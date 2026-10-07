@@ -53,7 +53,10 @@ struct StereoLoudnessMatchedPair {
 /// @brief Gain-matches `b` to `a`'s BS.1770 integrated loudness, so feeding
 ///        the result into @ref ab_switch or @ref ab_crossfade compares the
 ///        two without a loudness bias.
-/// @details Applies `measure_lufs(a) - measure_lufs(b)` to `b` with no upper
+/// @details Applies the uniform gain that lands `b`'s remeasured loudness on
+///          `measure_lufs(a)`. That is `measure_lufs(a) - measure_lufs(b)` unless
+///          the gain moves blocks across the absolute gate, in which case
+///          `applied_gain_db` reports the gate-aware value. No upper
 ///          bound: this API only reports the post-gain true peak rather than
 ///          capping it, because a bare headroom clamp would leave `b` at its
 ///          own loudness whenever it started near full scale, defeating the

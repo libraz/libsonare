@@ -369,6 +369,45 @@ LufsResult measure_lufs(const float* samples, size_t frames, int channels, int s
 
 }  // namespace
 
+LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, int channels,
+                                         int sample_rate, float target_lufs,
+                                         const LufsConfig& config) {
+  validate_config(config);
+  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(channels > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(samples != nullptr || frames == 0, ErrorCode::InvalidParameter);
+
+  const std::vector<double> energies =
+      k_weighted_block_energies(samples, frames, channels, sample_rate, config).integrated;
+  LufsGainToTarget result;
+  result.measured_lufs = gated_integrated_lufs(energies, config);
+  if (!std::isfinite(result.measured_lufs) || !std::isfinite(target_lufs)) return result;
+
+  // Each pass re-gates at the current gain; the gated set only changes a finite
+  // number of times, so the cap is reached only by a set that alternates.
+  constexpr int kMaxPasses = 32;
+  constexpr double kConvergedLu = 1e-4;
+  std::vector<double> scaled(energies.size());
+  double gain_db = static_cast<double>(target_lufs) - result.measured_lufs;
+  double best_gain_db = gain_db;
+  double best_error = std::numeric_limits<double>::infinity();
+  for (int pass = 0; pass < kMaxPasses; ++pass) {
+    const double power = std::pow(10.0, gain_db / 10.0);
+    for (size_t i = 0; i < energies.size(); ++i) scaled[i] = energies[i] * power;
+    const float achieved = gated_integrated_lufs(scaled, config);
+    if (!std::isfinite(achieved)) break;
+    const double error = static_cast<double>(target_lufs) - achieved;
+    if (std::abs(error) < best_error) {
+      best_error = std::abs(error);
+      best_gain_db = gain_db;
+    }
+    if (std::abs(error) < kConvergedLu) break;
+    gain_db += error;
+  }
+  result.gain_db = static_cast<float>(best_gain_db);
+  return result;
+}
+
 LufsResult lufs(const Audio& audio, const LufsConfig& config) {
   return lufs_interleaved(audio.data(), audio.size(), 1, audio.sample_rate(), config);
 }

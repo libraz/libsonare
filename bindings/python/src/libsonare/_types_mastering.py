@@ -53,9 +53,11 @@ class MasteringStereoResult:
 class LoudnessMatch:
     """What gain-matching one take to another's loudness took, and produced.
 
-    ``applied_gain_db`` is ``reference_lufs - source_lufs`` and carries no
-    upper bound, so ``matched_true_peak_dbtp`` reports where the gain left the
-    peak instead of the match being capped to keep it. A silent or below-gate
+    ``applied_gain_db`` is the gain that lands the remeasured source on
+    ``reference_lufs``; it equals ``reference_lufs - source_lufs`` unless the
+    gain moves blocks across the absolute gate. It carries no upper bound, so
+    ``matched_true_peak_dbtp`` reports where the gain left the peak instead of
+    the match being capped to keep it. A silent or below-gate
     take reads non-finite on both loudness values, and ``applied_gain_db`` is
     then 0.
     """

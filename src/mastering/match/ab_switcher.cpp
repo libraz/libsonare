@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "mastering/common/loudness_measure.h"
+#include "metering/lufs.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -101,12 +102,14 @@ StereoAudioPair ab_crossfade_stereo(const StereoAudioPair& a, const StereoAudioP
 LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b) {
   validate_pair(a, b);
   const float a_lufs = common::measure_lufs(a);
-  const float b_lufs = common::measure_lufs(b);
+  const metering::LufsGainToTarget solved =
+      metering::gain_to_integrated_lufs(b.data(), b.size(), 1, b.sample_rate(), a_lufs);
+  const float b_lufs = solved.measured_lufs;
 
   // No cap: a bare headroom clamp would leave a peak-normalized `b` at its own
   // loudness, which defeats the only reason this function exists. The caller
   // gets the post-gain true peak below instead of a decision made for it.
-  const float gain_db = std::isfinite(a_lufs) && std::isfinite(b_lufs) ? a_lufs - b_lufs : 0.0f;
+  const float gain_db = solved.gain_db;
 
   std::vector<float> matched(b.data(), b.data() + b.size());
   const float gain = db_to_linear(gain_db);
@@ -132,11 +135,10 @@ StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
   const std::vector<float> source_interleaved = interleave_stereo(b);
   const float reference_lufs =
       common::measure_lufs_interleaved(reference_interleaved.data(), a.left.size(), 2, sample_rate);
-  const float source_lufs =
-      common::measure_lufs_interleaved(source_interleaved.data(), b.left.size(), 2, sample_rate);
-  const float gain_db = std::isfinite(reference_lufs) && std::isfinite(source_lufs)
-                            ? reference_lufs - source_lufs
-                            : 0.0f;
+  const metering::LufsGainToTarget solved = metering::gain_to_integrated_lufs(
+      source_interleaved.data(), b.left.size(), 2, sample_rate, reference_lufs);
+  const float source_lufs = solved.measured_lufs;
+  const float gain_db = solved.gain_db;
 
   std::vector<float> matched_left(b.left.begin(), b.left.end());
   std::vector<float> matched_right(b.right.begin(), b.right.end());

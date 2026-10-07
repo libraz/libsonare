@@ -9,6 +9,7 @@
 #include "mastering/api/named_processor.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/match/ab_switcher.h"
+#include "metering/normalize.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
@@ -34,6 +35,20 @@ Audio square_audio(float frequency_hz, float amplitude, int sample_rate = 48000,
     out[static_cast<std::size_t>(i)] = phase < 0.5 ? amplitude : -amplitude;
   }
   return Audio::from_vector(std::move(out), sample_rate);
+}
+
+// 1 kHz sine whose first half peaks at @p first_db and second half at @p second_db.
+std::vector<float> two_level_sine(float first_db, float second_db, int sample_rate = 48000,
+                                  float duration_sec = 6.0f) {
+  const auto frames = static_cast<std::size_t>(duration_sec * static_cast<float>(sample_rate));
+  std::vector<float> out(frames);
+  for (std::size_t i = 0; i < frames; ++i) {
+    const float peak_db = i < frames / 2 ? first_db : second_db;
+    out[i] = std::pow(10.0f, peak_db / 20.0f) *
+             static_cast<float>(std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                         static_cast<double>(i) / sample_rate));
+  }
+  return out;
 }
 
 }  // namespace
@@ -430,4 +445,85 @@ TEST_CASE("Named stereo pair rejects oversized buffers before copying",
   }
   REQUIRE(invalid_parameter);
   REQUIRE_FALSE(bad_alloc);
+}
+
+// The quiet half sits below the absolute gate before the gain and above it after,
+// so `reference - source` measured once lands about 2 LU short.
+TEST_CASE("ABMatchLoudness reaches the reference when the gain moves blocks across the gate",
+          "[mastering][match][ab-match]") {
+  const auto a = Audio::from_vector(two_level_sine(-20.0f, -20.0f), 48000);
+  const auto b = Audio::from_vector(two_level_sine(-72.0f, -64.0f), 48000);
+
+  const auto matched = ab_match_loudness(a, b);
+  const float a_lufs = mastering::common::measure_lufs(a);
+  const float b_lufs = mastering::common::measure_lufs(b);
+  CAPTURE(a_lufs, b_lufs, matched.applied_gain_db);
+  REQUIRE(matched.b.size() == b.size());
+  REQUIRE_THAT(mastering::common::measure_lufs(matched.b), WithinAbs(a_lufs, 0.05f));
+  REQUIRE(matched.source_lufs == b_lufs);
+  // More than the naive difference, because the newly admitted half is quieter.
+  REQUIRE(matched.applied_gain_db > a_lufs - b_lufs + 1.0f);
+  const float gain = std::pow(10.0f, matched.applied_gain_db / 20.0f);
+  for (std::size_t i = 0; i < b.size(); i += 997) {
+    REQUIRE_THAT(matched.b[i], WithinAbs(b[i] * gain, 1e-6f * gain));
+  }
+  REQUIRE_THAT(matched.matched_true_peak_dbtp,
+               WithinAbs(mastering::common::measure_true_peak_dbtp(matched.b), 1e-4f));
+
+  // Control: 20 dB louder already has both halves above the gate, so the naive
+  // difference is exact and the solver must not move it.
+  const auto louder = Audio::from_vector(two_level_sine(-52.0f, -44.0f), 48000);
+  const auto stable = ab_match_loudness(a, louder);
+  REQUIRE_THAT(stable.applied_gain_db,
+               WithinAbs(a_lufs - mastering::common::measure_lufs(louder), 1e-3f));
+  REQUIRE_THAT(mastering::common::measure_lufs(stable.b), WithinAbs(a_lufs, 0.05f));
+}
+
+TEST_CASE("ABMatchLoudnessStereo reaches the reference when the gain moves blocks across the gate",
+          "[mastering][match][ab-match]") {
+  const auto ref = two_level_sine(-20.0f, -20.0f);
+  const auto src = two_level_sine(-72.0f, -64.0f);
+  StereoAudioPair a{Audio::from_vector(ref, 48000), Audio::from_vector(ref, 48000)};
+  std::vector<float> right(src);
+  for (float& v : right) v *= 0.5f;
+  StereoAudioPair b{Audio::from_vector(src, 48000), Audio::from_vector(right, 48000)};
+
+  const auto matched = ab_match_loudness_stereo(a, b);
+  auto stereo_lufs = [](const StereoAudioPair& pair) {
+    std::vector<float> interleaved(pair.left.size() * 2);
+    for (std::size_t i = 0; i < pair.left.size(); ++i) {
+      interleaved[2 * i] = pair.left[i];
+      interleaved[2 * i + 1] = pair.right[i];
+    }
+    return mastering::common::measure_lufs_interleaved(interleaved.data(), pair.left.size(), 2,
+                                                       48000);
+  };
+  REQUIRE_THAT(stereo_lufs(matched.b), WithinAbs(stereo_lufs(a), 0.05f));
+  for (std::size_t i = 1000; i < src.size(); i += 4999) {
+    REQUIRE_THAT(matched.b.right[i], WithinAbs(0.5f * matched.b.left[i], 1e-6f));
+  }
+}
+
+TEST_CASE(
+    "Offline LUFS normalization reaches the target when the gain moves blocks across the gate",
+    "[mastering][match][ab-match]") {
+  std::vector<float> mono = two_level_sine(-72.0f, -64.0f);
+  sonare::metering::normalize_interleaved_to_lufs(mono, mono.size(), 1, 48000, -23.0f);
+  REQUIRE_THAT(mastering::common::measure_lufs(mono.data(), mono.size(), 48000),
+               WithinAbs(-23.0f, 0.05f));
+
+  const std::vector<float> plane = two_level_sine(-72.0f, -64.0f);
+  std::vector<float> stereo(plane.size() * 2);
+  for (std::size_t i = 0; i < plane.size(); ++i) {
+    stereo[2 * i] = plane[i];
+    stereo[2 * i + 1] = 0.25f * plane[i];
+  }
+  sonare::metering::normalize_interleaved_to_lufs(stereo, plane.size(), 2, 48000, -23.0f);
+  REQUIRE_THAT(mastering::common::measure_lufs_interleaved(stereo.data(), plane.size(), 2, 48000),
+               WithinAbs(-23.0f, 0.05f));
+
+  // Below the gate there is nothing to measure, so the buffer stays as it was.
+  std::vector<float> silent(48000, 0.0f);
+  sonare::metering::normalize_interleaved_to_lufs(silent, silent.size(), 1, 48000, -23.0f);
+  REQUIRE(std::all_of(silent.begin(), silent.end(), [](float v) { return v == 0.0f; }));
 }

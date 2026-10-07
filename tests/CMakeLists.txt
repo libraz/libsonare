@@ -80,6 +80,7 @@ add_executable(sonare_tests
   effects/spectral_edit_test.cpp
   effects/pitch_shift_test.cpp
   effects/phase_vocoder_test.cpp
+  effects/phase_vocoder_synthesis_test.cpp
   effects/formant_warp_test.cpp
   effects/normalize_test.cpp
   effects/fx_reachability_test.cpp
@@ -351,6 +352,9 @@ if(BUILD_MIXING)
     mixing/routing_latency_test.cpp
     mixing/routing_scene_test.cpp
     mixing/routing_capi_test.cpp
+    mixing/routing_arrival_plan_test.cpp
+    mixing/routing_tail_test.cpp
+    mixing/automation_staging_test.cpp
   )
   target_sources(sonare_tests PRIVATE
     ${PROJECT_SOURCE_DIR}/src/c_api/sonare_c_mixing.cpp
@@ -701,12 +705,15 @@ if(BUILD_ARRANGEMENT)
     midi/gs_efx_parallel_test.cpp
     midi/gs_efx_realization_test.cpp
     midi/gs_efx_control_test.cpp
+    midi/gs_efx_receiver_range_test.cpp
+    midi/gs_efx_controller_settle_test.cpp
     midi/gs_layer_skeleton_test.cpp
     midi/midi_clip_sequencer_test.cpp
     midi/midi_no_alloc_test.cpp
     midi/smf_roundtrip_test.cpp
     midi/smf2_roundtrip_test.cpp
     midi/smf_parser_robustness_test.cpp
+    midi/sysex_framing_test.cpp
     midi/midi_fx_test.cpp
     midi/program_map_test.cpp
     midi/gm_gs_resolution_test.cpp

@@ -79,6 +79,27 @@ LufsResult lufs_interleaved(const float* samples, size_t frames, int channels, i
                             const LufsConfig& config, std::vector<float>* momentary_out,
                             std::vector<float>* short_term_out);
 
+/// @brief Integrated loudness of a buffer and the uniform gain that brings it to a target.
+struct LufsGainToTarget {
+  /// Integrated loudness before the gain; non-finite below the absolute gate.
+  float measured_lufs = 0.0f;
+  /// Gain in dB; 0 when either loudness is non-finite.
+  float gain_db = 0.0f;
+};
+
+/// @brief Solves the uniform gain that brings the integrated loudness of
+///        @p samples (interleaved) to @p target_lufs.
+/// @details `target - measured` alone misses the target when the gain moves
+///          blocks across the absolute gate, because the gated set the result is
+///          measured over is no longer the one the gain was derived from. This
+///          re-gates the measured block energies at each candidate gain until
+///          the gated set stops changing, so a remeasurement of the scaled
+///          buffer lands on the target. Where no gain lands exactly (a gate
+///          step jumps over it) the closest candidate is returned.
+LufsGainToTarget gain_to_integrated_lufs(const float* samples, size_t frames, int channels,
+                                         int sample_rate, float target_lufs,
+                                         const LufsConfig& config = {});
+
 std::vector<float> momentary_lufs(const Audio& audio, const LufsConfig& config = {});
 std::vector<float> short_term_lufs(const Audio& audio, const LufsConfig& config = {});
 

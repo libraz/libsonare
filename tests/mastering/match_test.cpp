@@ -6,6 +6,7 @@
 #include <complex>
 #include <vector>
 
+#include "mastering/common/loudness_measure.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/match/ab_switcher.h"
 #include "mastering/match/match_eq.h"
@@ -520,6 +521,33 @@ TEST_CASE("ReferenceLoudness reports gain required to match reference", "[master
 
   REQUIRE(result.gain_to_match_db > 10.0f);
   REQUIRE(result.reference_lufs > result.source_lufs);
+}
+
+// The source's first half sits below the absolute gate until the gain lifts it.
+TEST_CASE("ReferenceLoudness gain reaches the reference when it moves blocks across the gate",
+          "[mastering][match]") {
+  constexpr int kRate = 48000;
+  auto two_level = [](float first_db, float second_db) {
+    std::vector<float> out(6 * kRate);
+    for (std::size_t i = 0; i < out.size(); ++i) {
+      const float peak_db = i < out.size() / 2 ? first_db : second_db;
+      out[i] = std::pow(10.0f, peak_db / 20.0f) *
+               static_cast<float>(
+                   std::sin(sonare::constants::kTwoPiD * 1000.0 * static_cast<double>(i) / kRate));
+    }
+    return sonare::Audio::from_vector(std::move(out), kRate);
+  };
+  const auto source = two_level(-72.0f, -64.0f);
+  const auto reference = two_level(-20.0f, -20.0f);
+  const auto result = reference_loudness(source, reference);
+
+  std::vector<float> scaled(source.data(), source.data() + source.size());
+  const float gain = std::pow(10.0f, result.gain_to_match_db / 20.0f);
+  for (float& v : scaled) v *= gain;
+  const float achieved =
+      sonare::mastering::common::measure_lufs(scaled.data(), scaled.size(), kRate);
+  REQUIRE_THAT(achieved, WithinAbs(result.reference_lufs, 0.05f));
+  REQUIRE(result.gain_to_match_db > result.reference_lufs - result.source_lufs + 1.0f);
 }
 
 TEST_CASE("ABSwitcher selects and crossfades audio", "[mastering][match]") {

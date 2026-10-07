@@ -204,8 +204,10 @@ export interface LoudnessMatchResult {
   /** The matched take's, before the gain. Non-finite in the same case. */
   sourceLufs: number;
   /**
-   * `referenceLufs - sourceLufs`. Applied with no upper bound, and 0 whenever
-   * either loudness is non-finite.
+   * The gain that lands the remeasured source on `referenceLufs`; equals
+   * `referenceLufs - sourceLufs` unless the gain moves blocks across the
+   * absolute gate. Applied with no upper bound, and 0 whenever either loudness
+   * is non-finite.
    */
   appliedGainDb: number;
   /**
