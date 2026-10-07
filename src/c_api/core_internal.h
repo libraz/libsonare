@@ -46,7 +46,8 @@ PitchClass from_c_pitch_class(SonarePitchClass pitch);
 Mode from_c_mode(SonareMode mode);
 bool fill_key_profile(SonareKeyProfileType profile_type, KeyConfig* config);
 bool fill_key_modes(const SonareMode* modes, size_t mode_count, KeyConfig* config);
-void fill_chord_result(const std::vector<Chord>& chords, SonareChordAnalysisResult* out);
+void fill_chord_result(const std::vector<Chord>& chords, float tuning,
+                       SonareChordAnalysisResult* out);
 SonareError fill_cqt_result(const CqtResult& result, SonareCqtResult* out);
 
 // Marshal a quick-analysis value through temporary owners before publishing it

@@ -70,10 +70,11 @@ import type {
   ChordAnalysisResult,
   ChordDetectionOptions,
   ChromaResult,
+  DetectKeyOptions,
   DynamicsResult,
   HpssResult,
-  Key,
   KeyCandidate,
+  KeyDetection,
   KeyDetectionOptions,
   LufsResult,
   MasteringChainConfig,
@@ -231,7 +232,7 @@ export class Audio {
     return this.native.detectBpm();
   }
 
-  detectKey(options: KeyDetectionOptions = {}): Key {
+  detectKey(options: DetectKeyOptions = {}): KeyDetection {
     this.requireAlive();
     return this.native.detectKey(options);
   }

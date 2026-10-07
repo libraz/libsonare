@@ -305,6 +305,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['DoubleProperty', 'Reads a double; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
+  ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
   ['GsEfxRealizationProperty', 'Reads a realisation name, so it has no numeric fallback at all.'],
   [

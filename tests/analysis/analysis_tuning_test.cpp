@@ -4,6 +4,7 @@
 
 #include <sonare/sonare_c.h>
 
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <map>
@@ -16,6 +17,8 @@
 #include "analysis/key_analyzer.h"
 #include "analysis/music_analyzer.h"
 #include "core/audio.h"
+#include "core/resample.h"
+#include "feature/chroma.h"
 #include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -290,4 +293,175 @@ TEST_CASE("analysis JSON carries romanNumeral per chord", "[analysis][json]") {
   const std::string json = analysis_result_to_json(result);
   CHECK(json.find("\"romanNumeral\":\"V7\"") != std::string::npos);
   CHECK(json.find("\"romanNumeral\":\"\"") != std::string::npos);
+}
+
+namespace {
+
+/// A4 = 446 Hz, expressed as a semitone fraction.
+constexpr float kA446Tuning = 0.2349f;
+
+}  // namespace
+
+TEST_CASE("tuning converters round-trip and name the reference pitch", "[feature][tuning]") {
+  CHECK(tuning_to_reference_hz(0.0f) == Catch::Approx(440.0f));
+  CHECK(tuning_to_reference_hz(1.0f) == Catch::Approx(466.164f).margin(0.01));
+  CHECK(tuning_to_reference_hz(-0.5f, 442.0f) == Catch::Approx(429.5f).margin(0.1));
+  CHECK(reference_hz_to_tuning(446.0f) == Catch::Approx(kA446Tuning).margin(0.001));
+  for (float tuning : {-0.5f, -0.2f, 0.0f, 0.2349f, 0.49f, 7.0f}) {
+    CHECK(reference_hz_to_tuning(tuning_to_reference_hz(tuning, 432.0f), 432.0f) ==
+          Catch::Approx(tuning).margin(1e-4));
+  }
+}
+
+TEST_CASE("measure_tuning reports a semitone fraction at every input rate", "[feature][tuning]") {
+  const Audio audio = detuned_pop_loop(kA446Tuning, 1);
+  const float at_22k = measure_tuning(audio);
+  CHECK(at_22k == Catch::Approx(kA446Tuning).margin(0.03));
+  CHECK(is_valid_chroma_tuning(at_22k));
+
+  // The same recording at 44.1 kHz reads the same value: the measurement runs at the analysis rate.
+  const Audio upsampled = resample(audio, 44100);
+  CHECK(measure_tuning(upsampled) == Catch::Approx(at_22k).margin(0.03));
+
+  CHECK(measure_tuning(Audio()) == 0.0f);
+}
+
+TEST_CASE("auto tuning is measured by the key and chord analyzers and reported back",
+          "[analysis][tuning]") {
+  const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
+  const float measured = measure_tuning(audio);
+  REQUIRE(measured < -0.40f);
+
+  KeyConfig key_config;
+  key_config.auto_tuning = true;
+  const KeyAnalyzer key(audio, key_config);
+  CHECK(key.tuning() == measured);
+  KeyConfig explicit_key;
+  explicit_key.tuning = measured;
+  CHECK(key.key().root == KeyAnalyzer(audio, explicit_key).key().root);
+  CHECK(key.key().mode == KeyAnalyzer(audio, explicit_key).key().mode);
+
+  // A given tuning is reported as given when auto is off.
+  explicit_key.tuning = 0.1f;
+  CHECK(KeyAnalyzer(audio, explicit_key).tuning() == 0.1f);
+
+  ChordConfig chord_config;
+  chord_config.auto_tuning = true;
+  chord_config.use_beat_sync = false;
+  const ChordAnalyzer chords(audio, chord_config);
+  CHECK(chords.tuning() == measured);
+  ChordConfig explicit_chord = chord_config;
+  explicit_chord.auto_tuning = false;
+  explicit_chord.tuning = measured;
+  const ChordAnalyzer expected(audio, explicit_chord);
+  REQUIRE(chords.chords().size() == expected.chords().size());
+  for (size_t i = 0; i < chords.chords().size(); ++i) {
+    CHECK(chords.chords()[i].to_string() == expected.chords()[i].to_string());
+  }
+}
+
+TEST_CASE("MusicAnalyzer auto tuning reports the value it used", "[analysis][tuning]") {
+  const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
+  MusicAnalyzerConfig config;
+  config.auto_tuning = true;
+  const MusicAnalyzer analyzer(audio, config);
+  CHECK(analyzer.tuning() == measure_tuning(audio));
+
+  MusicAnalyzerConfig given;
+  given.tuning = -0.3f;
+  CHECK(MusicAnalyzer(audio, given).tuning() == -0.3f);
+}
+
+TEST_CASE("MusicAnalyzer auto tuning re-centres a detuned recording and lands in the JSON",
+          "[analysis][tuning][.][slow]") {
+  const Audio audio = detuned_pop_loop(kDetuneSemitones);
+  MusicAnalyzerConfig config;
+  config.auto_tuning = true;
+  const AnalysisResult result = MusicAnalyzer(audio, config).analyze();
+  CHECK(result.tuning == measure_tuning(audio));
+  CHECK(is_c_major(result.key));
+  CHECK(analysis_result_to_json(result).find("\"tuning\":-0.4") != std::string::npos);
+}
+
+TEST_CASE("C ABI auto tuning, tuning converters and the key tuning entry",
+          "[c_api][analysis][tuning]") {
+  const Audio audio = detuned_pop_loop(kDetuneSemitones, 1);
+  const float measured = measure_tuning(audio);
+
+  SECTION("analysis options carry a version and an auto flag") {
+    SonareMusicAnalyzeOptions options = sonare_music_analyze_options_default();
+    CHECK(options.struct_version == SONARE_MUSIC_ANALYZE_OPTIONS_VERSION);
+    CHECK(options.tuning_auto == 0);
+    options.struct_version = 1;
+    char* json = nullptr;
+    CHECK(sonare_analyze_json_ex(audio.data(), audio.size(), kSampleRate, &options, &json) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(json == nullptr);
+  }
+
+  SECTION("chord detection reports the tuning it used") {
+    SonareChordDetectionOptions options{};
+    options.min_duration = 0.3f;
+    options.smoothing_window = 2.0f;
+    options.threshold = 0.5f;
+    options.n_fft = 2048;
+    options.hop_length = 512;
+    options.hmm_beam_width = 24;
+    options.use_beat_sync = 0;
+
+    SonareChordAnalysisResult given{};
+    options.tuning = 0.1f;
+    REQUIRE(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &options, &given) ==
+            SONARE_OK);
+    CHECK(given.struct_version == SONARE_CHORD_ANALYSIS_RESULT_VERSION);
+    CHECK(given.tuning == 0.1f);
+    sonare_free_chord_analysis_result(&given);
+
+    SonareChordAnalysisResult measured_result{};
+    options.tuning_auto = 1;
+    REQUIRE(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &options,
+                                    &measured_result) == SONARE_OK);
+    CHECK(measured_result.tuning == measured);
+    sonare_free_chord_analysis_result(&measured_result);
+
+    options.struct_version = 1;
+    SonareChordAnalysisResult refused{};
+    CHECK(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &options, &refused) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("key detection reports the tuning it used") {
+    SonareKey key{};
+    float used = 99.0f;
+    REQUIRE(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
+                                          0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
+                                          nullptr, 0.0f, 1, &key, &used) == SONARE_OK);
+    CHECK(used == measured);
+    CHECK(key.root == SONARE_PITCH_C);
+    CHECK(key.mode == SONARE_MODE_MAJOR);
+
+    REQUIRE(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
+                                          0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
+                                          nullptr, 0.2f, 0, &key, &used) == SONARE_OK);
+    CHECK(used == 0.2f);
+    CHECK(sonare_detect_key_with_tuning(audio.data(), audio.size(), kSampleRate, 4096, 512, 0, 0,
+                                        0.0f, nullptr, 0, SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER,
+                                        nullptr, 0.7f, 0, &key,
+                                        &used) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(used == 0.0f);
+  }
+
+  SECTION("converters validate and round-trip") {
+    float hz = 0.0f;
+    REQUIRE(sonare_tuning_to_reference_hz(kA446Tuning, 440.0f, &hz) == SONARE_OK);
+    CHECK(hz == Catch::Approx(446.0f).margin(0.02));
+    float tuning = 0.0f;
+    REQUIRE(sonare_reference_hz_to_tuning(hz, 440.0f, &tuning) == SONARE_OK);
+    CHECK(tuning == Catch::Approx(kA446Tuning).margin(1e-4));
+    CHECK(sonare_tuning_to_reference_hz(std::nanf(""), 440.0f, &hz) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_tuning_to_reference_hz(0.0f, 0.0f, &hz) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_reference_hz_to_tuning(-1.0f, 440.0f, &tuning) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_reference_hz_to_tuning(440.0f, 440.0f, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
 }

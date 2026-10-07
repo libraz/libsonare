@@ -57,6 +57,8 @@ SCALAR_HELPERS = {
     "melToHz",
     "hzToMidi",
     "midiToHz",
+    "tuningToReferenceHz",
+    "referenceHzToTuning",
     "hzToNote",
     "noteToHz",
     "framesToTime",

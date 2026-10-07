@@ -1,7 +1,12 @@
 import { resolvePositiveIntegerOption } from './_feature_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
-import type { InverseMelResult, InverseStftResult } from './types.js';
+import type {
+  InverseMelResult,
+  InverseStftResult,
+  MelSpectrogramResult,
+  MfccResult,
+} from './types.js';
 import {
   assertFiniteScalar,
   assertIntegralSampleRate,
@@ -36,6 +41,29 @@ export interface MelToAudioRequest extends MelToStftRequest {
   hopLength?: number;
   nIter?: number;
 }
+/**
+ * Request form of {@link melToStft} that takes the forward result and reads the
+ * Mel matrix and every parameter from it. A field set here as well must agree
+ * with the result's value, or the call is refused with a `RangeError`; a result
+ * in dB is refused too, with a message naming {@link dbToPower}.
+ */
+export interface MelResultToStftRequest {
+  result: MelSpectrogramResult;
+  nMels?: number;
+  nFrames?: number;
+  sampleRate?: number;
+  nFft?: number;
+  fmin?: number;
+  fmax?: number;
+  htk?: boolean;
+}
+/** Request form of {@link melToAudio} over a forward result; see {@link MelResultToStftRequest}. */
+export interface MelResultToAudioRequest extends MelResultToStftRequest {
+  /** Hop of the reconstruction; must agree with the result's when set. */
+  hopLength?: number;
+  /** Griffin-Lim iterations. Default 32. */
+  nIter?: number;
+}
 export interface GriffinLimRequest {
   magnitude: Float32Array;
   nBins: number;
@@ -63,6 +91,165 @@ export interface MfccToAudioRequest extends MfccToMelRequest {
   nIter?: number;
   htk?: boolean;
 }
+/**
+ * Request form of {@link mfccToMel} that takes the forward result and reads the
+ * coefficients, Mel band count and lifter from it. A field set here as well must
+ * agree with the result's value, or the call is refused with a `RangeError`.
+ */
+export interface MfccResultToMelRequest {
+  result: MfccResult;
+  nMfcc?: number;
+  nFrames?: number;
+  nMels?: number;
+  lifter?: number;
+}
+/** Request form of {@link mfccToAudio} over a forward result; see {@link MfccResultToMelRequest}. */
+export interface MfccResultToAudioRequest extends MfccResultToMelRequest {
+  sampleRate?: number;
+  nFft?: number;
+  hopLength?: number;
+  fmin?: number;
+  fmax?: number;
+  htk?: boolean;
+  /** Griffin-Lim iterations. Default 32. */
+  nIter?: number;
+}
+
+// Refuses a field the caller set that disagrees with the value the result carries.
+// An fmax of 0 means the Nyquist in the inverse's own vocabulary, so it is compared resolved.
+function requireAgreesWithResult(
+  fnName: string,
+  request: object,
+  result: object,
+  keys: readonly string[],
+): void {
+  const given = request as Record<string, unknown>;
+  const carried = result as Record<string, unknown>;
+  for (const key of keys) {
+    const value = given[key];
+    if (value === undefined) {
+      continue;
+    }
+    const comparable = key === 'fmax' && value === 0 ? (carried.sampleRate as number) / 2 : value;
+    if (comparable !== carried[key]) {
+      throw new RangeError(
+        `${fnName}: ${key} ${String(value)} disagrees with the result's ${String(carried[key])}`,
+      );
+    }
+  }
+}
+
+// The fields a result must carry to be inverted, read once so a hand-built result that
+// lacks one is named rather than inverted with an undefined.
+function requireResultFields(fnName: string, result: object, keys: readonly string[]): void {
+  const carried = result as Record<string, unknown>;
+  for (const key of keys) {
+    if (carried[key] === undefined) {
+      throw new TypeError(`${fnName}: result.${key} is missing`);
+    }
+  }
+}
+
+function requireLinearMelResult(fnName: string, result: MelSpectrogramResult): void {
+  if (result.isDb === true) {
+    throw new RangeError(
+      `${fnName}: result is in dB; convert it to power with dbToPower before inverting it`,
+    );
+  }
+}
+
+const MEL_RESULT_FIELDS = [
+  'nMels',
+  'nFrames',
+  'sampleRate',
+  'hopLength',
+  'nFft',
+  'fmin',
+  'fmax',
+  'htk',
+  'power',
+] as const;
+const MFCC_RESULT_FIELDS = [
+  'nMfcc',
+  'nFrames',
+  'sampleRate',
+  'hopLength',
+  'nFft',
+  'nMels',
+  'fmin',
+  'fmax',
+  'htk',
+  'lifter',
+  'coefficients',
+] as const;
+
+// Reads a Mel result request into the positional request its inverse takes.
+function melRequestFromResult<T extends MelResultToAudioRequest>(
+  fnName: string,
+  request: T,
+  carriedKeys: readonly string[],
+): MelToAudioRequest {
+  const { result } = request;
+  if (result === null || typeof result !== 'object') {
+    throw new TypeError(`${fnName}: result must be a Mel spectrogram result`);
+  }
+  requireLinearMelResult(fnName, result);
+  requireResultFields(fnName, result, MEL_RESULT_FIELDS);
+  requireAgreesWithResult(fnName, request, result, carriedKeys);
+  return {
+    mel: result.power,
+    nMels: result.nMels,
+    nFrames: result.nFrames,
+    sampleRate: result.sampleRate,
+    nFft: result.nFft,
+    hopLength: result.hopLength,
+    fmin: result.fmin,
+    fmax: result.fmax,
+    htk: result.htk,
+    nIter: request.nIter,
+  };
+}
+
+// Reads an MFCC result request into the positional request its inverse takes.
+function mfccRequestFromResult<T extends MfccResultToAudioRequest>(
+  fnName: string,
+  request: T,
+  carriedKeys: readonly string[],
+): MfccToAudioRequest {
+  const { result } = request;
+  if (result === null || typeof result !== 'object') {
+    throw new TypeError(`${fnName}: result must be an MFCC result`);
+  }
+  requireResultFields(fnName, result, MFCC_RESULT_FIELDS);
+  requireAgreesWithResult(fnName, request, result, carriedKeys);
+  return {
+    mfcc: result.coefficients,
+    nMfcc: result.nMfcc,
+    nFrames: result.nFrames,
+    nMels: result.nMels,
+    lifter: result.lifter,
+    sampleRate: result.sampleRate,
+    nFft: result.nFft,
+    hopLength: result.hopLength,
+    fmin: result.fmin,
+    fmax: result.fmax,
+    htk: result.htk,
+    nIter: request.nIter,
+  };
+}
+
+const MEL_TO_STFT_CARRIED = ['nMels', 'nFrames', 'sampleRate', 'nFft', 'fmin', 'fmax', 'htk'];
+const MEL_TO_AUDIO_CARRIED = [...MEL_TO_STFT_CARRIED, 'hopLength'];
+const MFCC_TO_MEL_CARRIED = ['nMfcc', 'nFrames', 'nMels', 'lifter'];
+const MFCC_TO_AUDIO_CARRIED = [
+  ...MFCC_TO_MEL_CARRIED,
+  'sampleRate',
+  'nFft',
+  'hopLength',
+  'fmin',
+  'fmax',
+  'htk',
+];
 
 export interface PhaseVocoderRequest extends FeatureSamplesRequest {
   rate: number;
@@ -199,8 +386,11 @@ export function vqtToAudio(
   );
 }
 
-/** Reconstruct STFT power from a mel spectrogram. */
-export function melToStft(request: MelToStftRequest): InverseStftResult;
+/**
+ * Reconstruct STFT power from a mel spectrogram. The request form also takes the
+ * forward result as `{ result }` ({@link MelResultToStftRequest}).
+ */
+export function melToStft(request: MelToStftRequest | MelResultToStftRequest): InverseStftResult;
 export function melToStft(
   mel: Float32Array,
   nMels?: number,
@@ -212,7 +402,7 @@ export function melToStft(
   htk?: boolean,
 ): InverseStftResult;
 export function melToStft(
-  mel: Float32Array | MelToStftRequest,
+  mel: Float32Array | MelToStftRequest | MelResultToStftRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -222,7 +412,11 @@ export function melToStft(
   htk = false,
 ): InverseStftResult {
   const request =
-    mel instanceof Float32Array ? { mel, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk } : mel;
+    mel instanceof Float32Array
+      ? { mel, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk }
+      : 'result' in mel
+        ? melRequestFromResult('melToStft', mel, MEL_TO_STFT_CARRIED)
+        : mel;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -242,8 +436,11 @@ export function melToStft(
   );
 }
 
-/** Reconstruct audio from a mel spectrogram via Griffin-Lim. */
-export function melToAudio(request: MelToAudioRequest): Float32Array;
+/**
+ * Reconstruct audio from a mel spectrogram via Griffin-Lim. The request form
+ * also takes the forward result as `{ result }` ({@link MelResultToAudioRequest}).
+ */
+export function melToAudio(request: MelToAudioRequest | MelResultToAudioRequest): Float32Array;
 export function melToAudio(
   mel: Float32Array,
   nMels?: number,
@@ -257,7 +454,7 @@ export function melToAudio(
   htk?: boolean,
 ): Float32Array;
 export function melToAudio(
-  mel: Float32Array | MelToAudioRequest,
+  mel: Float32Array | MelToAudioRequest | MelResultToAudioRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -271,7 +468,9 @@ export function melToAudio(
   const request =
     mel instanceof Float32Array
       ? { mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
-      : mel;
+      : 'result' in mel
+        ? melRequestFromResult('melToAudio', mel, MEL_TO_AUDIO_CARRIED)
+        : mel;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -350,8 +549,11 @@ export function griffinLim(
   );
 }
 
-/** Reconstruct a mel power spectrogram from MFCCs (`nMels` mel bands). */
-export function mfccToMel(request: MfccToMelRequest): InverseMelResult;
+/**
+ * Reconstruct a mel power spectrogram from MFCCs (`nMels` mel bands). The request
+ * form also takes the forward result as `{ result }` ({@link MfccResultToMelRequest}).
+ */
+export function mfccToMel(request: MfccToMelRequest | MfccResultToMelRequest): InverseMelResult;
 export function mfccToMel(
   mfcc: Float32Array,
   nMfcc?: number,
@@ -360,13 +562,18 @@ export function mfccToMel(
   lifter?: number,
 ): InverseMelResult;
 export function mfccToMel(
-  mfcc: Float32Array | MfccToMelRequest,
+  mfcc: Float32Array | MfccToMelRequest | MfccResultToMelRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
   lifter = 0,
 ): InverseMelResult {
-  const request = mfcc instanceof Float32Array ? { mfcc, nMfcc, nFrames, nMels, lifter } : mfcc;
+  const request =
+    mfcc instanceof Float32Array
+      ? { mfcc, nMfcc, nFrames, nMels, lifter }
+      : 'result' in mfcc
+        ? mfccRequestFromResult('mfccToMel', mfcc, MFCC_TO_MEL_CARRIED)
+        : mfcc;
   return addon.mfccToMel(
     request.mfcc,
     request.nMfcc,
@@ -376,8 +583,11 @@ export function mfccToMel(
   );
 }
 
-/** Reconstruct audio from MFCCs via Griffin-Lim. */
-export function mfccToAudio(request: MfccToAudioRequest): Float32Array;
+/**
+ * Reconstruct audio from MFCCs via Griffin-Lim. The request form also takes the
+ * forward result as `{ result }` ({@link MfccResultToAudioRequest}).
+ */
+export function mfccToAudio(request: MfccToAudioRequest | MfccResultToAudioRequest): Float32Array;
 export function mfccToAudio(
   mfcc: Float32Array,
   nMfcc?: number,
@@ -393,7 +603,7 @@ export function mfccToAudio(
   lifter?: number,
 ): Float32Array;
 export function mfccToAudio(
-  mfcc: Float32Array | MfccToAudioRequest,
+  mfcc: Float32Array | MfccToAudioRequest | MfccResultToAudioRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
@@ -409,7 +619,9 @@ export function mfccToAudio(
   const request =
     mfcc instanceof Float32Array
       ? { mfcc, nMfcc, nFrames, nMels, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk, lifter }
-      : mfcc;
+      : 'result' in mfcc
+        ? mfccRequestFromResult('mfccToAudio', mfcc, MFCC_TO_AUDIO_CARRIED)
+        : mfcc;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.

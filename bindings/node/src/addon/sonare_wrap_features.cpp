@@ -140,6 +140,11 @@ Napi::Value SonareWrap::MelSpectrogramFn(const Napi::CallbackInfo& info) {
   out.Set("nFrames", Napi::Number::New(env, mel.n_frames()));
   out.Set("sampleRate", Napi::Number::New(env, mel.sample_rate()));
   out.Set("hopLength", Napi::Number::New(env, mel.hop_length()));
+  out.Set("nFft", Napi::Number::New(env, config.n_fft));
+  out.Set("fmin", Napi::Number::New(env, config.fmin));
+  out.Set("fmax", Napi::Number::New(env, config.resolved_fmax(mel.sample_rate())));
+  out.Set("htk", Napi::Boolean::New(env, config.htk));
+  out.Set("isDb", Napi::Boolean::New(env, false));
 
   // Power values
   std::vector<float> power_vec(mel.power_data(), mel.power_data() + mel.n_mels() * mel.n_frames());
@@ -198,6 +203,15 @@ Napi::Value SonareWrap::Mfcc(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nMfcc", Napi::Number::New(env, n_mfcc));
   out.Set("nFrames", Napi::Number::New(env, mel.n_frames()));
+  out.Set("sampleRate", Napi::Number::New(env, mel.sample_rate()));
+  out.Set("hopLength", Napi::Number::New(env, mel.hop_length()));
+  out.Set("nFft", Napi::Number::New(env, config.n_fft));
+  out.Set("nMels", Napi::Number::New(env, mel.n_mels()));
+  out.Set("fmin", Napi::Number::New(env, config.fmin));
+  out.Set("fmax", Napi::Number::New(env, config.resolved_fmax(mel.sample_rate())));
+  out.Set("htk", Napi::Boolean::New(env, config.htk));
+  out.Set("isDb", Napi::Boolean::New(env, false));
+  out.Set("lifter", Napi::Number::New(env, lifter));
   out.Set("coefficients", VecToFloat32(env, mfcc_coeffs));
 
   return out;

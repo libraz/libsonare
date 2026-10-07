@@ -63,6 +63,7 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
   std::string genre_hint;
+  KeyTuningOption tuning;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
@@ -73,18 +74,23 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
+    tuning = node_key_tuning_option(options);
   }
 
   SonareKey key{};
-  SonareError err = sonare_detect_key_with_extended_options(
+  float tuning_used = 0.0f;
+  SonareError err = sonare_detect_key_with_tuning(
       data, length, sample_rate, n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0,
       high_pass_hz, modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), &key);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
+      &key, &tuning_used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return KeyToObject(env, key.root, key.mode, key.confidence);
+  Napi::Object result = KeyToObject(env, key.root, key.mode, key.confidence);
+  result.Set("tuning", Napi::Number::New(env, static_cast<double>(tuning_used)));
+  return result;
   SONARE_NODE_CATCH(env)
 }
 
@@ -947,6 +953,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 15, "chromaMethod", 0, &chroma_method)) return env.Undefined();
   float tuning{};
   if (!OptionalFloatArg(env, info, 16, "tuning", 0.0f, &tuning)) return env.Undefined();
+  bool tuning_auto{};
+  if (!OptionalBoolArg(env, info, 17, "tuningAuto", false, &tuning_auto)) return env.Undefined();
 
   SonareChordAnalysisResult analysis{};
   SonareChordDetectionOptions options{};
@@ -965,6 +973,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
   options.tuning = tuning;
+  options.tuning_auto = tuning_auto ? 1 : 0;
   SonareError err = sonare_detect_chords_ex(data, length, sample_rate, &options, &analysis);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
@@ -993,6 +1002,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("chords", chords);
+  result.Set("tuning", Napi::Number::New(env, static_cast<double>(analysis.tuning)));
   sonare_free_chord_analysis_result(&analysis);
   return result;
   SONARE_NODE_CATCH(env)
@@ -1045,6 +1055,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 15, "chromaMethod", 0, &chroma_method)) return env.Undefined();
   float tuning{};
   if (!OptionalFloatArg(env, info, 16, "tuning", 0.0f, &tuning)) return env.Undefined();
+  bool tuning_auto{};
+  if (!OptionalBoolArg(env, info, 17, "tuningAuto", false, &tuning_auto)) return env.Undefined();
 
   SonareChordDetectionOptions options{};
   options.min_duration = min_duration;
@@ -1062,6 +1074,7 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
   options.tuning = tuning;
+  options.tuning_auto = tuning_auto ? 1 : 0;
 
   SonareStringArray labels{};
   SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options,

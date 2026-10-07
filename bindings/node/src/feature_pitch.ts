@@ -119,8 +119,10 @@ export interface NnlsChromaRequest extends FeatureSamplesRequest {
  * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
  * librosa.feature.chroma_stft — which estimates tuning from the signal when none
  * is given — this does NOT auto-estimate and takes no tuning argument. A
- * tuning offset from {@link estimateTuning} is applied through `analyze`'s
- * `tuning` option (and to chords through `detectChords`).
+ * tuning offset (a fraction of a semitone, which {@link estimateTuning} returns
+ * at 12 bins per octave) is applied through `analyze`'s `tuning` option (and to
+ * chords through `detectChords`); both also measure it themselves with
+ * `tuning: 'auto'`.
  */
 export function chroma(request: StftRequest): ChromaResult;
 export function chroma(
@@ -409,7 +411,14 @@ export function pitchTuning(
   );
 }
 
-/** Tuning offset of an audio signal (librosa.estimate_tuning). */
+/**
+ * Tuning offset of an audio signal (librosa.estimate_tuning).
+ *
+ * A librosa mirror: the offset is a fraction of a bin of `binsPerOctave`, which
+ * is the semitone fraction the analysis options take only at 12 (otherwise
+ * multiply by `12 / binsPerOctave`). Analysis measures the semitone fraction
+ * itself with `tuning: 'auto'`; {@link tuningToReferenceHz} converts it to Hz.
+ */
 export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(
   samples: Float32Array,
@@ -443,6 +452,32 @@ export function estimateTuning(
     request.resolution ?? 0.01,
     request.binsPerOctave ?? 12,
   );
+}
+
+/**
+ * Reference frequency of an A4 raised by `tuning` fractions of a semitone:
+ * `a4 * 2 ** (tuning / 12)`. The converter from the analysis unit (`tuning`, in
+ * `[-0.5, 0.5)` for the analysis options) to the Hz a pitch reference is stated
+ * in, such as `referenceHz` and the streaming `tuningRefHz`.
+ *
+ * @param tuning - Finite fraction of a semitone.
+ * @param a4 - Finite positive concert pitch the tuning is measured from. Default 440.
+ * @throws `SonareError` for a non-finite `tuning` or a non-positive `a4`.
+ */
+export function tuningToReferenceHz(tuning: number, a4 = 440): number {
+  return addon.tuningToReferenceHz(tuning, a4);
+}
+
+/**
+ * Tuning, in fractions of a semitone, of a recording whose A4 sits at `hz`:
+ * `12 * log2(hz / a4)`. Inverse of {@link tuningToReferenceHz}.
+ *
+ * @param hz - Finite positive reference frequency.
+ * @param a4 - Finite positive concert pitch. Default 440.
+ * @throws `SonareError` for a non-positive `hz` or `a4`.
+ */
+export function referenceHzToTuning(hz: number, a4 = 440): number {
+  return addon.referenceHzToTuning(hz, a4);
 }
 
 /** Per-bin spectral pitch candidates and their peak magnitudes (librosa.piptrack). */

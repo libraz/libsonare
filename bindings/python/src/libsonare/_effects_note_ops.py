@@ -925,7 +925,7 @@ def transcribe(
     *,
     tempo_bpm: float | None = None,
     polyphonic: bool = False,
-    reference_hz: float | None = None,
+    reference_hz: float | str | None = None,
     fmin: float | None = None,
     fmax: float | None = None,
     min_note_ms: float | None = None,
@@ -942,7 +942,7 @@ def transcribe(
     are ``(ppq, data0, data1)`` triples -- exactly what
     :meth:`Project.set_midi_events` takes, so nothing is left to convert.
 
-    Three things are deliberately NOT done here, because the library already
+    Two things are deliberately NOT done here, because the library already
     does each of them elsewhere and a second implementation would drift from the
     first:
 
@@ -951,10 +951,12 @@ def transcribe(
     - Detecting and installing a tempo map: :meth:`Project.auto_tempo`. What
       ``tempo_bpm=None`` does here is detect ONE constant tempo for this grid;
       it installs nothing and follows no tempo that moves during the take.
-    - Measuring the tuning reference. A take recorded away from A440 lands a
-      full semitone out at roughly 26 Hz of error, so measure it first --
-      :func:`pitch_pyin` into :func:`pitch_tuning` -- and pass the result as
-      ``reference_hz``.
+
+    The tuning reference is the caller's by default (``reference_hz``, or a
+    measured tuning through :func:`tuning_to_reference_hz`). A take recorded
+    away from A440 lands a full semitone out at roughly 26 Hz of error, so pass
+    ``reference_hz="auto"`` to measure it from the audio before any pitch is
+    tracked; ``tuning`` on the result reports what was used either way.
 
     Finding no notes is not an error: silence, and material the chain cannot
     resolve, come back with an empty ``events`` list, and ``tempo_bpm`` still
@@ -972,7 +974,8 @@ def transcribe(
             the cost of a full STFT and a mask per tracked ridge. The default
             reads pYIN cut into notes, which follows one line at a time.
         reference_hz: Tuning reference the MIDI note numbers are measured
-            against; ``None`` keeps the default (A4 = 440 Hz).
+            against, in Hz; ``"auto"`` measures it from the audio; ``None``
+            keeps the default (A4 = 440 Hz).
         fmin: Low end of the F0 tracker's range, in Hz. ``None`` uses 65 for
             the monophonic path or 55 for the polyphonic path. Both paths use
             this bound; the polyphonic path applies it to the salience
@@ -1017,9 +1020,8 @@ def transcribe(
         Off A440, measure the reference rather than letting the notes land a
         semitone out:
 
-        >>> pitch = libsonare.pitch_pyin(samples, sample_rate=sr, hop_length=512)
-        >>> reference = libsonare.pitch_tuning(pitch.f0)
-        >>> result = libsonare.transcribe(samples, sr, reference_hz=reference)
+        >>> result = libsonare.transcribe(samples, sr, reference_hz="auto")
+        >>> result.tuning  # semitone fraction of the recording from A440
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_transcribe"):

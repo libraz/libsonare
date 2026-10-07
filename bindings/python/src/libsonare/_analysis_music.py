@@ -9,6 +9,7 @@ from typing import cast
 
 from ._errors import _not_supported, _unknown_error
 from ._ffi import (
+    SONARE_CHORD_DETECTION_OPTIONS_VERSION,
     SonareBoundaryOptions,
     SonareBoundaryResult,
     SonareChordAnalysisResult,
@@ -27,6 +28,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int32,
     _to_c_size_t,
+    _tuning_arg,
 )
 from .types import (
     Boundary,
@@ -62,15 +64,17 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> ChordAnalysisResult:
     """Detect a continuous chord/N.C. timeline.
 
     ``threshold`` is a final-template correlation cutoff in ``[0, 1]``;
     rejected intervals use quality ``"unknown"`` and ``Chord.name == "N.C."``.
-    ``tuning`` is the recording's tuning offset in fractions of a semitone, the
-    unit :func:`estimate_tuning` returns; it must be in ``[-0.5, 0.5)`` and 0 is
-    concert A440. ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
+    ``tuning`` is the recording's tuning offset in fractions of a semitone; it
+    must be in ``[-0.5, 0.5)`` and 0 is concert A440. ``"auto"`` measures it from
+    the audio, and :func:`reference_hz_to_tuning` converts a reference pitch to
+    this unit. The value used, given or measured, is the result's ``tuning``.
+    ``n_fft`` is the STFT chroma window in samples at 22050 Hz,
     rescaled to the input rate so its duration is the same at every rate.
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
@@ -81,7 +85,9 @@ def detect_chords(
     out = SonareChordAnalysisResult()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
+    tuning_value, tuning_auto = _tuning_arg("detect_chords", tuning)
     options = SonareChordDetectionOptions(
+        SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration,
         smoothing_window,
         threshold,
@@ -96,7 +102,8 @@ def detect_chords(
         key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
-        tuning,
+        tuning_value,
+        tuning_auto,
     )
     rc = lib.sonare_detect_chords_ex(
         c_array,
@@ -145,7 +152,8 @@ def detect_chords(
                     bass=PitchClass(out.chords[i].bass),
                 )
                 for i in range(out.chord_count)
-            ]
+            ],
+            tuning=float(out.tuning),
         )
     finally:
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
@@ -169,7 +177,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> list[str]:
     """Label detected chords with Roman numerals relative to a key.
 
@@ -186,7 +194,9 @@ def chord_functional_analysis(
     out = SonareStringArray()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
+    tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning)
     options = SonareChordDetectionOptions(
+        SONARE_CHORD_DETECTION_OPTIONS_VERSION,
         min_duration,
         smoothing_window,
         threshold,
@@ -201,7 +211,8 @@ def chord_functional_analysis(
         key_mode,
         1 if detect_inversions else 0,
         chroma_method_value,
-        tuning,
+        tuning_value,
+        tuning_auto,
     )
     rc = lib.sonare_chord_functional_analysis(
         c_array,

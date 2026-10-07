@@ -76,7 +76,10 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTranscribeConfig* out) {
   *out = sonare_transcribe_config_default();
   out->polyphonic = BoolProperty(request, "polyphonic", out->polyphonic != 0) ? 1 : 0;
-  out->reference_hz = FiniteFloatProperty(request, "referenceHz", out->reference_hz);
+  bool reference_auto = false;
+  out->reference_hz =
+      AutoFiniteFloatProperty(request, "referenceHz", out->reference_hz, &reference_auto);
+  out->reference_auto = reference_auto ? 1 : 0;
   const Napi::Value fmin = request.Get("fmin");
   const bool wrote_fmin = !fmin.IsUndefined() && !fmin.IsNull();
   out->fmin = FiniteFloatProperty(request, "fmin", out->fmin);
@@ -182,6 +185,7 @@ Napi::Value Transcribe(const Napi::CallbackInfo& info) {
   out.Set("events", events);
   out.Set("noteCount", Napi::Number::New(env, static_cast<double>(result.value.note_count)));
   out.Set("tempoBpm", Napi::Number::New(env, result.value.tempo_bpm));
+  out.Set("tuning", Napi::Number::New(env, result.value.tuning));
   return out;
   SONARE_NODE_CATCH(env)
 }

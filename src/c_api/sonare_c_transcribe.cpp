@@ -5,6 +5,8 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
 #include "editing/note_model/note_transcriber.h"
+#include "feature/chroma.h"
+#include "feature/pitch.h"
 #include "util/insertion_sort.h"
 #endif
 
@@ -17,7 +19,9 @@ namespace {
 
 namespace ntm = sonare::editing::note_model;
 
-constexpr int32_t kTranscribeConfigVersion = 1;
+constexpr int32_t kTranscribeConfigVersionMin = 1;
+constexpr int32_t kTranscribeConfigVersion = 2;
+constexpr int32_t kTranscribeResultVersion = 2;
 
 /// Records which field was refused and why, so a caller reading
 /// sonare_last_error_message is told the field rather than left with a bare
@@ -33,14 +37,17 @@ SonareError refuse(const char* message) {
 /// field's domain is REFUSED rather than replaced, because a silently
 /// substituted default is indistinguishable downstream from a deliberate one.
 SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig* out,
-                        uint8_t* out_group, uint8_t* out_channel) {
+                        uint8_t* out_group, uint8_t* out_channel, bool* out_reference_auto) {
   *out = ntm::TranscribeConfig{};
   *out_group = 0;
   *out_channel = 0;
+  *out_reference_auto = false;
   if (in == nullptr) return SONARE_OK;
-  if (in->struct_version != kTranscribeConfigVersion) {
-    return refuse("struct_version must be 1");
+  if (in->struct_version < kTranscribeConfigVersionMin ||
+      in->struct_version > kTranscribeConfigVersion) {
+    return refuse("struct_version must be 1 or 2");
   }
+  if (in->struct_version >= 2) *out_reference_auto = in->reference_auto != 0;
 
   out->source =
       in->polyphonic != 0 ? ntm::TranscribeSource::kPolyphonic : ntm::TranscribeSource::kMonophonic;
@@ -143,6 +150,16 @@ std::vector<SonareMidiEventPod> build_events(const std::vector<ntm::TranscribedN
   return events;
 }
 
+/// Settles the tuning reference against @p audio: measured under @p reference_auto, otherwise
+/// the one @p config carries. Returns the tuning it amounts to, in fractions of a semitone.
+float resolve_reference(const sonare::Audio& audio, bool reference_auto,
+                        ntm::TranscribeConfig* config) {
+  if (reference_auto) {
+    config->reference_hz = sonare::tuning_to_reference_hz(sonare::measure_tuning(audio));
+  }
+  return sonare::reference_hz_to_tuning(config->reference_hz);
+}
+
 /// The tempo the grid is built on. A caller's value is taken as given; otherwise
 /// it is detected, and a detector that answers with nothing usable falls back to
 /// the project default rather than refusing the transcription.
@@ -158,7 +175,7 @@ float resolve_tempo(float requested, const sonare::Audio& audio) {
 
 SonareTranscribeConfig sonare_transcribe_config_default(void) {
   SonareTranscribeConfig config = {};
-  config.struct_version = 1;
+  config.struct_version = 2;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   // Seeded from the core defaults so the two cannot drift apart.
   const ntm::TranscribeConfig defaults;
@@ -181,6 +198,7 @@ void sonare_free_transcribe_result(SonareTranscribeResult* result) {
   result->count = 0;
   result->note_count = 0;
   result->tempo_bpm = 0.0f;
+  result->tuning = 0.0f;
 }
 
 SonareError sonare_transcribe(const float* samples, size_t length, int sample_rate, float tempo_bpm,
@@ -189,6 +207,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out = {};
+  out->struct_version = kTranscribeResultVersion;
   // The family's buffer policy, non-finite scan included. Transcription needs it
   // as much as any of them: a buffer of NaN tracks no pitch, so without the scan
   // it would answer SONARE_OK with zero notes -- an answer a caller cannot tell
@@ -198,11 +217,14 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   ntm::TranscribeConfig core_config;
   uint8_t group = 0;
   uint8_t channel = 0;
-  const SonareError config_error = read_config(config, &core_config, &group, &channel);
+  bool reference_auto = false;
+  const SonareError config_error =
+      read_config(config, &core_config, &group, &channel, &reference_auto);
   if (config_error != SONARE_OK) return config_error;
 
   SONARE_C_TRY
   const sonare::Audio audio = sonare::Audio::from_buffer(samples, length, sample_rate);
+  const float tuning = resolve_reference(audio, reference_auto, &core_config);
   const float tempo = resolve_tempo(tempo_bpm, audio);
 
   sonare::transport::TempoMap map;
@@ -215,6 +237,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
       build_events(notes, map, sample_rate, group, channel);
 
   out->tempo_bpm = tempo;
+  out->tuning = tuning;
   out->note_count = events.size() / 2u;
   if (events.empty()) return SONARE_OK;
   auto owned = std::make_unique<SonareMidiEventPod[]>(events.size());
@@ -242,7 +265,9 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   ntm::TranscribeConfig core_config;
   uint8_t group = 0;
   uint8_t channel = 0;
-  const SonareError config_error = read_config(config, &core_config, &group, &channel);
+  bool reference_auto = false;
+  const SonareError config_error =
+      read_config(config, &core_config, &group, &channel, &reference_auto);
   if (config_error != SONARE_OK) return config_error;
 
   std::vector<SonareMidiEventPod> events;
@@ -252,6 +277,7 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   // installed by sonare_project_auto_tempo transcribes onto that grid.
   sonare::transport::TempoMap map;
   fill_project_tempo_map(project->history.project(), &map);
+  resolve_reference(audio, reference_auto, &core_config);
   events =
       build_events(ntm::transcribe_notes(audio, core_config), map, sample_rate, group, channel);
   SONARE_C_CATCH

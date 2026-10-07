@@ -511,6 +511,10 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("pitchTuning", Napi::Function::New(env, &SonareWrap::PitchTuning, "pitchTuning"));
   exports.Set("estimateTuning",
               Napi::Function::New(env, &SonareWrap::EstimateTuning, "estimateTuning"));
+  exports.Set("tuningToReferenceHz",
+              Napi::Function::New(env, &SonareWrap::TuningToReferenceHz, "tuningToReferenceHz"));
+  exports.Set("referenceHzToTuning",
+              Napi::Function::New(env, &SonareWrap::ReferenceHzToTuning, "referenceHzToTuning"));
   exports.Set("piptrack", Napi::Function::New(env, &SonareWrap::Piptrack, "piptrack"));
   exports.Set("reassignedSpectrogram", Napi::Function::New(env, &SonareWrap::ReassignedSpectrogram,
                                                            "reassignedSpectrogram"));
@@ -993,6 +997,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
   std::vector<SonareMode> modes;
   SonareKeyProfileType profile = SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER;
   std::string genre_hint;
+  KeyTuningOption tuning;
   if (info.Length() >= 1 && info[0].IsObject()) {
     Napi::Object options = info[0].As<Napi::Object>();
     n_fft = IntProperty(options, "nFft", n_fft);
@@ -1003,22 +1008,27 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
     genre_hint = StringProperty(options, "genreHint", "");
+    tuning = node_key_tuning_option(options);
   }
 
-  // Forward modes/profile/genreHint through the extended entry point so the
+  // Forward modes/profile/genreHint/tuning through the tuning-aware entry point so the
   // instance method honors the same options as the standalone SonareWrap::DetectKey
   // (binding-node#1).
   SonareKey key{};
-  SonareError err = sonare_detect_key_with_extended_options(
+  float tuning_used = 0.0f;
+  SonareError err = sonare_detect_key_with_tuning(
       sonare_audio_data(audio_), sonare_audio_length(audio_), sonare_audio_sample_rate(audio_),
       n_fft, hop_length, use_hpss ? 1 : 0, loudness_weighted ? 1 : 0, high_pass_hz,
       modes.empty() ? nullptr : modes.data(), modes.size(), profile,
-      genre_hint.empty() ? nullptr : genre_hint.c_str(), &key);
+      genre_hint.empty() ? nullptr : genre_hint.c_str(), tuning.tuning, tuning.measure ? 1 : 0,
+      &key, &tuning_used);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  return KeyToObject(env, key.root, key.mode, key.confidence);
+  Napi::Object result = KeyToObject(env, key.root, key.mode, key.confidence);
+  result.Set("tuning", Napi::Number::New(env, static_cast<double>(tuning_used)));
+  return result;
   SONARE_NODE_CATCH(env)
 }
 

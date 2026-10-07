@@ -64,6 +64,12 @@ python = [
   # bindings/python/src/libsonare/_effects_voice.py:564.
   "realtime_voice_changer_preset_pod",
   "synth_enum_tables",      # facade-visible snapshot built from C enum names
+  # Result helpers over the librosa-mirror inverse functions, which keep their
+  # positional form; the JS surfaces take `{ result }` on the existing inverse request.
+  "mel_result_to_stft",
+  "mel_result_to_audio",
+  "mfcc_result_to_mel",
+  "mfcc_result_to_audio",
 ]
 
 # ---------------------------------------------------------------------------
@@ -82,10 +88,11 @@ python = [
 #   detect_chords_ex: the facade `detect_chords` IS the extended form (it
 #     exposes all SonareChordDetectionOptions fields and calls
 #     sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
-#   detect_key_with_options / _and_modes / _with_extended_options and the
-#     detect_key_candidates_with_modes / _with_extended_options family: folded
-#     into the facade `detect_key` / `detect_key_candidates` extended params
-#     (modes / profile / genre_hint).
+#   detect_key_with_options / _and_modes / _with_extended_options /
+#     _with_tuning and the detect_key_candidates_with_modes /
+#     _with_extended_options family: folded into the facade `detect_key` /
+#     `detect_key_candidates` extended params (modes / profile / genre_hint, and
+#     tuning for detect_key, whose result reports the tuning used).
 #   tempogram_with_mode: folded into `tempogram`'s `mode` selector.
 #   (mel_spectrogram_ex / mfcc_ex are credited by _ALIAS_COVERAGE in compare.py,
 #    anchored to the base mel_spectrogram / mfcc facade which now exposes the
@@ -182,6 +189,7 @@ node = [
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
+  "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
@@ -250,6 +258,7 @@ node = [
   "mel_to_stft_checked",
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
+  "mfcc_to_mel_checked_ex",
   "mfcc_to_audio_checked",
   "cqt_to_audio_checked",
   "vqt_to_audio_checked",
@@ -261,6 +270,7 @@ node = [
   "mel_to_stft_checked_ex",
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex2",
   # C-side canonical enum-name supplier consumed internally by the facade
   # snapshot/test helpers; not exposed as a same-named public function.
   "synth_enum_names",
@@ -314,6 +324,7 @@ wasm = [
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
+  "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
@@ -360,6 +371,7 @@ wasm = [
   "mel_to_stft_checked",
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
+  "mfcc_to_mel_checked_ex",
   "mfcc_to_audio_checked",
   "cqt_to_audio_checked",
   "vqt_to_audio_checked",
@@ -369,6 +381,7 @@ wasm = [
   "mel_to_stft_checked_ex",
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex2",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade analyze /
   # analyzeWithProgress / analyzeMelody (WASM keeps its native analyze() object).
@@ -422,6 +435,7 @@ python = [
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
+  "detect_key_with_tuning",
   "detect_key_candidates_with_modes",
   "detect_key_candidates_with_extended_options",
   "tempogram_with_mode",
@@ -470,6 +484,7 @@ python = [
   "mel_to_stft_checked",
   "mel_to_audio_checked",
   "mfcc_to_mel_checked",
+  "mfcc_to_mel_checked_ex",
   "mfcc_to_audio_checked",
   "cqt_to_audio_checked",
   "vqt_to_audio_checked",
@@ -479,6 +494,7 @@ python = [
   "mel_to_stft_checked_ex",
   "mel_to_audio_checked_ex",
   "mfcc_to_audio_checked_ex",
+  "mfcc_to_audio_checked_ex2",
   "synth_enum_names",
   # Unified-analysis variants folded into the base facade `analyze` /
   # `analyze_with_progress` / `analyze_melody` (use_pyin/center params).
@@ -807,6 +823,12 @@ names = []
 # Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
 # Every entry below was read against both the C header and the facade source.
 fields = [
+  # --- the `auto` flag folded into `tuning` ---
+  # The C option structs carry a `tuning_auto` flag beside the float `tuning`;
+  # Node and WASM spell it `tuning: 'auto'` on the one field.
+  "chord_detection_options.tuning_auto",
+  "music_analyze_options.tuning_auto",
+
   # --- ABI plumbing omitted by the TypeScript read models ---
   # schema_version is used by the C/Python layout mirrors and struct seeders;
   # Node/WASM expose the decoded values and do not surface this wire tag.

@@ -21,12 +21,12 @@
 ///   - Annotating key and chords -- @ref sonare_project_annotate_keys and
 ///     @ref sonare_project_annotate_chords.
 ///
-/// The tuning reference is likewise not measured here. A take recorded away
-/// from A440 should have its reference measured first -- run
-/// @ref sonare_pitch_pyin and feed its F0 array to @ref sonare_pitch_tuning --
-/// and the result passed in as @c reference_hz. Measuring it internally would
-/// mean tracking the pitch twice, and it would hide which of the two answers a
-/// wrong transcription came from.
+/// The tuning reference is the caller's by default: pass @c reference_hz, or
+/// convert a measured tuning with @ref sonare_tuning_to_reference_hz. A take
+/// recorded away from A440 can instead set @c reference_auto, which measures it
+/// from the audio (@ref sonare_estimate_tuning at 12 bins per octave) before
+/// any pitch is tracked. @ref SonareTranscribeResult reports the tuning that
+/// was used either way, so a wrong transcription can be traced to it.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -56,7 +56,8 @@ extern "C" {
 ///          a caller can mean. The divergence is deliberate and is the reason
 ///          the bindings do not simply forward this struct.
 typedef struct {
-  /// Must be 1. Any other value is rejected.
+  /// 1 or 2; any other value is rejected. Version 2 adds @c reference_auto,
+  /// which is read only from a version-2 struct.
   int32_t struct_version;
   /// Non-zero reads the multi-F0 chain, which finds overlapping notes at the
   /// cost of a full STFT and a mask per tracked ridge. 0 reads pYIN cut into
@@ -86,11 +87,22 @@ typedef struct {
   /// UMP group and MIDI channel the events are emitted on; both 0..15.
   int32_t group;
   int32_t channel;
+  /* --- struct_version 2 --- */
+  /// Non-zero measures the tuning reference from the audio and ignores
+  /// @c reference_hz. 0 keeps @c reference_hz.
+  int32_t reference_auto;
 } SonareTranscribeConfig;
 
 /// @brief Heap-owned transcription output. Release with
 ///        @ref sonare_free_transcribe_result.
 typedef struct {
+  /// 2; written by the function that fills the result.
+  int32_t struct_version;
+  /// Tuning the MIDI note numbers were measured against, in fractions of a
+  /// semitone from concert A440: the measured value under @c reference_auto,
+  /// otherwise the one @c reference_hz amounts to
+  /// (@ref sonare_reference_hz_to_tuning).
+  float tuning;
   /// Note-on / note-off pairs in canonical PPQ order, ready to hand to
   /// @ref sonare_project_set_midi_events. NULL when @c count is 0.
   SonareMidiEventPod* events;

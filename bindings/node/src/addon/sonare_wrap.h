@@ -275,6 +275,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value ZeroCrossings(const Napi::CallbackInfo& info);
   static Napi::Value PitchTuning(const Napi::CallbackInfo& info);
   static Napi::Value EstimateTuning(const Napi::CallbackInfo& info);
+  static Napi::Value TuningToReferenceHz(const Napi::CallbackInfo& info);
+  static Napi::Value ReferenceHzToTuning(const Napi::CallbackInfo& info);
   static Napi::Value Piptrack(const Napi::CallbackInfo& info);
   static Napi::Value ReassignedSpectrogram(const Napi::CallbackInfo& info);
   static Napi::Value SegmentCrossSimilarity(const Napi::CallbackInfo& info);

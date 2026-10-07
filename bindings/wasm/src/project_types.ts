@@ -635,16 +635,13 @@ export interface TranscribeOptions {
    */
   polyphonic?: boolean;
   /**
-   * Tuning reference in Hz the MIDI note numbers are measured against.
-   * Default `440`; must be finite and positive.
-   *
-   * **It is not measured for you.** A take recorded away from A440 should have
-   * its reference measured first — run `pitchPyin` and feed its F0 array to
-   * `pitchTuning` — and the answer passed in here. Measuring it internally
-   * would track the pitch twice and hide which of the two answers a wrong
-   * transcription came from.
+   * Tuning reference in Hz the MIDI note numbers are measured against, or
+   * `'auto'` to measure it from the audio before any pitch is tracked. Default
+   * `440`; a number must be finite and positive. {@link tuningToReferenceHz}
+   * converts a measured tuning to Hz, and {@link TranscribeResult.tuning}
+   * reports what was used either way, so a wrong transcription can be traced to it.
    */
-  referenceHz?: number;
+  referenceHz?: number | 'auto';
   /**
    * F0 tracker range in Hz. Both paths use these bounds; the polyphonic path
    * applies them to the salience estimator's F0 axis while its cent-spectrum
@@ -697,6 +694,12 @@ export interface TranscribeResult {
   noteCount: number;
   /** The tempo the PPQ coordinates were built on — yours when you gave one, the detected one otherwise. */
   tempoBpm: number;
+  /**
+   * Tuning the note numbers were measured against, in fractions of a semitone
+   * from concert A440: the measured value under `referenceHz: 'auto'`,
+   * otherwise the one `referenceHz` amounts to ({@link referenceHzToTuning}).
+   */
+  tuning: number;
 }
 
 /**

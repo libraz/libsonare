@@ -11,6 +11,7 @@
 #include "analysis/beat_analyzer.h"
 #include "core/convert.h"
 #include "feature/nnls_chroma.h"
+#include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -23,8 +24,14 @@ float ChordAnalyzer::analysis_end() const {
   return signal_duration_ > 0.0f ? std::min(grid_end, signal_duration_) : grid_end;
 }
 
-ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : config_(config) {
+ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& requested)
+    : config_(requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (config_.auto_tuning) {
+    config_.tuning = measure_tuning(audio);
+    config_.auto_tuning = false;
+  }
+  const ChordConfig& config = config_;
   SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
                    std::isfinite(config_.smoothing_window) && config_.smoothing_window >= 0.0f &&
                    std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&

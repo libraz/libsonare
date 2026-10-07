@@ -30,11 +30,29 @@ inline float tune_cqt_fmin(float fmin, float tuning) {
   return fmin * std::pow(2.0f, tuning / sonare::constants::kSemitonesPerOctave);
 }
 
+/// @brief Reference frequency of an A4 raised by @p tuning fractions of a semitone.
+/// @details The converter between the analysis unit (@ref is_valid_chroma_tuning) and the Hz a
+///          pitch reference is stated in. Not range-checked: a stream reference several semitones
+///          from @p a4 converts exactly, and the analyzers refuse what they cannot take.
+inline float tuning_to_reference_hz(float tuning, float a4 = sonare::constants::kA4Hz) {
+  return static_cast<float>(
+      static_cast<double>(a4) *
+      std::exp2(static_cast<double>(tuning) / sonare::constants::kSemitonesPerOctave));
+}
+
+/// @brief Tuning, in fractions of a semitone, of a recording whose A4 sits at @p hz.
+/// @details Inverse of @ref tuning_to_reference_hz. @p hz and @p a4 must be finite and positive.
+inline float reference_hz_to_tuning(float hz, float a4 = sonare::constants::kA4Hz) {
+  return static_cast<float>(static_cast<double>(sonare::constants::kSemitonesPerOctave) *
+                            std::log2(static_cast<double>(hz) / static_cast<double>(a4)));
+}
+
 /// @brief Configuration for Chromagram computation.
 struct ChromaConfig {
   // Chroma filterbank settings
   int n_chroma = 12;  ///< Number of chroma bins (typically 12)
-  /// Tuning deviation in fractions of a chroma bin. Defaults to 0 (concert A440).
+  /// Tuning deviation in fractions of a semitone, which is one chroma bin at 12 bins. Defaults to 0
+  /// (concert A440).
   /// NOTE: unlike librosa.feature.chroma_stft -- which estimates tuning from the
   /// signal when none is given -- this default is a fixed 0 and is NOT
   /// auto-estimated. For sharp/flat (non-A440) material, pass an estimate_tuning()

@@ -10,6 +10,7 @@
 #include "analysis/analysis_rate.h"
 #include "analysis/chord_analyzer.h"
 #include "effects/hpss.h"
+#include "feature/pitch.h"
 #include "feature/spectral.h"
 #include "filters/iir.h"
 #include "util/exception.h"
@@ -273,8 +274,13 @@ std::string key_name(int root, bool minor, bool short_form) {
   return short_form ? key.to_short_string() : key.to_string();
 }
 
-KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(config) {
+KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& requested) : config_(requested) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  if (config_.auto_tuning) {
+    config_.tuning = measure_tuning(audio);
+    config_.auto_tuning = false;
+  }
+  const KeyConfig& config = config_;
 
   if (uses_auto_audio_candidates(config)) {
     struct AudioCandidate {

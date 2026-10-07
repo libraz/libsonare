@@ -60,6 +60,20 @@ SonareError sonare_detect_key_with_extended_options(
     int loudness_weighted, float high_pass_hz, const SonareMode* modes, size_t mode_count,
     SonareKeyProfileType profile_type, const char* genre_hint, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
+  return sonare_detect_key_with_tuning(samples, length, sample_rate, n_fft, hop_length, use_hpss,
+                                       loudness_weighted, high_pass_hz, modes, mode_count,
+                                       profile_type, genre_hint, 0.0f, 0, out_key, nullptr);
+}
+
+SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, int sample_rate,
+                                          int n_fft, int hop_length, int use_hpss,
+                                          int loudness_weighted, float high_pass_hz,
+                                          const SonareMode* modes, size_t mode_count,
+                                          SonareKeyProfileType profile_type, const char* genre_hint,
+                                          float tuning, int tuning_auto, SonareKey* out_key,
+                                          float* out_tuning) {
+  SONARE_C_API_ENTRY;
+  if (out_tuning != nullptr) *out_tuning = 0.0f;
   if (out_key == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_key = {};
   if (n_fft <= 0 || hop_length <= 0 || (use_hpss != 0 && hop_length < 16) ||
@@ -83,10 +97,14 @@ SonareError sonare_detect_key_with_extended_options(
     if (genre_hint != nullptr && genre_hint[0] != '\0') {
       config.genre_hint = genre_hint;
     }
-    Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config);
+    config.tuning = tuning;
+    config.auto_tuning = tuning_auto != 0;
+    float used = 0.0f;
+    Key key = quick::detect_key(audio.data(), audio.size(), audio.sample_rate(), config, &used);
     out_key->root = static_cast<SonarePitchClass>(key.root);
     out_key->mode = static_cast<SonareMode>(key.mode);
     out_key->confidence = key.confidence;
+    if (out_tuning != nullptr) *out_tuning = used;
     return SONARE_OK;
   });
 }
@@ -275,7 +293,8 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
   const MusicAnalyzerConfig config;
   // Positional aggregate initialization: the order here must track the field
   // order in SonareMusicAnalyzeOptions.
-  SonareMusicAnalyzeOptions options = {config.n_fft,
+  SonareMusicAnalyzeOptions options = {SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
+                                       config.n_fft,
                                        config.hop_length,
                                        config.bpm_min,
                                        config.bpm_max,
@@ -295,7 +314,8 @@ SonareMusicAnalyzeOptions sonare_music_analyze_options_default(void) {
                                        {},
                                        0,
                                        config.meter_denominator,
-                                       config.tuning};
+                                       config.tuning,
+                                       config.auto_tuning ? 1 : 0};
   const size_t count = std::min(config.meter_candidate_numerators.size(),
                                 static_cast<size_t>(SONARE_MAX_METER_CANDIDATE_NUMERATORS));
   for (size_t i = 0; i < count; ++i) {
@@ -333,6 +353,7 @@ MusicAnalyzerConfig music_analyzer_config_from_options(const SonareMusicAnalyzeO
       options.meter_candidate_numerators + options.meter_candidate_numerator_count);
   config.meter_denominator = options.meter_denominator;
   config.tuning = options.tuning;
+  config.auto_tuning = options.tuning_auto != 0;
   return config;
 }
 
@@ -356,6 +377,9 @@ SonareError sonare_analyze_json_ex_with_progress(
   if (out_json == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   *out_json = nullptr;
   if (options == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  if (options->struct_version != SONARE_MUSIC_ANALYZE_OPTIONS_VERSION) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   if (options->meter_candidate_numerator_count < 0 ||
       options->meter_candidate_numerator_count > SONARE_MAX_METER_CANDIDATE_NUMERATORS) {
     return SONARE_ERROR_INVALID_PARAMETER;

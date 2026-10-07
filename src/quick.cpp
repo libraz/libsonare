@@ -38,6 +38,14 @@ Key detect_key(const float* samples, size_t size, int sample_rate, const KeyConf
   return sonare::detect_key(audio, config);
 }
 
+Key detect_key(const float* samples, size_t size, int sample_rate, const KeyConfig& config,
+               float* out_tuning) {
+  Audio audio = prepare_audio(samples, size, sample_rate);
+  KeyAnalyzer analyzer(audio, config);
+  if (out_tuning != nullptr) *out_tuning = analyzer.tuning();
+  return analyzer.key();
+}
+
 std::vector<KeyCandidate> detect_key_candidates(const float* samples, size_t size, int sample_rate,
                                                 const KeyConfig& config) {
   Audio audio = prepare_audio(samples, size, sample_rate);

@@ -37,8 +37,8 @@ from .types import (
     HpssResult,
     HumDetection,
     InverseResult,
-    Key,
     KeyCandidate,
+    KeyDetection,
     KeyProfile,
     LoudnessMatch,
     LufsResult,
@@ -272,7 +272,8 @@ def detect_key(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-) -> Key: ...
+    tuning: float | str = 0.0,
+) -> KeyDetection: ...
 def detect_key_candidates(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -326,7 +327,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> AnalysisResult: ...
 def analyze_with_progress(
     samples: FloatSamples,
@@ -353,7 +354,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> AnalysisResult: ...
 def estimate_meter(
     beat_times: Sequence[float],
@@ -501,7 +502,7 @@ def detect_chords(
     key_mode: Mode = Mode.MAJOR,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> ChordAnalysisResult: ...
 def chord_functional_analysis(
     samples: FloatSamples,
@@ -520,7 +521,7 @@ def chord_functional_analysis(
     use_key_context: bool = False,
     detect_inversions: bool = False,
     chroma_method: str = "stft",
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> list[str]: ...
 def analyze_sections(
     samples: FloatSamples,
@@ -765,11 +766,13 @@ class TranscribeResult:
     events: list[tuple[float, int, int]]
     note_count: int
     tempo_bpm: float
+    tuning: float
     def __init__(
         self,
         events: list[tuple[float, int, int]] = ...,
         note_count: int = 0,
         tempo_bpm: float = 0.0,
+        tuning: float = 0.0,
     ) -> None: ...
 
 def transcribe(
@@ -778,7 +781,7 @@ def transcribe(
     *,
     tempo_bpm: float | None = None,
     polyphonic: bool = False,
-    reference_hz: float | None = None,
+    reference_hz: float | str | None = None,
     fmin: float | None = None,
     fmax: float | None = None,
     min_note_ms: float | None = None,
@@ -1709,6 +1712,8 @@ def estimate_tuning(
     resolution: float = 0.01,
     bins_per_octave: int = 12,
 ) -> float: ...
+def tuning_to_reference_hz(tuning: float, a4: float = 440.0) -> float: ...
+def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float: ...
 def lufs_interleaved(
     samples: FloatSamples,
     channels: int,
@@ -2499,6 +2504,10 @@ def mfcc_to_audio(
     htk: bool = False,
     lifter: float = 0.0,
 ) -> list[float]: ...
+def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult: ...
+def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[float]: ...
+def mfcc_result_to_mel(result: MfccResult) -> InverseResult: ...
+def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]: ...
 def mastering_dynamics_compressor(
     samples: FloatSamples,
     sample_rate: int = 22050,

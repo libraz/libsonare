@@ -16,9 +16,10 @@ import type {
   ChordAnalysisResult,
   ChordChromaMethod,
   ChordDetectionOptions,
+  DetectKeyOptions,
   DynamicsResult,
-  Key,
   KeyCandidate,
+  KeyDetection,
   KeyDetectionOptions,
   MelodyOptions,
   MelodyResult,
@@ -85,7 +86,8 @@ export interface OnsetDetectOptions {
 }
 export interface DetectOnsetsRequest extends SamplesRequest, OnsetDetectOptions {}
 
-export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
+export interface DetectKeyRequest extends DetectKeyOptions, SamplesRequest {}
+export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, SamplesRequest {}
 
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
@@ -149,13 +151,14 @@ export interface MusicAnalyzeOptions {
    */
   meterDenominator?: number;
   /**
-   * Tuning offset of the recording in fractions of a semitone, the unit
-   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Every chroma the
-   * analysis builds (key, chords, sections) is shifted by it, so a recording
-   * that is not at A440 reads its key and chords on its own pitch grid.
-   * Default 0 (concert A440).
+   * Tuning offset of the recording in fractions of a semitone; must be in
+   * `[-0.5, 0.5)`. Every chroma the analysis builds (key, chords, sections) is
+   * shifted by it, so a recording that is not at A440 reads its key and chords
+   * on its own pitch grid. `'auto'` measures it from the audio. The value used,
+   * given or measured, is the result's `tuning`; {@link referenceHzToTuning}
+   * converts a reference pitch to this unit. Default 0 (concert A440).
    */
-  tuning?: number;
+  tuning?: number | 'auto';
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 
@@ -285,35 +288,35 @@ export function detectBpm(samples: Float32Array | SamplesRequest, sampleRate = 2
 }
 
 /**
- * Detect the musical key. The chroma is read at concert A440; a tuning offset
- * is applied through {@link analyze}'s `tuning` option (and to chords through
- * {@link detectChords}).
+ * Detect the musical key. The chroma is read at concert A440 unless `tuning`
+ * says otherwise: a semitone fraction in `[-0.5, 0.5)`, or `'auto'` to measure
+ * it from the audio. The result reports the tuning used.
  */
-export function detectKey(request: DetectKeyRequest): Key;
+export function detectKey(request: DetectKeyRequest): KeyDetection;
 export function detectKey(
   samples: Float32Array,
   sampleRate?: number,
-  options?: KeyDetectionOptions,
-): Key;
+  options?: DetectKeyOptions,
+): KeyDetection;
 export function detectKey(
   samples: Float32Array | DetectKeyRequest,
   sampleRate?: number,
-  options?: KeyDetectionOptions,
-): Key {
+  options?: DetectKeyOptions,
+): KeyDetection {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('detectKey', resolvedSampleRate);
   return addon.detectKey(request.samples, resolvedSampleRate, request);
 }
 
-export function detectKeyCandidates(request: DetectKeyRequest): KeyCandidate[];
+export function detectKeyCandidates(request: DetectKeyCandidatesRequest): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array,
   sampleRate?: number,
   options?: KeyDetectionOptions,
 ): KeyCandidate[];
 export function detectKeyCandidates(
-  samples: Float32Array | DetectKeyRequest,
+  samples: Float32Array | DetectKeyCandidatesRequest,
   sampleRate?: number,
   options?: KeyDetectionOptions,
 ): KeyCandidate[] {
@@ -844,7 +847,7 @@ interface ResolvedChordParams {
   keyMode: number;
   detectInversions: boolean;
   chromaMethod: ChordChromaMethod;
-  tuning: number;
+  tuning: number | 'auto';
 }
 
 function resolveChordOptions(options: ChordDetectionOptions): ResolvedChordParams {
@@ -981,7 +984,8 @@ export function detectChords(
     p.keyMode,
     p.detectInversions,
     chordChromaMethodValue(p.chromaMethod),
-    p.tuning,
+    p.tuning === 'auto' ? 0 : p.tuning,
+    p.tuning === 'auto',
   );
 }
 
@@ -1090,7 +1094,8 @@ export function chordFunctionalAnalysis(
     p.useKeyContext,
     p.detectInversions,
     chordChromaMethodValue(p.chromaMethod),
-    p.tuning,
+    p.tuning === 'auto' ? 0 : p.tuning,
+    p.tuning === 'auto',
   );
 }
 

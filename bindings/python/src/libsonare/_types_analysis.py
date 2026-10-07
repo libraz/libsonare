@@ -244,6 +244,18 @@ class AnalysisBeatObservations:
 
 
 @dataclass(frozen=True, slots=True)
+class KeyDetection(Key):
+    """A detected key and the tuning its chroma was built with.
+
+    Attributes:
+        tuning: Tuning used, in fractions of a semitone: the given value, or the
+            measured one under ``tuning="auto"``.
+    """
+
+    tuning: float = 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class AnalysisResult:
     """Full audio analysis result."""
 
@@ -298,6 +310,9 @@ class AnalysisResult:
     # is not how to get the global tempo.
     beat_local_bpm: list[float] = dataclasses.field(default_factory=list)
     form: str = ""
+    # Tuning the chromagrams were built with, in fractions of a semitone: the
+    # given value, or the measured one under ``tuning="auto"``.
+    tuning: float = 0.0
 
     @property
     def bpmConfidence(self) -> float:  # noqa: N802
@@ -793,9 +808,16 @@ class Chord:
 
 @dataclass(frozen=True, slots=True)
 class ChordAnalysisResult:
-    """Chord detection primitives."""
+    """Chord detection primitives.
+
+    Attributes:
+        chords: The detected chord timeline.
+        tuning: Tuning the chroma was built with, in fractions of a semitone:
+            the given value, or the measured one under ``tuning="auto"``.
+    """
 
     chords: list[Chord]
+    tuning: float = 0.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -813,7 +835,21 @@ class StftResult:
 
 @dataclass(frozen=True, slots=True)
 class MelSpectrogramResult:
-    """Mel spectrogram result."""
+    """Mel spectrogram result.
+
+    Carries the parameters of the forward transform, so the result alone is
+    enough to invert it (:func:`mel_result_to_stft`, :func:`mel_result_to_audio`).
+
+    Attributes:
+        n_fft: FFT size of the source STFT.
+        fmin: Lower Mel band edge in Hz as applied.
+        fmax: Upper Mel band edge in Hz as applied: the Nyquist when the
+            request left it at 0.
+        htk: ``True`` for the HTK Mel formula, ``False`` for Slaney.
+        is_db: ``True`` when ``power`` holds dB values. A forward transform
+            always reports ``False``: ``power`` is linear power and ``db`` is
+            its dB form.
+    """
 
     n_mels: int
     n_frames: int
@@ -821,15 +857,42 @@ class MelSpectrogramResult:
     hop_length: int
     power: list[float]
     db: list[float]
+    n_fft: int
+    fmin: float
+    fmax: float
+    htk: bool
+    is_db: bool
 
 
 @dataclass(frozen=True, slots=True)
 class MfccResult:
-    """MFCC (Mel-frequency cepstral coefficients) result."""
+    """MFCC (Mel-frequency cepstral coefficients) result.
+
+    Carries the Mel parameters the coefficients were derived with and the lifter,
+    so the result alone is enough to invert it (:func:`mfcc_result_to_mel`,
+    :func:`mfcc_result_to_audio`).
+
+    Attributes:
+        n_mels: Mel bands the coefficients were taken from.
+        fmax: Upper Mel band edge in Hz as applied: the Nyquist when the request
+            left it at 0.
+        is_db: Always ``False``: the coefficients are a cepstrum, not a dB
+            spectrogram.
+        lifter: Cepstral lifter applied to the coefficients; 0 means none.
+    """
 
     n_mfcc: int
     n_frames: int
     coefficients: list[float]
+    sample_rate: int
+    hop_length: int
+    n_fft: int
+    n_mels: int
+    fmin: float
+    fmax: float
+    htk: bool
+    is_db: bool
+    lifter: float
 
 
 @dataclass(frozen=True, slots=True)

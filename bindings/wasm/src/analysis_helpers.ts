@@ -122,6 +122,7 @@ export function convertChordAnalysisResult(wasm: WasmChordAnalysisResult): Chord
       confidence: c.confidence,
       name: c.name,
     })),
+    tuning: wasm.tuning,
   };
 }
 
@@ -189,5 +190,6 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     rhythm: wasm.rhythm,
     melody: wasm.melody,
     form: wasm.form,
+    tuning: wasm.tuning,
   };
 }

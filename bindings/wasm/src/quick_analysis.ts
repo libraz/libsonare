@@ -18,8 +18,9 @@ import type {
   AnalyzeTimbreOptions,
   ChordAnalysisResult,
   ChordDetectionOptions,
-  Key,
+  DetectKeyOptions,
   KeyCandidate,
+  KeyDetection,
   KeyDetectionOptions,
   MeterEstimate,
   RirResult,
@@ -68,7 +69,8 @@ export interface OnsetDetectOptions {
 export interface DetectOnsetsRequest extends SamplesRequest, OnsetDetectOptions {}
 
 /** Canonical request form for key detection functions. */
-export interface DetectKeyRequest extends KeyDetectionOptions, SamplesRequest {}
+export interface DetectKeyRequest extends DetectKeyOptions, SamplesRequest {}
+export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, SamplesRequest {}
 
 /** Canonical request form for analysis with synchronous progress reporting. */
 export interface AnalyzeWithProgressRequest extends SamplesRequest {
@@ -152,24 +154,25 @@ export function detectBpm(
 /**
  * Detect musical key from audio samples.
  *
- * The chroma is read at concert A440; a tuning offset is applied through
- * {@link analyze}'s `tuning` option (and to chords through {@link detectChords}).
+ * The chroma is read at concert A440 unless `tuning` says otherwise: a semitone
+ * fraction in `[-0.5, 0.5)`, or `'auto'` to measure it from the audio. The
+ * result reports the tuning used.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @returns Detected key
+ * @returns Detected key and the tuning its chroma was built with
  */
-export function detectKey(request: DetectKeyRequest): Key;
+export function detectKey(request: DetectKeyRequest): KeyDetection;
 export function detectKey(
   samples: Float32Array,
   sampleRate?: number,
-  options?: KeyDetectionOptions,
-): Key;
+  options?: DetectKeyOptions,
+): KeyDetection;
 export function detectKey(
   samples: Float32Array | DetectKeyRequest,
   sampleRate = 22050,
-  options: KeyDetectionOptions = {},
-): Key {
+  options: DetectKeyOptions = {},
+): KeyDetection {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('detectKey', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule()._detectKeyWithOptions(
@@ -183,6 +186,7 @@ export function detectKey(
     keyModeValues(request.modes),
     keyProfileValue(request.profile),
     request.genreHint ?? '',
+    request.tuning ?? 0,
   );
   return {
     root: result.root as PitchClass,
@@ -190,17 +194,18 @@ export function detectKey(
     confidence: result.confidence,
     name: result.name,
     shortName: result.shortName,
+    tuning: result.tuning,
   };
 }
 
-export function detectKeyCandidates(request: DetectKeyRequest): KeyCandidate[];
+export function detectKeyCandidates(request: DetectKeyCandidatesRequest): KeyCandidate[];
 export function detectKeyCandidates(
   samples: Float32Array,
   sampleRate?: number,
   options?: KeyDetectionOptions,
 ): KeyCandidate[];
 export function detectKeyCandidates(
-  samples: Float32Array | DetectKeyRequest,
+  samples: Float32Array | DetectKeyCandidatesRequest,
   sampleRate = 22050,
   options: KeyDetectionOptions = {},
 ): KeyCandidate[] {
@@ -452,13 +457,14 @@ export interface MusicAnalyzeOptions {
    */
   meterDenominator?: number;
   /**
-   * Tuning offset of the recording in fractions of a semitone, the unit
-   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Every chroma the
-   * analysis builds (key, chords, sections) is shifted by it, so a recording
-   * that is not at A440 reads its key and chords on its own pitch grid.
-   * Default 0 (concert A440).
+   * Tuning offset of the recording in fractions of a semitone; must be in
+   * `[-0.5, 0.5)`. Every chroma the analysis builds (key, chords, sections) is
+   * shifted by it, so a recording that is not at A440 reads its key and chords
+   * on its own pitch grid. `'auto'` measures it from the audio. The value used,
+   * given or measured, is the result's `tuning`; {@link referenceHzToTuning}
+   * converts a reference pitch to this unit. Default 0 (concert A440).
    */
-  tuning?: number;
+  tuning?: number | 'auto';
 }
 export interface MusicAnalyzeRequest extends SamplesRequest, MusicAnalyzeOptions {}
 

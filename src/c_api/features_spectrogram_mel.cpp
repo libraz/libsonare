@@ -77,8 +77,7 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->power = nullptr;
-  out->db = nullptr;
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     MelConfig config;
@@ -92,10 +91,16 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
     config.htk = htk != 0;
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
 
+    out->struct_version = SONARE_MEL_RESULT_VERSION;
     out->n_mels = mel.n_mels();
     out->n_frames = mel.n_frames();
     out->sample_rate = mel.sample_rate();
     out->hop_length = mel.hop_length();
+    out->n_fft = config.n_fft;
+    out->fmin = config.fmin;
+    out->fmax = config.resolved_fmax(mel.sample_rate());
+    out->htk = config.htk ? 1 : 0;
+    out->is_db = 0;
 
     size_t total = static_cast<size_t>(mel.n_mels()) * mel.n_frames();
     std::unique_ptr<float[]> power(new float[total]);
@@ -125,7 +130,7 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
   SONARE_C_API_ENTRY;
   if (!out) return SONARE_ERROR_INVALID_PARAMETER;
 
-  out->coefficients = nullptr;
+  *out = {};
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     MelConfig config;
@@ -139,8 +144,18 @@ SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate,
     MelSpectrogram mel = MelSpectrogram::compute(audio, config);
     std::vector<float> mfcc_data = mel.mfcc(n_mfcc, lifter);
 
+    out->struct_version = SONARE_MFCC_RESULT_VERSION;
     out->n_mfcc = n_mfcc;
     out->n_frames = mel.n_frames();
+    out->sample_rate = mel.sample_rate();
+    out->hop_length = mel.hop_length();
+    out->n_fft = config.n_fft;
+    out->n_mels = mel.n_mels();
+    out->fmin = config.fmin;
+    out->fmax = config.resolved_fmax(mel.sample_rate());
+    out->htk = config.htk ? 1 : 0;
+    out->is_db = 0;
+    out->lifter = lifter;
     std::unique_ptr<float[]> coeffs(new float[mfcc_data.size()]);
     std::memcpy(coeffs.get(), mfcc_data.data(), mfcc_data.size() * sizeof(float));
     out->coefficients = release_array(coeffs);

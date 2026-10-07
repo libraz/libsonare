@@ -46,7 +46,7 @@ export interface TranscribeRequest extends TranscribeOptions {
  * resolve, come back with an empty `events` array and `noteCount` 0, and
  * `tempoBpm` still reports the tempo that was used or detected.
  *
- * Three things are deliberately **not** done here, because the library already
+ * Two things are deliberately **not** done here, because the library already
  * does each of them somewhere else and a second implementation would drift:
  *
  * - **Quantizing to a grid** — {@link Project.bakeMidiFx}'s `quantizePpq` /
@@ -58,7 +58,8 @@ export interface TranscribeRequest extends TranscribeOptions {
  * - **Annotating key and chords** — {@link Project.annotateKeys} /
  *   {@link Project.annotateChords}.
  *
- * The tuning reference is likewise not measured — see
+ * The tuning reference is `referenceHz`, or measured from the audio with
+ * `referenceHz: 'auto'`; the result reports it as `tuning` — see
  * {@link TranscribeOptions.referenceHz}.
  *
  * @throws {RangeError} on empty `samples`, a non-finite sample, or a

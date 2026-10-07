@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <set>
 #include <string>
 #include <utility>
 #include <vector>
@@ -196,7 +197,7 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   const SonareTranscribeConfig config = sonare_transcribe_config_default();
   const ntm::TranscribeConfig core;
 
-  REQUIRE(config.struct_version == 1);
+  REQUIRE(config.struct_version == 2);
   CHECK(config.polyphonic == (core.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0));
   CHECK(config.reference_hz == core.reference_hz);
   CHECK(config.fmin == core.fmin);
@@ -265,8 +266,8 @@ TEST_CASE("sonare_transcribe refuses what it cannot read", "[c_api][transcribe]"
     CHECK(result.get().note_count == 0);
   }
 
-  SECTION("a struct version that is not 1") {
-    for (const int32_t version : {0, 2, -1, 99}) {
+  SECTION("a struct version that is neither 1 nor 2") {
+    for (const int32_t version : {0, 3, -1, 99}) {
       INFO("struct_version " << version);
       SonareTranscribeConfig config = sonare_transcribe_config_default();
       config.struct_version = version;
@@ -552,7 +553,7 @@ TEST_CASE("sonare_project_transcribe_to_clip refuses what it cannot write", "[c_
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
 
   SonareTranscribeConfig config = sonare_transcribe_config_default();
-  config.struct_version = 2;
+  config.struct_version = 3;
   CHECK(sonare_project_transcribe_to_clip(fixture.project(), fixture.clip(), samples.data(),
                                           samples.size(), kSampleRate, &config,
                                           &note_count) == SONARE_ERROR_INVALID_PARAMETER);
@@ -676,6 +677,56 @@ TEST_CASE("the C door resolves a partial tracker range from its source", "[c_api
                           poly_result.out()) == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(poly_result.get().events == nullptr);
   CHECK(std::string(sonare_last_error_message()) == "fmax must be above fmin");
+}
+
+// --- The tuning reference --------------------------------------------------
+
+TEST_CASE("reference_auto measures the tuning and the result reports what was used",
+          "[c_api][transcribe][tuning]") {
+  // Every tone sits 0.3 semitone above equal temperament at A440.
+  constexpr float kDetune = 0.3f;
+  const float stretch = std::pow(2.0f, kDetune / sonare::constants::kSemitonesPerOctave);
+  std::vector<float> samples(static_cast<size_t>(kGapSamples), 0.0f);
+  for (const int note : {60, 64, 67, 72}) {
+    append_tone(samples, hz_for_midi(note) * stretch, 0.5f, kToneSamples);
+    samples.insert(samples.end(), static_cast<size_t>(kGapSamples), 0.0f);
+  }
+
+  SECTION("a given reference is reported as the tuning it amounts to") {
+    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    float expected = 0.0f;
+    REQUIRE(sonare_reference_hz_to_tuning(432.0f, 440.0f, &expected) == SONARE_OK);
+    config.reference_hz = 432.0f;
+    Result result;
+    transcribe_into(&result, samples, 120.0f, &config);
+    CHECK(result.get().struct_version == 2);
+    CHECK_THAT(result.get().tuning, WithinAbs(expected, 1e-5));
+
+    Result defaulted;
+    transcribe_into(&defaulted, samples, 120.0f, nullptr);
+    CHECK(defaulted.get().tuning == 0.0f);
+  }
+
+  SECTION("reference_auto reads the recording's own tuning, and the notes stay on their pitches") {
+    SonareTranscribeConfig config = sonare_transcribe_config_default();
+    config.reference_auto = 1;
+    Result result;
+    transcribe_into(&result, samples, 120.0f, &config);
+    CHECK_THAT(result.get().tuning, WithinAbs(kDetune, 0.03));
+
+    std::set<int> notes;
+    for (const SonareMidiEventPod& pod : result.events()) {
+      const Decoded event = decode(pod);
+      if (event.status == kNoteOn) notes.insert(event.note);
+    }
+    CHECK(notes == std::set<int>{60, 64, 67, 72});
+
+    // The flag is a version-2 field: a version-1 struct that carries it is read as not asking.
+    config.struct_version = 1;
+    Result v1;
+    transcribe_into(&v1, samples, 120.0f, &config);
+    CHECK(v1.get().tuning == 0.0f);
+  }
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR

@@ -117,10 +117,14 @@ struct ChordConfig {
   /// @details Costs one extra bass-band CQT. The constructor also computes one
   /// when @ref detect_inversions is set, and the two share it.
   bool use_bass_chroma = true;
-  /// @brief Recording tuning offset in fractions of a semitone, the estimate_tuning() unit.
+  /// @brief Recording tuning offset in fractions of a semitone.
   /// @details Must be in [-0.5, 0.5); 0 is concert A440. Read only by the audio constructor,
   /// which builds its own chromagrams; a supplied chromagram already carries its tuning.
   float tuning = 0.0f;
+  /// @brief Measure the tuning from the audio (@ref measure_tuning) instead of reading @ref tuning.
+  /// @details Read only by the audio constructor; @ref ChordAnalyzer::tuning reports the value
+  /// used.
+  bool auto_tuning = false;
 };
 
 /// @brief Chord analyzer for detecting chords from audio.
@@ -157,6 +161,11 @@ class ChordAnalyzer {
 
   /// @brief Returns detected chords with timing.
   const std::vector<Chord>& chords() const { return chords_; }
+
+  /// @brief Returns the tuning the audio constructor used, in fractions of a semitone.
+  /// @details The measured value when @ref ChordConfig::auto_tuning was set, else the configured
+  ///          one; the configured one for a chromagram constructor, which does not apply it.
+  float tuning() const { return config_.tuning; }
 
   /// @brief Returns number of detected chords.
   size_t count() const { return chords_.size(); }

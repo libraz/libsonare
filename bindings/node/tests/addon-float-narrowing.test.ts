@@ -428,6 +428,18 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => native.estimateTuning(AUDIO, SAMPLE_RATE, 512, 256, v, 12),
   },
   {
+    name: 'tuningToReferenceHz a4',
+    site: 'features/advanced.cpp TuningToReferenceHz a4',
+    control: [440, 432],
+    call: (v) => native.tuningToReferenceHz(0.25, v),
+  },
+  {
+    name: 'referenceHzToTuning a4',
+    site: 'features/advanced.cpp ReferenceHzToTuning a4',
+    control: [440, 432],
+    call: (v) => native.referenceHzToTuning(446, v),
+  },
+  {
     name: 'trimSilence topDb',
     site: 'features/signal.cpp TrimSilence topDb',
     control: [60, 20],

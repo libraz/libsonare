@@ -3,6 +3,15 @@
 #include "c_api/core_internal.h"
 #include "util/numeric_validation.h"
 
+namespace {
+
+// 0 reads as the current layout, so a zero-filled struct with its fields set is valid.
+bool valid_chord_options_version(int version) {
+  return version == 0 || version == SONARE_CHORD_DETECTION_OPTIONS_VERSION;
+}
+
+}  // namespace
+
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
                                float bpm_max, float start_bpm, int n_fft, int hop_length,
                                int max_candidates, SonareBpmAnalysisResult* out) {
@@ -282,8 +291,8 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  out->chords = nullptr;
-  out->chord_count = 0;
+  *out = {};
+  out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
   if (!std::isfinite(min_duration) || min_duration < 0.0f || !std::isfinite(smoothing_window) ||
       smoothing_window <= 0.0f || !std::isfinite(threshold) || threshold < 0.0f ||
       threshold > 1.0f || n_fft <= 0 || hop_length <= 0) {
@@ -301,7 +310,7 @@ SonareError sonare_detect_chords(const float* samples, size_t length, int sample
     config.use_beat_sync = use_beat_sync != 0;
 
     std::vector<Chord> chords = detect_chords(audio, config);
-    fill_chord_result(chords, out);
+    fill_chord_result(chords, config.tuning, out);
     return SONARE_OK;
   });
 }
@@ -316,9 +325,10 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   // rejected input always leaves a NULL owned pointer; otherwise
   // sonare_free_chord_analysis_result(&r) would delete[] an uninitialised
   // pointer.
-  out->chords = nullptr;
-  out->chord_count = 0;
+  *out = {};
+  out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_chord_options_version(options->struct_version)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
       !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
       !std::isfinite(options->threshold) || options->threshold < 0.0f ||
@@ -359,9 +369,10 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
     config.detect_inversions = options->detect_inversions != 0;
     config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
     config.tuning = options->tuning;
+    config.auto_tuning = options->tuning_auto != 0;
 
-    std::vector<Chord> chords = detect_chords(audio, config);
-    fill_chord_result(chords, out);
+    ChordAnalyzer analyzer(audio, config);
+    fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
     return SONARE_OK;
   });
 }
@@ -379,6 +390,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   out->items = nullptr;
   out->count = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!valid_chord_options_version(options->struct_version)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
       !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
       !std::isfinite(options->threshold) || options->threshold < 0.0f ||
@@ -425,6 +437,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
     config.detect_inversions = options->detect_inversions != 0;
     config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
     config.tuning = options->tuning;
+    config.auto_tuning = options->tuning_auto != 0;
 
     ChordAnalyzer analyzer(audio, config);
     std::vector<std::string> labels =

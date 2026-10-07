@@ -631,8 +631,10 @@ export function reassignedSpectrogram(
  * The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
  * librosa.feature.chroma_stft — which estimates tuning from the signal when none
  * is given — this does NOT auto-estimate and takes no tuning argument. A
- * tuning offset from {@link estimateTuning} is applied through `analyze`'s
- * `tuning` option (and to chords through `detectChords`).
+ * tuning offset (a fraction of a semitone, which {@link estimateTuning} returns
+ * at 12 bins per octave) is applied through `analyze`'s `tuning` option (and to
+ * chords through `detectChords`); both also measure it themselves with
+ * `tuning: 'auto'`.
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)

@@ -89,6 +89,9 @@ from ._types_analysis import (
     KeyCandidate as KeyCandidate,
 )
 from ._types_analysis import (
+    KeyDetection as KeyDetection,
+)
+from ._types_analysis import (
     LufsResult as LufsResult,
 )
 from ._types_analysis import (

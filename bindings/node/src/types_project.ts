@@ -700,11 +700,11 @@ export interface ProjectMidiFxPreviewRequest {
  * - Annotating key and chords — {@link Project.annotateKeys} /
  *   {@link Project.annotateChords}.
  *
- * The tuning reference is likewise not measured. A take recorded away from
- * A440 should have its reference measured first — run {@link pitchPyin} and
- * feed its `f0` array to {@link pitchTuning} — and the answer passed as
- * {@link referenceHz}. Measuring it internally would track the pitch twice and
- * hide which of the two answers a wrong transcription came from.
+ * The tuning reference is the caller's by default: pass {@link referenceHz}, or
+ * convert a measured tuning with {@link tuningToReferenceHz}. A take recorded
+ * away from A440 can instead pass `referenceHz: 'auto'`, which measures it from
+ * the audio before any pitch is tracked; {@link TranscribeResult.tuning}
+ * reports what was used either way, so a wrong transcription can be traced to it.
  */
 export interface TranscribeOptions {
   /**
@@ -714,11 +714,12 @@ export interface TranscribeOptions {
    */
   polyphonic?: boolean;
   /**
-   * Tuning reference the MIDI note numbers are measured against, in Hz.
-   * Must be finite and positive; `0` is refused rather than read as the
-   * default, which is what omitting the field asks for. Default `440`.
+   * Tuning reference the MIDI note numbers are measured against, in Hz, or
+   * `'auto'` to measure it from the audio. A number must be finite and
+   * positive; `0` is refused rather than read as the default, which is what
+   * omitting the field asks for. Default `440`.
    */
-  referenceHz?: number;
+  referenceHz?: number | 'auto';
   /**
    * Low end of the F0 tracker's range, in Hz. Both paths use this bound; the
    * polyphonic path applies it to the salience estimator's F0 axis while its
@@ -790,6 +791,12 @@ export interface TranscribeResult {
   noteCount: number;
   /** The tempo the PPQ coordinates were built on — the supplied value when one was given, the detected one otherwise. */
   tempoBpm: number;
+  /**
+   * Tuning the note numbers were measured against, in fractions of a semitone
+   * from concert A440: the measured value under `referenceHz: 'auto'`,
+   * otherwise the one `referenceHz` amounts to ({@link referenceHzToTuning}).
+   */
+  tuning: number;
 }
 
 /**

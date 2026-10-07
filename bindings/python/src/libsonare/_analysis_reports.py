@@ -13,6 +13,7 @@ from ._analysis_detection import _parse_analysis_json
 from ._cancellation import CancellationState, make_cancel_trampoline
 from ._ffi import (
     SONARE_MAX_METER_CANDIDATE_NUMERATORS,
+    SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
     SonareAcousticResult,
     SonareAnalysisResult,
     SonareAnalyzeProgressCallback,
@@ -38,6 +39,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _tuning_arg,
 )
 from .types import (
     AcousticResult,
@@ -90,7 +92,7 @@ def _music_analyze_options(
     compute_tempo_curve: bool,
     meter_candidate_numerators: Sequence[int] | None,
     meter_denominator: int,
-    tuning: float,
+    tuning: float | str,
 ) -> SonareMusicAnalyzeOptions:
     """Build the options struct shared by :func:`analyze` and :func:`analyze_with_progress`."""
     numerators = (
@@ -107,7 +109,9 @@ def _music_analyze_options(
             "analyze: meter_candidate_numerators must hold at most "
             f"{SONARE_MAX_METER_CANDIDATE_NUMERATORS} entries"
         )
+    tuning_value, tuning_auto = _tuning_arg("analyze", tuning)
     return SonareMusicAnalyzeOptions(
+        struct_version=SONARE_MUSIC_ANALYZE_OPTIONS_VERSION,
         n_fft=n_fft,
         hop_length=hop_length,
         bpm_min=bpm_min,
@@ -141,7 +145,8 @@ def _music_analyze_options(
         ),
         meter_candidate_numerator_count=len(numerators),
         meter_denominator=meter_denominator,
-        tuning=tuning,
+        tuning=tuning_value,
+        tuning_auto=tuning_auto,
     )
 
 
@@ -169,7 +174,7 @@ def analyze(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> AnalysisResult:
     """Run full audio analysis on samples.
 
@@ -197,8 +202,10 @@ def analyze(
         meter_denominator: Beat unit reported for the detected meter; a power
             of two in ``[1, 32]``. The estimator still reports 8 on its own
             when it resolves a compound meter.
-        tuning: Tuning offset of the recording in fractions of a semitone, the
-            unit :func:`estimate_tuning` returns; must be in ``[-0.5, 0.5)``.
+        tuning: Tuning offset of the recording in fractions of a semitone; must
+            be in ``[-0.5, 0.5)``. ``"auto"`` measures it from the audio, and
+            :func:`reference_hz_to_tuning` converts a reference pitch to this unit.
+            The value used, given or measured, is ``AnalysisResult.tuning``.
             Every chroma the analysis builds (key, chords, sections) is shifted
             by it. 0 is concert A440.
 
@@ -388,7 +395,7 @@ def analyze_with_progress(
     compute_tempo_curve: bool = False,
     meter_candidate_numerators: Sequence[int] | None = None,
     meter_denominator: int = 4,
-    tuning: float = 0.0,
+    tuning: float | str = 0.0,
 ) -> AnalysisResult:
     """Run full audio analysis with optional progress callbacks.
 

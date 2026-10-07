@@ -59,20 +59,54 @@ typedef struct {
   float* power;      // n_bins * n_frames, caller frees with sonare_free_floats
 } SonareStftResult;
 
-// Mel spectrogram result
+/* Layout version of SonareMelResult and SonareMfccResult, written by the
+   function that fills them. */
+#define SONARE_MEL_RESULT_VERSION 2
+#define SONARE_MFCC_RESULT_VERSION 2
+
+/* Mel spectrogram result. Besides the matrices it carries the parameters of
+   the forward transform, so the result is enough to invert it: the inverse
+   entry points take the same values as arguments. */
 typedef struct {
+  /* SONARE_MEL_RESULT_VERSION. */
+  int struct_version;
   int n_mels;
   int n_frames;
   int sample_rate;
   int hop_length;
+  /* FFT size of the source STFT. */
+  int n_fft;
+  /* Mel range in Hz as applied: fmax is sr/2 when the request left it at 0. */
+  float fmin;
+  float fmax;
+  /* Non-zero for the HTK Mel formula, 0 for Slaney. */
+  int htk;
+  /* Non-zero when the matrix being described is in dB. Always 0 here: @c power
+     is linear power and @c db is its dB form. */
+  int is_db;
   float* power;  // n_mels * n_frames
   float* db;     // n_mels * n_frames
 } SonareMelResult;
 
-// MFCC result
+/* MFCC result. Carries the Mel parameters its coefficients were derived with,
+   plus the lifter, so the result is enough to invert it. */
 typedef struct {
+  /* SONARE_MFCC_RESULT_VERSION. */
+  int struct_version;
   int n_mfcc;
   int n_frames;
+  int sample_rate;
+  int hop_length;
+  int n_fft;
+  /* Mel bands the coefficients were taken from. */
+  int n_mels;
+  float fmin;
+  float fmax;
+  int htk;
+  /* Always 0: the coefficients are a cepstrum, not a dB spectrogram. */
+  int is_db;
+  /* Cepstral lifter applied to the coefficients; 0 = none. */
+  float lifter;
   float* coefficients;  // n_mfcc * n_frames
 } SonareMfccResult;
 
@@ -224,7 +258,15 @@ typedef struct {
   SonarePitchClass bass;
 } SonareChord;
 
+#define SONARE_CHORD_ANALYSIS_RESULT_VERSION 2
+
 typedef struct {
+  /* SONARE_CHORD_ANALYSIS_RESULT_VERSION, written by the filling function. */
+  int struct_version;
+  /* Tuning the chroma was built with, in fractions of a semitone: the options'
+     value, or the measured one when tuning_auto was set. 0 from the entry
+     points that take no tuning. */
+  float tuning;
   SonareChord* chords;
   size_t chord_count;
 } SonareChordAnalysisResult;
@@ -341,7 +383,13 @@ typedef struct {
   float vibrato_rate;
 } SonareMelodyResult;
 
+/* Layout version of SonareChordDetectionOptions; the caller sets it. 0 reads as
+   the current version, so a zero-filled struct with the fields set is valid. */
+#define SONARE_CHORD_DETECTION_OPTIONS_VERSION 2
+
 typedef struct {
+  /* SONARE_CHORD_DETECTION_OPTIONS_VERSION, or 0 for the same. */
+  int struct_version;
   float min_duration;
   float smoothing_window;
   float threshold; /* final-template correlation threshold [0, 1]; below => UNKNOWN / N.C. */
@@ -356,9 +404,14 @@ typedef struct {
   SonareMode key_mode;
   int detect_inversions;
   int chroma_method;  // 0 = STFT, 1 = NNLS
-  /* Tuning offset of the recording in fractions of a chroma bin, the unit
-     sonare_estimate_tuning returns; 0 is concert A440. Must be in [-0.5, 0.5). */
+  /* Tuning offset of the recording in fractions of a semitone; 0 is concert
+     A440. Must be in [-0.5, 0.5). sonare_reference_hz_to_tuning converts a
+     reference pitch to this unit, and sonare_estimate_tuning at 12 bins per
+     octave returns it. */
   float tuning;
+  /* Non-zero measures the tuning from the audio instead of reading @c tuning.
+     The value used, given or measured, is SonareChordAnalysisResult.tuning. */
+  int tuning_auto;
 } SonareChordDetectionOptions;
 
 /* ============================================================================

@@ -71,9 +71,12 @@ struct KeyConfig {
   KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;
   std::string genre_hint = "auto";  ///< "auto" | "edm" | "pop" | "classical" | "jazz"
   std::vector<Mode> modes = {Mode::Major, Mode::Minor};  ///< Candidate modes; default compatible
-  /// Recording tuning offset in fractions of a semitone, the estimate_tuning() unit; must be in
-  /// [-0.5, 0.5). 0 is concert A440.
+  /// Recording tuning offset in fractions of a semitone; must be in [-0.5, 0.5). 0 is concert
+  /// A440. @ref reference_hz_to_tuning converts a reference pitch to this unit.
   float tuning = 0.0f;
+  /// Measure the tuning from the audio (@ref measure_tuning) instead of reading @ref tuning.
+  /// Read only by the audio constructor; @ref KeyAnalyzer::tuning reports the value used.
+  bool auto_tuning = false;
 };
 
 /// @brief Key analyzer using chroma correlation.
@@ -96,6 +99,10 @@ class KeyAnalyzer {
 
   /// @brief Returns the detected key.
   Key key() const { return key_; }
+
+  /// @brief Returns the tuning the analysis used, in fractions of a semitone.
+  /// @details The measured value when @ref KeyConfig::auto_tuning was set, else the configured one.
+  float tuning() const { return config_.tuning; }
 
   /// @brief Returns the root pitch class.
   PitchClass root() const { return key_.root; }

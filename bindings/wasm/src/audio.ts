@@ -64,9 +64,10 @@ import type {
   ChordAnalysisResult,
   ChordDetectionOptions,
   ChromaResult,
+  DetectKeyOptions,
   HpssResult,
-  Key,
   KeyCandidate,
+  KeyDetection,
   KeyDetectionOptions,
   LufsResult,
   MasteringChainConfig,
@@ -385,7 +386,7 @@ export class Audio {
     return detectBpm(this._samples, this._sampleRate);
   }
 
-  detectKey(options: KeyDetectionOptions = {}): Key {
+  detectKey(options: DetectKeyOptions = {}): KeyDetection {
     return detectKey(this._samples, this._sampleRate, options);
   }
 

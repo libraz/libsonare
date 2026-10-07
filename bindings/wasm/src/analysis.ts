@@ -91,6 +91,7 @@ export type {
   ChordFunctionalAnalysisRequest,
   DetectAcousticRequest,
   DetectChordsRequest,
+  DetectKeyCandidatesRequest,
   DetectKeyRequest,
   DynamicsAnalysisResult,
   DynamicsResult,

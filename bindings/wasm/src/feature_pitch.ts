@@ -264,7 +264,38 @@ export function pitchTuning(
 }
 
 /**
+ * Reference frequency of an A4 raised by `tuning` fractions of a semitone:
+ * `a4 * 2 ** (tuning / 12)`. The converter from the analysis unit (`tuning`, in
+ * `[-0.5, 0.5)` for the analysis options) to the Hz a pitch reference is stated
+ * in, such as `referenceHz` and the streaming `tuningRefHz`.
+ *
+ * @param tuning - Finite fraction of a semitone.
+ * @param a4 - Finite positive concert pitch the tuning is measured from. Default 440.
+ * @throws `SonareError` for a non-finite `tuning` or a non-positive `a4`.
+ */
+export function tuningToReferenceHz(tuning: number, a4 = 440): number {
+  return requireModule().tuningToReferenceHz(tuning, a4);
+}
+
+/**
+ * Tuning, in fractions of a semitone, of a recording whose A4 sits at `hz`:
+ * `12 * log2(hz / a4)`. Inverse of {@link tuningToReferenceHz}.
+ *
+ * @param hz - Finite positive reference frequency.
+ * @param a4 - Finite positive concert pitch. Default 440.
+ * @throws `SonareError` for a non-positive `hz` or `a4`.
+ */
+export function referenceHzToTuning(hz: number, a4 = 440): number {
+  return requireModule().referenceHzToTuning(hz, a4);
+}
+
+/**
  * Estimate the tuning offset of an audio signal (librosa.estimate_tuning).
+ *
+ * A librosa mirror: the offset is a fraction of a bin of `binsPerOctave`, which
+ * is the semitone fraction the analysis options take only at 12 (otherwise
+ * multiply by `12 / binsPerOctave`). Analysis measures the semitone fraction
+ * itself with `tuning: 'auto'`; {@link tuningToReferenceHz} converts it to Hz.
  */
 export function estimateTuning(request: EstimateTuningRequest): number;
 export function estimateTuning(

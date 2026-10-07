@@ -29,6 +29,11 @@ struct MelConfig {
   WindowType window = WindowType::Hann;  ///< Window function
   bool center = true;                    ///< Pad signal to center frames
 
+  /// @brief The upper band edge that applies at @p sample_rate: @ref fmax, or the Nyquist when 0.
+  constexpr float resolved_fmax(int sample_rate) const {
+    return fmax > 0.0f ? fmax : static_cast<float>(sample_rate) / 2.0f;
+  }
+
   /// @brief Converts to StftConfig for STFT computation.
   /// @details Every field is bound by name. A StftConfig member that is added or reordered can
   ///          then not silently rebind this conversion to a different field, which a positional

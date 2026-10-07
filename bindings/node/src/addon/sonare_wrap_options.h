@@ -394,6 +394,25 @@ inline float FiniteFloatProperty(const Napi::Object& obj, const char* key, float
   return node_narrow_finite_float(obj.Env(), value, key);
 }
 
+/// @brief Read a finite float property that also accepts the string `"auto"`.
+/// @details `"auto"` sets @p is_auto and returns @p fallback; a number is read as
+///   @ref FiniteFloatProperty does, and any other type is refused by name.
+inline float AutoFiniteFloatProperty(const Napi::Object& obj, const char* key, float fallback,
+                                     bool* is_auto) {
+  *is_auto = false;
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  if (value.IsString()) {
+    if (value.As<Napi::String>().Utf8Value() == "auto") {
+      *is_auto = true;
+      return fallback;
+    }
+    throw Napi::TypeError::New(obj.Env(), std::string(key) + " must be a number or 'auto'");
+  }
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number or 'auto'");
+  return node_narrow_finite_float(obj.Env(), value, key);
+}
+
 /// @brief Read a double property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
 inline double DoubleProperty(const Napi::Object& obj, const char* key, double fallback) {

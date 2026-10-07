@@ -13,7 +13,7 @@ TEST_CASE("fill_chord_result nulls the pointer on an empty result", "[c_api]") {
   out.chords = reinterpret_cast<SonareChord*>(static_cast<std::uintptr_t>(0x1));
   out.chord_count = 42;
 
-  fill_chord_result({}, &out);
+  fill_chord_result({}, 0.0f, &out);
 
   REQUIRE(out.chords == nullptr);
   REQUIRE(out.chord_count == 0);
@@ -31,8 +31,10 @@ TEST_CASE("fill_chord_result populates a non-empty result", "[c_api]") {
   chords.push_back(chord);
 
   SonareChordAnalysisResult out = {};
-  fill_chord_result(chords, &out);
+  fill_chord_result(chords, 0.25f, &out);
 
+  REQUIRE(out.struct_version == SONARE_CHORD_ANALYSIS_RESULT_VERSION);
+  REQUIRE(out.tuning == 0.25f);
   REQUIRE(out.chord_count == 1);
   REQUIRE(out.chords != nullptr);
   REQUIRE(out.chords[0].start == 0.0f);

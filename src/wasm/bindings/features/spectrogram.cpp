@@ -147,6 +147,11 @@ val js_mel_spectrogram(val samples, const val& sample_rate_val, const val& n_fft
   out.set("nFrames", mel.n_frames());
   out.set("sampleRate", mel.sample_rate());
   out.set("hopLength", mel.hop_length());
+  out.set("nFft", config.n_fft);
+  out.set("fmin", config.fmin);
+  out.set("fmax", config.resolved_fmax(mel.sample_rate()));
+  out.set("htk", config.htk);
+  out.set("isDb", false);
 
   // Power values
   std::vector<float> power_vec(mel.power_data(), mel.power_data() + mel.n_mels() * mel.n_frames());
@@ -185,6 +190,15 @@ val js_mfcc(val samples, const val& sample_rate_val, const val& n_fft_val,
   val out = val::object();
   out.set("nMfcc", n_mfcc);
   out.set("nFrames", mel.n_frames());
+  out.set("sampleRate", mel.sample_rate());
+  out.set("hopLength", mel.hop_length());
+  out.set("nFft", config.n_fft);
+  out.set("nMels", mel.n_mels());
+  out.set("fmin", config.fmin);
+  out.set("fmax", config.resolved_fmax(mel.sample_rate()));
+  out.set("htk", config.htk);
+  out.set("isDb", false);
+  out.set("lifter", lifter);
   out.set("coefficients", vectorToFloat32Array(mfcc));
 
   return out;

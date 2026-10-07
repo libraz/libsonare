@@ -25,6 +25,8 @@ from ._runtime import (
 from .types import (
     CqtResult,
     InverseResult,
+    MelSpectrogramResult,
+    MfccResult,
 )
 
 # ============================================================================
@@ -519,6 +521,115 @@ def mfcc_to_audio(
         return [float(out[i]) for i in range(out_length.value)]
     finally:
         lib.sonare_free_floats(out)
+
+
+def _require_linear_mel(fn_name: str, result: MelSpectrogramResult) -> None:
+    """Refuse a Mel result whose matrix is in dB, naming the conversion."""
+    if result.is_db:
+        raise SonareValueError(
+            f"{fn_name}: result is in dB; convert it to power with db_to_power before inverting it"
+        )
+
+
+def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult:
+    """Approximate inverse of a Mel result (Mel power -> STFT power).
+
+    Reads the matrix and every forward parameter from ``result``, so the call
+    equals :func:`mel_to_stft` with the values the forward transform used.
+
+    Args:
+        result: A :func:`mel_spectrogram` result.
+
+    Returns:
+        An :class:`InverseResult` with the reconstructed STFT power matrix.
+
+    Raises:
+        SonareValueError: If ``result`` is in dB (``result.is_db``).
+    """
+    _require_linear_mel("mel_result_to_stft", result)
+    return mel_to_stft(
+        result.power,
+        result.n_mels,
+        result.n_frames,
+        result.sample_rate,
+        result.n_fft,
+        result.fmin,
+        result.fmax,
+        result.htk,
+    )
+
+
+def mel_result_to_audio(result: MelSpectrogramResult, n_iter: int = 32) -> list[float]:
+    """Reconstruct audio from a Mel result via Griffin-Lim.
+
+    Reads the matrix and every forward parameter from ``result``, so the call
+    equals :func:`mel_to_audio` with the values the forward transform used.
+
+    Args:
+        result: A :func:`mel_spectrogram` result.
+        n_iter: Griffin-Lim iterations (default 32).
+
+    Returns:
+        The reconstructed audio samples.
+
+    Raises:
+        SonareValueError: If ``result`` is in dB (``result.is_db``).
+    """
+    _require_linear_mel("mel_result_to_audio", result)
+    return mel_to_audio(
+        result.power,
+        result.n_mels,
+        result.n_frames,
+        result.sample_rate,
+        result.n_fft,
+        result.hop_length,
+        result.fmin,
+        result.fmax,
+        n_iter,
+        result.htk,
+    )
+
+
+def mfcc_result_to_mel(result: MfccResult) -> InverseResult:
+    """Invert an MFCC result back to a Mel power spectrogram, undoing its lifter.
+
+    Args:
+        result: An :func:`mfcc` result.
+
+    Returns:
+        An :class:`InverseResult` with the reconstructed Mel power matrix.
+    """
+    return mfcc_to_mel(
+        result.coefficients, result.n_mfcc, result.n_frames, result.n_mels, result.lifter
+    )
+
+
+def mfcc_result_to_audio(result: MfccResult, n_iter: int = 32) -> list[float]:
+    """Reconstruct audio from an MFCC result via Mel inversion and Griffin-Lim.
+
+    Reads the coefficients, the Mel parameters and the lifter from ``result``.
+
+    Args:
+        result: An :func:`mfcc` result.
+        n_iter: Griffin-Lim iterations (default 32).
+
+    Returns:
+        The reconstructed audio samples.
+    """
+    return mfcc_to_audio(
+        result.coefficients,
+        result.n_mfcc,
+        result.n_frames,
+        result.n_mels,
+        result.sample_rate,
+        result.n_fft,
+        result.hop_length,
+        result.fmin,
+        result.fmax,
+        n_iter,
+        result.htk,
+        result.lifter,
+    )
 
 
 @_guard_buffer("samples")

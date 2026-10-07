@@ -8,6 +8,7 @@
 
 #include "core/convert.h"
 #include "core/fft.h"
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -924,6 +925,14 @@ float estimate_tuning(const Audio& audio, int n_fft, int hop_length, float resol
     }
   }
   return pitch_tuning(freqs, resolution, bins_per_octave);
+}
+
+float measure_tuning(const Audio& audio) {
+  constexpr int kMeasureSampleRate = constants::kDefaultSampleRate;
+  if (audio.empty()) return 0.0f;
+  const Audio at_rate =
+      audio.sample_rate() > kMeasureSampleRate ? resample(audio, kMeasureSampleRate) : audio;
+  return estimate_tuning(at_rate);
 }
 
 }  // namespace sonare

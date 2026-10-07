@@ -160,7 +160,7 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|AutoFiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
 
 /**
  * Matches a reader call and captures its literal key, for either arity.
@@ -172,7 +172,7 @@ const OPTION_READER =
  * set of the graph entry points.
  */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|AutoFiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter

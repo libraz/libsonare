@@ -262,6 +262,11 @@ def mel_spectrogram(
             hop_length=out.hop_length,
             power=[float(out.power[i]) for i in range(total)],
             db=[float(out.db[i]) for i in range(total)],
+            n_fft=out.n_fft,
+            fmin=float(out.fmin),
+            fmax=float(out.fmax),
+            htk=bool(out.htk),
+            is_db=bool(out.is_db),
         )
     finally:
         lib.sonare_free_mel_result(ctypes.byref(out))
@@ -321,6 +326,15 @@ def mfcc(
             n_mfcc=out.n_mfcc,
             n_frames=out.n_frames,
             coefficients=[float(out.coefficients[i]) for i in range(total)],
+            sample_rate=out.sample_rate,
+            hop_length=out.hop_length,
+            n_fft=out.n_fft,
+            n_mels=out.n_mels,
+            fmin=float(out.fmin),
+            fmax=float(out.fmax),
+            htk=bool(out.htk),
+            is_db=bool(out.is_db),
+            lifter=float(out.lifter),
         )
     finally:
         lib.sonare_free_mfcc_result(ctypes.byref(out))
@@ -372,8 +386,10 @@ def chroma(
     The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
     librosa.feature.chroma_stft -- which estimates tuning from the signal when
     none is given -- this does NOT auto-estimate and takes no tuning argument.
-    A tuning offset from :func:`estimate_tuning` is applied through
-    :func:`analyze` (and to chords through :func:`detect_chords`).
+    A tuning offset (a fraction of a semitone, which :func:`estimate_tuning`
+    returns at 12 bins per octave) is applied through :func:`analyze` (and to
+    chords through :func:`detect_chords`); both also measure it themselves with
+    ``tuning="auto"``.
 
     Args:
         samples: Audio samples.

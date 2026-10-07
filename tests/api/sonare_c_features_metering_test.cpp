@@ -1100,6 +1100,102 @@ TEST_CASE("sonare mel range is applied or refused rather than defaulted", "[c_ap
   }
 }
 
+TEST_CASE("mel and MFCC results carry the parameters that invert them", "[c_api][features]") {
+  const auto samples = generate_sine(440.0f, 22050, 0.5f);
+
+  SECTION("the Mel result reports the transform it came from, with fmax resolved") {
+    SonareMelResult mel{};
+    REQUIRE(sonare_mel_spectrogram_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 100.0f,
+                                      0.0f, 1, &mel) == SONARE_OK);
+    CHECK(mel.struct_version == SONARE_MEL_RESULT_VERSION);
+    CHECK(mel.n_mels == 40);
+    CHECK(mel.sample_rate == 22050);
+    CHECK(mel.hop_length == 512);
+    CHECK(mel.n_fft == 2048);
+    CHECK(mel.fmin == 100.0f);
+    CHECK(mel.fmax == 11025.0f);
+    CHECK(mel.htk == 1);
+    CHECK(mel.is_db == 0);
+
+    // The carried values are the inverse's arguments: the checked inverse over them is
+    // bit-identical to the same call with the values spelled out as the forward request.
+    const size_t total = static_cast<size_t>(mel.n_mels) * mel.n_frames;
+    SonareInverseResult from_result{};
+    SonareInverseResult from_request{};
+    REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, mel.n_mels, mel.n_frames,
+                                          mel.sample_rate, mel.n_fft, mel.fmin, mel.fmax, mel.htk,
+                                          &from_result) == SONARE_OK);
+    REQUIRE(sonare_mel_to_stft_checked_ex(mel.power, total, 40, mel.n_frames, 22050, 2048, 100.0f,
+                                          0.0f, 1, &from_request) == SONARE_OK);
+    REQUIRE(from_result.rows == from_request.rows);
+    for (size_t i = 0; i < static_cast<size_t>(from_result.rows) * from_result.n_frames; ++i) {
+      REQUIRE(from_result.data[i] == from_request.data[i]);
+    }
+    sonare_free_inverse_result(&from_result);
+    sonare_free_inverse_result(&from_request);
+    sonare_free_mel_result(&mel);
+  }
+
+  SECTION(
+      "the MFCC result reports its Mel parameters and lifter, and the checked lifter inverse "
+      "undoes it") {
+    SonareMfccResult mfcc{};
+    REQUIRE(sonare_mfcc_ex(samples.data(), samples.size(), 22050, 2048, 512, 40, 13, 0.0f, 8000.0f,
+                           0, 22.0f, &mfcc) == SONARE_OK);
+    CHECK(mfcc.struct_version == SONARE_MFCC_RESULT_VERSION);
+    CHECK(mfcc.n_mfcc == 13);
+    CHECK(mfcc.n_mels == 40);
+    CHECK(mfcc.sample_rate == 22050);
+    CHECK(mfcc.hop_length == 512);
+    CHECK(mfcc.n_fft == 2048);
+    CHECK(mfcc.fmin == 0.0f);
+    CHECK(mfcc.fmax == 8000.0f);
+    CHECK(mfcc.htk == 0);
+    CHECK(mfcc.is_db == 0);
+    CHECK(mfcc.lifter == 22.0f);
+
+    const size_t total = static_cast<size_t>(mfcc.n_mfcc) * mfcc.n_frames;
+    SonareInverseResult checked{};
+    SonareInverseResult unchecked{};
+    REQUIRE(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
+                                          mfcc.n_mels, mfcc.lifter, &checked) == SONARE_OK);
+    REQUIRE(sonare_mfcc_to_mel_ex(mfcc.coefficients, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+                                  mfcc.lifter, &unchecked) == SONARE_OK);
+    for (size_t i = 0; i < static_cast<size_t>(checked.rows) * checked.n_frames; ++i) {
+      REQUIRE(checked.data[i] == unchecked.data[i]);
+    }
+    // The lifter changes the answer, so an inverse that dropped it would differ.
+    SonareInverseResult unlifted{};
+    REQUIRE(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
+                                          mfcc.n_mels, 0.0f, &unlifted) == SONARE_OK);
+    bool differs = false;
+    for (size_t i = 0; i < static_cast<size_t>(checked.rows) * checked.n_frames && !differs; ++i) {
+      differs = checked.data[i] != unlifted.data[i];
+    }
+    CHECK(differs);
+    CHECK(sonare_mfcc_to_mel_checked_ex(mfcc.coefficients, total - 1, mfcc.n_mfcc, mfcc.n_frames,
+                                        mfcc.n_mels, mfcc.lifter,
+                                        &unlifted) == SONARE_ERROR_INVALID_PARAMETER);
+
+    float* audio = nullptr;
+    size_t audio_length = 0;
+    REQUIRE(sonare_mfcc_to_audio_checked_ex2(mfcc.coefficients, total, mfcc.n_mfcc, mfcc.n_frames,
+                                             mfcc.n_mels, mfcc.sample_rate, mfcc.n_fft,
+                                             mfcc.hop_length, mfcc.fmin, mfcc.fmax, mfcc.htk,
+                                             mfcc.lifter, 2, &audio, &audio_length) == SONARE_OK);
+    CHECK(audio_length > 0);
+    sonare_free_floats(audio);
+    CHECK(sonare_mfcc_to_audio_checked_ex2(
+              mfcc.coefficients, total + 1, mfcc.n_mfcc, mfcc.n_frames, mfcc.n_mels,
+              mfcc.sample_rate, mfcc.n_fft, mfcc.hop_length, mfcc.fmin, mfcc.fmax, mfcc.htk,
+              mfcc.lifter, 2, &audio, &audio_length) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_inverse_result(&checked);
+    sonare_free_inverse_result(&unchecked);
+    sonare_free_inverse_result(&unlifted);
+    sonare_free_mfcc_result(&mfcc);
+  }
+}
+
 TEST_CASE("buffer and result entry points define their outputs on a refused input",
           "[c_api][features][out_params]") {
   const float nan = std::numeric_limits<float>::quiet_NaN();

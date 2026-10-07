@@ -163,8 +163,8 @@ from .types import (
     DynamicRangeReport,
     DynamicsResult,
     HpssResult,
-    Key,
     KeyCandidate,
+    KeyDetection,
     KeyProfile,
     LufsResult,
     MasteringChainResult,
@@ -547,8 +547,9 @@ class Audio:
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-    ) -> Key:
-        """Detect musical key."""
+        tuning: float | str = 0.0,
+    ) -> KeyDetection:
+        """Detect musical key and the tuning its chroma was built with."""
         from .analyzer import detect_key
 
         return detect_key(
@@ -562,6 +563,7 @@ class Audio:
             modes=modes,
             profile=profile,
             genre_hint=genre_hint,
+            tuning=tuning,
         )
 
     def detect_key_candidates(
@@ -788,6 +790,7 @@ class Audio:
         key_mode: Mode = Mode.MAJOR,
         detect_inversions: bool = False,
         chroma_method: str = "stft",
+        tuning: float | str = 0.0,
     ) -> ChordAnalysisResult:
         """Detect chord segments."""
         return _detect_chords(
@@ -807,6 +810,7 @@ class Audio:
             key_mode,
             detect_inversions,
             chroma_method,
+            tuning,
         )
 
     # --- Effects ---

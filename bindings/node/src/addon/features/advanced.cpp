@@ -577,6 +577,34 @@ Napi::Value SonareWrap::PitchTuning(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::TuningToReferenceHz(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  float tuning{};
+  if (!RequiredFloatArg(env, info, 0, "tuning", &tuning)) return env.Undefined();
+  float a4{};
+  if (!OptionalFiniteFloatArg(env, info, 1, "a4", 440.0f, &a4)) return env.Undefined();
+  float out_hz = 0.0f;
+  SonareError err = sonare_tuning_to_reference_hz(tuning, a4, &out_hz);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return Napi::Number::New(env, out_hz);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::ReferenceHzToTuning(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  float hz{};
+  if (!RequiredFloatArg(env, info, 0, "hz", &hz)) return env.Undefined();
+  float a4{};
+  if (!OptionalFiniteFloatArg(env, info, 1, "a4", 440.0f, &a4)) return env.Undefined();
+  float out_tuning = 0.0f;
+  SonareError err = sonare_reference_hz_to_tuning(hz, a4, &out_tuning);
+  if (err != SONARE_OK) return CheckCResult(env, err);
+  return Napi::Number::New(env, out_tuning);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::EstimateTuning(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

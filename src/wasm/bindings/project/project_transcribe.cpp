@@ -64,10 +64,20 @@ int velocityField(val config, const char* key) {
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
   SonareTranscribeConfig out = {};
-  out.struct_version = 1;
+  out.struct_version = 2;
   if (config.isUndefined() || config.isNull()) return out;
   out.polyphonic = boolProperty(config, "polyphonic", false) ? 1 : 0;
-  out.reference_hz = signedField(config, "referenceHz", true);
+  // `referenceHz` is a positive number in Hz, or "auto" to measure it from the audio.
+  const val reference = config["referenceHz"];
+  if (reference.isString()) {
+    if (reference.as<std::string>() != "auto") {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "referenceHz must be a positive number or 'auto'");
+    }
+    out.reference_auto = 1;
+  } else {
+    out.reference_hz = signedField(config, "referenceHz", true);
+  }
   out.fmin = signedField(config, "fmin", true);
   out.fmax = signedField(config, "fmax", true);
   out.min_note_ms = signedField(config, "minNoteMs", true);
@@ -111,6 +121,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   }
   const double note_count = static_cast<double>(result.note_count);
   const float tempo = result.tempo_bpm;
+  const float tuning = result.tuning;
   const std::vector<SonareMidiEventPod> events = takeTranscribeEvents(&result);
 
   val list = val::array();
@@ -121,6 +132,7 @@ val js_transcribe(val samples, const val& sample_rate_val, const val& tempo_bpm_
   out.set("events", list);
   out.set("noteCount", note_count);
   out.set("tempoBpm", tempo);
+  out.set("tuning", tuning);
   return out;
 }
 

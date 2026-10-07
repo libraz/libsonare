@@ -133,9 +133,19 @@ float pitch_tuning(const std::vector<float>& frequencies, float resolution = 0.0
 
 /// @brief Estimates global tuning offset of an audio signal.
 /// @details Uses piptrack to find spectral peaks, then aggregates with
-/// pitch_tuning. Mirrors librosa.estimate_tuning.
+/// pitch_tuning. Mirrors librosa.estimate_tuning, so the result is in fractions of a bin of
+/// @p bins_per_octave, which is the analyzers' semitone fraction only at 12 (otherwise multiply by
+/// 12 / bins_per_octave). @ref measure_tuning returns the analyzers' unit directly, and
+/// `tuning_to_reference_hz` (feature/chroma.h) converts it to Hz.
 float estimate_tuning(const Audio& audio, int n_fft = 2048, int hop_length = 512,
                       float resolution = 0.01f, int bins_per_octave = 12);
+
+/// @brief Measures the recording's tuning in fractions of a semitone.
+/// @details @ref estimate_tuning at 12 bins per octave on the audio at the analysis rate
+///          (22050 Hz, resampled when above it), so the same recording reads the same value at
+///          every input rate. The result is in [-0.5, 0.5) and is what the analyzers' `tuning`
+///          takes; 0 when no pitched peak is found.
+float measure_tuning(const Audio& audio);
 
 /// @brief Converts frequency to MIDI note number.
 /// @param freq Frequency in Hz

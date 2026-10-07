@@ -83,9 +83,17 @@ def estimate_tuning(
         bins_per_octave: Pitch bins per octave (default 12).
 
     Returns:
-        Tuning offset in fractions of a bin, in ``[-0.5, 0.5)``. Exactly
-        ``-0.5`` is a legitimate result (a pitch half a bin flat); ``+0.5``
-        is not attainable, because a residual of ``+0.5`` wraps to ``-0.5``.
+        Tuning offset in fractions of a bin of ``bins_per_octave``, in
+        ``[-0.5, 0.5)``. Exactly ``-0.5`` is a legitimate result (a pitch half a
+        bin flat); ``+0.5`` is not attainable, because a residual of ``+0.5``
+        wraps to ``-0.5``.
+
+    Note:
+        A librosa mirror: the offset is the semitone fraction the analysis
+        options take only at 12 bins per octave (otherwise multiply by
+        ``12 / bins_per_octave``). :func:`analyze` and :func:`detect_chords`
+        measure the semitone fraction themselves with ``tuning="auto"``, and
+        :func:`tuning_to_reference_hz` converts it to Hz.
     """
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
@@ -101,6 +109,57 @@ def estimate_tuning(
         ctypes.byref(out),
     )
     _check(rc)
+    return float(out.value)
+
+
+def tuning_to_reference_hz(tuning: float, a4: float = 440.0) -> float:
+    """Reference frequency of an A4 raised by ``tuning`` fractions of a semitone.
+
+    The converter from the analysis unit (``tuning``, in ``[-0.5, 0.5)`` for the
+    analysis options) to the Hz a pitch reference is stated in, such as
+    ``reference_hz`` and the streaming ``tuning_ref_hz``: ``a4 * 2 ** (tuning / 12)``.
+
+    Args:
+        tuning: Finite fraction of a semitone.
+        a4: Finite positive concert pitch the tuning is measured from (default 440).
+
+    Returns:
+        The reference frequency in Hz.
+
+    Raises:
+        SonareError: ``INVALID_PARAMETER`` for a non-finite ``tuning`` or a
+            non-positive ``a4``.
+    """
+    out = ctypes.c_float(0.0)
+    _check(
+        _get_lib().sonare_tuning_to_reference_hz(
+            _to_c_float(tuning, "tuning"), _to_c_float(a4, "a4"), ctypes.byref(out)
+        )
+    )
+    return float(out.value)
+
+
+def reference_hz_to_tuning(hz: float, a4: float = 440.0) -> float:
+    """Tuning, in fractions of a semitone, of a recording whose A4 sits at ``hz``.
+
+    Inverse of :func:`tuning_to_reference_hz`: ``12 * log2(hz / a4)``.
+
+    Args:
+        hz: Finite positive reference frequency.
+        a4: Finite positive concert pitch (default 440).
+
+    Returns:
+        The tuning in fractions of a semitone.
+
+    Raises:
+        SonareError: ``INVALID_PARAMETER`` for a non-positive ``hz`` or ``a4``.
+    """
+    out = ctypes.c_float(0.0)
+    _check(
+        _get_lib().sonare_reference_hz_to_tuning(
+            _to_c_float(hz, "hz"), _to_c_float(a4, "a4"), ctypes.byref(out)
+        )
+    )
     return float(out.value)
 
 

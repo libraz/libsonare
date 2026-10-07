@@ -91,6 +91,8 @@ export {
   pitchPyin,
   pitchTuning,
   pitchYin,
+  referenceHzToTuning,
+  tuningToReferenceHz,
 } from './feature_pitch.js';
 export { resample } from './feature_resample.js';
 export {

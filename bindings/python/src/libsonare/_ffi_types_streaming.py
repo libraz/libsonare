@@ -107,10 +107,16 @@ class SonareChord(CStruct):
     ]
 
 
+# Layout version of SonareChordDetectionOptions.struct_version.
+SONARE_CHORD_DETECTION_OPTIONS_VERSION = 2
+
+
 class SonareChordAnalysisResult(CStruct):
     """Maps to SonareChordAnalysisResult in sonare_c.h."""
 
     _fields_ = [
+        ("struct_version", ctypes.c_int),
+        ("tuning", ctypes.c_float),
         ("chords", ctypes.POINTER(SonareChord)),
         ("chord_count", ctypes.c_size_t),
     ]
@@ -120,6 +126,7 @@ class SonareChordDetectionOptions(CStruct):
     """Maps to SonareChordDetectionOptions in sonare_c.h."""
 
     _fields_ = [
+        ("struct_version", ctypes.c_int),
         ("min_duration", ctypes.c_float),
         ("smoothing_window", ctypes.c_float),
         ("threshold", ctypes.c_float),
@@ -135,6 +142,7 @@ class SonareChordDetectionOptions(CStruct):
         ("detect_inversions", ctypes.c_int),
         ("chroma_method", ctypes.c_int),
         ("tuning", ctypes.c_float),
+        ("tuning_auto", ctypes.c_int),
     ]
 
 
@@ -435,10 +443,16 @@ class SonareMelResult(CStruct):
     """Maps to SonareMelResult in sonare_c.h."""
 
     _fields_ = [
+        ("struct_version", ctypes.c_int32),
         ("n_mels", ctypes.c_int32),
         ("n_frames", ctypes.c_int32),
         ("sample_rate", ctypes.c_int32),
         ("hop_length", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("fmin", ctypes.c_float),
+        ("fmax", ctypes.c_float),
+        ("htk", ctypes.c_int32),
+        ("is_db", ctypes.c_int32),
         ("power", ctypes.POINTER(ctypes.c_float)),
         ("db", ctypes.POINTER(ctypes.c_float)),
     ]
@@ -448,8 +462,18 @@ class SonareMfccResult(CStruct):
     """Maps to SonareMfccResult in sonare_c.h."""
 
     _fields_ = [
+        ("struct_version", ctypes.c_int32),
         ("n_mfcc", ctypes.c_int32),
         ("n_frames", ctypes.c_int32),
+        ("sample_rate", ctypes.c_int32),
+        ("hop_length", ctypes.c_int32),
+        ("n_fft", ctypes.c_int32),
+        ("n_mels", ctypes.c_int32),
+        ("fmin", ctypes.c_float),
+        ("fmax", ctypes.c_float),
+        ("htk", ctypes.c_int32),
+        ("is_db", ctypes.c_int32),
+        ("lifter", ctypes.c_float),
         ("coefficients", ctypes.POINTER(ctypes.c_float)),
     ]
 

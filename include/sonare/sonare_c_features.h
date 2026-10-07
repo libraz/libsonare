@@ -283,9 +283,10 @@ SonareError sonare_mel_spectrogram_ex(const float* samples, size_t length, int s
                                       int htk, SonareMelResult* out);
 /// @brief MFCC with an explicit Mel range (see sonare_mel_spectrogram_ex).
 /// @param lifter Cepstral liftering coefficient (0.0 = no liftering, the librosa
-///   default). NOTE: the inverse entry points (sonare_mfcc_to_mel /
-///   sonare_mfcc_to_audio) do not undo liftering, so inverse reconstruction of a
-///   liftered MFCC is only exact for lifter == 0.
+///   default). The lifter-aware inverses (sonare_mfcc_to_mel_ex,
+///   sonare_mfcc_to_audio_ex2 and their checked forms) undo it when given the
+///   same value, which the result carries as @c lifter; the forms without a
+///   lifter argument assume 0.
 /// @param out Receives heap-owned arrays; free with sonare_free_mfcc_result.
 SonareError sonare_mfcc_ex(const float* samples, size_t length, int sample_rate, int n_fft,
                            int hop_length, int n_mels, int n_mfcc, float fmin, float fmax, int htk,
@@ -461,6 +462,11 @@ SonareError sonare_mel_to_audio_checked_ex(const float* mel, size_t input_length
 ///        n_mfcc * n_frames.
 SonareError sonare_mfcc_to_mel_checked(const float* mfcc, size_t input_length, int n_mfcc,
                                        int n_frames, int n_mels, SonareInverseResult* out);
+/// @brief Length-checked, lifter-aware sonare_mfcc_to_mel_ex.
+/// @param lifter Lifter used by the forward MFCC transform (0 = none).
+SonareError sonare_mfcc_to_mel_checked_ex(const float* mfcc, size_t input_length, int n_mfcc,
+                                          int n_frames, int n_mels, float lifter,
+                                          SonareInverseResult* out);
 
 /// @brief Length-checked sonare_mfcc_to_audio. @p input_length must equal
 ///        n_mfcc * n_frames.
@@ -474,6 +480,14 @@ SonareError sonare_mfcc_to_audio_checked_ex(const float* mfcc, size_t input_leng
                                             int n_frames, int n_mels, int sample_rate, int n_fft,
                                             int hop_length, float fmin, float fmax, int htk,
                                             int n_iter, float** out, size_t* out_length);
+/// @brief Length-checked sonare_mfcc_to_audio_ex2 (HTK and lifter).
+/// @param lifter Lifter used by the forward MFCC transform (0 = none).
+/// @note Free @p out with @ref sonare_free_floats.
+SonareError sonare_mfcc_to_audio_checked_ex2(const float* mfcc, size_t input_length, int n_mfcc,
+                                             int n_frames, int n_mels, int sample_rate, int n_fft,
+                                             int hop_length, float fmin, float fmax, int htk,
+                                             float lifter, int n_iter, float** out,
+                                             size_t* out_length);
 
 /// @brief Frees the matrix held by a SonareInverseResult.
 void sonare_free_inverse_result(SonareInverseResult* result);
@@ -486,9 +500,11 @@ void sonare_free_inverse_result(SonareInverseResult* result);
 /// @details The chroma filterbank uses a fixed tuning of 0 (concert A440). Unlike
 ///   librosa.feature.chroma_stft, which estimates tuning from the signal when
 ///   none is supplied, this entry point does NOT auto-estimate and takes no
-///   tuning argument. A tuning offset from @ref sonare_estimate_tuning is applied
+///   tuning argument. A tuning offset (a fraction of a semitone, which
+///   @ref sonare_estimate_tuning returns at 12 bins per octave) is applied
 ///   through SonareMusicAnalyzeOptions.tuning (analysis) and
-///   SonareChordDetectionOptions.tuning (chord detection).
+///   SonareChordDetectionOptions.tuning (chord detection); both also measure it
+///   themselves under @c tuning_auto.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma(const float* samples, size_t length, int sample_rate, int n_fft,
                           int hop_length, SonareChromaResult* out);
@@ -503,9 +519,11 @@ SonareError sonare_chroma_cens_ex(const float* samples, size_t length, int sampl
                                   SonareChromaResult* out);
 /// @brief Constant-Q chromagram (librosa.feature.chroma_cqt).
 /// @details Fixed tuning of 0 (concert A440); no auto-tuning estimation, matching
-///   the other chroma entry points. A tuning offset from @ref sonare_estimate_tuning
-///   is applied through SonareMusicAnalyzeOptions.tuning (analysis) and
-///   SonareChordDetectionOptions.tuning (chord detection).
+///   the other chroma entry points. A tuning offset (a fraction of a semitone,
+///   which @ref sonare_estimate_tuning returns at 12 bins per octave) is applied
+///   through SonareMusicAnalyzeOptions.tuning (analysis) and
+///   SonareChordDetectionOptions.tuning (chord detection); both also measure it
+///   themselves under @c tuning_auto.
 /// @param out Receives heap-owned arrays; free with sonare_free_chroma_result.
 SonareError sonare_chroma_cqt(const float* samples, size_t length, int sample_rate, int hop_length,
                               int n_chroma, SonareChromaResult* out);
@@ -618,6 +636,11 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 
 /// @brief Global tuning offset of an audio signal (librosa.estimate_tuning).
 /// @details Uses piptrack to find spectral peaks, then aggregates via pitch_tuning.
+///          A librosa mirror: the offset is in fractions of a bin of
+///          @p bins_per_octave, which is the semitone fraction the analysis
+///          options take only at 12 (otherwise multiply by 12 /
+///          @p bins_per_octave). Analysis measures it in that unit itself under
+///          @c tuning_auto; @ref sonare_tuning_to_reference_hz converts it to Hz.
 /// @param resolution Tuning resolution in fractions of a bin (e.g. 0.01 = 1 cent).
 /// @param bins_per_octave Number of pitch bins per octave (e.g. 12).
 /// @param out_tuning Receives the tuning offset in fractions of a bin
@@ -626,6 +649,28 @@ SonareError sonare_pitch_tuning(const float* frequencies, size_t length, float r
 SonareError sonare_estimate_tuning(const float* samples, size_t length, int sample_rate, int n_fft,
                                    int hop_length, float resolution, int bins_per_octave,
                                    float* out_tuning);
+
+/// @brief Reference frequency of an A4 raised by @p tuning fractions of a semitone.
+/// @details The converter from the analysis unit (a fraction of a semitone, in
+///          [-0.5, 0.5) for the analysis options) to the Hz a pitch reference is
+///          stated in: @p a4 * 2^(@p tuning / 12). Not range-checked beyond
+///          finiteness, so a streaming reference several semitones from A440
+///          converts exactly.
+/// @param tuning Finite fraction of a semitone.
+/// @param a4 Concert pitch the tuning is measured from, finite and positive
+///        (440 for the library's default).
+/// @param out_hz Receives the frequency in Hz.
+SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz);
+
+/// @brief Tuning, in fractions of a semitone, of a recording whose A4 sits at @p hz.
+/// @details Inverse of @ref sonare_tuning_to_reference_hz: 12 * log2(@p hz /
+///          @p a4). The live streaming reference (@c tuning_ref_hz) and the
+///          transcription reference (@c reference_hz) stay in Hz; this is the
+///          bridge to the analysis options' unit.
+/// @param hz Finite positive reference frequency.
+/// @param a4 Finite positive concert pitch (440 for the library's default).
+/// @param out_tuning Receives the tuning in fractions of a semitone.
+SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning);
 
 /// @brief Detects per-frame spectral pitch peaks (librosa.piptrack).
 /// @details @p pitches and @p magnitudes are row-major [n_bins x n_frames]

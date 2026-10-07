@@ -146,6 +146,30 @@ float js_estimate_tuning(val samples, const val& sample_rate_val, const val& n_f
   return estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
 }
 
+// Mirrors the C ABI sonare_tuning_to_reference_hz / sonare_reference_hz_to_tuning, whose
+// validation they reuse so the refusals read the same everywhere.
+float js_tuning_to_reference_hz(const val& tuning_val, const val& a4_val) {
+  const float tuning = checkedFloatFromVal(tuning_val, "tuning");
+  const float a4 = checkedFloatFromVal(a4_val, "a4");
+  float hz = 0.0f;
+  const SonareError error = sonare_tuning_to_reference_hz(tuning, a4, &hz);
+  if (error != SONARE_OK) {
+    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+  }
+  return hz;
+}
+
+float js_reference_hz_to_tuning(const val& hz_val, const val& a4_val) {
+  const float hz = checkedFloatFromVal(hz_val, "hz");
+  const float a4 = checkedFloatFromVal(a4_val, "a4");
+  float tuning = 0.0f;
+  const SonareError error = sonare_reference_hz_to_tuning(hz, a4, &tuning);
+  if (error != SONARE_OK) {
+    throw SonareException(static_cast<ErrorCode>(error), sonare_last_error_message());
+  }
+  return tuning;
+}
+
 val js_piptrack(val samples, const val& sample_rate_val, const val& n_fft_val,
                 const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                 const val& threshold_val) {
@@ -171,6 +195,8 @@ void registerFeaturePitchBindings() {
   function("noteSegments", &js_note_segments);
   function("pitchTuning", &js_pitch_tuning);
   function("estimateTuning", &js_estimate_tuning);
+  function("tuningToReferenceHz", &js_tuning_to_reference_hz);
+  function("referenceHzToTuning", &js_reference_hz_to_tuning);
   function("piptrack", &js_piptrack);
 }
 

@@ -131,6 +131,9 @@ struct AnalysisResult {
   RhythmFeatures rhythm;          ///< Rhythm features
   MelodyContour melody;           ///< Melody contour (pitch trajectory + characteristics)
   std::string form;               ///< Song form (e.g., "IABABCO")
+  /// @brief Tuning the chromagrams were built with, in fractions of a semitone.
+  /// @details The configured value, or the measured one when MusicAnalyzerConfig::auto_tuning.
+  float tuning = 0.0f;
 };
 
 /// @brief Configuration for music analysis.
@@ -174,10 +177,13 @@ struct MusicAnalyzerConfig {
   /// @details The estimator still reports 8 on its own when it resolves a
   ///          compound meter, so this is the unit for everything else.
   int meter_denominator = 4;
-  /// @brief Recording tuning offset in fractions of a semitone, the estimate_tuning() unit.
+  /// @brief Recording tuning offset in fractions of a semitone.
   /// @details Must be in [-0.5, 0.5); 0 is concert A440. Shifts every chromagram the analysis
   ///          builds (key, chords, bass cue, boundaries, sections).
   float tuning = 0.0f;
+  /// @brief Measure the tuning from the audio (@ref measure_tuning) instead of reading @ref tuning.
+  /// @details The value used is reported in @ref AnalysisResult::tuning either way.
+  bool auto_tuning = false;
 };
 
 // The meter candidate and denominator limits live in analysis/meter_analyzer.h
@@ -301,6 +307,11 @@ class MusicAnalyzer {
   /// @brief Returns the configuration.
   const MusicAnalyzerConfig& config() const { return config_.get(); }
 
+  /// @brief Returns the tuning the analysis uses, in fractions of a semitone.
+  /// @details The measured value when MusicAnalyzerConfig::auto_tuning is set, else the configured
+  /// one.
+  float tuning() const { return tuning_; }
+
  private:
   /// @brief Reports progress to callback if set.
   void report_progress(float progress, const char* stage);
@@ -317,6 +328,7 @@ class MusicAnalyzer {
   Audio analysis_audio_;  ///< Downsampled audio for spectral analysis (22050 Hz)
   int analysis_sr_;       ///< Sample rate of analysis_audio_
   Validated<MusicAnalyzerConfig> config_;
+  float tuning_ = 0.0f;  ///< Configured, or measured when config_->auto_tuning
   ProgressCallback progress_callback_;
   CancelCallback cancel_callback_;
 

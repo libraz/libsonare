@@ -104,7 +104,7 @@ class _ProjectMidiMixin:
         sample_rate: int,
         *,
         polyphonic: bool = False,
-        reference_hz: float | None = None,
+        reference_hz: float | str | None = None,
         fmin: float | None = None,
         fmax: float | None = None,
         min_note_ms: float | None = None,
@@ -123,8 +123,7 @@ class _ProjectMidiMixin:
         entire event list, exactly as :meth:`set_midi_events` does.
 
         The keyword options, and what this deliberately leaves to
-        :meth:`bake_midi_fx`, :meth:`auto_tempo` and :func:`pitch_tuning`, are
-        :func:`transcribe`'s.
+        :meth:`bake_midi_fx` and :meth:`auto_tempo`, are :func:`transcribe`'s.
 
         Args:
             clip_id: MIDI clip to write; its previous events are discarded.
@@ -133,7 +132,8 @@ class _ProjectMidiMixin:
                 project's: the conversion goes through seconds, so a 44.1 kHz
                 take lands correctly on a 48 kHz project's grid.
             polyphonic: Read the multi-F0 chain instead of pYIN cut into notes.
-            reference_hz: Tuning reference; ``None`` keeps the default (440 Hz).
+            reference_hz: Tuning reference in Hz; ``"auto"`` measures it from the
+                audio; ``None`` keeps the default (440 Hz).
             fmin: Low end of the F0 tracker's range; ``None`` uses 65 Hz for the
                 monophonic path or 55 Hz for the polyphonic path. Both paths use
                 this bound. The polyphonic path applies it to the salience

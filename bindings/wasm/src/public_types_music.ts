@@ -146,6 +146,12 @@ export interface Key {
   shortName: string;
 }
 
+/** A detected key together with the tuning its chroma was built with. */
+export interface KeyDetection extends Key {
+  /** Tuning used, in fractions of a semitone: the given value, or the measured one under `'auto'`. */
+  tuning: number;
+}
+
 export interface KeyDetectionOptions extends ValidateOptions {
   nFft?: number;
   hopLength?: number;
@@ -160,6 +166,17 @@ export interface KeyDetectionOptions extends ValidateOptions {
     | 'modal';
   profile?: KeyProfile | KeyProfileName;
   genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
+}
+
+/** Options of `detectKey`: {@link KeyDetectionOptions} plus the recording's tuning. */
+export interface DetectKeyOptions extends KeyDetectionOptions {
+  /**
+   * Tuning offset of the recording in fractions of a semitone, in `[-0.5, 0.5)`;
+   * 0 is concert A440. `'auto'` measures it from the audio. The value used is
+   * reported as {@link KeyDetection.tuning}; {@link referenceHzToTuning} converts
+   * a reference pitch to this unit. Default 0.
+   */
+  tuning?: number | 'auto';
 }
 
 export interface KeyCandidate {
@@ -185,10 +202,12 @@ export interface ChordDetectionOptions extends ValidateOptions {
   detectInversions?: boolean;
   chromaMethod?: 'stft' | 'nnls';
   /**
-   * Tuning offset of the recording in fractions of a semitone, the unit
-   * `estimateTuning` returns; must be in `[-0.5, 0.5)`. Default 0 (concert A440).
+   * Tuning offset of the recording in fractions of a semitone; must be in
+   * `[-0.5, 0.5)`. `'auto'` measures it from the audio; the value used is
+   * reported as {@link ChordAnalysisResult.tuning}. {@link referenceHzToTuning}
+   * converts a reference pitch to this unit. Default 0 (concert A440).
    */
-  tuning?: number;
+  tuning?: number | 'auto';
 }
 
 /** Options for `analyzeBpm`. All fields are optional. */
@@ -336,6 +355,8 @@ export interface AnalysisChord extends Chord {
 
 export interface ChordAnalysisResult {
   chords: Chord[];
+  /** Tuning the chroma was built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
+  tuning: number;
 }
 
 /**
@@ -684,4 +705,6 @@ export interface AnalysisResult {
   rhythm: RhythmFeatures;
   melody: MelodyContour;
   form: string;
+  /** Tuning the chromagrams were built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */
+  tuning: number;
 }

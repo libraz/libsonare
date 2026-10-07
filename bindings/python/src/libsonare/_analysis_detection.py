@@ -24,6 +24,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _tuning_arg,
     _utf8_arg,
 )
 from .types import (
@@ -37,6 +38,7 @@ from .types import (
     Chord,
     Key,
     KeyCandidate,
+    KeyDetection,
     KeyProfile,
     MelodyPoint,
     Mode,
@@ -95,11 +97,11 @@ def detect_key(
     modes: Sequence[Mode | str] | str | None = None,
     profile: KeyProfile | str | None = None,
     genre_hint: str | None = None,
-) -> Key:
+    tuning: float | str = 0.0,
+) -> KeyDetection:
     """Detect the musical key of audio samples.
 
-    The chroma is read at concert A440; a tuning offset is applied through
-    :func:`analyze` (and to chords through :func:`detect_chords`).
+    The chroma is read at concert A440 unless ``tuning`` says otherwise.
 
     Args:
         samples: Mono audio samples (1D float). See :func:`detect_bpm` for
@@ -113,10 +115,16 @@ def detect_key(
         profile: Optional key-profile family.
         genre_hint: Optional genre hint (``"auto"``, ``"edm"``, ``"pop"``,
             ``"classical"``, or ``"jazz"``).
+        tuning: Tuning offset of the recording in fractions of a semitone, in
+            ``[-0.5, 0.5)``; 0 is concert A440. ``"auto"`` measures it from the
+            audio, and :func:`reference_hz_to_tuning` converts a reference pitch
+            to this unit.
 
     Returns:
-        :class:`libsonare.Key` with ``root`` (:class:`PitchClass`), ``mode``
-        (:class:`Mode`), and ``confidence`` (``float`` in ``[0, 1]``).
+        :class:`libsonare.KeyDetection`, a :class:`Key` with ``root``
+        (:class:`PitchClass`), ``mode`` (:class:`Mode`), and ``confidence``
+        (``float`` in ``[0, 1]``), plus ``tuning``: the tuning used, given or
+        measured, in fractions of a semitone.
 
     Raises:
         RuntimeError: If detection fails.
@@ -126,7 +134,9 @@ def detect_key(
     mode_values = _mode_values(modes)
     mode_array, mode_count = _to_c_int_array(mode_values, "modes") if mode_values else (None, 0)
     out_key = SonareKey()
-    rc = lib.sonare_detect_key_with_extended_options(
+    out_tuning = ctypes.c_float()
+    tuning_value, tuning_auto = _tuning_arg("detect_key", tuning)
+    rc = lib.sonare_detect_key_with_tuning(
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -139,13 +149,17 @@ def detect_key(
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
         _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
+        _to_c_float(tuning_value, "tuning"),
+        _to_c_int(tuning_auto, "tuning_auto"),
         ctypes.byref(out_key),
+        ctypes.byref(out_tuning),
     )
     _check(rc)
-    return Key(
+    return KeyDetection(
         root=PitchClass(out_key.root),
         mode=Mode(out_key.mode),
         confidence=float(out_key.confidence),
+        tuning=float(out_tuning.value),
     )
 
 
@@ -601,4 +615,5 @@ def _parse_analysis_json(data: dict[str, Any]) -> AnalysisResult:
         beat_observations=beat_observations,
         beat_local_bpm=beat_local_bpm,
         form=str(data.get("form", "")),
+        tuning=float(data.get("tuning", 0.0)),
     )

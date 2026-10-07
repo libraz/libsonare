@@ -368,6 +368,12 @@ class Key:
     @property
     def shortName(self) -> str: ...
 
+class KeyDetection(Key):
+    tuning: float
+    def __init__(
+        self, root: PitchClass, mode: Mode, confidence: float, tuning: float = ...
+    ) -> None: ...
+
 class KeyCandidate:
     key: Key
     correlation: float
@@ -537,6 +543,7 @@ class AnalysisResult:
     beat_observations: AnalysisBeatObservations | None
     beat_local_bpm: list[float]
     form: str
+    tuning: float
     def __init__(
         self,
         bpm: float,
@@ -558,6 +565,7 @@ class AnalysisResult:
         beat_observations: AnalysisBeatObservations | None = None,
         beat_local_bpm: list[float] = ...,
         form: str = "",
+        tuning: float = 0.0,
     ) -> None: ...
     @property
     def bpmConfidence(self) -> float: ...
@@ -1122,7 +1130,8 @@ class Chord:
 
 class ChordAnalysisResult:
     chords: list[Chord]
-    def __init__(self, chords: list[Chord]) -> None: ...
+    tuning: float
+    def __init__(self, chords: list[Chord], tuning: float = ...) -> None: ...
 
 class StftResult:
     n_bins: int
@@ -1150,6 +1159,11 @@ class MelSpectrogramResult:
     hop_length: int
     power: list[float]
     db: list[float]
+    n_fft: int
+    fmin: float
+    fmax: float
+    htk: bool
+    is_db: bool
     def __init__(
         self,
         n_mels: int,
@@ -1158,13 +1172,41 @@ class MelSpectrogramResult:
         hop_length: int,
         power: list[float],
         db: list[float],
+        n_fft: int,
+        fmin: float,
+        fmax: float,
+        htk: bool,
+        is_db: bool,
     ) -> None: ...
 
 class MfccResult:
     n_mfcc: int
     n_frames: int
     coefficients: list[float]
-    def __init__(self, n_mfcc: int, n_frames: int, coefficients: list[float]) -> None: ...
+    sample_rate: int
+    hop_length: int
+    n_fft: int
+    n_mels: int
+    fmin: float
+    fmax: float
+    htk: bool
+    is_db: bool
+    lifter: float
+    def __init__(
+        self,
+        n_mfcc: int,
+        n_frames: int,
+        coefficients: list[float],
+        sample_rate: int,
+        hop_length: int,
+        n_fft: int,
+        n_mels: int,
+        fmin: float,
+        fmax: float,
+        htk: bool,
+        is_db: bool,
+        lifter: float,
+    ) -> None: ...
 
 class ChromaResult:
     n_chroma: int

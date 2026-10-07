@@ -209,7 +209,9 @@ bool ReadMusicAnalyzeOptions(const Napi::Value& value, SonareMusicAnalyzeOptions
   options->compute_tempo_curve =
       BoolProperty(object, "computeTempoCurve", options->compute_tempo_curve != 0) ? 1 : 0;
   options->meter_denominator = IntProperty(object, "meterDenominator", options->meter_denominator);
-  options->tuning = FiniteFloatProperty(object, "tuning", options->tuning);
+  bool tuning_auto = false;
+  options->tuning = AutoFiniteFloatProperty(object, "tuning", options->tuning, &tuning_auto);
+  options->tuning_auto = tuning_auto ? 1 : 0;
   return ReadMeterCandidateNumerators(object, "meterCandidateNumerators",
                                       options->meter_candidate_numerators,
                                       &options->meter_candidate_numerator_count);

@@ -44,6 +44,11 @@ export interface WasmKeyResult {
   shortName: string;
 }
 
+/** A detected key with the tuning its chroma was built with. */
+export interface WasmKeyDetectionResult extends WasmKeyResult {
+  tuning: number;
+}
+
 export interface WasmKeyCandidateResult {
   key: WasmKeyResult;
   correlation: number;
@@ -198,6 +203,7 @@ export interface WasmAnalysisResult {
   rhythm: WasmRhythmResult;
   melody: WasmMelodyContourResult;
   form: string;
+  tuning: number;
 }
 
 export interface WasmBpmHypothesis {
@@ -286,6 +292,7 @@ export interface WasmTimbreAnalysisResult {
 
 export interface WasmChordAnalysisResult {
   chords: WasmChordResult[];
+  tuning: number;
 }
 
 export interface WasmAcousticResult {
@@ -629,6 +636,11 @@ export interface WasmMelResult {
   nFrames: number;
   sampleRate: number;
   hopLength: number;
+  nFft: number;
+  fmin: number;
+  fmax: number;
+  htk: boolean;
+  isDb: boolean;
   power: Float32Array;
   db: Float32Array;
 }
@@ -636,6 +648,15 @@ export interface WasmMelResult {
 export interface WasmMfccResult {
   nMfcc: number;
   nFrames: number;
+  sampleRate: number;
+  hopLength: number;
+  nFft: number;
+  nMels: number;
+  fmin: number;
+  fmax: number;
+  htk: boolean;
+  isDb: boolean;
+  lifter: number;
   coefficients: Float32Array;
 }
 
@@ -1846,7 +1867,8 @@ export interface SonareModule {
     modes: number[],
     profileType: number,
     genreHint: string,
-  ) => WasmKeyResult;
+    tuning: number | 'auto',
+  ) => WasmKeyDetectionResult;
   _detectKeyCandidates: (
     samples: Float32Array,
     sampleRate: number,
@@ -1879,7 +1901,7 @@ export interface SonareModule {
     keyMode: number,
     detectInversions: boolean,
     chromaMethod: number,
-    tuning: number,
+    tuning: number | 'auto',
   ) => WasmChordAnalysisResult;
   chordFunctionalAnalysis: (
     samples: Float32Array,
@@ -1898,7 +1920,7 @@ export interface SonareModule {
     useKeyContext: boolean,
     detectInversions: boolean,
     chromaMethod: number,
-    tuning: number,
+    tuning: number | 'auto',
   ) => string[];
   analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
   estimateMeter: (
@@ -3148,6 +3170,8 @@ export interface SonareModule {
     zeroPos: boolean,
   ) => Int32Array;
   pitchTuning: (frequencies: Float32Array, resolution: number, binsPerOctave: number) => number;
+  tuningToReferenceHz: (tuning: number, a4: number) => number;
+  referenceHzToTuning: (hz: number, a4: number) => number;
   estimateTuning: (
     samples: Float32Array,
     sampleRate: number,

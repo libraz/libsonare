@@ -82,6 +82,7 @@ export const READER_FAMILIES: Readonly<
     // of the wrong type is refused by name (node_require_property_type).
     BoolProperty: 'refuse',
     DoubleProperty: 'refuse',
+    AutoFiniteFloatProperty: 'refuse',
     FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
     GsEfxRealizationProperty: 'refuse',

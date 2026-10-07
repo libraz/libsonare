@@ -103,6 +103,20 @@ def configure_extra_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_float),
     ]
 
+    # sonare_tuning_to_reference_hz / sonare_reference_hz_to_tuning (scalar converters)
+    lib.sonare_tuning_to_reference_hz.restype = ctypes.c_int32
+    lib.sonare_tuning_to_reference_hz.argtypes = [
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+    lib.sonare_reference_hz_to_tuning.restype = ctypes.c_int32
+    lib.sonare_reference_hz_to_tuning.argtypes = [
+        ctypes.c_float,
+        ctypes.c_float,
+        ctypes.POINTER(ctypes.c_float),
+    ]
+
     # --- Effects / decomposition - decompose / nn_filter / remix / pv / hpss+res ---
 
     # sonare_decompose (two flat matrices W, H)

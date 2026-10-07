@@ -691,6 +691,18 @@ def _to_c_double(value: object, name: str) -> ctypes.c_double:
     return ctypes.c_double(_narrow_double(value, name))
 
 
+def _tuning_arg(fn_name: str, tuning: float | str) -> tuple[float, int]:
+    """Split a ``tuning`` argument into the C pair ``(tuning, tuning_auto)``.
+
+    A number is a semitone fraction; ``"auto"`` asks the analysis to measure it.
+    """
+    if isinstance(tuning, str):
+        if tuning != "auto":
+            raise SonareValueError(f"{fn_name}: tuning must be a number or 'auto'")
+        return 0.0, 1
+    return tuning, 0
+
+
 _PAN_MODE_NAMES = {
     "balance": PAN_MODE_BALANCE,
     "stereo-pan": PAN_MODE_STEREO_PAN,

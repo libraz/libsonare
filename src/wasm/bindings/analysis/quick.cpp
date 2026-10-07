@@ -316,6 +316,7 @@ val analysisResultToVal(const AnalysisResult& result) {
 
   // Form
   out.set("form", result.form);
+  out.set("tuning", result.tuning);
 
   return out;
 }
@@ -344,10 +345,30 @@ val js_detect_key(val samples, const val& sample_rate_val) {
   return result;
 }
 
+// A `tuning` value: a semitone fraction, or the string "auto" to measure it from the audio.
+struct TuningArg {
+  float tuning = 0.0f;
+  bool measure = false;
+};
+
+TuningArg tuningFromVal(const val& value, const char* key) {
+  TuningArg out;
+  if (value.isString()) {
+    if (value.as<std::string>() != "auto") {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            std::string(key) + " must be a number or 'auto'");
+    }
+    out.measure = true;
+    return out;
+  }
+  out.tuning = checkedFloatFromVal(value, key);
+  return out;
+}
+
 val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
                                const val& hop_length_val, bool use_hpss, bool loudness_weighted,
                                const val& high_pass_hz_val, val modes, const val& profile_type_val,
-                               std::string genre_hint) {
+                               std::string genre_hint, const val& tuning_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -367,7 +388,11 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   if (!genre_hint.empty()) {
     config.genre_hint = genre_hint;
   }
-  Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config);
+  const TuningArg tuning = tuningFromVal(tuning_val, "tuning");
+  config.tuning = tuning.tuning;
+  config.auto_tuning = tuning.measure;
+  float tuning_used = 0.0f;
+  Key key = quick::detect_key(audio.data(), audio.size(), sample_rate, config, &tuning_used);
 
   val result = val::object();
   result.set("root", static_cast<int>(key.root));
@@ -375,6 +400,7 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   result.set("confidence", key.confidence);
   result.set("name", key.to_string());
   result.set("shortName", key.to_short_string());
+  result.set("tuning", tuning_used);
   return result;
 }
 
@@ -482,6 +508,7 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
                                    bool use_key_context, int key_root, int key_mode,
                                    bool detect_inversions, int chroma_method,
                                    const val& tuning_val) {
+  const TuningArg tuning = tuningFromVal(tuning_val, "tuning");
   ChordConfig config;
   config.min_duration = min_duration;
   config.smoothing_window = smoothing_window;
@@ -497,7 +524,8 @@ static ChordConfig makeChordConfig(float min_duration, float smoothing_window, f
   config.key_mode = static_cast<Mode>(key_mode);
   config.detect_inversions = detect_inversions;
   config.chroma_method = chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
-  config.tuning = checkedFloatFromVal(tuning_val, "tuning");
+  config.tuning = tuning.tuning;
+  config.auto_tuning = tuning.measure;
   return config;
 }
 
@@ -534,8 +562,10 @@ val js_detect_chords(val samples, const val& sample_rate_val, const val& min_dur
                       use_beat_sync, use_hmm, hmm_beam_width, use_key_context, key_root, key_mode,
                       detect_inversions, chroma_method, tuning_val);
 
+  const ChordAnalyzer analyzer(audio, config);
   val result = val::object();
-  result.set("chords", chordsToVal(detect_chords(audio, config)));
+  result.set("chords", chordsToVal(analyzer.chords()));
+  result.set("tuning", analyzer.tuning());
   return result;
 }
 
@@ -660,7 +690,12 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   set_number("tempoUpdateIntervalBeats", config.tempo_update_interval_beats);
   set_bool("computeTempoCurve", config.compute_tempo_curve);
   set_number("meterDenominator", config.meter_denominator);
-  set_number("tuning", config.tuning);
+  const val tuning = options["tuning"];
+  if (!tuning.isUndefined() && !tuning.isNull()) {
+    const TuningArg parsed = tuningFromVal(tuning, "analyze: tuning");
+    config.tuning = parsed.tuning;
+    config.auto_tuning = parsed.measure;
+  }
   // meterCandidateNumerators is an array, so set_number (a scalar reader) does
   // not apply. An undefined/null value leaves the core default {3, 4, 6} in
   // place.

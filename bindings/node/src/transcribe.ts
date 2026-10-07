@@ -16,8 +16,9 @@ import { assertSampleRate, assertSamples } from './validation.js';
  * `tempoBpm` still reports the tempo that was used or detected.
  *
  * See {@link TranscribeOptions} for what this deliberately does not do —
- * quantizing, tempo-map installation, key/chord annotation and tuning-reference
- * measurement each already live somewhere else.
+ * quantizing, tempo-map installation and key/chord annotation each already live
+ * somewhere else. The tuning reference is `referenceHz`, or measured with
+ * `referenceHz: 'auto'`; the result reports it as `tuning`.
  *
  * @example
  * ```typescript

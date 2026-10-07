@@ -17,8 +17,8 @@ from .types import (
     DynamicRangeReport,
     DynamicsResult,
     HpssResult,
-    Key,
     KeyCandidate,
+    KeyDetection,
     KeyProfile,
     LufsResult,
     MasteringChainResult,
@@ -72,7 +72,8 @@ class Audio:
         modes: Sequence[Mode | str] | str | None = None,
         profile: KeyProfile | str | None = None,
         genre_hint: str | None = None,
-    ) -> Key: ...
+        tuning: float | str = 0.0,
+    ) -> KeyDetection: ...
     def detect_key_candidates(
         self,
         n_fft: int = 4096,
@@ -140,6 +141,7 @@ class Audio:
         key_mode: Mode = Mode.MAJOR,
         detect_inversions: bool = False,
         chroma_method: str = "stft",
+        tuning: float | str = 0.0,
     ) -> ChordAnalysisResult: ...
     def hpss(self, kernel_harmonic: int = 31, kernel_percussive: int = 31) -> HpssResult: ...
     def harmonic(self) -> list[float]: ...

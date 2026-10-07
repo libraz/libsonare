@@ -100,6 +100,19 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
   throw Napi::RangeError::New(value.Env(), "invalid key profile: " + key);
 }
 
+/// @brief The `tuning` option of a key request: a semitone fraction, or `"auto"` to measure it.
+struct KeyTuningOption {
+  float tuning = 0.0f;
+  bool measure = false;
+};
+
+/// @brief Read the `tuning` option from a key-detection options object.
+inline KeyTuningOption node_key_tuning_option(const Napi::Object& object) {
+  KeyTuningOption out;
+  out.tuning = AutoFiniteFloatProperty(object, "tuning", out.tuning, &out.measure);
+  return out;
+}
+
 }  // namespace sonare_node
 
 #endif  // SONARE_NODE_SONARE_WRAP_KEY_OPTIONS_H_

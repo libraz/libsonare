@@ -461,6 +461,8 @@ from .analyzer import (
     mastering_streaming_preview_stereo as mastering_streaming_preview_stereo,
 )
 from .analyzer import mel_delta as mel_delta
+from .analyzer import mel_result_to_audio as mel_result_to_audio
+from .analyzer import mel_result_to_stft as mel_result_to_stft
 from .analyzer import (
     mel_spectrogram as mel_spectrogram,
 )
@@ -506,6 +508,8 @@ from .analyzer import (
 from .analyzer import (
     mfcc as mfcc,
 )
+from .analyzer import mfcc_result_to_audio as mfcc_result_to_audio
+from .analyzer import mfcc_result_to_mel as mfcc_result_to_mel
 from .analyzer import mfcc_to_audio as mfcc_to_audio
 from .analyzer import mfcc_to_mel as mfcc_to_mel
 from .analyzer import (
@@ -636,6 +640,9 @@ from .analyzer import (
     recurrence_to_lag as recurrence_to_lag,
 )
 from .analyzer import (
+    reference_hz_to_tuning as reference_hz_to_tuning,
+)
+from .analyzer import (
     remix as remix,
 )
 from .analyzer import (
@@ -731,6 +738,7 @@ from .analyzer import (
 from .analyzer import (
     trim_silence as trim_silence,
 )
+from .analyzer import tuning_to_reference_hz as tuning_to_reference_hz
 from .analyzer import (
     validate_realtime_voice_changer_preset_json as validate_realtime_voice_changer_preset_json,
 )
@@ -959,6 +967,9 @@ from .types import (
 )
 from .types import (
     KeyCandidate as KeyCandidate,
+)
+from .types import (
+    KeyDetection as KeyDetection,
 )
 from .types import (
     KeyProfile as KeyProfile,

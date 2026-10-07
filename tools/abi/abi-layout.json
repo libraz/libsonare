@@ -585,115 +585,139 @@
     "align": 8,
     "fields": [
       {
-        "kind": "pointer",
-        "name": "chords",
+        "kind": "signed",
+        "name": "struct_version",
         "offset": 0,
-        "size": 8
-      },
-      {
-        "kind": "unsigned",
-        "name": "chord_count",
-        "offset": 8,
-        "size": 8
-      }
-    ],
-    "size": 16
-  },
-  "SonareChordDetectionOptions": {
-    "align": 4,
-    "fields": [
-      {
-        "kind": "float",
-        "name": "min_duration",
-        "offset": 0,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "smoothing_window",
-        "offset": 4,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "threshold",
-        "offset": 8,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_triads_only",
-        "offset": 12,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "n_fft",
-        "offset": 16,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "hop_length",
-        "offset": 20,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_beat_sync",
-        "offset": 24,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_hmm",
-        "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "hmm_beam_width",
-        "offset": 32,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_key_context",
-        "offset": 36,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "key_root",
-        "offset": 40,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "key_mode",
-        "offset": 44,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "detect_inversions",
-        "offset": 48,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "chroma_method",
-        "offset": 52,
         "size": 4
       },
       {
         "kind": "float",
         "name": "tuning",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "chords",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "chord_count",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "size": 24
+  },
+  "SonareChordDetectionOptions": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_duration",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "smoothing_window",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "threshold",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_triads_only",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_beat_sync",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_hmm",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hmm_beam_width",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_key_context",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "key_root",
+        "offset": 44,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "key_mode",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "detect_inversions",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "chroma_method",
         "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "tuning",
+        "offset": 60,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "tuning_auto",
+        "offset": 64,
         "size": 4
       }
     ],
-    "size": 60
+    "size": 68
   },
   "SonareChromaResult": {
     "align": 8,
@@ -3904,42 +3928,78 @@
     "fields": [
       {
         "kind": "signed",
-        "name": "n_mels",
+        "name": "struct_version",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_frames",
+        "name": "n_mels",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "sample_rate",
+        "name": "n_frames",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "sample_rate",
         "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmax",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "htk",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "is_db",
+        "offset": 36,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "power",
-        "offset": 16,
+        "offset": 40,
         "size": 8
       },
       {
         "kind": "pointer",
         "name": "db",
-        "offset": 24,
+        "offset": 48,
         "size": 8
       }
     ],
-    "size": 32
+    "size": 56
   },
   "SonareMelodyPoint": {
     "align": 4,
@@ -4486,24 +4546,84 @@
     "fields": [
       {
         "kind": "signed",
-        "name": "n_mfcc",
+        "name": "struct_version",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "n_frames",
+        "name": "n_mfcc",
         "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_frames",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "sample_rate",
+        "offset": 12,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "hop_length",
+        "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_fft",
+        "offset": 20,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "n_mels",
+        "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmin",
+        "offset": 28,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "fmax",
+        "offset": 32,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "htk",
+        "offset": 36,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "is_db",
+        "offset": 40,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "lifter",
+        "offset": 44,
         "size": 4
       },
       {
         "kind": "pointer",
         "name": "coefficients",
-        "offset": 8,
+        "offset": 48,
         "size": 8
       }
     ],
-    "size": 16
+    "size": 56
   },
   "SonareMidiCcBinding": {
     "align": 4,
@@ -4780,132 +4900,144 @@
     "fields": [
       {
         "kind": "signed",
-        "name": "n_fft",
+        "name": "struct_version",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "hop_length",
+        "name": "n_fft",
         "offset": 4,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "bpm_min",
+        "kind": "signed",
+        "name": "hop_length",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "bpm_max",
+        "name": "bpm_min",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "start_bpm",
+        "name": "bpm_max",
         "offset": 16,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "use_triads_only",
+        "kind": "float",
+        "name": "start_bpm",
         "offset": 20,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "use_hpss",
+        "name": "use_triads_only",
         "offset": 24,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "use_hpss",
+        "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
         "name": "chroma_highpass_hz",
-        "offset": 28,
-        "size": 4
-      },
-      {
-        "kind": "signed",
-        "name": "use_bass_weighted",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "chroma_hop_multiplier",
+        "name": "use_bass_weighted",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "use_chord_hmm",
+        "name": "chroma_hop_multiplier",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "use_chord_key_context",
+        "name": "use_chord_hmm",
         "offset": 44,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "chord_hmm_beam_width",
+        "name": "use_chord_key_context",
         "offset": 48,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "detect_chord_inversions",
+        "name": "chord_hmm_beam_width",
         "offset": 52,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "adaptive_tempo",
+        "name": "detect_chord_inversions",
         "offset": 56,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "tempo_update_interval_beats",
+        "name": "adaptive_tempo",
         "offset": 60,
         "size": 4
       },
       {
         "kind": "signed",
-        "name": "compute_tempo_curve",
+        "name": "tempo_update_interval_beats",
         "offset": 64,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "compute_tempo_curve",
+        "offset": 68,
         "size": 4
       },
       {
         "kind": "aggregate",
         "name": "meter_candidate_numerators",
-        "offset": 68,
+        "offset": 72,
         "size": 64
       },
       {
         "kind": "signed",
         "name": "meter_candidate_numerator_count",
-        "offset": 132,
+        "offset": 136,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "meter_denominator",
-        "offset": 136,
+        "offset": 140,
         "size": 4
       },
       {
         "kind": "float",
         "name": "tuning",
-        "offset": 140,
+        "offset": 144,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "tuning_auto",
+        "offset": 148,
         "size": 4
       }
     ],
-    "size": 144
+    "size": 152
   },
   "SonareNoiseDetection": {
     "align": 4,
@@ -10039,39 +10171,57 @@
         "name": "channel",
         "offset": 40,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "reference_auto",
+        "offset": 44,
+        "size": 4
       }
     ],
-    "size": 44
+    "size": 48
   },
   "SonareTranscribeResult": {
     "align": 8,
     "fields": [
       {
-        "kind": "pointer",
-        "name": "events",
+        "kind": "signed",
+        "name": "struct_version",
         "offset": 0,
-        "size": 8
+        "size": 4
       },
       {
-        "kind": "unsigned",
-        "name": "count",
+        "kind": "float",
+        "name": "tuning",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "pointer",
+        "name": "events",
         "offset": 8,
         "size": 8
       },
       {
         "kind": "unsigned",
-        "name": "note_count",
+        "name": "count",
         "offset": 16,
+        "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "note_count",
+        "offset": 24,
         "size": 8
       },
       {
         "kind": "float",
         "name": "tempo_bpm",
-        "offset": 24,
+        "offset": 32,
         "size": 4
       }
     ],
-    "size": 32
+    "size": 40
   },
   "SonareTransientShaperConfig": {
     "align": 4,

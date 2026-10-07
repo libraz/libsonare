@@ -10,6 +10,8 @@
 
 - `SONARE_FEATURE_ABI_VERSION` is 7 and `SonareBoundaryOptions` grows from 40 to 44 bytes with the new `reference_window` field, so C callers rebuild; a caller that starts from `sonare_boundary_options_default()` gets the field's default.
 
+- Within the same `SONARE_FEATURE_ABI_VERSION` 7, six more shipped structs change layout, so C callers rebuild: `SonareMusicAnalyzeOptions`, `SonareChordDetectionOptions`, `SonareChordAnalysisResult`, `SonareMelResult`, `SonareMfccResult` and `SonareTranscribeResult` gain a leading `struct_version` and the fields listed under New; `SonareTranscribeConfig` is version 2 with a trailing `reference_auto` (version 1 is still read). `sonare_analyze_json_ex` refuses a `SonareMusicAnalyzeOptions` whose `struct_version` is not `SONARE_MUSIC_ANALYZE_OPTIONS_VERSION`, so start from `sonare_music_analyze_options_default()`; the chord options take 0 or the current version. The libraries fill the result structs' `struct_version` themselves.
+
 #### Now refused
 
 - `sonare_project_add_loop_recording_takes` refuses a `SonareProjectLoopRecordingDesc.flags` word with any bit other than `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`; the word was reserved and ignored before, so C callers zero it.
@@ -38,6 +40,12 @@
 - Name the streaming key and chords: the progressive estimate carries `keyName`, `keyShortName` and `chordName`, and each chord change and bar chord a `name`, spelled by the same functions batch analysis uses (Python: `key_name`, `key_short_name`, `chord_name`, `name`). No chord reads `N.C.`; an unknown key has no name.
 
 - Set the window the boundary detector's relative threshold is measured in with `referenceWindow` (Python: `reference_window`; CLI: `--reference-window`; C: `SonareBoundaryOptions.reference_window`). It is one-sided in seconds and defaults to 60; 0 disables the relative threshold.
+
+- Measure the recording's tuning with `tuning: 'auto'` (Python: `tuning="auto"`; C: `tuning_auto`) on `analyze`, `detectChords` and `detectKey`, and `referenceHz: 'auto'` (Python: `reference_hz="auto"`; C: `SonareTranscribeConfig.reference_auto`) on `transcribe` and `transcribeToClip`. `tuning` is one unit everywhere, a fraction of a semitone in `[-0.5, 0.5)`, and every result reports the value used, given or measured: `AnalysisResult.tuning`, `ChordAnalysisResult.tuning`, `detectKey`'s new `KeyDetection.tuning` (Python: `KeyDetection`, a `Key` subclass), `TranscribeResult.tuning` (C: the JSON `tuning` key, `SonareChordAnalysisResult.tuning`, `SonareTranscribeResult.tuning`, and `sonare_detect_key_with_tuning`, which reports it through `out_tuning`). `estimateTuning` stays the librosa mirror and returns a fraction of a bin of its `binsPerOctave`; it equals the analysis unit at 12.
+
+- Convert between a reference pitch and the analysis unit with `tuningToReferenceHz(tuning, a4 = 440)` and `referenceHzToTuning(hz, a4 = 440)` (Python: `tuning_to_reference_hz`, `reference_hz_to_tuning`; C: `sonare_tuning_to_reference_hz`, `sonare_reference_hz_to_tuning`). The live `tuningRefHz` of the stream analyzer and `referenceHz` of transcription stay in Hz.
+
+- Mel and MFCC results carry the parameters of their forward transform (`nFft`, `fmin`, `fmax` as applied, `htk`, `isDb`; MFCC also `sampleRate`, `hopLength`, `nMels` and `lifter`), so a result is enough to invert it: the Node and WASM inverse requests take `{ result, ...overrides }` (`melToStft`, `melToAudio`, `mfccToMel`, `mfccToAudio`), refusing with a `RangeError` an explicit field that disagrees with the result and a result in dB with a message naming `dbToPower`; the existing `mel` / `melPower` request forms are unchanged. Python adds `mel_result_to_stft`, `mel_result_to_audio`, `mfcc_result_to_mel` and `mfcc_result_to_audio`; the positional librosa-mirror inverses are untouched. C adds the length-checked, lifter-aware `sonare_mfcc_to_mel_checked_ex` and `sonare_mfcc_to_audio_checked_ex2`.
 
 #### Project
 
@@ -104,6 +112,12 @@
 - Feedback in the stereo delay, chorus, flanger, phaser and pitch shifter now reaches 98% (was 95%), and chorus and ensemble pre-delay reach 100 ms (were 50 and 25 ms), so GS EFX bytes past those points are no longer clipped.
 - Chorus, flanger, ensemble, ring modulator, Dattorro reverb and bitcrusher accept `mixLaw`, as the stereo delay and pitch shifter already did.
 - The WASM browser-decoder fallback (`Audio.fromMemoryWithBrowserFallback`) folds a multi-channel `AudioBuffer` to mono with `downmix`, the rule the native decoder applies, instead of the unweighted mean of every channel, so a file folds to the same samples whichever decoder ran. Stereo is unchanged; a 5.1 or 7.1 file now has its center and surrounds at -3 dB and its LFE dropped.
+- Every STFT path, including time stretch, pitch shift, HPSS and spectral edit, needs `nFft` of at least 4 (Python: `n_fft`). A two-point Hann window is all zeros. Spectral edit with a rectangular window used to accept 2; it no longer does. HPSS also refuses a window and `win_length` pair whose overlap-added windows leave a gap.
+- Time stretch, pitch shift and tempo-sync warps advance phase after emitting each frame, and phase locking keeps DC and Nyquist content. Their output differs from earlier versions.
+- 16- and 24-bit WAV output is written on the same 2^(b-1) scale the reader uses, so decoding and saving again reproduces every sample code. A written sample can differ by 1 LSB from earlier versions, and −1.0 now writes the minimum code.
+- Tape and transformer saturation evaluate their small-signal response without cancellation error. Mastering presets with a tape stage, and chains with a transformer, render slightly differently.
+- Loudness matching solves for the gain that lands the remeasured signal on the target. This covers A/B match, reference matching, LUFS normalize, the chain's loudness stages and `maximizer.loudnessOptimize`. When the gain moves blocks across the absolute gate, the applied gain is no longer `reference − source` (C: `applied_gain_db`).
+- The mixing assistant counts the measured peaks of short audible tracks toward master headroom. Phase alignment picks its window by the activity in the span the correlation actually uses.
 
 ### Fixes
 
@@ -118,6 +132,18 @@
 - A refused sidechain binding no longer publishes a provisional binding table to the audio thread before it is rolled back.
 - A track insert automation lane set before `setTrackLanes` reordered the lanes no longer moves to whichever track took its old position when another automation lane is set afterwards (C, Node, Python and WASM).
 - After an instrument switches to the classic GS EFX realisation, retained EFX CONTROL modulation keeps working, and an offline bounce sizes the GS EFX tail from the controller-applied parameters.
+- Mixer delay compensation covers direct strip inputs and inserts ahead of a keyed sidechain detector. A recompile keeps the audio already queued on unchanged routes.
+- The mixer's reported tail follows automated insert parameters and includes a key-listen sidechain path. A pre-fader send no longer inherits the tail of post-fader inserts. This applies to both the C mixer and the realtime engine.
+- Dense mixer automation keeps its intermediate points. Commands issued in order at the same sample time apply in order even when the pending queue is full.
+- Removing a send no longer breaks the automation of the sends after it. Scene export writes the live send levels and insert parameters. Removing a bus clears the sidechain keys that named it.
+- Re-enabling a bus EQ no longer replays stale filter state.
+- A dynamics processor no longer lets an earlier `set_config` overwrite later automation.
+- CutFilter automation of IIR parameters no longer allocates on the audio thread. A change that rebuilds a linear-phase FIR (a brickwall corner, or an Equalizer linear-phase or brickwall band) is reported as not realtime-safe instead of being accepted there.
+- Short inputs no longer collapse to silence or to nothing: mono clips and warp segments shorter than one hop, short custom HRTF responses when resampled, and empty streaming phase-vocoder jobs, which no longer emit one silent sample.
+- SMF import keeps a fragmented SysEx message across meta events, and an empty F7 escape no longer moves the next SysEx earlier. SMF and MIDI Clip File export keep a leading F0 or trailing F7 data byte of a SysEx8 payload.
+- Generated cabinet impulse responses keep in-band driver directivity at low sample rates.
+- Multiband setters reconfigure the crossover the processor owns, before or after prepare. A sparse dynamic-EQ sub-band keeps the slot its parameter keys name.
+- Gated silence trimming no longer rescans the full RMS window for every sample.
 
 ## v1.8.2 (2026-10-06)
 

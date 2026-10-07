@@ -2,6 +2,7 @@
 
 #include "c_api/features_internal.h"
 #include "core/synthesis.h"
+#include "feature/chroma.h"
 #include "util/numeric_validation.h"
 
 // Core - Synthetic audio generation
@@ -374,6 +375,30 @@ SonareError sonare_estimate_tuning(const float* samples, size_t length, int samp
     *out_tuning = estimate_tuning(audio, n_fft, hop_length, resolution, bins_per_octave);
     return SONARE_OK;
   });
+}
+
+SonareError sonare_tuning_to_reference_hz(float tuning, float a4, float* out_hz) {
+  SONARE_C_API_ENTRY;
+  if (!out_hz) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_hz = 0.0f;
+  if (!std::isfinite(tuning) || !numeric::finite_positive(a4)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const float hz = tuning_to_reference_hz(tuning, a4);
+  if (!numeric::finite_positive(hz)) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_hz = hz;
+  return SONARE_OK;
+}
+
+SonareError sonare_reference_hz_to_tuning(float hz, float a4, float* out_tuning) {
+  SONARE_C_API_ENTRY;
+  if (!out_tuning) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_tuning = 0.0f;
+  if (!numeric::finite_positive(hz) || !numeric::finite_positive(a4)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_tuning = reference_hz_to_tuning(hz, a4);
+  return SONARE_OK;
 }
 
 SonareError sonare_piptrack(const float* samples, size_t length, int sample_rate, int n_fft,

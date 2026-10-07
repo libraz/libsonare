@@ -596,23 +596,50 @@ export interface StftResult {
 }
 
 /**
- * Mel spectrogram result
+ * Mel spectrogram result, with the parameters of the forward transform, so the
+ * result alone is enough to invert it: `melToStft` and `melToAudio` take it as
+ * `{ result }`.
  */
 export interface MelSpectrogramResult {
   nMels: number;
   nFrames: number;
   sampleRate: number;
   hopLength: number;
+  /** FFT size of the source STFT. */
+  nFft: number;
+  /** Lower Mel band edge in Hz as applied. */
+  fmin: number;
+  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
+  fmax: number;
+  /** `true` for the HTK Mel formula, `false` for Slaney. */
+  htk: boolean;
+  /** `true` when `power` holds dB values. A forward transform always reports `false`: `power` is linear power and `db` is its dB form. */
+  isDb: boolean;
   power: Float32Array;
   db: Float32Array;
 }
 
 /**
- * MFCC result
+ * MFCC result, with the Mel parameters the coefficients were derived with and
+ * the lifter, so the result alone is enough to invert it: `mfccToMel` and
+ * `mfccToAudio` take it as `{ result }`.
  */
 export interface MfccResult {
   nMfcc: number;
   nFrames: number;
+  sampleRate: number;
+  hopLength: number;
+  nFft: number;
+  /** Mel bands the coefficients were taken from. */
+  nMels: number;
+  fmin: number;
+  /** Upper Mel band edge in Hz as applied: the Nyquist when the request left it at 0. */
+  fmax: number;
+  htk: boolean;
+  /** Always `false`: the coefficients are a cepstrum, not a dB spectrogram. */
+  isDb: boolean;
+  /** Cepstral lifter applied to the coefficients; 0 means none. */
+  lifter: number;
   coefficients: Float32Array;
 }
 

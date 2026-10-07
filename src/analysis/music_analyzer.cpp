@@ -9,6 +9,7 @@
 #include "feature/cqt.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
+#include "feature/pitch.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -82,6 +83,7 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
   analysis_audio_ = analysis_rate_audio(audio_);
   analysis_sr_ = analysis_audio_.sample_rate();
+  tuning_ = config_->auto_tuning ? measure_tuning(analysis_audio_) : config_->tuning;
 }
 
 void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {
@@ -130,7 +132,7 @@ KeyAnalyzer& MusicAnalyzer::key_analyzer() {
   std::call_once(key_analyzer_once_, [this]() {
     KeyConfig key_config;
     key_config.hop_length = config_->hop_length;
-    key_config.tuning = config_->tuning;
+    key_config.tuning = tuning_;
     // Build the key analyzer from the analysis audio (not a pre-computed chroma)
     // so the full refinement runs: the auto candidate search, the 60 Hz harmonic
     // high-pass fallback, and the loudness-weighted chroma refinement. Feeding a
@@ -172,7 +174,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
     chord_config.use_hmm = config_->use_chord_hmm;
     chord_config.hmm_beam_width = config_->chord_hmm_beam_width;
     chord_config.detect_inversions = config_->detect_chord_inversions;
-    chord_config.tuning = config_->tuning;
+    chord_config.tuning = tuning_;
     if (config_->use_chord_key_context) {
       const Key key = key_analyzer().key();
       chord_config.use_key_context = true;
@@ -194,7 +196,7 @@ ChordAnalyzer& MusicAnalyzer::chord_analyzer() {
       // space: the chord segments are expressed in harmonic-chroma frames and
       // are used directly to slice the bass chromagram.
       bass_config.cqt.hop_length = config_->hop_length * config_->chroma_hop_multiplier;
-      bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, config_->tuning);
+      bass_config.cqt.fmin = tune_cqt_fmin(bass_config.cqt.fmin, tuning_);
       chord_analyzer_ = std::make_unique<ChordAnalyzer>(
           harmonic, beat_times, bass_chroma(analysis_audio_, bass_config), chord_config);
     } else {
@@ -271,7 +273,7 @@ SectionAnalyzer& MusicAnalyzer::section_analyzer() {
     SectionConfig section_config;
     section_config.n_fft = config_->n_fft;
     section_config.hop_length = config_->hop_length;
-    section_config.tuning = config_->tuning;
+    section_config.tuning = tuning_;
     // Run section descriptors on the same analysis-rate signal the boundaries
     // were detected on (analysis_audio_ at kAnalysisSampleRate), not the native
     // input. This keeps the whole music-analysis pipeline on one sample rate, and
@@ -306,7 +308,7 @@ const Spectrogram& MusicAnalyzer::spectrogram() {
 const Chroma& MusicAnalyzer::chroma() {
   std::call_once(chroma_once_, [this]() {
     ChromaFilterConfig filter_config;
-    filter_config.tuning = config_->tuning;
+    filter_config.tuning = tuning_;
     chroma_ = std::make_unique<Chroma>(
         Chroma::from_spectrogram(spectrogram(), analysis_sr_, filter_config));
   });
@@ -355,7 +357,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
     CqtConfig cqt_config;
     cqt_config.hop_length = chroma_hop;
     // Shifted by the tuning offset so bin % 12 still names the pitch class below.
-    cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, config_->tuning);
+    cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, tuning_);
     cqt_config.n_bins = 84;  // 7 octaves * 12 bins
     cqt_config.bins_per_octave = 12;
 
@@ -372,7 +374,7 @@ const Chroma& MusicAnalyzer::harmonic_chroma() {
       // Use reduced CQT for bass (lower 4 octaves = 48 bins)
       CqtConfig bass_cqt_config;
       bass_cqt_config.hop_length = chroma_hop;
-      bass_cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, config_->tuning);
+      bass_cqt_config.fmin = tune_cqt_fmin(constants::kC1Hz, tuning_);
       bass_cqt_config.n_bins = 48;  // 4 octaves (bass-focused)
       bass_cqt_config.bins_per_octave = 12;
 
@@ -578,6 +580,7 @@ std::optional<AnalysisResult> MusicAnalyzer::analyze_impl() {
   }
   result.sections = section_analyzer().sections();
   result.form = section_analyzer().form();
+  result.tuning = tuning_;
 
   // Timbre (70-80%)
   report_progress(0.70f, "timbre");

@@ -42,7 +42,7 @@ _NOTE_STRUCT_VERSION = 1
 
 # The transcription config's own layout version. Unlike the note-object configs
 # above, 0 is rejected rather than read as version 1.
-_TRANSCRIBE_STRUCT_VERSION = 1
+_TRANSCRIBE_STRUCT_VERSION = 2
 
 
 @dataclasses.dataclass
@@ -262,11 +262,16 @@ class TranscribeResult:
         note_count: Number of notes.
         tempo_bpm: The tempo the PPQ coordinates were built on -- the requested
             value when one was given, and the detected one otherwise.
+        tuning: The tuning the note numbers were measured against, in fractions
+            of a semitone from concert A440: the measured value under
+            ``reference_hz="auto"``, otherwise the one ``reference_hz`` amounts
+            to (:func:`reference_hz_to_tuning`).
     """
 
     events: list[tuple[float, int, int]] = dataclasses.field(default_factory=list)
     note_count: int = 0
     tempo_bpm: float = 0.0
+    tuning: float = 0.0
 
 
 def _transcribe_int(fn_name: str, value: object, arg_name: str, low: int, high: int) -> int:
@@ -290,7 +295,7 @@ def _transcribe_config(
     fn_name: str,
     *,
     polyphonic: bool,
-    reference_hz: float | None,
+    reference_hz: float | str | None,
     fmin: float | None,
     fmax: float | None,
     min_note_ms: float | None,
@@ -312,6 +317,11 @@ def _transcribe_config(
     config = SonareTranscribeConfig()
     config.struct_version = _TRANSCRIBE_STRUCT_VERSION
     config.polyphonic = 1 if polyphonic else 0
+    if isinstance(reference_hz, str):
+        if reference_hz != "auto":
+            raise SonareValueError(f"{fn_name}: reference_hz must be a number or 'auto'")
+        config.reference_auto = 1
+        reference_hz = None
     for arg_name, value in (
         ("reference_hz", reference_hz),
         ("fmin", fmin),
@@ -364,6 +374,7 @@ def _transcribe_result_from_c(out: SonareTranscribeResult) -> TranscribeResult:
         events=events,
         note_count=int(out.note_count),
         tempo_bpm=float(out.tempo_bpm),
+        tuning=float(out.tuning),
     )
 
 
