@@ -87,6 +87,7 @@
     "format": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome format --write",
     "test": "vitest run",
     "test:types": "tsc --noEmit --ignoreConfig --strict --module ESNext --moduleResolution bundler --target ES2020 --lib ES2020,ESNext.Disposable,DOM tests/typing/analysis-entry.ts tests/typing/dist-entry-shared-types.ts tests/typing/worklet-capture-response.ts && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test:bundle": "node scripts/bundle-smoke.mjs",
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:boundary": "node scripts/boundary-smoke.mjs",
@@ -133,9 +134,11 @@
     "@biomejs/biome": "^2.5.13",
     "@types/node": "^22.20.3",
     "ajv": "^8.20.0",
+    "esbuild": "^0.27.7",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
     "vite": "^8.3.0",
-    "vitest": "^5.0.1"
+    "vitest": "^5.0.1",
+    "webpack": "^5.111.1"
   }
 }

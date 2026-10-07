@@ -454,7 +454,7 @@ jobs:
         run: yarn build
       - name: Test WASM binding
         working-directory: bindings/wasm
-        run: yarn test && yarn test:types
+        run: yarn test && yarn test:types && yarn test:bundle
       # Reads the built compile_commands.json, so it has to follow the build. A
       # catch compiled without -fexceptions is deleted silently: no compile
       # error, no link error, no failing test, just a throw that walks past its
