@@ -102,6 +102,65 @@ TEST_CASE("window_at_rate converts from a caller-named reference rate", "[analys
   CHECK_THROWS_AS(window_at_rate(2048, 48000, 0), SonareException);
 }
 
+TEST_CASE("stft_config_scaled_to_rate returns the config unchanged at the reference rate",
+          "[analysis_rate][helper]") {
+  StftConfig in = make_stft_config(4096, 512);
+  in.win_length = 3000;
+  in.window = WindowType::Hamming;
+  in.center = false;
+  const StftConfig out = stft_config_scaled_to_rate(in, 44100, 44100);
+  CHECK(out.n_fft == 4096);
+  CHECK(out.hop_length == 512);
+  CHECK(out.win_length == 3000);
+  CHECK(out.window == WindowType::Hamming);
+  CHECK_FALSE(out.center);
+}
+
+TEST_CASE("stft_config_scaled_to_rate converts window and hop in both directions",
+          "[analysis_rate][helper]") {
+  // 4096 * 48000 / 44100 = 4458.2 and 512 * 48000 / 44100 = 557.3.
+  const StftConfig up = stft_config_scaled_to_rate(make_stft_config(4096, 512), 48000, 44100);
+  CHECK(up.win_length == 4458);
+  CHECK(up.n_fft == fast_fft_length(4458));
+  CHECK(up.hop_length == 557);
+
+  const StftConfig half = stft_config_scaled_to_rate(make_stft_config(4096, 512), 22050, 44100);
+  CHECK(half.win_length == 2048);
+  CHECK(half.n_fft == 2048);
+  CHECK(half.hop_length == 256);
+
+  // 2048 * 44100 / 48000 = 1881.6 and 512 * 44100 / 48000 = 470.4.
+  const StftConfig down = stft_config_scaled_to_rate(make_stft_config(2048, 512), 44100, 48000);
+  CHECK(down.win_length == 1882);
+  CHECK(down.n_fft == fast_fft_length(1882));
+  CHECK(down.hop_length == 470);
+}
+
+TEST_CASE("stft_config_scaled_to_rate converts an explicit window on its own",
+          "[analysis_rate][helper]") {
+  StftConfig in = make_stft_config(4096, 512);
+  in.win_length = 2048;
+  in.window = WindowType::Hamming;
+  in.center = false;
+  // 2048 * 48000 / 44100 = 2229.1; the FFT length still follows n_fft.
+  const StftConfig out = stft_config_scaled_to_rate(in, 48000, 44100);
+  CHECK(out.win_length == 2229);
+  CHECK(out.n_fft == fast_fft_length(4458));
+  CHECK(out.hop_length == 557);
+  CHECK(out.window == WindowType::Hamming);
+  CHECK_FALSE(out.center);
+
+  // A window equal to n_fft is the default window, not an explicit one.
+  in.win_length = 4096;
+  CHECK(stft_config_scaled_to_rate(in, 48000, 44100).win_length == 4458);
+
+  StftConfig bad = make_stft_config(4096, 0);
+  CHECK_THROWS_AS(stft_config_scaled_to_rate(bad, 48000, 44100), SonareException);
+  bad = make_stft_config(4096, 512);
+  bad.win_length = 4097;
+  CHECK_THROWS_AS(stft_config_scaled_to_rate(bad, 48000, 44100), SonareException);
+}
+
 TEST_CASE("rate material has the specified length at each rate", "[analysis_rate][helper]") {
   for (int sr : {22050, 48000}) {
     CAPTURE(sr);

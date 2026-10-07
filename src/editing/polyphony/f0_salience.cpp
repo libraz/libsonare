@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -66,6 +67,10 @@ void fill_phase(const std::complex<float>* data, int n_bins, int n_frames, int f
 }
 
 }  // namespace
+
+StftConfig polyphony_stft_at_rate(const StftConfig& at_reference, int sample_rate) {
+  return stft_config_scaled_to_rate(at_reference, sample_rate, kPolyphonyReferenceRate);
+}
 
 float CentAxis::hz_at(float bin) const {
   return static_cast<float>(ref_hz *

@@ -75,4 +75,32 @@ inline StftConfig stft_config_at_rate(int n_fft_at_reference_rate, int hop_lengt
   return config;
 }
 
+/// @brief @p at_reference with its window and hop converted from @p reference_rate to
+///        @p sample_rate.
+/// @details For a geometry whose hop is a time quantity as well as its window. An explicit
+///          `win_length` (neither 0 nor `n_fft`) is converted on its own, capped at the FFT
+///          length. Other fields are kept. The same rate returns @p at_reference unchanged.
+/// @throws SonareException(InvalidParameter) on what @ref window_at_rate refuses, a
+///         non-positive hop, or a `win_length` outside [0, n_fft].
+inline StftConfig stft_config_scaled_to_rate(const StftConfig& at_reference, int sample_rate,
+                                             int reference_rate) {
+  if (sample_rate == reference_rate) return at_reference;
+  const RateWindow w = window_at_rate(at_reference.n_fft, sample_rate, reference_rate);
+  SONARE_CHECK(at_reference.hop_length > 0, ErrorCode::InvalidParameter);
+  SONARE_CHECK(at_reference.win_length >= 0 && at_reference.win_length <= at_reference.n_fft,
+               ErrorCode::InvalidParameter);
+  const auto scale = [&](int samples) {
+    return std::lround(static_cast<double>(samples) * sample_rate / reference_rate);
+  };
+  StftConfig config = at_reference;
+  config.n_fft = w.n_fft;
+  config.win_length = w.win_length;
+  if (at_reference.win_length != 0 && at_reference.win_length != at_reference.n_fft) {
+    config.win_length =
+        std::min(w.n_fft, std::max(2, static_cast<int>(scale(at_reference.win_length))));
+  }
+  config.hop_length = std::max(1, static_cast<int>(scale(at_reference.hop_length)));
+  return config;
+}
+
 }  // namespace sonare

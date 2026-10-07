@@ -20,6 +20,7 @@
 #include "editing/polyphony/masked_renderer.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "editing/polyphony/polyphonic_edit.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -1334,4 +1335,57 @@ TEST_CASE("a length ending before a ridge's span is a framing error", "[polyphon
   REQUIRE(got[0].onset_sample == onset);
   REQUIRE(got[0].offset_sample == onset + 1);
   require_usable_notes(got);
+}
+
+namespace {
+
+/// C4, E4 and G4, equal-tempered.
+constexpr float kRateChordHz[] = {261.6256f, 329.6276f, 391.9954f};
+constexpr int kChordRates[] = {22050, 44100, 48000};
+constexpr double kRateChordSeconds = 2.0;
+
+sonare::Audio rate_chord(int sample_rate) {
+  std::vector<float> samples(
+      static_cast<size_t>(std::lround(kRateChordSeconds * static_cast<double>(sample_rate))), 0.0f);
+  for (const float hz : kRateChordHz) add_tone(samples, hz, 0.2f, 6, sample_rate);
+  return sonare::Audio::from_vector(std::move(samples), sample_rate);
+}
+
+std::vector<float> sorted_note_hz(const PolyphonicAnalysis& analysis) {
+  std::vector<float> hz;
+  for (const NoteObject& note : analysis.notes) hz.push_back(note.median_hz);
+  std::sort(hz.begin(), hz.end());
+  return hz;
+}
+
+}  // namespace
+
+TEST_CASE("the default framing is a time quantity at every input rate", "[polyphony_notes]") {
+  const PolyphonicAnalysis reference = analyze_polyphonic(rate_chord(44100));
+  const double ref_win_sec = static_cast<double>(reference.spectrum.win_length()) / 44100.0;
+  const double ref_hop_sec = static_cast<double>(reference.spectrum.hop_length()) / 44100.0;
+  for (const int sample_rate : kChordRates) {
+    INFO("rate " << sample_rate);
+    const PolyphonicAnalysis got = analyze_polyphonic(rate_chord(sample_rate));
+    // One sample at the slower of the two rates compared.
+    const double tolerance = 1.0 / static_cast<double>(std::min(sample_rate, 44100));
+    const double sr = static_cast<double>(sample_rate);
+    CHECK(std::abs(static_cast<double>(got.spectrum.win_length()) / sr - ref_win_sec) <= tolerance);
+    CHECK(std::abs(static_cast<double>(got.spectrum.hop_length()) / sr - ref_hop_sec) <= tolerance);
+  }
+}
+
+TEST_CASE("a held triad yields the same notes at every input rate", "[polyphony_notes]") {
+  const std::vector<float> reference = sorted_note_hz(analyze_polyphonic(rate_chord(44100)));
+  REQUIRE(reference.size() == std::size(kRateChordHz));
+  for (const int sample_rate : kChordRates) {
+    INFO("rate " << sample_rate);
+    const std::vector<float> got = sorted_note_hz(analyze_polyphonic(rate_chord(sample_rate)));
+    REQUIRE(got.size() == reference.size());
+    for (size_t i = 0; i < got.size(); ++i) {
+      INFO("note " << i << ": " << got[i] << " Hz against " << reference[i] << " Hz");
+      CHECK(std::abs(sonare::constants::kCentsPerOctave * std::log2(got[i] / reference[i])) <=
+            10.0f);
+    }
+  }
 }

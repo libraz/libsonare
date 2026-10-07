@@ -134,8 +134,9 @@ struct PolyphonicAnalysis {
 /// @param audio Source. Its length becomes @ref PolyphonicAnalysis::length, so the
 ///        spans and the render agree by construction rather than by the caller
 ///        passing one number twice.
-/// @param config The three stages' configs. @c extraction.stft is the framing, and
-///        is not restated anywhere else.
+/// @param config The three stages' configs. @c extraction.stft is the framing, in
+///        samples at 44.1 kHz converted to @p audio's rate, and is not restated
+///        anywhere else.
 /// @throws SonareException(InvalidParameter) on empty @p audio, on an @p audio
 ///         longer than @ref PolyphonicAnalysis::length can hold -- the length is
 ///         an @c int because every stage below takes one, so a source past that

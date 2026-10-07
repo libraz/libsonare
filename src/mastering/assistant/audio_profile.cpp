@@ -501,12 +501,8 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
 }  // namespace
 
 StftConfig profile_stft_config(const AudioProfileConfig& config, int sample_rate) {
-  int hop_length = config.hop_length;
-  if (sample_rate != kProfileReferenceRate && sample_rate > 0) {
-    hop_length = std::max(1, static_cast<int>(std::lround(static_cast<double>(hop_length) *
-                                                          sample_rate / kProfileReferenceRate)));
-  }
-  return stft_config_at_rate(config.n_fft, hop_length, sample_rate, kProfileReferenceRate);
+  return stft_config_scaled_to_rate(make_stft_config(config.n_fft, config.hop_length), sample_rate,
+                                    kProfileReferenceRate);
 }
 
 double reference_power_scale(const Spectrogram& spec, int n_fft_at_reference_rate) {

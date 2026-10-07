@@ -32,6 +32,16 @@ namespace sonare::editing::polyphony {
 ///          is a phase difference across one hop and so averages over it.
 inline StftConfig polyphony_stft_defaults() { return make_stft_config(4096, 512); }
 
+/// Rate the polyphony framing is stated at: `n_fft`, `win_length` and `hop_length` are samples
+/// at this rate, converted to the input's by @ref polyphony_stft_at_rate.
+inline constexpr int kPolyphonyReferenceRate = 44100;
+
+/// @brief @p at_reference converted from @ref kPolyphonyReferenceRate to @p sample_rate.
+/// @details Window and hop both convert, since @ref RidgeConfig::max_jump_cents is calibrated
+///          to the hop's duration. Unchanged at 44.1 kHz.
+/// @throws SonareException(InvalidParameter) on what @ref stft_config_scaled_to_rate refuses.
+StftConfig polyphony_stft_at_rate(const StftConfig& at_reference, int sample_rate);
+
 /// @brief A log-frequency axis, shared by the cent spectrum and the F0 surface.
 struct CentAxis {
   /// Frequency of bin 0.

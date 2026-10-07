@@ -220,6 +220,7 @@ struct MultiF0Track {
 };
 
 struct MultiF0ExtractorConfig {
+  /// Samples at @ref kPolyphonyReferenceRate, converted to the input's rate.
   StftConfig stft = polyphony_stft_defaults();
   CentSpectrumConfig spectrum{};
   MultiF0Config estimation{};
@@ -243,6 +244,8 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
 ///          @c config.stft rather than trusted -- a framing that is not the one
 ///          the extraction asked for would put every ridge on frames it never
 ///          measured, and the frame count @p audio implies is part of that check.
+///          The comparison is against @c config.stft converted to @p audio's rate,
+///          so build @p spec with `polyphony_stft_at_rate(config.stft, rate)`.
 ///
 ///          @c config.stft is still read, for that validation. It is not a way to
 ///          ask for a different framing than @p spec carries.
@@ -261,7 +264,8 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
 ///          it is stated here rather than left to follow from the framing check.
 /// @param audio The signal @p spec was computed from, read for its length and rate
 ///        and for the span clamping the audio form also does.
-/// @param spec That signal's STFT under @c config.stft.
+/// @param spec That signal's STFT under @c config.stft at its rate
+///        (@ref polyphony_stft_at_rate).
 /// @throws SonareException(InvalidParameter) on empty @p audio, a @p spec whose
 ///         geometry is not that of @c config.stft over @p audio -- every framing
 ///         field, the sample rate, and the frame count @p audio implies -- plus

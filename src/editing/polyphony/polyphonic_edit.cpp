@@ -18,7 +18,8 @@ PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditCo
 
   PolyphonicAnalysis analysis;
   analysis.length = static_cast<int>(audio.size());
-  analysis.spectrum = Spectrogram::compute(audio, config.extraction.stft);
+  analysis.spectrum = Spectrogram::compute(
+      audio, polyphony_stft_at_rate(config.extraction.stft, audio.sample_rate()));
   analysis.track = extract_multi_f0(audio, analysis.spectrum, config.extraction);
   analysis.masks = build_note_masks(analysis.spectrum, analysis.track, config.masks);
   if (config.estimate_inharmonicity) {
