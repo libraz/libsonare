@@ -87,6 +87,12 @@ void EqualizerProcessor::validate_supported_band(const EqBand& band, PhaseMode g
   validate_dynamic_params(band.dyn);
 }
 
+bool EqualizerProcessor::uses_fir_backend(const EqBand& band, PhaseMode global_phase) noexcept {
+  const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
+  return resolved_phase == PhaseMode::LinearPhase ||
+         (is_cut_band(band.type) && band.slope_db_oct == 0);
+}
+
 void EqualizerProcessor::validate_backend_capacity(const std::array<EqBand, kMaxBands>& bands,
                                                    PhaseMode global_phase) {
   const bool any_soloed = [&] {
@@ -119,9 +125,7 @@ void EqualizerProcessor::validate_backend_capacity(const std::array<EqBand, kMax
     if (!band.enabled || band.bypassed || (any_soloed && !band.soloed)) {
       continue;
     }
-    const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? global_phase : band.phase;
-    const bool linear_band = resolved_phase == PhaseMode::LinearPhase ||
-                             (is_cut_band(band.type) && band.slope_db_oct == 0);
+    const bool linear_band = uses_fir_backend(band, global_phase);
     size_t expansion = 1;
     if (!band.soloed && band.type == EqBandType::TiltShelf) {
       expansion = 2;

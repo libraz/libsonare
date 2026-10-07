@@ -716,6 +716,151 @@ TEST_CASE("CutFilter brickwall process performs no heap allocation after prepare
   REQUIRE(guard.count() == 0);
 }
 
+namespace {
+
+// Renders an impulse followed by low-level noise through a freshly reset cut filter.
+std::vector<float> cut_filter_impulse_response(sonare::mastering::eq::CutFilter& eq, int length) {
+  eq.reset();
+  std::vector<float> samples(static_cast<size_t>(length), 0.0f);
+  samples[0] = 1.0f;
+  float* channels[] = {samples.data()};
+  eq.process(channels, 1, length);
+  return samples;
+}
+
+void require_same_response(const std::vector<float>& actual, const std::vector<float>& expected) {
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < actual.size(); ++i) {
+    INFO("sample " << i);
+    REQUIRE(std::abs(actual[i] - expected[i]) <= 1.0e-6f);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("CutFilter IIR corner and Q automation is realtime-safe and allocation free",
+          "[mastering][eq][rt]") {
+  using sonare::mastering::eq::CutFilter;
+  using sonare::mastering::eq::CutFilterSlope;
+  constexpr int kBlock = 256;
+  CutFilter eq;
+  eq.prepare(48000.0, kBlock);
+  eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db12PerOct);
+  eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db24PerOct);
+  for (unsigned int id = 0; id < 4; ++id) {
+    INFO("param " << id);
+    REQUIRE(eq.parameter_is_realtime_safe(id));
+  }
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  left.fill(0.02f);
+  right.fill(0.01f);
+  float* stereo[] = {left.data(), right.data()};
+  eq.process(stereo, 2, kBlock);
+
+  {
+    AllocationGuard guard;
+    REQUIRE(eq.set_parameter(0, 2000.0f));
+    REQUIRE(eq.set_parameter(1, 1.2f));
+    REQUIRE(eq.set_parameter(2, 8000.0f));
+    REQUIRE(eq.set_parameter(3, 0.9f));
+    eq.process(stereo, 2, kBlock);
+    REQUIRE(guard.count() == 0);
+  }
+
+  CutFilter fresh;
+  fresh.prepare(48000.0, kBlock);
+  fresh.set_high_pass(2000.0f, 1.2f, CutFilterSlope::Db12PerOct);
+  fresh.set_low_pass(8000.0f, 0.9f, CutFilterSlope::Db24PerOct);
+  require_same_response(cut_filter_impulse_response(eq, 1024),
+                        cut_filter_impulse_response(fresh, 1024));
+}
+
+TEST_CASE("CutFilter brickwall corner reports not realtime-safe and still applies directly",
+          "[mastering][eq][rt]") {
+  using sonare::mastering::eq::CutFilter;
+  using sonare::mastering::eq::CutFilterSlope;
+  constexpr int kBlock = 256;
+  CutFilter eq;
+  eq.prepare(48000.0, kBlock);
+  eq.set_high_pass(1000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Brickwall);
+  eq.set_low_pass(12000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db12PerOct);
+
+  // Only the brickwall corner reaches the FIR; its Q and the IIR stage do not.
+  REQUIRE_FALSE(eq.parameter_is_realtime_safe(0));
+  REQUIRE(eq.parameter_is_realtime_safe(1));
+  REQUIRE(eq.parameter_is_realtime_safe(2));
+  REQUIRE(eq.parameter_is_realtime_safe(3));
+
+  sonare::mixing::ChannelStrip strip;
+  auto inserted = std::make_unique<CutFilter>();
+  inserted->set_high_pass(1000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Brickwall);
+  strip.add_pre_insert(std::move(inserted));
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_insert_automation_result(0, 0, 0, 2000.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
+  REQUIRE(strip.schedule_insert_automation_result(0, 1, 0, 2.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::Success);
+
+  REQUIRE(eq.set_parameter(0, 2000.0f));
+  CutFilter fresh;
+  fresh.prepare(48000.0, kBlock);
+  fresh.set_high_pass(2000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Brickwall);
+  fresh.set_low_pass(12000.0f, sonare::constants::kButterworthQ, CutFilterSlope::Db12PerOct);
+  require_same_response(cut_filter_impulse_response(eq, 4096),
+                        cut_filter_impulse_response(fresh, 4096));
+}
+
+TEST_CASE("EqualizerProcessor brickwall cut corner is not realtime-safe and reaches its FIR",
+          "[mastering][eq][rt]") {
+  using sonare::mastering::eq::EqBand;
+  using sonare::mastering::eq::EqBandType;
+  using sonare::mastering::eq::EqualizerProcessor;
+  constexpr int kBlock = 256;
+  EqBand high_pass{EqBandType::HighPass, 1000.0f, 0.0f, sonare::constants::kButterworthQ, true};
+  high_pass.slope_db_oct = 0;
+  EqBand peak{EqBandType::Peak, 3000.0f, 3.0f, 1.0f, true};
+
+  EqualizerProcessor eq;
+  eq.prepare(48000.0, kBlock);
+  eq.set_band(0, high_pass);
+  eq.set_band(1, peak);
+  REQUIRE(eq.phase_mode() == sonare::mastering::eq::PhaseMode::ZeroLatency);
+  REQUIRE_FALSE(eq.parameter_is_realtime_safe(0));
+  REQUIRE_FALSE(eq.parameter_is_realtime_safe(2));
+  REQUIRE(eq.parameter_is_realtime_safe(3));
+
+  auto inserted = std::make_unique<EqualizerProcessor>();
+  inserted->set_band(0, high_pass);
+  sonare::mixing::ChannelStrip strip;
+  strip.add_pre_insert(std::move(inserted));
+  strip.prepare(48000.0, kBlock);
+  REQUIRE(strip.schedule_insert_automation_result(0, 0, 0, 2000.0f) ==
+          sonare::mixing::InsertAutomationScheduleResult::NotSupported);
+
+  REQUIRE(eq.set_parameter(0, 2000.0f));
+  EqualizerProcessor fresh;
+  fresh.prepare(48000.0, kBlock);
+  high_pass.frequency_hz = 2000.0f;
+  fresh.set_band(0, high_pass);
+  fresh.set_band(1, peak);
+
+  const auto render = [](EqualizerProcessor& target) {
+    target.reset();
+    std::vector<float> left(8192, 0.0f);
+    std::vector<float> right(8192, 0.0f);
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    for (size_t offset = 0; offset < left.size(); offset += kBlock) {
+      float* block[] = {left.data() + offset, right.data() + offset};
+      target.process(block, 2, kBlock);
+    }
+    return left;
+  };
+  require_same_response(render(eq), render(fresh));
+}
+
 TEST_CASE("MinimumPhaseEq process performs no heap allocation after prepare",
           "[mastering][eq][rt]") {
   constexpr int kBlock = 256;

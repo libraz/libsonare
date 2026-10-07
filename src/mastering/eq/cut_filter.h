@@ -53,17 +53,19 @@ class CutFilter : public rt::ProcessorBase {
   CutFilterSlope high_pass_slope() const { return high_pass_slope_; }
   CutFilterSlope low_pass_slope() const { return low_pass_slope_; }
 
-  // Automatable parameters (RT-safe: recomputes affected biquad coefficients in
-  // place via apply_high_pass()/apply_low_pass(), preserves filter state):
-  //   0 = high-pass frequency_hz (clamped to (0 Hz, Nyquist))
+  // Automatable parameters (recompute the affected biquad coefficients in place
+  // and preserve filter state):
+  //   0 = high-pass frequency_hz (clamped to (0 Hz, 0.49 * sample rate])
   //   1 = high-pass Q (clamped to > 0; resonance is applied to the final
   //       second-order stage; 6 dB/oct uses its first-order Butterworth stage)
-  //   2 = low-pass frequency_hz (clamped to (0 Hz, Nyquist))
+  //   2 = low-pass frequency_hz (clamped to (0 Hz, 0.49 * sample rate])
   //   3 = low-pass Q (same resonance rule as id 1)
-  // The slope enum is not automatable.
+  // The corner of an enabled brickwall stage rebuilds its FIR kernel, so that id
+  // reports not realtime-safe. The slope enum is not automatable.
   bool set_parameter_impl(unsigned int param_id, float value) override;
   // Automatable parameters: 0=highPassFrequencyHz, 1=highPassQ, 2=lowPassFrequencyHz, 3=lowPassQ.
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
  private:
   struct State {
@@ -84,6 +86,9 @@ class CutFilter : public rt::ProcessorBase {
   void build_sections(std::array<Section, kMaxSections>& sections, EqBandType type,
                       float frequency_hz, float q, bool enabled, CutFilterSlope slope);
   void rebuild_brickwall();
+  /// The one predicate that both selects the FIR rebuild in set_parameter_impl()
+  /// and answers parameter_is_realtime_safe().
+  bool parameter_rebuilds_brickwall(unsigned int param_id) const noexcept;
   bool high_pass_is_brickwall() const noexcept;
   bool low_pass_is_brickwall() const noexcept;
   /// @return true when any section's state was returned to its post-reset value.

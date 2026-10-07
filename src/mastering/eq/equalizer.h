@@ -44,8 +44,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   ///       - `2` -> Q
   /// Band type, placement (channel/mid-side), phase, enabled, soloed/bypassed
   /// and any `dynamic.*` parameters are NOT addressable through this method.
-  /// Linear-phase bands are not realtime-safe to mutate; see
-  /// parameter_is_realtime_safe().
+  /// Bands on the FIR backend (linear phase, or a brickwall cut) are not
+  /// realtime-safe to mutate; see parameter_is_realtime_safe().
   /// @param param_id Encoded band/parameter selector (see above).
   /// @param value New parameter value.
   /// @return true if the id maps to a valid band/parameter and was applied.
@@ -124,6 +124,10 @@ class EqualizerProcessor : public rt::ProcessorBase {
   static void validate_process_args(float* const* channels, int num_channels, int num_samples);
   static void validate_band_index(size_t index);
   static void validate_supported_band(const EqBand& band, PhaseMode global_phase);
+  /// Whether @p band runs on the FIR backend: linear phase, or a brickwall cut.
+  /// Selects the kernel-rebuilding set_parameter path and answers
+  /// parameter_is_realtime_safe().
+  static bool uses_fir_backend(const EqBand& band, PhaseMode global_phase) noexcept;
   static void validate_backend_capacity(const std::array<EqBand, kMaxBands>& bands,
                                         PhaseMode global_phase);
   static void validate_dynamic_params(const DynamicParams& dyn);

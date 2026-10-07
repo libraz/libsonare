@@ -171,6 +171,48 @@ TEST_CASE("CutFilter applies resonance only to the final cut stage", "[mastering
   REQUIRE(rms_tail(resonant_cutoff, 4096) / before > rms_tail(flat_cutoff, 4096) / before * 1.2f);
 }
 
+TEST_CASE("CutFilter stays stable with its corner at the highest accepted frequency",
+          "[mastering][eq]") {
+  const CutFilterSlope slopes[] = {CutFilterSlope::Db6PerOct, CutFilterSlope::Db12PerOct,
+                                   CutFilterSlope::Db18PerOct, CutFilterSlope::Db24PerOct};
+  for (const double sample_rate : {44100.0, 48000.0, 88200.0, 96000.0, 192000.0}) {
+    const int length = static_cast<int>(sample_rate);
+    for (const float corner :
+         {static_cast<float>(sample_rate * 0.5), static_cast<float>(sample_rate * 5.0)}) {
+      for (const CutFilterSlope slope : slopes) {
+        for (const float q : {0.5f, sonare::constants::kButterworthQ, 1.3f}) {
+          for (const bool high_pass : {true, false}) {
+            CutFilter eq;
+            eq.prepare(sample_rate, length);
+            if (high_pass) {
+              eq.set_high_pass(corner, q, slope);
+            } else {
+              eq.set_low_pass(corner, q, slope);
+            }
+            std::vector<float> noise(static_cast<size_t>(length));
+            uint32_t state = 0x12345678u;
+            for (float& sample : noise) {
+              state = state * 1664525u + 1013904223u;
+              sample = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+            }
+            float* channels[] = {noise.data()};
+            eq.process(channels, 1, length);
+            INFO("sr=" << sample_rate << " corner=" << corner << " q=" << q
+                       << " high_pass=" << high_pass << " slope=" << static_cast<int>(slope));
+            float peak = 0.0f;
+            for (const float sample : noise) {
+              // A non-finite sample counts as unbounded.
+              const float magnitude = std::isfinite(sample) ? std::abs(sample) : 1.0e30f;
+              peak = std::max(peak, magnitude);
+            }
+            REQUIRE(peak < 10.0f);
+          }
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("CutFilter brickwall high-pass uses linear-phase FIR latency and steep rejection",
           "[mastering][eq]") {
   constexpr int sample_rate = 48000;

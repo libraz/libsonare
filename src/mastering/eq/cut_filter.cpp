@@ -18,8 +18,10 @@ using sonare::constants::kButterworthQ;
 using sonare::constants::kPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
+// The ceiling sibling stages design at: keeps w0 safely below pi after float
+// rounding, where a corner at Nyquist turns an RBJ section unstable.
 float clamp_frequency(float frequency_hz, double sample_rate) {
-  return std::clamp(frequency_hz, 1.0e-3f, static_cast<float>(sample_rate * 0.5) - 1.0e-3f);
+  return std::clamp(frequency_hz, 1.0e-3f, static_cast<float>(sample_rate * 0.49));
 }
 
 int slope_db_oct(CutFilterSlope slope) {
@@ -81,6 +83,7 @@ void CutFilter::prepare(double sample_rate, int max_block_size) {
   prepare_channels(static_cast<int>(kRealtimePreparedChannels));
   apply_high_pass();
   apply_low_pass();
+  rebuild_brickwall();
 }
 
 void CutFilter::prepare_channels(int num_channels) {
@@ -147,22 +150,26 @@ void CutFilter::set_high_pass(float frequency_hz, float q, CutFilterSlope slope,
   high_pass_ = {EqBandType::HighPass, frequency_hz, 0.0f, q, enabled};
   high_pass_slope_ = slope;
   apply_high_pass();
+  rebuild_brickwall();
 }
 
 void CutFilter::set_low_pass(float frequency_hz, float q, CutFilterSlope slope, bool enabled) {
   low_pass_ = {EqBandType::LowPass, frequency_hz, 0.0f, q, enabled};
   low_pass_slope_ = slope;
   apply_low_pass();
+  rebuild_brickwall();
 }
 
 void CutFilter::clear_high_pass() {
   high_pass_.enabled = false;
   apply_high_pass();
+  rebuild_brickwall();
 }
 
 void CutFilter::clear_low_pass() {
   low_pass_.enabled = false;
   apply_low_pass();
+  rebuild_brickwall();
 }
 
 void CutFilter::clear() {
@@ -170,6 +177,7 @@ void CutFilter::clear() {
   low_pass_.enabled = false;
   apply_high_pass();
   apply_low_pass();
+  rebuild_brickwall();
 }
 
 bool CutFilter::set_parameter_impl(unsigned int param_id, float value) {
@@ -177,19 +185,39 @@ bool CutFilter::set_parameter_impl(unsigned int param_id, float value) {
     case 0:
       high_pass_.frequency_hz = clamp_frequency(value, sample_rate_);
       apply_high_pass();
-      return true;
+      break;
     case 1:
       high_pass_.q = std::max(value, 1.0e-6f);
       apply_high_pass();
-      return true;
+      break;
     case 2:
       low_pass_.frequency_hz = clamp_frequency(value, sample_rate_);
       apply_low_pass();
-      return true;
+      break;
     case 3:
       low_pass_.q = std::max(value, 1.0e-6f);
       apply_low_pass();
-      return true;
+      break;
+    default:
+      return false;
+  }
+  if (parameter_rebuilds_brickwall(param_id)) {
+    rebuild_brickwall();
+  }
+  return true;
+}
+
+bool CutFilter::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
+  return !parameter_rebuilds_brickwall(param_id);
+}
+
+bool CutFilter::parameter_rebuilds_brickwall(unsigned int param_id) const noexcept {
+  // The FIR stage ignores Q, so only an active brickwall corner reaches it.
+  switch (param_id) {
+    case 0:
+      return high_pass_is_brickwall();
+    case 2:
+      return low_pass_is_brickwall();
     default:
       return false;
   }
@@ -203,14 +231,12 @@ void CutFilter::apply_high_pass() {
   high_pass_.frequency_hz = clamp_frequency(high_pass_.frequency_hz, sample_rate_);
   build_sections(high_pass_sections_, EqBandType::HighPass, high_pass_.frequency_hz, high_pass_.q,
                  high_pass_.enabled, high_pass_slope_);
-  rebuild_brickwall();
 }
 
 void CutFilter::apply_low_pass() {
   low_pass_.frequency_hz = clamp_frequency(low_pass_.frequency_hz, sample_rate_);
   build_sections(low_pass_sections_, EqBandType::LowPass, low_pass_.frequency_hz, low_pass_.q,
                  low_pass_.enabled, low_pass_slope_);
-  rebuild_brickwall();
 }
 
 void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBandType type,

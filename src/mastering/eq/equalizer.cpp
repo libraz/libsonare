@@ -297,8 +297,7 @@ bool EqualizerProcessor::set_parameter_impl(unsigned int param_id, float value) 
     }
     return true;
   }
-  const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? phase_mode_ : band.phase;
-  if (resolved_phase == PhaseMode::LinearPhase) {
+  if (uses_fir_backend(band, phase_mode_)) {
     set_band(band_index, band);
     return true;
   }
@@ -329,9 +328,7 @@ bool EqualizerProcessor::parameter_is_realtime_safe(unsigned int param_id) const
   if (band_index >= kMaxBands) {
     return false;
   }
-  const EqBand& band = bands_[band_index];
-  const PhaseMode resolved_phase = band.phase == PhaseMode::Inherit ? phase_mode_ : band.phase;
-  return resolved_phase != PhaseMode::LinearPhase;
+  return !uses_fir_backend(bands_[band_index], phase_mode_);
 }
 
 int EqualizerProcessor::latency_samples() const noexcept {
