@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <memory>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -27,7 +28,8 @@ namespace {
 
 sonare::util::json::Array newline_name_array(const char* names) {
   sonare::util::json::Array values;
-  if (names == nullptr) return values;
+  // These lists fail only on allocation, and a partial catalog must never be cached.
+  if (names == nullptr) throw std::bad_alloc();
 
   for (const char* line = names; *line != '\0';) {
     const char* end = line;
@@ -275,8 +277,9 @@ const char* sonare_mastering_amp_preset_catalog(void) {
   SONARE_C_CATCH_RETURN(nullptr)
 }
 
-const char* sonare_capability_catalog_json(void) {
-  SONARE_C_TRY
+namespace {
+
+std::string build_capability_catalog_json() {
   namespace json = sonare::util::json;
 
   json::Object catalog;
@@ -285,14 +288,7 @@ const char* sonare_capability_catalog_json(void) {
   abi["project"] = static_cast<int>(SONARE_PROJECT_ABI_VERSION);
   abi["engine"] = static_cast<int>(sonare_engine_abi_version());
   catalog["abi"] = std::move(abi);
-  // sonare_mastering_processor_catalog() returns NULL on an allocation
-  // failure (it is itself SONARE_C_TRY-guarded); json::parse_strict takes a
-  // const std::string&, and constructing std::string from a NULL const
-  // char* is undefined behaviour, not a throwable exception this function's
-  // own try/catch could intercept. Fail this call the same way instead.
-  const char* processor_catalog_json = sonare_mastering_processor_catalog();
-  if (!processor_catalog_json) return nullptr;
-  catalog["processors"] = json::parse_strict(processor_catalog_json);
+  catalog["processors"] = json::parse_strict(sonare::mastering::api::processor_catalog_json());
 
   json::Object presets;
   presets["mastering"] = newline_name_array(sonare_mastering_preset_names());
@@ -343,9 +339,15 @@ const char* sonare_capability_catalog_json(void) {
     mastering_presets.emplace_back(json::Value(std::move(entry)));
   }
   catalog["masteringPresets"] = std::move(mastering_presets);
+  return json::dump(json::Value(std::move(catalog)));
+}
 
-  static thread_local std::string serialized;
-  serialized = json::dump(json::Value(std::move(catalog)));
+}  // namespace
+
+const char* sonare_capability_catalog_json(void) {
+  SONARE_C_TRY
+  // A pure function of the build, so one serialization serves every thread and call.
+  static const std::string serialized = build_capability_catalog_json();
   return serialized.c_str();
   SONARE_C_CATCH_RETURN(nullptr)
 }

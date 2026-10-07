@@ -443,8 +443,9 @@ const char* sonare_mastering_amp_preset_catalog(void);
 ///   descriptors) with the built-in mastering, synth, mixing-scene, and
 ///   realtime voice-changer preset name lists. `version` and `abi` use the same
 ///   values as @ref sonare_capabilities_json. Parameter metadata follows @ref
-///   sonare_mastering_insert_param_info. Backed by thread-local storage and
-///   valid until the next call on the same thread. Do NOT free the pointer.
+///   sonare_mastering_insert_param_info. Built once per process on first
+///   success; the pointer is immutable, valid for the process lifetime and
+///   may be read from any thread. Do NOT free the pointer.
 ///   Returns NULL if the catalog cannot be built.
 const char* sonare_capability_catalog_json(void);
 

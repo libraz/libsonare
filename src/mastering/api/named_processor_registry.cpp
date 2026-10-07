@@ -261,9 +261,7 @@ const char* catalog_category(const std::string& id) {
   return "other";
 }
 
-}  // namespace
-
-std::string processor_catalog_json() {
+std::string build_processor_catalog_json() {
   const std::set<std::string> insert_set = [] {
     const auto names = insert_factory_names();
     return std::set<std::string>(names.begin(), names.end());
@@ -326,6 +324,15 @@ std::string processor_catalog_json() {
   }
   out += ']';
   return out;
+}
+
+}  // namespace
+
+std::string processor_catalog_json() {
+  // A pure function of the build that costs tens of thousands of probe
+  // constructions, so it is measured once per process and shared by every thread.
+  static const std::string catalog = build_processor_catalog_json();
+  return catalog;
 }
 
 const std::vector<std::string>& processor_catalog_schema_paths() {

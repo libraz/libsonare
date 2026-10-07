@@ -124,9 +124,11 @@ sonare::util::json::Array catalog_voice_changer_preset_names() {
 
 }  // namespace
 
+namespace {
+
 // The WASM target deliberately does not link the aggregate C-ABI TU. Build the
 // identical schema from the same core registries that back that ABI instead.
-std::string js_capability_catalog() {
+std::string build_capability_catalog() {
   namespace json = sonare::util::json;
 
   json::Object catalog;
@@ -173,6 +175,14 @@ std::string js_capability_catalog() {
   }
   catalog["masteringPresets"] = std::move(mastering_presets);
   return json::dump(json::Value(std::move(catalog)));
+}
+
+}  // namespace
+
+std::string js_capability_catalog() {
+  // A pure function of the build, so it is serialized once per module instance.
+  static const std::string catalog = build_capability_catalog();
+  return catalog;
 }
 
 // ---------------------------------------------------------------------------
