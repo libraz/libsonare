@@ -9,25 +9,31 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./analysis": {
       "types": "./dist/analysis.d.ts",
-      "import": "./dist/analysis.js"
+      "import": "./dist/analysis.js",
+      "default": "./dist/analysis.js"
     },
     "./worklet": {
       "types": "./dist/worklet.d.ts",
-      "import": "./dist/worklet.js"
+      "import": "./dist/worklet.js",
+      "default": "./dist/worklet.js"
     },
     "./worker": {
       "types": "./dist/worker.d.ts",
-      "import": "./dist/worker.js"
+      "import": "./dist/worker.js",
+      "default": "./dist/worker.js"
     },
     "./vocal-edit-worker": {
       "types": "./dist/vocal_edit_worker.d.ts",
-      "import": "./dist/vocal_edit_worker.js"
+      "import": "./dist/vocal_edit_worker.js",
+      "default": "./dist/vocal_edit_worker.js"
     },
     "./wasm": "./dist/sonare.wasm",
+    "./wasm/analysis": "./dist/sonare-analysis.wasm",
     "./schemas/realtime-voice-changer-preset.schema.json": "./dist/schemas/realtime-voice-changer-preset.schema.json",
     "./schemas/realtime-voice-changer-preset-pack.schema.json": "./dist/schemas/realtime-voice-changer-preset-pack.schema.json",
     "./schemas/mixer-scene.schema.json": "./dist/schemas/mixer-scene.schema.json",
@@ -35,13 +41,32 @@
     "./hrtf/default.shrf": "./dist/hrtf/default.shrf",
     "./package.json": "./package.json"
   },
+  "typesVersions": {
+    "*": {
+      "analysis": [
+        "dist/analysis.d.ts"
+      ],
+      "worklet": [
+        "dist/worklet.d.ts"
+      ],
+      "worker": [
+        "dist/worker.d.ts"
+      ],
+      "vocal-edit-worker": [
+        "dist/vocal_edit_worker.d.ts"
+      ]
+    }
+  },
   "files": [
     "dist",
     "src",
     "NOTICE",
     "!dist/*.sources.json"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/worker.js",
+    "./dist/vocal_edit_worker.js"
+  ],
   "scripts": {
     "build": "yarn build:wasm && yarn build:js",
     "build:wasm": "yarn build:wasm:full && yarn build:wasm:analysis",
@@ -101,7 +126,7 @@
   },
   "homepage": "https://libsonare.libraz.net",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.12.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.13",

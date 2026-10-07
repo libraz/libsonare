@@ -6,7 +6,7 @@
  * required.
  */
 
-import { setSonareModule } from './module_state';
+import { assertSameInitOptions, notInitializedError, setSonareModule } from './module_state';
 import type { SonareCapabilities } from './public_types';
 import type { SonareModule } from './sonare.js';
 
@@ -115,6 +115,7 @@ export {
 
 let module: SonareModule | null = null;
 let initPromise: Promise<void> | null = null;
+let firstInitOptions: object | undefined;
 
 /** Initialize the analysis-only WASM module. */
 export async function init(options?: {
@@ -126,11 +127,14 @@ export async function init(options?: {
   }) => Promise<SonareModule>;
 }): Promise<void> {
   if (module) {
+    assertSameInitOptions(firstInitOptions, options);
     return;
   }
   if (initPromise) {
+    assertSameInitOptions(firstInitOptions, options);
     return initPromise;
   }
+  firstInitOptions = options && { ...options };
   initPromise = (async () => {
     try {
       const createModule = options?.moduleFactory ?? (await import('./sonare-analysis.js')).default;
@@ -138,6 +142,7 @@ export async function init(options?: {
       setSonareModule(module);
     } catch (error) {
       initPromise = null;
+      firstInitOptions = undefined;
       throw error;
     }
   })();
@@ -152,7 +157,7 @@ export function isInitialized(): boolean {
 /** Version reported by the loaded analysis WASM module. */
 export function version(): string {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.version();
 }
@@ -160,7 +165,7 @@ export function version(): string {
 /** Build capabilities for the loaded analysis-only module. */
 export function capabilities(): SonareCapabilities {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.capabilities();
 }
@@ -168,7 +173,7 @@ export function capabilities(): SonareCapabilities {
 /** Packed C-ABI version for compatibility checks. */
 export function abiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.abiVersion();
 }
@@ -176,7 +181,7 @@ export function abiVersion(): number {
 /** Realtime command-queue ABI version shared with the full entry. */
 export function engineAbiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.engineAbiVersion();
 }
@@ -184,7 +189,7 @@ export function engineAbiVersion(): number {
 /** Voice-changer ABI version retained for cross-entry compatibility checks. */
 export function voiceChangerAbiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.voiceChangerAbiVersion();
 }

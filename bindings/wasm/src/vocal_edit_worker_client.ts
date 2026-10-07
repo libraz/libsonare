@@ -244,7 +244,7 @@ export class VocalEditWorkerClient {
       const url =
         options.workerUrl === undefined
           ? new URL('./vocal_edit_worker.js', import.meta.url)
-          : new URL(options.workerUrl, import.meta.url);
+          : new URL(/* webpackIgnore: true */ options.workerUrl, import.meta.url);
       this.worker =
         options.workerFactory?.(url) ??
         new Worker(url, { type: 'module', name: 'sonare-vocal-edit' });

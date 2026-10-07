@@ -18,7 +18,7 @@
  * ```
  */
 
-import { setSonareModule } from './module_state';
+import { assertSameInitOptions, notInitializedError, setSonareModule } from './module_state';
 import type {
   CapabilityCatalog,
   RealtimeVoiceChangerPodConfig,
@@ -1023,6 +1023,7 @@ export type HpssWithResidualResult = WasmHpssWithResidualResult;
 
 let module: SonareModule | null = null;
 let initPromise: Promise<void> | null = null;
+let firstInitOptions: object | undefined;
 
 // ============================================================================
 // Initialization
@@ -1044,12 +1045,14 @@ export async function init(options?: {
   }) => Promise<SonareModule>;
 }): Promise<void> {
   if (module) {
+    assertSameInitOptions(firstInitOptions, options);
     return;
   }
-
   if (initPromise) {
+    assertSameInitOptions(firstInitOptions, options);
     return initPromise;
   }
+  firstInitOptions = options && { ...options };
 
   initPromise = (async () => {
     try {
@@ -1058,6 +1061,7 @@ export async function init(options?: {
       setSonareModule(module);
     } catch (error) {
       initPromise = null;
+      firstInitOptions = undefined;
       throw error;
     }
   })();
@@ -1077,7 +1081,7 @@ export function isInitialized(): boolean {
  */
 export function version(): string {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.version();
 }
@@ -1089,7 +1093,7 @@ export function version(): string {
  */
 export function capabilities(): SonareCapabilities {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.capabilities();
 }
@@ -1097,7 +1101,7 @@ export function capabilities(): SonareCapabilities {
 /** Return the initialized module's processors, parameters, and presets. */
 export function capabilityCatalog(): CapabilityCatalog {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return JSON.parse(module.capabilityCatalog()) as CapabilityCatalog;
 }
@@ -1109,21 +1113,21 @@ export function capabilityCatalog(): CapabilityCatalog {
  */
 export function abiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.abiVersion();
 }
 
 export function engineAbiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.engineAbiVersion();
 }
 
 export function voiceChangerAbiVersion(): number {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.voiceChangerAbiVersion();
 }
@@ -1160,7 +1164,7 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
  */
 export function voiceCharacterPresetId(preset: VoicePresetId | number): VoicePresetId | null {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   if (
     typeof preset === 'number' &&
@@ -1180,7 +1184,7 @@ export function realtimeVoiceChangerPresetConfig(
   preset: VoicePresetId | number,
 ): RealtimeVoiceChangerPodConfig {
   if (!module) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return module.realtimeVoiceChangerPresetConfig(resolveVoicePresetOrdinal(preset));
 }

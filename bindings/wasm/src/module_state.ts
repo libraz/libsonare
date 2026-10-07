@@ -199,13 +199,44 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
   }) as SonareModule;
 }
 
+/** Error thrown when a facade function runs before `init()` resolved. */
+export function notInitializedError(): SonareError {
+  return new SonareError(
+    ErrorCode.InvalidState,
+    'InvalidState',
+    'Module not initialized. Call init() first.',
+  );
+}
+
+/**
+ * Throw when a later `init(options)` call passes options that differ (shallow,
+ * functions by reference) from the first call's. No options always passes.
+ */
+export function assertSameInitOptions(first: object | undefined, next: object | undefined): void {
+  if (next === undefined) {
+    return;
+  }
+  const a = (first ?? {}) as Record<string, unknown>;
+  const b = next as Record<string, unknown>;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (a[key] !== b[key]) {
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        `init() options differ from the first call (${key}); options apply on the first call only.`,
+      );
+    }
+  }
+}
+
 export function setSonareModule(module: SonareModule): void {
   wrappedModule = wrapModuleErrors(module);
 }
 
 export function getSonareModule(): SonareModule {
   if (!wrappedModule) {
-    throw new Error('Module not initialized. Call init() first.');
+    throw notInitializedError();
   }
   return wrappedModule;
 }

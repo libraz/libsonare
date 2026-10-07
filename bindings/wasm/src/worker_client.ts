@@ -178,7 +178,7 @@ export class OfflineWorkerClient {
       const url =
         options.workerUrl === undefined
           ? new URL('./worker.js', import.meta.url)
-          : new URL(options.workerUrl, import.meta.url);
+          : new URL(/* webpackIgnore: true */ options.workerUrl, import.meta.url);
       this.worker =
         options.workerFactory?.(url) ?? new Worker(url, { type: 'module', name: 'sonare-offline' });
     }
