@@ -98,7 +98,9 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   MelSpectrogram mel_spec = MelSpectrogram::compute(audio, aligned_mel_config);
   std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
 
-  return center_onset_strength(std::move(onset_env), aligned_mel_config.n_fft,
+  // Centering follows the window, not the zero-padded FFT length.
+  return center_onset_strength(std::move(onset_env),
+                               aligned_mel_config.to_stft_config().actual_win_length(),
                                aligned_mel_config.hop_length, onset_config.center);
 }
 
