@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "midi/control_value.h"
 #include "midi/midi_clip.h"
@@ -134,11 +135,52 @@ bool is_midi_channel_voice(const Ump& ump) noexcept {
   return mt == UmpMessageType::kMidi1ChannelVoice || mt == UmpMessageType::kMidi2ChannelVoice;
 }
 
-bool is_midi2_per_note_controller_form(const Ump& ump) noexcept {
+bool is_midi2_note_addressed_form(const Ump& ump) noexcept {
   if (ump.message_type() != UmpMessageType::kMidi2ChannelVoice) return false;
   const uint8_t status = ump.status_nibble();
   return status == static_cast<uint8_t>(UmpStatus::kRegisteredPerNoteController) ||
-         status == static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController);
+         status == static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController) ||
+         status == static_cast<uint8_t>(UmpStatus::kPerNotePitchBend) ||
+         status == static_cast<uint8_t>(UmpStatus::kPerNoteManagement);
+}
+
+/// Patches the note address while preserving every other field of a channel
+/// voice message. Absolute-pitch payloads are adjusted later, once a fan-out
+/// stage has produced the final note and its complete source-to-target delta is
+/// known.
+Ump with_note_number(const Ump& src, uint8_t note) noexcept {
+  Ump out = src;
+  out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
+  return out;
+}
+
+/// Retunes one note-addressed event to @p note. The delta is measured from the
+/// original source key, so chord and arpeggiator branches can update absolute
+/// pitch attributes for each generated voice. A value outside the wire format
+/// is rejected, matching LayeredInstrument::retune's derived-event contract.
+bool retune_note_addressed(const Ump& src, uint8_t note, int64_t delta, Ump* out) noexcept {
+  if (out == nullptr) return false;
+  Ump copy = with_note_number(src, note);
+  if (copy.message_type() == UmpMessageType::kMidi2ChannelVoice) {
+    const uint8_t status = copy.status_nibble();
+    if (status == static_cast<uint8_t>(UmpStatus::kNoteOn) && note_attribute_type(copy) == 3u) {
+      const int64_t pitch =
+          static_cast<int64_t>(note_attribute_data(src)) + delta * (int64_t{1} << 9);
+      if (pitch < 0 || pitch > static_cast<int64_t>(std::numeric_limits<uint16_t>::max())) {
+        return false;
+      }
+      copy.words[1] = (copy.words[1] & ~uint32_t{0xFFFFu}) | static_cast<uint32_t>(pitch);
+    } else if (status == static_cast<uint8_t>(UmpStatus::kRegisteredPerNoteController) &&
+               (src.words[0] & 0xFFu) == 3u) {
+      const int64_t pitch = static_cast<int64_t>(src.words[1]) + delta * (int64_t{1} << 25);
+      if (pitch < 0 || pitch > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+        return false;
+      }
+      copy.words[1] = static_cast<uint32_t>(pitch);
+    }
+  }
+  *out = copy;
+  return true;
 }
 
 bool is_poly_pressure_form(const Ump& ump) noexcept {
@@ -185,22 +227,6 @@ Ump make_note(const Ump& src, bool note_on, uint8_t note, Velocity16 velocity) n
   return make_midi1_note_off(src.group, src.channel(), note, velocity7);
 }
 
-Ump make_note_preserving_velocity(const Ump& src, bool note_on, uint8_t note) noexcept {
-  if (src.message_type() == UmpMessageType::kMidi2ChannelVoice) {
-    const uint16_t velocity16 = static_cast<uint16_t>(src.words[1] >> 16u);
-    if (note_on) {
-      const uint8_t attr_type = static_cast<uint8_t>(src.words[0] & 0xFFu);
-      const uint16_t attr_data = static_cast<uint16_t>(src.words[1] & 0xFFFFu);
-      return make_midi2_note_on(src.group, src.channel(), note, velocity16, attr_type, attr_data);
-    }
-    // Patch only the note number so the NoteOff's velocity and attribute survive.
-    Ump out = src;
-    out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
-    return out;
-  }
-  return make_note(src, note_on, note, Velocity16::from7(midi1_velocity7(src)));
-}
-
 /// Rewrites the note a poly-pressure message addresses, preserving its pressure
 /// payload. The note number lives in word[0] bits 8..14 for both protocols, so
 /// the field is patched in place (same rewrite as the drum-map remap).
@@ -208,15 +234,6 @@ Ump make_poly_pressure_preserving_value(const Ump& src, uint8_t note) noexcept {
   Ump out = src;
   out.words[0] = (out.words[0] & ~(0x7Fu << 8u)) | (static_cast<uint32_t>(note & 0x7Fu) << 8u);
   return out;
-}
-
-Ump make_per_note_controller_preserving_value(const Ump& src, uint8_t note) noexcept {
-  const uint8_t index = static_cast<uint8_t>(src.words[0] & 0xFFu);
-  const uint32_t value = src.words[1];
-  if (src.status_nibble() == static_cast<uint8_t>(UmpStatus::kAssignablePerNoteController)) {
-    return make_midi2_assignable_per_note_controller(src.group, src.channel(), note, index, value);
-  }
-  return make_midi2_per_note_controller(src.group, src.channel(), note, index, value);
 }
 
 }  // namespace
@@ -341,18 +358,16 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     const bool channel_voice = is_midi_channel_voice(ev.ump);
     const bool note_on = channel_voice && ev.ump.is_note_on();
     const bool note_off = channel_voice && ev.ump.is_note_off();
-    const bool per_note_controller = channel_voice && is_midi2_per_note_controller_form(ev.ump);
+    const uint8_t source_note = ev.ump.note_number();
+    const bool note_addressed = channel_voice && is_midi2_note_addressed_form(ev.ump);
     const bool poly_pressure = channel_voice && is_poly_pressure_form(ev.ump);
 
-    // ---- 1. Transpose (note-on/off, poly pressure, MIDI 2.0 per-note controller) ----
+    // ---- 1. Transpose (every note-addressed channel-voice message) ----
     // Every note-addressed message shifts by the same amount: aftertouch left on
     // the source note number would address a note the shifted voice never played.
-    if (transpose_.enabled && (note_on || note_off)) {
+    if (transpose_.enabled && (note_on || note_off || note_addressed)) {
       const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
-      ev.ump = make_note_preserving_velocity(ev.ump, note_on, static_cast<uint8_t>(shifted));
-    } else if (transpose_.enabled && per_note_controller) {
-      const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
-      ev.ump = make_per_note_controller_preserving_value(ev.ump, static_cast<uint8_t>(shifted));
+      ev.ump = with_note_number(ev.ump, static_cast<uint8_t>(shifted));
     } else if (transpose_.enabled && poly_pressure) {
       const int shifted = clamp_note(static_cast<int>(ev.ump.note_number()) + transpose_.semitones);
       ev.ump = make_poly_pressure_preserving_value(ev.ump, static_cast<uint8_t>(shifted));
@@ -394,7 +409,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
     std::array<uint8_t, ChordConfig::kMaxChordNotes> notes{};
     size_t note_count = 0;
     const uint8_t base_note = ev.ump.note_number();
-    if (chord_.enabled && (note_on || note_off || per_note_controller) && chord_.count > 0) {
+    const bool can_fan_out = note_on || note_off || note_addressed;
+    if (chord_.enabled && can_fan_out && chord_.count > 0) {
       for (size_t c = 0; c < chord_.count && c < ChordConfig::kMaxChordNotes; ++c) {
         notes[note_count++] =
             static_cast<uint8_t>(clamp_note(static_cast<int>(base_note) + chord_.intervals[c]));
@@ -492,7 +508,13 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
           on_ev.source_track_id = ev.source_track_id;
           // Preserve the source velocity at its native resolution (full 16-bit
           // for MIDI 2.0) instead of round-tripping through 7 bits.
-          on_ev.ump = make_note_preserving_velocity(ev.ump, true, static_cast<uint8_t>(arp_note));
+          if (!retune_note_addressed(
+                  ev.ump, static_cast<uint8_t>(arp_note),
+                  static_cast<int64_t>(arp_note) - static_cast<int64_t>(source_note), &on_ev.ump)) {
+            // A generated voice whose absolute pitch cannot be represented has
+            // no matching gate to release, so discard the complete gate pair.
+            continue;
+          }
           // A generated gate is one logical note. Its on/off pair must share
           // timing jitter; deriving separate jitter from consecutive ordinals
           // could place the off before the on for short gates, leaving a hung
@@ -512,16 +534,14 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
                arpeggiator_.step_frames > 0) {
       // The matching source note-off was replaced by the arpeggiated gates;
       // drop it.
-    } else if (note_on || note_off || per_note_controller) {
-      // Non-arpeggiated note/per-note-controller path: emit each chord/single note.
+    } else if (can_fan_out) {
+      // Non-arpeggiated note-addressed path: emit each chord/single note.
       for (size_t n = 0; n < note_count; ++n) {
         MidiEvent note_ev = ev;
-        if (per_note_controller) {
-          note_ev.ump = make_per_note_controller_preserving_value(ev.ump, notes[n]);
-        } else {
-          // Preserve the source velocity at its native resolution (full 16-bit
-          // for MIDI 2.0) instead of round-tripping through 7 bits.
-          note_ev.ump = make_note_preserving_velocity(ev.ump, note_on, notes[n]);
+        if (!retune_note_addressed(
+                ev.ump, notes[n],
+                static_cast<int64_t>(notes[n]) - static_cast<int64_t>(source_note), &note_ev.ump)) {
+          continue;
         }
         shape_and_push(note_ev, input_ordinal);
       }

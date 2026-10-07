@@ -459,6 +459,195 @@ TEST_CASE("MidiFx maps MIDI 2.0 per-note controller notes without changing contr
   REQUIRE(out.events[3].ump.words[1] == 0x87654321u);
 }
 
+TEST_CASE("MidiFx transposes and chords MIDI 2.0 note-addressed bend and management",
+          "[midi][midi2]") {
+  MidiFxChain fx;
+  fx.prepare();
+
+  TransposeConfig transpose;
+  transpose.enabled = true;
+  transpose.semitones = 5;
+  fx.set_transpose(transpose);
+
+  ChordConfig chord;
+  chord.enabled = true;
+  chord.count = 2;
+  chord.intervals = {0, 7};
+  fx.set_chord(chord);
+
+  const MidiEvent input[] = {
+      {10, sonare::midi::make_midi2_per_note_pitch_bend(3, 11, 60, 0xC0FF1234u)},
+      {20, sonare::midi::make_midi2_per_note_management(3, 11, 60, true, true)},
+  };
+  MidiFxBuffer out;
+  fx.process(input, 2, &out);
+
+  REQUIRE(out.size == 4);
+  const uint8_t expected_notes[] = {65, 72, 65, 72};
+  for (size_t i = 0; i < out.size; ++i) {
+    REQUIRE(out.events[i].ump.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+    REQUIRE(out.events[i].ump.group == 3);
+    REQUIRE(out.events[i].ump.channel() == 11);
+    REQUIRE(out.events[i].ump.note_number() == expected_notes[i]);
+    REQUIRE(out.events[i].render_frame == input[i / 2].render_frame);
+  }
+
+  // Fan-out rewrites only the addressed note. Bend data and management flags
+  // are payload, and must remain byte-identical on every generated message.
+  REQUIRE(out.events[0].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPerNotePitchBend));
+  REQUIRE(out.events[1].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPerNotePitchBend));
+  REQUIRE(out.events[0].ump.words[1] == 0xC0FF1234u);
+  REQUIRE(out.events[1].ump.words[1] == 0xC0FF1234u);
+
+  REQUIRE(out.events[2].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPerNoteManagement));
+  REQUIRE(out.events[3].ump.status_nibble() ==
+          static_cast<uint8_t>(sonare::midi::UmpStatus::kPerNoteManagement));
+  REQUIRE((out.events[2].ump.words[0] & 0xFFu) == 0x03u);
+  REQUIRE((out.events[3].ump.words[0] & 0xFFu) == 0x03u);
+  REQUIRE(out.events[2].ump.words[1] == 0u);
+  REQUIRE(out.events[3].ump.words[1] == 0u);
+}
+
+TEST_CASE("MidiFx follows every transpose and chord delta in MIDI 2.0 absolute pitch",
+          "[midi][midi2]") {
+  constexpr uint8_t source_note = 60;
+  constexpr uint16_t velocity = 0xBEEFu;
+  constexpr uint16_t source_pitch_q7_9 = static_cast<uint16_t>(60u * 512u + 256u);
+  constexpr uint32_t source_pitch_q7_25 = (60u << 25u) | (1u << 24u);
+
+  MidiFxChain fx;
+  fx.prepare();
+  TransposeConfig transpose;
+  transpose.enabled = true;
+  transpose.semitones = 5;
+  fx.set_transpose(transpose);
+  ChordConfig chord;
+  chord.enabled = true;
+  chord.count = 2;
+  chord.intervals = {0, 7};
+  fx.set_chord(chord);
+
+  const MidiEvent input[] = {
+      {10, sonare::midi::make_midi2_note_on(2, 9, source_note, velocity, 3, source_pitch_q7_9)},
+      {20, sonare::midi::make_midi2_per_note_controller(2, 9, source_note, 3, source_pitch_q7_25)},
+  };
+  MidiFxBuffer out;
+  fx.process(input, 2, &out);
+
+  REQUIRE(out.size == 4);
+  const uint8_t expected_notes[] = {65, 72, 65, 72};
+  const uint32_t expected_pitch_q7_9[] = {
+      static_cast<uint32_t>(source_pitch_q7_9) + 5u * 512u,
+      static_cast<uint32_t>(source_pitch_q7_9) + 12u * 512u,
+  };
+  const uint32_t expected_pitch_q7_25[] = {
+      source_pitch_q7_25 + 5u * (1u << 25u),
+      source_pitch_q7_25 + 12u * (1u << 25u),
+  };
+
+  for (size_t i = 0; i < 2; ++i) {
+    const auto& note = out.events[i].ump;
+    REQUIRE(note.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+    REQUIRE(note.status_nibble() == static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOn));
+    REQUIRE(note.group == 2);
+    REQUIRE(note.channel() == 9);
+    REQUIRE(note.note_number() == expected_notes[i]);
+    REQUIRE(static_cast<uint16_t>(note.words[1] >> 16u) == velocity);
+    REQUIRE(sonare::midi::note_attribute_type(note) == 3);
+    CHECK(sonare::midi::note_attribute_data(note) == expected_pitch_q7_9[i]);
+  }
+  for (size_t i = 0; i < 2; ++i) {
+    const auto& controller = out.events[i + 2].ump;
+    REQUIRE(controller.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice);
+    REQUIRE(controller.status_nibble() ==
+            static_cast<uint8_t>(sonare::midi::UmpStatus::kRegisteredPerNoteController));
+    REQUIRE(controller.group == 2);
+    REQUIRE(controller.channel() == 9);
+    REQUIRE(controller.note_number() == expected_notes[i]);
+    REQUIRE(static_cast<uint8_t>(controller.words[0] & 0xFFu) == 3);
+    CHECK(controller.words[1] == expected_pitch_q7_25[i]);
+  }
+}
+
+TEST_CASE("MidiFx follows generated arpeggiator note deltas in absolute pitch attributes",
+          "[midi][midi2]") {
+  constexpr uint8_t source_note = 60;
+  constexpr uint16_t velocity = 0x8123u;
+  constexpr uint16_t source_pitch_q7_9 = static_cast<uint16_t>(60u * 512u + 256u);
+
+  MidiFxChain fx;
+  fx.prepare();
+  ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals = {0, 12};
+  arp.step_frames = 100;
+  arp.gate_frames = 50;
+  fx.set_arpeggiator(arp);
+
+  const MidiEvent input[] = {
+      {10, sonare::midi::make_midi2_note_on(4, 6, source_note, velocity, 3, source_pitch_q7_9)}};
+  MidiFxBuffer out;
+  fx.process(input, 1, &out);
+
+  REQUIRE(out.size == 4);
+  REQUIRE(out.events[0].ump.is_note_on());
+  REQUIRE(out.events[0].ump.note_number() == 60);
+  REQUIRE(out.events[0].render_frame == 10);
+  REQUIRE(static_cast<uint16_t>(out.events[0].ump.words[1] >> 16u) == velocity);
+  REQUIRE(sonare::midi::note_attribute_type(out.events[0].ump) == 3);
+  REQUIRE(sonare::midi::note_attribute_data(out.events[0].ump) == source_pitch_q7_9);
+
+  REQUIRE(out.events[1].ump.is_note_off());
+  REQUIRE(out.events[1].ump.note_number() == 60);
+  REQUIRE(out.events[1].render_frame == 60);
+
+  REQUIRE(out.events[2].ump.is_note_on());
+  REQUIRE(out.events[2].ump.note_number() == 72);
+  REQUIRE(out.events[2].render_frame == 110);
+  REQUIRE(static_cast<uint16_t>(out.events[2].ump.words[1] >> 16u) == velocity);
+  REQUIRE(sonare::midi::note_attribute_type(out.events[2].ump) == 3);
+  REQUIRE(sonare::midi::note_attribute_data(out.events[2].ump) ==
+          static_cast<uint16_t>(source_pitch_q7_9 + 12u * 512u));
+
+  REQUIRE(out.events[3].ump.is_note_off());
+  REQUIRE(out.events[3].ump.note_number() == 72);
+  REQUIRE(out.events[3].render_frame == 160);
+}
+
+TEST_CASE("MidiFx drops absolute pitch rewrites outside their MIDI 2.0 domains", "[midi][midi2]") {
+  TransposeConfig transpose;
+  transpose.enabled = true;
+
+  SECTION("Q7.9 note-on attribute underflows like LayeredInstrument::retune") {
+    MidiFxChain fx;
+    fx.prepare();
+    transpose.semitones = -1;
+    fx.set_transpose(transpose);
+
+    const MidiEvent input[] = {{0, sonare::midi::make_midi2_note_on(0, 0, 60, 0x1234u, 3, 0u)}};
+    MidiFxBuffer out;
+    fx.process(input, 1, &out);
+    REQUIRE(out.size == 0);
+  }
+
+  SECTION("Q7.25 RPNC #3 overflows like LayeredInstrument::retune") {
+    MidiFxChain fx;
+    fx.prepare();
+    transpose.semitones = 1;
+    fx.set_transpose(transpose);
+
+    const MidiEvent input[] = {
+        {0, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 0xFFFFFFFFu)}};
+    MidiFxBuffer out;
+    fx.process(input, 1, &out);
+    REQUIRE(out.size == 0);
+  }
+}
+
 TEST_CASE("MidiFx preserves MIDI 2.0 channel controller forms while time shaping", "[midi]") {
   MidiFxChain fx;
   fx.prepare();
