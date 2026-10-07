@@ -94,6 +94,17 @@ std::string Chord::to_string() const {
   return name;
 }
 
+std::string chord_symbol(int root, int quality) {
+  if (root < 0 || root > 11 || quality < 0 || quality >= kChordQualityCount) {
+    return "N.C.";
+  }
+  Chord chord{};
+  chord.root = static_cast<PitchClass>(root);
+  chord.quality = static_cast<ChordQuality>(quality);
+  chord.bass = chord.root;
+  return chord.to_string();
+}
+
 std::string ChordAnalyzer::progression_pattern() const {
   if (chords_.empty()) return "";
 

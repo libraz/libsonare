@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._analysis_detection import _QUALITY_NAMES, _UNKNOWN_QUALITY_ORDINAL
 from ._errors import _invalid_state, _not_supported
 from ._runtime import (
     QuantizeConfig,
@@ -33,6 +34,8 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_size_t,
 )
+from ._types_analysis import Chord, Key
+from ._types_enums import Mode, PitchClass
 
 
 def _quantize_config_to_c(
@@ -378,6 +381,24 @@ def _i16s(ptr: object, count: int) -> list[int]:
     return cast(list[int], _ptr_to_list(ptr, count, ctypes.c_int16, np.int16))
 
 
+def _chord_name(root: int, quality: int) -> str:
+    """Spell a chord through ``Chord.name``, the table the batch analysis uses."""
+    if not 0 <= root < len(PitchClass):
+        return "N.C."
+    quality_name = _QUALITY_NAMES.get(quality, _QUALITY_NAMES[_UNKNOWN_QUALITY_ORDINAL])
+    return Chord(
+        root=PitchClass(root), quality=quality_name, start=0.0, end=0.0, confidence=0.0
+    ).name
+
+
+def _key_names(key: int, minor: bool) -> tuple[str | None, str | None]:
+    """Spell a key through ``Key``, or ``(None, None)`` when no key is estimated."""
+    if not 0 <= key < len(PitchClass):
+        return None, None
+    spelled = Key(root=PitchClass(key), mode=Mode.MINOR if minor else Mode.MAJOR, confidence=0.0)
+    return spelled.name, spelled.short_name
+
+
 def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
     if not ptr or count <= 0:
         return []
@@ -386,6 +407,7 @@ def _chord_changes(ptr: object, count: int) -> list[StreamChordChange]:
         StreamChordChange(
             root=int(raw_ptr[i].root),
             quality=int(raw_ptr[i].quality),
+            name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
             start_time=float(raw_ptr[i].start_time),
             confidence=float(raw_ptr[i].confidence),
         )
@@ -402,6 +424,7 @@ def _bar_chords(ptr: object, count: int) -> list[StreamBarChord]:
             bar_index=int(raw_ptr[i].bar_index),
             root=int(raw_ptr[i].root),
             quality=int(raw_ptr[i].quality),
+            name=_chord_name(int(raw_ptr[i].root), int(raw_ptr[i].quality)),
             start_time=float(raw_ptr[i].start_time),
             confidence=float(raw_ptr[i].confidence),
         )
@@ -480,6 +503,7 @@ def _stream_frames_i16_from_c(raw: SonareStreamFramesI16) -> StreamFramesI16:
 
 
 def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
+    key_name, key_short_name = _key_names(int(raw.key), bool(raw.key_minor))
     return StreamStats(
         total_frames=int(raw.total_frames),
         total_samples=int(raw.total_samples),
@@ -495,8 +519,11 @@ def _stream_stats_from_c(raw: SonareStreamStats) -> StreamStats:
         key=int(raw.key),
         key_minor=bool(raw.key_minor),
         key_confidence=float(raw.key_confidence),
+        key_name=key_name,
+        key_short_name=key_short_name,
         chord_root=int(raw.chord_root),
         chord_quality=int(raw.chord_quality),
+        chord_name=_chord_name(int(raw.chord_root), int(raw.chord_quality)),
         chord_confidence=float(raw.chord_confidence),
         chord_start_time=float(raw.chord_start_time),
         current_bar=int(raw.current_bar),

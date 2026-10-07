@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   deemphasis,
+  detectKey,
   ErrorCode,
   ebur128LoudnessRange,
   fourierTempogram,
@@ -1133,5 +1134,90 @@ describe('StreamAnalyzer external offsets', () => {
     expect(() => analyzer.readFramesSoa(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesU8(Number.MAX_SAFE_INTEGER)).not.toThrow();
     expect(() => analyzer.readFramesI16(Number.MAX_SAFE_INTEGER)).not.toThrow();
+  });
+});
+
+describe('StreamAnalyzer chord and key names', () => {
+  const PITCH_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+  function chordProgressionSamples(): Float32Array {
+    const chords = [
+      [261.63, 329.63, 392.0],
+      [392.0, 493.88, 587.33],
+      [220.0, 261.63, 329.63],
+      [349.23, 440.0, 523.25],
+    ];
+    const samples = new Float32Array(SR * 8);
+    for (let i = 0; i < samples.length; i++) {
+      const t = i / SR;
+      const freqs = chords[Math.floor(t / 2)];
+      for (const freq of freqs) {
+        samples[i] += (Math.sin(2 * Math.PI * freq * t) / freqs.length) * 0.3;
+      }
+    }
+    return samples;
+  }
+
+  it('names every chord and the estimate consistently with the numeric fields', () => {
+    const samples = chordProgressionSamples();
+    const analyzer = new StreamAnalyzer({ sampleRate: SR });
+    for (let i = 0; i < samples.length; i += 4096) {
+      analyzer.process(samples.slice(i, Math.min(i + 4096, samples.length)));
+    }
+    const estimate = analyzer.stats().estimate;
+
+    expect(estimate.chordProgression.length).toBeGreaterThan(0);
+    for (const chord of [
+      ...estimate.chordProgression,
+      ...estimate.barChordProgression,
+      ...estimate.votedPattern,
+    ]) {
+      const prefix = chord.root < 0 ? 'N.C.' : PITCH_NAMES[chord.root];
+      expect(chord.name.startsWith(prefix)).toBe(true);
+      if (chord.quality === 0) {
+        expect(chord.name).toBe(PITCH_NAMES[chord.root]);
+      }
+      if (chord.quality === 1) {
+        expect(chord.name).toBe(`${PITCH_NAMES[chord.root]}m`);
+      }
+    }
+    const currentPrefix = estimate.chordRoot < 0 ? 'N.C.' : PITCH_NAMES[estimate.chordRoot];
+    expect(estimate.chordName.startsWith(currentPrefix)).toBe(true);
+
+    expect(estimate.key).toBeGreaterThanOrEqual(0);
+    const mode = estimate.keyMinor ? 'minor' : 'major';
+    expect(estimate.keyName).toBe(`${PITCH_NAMES[estimate.key]} ${mode}`);
+    expect(estimate.keyShortName).toBe(
+      estimate.keyMinor ? `${PITCH_NAMES[estimate.key]}m` : PITCH_NAMES[estimate.key],
+    );
+    analyzer.destroy();
+  });
+
+  it('spells the key the way batch analysis does', () => {
+    const notes = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88];
+    const samples = new Float32Array(SR * 7);
+    for (let n = 0; n < notes.length; n++) {
+      for (let i = 0; i < SR; i++) {
+        samples[n * SR + i] = Math.sin((2 * Math.PI * notes[n] * i) / SR) * 0.5;
+      }
+    }
+    const analyzer = new StreamAnalyzer({ sampleRate: SR });
+    analyzer.process(samples);
+    const { estimate } = analyzer.stats();
+    const batch = detectKey(samples, SR);
+    expect(estimate.keyName).toBe(batch.name);
+    expect(estimate.keyShortName).toBe(batch.shortName);
+    expect(estimate.keyName).toBe('C major');
+    analyzer.destroy();
+  });
+
+  it('reports no key name and N.C. before any estimate exists', () => {
+    const analyzer = new StreamAnalyzer({ sampleRate: SR });
+    const estimate = analyzer.stats().estimate;
+    expect(estimate.key).toBe(-1);
+    expect(estimate.keyName).toBeNull();
+    expect(estimate.keyShortName).toBeNull();
+    expect(estimate.chordName).toBe('N.C.');
+    analyzer.destroy();
   });
 });

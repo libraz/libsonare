@@ -106,7 +106,7 @@ python = [
 #     calls the C `_ex` entry point; omitting it reproduces the base call. The
 #     companion sizing entry point project_preview_midi_fx_count is a real
 #     facade method on all three surfaces and is NOT allowlisted.
-#   error_message / last_error_message / last_warning_message /
+#   error_message / last_error_message / last_error_code / last_warning_message /
 #     last_diagnostic_count / last_diagnostic_code / last_diagnostic_message /
 #     last_diagnostic_severity: C-ABI error/warning/diagnostic channel accessors
 #     consumed internally by each facade (errors map to native exceptions; the
@@ -190,6 +190,7 @@ node = [
   "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
+  "last_error_code",
   "last_warning_message",
   "last_diagnostic_count",
   "last_diagnostic_code",
@@ -326,6 +327,7 @@ wasm = [
   "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
+  "last_error_code",
   "last_warning_message",
   "last_diagnostic_count",
   "last_diagnostic_code",
@@ -436,6 +438,7 @@ python = [
   "project_bake_midi_fx_ex",
   "error_message",
   "last_error_message",
+  "last_error_code",
   "last_warning_message",
   "last_diagnostic_count",
   "last_diagnostic_code",
@@ -974,6 +977,11 @@ fields = [
   "note_edit.envelope_offset",
   "note_edit.envelope_count",
   "note_edit.amplitude_envelope",
+  # --- Derived display names (category 4) ---
+  # The chord symbol is spelled from root and quality by the core naming
+  # function every surface shares; C keeps the numeric fields only.
+  "stream_chord_change.name",
+  "stream_bar_chord.name",
 ]
 
 # Category 4 (intentionally one-sided): the facade record is a RICHER read model

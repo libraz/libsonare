@@ -3881,6 +3881,7 @@ export interface WasmGoniometerPoint {
 export interface WasmChordChange {
   root: number;
   quality: number;
+  name: string;
   startTime: number;
   confidence: number;
 }
@@ -3889,6 +3890,7 @@ export interface WasmBarChord {
   barIndex: number;
   root: number;
   quality: number;
+  name: string;
   startTime: number;
   confidence: number;
 }
@@ -3905,8 +3907,11 @@ export interface WasmProgressiveEstimate {
   key: number;
   keyMinor: boolean;
   keyConfidence: number;
+  keyName: string | null;
+  keyShortName: string | null;
   chordRoot: number;
   chordQuality: number;
+  chordName: string;
   chordConfidence: number;
   chordStartTime: number;
   chordProgression: WasmChordChange[];

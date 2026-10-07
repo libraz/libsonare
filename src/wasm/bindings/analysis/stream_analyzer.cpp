@@ -3,6 +3,8 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include "analysis/chord_analyzer.h"
+#include "analysis/key_analyzer.h"
 #include "util/numeric_validation.h"
 #include "wasm/bindings/common/common.h"
 
@@ -295,6 +297,14 @@ class StreamAnalyzerWrapper {
     estimate.set("key", s.estimate.key);
     estimate.set("keyMinor", s.estimate.key_minor);
     estimate.set("keyConfidence", s.estimate.key_confidence);
+    if (s.estimate.key >= 0) {
+      estimate.set("keyName", key_name(s.estimate.key, s.estimate.key_minor, false));
+      estimate.set("keyShortName", key_name(s.estimate.key, s.estimate.key_minor, true));
+    } else {
+      estimate.set("keyName", val::null());
+      estimate.set("keyShortName", val::null());
+    }
+    estimate.set("chordName", chord_symbol(s.estimate.chord_root, s.estimate.chord_quality));
     estimate.set("chordRoot", s.estimate.chord_root);
     estimate.set("chordQuality", s.estimate.chord_quality);
     estimate.set("chordConfidence", s.estimate.chord_confidence);
@@ -308,6 +318,7 @@ class StreamAnalyzerWrapper {
       c.set("quality", chord.quality);
       c.set("startTime", chord.start_time);
       c.set("confidence", chord.confidence);
+      c.set("name", chord_symbol(chord.root, chord.quality));
       chordProgression.call<void>("push", c);
     }
     estimate.set("chordProgression", chordProgression);
@@ -321,6 +332,7 @@ class StreamAnalyzerWrapper {
       c.set("quality", chord.quality);
       c.set("startTime", chord.start_time);
       c.set("confidence", chord.confidence);
+      c.set("name", chord_symbol(chord.root, chord.quality));
       barChordProgression.call<void>("push", c);
     }
     estimate.set("barChordProgression", barChordProgression);
@@ -336,6 +348,7 @@ class StreamAnalyzerWrapper {
       c.set("quality", chord.quality);
       c.set("startTime", chord.start_time);
       c.set("confidence", chord.confidence);
+      c.set("name", chord_symbol(chord.root, chord.quality));
       votedPattern.call<void>("push", c);
     }
     estimate.set("votedPattern", votedPattern);

@@ -2526,9 +2526,12 @@ class StreamFramesI16:
 class StreamChordChange:
     root: int
     quality: int
+    name: str
     start_time: float
     confidence: float
-    def __init__(self, root: int, quality: int, start_time: float, confidence: float) -> None: ...
+    def __init__(
+        self, root: int, quality: int, name: str, start_time: float, confidence: float
+    ) -> None: ...
 
 class StreamBarChord:
     """``bar_index`` is the bar number, not this entry's position in the list:
@@ -2542,10 +2545,17 @@ class StreamBarChord:
     bar_index: int
     root: int
     quality: int
+    name: str
     start_time: float
     confidence: float
     def __init__(
-        self, bar_index: int, root: int, quality: int, start_time: float, confidence: float
+        self,
+        bar_index: int,
+        root: int,
+        quality: int,
+        name: str,
+        start_time: float,
+        confidence: float,
     ) -> None: ...
 
 class StreamPatternScore:
@@ -2574,8 +2584,11 @@ class StreamStats:
     key: int
     key_minor: bool
     key_confidence: float
+    key_name: str | None
+    key_short_name: str | None
     chord_root: int
     chord_quality: int
+    chord_name: str
     chord_confidence: float
     chord_start_time: float
     current_bar: int
@@ -2606,8 +2619,11 @@ class StreamStats:
         key: int,
         key_minor: bool,
         key_confidence: float,
+        key_name: str | None,
+        key_short_name: str | None,
         chord_root: int,
         chord_quality: int,
+        chord_name: str,
         chord_confidence: float,
         chord_start_time: float,
         current_bar: int,

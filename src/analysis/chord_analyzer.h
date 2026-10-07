@@ -75,6 +75,13 @@ struct Chord {
   float duration() const { return end - start; }
 };
 
+/// @brief Spells a chord from raw root / quality ordinals, as @ref Chord::to_string does.
+/// @param root Pitch class 0-11 (C-B); anything else means no chord
+/// @param quality @ref ChordQuality ordinal
+/// @return Chord symbol (e.g., "C", "C#m"), or "N.C." for no chord
+/// @note Never throws and never indexes outside the pitch-class table.
+std::string chord_symbol(int root, int quality);
+
 /// @brief Configuration for chord analysis.
 struct ChordConfig {
   float min_duration = chord_constants::kMinDurationSec;  ///< Minimum chord duration in seconds

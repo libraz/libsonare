@@ -49,6 +49,13 @@ struct Key {
 };
 
 /// @brief Key candidate with correlation score.
+/// @brief Spells a key from a raw root ordinal and minor flag.
+/// @param root Pitch class 0-11 (C-B); anything else means no key
+/// @param minor True for minor, false for major
+/// @param short_form True for @ref Key::to_short_string spelling, false for @ref Key::to_string
+/// @return The name, or an empty string when @p root is not a pitch class
+std::string key_name(int root, bool minor, bool short_form);
+
 struct KeyCandidate {
   Key key;            ///< Key information, including its posterior confidence
   float correlation;  ///< Correlation with profile [-1, 1]

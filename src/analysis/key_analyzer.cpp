@@ -256,6 +256,16 @@ std::string Key::to_short_string() const {
   return std::string(pitch_class_name(root)) + " " + mode_name(mode);
 }
 
+std::string key_name(int root, bool minor, bool short_form) {
+  if (root < 0 || root > 11) {
+    return "";
+  }
+  Key key{};
+  key.root = static_cast<PitchClass>(root);
+  key.mode = minor ? Mode::Minor : Mode::Major;
+  return short_form ? key.to_short_string() : key.to_string();
+}
+
 KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 

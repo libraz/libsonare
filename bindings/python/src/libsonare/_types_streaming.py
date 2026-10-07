@@ -158,6 +158,7 @@ class StreamFramesI16:
 class StreamChordChange:
     root: int
     quality: int
+    name: str
     start_time: float
     confidence: float
 
@@ -182,6 +183,7 @@ class StreamBarChord:
     bar_index: int
     root: int
     quality: int
+    name: str
     start_time: float
     confidence: float
 
@@ -203,6 +205,10 @@ class StreamStats:
     ``updated`` is true when the key or BPM was re-estimated since the previous
     snapshot. One change sets it on exactly one snapshot however the caller
     chunks its input, and a call that produced no frame does not repeat it.
+
+    ``key_name`` / ``key_short_name`` are ``None`` while no key is estimated.
+    ``chord_name`` and every chord's ``name`` are spelled as the batch analysis
+    spells a chord, with ``N.C.`` for no chord.
     """
 
     total_frames: int
@@ -231,8 +237,11 @@ class StreamStats:
     key: int
     key_minor: bool
     key_confidence: float
+    key_name: str | None
+    key_short_name: str | None
     chord_root: int
     chord_quality: int
+    chord_name: str
     chord_confidence: float
     chord_start_time: float
     current_bar: int

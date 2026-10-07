@@ -6,6 +6,8 @@
 #include <limits>
 #include <thread>
 
+#include "analysis/chord_analyzer.h"
+#include "analysis/key_analyzer.h"
 #include "analysis/progression_patterns.h"
 #include "core/resample.h"
 #include "stream_analyzer_test_helpers.h"
@@ -1847,4 +1849,41 @@ TEST_CASE("StreamResampler finalizes a stream past the int sample range", "[.][s
   out.clear();
   resampler.finalize(out);
   CHECK(out.empty());
+}
+
+TEST_CASE("chord_symbol spells like Chord::to_string", "[streaming][naming]") {
+  CHECK(chord_symbol(0, static_cast<int>(ChordQuality::Major)) == "C");
+  CHECK(chord_symbol(1, static_cast<int>(ChordQuality::Minor)) == "C#m");
+  CHECK(chord_symbol(-1, static_cast<int>(ChordQuality::Major)) == "N.C.");
+  CHECK(chord_symbol(12, static_cast<int>(ChordQuality::Major)) == "N.C.");
+  CHECK(chord_symbol(0, -1) == "N.C.");
+  CHECK(chord_symbol(0, kChordQualityCount) == "N.C.");
+
+  for (int q = 0; q < kChordQualityCount; ++q) {
+    for (int root = 0; root < 12; ++root) {
+      Chord chord{};
+      chord.root = static_cast<PitchClass>(root);
+      chord.quality = static_cast<ChordQuality>(q);
+      chord.bass = chord.root;
+      INFO("root " << root << " quality " << q);
+      CHECK(chord_symbol(root, q) == chord.to_string());
+    }
+  }
+}
+
+TEST_CASE("key_name spells like Key::to_string", "[streaming][naming]") {
+  CHECK(key_name(9, true, false) == "A minor");
+  CHECK(key_name(9, true, true) == "Am");
+  CHECK(key_name(0, false, false) == "C major");
+  CHECK(key_name(0, false, true) == "C");
+  CHECK(key_name(-1, true, false).empty());
+  CHECK(key_name(12, false, true).empty());
+
+  for (int root = 0; root < 12; ++root) {
+    Key key{};
+    key.root = static_cast<PitchClass>(root);
+    key.mode = Mode::Minor;
+    CHECK(key_name(root, true, false) == key.to_string());
+    CHECK(key_name(root, true, true) == key.to_short_string());
+  }
 }

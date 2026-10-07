@@ -607,3 +607,83 @@ def test_stream_analyzer_counts_a_call_whose_input_it_scrubbed() -> None:
 
         analyzer.reset()
         assert analyzer.stats().non_finite_discard_blocks == 0
+
+
+def _chord_progression_samples(sample_rate: int) -> list[float]:
+    chords = [
+        [261.63, 329.63, 392.0],
+        [392.0, 493.88, 587.33],
+        [220.0, 261.63, 329.63],
+        [349.23, 440.0, 523.25],
+    ]
+    out: list[float] = []
+    for i in range(sample_rate * 8):
+        t = i / sample_rate
+        freqs = chords[int(t // 2)]
+        out.append(sum(math.sin(2 * math.pi * f * t) / len(freqs) for f in freqs) * 0.3)
+    return out
+
+
+def test_stream_analyzer_names_agree_with_numeric_fields() -> None:
+    from libsonare import StreamAnalyzer, StreamConfig
+
+    pitches = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    sr = 22050
+    samples = _chord_progression_samples(sr)
+    with StreamAnalyzer(StreamConfig(sample_rate=sr)) as analyzer:
+        for i in range(0, len(samples), 4096):
+            analyzer.process(samples[i : i + 4096])
+        stats = analyzer.stats()
+
+    assert stats.chord_progression
+    for chord in [*stats.chord_progression, *stats.bar_chord_progression, *stats.voted_pattern]:
+        prefix = "N.C." if chord.root < 0 else pitches[chord.root]
+        assert chord.name.startswith(prefix)
+        if chord.quality == 0:
+            assert chord.name == pitches[chord.root]
+        if chord.quality == 1:
+            assert chord.name == pitches[chord.root] + "m"
+    prefix = "N.C." if stats.chord_root < 0 else pitches[stats.chord_root]
+    assert stats.chord_name.startswith(prefix)
+
+    assert stats.key >= 0
+    mode = "minor" if stats.key_minor else "major"
+    assert stats.key_name == f"{pitches[stats.key]} {mode}"
+    assert stats.key_short_name == pitches[stats.key] + ("m" if stats.key_minor else "")
+
+
+def test_stream_analyzer_key_name_matches_batch_spelling() -> None:
+    from libsonare import StreamAnalyzer, StreamConfig, detect_key
+
+    sr = 22050
+    notes = [261.63, 293.66, 329.63, 349.23, 392.0, 440.0, 493.88]
+    samples = [math.sin(2 * math.pi * note * i / sr) * 0.5 for note in notes for i in range(sr)]
+    with StreamAnalyzer(StreamConfig(sample_rate=sr)) as analyzer:
+        for i in range(0, len(samples), 4096):
+            analyzer.process(samples[i : i + 4096])
+        stats = analyzer.stats()
+
+    batch = detect_key(samples, sr)
+    assert stats.key_name == batch.name == "C major"
+    assert stats.key_short_name == batch.short_name == "C"
+
+
+def test_stream_analyzer_names_before_any_estimate() -> None:
+    from libsonare import StreamAnalyzer, StreamConfig
+
+    with StreamAnalyzer(StreamConfig(sample_rate=22050)) as analyzer:
+        stats = analyzer.stats()
+    assert stats.key == -1
+    assert stats.key_name is None
+    assert stats.key_short_name is None
+    assert stats.chord_name == "N.C."
+
+
+def test_stream_chord_name_falls_back_for_unmapped_values() -> None:
+    from libsonare.streaming import _chord_name
+
+    assert _chord_name(-1, 0) == "N.C."
+    assert _chord_name(12, 0) == "N.C."
+    assert _chord_name(0, 0) == "C"
+    assert _chord_name(1, 1) == "C#m"
+    assert _chord_name(0, 999) == "N.C."

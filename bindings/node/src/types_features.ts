@@ -158,6 +158,8 @@ export interface StreamFramesI16 {
 export interface StreamChordChange {
   root: number;
   quality: number;
+  /** Chord symbol (e.g. `C`, `C#m`, `N.C.`), spelled as the batch analysis spells it. */
+  name: string;
   startTime: number;
   confidence: number;
 }
@@ -173,6 +175,8 @@ export interface StreamBarChord {
   barIndex: number;
   root: number;
   quality: number;
+  /** Chord symbol, spelled as the batch analysis spells it. */
+  name: string;
   /**
    * Start of the bar, on the same timeline as `StreamFrame.timestamp`
    * (including a `sampleOffset` anchor). Consecutive bars are `barDuration`
@@ -202,8 +206,14 @@ export interface StreamProgressiveEstimate {
   key: number;
   keyMinor: boolean;
   keyConfidence: number;
+  /** Key name (e.g. `A minor`); `null` while no key is estimated. */
+  keyName: string | null;
+  /** Short key name (e.g. `Am`); `null` while no key is estimated. */
+  keyShortName: string | null;
   chordRoot: number;
   chordQuality: number;
+  /** Current chord symbol; `N.C.` while no chord is detected. */
+  chordName: string;
   chordConfidence: number;
   chordStartTime: number;
   chordProgression: StreamChordChange[];

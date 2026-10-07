@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+#include "analysis/chord_analyzer.h"
+#include "analysis/key_analyzer.h"
 #include "core/audio.h"
 #include "editing/voice_changer/realtime.h"
 #include "mastering/api/chain.h"
@@ -471,6 +473,17 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   estimate.Set("key", Napi::Number::New(env, est.key));
   estimate.Set("keyMinor", Napi::Boolean::New(env, est.key_minor));
   estimate.Set("keyConfidence", Napi::Number::New(env, est.key_confidence));
+  if (est.key >= 0) {
+    estimate.Set("keyName",
+                 Napi::String::New(env, sonare::key_name(est.key, est.key_minor, false)));
+    estimate.Set("keyShortName",
+                 Napi::String::New(env, sonare::key_name(est.key, est.key_minor, true)));
+  } else {
+    estimate.Set("keyName", env.Null());
+    estimate.Set("keyShortName", env.Null());
+  }
+  estimate.Set("chordName",
+               Napi::String::New(env, sonare::chord_symbol(est.chord_root, est.chord_quality)));
   estimate.Set("chordRoot", Napi::Number::New(env, est.chord_root));
   estimate.Set("chordQuality", Napi::Number::New(env, est.chord_quality));
   estimate.Set("chordConfidence", Napi::Number::New(env, est.chord_confidence));
@@ -484,6 +497,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startTime", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
+    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     chordProgression.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("chordProgression", chordProgression);
@@ -497,6 +511,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startTime", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
+    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     barChordProgression.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("barChordProgression", barChordProgression);
@@ -512,6 +527,7 @@ Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
     c.Set("quality", Napi::Number::New(env, chord.quality));
     c.Set("startTime", Napi::Number::New(env, chord.start_time));
     c.Set("confidence", Napi::Number::New(env, chord.confidence));
+    c.Set("name", Napi::String::New(env, sonare::chord_symbol(chord.root, chord.quality)));
     votedPattern.Set(static_cast<uint32_t>(i), c);
   }
   estimate.Set("votedPattern", votedPattern);
