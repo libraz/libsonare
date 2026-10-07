@@ -1,4 +1,5 @@
 import { closeSync, openSync, readSync } from 'node:fs';
+import { ErrorCode, SonareError } from './errors.js';
 import type { RealtimeEngine } from './realtime_engine.js';
 import type { ClipPageRequest, FileClipPageProviderOptions } from './types.js';
 
@@ -12,7 +13,11 @@ export class ClipPageProvider {
 
   supply(pageIndex: number, channels: Float32Array[]): void {
     if (this.disposed) {
-      throw new Error('ClipPageProvider is destroyed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'ClipPageProvider is destroyed',
+      );
     }
     this.engine.supplyClipPage(this.id, pageIndex, channels);
   }
@@ -52,7 +57,7 @@ export class FileClipPageProvider extends ClipPageProvider {
   ) {
     super(engine, id);
     if (options.numChannels <= 0 || options.numSamples <= 0 || options.pageFrames <= 0) {
-      throw new Error('numChannels, numSamples, and pageFrames must be positive');
+      throw new RangeError('numChannels, numSamples, and pageFrames must be positive');
     }
     this.fd = openSync(path, 'r');
     this.numChannels = options.numChannels;
@@ -63,7 +68,11 @@ export class FileClipPageProvider extends ClipPageProvider {
 
   supplyPage(pageIndex: number): boolean {
     if (this.fd === null) {
-      throw new Error('FileClipPageProvider is destroyed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'FileClipPageProvider is destroyed',
+      );
     }
     if (pageIndex < 0) {
       return false;

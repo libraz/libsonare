@@ -227,13 +227,13 @@ StreamAnalyzerWrap::StreamAnalyzerWrap(const Napi::CallbackInfo& info)
     e.ThrowAsJavaScriptException();
     return;
   } catch (const sonare::SonareException& e) {
-    ThrowSonareErrorMessage(env, CErrorFromException(e), e.what());
+    sonare_node::ThrowSonareErrorMessage(env, CErrorFromException(e), e.what());
     return;
   } catch (const std::exception& e) {
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+    sonare_node::ThrowStdException(env, e);
     return;
   } catch (...) {
-    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");
     return;
   }
 }
@@ -255,7 +255,8 @@ Napi::Value StreamAnalyzerWrap::Destroy(const Napi::CallbackInfo& info) {
 Napi::Value StreamAnalyzerWrap::Process(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
@@ -273,7 +274,8 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 2 || !IsFloat32Array(info[0])) {
@@ -291,7 +293,8 @@ Napi::Value StreamAnalyzerWrap::ProcessWithOffset(const Napi::CallbackInfo& info
 Napi::Value StreamAnalyzerWrap::FinalizeStream(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -304,7 +307,8 @@ Napi::Value StreamAnalyzerWrap::AvailableFrames(const Napi::CallbackInfo& info) 
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   return Napi::Number::New(env, static_cast<double>(analyzer_->available_frames()));
@@ -315,7 +319,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1) {
@@ -350,7 +355,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1) {
@@ -384,7 +390,8 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1) {
@@ -418,7 +425,8 @@ Napi::Value StreamAnalyzerWrap::Reset(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   size_t base_offset = 0;
@@ -434,7 +442,8 @@ Napi::Value StreamAnalyzerWrap::Reset(const Napi::CallbackInfo& info) {
 Napi::Value StreamAnalyzerWrap::Stats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   SONARE_NODE_TRY
@@ -532,7 +541,8 @@ Napi::Value StreamAnalyzerWrap::FrameCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   return Napi::Number::New(env, analyzer_->frame_count());
@@ -543,7 +553,8 @@ Napi::Value StreamAnalyzerWrap::CurrentTime(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   return Napi::Number::New(env, analyzer_->current_time());
@@ -560,7 +571,8 @@ Napi::Value StreamAnalyzerWrap::SampleRate(const Napi::CallbackInfo& info) {
 Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsNumber()) {
@@ -576,7 +588,8 @@ Napi::Value StreamAnalyzerWrap::SetExpectedDuration(const Napi::CallbackInfo& in
 Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsNumber()) {
@@ -592,7 +605,8 @@ Napi::Value StreamAnalyzerWrap::SetNormalizationGain(const Napi::CallbackInfo& i
 Napi::Value StreamAnalyzerWrap::SetTuningRefHz(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (!analyzer_) {
-    Napi::Error::New(env, "StreamAnalyzer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "StreamAnalyzer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsNumber()) {

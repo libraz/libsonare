@@ -169,7 +169,7 @@ Napi::Value SonareWrap::LufsInterleaved(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::TypeError::New(env, "interleaved length must be a multiple of channels")
+    Napi::RangeError::New(env, "interleaved length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -210,7 +210,7 @@ Napi::Value SonareWrap::LufsSeriesInterleaved(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   if (typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::TypeError::New(env, "interleaved length must be a multiple of channels")
+    Napi::RangeError::New(env, "interleaved length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -581,7 +581,7 @@ Napi::Value StereoScalar(const Napi::CallbackInfo& info, StereoScalarFn fn, cons
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, std::string(fn_label) + ": left and right must have the same length")
+    Napi::RangeError::New(env, std::string(fn_label) + ": left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -624,7 +624,7 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, "meteringVectorscope: left and right must have the same length")
+    Napi::RangeError::New(env, "meteringVectorscope: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -666,7 +666,7 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, "meteringPhaseScope: left and right must have the same length")
+    Napi::RangeError::New(env, "meteringPhaseScope: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -793,7 +793,8 @@ Napi::Value SonareWrap::PeakDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -810,7 +811,8 @@ Napi::Value SonareWrap::RmsDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -827,7 +829,8 @@ Napi::Value SonareWrap::DcOffsetInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float out_value = 0.0f;
@@ -844,7 +847,8 @@ Napi::Value SonareWrap::CrestFactorDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float out_db = 0.0f;
@@ -861,7 +865,8 @@ Napi::Value SonareWrap::SilenceRatioInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float threshold_db{};
@@ -886,7 +891,8 @@ Napi::Value SonareWrap::TruePeakDbInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   int oversample{};
@@ -905,7 +911,8 @@ Napi::Value SonareWrap::DetectClippingInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float threshold = 0.999f;
@@ -954,7 +961,8 @@ Napi::Value SonareWrap::DynamicRangeInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float window_sec = 0.0f;
@@ -995,7 +1003,8 @@ Napi::Value SonareWrap::SpectrumInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   int n_fft = 0;
@@ -1026,7 +1035,8 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   int64_t frame_offset_arg = 0;
@@ -1061,7 +1071,8 @@ Napi::Value SonareWrap::Ebur128LoudnessRangeInstance(const Napi::CallbackInfo& i
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (!audio_) {
-    Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Audio has been destroyed");
     return env.Undefined();
   }
   float out_lra = 0.0f;
@@ -1088,7 +1099,7 @@ Napi::Value SonareWrap::WaveformPeaks(const Napi::CallbackInfo& info) {
   size_t samples_per_bucket = static_cast<size_t>(
       std::max<int64_t>(0, node_narrow_int64(env, info[2], node_arg_label(2).c_str())));
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::TypeError::New(env, "waveformPeaks: samples length must be a multiple of channels")
+    Napi::RangeError::New(env, "waveformPeaks: samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -1117,7 +1128,7 @@ Napi::Value SonareWrap::WaveformPeakPyramid(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   int channels = node_narrow_int(env, info[1], "channels");
   if (channels <= 0 || typed.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::TypeError::New(env, "waveformPeakPyramid: samples length must be a multiple of channels")
+    Napi::RangeError::New(env, "waveformPeakPyramid: samples length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

@@ -18,12 +18,12 @@ inline SonareMode node_mode_from_value(const Napi::Value& value) {
   if (value.IsNumber()) {
     const int mode = sonare_node::node_narrow_int(value.Env(), value, "keyMode");
     if (mode < SONARE_MODE_MAJOR || mode > SONARE_MODE_LOCRIAN) {
-      throw Napi::Error::New(value.Env(), "invalid key mode");
+      throw Napi::RangeError::New(value.Env(), "invalid key mode");
     }
     return static_cast<SonareMode>(mode);
   }
   if (!value.IsString()) {
-    throw Napi::Error::New(value.Env(), "key modes must be strings or numbers");
+    throw Napi::TypeError::New(value.Env(), "key modes must be strings or numbers");
   }
   std::string key = value.As<Napi::String>().Utf8Value();
   std::transform(key.begin(), key.end(), key.begin(),
@@ -35,7 +35,7 @@ inline SonareMode node_mode_from_value(const Napi::Value& value) {
   if (key == "lydian") return SONARE_MODE_LYDIAN;
   if (key == "mixolydian") return SONARE_MODE_MIXOLYDIAN;
   if (key == "locrian") return SONARE_MODE_LOCRIAN;
-  throw Napi::Error::New(value.Env(), "invalid key mode: " + key);
+  throw Napi::RangeError::New(value.Env(), "invalid key mode: " + key);
 }
 
 /// @brief Parse the `modes` option: a mode-set string, single mode, or array.
@@ -58,7 +58,7 @@ inline std::vector<SonareMode> node_modes_option(const Napi::Object& object) {
     return {node_mode_from_value(value)};
   }
   if (!value.IsArray()) {
-    throw Napi::Error::New(object.Env(), "modes must be an array or mode-set string");
+    throw Napi::TypeError::New(object.Env(), "modes must be an array or mode-set string");
   }
   Napi::Array arr = value.As<Napi::Array>();
   std::vector<SonareMode> modes;
@@ -78,12 +78,12 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
     const int profile = sonare_node::node_narrow_int(value.Env(), value, "keyProfile");
     if (profile < SONARE_KEY_PROFILE_KRUMHANSL_SCHMUCKLER ||
         profile > SONARE_KEY_PROFILE_BELLMAN_BUDGE) {
-      throw Napi::Error::New(value.Env(), "invalid key profile");
+      throw Napi::RangeError::New(value.Env(), "invalid key profile");
     }
     return static_cast<SonareKeyProfileType>(profile);
   }
   if (!value.IsString()) {
-    throw Napi::Error::New(value.Env(), "key profile must be a string or number");
+    throw Napi::TypeError::New(value.Env(), "key profile must be a string or number");
   }
   std::string key = value.As<Napi::String>().Utf8Value();
   std::transform(key.begin(), key.end(), key.begin(),
@@ -97,7 +97,7 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
   if (key == "faraldo-edma" || key == "edma") return SONARE_KEY_PROFILE_FARALDO_EDMA;
   if (key == "faraldo-edmm" || key == "edmm") return SONARE_KEY_PROFILE_FARALDO_EDMM;
   if (key == "bellman-budge" || key == "bellman") return SONARE_KEY_PROFILE_BELLMAN_BUDGE;
-  throw Napi::Error::New(value.Env(), "invalid key profile: " + key);
+  throw Napi::RangeError::New(value.Env(), "invalid key profile: " + key);
 }
 
 }  // namespace sonare_node

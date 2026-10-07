@@ -157,9 +157,9 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env,
-                     "masteringRepairTrimSilenceStereo: left and right must have the same "
-                     "length")
+    Napi::RangeError::New(env,
+                          "masteringRepairTrimSilenceStereo: left and right must have the same "
+                          "length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -233,7 +233,7 @@ Napi::Value SonareWrap::MasteringRepairDetectTrimRangeStereo(const Napi::Callbac
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(
+    Napi::RangeError::New(
         env, "masteringRepairDetectTrimRangeStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();

@@ -269,7 +269,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(
+    Napi::RangeError::New(
         env, "masteringRepairDenoiseClassicalStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
@@ -429,7 +429,8 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, "masteringRepairDehumStereo: left and right must have the same length")
+    Napi::RangeError::New(env,
+                          "masteringRepairDehumStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

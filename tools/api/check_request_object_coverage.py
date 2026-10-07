@@ -84,6 +84,7 @@ METADATA_HELPERS = {
     "engineAbiVersion",
     "voiceChangerAbiVersion",
     "projectAbiVersion",
+    "checkAbiVersion",
     "hasFfmpegSupport",
     "isInitialized",
     "engineCapabilities",

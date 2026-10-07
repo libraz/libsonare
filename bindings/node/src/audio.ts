@@ -26,6 +26,7 @@ import {
   timeStretch as timeStretchFn,
   voiceChange as voiceChangeFn,
 } from './effects_mastering.js';
+import { ErrorCode, SonareError } from './errors.js';
 import {
   chroma as chromaFn,
   lufs as lufsFn,
@@ -153,7 +154,7 @@ export class Audio {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new Error('Audio has been destroyed');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'Audio has been destroyed');
     }
   }
 

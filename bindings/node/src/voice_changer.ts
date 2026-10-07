@@ -178,10 +178,10 @@ export function voiceChangeRealtime(
   assertSamples('voiceChangeRealtime', request.samples, validate);
   const channels = request.channels ?? 1;
   if (channels !== 1 && channels !== 2) {
-    throw new Error('voiceChangeRealtime: channels must be 1 or 2.');
+    throw new RangeError('voiceChangeRealtime: channels must be 1 or 2.');
   }
   if (channels === 2 && request.samples.length % 2 !== 0) {
-    throw new Error('voiceChangeRealtime: stereo input length must be a multiple of 2.');
+    throw new RangeError('voiceChangeRealtime: stereo input length must be a multiple of 2.');
   }
   const presetConfig = request.preset ?? 'neutral-monitor';
   return addon.voiceChangeRealtime(
@@ -226,7 +226,7 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
   if (ordinal === undefined) {
     // Mirror the WASM/Python bindings: an unknown preset name is an error, not
     // a silent `undefined` ordinal that would corrupt the native call.
-    throw new Error(`Unknown voice character preset: ${preset}`);
+    throw new RangeError(`Unknown voice character preset: ${preset}`);
   }
   return ordinal;
 }

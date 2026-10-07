@@ -63,7 +63,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     const size_t channels = channel_count(layout);
     const Napi::Array source_planes = samples.As<Napi::Array>();
     if (channels == 0 || source_planes.Length() != channels) {
-      Napi::TypeError::New(env, "planarSamples must match mono or stereo layout")
+      Napi::RangeError::New(env, "planarSamples must match mono or stereo layout")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

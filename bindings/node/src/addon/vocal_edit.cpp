@@ -636,11 +636,9 @@ Napi::Object RenderResultToObject(Napi::Env env, const SonareVocalRenderResult& 
 Napi::Error MakeVocalError(Napi::Env env, SonareError error,
                            const SonareVocalErrorDetail* detail = nullptr) {
   const char* message = sonare_error_message(error);
-  Napi::Error js_error = Napi::Error::New(env, message == nullptr ? "libsonare error" : message);
+  Napi::Error js_error =
+      sonare_node::MakeSonareError(env, error, message == nullptr ? "libsonare error" : message);
   Napi::Object object = js_error.Value();
-  object.Set("name", "SonareError");
-  object.Set("code", Napi::Number::New(env, static_cast<int>(error)));
-  object.Set("codeName", sonare_node::ErrorCodeName(error));
   object.Set("reason", detail == nullptr ? 0u : detail->reason);
   object.Set("field", detail == nullptr ? "" : detail->field);
   object.Set("expected", detail == nullptr

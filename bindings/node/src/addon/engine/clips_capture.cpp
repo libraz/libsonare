@@ -158,7 +158,7 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
       if (ch == 0) {
         num_samples = channel.ElementLength();
       } else if (channel.ElementLength() != num_samples) {
-        Napi::TypeError::New(env, "all clip channels must have the same length")
+        Napi::RangeError::New(env, "all clip channels must have the same length")
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
@@ -539,7 +539,7 @@ Napi::Value RealtimeEngineWrap::SupplyClipPage(const Napi::CallbackInfo& info) {
     if (ch == 0) {
       frames = channel.ElementLength();
     } else if (channel.ElementLength() != frames) {
-      Napi::TypeError::New(env, "all clip page channels must have the same length")
+      Napi::RangeError::New(env, "all clip page channels must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -714,7 +714,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info)
         return env.Undefined();
       }
     } else if (static_cast<int64_t>(channel.ElementLength()) != frames) {
-      Napi::TypeError::New(env, "all capture channels must have the same length")
+      Napi::RangeError::New(env, "all capture channels must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -822,7 +822,8 @@ Napi::Value RealtimeEngineWrap::CapturedAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (engine_ == nullptr) {
-    Napi::Error::New(env, "RealtimeEngine is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeEngine is destroyed");
     return env.Undefined();
   }
   SonareEngineCaptureStatus status{};

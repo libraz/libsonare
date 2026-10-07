@@ -388,7 +388,9 @@ class AnalyzeAsyncWorker : public Napi::AsyncWorker {
 
     if (env.IsExceptionPending() || !parsed.IsObject()) {
       if (!env.IsExceptionPending()) {
-        deferred_.Reject(Napi::Error::New(env, "Failed to parse analysis JSON").Value());
+        deferred_.Reject(sonare_node::MakeSonareError(env, SONARE_ERROR_INVALID_FORMAT,
+                                                      "Failed to parse analysis JSON")
+                             .Value());
       } else {
         deferred_.Reject(env.GetAndClearPendingException().Value());
       }
@@ -1099,7 +1101,8 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   const char* json = sonare_capabilities_json();
   if (json == nullptr) {
-    Napi::Error::New(env, "Native capabilities JSON is unavailable").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_NOT_SUPPORTED,
+                                         "Native capabilities JSON is unavailable");
     return env.Undefined();
   }
 
@@ -1108,8 +1111,8 @@ Napi::Value SonareWrap::Capabilities(const Napi::CallbackInfo& info) {
   Napi::Value parsed = json_parse.Call(json_global, {Napi::String::New(env, json)});
   if (env.IsExceptionPending() || !parsed.IsObject()) {
     if (!env.IsExceptionPending()) {
-      Napi::Error::New(env, "Failed to parse native capabilities JSON")
-          .ThrowAsJavaScriptException();
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "Failed to parse native capabilities JSON");
     }
     return env.Undefined();
   }

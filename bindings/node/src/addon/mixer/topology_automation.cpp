@@ -12,7 +12,8 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsString()) {
@@ -43,8 +44,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
   if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
                                 true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    Napi::Error::New(env, std::string("failed to add strip: ") + sonare_last_error_message())
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowLastSonareError(env, "failed to add strip: ");
   }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -54,7 +54,8 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsString()) {
@@ -76,7 +77,8 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsString()) {
@@ -96,7 +98,8 @@ Napi::Value MixerWrap::BusCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   size_t count = 0;
@@ -113,7 +116,8 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
@@ -157,7 +161,8 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsString()) {
@@ -177,7 +182,8 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsNumber()) {
@@ -198,7 +204,8 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 2 || !info[0].IsString() || !info[1].IsArray()) {
@@ -234,7 +241,8 @@ Napi::Value MixerWrap::VcaGroupCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   size_t count = 0;

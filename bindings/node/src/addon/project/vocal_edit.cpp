@@ -282,8 +282,8 @@ bool ResultCountValid(Napi::Env env, uint64_t count, const char* field) {
 
 bool ResultPointerValid(Napi::Env env, const void* pointer, uint64_t count, const char* field) {
   if (count != 0 && pointer == nullptr) {
-    Napi::Error::New(env, std::string(field) + " result contains a null array")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+                                         std::string(field) + " result contains a null array");
     return false;
   }
   return true;
@@ -344,7 +344,7 @@ Napi::Value ProjectWrap::ApplyVocalEdit(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (project_ == nullptr) {
-    Napi::Error::New(env, "Project is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
     return env.Undefined();
   }
   if (info.Length() != 1) {
@@ -367,7 +367,7 @@ Napi::Value ProjectWrap::GetVocalEditDependencies(const Napi::CallbackInfo& info
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (project_ == nullptr) {
-    Napi::Error::New(env, "Project is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
     return env.Undefined();
   }
   if (info.Length() != 0) {
@@ -398,7 +398,7 @@ Napi::Value ProjectWrap::RehydrateVocalEdits(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (project_ == nullptr) {
-    Napi::Error::New(env, "Project is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
     return env.Undefined();
   }
   if (info.Length() < 1 || info.Length() > 2) {

@@ -95,20 +95,34 @@ void SetSonareErrorProperties(Napi::Env env, Napi::Object error, SonareError err
   error.Set("codeName", Napi::String::New(env, ErrorCodeName(err)));
 }
 
-void ThrowWithCode(Napi::Env env, SonareError err, const std::string& message) {
-  Napi::Error error = Napi::Error::New(env, message);
-  SetSonareErrorProperties(env, error.Value(), err);
-  error.ThrowAsJavaScriptException();
-}
-
 }  // namespace
 
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message) {
+  Napi::Error error = Napi::Error::New(env, message);
+  SetSonareErrorProperties(env, error.Value(), err);
+  return error;
+}
+
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix) {
-  ThrowWithCode(env, err, prefix + ErrorMessageForCode(err));
+  MakeSonareError(env, err, prefix + ErrorMessageForCode(err)).ThrowAsJavaScriptException();
 }
 
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message) {
-  ThrowWithCode(env, err, message);
+  MakeSonareError(env, err, message).ThrowAsJavaScriptException();
+}
+
+void ThrowLastSonareError(Napi::Env env, const std::string& prefix, SonareError fallback) {
+  SonareError code = sonare_last_error_code();
+  if (code == SONARE_OK) code = fallback;
+  const char* detail = sonare_last_error_message();
+  const std::string text =
+      (detail != nullptr && detail[0] != '\0') ? std::string(detail) : ErrorMessageForCode(code);
+  ThrowSonareErrorMessage(env, code, prefix + text);
+}
+
+void ThrowStdException(Napi::Env env, const std::exception& e) {
+  ThrowSonareErrorMessage(env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)),
+                          e.what());
 }
 
 bool RejectEmbeddedNul(Napi::Env env, const std::string& value, const char* field) {
@@ -481,7 +495,7 @@ Napi::Value ParseJsonObjectAndFree(Napi::Env env, char* json, const char* failur
 
   if (env.IsExceptionPending() || !parsed.IsObject()) {
     if (!env.IsExceptionPending()) {
-      Napi::Error::New(env, failure_message).ThrowAsJavaScriptException();
+      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT, failure_message);
     }
     return env.Undefined();
   }

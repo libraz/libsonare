@@ -289,7 +289,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
     if (desc.audio_channels <= 0 ||
         array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {
-      Napi::TypeError::New(env, "audio length must be a multiple of audioChannels")
+      Napi::RangeError::New(env, "audio length must be a multiple of audioChannels")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
@@ -334,7 +334,7 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
     Napi::Float32Array array = audio_value.As<Napi::Float32Array>();
     if (desc.audio_channels <= 0 ||
         array.ElementLength() % static_cast<size_t>(desc.audio_channels) != 0) {
-      Napi::TypeError::New(env, "audio length must be a multiple of audioChannels")
+      Napi::RangeError::New(env, "audio length must be a multiple of audioChannels")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

@@ -28,6 +28,10 @@ SonareError CErrorFromException(const sonare::SonareException& e);
 ///        so a C-ABI failure can be re-raised as a code-carrying exception.
 sonare::ErrorCode CodeFromCError(SonareError err);
 
+/// @brief Build (without throwing) a JS Error carrying
+///        { name: 'SonareError', code, codeName } and @p message.
+Napi::Error MakeSonareError(Napi::Env env, SonareError err, const std::string& message);
+
 /// @brief Throw a JS Error carrying { name: 'SonareError', code, codeName }.
 ///        The detail message is @p prefix + the thread-local / generic message.
 void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix = "");
@@ -35,6 +39,15 @@ void ThrowSonareError(Napi::Env env, SonareError err, const std::string& prefix 
 /// @brief Like ThrowSonareError but uses an explicit detail message (e.g. a
 ///        caught SonareException's what()).
 void ThrowSonareErrorMessage(Napi::Env env, SonareError err, const std::string& message);
+
+/// @brief Throw the failure of the last C-ABI call that returned a null handle:
+///        the code from sonare_last_error_code() with @p prefix + the recorded
+///        detail as the message. @p fallback stands in when the code reads Ok.
+void ThrowLastSonareError(Napi::Env env, const std::string& prefix,
+                          SonareError fallback = SONARE_ERROR_INVALID_STATE);
+
+/// @brief Throw @p e classified through the shared std::exception classifier.
+void ThrowStdException(Napi::Env env, const std::exception& e);
 
 /// @brief Throw a RangeError and return true when @p value holds an embedded NUL
 ///        that a C-string hand-off would silently truncate.
@@ -269,12 +282,11 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
     return env.Undefined();                                                                   \
   }                                                                                           \
   catch (const std::exception& e) {                                                           \
-    sonare_node::ThrowSonareErrorMessage(                                                     \
-        env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)), e.what());    \
+    sonare_node::ThrowStdException(env, e);                                                   \
     return env.Undefined();                                                                   \
   }                                                                                           \
   catch (...) {                                                                               \
-    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();                      \
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");         \
     return env.Undefined();                                                                   \
   }
 
@@ -290,11 +302,10 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
     sonare_node::ThrowSonareErrorMessage(env, sonare_node::CErrorFromException(e), e.what()); \
   }                                                                                           \
   catch (const std::exception& e) {                                                           \
-    sonare_node::ThrowSonareErrorMessage(                                                     \
-        env, static_cast<SonareError>(sonare::error_code_for_std_exception(e)), e.what());    \
+    sonare_node::ThrowStdException(env, e);                                                   \
   }                                                                                           \
   catch (...) {                                                                               \
-    Napi::Error::New(env, "Unknown error").ThrowAsJavaScriptException();                      \
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN, "Unknown error");         \
   }
 
 #endif  // SONARE_NODE_SONARE_WRAP_UTILS_H_

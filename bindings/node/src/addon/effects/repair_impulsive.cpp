@@ -268,7 +268,8 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, "masteringRepairDeclickStereo: left and right must have the same length")
+    Napi::RangeError::New(env,
+                          "masteringRepairDeclickStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -365,7 +366,8 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env, "masteringRepairDeclipStereo: left and right must have the same length")
+    Napi::RangeError::New(env,
+                          "masteringRepairDeclipStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -461,8 +463,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(env,
-                     "masteringRepairDecrackleStereo: left and right must have the same length")
+    Napi::RangeError::New(
+        env, "masteringRepairDecrackleStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

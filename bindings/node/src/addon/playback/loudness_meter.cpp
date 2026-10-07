@@ -39,7 +39,8 @@ PlaybackLoudnessMeterWrap::~PlaybackLoudnessMeterWrap() {
 
 bool PlaybackLoudnessMeterWrap::EnsureAlive(Napi::Env env) const {
   if (meter_ != nullptr) return true;
-  Napi::Error::New(env, "PlaybackLoudnessMeter has been destroyed").ThrowAsJavaScriptException();
+  sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                       "PlaybackLoudnessMeter has been destroyed");
   return false;
 }
 

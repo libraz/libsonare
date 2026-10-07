@@ -135,7 +135,8 @@ Napi::Value SampleBankWrap::AddSample(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "SampleBank is destroyed");
     return env.Undefined();
   }
   if (!sonare_node::RequireFloat32Array(info, 0,
@@ -172,7 +173,8 @@ Napi::Value SampleBankWrap::AddZone(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "SampleBank is destroyed");
     return env.Undefined();
   }
   uint32_t set_index = 0;
@@ -202,7 +204,8 @@ Napi::Value SampleBankWrap::SampleCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "SampleBank is destroyed");
     return env.Undefined();
   }
   size_t count = 0;
@@ -216,7 +219,8 @@ Napi::Value SampleBankWrap::SetCount(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (bank_ == nullptr) {
-    Napi::Error::New(env, "SampleBank is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "SampleBank is destroyed");
     return env.Undefined();
   }
   size_t count = 0;

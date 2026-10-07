@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors.js';
 import { addon } from './native.js';
 import type {
   BuiltinInstrumentConfig,
@@ -277,7 +278,7 @@ export class Project {
 
   private assertAlive(): void {
     if (this.disposed) {
-      throw new Error('Project has been disposed');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'Project has been disposed');
     }
   }
 

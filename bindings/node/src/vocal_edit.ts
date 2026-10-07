@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors.js';
 import { addon } from './native.js';
 import type {
   VocalAnalysis,
@@ -216,7 +217,11 @@ export class VocalEditSession implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new Error('VocalEditSession has been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'VocalEditSession has been disposed',
+      );
     }
   }
 }
@@ -298,7 +303,11 @@ export class VocalEditDraft implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed || disposedSessions.has(this.owner)) {
-      throw new Error('VocalEditDraft has been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'VocalEditDraft has been disposed',
+      );
     }
   }
 }
@@ -351,7 +360,11 @@ export class VocalRenderSnapshot implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new Error('VocalRenderSnapshot has been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'VocalRenderSnapshot has been disposed',
+      );
     }
   }
 
@@ -405,7 +418,11 @@ export class VocalRenderJob implements Disposable {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new Error('VocalRenderJob has been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'VocalRenderJob has been disposed',
+      );
     }
   }
 }

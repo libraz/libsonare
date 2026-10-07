@@ -276,7 +276,8 @@ Napi::Value MixerWrap::StripById(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return env.Undefined();
   }
   if (info.Length() < 1 || !info[0].IsString()) {

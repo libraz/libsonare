@@ -445,7 +445,7 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::TypeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
+    Napi::RangeError::New(env, "left and right lengths must match").ThrowAsJavaScriptException();
     return env.Undefined();
   }
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.

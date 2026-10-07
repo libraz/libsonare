@@ -118,7 +118,8 @@ Napi::Value SonareWrap::AnalyzeWithProgress(const Napi::CallbackInfo& info) {
 
   if (env.IsExceptionPending() || !parsed.IsObject()) {
     if (!env.IsExceptionPending()) {
-      Napi::Error::New(env, "Failed to parse analysis JSON").ThrowAsJavaScriptException();
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_FORMAT,
+                                           "Failed to parse analysis JSON");
     }
     return env.Undefined();
   }

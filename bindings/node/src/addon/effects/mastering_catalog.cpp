@@ -220,8 +220,8 @@ Napi::Value SonareWrap::CapabilityCatalog(const Napi::CallbackInfo& info) {
   // facade parses it so each language receives the same catalog shape.
   const char* json = sonare_capability_catalog_json();
   if (json == nullptr) {
-    Napi::Error::New(env, "Native capability catalog JSON is unavailable")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_NOT_SUPPORTED,
+                                         "Native capability catalog JSON is unavailable");
     return env.Undefined();
   }
   return Napi::String::New(env, json);

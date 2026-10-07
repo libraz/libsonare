@@ -270,14 +270,16 @@ describe('the addon exception map covers every core ErrorCode', () => {
  * bindings/wasm/tests/errors.test.ts for that half.
  */
 describe('SONARE_NODE_CATCH classifies a raw std::exception through the shared classifier', () => {
-  it('calls error_code_for_std_exception exactly once per catch macro', () => {
+  it('routes each catch macro through one classifying helper that calls the classifier once', () => {
     const text = addonSourceText('sonare_wrap_utils.h');
     const nodeCatch = text.slice(text.indexOf('#define SONARE_NODE_CATCH('));
     const tryCatch = nodeCatch.slice(0, nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
     const voidCatch = nodeCatch.slice(nodeCatch.indexOf('#define SONARE_NODE_CATCH_VOID('));
-    const hits = (s: string) => (s.match(/error_code_for_std_exception/g) ?? []).length;
+    const hits = (s: string) => (s.match(/ThrowStdException/g) ?? []).length;
     expect(hits(tryCatch)).toBe(1);
     expect(hits(voidCatch)).toBe(1);
+    const helper = addonSourceText('sonare_wrap_utils.cpp');
+    expect((helper.match(/error_code_for_std_exception/g) ?? []).length).toBe(1);
   });
 
   it('no longer special-cases std::bad_alloc separately from other std::exception', () => {

@@ -63,7 +63,7 @@ inline bool ReadLinkedPlanes(Napi::Env env, const Napi::Value& value, const char
     if (index == 0) {
       planes->length = length;
     } else if (length != planes->length) {
-      Napi::Error::New(env, std::string(fn_name) + ": every channel must have the same length")
+      Napi::RangeError::New(env, std::string(fn_name) + ": every channel must have the same length")
           .ThrowAsJavaScriptException();
       return false;
     }

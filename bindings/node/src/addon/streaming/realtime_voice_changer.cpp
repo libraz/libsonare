@@ -72,7 +72,7 @@ RealtimeVoiceChangerWrap::RealtimeVoiceChangerWrap(const Napi::CallbackInfo& inf
     changer_ = std::make_unique<sonare::editing::voice_changer::RealtimeVoiceChanger>();
     changer_->set_config(info.Length() >= 1 ? ConfigFromJs(info[0]) : ConfigFromJs(env.Null()));
   } catch (const std::exception& e) {
-    Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
+    sonare_node::ThrowStdException(env, e);
   }
 }
 
@@ -80,7 +80,8 @@ RealtimeVoiceChangerWrap::~RealtimeVoiceChangerWrap() { ReleaseNative(); }
 
 bool RealtimeVoiceChangerWrap::EnsureAlive(Napi::Env env) const {
   if (changer_) return true;
-  Napi::Error::New(env, "RealtimeVoiceChanger has been destroyed").ThrowAsJavaScriptException();
+  sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                       "RealtimeVoiceChanger has been destroyed");
   return false;
 }
 
@@ -185,8 +186,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMono(const Napi::CallbackInfo& info
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeVoiceChanger must be prepared before processing");
     return env.Undefined();
   }
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
@@ -209,8 +210,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessMonoInto(const Napi::CallbackInfo& 
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeVoiceChanger must be prepared before processing");
     return env.Undefined();
   }
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
@@ -238,8 +239,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleaved(const Napi::CallbackInf
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeVoiceChanger must be prepared before processing");
     return env.Undefined();
   }
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
@@ -285,8 +286,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessInterleavedInto(const Napi::Callbac
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeVoiceChanger must be prepared before processing");
     return env.Undefined();
   }
   if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
@@ -341,8 +342,8 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackIn
   Napi::Env env = info.Env();
   if (!EnsureAlive(env)) return env.Undefined();
   if (!prepared_) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared before processing")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeVoiceChanger must be prepared before processing");
     return env.Undefined();
   }
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
@@ -351,8 +352,9 @@ Napi::Value RealtimeVoiceChangerWrap::ProcessPlanarStereo(const Napi::CallbackIn
     return env.Undefined();
   }
   if (channels_ < 2) {
-    Napi::Error::New(env, "RealtimeVoiceChanger must be prepared with at least 2 channels")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_INVALID_STATE,
+        "RealtimeVoiceChanger must be prepared with at least 2 channels");
     return env.Undefined();
   }
   SONARE_NODE_TRY

@@ -190,14 +190,14 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     left_arrays.push_back(left_value.As<Napi::Float32Array>());
     right_arrays.push_back(right_value.As<Napi::Float32Array>());
     if (left_arrays.back().ElementLength() != right_arrays.back().ElementLength()) {
-      Napi::TypeError::New(env, "left and right channel lengths must match")
+      Napi::RangeError::New(env, "left and right channel lengths must match")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
     if (index == 0) {
       length = left_arrays.back().ElementLength();
     } else if (left_arrays.back().ElementLength() != length) {
-      Napi::TypeError::New(env, "all strips must have the same length")
+      Napi::RangeError::New(env, "all strips must have the same length")
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }

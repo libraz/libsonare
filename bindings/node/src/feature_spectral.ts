@@ -222,7 +222,7 @@ export function melDelta(
     throw new RangeError('melDelta: width must be an odd integer of at least 3');
   }
   if (request.features.length !== request.nFeatures * request.nFrames) {
-    throw new TypeError('melDelta: feature matrix length must equal nFeatures * nFrames');
+    throw new RangeError('melDelta: feature matrix length must equal nFeatures * nFrames');
   }
   return addon.melDelta(request.features, request.nFeatures, request.nFrames, request.width ?? 9);
 }

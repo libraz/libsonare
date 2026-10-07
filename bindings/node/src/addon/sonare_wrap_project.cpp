@@ -156,12 +156,13 @@ ProjectWrap::ProjectWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Proj
 
   const uint32_t abi_version = sonare_project_abi_version();
   if (abi_version != kExpectedProjectAbiVersion) {
-    Napi::Error::New(env, "libsonare project ABI mismatch: native binary reports version " +
-                              std::to_string(abi_version) + ", expected " +
-                              std::to_string(kExpectedProjectAbiVersion) +
-                              " (0 = arrangement support not compiled in). The prebuilt addon is "
-                              "incompatible with this binding.")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_ABI_MISMATCH,
+        "libsonare project ABI mismatch: native binary reports version " +
+            std::to_string(abi_version) + ", expected " +
+            std::to_string(kExpectedProjectAbiVersion) +
+            " (0 = arrangement support not compiled in). The prebuilt addon is "
+            "incompatible with this binding.");
     return;
   }
   ThrowIfError(env, sonare_project_create(&project_));
@@ -182,7 +183,7 @@ Napi::Value ProjectWrap::ToJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (project_ == nullptr) {
-    Napi::Error::New(env, "Project is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE, "Project is destroyed");
     return env.Undefined();
   }
   char* json = nullptr;
@@ -204,11 +205,12 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   }
   const uint32_t abi_version = sonare_project_abi_version();
   if (abi_version != kExpectedProjectAbiVersion) {
-    Napi::Error::New(env, "libsonare project ABI mismatch: native binary reports version " +
-                              std::to_string(abi_version) + ", expected " +
-                              std::to_string(kExpectedProjectAbiVersion) +
-                              " (0 = arrangement support not compiled in).")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_ABI_MISMATCH,
+        "libsonare project ABI mismatch: native binary reports version " +
+            std::to_string(abi_version) + ", expected " +
+            std::to_string(kExpectedProjectAbiVersion) +
+            " (0 = arrangement support not compiled in).");
     return env.Undefined();
   }
   std::string json = info[0].As<Napi::String>().Utf8Value();
@@ -218,8 +220,8 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
   if (err != SONARE_OK) {
     std::string detail = diag != nullptr ? diag : "";
     if (diag != nullptr) sonare_free_string(diag);
-    Napi::Error::New(env, detail.empty() ? "failed to deserialize project JSON" : detail)
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, err, detail.empty() ? "failed to deserialize project JSON" : detail);
     return env.Undefined();
   }
   if (diag != nullptr) sonare_free_string(diag);
@@ -237,11 +239,12 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
   }
   const uint32_t abi_version = sonare_project_abi_version();
   if (abi_version != kExpectedProjectAbiVersion) {
-    Napi::Error::New(env, "libsonare project ABI mismatch: native binary reports version " +
-                              std::to_string(abi_version) + ", expected " +
-                              std::to_string(kExpectedProjectAbiVersion) +
-                              " (0 = arrangement support not compiled in).")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_ABI_MISMATCH,
+        "libsonare project ABI mismatch: native binary reports version " +
+            std::to_string(abi_version) + ", expected " +
+            std::to_string(kExpectedProjectAbiVersion) +
+            " (0 = arrangement support not compiled in).");
     return env.Undefined();
   }
   std::string json = info[0].As<Napi::String>().Utf8Value();
@@ -252,8 +255,8 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
   if (diag != nullptr) sonare_free_string(diag);
   if (err != SONARE_OK) {
     sonare_project_destroy(handle);
-    Napi::Error::New(env, diagnostics.empty() ? "failed to deserialize project JSON" : diagnostics)
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, err, diagnostics.empty() ? "failed to deserialize project JSON" : diagnostics);
     return env.Undefined();
   }
 
@@ -618,7 +621,7 @@ Napi::Value ProjectWrap::SetSourceAudio(const Napi::CallbackInfo& info) {
   }
   Napi::Float32Array audio = info[1].As<Napi::Float32Array>();
   if (channels <= 0 || audio.ElementLength() % static_cast<size_t>(channels) != 0) {
-    Napi::TypeError::New(env, "audio length must be a multiple of channels")
+    Napi::RangeError::New(env, "audio length must be a multiple of channels")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

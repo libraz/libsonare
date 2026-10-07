@@ -227,7 +227,7 @@ export class Mixer {
    */
   processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
     if (leftChannels.length !== rightChannels.length) {
-      throw new Error('leftChannels and rightChannels must have the same length.');
+      throw new RangeError('leftChannels and rightChannels must have the same length.');
     }
     return this.native.processStereo(leftChannels, rightChannels);
   }

@@ -118,7 +118,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
       if (IsFloat32Array(right_value)) {
         Napi::Float32Array right = right_value.As<Napi::Float32Array>();
         if (right.ElementLength() != out->lengths.back()) {
-          Napi::TypeError::New(env, "a track's left and right channel lengths must match")
+          Napi::RangeError::New(env, "a track's left and right channel lengths must match")
               .ThrowAsJavaScriptException();
           return false;
         }

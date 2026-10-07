@@ -386,11 +386,12 @@ RealtimeEngineWrap::RealtimeEngineWrap(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   const uint32_t abi_version = sonare_engine_abi_version();
   if (abi_version != kExpectedEngineAbiVersion) {
-    Napi::Error::New(env, "libsonare engine ABI mismatch: native binary reports version " +
-                              std::to_string(abi_version) + ", expected " +
-                              std::to_string(kExpectedEngineAbiVersion) +
-                              ". The prebuilt addon is incompatible with this binding.")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_ABI_MISMATCH,
+        "libsonare engine ABI mismatch: native binary reports version " +
+            std::to_string(abi_version) + ", expected " +
+            std::to_string(kExpectedEngineAbiVersion) +
+            ". The prebuilt addon is incompatible with this binding.");
     return;
   }
   double sample_rate = 48000.0;
@@ -448,7 +449,8 @@ Napi::Value RealtimeEngineWrap::Prepare(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   if (engine_ == nullptr) {
-    Napi::Error::New(env, "RealtimeEngine is destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "RealtimeEngine is destroyed");
     return env.Undefined();
   }
   // Both leading arguments are required: an absent one reads as undefined and is

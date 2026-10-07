@@ -232,7 +232,7 @@ inline ChannelBlock ReadChannels(const Napi::CallbackInfo& info, size_t index) {
         return {};
       }
     } else if (static_cast<int>(channel.ElementLength()) != block.frames) {
-      Napi::TypeError::New(env, "all channels must have the same length")
+      Napi::RangeError::New(env, "all channels must have the same length")
           .ThrowAsJavaScriptException();
       return {};
     }

@@ -480,7 +480,7 @@ export class StreamingEqualizer {
   setPhaseMode(mode: StreamingEqualizerPhaseMode): void {
     const value = typeof mode === 'number' ? mode : EQ_PHASE_MODES[mode.toLowerCase()];
     if (value === undefined) {
-      throw new Error(`unknown EQ phase mode: ${mode}`);
+      throw new RangeError(`unknown EQ phase mode: ${mode}`);
     }
     this.native.setPhaseMode(value);
   }
@@ -614,7 +614,7 @@ export class StreamingEqualizer {
   ): Float32Array {
     const value = EQ_PLACEMENTS[placement.toLowerCase()];
     if (value === undefined) {
-      throw new Error(`unknown EQ band placement: ${placement}`);
+      throw new RangeError(`unknown EQ band placement: ${placement}`);
     }
     return this.native.magnitudeResponse(value, frequenciesHz);
   }

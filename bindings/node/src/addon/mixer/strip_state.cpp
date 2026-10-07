@@ -9,7 +9,8 @@ namespace sonare_node {
 SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi::Value& ref) {
   Napi::Env env = info.Env();
   if (mixer_ == nullptr) {
-    Napi::Error::New(env, "Mixer is not initialized").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
     return nullptr;
   }
   SonareStrip* strip = nullptr;
@@ -17,14 +18,14 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
     const size_t index = static_cast<size_t>(node_narrow_int64(env, ref, "strip"));
     strip = sonare_mixer_strip_at(mixer_, index);
     if (strip == nullptr) {
-      Napi::Error::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
+      Napi::RangeError::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
     }
   } else if (ref.IsString()) {
     const std::string id = ref.As<Napi::String>().Utf8Value();
     strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
     if (strip == nullptr) {
-      Napi::Error::New(env, std::string("mixer strip not found: ") + id)
-          .ThrowAsJavaScriptException();
+      sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                                           std::string("mixer strip not found: ") + id);
     }
   } else {
     Napi::TypeError::New(env, "strip reference must be a number (index) or string (id)")

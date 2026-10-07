@@ -1101,5 +1101,5 @@ function chordChromaMethodValue(method: ChordChromaMethod): number {
   if (method === 'nnls') {
     return 1;
   }
-  throw new Error(`Invalid chord chroma method: ${method}`);
+  throw new RangeError(`Invalid chord chroma method: ${method}`);
 }

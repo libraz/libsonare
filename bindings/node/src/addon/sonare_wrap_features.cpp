@@ -220,7 +220,7 @@ Napi::Value SonareWrap::MelDelta(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 3, "width", 9, &width)) return env.Undefined();
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) != typed.ElementLength()) {
-    Napi::TypeError::New(env, "feature matrix length must equal nFeatures * nFrames")
+    Napi::RangeError::New(env, "feature matrix length must equal nFeatures * nFrames")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }

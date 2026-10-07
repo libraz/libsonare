@@ -160,8 +160,9 @@ PolyphonicAnalysisWrap::PolyphonicAnalysisWrap(const Napi::CallbackInfo& info)
   // by a note index the C ABI validated against the handle, not against it.
   if (written != note_count) {
     Release();
-    Napi::Error::New(env, "PolyphonicAnalysis: the analysis reported a different note count")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(
+        env, SONARE_ERROR_UNKNOWN,
+        "PolyphonicAnalysis: the analysis reported a different note count");
     return;
   }
   spans_.reserve(written);
@@ -182,7 +183,8 @@ void PolyphonicAnalysisWrap::Release() {
 
 bool PolyphonicAnalysisWrap::RequireOpen(Napi::Env env) {
   if (analysis_ == nullptr) {
-    Napi::Error::New(env, "PolyphonicAnalysis has been destroyed").ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "PolyphonicAnalysis has been destroyed");
     return false;
   }
   return true;
@@ -220,8 +222,8 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
   // The capacity is the count this handle reported at construction, so a short
   // write is an inconsistency rather than a buffer the caller sized badly.
   if (written != notes.size()) {
-    Napi::Error::New(env, "notes: the analysis reported a different note count")
-        .ThrowAsJavaScriptException();
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+                                         "notes: the analysis reported a different note count");
     return env.Undefined();
   }
 

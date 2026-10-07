@@ -143,7 +143,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
   auto left = info[0].As<Napi::Float32Array>();
   auto right = info[1].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
-    Napi::Error::New(
+    Napi::RangeError::New(
         env, "masteringRepairDereverbClassicalStereo: left and right must have the same length")
         .ThrowAsJavaScriptException();
     return env.Undefined();
