@@ -145,3 +145,22 @@ TEST_CASE("rate material reads as designed at 22050", "[analysis_rate][helper]")
     CHECK(onsets.count() == 16);
   }
 }
+
+TEST_CASE("analysis_rate_audio resamples only above the analysis rate", "[analysis_rate][helper]") {
+  const std::vector<float> samples(44100, 0.25f);
+
+  const Audio high = analysis_rate_audio(Audio::from_buffer(samples.data(), samples.size(), 44100));
+  CHECK(high.sample_rate() == kAnalysisSampleRate);
+  CHECK(high.size() == 22050);
+
+  const Audio at = analysis_rate_audio(Audio::from_buffer(samples.data(), 22050, 22050));
+  CHECK(at.sample_rate() == 22050);
+  CHECK(at.size() == 22050);
+
+  const Audio low = analysis_rate_audio(Audio::from_buffer(samples.data(), 8000, 16000));
+  CHECK(low.sample_rate() == 16000);
+  CHECK(low.size() == 8000);
+
+  const Audio empty = analysis_rate_audio(Audio());
+  CHECK(empty.empty());
+}

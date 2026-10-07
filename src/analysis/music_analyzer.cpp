@@ -1,8 +1,8 @@
 #include "analysis/music_analyzer.h"
 
+#include "analysis/analysis_rate.h"
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/tempo_curve.h"
-#include "core/resample.h"
 #include "core/spectrum.h"
 #include "effects/hpss.h"
 #include "feature/chroma.h"
@@ -80,14 +80,8 @@ MusicAnalyzer::MusicAnalyzer(const Audio& audio, const MusicAnalyzerConfig& conf
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Downsample to 22050 Hz for spectral analysis if sample rate is higher
-  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
-  if (audio_.sample_rate() > kAnalysisSampleRate) {
-    analysis_audio_ = resample(audio_, kAnalysisSampleRate);
-    analysis_sr_ = kAnalysisSampleRate;
-  } else {
-    analysis_audio_ = audio_;
-    analysis_sr_ = audio_.sample_rate();
-  }
+  analysis_audio_ = analysis_rate_audio(audio_);
+  analysis_sr_ = analysis_audio_.sample_rate();
 }
 
 void MusicAnalyzer::set_progress_callback(ProgressCallback callback) {

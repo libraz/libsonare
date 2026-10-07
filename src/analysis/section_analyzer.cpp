@@ -5,7 +5,7 @@
 #include <complex>
 #include <vector>
 
-#include "core/resample.h"
+#include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/spectral.h"
@@ -65,13 +65,7 @@ ChromaConfig section_chroma_config(const SectionConfig& config) {
   return chroma_config;
 }
 
-Audio section_analysis_audio(const Audio& audio) {
-  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
-  if (!audio.empty() && audio.sample_rate() > kAnalysisSampleRate) {
-    return resample(audio, kAnalysisSampleRate);
-  }
-  return audio;
-}
+Audio section_analysis_audio(const Audio& audio) { return analysis_rate_audio(audio); }
 
 void add_fallback_section(std::vector<Section>& sections, float audio_duration) {
   if (!sections.empty() || audio_duration <= 0.0f) {

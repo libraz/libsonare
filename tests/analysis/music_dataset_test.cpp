@@ -14,12 +14,12 @@
 #include <string>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/beat_analyzer.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/chord_analyzer.h"
 #include "analysis/key_analyzer.h"
 #include "core/audio.h"
-#include "core/resample.h"
 #include "quick.h"
 
 namespace sonare {
@@ -235,13 +235,7 @@ std::vector<ExpectedKey> key_targets(const std::vector<std::string>& row) {
   return targets;
 }
 
-Audio prepare_quick_key_audio(const Audio& audio) {
-  constexpr int kAnalysisSampleRate = 22050;
-  if (audio.sample_rate() > kAnalysisSampleRate) {
-    return resample(audio, kAnalysisSampleRate);
-  }
-  return audio;
-}
+Audio prepare_quick_key_audio(const Audio& audio) { return analysis_rate_audio(audio); }
 
 std::vector<float> bpm_targets(const std::vector<std::string>& row) {
   std::vector<float> targets;

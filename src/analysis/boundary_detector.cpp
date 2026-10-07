@@ -6,7 +6,7 @@
 #include <cmath>
 #include <string>
 
-#include "core/resample.h"
+#include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/chroma.h"
 #include "feature/mel_spectrogram.h"
@@ -41,13 +41,7 @@ void normalize_feature(float* feature, int n) {
 /// input is resampled before any feature is computed. Matches the resampling the
 /// section analysis layered on this detector applies to the same input, so the
 /// two entry points segment on one time grid.
-Audio boundary_analysis_audio(const Audio& audio) {
-  constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
-  if (!audio.empty() && audio.sample_rate() > kAnalysisSampleRate) {
-    return resample(audio, kAnalysisSampleRate);
-  }
-  return audio;
-}
+Audio boundary_analysis_audio(const Audio& audio) { return analysis_rate_audio(audio); }
 
 /// @brief Stored half-bandwidth of the self-similarity band.
 /// @details The checkerboard kernel centred on frame c reads ssm(c + i, c + j)

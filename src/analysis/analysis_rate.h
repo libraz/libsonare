@@ -8,6 +8,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "core/audio.h"
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -15,6 +17,15 @@
 namespace sonare {
 
 inline constexpr int kAnalysisSampleRate = constants::kDefaultSampleRate;
+
+/// @brief Returns @p audio resampled to @ref kAnalysisSampleRate when non-empty and above it, else
+/// unchanged.
+inline Audio analysis_rate_audio(const Audio& audio) {
+  if (!audio.empty() && audio.sample_rate() > kAnalysisSampleRate) {
+    return resample(audio, kAnalysisSampleRate);
+  }
+  return audio;
+}
 
 /// @brief Smallest m >= n with m = 2^a * 3^b * 5^c and m % 32 == 0.
 inline int fast_fft_length(int n) {
