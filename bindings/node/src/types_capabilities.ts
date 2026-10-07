@@ -113,8 +113,11 @@ export interface MasteringInsertSlot {
  * other parameter at its default, so two parameters that constrain each other
  * each report the other's default; a sample-rate-derived bound reflects the
  * un-prepared processor and rises once the insert is prepared at a higher
- * rate; and an exclusive bound is reported as its limit value, so a control
- * requiring `> 0` reports `min` 0 and still rejects 0.
+ * rate; and an exclusive bound is reported as its limit value and flagged by
+ * `minExclusive` / `maxExclusive`, so a control requiring `> 0` reports `min` 0
+ * with `minExclusive` true. A ceiling that follows the processing rate carries
+ * `maxRelativeTo: "nyquist"`: its effective ceiling is the lower of `max` and
+ * the host's Nyquist.
  */
 export interface CapabilityCatalogParameter {
   name: string;
@@ -123,6 +126,12 @@ export interface CapabilityCatalogParameter {
   type: 'boolean' | 'number' | 'enum' | 'string' | 'array';
   min: number | null;
   max: number | null;
+  /** Whether `min` itself is rejected; false when `min` is null. */
+  minExclusive: boolean;
+  /** Whether `max` itself is rejected; false when `max` is null. */
+  maxExclusive: boolean;
+  /** `"nyquist"` when the effective ceiling is the lower of `max` and the host's Nyquist (both exclusive); null otherwise. */
+  maxRelativeTo: 'nyquist' | null;
   default: boolean | number | null;
   unit: string | null;
   choices: MasteringInsertParamChoice[] | null;

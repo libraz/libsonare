@@ -28,6 +28,24 @@ def test_soft_clipper_param_info_publishes_the_aliasing_enum() -> None:
     assert "ceiling" in params
 
 
+def test_param_info_flags_exclusive_bounds_and_nyquist_ceilings() -> None:
+    """A bound the processor rejects itself is flagged; an EQ ceiling follows Nyquist."""
+    import libsonare
+
+    compressor = {
+        param["name"]: param
+        for param in libsonare.mastering_insert_param_info("dynamics.compressor")
+    }
+    hpf = compressor["sidechainHpfHz"]
+    assert hpf["min"] == 0
+    assert isinstance(hpf["minExclusive"], bool)
+    assert hpf["minExclusive"] is True
+    assert hpf["maxExclusive"] is False
+    assert hpf["maxRelativeTo"] is None
+    eq = {param["name"]: param for param in libsonare.mastering_insert_param_info("eq.parametric")}
+    assert eq["band0.frequencyHz"]["maxRelativeTo"] == "nyquist"
+
+
 def test_insert_timing_reports_positive_latency_for_oversampling() -> None:
     """Selecting the 4x-oversampling choice reports a non-zero latency."""
     import libsonare

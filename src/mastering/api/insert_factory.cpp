@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -1426,8 +1427,9 @@ namespace {
 // |value| <= kBoundProbeLimit, and anything beyond reports null, which reads the
 // same as "no validation". A boundary is bisected and rounded, so an EXCLUSIVE
 // bound publishes its limit value — a `> 0` validator reports `min: 0` and still
-// rejects 0. Parameters the config builder never reads, and booleans, are not
-// probed at all.
+// rejects 0 — which is why each published bound is probed once more and
+// flagged exclusive when it is itself rejected. Parameters the config builder
+// never reads, and booleans, are not probed at all.
 // ---------------------------------------------------------------------------
 
 constexpr double kBoundProbeLimit = 1.0e6;
@@ -1462,6 +1464,9 @@ ParamMap probe_map(const std::string& name, const std::string& key, double value
   return probe;
 }
 
+// Whether a value is accepted, as measured through one construction path.
+using AcceptFn = std::function<bool(double)>;
+
 // Whether construction accepts @p value for @p key with every other parameter
 // at its default. An unknown name yields no processor and so accepts nothing,
 // which keeps a caller from measuring bounds against a processor that does not
@@ -1476,29 +1481,34 @@ bool insert_accepts(const std::string& name, const std::string& key, double valu
 
 // insert_accepts, then prepared: a processor may refuse a selection only once
 // it knows its rate (a linear-phase EQ has no all-pass response to realize).
-bool insert_accepts_prepared(const std::string& name, const std::string& key, double value) {
+bool insert_accepts_at_rate(const std::string& name, const std::string& key, double value,
+                            double sample_rate) {
   try {
     auto processor = build_insert(name, probe_map(name, key, value));
     if (processor == nullptr) return false;
-    processor->prepare(kInsertProbeSampleRate, kInsertProbeBlockSize);
+    processor->prepare(sample_rate, kInsertProbeBlockSize);
     return true;
   } catch (...) {
     return false;
   }
 }
 
+bool insert_accepts_prepared(const std::string& name, const std::string& key, double value) {
+  return insert_accepts_at_rate(name, key, value, kInsertProbeSampleRate);
+}
+
 // Narrows a bracket whose ends disagree down to the extreme value construction
 // still accepts. Integer-valued parameters bisect over integers: the flat
 // surface rounds the value before it reaches the field, so a real-valued
 // midpoint would report a bound halfway between two accepted settings.
-double bisect_accepted_boundary(const std::string& name, const std::string& key, double rejected,
-                                double accepted, bool integer_valued) {
+double bisect_accepted_boundary(const AcceptFn& accepts, double rejected, double accepted,
+                                bool integer_valued) {
   if (integer_valued) {
     long long accepted_step = std::llround(accepted);
     long long rejected_step = std::llround(rejected);
     while (std::llabs(rejected_step - accepted_step) > 1) {
       const long long middle = accepted_step + (rejected_step - accepted_step) / 2;
-      if (insert_accepts(name, key, static_cast<double>(middle))) {
+      if (accepts(static_cast<double>(middle))) {
         accepted_step = middle;
       } else {
         rejected_step = middle;
@@ -1512,7 +1522,7 @@ double bisect_accepted_boundary(const std::string& name, const std::string& key,
     if (std::fabs(accepted - rejected) <= tolerance) break;
     const double middle = 0.5 * (rejected + accepted);
     if (middle == rejected || middle == accepted) break;
-    if (insert_accepts(name, key, middle)) {
+    if (accepts(middle)) {
       accepted = middle;
     } else {
       rejected = middle;
@@ -1521,28 +1531,39 @@ double bisect_accepted_boundary(const std::string& name, const std::string& key,
   return accepted;
 }
 
-double round_to_significant_digits(double value, int digits) {
-  if (!std::isfinite(value) || value == 0.0) return value;
-  const double exponent = std::ceil(std::log10(std::fabs(value)));
-  const double scale = std::pow(10.0, static_cast<double>(digits) - exponent);
-  if (!std::isfinite(scale) || scale == 0.0) return value;
-  return std::round(value * scale) / scale;
-}
-
-double settle_measured_bound(double value) {
-  const double rounded = round_to_significant_digits(value, kBoundSignificantDigits);
-  return std::fabs(rounded) < kBoundZeroSnap ? 0.0 : rounded;
+// Rounds the accepted end of a bisected bracket toward the accepted side, so a
+// published bound is never beyond what construction accepts. The bisection
+// residue and the config fields' float resolution are added back first: an
+// accepted value a hair inside a limit that is itself a 6-digit number must
+// publish that number, not the step below it.
+double settle_measured_bound(double accepted, bool is_max) {
+  if (std::fabs(accepted) < kBoundZeroSnap || !std::isfinite(accepted)) return 0.0;
+  const double slack =
+      std::max(kBoundAbsoluteTolerance,
+               std::max(kBoundRelativeTolerance,
+                        static_cast<double>(std::numeric_limits<float>::epsilon())) *
+                   std::fabs(accepted));
+  const double exponent = std::ceil(std::log10(std::fabs(accepted)));
+  const double scale = std::pow(10.0, static_cast<double>(kBoundSignificantDigits) - exponent);
+  if (!std::isfinite(scale) || scale == 0.0) return accepted;
+  const double settled = is_max ? std::floor((accepted + slack) * scale) / scale
+                                : std::ceil((accepted - slack) * scale) / scale;
+  return std::fabs(settled) < kBoundZeroSnap ? 0.0 : settled;
 }
 
 struct MeasuredBounds {
   bool has_min = false;
   double min = 0.0;
+  bool min_exclusive = false;
   bool has_max = false;
   double max = 0.0;
+  bool max_exclusive = false;
+  bool max_follows_nyquist = false;
 };
 
 MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
                               bool integer_valued) {
+  const AcceptFn accepts = [&](double value) { return insert_accepts(name, key, value); };
   const std::vector<double>& points = bound_probe_points();
   // Each side stops at the first probe point it accepts, so an unconstrained
   // parameter — the majority — costs exactly two builds: the window's two ends
@@ -1551,7 +1572,7 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   // the extreme probe alone decides whether a bound is reported at all.
   size_t lowest_accepted = points.size();
   for (size_t index = 0; index < points.size(); ++index) {
-    if (insert_accepts(name, key, points[index])) {
+    if (accepts(points[index])) {
       lowest_accepted = index;
       break;
     }
@@ -1562,7 +1583,7 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   if (lowest_accepted == points.size()) return {};
   size_t highest_accepted = lowest_accepted;
   for (size_t index = points.size(); index > lowest_accepted; --index) {
-    if (insert_accepts(name, key, points[index - 1])) {
+    if (accepts(points[index - 1])) {
       highest_accepted = index - 1;
       break;
     }
@@ -1571,15 +1592,45 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
   MeasuredBounds bounds;
   if (lowest_accepted > 0) {
     bounds.has_min = true;
-    bounds.min = settle_measured_bound(bisect_accepted_boundary(
-        name, key, points[lowest_accepted - 1], points[lowest_accepted], integer_valued));
+    bounds.min =
+        settle_measured_bound(bisect_accepted_boundary(accepts, points[lowest_accepted - 1],
+                                                       points[lowest_accepted], integer_valued),
+                              false);
+    bounds.min_exclusive = !accepts(bounds.min);
   }
   if (highest_accepted + 1 < points.size()) {
     bounds.has_max = true;
-    bounds.max = settle_measured_bound(bisect_accepted_boundary(
-        name, key, points[highest_accepted + 1], points[highest_accepted], integer_valued));
+    bounds.max =
+        settle_measured_bound(bisect_accepted_boundary(accepts, points[highest_accepted + 1],
+                                                       points[highest_accepted], integer_valued),
+                              true);
+    bounds.max_exclusive = !accepts(bounds.max);
   }
   return bounds;
+}
+
+// Second rate the ceiling is measured at, to tell a ceiling that follows the
+// processing rate's Nyquist from one that does not.
+constexpr double kNyquistProbeSampleRate = 44100.0;
+constexpr double kNyquistMatchTolerance = 1.0e-4;
+
+// Whether the ceiling of @p key rises and falls with half the processing rate:
+// prepared at a second rate, the largest accepted value lands on that rate's
+// Nyquist. Only an exclusive ceiling can follow it, and the measured `max` is
+// kept as the number at the probe rate.
+bool max_follows_nyquist(const std::string& name, const std::string& key,
+                         const MeasuredBounds& bounds) {
+  if (!bounds.has_max || !bounds.max_exclusive) return false;
+  const AcceptFn accepts = [&](double value) {
+    return insert_accepts_at_rate(name, key, value, kNyquistProbeSampleRate);
+  };
+  const double inside = bounds.max * (1.0 - 1.0e-3);
+  if (accepts(inside)) return false;
+  const double accepted = bounds.has_min ? 0.5 * (bounds.min + bounds.max) : 0.5 * bounds.max;
+  if (!accepts(accepted)) return false;
+  const double nyquist = 0.5 * kNyquistProbeSampleRate;
+  const double ceiling = bisect_accepted_boundary(accepts, inside, accepted, false);
+  return std::fabs(ceiling - nyquist) <= kNyquistMatchTolerance * nyquist;
 }
 
 // The declared values of an enum key that construction accepts.
@@ -1712,6 +1763,7 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   bool has_choices = false;
   std::vector<detail::EnumChoice> choices;
   MeasuredBounds bounds;
+  const bool unit_is_hz = catalog_unit(name, key) == "\"Hz\"";
   if (construction_reads_key && measurable && !coupled_gs_type_selector) {
     if (is_enum) {
       choices = measure_enum_choices(name, key, declared->second);
@@ -1721,8 +1773,12 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
       if (param_kind == ParamKind::Integer && bounds.has_min) {
         bool open_with_holes = false;
         has_choices = measure_integer_choices(name, key, bounds.min, &choices, &open_with_holes);
-        if (open_with_holes) bounds.has_max = false;
+        if (open_with_holes) {
+          bounds.has_max = false;
+          bounds.max_exclusive = false;
+        }
       }
+      if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
     }
   }
   if (has_choices) bounds = MeasuredBounds{};
@@ -1739,6 +1795,12 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   out += bounds.has_min ? format_catalog_number(bounds.min) : "null";
   out += ",\"max\":";
   out += bounds.has_max ? format_catalog_number(bounds.max) : "null";
+  out += ",\"minExclusive\":";
+  out += bounds.min_exclusive ? "true" : "false";
+  out += ",\"maxExclusive\":";
+  out += bounds.max_exclusive ? "true" : "false";
+  out += ",\"maxRelativeTo\":";
+  out += bounds.max_follows_nyquist ? "\"nyquist\"" : "null";
 
   out += ",\"default\":";
   const auto fallback = defaults.find(key);
@@ -1860,6 +1922,9 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].type",
       "[].min",
       "[].max",
+      "[].minExclusive",
+      "[].maxExclusive",
+      "[].maxRelativeTo",
       "[].default",
       "[].unit",
       "[].choices",

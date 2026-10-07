@@ -32,6 +32,20 @@ describe('insert param validation (WASM)', () => {
     expect(masteringInsertParamNames('not.a.real.processor')).toEqual([]);
   });
 
+  it('flags a bound the processor itself rejects as exclusive', () => {
+    const hpf = masteringInsertParamInfo('dynamics.compressor').find(
+      (d) => d.name === 'sidechainHpfHz',
+    );
+    expect(hpf?.min).toBe(0);
+    expect(typeof hpf?.minExclusive).toBe('boolean');
+    expect(hpf?.minExclusive).toBe(true);
+    expect(hpf?.maxRelativeTo).toBeNull();
+    const frequency = masteringInsertParamInfo('eq.parametric').find(
+      (d) => d.name === 'band0.frequencyHz',
+    );
+    expect(frequency?.maxRelativeTo).toBe('nyquist');
+  });
+
   it('reports realtime-automatable insert param descriptors', () => {
     const info = masteringInsertParamInfo('effects.reverb.fdn');
     if (info.length === 0) {

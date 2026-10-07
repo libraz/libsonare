@@ -94,7 +94,10 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         descriptor order, with the integer param_id accepted by the engine's
 ///         realtime insert-parameter setter; then, sorted by name, every other
 ///         key construction reads, with a null id. Each carries its declared
-///         type, measured bounds or choices, default, unit and the slot it
+///         type, measured bounds (with `minExclusive` / `maxExclusive` saying
+///         whether the limit itself is rejected, and `maxRelativeTo`
+///         `"nyquist"` when the effective ceiling is the lower of `max` and the
+///         host's Nyquist frequency) or choices, default, unit and the slot it
 ///         belongs to (see insert_slot_info_json()), or null. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be

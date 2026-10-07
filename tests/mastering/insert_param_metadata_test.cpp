@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <memory>
 #include <set>
 #include <string>
@@ -418,6 +419,69 @@ TEST_CASE("a published bound brackets the default and rejects the value beyond i
   }
 }
 
+TEST_CASE("a bound builds exactly when it is not flagged exclusive", "[mastering][catalog]") {
+  for (const std::string& name : insert_factory_names()) {
+    for (const json::Value& parameter : param_info(name)) {
+      const std::string key = field(parameter, "name").as_string();
+      INFO(name << " parameter " << key);
+      for (const char* side : {"min", "max"}) {
+        const json::Value& bound = field(parameter, side);
+        const bool exclusive =
+            field(parameter, std::string(std::string(side) + "Exclusive").c_str()).as_bool();
+        if (bound.is_null()) {
+          REQUIRE_FALSE(exclusive);
+          continue;
+        }
+        INFO(side << " " << bound.as_number());
+        REQUIRE(builds_with(name, key, bound) == !exclusive);
+        if (exclusive) {
+          // A value strictly inside the limit builds, so the flag is the whole
+          // story and the interval beyond the limit is not itself rejected.
+          const double inside =
+              bound.as_number() + (std::string(side) == "min" ? 1.0 : -1.0) *
+                                      std::max(1.0e-4 * std::fabs(bound.as_number()), 1.0e-6);
+          REQUIRE(builds_with(name, key, json::Value(inside)));
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("an EQ band ceiling follows the processing rate's Nyquist", "[mastering][catalog]") {
+  const json::Array parametric = param_info("eq.parametric");
+  const json::Value* frequency = find_param(parametric, "band0.frequencyHz");
+  REQUIRE(frequency != nullptr);
+  REQUIRE(field(*frequency, "maxRelativeTo").as_string() == "nyquist");
+  REQUIRE(field(*frequency, "maxExclusive").as_bool());
+  REQUIRE(field(*frequency, "max").as_number() == 24000.0);
+
+  // The ceiling is the lower of `max` and the host's Nyquist: a band the probe
+  // rate accepts is refused once the insert is prepared lower.
+  const std::string below = R"({"band0.frequencyHz":12000})";
+  const std::string above = R"({"band0.frequencyHz":20000})";
+  auto prepared = make_insert("eq.parametric", above);
+  REQUIRE(prepared != nullptr);
+  REQUIRE_NOTHROW(prepared->prepare(48000.0, sonare::mastering::api::kInsertProbeBlockSize));
+  auto narrow = make_insert("eq.parametric", above);
+  REQUIRE_THROWS(narrow->prepare(22050.0, sonare::mastering::api::kInsertProbeBlockSize));
+  auto fits = make_insert("eq.parametric", below);
+  REQUIRE_NOTHROW(fits->prepare(32000.0, sonare::mastering::api::kInsertProbeBlockSize));
+
+  // No other kind of key follows the rate.
+  for (const std::string& name : insert_factory_names()) {
+    for (const json::Value& parameter : param_info(name)) {
+      if (field(parameter, "maxRelativeTo").is_null()) continue;
+      INFO(name << " " << field(parameter, "name").as_string());
+      REQUIRE(field(parameter, "maxRelativeTo").as_string() == "nyquist");
+      REQUIRE(field(parameter, "unit").as_string() == "Hz");
+      REQUIRE(field(parameter, "maxExclusive").as_bool());
+    }
+  }
+  const json::Array compressor = param_info("dynamics.compressor");
+  REQUIRE(field(*find_param(compressor, "ratio"), "maxRelativeTo").is_null());
+  REQUIRE(field(*find_param(compressor, "makeupGainDb"), "maxRelativeTo").is_null());
+}
+
 TEST_CASE("published defaults come from the config struct's own initializers",
           "[mastering][catalog]") {
   const sonare::mastering::dynamics::CompressorConfig compressor;
@@ -461,9 +525,14 @@ TEST_CASE("measured bounds reproduce the validation they were measured through",
   REQUIRE(makeup_max > 770.0);
   REQUIRE(makeup_max < 771.0);
   // sidechainHpfHz is validated as strictly positive, and an exclusive bound is
-  // published as the limit it excludes.
+  // published as the limit it excludes, flagged as such.
   REQUIRE(find_param(compressor, "sidechainHpfHz")->find("min")->as_number() == 0.0);
+  REQUIRE(find_param(compressor, "sidechainHpfHz")->find("minExclusive")->as_bool());
   REQUIRE_FALSE(builds_with("dynamics.compressor", "sidechainHpfHz", json::Value(0.0)));
+  // An inclusive bound carries a false flag, and an absent bound never an exclusive one.
+  REQUIRE_FALSE(find_param(compressor, "attackMs")->find("minExclusive")->as_bool());
+  REQUIRE_FALSE(find_param(compressor, "thresholdDb")->find("minExclusive")->as_bool());
+  REQUIRE_FALSE(find_param(compressor, "thresholdDb")->find("maxExclusive")->as_bool());
 
   // The two-sided ranges the imager checks explicitly.
   const json::Array imager = param_info("stereo.imager");

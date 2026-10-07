@@ -478,10 +478,9 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @return A JSON array string
-///   `[{"name","id","rtSafe","type","min","max","default","unit","choices","slot"}, ...]`
-///   (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a
-///   thread-local valid only until the next API call on the same thread; the
-///   caller must NOT free it.
+///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","choices","slot"},
+///   ...]` (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a thread-local
+///   valid only until the next API call on the same thread; the caller must NOT free it.
 /// @details Entries come in two runs. The first lists the processor's realtime
 ///   automation targets in id order: `id` is the integer used by @ref
 ///   sonare_engine_set_track_strip_insert_param_by_name (and the master variant),
@@ -522,8 +521,16 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///       `curve` is asymmetric);
 ///     - a sample-rate-derived bound reflects the un-prepared processor and
 ///       rises once the insert is prepared at a higher rate;
-///     - an exclusive bound is reported as its limit value, so a control
-///       requiring `> 0` reports `min` 0 and still rejects 0;
+///     - an exclusive bound is reported as its limit value and flagged: a
+///       control requiring `> 0` reports `min` 0 with `minExclusive` true, and
+///       the limit itself is rejected exactly when its flag is true (both flags
+///       are false for a null bound). A bound is rounded to 6 significant
+///       digits toward the accepted side, so a published inclusive bound builds;
+///     - `maxRelativeTo` is `"nyquist"` for a ceiling that follows the processing
+///       rate (an EQ band frequency), and null for every other key. `max` is
+///       then the number measured at the catalog's probe rate, and the
+///       effective ceiling is the LOWER of `max` and the host's Nyquist
+///       frequency (half the rate the insert is prepared at), both exclusive;
 ///     - a whole-number parameter whose accepted values have holes and run
 ///       past the measured window (a kernel size that must be odd) reports its
 ///       `min` and a null `max`, and not every value above `min` builds;

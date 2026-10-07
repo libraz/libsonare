@@ -21,6 +21,21 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(ceiling).toBeDefined();
   });
 
+  it('flags a bound the processor itself rejects as exclusive', () => {
+    const hpf = masteringInsertParamInfo('dynamics.compressor').find(
+      (param) => param.name === 'sidechainHpfHz',
+    );
+    expect(hpf?.min).toBe(0);
+    expect(typeof hpf?.minExclusive).toBe('boolean');
+    expect(hpf?.minExclusive).toBe(true);
+    expect(hpf?.maxExclusive).toBe(false);
+    expect(hpf?.maxRelativeTo).toBeNull();
+    const frequency = masteringInsertParamInfo('eq.parametric').find(
+      (param) => param.name === 'band0.frequencyHz',
+    );
+    expect(frequency?.maxRelativeTo).toBe('nyquist');
+  });
+
   it('reports positive latency once softClipper is built with 4x oversampling', () => {
     const timing = masteringInsertTiming('saturation.softClipper', { aliasing: 3 }, 48000);
     expect(timing.latencySamples).toBeGreaterThan(0);

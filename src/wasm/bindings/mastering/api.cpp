@@ -48,7 +48,8 @@ val js_mastering_insert_param_names(std::string name) {
 
 // Parameter descriptors for every key an insert processor's construction
 // reads, as a JSON array string [{"name","id","rtSafe","type","min","max",
-// "default","unit","choices"}, ...]. The TS facade parses it; "[]" for an
+// "minExclusive","maxExclusive","maxRelativeTo","default","unit","choices",
+// "slot"}, ...]. The TS facade parses it; "[]" for an
 // unknown name. Entries come in two runs: realtime automation targets (integer
 // "id") in id order, then every other construction key sorted by name with
 // "id" null and "rtSafe" false. See sonare_mastering_insert_param_info (the C

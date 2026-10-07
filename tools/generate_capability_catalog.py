@@ -113,6 +113,16 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     for bound in ("min", "max"):
         if not optional_number(parameter[bound]):
             raise ValueError(f"{path}.{bound} must be a number or null")
+    for bound in ("min", "max"):
+        exclusive = parameter[f"{bound}Exclusive"]
+        if not isinstance(exclusive, bool):
+            raise ValueError(f"{path}.{bound}Exclusive must be a boolean")
+        if exclusive and parameter[bound] is None:
+            raise ValueError(f"{path}.{bound}Exclusive is set without a {bound}")
+    if parameter["maxRelativeTo"] not in {None, "nyquist"}:
+        raise ValueError(f"{path}.maxRelativeTo must be null or 'nyquist'")
+    if parameter["maxRelativeTo"] is not None and not parameter["maxExclusive"]:
+        raise ValueError(f"{path} has a rate-relative max and so must be exclusive")
     if (
         parameter["min"] is not None
         and parameter["max"] is not None
@@ -257,6 +267,9 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                     "type",
                     "min",
                     "max",
+                    "minExclusive",
+                    "maxExclusive",
+                    "maxRelativeTo",
                     "default",
                     "unit",
                     "choices",

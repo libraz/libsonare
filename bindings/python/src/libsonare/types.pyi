@@ -142,8 +142,12 @@ class MasteringInsertParamInfo(TypedDict):
     every other parameter at its default, so two parameters that constrain
     each other each report the other's default; a sample-rate-derived bound
     reflects the un-prepared processor and rises once the insert is prepared
-    at a higher rate; and an exclusive bound is reported as its limit value,
-    so a control requiring ``> 0`` reports ``min`` 0 and still rejects 0.
+    at a higher rate; and an exclusive bound is reported as its limit value
+    and flagged by ``minExclusive`` / ``maxExclusive`` (false when the bound is
+    ``None``), so a control requiring ``> 0`` reports ``min`` 0 with
+    ``minExclusive`` true. ``maxRelativeTo`` is ``"nyquist"`` when the ceiling
+    follows the processing rate: the effective ceiling is then the lower of
+    ``max`` and the host's Nyquist frequency, both exclusive.
     """
 
     name: str
@@ -152,6 +156,9 @@ class MasteringInsertParamInfo(TypedDict):
     type: Literal["boolean", "number", "enum", "string", "array"]
     min: float | None
     max: float | None
+    minExclusive: bool
+    maxExclusive: bool
+    maxRelativeTo: Literal["nyquist"] | None
     default: float | bool | None
     unit: str | None
     choices: list[MasteringInsertParamChoice] | None

@@ -237,6 +237,16 @@ export interface MasteringInsertParamInfo {
   min: number | null;
   /** Largest value construction accepts, or null when the catalog states no limit or `choices` is non-null. */
   max: number | null;
+  /** Whether {@link min} itself is rejected (a `> min` constraint); false when `min` is null. */
+  minExclusive: boolean;
+  /** Whether {@link max} itself is rejected (a `< max` constraint); false when `max` is null. */
+  maxExclusive: boolean;
+  /**
+   * `"nyquist"` when the ceiling follows the processing rate: the effective
+   * ceiling is then the lower of `max` (measured at the catalog's probe rate)
+   * and the host's Nyquist frequency, both exclusive. Null otherwise.
+   */
+  maxRelativeTo: 'nyquist' | null;
   /**
    * Value the processor uses when the key is absent — the config struct's own
    * field initializer, an enum as its number. Null for a param id with no

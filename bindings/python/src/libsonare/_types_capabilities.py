@@ -102,6 +102,12 @@ class MasteringInsertParamInfo(TypedDict):
     Entries come in two runs: first the processor's realtime automation
     targets in id order, then -- sorted by name -- the keys construction reads
     that are not automation targets, with ``id`` null and ``rtSafe`` false.
+
+    ``minExclusive`` / ``maxExclusive`` say whether the published bound itself
+    is rejected (false when the bound is ``None``). ``maxRelativeTo`` is
+    ``"nyquist"`` when the ceiling follows the processing rate: the effective
+    ceiling is then the lower of ``max`` and the host's Nyquist frequency, both
+    exclusive.
     """
 
     name: str
@@ -110,6 +116,9 @@ class MasteringInsertParamInfo(TypedDict):
     type: Literal["boolean", "number", "enum", "string", "array"]
     min: float | None
     max: float | None
+    minExclusive: bool
+    maxExclusive: bool
+    maxRelativeTo: Literal["nyquist"] | None
     default: float | bool | None
     unit: str | None
     choices: list[MasteringInsertParamChoice] | None
