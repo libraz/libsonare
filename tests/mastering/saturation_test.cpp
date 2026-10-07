@@ -61,21 +61,18 @@ struct LegacyJaState {
   float H_prev = 0.0f;
 };
 
+// Closed forms in double, which keep float accuracy down to |x| ~ 1e-6.
 float legacy_langevin(float x) {
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    return x * (1.0f / 3.0f - x * x / 45.0f);
-  }
-  return 1.0f / std::tanh(x) - 1.0f / x;
+  const double xd = x;
+  if (std::abs(xd) < 1e-6) return static_cast<float>(xd / 3.0);
+  return static_cast<float>(1.0 / std::tanh(xd) - 1.0 / xd);
 }
 
 float legacy_langevin_derivative(float x) {
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    return 1.0f / 3.0f - x * x / 15.0f;
-  }
-  const float sinh_x = std::sinh(x);
-  return 1.0f / (x * x) - 1.0f / (sinh_x * sinh_x);
+  const double xd = x;
+  if (std::abs(xd) < 1e-6) return 1.0f / 3.0f;
+  const double sinh_x = std::sinh(xd);
+  return static_cast<float>(1.0 / (xd * xd) - 1.0 / (sinh_x * sinh_x));
 }
 
 /// Transcription of the DAFx-19 loop equation, frozen here so a later edit to

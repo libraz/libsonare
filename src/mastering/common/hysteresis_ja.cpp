@@ -139,21 +139,28 @@ void JilesAtherton::reset(JilesAthertonState& state) noexcept {
   state.previous_field = 0.0f;
 }
 
+// Below this |x| the closed forms cancel terms of order 1/x and 1/x^2, so the
+// truncated series takes over; its next omitted term is below 1e-13 relative here.
+constexpr double kLangevinSeriesLimit = 0.1;
+
 float JilesAtherton::langevin(float x) {
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    return x * (1.0f / 3.0f - x * x / 45.0f);
+  const double xd = x;
+  if (std::abs(xd) < kLangevinSeriesLimit) {
+    const double x2 = xd * xd;
+    return static_cast<float>(xd *
+                              (1.0 / 3.0 + x2 * (-1.0 / 45.0 + x2 * (2.0 / 945.0 - x2 / 4725.0))));
   }
-  return 1.0f / std::tanh(x) - 1.0f / x;
+  return static_cast<float>(1.0 / std::tanh(xd) - 1.0 / xd);
 }
 
 float JilesAtherton::langevin_derivative(float x) {
-  const float ax = std::abs(x);
-  if (ax < 1e-4f) {
-    return 1.0f / 3.0f - x * x / 15.0f;
+  const double xd = x;
+  if (std::abs(xd) < kLangevinSeriesLimit) {
+    const double x2 = xd * xd;
+    return static_cast<float>(1.0 / 3.0 + x2 * (-1.0 / 15.0 + x2 * (2.0 / 189.0 - x2 / 675.0)));
   }
-  const float sinh_x = std::sinh(x);
-  return 1.0f / (x * x) - 1.0f / (sinh_x * sinh_x);
+  const double sinh_x = std::sinh(xd);
+  return static_cast<float>(1.0 / (xd * xd) - 1.0 / (sinh_x * sinh_x));
 }
 
 void JilesAtherton::validate_config(const JilesAthertonConfig& config) {

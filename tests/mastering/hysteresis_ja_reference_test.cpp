@@ -22,12 +22,14 @@
 #include <vector>
 
 #include "mastering/common/hysteresis_ja.h"
+#include "mastering/saturation/transformer.h"
 #include "util/constants.h"
 
 namespace common = sonare::mastering::common;
 
 namespace {
 
+using sonare::constants::kPiD;
 using sonare::constants::kTwoPiD;
 
 constexpr double kMs = 1.0;
@@ -39,6 +41,35 @@ constexpr double kCoercivity = 0.11;
 double langevin_reference(double x) {
   if (std::abs(x) < 1e-6) return x / 3.0;
   return 1.0 / std::tanh(x) - 1.0 / x;
+}
+
+/// Partial-fraction expansions coth(x) - 1/x = sum 2x / (x^2 + k^2 pi^2) and its
+/// derivative, summed in long double with an Euler-Maclaurin tail. Free of the
+/// cancellation the closed forms suffer at small x, and shares no code with the
+/// engine's series.
+long double langevin_partial_fraction(long double x) {
+  constexpr int kTerms = 20000;
+  long double sum = 0.0L;
+  for (int k = kTerms; k >= 1; --k) {
+    const long double kpi = static_cast<long double>(k) * kPiD;
+    sum += 2.0L * x / (x * x + kpi * kpi);
+  }
+  const long double n = kTerms;
+  const long double tail = 1.0L / n - 1.0L / (2.0L * n * n) + 1.0L / (6.0L * n * n * n);
+  return sum + 2.0L * x * tail / (kPiD * kPiD);
+}
+
+long double langevin_derivative_partial_fraction(long double x) {
+  constexpr int kTerms = 20000;
+  long double sum = 0.0L;
+  for (int k = kTerms; k >= 1; --k) {
+    const long double kpi2 = static_cast<long double>(k) * k * kPiD * kPiD;
+    const long double denom = x * x + kpi2;
+    sum += 2.0L * (kpi2 - x * x) / (denom * denom);
+  }
+  const long double n = kTerms;
+  const long double tail = 1.0L / n - 1.0L / (2.0L * n * n) + 1.0L / (6.0L * n * n * n);
+  return sum + 2.0L * tail / (kPiD * kPiD);
 }
 
 /// Anhysteretic magnetization for a held field: the solution of
@@ -254,6 +285,82 @@ TEST_CASE("Jiles-Atherton magnetization stays within saturation", "[mastering][s
       }
       CAPTURE(peak);
       REQUIRE(peak <= kMs);
+    }
+  }
+}
+
+// The closed forms lose every significant bit to cancellation near the origin, so
+// the evaluator has to hand over to a series without a step at the hand-over.
+TEST_CASE("Jiles-Atherton Langevin evaluators hold float accuracy at small arguments",
+          "[mastering][saturation]") {
+  for (double magnitude : {9e-5, 1e-4, 1.1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 0.0999, 0.1,
+                           0.1001, 0.3, 1.0, 3.0}) {
+    for (double sign : {1.0, -1.0}) {
+      const float x = static_cast<float>(sign * magnitude);
+      CAPTURE(x);
+      const long double expected = langevin_partial_fraction(x);
+      const long double expected_slope = langevin_derivative_partial_fraction(x);
+      const double actual = common::JilesAtherton::langevin(x);
+      const double actual_slope = common::JilesAtherton::langevin_derivative(x);
+      CAPTURE(actual, static_cast<double>(expected), actual_slope,
+              static_cast<double>(expected_slope));
+      REQUIRE(std::abs(actual - static_cast<double>(expected)) <=
+              4e-7 * std::abs(static_cast<double>(expected)));
+      REQUIRE(std::abs(actual_slope - static_cast<double>(expected_slope)) <=
+              4e-7 * std::abs(static_cast<double>(expected_slope)));
+    }
+  }
+}
+
+// With reversibility 1 and no mean field a held field lands on Ms * L(H / a).
+TEST_CASE("Fully reversible Jiles-Atherton tracks the Langevin curve at small fields",
+          "[mastering][saturation]") {
+  for (double x : {9e-5, 1.1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2}) {
+    for (double sign : {1.0, -1.0}) {
+      common::JilesAtherton engine(reversible_config(0.0));
+      common::JilesAthertonState state;
+      const float field = static_cast<float>(sign * x * kShape);
+      const double actual = engine.process(state, field);
+      const double expected =
+          kMs * static_cast<double>(langevin_partial_fraction(static_cast<double>(field) / kShape));
+      CAPTURE(field, actual, expected);
+      REQUIRE(std::abs(actual - expected) <= 1e-5 * std::abs(expected));
+    }
+  }
+}
+
+// A quiet signal sits in the linear region of the core, so the Transformer's
+// gain must not depend on which side of an evaluator branch the field falls.
+TEST_CASE("Transformer small-signal gain is level independent", "[mastering][saturation]") {
+  using sonare::mastering::saturation::Transformer;
+  using sonare::mastering::saturation::TransformerConfig;
+  for (double rate : {48000.0, 192000.0}) {
+    const int length = static_cast<int>(rate);
+    const int skip = length / 4;
+    auto gain_at = [&](double amplitude) {
+      Transformer transformer(TransformerConfig{0.0f, 0.0f, 1.0f});
+      transformer.prepare(rate, length);
+      std::vector<float> buffer(static_cast<size_t>(length));
+      for (int i = 0; i < length; ++i) {
+        buffer[static_cast<size_t>(i)] =
+            static_cast<float>(amplitude * std::sin(kTwoPiD * 1000.0 * i / rate));
+      }
+      std::vector<float> input = buffer;
+      float* channels[] = {buffer.data()};
+      transformer.process(channels, 1, length);
+      double out = 0.0;
+      double in = 0.0;
+      for (int i = skip; i < length; ++i) {
+        out += static_cast<double>(buffer[static_cast<size_t>(i)]) * buffer[static_cast<size_t>(i)];
+        in += static_cast<double>(input[static_cast<size_t>(i)]) * input[static_cast<size_t>(i)];
+      }
+      return std::sqrt(out / in);
+    };
+    const double reference = gain_at(1e-5);
+    for (double amplitude : {1e-4, 1e-3}) {
+      const double gain = gain_at(amplitude);
+      CAPTURE(rate, amplitude, reference, gain);
+      REQUIRE(std::abs(gain / reference - 1.0) < 0.01);
     }
   }
 }
