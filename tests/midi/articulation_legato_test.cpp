@@ -182,6 +182,33 @@ TEST_CASE("an engine that declines to be carried plays the note and says so",
   REQUIRE(std::fabs(1200.0 * std::log2(sounding / kSecondHz)) < 40.0);
 }
 
+TEST_CASE("a program change cannot carry a held voice into a different GM patch",
+          "[midi][synth][articulation]") {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  synth.set_articulation(0, ArticulationMode::kMonoLegato);
+
+  // GM Piano declines legato. Change to Clarinet while its key is still down,
+  // then overlap the next key: the new patch must start a new voice rather than
+  // applying the new patch's acceptance rule to the old Piano voice.
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 0)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kFirst, kVelocity)));
+  render_left(synth, 2048);
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 71)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kSecond, kVelocity)));
+
+  // The old Piano is fast-choked but remains in the pool until its short fade
+  // renders; the Clarinet is a newly allocated voice.
+  REQUIRE(synth.active_voice_count() == 2);
+  uint64_t fallbacks = 0;
+  REQUIRE(synth.legato_fallback_count(&fallbacks));
+  REQUIRE(fallbacks >= 1);
+}
+
 TEST_CASE("a pitch below the engine's delay line is refused rather than pinned",
           "[midi][synth][articulation]") {
   // Upward is unconditional -- it shortens the delay.

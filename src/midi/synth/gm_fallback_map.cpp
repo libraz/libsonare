@@ -1253,6 +1253,7 @@ namespace {
 struct FallbackTailBounds {
   float max_release_ms = 0.0f;
   float max_zero_sustain_decay_ms = 0.0f;
+  double max_harpsichord_tail_s = 0.0;
   bool has_one_shot = false;
   DahdsrConfig one_shot_env{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
   /// One-shots whose envelope holds end by their engine instead.
@@ -1266,6 +1267,10 @@ struct FallbackTailBounds {
 void observe_fallback_tail(FallbackTailBounds& bounds, const NativeSynthPatch& patch,
                            const NativeSynthPatch* stored) noexcept {
   const DahdsrConfig& amp = patch.amp_env;
+  if (patch.mode == SynthEngineMode::kHarpsichord) {
+    bounds.max_harpsichord_tail_s = std::max(
+        bounds.max_harpsichord_tail_s, harpsichord_max_release_tail_seconds(patch.harpsichord));
+  }
   const bool zero_sustain = amp.sustain <= DahdsrEnvelope::kSilenceLevel;
   if (patch.one_shot && !zero_sustain) {
     // The cases mirror sustained_one_shot_tail_samples; no fallback patch is a sample voice.
@@ -1338,6 +1343,7 @@ int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, flo
   }
   tail = std::max(tail,
                   numeric::ceil_sample_count(static_cast<double>(bounds.max_ring_s) * sample_rate));
+  tail = std::max(tail, numeric::ceil_sample_count(bounds.max_harpsichord_tail_s * sample_rate));
   for (size_t i = 0; i < bounds.sustained_fm_count; ++i) {
     tail = std::max(tail, fm_one_shot_tail_samples(*bounds.sustained_fm[i], sample_rate));
   }

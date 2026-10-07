@@ -530,6 +530,12 @@ struct NativeSynthVoice : VoiceState {
   float sampler_pan_units = 0.0f;
   /// Set by choke(): the voice is being cut and takes no live refresh.
   bool choked = false;
+  /// Amp level latched at note-off while the undamped 4' tail sounds; the tail
+  /// holds it past the shared envelope's idle. Choke paths fade it with the
+  /// envelope's release law.
+  bool harpsichord_tail_latched = false;
+  float harpsichord_tail_level = 0.0f;
+  float harpsichord_tail_choke_multiplier = 0.0f;
 
   /// Starts the voice for @p p. note/channel/age must already be set (the
   /// pool fills them in allocate()); @p voice_index seeds the deterministic
@@ -896,22 +902,31 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
     ArticulationMode articulation = ArticulationMode::kPoly;
     /// Keys held on this channel, oldest first. Ordered rather than a bitmap
     /// because last-note priority is a question about the order they were
-    /// pressed in, which a set cannot answer. Ten fingers plus margin; a press
-    /// past that is not recorded rather than displacing an older key, so the
-    /// note still sounds and only the return-to priority loses it.
-    std::array<uint8_t, 16> held_keys{};
+    /// pressed in, which a set cannot answer. The Note On attribute stays with
+    /// its key so a legato return restores that key's absolute pitch.
+    struct HeldKey {
+      uint8_t note = 0;
+      uint8_t attribute_type = 0;
+      uint16_t attribute_data = 0;
+    };
+    /// Ten fingers plus margin; a press past that is not recorded rather than
+    /// displacing an older key, so the note still sounds and only the
+    /// return-to priority loses it.
+    std::array<HeldKey, 16> held_keys{};
     uint8_t held_count = 0;
 
     /// Records @p note as held. A repeat moves it to the top, which is what a
     /// re-press means for last-note priority.
-    void hold_key(uint8_t note) noexcept {
+    void hold_key(uint8_t note, uint8_t attribute_type = 0, uint16_t attribute_data = 0) noexcept {
       release_key(note);
-      if (held_count < held_keys.size()) held_keys[held_count++] = note;
+      if (held_count < held_keys.size()) {
+        held_keys[held_count++] = {note, attribute_type, attribute_data};
+      }
     }
     /// Removes @p note from the stack; a key that is not there is a no-op.
     void release_key(uint8_t note) noexcept {
       for (uint8_t i = 0; i < held_count; ++i) {
-        if (held_keys[i] != note) continue;
+        if (held_keys[i].note != note) continue;
         for (uint8_t j = static_cast<uint8_t>(i + 1); j < held_count; ++j) {
           held_keys[j - 1] = held_keys[j];
         }
@@ -919,8 +934,15 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
         return;
       }
     }
+    /// The most recently pressed held key and its Note On attribute, or null.
+    const HeldKey* newest_held_key() const noexcept {
+      return held_count > 0 ? &held_keys[held_count - 1] : nullptr;
+    }
     /// The most recently pressed key still held, or -1 when none is.
-    int newest_key() const noexcept { return held_count > 0 ? held_keys[held_count - 1] : -1; }
+    int newest_key() const noexcept {
+      const HeldKey* key = newest_held_key();
+      return key != nullptr ? key->note : -1;
+    }
   };
 
   /// The voice a note-off or a legato continuation on @p ch means: sounding on
@@ -983,7 +1005,7 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// Binds @p state to (channel, note) at note-on with the Note On attribute, the engine starting
   /// on @p zone_key.
   void bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note, uint8_t attribute_type,
-                     uint16_t attribute_data, uint8_t zone_key) const noexcept;
+                     uint16_t attribute_data, int16_t zone_key) const noexcept;
   ComposedPitch compose_per_note(const Sf2PerNoteVoice& state) const noexcept;
   void refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept;
   /// Re-evaluates every sounding voice on (channel, note), or on the whole channel when

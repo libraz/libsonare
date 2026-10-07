@@ -431,11 +431,15 @@ class PercussionVoiceCore {
   struct Mode {
     float omega = 0.0f;
     float r = 0.0f;
+    // Strike excitation before the two-pole impulse normalization. Keeping this
+    // separate lets a live pitch change rebuild gain from the current omega.
+    float peak_gain = 0.0f;
     float gain = 0.0f;
     float a1 = 0.0f;
     float a2 = 0.0f;
     float y1 = 0.0f;
     float y2 = 0.0f;
+    bool audible = false;
   };
 
   std::array<Mode, kMaxPercussionModes> modes_{};

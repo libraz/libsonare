@@ -315,9 +315,15 @@ struct Sf2PerNoteVoice {
   bool has_attribute_pitch = false;  ///< Note On attribute #3, captured at note-on.
   uint16_t attribute_pitch_q7_9 = 0;
   /// The key the sample was selected and tuned at. An absolute pitch is measured from it.
-  uint8_t zone_key = 0;
+  int16_t zone_key = 0;
   /// Pitch offset from the zone key in cents; exactly 0 while the key carries no per-note pitch.
   float cents = 0.0f;
+  /// GS SCALE TUNING / PITCH OFFSET FINE captured at note-on. GS edits are latched for a
+  /// sounding voice; a later absolute-pitch state can still suppress or restore this term.
+  float gs_tuning_cents = 0.0f;
+  /// The part tuning already baked into the voice's initial sample increment / base pitch.
+  /// Refreshes add the live absolute-vs-relative delta around this captured baseline.
+  float baked_gs_tuning_cents = 0.0f;
 };
 
 /// One playing SF2 voice (lives in a VoicePool inside Sf2Player).

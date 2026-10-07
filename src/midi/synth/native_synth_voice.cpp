@@ -6,6 +6,7 @@
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/synth/voice_random.h"
+#include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
 #include "util/tunable.h"
 
@@ -268,6 +269,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   part_release_scale = part_mod.release_scale;
   part_vib_rate_scale = part_mod.vib_rate_scale;
   choked = false;
+  harpsichord_tail_latched = false;
+  harpsichord_tail_level = 0.0f;
   drive_fade = {};
   body_fade = {};
   body_fade_in = false;
@@ -379,8 +382,10 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
 
   // After any kit variation, so a GS part edit scales the envelope the kit
   // actually gave this note rather than the patch's own.
-  amp_env.configure(sample_rate, scaled_amp_env(amp_cfg, part_mod.attack_scale,
-                                                part_mod.decay_scale, part_mod.release_scale));
+  const DahdsrConfig scaled_amp =
+      scaled_amp_env(amp_cfg, part_mod.attack_scale, part_mod.decay_scale, part_mod.release_scale);
+  amp_env.configure(sample_rate, scaled_amp);
+  harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   amp_env.note_on();
   filter_env.configure(sample_rate, p.filter_env);
   filter_env.set_percussive_auto_idle(false);
@@ -506,11 +511,23 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   if (!active || patch == nullptr) return 0.0f;
 
   // --- modulation sources ---
-  const float level = amp_env.next();
-  if (!amp_env.active()) {
+  if (harpsichord_tail_latched && choked) {
+    // The ordinary envelope may already be idle. Fade the physical tail from
+    // its own level with the same release law instead of cutting its latch.
+    harpsichord_tail_level *= harpsichord_tail_choke_multiplier;
+    if (harpsichord_tail_level <= DahdsrEnvelope::kSilenceLevel) {
+      kill();
+      return 0.0f;
+    }
+  }
+  const float envelope_level = amp_env.next();
+  const bool harpsichord_tail = patch->mode == SynthEngineMode::kHarpsichord &&
+                                harpsichord_tail_latched && harpsichord.tail_active();
+  if (!amp_env.active() && !harpsichord_tail) {
     active = false;
     return 0.0f;
   }
+  const float level = harpsichord_tail ? harpsichord_tail_level : envelope_level;
   const float fenv = filter_env.next();
   // The matrix's LFO1-rate destination is one sample old by construction; see
   // ModDestination::kLfo1RateScale.
@@ -521,7 +538,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
   ModOffsets offsets;
   if (has_matrix) {
     ModSourceValues values;
-    values.amp_env = level;
+    // The matrix follows the real envelope even while an undamped
+    // harpsichord tail keeps the output at its latched release level.
+    values.amp_env = envelope_level;
     values.filter_env = fenv;
     values.lfo1 = lfo1_value;
     values.lfo2 = lfo2.next();
@@ -675,6 +694,11 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     sample = free_reed.render(common);
   } else if (patch->mode == SynthEngineMode::kHarpsichord) {
     sample = harpsichord.render(common);
+    if (harpsichord.finished()) {
+      active = false;
+      amp_env.kill();
+      return 0.0f;
+    }
   } else if (patch->mode == SynthEngineMode::kSample) {
     sample = sampler.render(common, key_down);
     // A one-shot region that ran out ends the voice; the amp envelope would
@@ -809,8 +833,10 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
   // Envelopes: configure() swaps rates and the sustain target, keeping the
   // level and the stage, so a running segment continues from where it is.
   if (has_any({Id::kAmpAttackMs, Id::kAmpDecayMs, Id::kAmpSustain, Id::kAmpReleaseMs})) {
-    amp_env.configure(sample_rate, scaled_amp_env(p.amp_env, part_attack_scale, part_decay_scale,
-                                                  part_release_scale));
+    const DahdsrConfig scaled_amp =
+        scaled_amp_env(p.amp_env, part_attack_scale, part_decay_scale, part_release_scale);
+    amp_env.configure(sample_rate, scaled_amp);
+    harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   }
   if (has_any(
           {Id::kFilterAttackMs, Id::kFilterDecayMs, Id::kFilterSustain, Id::kFilterReleaseMs})) {
@@ -915,6 +941,9 @@ void NativeSynthVoice::release() noexcept {
   // note-off; everything else enters the release stage.
   if (patch != nullptr && patch->one_shot) return;
   releasing = true;
+  const bool is_harpsichord = patch != nullptr && patch->mode == SynthEngineMode::kHarpsichord;
+  const float release_level = amp_env.level();
+  if (is_harpsichord) harpsichord.release();
   amp_env.note_off();
   filter_env.note_off();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFm) fm.release();
@@ -929,7 +958,10 @@ void NativeSynthVoice::release() noexcept {
   if (patch != nullptr && patch->mode == SynthEngineMode::kPluckedString) plucked_string.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kVocal) vocal.release();
   if (patch != nullptr && patch->mode == SynthEngineMode::kFreeReed) free_reed.release();
-  if (patch != nullptr && patch->mode == SynthEngineMode::kHarpsichord) harpsichord.release();
+  if (is_harpsichord && !harpsichord_tail_latched && harpsichord.tail_active()) {
+    harpsichord_tail_level = release_level;
+    harpsichord_tail_latched = true;
+  }
 }
 
 void NativeSynthVoice::kill() noexcept {
@@ -950,6 +982,8 @@ void NativeSynthVoice::kill() noexcept {
   vocal.kill();
   free_reed.kill();
   harpsichord.kill();
+  harpsichord_tail_latched = false;
+  harpsichord_tail_level = 0.0f;
   active = false;
   releasing = false;
 }
@@ -961,6 +995,7 @@ void NativeSynthVoice::choke_fast(double sample_rate) noexcept {
     DahdsrConfig fast = patch->amp_env;
     fast.release_ms = kChokeReleaseMs;
     amp_env.configure(sample_rate, fast);
+    harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   }
   choke();
 }
@@ -1006,6 +1041,11 @@ int64_t native_patch_tail_samples(const NativeSynthPatch& patch, double sample_r
   if (patch.one_shot) {
     tail = std::max(
         tail, DahdsrEnvelope::one_shot_tail_samples(sample_rate, amp, scales.attack, scales.decay));
+  }
+  if (patch.mode == SynthEngineMode::kHarpsichord) {
+    tail =
+        std::max(tail, numeric::ceil_sample_count(
+                           harpsichord_max_release_tail_seconds(patch.harpsichord) * sample_rate));
   }
   return tail;
 }

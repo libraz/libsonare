@@ -280,7 +280,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       int organ_demand[16] = {};
       for (const NativeSynthVoice& v : fallback_pool_) {
         if (v.active && v.patch != nullptr && v.patch->mode == SynthEngineMode::kPipeOrgan) {
-          ++organ_demand[v.channel & 0x0Fu];
+          organ_demand[v.channel & 0x0Fu] += v.pipe_organ.sounding_pipe_count();
         }
       }
       for (int part = 0; part < 16; ++part) {

@@ -5,12 +5,14 @@
 
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kFloorDbD;
 using sonare::constants::kTwoPi;
 
 /// How the plectrum's release displacement grows with key speed below its peak.
@@ -160,13 +162,60 @@ float onepole_alpha(float cutoff_hz, double sample_rate) noexcept {
                     1.0f);
 }
 
+double harpsichord_t60_seconds(const HarpsichordPatchParams& params, uint8_t note) noexcept {
+  const double decay_s =
+      std::isfinite(params.decay_s) ? std::max(0.05, static_cast<double>(params.decay_s)) : 0.05;
+  const double stretch = std::isfinite(params.decay_stretch)
+                             ? std::clamp(static_cast<double>(params.decay_stretch), 0.0, 2.0)
+                             : 0.0;
+  const double octaves_below_a4 = (69.0 - static_cast<double>(note & 0x7Fu)) / 12.0;
+  return decay_s * std::exp2(stretch * octaves_below_a4);
+}
+
 }  // namespace
+
+double harpsichord_release_tail_seconds(const HarpsichordPatchParams& params,
+                                        uint8_t note) noexcept {
+  const uint8_t key = note & 0x7Fu;
+  if (!params.four || key < params.undamped_from_note) return 0.0;
+
+  const double t60 = harpsichord_t60_seconds(params, key);
+  double bound = std::max(2.0 * t60, static_cast<double>(kJackMs) * 0.001);
+  const bool audible_rear = std::isfinite(params.rear_segment_mm) &&
+                            params.rear_segment_mm > 0.0f && std::isfinite(params.rear_coupling) &&
+                            params.rear_coupling > 0.0f;
+  if (audible_rear) {
+    const double rear_t60 = std::isfinite(params.rear_decay_s) && params.rear_decay_s > 0.0f
+                                ? static_cast<double>(params.rear_decay_s)
+                                : t60;
+    bound = std::max(bound, 2.0 * rear_t60);
+  }
+  if (std::isfinite(params.board_diffuse_db) && params.board_diffuse_db > kDiffuseOffDb) {
+    // The diffuse follower falls through the numerical dB floor in this many time constants.
+    bound +=
+        std::log(std::pow(10.0, -kFloorDbD / 20.0)) * static_cast<double>(kDiffuseFollowMs) * 0.001;
+  }
+  return bound;
+}
+
+double harpsichord_max_release_tail_seconds(const HarpsichordPatchParams& params) noexcept {
+  double longest = 0.0;
+  for (int note = 0; note < 128; ++note) {
+    longest =
+        std::max(longest, harpsichord_release_tail_seconds(params, static_cast<uint8_t>(note)));
+  }
+  return longest;
+}
 
 void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sample_rate,
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
   const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
+  released_ = false;
+  tail_active_ = false;
+  tail_remaining_samples_ =
+      numeric::ceil_sample_count(harpsichord_release_tail_seconds(params, note) * sr);
 
   const float f0 = note_to_hz(note);
   const float period = static_cast<float>(sr) / f0;
@@ -174,9 +223,7 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   // The decay the fundamental is asked for, and the one the octave above it
   // gets. Both are per-traversal gains, which is the form the loss filter is
   // solved in.
-  const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
-  const float stretch = std::clamp(params.decay_stretch, 0.0f, 2.0f);
-  const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
+  const float t60 = static_cast<float>(harpsichord_t60_seconds(params, note));
   const float hf = std::clamp(params.hf_damping, 0.05f, 1.0f);
   const float damper_t60 = std::max(0.005f, params.damper_s);
   const float ref_hz = harpsichord_damping_ref_hz(params.damping_ref_hz, f0, sr);
@@ -232,6 +279,7 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   // the break those strings go on sounding after the key is released.
   voice_choir(four_, span_4, full / 2, 0.5f * period * detune_4, params.four, params.pluck_4,
               (note & 0x7Fu) < params.undamped_from_note);
+  has_undamped_tail_ = four_.level > 0.0f && !four_.damped;
 
   // The string behind the bridge. Its length is fixed by the case while the
   // speaking length is not, so the ratio between them — and with it how far the
@@ -517,10 +565,17 @@ float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
     ++jack_pos_;
   }
 
-  return output_scale_ * result;
+  const float output = output_scale_ * result;
+  if (tail_active_ && (--tail_remaining_samples_ <= 0)) {
+    kill();
+    return 0.0f;
+  }
+  return output;
 }
 
 void HarpsichordVoiceCore::release() noexcept {
+  if (killed_ || released_) return;
+  released_ = true;
   // The felt reaches whichever choirs have dampers. The 4' top has none, and the
   // string behind the bridge never had any.
   if (eight_a_.damped) eight_a_.loop.release();
@@ -530,10 +585,14 @@ void HarpsichordVoiceCore::release() noexcept {
     jack_pos_ = 0;
     jack_lp_ = 0.0f;
   }
+  if (has_undamped_tail_ && tail_remaining_samples_ > 0) tail_active_ = true;
 }
 
 void HarpsichordVoiceCore::kill() noexcept {
   killed_ = true;
+  released_ = true;
+  tail_active_ = false;
+  tail_remaining_samples_ = 0;
   pluck_pos_ = pluck_span_;
   exc_prev_ = 0.0f;
   for (TiltSection& s : tilt_) {

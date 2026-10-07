@@ -226,6 +226,16 @@ struct HarpsichordPatchParams {
   uint8_t undamped_from_note = 128;
 };
 
+/// Seconds a released @p note's undamped 4' choir or its audible rear segment
+/// may remain above the core's finite tail floor. This is a pure patch
+/// calculation and uses the same stretched t60 as HarpsichordVoiceCore::start.
+/// A note without a drawn undamped 4' choir has no core-owned release tail.
+double harpsichord_release_tail_seconds(const HarpsichordPatchParams& params,
+                                        uint8_t note) noexcept;
+
+/// Maximum of harpsichord_release_tail_seconds over the MIDI note range.
+double harpsichord_max_release_tail_seconds(const HarpsichordPatchParams& params) noexcept;
+
 /// Per-voice harpsichord state, embedded in NativeSynthVoice. The voice's
 /// amplitude envelope / filter / mod matrix wrap around this core; render()
 /// returns the raw radiated sample.
@@ -246,6 +256,10 @@ class HarpsichordVoiceCore {
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / glide), 1 = on pitch.
   float render(float pitch_ratio) noexcept;
+  /// Whether a released undamped 4' choir is keeping this core alive.
+  bool tail_active() const noexcept { return tail_active_; }
+  /// Whether the core has been silenced, either by kill() or by its finite tail.
+  bool finished() const noexcept { return killed_; }
   /// Key release: the jack falls, the tongue pivots past the string without
   /// plucking it again, and the damper lands. Undamped choirs keep ringing.
   void release() noexcept;
@@ -254,6 +268,10 @@ class HarpsichordVoiceCore {
 
  private:
   bool killed_ = true;
+  bool released_ = false;
+  bool has_undamped_tail_ = false;
+  bool tail_active_ = false;
+  int64_t tail_remaining_samples_ = 0;
   /// A choir of strings and the jack that plucks it.
   struct Choir {
     StringLoop loop;

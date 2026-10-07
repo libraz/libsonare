@@ -411,3 +411,54 @@ TEST_CASE("harpsichord kill silences subsequent rendering and permits restart",
   const bool deterministic = restarted_samples == fresh_samples;
   REQUIRE(deterministic);
 }
+
+TEST_CASE("harpsichord undamped tail has a finite bound and reaches finished",
+          "[midi][synth][harpsichord]") {
+  HarpsichordPatchParams params;
+  params.decay_s = 0.05f;
+  params.decay_stretch = 0.0f;
+  params.eight_a = false;
+  params.four = true;
+  params.undamped_from_note = 84;
+  params.rear_segment_mm = 0.0f;
+  params.board_diffuse_db = -120.0f;
+
+  Slab slab;
+  HarpsichordVoiceCore core;
+  core.attach(slab.data.data(), slab.per_line);
+  core.start(params, kSr, 89, sonare::midi::Velocity16::from7(110), 0x5441494cULL);
+  for (int i = 0; i < 2048; ++i) core.render(1.0f);
+  core.release();
+
+  const double bound_seconds = sonare::midi::synth::harpsichord_release_tail_seconds(params, 89);
+  REQUIRE(std::isfinite(bound_seconds));
+  REQUIRE(bound_seconds > 0.0);
+  REQUIRE(core.tail_active());
+
+  const int bound_samples = static_cast<int>(std::ceil(bound_seconds * kSr));
+  for (int i = 0; i < bound_samples + 128 && !core.finished(); ++i) core.render(1.0f);
+  REQUIRE(core.finished());
+  REQUIRE_FALSE(core.tail_active());
+}
+
+TEST_CASE("harpsichord kill overrides an active undamped tail immediately",
+          "[midi][synth][harpsichord]") {
+  HarpsichordPatchParams params;
+  params.decay_s = 0.05f;
+  params.eight_a = false;
+  params.four = true;
+  params.undamped_from_note = 84;
+
+  Slab slab;
+  HarpsichordVoiceCore core;
+  core.attach(slab.data.data(), slab.per_line);
+  core.start(params, kSr, 89, sonare::midi::Velocity16::from7(110), 0x4b494c4cULL);
+  for (int i = 0; i < 1024; ++i) core.render(1.0f);
+  core.release();
+  REQUIRE(core.tail_active());
+
+  core.kill();
+  REQUIRE(core.finished());
+  REQUIRE_FALSE(core.tail_active());
+  for (int i = 0; i < 128; ++i) REQUIRE(core.render(1.0f) == 0.0f);
+}

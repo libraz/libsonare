@@ -533,8 +533,8 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     NativeSynthVoice* held =
         find_sounding(ch, static_cast<uint8_t>(live.newest_key()), source_track_id);
     if (held != nullptr) {
-      if (live.articulation == ArticulationMode::kMonoLegato &&
-          accepts_legato(patch->mode, held->note, note, lowest_pitch_mult(*patch))) {
+      if (live.articulation == ArticulationMode::kMonoLegato && held->patch == patch &&
+          accepts_legato(held->patch->mode, held->note, note, lowest_pitch_mult(*held->patch))) {
         const uint8_t from = held->note;
         held->retune(note, sample_rate_);
         carry_per_note(*held, from, note, attribute_type, attribute_data);
@@ -542,7 +542,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
           record_velocity_axes(*held, velocity_excitation, velocity_excitation_mask);
           held->push_excitation(velocity_excitation, velocity_excitation_mask);
         }
-        live.hold_key(note);
+        live.hold_key(note, attribute_type, attribute_data);
         live.last_freq_hz = synth_note_to_hz(static_cast<float>(note));
         return;
       }
@@ -554,7 +554,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
       held->choke_fast(sample_rate_);
     }
   }
-  live.hold_key(note);
+  live.hold_key(note, attribute_type, attribute_data);
 
   NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
@@ -796,11 +796,12 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
   if (st.articulation == ArticulationMode::kMonoLegato && st.newest_key() >= 0) {
     NativeSynthVoice* sounding = find_sounding(ch, note, source_track_id);
     if (sounding != nullptr && sounding->patch != nullptr) {
-      const uint8_t back = static_cast<uint8_t>(st.newest_key());
+      const ChannelState::HeldKey* back_key = st.newest_held_key();
+      const uint8_t back = back_key->note;
       if (accepts_legato(sounding->patch->mode, sounding->note, back,
                          lowest_pitch_mult(*sounding->patch))) {
         sounding->retune(back, sample_rate_);
-        carry_per_note(*sounding, note, back, 0, 0);
+        carry_per_note(*sounding, note, back, back_key->attribute_type, back_key->attribute_data);
         st.last_freq_hz = synth_note_to_hz(static_cast<float>(back));
         return;
       }
@@ -1605,7 +1606,7 @@ bool NativeSynth::relative_controller(const ChannelVoiceEvent& ev) noexcept {
 
 void NativeSynth::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t note,
                                 uint8_t attribute_type, uint16_t attribute_data,
-                                uint8_t zone_key) const noexcept {
+                                int16_t zone_key) const noexcept {
   state.binding.bind(channel, note);
   state.has_attribute_pitch = attribute_type == kAttributePitch79;
   state.attribute_pitch_q7_9 = state.has_attribute_pitch ? attribute_data : uint16_t{0};
@@ -1644,11 +1645,9 @@ void NativeSynth::carry_per_note(const NativeSynthVoice& voice, uint8_t from_not
   Sf2PerNoteVoice& state = per_note_[static_cast<size_t>(&voice - pool_.data())];
   // retune() moves the engine by the interval between the keys, so the key it nominally sounds
   // moves by the same interval from the one it was started on.
-  const int zone_key = std::clamp(
-      static_cast<int>(state.zone_key) + static_cast<int>(to_note) - static_cast<int>(from_note), 0,
-      127);
-  bind_per_note(state, voice.channel, to_note, attribute_type, attribute_data,
-                static_cast<uint8_t>(zone_key));
+  const int16_t zone_key = static_cast<int16_t>(
+      static_cast<int>(state.zone_key) + static_cast<int>(to_note) - static_cast<int>(from_note));
+  bind_per_note(state, voice.channel, to_note, attribute_type, attribute_data, zone_key);
   refresh_per_note_pitch(state);
 }
 
@@ -1804,10 +1803,7 @@ void NativeSynth::process_impl(float* const* channels,
       const int i = offset + c;
       float mix_l = 0.0f;
       float mix_r = 0.0f;
-      // Each organ part advances its own wind chest. Count the voices at this
-      // sample rather than once per process() call: render() can finish a
-      // release inside a long block, and the next sample must not keep a
-      // phantom load on that part's regulator.
+      // Per-sample, per-part pipe count: a release ending mid-block must stop loading its chest.
       std::array<int, 16> organ_demand{};
       for (const NativeSynthVoice& active_voice : pool_) {
         if (!active_voice.active || active_voice.patch == nullptr ||
@@ -1815,8 +1811,8 @@ void NativeSynth::process_impl(float* const* channels,
           continue;
         }
         const size_t organ_part = static_cast<size_t>(active_voice.channel & 0x0Fu);
-        // Demand is a per-part voice count (order-independent), so the sag is deterministic.
-        ++organ_demand[organ_part];
+        // Counting pipes keeps the sag order-independent; a zero-level rank adds none.
+        organ_demand[organ_part] += active_voice.pipe_organ.sounding_pipe_count();
       }
       // The default state is unity, so non-organ voices never inherit an organ's wind.
       std::array<OrganWindSupply::State, 16> wind_state{};

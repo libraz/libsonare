@@ -377,6 +377,34 @@ TEST_CASE("wind sag drops pressure under load", "[midi][synth][organ]") {
   REQUIRE(loaded.pitch_ratio < 1.0f);
 }
 
+TEST_CASE("pipe-organ wind demand counts only positively drawn ranks", "[midi][synth][organ]") {
+  using sonare::midi::synth::pipe_organ_slab_capacity;
+  using sonare::midi::synth::PipeOrganPatchParams;
+  using sonare::midi::synth::PipeOrganVoiceCore;
+
+  std::vector<float> slab(static_cast<size_t>(pipe_organ_slab_capacity(kRate)), 0.0f);
+  PipeOrganVoiceCore core;
+  core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(kRate));
+
+  PipeOrganPatchParams params;
+  params.rank_count = 4;
+  params.ranks[0].level = 1.0f;
+  params.ranks[1].level = 0.0f;
+  params.ranks[2].level = 0.0f;
+  params.ranks[3].level = 0.0f;
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(100), 0x1200u);
+  REQUIRE(core.sounding_pipe_count() == 1);
+
+  for (auto& rank : params.ranks) rank.level = 0.0f;
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(100), 0x1201u);
+  REQUIRE(core.sounding_pipe_count() == 0);
+
+  // rank_count == 0 is the implicit 8' rank, which remains a sounding pipe.
+  params.rank_count = 0;
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(100), 0x1202u);
+  REQUIRE(core.sounding_pipe_count() == 1);
+}
+
 // --- Reed (lingual) pipes ---
 
 /// Harmonic-to-noise ratio: power at the exact harmonic bins (1..16) versus

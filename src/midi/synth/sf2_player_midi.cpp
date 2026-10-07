@@ -137,6 +137,8 @@ void Sf2Player::bind_per_note(Sf2PerNoteVoice& state, uint8_t channel, uint8_t n
   state.attribute_pitch_q7_9 = state.has_attribute_pitch ? attribute_data : uint16_t{0};
   state.zone_key = note;
   state.cents = 0.0f;
+  state.gs_tuning_cents = 0.0f;
+  state.baked_gs_tuning_cents = 0.0f;
 }
 
 ComposedPitch Sf2Player::compose_per_note(const Sf2PerNoteVoice& state) const noexcept {
@@ -151,7 +153,10 @@ ComposedPitch Sf2Player::compose_per_note(const Sf2PerNoteVoice& state) const no
 }
 
 void Sf2Player::refresh_per_note_pitch(Sf2PerNoteVoice& state) const noexcept {
-  state.cents = per_note_cents(state, compose_per_note(state));
+  const ComposedPitch pitch = compose_per_note(state);
+  // GS tuning is baked into the start pitch; an absolute per-note pitch removes it here.
+  const float gs_tuning = pitch.absolute ? 0.0f : state.gs_tuning_cents;
+  state.cents = per_note_cents(state, pitch) + gs_tuning - state.baked_gs_tuning_cents;
 }
 
 void Sf2Player::refresh_per_note_voices(uint8_t channel, uint8_t note, bool all_notes) noexcept {
@@ -287,10 +292,11 @@ Sf2Player::NoteRoute Sf2Player::route_note_on(uint8_t channel, uint8_t note, Vel
   // to it (M2-104-UM §7.4.15.2).
   bind_per_note(route.per_note, channel, note, attribute_type, attribute_data);
   route.note_pitch = compose_per_note(route.per_note);
-  route.note_pitch_cents = route.note_pitch.absolute
-                               ? 0.0f
-                               : gs_scale_tuning_cents(ch.scale_tuning, note) +
-                                     gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  route.per_note.gs_tuning_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
+                                   gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  route.per_note.baked_gs_tuning_cents =
+      route.note_pitch.absolute ? 0.0f : route.per_note.gs_tuning_cents;
+  route.note_pitch_cents = route.per_note.baked_gs_tuning_cents;
   route.gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
   // sounded at all, so this precedes every choice of bank below — a note refused
@@ -518,6 +524,9 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   Sf2PerNoteVoice per_note;
   bind_per_note(per_note, channel, note, attribute_type, attribute_data);
   const ComposedPitch note_pitch = compose_per_note(per_note);
+  per_note.gs_tuning_cents = gs_scale_tuning_cents(ch.scale_tuning, note) +
+                             gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  per_note.baked_gs_tuning_cents = note_pitch.absolute ? 0.0f : per_note.gs_tuning_cents;
   // The per-note GS edits, read before the patch: PLAY NOTE NUMBER picks which
   // kit piece answers and ASSIGN GROUP which group it belongs to, and both are
   // needed before the choke below, let alone the voice.
@@ -656,10 +665,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   // per part, so they are set on the way past rather than built with them; the
   // struck key indexes both, as it does on the SoundFont bank.
   // An absolute pitch overrides tuning tables (M2-104-UM §7.4.15.2).
-  part_mod.pitch_cents = note_pitch.absolute
-                             ? 0.0f
-                             : gs_scale_tuning_cents(ch.scale_tuning, note) +
-                                   gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  part_mod.pitch_cents = per_note.baked_gs_tuning_cents;
   // Same reason the SoundFont bank engages its filter here: the offset itself
   // arrives per sample from the controller, so what the note-on has to settle
   // is only whether there is a filter for it to reach.

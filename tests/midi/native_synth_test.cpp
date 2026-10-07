@@ -49,9 +49,13 @@ using sonare::db_to_linear;
 using sonare::pearson_correlation;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiInstrumentSourceOutput;
+using sonare::midi::synth::harpsichord_buffer_capacity;
+using sonare::midi::synth::harpsichord_slab_capacity;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::NativeSynthVoice;
+using sonare::midi::synth::Sf2ChannelMod;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
 using sonare::midi::synth::Sf2PlayerConfig;
@@ -702,6 +706,170 @@ TEST_CASE("harpsichord GS/GM2 banks select registration variations", "[midi][syn
   REQUIRE(gm_fallback_patch(9, 6).harpsichord.jack_noise == 0.0f);
 }
 
+TEST_CASE("NativeSynth preserves the bank-1 harpsichord's undamped 4' tail",
+          "[midi][synth][harpsichord]") {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+
+  // GM2/GS bank 1, program 6 is the octave registration. At note 89 its 4'
+  // strings are above the damper break and must continue after key-off.
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 0, 121)));
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 32, 1)));
+  synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 6)));
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 89, 110)));
+  REQUIRE(peak(render(synth, 12000).left) > 1.0e-4f);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 89, 0)));
+  const StereoRender tail = render(synth, 72000);
+  const float late_peak = peak(tail.left, 48000);
+  INFO("late undamped 4' peak " << late_peak);
+  REQUIRE(late_peak > 1.0e-5f);
+  REQUIRE(synth.active_voice_count() > 0);
+}
+
+TEST_CASE("harpsichord tail helper bounds native and GM metadata", "[midi][synth][harpsichord]") {
+  NativeSynthPatch custom;
+  custom.mode = SynthEngineMode::kHarpsichord;
+  custom.harpsichord.decay_s = 0.05f;
+  custom.harpsichord.decay_stretch = 0.0f;
+  custom.harpsichord.eight_a = false;
+  custom.harpsichord.four = true;
+  custom.harpsichord.undamped_from_note = 84;
+  custom.harpsichord.rear_segment_mm = 0.0f;
+  custom.harpsichord.board_diffuse_db = -120.0f;
+
+  const double custom_seconds =
+      sonare::midi::synth::harpsichord_max_release_tail_seconds(custom.harpsichord);
+  const int64_t custom_helper_samples = static_cast<int64_t>(std::ceil(custom_seconds * kOutRate));
+  const int64_t custom_bound =
+      sonare::midi::synth::native_patch_tail_samples(custom, kOutRate, {}, nullptr);
+  INFO("custom helper " << custom_helper_samples << ", native bound " << custom_bound);
+  REQUIRE(std::isfinite(custom_seconds));
+  REQUIRE(custom_bound < std::numeric_limits<int64_t>::max());
+  REQUIRE(custom_bound >= custom_helper_samples);
+
+  const NativeSynthPatch& gm_octave = sonare::midi::synth::gm_fallback_patch(1, 6);
+  REQUIRE(gm_octave.mode == SynthEngineMode::kHarpsichord);
+  const double gm_seconds =
+      sonare::midi::synth::harpsichord_max_release_tail_seconds(gm_octave.harpsichord);
+  const int64_t gm_helper_samples = static_cast<int64_t>(std::ceil(gm_seconds * kOutRate));
+  const int64_t gm_bound =
+      sonare::midi::synth::gm_fallback_max_tail_samples(kOutRate, 1.0f, 1.0f, 1.0f);
+  INFO("GM helper " << gm_helper_samples << ", GM bound " << gm_bound);
+  REQUIRE(std::isfinite(gm_seconds));
+  REQUIRE(gm_bound >= gm_helper_samples);
+}
+
+TEST_CASE("NativeSynthVoice choke_fast overrides an idle harpsichord tail",
+          "[midi][synth][harpsichord]") {
+  NativeSynthPatch patch;
+  patch.mode = SynthEngineMode::kHarpsichord;
+  patch.amp_env.sustain = 1.0f;
+  patch.amp_env.release_ms = 1.0f;
+  patch.harpsichord.decay_s = 0.05f;
+  patch.harpsichord.decay_stretch = 0.0f;
+  patch.harpsichord.eight_a = false;
+  patch.harpsichord.four = true;
+  patch.harpsichord.undamped_from_note = 84;
+  patch.harpsichord.rear_segment_mm = 0.0f;
+  patch.harpsichord.board_diffuse_db = -120.0f;
+
+  NativeSynthVoice voice;
+  voice.active = true;
+  voice.note = 89;
+  voice.channel = 0;
+  std::vector<float> slab(static_cast<size_t>(harpsichord_slab_capacity(kOutRate)), 0.0f);
+  voice.harpsichord.attach(slab.data(), harpsichord_buffer_capacity(kOutRate));
+  voice.start(patch, kOutRate, sonare::midi::Velocity16::from7(110), 0);
+
+  Sf2ChannelMod mod;
+  for (int i = 0; i < 2048; ++i) static_cast<void>(voice.render(mod));
+  voice.release();
+  // The ordinary amp envelope is already idle, while the undamped 4' string
+  // still has a live tail that the voice must keep rendering.
+  for (int i = 0; i < 2048; ++i) static_cast<void>(voice.render(mod));
+  REQUIRE(voice.active);
+
+  voice.choke_fast(kOutRate);
+  // A late choke must fade from the physical tail's current level, even
+  // though the ordinary amp envelope is idle. Cutting its latch in one
+  // sample would click instead of applying the replacement fade.
+  float fade_peak = 0.0f;
+  for (int i = 0; i < 128; ++i) {
+    fade_peak = std::max(fade_peak, std::abs(voice.render(mod)));
+  }
+  REQUIRE(fade_peak > 1.0e-6f);
+  for (int i = 0; i < static_cast<int>(0.02 * kOutRate) && voice.active; ++i) {
+    static_cast<void>(voice.render(mod));
+  }
+  REQUIRE_FALSE(voice.active);
+}
+
+TEST_CASE("NativeSynth harpsichord short tails end after the reported bound",
+          "[midi][synth][harpsichord]") {
+  NativeSynthConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  cfg.patch.mode = SynthEngineMode::kHarpsichord;
+  cfg.patch.amp_env.sustain = 1.0f;
+  cfg.patch.amp_env.release_ms = 1.0f;
+  cfg.patch.harpsichord.decay_s = 0.05f;
+  cfg.patch.harpsichord.decay_stretch = 0.0f;
+  cfg.patch.harpsichord.eight_a = false;
+  cfg.patch.harpsichord.four = true;
+  cfg.patch.harpsichord.undamped_from_note = 84;
+  cfg.patch.harpsichord.rear_segment_mm = 0.0f;
+  cfg.patch.harpsichord.board_diffuse_db = -120.0f;
+
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 89, 110)));
+  REQUIRE(peak(render(synth, 4096).left) > 1.0e-4f);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 89, 0)));
+
+  const int tail = synth.tail_samples();
+  REQUIRE(tail > 0);
+  render(synth, tail + 256);
+  REQUIRE(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("NativeSynth harpsichord kill and mono choke end tails early",
+          "[midi][synth][harpsichord]") {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+
+  auto select_harpsichord = [&](uint8_t bank_lsb) {
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 0, 121)));
+    synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 32, bank_lsb)));
+    synth.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 6)));
+  };
+
+  select_harpsichord(0);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 89, 110)));
+  REQUIRE(peak(render(synth, 2048).left) > 1.0e-4f);
+  synth.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, 120, 0)));
+  REQUIRE(synth.active_voice_count() == 0);
+
+  synth.set_articulation(0, sonare::midi::ArticulationMode::kMonoLegato);
+  select_harpsichord(0);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 89, 110)));
+  render(synth, 2048);
+  select_harpsichord(1);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 89, 110)));
+  REQUIRE(synth.active_voice_count() == 2);
+  render(synth, static_cast<int>(0.02 * kOutRate));
+  // choke_fast() is a five-ms replacement fade, even when the harpsichord's
+  // ordinary undamped tail is much longer.
+  REQUIRE(synth.active_voice_count() == 1);
+}
+
 TEST_CASE("Sf2Player without a SoundFont plays the GM drum map via the fallback",
           "[midi][sf2][synth]") {
   Sf2Player player = make_fallback_player();
@@ -1012,6 +1180,58 @@ TEST_CASE("NativeSynth organ pressure recovers while its part is silent",
   CAPTURE(immediate_error, recovered_error);
   REQUIRE(immediate_error > 1e-8);
   CHECK(recovered_error < immediate_error * 0.1);
+}
+
+TEST_CASE("NativeSynth wind sag follows sounding rank count, not voice count",
+          "[midi][synth][organ]") {
+  const auto make_patch = [](int rank_count, float wind_sag, bool sparse) {
+    NativeSynthPatch patch;
+    patch.mode = SynthEngineMode::kPipeOrgan;
+    patch.gain = 1.0f;
+    patch.cutoff_hz = 20000.0f;
+    patch.amp_env.attack_ms = 1.0f;
+    patch.amp_env.sustain = 1.0f;
+    patch.amp_env.release_ms = 100.0f;
+    patch.pipe_organ.breath = 0.9f;
+    patch.pipe_organ.chiff = 0.0f;
+    patch.pipe_organ.tone_decay_s = 8.0f;
+    patch.pipe_organ.wind_sag = wind_sag;
+    patch.pipe_organ.rank_count = rank_count;
+    for (int r = 0; r < rank_count; ++r) {
+      patch.pipe_organ.ranks[static_cast<size_t>(r)] = {
+          1.0f, false, 0.6f, sparse && r > 0 ? 0.0f : 1.0f, 0.0f, 0.0f};
+    }
+    return patch;
+  };
+  const auto settled_rms = [](const NativeSynthPatch& patch) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    cfg.gain = 1.0f;
+    cfg.dc_block = false;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 110)));
+    return rms(render(synth, 48000).left, 24000);
+  };
+
+  const float one_dry = settled_rms(make_patch(1, 0.0f, false));
+  const float one_sag = settled_rms(make_patch(1, 0.9f, false));
+  const float six_dry = settled_rms(make_patch(6, 0.0f, false));
+  const float six_sag = settled_rms(make_patch(6, 0.9f, false));
+  const float sparse_sag = settled_rms(make_patch(6, 0.9f, true));
+  REQUIRE(one_dry > 1.0e-4f);
+  REQUIRE(six_dry > 1.0e-4f);
+  const float one_ratio = one_sag / one_dry;
+  const float six_ratio = six_sag / six_dry;
+  const float sparse_ratio = sparse_sag / one_dry;
+  INFO("one ratio " << one_ratio << ", six ratio " << six_ratio << ", sparse ratio "
+                    << sparse_ratio);
+
+  // Six drawn ranks consume substantially more wind than one rank. The zero
+  // level slots in the same registration are silent pipes and must not add a
+  // second load of their own.
+  REQUIRE(six_ratio < one_ratio - 0.15f);
+  CHECK(std::fabs(sparse_ratio - one_ratio) < 0.08f);
 }
 
 TEST_CASE("All Sound Off silences the piano bus resonators too", "[midi][synth][sf2]") {
@@ -2762,6 +2982,18 @@ NativeSynthConfig per_note_config() {
   return cfg;
 }
 
+NativeSynthConfig fm_absolute_pitch_config() {
+  NativeSynthConfig cfg = resolution_config();
+  cfg.dc_block = false;
+  cfg.patch.mode = sonare::midi::synth::SynthEngineMode::kFm;
+  cfg.patch.fm.algorithm = sonare::midi::synth::FmAlgorithm::kStack2;
+  cfg.patch.fm.ops[0].ratio = 1.0f;
+  cfg.patch.fm.ops[0].level = 1.0f;
+  cfg.patch.fm.ops[0].env = {0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 100.0f};
+  cfg.patch.fm.ops[1].level = 0.0f;
+  return cfg;
+}
+
 NativeSynth prepared_per_note_synth() {
   NativeSynth synth(per_note_config());
   synth.prepare(kOutRate, 256);
@@ -2884,6 +3116,48 @@ TEST_CASE("NativeSynth takes a note's absolute pitch from RPNC #3 and attribute 
   CHECK(near_hz(from_rpnc, note_hz(72.5)));
   CHECK(near_hz(from_attribute, note_hz(67.5)));
   CHECK(near_hz(bent, note_hz(73.5)));
+}
+
+TEST_CASE("NativeSynth carries an absolute-pitch FM voice without clamping its zone key",
+          "[midi][synth][midi2]") {
+  const auto carried_frequency = [](uint8_t first, uint16_t first_pitch, uint8_t second) {
+    NativeSynth synth(fm_absolute_pitch_config());
+    synth.prepare(kOutRate, 256);
+    synth.set_articulation(0, sonare::midi::ArticulationMode::kMonoLegato);
+    synth.on_event(
+        0, event(sonare::midi::make_midi2_note_on(0, 0, first, kPerNoteVelocity, 3, first_pitch)));
+    render(synth, 4096);
+    // The virtual reference reaches 132 after +12 and must remain outside the
+    // ordinary MIDI key range while the sounding pitch becomes note 72.
+    synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, second, kPerNoteVelocity)));
+    return estimate_frequency(render(synth, kPerNoteSamples).left, kOutRate, 1024);
+  };
+
+  const double high = carried_frequency(60, static_cast<uint16_t>(120u * 512u), 72);
+  const double low = carried_frequency(60, static_cast<uint16_t>(8u * 512u), 48);
+  INFO("upper-bound carry " << high << " Hz, lower-bound carry " << low << " Hz");
+  REQUIRE(near_hz(high, note_hz(72.0)));
+  REQUIRE(near_hz(low, note_hz(48.0)));
+}
+
+TEST_CASE("NativeSynth restores a held key's absolute-pitch attribute after legato return",
+          "[midi][synth][midi2]") {
+  NativeSynth synth(fm_absolute_pitch_config());
+  synth.prepare(kOutRate, 256);
+  synth.set_articulation(0, sonare::midi::ArticulationMode::kMonoLegato);
+
+  // Key 60 carries absolute pitch 67. The transient key 64 has no attribute;
+  // releasing it must return to the held key's original absolute pitch rather
+  // than replacing that attribute with zero.
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, kPerNoteVelocity, 3,
+                                                           static_cast<uint16_t>(67u * 512u))));
+  render(synth, 4096);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 64, kPerNoteVelocity)));
+  render(synth, 4096);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_off(0, 0, 64, 0)));
+  const double sounding = estimate_frequency(render(synth, kPerNoteSamples).left, kOutRate, 1024);
+  INFO("sounding " << sounding << " Hz");
+  REQUIRE(near_hz(sounding, note_hz(67.0)));
 }
 
 TEST_CASE("NativeSynth scales per-note bend by RC 0/7, absolute and relative",

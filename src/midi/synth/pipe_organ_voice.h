@@ -181,6 +181,10 @@ class PipeOrganVoiceCore {
   /// Renders one sample; @p pitch_ratio is the common per-sample pitch factor
   /// (bend / vibrato / drift / tremulant / wind sag), 1 = on pitch.
   float render(float pitch_ratio) noexcept;
+  /// Number of ranks with a positive mix level in the registration. This is
+  /// the instantaneous pipe demand a shared wind chest sees for one key;
+  /// silent rank slots do not draw wind.
+  int sounding_pipe_count() const noexcept { return sounding_pipe_count_; }
   /// Note-off: stop blowing (ramp the breath to zero); the bores ring down.
   void release() noexcept;
   /// Immediate silence.
@@ -319,6 +323,7 @@ class PipeOrganVoiceCore {
 
   std::array<Rank, kMaxPipeRanks> ranks_{};
   int rank_count_ = 0;
+  int sounding_pipe_count_ = 0;
 
   // Breath contour shared by every rank (the wind gate): ramps to 1 on note-on,
   // to 0 on release; each rank's steady breath is scaled by this.

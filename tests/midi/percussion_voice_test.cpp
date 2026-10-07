@@ -22,6 +22,8 @@ using sonare::midi::synth::bessel_j;
 using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
+using sonare::midi::synth::PercussionPatchParams;
+using sonare::midi::synth::PercussionVoiceCore;
 using sonare::midi::synth::SynthEngineMode;
 using sonare::midi::synth::SynthFilterOutput;
 
@@ -59,7 +61,73 @@ NativeSynthPatch tom_patch() {
   return p;
 }
 
+PercussionPatchParams single_modal_percussion(float base_hz) {
+  PercussionPatchParams params;
+  params.num_modes = 1;
+  params.base_freq_hz = base_hz;
+  params.mode_ratios[0] = 1.0f;
+  params.mode_m[0] = 0;
+  params.mode_alpha[0] = 2.4048f;
+  params.mode_decay_s = 4.0f;
+  params.noise_gain = 0.0f;
+  return params;
+}
+
+float percussion_ratio_peak(const PercussionPatchParams& params, float ratio,
+                            int warmup_samples = 64, int measured_samples = 2048) {
+  PercussionVoiceCore core;
+  core.start(params, kRate, 60, sonare::midi::Velocity16::from7(127), 0x50455243ULL);
+  for (int i = 0; i < warmup_samples; ++i) static_cast<void>(core.render(ratio));
+  float peak = 0.0f;
+  for (int i = 0; i < measured_samples; ++i) peak = std::max(peak, std::fabs(core.render(ratio)));
+  return peak;
+}
+
 }  // namespace
+
+TEST_CASE("percussion modal excitation follows a live pitch ratio", "[midi][synth][percussion]") {
+  const PercussionPatchParams params = single_modal_percussion(400.0f);
+  const float reference = percussion_ratio_peak(params, 1.0f);
+  REQUIRE(reference > 0.01f);
+
+  // The two-pole impulse gain is sin(omega). A live bend changes omega, so the
+  // strike's pre-normalization excitation must be retained and the gain rebuilt
+  // from the current frequency; otherwise a downbend doubles the level and an
+  // upbend halves it.
+  for (const float ratio : {0.5f, 2.0f}) {
+    const float bent = percussion_ratio_peak(params, ratio);
+    INFO("pitch ratio = " << ratio << ", reference peak = " << reference
+                          << ", bent peak = " << bent);
+    CHECK(bent > 0.85f * reference);
+    CHECK(bent < 1.15f * reference);
+  }
+}
+
+TEST_CASE("percussion modes are silenced when a live bend leaves the audible band",
+          "[midi][synth][percussion]") {
+  // The mode is valid at 8 kHz, then a 3x bend requests 24 kHz at 48 kHz.
+  // It must be cleared rather than clamped to an unrelated near-Nyquist tone,
+  // and returning to the old ratio must not resurrect the already-struck mode.
+  PercussionVoiceCore core;
+  core.start(single_modal_percussion(8000.0f), kRate, 60, sonare::midi::Velocity16::from7(127),
+             0x5045524FULL);
+
+  float nominal_peak = 0.0f;
+  for (int i = 0; i < 512; ++i) nominal_peak = std::max(nominal_peak, std::fabs(core.render(1.0f)));
+  REQUIRE(nominal_peak > 0.01f);
+
+  float out_of_band_peak = 0.0f;
+  for (int i = 0; i < 512; ++i)
+    out_of_band_peak = std::max(out_of_band_peak, std::fabs(core.render(3.0f)));
+  INFO("nominal in-band peak = " << nominal_peak << ", out-of-band peak = " << out_of_band_peak);
+  REQUIRE(out_of_band_peak < 1.0e-5f);
+
+  float returned_peak = 0.0f;
+  for (int i = 0; i < 512; ++i)
+    returned_peak = std::max(returned_peak, std::fabs(core.render(1.0f)));
+  INFO("returned-ratio peak = " << returned_peak);
+  REQUIRE(returned_peak < 1.0e-5f);
+}
 
 TEST_CASE("bessel_j matches known values and zeros", "[midi][synth][bessel]") {
   // Origin: J_0(0) = 1, J_{m>=1}(0) = 0.

@@ -1742,3 +1742,153 @@ TEST_CASE("Sf2Player All Notes Off preserves a sostenuto capture in both voice p
     REQUIRE(released == 0);
   }
 }
+
+namespace {
+
+enum class GsPitchTuning : uint8_t { kScale, kPitchOffset };
+
+void set_gs_pitch_tuning(Sf2Player& player, GsPitchTuning tuning) {
+  std::vector<uint8_t> msg{
+      0xF0, 0x41, 0x10, 0x42,
+      0x12, 0x40, 0x11, static_cast<uint8_t>(tuning == GsPitchTuning::kScale ? 0x40 : 0x17)};
+  int sum = 0x40 + 0x11 + msg.back();
+  if (tuning == GsPitchTuning::kScale) {
+    const std::array<uint8_t, 12> scale = {0x68, 0x40, 0x40, 0x40, 0x40, 0x40,
+                                           0x40, 0x40, 0x40, 0x40, 0x40, 0x40};
+    msg.insert(msg.end(), scale.begin(), scale.end());
+    for (const uint8_t value : scale) sum += value;
+  } else {
+    // 0xCD is +7.7 Hz. At middle C this is approximately +40 cents, and it
+    // exercises the other GS offset that is captured at note-on.
+    msg.push_back(0x0C);
+    msg.push_back(0x0D);
+    sum += 0x0C + 0x0D;
+  }
+  msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+  msg.push_back(0xF7);
+  REQUIRE(player.handle_sysex(msg.data(), msg.size()));
+}
+
+double gs_pitch_tuning_cents(GsPitchTuning tuning) {
+  return tuning == GsPitchTuning::kScale
+             ? 40.0
+             : static_cast<double>(sonare::midi::synth::gs_pitch_offset_fine_cents(0xCD, 60));
+}
+
+}  // namespace
+
+TEST_CASE("Sf2Player reapplies GS tuning when a live note becomes absolute pitch",
+          "[midi][sf2][synth][midi2]") {
+  // C is +40 cents in the part's scale table. RPNC #3 is an absolute pitch,
+  // so setting it to the struck key must remove that offset from a sounding
+  // voice in either host. The offset is applied before note-on so the voice
+  // starts with it and the live absolute-pitch update has to remove it.
+  for (const GsPitchTuning tuning : {GsPitchTuning::kScale, GsPitchTuning::kPitchOffset}) {
+    INFO("GS tuning: " << static_cast<int>(tuning));
+    for (const bool fallback : {false, true}) {
+      INFO("voice pool: " << (fallback ? "fallback" : "SoundFont"));
+      Sf2Player player = fallback ? make_fallback_player() : fixture_player();
+      set_gs_pitch_tuning(player, tuning);
+      if (fallback) send(player, sonare::midi::make_midi1_program_change(0, 0, 80));
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+      (void)render(player, 4096);
+      send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25));
+      const std::vector<float> after = render_one_second(player);
+
+      const double expected = fallback ? 261.6255653005986 : 1000.0;
+      const double measured =
+          fallback ? sonare::test::fft_fundamental(after, 4096, expected) : crossing_hz(after);
+      CAPTURE(expected, measured);
+      CHECK(measured == Approx(expected).margin(fallback ? 4.0 : 2.0));
+    }
+  }
+}
+
+TEST_CASE("Sf2Player restores GS tuning after resetting live absolute pitch",
+          "[midi][sf2][synth][midi2]") {
+  for (const GsPitchTuning tuning : {GsPitchTuning::kScale, GsPitchTuning::kPitchOffset}) {
+    INFO("GS tuning: " << static_cast<int>(tuning));
+    const double tuning_cents = gs_pitch_tuning_cents(tuning);
+    for (const bool fallback : {false, true}) {
+      INFO("voice pool: " << (fallback ? "fallback" : "SoundFont"));
+      Sf2Player player = fallback ? make_fallback_player() : fixture_player();
+      set_gs_pitch_tuning(player, tuning);
+      if (fallback) send(player, sonare::midi::make_midi1_program_change(0, 0, 80));
+      send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25));
+      send(player, sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000));
+      (void)render(player, 4096);
+      send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, false, true));
+      const std::vector<float> after = render_one_second(player);
+
+      const double expected =
+          (fallback ? 261.6255653005986 : 1000.0) * std::exp2(tuning_cents / 1200.0);
+      const double measured =
+          fallback ? sonare::test::fft_fundamental(after, 4096, expected) : crossing_hz(after);
+      CAPTURE(expected, measured);
+      CHECK(measured == Approx(expected).margin(fallback ? 4.0 : 2.0));
+    }
+  }
+}
+
+TEST_CASE("Sf2Player detaches absolute pitch before reset in both voice pools",
+          "[midi][sf2][synth][midi2]") {
+  // D=1 freezes the sounding note before S=1 clears the key's row. The old
+  // voice must keep the absolute pitch, while a later note on the same key
+  // sees the reset row and therefore receives the part's +40 cent tuning.
+  for (const GsPitchTuning tuning : {GsPitchTuning::kScale, GsPitchTuning::kPitchOffset}) {
+    INFO("GS tuning: " << static_cast<int>(tuning));
+    const double tuning_cents = gs_pitch_tuning_cents(tuning);
+    for (const bool fallback : {false, true}) {
+      INFO("voice pool: " << (fallback ? "fallback" : "SoundFont"));
+      Sf2Player player = fallback ? make_fallback_player() : fixture_player();
+      set_gs_pitch_tuning(player, tuning);
+      if (fallback) send(player, sonare::midi::make_midi1_program_change(0, 0, 80));
+      send(player, sonare::midi::make_midi2_per_note_controller(0, 0, 60, 3, 60u << 25));
+      player.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000), 1));
+      (void)render(player, 4096);
+      send(player, sonare::midi::make_midi2_per_note_management(0, 0, 60, true, true));
+      player.on_event(0, on_track(sonare::midi::make_midi2_note_on(0, 0, 60, 0xC000), 2));
+      const auto tracks = render_tracks(player, 16384);
+
+      const double absolute = fallback ? 261.6255653005986 : 1000.0;
+      const double tuned = absolute * std::exp2(tuning_cents / 1200.0);
+      const double old_pitch = fallback ? sonare::test::fft_fundamental(tracks[0], 4096, absolute)
+                                        : crossing_hz(tracks[0]);
+      const double new_pitch =
+          fallback ? sonare::test::fft_fundamental(tracks[1], 4096, tuned) : crossing_hz(tracks[1]);
+      CAPTURE(absolute, tuned, old_pitch, new_pitch);
+      CHECK(old_pitch == Approx(absolute).margin(fallback ? 4.0 : 2.0));
+      CHECK(new_pitch == Approx(tuned).margin(fallback ? 4.0 : 2.0));
+    }
+  }
+}
+
+TEST_CASE("Sf2Player organ wind demand follows the number of sounding ranks",
+          "[midi][sf2][synth][organ]") {
+  // GS Church Organ variation 8 has three ranks and variation 16 has eight.
+  // Keep track 1 on variation 8 in every render, then change the part's bank
+  // only before the optional track 2 note. This holds the measured voice's
+  // static registration fixed while the shared wind demand changes from 3 to
+  // 6 or 11 pipes.
+  const auto first_voice_rms = [](uint8_t second_variation) {
+    Sf2Player player = make_player(nullptr);
+    send(player, sonare::midi::make_midi1_control_change(0, 0, 0, 8));
+    send(player, sonare::midi::make_midi1_program_change(0, 0, 19));
+    player.on_event(0, on_track(sonare::midi::make_midi1_note_on(0, 0, 60, 110), 1));
+    if (second_variation != 0) {
+      send(player, sonare::midi::make_midi1_control_change(0, 0, 0, second_variation));
+      player.on_event(0, on_track(sonare::midi::make_midi1_note_on(0, 0, 60, 110), 2));
+    }
+    const auto tracks = render_tracks(player, 48000);
+    return rms_window(tracks[0], 24000, 48000);
+  };
+
+  const float one_voice = first_voice_rms(0);
+  const float three_rank_chord = first_voice_rms(8);
+  const float eight_rank_chord = first_voice_rms(16);
+  const float three_ratio = three_rank_chord / std::max(1.0e-20f, one_voice);
+  const float eight_ratio = eight_rank_chord / std::max(1.0e-20f, one_voice);
+  CAPTURE(one_voice, three_rank_chord, eight_rank_chord, three_ratio, eight_ratio);
+  REQUIRE(one_voice > 1.0e-4f);
+  REQUIRE(eight_ratio + 0.01f < three_ratio);
+}

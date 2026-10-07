@@ -240,6 +240,10 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
     count = std::min(params.rank_count, kMaxPipeRanks);
   }
   rank_count_ = count;
+  sounding_pipe_count_ = 0;
+  for (int r = 0; r < count; ++r) {
+    if (std::clamp(ranks[r].level, 0.0f, 1.0f) > 0.0f) ++sounding_pipe_count_;
+  }
 
   // Chorus normalisation: decorrelated pipes add in power, so divide by
   // sqrt(sum level^2) to hold the stop at a single-pipe loudness.

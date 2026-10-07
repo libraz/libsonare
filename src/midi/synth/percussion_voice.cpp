@@ -176,13 +176,15 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
     } else if (m == 0 && dipole && params.shell_depth_m > 0.0f) {
       radiation = std::min(1.0f, wavenumber * params.shell_depth_m * kDipolePerKl);
     }
-    mode.gain = strike * std::sin(mode.omega) * strike_pos * radiation;
+    // render() rebuilds the impulse gain from the bent frequency, so a bend keeps the level.
+    mode.peak_gain = strike * strike_pos * radiation;
+    mode.gain = 0.0f;
+    mode.audible = false;
     // The head's own peak swing at unit excitation. Every mode is impulse-
-    // excited in phase, so the in-phase sum of the two-pole peaks (gain/sin w,
-    // read at the frequency the strike starts on) is the bound the membrane
-    // cannot exceed. It is what the wire gate measures its threshold against.
-    const float w0 = std::min(mode.omega * start_ratio, 0.95f * kPi);
-    tone_peak_ += mode.gain / std::max(1.0e-6f, std::sin(w0));
+    // excited in phase, so the in-phase sum of the pre-normalization gains is
+    // the bound the membrane cannot exceed. It is what the wire gate measures
+    // its threshold against.
+    tone_peak_ += mode.peak_gain;
     ++placed;
   };
 
@@ -396,8 +398,20 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
       cached_ratio_ = ratio;
       for (int k = 0; k < num_modes_; ++k) {
         Mode& mode = modes_[static_cast<size_t>(k)];
-        if (mode.gain == 0.0f && mode.r == 0.0f) continue;
-        const float w = std::min(mode.omega * ratio, 0.95f * kPi);
+        const float w = mode.omega * ratio;
+        if (mode.peak_gain == 0.0f || mode.r <= 0.0f || w <= 0.0f || w >= 0.9f * kPi) {
+          // Keep the descriptor for a later downbend, but never carry a state
+          // through an out-of-band interval or retrigger it when it returns.
+          mode.audible = false;
+          mode.gain = 0.0f;
+          mode.a1 = 0.0f;
+          mode.a2 = 0.0f;
+          mode.y1 = 0.0f;
+          mode.y2 = 0.0f;
+          continue;
+        }
+        mode.audible = true;
+        mode.gain = mode.peak_gain * std::sin(w);
         mode.a1 = 2.0f * mode.r * std::cos(w);
         mode.a2 = -mode.r * mode.r;
       }
@@ -407,6 +421,7 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     float tone = 0.0f;
     for (int k = 0; k < num_modes_; ++k) {
       Mode& mode = modes_[static_cast<size_t>(k)];
+      if (!mode.audible) continue;
       const float y = mode.a1 * mode.y1 + mode.a2 * mode.y2 + mode.gain * x;
       mode.y2 = mode.y1;
       mode.y1 = y;
@@ -598,7 +613,9 @@ void PercussionVoiceCore::kill() noexcept {
   for (Mode& mode : modes_) {
     mode.y1 = 0.0f;
     mode.y2 = 0.0f;
+    mode.peak_gain = 0.0f;
     mode.gain = 0.0f;
+    mode.audible = false;
   }
   num_modes_ = 0;
   silence_env_ = 0.0f;

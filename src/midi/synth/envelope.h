@@ -64,6 +64,8 @@ class DahdsrEnvelope {
   bool releasing() const noexcept { return stage_ == Stage::kRelease; }
   Stage stage() const noexcept { return stage_; }
   float level() const noexcept { return level_; }
+  /// One-pole release weight per sample, as last configured.
+  float release_rate() const noexcept { return release_rate_; }
 
   /// Longest tail after note-off in samples (time for the release exponential
   /// to fall from 1.0 to kSilenceLevel) for @p release_ms at @p sample_rate.
