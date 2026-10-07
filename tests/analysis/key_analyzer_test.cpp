@@ -14,6 +14,7 @@
 #include "feature/chroma.h"
 #include "feature/spectral.h"
 #include "filters/iir.h"
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -676,5 +677,18 @@ TEST_CASE("Auto key selection is exact against a chromagram-per-mean front-end",
     KeyConfig high_passed = config;
     high_passed.high_pass_hz = 120.0f;
     require_auto_matches_oracle(create_loud_eflat_after_quiet_c(), high_passed, true);
+  }
+}
+
+TEST_CASE("key of the same content agrees across input sample rates",
+          "[analysis_rate][key_analyzer]") {
+  using test::RateMaterial;
+  const KeyAnalyzer base(test::make_rate_material(RateMaterial::Cadence, 22050));
+  for (int sr : {32000, 44100, 48000}) {
+    const KeyAnalyzer at_rate(test::make_rate_material(RateMaterial::Cadence, sr));
+    CAPTURE(sr, base.key().to_string(), at_rate.key().to_string(), base.key().confidence,
+            at_rate.key().confidence);
+    CHECK(at_rate.key().root == base.key().root);
+    CHECK(at_rate.key().mode == base.key().mode);
   }
 }

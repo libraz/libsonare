@@ -65,11 +65,12 @@ std::vector<float> noise(uint32_t seed, size_t samples) {
 /// @details Normalised so the peak is exactly @p amplitude, which makes the
 ///          synthesised level an analytic anchor for peak_amplitude and for the
 ///          lifted signal's size.
-std::vector<float> hit(uint32_t seed, float amplitude) {
-  std::vector<float> burst = noise(seed, kHitSamples);
-  const double decay = static_cast<double>(kHitDecayMs) * 0.001 * kSampleRate;
+std::vector<float> hit(uint32_t seed, float amplitude, int sample_rate = kSampleRate) {
+  const size_t hit_samples = static_cast<size_t>(std::lround(0.060 * sample_rate));
+  std::vector<float> burst = noise(seed, hit_samples);
+  const double decay = static_cast<double>(kHitDecayMs) * 0.001 * sample_rate;
   float worst = 0.0f;
-  for (size_t i = 0; i < kHitSamples; ++i) {
+  for (size_t i = 0; i < hit_samples; ++i) {
     burst[i] *= static_cast<float>(std::exp(-static_cast<double>(i) / decay));
     worst = std::max(worst, std::abs(burst[i]));
   }
@@ -85,9 +86,10 @@ struct HitSpec {
   float amplitude;
 };
 
-void add_hits(std::vector<float>& into, const std::vector<HitSpec>& specs) {
+void add_hits(std::vector<float>& into, const std::vector<HitSpec>& specs,
+              int sample_rate = kSampleRate) {
   for (const HitSpec& spec : specs) {
-    const std::vector<float> burst = hit(spec.seed, spec.amplitude);
+    const std::vector<float> burst = hit(spec.seed, spec.amplitude, sample_rate);
     for (size_t i = 0; i < burst.size() && spec.start + i < into.size(); ++i) {
       into[spec.start + i] += burst[i];
     }
@@ -458,6 +460,42 @@ TEST_CASE("extract_percussive_events finds every hit, in order, with an identity
   // at its ceiling for everything -- is the note_then_hit case below.
   for (const PercussiveEvent& event : events) {
     REQUIRE(event.percussive_ratio > 0.5f);
+  }
+}
+
+TEST_CASE("extract_percussive_events places spans at the same times at 48 kHz", "[event_model]") {
+  constexpr int kHighRate = 48000;
+  const sonare::Audio base_audio = three_hits();
+  const std::vector<PercussiveEvent> base = extract_percussive_events(base_audio);
+  REQUIRE(base.size() == 3);
+
+  // The same hit pattern, with each start converted through seconds.
+  std::vector<float> samples(static_cast<size_t>(base_audio.size()) * kHighRate / kSampleRate,
+                             0.0f);
+  std::vector<HitSpec> specs;
+  for (size_t i = 0; i < 3; ++i) {
+    const size_t start = static_cast<size_t>(
+        std::llround(static_cast<double>(kThreeHitStarts[i]) * kHighRate / kSampleRate));
+    specs.push_back({start, static_cast<uint32_t>(i + 1), kThreeHitPeaks[i]});
+  }
+  add_hits(samples, specs, kHighRate);
+  const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), kHighRate);
+  const std::vector<PercussiveEvent> events = extract_percussive_events(audio);
+
+  REQUIRE(events.size() == base.size());
+  // The detector runs on the native framing, so a span lands within one hop of
+  // the written hit; the 22050 result carries its own, coarser grid.
+  const double ratio = static_cast<double>(kHighRate) / kSampleRate;
+  const double native_hop = kHopLength;
+  const double base_grid = kHopLength * ratio;
+  for (size_t i = 0; i < events.size(); ++i) {
+    const double written = static_cast<double>(kThreeHitStarts[i]) * ratio;
+    const double got = static_cast<double>(events[i].onset_sample);
+    INFO("hit " << i << " written=" << written << " got=" << got
+                << " at 22050=" << base[i].onset_sample);
+    REQUIRE(std::abs(got - written) <= native_hop);
+    REQUIRE(std::abs(got - static_cast<double>(base[i].onset_sample) * ratio) <=
+            base_grid + native_hop);
   }
 }
 

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "feature/onset.h"
-#include "util/constants.h"
+#include "support/rate_material.h"
 
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
@@ -367,5 +367,28 @@ TEST_CASE("OnsetAnalyzer wait parameter", "[onset_analyzer]") {
     for (size_t i = 1; i < frames.size(); ++i) {
       REQUIRE(frames[i] - frames[i - 1] > config.wait);
     }
+  }
+}
+
+TEST_CASE("onsets of the same content agree across input sample rates",
+          "[analysis_rate][onset_analyzer]") {
+  using test::RateMaterial;
+  const OnsetAnalyzer base(test::make_rate_material(RateMaterial::Clicks, 22050));
+  const std::vector<float> base_times = base.onset_times();
+  for (int sr : {32000, 44100, 48000}) {
+    const OnsetAnalyzer at_rate(test::make_rate_material(RateMaterial::Clicks, sr));
+    const std::vector<float> times = at_rate.onset_times();
+    float max_time_dev = 0.0f;
+    for (size_t i = 0; i < std::min(times.size(), base_times.size()); ++i) {
+      max_time_dev = std::max(max_time_dev, std::abs(times[i] - base_times[i]));
+    }
+    // One frame of peak-picking drift in each grid.
+    const float time_tolerance =
+        static_cast<float>(base.hop_length()) / static_cast<float>(constants::kDefaultSampleRate) +
+        static_cast<float>(at_rate.hop_length()) / static_cast<float>(sr);
+    CAPTURE(sr, base_times.size(), times.size(), max_time_dev, time_tolerance);
+    CAPTURE(base_times, times);
+    CHECK(times.size() == base_times.size());
+    CHECK(max_time_dev <= time_tolerance);
   }
 }

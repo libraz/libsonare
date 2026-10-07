@@ -7,6 +7,7 @@
 #include <iterator>
 #include <limits>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/chord_analyzer.h"
 #include "effects/hpss.h"
 #include "feature/spectral.h"
@@ -169,9 +170,11 @@ void validate_chroma_config(const Audio& audio, const KeyConfig& config) {
                ErrorCode::InvalidParameter);
 }
 
-ChromaConfig chroma_config_for(const KeyConfig& config) {
+ChromaConfig chroma_config_for(const KeyConfig& config, int sample_rate) {
+  const RateWindow window = window_at_rate(config.n_fft, sample_rate);
   ChromaConfig chroma_config;
-  chroma_config.n_fft = config.n_fft;
+  chroma_config.n_fft = window.n_fft;
+  chroma_config.win_length = window.win_length;
   chroma_config.hop_length = config.hop_length;
   chroma_config.tuning = config.tuning;
   return chroma_config;
@@ -200,7 +203,9 @@ Audio high_passed_audio(const Audio& audio, const KeyConfig& config) {
 std::array<float, 12> chroma_mean(const Chroma& chroma, const Audio& analysis_audio,
                                   const KeyConfig& config, bool loudness_weighted) {
   if (loudness_weighted) {
-    return chroma.weighted_mean_energy(rms_energy(analysis_audio, config.n_fft, config.hop_length));
+    const RateWindow window = window_at_rate(config.n_fft, analysis_audio.sample_rate());
+    const int frame_length = window.win_length > 0 ? window.win_length : window.n_fft;
+    return chroma.weighted_mean_energy(rms_energy(analysis_audio, frame_length, config.hop_length));
   }
   return chroma.mean_energy();
 }
@@ -208,7 +213,8 @@ std::array<float, 12> chroma_mean(const Chroma& chroma, const Audio& analysis_au
 /// @brief Mean chroma of one analysis signal, optionally loudness-weighted.
 std::array<float, 12> mean_chroma_of(const Audio& analysis_audio, const KeyConfig& config,
                                      bool loudness_weighted) {
-  const Chroma chroma = Chroma::compute(analysis_audio, chroma_config_for(config));
+  const Chroma chroma =
+      Chroma::compute(analysis_audio, chroma_config_for(config, analysis_audio.sample_rate()));
   return chroma_mean(chroma, analysis_audio, config, loudness_weighted);
 }
 
@@ -218,7 +224,8 @@ std::array<float, 12> compute_mean_chroma_for_audio(const Audio& audio, const Ke
 
   const Audio filtered_audio = high_passed_audio(audio, config);
   const Audio analysis_audio =
-      use_hpss ? harmonic(filtered_audio, HpssConfig(), chroma_config_for(config).to_stft_config())
+      use_hpss ? harmonic(filtered_audio, HpssConfig(),
+                          chroma_config_for(config, audio.sample_rate()).to_stft_config())
                : filtered_audio;
   return mean_chroma_of(analysis_audio, config, loudness_weighted);
 }
@@ -295,14 +302,17 @@ KeyAnalyzer::KeyAnalyzer(const Audio& audio, const KeyConfig& config) : config_(
     std::array<std::array<float, 12>, 4> candidate_means{};
     {
       const Audio filtered_audio = high_passed_audio(audio, config);
-      const Chroma filtered_chroma = Chroma::compute(filtered_audio, chroma_config_for(config));
+      const Chroma filtered_chroma =
+          Chroma::compute(filtered_audio, chroma_config_for(config, audio.sample_rate()));
       candidate_means[0] =
           chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/false);
       candidate_means[2] =
           chroma_mean(filtered_chroma, filtered_audio, config, /*loudness_weighted=*/true);
       const Audio harmonic_audio =
-          harmonic(filtered_audio, HpssConfig(), chroma_config_for(config).to_stft_config());
-      const Chroma harmonic_chroma = Chroma::compute(harmonic_audio, chroma_config_for(config));
+          harmonic(filtered_audio, HpssConfig(),
+                   chroma_config_for(config, audio.sample_rate()).to_stft_config());
+      const Chroma harmonic_chroma =
+          Chroma::compute(harmonic_audio, chroma_config_for(config, audio.sample_rate()));
       candidate_means[1] =
           chroma_mean(harmonic_chroma, harmonic_audio, config, /*loudness_weighted=*/false);
       candidate_means[3] =

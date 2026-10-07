@@ -4,6 +4,7 @@
 #include <cmath>
 #include <numeric>
 
+#include "analysis/analysis_rate.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/rhythm.h"
@@ -398,8 +399,10 @@ BpmAnalyzer::BpmAnalyzer(const Audio& audio, const BpmConfig& config) : config_(
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   /// Compute onset strength
+  const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
   MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
+  mel_config.n_fft = window.n_fft;
+  mel_config.win_length = window.win_length;
   mel_config.hop_length = config.hop_length;
   mel_config.n_mels = constants::kDefaultNMels;
 

@@ -18,7 +18,7 @@ struct Onset {
 /// @brief Configuration for onset detection.
 /// @details Default values follow common onset-detection settings (sr=22050, hop=512).
 struct OnsetDetectConfig {
-  int n_fft = 2048;        ///< FFT size
+  int n_fft = 2048;        ///< Window length in samples at 22050 Hz, rescaled to the input rate
   int hop_length = 512;    ///< Hop length
   float threshold = 0.0f;  ///< Minimum onset strength (0 = adaptive)
   int pre_max = 1;         ///< Frames before peak for local max (~30ms)
@@ -36,13 +36,23 @@ struct OnsetDetectConfig {
   int backtrack_range = 10;
 };
 
+/// @brief How the onset envelope's analysis window relates to the input sample rate.
+enum class OnsetFraming {
+  /// `n_fft` is a window length in samples at 22050 Hz, rescaled to the input rate.
+  kAnalysisRate,
+  /// `n_fft` is used as given, in samples of the input buffer.
+  kNative
+};
+
 /// @brief Onset analyzer for detecting note/beat onsets.
 class OnsetAnalyzer {
  public:
   /// @brief Constructs onset analyzer from audio.
   /// @param audio Input audio
-  /// @param config Onset configuration
-  explicit OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config = OnsetDetectConfig());
+  /// @param config Onset configuration; `hop_length` is in samples of @p audio
+  /// @param framing Whether `n_fft` is rescaled from 22050 Hz to the input rate
+  explicit OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config = OnsetDetectConfig(),
+                         OnsetFraming framing = OnsetFraming::kAnalysisRate);
 
   /// @brief Constructs onset analyzer from pre-computed onset strength.
   /// @param onset_strength Onset strength envelope

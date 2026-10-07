@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -394,5 +395,19 @@ TEST_CASE("BpmAnalyzer keeps confidence in range without onset structure", "[bpm
   for (const BpmCandidate& candidate : analyzer.candidates()) {
     REQUIRE(candidate.confidence >= 0.0f);
     REQUIRE(candidate.confidence <= 1.0f);
+  }
+}
+
+TEST_CASE("BPM of the same content agrees across input sample rates",
+          "[analysis_rate][bpm_analyzer]") {
+  using test::RateMaterial;
+  const float base_bpm =
+      BpmAnalyzer(test::make_rate_material(RateMaterial::TriadTurnaround, 22050)).bpm();
+  for (int sr : {32000, 44100, 48000}) {
+    const float bpm =
+        BpmAnalyzer(test::make_rate_material(RateMaterial::TriadTurnaround, sr)).bpm();
+    const float bpm_dev = std::abs(bpm - base_bpm) / base_bpm;
+    CAPTURE(sr, base_bpm, bpm, bpm_dev);
+    CHECK(bpm_dev <= 0.02f);
   }
 }

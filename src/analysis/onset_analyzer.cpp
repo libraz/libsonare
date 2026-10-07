@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_rate.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "util/constants.h"
@@ -10,13 +11,20 @@
 
 namespace sonare {
 
-OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config)
+OnsetAnalyzer::OnsetAnalyzer(const Audio& audio, const OnsetDetectConfig& config,
+                             OnsetFraming framing)
     : sr_(audio.sample_rate()), hop_length_(config.hop_length), config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Compute onset strength
   MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
+  if (framing == OnsetFraming::kAnalysisRate) {
+    const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
+    mel_config.n_fft = window.n_fft;
+    mel_config.win_length = window.win_length;
+  } else {
+    mel_config.n_fft = config.n_fft;
+  }
   mel_config.hop_length = config.hop_length;
   mel_config.n_mels = constants::kDefaultNMels;
 

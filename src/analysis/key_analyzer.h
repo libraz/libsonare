@@ -63,9 +63,9 @@ struct KeyCandidate {
 
 /// @brief Configuration for key analysis.
 struct KeyConfig {
-  int n_fft = 4096;                ///< FFT size for chroma
-  int hop_length = 512;            ///< Hop length for chroma
-  bool use_hpss = false;           ///< Use HPSS to extract harmonic component
+  int n_fft = 4096;       ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;   ///< Hop length in samples of the input buffer
+  bool use_hpss = false;  ///< Use HPSS to extract harmonic component
   bool loudness_weighted = false;  ///< Weight chroma frames by RMS loudness
   float high_pass_hz = 0.0f;       ///< High-pass filter cutoff (0 = disabled)
   KeyProfileType profile_type = KeyProfileType::KrumhanslSchmuckler;

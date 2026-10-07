@@ -48,8 +48,8 @@ struct BpmConfig {
   float bpm_min = 30.0f;     ///< Minimum BPM to consider
   float bpm_max = 300.0f;    ///< Maximum BPM to consider
   float start_bpm = 120.0f;  ///< Initial BPM estimate (used as fallback)
-  int n_fft = 2048;          ///< FFT size for onset detection
-  int hop_length = 512;      ///< Hop length for onset detection
+  int n_fft = 2048;          ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;      ///< Hop length in samples of the input buffer
 };
 
 /// @brief BPM candidate with confidence score.

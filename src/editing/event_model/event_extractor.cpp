@@ -78,7 +78,7 @@ std::vector<PercussiveEvent> extract_percussive_events(
   OnsetDetectConfig onset_config = config.onset;
   onset_config.n_fft = config.separation.n_fft;
   onset_config.hop_length = config.separation.hop_length;
-  const OnsetAnalyzer analyzer(separated.percussive, onset_config);
+  const OnsetAnalyzer analyzer(separated.percussive, onset_config, OnsetFraming::kNative);
   const std::vector<Onset>& onsets = analyzer.onsets();
 
   const int64_t n_samples = static_cast<int64_t>(audio.size());

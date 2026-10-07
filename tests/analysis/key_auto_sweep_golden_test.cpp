@@ -154,8 +154,8 @@ std::vector<Row> compute_rows() {
     for (int major = 1; major >= 0; --major) {
       for (int variant = 0; variant < 3; ++variant) {
         // Every tonality is covered at the analysis rate; one variant also runs
-        // at 44.1 kHz so the internal downsample to 22.05 kHz stays covered
-        // without paying for it on every row.
+        // at 44.1 kHz so the rescaled analysis window stays covered without
+        // paying for it on every row.
         std::vector<int> rates = {22050};
         if (variant == 0) rates.push_back(44100);
         for (int sr : rates) {
