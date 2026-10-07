@@ -53,6 +53,14 @@ inline constexpr uint8_t kEfxSourceBend = 0x61;
 /// half. The depth is centred on 40 over 64 steps.
 uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcept;
 
+/// Serial tail of one part's rig chain in samples, saturating.
+int64_t part_chain_tail_samples(
+    const std::vector<std::unique_ptr<rt::ProcessorBase>>& chain) noexcept;
+
+/// Tail of a part chain feeding @p unit (null for none): the unit rings out
+/// after the chain, so the two add. Negative inputs count as zero; saturating.
+int64_t routed_part_tail_samples(int64_t chain_tail, const Sf2EfxUnitRt* unit) noexcept;
+
 /// A realised set of part chains and insertion units, handed to the audio
 /// thread as one immutable-lifetime snapshot. Built entirely on the CONTROL
 /// thread, so the audio thread only reads it (running the processors, which a
@@ -61,6 +69,10 @@ uint8_t efx_control_byte(const Sf2EfxControlRt& control, float position) noexcep
 struct PartFxSnapshot {
   /// The rig chain run in place on each part's bus.
   std::array<std::vector<std::unique_ptr<rt::ProcessorBase>>, 16> chains{};
+  /// Tail of each part's host rig chain, before any shared GS insertion unit.
+  /// This is retained per part so a prepared overlay can add the selected
+  /// unit's tail without rebuilding or allocating a speculative snapshot.
+  std::array<int, 16> chain_tail_samples{};
   /// The processor name of each stage in chains, in order.
   std::array<std::vector<std::string>, 16> stage_names{};
   /// Whether the part sums through its bus rather than straight to the mix.
@@ -74,6 +86,10 @@ struct PartFxSnapshot {
   /// Which build this is. A queued update carries the generation it was
   /// resolved against and is dropped by any other snapshot.
   uint32_t generation = 0;
+  /// Tail declared when this immutable graph was published. Processors may
+  /// report a larger bound after a realtime parameter update; the stage keeps
+  /// that observed bound separately from this snapshot value.
+  int tail_samples = 0;
   /// The unit each part merges into after its own chain, or kNoUnit.
   static constexpr uint8_t kNoUnit = 0xFF;
   std::array<uint8_t, 16> part_unit{};
@@ -208,7 +224,11 @@ class PartFxStage {
 
   /// AUDIO thread: the snapshot adopted by the last acquire().
   const PartFxSnapshot* current() const noexcept { return pub_->current(); }
-  void acquire() noexcept { pub_->acquire(); }
+  void acquire() noexcept;
+  /// CONTROL thread at a quiescent boundary: adopt every published snapshot,
+  /// including a coalesced pending replacement left behind by a full burst.
+  /// Unlike acquire(), this may reclaim the retire ring between iterations.
+  void acquire_control_quiescent() noexcept;
   /// CONTROL thread: the last published snapshot.
   const PartFxSnapshot* control_current() const noexcept { return pub_->control_current().get(); }
   /// How many snapshots have been published.
@@ -254,8 +274,14 @@ class PartFxStage {
   void run_units(int n, const std::array<bool, kGsEfxUnitCount>& fed,
                  const PartFxUnitOverrides* overrides) noexcept;
 
-  /// The longest tail of the published chains and units, in samples.
-  int tail_samples() const noexcept { return tail_samples_; }
+  /// The longest tail of the published chains and units, in samples. The
+  /// result includes a larger bound observed after a realtime parameter edit;
+  /// it lowers only when a fresh graph is adopted or at a quiescent boundary.
+  int tail_samples() const noexcept {
+    const int published = published_tail_samples_->load(std::memory_order_relaxed);
+    const int active = active_tail_samples_->load(std::memory_order_relaxed);
+    return published > active ? published : active;
+  }
   /// Every published processor's discard count added together. RT-safe.
   uint64_t discard_sum(const PartFxUnitOverrides* overrides) const noexcept;
 
@@ -337,9 +363,21 @@ class PartFxStage {
   /// Retain the realtime-safe subset of a realised unit's binding rows, so a
   /// candidate-less overlay delta can edit it in place.
   void build_legacy_plan(Sf2EfxUnitRt& unit, size_t unit_index, const GsEfx& efx) const;
-  /// Resolve a parameter-only edit of @p unit against the published unit and
-  /// enqueue the updates. Returns true when a full rebuild is required instead.
-  bool enqueue_param_updates(size_t unit, const std::array<uint8_t, 20>& previous_params);
+  /// Append all realtime-safe updates for one changed unit to @p pending. No
+  /// queue state is mutated here, so a multi-unit SysEx can validate every
+  /// unit before publishing one atomic batch.
+  bool append_param_updates(size_t unit, const std::array<uint8_t, 20>& previous_params,
+                            const PartFxSnapshot& snapshot, EfxParamUpdate* pending,
+                            size_t* pending_count) const;
+  /// Compute the current topology tail without allocating. The processor
+  /// tails are read on the audio thread after an in-place update.
+  int actual_tail_samples(const PartFxSnapshot& snapshot) const noexcept;
+  /// Raise the active graph's observed bound; this intentionally never lowers
+  /// it while the same snapshot remains active.
+  void raise_active_tail(const PartFxSnapshot& snapshot) noexcept;
+  /// Set both metadata channels when a snapshot is adopted at a quiescent
+  /// boundary, where lowering is safe.
+  void set_quiescent_tail(const PartFxSnapshot* snapshot) noexcept;
 
   PartFxStageConfig config_;
   double sample_rate_ = 0.0;
@@ -355,7 +393,6 @@ class PartFxStage {
   /// 16 units x stereo x kPartFxChunkFrames.
   std::vector<float> unit_bus_;
   uint32_t generation_ = 0;
-  int tail_samples_ = 0;
   /// Held by unique_ptr because RtPublisher and the atomics are not movable
   /// while the stage is.
   std::unique_ptr<rt::RtPublisher<PartFxSnapshot>> pub_ =
@@ -368,6 +405,11 @@ class PartFxStage {
   /// One bit per part whose rig in force is the bank's, so the AUDIO thread can
   /// tell whether a program change reaches a chain.
   std::unique_ptr<std::atomic<uint32_t>> bank_parts_ = std::make_unique<std::atomic<uint32_t>>(0);
+  /// Published is the declared tail of the newest control snapshot; active is
+  /// the tail of the graph currently adopted by audio, including raises seen
+  /// after realtime parameter updates. Unique pointers preserve move support.
+  std::unique_ptr<std::atomic<int>> published_tail_samples_ = std::make_unique<std::atomic<int>>(0);
+  std::unique_ptr<std::atomic<int>> active_tail_samples_ = std::make_unique<std::atomic<int>>(0);
   /// Attached for one offline render only; never set on a live path.
   RenderPathRecorder* recorder_ = nullptr;
 };

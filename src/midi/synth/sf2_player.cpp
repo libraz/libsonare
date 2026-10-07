@@ -119,6 +119,7 @@ void Sf2Player::clear_control_owned_gs_state() {
 }
 
 void Sf2Player::clear_prepared_audio_state() noexcept {
+  prepared_part_fx_tail_->store(0, std::memory_order_relaxed);
   for (PreparedEfxNode*& node : prepared_active_nodes_) {
     if (node != nullptr) {
       node->audio_pins.fetch_sub(1, std::memory_order_acq_rel);
@@ -138,11 +139,11 @@ void Sf2Player::clear_prepared_audio_state() noexcept {
   prepared_host_part_bussed_.fill(false);
   prepared_host_mono_prefix_.fill(0);
   prepared_host_any_bussed_ = false;
-  prepared_any_unit_ = false;
   prepared_any_bussed_ = false;
   prepared_runtime_active_ = false;
   prepared_base_synced_ = false;
   prepared_empty_unit_ = {};
+  prepared_unit_render_state_ = {};
 }
 
 void Sf2Player::seed_prepared_from_control_state() noexcept {
@@ -170,7 +171,6 @@ void Sf2Player::rebuild_prepared_routing() noexcept {
   prepared_part_bussed_ = prepared_host_part_bussed_;
   prepared_mono_prefix_ = prepared_host_mono_prefix_;
   prepared_unit_fed_.fill(false);
-  prepared_any_unit_ = false;
   prepared_any_bussed_ = prepared_host_any_bussed_;
   if (!part_fx_.enabled()) return;
   for (size_t part = 0; part < prepared_assign_.size(); ++part) {
@@ -179,7 +179,6 @@ void Sf2Player::rebuild_prepared_routing() noexcept {
     prepared_part_unit_[part] = static_cast<uint8_t>(unit);
     prepared_part_bussed_[part] = true;
     prepared_unit_fed_[static_cast<size_t>(unit)] = true;
-    prepared_any_unit_ = true;
     prepared_any_bussed_ = true;
   }
 }
@@ -200,6 +199,7 @@ void Sf2Player::sync_prepared_base() noexcept {
   }
   rebuild_prepared_routing();
   prepared_base_synced_ = true;
+  raise_prepared_fx_tail();
 }
 
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
@@ -266,6 +266,35 @@ void Sf2Player::raise_tail() noexcept {
   int64_t current = tail_samples_->load(std::memory_order_relaxed);
   while (tail > current &&
          !tail_samples_->compare_exchange_weak(current, tail, std::memory_order_relaxed)) {
+  }
+}
+
+void Sf2Player::raise_prepared_fx_tail() noexcept {
+  if (!prepared_runtime_active_) return;
+  const PartFxSnapshot* snapshot = part_fx_.current();
+  int64_t maximum = 0;
+  for (size_t part = 0; part < prepared_part_unit_.size(); ++part) {
+    const int unit = prepared_part_unit_[part] == PartFxSnapshot::kNoUnit
+                         ? -1
+                         : static_cast<int>(prepared_part_unit_[part]);
+    if (unit < 0 || static_cast<size_t>(unit) >= kGsEfxUnitCount) continue;
+    const int64_t chain_tail =
+        snapshot == nullptr ? 0 : std::max(0, snapshot->chain_tail_samples[part]);
+    const Sf2EfxUnitRt* runtime = nullptr;
+    if (prepared_unit_overridden_[static_cast<size_t>(unit)]) {
+      runtime = prepared_active_nodes_[static_cast<size_t>(unit)] != nullptr
+                    ? &prepared_active_nodes_[static_cast<size_t>(unit)]->unit_rt
+                    : &prepared_empty_unit_;
+    } else if (snapshot != nullptr && snapshot->unit_fed[static_cast<size_t>(unit)]) {
+      runtime = &snapshot->units[static_cast<size_t>(unit)];
+    }
+    maximum = std::max(maximum, routed_part_tail_samples(chain_tail, runtime));
+  }
+  const int bounded = maximum > std::numeric_limits<int>::max() ? std::numeric_limits<int>::max()
+                                                                : static_cast<int>(maximum);
+  int current = prepared_part_fx_tail_->load(std::memory_order_relaxed);
+  while (bounded > current && !prepared_part_fx_tail_->compare_exchange_weak(
+                                  current, bounded, std::memory_order_relaxed)) {
   }
 }
 
@@ -412,6 +441,10 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // bussed parts from the first block.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   part_fx_.publish();
+  // prepare() is a quiescent boundary, so adopt the initial publication now.
+  // Prepared metadata can be queried immediately after an event, before the
+  // first process() has had an opportunity to acquire the snapshot.
+  part_fx_.acquire_control_quiescent();
   part_fx_.clear_dirty();
 }
 
@@ -440,6 +473,9 @@ void Sf2Player::reset() {
   // old snapshot is retired/freed by the control thread, never the audio thread.
   if (prepared_) {
     part_fx_.publish();
+    // reset() is also quiescent; make the rebuilt host-chain metadata visible
+    // to prepared events dispatched before the next audio block.
+    part_fx_.acquire_control_quiescent();
     part_fx_.clear_dirty();
   }
 #if defined(SONARE_MIDI_WITH_FX)

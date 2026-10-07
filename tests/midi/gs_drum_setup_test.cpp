@@ -376,6 +376,25 @@ TEST_CASE("a GS drum setup run applies every byte, not the first", "[midi][synth
   CHECK_FALSE(identical(run, first_only));
 }
 
+TEST_CASE("a long GS drum setup run keeps bytes after the first 128", "[midi][synth][gs]") {
+  // 41 01 00 + 166 reaches 41 02 26: LEVEL for note 38. The first 128 bytes
+  // are PLAY NOTE values (identity for every note); the byte beyond the fixed
+  // decoder buffer mutes the struck note. The split write is the oracle.
+  std::vector<uint8_t> data(167, 0x7F);
+  for (size_t note = 0; note < 128; ++note) data[note] = static_cast<uint8_t>(note);
+  data[166] = 0x00;
+  const std::vector<uint8_t> prefix(data.begin(), data.begin() + 128);
+
+  const StereoRender bulk =
+      render([&](Sf2Player& player) { sysex(player, dt1(drum_addr(0, 0x1, 0), data)); });
+  const StereoRender split = render([&](Sf2Player& player) {
+    sysex(player, dt1(drum_addr(0, 0x1, 0), prefix));
+    sysex(player, dt1(drum_addr(0, 0x2, kNoteA), {0x00}));
+  });
+  CHECK_FALSE(identical(split, render(nullptr)));
+  CHECK(static_cast<bool>(identical(bulk, split)));
+}
+
 TEST_CASE("41 m4 rr 00 is centre where NRPN 1C 00 is hard left", "[midi][synth][gs]") {
   // docs/gs.md: the address's 00 is RANDOM on the hardware and answers centre
   // here, while the NRPN has no RANDOM value and 00 is the leftmost position.

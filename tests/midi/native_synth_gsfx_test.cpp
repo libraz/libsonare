@@ -62,6 +62,11 @@ Bytes dt1(uint32_t addr, std::vector<uint8_t> data) {
 /// Distortion in the spec unit, and part slot 0 (block 1) routed into it.
 const Bytes kDistortion = dt1(0x400300u, {0x01, 0x11});
 const Bytes kPart0On = dt1(0x404122u, {0x01});
+const Bytes kPart0OnUnit1 = dt1(0x404122u, {0x02});
+const Bytes kPart1OnUnit1 = dt1(0x404222u, {0x02});
+// Start one byte before PART EFX ASSIGN so the assignment is the third
+// decoded write, after PART EQ SWITCH and the output-pair byte.
+const Bytes kPart0OnBulk = dt1(0x404120u, {0x01, 0x00, 0x01});
 const Bytes kGsReset = dt1(0x40007Fu, {0x00});
 
 NativeSynthConfig offline_config() {
@@ -216,6 +221,53 @@ TEST_CASE("native: a GS insertion effect reaches the part it is assigned to and 
   REQUIRE(wet.fallback_l == dry.fallback_l);
 }
 
+TEST_CASE("native: a later EFX assignment in a bulk DT1 reaches the inline path",
+          "[midi][native][gsfx]") {
+  const Lanes single = render_lanes(offline_config(), {kDistortion, kPart0On});
+  const Lanes bulk = render_lanes(offline_config(), {kDistortion, kPart0OnBulk});
+  // The assignment must be audible, or bulk == single holds with it dropped.
+  const Lanes unassigned = render_lanes(offline_config(), {kDistortion});
+  REQUIRE(energy(single.assigned_l) > 1.0e-6);
+  CHECK_FALSE(static_cast<bool>(single.assigned_l == unassigned.assigned_l));
+  CHECK(same(bulk, single));
+}
+
+TEST_CASE("native: one bulk run realizes every EFX unit before its assignments",
+          "[midi][native][gsfx][bulk]") {
+  std::vector<uint8_t> data(130, 0x00);
+  data[0] = 0x01;
+  data[1] = 0x11;  // unit 0: Distortion
+  data[0x20] = 0x01;
+  data[0x21] = 0x50;  // reserved 40 30 20: must not alter unit 0
+  data[128] = 0x01;
+  data[129] = 0x10;  // unit 1: Overdrive
+  const Bytes bulk_units = dt1(0x403000u, data);
+  const Bytes split_unit0 = dt1(0x403000u, std::vector<uint8_t>(data.begin(), data.begin() + 32));
+  const Bytes split_unit1 = dt1(0x403100u, {0x01, 0x10});
+
+  const Lanes dry = render_lanes(offline_config(), {});
+  const Lanes split =
+      render_lanes(offline_config(), {split_unit0, split_unit1, kPart0On, kPart1OnUnit1});
+  const Lanes bulk = render_lanes(offline_config(), {bulk_units, kPart0On, kPart1OnUnit1});
+  REQUIRE(energy(dry.assigned_l) > 1.0e-6);
+  REQUIRE(energy(dry.other_l) > 1.0e-6);
+  REQUIRE(energy(bulk.assigned_l) > 1.0e-6);
+  REQUIRE(energy(bulk.other_l) > 1.0e-6);
+  CHECK(static_cast<bool>(bulk.assigned_l != dry.assigned_l));
+  CHECK(static_cast<bool>(bulk.other_l != dry.other_l));
+  CHECK(same(bulk, split));
+
+  // The same bulk walk must reach the live control path. Part 0 is routed to
+  // unit 1 here so the second block is audible rather than merely held.
+  const std::vector<float> live_dry = render_pushed({});
+  const std::vector<float> live_split = render_pushed({split_unit0, split_unit1, kPart0OnUnit1});
+  const std::vector<float> live_bulk = render_pushed({bulk_units, kPart0OnUnit1});
+  REQUIRE(energy(live_dry) > 1.0e-6);
+  REQUIRE(energy(live_bulk) > 1.0e-6);
+  CHECK(static_cast<bool>(live_bulk != live_dry));
+  CHECK(static_cast<bool>(live_bulk == live_split));
+}
+
 TEST_CASE("native: a bussed piano's board return is silenced by its part rig",
           "[midi][native][gsfx][piano]") {
   NativeSynthConfig dry_cfg = offline_config();
@@ -245,6 +297,55 @@ TEST_CASE("native: a bussed piano's board return is silenced by its part rig",
   REQUIRE(energy(dry_r) > 1.0e-6);
   REQUIRE(energy(bussed_l) == 0.0);
   REQUIRE(energy(bussed_r) == 0.0);
+}
+
+TEST_CASE("native: reset adopts the final part rig after a full publication burst",
+          "[midi][native][gsfx][quiescent]") {
+  NativeSynthConfig cfg = offline_config();
+  cfg.use_gm_programs = false;
+
+  sonare::midi::PartRig identity;
+  identity.mode = sonare::midi::PartRigMode::kChain;
+  identity.stages = {{"utility.gain", R"({"levelDb":0})"}};
+  sonare::midi::PartRig mute;
+  mute.mode = sonare::midi::PartRigMode::kChain;
+  mute.stages = {{"utility.gain", R"({"levelDb":-1000})"}};
+
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 256);
+  // Establish an audio-owned snapshot before filling the hand-off ring. With
+  // no current snapshot, a burst can be drained without exercising retirement.
+  const auto silent = sonare::test::render_stereo(synth, 256);
+  REQUIRE(energy(silent.left) == 0.0);
+  REQUIRE(energy(silent.right) == 0.0);
+
+  constexpr int kRigPublishes = 64;
+  for (int i = 0; i < kRigPublishes; ++i) REQUIRE(synth.set_part_rig(0, identity));
+  REQUIRE(synth.set_part_rig(0, mute));
+  synth.reset();
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+  const auto after_reset = sonare::test::render_stereo(synth, kSamples);
+
+  NativeSynth mute_oracle(cfg);
+  REQUIRE(mute_oracle.set_part_rig(0, mute));
+  mute_oracle.prepare(kRate, 256);
+  mute_oracle.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+  const auto expected_mute = sonare::test::render_stereo(mute_oracle, kSamples);
+
+  NativeSynth identity_oracle(cfg);
+  REQUIRE(identity_oracle.set_part_rig(0, identity));
+  identity_oracle.prepare(kRate, 256);
+  identity_oracle.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 48, 110)));
+  const auto expected_identity = sonare::test::render_stereo(identity_oracle, kSamples);
+
+  REQUIRE(energy(expected_identity.left) > 1.0e-6);
+  REQUIRE(energy(expected_identity.right) > 1.0e-6);
+  REQUIRE(energy(expected_mute.left) == 0.0);
+  REQUIRE(energy(expected_mute.right) == 0.0);
+  CHECK(static_cast<bool>(after_reset.left == expected_mute.left));
+  CHECK(static_cast<bool>(after_reset.right == expected_mute.right));
+  CHECK(energy(after_reset.left) != energy(expected_identity.left));
+  CHECK(energy(after_reset.right) != energy(expected_identity.right));
 }
 
 TEST_CASE("native: physical bodies follow a held note through rig changes",
@@ -504,6 +605,16 @@ TEST_CASE("native live: a host-pushed EFX SysEx takes effect", "[midi][native][g
   const std::vector<float> wet = render_pushed({kDistortion, kPart0On});
   REQUIRE(energy(dry) > 1.0e-6);
   REQUIRE(wet != dry);
+}
+
+TEST_CASE("native live: a later EFX assignment in a bulk DT1 reaches the control path",
+          "[midi][native][gsfx][live]") {
+  const std::vector<float> single = render_pushed({kDistortion, kPart0On});
+  const std::vector<float> bulk = render_pushed({kDistortion, kPart0OnBulk});
+  const std::vector<float> unassigned = render_pushed({kDistortion});
+  REQUIRE(energy(single) > 1.0e-6);
+  CHECK_FALSE(static_cast<bool>(single == unassigned));
+  CHECK(bulk == single);
 }
 
 TEST_CASE("native live: an EFX SysEx scheduled inside a clip is not applied",

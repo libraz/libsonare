@@ -413,30 +413,73 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
   return out;
 }
 
-int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept {
-  if (data == nullptr || size < 4) return -1;
-  const GsFrame frame = gs_sysex_frame(data, size);
-  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return -1;
-  const uint32_t block = frame.addr & 0xFFFF00u;
+bool gs_efx_assign_accepted(const GsWrite& write) noexcept {
+  const GsAddressEntry* entry = gs_lookup_address(write.addr);
+  return entry != nullptr && entry->param == GsParam::kPartEfxAssign &&
+         gs_value_in_range(*entry, write.value);
+}
+
+bool apply_gs_efx_assign_sysex(std::array<uint8_t, 16>* assignments, const uint8_t* data,
+                               size_t size) noexcept {
+  // Not classified through parse_gs_sysex: the assignment row may be several
+  // bytes after the run's start, and the walk reaches every byte of a dump.
+  return gs_for_each_sysex_write(data, size, [&](const GsWrite& write) noexcept {
+    if (!gs_efx_assign_accepted(write)) return false;
+    if (assignments != nullptr) (*assignments)[write.part & 0x0Fu] = write.value;
+    return true;
+  });
+}
+
+namespace {
+
+int efx_unit_for_block_address(uint32_t addr) noexcept {
+  const uint32_t block = addr & 0xFFFF00u;
   if (block == 0x400300u) return 0;
-  // The extension numbers a unit by its own address nibble, so 40 30 xx is
-  // unit 0 and writes the storage 40 03 xx writes (docs/gs.md).
-  if ((block & 0xFFF000u) == 0x403000u) return static_cast<int>((block >> 8) & 0x0Fu);
+  // 40 30 is the uniform alias for unit 0; 40 31-3F are units 1-15.
+  if ((block & 0xFFF000u) == 0x403000u) {
+    return static_cast<int>((block >> 8) & 0x0Fu);
+  }
   return -1;
 }
 
-bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
-                        bool* out_type_changed) noexcept {
+}  // namespace
+
+bool gs_next_efx_block_slice(const GsFrame& frame, size_t* cursor, GsEfxBlockSlice* out) noexcept {
+  if (cursor == nullptr || out == nullptr || !frame.valid || frame.data == nullptr ||
+      frame.command != kGsCommandDt1 || frame.model != kGsModelId) {
+    return false;
+  }
+  size_t offset = *cursor;
+  if (offset >= frame.len) return false;
+  while (offset < frame.len) {
+    const uint32_t addr = gs_address_offset(frame.addr, static_cast<uint32_t>(offset));
+    const int unit = efx_unit_for_block_address(addr);
+    const size_t block_offset = static_cast<size_t>(addr & 0x7Fu);
+    if (unit >= 0 && block_offset < kGsEfxBlockSize) {
+      const size_t count = std::min(frame.len - offset, kGsEfxBlockSize - block_offset);
+      GsFrame slice = frame;
+      slice.addr = addr;
+      slice.data = frame.data + offset;
+      slice.len = count;
+      out->unit = static_cast<uint8_t>(unit);
+      out->frame = slice;
+      *cursor = offset + count;
+      return true;
+    }
+    ++offset;
+  }
+  *cursor = frame.len;
+  return false;
+}
+
+namespace {
+
+bool apply_gs_efx_frame(GsEfx& efx, const GsFrame& frame, bool* out_type_changed) noexcept {
   if (out_type_changed != nullptr) *out_type_changed = false;
-  if (data == nullptr || size < 4) return false;
-
-  const GsFrame frame = gs_sysex_frame(data, size);
-  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return false;
-  // An EFX block: the spec one at 40 03 xx, or an extension unit at 40 3u xx.
-  // Which unit @p efx is is the caller's to have resolved (gs_efx_addressed_unit);
-  // a run starting anywhere else belongs to another parameter group.
-  if (gs_efx_addressed_unit(data, size) < 0) return false;
-
+  if (!frame.valid || frame.data == nullptr || frame.model != kGsModelId ||
+      frame.command != kGsCommandDt1) {
+    return false;
+  }
   const size_t block_length = gs_efx_block_write_count(frame.addr, frame.len);
   if (block_length == 0) return false;
   GsFrame bounded_frame = frame;
@@ -456,7 +499,7 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
     switch (write.param) {
       case GsParam::kEfxType:
         if (write.index == 0) {
-          // The MSB alone resolves nothing; it waits for its LSB.
+          // The MSB alone resolves nothing; it waits for the LSB.
           efx.type_msb = write.value;
         } else {
           efx.type = static_cast<uint16_t>((static_cast<uint16_t>(efx.type_msb) << 8) |
@@ -511,6 +554,43 @@ bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
   // that leaves the type value untouched is a parameter/send-only edit the
   // caller can apply to the live processors in place.
   if (out_type_changed != nullptr) *out_type_changed = touched && efx.type != old_type;
+  return touched;
+}
+
+}  // namespace
+
+uint32_t gs_efx_units_in_sysex(const uint8_t* data, size_t size) noexcept {
+  const GsFrame frame = gs_sysex_frame(data, size);
+  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return 0;
+  uint32_t mask = 0;
+  size_t cursor = 0;
+  GsEfxBlockSlice slice;
+  while (gs_next_efx_block_slice(frame, &cursor, &slice)) {
+    GsEfx probe{};
+    if (apply_gs_efx_frame(probe, slice.frame, nullptr)) {
+      mask |= uint32_t{1} << slice.unit;
+    }
+  }
+  return mask;
+}
+
+bool apply_gs_efx_units_sysex(std::array<GsEfx, kGsEfxUnitCount>& efx, const uint8_t* data,
+                              size_t size, uint32_t* out_type_changed) noexcept {
+  if (out_type_changed != nullptr) *out_type_changed = 0;
+  const GsFrame frame = gs_sysex_frame(data, size);
+  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return false;
+
+  bool touched = false;
+  size_t cursor = 0;
+  GsEfxBlockSlice slice;
+  while (gs_next_efx_block_slice(frame, &cursor, &slice)) {
+    bool type_changed = false;
+    const bool slice_touched = apply_gs_efx_frame(efx[slice.unit], slice.frame, &type_changed);
+    touched |= slice_touched;
+    if (type_changed && out_type_changed != nullptr) {
+      *out_type_changed |= uint32_t{1} << slice.unit;
+    }
+  }
   return touched;
 }
 

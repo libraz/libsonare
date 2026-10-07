@@ -159,7 +159,9 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     const int base = static_cast<int>(
         std::clamp<int64_t>(tail_samples_->load(std::memory_order_relaxed), 0,
                             static_cast<int64_t>(std::numeric_limits<int>::max())));
-    return numeric::saturating_add(base, std::max(part_fx_.tail_samples(), 0));
+    const int part_fx_tail = std::max(std::max(part_fx_.tail_samples(), 0),
+                                      prepared_part_fx_tail_->load(std::memory_order_relaxed));
+    return numeric::saturating_add(base, part_fx_tail);
   }
   /// A received GS envelope-time edit raises the tail (raise_tail).
   bool tail_follows_events() const noexcept override { return true; }
@@ -654,6 +656,9 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// Raises tail_samples_ to tail_bound() and never lowers it: a voice struck
   /// under an edit since withdrawn may still be ringing.
   void raise_tail() noexcept;
+  /// AUDIO thread: raise the conservative tail bound for the currently routed
+  /// prepared units, including each part's host chain before that unit.
+  void raise_prepared_fx_tail() noexcept;
 
   Sf2PlayerConfig config_{};
   std::shared_ptr<const Sf2File> soundfont_;
@@ -662,6 +667,9 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// Written on the audio thread by a live raise and read by the host, so
   /// atomic; held by pointer so the player stays movable.
   std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
+  /// Highest prepared host-chain + unit tail applied by the audio runtime.
+  /// Speculative prepare/build work never raises this value.
+  std::unique_ptr<std::atomic<int>> prepared_part_fx_tail_ = std::make_unique<std::atomic<int>>(0);
   /// Longest release timecents found in the soundfont (set_soundfont scan).
   int32_t max_release_timecents_ = -12000;
   /// Mix-bus DC blocker state (config_.dc_block): pole and per-leg histories.
@@ -855,12 +863,14 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// accepted payload and its prepared lease; AUDIO drains nodes in publication
   /// order and mutates one audio-owned prepared overlay.
   struct PreparedSysEx;
-  static constexpr size_t kDirectGsMaxBytes = 512;
   struct DirectGsNode {
     std::atomic<DirectGsNode*> next{nullptr};
     uint64_t seq = 0;
-    uint16_t size = 0;
-    std::array<uint8_t, kDirectGsMaxBytes> bytes{};
+    size_t size = 0;
+    /// The CONTROL thread owns the allocation; AUDIO only borrows this immutable
+    /// vector while applying the node, so long DT1 frames stay allocation-free
+    /// on the realtime path as well.
+    std::shared_ptr<const std::vector<uint8_t>> bytes;
     const PreparedSysEx* prepared_raw = nullptr;
     std::shared_ptr<const PreparedMidiSysEx> prepared_owner;
     bool legacy_full_snapshot = false;
@@ -970,7 +980,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
 
   static constexpr size_t kMaxPreparedDestinations = 64;
   static constexpr size_t kMaxPreparedEnables = 32;
-  static constexpr size_t kMaxPreparedCandidates = 7;
 
   /// One modern (row, stage, realtime parameter) destination frozen in a
   /// prepared node. The row is copied because custom row views are a control
@@ -1013,7 +1022,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     /// CONTROL-owned lease. The audio thread uses only `node`; no shared
     /// pointer operation is performed while dispatching the event.
     std::shared_ptr<PreparedEfxNode> lease;
-    GsEfx target{};
   };
 
   /// Heap-stable owner identity for prepared tokens. Sf2Player is movable, so
@@ -1024,11 +1032,11 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   struct PreparedSysEx final : PreparedMidiSysEx {
     std::shared_ptr<const PreparedOwnerIdentity> owner_identity;
     uint64_t domain = 0;
-    bool efx_block = false;
-    bool full_reapply = false;
-    uint8_t unit = 0;
-    std::array<PreparedEfxCandidate, kMaxPreparedCandidates> candidates{};
-    uint8_t candidate_count = 0;
+    uint32_t efx_units = 0;
+    uint32_t full_reapply_units = 0;
+    /// Control-thread-built candidates are immutable while the event is live;
+    /// audio only scans this vector and never changes its capacity or ownership.
+    std::vector<PreparedEfxCandidate> candidates;
   };
 
   std::shared_ptr<PreparedEfxNode> find_or_build_prepared_node(size_t unit, uint16_t type);
@@ -1068,11 +1076,19 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   std::array<bool, 16> prepared_host_part_bussed_{};
   std::array<uint8_t, 16> prepared_host_mono_prefix_{};
   bool prepared_host_any_bussed_ = false;
-  bool prepared_any_unit_ = false;
   bool prepared_any_bussed_ = false;
   bool prepared_runtime_active_ = false;
   bool prepared_base_synced_ = false;
   Sf2EfxUnitRt prepared_empty_unit_{};
+  /// AUDIO-owned tail state for prepared units. A unit keeps its selected
+  /// runtime identity while an assignment is removed so its finite tail can
+  /// drain through the same graph; replacing the runtime drops that tail.
+  struct PreparedUnitRenderState {
+    const Sf2EfxUnitRt* runtime = nullptr;
+    int remaining_tail = 0;
+    bool eq_bypass = false;
+  };
+  std::array<PreparedUnitRenderState, kGsEfxUnitCount> prepared_unit_render_state_{};
 
 #if defined(SONARE_MIDI_WITH_FX)
   std::unique_ptr<GsEffectBus> effects_;

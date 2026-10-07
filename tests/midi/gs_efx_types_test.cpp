@@ -44,13 +44,14 @@
 
 namespace {
 
-using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_insert_name;
 using sonare::midi::synth::gs_efx_insert_params;
 using sonare::midi::synth::gs_efx_type_defaults;
 using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsEfxStage;
+using sonare::midi::synth::kGsEfxUnitCount;
 
 namespace s = sonare::midi::synth;
 
@@ -166,7 +167,7 @@ const std::vector<EfxCollision>& collisions() {
 
 /// A unit holding @p type, in the state selecting it over the wire leaves: the
 /// type's own twenty power-on parameters, not a block of zeros. Built directly
-/// rather than through apply_gs_efx_sysex, so the round-trip case below still
+/// rather than through apply_gs_efx_units_sysex, so the round-trip case below still
 /// compares two ways of arriving at the state instead of one way twice.
 GsEfx make_efx(uint16_t type) {
   GsEfx efx;
@@ -211,6 +212,19 @@ bool json_number(const std::string& json, const std::string& key, double& out) {
 
 /// A GS DT1 message writing @p values from EFX block address 40 03 @p offset,
 /// with the Roland checksum.
+/// Applies @p msg to a unit array holding @p efx as unit 0 and reads unit 0
+/// back. Returns whether any byte reached a field; @p type_changed is unit 0's
+/// bit of the type-change mask.
+bool apply_to_unit0(GsEfx& efx, const std::vector<uint8_t>& msg, bool* type_changed = nullptr) {
+  std::array<GsEfx, kGsEfxUnitCount> units{};
+  units[0] = efx;
+  uint32_t changed = 0;
+  const bool touched = apply_gs_efx_units_sysex(units, msg.data(), msg.size(), &changed);
+  efx = units[0];
+  if (type_changed != nullptr) *type_changed = (changed & 1u) != 0;
+  return touched;
+}
+
 std::vector<uint8_t> efx_sysex(uint8_t offset, const std::vector<uint8_t>& values) {
   std::vector<uint8_t> msg = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, offset};
   unsigned sum = 0x40u + 0x03u + offset;
@@ -748,7 +762,7 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
       const auto lsb = static_cast<uint8_t>(row.type & 0x7Fu);
       const auto write = efx_sysex(0x00, {msb, lsb});
       bool type_changed = false;
-      REQUIRE(apply_gs_efx_sysex(efx, write.data(), write.size(), &type_changed));
+      REQUIRE(apply_to_unit0(efx, write, &type_changed));
       REQUIRE(efx.type == row.type);
       REQUIRE(type_changed);  // every row is a real type, never the Thru default
 
@@ -764,7 +778,7 @@ TEST_CASE("an EFX type set over the wire reads back the same chain", "[midi][sf2
       const uint8_t before = efx.params[1];
       const auto param = efx_sysex(0x04, {0x50});  // EFX PARAMETER 2 = 80
       bool param_changed_type = true;
-      REQUIRE(apply_gs_efx_sysex(efx, param.data(), param.size(), &param_changed_type));
+      REQUIRE(apply_to_unit0(efx, param, &param_changed_type));
       REQUIRE_FALSE(param_changed_type);
       // A slot printing a list of states does not take a byte past it.
       REQUIRE(efx.params[1] == (s::gs_efx_printed_states(row.type, 1) == 0 ? 0x50 : before));
@@ -985,13 +999,13 @@ GsEfx selected(uint16_t type) {
   GsEfx efx;
   const auto write = efx_sysex(
       0x00, {static_cast<uint8_t>((type >> 8) & 0x7Fu), static_cast<uint8_t>(type & 0x7Fu)});
-  apply_gs_efx_sysex(efx, write.data(), write.size());
+  apply_to_unit0(efx, write);
   return efx;
 }
 
 void write_parameter(GsEfx& efx, uint8_t slot, uint8_t value) {
   const auto write = efx_sysex(static_cast<uint8_t>(0x03 + slot), {value});
-  apply_gs_efx_sysex(efx, write.data(), write.size());
+  apply_to_unit0(efx, write);
 }
 
 double equaliser_hz(const GsEfx& efx, const std::string& key) {

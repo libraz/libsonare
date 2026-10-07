@@ -20,6 +20,7 @@
 ///
 /// RT contract: POD + pure functions, no allocation.
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -1027,6 +1028,32 @@ size_t gs_decode_writes(const GsFrame& frame, GsWrite* out, size_t capacity,
 /// layer refuses.
 size_t gs_decode_sysex(const uint8_t* data, size_t size, GsWrite* out, size_t capacity,
                        uint32_t* unknown_writes) noexcept;
+
+/// Writes decoded per chunk by gs_for_each_sysex_write; large enough for the
+/// longest single-address block while keeping the walk on the stack.
+inline constexpr size_t kGsWriteChunkSize = 64;
+
+/// Calls @p visitor on every write a validated GS DT1 payload carries, in wire
+/// order, decoding fixed-size chunks so a run of any length is walked without
+/// allocating. Returns true when the visitor returned true for any write, and
+/// false for anything the frame layer refuses.
+template <typename Visitor>
+bool gs_for_each_sysex_write(const uint8_t* data, size_t size, Visitor&& visitor) noexcept {
+  const GsFrame frame = gs_sysex_frame(data, size);
+  if (!frame.valid || frame.model != kGsModelId || frame.command != kGsCommandDt1) return false;
+  bool touched = false;
+  for (size_t offset = 0; offset < frame.len; offset += kGsWriteChunkSize) {
+    GsFrame chunk = frame;
+    chunk.addr = gs_address_offset(frame.addr, static_cast<uint32_t>(offset));
+    chunk.data = frame.data + offset;
+    chunk.len = std::min(kGsWriteChunkSize, frame.len - offset);
+    GsWrite writes[kGsWriteChunkSize];
+    const size_t decoded =
+        std::min(gs_decode_writes(chunk, writes, kGsWriteChunkSize, nullptr), kGsWriteChunkSize);
+    for (size_t i = 0; i < decoded; ++i) touched = visitor(writes[i]) || touched;
+  }
+  return touched;
+}
 
 // --- Table self-checks ---
 

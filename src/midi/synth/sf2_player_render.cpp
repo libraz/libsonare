@@ -124,6 +124,44 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
     const uint8_t u = efx->part_unit[static_cast<size_t>(part)];
     return u == PartFxSnapshot::kNoUnit ? -1 : static_cast<int>(u);
   };
+  const std::array<bool, kGsEfxUnitCount>& unit_fed =
+      prepared ? prepared_unit_fed_ : (efx != nullptr ? efx->unit_fed : kNoUnitFed);
+  // A prepared assignment can disappear while the selected unit still owns a
+  // finite tail. Keep the input-routing mask above unchanged and use this
+  // separate processing mask for the old unit's drain.
+  std::array<bool, kGsEfxUnitCount> unit_process = unit_fed;
+  if (prepared) {
+    for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+      const Sf2EfxUnitRt* runtime = nullptr;
+      if (prepared_unit_overridden_[unit]) {
+        runtime = prepared_active_nodes_[unit] != nullptr ? &prepared_active_nodes_[unit]->unit_rt
+                                                          : &prepared_empty_unit_;
+      } else if (efx != nullptr && efx->unit_fed[unit]) {
+        runtime = &efx->units[unit];
+      }
+      PreparedUnitRenderState& state = prepared_unit_render_state_[unit];
+      if (state.runtime != runtime) {
+        state.runtime = runtime;
+        state.remaining_tail = 0;
+        state.eq_bypass = false;
+      }
+      if (unit_fed[unit]) {
+        state.remaining_tail =
+            runtime == nullptr ? 0 : std::max(0, sf2_efx_unit_tail_samples(*runtime));
+        bool all_bypassed = true;
+        bool has_feeder = false;
+        for (size_t part = 0; part < 16; ++part) {
+          if (unit_for(static_cast<int>(part)) != static_cast<int>(unit)) continue;
+          has_feeder = true;
+          all_bypassed = all_bypassed && eq_bypassed_[part];
+        }
+        state.eq_bypass = has_feeder && all_bypassed;
+      }
+      // A fed empty override still needs to preserve the existing routing's
+      // dry signal; a drain requires a concrete runtime to process.
+      unit_process[unit] = unit_fed[unit] || (runtime != nullptr && state.remaining_tail > 0);
+    }
+  }
   if (any_bussed) part_fx_.clear_part_buses();
   // Master EQ (GS 40 02 xx) is one stage on the output; a part switched out of
   // it (40 4x 20) accumulates into the bypass bus as well as into the mix, so
@@ -132,12 +170,25 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
   float* eq_byp_l = nullptr;
   float* eq_byp_r = nullptr;
   if (eq_.active() && !eq_bypass_bus_.empty()) {
+    bool need_bypass_bus = false;
     for (const bool bypassed : eq_bypassed_) {
-      if (!bypassed) continue;
+      if (bypassed) {
+        need_bypass_bus = true;
+        break;
+      }
+    }
+    if (!need_bypass_bus && prepared) {
+      for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+        if (unit_process[unit] && prepared_unit_render_state_[unit].eq_bypass) {
+          need_bypass_bus = true;
+          break;
+        }
+      }
+    }
+    if (need_bypass_bus) {
       eq_byp_l = eq_bypass_bus_.data();
       eq_byp_r = eq_byp_l + kChunkFrames;
       std::memset(eq_byp_l, 0, sizeof(float) * eq_bypass_bus_.size());
-      break;
     }
   }
 
@@ -571,8 +622,9 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 
   // Per-part rig processing, then either into the part's insertion unit or
   // straight to the dry mix.
-  const bool any_unit = (prepared ? prepared_any_unit_ : (efx != nullptr && efx->any_unit)) &&
-                        part_fx_.has_unit_buses();
+  const bool any_unit =
+      std::any_of(unit_process.begin(), unit_process.end(), [](bool process) { return process; }) &&
+      part_fx_.has_unit_buses();
   if (any_unit) part_fx_.clear_unit_buses();
   if (any_bussed) {
     part_fx_.run_part_chains(n, part_bussed, mono_prefix, *this);
@@ -612,13 +664,11 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
 
   // The insertion units, one pass each over the sum of the parts feeding them.
   if (any_unit) {
-    const std::array<bool, kGsEfxUnitCount>& unit_fed =
-        prepared ? prepared_unit_fed_ : (efx != nullptr ? efx->unit_fed : kNoUnitFed);
     const PartFxUnitOverrides overrides =
         prepared ? prepared_unit_overrides() : PartFxUnitOverrides{};
-    part_fx_.run_units(n, unit_fed, prepared ? &overrides : nullptr);
+    part_fx_.run_units(n, unit_process, prepared ? &overrides : nullptr);
     for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-      if (!unit_fed[unit]) continue;
+      if (!unit_process[unit]) continue;
       float* unit_l = part_fx_.unit_bus_l(unit);
       float* unit_r = part_fx_.unit_bus_r(unit);
 #if defined(SONARE_MIDI_WITH_FX)
@@ -660,13 +710,17 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       // for it, and otherwise the unit takes the EQ, which is what every part
       // powers on with. Read live for the same reason the sends are — the part
       // EQ switch does not rebuild the chains.
-      bool eq_bypass_unit = eq_byp_l != nullptr;
-      if (eq_bypass_unit) {
+      bool eq_bypass_unit = false;
+      if (prepared) {
+        eq_bypass_unit = prepared_unit_render_state_[unit].eq_bypass;
+      } else if (eq_byp_l != nullptr) {
+        eq_bypass_unit = true;
         for (size_t part = 0; part < 16; ++part) {
           if (unit_for(static_cast<int>(part)) != static_cast<int>(unit)) continue;
           eq_bypass_unit = eq_bypass_unit && eq_bypassed_[part];
         }
       }
+      eq_bypass_unit = eq_bypass_unit && eq_byp_l != nullptr;
       for (int i = 0; i < n; ++i) {
         mix_l_[static_cast<size_t>(i)] += unit_l[i];
         mix_r_[static_cast<size_t>(i)] += unit_r[i];
@@ -676,6 +730,10 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
         }
       }
       if (source_render) flush_component(unit_splitters_[unit], unit_l, unit_r);
+      if (prepared && !unit_fed[unit]) {
+        PreparedUnitRenderState& state = prepared_unit_render_state_[unit];
+        state.remaining_tail = std::max(0, state.remaining_tail - n);
+      }
     }
   }
 
@@ -693,9 +751,7 @@ bool Sf2Player::render_chunk(int n, const MidiInstrumentSourceOutput* source_out
       if (!flushed) age(part_bus_splitters_[part]);
     }
     for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
-      const bool fed =
-          prepared ? prepared_unit_fed_[unit] : (efx != nullptr && efx->unit_fed[unit]);
-      if (!any_unit || !fed) age(unit_splitters_[unit]);
+      if (!any_unit || !unit_process[unit]) age(unit_splitters_[unit]);
     }
   }
 

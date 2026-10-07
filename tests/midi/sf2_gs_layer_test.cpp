@@ -5,10 +5,12 @@
 ///        SysEx recognition (GM System On / GS Reset / use-for-rhythm) and
 ///        the GS reset power-on state.
 
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <string>
 #include <vector>
@@ -25,7 +27,7 @@ namespace {
 
 using Catch::Approx;
 using sonare::midi::MidiEvent;
-using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_drum_kit_name;
 using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_insert_name;
@@ -33,6 +35,7 @@ using sonare::midi::synth::gs_efx_insert_params;
 using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsSysEx;
 using sonare::midi::synth::GsSysExKind;
+using sonare::midi::synth::kGsEfxUnitCount;
 using sonare::midi::synth::parse_gs_sysex;
 using sonare::midi::synth::Sf2File;
 using sonare::midi::synth::Sf2Player;
@@ -126,6 +129,37 @@ std::vector<uint8_t> use_for_rhythm_sysex(uint8_t channel, uint8_t map) {
   const uint8_t sum = static_cast<uint8_t>(0x40 + addr_mid + 0x15 + map);
   const uint8_t checksum = static_cast<uint8_t>((0x80 - (sum & 0x7F)) & 0x7F);
   return {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, addr_mid, 0x15, map, checksum, 0xF7};
+}
+
+/// Builds a framed GS DT1 run from a 24-bit address. The bulk SysEx cases in
+/// this file deliberately cross rows, so their checksums should be derived from
+/// the exact bytes under test rather than copied from a single-byte fixture.
+std::vector<uint8_t> gs_dt1_run(uint8_t addr_mid, uint8_t addr_low,
+                                std::initializer_list<uint8_t> values) {
+  std::vector<uint8_t> message = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, addr_mid, addr_low};
+  uint32_t sum = 0x40u + addr_mid + addr_low;
+  for (const uint8_t value : values) {
+    message.push_back(value);
+    sum += value;
+  }
+  message.push_back(static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu));
+  message.push_back(0xF7);
+  return message;
+}
+
+/// Same frame builder for a long bulk run. The short helper above intentionally
+/// takes an initializer list; this one makes the truncation boundary explicit.
+std::vector<uint8_t> gs_dt1_long_run(uint8_t addr_mid, uint8_t addr_low,
+                                     const std::vector<uint8_t>& values) {
+  std::vector<uint8_t> message = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, addr_mid, addr_low};
+  uint32_t sum = 0x40u + addr_mid + addr_low;
+  for (const uint8_t value : values) {
+    message.push_back(value);
+    sum += value;
+  }
+  message.push_back(static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu));
+  message.push_back(0xF7);
+  return message;
 }
 
 double band_energy(const std::vector<float>& buf, size_t from, double freq) {
@@ -386,52 +420,157 @@ TEST_CASE("parse_gs_sysex recognises the GS/GM messages", "[midi][sf2][gslayer]"
   REQUIRE(parse_gs_sysex(nullptr, 0).kind == GsSysExKind::kNone);
 }
 
-TEST_CASE("apply_gs_efx_sysex captures the EFX block as raw wire", "[midi][sf2][gslayer]") {
+TEST_CASE("bulk EFX assignment applies accepted bytes after the first address",
+          "[midi][sf2][gsefx][gslayer]") {
+  // 40 41 20 starts at PART EQ SWITCH and reaches OUTPUT ASSIGN, then PART
+  // EFX ASSIGN at 40 41 22. Only the third byte routes part 1 through EFX.
+  const std::vector<uint8_t> route = gs_dt1_run(0x41, 0x20, {0x01, 0x00, 0x01});
+  // The final value is outside PART EFX ASSIGN's 00-10 range. It must leave
+  // the route selected by the previous message untouched.
+  const std::vector<uint8_t> invalid = gs_dt1_run(0x41, 0x20, {0x01, 0x00, 0x11});
+
+  SECTION("offline inline mirror") {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    cfg.realize_efx_inline = true;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+
+    REQUIRE(player.handle_sysex(route.data(), route.size()));
+    REQUIRE(player.gs_efx_assign(0) == 1);
+    REQUIRE(player.handle_sysex(invalid.data(), invalid.size()));
+    REQUIRE(player.gs_efx_assign(0) == 1);
+  }
+
+  SECTION("control-thread mirror") {
+    Sf2Player player = make_player();
+    player.on_control_sysex(route.data(), route.size());
+    REQUIRE(player.gs_efx_assign(0) == 1);
+    player.on_control_sysex(invalid.data(), invalid.size());
+    REQUIRE(player.gs_efx_assign(0) == 1);
+  }
+}
+
+TEST_CASE("bulk part runs apply rhythm selection and preserve later bytes",
+          "[midi][sf2][gslayer]") {
+  // 40 11 14 starts at ASSIGN MODE (the polyphonic/multi assignment), then
+  // reaches USE FOR RHYTHM PART, KEY SHIFT and both PITCH OFFSET FINE nibbles.
+  const std::vector<uint8_t> map2 = gs_dt1_run(0x11, 0x14, {0x01, 0x02, 0x48, 0x08, 0x00});
+  const std::vector<uint8_t> invalid_map = gs_dt1_run(0x11, 0x14, {0x01, 0x7F, 0x48, 0x08, 0x00});
+
+  SECTION("map 2 is selected from the middle of the run") {
+    Sf2Player player = make_player();
+    REQUIRE(player.handle_sysex(map2.data(), map2.size()));
+    REQUIRE(player.assign_mode(0) == 1);
+    REQUIRE(player.pitch_key_shift(0) == 0x48);
+    REQUIRE(player.pitch_offset_fine(0) == 0x80);
+
+    // The fixture's drum sample is 500 Hz. A +12 semitone drum NRPN edit is
+    // held by map 2, proving that the second byte selected the kit map.
+    send_nrpn(player, 0, 0x18, 60, 76);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(estimate_frequency(render(player, 24000).left, 4800) == Approx(1000.0).margin(10.0));
+  }
+
+  SECTION("an invalid map value follows the GS map-1 divergence") {
+    Sf2Player player = make_player();
+    REQUIRE(player.handle_sysex(map2.data(), map2.size()));
+    send_nrpn(player, 0, 0x18, 60, 76);  // map 2 only
+    REQUIRE(player.handle_sysex(invalid_map.data(), invalid_map.size()));
+    REQUIRE(player.assign_mode(0) == 1);
+    REQUIRE(player.pitch_key_shift(0) == 0x48);
+    REQUIRE(player.pitch_offset_fine(0) == 0x80);
+
+    // Invalid USE FOR RHYTHM PART values mean map 1. The map-2 edit above
+    // must therefore no longer affect this note.
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    REQUIRE(estimate_frequency(render(player, 24000).left, 4800) == Approx(500.0).margin(10.0));
+  }
+}
+
+TEST_CASE("long part bulk runs do not lose a rhythm assignment after 64 bytes",
+          "[midi][sf2][gslayer]") {
+  // Starting at 40 10 00, the next part block begins at byte 128 and its USE
+  // FOR RHYTHM PART row is byte 149. This is beyond apply_gs_part_sysex's old
+  // 64-write decode window.
+  std::vector<uint8_t> values(150, 0x00);
+  const auto preserve_part_defaults = [&values](size_t base, uint8_t rx_channel) {
+    values[base + 2] = rx_channel;
+    for (size_t offset = base + 3; offset <= base + 18; ++offset) values[offset] = 0x01;
+    values[base + 19] = 0x01;  // MONO/POLY: poly.
+    values[base + 20] = 0x01;  // ASSIGN MODE: limited multi.
+    values[base + 21] = 0x01;  // USE FOR RHYTHM PART: map 1.
+    values[base + 22] = 0x40;  // PITCH KEY SHIFT: centre.
+    values[base + 23] = 0x08;  // PITCH OFFSET FINE: high nibble.
+    values[base + 24] = 0x00;  // PITCH OFFSET FINE: low nibble.
+    values[base + 25] = 0x64;  // PART LEVEL.
+    values[base + 26] = 0x40;  // VELOCITY SENSE DEPTH.
+    values[base + 27] = 0x40;  // VELOCITY SENSE OFFSET.
+    values[base + 28] = 0x40;  // PANPOT.
+    values[base + 29] = 0x00;  // KEY RANGE LOW.
+    values[base + 30] = 0x7F;  // KEY RANGE HIGH.
+  };
+  preserve_part_defaults(0, 0x09);    // Keep part 10 on MIDI channel 10.
+  preserve_part_defaults(128, 0x00);  // Part 1 listens to MIDI channel 1.
+  values[147] = 0x01;                 // 40 11 13 MONO/POLY: poly.
+  values[148] = 0x01;                 // 40 11 14 ASSIGN MODE: limited multi.
+  values[149] = 0x02;                 // 40 11 15 USE FOR RHYTHM PART: drum map 2.
+  const std::vector<uint8_t> bulk = gs_dt1_long_run(0x10, 0x00, values);
+
+  Sf2Player player = make_player();
+  REQUIRE(player.handle_sysex(bulk.data(), bulk.size()));
+  send_nrpn(player, 0, 0x18, 60, 76);  // map 2 drum edit: +12 semitones.
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  REQUIRE(estimate_frequency(render(player, 24000).left, 4800) == Approx(1000.0).margin(10.0));
+}
+
+TEST_CASE("apply_gs_efx_units_sysex captures the EFX block as raw wire", "[midi][sf2][gslayer]") {
   // EFX TYPE write (40 03 00, two data bytes 01 10 = Overdrive). Checksum over
   // 40 03 00 01 10 = 84 -> 0x2C.
   const uint8_t type_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
                                 0x03, 0x00, 0x01, 0x10, 0x2C, 0xF7};
-  GsEfx efx;
-  REQUIRE(apply_gs_efx_sysex(efx, type_write, sizeof(type_write)));
-  REQUIRE(efx.type == 0x0110);
-  REQUIRE(efx.assigned);
+  std::array<GsEfx, kGsEfxUnitCount> efx{};
+  REQUIRE(apply_gs_efx_units_sysex(efx, type_write, sizeof(type_write)));
+  REQUIRE(efx[0].type == 0x0110);
+  REQUIRE(efx[0].assigned);
   // Unframed payload parses identically (framing is stripped).
-  GsEfx efx_unframed;
-  REQUIRE(apply_gs_efx_sysex(efx_unframed, type_write + 1, sizeof(type_write) - 2));
-  REQUIRE(efx_unframed.type == 0x0110);
+  std::array<GsEfx, kGsEfxUnitCount> efx_unframed{};
+  REQUIRE(apply_gs_efx_units_sysex(efx_unframed, type_write + 1, sizeof(type_write) - 2));
+  REQUIRE(efx_unframed[0].type == 0x0110);
 
   // EFX PARAMETER 1 write (40 03 03, data 0x64 = 100). Checksum 0x56.
   const uint8_t param_write[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x03, 0x64, 0x56, 0xF7};
-  REQUIRE(apply_gs_efx_sysex(efx, param_write, sizeof(param_write)));
-  REQUIRE(efx.params[0] == 100);
-  REQUIRE(efx.type == 0x0110);  // the earlier type is preserved across writes
+  REQUIRE(apply_gs_efx_units_sysex(efx, param_write, sizeof(param_write)));
+  REQUIRE(efx[0].params[0] == 100);
+  REQUIRE(efx[0].type == 0x0110);  // the earlier type is preserved across writes
 
   // A full-block run from 0x00: type 01 10, reserved 00, params 1..3 = 10 02 00,
   // the last two inside the four- and two-state lists those slots print.
   // Checksum over 40 03 00 01 10 00 10 02 00 = 102 -> 0x1A.
   const uint8_t run[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x03, 0x00,
                          0x01, 0x10, 0x00, 0x10, 0x02, 0x00, 0x1A, 0xF7};
-  GsEfx efx_run;
-  REQUIRE(apply_gs_efx_sysex(efx_run, run, sizeof(run)));
-  REQUIRE(efx_run.type == 0x0110);
-  REQUIRE(efx_run.params[0] == 0x10);
-  REQUIRE(efx_run.params[1] == 0x02);
-  REQUIRE(efx_run.params[2] == 0x00);
+  std::array<GsEfx, kGsEfxUnitCount> efx_run{};
+  REQUIRE(apply_gs_efx_units_sysex(efx_run, run, sizeof(run)));
+  REQUIRE(efx_run[0].type == 0x0110);
+  REQUIRE(efx_run[0].params[0] == 0x10);
+  REQUIRE(efx_run[0].params[1] == 0x02);
+  REQUIRE(efx_run[0].params[2] == 0x00);
 
   // A non-EFX Roland message (GS reset, address 40 00 7F) is not an EFX write.
   const uint8_t gs_reset[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x00, 0x7F, 0x00, 0x41, 0xF7};
-  GsEfx untouched;
-  REQUIRE_FALSE(apply_gs_efx_sysex(untouched, gs_reset, sizeof(gs_reset)));
-  REQUIRE_FALSE(untouched.assigned);
+  std::array<GsEfx, kGsEfxUnitCount> untouched{};
+  REQUIRE_FALSE(apply_gs_efx_units_sysex(untouched, gs_reset, sizeof(gs_reset)));
+  REQUIRE_FALSE(untouched[0].assigned);
 
   // A bad checksum is rejected and leaves the struct untouched.
   uint8_t corrupt[sizeof(type_write)];
   for (size_t i = 0; i < sizeof(type_write); ++i) corrupt[i] = type_write[i];
   corrupt[10] ^= 0x7F;  // wreck the checksum
-  GsEfx efx_corrupt;
-  REQUIRE_FALSE(apply_gs_efx_sysex(efx_corrupt, corrupt, sizeof(corrupt)));
-  REQUIRE_FALSE(efx_corrupt.assigned);
-  REQUIRE(apply_gs_efx_sysex(untouched, nullptr, 0) == false);
+  std::array<GsEfx, kGsEfxUnitCount> efx_corrupt{};
+  REQUIRE_FALSE(apply_gs_efx_units_sysex(efx_corrupt, corrupt, sizeof(corrupt)));
+  REQUIRE_FALSE(efx_corrupt[0].assigned);
+  REQUIRE(apply_gs_efx_units_sysex(untouched, nullptr, 0) == false);
 }
 
 TEST_CASE("gs_efx_insert_name maps the adapted EFX types to inserts", "[midi][sf2][gslayer]") {

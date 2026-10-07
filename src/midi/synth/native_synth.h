@@ -727,6 +727,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   }
   /// A received GS envelope-time edit raises the tail (raise_tail).
   bool tail_follows_events() const noexcept override { return true; }
+  /// CONTROL thread, offline tail probe: publish a pending inline EFX change
+  /// without processing audio, so the host reads the chain that replayed events
+  /// actually selected.
+  bool materialize_tail_probe() override;
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   /// CONTROL thread: a host-pushed GS EFX block write or reset, realised here
   /// and handed to the audio thread wait-free. The live path's only EFX writer:

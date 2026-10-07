@@ -204,6 +204,32 @@ class CountingInsert final : public sonare::rt::ProcessorBase {
   std::vector<std::string> keys_;
 };
 
+class NamedResetInsert final : public sonare::rt::ProcessorBase {
+ public:
+  NamedResetInsert(std::shared_ptr<std::map<std::string, int>> resets, std::string name,
+                   std::vector<std::string> keys)
+      : resets_(std::move(resets)), name_(std::move(name)), keys_(std::move(keys)) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {
+    if (resets_ != nullptr) ++(*resets_)[name_];
+  }
+  bool set_parameter_impl(unsigned int, float) override { return true; }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> out;
+    for (size_t i = 0; i < keys_.size(); ++i) {
+      out.push_back({keys_[i], static_cast<unsigned int>(i)});
+    }
+    return out;
+  }
+
+ private:
+  std::shared_ptr<std::map<std::string, int>> resets_;
+  std::string name_;
+  std::vector<std::string> keys_;
+};
+
 /// A real streaming stand-in with one realtime-safe descriptor followed by a
 /// non-realtime descriptor. It makes a failed multi-key publication audible:
 /// the first descriptor must not reach the old graph by itself.
@@ -233,6 +259,38 @@ class MixedSafetyInsert final : public sonare::rt::ProcessorBase {
  private:
   std::shared_ptr<int> set_count_;
   float gain_ = 1.0f;
+};
+
+/// A deliberately unsupported custom graph with stateful processing. A live
+/// update to another EFX unit must not rebuild this unit from the fallback
+/// snapshot, because doing so resets its stream state at an unrelated address.
+class StatefulFallbackInsert final : public sonare::rt::ProcessorBase {
+ public:
+  explicit StatefulFallbackInsert(std::shared_ptr<int> resets) : resets_(std::move(resets)) {}
+
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    if (channels == nullptr) return;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      if (channels[ch] == nullptr) continue;
+      for (int i = 0; i < num_samples; ++i) {
+        state_ = 0.97f * state_ + channels[ch][i];
+        channels[ch][i] = state_;
+      }
+    }
+  }
+  void reset() override {
+    if (resets_ != nullptr) ++*resets_;
+    state_ = 0.0f;
+  }
+  bool set_parameter_impl(unsigned int, float) override { return true; }
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"levelDb", 0}};
+  }
+
+ private:
+  std::shared_ptr<int> resets_;
+  float state_ = 0.0f;
 };
 
 /// The stereo delay's automatable keys, which the delay types' translations now
@@ -284,6 +342,25 @@ std::vector<uint8_t> efx_extension_write(uint32_t addr, const std::vector<uint8_
   return m;
 }
 
+/// A PART EFX ASSIGN write for one of the first sixteen GS part blocks. The
+/// 40 4x 22 row is deliberately reached through the same framed helper as an
+/// EFX block so the high-level tests exercise the wire decoder as a file does.
+std::vector<uint8_t> part_efx_assign_write(uint8_t part, uint8_t unit) {
+  return efx_extension_write(0x404122u + (static_cast<uint32_t>(part) << 8), {unit});
+}
+
+/// Extract one uniform EFX block from a long 40 30 run, preserving every byte
+/// the run actually writes, including zero-valued parameters and sends.
+std::vector<uint8_t> efx_uniform_slice(const std::vector<uint8_t>& data, size_t unit,
+                                       size_t length) {
+  const size_t offset = unit * 128;
+  REQUIRE(offset <= data.size());
+  REQUIRE(length <= data.size() - offset);
+  return efx_extension_write(
+      0x403000u + static_cast<uint32_t>(unit << 8),
+      std::vector<uint8_t>(data.begin() + offset, data.begin() + offset + length));
+}
+
 /// A contiguous EFX block write, used to exercise the parameter+send
 /// transaction at 40 03 16..19.
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
@@ -308,6 +385,84 @@ std::array<uint8_t, 12> efx_type_write(uint8_t msb, uint8_t lsb) {
 }  // namespace
 
 #if defined(SONARE_MIDI_WITH_FX) && defined(SONARE_WITH_MASTERING)
+
+Sf2PlayerConfig prepared_efx_config() {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.dc_block = false;
+  cfg.bank_rig_binding = false;
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+  return cfg;
+}
+
+void dispatch_prepared(Sf2Player& player, const std::vector<uint8_t>& payload) {
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(player.prepare_sysex(payload.data(), payload.size(), token));
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  event.prepared_sysex = token.get();
+  player.on_event(0, event);
+}
+
+template <size_t N>
+void dispatch_prepared(Sf2Player& player, const std::array<uint8_t, N>& payload) {
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(player.prepare_sysex(payload.data(), payload.size(), token));
+  MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = payload.data();
+  event.sysex_payload_size = payload.size();
+  event.prepared_sysex = token.get();
+  player.on_event(0, event);
+}
+
+struct StereoEfxRender {
+  std::vector<float> left;
+  std::vector<float> right;
+};
+
+StereoEfxRender render_prepared_parts(Sf2Player& player, uint8_t part_count) {
+  for (uint8_t part = 0; part < part_count; ++part) {
+    player.on_event(0, event(sonare::midi::make_midi1_program_change(0, part, 1)));
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(
+                           0, part, static_cast<uint8_t>(60 + part * 5), 127)));
+  }
+  StereoEfxRender output{std::vector<float>(4096, 0.0f), std::vector<float>(4096, 0.0f)};
+  float* channels[2] = {output.left.data(), output.right.data()};
+  player.process(channels, 2, static_cast<int>(output.left.size()));
+  return output;
+}
+
+double stereo_relative_error(const StereoEfxRender& actual, const StereoEfxRender& expected) {
+  REQUIRE(actual.left.size() == expected.left.size());
+  double error = 0.0;
+  double reference = 0.0;
+  for (size_t i = 0; i < actual.left.size(); ++i) {
+    const double dl = static_cast<double>(actual.left[i]) - expected.left[i];
+    const double dr = static_cast<double>(actual.right[i]) - expected.right[i];
+    error += dl * dl + dr * dr;
+    reference += static_cast<double>(expected.left[i]) * expected.left[i] +
+                 static_cast<double>(expected.right[i]) * expected.right[i];
+  }
+  return std::sqrt(error / std::max(reference, 1e-30));
+}
+
+double stereo_energy(const StereoEfxRender& audio) {
+  double energy = 0.0;
+  for (size_t i = 0; i < audio.left.size(); ++i) {
+    energy += static_cast<double>(audio.left[i]) * audio.left[i] +
+              static_cast<double>(audio.right[i]) * audio.right[i];
+  }
+  return energy;
+}
+
 TEST_CASE("fallback physical-model body sends preserve stereo through every GS effect",
           "[midi][sf2][gsefx][fallback][body]") {
   using sonare::midi::synth::gm_fallback_sends;
@@ -795,6 +950,274 @@ TEST_CASE("prepared GS EFX type, assignment, and parameter render at dispatch",
   REQUIRE(std::sqrt(error / reference) < 1e-5);
 }
 
+TEST_CASE("prepared bulk EFX assignment routes the part and preserves invalid writes",
+          "[midi][sf2][gsefx][prepared]") {
+  REQUIRE(sonare::mastering::api::make_insert("saturation.ampSim", "{}") != nullptr);
+
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.bank_rig_binding = false;
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+  cfg.insert_factory = [](std::string_view name, std::string_view json) {
+    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+  };
+
+  Sf2Player prepared(cfg);
+  Sf2Player legacy(cfg);
+  const std::shared_ptr<Sf2File> sf2 = make_fixture();
+  prepared.set_soundfont(sf2);
+  legacy.set_soundfont(sf2);
+  prepared.prepare(kOutRate, 256);
+  legacy.prepare(kOutRate, 256);
+
+  // The third byte is PART EFX ASSIGN: 40 41 20 = EQ switch, output assign,
+  // EFX assign. The invalid follow-up must not clear the route selected first.
+  const std::vector<uint8_t> bulk_route = efx_extension_write(0x404120, {0x01, 0x00, 0x01});
+  const std::vector<uint8_t> invalid_route = efx_extension_write(0x404120, {0x01, 0x00, 0x11});
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> route_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> invalid_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> drive_token;
+  REQUIRE(prepared.prepare_sysex(bulk_route.data(), bulk_route.size(), route_token));
+  REQUIRE(prepared.prepare_sysex(invalid_route.data(), invalid_route.size(), invalid_token));
+  REQUIRE(prepared.prepare_sysex(kOdType, sizeof(kOdType), type_token));
+  REQUIRE(prepared.prepare_sysex(kOdDrive, sizeof(kOdDrive), drive_token));
+
+  const auto dispatch = [](Sf2Player& player, const uint8_t* payload, size_t size,
+                           const std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& token) {
+    MidiEvent event;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = payload;
+    event.sysex_payload_size = size;
+    event.prepared_sysex = token.get();
+    player.on_event(0, event);
+  };
+  dispatch(prepared, bulk_route.data(), bulk_route.size(), route_token);
+  dispatch(prepared, invalid_route.data(), invalid_route.size(), invalid_token);
+  dispatch(prepared, kOdType, sizeof(kOdType), type_token);
+  dispatch(prepared, kOdDrive, sizeof(kOdDrive), drive_token);
+
+  // The single-byte route is the oracle for the same final state. Applying the
+  // invalid bulk write after it must leave the part routed through unit 0.
+  legacy.on_control_sysex(kPartOn, sizeof(kPartOn));
+  legacy.on_control_sysex(invalid_route.data(), invalid_route.size());
+  legacy.on_control_sysex(kOdType, sizeof(kOdType));
+  legacy.on_control_sysex(kOdDrive, sizeof(kOdDrive));
+
+  for (Sf2Player* player : {&prepared, &legacy}) {
+    player->on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 1)));
+    player->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  }
+  std::vector<float> prepared_left(2048, 0.0f);
+  std::vector<float> prepared_right(2048, 0.0f);
+  std::vector<float> legacy_left(2048, 0.0f);
+  std::vector<float> legacy_right(2048, 0.0f);
+  float* prepared_channels[2] = {prepared_left.data(), prepared_right.data()};
+  float* legacy_channels[2] = {legacy_left.data(), legacy_right.data()};
+  prepared.process(prepared_channels, 2, static_cast<int>(prepared_left.size()));
+  legacy.process(legacy_channels, 2, static_cast<int>(legacy_left.size()));
+
+  double error = 0.0;
+  double reference = 0.0;
+  for (size_t i = 0; i < prepared_left.size(); ++i) {
+    const double dl = static_cast<double>(prepared_left[i]) - legacy_left[i];
+    const double dr = static_cast<double>(prepared_right[i]) - legacy_right[i];
+    error += dl * dl + dr * dr;
+    reference += static_cast<double>(legacy_left[i]) * legacy_left[i] +
+                 static_cast<double>(legacy_right[i]) * legacy_right[i];
+  }
+  REQUIRE(reference > 1e-8);
+  REQUIRE(std::sqrt(error / reference) < 1e-5);
+}
+
+TEST_CASE("prepared EFX frames entering 40 03 and 40 31 keep their target units",
+          "[midi][sf2][gsefx][prepared][bulk]") {
+  REQUIRE(sonare::mastering::api::make_insert("saturation.overdrive", "{}") != nullptr);
+
+  const std::vector<uint8_t> entering_spec = efx_extension_write(0x40027Fu, {0x00, 0x01, 0x10});
+  const std::vector<uint8_t> split_spec = efx_extension_write(0x400300u, {0x01, 0x10});
+  const std::vector<uint8_t> entering_unit1 = efx_extension_write(0x40307Fu, {0x00, 0x01, 0x50});
+  const std::vector<uint8_t> split_unit1 = efx_extension_write(0x403100u, {0x01, 0x50});
+  const std::vector<uint8_t> assign_part0 = part_efx_assign_write(0, 1);
+  const std::vector<uint8_t> assign_part1 = part_efx_assign_write(1, 2);
+
+  const auto render = [&](const std::vector<uint8_t>& first, const std::vector<uint8_t>& second) {
+    Sf2Player player(prepared_efx_config());
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    dispatch_prepared(player, first);
+    dispatch_prepared(player, second);
+    dispatch_prepared(player, assign_part0);
+    dispatch_prepared(player, assign_part1);
+    return render_prepared_parts(player, 2);
+  };
+
+  const StereoEfxRender entering = render(entering_spec, entering_unit1);
+  const StereoEfxRender split = render(split_spec, split_unit1);
+  REQUIRE(stereo_energy(split) > 1e-8);
+  REQUIRE(stereo_relative_error(entering, split) < 1e-5);
+}
+
+TEST_CASE("prepared multi-unit EFX bulk matches split writes without touching unit 2",
+          "[midi][sf2][gsefx][prepared][bulk]") {
+  REQUIRE(sonare::mastering::api::make_insert("effects.modulation.chorus", "{}") != nullptr);
+
+  std::vector<uint8_t> bulk_data(130, 0x00);
+  bulk_data[0] = 0x01;
+  bulk_data[1] = 0x10;  // unit 0: Overdrive.
+  bulk_data[128] = 0x01;
+  bulk_data[129] = 0x50;  // unit 1: Stereo Delay.
+  const std::vector<uint8_t> bulk = efx_extension_write(0x403000u, bulk_data);
+  const std::vector<uint8_t> unit0 = efx_uniform_slice(bulk_data, 0, 32);
+  const std::vector<uint8_t> unit1 = efx_uniform_slice(bulk_data, 1, 2);
+  const std::vector<uint8_t> unit2 = efx_extension_write(0x403200u, {0x01, 0x42});
+  const std::vector<uint8_t> assign_part0 = part_efx_assign_write(0, 1);
+  const std::vector<uint8_t> assign_part1 = part_efx_assign_write(1, 2);
+  const std::vector<uint8_t> assign_part2 = part_efx_assign_write(2, 3);
+
+  const auto render = [&](const std::vector<std::vector<uint8_t>>& efx) {
+    Sf2Player player(prepared_efx_config());
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    for (const std::vector<uint8_t>& message : efx) dispatch_prepared(player, message);
+    dispatch_prepared(player, assign_part0);
+    dispatch_prepared(player, assign_part1);
+    dispatch_prepared(player, assign_part2);
+    return render_prepared_parts(player, 3);
+  };
+
+  const StereoEfxRender bulk_render = render({unit2, bulk});
+  const StereoEfxRender split_render = render({unit2, unit0, unit1});
+  REQUIRE(stereo_energy(split_render) > 1e-8);
+  REQUIRE(stereo_relative_error(bulk_render, split_render) < 1e-5);
+}
+
+TEST_CASE("live multi-unit EFX writes match split writes, including an oversized frame",
+          "[midi][sf2][gsefx][live][bulk]") {
+  std::vector<uint8_t> bulk_data(130, 0x00);
+  bulk_data[0] = 0x01;
+  bulk_data[1] = 0x10;
+  bulk_data[128] = 0x01;
+  bulk_data[129] = 0x50;
+  const std::vector<uint8_t> unit0 = efx_uniform_slice(bulk_data, 0, 32);
+  const std::vector<uint8_t> unit1 = efx_uniform_slice(bulk_data, 1, 2);
+  const std::vector<uint8_t> two_units = efx_extension_write(0x403000u, bulk_data);
+  std::vector<uint8_t> long_data(514, 0x00);
+  long_data[0] = 0x01;
+  long_data[1] = 0x10;
+  long_data[128] = 0x01;
+  long_data[129] = 0x50;
+  const std::vector<uint8_t> oversized = efx_extension_write(0x403000u, long_data);
+  const std::vector<std::vector<uint8_t>> oversized_split = {
+      efx_uniform_slice(long_data, 0, 32), efx_uniform_slice(long_data, 1, 32),
+      efx_uniform_slice(long_data, 2, 32), efx_uniform_slice(long_data, 3, 32),
+      efx_uniform_slice(long_data, 4, 2)};
+  const std::vector<uint8_t> assign_part0 = part_efx_assign_write(0, 1);
+  const std::vector<uint8_t> assign_part1 = part_efx_assign_write(1, 2);
+
+  const auto render = [&](const std::vector<std::vector<uint8_t>>& messages) {
+    Sf2PlayerConfig cfg = prepared_efx_config();
+    cfg.realize_efx_inline = false;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    for (const std::vector<uint8_t>& message : messages)
+      player.on_control_sysex(message.data(), message.size());
+    player.on_control_sysex(assign_part0.data(), assign_part0.size());
+    player.on_control_sysex(assign_part1.data(), assign_part1.size());
+    return render_prepared_parts(player, 2);
+  };
+
+  const StereoEfxRender split = render({unit0, unit1});
+  const StereoEfxRender two_unit_bulk = render({two_units});
+  const StereoEfxRender oversized_bulk = render({oversized});
+  const StereoEfxRender oversized_oracle = render(oversized_split);
+  REQUIRE(stereo_energy(split) > 1e-8);
+  CHECK(stereo_relative_error(two_unit_bulk, split) < 1e-5);
+  CHECK(stereo_relative_error(oversized_bulk, oversized_oracle) < 1e-5);
+}
+
+TEST_CASE("live unit-1 EFX updates preserve an unsupported unit-0 fallback graph",
+          "[midi][sf2][gsefx][live][prepared]") {
+  const auto custom_resets = std::make_shared<int>(0);
+  const auto make_config = [custom_resets] {
+    Sf2PlayerConfig cfg = prepared_efx_config();
+    cfg.realize_efx_inline = false;
+    cfg.insert_factory = [custom_resets](std::string_view name, std::string_view json) {
+      // The amp stage deliberately exposes a descriptor unrelated to the GS
+      // bindings, forcing unit 0 through its legacy full-snapshot path.
+      if (name == "saturation.ampSim") {
+        return std::unique_ptr<sonare::rt::ProcessorBase>(
+            new StatefulFallbackInsert(custom_resets));
+      }
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+    return cfg;
+  };
+  REQUIRE(sonare::mastering::api::make_insert("utility.gain", R"({"levelDb":6})") != nullptr);
+
+  std::vector<uint8_t> unit1_type;
+  SECTION("the frame starts on unit 1") {
+    unit1_type = efx_extension_write(0x403100u, {0x01, 0x50});
+  }
+  SECTION("a reserved suffix of unit 0 precedes the unit 1 type") {
+    std::vector<uint8_t> bytes(99, 0x00);
+    bytes[97] = 0x01;
+    bytes[98] = 0x50;
+    unit1_type = efx_extension_write(0x40301Fu, bytes);
+  }
+  CHECK(sonare::midi::synth::gs_efx_units_in_sysex(unit1_type.data(), unit1_type.size()) ==
+        (uint32_t{1} << 1));
+  Sf2Player player(make_config());
+  Sf2Player reference(make_config());
+  for (Sf2Player* current : {&player, &reference}) {
+    current->set_soundfont(make_sustained_fixture());
+    current->prepare(kOutRate, 256);
+    current->on_control_sysex(kPartOn, sizeof(kPartOn));
+    current->on_control_sysex(kOdType, sizeof(kOdType));
+  }
+  for (Sf2Player* current : {&player, &reference}) {
+    current->on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 1)));
+    current->on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  }
+  std::array<float, 256> warm_player_left{};
+  std::array<float, 256> warm_player_right{};
+  std::array<float, 256> warm_reference_left{};
+  std::array<float, 256> warm_reference_right{};
+  float* warm_player[2] = {warm_player_left.data(), warm_player_right.data()};
+  float* warm_reference[2] = {warm_reference_left.data(), warm_reference_right.data()};
+  player.process(warm_player, 2, 256);
+  reference.process(warm_reference, 2, 256);
+  const int resets_before = *custom_resets;
+
+  // This message addresses unit 1 only. Rebuilding the whole snapshot here
+  // would reset the unrelated custom unit 0 and break its stream continuity.
+  player.on_control_sysex(unit1_type.data(), unit1_type.size());
+  std::array<float, 256> actual_left{};
+  std::array<float, 256> actual_right{};
+  std::array<float, 256> expected_left{};
+  std::array<float, 256> expected_right{};
+  float* actual[2] = {actual_left.data(), actual_right.data()};
+  float* expected[2] = {expected_left.data(), expected_right.data()};
+  player.process(actual, 2, 256);
+  reference.process(expected, 2, 256);
+
+  REQUIRE(*custom_resets == resets_before);
+  double error = 0.0;
+  double reference_power = 0.0;
+  for (size_t i = 0; i < actual_left.size(); ++i) {
+    const double dl = static_cast<double>(actual_left[i]) - expected_left[i];
+    const double dr = static_cast<double>(actual_right[i]) - expected_right[i];
+    error += dl * dl + dr * dr;
+    reference_power += static_cast<double>(expected_left[i]) * expected_left[i] +
+                       static_cast<double>(expected_right[i]) * expected_right[i];
+  }
+  REQUIRE(reference_power > 1e-8);
+  REQUIRE(std::sqrt(error / reference_power) < 1e-5);
+}
+
 TEST_CASE("prepared GS EFX remains dry until its scheduled frame", "[midi][sf2][gsefx][prepared]") {
   REQUIRE(sonare::mastering::api::make_insert("saturation.ampSim", "{}") != nullptr);
 
@@ -978,6 +1401,66 @@ TEST_CASE("prepared GS EFX accepts split type writes and resolves the current MS
   REQUIRE(std::sqrt(error / reference) < 1e-5);
 }
 
+TEST_CASE("prepared long EFX aliases pair each LSB with its preceding MSB",
+          "[midi][sf2][gsefx][prepared][bulk]") {
+  const std::vector<std::string> keys = all_efx_binding_keys();
+
+  // The first two bytes resolve 0100. At the 40 30 alias 5760 bytes later,
+  // only the MSB changes to 04; that MSB must wait for a later LSB instead of
+  // retroactively changing the candidate selected by the earlier LSB.
+  std::vector<uint8_t> long_data(5761, 0x00);
+  long_data[0] = 0x01;
+  long_data[1] = 0x00;
+  long_data[5760] = 0x04;
+  const std::vector<uint8_t> long_frame = efx_extension_write(0x400300u, long_data);
+  const std::vector<uint8_t> first_type = efx_uniform_slice(long_data, 0, 32);
+  const std::vector<uint8_t> alias_msb = efx_extension_write(0x403000u, {0x04});
+  const std::vector<uint8_t> alias_lsb = efx_extension_write(0x403001u, {0x00});
+  const auto make_player = [&](std::shared_ptr<std::map<std::string, int>> resets) {
+    Sf2PlayerConfig cfg = prepared_efx_config();
+    cfg.insert_factory = [resets, keys](std::string_view name, std::string_view) {
+      return std::unique_ptr<sonare::rt::ProcessorBase>(
+          new NamedResetInsert(resets, std::string(name), keys));
+    };
+    auto player = std::make_unique<Sf2Player>(cfg);
+    player->prepare(kOutRate, 256);
+    return player;
+  };
+  const auto send = [](Sf2Player& player, const std::vector<uint8_t>& payload) {
+    std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+    REQUIRE(player.prepare_sysex(payload.data(), payload.size(), token));
+    MidiEvent event;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    event.prepared_sysex = token.get();
+    player.on_event(0, event);
+  };
+  const auto count = [](const std::shared_ptr<std::map<std::string, int>>& resets,
+                        std::string_view name) {
+    const auto it = resets->find(std::string(name));
+    return it == resets->end() ? 0 : it->second;
+  };
+
+  const auto long_resets = std::make_shared<std::map<std::string, int>>();
+  auto long_player = make_player(long_resets);
+  send(*long_player, long_frame);
+  REQUIRE(count(long_resets, "eq.parametric") > 0);
+  REQUIRE(count(long_resets, "dynamics.compressor") == 0);
+  send(*long_player, alias_lsb);
+  REQUIRE(count(long_resets, "dynamics.compressor") > 0);
+
+  const auto split_resets = std::make_shared<std::map<std::string, int>>();
+  auto split_player = make_player(split_resets);
+  send(*split_player, first_type);
+  REQUIRE(count(split_resets, "eq.parametric") > 0);
+  REQUIRE(count(split_resets, "dynamics.compressor") == 0);
+  send(*split_player, alias_msb);
+  REQUIRE(count(split_resets, "dynamics.compressor") == 0);
+  send(*split_player, alias_lsb);
+  REQUIRE(count(split_resets, "dynamics.compressor") > 0);
+}
+
 TEST_CASE("prepared GS EFX caches bounded LSB candidates", "[midi][sf2][gsefx][prepared]") {
   int factory_calls = 0;
   Sf2PlayerConfig cfg;
@@ -999,7 +1482,7 @@ TEST_CASE("prepared GS EFX caches bounded LSB candidates", "[midi][sf2][gsefx][p
   REQUIRE(factory_calls == calls_after_first);
 }
 
-TEST_CASE("prepared GS EFX candidate scan stays inside its unit block",
+TEST_CASE("prepared GS EFX candidate scan follows rollover into the next unit",
           "[midi][sf2][gsefx][prepared]") {
   int factory_calls = 0;
   Sf2PlayerConfig cfg;
@@ -1011,13 +1494,13 @@ TEST_CASE("prepared GS EFX candidate scan stays inside its unit block",
   player.prepare(kOutRate, 256);
 
   // The start is in unit 0's reserved tail. The following two bytes roll over
-  // to a valid Overdrive TYPE at unit 1's 40 31 00/01, but belong to neither
-  // the addressed block nor its prepared candidate set.
+  // to a valid Overdrive TYPE at unit 1's 40 31 00/01, so a high-level prepared
+  // event must retain that candidate even though the first byte is reserved.
   const std::vector<uint8_t> spilled = efx_extension_write(0x40307F, {0x00, 0x01, 0x10});
   std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
   REQUIRE(player.prepare_sysex(spilled.data(), spilled.size(), token));
   REQUIRE(token != nullptr);
-  REQUIRE(factory_calls == 0);
+  REQUIRE(factory_calls > 0);
 }
 
 TEST_CASE("unsupported direct EFX keeps its legacy DSP for parameter edits",
@@ -1954,8 +2437,9 @@ TEST_CASE("prepared GS EFX ignores a rejected boundary token at dispatch",
   const int sets_after_type = counters->set_params;
   REQUIRE(resets_after_type > 0);
 
-  // This token starts in unit 0's reserved tail and rolls into unit 1's TYPE,
-  // so prepare_sysex accepts the frame but has no EFX write to dispatch.
+  // This token starts in unit 0's reserved tail and rolls into unit 1's TYPE.
+  // It therefore selects a prepared unit-1 node, even though unit 1 is not
+  // currently routed into a part.
   const std::vector<uint8_t> rejected = efx_extension_write(0x40307F, {0x00, 0x01, 0x10});
   std::shared_ptr<const sonare::midi::PreparedMidiSysEx> rejected_token;
   REQUIRE(player.prepare_sysex(rejected.data(), rejected.size(), rejected_token));
@@ -1968,10 +2452,10 @@ TEST_CASE("prepared GS EFX ignores a rejected boundary token at dispatch",
   player.on_event(0, rejected_event);
   player.process(channels, 2, 256);
 
-  // A rejected token must not reapply the active node's plan. That would make
-  // a no-op boundary message observable as a parameter publication.
-  REQUIRE(counters->resets == resets_after_type);
-  REQUIRE(counters->set_params == sets_after_type);
+  // The unit-1 candidate is a real prepared selection; it must not be dropped
+  // merely because the frame began in unit 0's reserved tail.
+  REQUIRE(counters->resets > resets_after_type);
+  REQUIRE(counters->set_params > sets_after_type);
 }
 #endif  // SONARE_MIDI_WITH_FX && SONARE_WITH_MASTERING
 

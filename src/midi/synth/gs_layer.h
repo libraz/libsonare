@@ -509,18 +509,33 @@ constexpr int gs_efx_assign_unit(uint8_t value) noexcept {
   return value == 0 || value > kGsEfxUnitCount ? -1 : static_cast<int>(value) - 1;
 }
 
-/// The insertion unit an EFX-block write addresses, or -1 for a write outside
-/// every EFX block. Unit 0 is the spec block at 40 03 xx and is also reachable
-/// at 40 30 xx, where the extension's uniform layout puts it; units 1-15 are at
-/// 40 31 xx - 40 3F xx (docs/gs.md). Accepts the payload with or without F0/F7
-/// framing. Never crashes.
-int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
+/// One real EFX block found while walking a DT1 run. The frame is bounded to
+/// the bytes that belong to this block; its data pointer still points into the
+/// caller's original SysEx buffer.
+struct GsEfxBlockSlice {
+  uint8_t unit = 0;
+  GsFrame frame{};
+};
 
-/// Applies a GS DT1 write to an EFX block (address 40 03 xx or 40 3u xx) onto @p efx,
-/// handling a run of consecutive data bytes from the start address (a single
-/// parameter write or a full-block dump). Bytes addressing reserved/unknown
-/// offsets are preserved by being ignored, never dropping the message. Accepts
-/// the payload with or without F0/F7 framing. Never crashes.
+/// Finds the next EFX block in @p frame at or after @p cursor. Reserved bytes
+/// in the uniform 40 3u address space are skipped, so a run can enter the next
+/// unit only at its own 00-1F block. On success @p cursor advances past the
+/// returned slice. The frame must be a validated GS DT1 message.
+bool gs_next_efx_block_slice(const GsFrame& frame, size_t* cursor, GsEfxBlockSlice* out) noexcept;
+
+/// Returns one bit per EFX unit with a recognized write in a validated GS DT1
+/// run. Reserved and ignored bytes do not select a unit. Unit 0's 40 03 and
+/// 40 30 addresses share bit zero; the whole run is scanned.
+uint32_t gs_efx_units_in_sysex(const uint8_t* data, size_t size) noexcept;
+
+/// Applies a GS DT1 run to every EFX block it reaches, in wire order (a single
+/// parameter write, a full-block dump, or a run across units). Unit 0 is the
+/// spec block at 40 03 xx and is also reachable at 40 30 xx, where the
+/// extension's uniform layout puts it; units 1-15 are at 40 31 xx - 40 3F xx
+/// (docs/gs.md). A run enters a unit only at its own 00-1F block
+/// (gs_next_efx_block_slice). Bytes addressing reserved/unknown offsets are
+/// preserved by being ignored, never dropping the message. Accepts the payload
+/// with or without F0/F7 framing. Never crashes.
 ///
 /// Returns true when at least one byte reached a GsEfx field. A write landing
 /// entirely on the block's one IGNORE row — the send EQ switch (docs/gs.md) —
@@ -546,13 +561,13 @@ int gs_efx_addressed_unit(const uint8_t* data, size_t size) noexcept;
 /// the slot keeps what it held (gs_efx_parameter_takes); it still counts as
 /// reaching a field.
 ///
-/// @param out_type_changed  Optional out-flag: set to true when the write
-///   changed the EFX TYPE (address 40 03 00/01), false when it touched only
-///   parameter/send bytes. A parameter/send-only change lets the caller update
-///   the already-built insert processors in place (preserving their DSP state)
-///   instead of rebuilding the whole chain, while a type change restructures it.
-bool apply_gs_efx_sysex(GsEfx& efx, const uint8_t* data, size_t size,
-                        bool* out_type_changed = nullptr) noexcept;
+/// @param out_type_changed  Optional out-mask: one bit per unit whose resolved
+///   TYPE changed. A unit with a parameter/send-only change keeps its bit clear,
+///   which lets the caller update the already-built insert processors in place
+///   (preserving their DSP state) instead of rebuilding the whole chain, while
+///   a type change restructures it.
+bool apply_gs_efx_units_sysex(std::array<GsEfx, kGsEfxUnitCount>& efx, const uint8_t* data,
+                              size_t size, uint32_t* out_type_changed = nullptr) noexcept;
 
 /// Insertion-effect adapter name for a GS EFX @p type: the `insert_factory`
 /// processor name an adapter drives, or an empty view for a type this layer
@@ -751,6 +766,19 @@ struct GsSysEx {
 /// payload with or without the surrounding F0/F7 framing bytes. Unknown or
 /// malformed messages return kind == kNone (never crash).
 GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept;
+
+/// Applies every accepted `40 4x 22` PART EFX ASSIGN byte in a validated GS
+/// DT1 run, in wire order. The parser deliberately classifies a SysEx message
+/// from its first byte, but bulk dumps commonly reach this row after the run's
+/// start address. Passing nullptr detects whether the run contains an accepted
+/// assignment without changing state. Out-of-range values are ignored and do
+/// not count as touched. Accepts the payload with or without F0/F7 framing.
+bool apply_gs_efx_assign_sysex(std::array<uint8_t, 16>* assignments, const uint8_t* data,
+                               size_t size) noexcept;
+
+/// True when @p write lands on a `40 4x 22` PART EFX ASSIGN row with a value in
+/// its range: the per-byte filter apply_gs_efx_assign_sysex applies to a run.
+bool gs_efx_assign_accepted(const GsWrite& write) noexcept;
 
 /// One GS drum-kit variation: the rhythm-part program that selects it, its
 /// zero-based kit index, its name, and the tone map that introduced it. This

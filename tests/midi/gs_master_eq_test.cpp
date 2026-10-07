@@ -261,6 +261,83 @@ std::array<double, 4> tone_powers(const StereoRender& out) {
   return p;
 }
 
+/// A system-effect run whose last byte is 40 02 00 (MASTER EQ LOW FREQ).
+/// 40 01 30 + 80 reaches the next address block, so this is deliberately long
+/// enough to cross the system-effect/master-EQ boundary.
+std::vector<uint8_t> system_run_reaching_master_eq() {
+  std::vector<uint8_t> data(81, 0x40);
+  data.back() = 0x01;  // 40 02 00, LOW FREQ = 400 Hz
+  return dt1(0x40, 0x01, 0x30, data);
+}
+
+std::vector<uint8_t> system_run_prefix() {
+  return dt1(0x40, 0x01, 0x30, std::vector<uint8_t>(64, 0x40));
+}
+
+std::vector<uint8_t> master_eq_low_freq() { return dt1(0x40, 0x02, 0x00, {0x01}); }
+
+void dispatch_prepared_message(Sf2Player& player, const std::vector<uint8_t>& payload) {
+  std::shared_ptr<const PreparedMidiSysEx> token;
+  REQUIRE(player.prepare_sysex(payload.data(), payload.size(), token));
+  dispatch_prepared(player, payload, token);
+}
+
+void play_eq_probe_notes(Sf2Player& player) {
+  for (const uint8_t note : {24, 36, 60, 96}) {
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  }
+}
+
+/// @p with_low_freq false drops the split path's 40 02 00 write, the one byte
+/// the bulk run's master-EQ reach is about.
+StereoRender render_prepared_system_run(bool bulk, bool with_low_freq = true) {
+  Sf2Player player = make_offline_player();
+  mute_sends(player);
+  const std::vector<uint8_t> low_gain = dt1(0x40, 0x02, 0x01, {0x4C});
+  dispatch_prepared_message(player, low_gain);
+
+  const std::vector<uint8_t> run = system_run_reaching_master_eq();
+  if (bulk) {
+    dispatch_prepared_message(player, run);
+  } else {
+    const std::vector<uint8_t> prefix = system_run_prefix();
+    dispatch_prepared_message(player, prefix);
+    if (with_low_freq) {
+      const std::vector<uint8_t> low_freq = master_eq_low_freq();
+      dispatch_prepared_message(player, low_freq);
+    }
+  }
+  play_eq_probe_notes(player);
+  return render(player, kToneSamples);
+}
+
+/// @p with_low_freq false drops the split path's 40 02 00 write, the one byte
+/// the bulk run's master-EQ reach is about.
+StereoRender render_live_system_run(bool bulk, bool with_low_freq = true) {
+  Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  Sf2Player player(cfg);
+  player.set_soundfont(make_fixture());
+  player.prepare(kOutRate, 256);
+  mute_sends(player);
+
+  const std::vector<uint8_t> low_gain = dt1(0x40, 0x02, 0x01, {0x4C});
+  player.on_control_sysex(low_gain.data(), low_gain.size());
+  const std::vector<uint8_t> run = system_run_reaching_master_eq();
+  if (bulk) {
+    player.on_control_sysex(run.data(), run.size());
+  } else {
+    const std::vector<uint8_t> prefix = system_run_prefix();
+    player.on_control_sysex(prefix.data(), prefix.size());
+    if (with_low_freq) {
+      const std::vector<uint8_t> low_freq = master_eq_low_freq();
+      player.on_control_sysex(low_freq.data(), low_freq.size());
+    }
+  }
+  play_eq_probe_notes(player);
+  return render(player, kToneSamples);
+}
+
 double power_ratio_db(double measured, double reference) {
   return 10.0 * std::log10(std::max(measured, 1e-30) / std::max(reference, 1e-30));
 }
@@ -417,6 +494,46 @@ TEST_CASE("a GS system-effect run lands on every field of its block", "[midi][sy
   CHECK(player.gs_master_eq().low_gain == 0x4C);
   CHECK(player.gs_master_eq().high_freq == 0x01);
   CHECK(player.gs_master_eq().high_gain == 0x34);
+}
+
+TEST_CASE("a part run reaches the master-EQ switch after tone-map bytes", "[midi][synth][gs]") {
+  // 40 41 00 is TONE MAP NUMBER for channel 0. The 33rd byte is the separate
+  // 40 41 20 PART EQ SWITCH row; returning after the part applier would lose it.
+  std::vector<uint8_t> data(33, 0x00);
+  data.front() = 0x03;
+  data.back() = 0x00;
+  const std::vector<uint8_t> run = dt1(0x40, kPart1Block, 0x00, data);
+  Sf2Player player = make_offline_player();
+  REQUIRE(player.handle_sysex(run.data(), run.size()));
+  CHECK_FALSE(player.gs_part_eq_enabled(0));
+}
+
+TEST_CASE("a long system run reaches master EQ in offline prepared and live paths",
+          "[midi][synth][gs]") {
+  const std::vector<uint8_t> run = system_run_reaching_master_eq();
+
+  // The 81st byte is 40 02 00. This mirror assertion is deliberately separate
+  // from the audio comparisons so a prepared overlay cannot hide a stale copy.
+  Sf2Player offline = make_offline_player();
+  REQUIRE(offline.handle_sysex(run.data(), run.size()));
+  CHECK(offline.gs_master_eq().low_freq == 0x01);
+
+  const StereoRender prepared_bulk = render_prepared_system_run(true);
+  const StereoRender prepared_split = render_prepared_system_run(false);
+  CHECK(static_cast<bool>(prepared_bulk.left == prepared_split.left));
+  CHECK(static_cast<bool>(prepared_bulk.right == prepared_split.right));
+  // Without the 40 02 00 byte the render must differ, or the equality is vacuous.
+  const StereoRender prepared_prefix = render_prepared_system_run(false, false);
+  CHECK_FALSE(static_cast<bool>(prepared_split.left == prepared_prefix.left));
+
+  // The split live writes are the oracle for the direct-system mailbox: a
+  // single long publish must carry the same field sequence as two short ones.
+  const StereoRender live_bulk = render_live_system_run(true);
+  const StereoRender live_split = render_live_system_run(false);
+  CHECK(static_cast<bool>(live_bulk.left == live_split.left));
+  CHECK(static_cast<bool>(live_bulk.right == live_split.right));
+  const StereoRender live_prefix = render_live_system_run(false, false);
+  CHECK_FALSE(static_cast<bool>(live_split.left == live_prefix.left));
 }
 
 TEST_CASE("an out-of-range system-effect value is ignored, not clamped", "[midi][synth][gs]") {

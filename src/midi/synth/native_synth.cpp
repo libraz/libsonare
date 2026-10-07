@@ -110,6 +110,13 @@ void NativeSynth::raise_tail() noexcept {
   }
 }
 
+bool NativeSynth::materialize_tail_probe() {
+  if (!prepared_ || !config_.realize_efx_inline || !part_fx_.enabled()) return true;
+  if (part_fx_.dirty()) realize_part_fx();
+  part_fx_.acquire_control_quiescent();
+  return true;
+}
+
 EnvelopeTimeScales NativeSynth::gs_tail_scales() const noexcept {
   return gs_slowest_eg_time_scales(
       channels_, [](const ChannelState& st) -> const GsPartParams& { return st.gs; });
@@ -306,6 +313,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // bussed part routes from the first block.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   part_fx_.publish();
+  part_fx_.acquire_control_quiescent();
   part_fx_.clear_dirty();
 }
 
@@ -359,7 +367,10 @@ void NativeSynth::reset() {
   refresh_all_channel_mods();
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   // A fresh snapshot rebuilds the chains, which is their reset.
-  if (prepared_) part_fx_.publish();
+  if (prepared_) {
+    part_fx_.publish();
+    part_fx_.acquire_control_quiescent();
+  }
   part_fx_.clear_dirty();
   if (prepared_) tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
 }
@@ -1488,28 +1499,49 @@ void NativeSynth::apply_part_sysex(const uint8_t* data, size_t size) noexcept {
   if (gs_sysex_resets(msg.kind)) {
     // GM System On closes NRPN reception, the NRPNs being Roland's; GS Reset reopens it.
     const bool gm = msg.kind != GsSysExKind::kGsReset;
-    for (ChannelState& st : channels_) {
+    uint16_t rig_dirty = 0;
+    for (uint8_t ch = 0; ch < 16; ++ch) {
+      ChannelState& st = channels_[ch];
       st.gs = {};
       st.rx_nrpn = !gm;
+      const bool drums = ch == kDrumChannelIndex;
+      if (st.drums != drums) {
+        st.drums = drums;
+        rig_dirty |= static_cast<uint16_t>(1u << ch);
+      }
+    }
+    for (uint8_t ch = 0; ch < 16; ++ch) {
+      if ((rig_dirty & (uint16_t{1} << ch)) != 0) refresh_part_rig(ch);
     }
     return;
   }
-  constexpr size_t kMaxWrites = 64;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
+  uint16_t rig_dirty = 0;
   bool eg_moved = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    const bool rhythm_write = w.param == GsParam::kUseForRhythmPart;
+    // USE FOR RHYTHM PART is the one GS row whose out-of-range value reads as
+    // map 1 (docs/gs.md). NativeSynth stores only the rhythm/melodic choice,
+    // so every nonzero byte, including >2, means rhythm here.
+    if (entry == nullptr || (!rhythm_write && !gs_value_in_range(*entry, w.value))) return false;
     ChannelState& st = channels_[w.part & 0x0Fu];
-    if (w.param == GsParam::kPartToneModify) {
+    if (rhythm_write) {
+      const bool drums = w.value != 0;
+      if (st.drums != drums) {
+        st.drums = drums;
+        rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+      }
+    } else if (w.param == GsParam::kPartToneModify) {
       const GsPartParams before = st.gs;
       gs_apply_tone_modify(st.gs, w.index, w.value);
       eg_moved |= gs_eg_times_differ(before, st.gs);
     } else if (w.param == GsParam::kPartRxNrpn) {
       st.rx_nrpn = w.value != 0;
     }
+    return true;
+  });
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((rig_dirty & (uint16_t{1} << ch)) != 0) refresh_part_rig(ch);
   }
   if (eg_moved) raise_tail();
 }

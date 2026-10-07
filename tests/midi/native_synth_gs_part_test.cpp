@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <vector>
 
@@ -66,6 +67,24 @@ std::vector<uint8_t> dt1(uint8_t mid, uint8_t lo, uint8_t value) {
   msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
   msg.push_back(0xF7);
   return msg;
+}
+
+/// A framed Roland DT1 run, used where adjacent addresses exercise the
+/// decoder's one-write-per-byte path rather than a single-address shortcut.
+std::vector<uint8_t> dt1_run(uint8_t mid, uint8_t lo, const std::vector<uint8_t>& values) {
+  std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, mid, lo};
+  int sum = 0x40 + mid + lo;
+  for (const uint8_t value : values) {
+    msg.push_back(value);
+    sum += value;
+  }
+  msg.push_back(static_cast<uint8_t>((128 - (sum % 128)) & 0x7F));
+  msg.push_back(0xF7);
+  return msg;
+}
+
+std::vector<uint8_t> dt1_run(uint8_t mid, uint8_t lo, std::initializer_list<uint8_t> values) {
+  return dt1_run(mid, lo, std::vector<uint8_t>(values));
 }
 
 const std::vector<uint8_t> kGsReset{0xF0, 0x41, 0x10, 0x42, 0x12, 0x40,
@@ -130,6 +149,24 @@ PartRender render_probe(Setup setup, uint8_t channel = 0, bool silent_profile = 
   return out;
 }
 
+/// The same probe through NativeSynth's GM fallback resolution. This keeps the
+/// fixture and render lengths identical while making the channel's rhythm flag
+/// choose between a melodic fallback and the drum map.
+template <typename Setup>
+PartRender render_gm_probe(Setup setup, uint8_t channel = 0) {
+  NativeSynthConfig cfg = probe_config();
+  cfg.use_gm_programs = true;
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  setup(synth);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, channel, 60, 127)));
+  PartRender out;
+  out.onset = render_stereo(synth, 8192).left;
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, channel, 60, 0)));
+  out.tail = render_stereo(synth, 16384).left;
+  return out;
+}
+
 bool same(const PartRender& a, const PartRender& b) {
   return a.onset == b.onset && a.tail == b.tail;
 }
@@ -182,6 +219,69 @@ TEST_CASE("GS Reset and GM System On clear NativeSynth's part edits", "[midi][sy
       send_sysex(s, *reset);
     });
     CHECK(same(cleared, baseline));
+  }
+}
+
+TEST_CASE("NativeSynth USE FOR RHYTHM PART reaches the GM drum bank",
+          "[midi][synth][native-gs][rhythm]") {
+  const PartRender melodic = render_gm_probe([](NativeSynth&) {});
+  const PartRender direct =
+      render_gm_probe([](NativeSynth& s) { send_sysex(s, dt1(kPart1Block, 0x15, 0x01)); });
+  const PartRender bulk = render_gm_probe([](NativeSynth& s) {
+    // 40 11 14: POLY (01), followed by USE FOR RHYTHM PART (01).
+    send_sysex(s, dt1_run(kPart1Block, 0x14, {0x01, 0x01}));
+  });
+  REQUIRE_FALSE(same(direct, melodic));
+  CHECK(same(bulk, direct));
+
+  // Zero returns the part to the melodic fallback. Values outside the printed
+  // 00-02 range are the GS map-1 reading, so NativeSynth's bool still turns
+  // the part into drums.
+  const PartRender restored = render_gm_probe([](NativeSynth& s) {
+    send_sysex(s, dt1(kPart1Block, 0x15, 0x01));
+    send_sysex(s, dt1(kPart1Block, 0x15, 0x00));
+  });
+  CHECK(same(restored, melodic));
+  const PartRender out_of_range =
+      render_gm_probe([](NativeSynth& s) { send_sysex(s, dt1(kPart1Block, 0x15, 0x7F)); });
+  CHECK(same(out_of_range, direct));
+}
+
+TEST_CASE("NativeSynth reaches a rhythm write after 64 bytes of one DT1 run",
+          "[midi][synth][native-gs][rhythm]") {
+  const PartRender melodic = render_gm_probe([](NativeSynth&) {});
+  std::vector<uint8_t> values(150, 0x00);
+  // 40 10 00 + 149 bytes = 40 11 15, USE FOR RHYTHM PART on channel 0.
+  values.back() = 0x01;
+  const PartRender drums =
+      render_gm_probe([&](NativeSynth& s) { send_sysex(s, dt1_run(0x10, 0x00, values)); });
+  REQUIRE_FALSE(same(drums, melodic));
+}
+
+TEST_CASE("NativeSynth GS and GM resets restore rhythm defaults on every part",
+          "[midi][synth][native-gs][rhythm]") {
+  const PartRender melodic = render_gm_probe([](NativeSynth&) {}, 0);
+  const PartRender drums = render_gm_probe([](NativeSynth&) {}, 9);
+  REQUIRE_FALSE(same(melodic, drums));
+
+  for (const std::vector<uint8_t>* reset : {&kGsReset, &kGmSystemOn}) {
+    const char* reset_name = reset == &kGsReset ? "GS Reset" : "GM System On";
+    INFO(reset_name);
+    const PartRender channel0 = render_gm_probe(
+        [&](NativeSynth& s) {
+          send_sysex(s, dt1(kPart1Block, 0x15, 0x01));
+          send_sysex(s, *reset);
+        },
+        0);
+    CHECK(same(channel0, melodic));
+
+    const PartRender channel9 = render_gm_probe(
+        [&](NativeSynth& s) {
+          send_sysex(s, dt1(0x10, 0x15, 0x00));
+          send_sysex(s, *reset);
+        },
+        9);
+    CHECK(same(channel9, drums));
   }
 }
 

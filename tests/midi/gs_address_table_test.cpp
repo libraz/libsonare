@@ -756,11 +756,25 @@ TEST_CASE("GS param names come from the enum itself", "[midi][gs][address]") {
 
 namespace {
 
-using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_decode_sysex;
 using sonare::midi::synth::gs_lookup_range;
 using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsSysEx;
+using sonare::midi::synth::kGsEfxUnitCount;
+
+/// Applies @p msg to a unit array holding @p efx as unit 0 and reads unit 0
+/// back. Returns whether any byte reached a field; @p type_changed is unit 0's
+/// bit of the type-change mask.
+bool apply_to_unit0(GsEfx& efx, const std::vector<uint8_t>& msg, bool* type_changed = nullptr) {
+  std::array<GsEfx, kGsEfxUnitCount> units{};
+  units[0] = efx;
+  uint32_t changed = 0;
+  const bool touched = apply_gs_efx_units_sysex(units, msg.data(), msg.size(), &changed);
+  efx = units[0];
+  if (type_changed != nullptr) *type_changed = (changed & 1u) != 0;
+  return touched;
+}
 
 std::string hex_bytes(const std::vector<uint8_t>& bytes) {
   std::string out;
@@ -1172,7 +1186,7 @@ unsigned efx_printed_states(uint16_t type, unsigned slot) {
 /// The state @p before must reach when a run of @p data lands from block offset
 /// @p start_lo.
 ///
-/// Written from the contract in gs_layer.h rather than from apply_gs_efx_sysex,
+/// Written from the contract in gs_layer.h rather than from apply_gs_efx_units_sysex,
 /// because a mirror that reads the implementation is the implementation twice.
 /// The rule it models, in full:
 ///   - Bytes apply in address order, so what a byte does can depend on what an
@@ -1352,7 +1366,7 @@ void check_efx_cases(const std::vector<EfxCase>& cases) {
       bool type_changed = true;  // the call must clear it, whatever the outcome
       // The return is "a byte reached a field", not "the address was in the
       // block": a run landing only on the block's IGNORE rows applies nothing.
-      CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size(), &type_changed) == expected.touched);
+      CHECK(apply_to_unit0(efx, msg, &type_changed) == expected.touched);
       CHECK(same_efx(efx, expected.efx));
       CHECK(type_changed == (expected.touched && expected.efx.type != before.type));
     }
@@ -1382,7 +1396,7 @@ TEST_CASE("GS SysEx: a 7-bit violation is refused, not masked", "[midi][gs][addr
   GsEfx efx;
   const std::vector<uint8_t> efx_msg =
       faulted_message(0x400300, {0x01, 0x10}, Fault::kHighBit, true);
-  CHECK_FALSE(apply_gs_efx_sysex(efx, efx_msg.data(), efx_msg.size()));
+  CHECK_FALSE(apply_to_unit0(efx, efx_msg));
   CHECK_FALSE(efx.assigned);
 }
 
@@ -1399,7 +1413,7 @@ TEST_CASE("GS EFX: every block offset lands where the layout says", "[midi][gs][
     // so the unit is untouched and the call reports nothing applied.
     GsEfx efx;
     const std::vector<uint8_t> msg = roland_message(0x40037E, {0x01, 0x02, 0x03, 0x04});
-    CHECK_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    CHECK_FALSE(apply_to_unit0(efx, msg));
     CHECK_FALSE(efx.assigned);
   }
 
@@ -1411,7 +1425,7 @@ TEST_CASE("GS EFX: every block offset lands where the layout says", "[midi][gs][
       data[i] = static_cast<uint8_t>((0x11u + i) & 0x7Fu);
     }
     const std::vector<uint8_t> msg = roland_message(0x400300, data);
-    CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    CHECK(apply_to_unit0(efx, msg));
     CHECK(efx.params[19] == data[0x16]);
     CHECK(efx.send_delay == data[0x19]);
   }

@@ -23,7 +23,7 @@
 
 namespace {
 
-using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_efx_binding_value;
 using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_type_defaults;
@@ -49,6 +49,7 @@ using sonare::midi::synth::kGsEfxRowDesigned;
 using sonare::midi::synth::kGsEfxRowKeys;
 using sonare::midi::synth::kGsEfxRowStages;
 using sonare::midi::synth::kGsEfxRowTranslated;
+using sonare::midi::synth::kGsEfxUnitCount;
 
 using Chain = std::vector<GsEfxStage>;
 
@@ -152,6 +153,19 @@ GsEfxEnable select_row(uint16_t type, uint8_t slot,
 }
 
 /// A GS DT1 message carrying @p data from address @p addr, with its checksum.
+/// Applies @p msg to a unit array holding @p efx as unit 0 and reads unit 0
+/// back. Returns whether any byte reached a field; @p type_changed is unit 0's
+/// bit of the type-change mask.
+bool apply_to_unit0(GsEfx& efx, const std::vector<uint8_t>& msg, bool* type_changed = nullptr) {
+  std::array<GsEfx, kGsEfxUnitCount> units{};
+  units[0] = efx;
+  uint32_t changed = 0;
+  const bool touched = apply_gs_efx_units_sysex(units, msg.data(), msg.size(), &changed);
+  efx = units[0];
+  if (type_changed != nullptr) *type_changed = (changed & 1u) != 0;
+  return touched;
+}
+
 std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
   std::vector<uint8_t> msg{0xF0, 0x41, 0x10, 0x42, 0x12};
   unsigned sum = 0;
@@ -470,7 +484,7 @@ TEST_CASE("the unit holds its two control assignments", "[midi][gs-skeleton]") {
       GsEfx efx = efx_of(0x0110);
       const std::vector<uint8_t> msg = dt1(addrs[i], {static_cast<uint8_t>(0x10 + i)});
       bool type_changed = true;
-      CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size(), &type_changed));
+      CHECK(apply_to_unit0(efx, msg, &type_changed));
       CHECK_FALSE(type_changed);
       const uint8_t held = (i % 2 == 0) ? efx.control_source[i / 2] : efx.control_depth[i / 2];
       CHECK(static_cast<int>(held) == static_cast<int>(0x10 + i));
@@ -479,7 +493,7 @@ TEST_CASE("the unit holds its two control assignments", "[midi][gs-skeleton]") {
   SECTION("one run writes all four, and a reset brings them back") {
     GsEfx efx;
     const std::vector<uint8_t> msg = dt1(0x40031B, {0x01, 0x7F, 0x60, 0x00});
-    CHECK(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    CHECK(apply_to_unit0(efx, msg));
     CHECK(efx.control_source == std::array<uint8_t, 2>{0x01, 0x60});
     CHECK(efx.control_depth == std::array<uint8_t, 2>{0x7F, 0x00});
     // A GS reset replaces each unit with a value-initialised one.
@@ -490,6 +504,6 @@ TEST_CASE("the unit holds its two control assignments", "[midi][gs-skeleton]") {
   SECTION("the send EQ switch beside them still applies nothing") {
     GsEfx efx;
     const std::vector<uint8_t> msg = dt1(0x40031F, {0x00});
-    CHECK_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    CHECK_FALSE(apply_to_unit0(efx, msg));
   }
 }

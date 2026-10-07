@@ -1,3 +1,4 @@
+#include <array>
 #include <utility>
 
 #include "midi/synth/gm_fallback_map.h"
@@ -691,9 +692,12 @@ void NativeSynth::apply_efx_sysex(const uint8_t* data, size_t size) noexcept {
     part_fx_.clear_efx();
     return;
   }
-  if (msg.kind == GsSysExKind::kEfxPartSwitch) {
-    part_fx_.assign_part(msg.channel, msg.value);
-    return;
+  std::array<uint8_t, 16> assignments;
+  assignments.fill(0xFF);
+  if (apply_gs_efx_assign_sysex(&assignments, data, size)) {
+    for (uint8_t part = 0; part < 16; ++part) {
+      if (assignments[part] != 0xFF) part_fx_.assign_part(part, assignments[part]);
+    }
   }
   (void)part_fx_.apply_unit_sysex(data, size);
 }
@@ -710,8 +714,8 @@ void NativeSynth::on_control_sysex(const uint8_t* data, size_t size) noexcept {
     return;
   }
   const GsSysEx msg = parse_gs_sysex(data, size);
-  if (!gs_sysex_resets(msg.kind) && msg.kind != GsSysExKind::kEfxPartSwitch &&
-      gs_efx_addressed_unit(data, size) < 0) {
+  const bool has_assignment = apply_gs_efx_assign_sysex(nullptr, data, size);
+  if (!gs_sysex_resets(msg.kind) && !has_assignment && gs_efx_units_in_sysex(data, size) == 0) {
     return;
   }
   const PartFxStage::Checkpoint before = part_fx_.checkpoint();

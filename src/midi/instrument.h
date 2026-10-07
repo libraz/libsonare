@@ -116,6 +116,13 @@ class MidiInstrument : public rt::ProcessorBase, public MidiEventSink {
     return true;
   }
 
+  /// CONTROL thread: materializes state changed by the preceding probe event
+  /// without advancing audio or DSP time. Offline hosts call this after each
+  /// replayed event before reading tail_samples(); a prepared instrument may
+  /// allocate here to publish the state that the next real render will adopt.
+  /// The default instrument has no deferred state to materialize.
+  virtual bool materialize_tail_probe() { return true; }
+
   /// CONTROL thread: true when an event this instrument receives can lengthen
   /// tail_samples() (a GS envelope-time edit), so an offline host sizing a
   /// render from the tail feeds the schedule's events to a prepared instance

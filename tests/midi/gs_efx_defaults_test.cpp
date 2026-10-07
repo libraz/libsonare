@@ -27,7 +27,7 @@
 
 namespace {
 
-using sonare::midi::synth::apply_gs_efx_sysex;
+using sonare::midi::synth::apply_gs_efx_units_sysex;
 using sonare::midi::synth::gs_efx_insert_chain;
 using sonare::midi::synth::gs_efx_parameter_reset_default;
 using sonare::midi::synth::gs_efx_power_on_params;
@@ -36,6 +36,7 @@ using sonare::midi::synth::GsEfx;
 using sonare::midi::synth::GsEfxTypeDefaults;
 using sonare::midi::synth::kGsEfxTypeDefaults;
 using sonare::midi::synth::kGsEfxTypeThru;
+using sonare::midi::synth::kGsEfxUnitCount;
 
 /// The params of the one stage named @p name, or an empty string where the
 /// chain carries no such stage.
@@ -65,17 +66,30 @@ std::vector<uint8_t> dt1(uint32_t addr, const std::vector<uint8_t>& data) {
   return msg;
 }
 
+/// Applies @p msg to a unit array holding @p efx at @p unit and reads that unit
+/// back. Returns whether any byte reached a field; @p type_changed is the unit's
+/// own bit of the type-change mask.
+bool apply_to_unit(GsEfx& efx, const std::vector<uint8_t>& msg, bool* type_changed = nullptr,
+                   size_t unit = 0) {
+  std::array<GsEfx, kGsEfxUnitCount> units{};
+  units[unit] = efx;
+  uint32_t changed = 0;
+  const bool touched = apply_gs_efx_units_sysex(units, msg.data(), msg.size(), &changed);
+  efx = units[unit];
+  if (type_changed != nullptr) *type_changed = ((changed >> unit) & 1u) != 0;
+  return touched;
+}
+
 /// Writes the EFX TYPE as a file does: both bytes of `40 03 00` in one message.
 bool write_type(GsEfx& efx, uint16_t type, bool* type_changed = nullptr) {
-  const std::vector<uint8_t> msg =
-      dt1(0x400300, {static_cast<uint8_t>(type >> 8), static_cast<uint8_t>(type & 0x7Fu)});
-  return apply_gs_efx_sysex(efx, msg.data(), msg.size(), type_changed);
+  return apply_to_unit(
+      efx, dt1(0x400300, {static_cast<uint8_t>(type >> 8), static_cast<uint8_t>(type & 0x7Fu)}),
+      type_changed);
 }
 
 /// Writes one EFX PARAMETER, numbered from 1 as the manual numbers them.
 bool write_param(GsEfx& efx, unsigned parameter, uint8_t value) {
-  const std::vector<uint8_t> msg = dt1(0x400302u + parameter, {value});
-  return apply_gs_efx_sysex(efx, msg.data(), msg.size(), nullptr);
+  return apply_to_unit(efx, dt1(0x400302u + parameter, {value}));
 }
 
 /// True when @p params is @p type's twenty power-on bytes.
@@ -139,7 +153,7 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
   {
     GsEfx efx;
     const std::vector<uint8_t> msg = dt1(0x400300, {0x01, 0x50, 0x00, 0x11, 0x22, 0x33});
-    REQUIRE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    REQUIRE(apply_to_unit(efx, msg));
     tally.same(efx.type == 0x0150, "the bulk write selected the delay");
     tally.same(efx.params[0] == 0x11, "PARAMETER 1 survived the load");
     tally.same(efx.params[1] == 0x22, "PARAMETER 2 survived the load");
@@ -173,14 +187,14 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
 
     bool type_changed = true;
     const std::vector<uint8_t> msb_only = dt1(0x400300, {0x04});
-    REQUIRE(apply_gs_efx_sysex(efx, msb_only.data(), msb_only.size(), &type_changed));
+    REQUIRE(apply_to_unit(efx, msb_only, &type_changed));
     tally.same(efx.type == 0x0150, "the resolved type is still the delay");
     tally.same(!type_changed, "an MSB-only write is not a type change");
     tally.same(same_block(efx.params, delay), "an MSB-only write loaded no defaults");
     tally.same(gs_efx_type_defaults(0x0450) == nullptr, "(new MSB, old LSB) is not a type");
 
     const std::vector<uint8_t> lsb_only = dt1(0x400301, {0x01});
-    REQUIRE(apply_gs_efx_sysex(efx, lsb_only.data(), lsb_only.size(), &type_changed));
+    REQUIRE(apply_to_unit(efx, lsb_only, &type_changed));
     tally.same(efx.type == 0x0401, "the LSB paired with the MSB written earlier");
     tally.same(type_changed, "the LSB is where the type changes");
     tally.same(is_block_of(efx.params, 0x0401), "the LSB loaded the paired type's block");
@@ -191,7 +205,7 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
     GsEfx efx;
     REQUIRE(write_type(efx, 0x0150));
     const std::vector<uint8_t> msg = dt1(0x400301, {0x57});
-    REQUIRE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    REQUIRE(apply_to_unit(efx, msg));
     tally.same(efx.type == 0x0157, "the stored MSB carried into the new type");
     tally.same(is_block_of(efx.params, 0x0157), "the paired type loaded its own block");
   }
@@ -202,12 +216,13 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
   {
     GsEfx efx;
     const std::vector<uint8_t> msg = dt1(0x403700, {0x01, 0x50});
-    REQUIRE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
+    REQUIRE(apply_to_unit(efx, msg, nullptr, 7));
     tally.same(efx.type == 0x0150, "an extension unit resolved its type");
     tally.same(is_block_of(efx.params, 0x0150), "an extension unit loaded the type's block");
   }
 
-  // A run applies only to the 00-1F block its start address selects.
+  // A run reaches a unit only at that unit's own 00-1F block: reserved offsets
+  // are skipped, and a byte past 1F never lands in the block before it.
   {
     const auto same_state = [](const GsEfx& a, const GsEfx& b) {
       return a.type == b.type && a.type_msb == b.type_msb && a.params == b.params &&
@@ -226,51 +241,58 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
     baseline.control_depth = {0x66, 0x77};
     baseline.assigned = false;
 
-    // Starts in unit 0's reserved tail and rolls over into unit 1's TYPE.
-    {
-      GsEfx efx = baseline;
-      const std::vector<uint8_t> msg = dt1(0x40307F, {0x00, 0x01, 0x10});
-      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
-      REQUIRE(same_state(efx, baseline));
-    }
+    // Each run ends on unit 1's TYPE: unit 0 keeps its state, unit 1 selects
+    // the overdrive and is the only unit whose type changed.
+    const auto check_rolls_into_unit1 = [&](const std::vector<uint8_t>& msg) {
+      std::array<GsEfx, kGsEfxUnitCount> units{};
+      units[0] = baseline;
+      uint32_t changed = 0;
+      REQUIRE(apply_gs_efx_units_sysex(units, msg.data(), msg.size(), &changed));
+      REQUIRE(same_state(units[0], baseline));
+      REQUIRE(units[1].type == 0x0110);
+      REQUIRE(is_block_of(units[1].params, 0x0110));
+      REQUIRE(units[1].assigned);
+      REQUIRE(changed == (uint32_t{1} << 1));
+    };
 
-    // A start outside 00-1F refuses the whole run.
+    // Starts in unit 0's reserved tail and rolls over into unit 1's TYPE.
+    check_rolls_into_unit1(dt1(0x40307F, {0x00, 0x01, 0x10}));
+
+    // A start outside 00-1F skips to the next block rather than refusing the run.
     {
       std::vector<uint8_t> data(18, 0x00);
       data[16] = 0x01;
       data[17] = 0x10;
-      GsEfx efx = baseline;
-      const std::vector<uint8_t> msg = dt1(0x403070, data);
-      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
-      REQUIRE(same_state(efx, baseline));
+      check_rolls_into_unit1(dt1(0x403070, data));
     }
 
-    // Bytes through 1F apply; the unit-1 TYPE after them does not.
+    // 40 30 1E-1F carry no unit-0 field (EFX CONTROL is 40 03 only), and the
+    // reserved tail after them is skipped on the way to unit 1.
     {
       std::vector<uint8_t> data(0x80 - 0x1E + 2, 0x00);
       data[0x80 - 0x1E] = 0x01;
       data[0x80 - 0x1E + 1] = 0x10;
-      GsEfx efx = baseline;
-      const std::vector<uint8_t> msg = dt1(0x40301E, data);
-      REQUIRE_FALSE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
-      REQUIRE(same_state(efx, baseline));
+      check_rolls_into_unit1(dt1(0x40301E, data));
     }
 
-    // A long run from 40 03 1E keeps its depth write and drops bytes past 1F.
+    // A long run from 40 03 1E keeps its depth write and drops bytes past 1F:
+    // the next group is 40 04, not another unit.
     {
       std::vector<uint8_t> data(0x80 - 0x1E + 2, 0x00);
       data[0] = 0x12;
       data[1] = 0x01;  // SEND EQ SWITCH: in-range but intentionally ignored.
       data[0x80 - 0x1E] = 0x01;
       data[0x80 - 0x1E + 1] = 0x10;
-      GsEfx efx = baseline;
+      std::array<GsEfx, kGsEfxUnitCount> units{};
+      units[0] = baseline;
       const std::vector<uint8_t> msg = dt1(0x40031E, data);
-      REQUIRE(apply_gs_efx_sysex(efx, msg.data(), msg.size()));
-      REQUIRE(efx.control_depth[1] == 0x12);
-      REQUIRE(efx.type == baseline.type);
-      REQUIRE(efx.type_msb == baseline.type_msb);
-      REQUIRE(efx.params == baseline.params);
-      REQUIRE(efx.assigned);
+      REQUIRE(apply_gs_efx_units_sysex(units, msg.data(), msg.size()));
+      REQUIRE(units[0].control_depth[1] == 0x12);
+      REQUIRE(units[0].type == baseline.type);
+      REQUIRE(units[0].type_msb == baseline.type_msb);
+      REQUIRE(units[0].params == baseline.params);
+      REQUIRE(units[0].assigned);
+      for (size_t unit = 1; unit < units.size(); ++unit) REQUIRE(same_state(units[unit], GsEfx{}));
     }
   }
 

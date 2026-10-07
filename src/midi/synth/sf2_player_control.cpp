@@ -3,7 +3,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
-#include <cstring>
 #include <memory>
 #include <new>
 #include <string>
@@ -22,13 +21,9 @@ namespace sonare::midi::synth {
 
 bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
   const GsSysEx msg = parse_gs_sysex(data, size);
-  // A frame's kind is classified from its FIRST decoded byte alone (gs_layer.cpp),
-  // so a case that returns here discards every later byte of the same run. The
-  // resets below are whole-frame messages and still return; the two part-scoped
-  // kinds record that they were handled and fall through to the appliers, which
-  // walk every decoded write. Neither address has a case in those appliers
-  // (apply_gs_part_sysex has none for USE FOR RHYTHM PART, apply_gs_system_sysex
-  // none for the part EFX assign), so falling through cannot apply either twice.
+  // A frame's kind is classified from its FIRST decoded byte alone (gs_layer.cpp).
+  // Resets are whole-frame messages and still return; part-scoped writes fall
+  // through to the decoded-write appliers so a bulk run cannot lose a later row.
   bool handled = false;
   switch (msg.kind) {
     case GsSysExKind::kGm1Reset:
@@ -41,55 +36,55 @@ bool Sf2Player::handle_sysex(const uint8_t* data, size_t size) noexcept {
       gs_reset();
       return true;
     case GsSysExKind::kUseForRhythm:
-      // The map number is kept, not just its truth: it selects which drum-note
-      // edit slab the part reads (docs/gs.md).
-      channels_[msg.channel & 0x0Fu].drum_map = msg.value;
-      // The part's effective bank just moved between melodic and rhythm, and
-      // both the fallback ambience floor and the bank's rig are keyed on it.
-      refresh_channel_mod(msg.channel & 0x0Fu);
-      refresh_part_rig(msg.channel & 0x0Fu);
-      // 40 1x 16-1E (key shift, pitch offset, level, velocity sense depth and
-      // offset, pan, key range low/high) are the addresses immediately after
-      // this one, and a real file writes them in one run with it.
-      handled = true;
-      break;
     case GsSysExKind::kEfxPartSwitch:
-      // Route/unroute the part through the EFX. Offline (inline) updates the
-      // mirror here on the render thread; live leaves the mirror to the control
-      // thread's on_control_sysex (which realises + swaps the chains wait-free).
-      if (config_.realize_efx_inline) part_fx_.assign_part(msg.channel & 0x0Fu, msg.value);
-      handled = true;
-      break;
     case GsSysExKind::kNone:
       break;
   }
+  // PART EFX ASSIGN may be a later byte in a part-block run. The control path
+  // owns the mirror for live players; only inline mode commits the copy here.
+  // Avoid reading the control-owned mirror on the live audio path: the control
+  // thread may publish a new snapshot concurrently.
+  bool efx_assign_touched = false;
+  if (config_.realize_efx_inline) {
+    std::array<uint8_t, 16> assignments = part_fx_.part_assign();
+    if (apply_gs_efx_assign_sysex(&assignments, data, size)) {
+      efx_assign_touched = true;
+      const std::array<uint8_t, 16>& current = part_fx_.part_assign();
+      for (size_t part = 0; part < assignments.size(); ++part) {
+        if (assignments[part] != current[part]) {
+          part_fx_.assign_part(static_cast<uint8_t>(part), assignments[part]);
+        }
+      }
+    }
+  } else {
+    efx_assign_touched = apply_gs_efx_assign_sysex(nullptr, data, size);
+  }
+  if (efx_assign_touched) handled = true;
+
   // Part parameters (40 1x xx). These alias controllers the render thread
   // already owns, so unlike the effect blocks they apply here in both modes.
-  if (apply_gs_part_sysex(data, size)) return true;
+  if (apply_gs_part_sysex(data, size)) handled = true;
   // Master tuning / volume / pan (40 00 00-06), on the same thread split.
-  if (apply_gs_master_sysex(data, size)) return true;
+  if (apply_gs_master_sysex(data, size)) handled = true;
   // Drum setup (41 mn rr). Render thread in both modes, like the part block
   // above and for the same reason: the slab it writes is the one the drum NRPNs
   // already write from on_event, and a note-on reads it there.
-  if (apply_gs_drum_sysex(data, size)) return true;
+  if (apply_gs_drum_sysex(data, size)) handled = true;
   // User drum sets (21 dn rr), on the same thread split: a note-on reads them
   // where it reads the drum setup slab.
-  if (apply_gs_user_drum_sysex(data, size)) return true;
+  if (apply_gs_user_drum_sysex(data, size)) handled = true;
   // GS insertion-effect (EFX) block writes (40 03 xx, or 40 3u xx for one of
   // the extension's units). Offline captures the raw wire into that unit's
   // mirror so process() can realise it inline; live routes realisation through
   // the control thread (on_control_sysex), so the audio thread must not touch
   // the mirror the builder reads.
-  if (config_.realize_efx_inline && part_fx_.apply_unit_sysex(data, size)) return true;
+  if (config_.realize_efx_inline && part_fx_.apply_unit_sysex(data, size)) handled = true;
   // System-effect (40 01 30-5A), master-EQ (40 02 00-03) and part EQ switch
   // (40 4x 20) writes, on the same thread split as the EFX block above.
   if (config_.realize_efx_inline && apply_gs_system_sysex(data, size)) {
     gs_system_dirty_ = true;
-    return true;
+    handled = true;
   }
-  // True when the switch above consumed the frame's first byte even though no
-  // applier claimed the rest, so a single-byte write of one of those two
-  // addresses still reports as handled.
   return handled;
 }
 
@@ -100,18 +95,12 @@ bool Sf2Player::apply_gs_system_sysex(const uint8_t* data, size_t size) noexcept
 bool Sf2Player::apply_gs_system_sysex_to(GsSystemEffects& fx, GsMasterEq& eq,
                                          std::array<bool, 16>& eq_part, const uint8_t* data,
                                          size_t size) noexcept {
-  // A file writes these blocks as multi-byte runs — the census finds up to 11
-  // data bytes at 40 01 50 — so every decoded byte is applied, not just the
-  // first. gs_decode_sysex reports one write per byte with its own address.
-  constexpr size_t kMaxWrites = 64;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
-  bool touched = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  // A file writes these blocks as multi-byte runs. Walk every decoded byte,
+  // including bytes that cross from system effects into master EQ.
+  return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     // An out-of-range value is ignored rather than clamped (docs/gs.md).
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
     switch (w.param) {
       // A macro is a one-shot write of the parameters it covers, so it lands
       // through gs_apply_*_macro rather than on a field of its own.
@@ -212,28 +201,36 @@ bool Sf2Player::apply_gs_system_sysex_to(GsSystemEffects& fx, GsMasterEq& eq,
         eq_part[w.part & 0x0Fu] = w.value == 0;
         break;
       default:
-        continue;
+        return false;
     }
-    touched = true;
-  }
-  return touched;
+    return true;
+  });
 }
 
 bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
-  constexpr size_t kMaxWrites = 64;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
   // One bit per part written, so a run over several parts refreshes each once
   // instead of once per byte.
   uint16_t dirty = 0;
   uint16_t rig_dirty = 0;
   bool rx_dirty = false;
   bool eg_moved = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  // A valid DT1 may carry a whole dump; the masks run across the walk's chunks,
+  // so no later part row is discarded at a write-buffer boundary.
+  gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    if (entry == nullptr) return false;
     ChannelState& st = channels_[w.part & 0x0Fu];
+    // USE FOR RHYTHM PART is the one GS row whose out-of-range value has a
+    // defined divergence: every value above map 2 selects map 1. Do this
+    // before the ordinary row-range rejection, because real files place it in
+    // the middle of a bulk run (40 1x 14, 15, ...).
+    if (w.param == GsParam::kUseForRhythmPart) {
+      st.drum_map = w.value <= 2 ? w.value : 1;
+      dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+      rig_dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
+      return true;
+    }
+    if (!gs_value_in_range(*entry, w.value)) return false;
     switch (w.param) {
       case GsParam::kPartLevel:
         st.volume = Control32::from7(w.value);
@@ -382,10 +379,11 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
         st.bend_range_cents = 100.0f * static_cast<float>(w.value - 0x40);
         break;
       default:
-        continue;
+        return false;
     }
     dirty |= static_cast<uint16_t>(1u << (w.part & 0x0Fu));
-  }
+    return true;
+  });
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((dirty & (1u << ch)) != 0) refresh_channel_mod(ch);
     // Its own mask rather than `dirty`: this resolves a preset, and every other
@@ -398,16 +396,9 @@ bool Sf2Player::apply_gs_part_sysex(const uint8_t* data, size_t size) noexcept {
 }
 
 bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept {
-  // MASTER TUNE is four nibbles, so a run of up to seven bytes reaches every
-  // address in the block.
-  constexpr size_t kMaxWrites = 16;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
-  bool touched = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
     switch (w.param) {
       case GsParam::kMasterTune:
         master_.tune[w.index & 0x03u] = w.value;
@@ -422,29 +413,20 @@ bool Sf2Player::apply_gs_master_sysex(const uint8_t* data, size_t size) noexcept
         master_.pan = w.value;
         break;
       default:
-        continue;
+        return false;
     }
-    touched = true;
-  }
-  return touched;
+    return true;
+  });
 }
 
 bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
-  // A drum setup dump writes consecutive notes as one run, so every decoded byte
-  // is applied rather than the first (apply_gs_system_sysex's pattern) and the
-  // buffer holds one write per drum note, which is as long as a run can be.
-  constexpr size_t kMaxWrites = 128;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
-  bool touched = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
     // The address nibble is zero-based, so it indexes the slabs directly — where
     // 40 1x 15's value is one-based and goes through drum_map_slot(). A map the
     // machine does not have is ignored like any other out-of-range write.
-    if (w.part >= kGsDrumMapCount) continue;
+    if (w.part >= kGsDrumMapCount) return false;
     GsDrumNoteParams& d = drum_params_[w.part][w.index & 0x7Fu];
     switch (w.param) {
       case GsParam::kDrumPlayNote:
@@ -482,25 +464,17 @@ bool Sf2Player::apply_gs_drum_sysex(const uint8_t* data, size_t size) noexcept {
         d.flags |= GsDrumNoteParams::kDelay;
         break;
       default:
-        continue;
+        return false;
     }
-    touched = true;
-  }
-  return touched;
+    return true;
+  });
 }
 
 bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexcept {
-  // Same run shape as the drum setup block above: a set is written note by note
-  // as one run per parameter, so the buffer holds a whole 128-note run.
-  constexpr size_t kMaxWrites = 128;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded = gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
-  bool touched = false;
-  for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-    const GsWrite& w = writes[i];
+  return gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
     const GsAddressEntry* entry = gs_lookup_address(w.addr);
-    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
-    if (w.part >= kGsUserDrumSetCount) continue;
+    if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
+    if (w.part >= kGsUserDrumSetCount) return false;
     GsUserDrumSource& src = user_drum_sources_[w.part][w.index & 0x7Fu];
     GsDrumNoteParams& d = user_drum_params_[w.part][w.index & 0x7Fu];
     switch (w.param) {
@@ -547,11 +521,10 @@ bool Sf2Player::apply_gs_user_drum_sysex(const uint8_t* data, size_t size) noexc
         d.flags |= GsDrumNoteParams::kDelay;
         break;
       default:
-        continue;
+        return false;
     }
-    touched = true;
-  }
-  return touched;
+    return true;
+  });
 }
 
 void Sf2Player::apply_gs_system_state(const GsSystemEffects& fx, const GsMasterEq& eq,
@@ -595,13 +568,13 @@ constexpr size_t kDirectDelayFirst = offsetof(GsSystemEffects, delay_macro);
 bool Sf2Player::append_direct_gs_node(const uint8_t* data, size_t size,
                                       std::shared_ptr<const PreparedMidiSysEx> prepared,
                                       bool legacy_full_snapshot) noexcept {
-  if (data == nullptr || size == 0 || size > kDirectGsMaxBytes) return false;
+  if (data == nullptr || size == 0) return false;
   try {
     sweep_direct_gs_nodes();
     auto node = std::make_unique<DirectGsNode>();
     node->seq = direct_queue_->next_seq++;
-    node->size = static_cast<uint16_t>(size);
-    std::memcpy(node->bytes.data(), data, size);
+    node->size = size;
+    node->bytes = std::make_shared<const std::vector<uint8_t>>(data, data + size);
     node->prepared_owner = std::move(prepared);
     node->prepared_raw = node->prepared_owner != nullptr
                              ? dynamic_cast<const PreparedSysEx*>(node->prepared_owner.get())
@@ -677,9 +650,9 @@ void Sf2Player::drain_direct_gs_nodes() noexcept {
       restart_prepared_audio_runtime(next->restart_domain);
     } else if (next->legacy_full_snapshot) {
       adopt_legacy_direct_snapshot();
-    } else if (next->prepared_raw != nullptr) {
+    } else if (next->prepared_raw != nullptr && next->bytes != nullptr) {
       // Direct deltas update and activate the audio-owned overlay.
-      apply_prepared_gs_delta(*next->prepared_raw, next->bytes.data(), next->size, false);
+      apply_prepared_gs_delta(*next->prepared_raw, next->bytes->data(), next->size, false);
     }
     direct_queue_->audio_head = next;
     direct_queue_->consumed_seq.store(next->seq, std::memory_order_release);
@@ -688,10 +661,6 @@ void Sf2Player::drain_direct_gs_nodes() noexcept {
 }
 
 void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, size_t size) noexcept {
-  constexpr size_t kMaxWrites = 64;
-  GsWrite writes[kMaxWrites];
-  const size_t decoded =
-      data == nullptr ? 0 : gs_decode_sysex(data, size, writes, kMaxWrites, nullptr);
   const uint64_t seq = ++direct_system_patch_control_.publish_seq;
   if (reset) direct_system_patch_control_.last_reset_seq = seq;
   auto stamp = [&](size_t index, uint8_t value) {
@@ -710,10 +679,9 @@ void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, siz
   };
 
   if (!reset) {
-    for (size_t i = 0; i < std::min(decoded, kMaxWrites); ++i) {
-      const GsWrite& w = writes[i];
+    gs_for_each_sysex_write(data, size, [&](const GsWrite& w) noexcept {
       const GsAddressEntry* entry = gs_lookup_address(w.addr);
-      if (entry == nullptr || !gs_value_in_range(*entry, w.value)) continue;
+      if (entry == nullptr || !gs_value_in_range(*entry, w.value)) return false;
       const size_t param = static_cast<size_t>(w.param);
       const size_t first_param = static_cast<size_t>(GsParam::kReverbMacro);
       const size_t last_param = static_cast<size_t>(GsParam::kDelaySendToReverb);
@@ -745,10 +713,11 @@ void Sf2Player::publish_direct_system_patch(bool reset, const uint8_t* data, siz
             stamp_part_eq(w.part);
             break;
           default:
-            break;
+            return false;
         }
       }
-    }
+      return true;
+    });
   }
   direct_system_patch_->store(direct_system_patch_control_);
 }
@@ -971,84 +940,90 @@ bool Sf2Player::prepare_sysex(const uint8_t* data, size_t size,
     token->owner_identity = prepared_owner_identity_;
     token->domain = prepared_domain_;
 
-    const int addressed_unit = gs_efx_addressed_unit(data, size);
-    if (addressed_unit >= 0) {
-      token->efx_block = true;
-      token->unit = static_cast<uint8_t>(addressed_unit);
-      constexpr size_t kMaxWrites = 64;
-      std::array<GsWrite, kMaxWrites> writes{};
-      const GsFrame frame = gs_sysex_frame(data, size);
-      const size_t block_length = gs_efx_block_write_count(frame.addr, frame.len);
-      GsFrame bounded_frame = frame;
-      bounded_frame.len = block_length;
-      const size_t decoded = std::min(
-          gs_decode_writes(bounded_frame, writes.data(), writes.size(), nullptr), writes.size());
-      bool has_msb = false;
-      bool has_lsb = false;
-      uint8_t message_msb = 0;
-      uint8_t message_lsb = 0;
-      for (size_t i = 0; i < decoded; ++i) {
-        if (writes[i].param != GsParam::kEfxType) continue;
-        if (writes[i].index == 0) {
-          has_msb = true;
-          message_msb = writes[i].value;
-        } else if (writes[i].index == 1) {
-          has_lsb = true;
-          message_lsb = writes[i].value;
+    const uint32_t efx_units = gs_efx_units_in_sysex(data, size);
+    token->efx_units = efx_units;
+    if (efx_units != 0) {
+      // Type state is discovered in wire order. An MSB-only write updates the
+      // current pairing for its unit, while the MSB that resolved the final LSB
+      // is retained separately so a later alias cannot rewrite that resolution.
+      token->candidates.reserve(kGsEfxUnitCount);
+      const auto add_candidate = [&](uint8_t unit, uint16_t type) {
+        // Type 0000 is the measured Thru/default state. Unknown types and Thru
+        // both intentionally carry no prepared node; the runtime selects an
+        // empty override for them rather than rejecting the token.
+        if (type == 0 || gs_efx_type_defaults(type) == nullptr) return true;
+        for (const PreparedEfxCandidate& existing : token->candidates) {
+          if (existing.unit == unit && existing.type == type) return true;
         }
-      }
-      // Only an LSB resolves a type; other writes reuse the node active at event time.
-      token->full_reapply = has_lsb;
+        const std::shared_ptr<PreparedEfxNode> node = find_or_build_prepared_node(unit, type);
+        if (node == nullptr) return false;
 
-      std::array<uint16_t, kMaxPreparedCandidates> types{};
-      size_t type_count = 0;
-      const auto add_type = [&](uint16_t type) {
-        if (type == 0 || gs_efx_type_defaults(type) == nullptr || type_count >= types.size()) {
-          return;
-        }
-        for (size_t i = 0; i < type_count; ++i) {
-          if (types[i] == type) return;
-        }
-        types[type_count++] = type;
+        PreparedEfxCandidate candidate;
+        candidate.unit = unit;
+        candidate.type = type;
+        candidate.node = node.get();
+        candidate.lease = node;
+        token->candidates.push_back(std::move(candidate));
+        return true;
       };
-      if (has_lsb) {
-        if (has_msb) {
-          add_type(static_cast<uint16_t>((static_cast<uint16_t>(message_msb) << 8) |
-                                         static_cast<uint16_t>(message_lsb)));
-        } else {
-          // An LSB alone pairs with every measured MSB carrying that low byte.
-          for (const GsEfxTypeDefaults& defaults : kGsEfxTypeDefaults) {
-            if (static_cast<uint8_t>(defaults.type & 0x7Fu) == message_lsb) {
-              add_type(defaults.type);
-            }
-            if (type_count == types.size()) break;
+
+      struct EfxTypeScan final {
+        bool have_msb = false;
+        uint8_t current_msb = 0;
+        bool have_lsb = false;
+        uint8_t last_lsb = 0;
+        bool last_lsb_had_msb = false;
+        uint8_t last_lsb_msb = 0;
+      };
+      std::array<EfxTypeScan, kGsEfxUnitCount> type_scan{};
+      const GsFrame frame = gs_sysex_frame(data, size);
+      size_t cursor = 0;
+      GsEfxBlockSlice slice;
+      while (gs_next_efx_block_slice(frame, &cursor, &slice)) {
+        std::array<GsWrite, kGsEfxBlockSize> writes{};
+        const size_t decoded = std::min(
+            gs_decode_writes(slice.frame, writes.data(), writes.size(), nullptr), writes.size());
+        for (size_t i = 0; i < decoded; ++i) {
+          const GsWrite& write = writes[i];
+          if (write.param != GsParam::kEfxType) continue;
+          const uint32_t bit = uint32_t{1} << slice.unit;
+          if (write.index == 0) {
+            type_scan[slice.unit].current_msb = write.value;
+            type_scan[slice.unit].have_msb = true;
+          } else if (write.index == 1) {
+            token->full_reapply_units |= bit;
+            type_scan[slice.unit].have_lsb = true;
+            type_scan[slice.unit].last_lsb = write.value;
+            type_scan[slice.unit].last_lsb_had_msb = type_scan[slice.unit].have_msb;
+            type_scan[slice.unit].last_lsb_msb = type_scan[slice.unit].current_msb;
           }
         }
       }
 
-      for (size_t type_index = 0; type_index < type_count; ++type_index) {
-        const uint16_t type = types[type_index];
-        const std::shared_ptr<PreparedEfxNode> node =
-            find_or_build_prepared_node(static_cast<size_t>(addressed_unit), type);
-        if (node == nullptr) {
-          out.reset();
-          return false;
+      // Build only the final LSB resolution for each unit. A later MSB-only
+      // alias changes current_msb but cannot retroactively change this type.
+      for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+        const EfxTypeScan& scan = type_scan[unit];
+        if ((efx_units & (uint32_t{1} << unit)) == 0 || !scan.have_lsb) continue;
+        if (scan.last_lsb_had_msb) {
+          const uint16_t type = static_cast<uint16_t>(
+              (static_cast<uint16_t>(scan.last_lsb_msb) << 8) | scan.last_lsb);
+          if (!add_candidate(static_cast<uint8_t>(unit), type)) {
+            out.reset();
+            return false;
+          }
+        } else {
+          // With no MSB before the final LSB, every measured type carrying
+          // that low byte is possible at event time. A known non-Thru type
+          // must have a prepared node; otherwise this token is unsafe.
+          for (const GsEfxTypeDefaults& defaults : kGsEfxTypeDefaults) {
+            if (static_cast<uint8_t>(defaults.type & 0x7Fu) != scan.last_lsb) continue;
+            if (!add_candidate(static_cast<uint8_t>(unit), defaults.type)) {
+              out.reset();
+              return false;
+            }
+          }
         }
-        PreparedEfxCandidate candidate;
-        candidate.unit = static_cast<uint8_t>(addressed_unit);
-        candidate.type = type;
-        candidate.node = node.get();
-        candidate.lease = node;
-        candidate.target.type = type;
-        candidate.target.type_msb = static_cast<uint8_t>(type >> 8);
-        candidate.target.assigned = true;
-        candidate.target.params = gs_efx_type_defaults(type)->params;
-        // The parser's own order: type defaults first, later bytes survive.
-        if (!apply_gs_efx_sysex(candidate.target, data, size, nullptr)) {
-          out.reset();
-          return false;
-        }
-        token->candidates[token->candidate_count++] = std::move(candidate);
       }
     }
 
@@ -1221,7 +1196,6 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
     prepared_assign_ = {};
     prepared_part_unit_.fill(PartFxSnapshot::kNoUnit);
     prepared_unit_fed_.fill(false);
-    prepared_any_unit_ = false;
     if (prepared_base_synced_) rebuild_prepared_routing();
     if (apply_performance) {
       prepared_sys_fx_ = {};
@@ -1234,46 +1208,53 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
 
   // Channel bytes first; EFX and system state below use only the overlay.
   if (apply_performance) handle_sysex(data, size);
-  if (msg.kind == GsSysExKind::kEfxPartSwitch) {
-    prepared_assign_[msg.channel & 0x0Fu] = msg.value;
+  // PART EFX ASSIGN may be any byte in a validated DT1 run. Apply it directly
+  // to the audio-owned overlay so prepared events do not depend on the parser's
+  // first-byte kind.
+  if (apply_gs_efx_assign_sysex(&prepared_assign_, data, size)) {
     if (prepared_base_synced_) rebuild_prepared_routing();
   }
 
-  if (token.efx_block && token.unit < kGsEfxUnitCount &&
-      apply_gs_efx_sysex(prepared_efx_[token.unit], data, size, nullptr)) {
-    const bool was_overridden = prepared_unit_overridden_[token.unit];
-    PreparedEfxNode* selected = nullptr;
-    for (uint8_t i = 0; i < token.candidate_count; ++i) {
-      if (token.candidates[i].unit == token.unit &&
-          token.candidates[i].type == prepared_efx_[token.unit].type) {
-        selected = token.candidates[i].node;
-        apply_prepared_candidate(token, token.candidates[i]);
-        break;
+  if (token.efx_units != 0 && apply_gs_efx_units_sysex(prepared_efx_, data, size, nullptr)) {
+    // All units are first brought to their final raw state. Only then are the
+    // selected nodes reconciled, so a multi-unit frame rebuilds routing once and
+    // cannot expose a half-applied graph between its slices.
+    for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+      const uint32_t bit = uint32_t{1} << unit;
+      if ((token.efx_units & bit) == 0) continue;
+      const bool was_overridden = prepared_unit_overridden_[unit];
+      PreparedEfxNode* selected = nullptr;
+      for (const PreparedEfxCandidate& candidate : token.candidates) {
+        if (candidate.unit == unit && candidate.type == prepared_efx_[unit].type) {
+          selected = candidate.node;
+          apply_prepared_candidate(token, candidate);
+          break;
+        }
       }
-    }
-    if (selected == nullptr) {
-      // Keep the active node, else a same-type published unit, else an empty override.
-      PreparedEfxNode* active = prepared_active_nodes_[token.unit];
-      if (!token.full_reapply && active != nullptr &&
-          active->type == prepared_efx_[token.unit].type) {
-        prepared_unit_overridden_[token.unit] = true;
-        apply_prepared_node_plan(*active, prepared_efx_[token.unit], true);
-      } else if (!token.full_reapply && !was_overridden && active == nullptr) {
+      if (selected != nullptr) continue;
+
+      // Keep the active node for parameter-only writes. An LSB write, or an
+      // unsupported type, explicitly requires a fresh selection and therefore
+      // falls back to an empty prepared override when no candidate exists.
+      PreparedEfxNode* active = prepared_active_nodes_[unit];
+      const bool full_reapply = (token.full_reapply_units & bit) != 0;
+      if (!full_reapply && active != nullptr && active->type == prepared_efx_[unit].type) {
+        prepared_unit_overridden_[unit] = true;
+        apply_prepared_node_plan(*active, prepared_efx_[unit], true);
+      } else if (!full_reapply && !was_overridden && active == nullptr) {
         const PartFxSnapshot* snapshot = part_fx_.current();
-        const bool matching_legacy =
-            snapshot != nullptr && snapshot->unit_fed[token.unit] &&
-            snapshot->gs_efx_state[token.unit].type == prepared_efx_[token.unit].type;
+        const bool matching_legacy = snapshot != nullptr && snapshot->unit_fed[unit] &&
+                                     snapshot->gs_efx_state[unit].type == prepared_efx_[unit].type;
         if (matching_legacy) {
           // Not overridden: the published processors keep running with their tail.
-          part_fx_.apply_legacy_plan(token.unit, prepared_efx_[token.unit],
-                                     prepared_control_part(token.unit), *this);
+          part_fx_.apply_legacy_plan(unit, prepared_efx_[unit], prepared_control_part(unit), *this);
         } else {
-          activate_prepared_node(token.unit, nullptr);
-          prepared_unit_overridden_[token.unit] = true;
+          activate_prepared_node(unit, nullptr);
+          prepared_unit_overridden_[unit] = true;
         }
       } else {
-        activate_prepared_node(token.unit, nullptr);
-        prepared_unit_overridden_[token.unit] = true;
+        activate_prepared_node(unit, nullptr);
+        prepared_unit_overridden_[unit] = true;
       }
     }
     if (prepared_base_synced_) rebuild_prepared_routing();
@@ -1283,6 +1264,10 @@ void Sf2Player::apply_prepared_gs_delta(const PreparedSysEx& token, const uint8_
                                                     prepared_eq_part_bypassed_, data, size)) {
     apply_gs_system_state(prepared_sys_fx_, prepared_master_eq_, prepared_eq_part_bypassed_);
   }
+  // The prepared graph is now active at this event boundary. Raise the
+  // conservative bounce bound only after its selected node and routing have
+  // been applied; speculative prepare/build work remains side-effect free.
+  raise_prepared_fx_tail();
 }
 
 void Sf2Player::realize_gs_efx() {
@@ -1353,6 +1338,7 @@ void Sf2Player::restart_prepared_audio_runtime(uint64_t domain) noexcept {
       prepared_unit_overridden_[unit] = true;
     }
   }
+  raise_prepared_fx_tail();
 }
 
 void Sf2Player::set_gs_efx_realization(GsEfxRealization realization) {
@@ -1417,8 +1403,23 @@ int Sf2Player::gs_efx_control_byte(size_t control) const noexcept {
 void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   if (!prepared_ || data == nullptr || size == 0) return;
   const GsSysEx msg = parse_gs_sysex(data, size);
-  const bool efx_message = gs_sysex_resets(msg.kind) || msg.kind == GsSysExKind::kEfxPartSwitch ||
-                           gs_efx_addressed_unit(data, size) >= 0;
+  const bool efx_assign_message = apply_gs_efx_assign_sysex(nullptr, data, size);
+  const uint32_t efx_units = gs_efx_units_in_sysex(data, size);
+  const bool efx_message = gs_sysex_resets(msg.kind) || efx_assign_message || efx_units != 0;
+  uint32_t assignment_units = 0;
+  if (efx_assign_message) {
+    const std::array<uint8_t, 16>& current_assign = part_fx_.part_assign();
+    gs_for_each_sysex_write(data, size, [&](const GsWrite& write) noexcept {
+      if (!gs_efx_assign_accepted(write)) return false;
+      const size_t part = write.part & 0x0Fu;
+      const int old_unit = gs_efx_assign_unit(current_assign[part]);
+      const int new_unit = gs_efx_assign_unit(write.value);
+      if (old_unit >= 0) assignment_units |= uint32_t{1} << old_unit;
+      if (new_unit >= 0) assignment_units |= uint32_t{1} << new_unit;
+      return true;
+    });
+  }
+  const uint32_t affected_units = efx_units | assignment_units;
   // A checkpoint, so a throwing rebuild under this noexcept hook leaves the mirror whole.
   const PartFxStage::Checkpoint mirror_before = part_fx_.checkpoint();
   const std::array<bool, kGsEfxUnitCount> fallback_before = direct_legacy_efx_fallback_;
@@ -1441,20 +1442,20 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
   // Only this hook rejects a plan, and only while a custom unit renders from the full snapshot.
   const PreparedSysEx* prepared_token =
       prepared != nullptr ? dynamic_cast<const PreparedSysEx*>(prepared.get()) : nullptr;
-  const bool has_legacy_fallback =
-      std::any_of(direct_legacy_efx_fallback_.begin(), direct_legacy_efx_fallback_.end(),
-                  [](bool fallback) { return fallback; });
+  uint32_t legacy_fallback_units = 0;
+  for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+    if (direct_legacy_efx_fallback_[unit]) legacy_fallback_units |= uint32_t{1} << unit;
+  }
   bool forced_legacy_direct = false;
-  bool legacy_candidate_replaces_unit = false;
-  uint8_t legacy_candidate_unit = 0;
-  if (prepared_ok && prepared_token != nullptr && has_legacy_fallback &&
-      (prepared_token->efx_block || msg.kind == GsSysExKind::kEfxPartSwitch)) {
-    // The overlay would replace the custom unit with a null node; stay on the snapshot.
+  uint32_t legacy_candidate_replaces_units = 0;
+  if (prepared_ok && prepared_token != nullptr && (affected_units & legacy_fallback_units) != 0) {
+    // The overlay would replace an unrelated custom unit with a null node; stay
+    // on the full snapshot only when this message reaches that unit.
     forced_legacy_direct = true;
-    if (prepared_token->efx_block && prepared_token->candidate_count != 0 &&
-        prepared_token->unit < kGsEfxUnitCount) {
-      legacy_candidate_replaces_unit = true;
-      legacy_candidate_unit = prepared_token->unit;
+    for (const PreparedEfxCandidate& candidate : prepared_token->candidates) {
+      if (candidate.unit < kGsEfxUnitCount) {
+        legacy_candidate_replaces_units |= uint32_t{1} << candidate.unit;
+      }
     }
     prepared_ok = false;
     prepared.reset();
@@ -1474,19 +1475,29 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
           break;
         case GsSysExKind::kUseForRhythm:
         case GsSysExKind::kNone: {
-          const int unit = gs_efx_addressed_unit(data, size);
           // A selected prepared node ends this unit's full-snapshot fallback.
-          if (unit >= 0 && prepared_token != nullptr && prepared_token->candidate_count != 0) {
-            direct_legacy_efx_fallback_[static_cast<size_t>(unit)] = false;
+          if (prepared_token != nullptr) {
+            uint32_t candidate_units = 0;
+            for (const PreparedEfxCandidate& candidate : prepared_token->candidates) {
+              if (candidate.unit < kGsEfxUnitCount)
+                candidate_units |= uint32_t{1} << candidate.unit;
+            }
+            for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+              if ((candidate_units & (uint32_t{1} << unit)) != 0)
+                direct_legacy_efx_fallback_[unit] = false;
+            }
           }
           break;
         }
       }
       part_fx_.clear_dirty();
     } else {
-      const int unit = gs_efx_addressed_unit(data, size);
-      if (unit >= 0 && !forced_legacy_direct)
-        direct_legacy_efx_fallback_[static_cast<size_t>(unit)] = true;
+      if (!forced_legacy_direct) {
+        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+          if ((affected_units & (uint32_t{1} << unit)) != 0)
+            direct_legacy_efx_fallback_[unit] = true;
+        }
+      }
       bool rebuilt = false;
       try {
         rebuilt = part_fx_.apply_control_sysex(data, size);
@@ -1504,8 +1515,12 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
           direct_rebuild_failed = true;
         }
       }
-      if (rebuilt && !direct_rebuild_failed && legacy_candidate_replaces_unit)
-        direct_legacy_efx_fallback_[legacy_candidate_unit] = false;
+      if (rebuilt && !direct_rebuild_failed) {
+        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+          if ((legacy_candidate_replaces_units & (uint32_t{1} << unit)) != 0)
+            direct_legacy_efx_fallback_[unit] = false;
+        }
+      }
     }
   }
   if (efx_message && !direct_rebuild_failed) {
@@ -1514,8 +1529,10 @@ void Sf2Player::on_control_sysex(const uint8_t* data, size_t size) noexcept {
       // A node that could not be queued falls back to the full-snapshot publication.
       try {
         realize_gs_efx();
-        const int unit = gs_efx_addressed_unit(data, size);
-        if (unit >= 0) direct_legacy_efx_fallback_[static_cast<size_t>(unit)] = true;
+        for (size_t unit = 0; unit < kGsEfxUnitCount; ++unit) {
+          if ((affected_units & (uint32_t{1} << unit)) != 0)
+            direct_legacy_efx_fallback_[unit] = true;
+        }
       } catch (...) {
         restore_direct_mirror();
       }

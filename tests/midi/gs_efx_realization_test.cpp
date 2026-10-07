@@ -92,6 +92,27 @@ std::array<uint8_t, 11> part_efx_assign(uint8_t value) {
 }
 #endif
 
+/// A variable-length GS DT1 frame used for bulk runs that cross the reserved
+/// addresses between the uniform EFX blocks. The checksum covers the exact
+/// wire bytes, so the same frame exercises every public PartFxStage entry
+/// point rather than a helper that bypasses framing.
+std::vector<uint8_t> efx_bulk(uint32_t addr, const std::vector<uint8_t>& data) {
+  std::vector<uint8_t> m{0xF0,
+                         0x41,
+                         0x10,
+                         0x42,
+                         0x12,
+                         static_cast<uint8_t>((addr >> 16) & 0x7Fu),
+                         static_cast<uint8_t>((addr >> 8) & 0x7Fu),
+                         static_cast<uint8_t>(addr & 0x7Fu)};
+  m.insert(m.end(), data.begin(), data.end());
+  uint32_t sum = m[5] + m[6] + m[7];
+  for (const uint8_t value : data) sum += value & 0x7Fu;
+  m.push_back(static_cast<uint8_t>((128u - (sum & 0x7Fu)) & 0x7Fu));
+  m.push_back(0xF7);
+  return m;
+}
+
 /// Part 1 (channel 0) routed into the spec unit.
 constexpr uint8_t kPartOn[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x41, 0x22, 0x01, 0x5C, 0xF7};
 
@@ -174,6 +195,137 @@ class StandIn final : public sonare::rt::ProcessorBase {
   int latency_samples_q8_;
 };
 
+/// A finite, deterministic delay used by prepared-runtime tests. The stage
+/// keeps exactly its declared number of samples, then returns to zero when its
+/// input is silent; this makes a stale unit's drain and reactivation observable
+/// without depending on a feedback effect's numerical decay.
+class FiniteTailDelay final : public sonare::rt::ProcessorBase {
+ public:
+  FiniteTailDelay(std::shared_ptr<Counters> counters, int tail_samples)
+      : counters_(std::move(counters)), tail_samples_(tail_samples) {}
+
+  void prepare(double, int) override {
+    ++counters_->prepares;
+    delay_.assign(static_cast<size_t>(std::max(0, tail_samples_)), 0.0f);
+    write_index_ = 0;
+  }
+
+  void process(float* const* channels, int num_channels, int n) override {
+    ++counters_->processes;
+    if (channels == nullptr || channels[0] == nullptr || n <= 0) return;
+    if (delay_.empty()) return;
+    float* right = num_channels > 1 ? channels[1] : nullptr;
+    for (int i = 0; i < n; ++i) {
+      const float delayed = delay_[write_index_];
+      delay_[write_index_] = channels[0][i];
+      channels[0][i] = delayed;
+      if (right != nullptr) right[i] = delayed;
+      write_index_ = (write_index_ + 1) % delay_.size();
+    }
+  }
+
+  void reset() override {
+    ++counters_->resets;
+    std::fill(delay_.begin(), delay_.end(), 0.0f);
+    write_index_ = 0;
+  }
+
+  int tail_samples() const noexcept override { return tail_samples_; }
+
+  bool set_parameter_impl(unsigned int id, float value) override {
+    ++counters_->parameter_sets;
+    if (id < counters_->last_parameter_by_id.size()) {
+      counters_->last_parameter_by_id[id] = value;
+      counters_->has_parameter_by_id[id] = true;
+    }
+    return true;
+  }
+
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> out;
+    out.reserve(s::kGsEfxRowKeys.size());
+    for (size_t i = 0; i < s::kGsEfxRowKeys.size(); ++i) {
+      out.push_back({std::string(s::kGsEfxRowKeys[i]), static_cast<unsigned int>(i)});
+    }
+    return out;
+  }
+
+ private:
+  std::shared_ptr<Counters> counters_;
+  int tail_samples_;
+  std::vector<float> delay_;
+  size_t write_index_ = 0;
+};
+
+/// A realtime-safe EFX stage whose declared tail can change when a queued
+/// parameter reaches the audio thread. Construction-time parameter writes
+/// leave the initial tail alone; tests opt into runtime updates explicitly so
+/// a freshly built snapshot can be made low without consuming an old queue.
+struct LiveTailState {
+  int tail = 64;
+  int next_tail = 64;
+  bool runtime_update = false;
+  int updates = 0;
+};
+
+class LiveTailDelay final : public sonare::rt::ProcessorBase {
+ public:
+  explicit LiveTailDelay(std::shared_ptr<LiveTailState> state) : state_(std::move(state)) {}
+
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int tail_samples() const noexcept override { return state_->tail; }
+
+  bool set_parameter_impl(unsigned int, float) override {
+    ++state_->updates;
+    if (state_->runtime_update) state_->tail = state_->next_tail;
+    return true;
+  }
+
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    std::vector<sonare::rt::ParamDescriptor> out;
+    out.reserve(s::kGsEfxRowKeys.size());
+    for (size_t i = 0; i < s::kGsEfxRowKeys.size(); ++i) {
+      out.push_back({std::string(s::kGsEfxRowKeys[i]), static_cast<unsigned int>(i)});
+    }
+    return out;
+  }
+
+ private:
+  std::shared_ptr<LiveTailState> state_;
+};
+
+s::PartFxStageConfig live_tail_config(const std::shared_ptr<LiveTailState>& state) {
+  s::PartFxStageConfig cfg;
+  cfg.bank_rig_binding = false;
+  cfg.insert_factory = [state](std::string_view name, std::string_view) {
+    if (name == "effects.delay.stereo") {
+      return std::unique_ptr<sonare::rt::ProcessorBase>(new LiveTailDelay(state));
+    }
+    return std::unique_ptr<sonare::rt::ProcessorBase>(new StandIn(
+        std::make_shared<Counters>(), std::string(name), false, std::vector<std::string>{}));
+  };
+  return cfg;
+}
+
+void prepare_live_tail_stage(s::PartFxStage& fx) {
+  fx.prepare(kRate);
+  fx.assign_part(0, 1);
+  const auto type = type_write(kStereoDelay);
+  REQUIRE(fx.apply_unit_sysex(type.data(), type.size()));
+  fx.publish();
+  fx.acquire();
+  REQUIRE(fx.current() != nullptr);
+}
+
+struct LiveTailHost final : s::PartFxHost {
+  float position = 1.0f;
+
+  float part_controller_position(int, uint8_t) const noexcept override { return position; }
+  float part_pan_units(int) const noexcept override { return 0.0f; }
+};
+
 void render_block(s::Sf2Player& player, std::vector<float>* left = nullptr) {
   std::vector<float> l(kBlock, 0.0f);
   std::vector<float> r(kBlock, 0.0f);
@@ -227,6 +379,18 @@ s::GsEfxStageFactory tail_factory(const std::shared_ptr<TailFactoryPlan>& plan) 
     return std::unique_ptr<sonare::rt::ProcessorBase>(
         new StandIn(plan->counters, std::string(name), false, {}, plan->tails.at(index),
                     plan->latency_samples_q8.at(index)));
+  };
+}
+
+s::GsEfxStageFactory prepared_tail_factory(const std::shared_ptr<TailFactoryPlan>& plan) {
+  return [plan](std::string_view name, std::string_view) {
+    const size_t index = plan->next++;
+    std::vector<std::string> keys;
+    keys.reserve(s::kGsEfxRowKeys.size());
+    for (const std::string_view key : s::kGsEfxRowKeys) keys.emplace_back(key);
+    return std::unique_ptr<sonare::rt::ProcessorBase>(
+        new StandIn(plan->counters, std::string(name), false, std::move(keys),
+                    plan->tails.at(index), plan->latency_samples_q8.at(index)));
   };
 }
 
@@ -409,6 +573,191 @@ TEST_CASE("GS EFX tails follow serial and parallel graph topology", "[gs-efx-rea
   }
 }
 
+TEST_CASE("a live EFX tail raises metadata without rebuilding its generation",
+          "[gs-efx-realization][gs-efx-tail]") {
+  const auto state = std::make_shared<LiveTailState>();
+  s::PartFxStage fx(live_tail_config(state));
+  prepare_live_tail_stage(fx);
+  REQUIRE(fx.tail_samples() == 64);
+  const uint32_t generation = fx.generation();
+
+  state->runtime_update = true;
+  state->next_tail = 8192;
+  const int updates_before_raise = state->updates;
+  const auto raise = slot_write(2, 0x71);
+  REQUIRE_FALSE(fx.apply_control_sysex(raise.data(), raise.size()));
+  REQUIRE(fx.generation() == generation);
+  fx.drain_param_updates();
+  REQUIRE(state->updates > updates_before_raise);
+  REQUIRE(fx.tail_samples() == 8192);
+
+  // The same graph can report a smaller current tail after the parameter is
+  // returned, but the active bound stays high until a fresh snapshot replaces
+  // the graph.
+  state->next_tail = 64;
+  const auto lower = slot_write(2, 0x40);
+  REQUIRE_FALSE(fx.apply_control_sysex(lower.data(), lower.size()));
+  REQUIRE(fx.generation() == generation);
+  fx.drain_param_updates();
+  REQUIRE(fx.tail_samples() == 8192);
+}
+
+TEST_CASE("a live EFX CONTROL tail raises metadata without rebuilding its generation",
+          "[gs-efx-realization][gs-efx-tail]") {
+  const auto state = std::make_shared<LiveTailState>();
+  s::PartFxStage fx(live_tail_config(state));
+  fx.prepare(kRate);
+  fx.assign_part(0, 1);
+  const auto type = type_write(kStereoDelay);
+  REQUIRE(fx.apply_unit_sysex(type.data(), type.size()));
+  const auto source = efx_write(0x1B, 0x01);  // CONTROL 1 <- CC1.
+  REQUIRE(fx.apply_unit_sysex(source.data(), source.size()));
+  const auto depth = efx_write(0x1C, 0x7F);  // Full positive modulation.
+  REQUIRE(fx.apply_unit_sysex(depth.data(), depth.size()));
+  fx.publish();
+  fx.acquire();
+  REQUIRE(fx.tail_samples() == 64);
+  const uint32_t generation = fx.generation();
+
+  state->runtime_update = true;
+  state->next_tail = 8192;
+  const int updates_before_control = state->updates;
+  LiveTailHost host;
+  fx.apply_controls(host);
+  REQUIRE(state->updates > updates_before_control);
+  REQUIRE(fx.generation() == generation);
+  REQUIRE(fx.tail_samples() == 8192);
+}
+
+TEST_CASE("published EFX tails are visible before adoption and reset on a fresh graph",
+          "[gs-efx-realization][gs-efx-tail]") {
+  const auto state = std::make_shared<LiveTailState>();
+  s::PartFxStage fx(live_tail_config(state));
+  prepare_live_tail_stage(fx);
+  REQUIRE(fx.tail_samples() == 64);
+
+  state->tail = 8192;
+  state->next_tail = 8192;
+  fx.publish();
+  REQUIRE(fx.tail_samples() == 8192);
+  fx.acquire();
+  REQUIRE(fx.tail_samples() == 8192);
+
+  state->tail = 64;
+  state->next_tail = 64;
+  fx.publish();
+  // The high active graph remains the bound until the low replacement is
+  // adopted by the audio side.
+  REQUIRE(fx.tail_samples() == 8192);
+  fx.acquire();
+  REQUIRE(fx.tail_samples() == 64);
+}
+
+TEST_CASE("a queued EFX update from a stale generation cannot raise the new graph",
+          "[gs-efx-realization][gs-efx-tail]") {
+  const auto state = std::make_shared<LiveTailState>();
+  s::PartFxStage fx(live_tail_config(state));
+  prepare_live_tail_stage(fx);
+  REQUIRE(fx.tail_samples() == 64);
+  const uint32_t old_generation = fx.generation();
+
+  state->next_tail = 8192;
+  const auto raise = slot_write(2, 0x71);
+  REQUIRE_FALSE(fx.apply_control_sysex(raise.data(), raise.size()));
+  REQUIRE(fx.generation() == old_generation);
+
+  // Publish and adopt a low replacement before the queued old-generation
+  // record is drained. The record must be discarded by its generation check.
+  state->tail = 64;
+  state->next_tail = 64;
+  fx.publish();
+  fx.acquire();
+  state->runtime_update = true;
+  const int updates_before_drain = state->updates;
+  fx.drain_param_updates();
+  REQUIRE(state->updates == updates_before_drain);
+  REQUIRE(fx.tail_samples() == 64);
+}
+
+TEST_CASE("all PartFxStage SysEx paths walk uniform EFX blocks in wire order",
+          "[gs-efx-realization][gs-efx-bulk]") {
+  // A 40 30 run has one real EFX block at 00-1F, reserved bytes at 20-7F,
+  // then the next unit at 40 31 00. Poisoning the reserved region catches a
+  // decoder that treats every 32-byte slice as another unit or folds it back
+  // into unit 0.
+  std::vector<uint8_t> bulk_data(130, 0x00);
+  bulk_data[0] = 0x01;
+  bulk_data[1] = 0x10;  // unit 0: Overdrive
+  bulk_data[0x20] = 0x01;
+  bulk_data[0x21] = 0x50;  // reserved: must not become a second type write
+  bulk_data[128] = 0x01;
+  bulk_data[129] = 0x50;  // unit 1: Stereo Delay
+  const std::vector<uint8_t> bulk = efx_bulk(0x403000, bulk_data);
+
+  const auto check_units = [](const s::PartFxStage& fx) {
+    REQUIRE(fx.efx()[0].type == 0x0110);
+    REQUIRE(fx.efx()[1].type == 0x0150);
+    REQUIRE(fx.efx()[0].assigned);
+    REQUIRE(fx.efx()[1].assigned);
+  };
+
+  SECTION("audio/offline unit application") {
+    s::PartFxStage fx;
+    REQUIRE(fx.apply_unit_sysex(bulk.data(), bulk.size()));
+    check_units(fx);
+  }
+
+  SECTION("control mirror") {
+    s::PartFxStage fx;
+    fx.mirror_sysex(bulk.data(), bulk.size());
+    check_units(fx);
+  }
+
+  SECTION("control application") {
+    s::PartFxStage fx;
+    REQUIRE(fx.apply_control_sysex(bulk.data(), bulk.size()));
+    check_units(fx);
+  }
+
+  // A run starting in the reserved tail of unit 0 must still enter unit 1 at
+  // 40 31 00. This is the boundary a first-byte classifier cannot see.
+  const std::vector<uint8_t> entering_next = efx_bulk(0x40307F, {0x01, 0x01, 0x10});
+  for (const int path : {0, 1, 2}) {
+    CAPTURE(path);
+    s::PartFxStage fx;
+    if (path == 0) {
+      REQUIRE(fx.apply_unit_sysex(entering_next.data(), entering_next.size()));
+    } else if (path == 1) {
+      fx.mirror_sysex(entering_next.data(), entering_next.size());
+    } else {
+      REQUIRE(fx.apply_control_sysex(entering_next.data(), entering_next.size()));
+    }
+    REQUIRE(fx.efx()[0].type == 0);
+    REQUIRE(fx.efx()[1].type == 0x0110);
+  }
+
+  // 40 03 and 40 30 are aliases for unit 0. A long valid DT1 run reaches the
+  // alias after the spec block; the later bytes must win in every path.
+  std::vector<uint8_t> alias_data(5762, 0x00);
+  alias_data[0] = 0x01;
+  alias_data[1] = 0x10;
+  alias_data[5760] = 0x01;
+  alias_data[5761] = 0x50;
+  const std::vector<uint8_t> alias = efx_bulk(0x400300, alias_data);
+  for (const int path : {0, 1, 2}) {
+    CAPTURE(path);
+    s::PartFxStage fx;
+    if (path == 0) {
+      REQUIRE(fx.apply_unit_sysex(alias.data(), alias.size()));
+    } else if (path == 1) {
+      fx.mirror_sysex(alias.data(), alias.size());
+    } else {
+      REQUIRE(fx.apply_control_sysex(alias.data(), alias.size()));
+    }
+    REQUIRE(fx.efx()[0].type == 0x0150);
+  }
+}
+
 TEST_CASE("a stage the factory cannot build keeps its position", "[gs-efx-realization]") {
   const s::GsEfx efx = efx_holding(kStereoDelay);
   const std::vector<s::GsEfxStage> chain = s::gs_efx_insert_chain(efx);
@@ -553,6 +902,27 @@ std::shared_ptr<s::Sf2File> sine_fixture() {
   return sf2;
 }
 
+/// Program 0: a deterministic one-shot impulse with a short zero tail. It
+/// excites a prepared finite-delay stage, then leaves that stage unfed when
+/// the prepared EFX assignment is removed.
+std::shared_ptr<s::Sf2File> impulse_fixture() {
+  sonare::test::Sf2Builder b;
+  std::vector<float> impulse(64, 0.0f);
+  impulse.front() = 1.0f;
+  const int id = b.add_sample("impulse", impulse, 48000, 60, 0, impulse.size());
+  sonare::test::Sf2Builder::ZoneSpec zone;
+  zone.target = id;
+  const int inst = b.add_instrument("impulse", {zone});
+  sonare::test::Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = inst;
+  b.add_preset("Impulse", 0, 0, {preset_zone});
+  const auto bytes = b.build();
+  auto sf2 = std::make_shared<s::Sf2File>();
+  std::string error;
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+  return sf2;
+}
+
 float rms(const std::vector<float>& x, size_t from) {
   double acc = 0.0;
   for (size_t i = from; i < x.size(); ++i) acc += static_cast<double>(x[i]) * x[i];
@@ -560,6 +930,261 @@ float rms(const std::vector<float>& x, size_t from) {
 }
 
 }  // namespace
+
+TEST_CASE("prepared EFX node tails are included before the first process", "[gs-efx-realization]") {
+  s::Sf2PlayerConfig classic_cfg;
+  classic_cfg.synth_fallback = false;
+  classic_cfg.gs_efx_realization = s::GsEfxRealization::kClassic;
+  classic_cfg.effects.enable_reverb = false;
+  classic_cfg.effects.enable_chorus = false;
+  classic_cfg.effects.enable_delay = false;
+  classic_cfg.insert_factory = [](std::string_view, std::string_view) {
+    // Keep PartFxStage enabled so the prepared assignment is a real route;
+    // Classic units own their DSP and do not need a modern child factory.
+    return std::unique_ptr<sonare::rt::ProcessorBase>{};
+  };
+  s::Sf2Player classic(classic_cfg);
+  classic.prepare(kRate, kBlock);
+  const int classic_before = classic.tail_samples();
+
+  const auto classic_type_payload = type_write(kOverdrive);
+  const auto assign = part_efx_assign(1);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> classic_type;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> classic_assign;
+  REQUIRE(classic.prepare_sysex(classic_type_payload.data(), classic_type_payload.size(),
+                                classic_type));
+  REQUIRE(classic.prepare_sysex(assign.data(), assign.size(), classic_assign));
+  const auto dispatch = [](s::Sf2Player& player, const uint8_t* data, size_t size,
+                           const std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& token) {
+    sonare::midi::MidiEvent event;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = data;
+    event.sysex_payload_size = size;
+    event.prepared_sysex = token.get();
+    player.on_event(0, event);
+  };
+  dispatch(classic, classic_type_payload.data(), classic_type_payload.size(), classic_type);
+  dispatch(classic, assign.data(), assign.size(), classic_assign);
+  CHECK(classic.tail_samples() - classic_before >= static_cast<int>(10.0 * kRate));
+
+  const auto state = efx_holding(kOverdrive);
+  const auto chain = s::gs_efx_insert_chain(state);
+  constexpr int kDeclaredTail = 173;
+  std::vector<int> tails(chain.size(), 0);
+  REQUIRE_FALSE(tails.empty());
+  tails.front() = kDeclaredTail;
+  const auto plan = make_tail_factory_plan(tails);
+  s::Sf2PlayerConfig modern_cfg;
+  modern_cfg.synth_fallback = false;
+  modern_cfg.effects.enable_reverb = false;
+  modern_cfg.effects.enable_chorus = false;
+  modern_cfg.effects.enable_delay = false;
+  modern_cfg.insert_factory = prepared_tail_factory(plan);
+  s::Sf2Player modern(modern_cfg);
+  modern.prepare(kRate, kBlock);
+  const int modern_before = modern.tail_samples();
+  const auto modern_type_payload = type_write(kOverdrive);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> modern_type;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> modern_assign;
+  REQUIRE(
+      modern.prepare_sysex(modern_type_payload.data(), modern_type_payload.size(), modern_type));
+  REQUIRE(modern.prepare_sysex(assign.data(), assign.size(), modern_assign));
+  dispatch(modern, modern_type_payload.data(), modern_type_payload.size(), modern_type);
+  dispatch(modern, assign.data(), assign.size(), modern_assign);
+  REQUIRE(modern.tail_samples() - modern_before >= kDeclaredTail);
+}
+
+TEST_CASE("speculative prepared EFX work does not raise an unrouted tail", "[gs-efx-realization]") {
+  s::Sf2PlayerConfig cfg;
+  cfg.synth_fallback = false;
+  cfg.gs_efx_realization = s::GsEfxRealization::kClassic;
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+  cfg.insert_factory = [](std::string_view, std::string_view) {
+    return std::unique_ptr<sonare::rt::ProcessorBase>{};
+  };
+  s::Sf2Player player(cfg);
+  player.prepare(kRate, kBlock);
+  const int before = player.tail_samples();
+  const auto type = type_write(kOverdrive);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+  REQUIRE(player.prepare_sysex(type.data(), type.size(), token));
+  CHECK(player.tail_samples() == before);
+
+  sonare::midi::MidiEvent event;
+  event.ump = sonare::midi::make_sysex_handle(0, 1);
+  event.sysex_payload = type.data();
+  event.sysex_payload_size = type.size();
+  event.prepared_sysex = token.get();
+  player.on_event(0, event);
+  // Selecting a node without routing a part into it cannot contribute a tail.
+  CHECK(player.tail_samples() == before);
+}
+
+TEST_CASE("prepared EFX metadata adds a selected unit after its host rig", "[gs-efx-realization]") {
+  constexpr int kHostTail = 400;
+  constexpr int kLongHostTail = 900;
+  constexpr int kUnitTail = 173;
+  const auto state = efx_holding(kOverdrive);
+  const auto unit_chain = s::gs_efx_insert_chain(state);
+  REQUIRE_FALSE(unit_chain.empty());
+  const std::string unit_head = unit_chain.front().name;
+  auto counters = std::make_shared<Counters>();
+
+  s::Sf2PlayerConfig cfg;
+  cfg.synth_fallback = false;
+  cfg.bank_rig_binding = false;
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+  for (sonare::midi::PartRig& rig : cfg.part_rigs) rig.mode = sonare::midi::PartRigMode::kNone;
+  cfg.part_rigs[0].mode = sonare::midi::PartRigMode::kChain;
+  cfg.part_rigs[0].stages = {{"test.host", "{}"}};
+  cfg.insert_factory = [counters, unit_head](std::string_view name, std::string_view) {
+    std::vector<std::string> keys;
+    if (name != "test.host") {
+      keys.reserve(s::kGsEfxRowKeys.size());
+      for (const std::string_view key : s::kGsEfxRowKeys) keys.emplace_back(key);
+    }
+    const int tail = name == "test.host"        ? kHostTail
+                     : name == "test.host.long" ? kLongHostTail
+                     : name == unit_head        ? kUnitTail
+                                                : 0;
+    return std::unique_ptr<sonare::rt::ProcessorBase>(
+        new StandIn(counters, std::string(name), false, std::move(keys), tail));
+  };
+  s::Sf2Player player(cfg);
+  player.prepare(kRate, kBlock);
+  const int before = player.tail_samples();
+
+  const auto type = type_write(kOverdrive);
+  const auto assign = part_efx_assign(1);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> assign_token;
+  REQUIRE(player.prepare_sysex(type.data(), type.size(), type_token));
+  REQUIRE(player.prepare_sysex(assign.data(), assign.size(), assign_token));
+  const auto dispatch = [](s::Sf2Player& target, const auto& payload,
+                           const std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& token) {
+    sonare::midi::MidiEvent event;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    event.prepared_sysex = token.get();
+    target.on_event(0, event);
+  };
+  dispatch(player, type, type_token);
+  dispatch(player, assign, assign_token);
+  // The prepared unit is serial after the host chain, so its tail is additive.
+  const int after = player.tail_samples();
+  CAPTURE(before, after, kHostTail, kUnitTail);
+  REQUIRE(after - before == kUnitTail);
+
+  // Fill the publication ring with the original host-chain shape, then leave
+  // a longer chain as the newest snapshot. A quiescent reset must adopt that
+  // newest snapshot before its first prepared event; otherwise a plain acquire
+  // can stop at the full retire ring and retain a stale shorter topology.
+  const sonare::midi::PartRig host_rig = cfg.part_rigs[0];
+  sonare::midi::PartRig longer_host_rig = host_rig;
+  longer_host_rig.stages = {{"test.host.long", "{}"}};
+  for (int publication = 0; publication < 64; ++publication) {
+    REQUIRE(player.set_part_rig(0, host_rig));
+  }
+  REQUIRE(player.set_part_rig(0, longer_host_rig));
+
+  // reset() republishes the host chain at another quiescent boundary. The
+  // prepared metadata must be available before that boundary's first block.
+  player.reset();
+  const int reset_before = player.tail_samples();
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> reset_type_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> reset_assign_token;
+  REQUIRE(player.prepare_sysex(type.data(), type.size(), reset_type_token));
+  REQUIRE(player.prepare_sysex(assign.data(), assign.size(), reset_assign_token));
+  dispatch(player, type, reset_type_token);
+  dispatch(player, assign, reset_assign_token);
+  const int reset_after = player.tail_samples();
+  CAPTURE(reset_before, reset_after, kLongHostTail, kUnitTail);
+  REQUIRE(reset_after - reset_before == kUnitTail);
+}
+
+TEST_CASE("prepared EFX assignment drains a finite old unit before reactivation",
+          "[gs-efx-realization]") {
+  constexpr int kTail = 2 * kBlock;
+  const auto state = efx_holding(kOverdrive);
+  const auto chain = s::gs_efx_insert_chain(state);
+  REQUIRE_FALSE(chain.empty());
+  std::vector<int> tails(chain.size(), 0);
+  tails.front() = kTail;
+  const auto plan = make_tail_factory_plan(tails);
+  auto counters = plan->counters;
+
+  s::Sf2PlayerConfig cfg;
+  cfg.gain = 1.0f;
+  cfg.synth_fallback = false;
+  cfg.dc_block = false;
+  cfg.effects.enable_reverb = false;
+  cfg.effects.enable_chorus = false;
+  cfg.effects.enable_delay = false;
+  cfg.insert_factory = [plan](std::string_view, std::string_view) {
+    const size_t index = plan->next++;
+    return std::unique_ptr<sonare::rt::ProcessorBase>(
+        new FiniteTailDelay(plan->counters, plan->tails.at(index)));
+  };
+  s::Sf2Player player(cfg);
+  player.set_soundfont(impulse_fixture());
+  player.prepare(kRate, kBlock);
+
+  const auto type = type_write(kOverdrive);
+  const auto assign = part_efx_assign(1);
+  const auto unassign = part_efx_assign(0);
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> type_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> assign_token;
+  std::shared_ptr<const sonare::midi::PreparedMidiSysEx> unassign_token;
+  REQUIRE(player.prepare_sysex(type.data(), type.size(), type_token));
+  REQUIRE(player.prepare_sysex(assign.data(), assign.size(), assign_token));
+  REQUIRE(player.prepare_sysex(unassign.data(), unassign.size(), unassign_token));
+  const auto dispatch = [&](const auto& payload,
+                            const std::shared_ptr<const sonare::midi::PreparedMidiSysEx>& token) {
+    sonare::midi::MidiEvent event;
+    event.ump = sonare::midi::make_sysex_handle(0, 1);
+    event.sysex_payload = payload.data();
+    event.sysex_payload_size = payload.size();
+    event.prepared_sysex = token.get();
+    player.on_event(0, event);
+  };
+  dispatch(type, type_token);
+  dispatch(assign, assign_token);
+
+  player.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  render_block(player);
+  const int after_excitation = counters->processes;
+  REQUIRE(after_excitation > 0);
+
+  dispatch(unassign, unassign_token);
+  std::vector<float> first_drain;
+  render_block(player, &first_drain);
+  const int after_first_drain = counters->processes;
+  REQUIRE(after_first_drain > after_excitation);
+
+  std::vector<float> second_drain;
+  render_block(player, &second_drain);
+  const int after_second_drain = counters->processes;
+  REQUIRE(after_second_drain > after_first_drain);
+  const auto max_abs = [](const std::vector<float>& samples) {
+    float out = 0.0f;
+    for (const float sample : samples) out = std::max(out, std::abs(sample));
+    return out;
+  };
+  REQUIRE(max_abs(first_drain) + max_abs(second_drain) > 1e-5f);
+
+  render_block(player);
+  REQUIRE(counters->processes == after_second_drain);
+
+  dispatch(assign, assign_token);
+  std::vector<float> reactivated;
+  render_block(player, &reactivated);
+  REQUIRE(max_abs(reactivated) < 1e-8f);
+}
 
 TEST_CASE("a classic unit is the type's graph and takes byte edits live", "[gs-efx-realization]") {
   const auto& registry = s::gs_classic::gs_classic_default_registry();
