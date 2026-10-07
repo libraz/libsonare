@@ -44,6 +44,7 @@ Napi::Value SonareWrap::Tonnetz(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 1 || !IsFloat32Array(info[0])) {
     Napi::TypeError::New(env, "Expected onset envelope Float32Array").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -55,17 +56,16 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
-  int mode = SONARE_TEMPOGRAM_AUTOCORRELATION;
-  try {
-    mode = info.Length() >= 5 ? TempogramModeFromValue(info[4]) : SONARE_TEMPOGRAM_AUTOCORRELATION;
-  } catch (const Napi::Error& err) {
-    err.ThrowAsJavaScriptException();
+  const int mode =
+      info.Length() >= 5 ? TempogramModeFromValue(info[4]) : SONARE_TEMPOGRAM_AUTOCORRELATION;
+  bool center = true;
+  if (!OptionalBoolArg(env, info, 5, "center", true, &center)) {
     return env.Undefined();
   }
-  const int center =
-      info.Length() >= 6 && info[5].IsBoolean() ? (info[5].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
-  const int norm =
-      info.Length() >= 7 && info[6].IsBoolean() ? (info[6].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  bool norm = true;
+  if (!OptionalBoolArg(env, info, 6, "norm", true, &norm)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
@@ -77,6 +77,7 @@ Napi::Value SonareWrap::Tempogram(const Napi::CallbackInfo& info) {
   result.Set("winLength", win);
   result.Set("data", FloatResult(env, out, count));
   return result;
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value SonareWrap::CyclicTempogram(const Napi::CallbackInfo& info) {
@@ -209,10 +210,14 @@ Napi::Value SonareWrap::FourierTempogram(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 2, "hop", 512, &hop)) return env.Undefined();
   int win{};
   if (!OptionalIntArg(env, info, 3, "win", 384, &win)) return env.Undefined();
-  const int center =
-      info.Length() >= 5 && info[4].IsBoolean() ? (info[4].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
-  const int norm =
-      info.Length() >= 6 && info[5].IsBoolean() ? (info[5].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  bool center = true;
+  if (!OptionalBoolArg(env, info, 4, "center", true, &center)) {
+    return env.Undefined();
+  }
+  bool norm = true;
+  if (!OptionalBoolArg(env, info, 5, "norm", true, &norm)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
@@ -270,8 +275,10 @@ Napi::Value SonareWrap::NnlsChroma(const Napi::CallbackInfo& info) {
   float* out = nullptr;
   size_t count = 0;
   int n_frames = 0;
-  const bool enable_blend =
-      info.Length() >= 3 && info[2].IsBoolean() ? info[2].As<Napi::Boolean>().Value() : true;
+  bool enable_blend = true;
+  if (!OptionalBoolArg(env, info, 2, "enableBlend", true, &enable_blend)) {
+    return env.Undefined();
+  }
   float blend_weight{};
   if (!OptionalFiniteFloatArg(env, info, 3, "blendWeight", 0.55f, &blend_weight))
     return env.Undefined();

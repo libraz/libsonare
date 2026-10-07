@@ -307,7 +307,10 @@ Napi::Value SonareWrap::FixFrames(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 1, "xMin", 0, &x_min)) return env.Undefined();
   int x_max{};
   if (!OptionalIntArg(env, info, 2, "xMax", -1, &x_max)) return env.Undefined();
-  bool pad = info.Length() >= 4 && info[3].IsBoolean() ? info[3].As<Napi::Boolean>().Value() : true;
+  bool pad = true;
+  if (!OptionalBoolArg(env, info, 3, "pad", true, &pad)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t count = 0;
   SonareError err =

@@ -78,6 +78,37 @@ const UNGUARDED_ENTRY_POINT: AddonSource[] = [
 ];
 
 /**
+ * A harness that is present but opens too late: the reader above it throws
+ * where nothing can catch, which is the abort the harness exists to prevent.
+ * One spelling reads directly, the other through a helper that reads, because
+ * a check anchored on the family's names alone would pass the second.
+ */
+const readBeforeHarness = (read: string, helper = ''): AddonSource[] => [
+  {
+    file: 'fake.cpp',
+    text: [
+      helper,
+      'Napi::Value Fn(const Napi::CallbackInfo& info) {',
+      '  Napi::Env env = info.Env();',
+      `  ${read}`,
+      '  SONARE_NODE_TRY',
+      '  return env.Undefined();',
+      '  SONARE_NODE_CATCH(env)',
+      '}',
+      'void Init(Napi::Env env, Napi::Object exports) {',
+      '  exports.Set("fn", Napi::Function::New(env, &Fn));',
+      '}',
+    ].join('\n'),
+  },
+];
+
+const READER_HELPER = [
+  'int ReadRate(const Napi::Object& options) {',
+  '  return IntProperty(options, "sampleRate", 0);',
+  '}',
+].join('\n');
+
+/**
  * The shared header's own shape: one narrowing inside the family, one beside it.
  *
  * Both sit in the file the rule used to trust by name, so the second is exactly
@@ -191,6 +222,39 @@ describe('each narrowing-scope failure class fires on its own', () => {
       'nowhere to catch',
     );
     expect(lines).toEqual(['fake.cpp Fn (fn)']);
+  });
+
+  it('reports a reader called before the harness opens, and only that', () => {
+    const lines = only(
+      evaluateNarrowingScope(
+        readBeforeHarness('if (!RequiredIntArg(env, info, 0, "n", &n)) return env.Undefined();'),
+        new Map(),
+        NO_FLOOR,
+      ),
+      'before the harness opens',
+    );
+    expect(lines).toEqual(['fake.cpp Fn (fn) reads RequiredIntArg() first']);
+  });
+
+  it('reports a helper that reaches a reader before the harness opens', () => {
+    const lines = only(
+      evaluateNarrowingScope(
+        readBeforeHarness('const int rate = ReadRate(info[0].As<Napi::Object>());', READER_HELPER),
+        new Map(),
+        NO_FLOOR,
+      ),
+      'before the harness opens',
+    );
+    expect(lines).toEqual(['fake.cpp Fn (fn) reads ReadRate() first']);
+  });
+
+  it('accepts the same reads once the harness is already open', () => {
+    const sources = readBeforeHarness('', READER_HELPER);
+    sources[0].text = sources[0].text.replace(
+      '  return env.Undefined();',
+      '  const int rate = ReadRate(info[0].As<Napi::Object>());\n  return env.Undefined();',
+    );
+    expect(evaluateNarrowingScope(sources, new Map(), NO_FLOOR)).toEqual([]);
   });
 
   it('reports a stale allowlist entry, and only that', () => {

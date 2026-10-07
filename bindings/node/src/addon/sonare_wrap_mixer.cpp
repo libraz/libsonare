@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "core/audio.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -77,6 +78,13 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
   }
   std::string json = info[0].As<Napi::String>().Utf8Value();
   if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate_)) return;
+  if (sample_rate_ < sonare::kMinAudioSampleRate || sample_rate_ > sonare::kMaxAudioSampleRate) {
+    Napi::RangeError::New(env, "Mixer: sampleRate out of supported range [" +
+                                   std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                                   std::to_string(sonare::kMaxAudioSampleRate) + "]")
+        .ThrowAsJavaScriptException();
+    return;
+  }
   if (!OptionalIntArg(env, info, 2, "blockSize", 512, &block_size_)) return;
 
   mixer_ = sonare_mixer_from_scene_json(json.c_str(), sample_rate_, block_size_);

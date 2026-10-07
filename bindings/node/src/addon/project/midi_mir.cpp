@@ -202,9 +202,8 @@ Napi::Value ProjectWrap::BakeMidiFx(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
-  std::string config = info.Length() > 1 && info[1].IsString()
-                           ? info[1].As<Napi::String>().Utf8Value()
-                           : std::string();
+  std::string config;
+  if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
   ThrowIfError(env, sonare_project_bake_midi_fx(project_, clip_id, config.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -215,9 +214,8 @@ Napi::Value ProjectWrap::BakeMidiFxWithSourceIndex(const Napi::CallbackInfo& inf
   SONARE_NODE_TRY
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
-  std::string config = info.Length() > 1 && info[1].IsString()
-                           ? info[1].As<Napi::String>().Utf8Value()
-                           : std::string();
+  std::string config;
+  if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
   // Size the provenance buffer from the non-destructive preview so the bake
   // runs once with an exactly-fitting buffer.
   size_t expected = 0;
@@ -242,9 +240,8 @@ Napi::Value ProjectWrap::PreviewMidiFxCount(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   uint32_t clip_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "clipId", 0, &clip_id)) return env.Undefined();
-  std::string config = info.Length() > 1 && info[1].IsString()
-                           ? info[1].As<Napi::String>().Utf8Value()
-                           : std::string();
+  std::string config;
+  if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
   size_t count = 0;
   ThrowIfError(env,
                sonare_project_preview_midi_fx_count(project_, clip_id, config.c_str(), &count));
@@ -315,8 +312,11 @@ Napi::Value ProjectWrap::AutoTempo(const Napi::CallbackInfo& info) {
   if (!NonNegativeSizeTArg(env, info, 2, "candidateIndex", &candidate_index)) {
     return env.Undefined();
   }
+  bool apply_time_signatures = false;
+  if (!OptionalBoolArg(env, info, 3, "applyTimeSignatures", false, &apply_time_signatures)) {
+    return env.Undefined();
+  }
   float out_bpm = 0.0f;
-  const bool apply_time_signatures = info.Length() > 3 && info[3].ToBoolean().Value();
   const SonareProjectTempoOptions options =
       TempoOptionsFrom(info.Length() > 4 ? info[4] : env.Undefined());
   ThrowIfError(env, sonare_project_auto_tempo_with_options(
@@ -392,24 +392,25 @@ Napi::Value ProjectWrap::SnapToGrid(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::AnnotateKeys(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  Napi::Array input;
+  if (!RequiredArrayValue(env, info[0], "keys", &input)) return env.Undefined();
   std::vector<SonareProjectKeySegment> keys;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array input = info[0].As<Napi::Array>();
-    keys.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
-      Napi::Value entry = input.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "key segment must be an object").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = entry.As<Napi::Object>();
-      SonareProjectKeySegment seg{};
-      seg.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-      seg.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
-      seg.tonic_pc = static_cast<uint32_t>(IntProperty(obj, "tonicPc", 255));
-      seg.mode = static_cast<uint32_t>(IntProperty(obj, "mode", 0));
-      keys.push_back(seg);
+  keys.reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "key segment must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
     }
+    Napi::Object obj = entry.As<Napi::Object>();
+    SonareProjectKeySegment seg{};
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &seg.start_ppq) ||
+        !RequiredDoubleProperty(env, obj, "endPpq", &seg.end_ppq)) {
+      return env.Undefined();
+    }
+    seg.tonic_pc = Uint32Property(obj, "tonicPc", 255);
+    seg.mode = Uint32Property(obj, "mode", 0);
+    keys.push_back(seg);
   }
   ThrowIfError(env, sonare_project_annotate_keys(project_, keys.empty() ? nullptr : keys.data(),
                                                  keys.size()));
@@ -425,44 +426,50 @@ Napi::Value ProjectWrap::AnnotateChords(const Napi::CallbackInfo& info) {
   // keep them in side buffers parallel to `chords` (pointers patched after fill).
   std::vector<std::vector<uint8_t>> extensions;
   std::vector<std::string> roman;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array input = info[0].As<Napi::Array>();
-    chords.reserve(input.Length());
-    extensions.resize(input.Length());
-    roman.resize(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
-      Napi::Value entry = input.Get(i);
-      if (!entry.IsObject()) {
-        Napi::TypeError::New(env, "chord symbol must be an object").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = entry.As<Napi::Object>();
-      SonareProjectChordSymbol chord{};
-      chord.start_ppq = obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-      chord.end_ppq = obj.Get("endPpq").As<Napi::Number>().DoubleValue();
-      chord.root_pc = static_cast<uint32_t>(IntProperty(obj, "rootPc", 255));
-      chord.quality = static_cast<uint32_t>(IntProperty(obj, "quality", 0));
-      Napi::Value ext = obj.Get("extensions");
-      if (ext.IsArray()) {
-        Napi::Array arr = ext.As<Napi::Array>();
-        extensions[i].reserve(arr.Length());
-        for (uint32_t j = 0; j < arr.Length(); ++j) {
-          extensions[i].push_back(
-              static_cast<uint8_t>(node_narrow_uint32(env, arr.Get(j), "extensions")));
-        }
-      }
-      chord.extensions = extensions[i].empty() ? nullptr : extensions[i].data();
-      chord.extension_count = extensions[i].size();
-      chord.slash_bass_pc = static_cast<uint32_t>(IntProperty(obj, "slashBassPc", 255));
-      Napi::Value rn = obj.Get("romanNumeral");
-      if (!rn.IsUndefined() && !rn.IsNull()) {
-        roman[i] = rn.As<Napi::String>().Utf8Value();
-        chord.roman_numeral = roman[i].c_str();
-      }
-      Napi::Value mod = obj.Get("modulationBoundary");
-      chord.modulation_boundary = (!mod.IsUndefined() && mod.ToBoolean().Value()) ? 1 : 0;
-      chords.push_back(chord);
+  Napi::Array input;
+  if (!RequiredArrayValue(env, info[0], "chords", &input)) return env.Undefined();
+  chords.reserve(input.Length());
+  extensions.resize(input.Length());
+  roman.resize(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    Napi::Value entry = input.Get(i);
+    if (!entry.IsObject()) {
+      Napi::TypeError::New(env, "chord symbol must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
     }
+    Napi::Object obj = entry.As<Napi::Object>();
+    SonareProjectChordSymbol chord{};
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &chord.start_ppq) ||
+        !RequiredDoubleProperty(env, obj, "endPpq", &chord.end_ppq)) {
+      return env.Undefined();
+    }
+    chord.root_pc = Uint32Property(obj, "rootPc", 255);
+    chord.quality = Uint32Property(obj, "quality", 0);
+    Napi::Value ext = obj.Get("extensions");
+    if (!ext.IsUndefined() && !ext.IsNull()) {
+      Napi::Array arr;
+      if (!RequiredArrayValue(env, ext, "extensions", &arr)) return env.Undefined();
+      extensions[i].reserve(arr.Length());
+      for (uint32_t j = 0; j < arr.Length(); ++j) {
+        uint8_t extension = 0;
+        if (!RequiredMidiByteValue(env, arr.Get(j), "extensions[" + std::to_string(j) + "]",
+                                   &extension)) {
+          return env.Undefined();
+        }
+        extensions[i].push_back(extension);
+      }
+    }
+    chord.extensions = extensions[i].empty() ? nullptr : extensions[i].data();
+    chord.extension_count = extensions[i].size();
+    chord.slash_bass_pc = Uint32Property(obj, "slashBassPc", 255);
+    Napi::Value rn = obj.Get("romanNumeral");
+    if (!rn.IsUndefined() && !rn.IsNull()) {
+      roman[i] = StringProperty(obj, "romanNumeral", "");
+      chord.roman_numeral = roman[i].c_str();
+    }
+    chord.modulation_boundary = BoolProperty(obj, "modulationBoundary", false) ? 1 : 0;
+    if (env.IsExceptionPending()) return env.Undefined();
+    chords.push_back(chord);
   }
   ThrowIfError(env, sonare_project_annotate_chords(
                         project_, chords.empty() ? nullptr : chords.data(), chords.size()));
@@ -486,8 +493,8 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   std::string module_id = module_value.As<Napi::String>().Utf8Value();
-  const uint32_t schema_version = static_cast<uint32_t>(IntProperty(obj, "schemaVersion", 0));
-  const uint32_t target_track_id = static_cast<uint32_t>(IntProperty(obj, "targetTrackId", 0));
+  const uint32_t schema_version = Uint32Property(obj, "schemaVersion", 0);
+  const uint32_t target_track_id = Uint32Property(obj, "targetTrackId", 0);
   Napi::Value start_value = obj.Get("regionStartPpq");
   Napi::Value end_value = obj.Get("regionEndPpq");
   const double region_start_ppq =

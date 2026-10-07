@@ -59,7 +59,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    const uint32_t layout = static_cast<uint32_t>(IntProperty(stem, "layout", 0));
+    const uint32_t layout = Uint32Property(stem, "layout", 0);
     const size_t channels = channel_count(layout);
     const Napi::Array source_planes = samples.As<Napi::Array>();
     if (channels == 0 || source_planes.Length() != channels) {
@@ -69,7 +69,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     }
     names.push_back(name.As<Napi::String>().Utf8Value());
     const Napi::Value role = stem.Get("role");
-    if (role.IsString()) roles.push_back(role.As<Napi::String>().Utf8Value());
+    if (!role.IsUndefined() && !role.IsNull()) roles.push_back(StringProperty(stem, "role", ""));
     buffers.emplace_back();
     planes.emplace_back();
     auto& stem_buffers = buffers.back();
@@ -97,7 +97,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
     }
     SonareExternalStemDesc desc{};
     desc.name = names.back().c_str();
-    desc.role = role.IsString() ? roles.back().c_str() : nullptr;
+    desc.role = role.IsUndefined() || role.IsNull() ? nullptr : roles.back().c_str();
     desc.layout = layout;
     desc.planar_samples = stem_planes.data();
     desc.frame_count = static_cast<int64_t>(frame_count);

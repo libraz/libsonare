@@ -160,7 +160,7 @@ export function bareHasSites(): BareHasSite[] {
  * the two cannot drift.
  */
 const OPTION_READER =
-  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
+  /\b(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|String|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|OptionAt)\s*\(/;
 
 /**
  * Matches a reader call and captures its literal key, for either arity.
@@ -172,7 +172,7 @@ const OPTION_READER =
  * set of the graph entry points.
  */
 const OPTION_READER_KEY =
-  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
+  /(?:node_(?:int|float|double|bool|int64|string|uint32)_option|(?:Int|Int8|Int32|Int64|Uint32|Uint64|Word|Float|FiniteFloat|Double|Bool|MidiByte|NonNegativeSizeT|GsEfxRealization)Property|(?<!Required)StringProperty|OptionAt)\s*\(\s*(?:env\s*,\s*)?[\w.>-]+\s*,\s*"([A-Za-z0-9_]+)"/g;
 
 /**
  * A definition that READS A KEY OFF A JS OBJECT, recognised by its parameter
@@ -385,10 +385,12 @@ const INLINE_TYPED_READ = new RegExp(
  * population is large before asserting the violation subset is empty. Returning
  * only violations would make a dead regex read as a clean sweep.
  */
-export function inlineTypedArgumentReads(): Array<ReaderShapedSite & { typeChecked: boolean }> {
+export function inlineTypedArgumentReads(
+  sources: AddonSource[] = addonSources(),
+): Array<ReaderShapedSite & { typeChecked: boolean }> {
   const sites: Array<ReaderShapedSite & { typeChecked: boolean }> = [];
   const definition = /^[A-Za-z_][\w:<>&*,\s]*?\b((?:\w+::)?\w+)\s*\([^;]*?\)\s*\{$/gm;
-  for (const { file, text: raw } of addonSources()) {
+  for (const { file, text: raw } of sources) {
     const text = withoutComments(raw);
     const defs = [...text.matchAll(definition)];
     for (const match of text.matchAll(INLINE_TYPED_READ)) {
@@ -767,7 +769,60 @@ export interface EntryPointGuardSite {
   jsName: string;
   symbol: string;
   file: string;
+  /** The harness opens before the first call that can reach a reader. */
   guarded: boolean;
+  /** The first reader-reaching call written above the harness, or `''`. */
+  readBeforeHarness: string;
+}
+
+/**
+ * A call into the shared reader family, which is where a refusal is thrown.
+ *
+ * Deliberately broader than the bail-out list: `node_narrow_*` and the
+ * `*Property` readers unwind, and a `Required*` reader that has returned false
+ * is still followed by narrowing calls that throw. All of them need the harness
+ * already open when they run.
+ */
+const READER_CALL =
+  /\b(?:Required\w+|Optional\w+Arg|Int32Arg|Int32Value|\w+Property|NonNegativeSizeT\w+|node_narrow_\w+|node_require_property_type|ReadBuiltinWaveform)\s*\(/;
+
+/**
+ * Names whose call can reach {@link READER_CALL}: the family itself plus every
+ * addon function whose body calls one, closed over four levels of helpers.
+ */
+function readerReachingCall(sources: AddonSource[]): RegExp {
+  const bodies = new Map<string, string>();
+  for (const { text } of sources) {
+    const code = withoutComments(text);
+    for (const span of definitionSpans(code)) {
+      bodies.set(span.name, (bodies.get(span.name) ?? '') + code.slice(span.open, span.end));
+    }
+  }
+  const reaching = new Set<string>();
+  const callOf = (): RegExp =>
+    reaching.size === 0
+      ? READER_CALL
+      : new RegExp(`${READER_CALL.source}|(?<![.>])\\b(?:${[...reaching].join('|')})\\s*\\(`);
+  for (let pass = 0; pass < 4; pass++) {
+    const callee = callOf();
+    let grew = false;
+    for (const [name, body] of bodies) {
+      if (!reaching.has(name) && callee.test(body)) {
+        reaching.add(name);
+        grew = true;
+      }
+    }
+    if (!grew) {
+      break;
+    }
+  }
+  return callOf();
+}
+
+/** Offset of the catch harness inside @p body, or -1 when it has none. */
+function harnessOffset(body: string): number {
+  const match = /SONARE_NODE_TRY|\btry\s*\{/.exec(body);
+  return match ? match.index : -1;
 }
 
 /** Entry-point bodies keyed by their bare name, from {@link definitionSpans}. */
@@ -799,6 +854,7 @@ function bodiesByName(sources: AddonSource[]): Map<string, { file: string; body:
  */
 export function entryPointGuards(sources: AddonSource[] = addonSources()): EntryPointGuardSite[] {
   const bodies = bodiesByName(sources);
+  const reaches = readerReachingCall(sources);
   const out: EntryPointGuardSite[] = [];
   const seen = new Set<string>();
   for (const entry of addonEntryPointRegistrations(sources)) {
@@ -808,11 +864,15 @@ export function entryPointGuards(sources: AddonSource[] = addonSources()): Entry
       continue;
     }
     seen.add(`${entry.jsName}:${entry.symbol}`);
+    const harness = harnessOffset(found.body);
+    const above = harness < 0 ? found.body : found.body.slice(0, harness);
+    const early = reaches.exec(above)?.[0].replace(/\s*\($/, '') ?? '';
     out.push({
       jsName: entry.jsName,
       symbol: entry.symbol,
       file: found.file,
-      guarded: found.body.includes('SONARE_NODE_TRY') || /\bcatch\s*\(/.test(found.body),
+      guarded: harness >= 0 && early === '',
+      readBeforeHarness: early,
     });
   }
   return out.sort((a, b) => a.jsName.localeCompare(b.jsName));
@@ -1108,9 +1168,14 @@ export function evaluateNarrowingScope(
   if (unguarded.length > 0) {
     findings.push({
       heading:
-        'These registered entry points have nowhere to catch a refusal, so a reader that ' +
-        'throws escapes the N-API callback and terminates the process',
-      lines: unguarded.map((entry) => `${entry.file} ${entry.symbol} (${entry.jsName})`),
+        'These registered entry points have nowhere to catch a refusal, or call a reader before ' +
+        'the harness opens, so a reader that throws escapes the N-API callback and terminates ' +
+        'the process',
+      lines: unguarded.map(
+        (entry) =>
+          `${entry.file} ${entry.symbol} (${entry.jsName})` +
+          (entry.readBeforeHarness === '' ? '' : ` reads ${entry.readBeforeHarness}() first`),
+      ),
     });
   }
 
@@ -1169,6 +1234,7 @@ export interface ZeroFallbackSite {
  */
 const ZERO_FALLBACK_READER_NAMES = [
   'IntProperty',
+  'Int8Property',
   'Int64Property',
   'Uint32Property',
   'WordProperty',

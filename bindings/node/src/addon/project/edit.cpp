@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "project/common.h"
@@ -22,8 +23,7 @@ static_assert(std::size(kPartRigModes) == 3 && SONARE_PART_RIG_CHAIN == 2,
 bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectClipFade* out) {
   if (out == nullptr) return false;
   SonareProjectClipFade fade{};
-  const Napi::Value length = obj.Get("lengthPpq");
-  fade.length_ppq = length.IsNumber() ? length.As<Napi::Number>().DoubleValue() : 0.0;
+  fade.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   const Napi::Value curve = obj.Get("curve");
   if (curve.IsString()) {
     const std::string name = curve.As<Napi::String>().Utf8Value();
@@ -33,7 +33,7 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
       return false;
     }
   } else {
-    fade.curve = static_cast<uint32_t>(IntProperty(obj, "curve", SONARE_FADE_CURVE_LINEAR));
+    fade.curve = Uint32Property(obj, "curve", SONARE_FADE_CURVE_LINEAR);
   }
   if (env.IsExceptionPending()) return false;
   *out = fade;
@@ -60,20 +60,14 @@ bool ParseClipTakes(Napi::Env env, const Napi::Value& value,
     Napi::Object obj = entry.As<Napi::Object>();
     SonareProjectClipTake take{};
     if (!RequiredUint32Property(env, obj, "id", &take.id)) return false;
-    take.source_id = static_cast<uint32_t>(IntProperty(obj, "sourceId", kZeroIsSentinel));
+    take.source_id = Uint32Property(obj, "sourceId", kZeroIsSentinel);
     if (env.IsExceptionPending()) return false;
-    const Napi::Value source_offset = obj.Get("sourceOffsetPpq");
+    take.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
+    std::string name = StringProperty(obj, "name", "");
     if (env.IsExceptionPending()) return false;
-    take.source_offset_ppq = source_offset.IsUndefined() || source_offset.IsNull()
-                                 ? 0.0
-                                 : source_offset.As<Napi::Number>().DoubleValue();
-    if (env.IsExceptionPending()) return false;
-    const Napi::Value name = obj.Get("name");
-    if (env.IsExceptionPending()) return false;
-    if (name.IsString()) {
-      name_storage->push_back(name.As<Napi::String>().Utf8Value());
-      if (env.IsExceptionPending()) return false;
-      take.name = name_storage->back().empty() ? nullptr : name_storage->back().c_str();
+    if (!name.empty()) {
+      name_storage->push_back(std::move(name));
+      take.name = name_storage->back().c_str();
     }
     takes->push_back(take);
   }
@@ -99,7 +93,7 @@ bool ParseClipCompSegments(Napi::Env env, const Napi::Value& value,
     SonareProjectClipCompSegment segment{};
     if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) return false;
     if (!RequiredDoubleProperty(env, obj, "endPpq", &segment.end_ppq)) return false;
-    segment.take_id = static_cast<uint32_t>(IntProperty(obj, "takeId", 0));
+    segment.take_id = Uint32Property(obj, "takeId", 0);
     if (env.IsExceptionPending()) return false;
     segment.crossfade_ppq = DoubleProperty(obj, "crossfadePpq", 0.0);
     if (env.IsExceptionPending()) return false;
@@ -199,7 +193,7 @@ bool ReadAutomationTargetKind(Napi::Env env, const Napi::Object& obj, bool* pres
 bool FillAutomationLaneDesc(Napi::Env env, const Napi::Object& obj,
                             std::vector<SonareAutomationPoint>* points,
                             SonareAutomationLaneDesc* desc) {
-  desc->target_param_id = static_cast<uint32_t>(IntProperty(obj, "targetParamId", 0));
+  desc->target_param_id = Uint32Property(obj, "targetParamId", 0);
   if (!ParseAutomationPoints(env, obj.Get("points"), points)) {
     return false;
   }
@@ -278,17 +272,11 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareProjectClipDesc desc{};
-  desc.track_id = static_cast<uint32_t>(IntProperty(obj, "trackId", 0));
-  desc.is_midi = obj.Get("isMidi").ToBoolean().Value() ? 1 : 0;
-  desc.start_ppq = obj.Get("startPpq").IsUndefined()
-                       ? 0.0
-                       : obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-  desc.length_ppq = obj.Get("lengthPpq").IsUndefined()
-                        ? 0.0
-                        : obj.Get("lengthPpq").As<Napi::Number>().DoubleValue();
-  desc.source_offset_ppq = obj.Get("sourceOffsetPpq").IsUndefined()
-                               ? 0.0
-                               : obj.Get("sourceOffsetPpq").As<Napi::Number>().DoubleValue();
+  desc.track_id = Uint32Property(obj, "trackId", 0);
+  desc.is_midi = BoolProperty(obj, "isMidi", false) ? 1 : 0;
+  desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+  desc.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
+  desc.source_offset_ppq = DoubleProperty(obj, "sourceOffsetPpq", 0.0);
   desc.gain = FiniteFloatProperty(obj, "gain", 1.0f);
   desc.audio_channels = IntProperty(obj, "audioChannels", kZeroIsSentinel);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 0);
@@ -313,7 +301,7 @@ Napi::Value ProjectWrap::AddClip(const Napi::CallbackInfo& info) {
   std::string source_uri;
   Napi::Value uri_value = obj.Get("sourceUri");
   if (!uri_value.IsUndefined() && !uri_value.IsNull()) {
-    source_uri = uri_value.As<Napi::String>().Utf8Value();
+    source_uri = StringProperty(obj, "sourceUri", "");
     desc.source_uri = source_uri.c_str();
   }
 
@@ -334,13 +322,9 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareProjectLoopRecordingDesc desc{};
-  desc.track_id = static_cast<uint32_t>(IntProperty(obj, "trackId", 0));
-  desc.start_ppq = obj.Get("startPpq").IsUndefined()
-                       ? 0.0
-                       : obj.Get("startPpq").As<Napi::Number>().DoubleValue();
-  desc.loop_length_ppq = obj.Get("loopLengthPpq").IsUndefined()
-                             ? 0.0
-                             : obj.Get("loopLengthPpq").As<Napi::Number>().DoubleValue();
+  desc.track_id = Uint32Property(obj, "trackId", 0);
+  desc.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
+  desc.loop_length_ppq = DoubleProperty(obj, "loopLengthPpq", 0.0);
   desc.audio_channels = IntProperty(obj, "audioChannels", 1);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 48000);
 
@@ -492,10 +476,8 @@ Napi::Value ProjectWrap::SetWarpMap(const Napi::CallbackInfo& info) {
   }
   std::vector<SonareProjectWarpAnchor> anchors;
   SonareProjectWarpMapDesc desc{};
-  std::string name_storage;
   Napi::Object obj = info[0].As<Napi::Object>();
-  Napi::Value name = obj.Get("name");
-  if (name.IsString()) name_storage = name.As<Napi::String>().Utf8Value();
+  const std::string name_storage = StringProperty(obj, "name", "");
   if (!FillWarpMapDesc(env, obj, &anchors, &desc)) return env.Undefined();
   desc.name = name_storage.empty() ? nullptr : name_storage.c_str();
   ThrowIfError(env, sonare_project_set_warp_map(project_, &desc));
@@ -604,9 +586,12 @@ Napi::Value ProjectWrap::SetTrackMute(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   uint32_t track_id = 0;
-  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  const int mute = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
-  ThrowIfError(env, sonare_project_set_track_mute(project_, track_id, mute));
+  bool mute = false;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !RequiredBoolArg(env, info, 1, "mute", &mute)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_mute(project_, track_id, mute ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
@@ -615,9 +600,12 @@ Napi::Value ProjectWrap::SetTrackSolo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   uint32_t track_id = 0;
-  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id)) return env.Undefined();
-  const int solo = info.Length() > 1 && info[1].ToBoolean().Value() ? 1 : 0;
-  ThrowIfError(env, sonare_project_set_track_solo(project_, track_id, solo));
+  bool solo = false;
+  if (!OptionalUint32Arg(env, info, 0, "trackId", 0, &track_id) ||
+      !RequiredBoolArg(env, info, 1, "solo", &solo)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_project_set_track_solo(project_, track_id, solo ? 1 : 0));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

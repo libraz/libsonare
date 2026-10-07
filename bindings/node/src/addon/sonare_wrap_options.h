@@ -331,6 +331,19 @@ inline uint8_t MidiByteProperty(Napi::Env env, const Napi::Object& obj, const ch
   return static_cast<uint8_t>(number);
 }
 
+/// @brief Read a property destined for an int8_t C-ABI field: undefined/null
+///        returns the fallback, a non-number is refused by name, and a value the
+///        narrowing cast would wrap (256 -> 0, 200 -> -56) is a RangeError naming
+///        @p key. The field's own domain stays the C ABI's to enforce.
+inline int8_t Int8Property(const Napi::Object& obj, const char* key, int8_t fallback) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return fallback;
+  node_require_property_type(obj.Env(), value.IsNumber(), key, "a number");
+  return static_cast<int8_t>(node_narrow_number(
+      obj.Env(), value, key, static_cast<double>(std::numeric_limits<int8_t>::min()),
+      static_cast<double>(std::numeric_limits<int8_t>::max())));
+}
+
 /// @brief Read an int64 property: undefined/null returns the fallback, any other
 ///        non-number is refused by name.
 inline int64_t Int64Property(const Napi::Object& obj, const char* key, int64_t fallback) {

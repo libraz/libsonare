@@ -71,16 +71,9 @@ inline bool ReadParameter(const Napi::CallbackInfo& info, size_t index, SonarePa
     return false;
   }
   out->id = node_narrow_uint32(id_val.Env(), id_val, "id");
-  // Optional name/unit: only copy when present as strings; a non-string leaves
-  // the zero-initialized empty string.
-  const Napi::Value name = obj.Get("name");
-  if (name.IsString()) {
-    CopyString(out->name, sizeof(out->name), name.As<Napi::String>().Utf8Value());
-  }
-  const Napi::Value unit = obj.Get("unit");
-  if (unit.IsString()) {
-    CopyString(out->unit, sizeof(out->unit), unit.As<Napi::String>().Utf8Value());
-  }
+  // Optional name/unit: absent reads as the empty string, a non-string is refused.
+  CopyString(out->name, sizeof(out->name), sonare_node::StringProperty(obj, "name", ""));
+  CopyString(out->unit, sizeof(out->unit), sonare_node::StringProperty(obj, "unit", ""));
   // Numeric/bool fields go through the presence-checked *Property helpers so a
   // missing field falls back cleanly instead of coercing `undefined`.
   out->min_value = sonare_node::FloatProperty(obj, "minValue", 0.0f);
@@ -294,6 +287,7 @@ using sonare_node::OptionalStringArg;
 using sonare_node::OptionalUint16Arg;
 using sonare_node::OptionalUint32Arg;
 using sonare_node::ReadBuiltinWaveform;
+using sonare_node::RequiredArrayValue;
 using sonare_node::RequiredBoolArg;
 using sonare_node::RequiredDoubleArg;
 using sonare_node::RequiredDoubleProperty;
@@ -306,6 +300,7 @@ using sonare_node::RequiredStringProperty;
 using sonare_node::RequiredUint32Arg;
 using sonare_node::RequiredUint32Property;
 using sonare_node::RequiredWordValue;
+using sonare_node::StringProperty;
 using sonare_node::ThrowIfError;
 using sonare_node::ThrowIfRealtimeError;
 using sonare_node::Uint32Property;

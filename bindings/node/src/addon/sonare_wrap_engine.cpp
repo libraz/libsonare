@@ -586,26 +586,25 @@ Napi::Value RealtimeEngineWrap::ResetMasterLoudnessMeter(const Napi::CallbackInf
 Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  Napi::Array input;
+  if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTempoSegment> segments;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array input = info[0].As<Napi::Array>();
-    segments.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
-      if (!input.Get(i).IsObject()) {
-        Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = input.Get(i).As<Napi::Object>();
-      SonareProjectTempoSegment segment{};
-      if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) {
-        return env.Undefined();
-      }
-      if (!RequiredDoubleProperty(env, obj, "bpm", &segment.bpm)) return env.Undefined();
-      segment.start_sample = 0.0;
-      segment.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
-      if (env.IsExceptionPending()) return env.Undefined();
-      segments.push_back(segment);
+  segments.reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    if (!input.Get(i).IsObject()) {
+      Napi::TypeError::New(env, "tempo segment must be an object").ThrowAsJavaScriptException();
+      return env.Undefined();
     }
+    Napi::Object obj = input.Get(i).As<Napi::Object>();
+    SonareProjectTempoSegment segment{};
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) {
+      return env.Undefined();
+    }
+    if (!RequiredDoubleProperty(env, obj, "bpm", &segment.bpm)) return env.Undefined();
+    segment.start_sample = 0.0;
+    segment.end_bpm = DoubleProperty(obj, "endBpm", 0.0);
+    if (env.IsExceptionPending()) return env.Undefined();
+    segments.push_back(segment);
   }
   ThrowIfError(env, sonare_engine_set_tempo_segments(engine_, segments.data(), segments.size()));
   return env.Undefined();
@@ -615,27 +614,26 @@ Napi::Value RealtimeEngineWrap::SetTempoSegments(const Napi::CallbackInfo& info)
 Napi::Value RealtimeEngineWrap::SetTimeSignatureSegments(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
+  Napi::Array input;
+  if (!RequiredArrayValue(env, info[0], "segments", &input)) return env.Undefined();
   std::vector<SonareProjectTimeSignatureSegment> segments;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array input = info[0].As<Napi::Array>();
-    segments.reserve(input.Length());
-    for (uint32_t i = 0; i < input.Length(); ++i) {
-      if (!input.Get(i).IsObject()) {
-        Napi::TypeError::New(env, "time signature segment must be an object")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Object obj = input.Get(i).As<Napi::Object>();
-      SonareProjectTimeSignatureSegment segment{};
-      if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) {
-        return env.Undefined();
-      }
-      if (!RequiredIntProperty(env, obj, "numerator", &segment.numerator)) return env.Undefined();
-      if (!RequiredIntProperty(env, obj, "denominator", &segment.denominator)) {
-        return env.Undefined();
-      }
-      segments.push_back(segment);
+  segments.reserve(input.Length());
+  for (uint32_t i = 0; i < input.Length(); ++i) {
+    if (!input.Get(i).IsObject()) {
+      Napi::TypeError::New(env, "time signature segment must be an object")
+          .ThrowAsJavaScriptException();
+      return env.Undefined();
     }
+    Napi::Object obj = input.Get(i).As<Napi::Object>();
+    SonareProjectTimeSignatureSegment segment{};
+    if (!RequiredDoubleProperty(env, obj, "startPpq", &segment.start_ppq)) {
+      return env.Undefined();
+    }
+    if (!RequiredIntProperty(env, obj, "numerator", &segment.numerator)) return env.Undefined();
+    if (!RequiredIntProperty(env, obj, "denominator", &segment.denominator)) {
+      return env.Undefined();
+    }
+    segments.push_back(segment);
   }
   ThrowIfError(
       env, sonare_engine_set_time_signature_segments(engine_, segments.data(), segments.size()));
@@ -734,7 +732,7 @@ Napi::Value RealtimeEngineWrap::SetAutomationLane(const Napi::CallbackInfo& info
     }
     Napi::Object obj = input.Get(i).As<Napi::Object>();
     SonareAutomationPoint point{};
-    point.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
+    if (!RequiredDoubleProperty(env, obj, "ppq", &point.ppq)) return env.Undefined();
     const Napi::Value point_value = obj.Get("value");
     node_require_property_type(env, point_value.IsNumber(), "value", "a number");
     point.value = node_narrow_finite_float(env, point_value, "value");
@@ -778,13 +776,11 @@ Napi::Value RealtimeEngineWrap::SetMarkers(const Napi::CallbackInfo& info) {
     if (!ReadPositiveUint32(env, obj.Get("id"), "marker id", &marker.id)) {
       return env.Undefined();
     }
-    marker.kind = static_cast<uint8_t>(IntProperty(obj, "kind", SONARE_MARKER_KIND_MARKER));
-    marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
+    marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
+    marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
     marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
-    marker.ppq = obj.Get("ppq").As<Napi::Number>().DoubleValue();
-    const Napi::Value name = obj.Get("name");
-    CopyString(marker.name, sizeof(marker.name),
-               name.IsUndefined() || name.IsNull() ? "" : name.As<Napi::String>().Utf8Value());
+    if (!RequiredDoubleProperty(env, obj, "ppq", &marker.ppq)) return env.Undefined();
+    CopyString(marker.name, sizeof(marker.name), StringProperty(obj, "name", ""));
     if (env.IsExceptionPending()) return env.Undefined();
     markers.push_back(marker);
   }
@@ -1026,7 +1022,7 @@ Napi::Value RealtimeEngineWrap::SetMidiClips(const Napi::CallbackInfo& info) {
     clip.start_sample = Int64Property(obj, "startSample", 0);
     clip.start_ppq = DoubleProperty(obj, "startPpq", 0.0);
     clip.length_samples = Int64Property(obj, "lengthSamples", kZeroIsSentinel);
-    clip.loop = obj.Get("loop").ToBoolean().Value() ? 1 : 0;
+    clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
     clip.loop_length_samples = Int64Property(obj, "loopLengthSamples", kZeroIsSentinel);
     clip.destination_id = Uint32Property(obj, "destinationId", Uint32Property(obj, "trackId", 0));
     // Same defaults as the audio clip's gain/fade fields (SetClips): a
@@ -1131,14 +1127,15 @@ Napi::Value RealtimeEngineWrap::SetSf2Instrument(const Napi::CallbackInfo& info)
     const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
     if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
       config.struct_version = 2;
-      config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
+      config.prefer_model_for_modeled_families =
+          BoolProperty(obj, "preferModelForModeledFamilies", false) ? 1 : 0;
     }
     // Version 3 reads version 2's field as well, so raising it here covers both
     // whichever of the two the caller passed.
     const Napi::Value clear_rig = obj.Get("clearBankRig");
     if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
       config.struct_version = 3;
-      config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
+      config.clear_bank_rig = BoolProperty(obj, "clearBankRig", false) ? 1 : 0;
     }
     config.struct_version = 4;
     config.gs_efx_realization = sonare_node::GsEfxRealizationProperty(obj, "gsEfxRealization");
@@ -1470,9 +1467,8 @@ Napi::Value RealtimeEngineWrap::SetMidiFx(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
   uint32_t destination_id = 0;
   if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id)) return env.Undefined();
-  std::string config = info.Length() > 1 && info[1].IsString()
-                           ? info[1].As<Napi::String>().Utf8Value()
-                           : std::string();
+  std::string config;
+  if (!OptionalStringArg(env, info, 1, "config", "", &config)) return env.Undefined();
   ThrowIfError(env, sonare_engine_set_midi_fx(engine_, destination_id, config.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

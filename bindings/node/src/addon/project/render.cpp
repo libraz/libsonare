@@ -304,8 +304,9 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
   }
   std::vector<SonareSf2InstrumentBinding> bindings;
-  if (info.Length() > 0 && info[0].IsArray()) {
-    Napi::Array arr = info[0].As<Napi::Array>();
+  if (!info[0].IsUndefined() && !info[0].IsNull()) {
+    Napi::Array arr;
+    if (!RequiredArrayValue(env, info[0], "instruments", &arr)) return env.Undefined();
     bindings.reserve(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       Napi::Value element = arr.Get(i);
@@ -316,23 +317,21 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
       }
       Napi::Object obj = element.As<Napi::Object>();
       SonareSf2InstrumentBinding binding{};
-      binding.destination_id =
-          obj.Get("destinationId").IsUndefined()
-              ? 0u
-              : node_narrow_uint32(obj.Env(), obj.Get("destinationId"), "destinationId");
+      binding.destination_id = Uint32Property(obj, "destinationId", 0);
       binding.config.gain = FloatProperty(obj, "gain", 0.0f);
       binding.config.polyphony = IntProperty(obj, "polyphony", kZeroIsSentinel);
       const Napi::Value prefer_model = obj.Get("preferModelForModeledFamilies");
       if (!prefer_model.IsUndefined() && !prefer_model.IsNull()) {
         binding.config.struct_version = 2;
-        binding.config.prefer_model_for_modeled_families = prefer_model.ToBoolean().Value() ? 1 : 0;
+        binding.config.prefer_model_for_modeled_families =
+            BoolProperty(obj, "preferModelForModeledFamilies", false) ? 1 : 0;
       }
       // Version 3 reads version 2's field as well, so raising it here covers
       // both whichever of the two the caller passed.
       const Napi::Value clear_rig = obj.Get("clearBankRig");
       if (!clear_rig.IsUndefined() && !clear_rig.IsNull()) {
         binding.config.struct_version = 3;
-        binding.config.clear_bank_rig = clear_rig.ToBoolean().Value() ? 1 : 0;
+        binding.config.clear_bank_rig = BoolProperty(obj, "clearBankRig", false) ? 1 : 0;
       }
       binding.config.struct_version = 4;
       binding.config.gs_efx_realization =

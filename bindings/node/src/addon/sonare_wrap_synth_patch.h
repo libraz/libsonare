@@ -117,7 +117,7 @@ inline bool SynthEnumValue(Napi::Env env, const Napi::Value& value, const char* 
 inline bool SynthEnumProperty(Napi::Env env, const Napi::Object& obj, const char* key,
                               const char* const* names, int count, const char* what, int* out) {
   const Napi::Value value = obj.Get(key);
-  if (value.IsUndefined()) return true;
+  if (value.IsUndefined() || value.IsNull()) return true;
   return SynthEnumValue(env, value, names, count, what, out);
 }
 

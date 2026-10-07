@@ -593,6 +593,7 @@ void RealtimeEngineWrap::InstallCaptureBuffers(Napi::Env env,
 // peak footprint of a long capture.
 Napi::Value RealtimeEngineWrap::SetCaptureBufferExtent(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   int num_channels = 0;
   int64_t capacity_frames = 0;
   if (!RequiredIntArg(env, info, 0, "numChannels", &num_channels) ||
@@ -613,6 +614,7 @@ Napi::Value RealtimeEngineWrap::SetCaptureBufferExtent(const Napi::CallbackInfo&
   }
   InstallCaptureBuffers(env, std::move(buffers), capacity_frames);
   return env.Undefined();
+  SONARE_NODE_CATCH(env)
 }
 
 Napi::Value RealtimeEngineWrap::SetCaptureBuffer(const Napi::CallbackInfo& info) {

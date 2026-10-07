@@ -13,6 +13,7 @@ namespace sonare_node {
 // the result is `{ samples, channels }` rather than a bare Float32Array.
 Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireFloat32Array(info, 0,
                            "Expected (Float32Array, inChannels, sampleRate, configJson, hrtf?)")) {
     return env.Undefined();
@@ -30,7 +31,6 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
   const SonareHrtfSet* hrtf = nullptr;
   if (!HrtfSetWrap::ReadHandle(env, info[4], &hrtf)) return env.Undefined();
 
-  SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   if (in_channels <= 0 || input.ElementLength() % static_cast<size_t>(in_channels) != 0) {
     Napi::RangeError::New(env, "invalid channel count").ThrowAsJavaScriptException();

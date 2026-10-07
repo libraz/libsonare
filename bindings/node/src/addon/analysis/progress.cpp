@@ -269,12 +269,16 @@ Napi::Value SonareWrap::AnalyzeMelody(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 5, "hopLength", 256, &hop_length)) return env.Undefined();
   float threshold{};
   if (!OptionalFiniteFloatArg(env, info, 6, "threshold", 0.1f, &threshold)) return env.Undefined();
-  const int use_pyin =
-      info.Length() >= 8 && info[7].IsBoolean() && info[7].As<Napi::Boolean>().Value() ? 1 : 0;
+  bool use_pyin = false;
+  if (!OptionalBoolArg(env, info, 7, "usePyin", false, &use_pyin)) {
+    return env.Undefined();
+  }
   // center defaults to true (matches librosa.pyin(center=True)); only honored
   // when use_pyin is set.
-  const int center =
-      info.Length() >= 9 && info[8].IsBoolean() ? (info[8].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  bool center = true;
+  if (!OptionalBoolArg(env, info, 8, "center", true, &center)) {
+    return env.Undefined();
+  }
 
   SonareMelodyResult result{};
   SonareError err =

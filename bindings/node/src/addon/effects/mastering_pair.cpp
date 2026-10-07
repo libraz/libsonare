@@ -577,7 +577,7 @@ Napi::Value SonareWrap::MasteringStreamingPreview(const Napi::CallbackInfo& info
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
+      platforms.push_back({StringProperty(object, "name", ""),
                            node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
                            node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
     }
@@ -675,7 +675,7 @@ Napi::Value SonareWrap::MasteringStreamingPreviewStereo(const Napi::CallbackInfo
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      platforms.push_back({object.Get("name").As<Napi::String>().Utf8Value(),
+      platforms.push_back({StringProperty(object, "name", ""),
                            node_narrow_finite_float(env, object.Get("targetLufs"), "targetLufs"),
                            node_narrow_finite_float(env, object.Get("ceilingDb"), "ceilingDb")});
     }

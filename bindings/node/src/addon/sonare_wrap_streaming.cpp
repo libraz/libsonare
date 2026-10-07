@@ -50,6 +50,10 @@ void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
       out->push_back({full_key, value.As<Napi::Number>().DoubleValue()});
     } else if (value.IsBoolean()) {
       out->push_back({full_key, value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
+    } else if (!value.IsUndefined()) {
+      // Same refusal, in the same words, as the facade's flattenChainConfig.
+      throw Napi::TypeError::New(
+          object.Env(), "Mastering override '" + full_key + "' must be a number or boolean.");
     }
   }
 }
@@ -168,7 +172,7 @@ Napi::Object StreamingMasteringChainWrap::Init(Napi::Env env, Napi::Object expor
 StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<StreamingMasteringChainWrap>(info) {
   Napi::Env env = info.Env();
-
+  SONARE_NODE_TRY
   std::vector<sonare::mastering::api::Param> params;
   sonare::mastering::api::StreamingMasteringChainOptions options;
   if (info.Length() >= 1 && info[0].IsObject()) {
@@ -192,6 +196,7 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
     return;
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 StreamingMasteringChainWrap::~StreamingMasteringChainWrap() = default;
@@ -459,7 +464,7 @@ Napi::Object StreamingEqualizerWrap::Init(Napi::Env env, Napi::Object exports) {
 StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
     : Napi::ObjectWrap<StreamingEqualizerWrap>(info) {
   Napi::Env env = info.Env();
-
+  SONARE_NODE_TRY
   double sample_rate = 48000.0;
   int max_block_size = 512;
   if (info.Length() >= 1 && info[0].IsObject()) {
@@ -479,6 +484,7 @@ StreamingEqualizerWrap::StreamingEqualizerWrap(const Napi::CallbackInfo& info)
     Napi::Error::New(env, e.what()).ThrowAsJavaScriptException();
     return;
   }
+  SONARE_NODE_CATCH_VOID(env)
 }
 
 StreamingEqualizerWrap::~StreamingEqualizerWrap() = default;
@@ -498,6 +504,7 @@ Napi::Value StreamingEqualizerWrap::Destroy(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!eq_) {
     Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -510,7 +517,6 @@ Napi::Value StreamingEqualizerWrap::SetBand(const Napi::CallbackInfo& info) {
   // at set_band as a huge positive one.
   size_t index = 0;
   if (!sonare_node::NonNegativeSizeTArg(env, info, 0, "index", &index)) return env.Undefined();
-  SONARE_NODE_TRY
   sonare::mastering::eq::EqBand band = EqBandFromObject(info[1].As<Napi::Object>());
   eq_->set_band(index, band);
   return env.Undefined();
@@ -857,6 +863,7 @@ Napi::Value StreamingEqualizerWrap::Spectrum(const Napi::CallbackInfo& info) {
 
 Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!eq_) {
     Napi::Error::New(env, "StreamingEqualizer is not initialized").ThrowAsJavaScriptException();
     return env.Undefined();
@@ -881,7 +888,6 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
       return env.Undefined();
     }
   }
-  SONARE_NODE_TRY
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
   sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sample_rate);

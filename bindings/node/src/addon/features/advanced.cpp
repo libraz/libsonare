@@ -255,8 +255,10 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 5, "fmin", 0.0f, &fmin)) return env.Undefined();
   float fmax{};
   if (!OptionalFiniteFloatArg(env, info, 6, "fmax", 0.0f, &fmax)) return env.Undefined();
-  const bool htk =
-      info.Length() >= 8 && info[7].IsBoolean() ? info[7].As<Napi::Boolean>().Value() : false;
+  bool htk = false;
+  if (!OptionalBoolArg(env, info, 7, "htk", false, &htk)) {
+    return env.Undefined();
+  }
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -307,8 +309,10 @@ Napi::Value SonareWrap::MelToAudio(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 7, "fmax", 0.0f, &fmax)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 8, "nIter", 32, &n_iter)) return env.Undefined();
-  const bool htk =
-      info.Length() >= 10 && info[9].IsBoolean() ? info[9].As<Napi::Boolean>().Value() : false;
+  bool htk = false;
+  if (!OptionalBoolArg(env, info, 9, "htk", false, &htk)) {
+    return env.Undefined();
+  }
 
   sonare::MelConfig config;
   config.n_fft = n_fft;
@@ -428,8 +432,10 @@ Napi::Value SonareWrap::MfccToAudio(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 8, "fmax", 0.0f, &fmax)) return env.Undefined();
   int n_iter{};
   if (!OptionalIntArg(env, info, 9, "nIter", 32, &n_iter)) return env.Undefined();
-  const bool htk =
-      info.Length() >= 11 && info[10].IsBoolean() ? info[10].As<Napi::Boolean>().Value() : false;
+  bool htk = false;
+  if (!OptionalBoolArg(env, info, 10, "htk", false, &htk)) {
+    return env.Undefined();
+  }
   float lifter{};
   if (!OptionalFiniteFloatArg(env, info, 11, "lifter", 0.0f, &lifter)) return env.Undefined();
 
@@ -529,12 +535,18 @@ Napi::Value SonareWrap::ZeroCrossings(const Napi::CallbackInfo& info) {
   float threshold{};
   if (!OptionalFiniteFloatArg(env, info, 1, "threshold", 1e-10f, &threshold))
     return env.Undefined();
-  int ref_magnitude =
-      info.Length() >= 3 && info[2].IsBoolean() && info[2].As<Napi::Boolean>().Value() ? 1 : 0;
-  int pad =
-      info.Length() >= 4 && info[3].IsBoolean() ? (info[3].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
-  int zero_pos =
-      info.Length() >= 5 && info[4].IsBoolean() ? (info[4].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  bool ref_magnitude = false;
+  if (!OptionalBoolArg(env, info, 2, "refMagnitude", false, &ref_magnitude)) {
+    return env.Undefined();
+  }
+  bool pad = true;
+  if (!OptionalBoolArg(env, info, 3, "pad", true, &pad)) {
+    return env.Undefined();
+  }
+  bool zero_pos = true;
+  if (!OptionalBoolArg(env, info, 4, "zeroPos", true, &zero_pos)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t count = 0;
   SonareError err = sonare_zero_crossings(arr.Data(), arr.ElementLength(), threshold, ref_magnitude,

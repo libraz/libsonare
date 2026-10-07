@@ -259,12 +259,12 @@ Napi::Value PolyphonicAnalysisWrap::Notes(const Napi::CallbackInfo& info) {
 
 Napi::Value PolyphonicAnalysisWrap::SetNoteEdit(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!RequireOpen(env)) return env.Undefined();
 
   size_t note = 0;
   if (!NonNegativeSizeTArg(env, info, 0, "note", &note)) return env.Undefined();
 
-  SONARE_NODE_TRY
   SonareNoteEdit edit{};
   std::vector<float> envelope;
   const Napi::Value edit_value = info[1];

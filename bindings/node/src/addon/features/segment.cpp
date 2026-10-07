@@ -64,11 +64,14 @@ Napi::Value SonareWrap::SegmentCrossSimilarity(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 5, "yCols", 0, &y_cols)) return env.Undefined();
   int k{};
   if (!OptionalIntArg(env, info, 6, "k", 0, &k)) return env.Undefined();
-  const std::string metric =
-      info.Length() > 7 && info[7].IsString() ? info[7].As<Napi::String>().Utf8Value() : "cosine";
-  const std::string mode = info.Length() > 8 && info[8].IsString()
-                               ? info[8].As<Napi::String>().Utf8Value()
-                               : "connectivity";
+  std::string metric;
+  if (!OptionalStringArg(env, info, 7, "metric", "cosine", &metric)) {
+    return env.Undefined();
+  }
+  std::string mode;
+  if (!OptionalStringArg(env, info, 8, "mode", "connectivity", &mode)) {
+    return env.Undefined();
+  }
   if (x_rows <= 0 || x_cols <= 0 || y_rows != x_rows || y_cols <= 0 || k < 0 ||
       x.ElementLength() != static_cast<size_t>(x_rows) * x_cols ||
       y.ElementLength() != static_cast<size_t>(y_rows) * y_cols) {
@@ -100,12 +103,14 @@ Napi::Value SonareWrap::SegmentRecurrenceMatrix(const Napi::CallbackInfo& info) 
   if (!OptionalIntArg(env, info, 4, "width", 1, &width)) return env.Undefined();
   bool sym{};
   if (!OptionalBoolArg(env, info, 5, "sym", false, &sym)) return env.Undefined();
-  const std::string metric = info.Length() > 6 && info[6].IsString()
-                                 ? info[6].As<Napi::String>().Utf8Value()
-                                 : "euclidean";
-  const std::string mode = info.Length() > 7 && info[7].IsString()
-                               ? info[7].As<Napi::String>().Utf8Value()
-                               : "connectivity";
+  std::string metric;
+  if (!OptionalStringArg(env, info, 6, "metric", "euclidean", &metric)) {
+    return env.Undefined();
+  }
+  std::string mode;
+  if (!OptionalStringArg(env, info, 7, "mode", "connectivity", &mode)) {
+    return env.Undefined();
+  }
   SonareSegmentMatrix result{};
   const SonareError err = sonare_segment_recurrence_matrix(
       data.Data(), rows, cols, k, width, sym ? 1 : 0, metric.c_str(), mode.c_str(), &result);
@@ -189,8 +194,10 @@ Napi::Value SonareWrap::SegmentAgglomerative(const Napi::CallbackInfo& info) {
   if (!SegmentMatrixInput(env, "segmentAgglomerative", data, rows, cols)) return env.Undefined();
   int k{};
   if (!OptionalIntArg(env, info, 3, "k", 0, &k)) return env.Undefined();
-  const std::string linkage =
-      info.Length() > 4 && info[4].IsString() ? info[4].As<Napi::String>().Utf8Value() : "average";
+  std::string linkage;
+  if (!OptionalStringArg(env, info, 4, "linkage", "average", &linkage)) {
+    return env.Undefined();
+  }
   SonareSegmentIndices result{};
   const SonareError err =
       sonare_segment_agglomerative(data.Data(), rows, cols, k, linkage.c_str(), &result);

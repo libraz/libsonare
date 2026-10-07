@@ -583,8 +583,10 @@ Napi::Value SonareWrap::Normalize(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sr");
   float target_db{};
   if (!OptionalFiniteFloatArg(env, info, 2, "targetDb", 0.0f, &target_db)) return env.Undefined();
-  std::string mode =
-      info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "peak";
+  std::string mode;
+  if (!OptionalStringArg(env, info, 3, "mode", "peak", &mode)) {
+    return env.Undefined();
+  }
   if (mode != "peak" && mode != "rms") {
     Napi::TypeError::New(env, "normalize: mode must be 'peak' or 'rms'")
         .ThrowAsJavaScriptException();

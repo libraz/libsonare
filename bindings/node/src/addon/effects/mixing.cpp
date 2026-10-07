@@ -78,6 +78,14 @@ Napi::Value OptionAt(Napi::Env env, const Napi::Object& options, const char* key
   return value;
 }
 
+/// @brief Refuses a present per-strip option of the wrong type by name, as the
+///        *Property readers do; undefined/null leaves the strip at its default.
+void RequireOptionType(Napi::Env env, const Napi::Value& value, bool ok, const char* key,
+                       const char* expected) {
+  sonare_node::node_require_property_type(env, ok || value.IsUndefined() || value.IsNull(), key,
+                                          expected);
+}
+
 Napi::Object MixMeterToObject(Napi::Env env, const SonareMixMeterSnapshot& snapshot) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("peakDbL", snapshot.peak_db_l);
@@ -146,6 +154,7 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsArray() || !info[2].IsNumber()) {
     Napi::TypeError::New(env, "Expected (leftChannels, rightChannels, sampleRate, options?)")
         .ThrowAsJavaScriptException();
@@ -197,8 +206,25 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   }
 
   const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
+  if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
+    Napi::RangeError::New(env, "mixStereo: sampleRate out of supported range [" +
+                                   std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                                   std::to_string(sonare::kMaxAudioSampleRate) + "]")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
   Napi::Object options = info.Length() >= 4 && info[3].IsObject() ? info[3].As<Napi::Object>()
                                                                   : Napi::Object::New(env);
+  // A per-strip array may be shorter than the strip list (the rest keep their
+  // defaults) but never longer: the surplus entries would belong to no strip.
+  for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
+    const Napi::Value value = options.Get(key);
+    if (value.IsArray() && value.As<Napi::Array>().Length() > count) {
+      throw Napi::RangeError::New(env, std::string("mixStereo: '") + key +
+                                           "' has more entries than strips (" +
+                                           std::to_string(count) + ")");
+    }
+  }
 
   SonareMixer* mixer =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
@@ -220,7 +246,6 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   std::vector<SonareStrip*> strips;
   std::vector<float> out_left(length, 0.0f);
   std::vector<float> out_right(length, 0.0f);
-  SONARE_NODE_TRY
   for (size_t index = 0; index < count; ++index) {
     SonareStrip* strip = sonare_mixer_add_strip(mixer, ("strip" + std::to_string(index)).c_str());
     if (strip == nullptr) {
@@ -229,6 +254,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     }
     strips.push_back(strip);
     Napi::Value inputTrim = OptionAt(env, options, "inputTrimDb", index);
+    RequireOptionType(env, inputTrim, inputTrim.IsNumber(), "inputTrimDb", "a number");
     if (inputTrim.IsNumber()) {
       SonareError err = sonare_strip_set_input_trim_db(
           strip, node_narrow_finite_float(env, inputTrim, "inputTrimDb"));
@@ -236,6 +262,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
     Napi::Value fader = OptionAt(env, options, "faderDb", index);
+    RequireOptionType(env, fader, fader.IsNumber(), "faderDb", "a number");
     if (fader.IsNumber()) {
       SonareError err =
           sonare_strip_set_fader_db(strip, node_narrow_finite_float(env, fader, "faderDb"));
@@ -251,6 +278,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
     Napi::Value pan = OptionAt(env, options, "pan", index);
     Napi::Value mode = OptionAt(env, options, "panMode", index);
     const bool has_mode = !mode.IsUndefined() && !mode.IsNull();
+    RequireOptionType(env, pan, pan.IsNumber(), "pan", "a number");
     if (pan.IsNumber() || has_mode) {
       const float pan_value = pan.IsNumber() ? node_narrow_finite_float(env, pan, "pan") : 0.0f;
       const int mode_value = has_mode ? PanModeValue(mode) : SONARE_PAN_MODE_KEEP;
@@ -259,6 +287,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
     Napi::Value width = OptionAt(env, options, "width", index);
+    RequireOptionType(env, width, width.IsNumber(), "width", "a number");
     if (width.IsNumber()) {
       SonareError err =
           sonare_strip_set_width(strip, node_narrow_finite_float(env, width, "width"));
@@ -266,6 +295,7 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
         throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
     }
     Napi::Value muted = OptionAt(env, options, "muted", index);
+    RequireOptionType(env, muted, muted.IsBoolean(), "muted", "a boolean");
     if (muted.IsBoolean()) {
       SonareError err = sonare_strip_set_muted(strip, muted.As<Napi::Boolean>().Value() ? 1 : 0);
       if (err != SONARE_OK)

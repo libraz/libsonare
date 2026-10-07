@@ -307,9 +307,8 @@ Napi::Value ProjectWrap::GetOverlapPolicy(const Napi::CallbackInfo& info) {
 Napi::Value ProjectWrap::SetMixerSceneJson(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  std::string scene = info.Length() > 0 && info[0].IsString()
-                          ? info[0].As<Napi::String>().Utf8Value()
-                          : std::string();
+  std::string scene;
+  if (!OptionalStringArg(env, info, 0, "sceneJson", "", &scene)) return env.Undefined();
   ThrowIfError(env, sonare_project_set_mixer_scene_json(project_, scene.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
@@ -324,9 +323,8 @@ Napi::Value ProjectWrap::SetMarker(const Napi::CallbackInfo& info) {
       !OptionalDoubleArg(env, info, 1, "ppq", 0.0, &ppq)) {
     return env.Undefined();
   }
-  std::string name = info.Length() > 2 && info[2].IsString()
-                         ? info[2].As<Napi::String>().Utf8Value()
-                         : std::string();
+  std::string name;
+  if (!OptionalStringArg(env, info, 2, "name", "", &name)) return env.Undefined();
   uint32_t out_id = 0;
   ThrowIfError(env, sonare_project_set_marker(project_, marker_id, ppq, name.c_str(), &out_id));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -343,14 +341,12 @@ Napi::Value ProjectWrap::SetMarkerEx(const Napi::CallbackInfo& info) {
   }
   Napi::Object obj = info[0].As<Napi::Object>();
   SonareProjectMarker marker{};
-  marker.id = static_cast<uint32_t>(IntProperty(obj, "id", 0));
-  marker.kind = static_cast<uint8_t>(IntProperty(obj, "kind", SONARE_MARKER_KIND_MARKER));
-  marker.key_fifths = static_cast<int8_t>(IntProperty(obj, "keyFifths", 0));
+  marker.id = Uint32Property(obj, "id", 0);
+  marker.kind = sonare_node::MidiByteProperty(env, obj, "kind", SONARE_MARKER_KIND_MARKER);
+  marker.key_fifths = sonare_node::Int8Property(obj, "keyFifths", 0);
   marker.key_minor = BoolProperty(obj, "keyMinor", false) ? 1 : 0;
   marker.ppq = DoubleProperty(obj, "ppq", 0.0);
-  const std::string name = obj.Has("name") && !obj.Get("name").IsUndefined()
-                               ? obj.Get("name").As<Napi::String>().Utf8Value()
-                               : std::string();
+  const std::string name = StringProperty(obj, "name", "");
   uint32_t out_id = 0;
   ThrowIfError(env, sonare_project_set_marker_ex_name(project_, &marker, name.c_str(), &out_id));
   if (env.IsExceptionPending()) return env.Undefined();

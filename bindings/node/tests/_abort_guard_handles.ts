@@ -322,6 +322,7 @@ export interface NativeProject {
   setTimeSignatures(segments: unknown): void;
   setMidiEvents(clipId: unknown, events?: unknown): void;
   setWarpMap(map: unknown): void;
+  setMixerSceneJson(scene: unknown): void;
   addAutomationLane(trackId: unknown, desc?: unknown): number;
   editAutomationLane(trackId: unknown, targetParamId?: unknown, desc?: unknown): void;
   removeAutomationLane(trackId: unknown, targetParamId?: unknown): void;

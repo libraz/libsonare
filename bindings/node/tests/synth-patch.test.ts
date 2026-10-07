@@ -207,6 +207,24 @@ describe('NativeSynth preset catalog', () => {
     expect(synthPresetPatch('saw-lead').retrigger).toBe('free');
   });
 
+  it('reads a null enum field as absent and refuses a wrong type by name', () => {
+    // The reader family's contract: only undefined/null take the default.
+    const base = synthPatchRoundTripForTest({});
+    const fields = [
+      ['engineMode', 'synth engine mode'],
+      ['waveform', 'oscillator waveform'],
+      ['filterModel', 'filter model'],
+      ['filterOutput', 'filter output'],
+    ] as const;
+    for (const [field, label] of fields) {
+      const absent = synthPatchRoundTripForTest({ [field]: null } as unknown as SynthPatch);
+      expect(absent[field], field).toBe(base[field]);
+      expect(() => synthPatchRoundTripForTest({ [field]: true } as unknown as SynthPatch)).toThrow(
+        label,
+      );
+    }
+  });
+
   it('rejects non-string preset properties consistently', () => {
     expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
     expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');

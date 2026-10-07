@@ -833,7 +833,7 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
     if (!RequiredUint32Value(env, analysis.Get("frameLengthSamples"), "analysis.frameLengthSamples",
                              &analysis_storage->frame_length_samples))
       return false;
-    *algorithm_storage = StringProperty(analysis, "algorithmId", "libsonare.pyin");
+    *algorithm_storage = StringProperty(analysis, "algorithmId", "host");
     if (algorithm_storage->empty()) {
       Napi::RangeError::New(env, "analysis.algorithmId must not be empty")
           .ThrowAsJavaScriptException();

@@ -201,18 +201,19 @@ Napi::Value SonareWrap::Mastering(const Napi::CallbackInfo& info) {
   }
   // 0 is the C-ABI sentinel for the library default; any other value reaches
   // the loudness validator instead of being replaced by the default.
-  if (info.Length() >= 5 && info[4].IsNumber()) {
-    const int oversample = node_narrow_int(env, info[4], "oversample");
-    if (oversample != 0) config.true_peak_oversample = oversample;
+  int oversample = 0;
+  float release_ms = 0.0f;
+  bool apply_gain_at_input_rate = false;
+  if (!OptionalIntArg(env, info, 4, "oversample", 0, &oversample) ||
+      !OptionalFiniteFloatArg(env, info, 5, "releaseMs", 0.0f, &release_ms) ||
+      !OptionalBoolArg(env, info, 6, "applyGainAtInputRate", false, &apply_gain_at_input_rate)) {
+    return env.Undefined();
   }
+  if (oversample != 0) config.true_peak_oversample = oversample;
   // release_ms: 0 selects the library default; any other value is applied as
   // asked and rejected by the shared loudness validator if it is not positive.
-  if (info.Length() >= 6 && info[5].IsNumber()) {
-    config.release_ms = sonare::ZeroIsDefault(node_narrow_finite_float(env, info[5], "releaseMs"))
-                            .or_default(config.release_ms);
-  }
-  config.apply_gain_at_input_rate =
-      info.Length() >= 7 && info[6].IsBoolean() ? info[6].As<Napi::Boolean>().Value() : false;
+  config.release_ms = sonare::ZeroIsDefault(release_ms).or_default(config.release_ms);
+  config.apply_gain_at_input_rate = apply_gain_at_input_rate;
 
   sonare::Audio audio = sonare::Audio::from_buffer(data, length, sr);
   auto result = sonare::mastering::maximizer::loudness_optimize(audio, config);

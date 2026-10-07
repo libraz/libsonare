@@ -272,8 +272,10 @@ Napi::Value SonareWrap::ReassignedSpectrogram(const Napi::CallbackInfo& info) {
   if (!OptionalIntArg(env, info, 3, "hopLength", 512, &hop_length)) return env.Undefined();
   float ref_power{};
   if (!OptionalFloatArg(env, info, 4, "refPower", 1e-6f, &ref_power)) return env.Undefined();
-  const bool fill_nan =
-      info.Length() >= 6 && info[5].IsBoolean() && info[5].As<Napi::Boolean>().Value();
+  bool fill_nan = false;
+  if (!OptionalBoolArg(env, info, 5, "fillNan", false, &fill_nan)) {
+    return env.Undefined();
+  }
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
   if (!std::isfinite(ref_power) || ref_power < 0.0f) {
     Napi::RangeError::New(env, "refPower must be finite and non-negative")

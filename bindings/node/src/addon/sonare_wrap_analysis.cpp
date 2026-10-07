@@ -72,8 +72,7 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
     high_pass_hz = FiniteFloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
-    Napi::Value genre = options.Get("genreHint");
-    if (genre.IsString()) genre_hint = genre.As<Napi::String>().Utf8Value();
+    genre_hint = StringProperty(options, "genreHint", "");
   }
 
   SonareKey key{};
@@ -121,8 +120,7 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
     high_pass_hz = FiniteFloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
-    Napi::Value genre = options.Get("genreHint");
-    if (genre.IsString()) genre_hint = genre.As<Napi::String>().Utf8Value();
+    genre_hint = StringProperty(options, "genreHint", "");
   }
 
   SonareKeyCandidate* candidates = nullptr;

@@ -730,9 +730,7 @@ Napi::Value SonareWrap::FromBuffer(const Napi::CallbackInfo& info) {
   size_t length = typed.ElementLength();
 
   int sample_rate = 48000;
-  if (info.Length() >= 2 && info[1].IsNumber()) {
-    sample_rate = node_narrow_int(env, info[1], node_arg_label(1).c_str());
-  }
+  if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate)) return env.Undefined();
 
   SonareAudio* audio_raw = nullptr;
   SonareError err = sonare_audio_from_buffer(data, length, sample_rate, &audio_raw);
@@ -898,7 +896,7 @@ Napi::Value SonareWrap::DetectKeyInstance(const Napi::CallbackInfo& info) {
     high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
-    genre_hint = node_genre_hint_option(options);
+    genre_hint = StringProperty(options, "genreHint", "");
   }
 
   // Forward modes/profile/genreHint through the extended entry point so the
@@ -943,7 +941,7 @@ Napi::Value SonareWrap::DetectKeyCandidatesInstance(const Napi::CallbackInfo& in
     high_pass_hz = FloatProperty(options, "highPassHz", high_pass_hz);
     modes = node_modes_option(options);
     profile = node_profile_from_value(options.Get("profile"));
-    genre_hint = node_genre_hint_option(options);
+    genre_hint = StringProperty(options, "genreHint", "");
   }
 
   // Forward modes/profile/genreHint through the extended entry point so the

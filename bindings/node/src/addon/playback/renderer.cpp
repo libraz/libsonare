@@ -130,6 +130,7 @@ Napi::Value PlaybackRendererWrap::ProcessPlanar(const Napi::CallbackInfo& info) 
 
 Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
   if (!sonare_node::RequireFloat32Array(info, 0, "Expected (Float32Array, inChannels)")) {
     return env.Undefined();
@@ -137,7 +138,6 @@ Napi::Value PlaybackRendererWrap::ProcessInterleaved(const Napi::CallbackInfo& i
   int in_channels = 0;
   if (!sonare_node::RequiredIntArg(env, info, 1, "inChannels", &in_channels))
     return env.Undefined();
-  SONARE_NODE_TRY
   Napi::Float32Array input = info[0].As<Napi::Float32Array>();
   if (in_channels <= 0 || input.ElementLength() % static_cast<size_t>(in_channels) != 0) {
     Napi::RangeError::New(env, "invalid channel count").ThrowAsJavaScriptException();
@@ -190,6 +190,7 @@ Napi::Value PlaybackRendererWrap::Config(const Napi::CallbackInfo& info) {
 
 Napi::Value PlaybackRendererWrap::SetHeadOrientation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
+  SONARE_NODE_TRY
   if (!EnsureAlive(env)) return env.Undefined();
   float yaw_deg = 0.0f;
   if (!sonare_node::RequiredFloatValue(env, info[0], "yawDeg", &yaw_deg)) return env.Undefined();
@@ -199,7 +200,6 @@ Napi::Value PlaybackRendererWrap::SetHeadOrientation(const Napi::CallbackInfo& i
       !sonare_node::OptionalFloatArg(env, info, 2, "rollDeg", 0.0f, &roll_deg)) {
     return env.Undefined();
   }
-  SONARE_NODE_TRY
   // Realtime entry: see the note in sonare_wrap_playback.h.
   sonare_node::ThrowIfRealtimeError(
       env, sonare_playback_renderer_set_head_orientation(renderer_, yaw_deg, pitch_deg, roll_deg));

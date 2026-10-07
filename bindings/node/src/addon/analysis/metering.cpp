@@ -630,10 +630,9 @@ Napi::Value SonareWrap::MeteringVectorscope(const Napi::CallbackInfo& info) {
   }
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  size_t max_points = info.Length() >= 4 && info[3].IsNumber()
-                          ? static_cast<size_t>(std::max<int64_t>(
-                                0, node_narrow_int64(env, info[3], node_arg_label(3).c_str())))
-                          : 0;
+  int64_t max_points_arg = 0;
+  if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
+  size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
   SonareVectorscopeResult result{};
   SonareError err = sonare_metering_vectorscope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
@@ -673,10 +672,9 @@ Napi::Value SonareWrap::MeteringPhaseScope(const Napi::CallbackInfo& info) {
   }
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  size_t max_points = info.Length() >= 4 && info[3].IsNumber()
-                          ? static_cast<size_t>(std::max<int64_t>(
-                                0, node_narrow_int64(env, info[3], node_arg_label(3).c_str())))
-                          : 0;
+  int64_t max_points_arg = 0;
+  if (!OptionalInt64Arg(env, info, 3, "maxPoints", 0, &max_points_arg)) return env.Undefined();
+  size_t max_points = static_cast<size_t>(std::max<int64_t>(0, max_points_arg));
   SonarePhaseScopeResult result{};
   SonareError err = sonare_metering_phase_scope_decimated(
       left.Data(), right.Data(), left.ElementLength(), sr, max_points, &result);
@@ -754,10 +752,9 @@ Napi::Value SonareWrap::MeteringSpectrumFrame(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   int sr{};
   if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sr)) return env.Undefined();
-  size_t frame_offset = info.Length() >= 3 && info[2].IsNumber()
-                            ? static_cast<size_t>(std::max<int64_t>(
-                                  0, node_narrow_int64(env, info[2], node_arg_label(2).c_str())))
-                            : 0;
+  int64_t frame_offset_arg = 0;
+  if (!OptionalInt64Arg(env, info, 2, "frameOffset", 0, &frame_offset_arg)) return env.Undefined();
+  size_t frame_offset = static_cast<size_t>(std::max<int64_t>(0, frame_offset_arg));
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;
@@ -1032,10 +1029,9 @@ Napi::Value SonareWrap::SpectrumFrameInstance(const Napi::CallbackInfo& info) {
     Napi::Error::New(env, "Audio has been destroyed").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  size_t frame_offset = info.Length() >= 1 && info[0].IsNumber()
-                            ? static_cast<size_t>(std::max<int64_t>(
-                                  0, node_narrow_int64(env, info[0], node_arg_label(0).c_str())))
-                            : 0;
+  int64_t frame_offset_arg = 0;
+  if (!OptionalInt64Arg(env, info, 0, "frameOffset", 0, &frame_offset_arg)) return env.Undefined();
+  size_t frame_offset = static_cast<size_t>(std::max<int64_t>(0, frame_offset_arg));
   int n_fft = 0;
   int smooth = 0;
   int octave = 0;

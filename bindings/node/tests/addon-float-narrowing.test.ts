@@ -576,6 +576,17 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     call: (v) => peak(native.mastering(AUDIO, SAMPLE_RATE, -14, v).samples),
   },
   {
+    name: 'mastering releaseMs',
+    site: 'effects/mastering.cpp Mastering releaseMs',
+    // Neither arm may be 0: that is the ZeroIsDefault sentinel, and a control
+    // built on it would measure the sentinel rather than the value.
+    control: [20, 200],
+    // A target and ceiling the limiter has to work for: at -14 / -1 this input
+    // never reaches the ceiling, and a release nothing recovers from is not a
+    // control.
+    call: (v) => magnitudeSum(native.mastering(AUDIO, SAMPLE_RATE, -6, -12, 4, v).samples),
+  },
+  {
     name: 'mixer addSend sendDb',
     site: 'mixer/sends_metering.cpp AddSend sendDb',
     control: [-6, 0],
@@ -1095,17 +1106,6 @@ const REQUIRED_FLOAT_STATE_ARGUMENTS: FloatArgument[] = [
       peak(
         native.mixStereo([SHORT], [SHORT.map((s: number) => -s)], SAMPLE_RATE, { width: v }).left,
       ),
-  },
-  {
-    name: 'mastering releaseMs',
-    site: 'effects/mastering.cpp Mastering releaseMs',
-    // Neither arm may be 0: that is the ZeroIsDefault sentinel, and a control
-    // built on it would measure the sentinel rather than the value.
-    control: [20, 200],
-    // A target and ceiling the limiter has to work for: at -14 / -1 this input
-    // never reaches the ceiling, and a release nothing recovers from is not a
-    // control.
-    call: (v) => magnitudeSum(native.mastering(AUDIO, SAMPLE_RATE, -6, -12, 4, v).samples),
   },
   {
     name: 'masteringStreamingPreview targetLufs',

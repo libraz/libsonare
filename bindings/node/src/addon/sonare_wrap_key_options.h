@@ -100,12 +100,6 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
   throw Napi::Error::New(value.Env(), "invalid key profile: " + key);
 }
 
-/// @brief Read the optional `genreHint` string option ("" if absent).
-inline std::string node_genre_hint_option(const Napi::Object& object) {
-  Napi::Value value = object.Get("genreHint");
-  return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string{};
-}
-
 }  // namespace sonare_node
 
 #endif  // SONARE_NODE_SONARE_WRAP_KEY_OPTIONS_H_

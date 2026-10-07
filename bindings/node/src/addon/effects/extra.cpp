@@ -121,9 +121,8 @@ SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, st
   config.n_iter = IntProperty(options, "nIter", kZeroIsSentinel);
   config.beta = FloatProperty(options, "beta", 0.0f);
   config.mask_power = FloatProperty(options, "maskPower", 0.0f);
-  Napi::Value init_value = options.Get("init");
-  if (init_value.IsString()) {
-    *init = init_value.As<Napi::String>().Utf8Value();
+  if (!options.Get("init").IsUndefined() && !options.Get("init").IsNull()) {
+    *init = StringProperty(options, "init", "");
     config.init = init->c_str();
   }
   return config;
@@ -222,8 +221,10 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
   if (!OptionalFiniteFloatArg(env, info, 5, "beta", 2.0f, &beta)) return env.Undefined();
   // Optional 7th arg selects the initialiser ("random" | "nndsvd"). When given,
   // route through the with-init variant for the NNDSVD warm-start.
-  std::string init =
-      info.Length() >= 7 && info[6].IsString() ? info[6].As<Napi::String>().Utf8Value() : "";
+  std::string init;
+  if (!OptionalStringArg(env, info, 6, "init", "", &init)) {
+    return env.Undefined();
+  }
   float* out_w = nullptr;
   size_t out_w_length = 0;
   float* out_h = nullptr;
@@ -360,8 +361,10 @@ Napi::Value SonareWrap::NnFilter(const Napi::CallbackInfo& info) {
   if (!ValidateMatrixDims(env, "nnFilter", n_features, n_frames, arr.ElementLength())) {
     return env.Undefined();
   }
-  std::string aggregate =
-      info.Length() >= 4 && info[3].IsString() ? info[3].As<Napi::String>().Utf8Value() : "mean";
+  std::string aggregate;
+  if (!OptionalStringArg(env, info, 3, "aggregate", "mean", &aggregate)) {
+    return env.Undefined();
+  }
   int k{};
   if (!OptionalIntArg(env, info, 4, "k", 7, &k)) return env.Undefined();
   int width{};
@@ -396,8 +399,10 @@ Napi::Value SonareWrap::Remix(const Napi::CallbackInfo& info) {
   }
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  int align_zeros =
-      info.Length() >= 4 && info[3].IsBoolean() && info[3].As<Napi::Boolean>().Value() ? 1 : 0;
+  bool align_zeros = false;
+  if (!OptionalBoolArg(env, info, 3, "alignZeros", false, &align_zeros)) {
+    return env.Undefined();
+  }
   float* out = nullptr;
   size_t out_length = 0;
   SonareError err = sonare_remix(arr.Data(), arr.ElementLength(), sr, intervals.data(),
@@ -424,8 +429,10 @@ Napi::Value SonareWrap::RemixAlignedIntervals(const Napi::CallbackInfo& info) {
   }
   int sr{};
   if (!OptionalIntArg(env, info, 2, "sampleRate", 22050, &sr)) return env.Undefined();
-  int align_zeros =
-      info.Length() >= 4 && info[3].IsBoolean() ? (info[3].As<Napi::Boolean>().Value() ? 1 : 0) : 1;
+  bool align_zeros = true;
+  if (!OptionalBoolArg(env, info, 3, "alignZeros", true, &align_zeros)) {
+    return env.Undefined();
+  }
   int* out = nullptr;
   size_t out_count = 0;
   SonareError err =

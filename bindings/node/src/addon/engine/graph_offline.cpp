@@ -280,10 +280,11 @@ Napi::Value RealtimeEngineWrap::BounceOffline(const Napi::CallbackInfo& info) {
   options.target_sample_rate = IntProperty(obj, "targetSampleRate", kZeroIsSentinel);
   options.source_sample_rate = IntProperty(obj, "sourceSampleRate", kZeroIsSentinel);
   options.normalize_lufs = BoolProperty(obj, "normalizeLufs", false) ? 1 : 0;
-  options.target_lufs = FloatProperty(obj, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+  options.target_lufs =
+      sonare_node::FiniteFloatProperty(obj, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
   options.dither = IntProperty(obj, "dither", 0);
   options.dither_bits = IntProperty(obj, "ditherBits", 16);
-  options.dither_seed = static_cast<uint32_t>(Int64Property(obj, "ditherSeed", kZeroIsSentinel));
+  options.dither_seed = Uint32Property(obj, "ditherSeed", kZeroIsSentinel);
   SonareEngineBounceResult result{};
   ThrowIfError(env, sonare_engine_bounce_offline(engine_, &options, &result));
   if (env.IsExceptionPending()) return env.Undefined();
@@ -320,7 +321,7 @@ Napi::Value RealtimeEngineWrap::FreezeOffline(const Napi::CallbackInfo& info) {
   options.total_frames = Int64Property(obj, "totalFrames", 0);
   options.block_size = IntProperty(obj, "blockSize", 128);
   options.num_channels = IntProperty(obj, "numChannels", 2);
-  options.clip_id = static_cast<uint32_t>(Int64Property(obj, "clipId", 1));
+  options.clip_id = Uint32Property(obj, "clipId", 1);
   options.start_ppq = sonare_node::DoubleProperty(obj, "startPpq", 0.0);
   options.gain = FloatProperty(obj, "gain", 1.0f);
   SonareEngineFreezeResult result{};

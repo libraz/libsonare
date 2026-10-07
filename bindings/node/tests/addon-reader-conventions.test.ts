@@ -1124,6 +1124,14 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'masteringAssistantSuggestStereo',
         'Reads through AssistantConfigFromParams, which the scanner does not follow; mastering-assistant-preset.test.ts drives preset: undefined against an omitted preset.',
       ],
+      [
+        'masteringStreamingPreview',
+        'Its only key read is the name of a platforms record whose fields are type-checked as required just above it, so no omitted key reaches a default; covered by request_object_mastering.test.ts.',
+      ],
+      [
+        'masteringStreamingPreviewStereo',
+        'Its only key read is the name of a platforms record whose fields are type-checked as required just above it, so no omitted key reaches a default; covered by request_object_mastering.test.ts.',
+      ],
       ['meteringSpectrum', 'Covered by metering-and-scale.test.ts.'],
       ['meteringSpectrumFrame', 'Covered by metering-and-scale.test.ts.'],
       ['midiCcLearn', 'Covered by public-input-conformance.test.ts.'],
@@ -1149,6 +1157,7 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
         'PolyphonicAnalysis instance method; needs an open analysis, and its undefined-equivalence is asserted in polyphonic-analysis.test.ts.',
       ],
       ['setSurroundPan', 'Needs a mixer strip handle.'],
+      ['setWarpMap', 'Needs a project with a registered audio source; covered by project.test.ts.'],
       ['setSynthInstrument', 'Covered by synth-patch.test.ts and soundfont.test.ts.'],
       [
         'setTrackStripSurroundPan',

@@ -105,42 +105,6 @@ const POSITIONAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
  * than silently shipping untested.
  */
 /**
- * The reason the ten GM/GM2 name lookups in `addon.cpp` may keep their
- * accessor-less `info[i].As<Napi::Number>()` reads for now.
- *
- * They became visible when the scanner's premise was corrected: an
- * accessor-less `.As<>()` "cannot fail" is true of `Napi::Object` and false of
- * `Napi::Number`, whose conversion operators run the same conversion the
- * explicit accessor would. So these are genuine unchecked reads and the scanner
- * is right to see them — but every one was driven with a wrong-typed argument
- * and with no argument at all, and each answers a single catchable
- * `TypeError: A number was expected` with the addon still usable afterwards.
- * The conversion sets a pending exception and node-addon-api surfaces it as one
- * throw rather than the abort this family exists to prevent.
- *
- * That measurement is what this entry rests on, so the measured STATE is
- * pinned rather than described: see {@link GM_NAME_LOOKUP_POPULATION} and the
- * case that asserts it. A suppression whose expiry condition exists only as a
- * sentence is a declared level, not a verified one — it goes on blessing the
- * file while the shape it excused quietly changes underneath.
- */
-const GM_NAME_LOOKUP_REASON =
-  'Accessor-less Napi::Number read, so the conversion is implicit rather than absent. Driven with a wrong-typed argument and with none: answers one catchable TypeError and leaves the addon usable. Scoped to the exact population pinned by GM_NAME_LOOKUP_POPULATION, so a new read or a new body fails rather than inheriting this.';
-
-/**
- * The exact shape this suppression was measured against, not a target.
- *
- * An eleventh function, or one more read inside any of the ten, moves the
- * population off these numbers and fails the case below — which is the point.
- * The entries above excuse a set of reads that were each driven and found to
- * answer one catchable error; they do not excuse `addon.cpp`, and they must not
- * become a blanket blessing that the next read to land there inherits
- * unexamined. Re-measure and re-justify, or move the body onto the shared
- * reader family and delete its entry.
- */
-const GM_NAME_LOOKUP_POPULATION = { reads: 15, functions: 10 } as const;
-
-/**
  * Inline typed positional reads that may stay inline, each with the reason the
  * accessor cannot fail there — or, for the implicit-conversion form, the reason
  * its failure is already safe. Keyed by `file:enclosing-function`. The scan is
@@ -148,20 +112,7 @@ const GM_NAME_LOOKUP_POPULATION = { reads: 15, functions: 10 } as const;
  * hazard, since editing the helper silently unguards every call site — so a
  * site guarded from a distance has to say so here rather than read as safe.
  */
-const INLINE_READ_ALLOWLIST: ReadonlyMap<string, string> = new Map([
-  ...[
-    'MidiGmInstrumentName',
-    'MidiGmFamilyName',
-    'MidiGmFamilyFirstProgram',
-    'MidiGm2InstrumentName',
-    'MidiGmDrumName',
-    'MidiGm2DrumSetName',
-    'MidiGm2DrumName',
-    'MidiCcName',
-    'MidiPerNoteControllerName',
-    'MidiBankProgram',
-  ].map((name) => [`addon.cpp:${name}`, GM_NAME_LOOKUP_REASON] as [string, string]),
-]);
+const INLINE_READ_ALLOWLIST: ReadonlyMap<string, string> = new Map();
 
 const UNCOVERED_POSITIONAL_GUARDS: ReadonlyMap<string, string> = new Map([
   [
@@ -637,19 +588,30 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     // non-integer half: every integer read moved onto the shared narrowing
     // family, either onto a bail-out reader or as a bare info[i] read routed
     // through node_narrow_int, which is a call rather than an inline accessor.
-    // 100 reads match. The floor sits well under that on purpose: routing an
+    // 62 reads match. The floor sits well under that on purpose: routing an
     // argument onto a reader shrinks this population without touching the
     // violation subset it guards, so such a move must not redden it.
-    expect(inlineTypedArgumentReads().length).toBeGreaterThan(80);
+    expect(inlineTypedArgumentReads().length).toBeGreaterThan(40);
     // The floor alone would not notice the implicit-conversion form being
-    // dropped again, so pin that form where it is concentrated. Measured on
-    // addon.cpp's MIDI lookups: 15 reads match and every one of them is
-    // accessor-less, so a scanner that saw only the explicit form would find
-    // none. A floor between the two separates them.
-    const midiReads = inlineTypedArgumentReads().filter(
-      (site) => site.file === 'addon.cpp' && site.name.startsWith('Midi'),
-    );
-    expect(midiReads.length).toBeGreaterThan(10);
+    // dropped again, and the addon no longer holds one to measure it on, so
+    // the scanner is driven with each form and must report both unchecked.
+    const forms = inlineTypedArgumentReads([
+      {
+        file: 'fake.cpp',
+        text: [
+          'Napi::Value Implicit(const Napi::CallbackInfo& info) {',
+          '  return Lookup(info[0].As<Napi::Number>());',
+          '}',
+          'Napi::Value Explicit(const Napi::CallbackInfo& info) {',
+          '  return Lookup(info[0].As<Napi::Number>().Int32Value());',
+          '}',
+        ].join('\n'),
+      },
+    ]);
+    expect(forms.map((site) => [site.name, site.typeChecked])).toEqual([
+      ['Implicit', false],
+      ['Explicit', false],
+    ]);
     // Positive control for the bail-out detector: it has to answer "no" to the
     // shape this whole family exists to prevent, or a clean sweep means nothing.
     expect(isBailoutGuarded('  if (!')).toBe(true);
@@ -712,26 +674,6 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
         .map((site) => site.id),
     );
     expect([...INLINE_READ_ALLOWLIST.keys()].filter((id) => !live.has(id))).toEqual([]);
-  });
-
-  it('holds the GM lookup suppression to the population it was measured against', () => {
-    // The entries excuse a set of reads that were each driven with a wrong-typed
-    // argument and with none, and each answered one catchable TypeError. They do
-    // not excuse addon.cpp. Without this the written expiry condition has no
-    // reader, and an eleventh read added to the file would inherit the blessing
-    // unexamined — which is the failure mode of every stale allowlist entry.
-    const unguarded = inlineTypedArgumentReads().filter(
-      (site) => !site.typeChecked && site.file === 'addon.cpp' && site.name.startsWith('Midi'),
-    );
-    const functions = new Set(unguarded.map((site) => site.name));
-    expect(
-      { reads: unguarded.length, functions: functions.size },
-      'The measured population behind GM_NAME_LOOKUP_REASON has changed. Re-drive the affected ' +
-        'body with a wrong-typed argument and with none: if it still answers ONE catchable ' +
-        'TypeError, update GM_NAME_LOOKUP_POPULATION with the new numbers and say so; if a second ' +
-        'failing read now makes it abort, move the body onto the shared reader family and delete ' +
-        'its allowlist entry instead of widening this.',
-    ).toEqual(GM_NAME_LOOKUP_POPULATION);
   });
 
   it('accounts for every entry point that can reject a positional argument', () => {
