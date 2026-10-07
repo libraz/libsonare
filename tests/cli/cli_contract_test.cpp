@@ -165,6 +165,60 @@ TEST_CASE("CLI help command", "[cli]") {
   REQUIRE(output.find("UTILITY COMMANDS") < output.find("\n  frames-to-samples"));
 }
 
+TEST_CASE("CLI help goes to stdout and usage errors stay one line on stderr", "[cli]") {
+  const auto count_lines = [](const std::string& text) {
+    return std::count(text.begin(), text.end(), '\n');
+  };
+
+  SECTION("--help prints usage on stdout with nothing on stderr") {
+    const auto r = exec_command_split(CLI + " --help");
+    REQUIRE(r.exit_code == 0);
+    REQUIRE_THAT(r.out, ContainsSubstring("Usage:"));
+    REQUIRE_THAT(r.out, ContainsSubstring("ANALYSIS COMMANDS"));
+    REQUIRE(r.err.empty());
+  }
+
+  SECTION("a command's --help prints on stdout") {
+    const auto r = exec_command_split(CLI + " mel --help");
+    REQUIRE(r.exit_code == 0);
+    REQUIRE_THAT(r.out, ContainsSubstring("mel [options] <audio_file>"));
+    REQUIRE(r.err.empty());
+  }
+
+  SECTION("an unknown command is one error line plus a hint on stderr") {
+    const auto r = exec_command_split(CLI + " no-such-command");
+    REQUIRE(r.exit_code == 2);
+    REQUIRE(r.out.empty());
+    REQUIRE_THAT(r.err, ContainsSubstring("Unknown command 'no-such-command'"));
+    REQUIRE_THAT(r.err, ContainsSubstring("Try 'sonare-cli --help'."));
+    REQUIRE(count_lines(r.err) == 2);
+    REQUIRE_THAT(r.err, !ContainsSubstring("COMMANDS:"));
+  }
+
+  SECTION("no arguments is a one-line usage error") {
+    const auto r = exec_command_split(CLI);
+    REQUIRE(r.exit_code == 2);
+    REQUIRE(r.out.empty());
+    REQUIRE(count_lines(r.err) == 2);
+    REQUIRE_THAT(r.err, ContainsSubstring("Try 'sonare-cli --help'."));
+  }
+
+  SECTION("a missing audio argument is a one-line usage error") {
+    const auto r = exec_command_split(CLI + " chroma --json");
+    REQUIRE(r.exit_code == 2);
+    REQUIRE(r.out.empty());
+    REQUIRE(count_lines(r.err) == 2);
+    REQUIRE_THAT(r.err, ContainsSubstring("Try 'sonare-cli --help'."));
+  }
+}
+
+TEST_CASE("CLI --version prints the library version and exits 0", "[cli]") {
+  const auto r = exec_command_split(CLI + " --version");
+  REQUIRE(r.exit_code == 0);
+  REQUIRE_THAT(r.out, ContainsSubstring(std::string("libsonare version ") + sonare::version()));
+  REQUIRE(r.err.empty());
+}
+
 TEST_CASE("CLI hidden contract inventory is machine-readable", "[cli][contract]") {
   auto [code, output] = exec_command(CLI + " --dump-cli-contract");
   REQUIRE(code == 0);
@@ -287,7 +341,7 @@ TEST_CASE("CLI contract inventory follows path-scoped parser metadata", "[cli][c
                                          "project compile -o ignored.wav"}) {
       auto [code, output] = exec_command(CLI + " " + invocation);
       REQUIRE(code == 2);
-      REQUIRE_THAT(output, ContainsSubstring("option"));
+      REQUIRE_THAT(output, ContainsSubstring("Error:"));
     }
   }
 #endif
@@ -1021,7 +1075,8 @@ TEST_CASE("CLI generic parser failures use the usage exit code", "[cli][argument
   SECTION("legacy mode folds top-level and command early failures to one") {
     auto [no_args_code, no_args_output] = exec_command("SONARE_LEGACY_EXIT=1 " + CLI);
     REQUIRE(no_args_code == 1);
-    REQUIRE_THAT(no_args_output, ContainsSubstring("Usage:"));
+    REQUIRE_THAT(no_args_output, ContainsSubstring("No command specified"));
+    REQUIRE_THAT(no_args_output, ContainsSubstring("Try 'sonare-cli --help'."));
 
     auto [unknown_code, unknown_output] =
         exec_command("SONARE_LEGACY_EXIT=1 " + CLI + " no-such-command");

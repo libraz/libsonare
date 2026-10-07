@@ -517,11 +517,12 @@ TEST_CASE("CLI project command group", "[cli]") {
   }
 
   SECTION("missing subcommand is a usage error, not an invalid state") {
-    // A bare `project` with no subcommand prints usage and exits with the usage
-    // code (2), not the project invalid-state code (9).
+    // A bare `project` with no subcommand is a one-line usage error with the
+    // usage code (2), not the project invalid-state code (9).
     auto [code, output] = exec_command(CLI + " project");
     REQUIRE(code == 2);
-    REQUIRE_THAT(output, ContainsSubstring("PROJECT SUBCOMMANDS"));
+    REQUIRE_THAT(output, ContainsSubstring("No project subcommand specified"));
+    REQUIRE_THAT(output, ContainsSubstring("Try 'sonare-cli project --help'."));
   }
 
   SECTION("--help lists every subcommand instead of an empty option banner") {

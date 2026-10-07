@@ -229,6 +229,12 @@ from ._cli_project import (
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 
 
+def _package_version() -> str:
+    from . import __version__
+
+    return __version__
+
+
 def _build_parser() -> _ContractArgumentParser:
     """Build the public CLI parser without parsing argv.
 
@@ -241,6 +247,11 @@ def _build_parser() -> _ContractArgumentParser:
     parser = _ContractArgumentParser(
         prog="sonare",
         description="libsonare - Fast audio analysis (Python CLI)",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"libsonare {_package_version()} (Python CLI)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

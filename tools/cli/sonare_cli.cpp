@@ -261,35 +261,39 @@ std::string dump_cli_contract_json() {
 // Usage
 // ============================================================================
 
-void print_usage(const char* prog) {
-  std::cerr << "Usage: " << prog << " <command> [options] <audio_file> [-o output]\n\n";
+void print_usage(const char* prog, std::ostream& out) {
+  out << "Usage: " << prog << " <command> [options] <audio_file> [-o output]\n\n";
 
-  std::cerr << "ANALYSIS COMMANDS:\n";
+  out << "ANALYSIS COMMANDS:\n";
   for (const auto& cmd : get_commands()) {
-    if (cmd.name == "pitch-shift") std::cerr << "\nPROCESSING COMMANDS:\n";
-    if (cmd.name == "mel") std::cerr << "\nFEATURE COMMANDS:\n";
-    if (cmd.name == "frames-to-samples") std::cerr << "\nUTILITY COMMANDS:\n";
-    fprintf(stderr, "  %-14s %s\n", cmd.name.c_str(), cmd.description.c_str());
+    if (cmd.name == "pitch-shift") out << "\nPROCESSING COMMANDS:\n";
+    if (cmd.name == "mel") out << "\nFEATURE COMMANDS:\n";
+    if (cmd.name == "frames-to-samples") out << "\nUTILITY COMMANDS:\n";
+    out << "  " << std::left << std::setw(14) << cmd.name << " " << cmd.description << "\n";
   }
-  std::cerr << "  version        Show library version\n";
-  std::cerr << "  doctor         Show compiled capabilities\n";
-  std::cerr << "  system-info    Show system and parallel configuration\n";
+  out << "  version        Show library version\n";
+  out << "  doctor         Show compiled capabilities\n";
+  out << "  system-info    Show system and parallel configuration\n";
 
-  std::cerr << "\nGLOBAL OPTIONS:\n"
-            << "  --json             Output results in JSON format\n"
-            << "  --quiet, -q        Suppress progress output\n"
-            << "  --help, -h         Show help\n"
-            << "  -o, --output       Output file path\n"
-            << "  --n-fft <int>      FFT size (default: 2048; where supported)\n"
-            << "  --hop-length <int> Hop length (default: 512; where supported)\n"
-            << "  --n-mels <int>     Mel bands (default: 128; mel/timbre/inversion commands)\n"
-            << "  --fmin <hz>        Minimum analysis/synthesis frequency (where supported)\n"
-            << "  --fmax <hz>        Maximum analysis/synthesis frequency (where supported)\n"
-            << "\nExamples:\n"
-            << "  " << prog << " analyze music.mp3\n"
-            << "  " << prog << " bpm music.wav --json\n"
-            << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
+  out << "\nGLOBAL OPTIONS:\n"
+      << "  --json             Output results in JSON format\n"
+      << "  --quiet, -q        Suppress progress output\n"
+      << "  --help, -h         Show help\n"
+      << "  -o, --output       Output file path\n"
+      << "  --n-fft <int>      FFT size (default: 2048; where supported)\n"
+      << "  --hop-length <int> Hop length (default: 512; where supported)\n"
+      << "  --n-mels <int>     Mel bands (default: 128; mel/timbre/inversion commands)\n"
+      << "  --fmin <hz>        Minimum analysis/synthesis frequency (where supported)\n"
+      << "  --fmax <hz>        Maximum analysis/synthesis frequency (where supported)\n"
+      << "\nExamples:\n"
+      << "  " << prog << " analyze music.mp3\n"
+      << "  " << prog << " bpm music.wav --json\n"
+      << "  " << prog << " pitch-shift --semitones 3 input.wav -o output.wav\n";
 }
+
+// Error paths name the problem on one line and point at --help instead of
+// repeating the whole usage text; the full text is for an explicit help request.
+void print_usage_hint() { std::cerr << "Try 'sonare-cli --help'.\n"; }
 
 // Renders a registry path as the invocation that selects it: `project.bounce`
 // is typed as `project bounce`. The usage line has to name the leaf whose
@@ -304,15 +308,15 @@ std::string invocation_for_path(const std::string& path) {
 void print_command_usage(const char* prog, const CommandInfo& command,
                          const std::string& option_command = {}) {
   const std::string path = option_command.empty() ? command.name : option_command;
-  std::cerr << "Usage: " << prog << " " << invocation_for_path(path) << " [options]";
-  if (command.requires_audio) std::cerr << " <audio_file>";
-  std::cerr << "\n\n" << command.description << "\n";
+  std::cout << "Usage: " << prog << " " << invocation_for_path(path) << " [options]";
+  if (command.requires_audio) std::cout << " <audio_file>";
+  std::cout << "\n\n" << command.description << "\n";
   const auto options = cli_options_for_command(path);
   if (!options.empty()) {
-    std::cerr << "\nOPTIONS:\n";
-    for (const auto& option : options) std::cerr << "  " << option << "\n";
+    std::cout << "\nOPTIONS:\n";
+    for (const auto& option : options) std::cout << "  " << option << "\n";
   }
-  std::cerr << "\nUse '" << prog << " --help' for shared output options.\n";
+  std::cout << "\nUse '" << prog << " --help' for shared output options.\n";
 }
 
 // ============================================================================
@@ -359,9 +363,12 @@ int exit_code_for(const sonare::SonareException& error) noexcept {
 int main(int argc, char* argv[]) {
   color::configure();
   if (argc < 2) {
-    print_usage(argv[0]);
+    std::cerr << color::red << "Error: No command specified" << color::reset << "\n";
+    print_usage_hint();
     return finalize_exit(kExitUsage);
   }
+
+  if (argc == 2 && std::string(argv[1]) == "--version") return cmd_version(CliArgs{});
 
   // Kept out of the public help and normal command parser intentionally: this
   // is a machine-readable inventory hook for the cross-surface contract
@@ -375,13 +382,13 @@ int main(int argc, char* argv[]) {
     CliArgs args = ArgParser::parse(argc, argv);
 
     if (args.help && args.command.empty()) {
-      print_usage(argv[0]);
+      print_usage(argv[0], std::cout);
       return 0;
     }
 
     if (args.command.empty()) {
-      std::cerr << color::red << "Error: No command specified" << color::reset << "\n\n";
-      print_usage(argv[0]);
+      std::cerr << color::red << "Error: No command specified" << color::reset << "\n";
+      print_usage_hint();
       return finalize_exit(kExitUsage);
     }
 
@@ -391,8 +398,8 @@ int main(int argc, char* argv[]) {
         args.command == "version" || args.command == "doctor" || args.command == "system-info";
     if (!cmd && !built_in_command) {
       std::cerr << color::red << "Error: Unknown command '" << args.command << "'" << color::reset
-                << "\n\n";
-      print_usage(argv[0]);
+                << "\n";
+      print_usage_hint();
       return finalize_exit(kExitUsage);
     }
 
@@ -414,7 +421,7 @@ int main(int argc, char* argv[]) {
         }
         print_command_usage(argv[0], *cmd, option_command);
       } else {
-        print_usage(argv[0]);
+        print_usage(argv[0], std::cout);
       }
       return 0;
     }
@@ -422,14 +429,14 @@ int main(int argc, char* argv[]) {
     const CliValidationError argument_error =
         validate_cli_arguments(args, cmd ? cmd->requires_audio : false);
     if (!argument_error.empty()) {
-      std::cerr << color::red << "Error: " << argument_error.message << color::reset << "\n\n";
+      std::cerr << color::red << "Error: " << argument_error.message << color::reset << "\n";
       // A rejected option value carries its own exit class from the registry:
       // a parse-time domain (the Python parser's `type=` / `choices=`) is a
       // usage failure, and a domain the Python CLI enforces in its handler is
       // an invalid-parameter failure. The usage banner belongs to the first
       // kind only -- the second is a value the caller spelled correctly.
       if (argument_error.invalid_parameter) return finalize_exit(kExitInvalidParameter);
-      print_usage(argv[0]);
+      print_usage_hint();
       return finalize_exit(kExitUsage);
     }
 
@@ -441,8 +448,8 @@ int main(int argc, char* argv[]) {
 
     // Check for audio file
     if (cmd->requires_audio && args.input_file.empty()) {
-      std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n\n";
-      print_usage(argv[0]);
+      std::cerr << color::red << "Error: Missing audio file" << color::reset << "\n";
+      print_usage_hint();
       return finalize_exit(kExitUsage);
     }
 

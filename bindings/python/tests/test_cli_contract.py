@@ -1432,3 +1432,15 @@ def test_mastering_cli_reports_ceiling_limited_loudness(tmp_path) -> None:
         params={"targetLufs": -6.0, "ceilingDb": -12.0},
     )
     assert named.loudness_target_limited is limited_payload["loudness_target_limited"]
+
+
+def test_root_version_flag_prints_the_package_version_and_exits_zero(monkeypatch, capsys) -> None:
+    from libsonare import __version__, cli
+
+    monkeypatch.setattr(sys, "argv", ["sonare", "--version"])
+    with pytest.raises(SystemExit) as raised:
+        cli.main()
+    assert raised.value.code == 0
+    captured = capsys.readouterr()
+    assert captured.out.strip() == f"libsonare {__version__} (Python CLI)"
+    assert captured.err == ""

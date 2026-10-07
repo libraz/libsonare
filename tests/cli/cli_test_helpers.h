@@ -240,6 +240,44 @@ inline std::pair<int, std::string> exec_command(const std::string& cmd) {
   return {exit_code, result};
 }
 
+/// @brief Result of a command run with stdout and stderr captured separately.
+struct SplitResult {
+  int exit_code = -1;
+  std::string out;
+  std::string err;
+};
+
+/// @brief Executes a shell command, keeping stdout and stderr apart.
+/// @param cmd Command to execute
+///
+/// stderr goes to a temporary file so the two streams cannot interleave in one
+/// pipe; the exit code is the command's own.
+inline SplitResult exec_command_split(const std::string& cmd) {
+  char err_path[] = "/tmp/sonare_cli_stderr_XXXXXX";
+  const int fd = mkstemp(err_path);
+  if (fd < 0) return {-1, "mkstemp failed", ""};
+  close(fd);
+
+  SplitResult result;
+  std::array<char, 4096> buffer;
+  const std::string full_cmd = cmd + " 2>" + err_path;
+  std::unique_ptr<FILE, PipeDeleter> pipe(popen(full_cmd.c_str(), "r"));
+  if (!pipe) {
+    std::remove(err_path);
+    return {-1, "popen failed", ""};
+  }
+  while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) result.out += buffer.data();
+  const int status = pclose(pipe.release());
+  result.exit_code = WEXITSTATUS(status);
+
+  std::ifstream err_file(err_path);
+  std::stringstream err_stream;
+  err_stream << err_file.rdbuf();
+  result.err = err_stream.str();
+  std::remove(err_path);
+  return result;
+}
+
 /// @brief Gets the path to the sonare CLI executable.
 inline std::string get_cli_path() {
 #ifdef SONARE_TEST_CLI

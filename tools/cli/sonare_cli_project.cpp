@@ -532,8 +532,13 @@ void print_project_usage(std::ostream& out) {
 int cmd_project(const CliArgs& args, const Audio&) {
   const std::string& sub = args.input_file;
   if (args.help || sub.empty() || sub == "help") {
-    print_project_usage(sub.empty() && !args.help ? std::cerr : std::cout);
-    return (sub.empty() && !args.help) ? kExitUsage : 0;
+    if (sub.empty() && !args.help) {
+      std::cerr << color::red << "Error: No project subcommand specified" << color::reset << "\n";
+      std::cerr << "Try 'sonare-cli project --help'.\n";
+      return kExitUsage;
+    }
+    print_project_usage(std::cout);
+    return 0;
   }
   if (sub == "abi") return cmd_project_abi(args);
   if (sub == "synth-presets") return cmd_project_synth_presets(args);
@@ -547,8 +552,8 @@ int cmd_project(const CliArgs& args, const Audio&) {
   if (sub == "export-midi2") return cmd_project_export_midi2(args);
   if (sub == "import-midi2") return cmd_project_import_midi2(args);
   std::cerr << color::red << "Error: unknown project subcommand '" << sub << "'" << color::reset
-            << "\n\n";
-  print_project_usage(std::cerr);
+            << "\n";
+  std::cerr << "Try 'sonare-cli project --help'.\n";
   return kExitUsage;
 }
 #endif  // SONARE_WITH_ARRANGEMENT
