@@ -8,6 +8,8 @@
 
 - Every binding checks the loaded native module's ABI version when it loads and refuses a mismatch with the new error code `AbiMismatch` (10): Node when the addon is required, WASM in `init()`, Python on first library use (the Python CLI exits with 13). The code is binding-only; the core never reports it.
 
+- `SONARE_FEATURE_ABI_VERSION` is 7 and `SonareBoundaryOptions` grows from 40 to 44 bytes with the new `reference_window` field, so C callers rebuild; a caller that starts from `sonare_boundary_options_default()` gets the field's default.
+
 #### Now refused
 
 - `sonare_project_add_loop_recording_takes` refuses a `SonareProjectLoopRecordingDesc.flags` word with any bit other than `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`; the word was reserved and ignored before, so C callers zero it.
@@ -31,6 +33,8 @@
 #### Analysis
 
 - Name the streaming key and chords: the progressive estimate carries `keyName`, `keyShortName` and `chordName`, and each chord change and bar chord a `name`, spelled by the same functions batch analysis uses (Python: `key_name`, `key_short_name`, `chord_name`, `name`). No chord reads `N.C.`; an unknown key has no name.
+
+- Set the window the boundary detector's relative threshold is measured in with `referenceWindow` (Python: `reference_window`; CLI: `--reference-window`; C: `SonareBoundaryOptions.reference_window`). It is one-sided in seconds and defaults to 60; 0 disables the relative threshold.
 
 #### Project
 
@@ -59,6 +63,11 @@
 
 ### Behaviour changes
 
+- Boundary detection gates each novelty peak against the largest novelty within `referenceWindow` seconds on either side instead of the whole-track maximum, so a dominant change no longer hides weaker section changes far from it. This affects tracks longer than 60 s and the sections `analyze()` reports. Minimum spacing keeps the strongest peaks first and no longer depends on peak order, so chains of peaks closer than `peakDistance` resolve differently. `strength` and `noveltyCurve` keep their meaning.
+- Beat trimming measures the edge beats against the third-highest peak of the onset envelope instead of its single loudest frame, so one loud burst no longer trims quiet edge beats.
+- Analyzers that take audio at its own sample rate (beats, tempo, onsets, key, rhythm, the chord beat grid, timbre) read `n_fft` as a window length in samples at 22050 Hz and rescale it to the input rate; the hop stays in input samples. Results at other rates can change and now agree across rates; 22050 Hz input is unchanged.
+- The mastering audio profile and the mixing assistant read window and hop as samples at 48 kHz and rescale both to the input rate, and normalise band levels so they agree across rates; values at 48 kHz are unchanged.
+- Chord segments end at the signal's duration instead of past it.
 - A loop recording whose last loop is incomplete keeps the previous complete take active; the partial take is kept but not activated. A remainder of one frame or less no longer creates a take.
 - Loading a mixing scene reports every key the reader does not consume in `sceneWarnings()` / `scene_warnings` (keys starting with `$` or `x-` are exempt, and the scene schema accepts them). `sonare_project_set_mixer_scene_json` reports them through `sonare_last_warning_message` and `Project.setMixerSceneJson` / `set_mixer_scene_json` return them as a list of strings (empty when the scene is clean), and `sonare_project_deserialize` reports those inside the embedded scene in `out_diag` as `unknown_scene_key` with a path from the document root, e.g. `scene.strips[2].faderDB`; the rest of the project document is not checked for unknown keys.
 - A malformed scene document passed to the mixer is `InvalidFormat`.
