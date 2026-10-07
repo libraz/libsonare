@@ -85,8 +85,17 @@ void erase_source(std::vector<float>& output, const Audio& source, SampleRange s
   }
 }
 
+/// True when the rendered segment replaces the note's own source span sample for sample.
+bool renders_in_place(const VocalNote& note) noexcept {
+  return !note.edit.muted && note.edit.destination_start_sample == note.source_range.start &&
+         note.edit.destination_length_samples == note.source_range.length();
+}
+
+/// Crossfades @p segment over @p output. A segment sitting on the source it was cut from is
+/// coherent with it, so complementary gains keep a no-op edit at unity; elsewhere the two are
+/// independent and the gains are equal-power.
 void overlay(std::vector<float>& output, const std::vector<float>& segment,
-             int64_t destination_start, SampleRange request, int64_t fade) {
+             int64_t destination_start, SampleRange request, int64_t fade, bool coherent) {
   const int64_t segment_length = static_cast<int64_t>(segment.size());
   if (segment_length <= 0) return;
   const int64_t destination_end = checked_end(destination_start, segment_length, "destination");
@@ -99,7 +108,9 @@ void overlay(std::vector<float>& output, const std::vector<float>& segment,
     const float segment_gain =
         phase >= 1.0f ? 1.0f : std::sin(static_cast<float>(sonare::constants::kHalfPi) * phase);
     const float existing_gain =
-        phase >= 1.0f ? 0.0f : std::cos(static_cast<float>(sonare::constants::kHalfPi) * phase);
+        phase >= 1.0f ? 0.0f
+        : coherent    ? 1.0f - segment_gain
+                      : std::cos(static_cast<float>(sonare::constants::kHalfPi) * phase);
     const std::size_t output_index = checked_size(sample - request.start, "render.range");
     output[output_index] = segment_gain * segment[checked_size(local, "destination")] +
                            existing_gain * output[output_index];
@@ -556,6 +567,9 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
         if (effective_identity(note, impl_->plans[i])) {
           continue;
         }
+        // An in-place segment crossfades against the source through overlay() alone; fading the
+        // source here as well would weight it twice across the seam.
+        if (renders_in_place(note)) continue;
         erase_source(tile, source, note.source_range, request,
                      fade_samples(data.render_settings.edge_fade_ms, sample_rate,
                                   note.source_range.length()));
@@ -574,7 +588,8 @@ bool VocalRenderJob::next(const VocalCancelProbe& cancel) {
         const auto& artifact = *impl_->artifacts[index];
         overlay(tile, *artifact.samples, artifact.destination_range.start, request,
                 fade_samples(data.render_settings.edge_fade_ms, sample_rate,
-                             artifact.destination_range.length()));
+                             artifact.destination_range.length()),
+                renders_in_place(note));
       }
       if (cancel && cancel()) {
         abort();

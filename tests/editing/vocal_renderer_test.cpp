@@ -1,4 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -6,6 +7,8 @@
 
 #include "editing/vocal_edit/renderer.h"
 #include "editing/vocal_edit/session.h"
+
+using Catch::Matchers::WithinAbs;
 
 namespace {
 std::uint32_t bits(float value) {
@@ -101,4 +104,25 @@ TEST_CASE("vocal renderer applies pitch, gain and mute on complete note units",
     changed = changed || bits(rendered.samples[i]) != bits(snapshot->data().source[i]);
   }
   CHECK(changed);
+}
+
+TEST_CASE("vocal renderer reproduces the source across an in-place edit seam", "[vocal_renderer]") {
+  constexpr int sample_rate = 16000;
+  constexpr std::size_t kCount = 4096;
+  VocalSessionCreateOptions options;
+  options.analysis = make_analysis(kCount / 512, sample_rate);
+  auto session = VocalEditSession::create(make_source(kCount, sample_rate), options);
+  const auto note = session.notes().front();
+  auto draft = session.begin_edit(0);
+  auto edit = note.edit;
+  edit.amplitude_envelope = {1.0f};  // non-identity, yet the segment equals the source
+  draft->apply(draft->token().draft_generation, {SetNoteEditOp{note.id, edit}});
+  draft->commit(0);
+  const auto snapshot = session.capture_render_snapshot();
+  const auto rendered = render_snapshot(snapshot, {{0, static_cast<int64_t>(kCount)}, 6});
+
+  REQUIRE(rendered.samples.size() == kCount);
+  for (std::size_t i = 0; i < kCount; ++i) {
+    CHECK_THAT(rendered.samples[i], WithinAbs(snapshot->data().source[i], 1.0e-5f));
+  }
 }

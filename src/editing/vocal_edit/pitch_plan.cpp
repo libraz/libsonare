@@ -371,7 +371,11 @@ std::vector<CompiledPitchPlan> compile_pitch_plans(const VocalAnalysisData& anal
     const auto apply_bridge = [&](CompiledPitchPlan& plan, const VocalNote& note) {
       for (auto& point : plan.points) {
         if (!point.voiced) continue;
-        const double destination = source_sample_to_destination_sample(note, point.source_sample);
+        // A frame within the half-sample bracketing tolerance can sit just outside the range.
+        const double source =
+            std::clamp(point.source_sample, static_cast<double>(note.source_range.start),
+                       static_cast<double>(note.source_range.end));
+        const double destination = source_sample_to_destination_sample(note, source);
         if (destination < left_outer || destination > right_outer) continue;
         const double t = std::clamp((destination - left_outer) / span, 0.0, 1.0);
         const double smooth = t * t * (3.0 - 2.0 * t);

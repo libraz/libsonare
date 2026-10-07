@@ -156,6 +156,20 @@ TEST_CASE("shoebox validation checks material coefficients on every wall",
   REQUIRE(has_code(diagnostics, "acoustic.invalid_scattering"));
 }
 
+TEST_CASE("shoebox validation keeps checking walls after a band-count mismatch",
+          "[acoustic][room_model]") {
+  ShoeboxRoom room;
+  room.dims = {4.0f, 3.0f, 2.5f};
+  for (auto& wall : room.walls) wall = uniform_material(0.2f, 0.1f);
+
+  room.walls[kWallXMin].absorption.clear();
+  room.walls[kWallZMax].absorption[0] = std::numeric_limits<float>::quiet_NaN();
+  const auto diagnostics = validate_shoebox(room, {{1.0f, 1.0f, 1.0f}, {2.0f, 2.0f, 1.5f}});
+
+  REQUIRE(has_code(diagnostics, "acoustic.material_band_mismatch"));
+  REQUIRE(has_code(diagnostics, "acoustic.invalid_absorption"));
+}
+
 TEST_CASE("point_inside_mesh on a closed cube", "[acoustic][room_model]") {
   const auto cube = unit_cube();
   REQUIRE(point_inside_mesh(cube, {0.5f, 0.5f, 0.5f}));

@@ -431,13 +431,10 @@ std::vector<Diagnostic> validate_shoebox(const ShoeboxRoom& room, const SourceLi
   for (const auto& w : room.walls) {
     if (w.absorption.empty()) {
       band_mismatch = true;
-      break;
-    }
-    if (bands == 0) {
+    } else if (bands == 0) {
       bands = w.absorption.size();
     } else if (w.absorption.size() != bands) {
       band_mismatch = true;
-      break;
     }
     // Record and move on rather than returning: an early return here would
     // abort validation of the remaining walls (each wall's own absorption /

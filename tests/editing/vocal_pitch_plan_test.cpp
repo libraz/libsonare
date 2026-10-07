@@ -184,6 +184,31 @@ TEST_CASE("pitch transitions bridge neighbouring raw deltas in destination time"
   CHECK(plans[1].points[0].delta_semitones < 4.0f);
 }
 
+TEST_CASE("pitch transitions compile when a frame sits just outside its note's range",
+          "[vocal_pitch_plan]") {
+  const float c4 =
+      static_cast<float>(kA4Hz * std::pow(2.0, (60.0 - kMidiA4) / kSemitonesPerOctave));
+  // A -0.3 sample origin puts the first frame of each note 0.3 sample before its
+  // source range, inside the half-sample tolerance state validation admits.
+  const VocalAnalysisData track =
+      analysis({c4, c4, c4, c4, c4, c4, c4, c4}, {1, 1, 1, 1, 1, 1, 1, 1}, -0.3);
+  VocalNote left = note(0, 4, 60.0);
+  VocalNote right = note(4, 8, 60.0);
+  right.id = 2;
+  right.edit = sonare::editing::vocal_edit::VocalNoteEdit::identity_for(right.source_range);
+  left.edit.pitch.transpose_semitones = 2.0;
+  right.edit.pitch.transpose_semitones = 4.0;
+
+  VocalEditState state;
+  state.notes = {left, right};
+  state.transitions.push_back(PitchTransition{1, 2, 480, 480, 1.0});
+  std::vector<sonare::editing::vocal_edit::CompiledPitchPlan> plans;
+  REQUIRE_NOTHROW(plans = compile_pitch_plans(track, state, RenderSettings{}, 48000));
+  REQUIRE(plans.size() == 2);
+  CHECK(plans[1].points[0].delta_semitones > 2.0f);
+  CHECK(plans[1].points[0].delta_semitones < 4.0f);
+}
+
 TEST_CASE("pitch evaluation reports the narrowed float delta", "[vocal_pitch_plan]") {
   const float c4 =
       static_cast<float>(kA4Hz * std::pow(2.0, (60.0 - kMidiA4) / kSemitonesPerOctave));
