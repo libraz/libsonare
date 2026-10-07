@@ -144,8 +144,8 @@ export interface StripMeteringOptions {
   /** Inter-sample (true) peak measurement. Default `true`. */
   truePeak?: boolean;
   /**
-   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves it
-   * to the nearest of 2x / 4x / 8x. `0` selects the library default (4x).
+   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves 2
+   * to 2x, 8..16 to 8x, and any other value to 4x. `0` selects the library default (4x).
    */
   truePeakOversample?: number;
 }

@@ -49,6 +49,10 @@ export interface TransientShaperOptions extends ValidateOptions {
 /** Result of an offline dynamics processor call. */
 export interface DynamicsProcessorResult {
   samples: Float32Array;
+  /**
+   * The processor's own latency, already compensated in the returned audio;
+   * do not trim the returned audio by it.
+   */
   latencySamples: number;
 }
 
