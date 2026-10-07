@@ -1047,10 +1047,15 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.destroy();
     });
 
-    it('accepts a lane sourceChannelLayout and rejects an out-of-range one', () => {
+    it('accepts only a stereo lane sourceChannelLayout and rejects an out-of-range one', () => {
       const engine = new RealtimeEngine(48000, 128);
-      // Valid layouts (0 mono .. 3 7.1) and an omitted layout are accepted.
-      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
+      // Stereo and an omitted layout are accepted; mono, 5.1 and 7.1 are refused.
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 1 }])).not.toThrow();
+      for (const layout of [0, 2, 3]) {
+        expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
+          /must be stereo/,
+        );
+      }
       expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
       // Out-of-range layout is rejected like the C ABI is_valid_channel_layout.
       expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 9 }])).toThrow();

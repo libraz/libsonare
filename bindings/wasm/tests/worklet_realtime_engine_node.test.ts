@@ -1087,21 +1087,46 @@ describe('SonareRealtimeEngineNode', () => {
       };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 2 }]);
-        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 2 });
+        engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 1 }]);
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 1 });
 
         engine.setSends(1, [{ busId: 100, levelDb: -6, enabled: true }]);
         expect(latestSync().lanes[0]).toMatchObject({
           trackId: 1,
-          sourceChannelLayout: 2,
+          sourceChannelLayout: 1,
           sends: [{ busId: 100, levelDb: -6, enabled: true }],
         });
 
         // An omitted layout on an existing lane keeps the previous explicit
         // value, while a newly appended lane remains on the native default.
         engine.setTrackLanes([{ trackId: 1 }, 2]);
-        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 2 });
+        expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 1 });
         expect(latestSync().lanes[1]).toEqual({ trackId: 2 });
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('refuses a non-stereo lane layout before posting to the worklet', async () => {
+      const posted: unknown[] = [];
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () =>
+          readyWorkletNode({
+            postMessage: (message: unknown) => posted.push(message),
+            onmessage: undefined,
+          }),
+      });
+      try {
+        engine.setTrackLanes([1]);
+        const before = posted.length;
+        for (const layout of [0, 2, 3]) {
+          expect(() => engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: layout }])).toThrow(
+            RangeError,
+          );
+        }
+        expect(posted).toHaveLength(before);
+        expect(() => engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 1 }])).not.toThrow();
       } finally {
         engine.destroy();
       }
@@ -1123,7 +1148,7 @@ describe('SonareRealtimeEngineNode', () => {
         };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 2 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 1 }]);
         const beforeRejectedRoute = posted.length;
         expect(() => engine.setTrackOutputBus(1, 999)).toThrow();
         expect(posted).toHaveLength(beforeRejectedRoute);
@@ -1131,7 +1156,7 @@ describe('SonareRealtimeEngineNode', () => {
         // A valid no-op topology sync must still use the prior route.
         expect(() => engine.setSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
-          { trackId: 1, outputBusId: 100, sourceChannelLayout: 2 },
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
         ]);
       } finally {
         engine.destroy();
@@ -1182,14 +1207,14 @@ describe('SonareRealtimeEngineNode', () => {
         };
       try {
         engine.setTrackBuses([{ busId: 100 }]);
-        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 2 }]);
+        engine.setTrackLanes([{ trackId: 1, outputBusId: 100, sourceChannelLayout: 1 }]);
         const beforeRejectedLanes = posted.length;
         expect(() =>
           engine.setTrackLanes([
             {
               trackId: 1,
               outputBusId: 999,
-              sourceChannelLayout: 3,
+              sourceChannelLayout: 1,
               sends: [{ busId: 999, levelDb: -6 }],
             },
           ]),
@@ -1198,7 +1223,7 @@ describe('SonareRealtimeEngineNode', () => {
 
         expect(() => engine.setSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
-          { trackId: 1, outputBusId: 100, sourceChannelLayout: 2 },
+          { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
         ]);
       } finally {
         engine.destroy();

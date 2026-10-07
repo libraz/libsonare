@@ -74,6 +74,10 @@ enum class TrackMonitorMode : uint8_t {
   kAfl = 2,
 };
 
+/// Message surfaces attach when a lane names a source layout other than stereo.
+inline constexpr const char* kTrackLaneLayoutRefusal =
+    "track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented";
+
 struct TrackLaneConfig {
   struct Send {
     uint32_t bus_id = 0;
@@ -93,8 +97,9 @@ struct TrackLaneConfig {
   /// (group/folder routing); 0 keeps the lane on the master mix. Must
   /// reference a declared bus. Sends are unaffected by the routing.
   uint32_t output_bus_id = 0;
-  /// Input channel layout of the source feeding this lane. Stored but inert
-  /// until the surround DSP path lands (lanes still render stereo in phase 1).
+  /// Input channel layout of the source feeding this lane. Only Stereo is
+  /// accepted: set_track_lanes refuses any other layout until multichannel
+  /// lanes are implemented.
   ChannelLayout source_layout = ChannelLayout::Stereo;
 };
 

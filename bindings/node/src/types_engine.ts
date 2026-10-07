@@ -354,7 +354,8 @@ export interface EngineTrackLane {
   outputBusId?: number;
   /**
    * Input channel layout of the source feeding this lane. Absent defaults to
-   * stereo. Stored but inert until the surround DSP path lands.
+   * stereo. Only stereo (`1`) is accepted; any other layout throws until
+   * multichannel lanes are implemented.
    */
   sourceChannelLayout?: ChannelLayout;
 }

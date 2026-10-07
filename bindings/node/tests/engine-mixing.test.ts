@@ -110,7 +110,14 @@ describe('RealtimeEngine native binding', () => {
     // A surround bus/source layout flows through to the native struct fields
     // (the native side validates the enum range).
     expect(() => engine.setTrackBuses([{ busId: 1, gainDb: 0, channelLayout: 2 }])).not.toThrow();
-    expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 2 }])).not.toThrow();
+    // Only a stereo (or omitted) lane layout is accepted; the others are refused.
+    expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: 1 }])).not.toThrow();
+    expect(() => engine.setTrackLanes([{ trackId: 10 }])).not.toThrow();
+    for (const layout of [0, 2, 3] as const) {
+      expect(() => engine.setTrackLanes([{ trackId: 10, sourceChannelLayout: layout }])).toThrow(
+        /must be stereo/,
+      );
+    }
     // 257/-255 narrow to 1 (Stereo, valid) if the addon range-checks the
     // uint8_t C-ABI field's value AFTER narrowing to it instead of before --
     // the wrap this guards against on both the lane and the bus reader.

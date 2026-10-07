@@ -373,8 +373,9 @@ typedef struct {
      (group/folder routing); 0 keeps the lane on the master mix. */
   uint32_t output_bus_id;
   /* Input channel layout of the source feeding this lane (SonareChannelLayout).
-     0 (mono) / 1 (stereo) keep existing behavior; surround upmix is applied by
-     the panner once the surround DSP path lands. */
+     Only SONARE_CHANNEL_LAYOUT_STEREO is accepted; any other value makes
+     sonare_engine_set_track_lanes fail with SONARE_ERROR_INVALID_PARAMETER
+     until multichannel lanes are implemented. */
   uint8_t source_channel_layout;
 } SonareEngineTrackLane;
 

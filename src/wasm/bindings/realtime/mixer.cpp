@@ -97,7 +97,11 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
         throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                       "invalid source channel layout");
       }
-      config.source_layout = static_cast<sonare::ChannelLayout>(raw_layout);
+      if (raw_layout != static_cast<int>(sonare::ChannelLayout::Stereo)) {
+        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                      sonare::engine::kTrackLaneLayoutRefusal);
+      }
+      config.source_layout = sonare::ChannelLayout::Stereo;
     }
     if (lane_val.typeOf().as<std::string>() == "object") config.sends = readOptionalSends(lane_val);
     configs.push_back(std::move(config));

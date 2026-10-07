@@ -1318,6 +1318,7 @@ bool TrackMixerRuntime::lane_config_valid(
   if (lanes.size() > kMaxTrackLanes) return false;
   for (size_t i = 0; i < lanes.size(); ++i) {
     if (lanes[i].track_id == 0) return false;
+    if (lanes[i].source_layout != ChannelLayout::Stereo) return false;
     if (lanes[i].output_bus_id != 0 && bus_state_for(lanes[i].output_bus_id) == nullptr) {
       return false;
     }

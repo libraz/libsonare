@@ -503,7 +503,7 @@ TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor b
   clip.length_samples = kFrames;
   clip.gain = 1.0f;
   REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
-  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_MONO}};
+  SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 

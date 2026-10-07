@@ -106,8 +106,8 @@ export interface EngineTrackLane {
   outputBusId?: number;
   /**
    * Input channel layout of the source feeding this lane (`SonareChannelLayout`:
-   * 0 mono, 1 stereo, 2 5.1, 3 7.1). Absent defaults to stereo. Stored but inert
-   * until the surround DSP path lands.
+   * 0 mono, 1 stereo, 2 5.1, 3 7.1). Absent defaults to stereo. Only stereo is
+   * accepted; any other layout throws until multichannel lanes are implemented.
    */
   sourceChannelLayout?: number;
 }

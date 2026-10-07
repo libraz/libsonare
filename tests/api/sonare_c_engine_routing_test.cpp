@@ -145,6 +145,33 @@ float deepest(const std::vector<float>& values) {
 }  // namespace
 
 #if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine_set_track_lanes accepts only a stereo source layout",
+          "[c_engine_routing]") {
+  const float direct = direct_level();
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineBus attenuated_bus{1, -60.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &attenuated_bus, 1) == SONARE_OK);
+  const SonareEngineTrackLane routed[] = {{10, nullptr, 0, 1, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, routed, 1) == SONARE_OK);
+  const float routed_level = settled(engine);
+  REQUIRE(routed_level < 0.1f * direct);
+
+  for (const uint8_t layout : {static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_MONO),
+                               static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_5_1),
+                               static_cast<uint8_t>(SONARE_CHANNEL_LAYOUT_7_1)}) {
+    // Unrouted would render at the direct level if the refused lanes were applied.
+    const SonareEngineTrackLane refused[] = {{10, nullptr, 0, 0, layout}};
+    CHECK(sonare_engine_set_track_lanes(engine, refused, 1) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()).find("must be stereo") != std::string::npos);
+    CHECK(settled(engine) == Catch::Approx(routed_level).margin(1e-6));
+  }
+
+  const SonareEngineTrackLane stereo[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  CHECK(sonare_engine_set_track_lanes(engine, stereo, 1) == SONARE_OK);
+  CHECK(settled(engine) == Catch::Approx(direct).margin(1e-3));
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine bus output_bus_id routes a bus into another bus", "[c_engine_routing]") {
   const float x = direct_level();
   const float half = sonare::db_to_linear(-6.0f);

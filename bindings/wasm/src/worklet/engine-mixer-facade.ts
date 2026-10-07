@@ -650,6 +650,7 @@ export function replayInsertParamOverrides(
  * append new track ids after them. Entries carrying `sends` replace that
  * track's send list; entries without `sends` leave existing sends untouched.
  * The same omission rule preserves an existing source channel layout.
+ * A `sourceChannelLayout` other than stereo (1) throws a `RangeError`.
  *
  * @param lanes Track ids or lane descriptors in the desired lane order.
  */
@@ -657,6 +658,17 @@ export function setTrackLanes(
   ctx: EngineMixerContext,
   lanes: ReadonlyArray<number | EngineTrackLane>,
 ): void {
+  for (const lane of lanes) {
+    if (
+      typeof lane === 'object' &&
+      lane.sourceChannelLayout !== undefined &&
+      lane.sourceChannelLayout !== 1
+    ) {
+      throw new RangeError(
+        'track lane sourceChannelLayout must be stereo; multichannel lanes are not implemented',
+      );
+    }
+  }
   const draft = cloneMixerRouting(ctx);
   const { entries, ids } = normalizeTrackLanes(draft.trackLaneIds, lanes);
   for (const entry of entries) {

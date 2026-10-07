@@ -71,6 +71,11 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
     if (!is_valid_channel_layout(lanes[i].source_channel_layout)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    if (lanes[i].source_channel_layout != SONARE_CHANNEL_LAYOUT_STEREO) {
+      sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                      engine::kTrackLaneLayoutRefusal);
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     engine::TrackLaneConfig lane{lanes[i].track_id};
     lane.output_bus_id = lanes[i].output_bus_id;
     lane.source_layout = static_cast<ChannelLayout>(lanes[i].source_channel_layout);

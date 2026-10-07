@@ -75,7 +75,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
                 )
             ]
         )
-        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.MONO}])
+        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.STEREO}])
         engine.set_track_strip_json(
             10,
             '{"version":1,"strips":[{"id":"track-10"}],"buses":[],"connections":[]}',
@@ -170,6 +170,16 @@ def test_engine_track_buses_route_lane_sends() -> None:
             engine.set_track_buses([{"bus_id": 1, "channel_layout": 99}])
         with pytest.raises(SonareError):
             engine.set_track_lanes([{"track_id": 10, "source_channel_layout": 99}])
+        # Only stereo (or an omitted layout) is accepted for a lane.
+        engine.set_track_lanes([{"track_id": 10, "source_channel_layout": ChannelLayout.STEREO}])
+        engine.set_track_lanes([{"track_id": 10}])
+        for layout in (
+            ChannelLayout.MONO,
+            ChannelLayout.FIVE_POINT_ONE,
+            ChannelLayout.SEVEN_POINT_ONE,
+        ):
+            with pytest.raises(SonareError, match="must be stereo"):
+                engine.set_track_lanes([{"track_id": 10, "source_channel_layout": layout}])
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0}]}])
         bad_lanes = [
