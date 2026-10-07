@@ -60,16 +60,19 @@ struct BoundaryConfig {
   int hop_length = 512;  ///< Hop length
   int kernel_size = 64;  ///< Checkerboard kernel size in frames
   /// Relative novelty threshold: a peak must reach this fraction of the largest
-  /// raw novelty within @ref reference_window of it. Selects how prominent a
-  /// peak is *among its neighbours*; it says nothing about how much the features
-  /// actually changed. Because the reference is local, a returned boundary's
-  /// `strength` (scaled by the whole-track maximum) can sit below this value.
+  /// raw novelty event within @ref reference_window of it, a lone dominant event
+  /// set aside. An event is lone when no other event in the window reaches this
+  /// same fraction of it; peaks within one kernel span or one @ref peak_distance
+  /// count as one event. Selects how prominent a peak is *among its neighbours*;
+  /// it says nothing about how much the features actually changed. Because the
+  /// reference is local, a returned boundary's `strength` (scaled by the
+  /// whole-track maximum) can sit below this value.
   float threshold = 0.3f;
   /// One-sided span in seconds of the neighbourhood @ref threshold is measured
   /// against, so a dominant change further away than this cannot gate a weaker
   /// one out. 0 makes the reference the frame itself, which disables
-  /// @ref threshold; a value at least the track length restores a whole-track
-  /// reference.
+  /// @ref threshold; a value at least the track length makes the reference
+  /// whole-track, still with a lone dominant event set aside.
   float reference_window = 60.0f;
   /// Absolute novelty threshold, applied to the raw checkerboard response before
   /// that scaling. A stationary feature sequence still produces a full-scale
@@ -151,8 +154,7 @@ class BoundaryDetector {
 
   /// @brief Returns the novelty curve, scaled by its own maximum.
   /// @details Values are in [0, 1]. @ref BoundaryConfig::threshold is compared
-  /// against the local maximum of this curve within
-  /// @ref BoundaryConfig::reference_window, not against 1.0. The scaling is
+  /// against the local reference described there, not against 1.0. The scaling is
   /// per-track, so a peak of 1.0 means "the most
   /// novel frame here", not "a large change" — multiply by @ref novelty_peak to
   /// recover the raw checkerboard response the absolute threshold reads.

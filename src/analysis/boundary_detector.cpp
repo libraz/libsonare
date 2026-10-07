@@ -413,16 +413,26 @@ void BoundaryDetector::detect_boundaries() {
   // unnormalized under the numerical floor, so that curve yields no candidates.
   std::vector<float> raw(novelty_curve_.size());
   for (size_t i = 0; i < raw.size(); ++i) raw[i] = novelty_curve_[i] * novelty_peak_;
-  const std::vector<float> reference =
-      sliding_max(raw.data(), raw.size(), static_cast<size_t>(window_frames));
-
-  // The relative gate asks whether a peak stands out among its neighbours; the
-  // absolute one asks whether the features changed at all.
-  std::vector<int> candidates;
+  std::vector<int> peaks;
   for (int i = 1; i < n_frames_ - 1; ++i) {
-    const bool is_peak = raw[i] > raw[i - 1] && raw[i] > raw[i + 1];
-    if (is_peak && raw[i] >= config_.threshold * reference[i] &&
-        raw[i] >= config_.absolute_threshold) {
+    if (raw[i] > raw[i - 1] && raw[i] > raw[i + 1]) peaks.push_back(i);
+  }
+
+  // Peaks within one kernel span or one boundary spacing are one event.
+  std::vector<int> positive_peaks;
+  for (int i : peaks) {
+    if (raw[i] > 0.0f) positive_peaks.push_back(i);
+  }
+  const std::vector<int> events = select_peaks_min_distance(
+      positive_peaks, raw.data(), std::max(config_.kernel_size, min_peak_distance));
+  const std::vector<float> reference = sliding_max_without_lone_peaks(
+      raw.data(), raw.size(), static_cast<size_t>(window_frames), events, config_.threshold);
+
+  // The relative gate asks whether a peak stands out among its neighbours, a lone
+  // dominant event set aside; the absolute one asks whether the features changed at all.
+  std::vector<int> candidates;
+  for (int i : peaks) {
+    if (raw[i] >= config_.threshold * reference[i] && raw[i] >= config_.absolute_threshold) {
       candidates.push_back(i);
     }
   }

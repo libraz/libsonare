@@ -13,6 +13,7 @@
 #include <complex>
 #include <cstddef>
 #include <iterator>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "feature/mel_spectrogram.h"
 #include "support/far_event.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -961,4 +963,83 @@ TEST_CASE("peak spacing keeps the same boundaries when the input is time-reverse
     const int mirrored = n_frames - 1 - backward[backward.size() - 1 - i];
     REQUIRE(std::abs(forward[i] - mirrored) <= 2);
   }
+}
+
+namespace {
+
+/// @brief Chord partials over `harmonics` harmonics with rolloff 1/h (1/h^1.5 under four), RMS 0.1.
+std::vector<float> chord_segment(const std::vector<double>& freqs, int harmonics, double seconds,
+                                 int sr) {
+  const auto n = static_cast<std::size_t>(seconds * sr);
+  const double rolloff = harmonics < 4 ? 1.5 : 1.0;
+  std::vector<double> v(n, 0.0);
+  for (double f : freqs) {
+    for (int h = 1; h <= harmonics; ++h) {
+      if (f * h >= sr / 2.2) continue;
+      const double amp = 1.0 / std::pow(static_cast<double>(h), rolloff);
+      for (std::size_t i = 0; i < n; ++i) {
+        v[i] += amp * std::sin(constants::kTwoPiD * f * h * static_cast<double>(i) / sr);
+      }
+    }
+  }
+  double ss = 0.0;
+  for (double s : v) ss += s * s;
+  const double gain = 0.1 / std::sqrt(ss / static_cast<double>(n));
+  std::vector<float> out(n);
+  for (std::size_t i = 0; i < n; ++i) out[i] = static_cast<float>(v[i] * gain);
+  return out;
+}
+
+/// @brief Adds 0.5 s of white noise 24 dB above RMS 0.1 at @p at_sec, from a fixed seed.
+void add_short_burst(std::vector<float>& samples, double at_sec, int sr) {
+  std::mt19937 rng(11);
+  std::normal_distribution<double> dist(0.0, 0.1 * db_to_linear(24.0));
+  const auto begin = static_cast<std::size_t>(at_sec * sr);
+  const auto end = std::min(samples.size(), begin + static_cast<std::size_t>(0.5 * sr));
+  for (std::size_t i = begin; i < end; ++i) samples[i] += static_cast<float>(dist(rng));
+}
+
+}  // namespace
+
+TEST_CASE(
+    "a short dominant event inside the reference window does not hide the boundaries around it",
+    "[boundary_detector]") {
+  constexpr int kSr = 22050;
+  std::vector<float> samples;
+  const std::vector<std::vector<double>> chords = {
+      {261.63, 329.63, 392.0}, {349.23, 440.0, 523.25}, {220.0, 261.63, 329.63}};
+  const int harmonics[] = {1, 6, 3};
+  for (std::size_t c = 0; c < chords.size(); ++c) {
+    const auto seg = chord_segment(chords[c], harmonics[c], 8.0, kSr);
+    samples.insert(samples.end(), seg.begin(), seg.end());
+  }
+  std::vector<float> with_burst = samples;
+  add_short_burst(with_burst, 12.0, kSr);
+
+  BoundaryConfig config;
+  config.reference_window = 5.0f;
+  const BoundaryDetector base(Audio::from_vector(samples, kSr), config);
+  const BoundaryDetector burst(Audio::from_vector(with_burst, kSr), config);
+  INFO("without " << ::Catch::Detail::stringify(base.boundary_times()) << ", with "
+                  << ::Catch::Detail::stringify(burst.boundary_times()));
+
+  const std::vector<int> base_frames = boundary_frames(base);
+  REQUIRE(base_frames.size() == 2);
+  const float hop_sec = static_cast<float>(config.hop_length) / static_cast<float>(kSr);
+  std::vector<int> kept;
+  std::vector<int> at_burst;
+  for (const Boundary& b : burst.boundaries()) {
+    if (b.time >= 11.5f && b.time <= 13.0f) {
+      at_burst.push_back(b.frame);
+    } else {
+      kept.push_back(b.frame);
+    }
+  }
+  CHECK(at_burst.size() == 1);
+  REQUIRE(kept.size() == base_frames.size());
+  for (std::size_t i = 0; i < kept.size(); ++i) {
+    CHECK(std::abs(kept[i] - base_frames[i]) <= 2);
+  }
+  CHECK(std::fabs(base.boundary_times()[0] - 8.0f) <= 2.0f * hop_sec);
+  CHECK(std::fabs(base.boundary_times()[1] - 16.0f) <= 2.0f * hop_sec);
 }

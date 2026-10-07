@@ -89,6 +89,40 @@ std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius
   return y;
 }
 
+std::vector<float> sliding_max_without_lone_peaks(const float* x, std::size_t n, std::size_t radius,
+                                                  const std::vector<int>& events, float ratio) {
+  std::vector<float> y = sliding_max(x, n, radius);
+  std::vector<float> heights;
+  std::size_t prev_lo = 0;
+  std::size_t prev_hi = 0;
+  float prev_ref = 0.0f;
+  for (std::size_t i = 0; i < n; ++i) {
+    const auto lo_value = static_cast<long long>(i) - static_cast<long long>(radius);
+    const auto hi_value =
+        (radius >= n - 1 - i) ? static_cast<long long>(n - 1) : static_cast<long long>(i + radius);
+    const auto lo = std::lower_bound(events.begin(), events.end(), lo_value,
+                                     [](int e, long long v) { return e < v; });
+    const auto hi = std::upper_bound(events.begin(), events.end(), hi_value,
+                                     [](long long v, int e) { return v < e; });
+    if (lo == hi) continue;
+    const auto lo_index = static_cast<std::size_t>(lo - events.begin());
+    const auto hi_index = static_cast<std::size_t>(hi - events.begin());
+    // The event set only changes when the window crosses an event.
+    if (lo_index != prev_lo || hi_index != prev_hi || heights.empty()) {
+      heights.clear();
+      for (auto it = lo; it != hi; ++it) heights.push_back(x[*it]);
+      std::sort(heights.begin(), heights.end(), std::greater<float>());
+      std::size_t k = 0;
+      while (k + 1 < heights.size() && heights[k + 1] < ratio * heights[k]) ++k;
+      prev_lo = lo_index;
+      prev_hi = hi_index;
+      prev_ref = heights[k];
+    }
+    y[i] = prev_ref;
+  }
+  return y;
+}
+
 std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, const float* values,
                                            int min_distance) {
   std::vector<int> order(candidates);

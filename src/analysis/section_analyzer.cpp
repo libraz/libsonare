@@ -418,12 +418,9 @@ float SectionAnalyzer::compute_section_energy(float start, float end) const {
     return 0.0f;
   }
 
-  float sum = 0.0f;
-  for (int i = start_frame; i < end_frame; ++i) {
-    sum += energy_curve_[i];
-  }
-
-  return sum / (end_frame - start_frame);
+  // The median keeps a short loud event from setting the section's level.
+  return median(&energy_curve_[static_cast<size_t>(start_frame)],
+                static_cast<size_t>(end_frame - start_frame));
 }
 
 std::vector<SectionAnalyzer::SectionDescriptor> SectionAnalyzer::build_descriptors(

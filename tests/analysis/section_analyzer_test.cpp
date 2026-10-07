@@ -9,6 +9,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <random>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "feature/chroma.h"
 #include "support/section_form.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
 
@@ -854,5 +856,96 @@ TEST_CASE("existing synthetic inputs keep their boundaries", "[section_analyzer]
     check(
         create_tone_spans({{10.0f, 261.63f}, {11.0f, 329.63f}, {14.0f, 415.30f}, {30.0f, 293.66f}}),
         SectionConfig{}, {605});
+  }
+}
+
+namespace {
+
+/// @brief Chord partials over `harmonics` harmonics with rolloff 1/h (1/h^1.5 under four), RMS 0.1.
+std::vector<float> chord_segment(const std::vector<double>& freqs, int harmonics, double seconds,
+                                 int sr) {
+  const auto n = static_cast<std::size_t>(seconds * sr);
+  const double rolloff = harmonics < 4 ? 1.5 : 1.0;
+  std::vector<double> v(n, 0.0);
+  for (double f : freqs) {
+    for (int h = 1; h <= harmonics; ++h) {
+      if (f * h >= sr / 2.2) continue;
+      const double amp = 1.0 / std::pow(static_cast<double>(h), rolloff);
+      for (std::size_t i = 0; i < n; ++i) {
+        v[i] += amp * std::sin(constants::kTwoPiD * f * h * static_cast<double>(i) / sr);
+      }
+    }
+  }
+  double ss = 0.0;
+  for (double s : v) ss += s * s;
+  const double gain = 0.1 / std::sqrt(ss / static_cast<double>(n));
+  std::vector<float> out(n);
+  for (std::size_t i = 0; i < n; ++i) out[i] = static_cast<float>(v[i] * gain);
+  return out;
+}
+
+constexpr int kBurstSr = 22050;
+constexpr double kBurstSectionSec = 10.0;
+constexpr double kBurstAtSec = 1.5 * kBurstSectionSec;
+
+/// @brief Five 10 s chord sections of equal RMS, optionally with 0.5 s of white noise 24 dB
+///        above that RMS in the middle of the second.
+Audio create_chords_with_burst(bool burst) {
+  const std::vector<std::vector<double>> chords = {{261.63, 329.63, 392.0},
+                                                   {349.23, 440.0, 523.25},
+                                                   {220.0, 261.63, 329.63},
+                                                   {196.0, 246.94, 293.66},
+                                                   {329.63, 392.0, 493.88}};
+  const int harmonics[] = {1, 6, 3, 10, 2};
+  std::vector<float> samples;
+  for (std::size_t c = 0; c < chords.size(); ++c) {
+    const auto seg = chord_segment(chords[c], harmonics[c], kBurstSectionSec, kBurstSr);
+    samples.insert(samples.end(), seg.begin(), seg.end());
+  }
+  if (burst) {
+    std::mt19937 rng(11);
+    std::normal_distribution<double> dist(0.0, 0.1 * db_to_linear(24.0));
+    const auto begin = static_cast<std::size_t>(kBurstAtSec * kBurstSr);
+    for (std::size_t i = begin; i < begin + static_cast<std::size_t>(0.5 * kBurstSr); ++i) {
+      samples[i] += static_cast<float>(dist(rng));
+    }
+  }
+  return Audio::from_vector(std::move(samples), kBurstSr);
+}
+
+std::vector<SectionType> section_types(const SectionAnalyzer& analyzer) {
+  std::vector<SectionType> types;
+  for (const Section& s : analyzer.sections()) types.push_back(s.type);
+  return types;
+}
+
+}  // namespace
+
+TEST_CASE("a short loud event does not change the section count or labels",
+          "[.][slow][section_analyzer]") {
+  const SectionAnalyzer clean(create_chords_with_burst(false));
+  const SectionAnalyzer burst(create_chords_with_burst(true));
+  const auto clean_types = section_types(clean);
+  const auto burst_types = section_types(burst);
+  INFO("without " << clean.form() << ", with " << burst.form());
+
+  // The clean side names its sections, so agreeing with it is not agreeing on Unknown.
+  REQUIRE(clean_types.size() > 1);
+  for (SectionType t : clean_types) REQUIRE(t != SectionType::Unknown);
+  CHECK(burst_types == clean_types);
+}
+
+TEST_CASE("a short loud event inside a section leaves its energy level with its neighbours",
+          "[section_analyzer]") {
+  const SectionAnalyzer analyzer(create_chords_with_burst(true));
+  const auto& sections = analyzer.sections();
+  const auto loud = std::find_if(sections.begin(), sections.end(), [](const Section& s) {
+    return s.start <= kBurstAtSec && kBurstAtSec < s.end;
+  });
+  REQUIRE(loud != sections.end());
+  REQUIRE(sections.size() > 1);
+  for (const Section& s : sections) {
+    CAPTURE(s.start, s.end, s.energy_level, loud->energy_level);
+    CHECK(std::fabs(s.energy_level - loud->energy_level) <= 0.02f);
   }
 }

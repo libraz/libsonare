@@ -8,7 +8,9 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators_range.hpp>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
+#include <functional>
 #include <iterator>
 #include <random>
 #include <vector>
@@ -261,4 +263,89 @@ TEST_CASE("max_excluding_top falls back to the plain maximum on short input", "[
 TEST_CASE("max_excluding_top of an empty population is zero", "[util][peak]") {
   CHECK(max_excluding_top({}, 0) == 0.0f);
   CHECK(max_excluding_top({}, kReferenceIgnoredTopEvents) == 0.0f);
+}
+
+namespace {
+
+/// @brief Reference by enumeration: every frame's window events, sorted and walked from the top.
+std::vector<float> brute_without_lone_peaks(const std::vector<float>& x, std::size_t radius,
+                                            const std::vector<int>& events, float ratio) {
+  const auto n = static_cast<long long>(x.size());
+  const auto r = static_cast<long long>(radius);
+  std::vector<float> y(x.size());
+  for (long long i = 0; i < n; ++i) {
+    std::vector<float> heights;
+    float window_max = x[static_cast<std::size_t>(i)];
+    for (long long j = std::max(0LL, i - r); j <= std::min(n - 1, i + r); ++j) {
+      window_max = std::max(window_max, x[static_cast<std::size_t>(j)]);
+      if (std::find(events.begin(), events.end(), static_cast<int>(j)) != events.end()) {
+        heights.push_back(x[static_cast<std::size_t>(j)]);
+      }
+    }
+    if (heights.empty()) {
+      y[static_cast<std::size_t>(i)] = window_max;
+      continue;
+    }
+    std::sort(heights.begin(), heights.end(), std::greater<float>());
+    std::size_t k = 0;
+    while (k + 1 < heights.size() && heights[k + 1] < ratio * heights[k]) ++k;
+    y[static_cast<std::size_t>(i)] = heights[k];
+  }
+  return y;
+}
+
+/// @brief Reference level at the middle sample of three events placed apart within one window.
+float lone_peak_reference(const std::vector<float>& heights, float ratio) {
+  std::vector<float> x(9, 0.0f);
+  const std::vector<int> events = {1, 4, 7};
+  for (std::size_t e = 0; e < heights.size(); ++e)
+    x[static_cast<std::size_t>(events[e])] = heights[e];
+  std::vector<int> used(events.begin(),
+                        events.begin() + static_cast<std::ptrdiff_t>(heights.size()));
+  return sliding_max_without_lone_peaks(x.data(), x.size(), x.size(), used, ratio)[4];
+}
+
+}  // namespace
+
+TEST_CASE("sliding_max_without_lone_peaks sets aside an event nothing else comes near",
+          "[util][peak]") {
+  // 0.5 reaches 0.3 of 1.0, so the strongest event keeps the level.
+  CHECK(lone_peak_reference({1.0f, 0.5f, 0.1f}, 0.3f) == 1.0f);
+  // 0.2 does not, and 0.15 reaches 0.3 of 0.2, so the walk stops at 0.2.
+  CHECK(lone_peak_reference({1.0f, 0.2f, 0.15f}, 0.3f) == 0.2f);
+  // Each event is lone against the one above it, so the walk reaches the weakest.
+  CHECK(lone_peak_reference({1.0f, 0.2f, 0.05f}, 0.3f) == 0.05f);
+  CHECK(lone_peak_reference({0.7f}, 0.3f) == 0.7f);
+  CHECK(lone_peak_reference({1.0f, 0.2f, 0.05f}, 0.0f) == 1.0f);
+}
+
+TEST_CASE("sliding_max_without_lone_peaks falls back to the window maximum away from events",
+          "[util][peak]") {
+  const std::vector<float> x = {0.2f, 0.9f, 0.1f, 0.0f, 0.0f, 0.0f, 0.3f, 0.1f};
+  const std::vector<int> events = {1};
+  const auto y = sliding_max_without_lone_peaks(x.data(), x.size(), 2, events, 0.3f);
+  CHECK(y == std::vector<float>{0.9f, 0.9f, 0.9f, 0.9f, 0.3f, 0.3f, 0.3f, 0.3f});
+  // A zero radius makes every sample its own reference.
+  CHECK(sliding_max_without_lone_peaks(x.data(), x.size(), 0, events, 0.3f) == x);
+  CHECK(sliding_max_without_lone_peaks(nullptr, 0, 3, {}, 0.3f).empty());
+}
+
+TEST_CASE("sliding_max_without_lone_peaks matches an enumerated reference", "[util][peak]") {
+  std::mt19937 rng(4242);
+  // Heights spread over two decades so lone events of every depth occur.
+  std::uniform_real_distribution<float> log_height(-2.0f, 0.0f);
+  for (int trial = 0; trial < 300; ++trial) {
+    const std::size_t n = 1 + rng() % 40;
+    std::vector<float> x(n);
+    for (auto& v : x) v = std::pow(10.0f, log_height(rng));
+    std::vector<int> events;
+    for (std::size_t i = 0; i < n; ++i) {
+      if (rng() % 4 == 0) events.push_back(static_cast<int>(i));
+    }
+    const std::size_t radius = rng() % (n + 3);
+    const float ratio = static_cast<float>(rng() % 6) * 0.1f;
+    CAPTURE(trial, n, radius, ratio);
+    REQUIRE(sliding_max_without_lone_peaks(x.data(), n, radius, events, ratio) ==
+            brute_without_lone_peaks(x, radius, events, ratio));
+  }
 }

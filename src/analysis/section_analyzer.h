@@ -20,7 +20,7 @@ struct Section {
   SectionType type;    ///< Section type (Intro, Verse, Chorus, etc.)
   float start;         ///< Start time in seconds
   float end;           ///< End time in seconds
-  float energy_level;  ///< Relative energy level [0, 1]
+  float energy_level;  ///< Median frame RMS in the section over the loudest section's, [0, 1]
   float confidence;    ///< Classification confidence [0, 1]
 
   /// @brief Returns section type as string.

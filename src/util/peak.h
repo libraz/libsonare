@@ -40,6 +40,21 @@ std::vector<int> peak_pick(const std::vector<float>& x, int pre_max, int post_ma
 /// @details O(n) monotonic deque. `radius >= n` yields the global maximum everywhere.
 std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius);
 
+/// @brief Sliding-window reference level that sets aside a lone dominant event.
+/// @param x Input array (finite values)
+/// @param n Length of x
+/// @param radius Window radius in samples
+/// @param events Event indices into x, ascending
+/// @param ratio Fraction of an event the next-highest event must reach for it to count
+/// @return Per sample: the event heights in the inclusive window `[i - radius, i + radius]`,
+///         sorted descending as h1 >= h2 >= ..., step from h1 while `h_{k+1} < ratio * h_k`
+///         and return the h_k reached; @ref sliding_max where the window holds no event.
+/// @details The strongest event in a neighbourhood stops setting the level for as long as no
+///          other event there comes within `ratio` of it. `ratio <= 0` gives h1 and
+///          `radius == 0` gives `x[i]`.
+std::vector<float> sliding_max_without_lone_peaks(const float* x, std::size_t n, std::size_t radius,
+                                                  const std::vector<int>& events, float ratio);
+
 /// @brief Select the strongest candidates that are at least `min_distance` apart.
 /// @param candidates Candidate frame indices (valid indices into `values`)
 /// @param values Strength per frame
