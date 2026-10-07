@@ -1740,8 +1740,12 @@ if(BUILD_WASM)
     --bind
   )
 
+  # Patch the glue's literal `import("node:module")` before it is copied, so
+  # browser bundlers can consume it. Fails the build if the emitter changed.
   # Copy output to bindings/wasm/dist directory
   add_custom_command(TARGET sonare POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -DGLUE_FILE=$<TARGET_FILE:sonare>
+            -P ${PROJECT_SOURCE_DIR}/cmake/patch_wasm_glue.cmake
     COMMAND ${CMAKE_COMMAND} -E make_directory ${PROJECT_SOURCE_DIR}/bindings/wasm/dist
     COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:sonare> ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/bin/${SONARE_WASM_OUTPUT_NAME}.wasm ${PROJECT_SOURCE_DIR}/bindings/wasm/dist/
@@ -1798,6 +1802,10 @@ foreach(_sonare_target IN ITEMS
   set_target_properties(${_sonare_target} PROPERTIES EXPORT_NAME ${_sonare_export_name})
   add_library(sonare::${_sonare_export_name} ALIAS ${_sonare_target})
   list(APPEND SONARE_EXPORT_TARGETS ${_sonare_target})
+  # The headers use C++17 (`if constexpr`); carry it so a consumer need not set it.
+  if(NOT _sonare_target STREQUAL "kissfft" AND NOT _sonare_target STREQUAL "pffft")
+    target_compile_features(${_sonare_target} PUBLIC cxx_std_17)
+  endif()
 endforeach()
 
 # The aggregate covers the static C++ library only. sonare_shared is the C-ABI
@@ -1807,6 +1815,7 @@ set(SONARE_AGGREGATE_TARGETS ${SONARE_EXPORT_TARGETS})
 list(REMOVE_ITEM SONARE_AGGREGATE_TARGETS sonare_shared)
 
 add_library(sonare_all INTERFACE)
+target_compile_features(sonare_all INTERFACE cxx_std_17)
 target_link_libraries(sonare_all INTERFACE ${SONARE_AGGREGATE_TARGETS})
 # `sonare` is already taken in this build tree -- by the CLI executable and, in
 # a WASM configuration, by the embind module -- so the aggregate carries the

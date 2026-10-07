@@ -30,11 +30,12 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/include/sonare
 # The C++ API is the src/ header tree: sonare.h pulls in roughly four hundred
 # headers that include each other by their path relative to src/, so the tree
 # has to be installed with that structure intact for those includes to resolve.
-# It lands under a subdirectory of its own rather than at the include root,
-# which would put generic paths like `core/audio.h` and `util/types.h` into
-# every consumer's search space. Both spellings then work: `<sonare/cpp/...>`
-# through the include root, and the in-tree `"sonare.h"` through the exported
-# install-interface path.
+# It lands under a subdirectory of its own, and the exported targets put that
+# subdirectory on the consumer's include path, so `core/audio.h`-style paths and
+# short names such as `sonare.h` resolve at the root of <prefix>/include/sonare/cpp.
+# That exposes those generic roots to the consumer; it is the price of the
+# installed headers including each other by src-relative quoted paths. The
+# namespaced `<sonare/cpp/...>` spelling resolves through the include root.
 #
 # Excluded: the WASM embind wrappers and the macOS host backends. Neither is
 # part of any distributed configuration, and the backends include OS SDK
@@ -118,6 +119,16 @@ if(BUILD_SHARED)
     set(SONARE_PC_INCLUDEDIR "${CMAKE_INSTALL_INCLUDEDIR}")
   else()
     set(SONARE_PC_INCLUDEDIR "\${prefix}/${CMAKE_INSTALL_INCLUDEDIR}")
+  endif()
+
+  # Relative to the .pc directory so a relocated or re-prefixed install resolves.
+  if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+    set(SONARE_PC_PREFIX "${CMAKE_INSTALL_PREFIX}")
+  else()
+    file(RELATIVE_PATH _sonare_pc_rel
+      "${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}/pkgconfig" "${CMAKE_INSTALL_PREFIX}")
+    string(REGEX REPLACE "/+$" "" _sonare_pc_rel "${_sonare_pc_rel}")
+    set(SONARE_PC_PREFIX "\${pcfiledir}/${_sonare_pc_rel}")
   endif()
 
   set(SONARE_PC_REQUIRES_PRIVATE "")

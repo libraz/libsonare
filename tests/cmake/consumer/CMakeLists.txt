@@ -9,10 +9,6 @@ project(sonare_find_package_consumer LANGUAGES C CXX)
 # installed header layout resolves both include spellings, and that the link
 # interface names nothing the consumer has to supply itself.
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
 find_package(sonare REQUIRED)
 
 add_executable(consumer_cpp consumer.cpp)

@@ -1,4 +1,4 @@
-prefix=@CMAKE_INSTALL_PREFIX@
+prefix=@SONARE_PC_PREFIX@
 exec_prefix=${prefix}
 libdir=@SONARE_PC_LIBDIR@
 includedir=@SONARE_PC_INCLUDEDIR@
