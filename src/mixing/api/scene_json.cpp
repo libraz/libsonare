@@ -13,6 +13,7 @@
 #include "mixing/surround_panner.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
+#include "util/json_key.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mixing::api {
@@ -76,24 +77,6 @@ KeySet known_keys(const std::string& prefix, std::initializer_list<const char*> 
   return keys;
 }
 
-// Renders a key for a one-line warning: control characters are escaped so a key
-// cannot split the newline-joined channel into forged entries.
-std::string escape_key(const std::string& key) {
-  static const char kHex[] = "0123456789abcdef";
-  std::string out;
-  for (const char c : key) {
-    const auto u = static_cast<unsigned char>(c);
-    if (u < 0x20 || u == 0x7f) {
-      out += "\\x";
-      out += kHex[u >> 4];
-      out += kHex[u & 0xf];
-    } else {
-      out += c;
-    }
-  }
-  return out;
-}
-
 constexpr char kUnknownKeyPrefix[] = "unknown scene key '";
 
 // `$`- and `x-`-prefixed keys are annotations, never reported.
@@ -102,11 +85,11 @@ void report_unknown_keys(const JsonValue& object, const std::string& path, const
   if (warnings == nullptr) return;
   for (const auto& entry : object.as_object()) {
     const std::string& key = entry.first;
-    if (known.count(key) != 0 || key.compare(0, 1, "$") == 0 || key.compare(0, 2, "x-") == 0) {
+    if (known.count(key) != 0 || util::json::is_annotation_key(key)) {
       continue;
     }
     warnings->push_back(std::string(kUnknownKeyPrefix) + (path.empty() ? "" : path + ".") +
-                        escape_key(key) + "'");
+                        util::json::escape_key(key) + "'");
   }
 }
 

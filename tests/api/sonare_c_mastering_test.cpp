@@ -44,7 +44,7 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(sonare_eq_set_band(eq, 0, "{\"type\":\"Peak\",\"coeffMode\":\"unknown\"}") ==
             SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_eq_set_band(eq, 0,
-                               "{\"note\":\"\\\"type\\\":\\\"Unknown\\\"\","
+                               "{\"x-note\":\"\\\"type\\\":\\\"Unknown\\\"\","
                                "\"type\":\"Peak\",\"frequency_hz\":1000,\"gain_db\":9,"
                                "\"q\":1,\"enabled\":true,\"coeff_mode\":\"vicanek\","
                                "\"proportional_q\":true}") == SONARE_OK);

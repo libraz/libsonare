@@ -856,6 +856,8 @@ void sonare_eq_destroy(SonareEq* eq);
 /// @c releaseMs, @c detectorDelayMs, @c sidechainFreqHz, @c sidechainQ, and
 /// @c externalSidechain. The corresponding snake_case spellings are also
 /// accepted where applicable. Omitted fields use the default @c EqBand values.
+/// Any other key is refused with @c SONARE_ERROR_INVALID_PARAMETER naming it;
+/// keys starting with @c $ or @c x- are ignored.
 /// @c detectorDelayMs delays the detector's view of the signal, so a larger
 /// value makes the band react later; it is not look-ahead and adds no latency
 /// to the audio path. @c lookaheadMs is still accepted as its former spelling.

@@ -12,6 +12,7 @@
 
 - `sonare_project_add_loop_recording_takes` refuses a `SonareProjectLoopRecordingDesc.flags` word with any bit other than `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`; the word was reserved and ignored before, so C callers zero it.
 - `sonare_engine_set_track_strip_json`, `sonare_engine_set_bus_strip_json` and `sonare_engine_set_master_strip_json` (and the Node, WASM and Python setters over them) refuse a key the scene reader does not consume with InvalidParameter naming it, e.g. `unknown strip key 'strips[0].faderDB'`; keys starting with `$` or `x-` and the legacy snake_case aliases are still accepted, and a misspelled key used to be ignored.
+- `sonare_eq_set_band` and the strip EQ band setters (`sonare_engine_set_track_strip_eq_band_json`, `sonare_engine_set_bus_strip_eq_band_json`, `sonare_engine_set_master_strip_eq_band_json`, and the Node, WASM and Python setters over them) refuse a key the band reader does not consume with InvalidParameter naming it, e.g. `unknown band key 'gainDB'`; keys starting with `$` or `x-` and the snake_case spellings are still accepted, and a misspelled key used to be ignored.
 - A track lane whose source channel layout is not stereo is refused with InvalidParameter; mono, 5.1 and 7.1 were accepted but rendered as stereo. A zero-initialised C `SonareEngineTrackLane` reads as mono, so C callers set `SONARE_CHANNEL_LAYOUT_STEREO` (`sonare_engine_set_track_lanes`, `setTrackLanes`, `set_track_lanes`).
 
 #### Error classes
