@@ -5,6 +5,9 @@ import type {
   LoudnessMatchStereoResult,
   MasteringAssistantParams,
   MasteringInsertParamChoice,
+  MasteringInsertParamDependency,
+  MasteringInsertParamScale,
+  MasteringInsertParamUnit,
   MasteringInsertSlot,
   MasteringOptions,
   MasteringProcessorParams,
@@ -255,13 +258,13 @@ export interface MasteringInsertParamInfo {
    */
   default: boolean | number | null;
   /** Declared unit of a number; null for any other type. */
-  unit: string | null;
+  unit: MasteringInsertParamUnit | null;
   /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMin: number | null;
   /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMax: number | null;
   /** Axis a control draws the value on. */
-  scale: 'linear' | 'log';
+  scale: MasteringInsertParamScale;
   /**
    * The closed set of values construction accepts, in value order, or null
    * when the accepted values are not a closed set. Non-null only for `"enum"`
@@ -278,7 +281,7 @@ export interface MasteringInsertParamInfo {
    * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
    * empty for an independent key. `min` and `max` are measured with every sibling at its default.
    */
-  dependsOn: { key: string; relation: 'lt' | 'le' | 'gt' | 'ge' }[];
+  dependsOn: MasteringInsertParamDependency[];
 }
 
 /**

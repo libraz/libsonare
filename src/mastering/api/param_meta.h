@@ -140,6 +140,9 @@ constexpr ParamMeta logarithmic(ParamMeta meta) {
   return meta;
 }
 
+/// @brief A display bound that defers to the accepted bound (needed where that bound is exclusive).
+inline constexpr double kAcceptedBound = std::numeric_limits<double>::quiet_NaN();
+
 /// @brief @p meta with a display range inside the accepted one.
 constexpr ParamMeta display_range(ParamMeta meta, double ui_min, double ui_max) {
   meta.ui_min = ui_min;

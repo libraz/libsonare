@@ -825,10 +825,14 @@ std::vector<std::string> descriptor_defects(const json::Array& params) {
     const json::Value& max = field(parameter, "max");
     for (const json::Value* ui : {&ui_min, &ui_max}) {
       if (ui->is_null()) continue;
-      if (min.is_number() && ui->as_number() < min.as_number()) {
+      const bool min_open = field(parameter, "minExclusive").as_bool();
+      const bool max_open = field(parameter, "maxExclusive").as_bool();
+      if (min.is_number() &&
+          (ui->as_number() < min.as_number() || (min_open && ui->as_number() == min.as_number()))) {
         defects.push_back(name + ": display range below the accepted range");
       }
-      if (max.is_number() && ui->as_number() > max.as_number()) {
+      if (max.is_number() &&
+          (ui->as_number() > max.as_number() || (max_open && ui->as_number() == max.as_number()))) {
         defects.push_back(name + ": display range above the accepted range");
       }
     }
@@ -902,6 +906,11 @@ TEST_CASE("the descriptor check reports each defect it exists to catch", "[maste
   CHECK(defects_of(R"("uiMin":null)", R"("uiMin":-1)").size() == 1);
   CHECK(defects_of(R"("uiMax":null)", R"("uiMax":11)").size() == 1);
   CHECK(defects_of(R"("uiMax":null)", R"("uiMax":10)").empty());
+  CHECK(
+      defects_of(
+          R"("maxExclusive":false,"maxRelativeTo":null,"default":1,"unit":"Hz","uiMin":null,"uiMax":null)",
+          R"("maxExclusive":true,"maxRelativeTo":null,"default":1,"unit":"Hz","uiMin":null,"uiMax":10)")
+          .size() == 1);
   CHECK(defects_of(R"("uiMin":null,"uiMax":null)", R"("uiMin":6,"uiMax":5)").size() == 1);
   CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le"}])").size() ==
         1);
@@ -995,6 +1004,23 @@ bool has_dependency(const std::vector<DeclaredDependency>& all, const std::strin
 }
 
 }  // namespace
+
+TEST_CASE("common controls publish a display range inside their accepted range",
+          "[mastering][catalog]") {
+  const auto range_of = [](const std::string& insert, const std::string& key) {
+    const json::Array params = param_info(insert);
+    const json::Value* parameter = find_param(params, key);
+    REQUIRE(parameter != nullptr);
+    REQUIRE(field(*parameter, "uiMin").is_number());
+    REQUIRE(field(*parameter, "uiMax").is_number());
+    return std::pair<double, double>(field(*parameter, "uiMin").as_number(),
+                                     field(*parameter, "uiMax").as_number());
+  };
+  CHECK(range_of("dynamics.compressor", "thresholdDb") == std::pair<double, double>(-60, 0));
+  CHECK(range_of("effects.modulation.chorus", "rateHz") == std::pair<double, double>(0, 10));
+  // The gate refuses a threshold below its close threshold's default, so the window starts there.
+  CHECK(range_of("dynamics.gate", "thresholdDb") == std::pair<double, double>(-50, 0));
+}
 
 TEST_CASE("sibling dependencies are declared for every coupled pair", "[mastering][catalog]") {
   const auto all = declared_dependencies();

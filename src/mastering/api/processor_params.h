@@ -917,8 +917,8 @@ inline dynamics::VocalRiderConfig vocal_rider_config(const ParamMap& params) {
 // ---------------------------------------------------------------------------
 
 inline void configure_tilt(eq::TiltEq& p, const ParamMap& params) {
-  p.set_tilt_db(f(params, "tiltDb", 0.0f, kDb));
-  p.set_pivot_hz(f(params, "pivotHz", 1000.0f, kHzLog));
+  p.set_tilt_db(f(params, "tiltDb", 0.0f, display_range(kDb, -12, 12)));
+  p.set_pivot_hz(f(params, "pivotHz", 1000.0f, display_range(kHzLog, 20, 20000)));
 }
 
 inline void configure_api_style(eq::ApiStyleEq& p, const ParamMap& params) {

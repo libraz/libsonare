@@ -54,6 +54,42 @@ export interface SonareCapabilities {
   hardwareConcurrency: number;
 }
 
+/** Closed vocabulary of units a numeric insert parameter declares; `none` is a declaration (a fraction, a selector index, a seed). */
+export type MasteringInsertParamUnit =
+  | 'dB'
+  | 'dBFS'
+  | 'LUFS'
+  | 'Hz'
+  | 'ms'
+  | 's'
+  | 'samples'
+  | 'm'
+  | 'cm'
+  | 'deg'
+  | 'percent'
+  | 'degC'
+  | 'V'
+  | 'inPerSec'
+  | 'dBPerOct'
+  | 'semitones'
+  | 'cents'
+  | 'ratio'
+  | 'bits'
+  | 'count'
+  | 'none';
+
+/** Axis a control draws an insert parameter on. */
+export type MasteringInsertParamScale = 'linear' | 'log';
+
+/** How a parameter's value is ordered against a sibling's, read as `this <relation> sibling`. */
+export type MasteringInsertParamRelation = 'lt' | 'le' | 'gt' | 'ge';
+
+/** A sibling whose live value bounds an insert parameter. */
+export interface MasteringInsertParamDependency {
+  key: string;
+  relation: MasteringInsertParamRelation;
+}
+
 /** One named value an enum- or closed-integer-typed insert param accepts. */
 export interface MasteringInsertParamChoice {
   /** Display/identification name (lowerCamelCase); never accepted as input. */
@@ -138,13 +174,13 @@ export interface CapabilityCatalogParameter {
   /** `"nyquist"` when the effective ceiling is the lower of `max` and the host's Nyquist (both exclusive); null otherwise. */
   maxRelativeTo: 'nyquist' | null;
   default: boolean | number | null;
-  unit: string | null;
+  unit: MasteringInsertParamUnit | null;
   /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMin: number | null;
   /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMax: number | null;
   /** Axis a control draws the value on. */
-  scale: 'linear' | 'log';
+  scale: MasteringInsertParamScale;
   choices: MasteringInsertParamChoice[] | null;
   /**
    * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
@@ -155,7 +191,7 @@ export interface CapabilityCatalogParameter {
    * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
    * empty for an independent key. `min` and `max` are measured with every sibling at its default.
    */
-  dependsOn: { key: string; relation: 'lt' | 'le' | 'gt' | 'ge' }[];
+  dependsOn: MasteringInsertParamDependency[];
 }
 
 /** One named mastering processor and its host-facing capabilities. */

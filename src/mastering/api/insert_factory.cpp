@@ -116,6 +116,7 @@ namespace {
 using detail::b;
 using detail::compressor_config;
 using detail::crossover_config;
+using detail::display_range;
 using detail::f;
 using detail::kCents;
 using detail::kCount;
@@ -902,7 +903,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
 #endif
   if (name == "effects.modulation.chorus") {
     effects::modulation::ChorusConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, display_range(kHz, 0, 10));
     config.depth_ms = f(params, "depthMs", config.depth_ms, kMs);
     config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms, kMs);
     config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
@@ -933,7 +934,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   if (name == "effects.modulation.flanger") {
     effects::modulation::FlangerConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, display_range(kHz, 0, 10));
     config.depth_ms = f(params, "depthMs", config.depth_ms, kMs);
     config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms, kMs);
     config.feedback = f(params, "feedback", config.feedback, kNone);

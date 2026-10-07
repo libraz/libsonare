@@ -182,7 +182,19 @@ from ._types_capabilities import (
     MasteringInsertParamChoice as MasteringInsertParamChoice,
 )
 from ._types_capabilities import (
+    MasteringInsertParamDependency as MasteringInsertParamDependency,
+)
+from ._types_capabilities import (
     MasteringInsertParamInfo as MasteringInsertParamInfo,
+)
+from ._types_capabilities import (
+    MasteringInsertParamRelation as MasteringInsertParamRelation,
+)
+from ._types_capabilities import (
+    MasteringInsertParamScale as MasteringInsertParamScale,
+)
+from ._types_capabilities import (
+    MasteringInsertParamUnit as MasteringInsertParamUnit,
 )
 from ._types_capabilities import (
     MasteringInsertSlot as MasteringInsertSlot,

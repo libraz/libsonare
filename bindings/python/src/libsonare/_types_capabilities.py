@@ -12,6 +12,31 @@ from typing import Literal, TypedDict
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
 MasteringPresetKind = Literal["mastering", "restoration"]
+MasteringInsertParamUnit = Literal[
+    "dB",
+    "dBFS",
+    "LUFS",
+    "Hz",
+    "ms",
+    "s",
+    "samples",
+    "m",
+    "cm",
+    "deg",
+    "percent",
+    "degC",
+    "V",
+    "inPerSec",
+    "dBPerOct",
+    "semitones",
+    "cents",
+    "ratio",
+    "bits",
+    "count",
+    "none",
+]
+MasteringInsertParamScale = Literal["linear", "log"]
+MasteringInsertParamRelation = Literal["lt", "le", "gt", "ge"]
 
 
 class CapabilitiesAbi(TypedDict):
@@ -96,6 +121,17 @@ class MasteringInsertSlot(TypedDict):
     minCrossoverCutoffs: int
 
 
+class MasteringInsertParamDependency(TypedDict):
+    """A sibling key whose value bounds this parameter's.
+
+    ``relation`` reads from this parameter's side: ``"le"`` means this
+    parameter's value must be less than or equal to the sibling's.
+    """
+
+    key: str
+    relation: MasteringInsertParamRelation
+
+
 class MasteringInsertParamInfo(TypedDict):
     """Metadata for one key an insert processor's construction or automation reads.
 
@@ -108,6 +144,14 @@ class MasteringInsertParamInfo(TypedDict):
     ``"nyquist"`` when the ceiling follows the processing rate: the effective
     ceiling is then the lower of ``max`` and the host's Nyquist frequency, both
     exclusive.
+
+    ``unit`` is declared for every numeric parameter (``"none"`` for a
+    fraction, a selector index or a seed) and ``None`` otherwise. ``scale`` is
+    the axis a control draws the value on. ``uiMin`` / ``uiMax``, when not
+    ``None``, are a display range inside ``[min, max]``; ``None`` means the
+    accepted range is also the display range. ``dependsOn`` lists the siblings
+    whose values bound this one; ``min`` / ``max`` stay what they are with the
+    siblings at their defaults.
     """
 
     name: str
@@ -120,7 +164,11 @@ class MasteringInsertParamInfo(TypedDict):
     maxExclusive: bool
     maxRelativeTo: Literal["nyquist"] | None
     default: float | bool | None
-    unit: str | None
+    unit: MasteringInsertParamUnit | None
+    uiMin: float | None
+    uiMax: float | None
+    scale: MasteringInsertParamScale
+    dependsOn: list[MasteringInsertParamDependency]
     choices: list[MasteringInsertParamChoice] | None
     slot: str | None
 

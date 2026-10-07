@@ -979,7 +979,11 @@ from .types import (
 )
 from .types import MasteringChannelPolicy as MasteringChannelPolicy
 from .types import MasteringInsertParamChoice as MasteringInsertParamChoice
+from .types import MasteringInsertParamDependency as MasteringInsertParamDependency
 from .types import MasteringInsertParamInfo as MasteringInsertParamInfo
+from .types import MasteringInsertParamRelation as MasteringInsertParamRelation
+from .types import MasteringInsertParamScale as MasteringInsertParamScale
+from .types import MasteringInsertParamUnit as MasteringInsertParamUnit
 from .types import MasteringInsertSlot as MasteringInsertSlot
 from .types import MasteringInsertTiming as MasteringInsertTiming
 from .types import (

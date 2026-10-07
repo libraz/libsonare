@@ -363,8 +363,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -24,
           "unit": "dBFS"
         },
         {
@@ -382,8 +382,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -401,8 +401,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 20,
+          "uiMin": 0,
           "unit": "ms"
         }
       ],
@@ -434,8 +434,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -60,
           "unit": "dB"
         },
         {
@@ -453,8 +453,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 20,
+          "uiMin": 1,
           "unit": "ratio"
         },
         {
@@ -472,8 +472,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 200,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -491,8 +491,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 2000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -510,8 +510,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -12,
           "unit": "dB"
         },
         {
@@ -529,8 +529,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": 0,
           "unit": "dB"
         },
         {
@@ -689,8 +689,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 16000,
+          "uiMin": 1000,
           "unit": "Hz"
         },
         {
@@ -708,8 +708,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -60,
           "unit": "dB"
         },
         {
@@ -727,8 +727,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 20,
+          "uiMin": 1,
           "unit": "ratio"
         },
         {
@@ -1078,8 +1078,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -50,
           "unit": "dB"
         },
         {
@@ -1097,8 +1097,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 100,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -1116,8 +1116,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 2000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -1135,8 +1135,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -80,
           "unit": "dB"
         },
         {
@@ -1178,8 +1178,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -1230,8 +1230,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -60,
           "unit": "dB"
         },
         {
@@ -1249,8 +1249,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -1306,8 +1306,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 20,
+          "uiMin": 0,
           "unit": "ms"
         }
       ],
@@ -4155,8 +4155,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 10,
+          "uiMin": 0,
           "unit": "Hz"
         },
         {
@@ -4613,8 +4613,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 10,
+          "uiMin": 0,
           "unit": "Hz"
         },
         {
@@ -89891,8 +89891,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 12,
+          "uiMin": -12,
           "unit": "dB"
         },
         {
@@ -89910,8 +89910,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 20000,
+          "uiMin": 20,
           "unit": "Hz"
         }
       ],
@@ -90233,8 +90233,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": 0,
           "unit": "dB"
         },
         {
@@ -90252,8 +90252,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 0,
+          "uiMin": -24,
           "unit": "dBFS"
         },
         {
@@ -90271,8 +90271,8 @@
           "scale": "log",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1000,
+          "uiMin": 0,
           "unit": "ms"
         },
         {
@@ -121794,8 +121794,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -12,
           "unit": "dB"
         },
         {
@@ -121813,8 +121813,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1,
+          "uiMin": 0,
           "unit": "none"
         },
         {
@@ -121864,7 +121864,7 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
+          "uiMax": 1,
           "uiMin": null,
           "unit": "none"
         }
@@ -121897,8 +121897,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -12,
           "unit": "dB"
         },
         {
@@ -121916,8 +121916,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1,
+          "uiMin": 0,
           "unit": "none"
         },
         {
@@ -121954,8 +121954,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -24,
           "unit": "dB"
         },
         {
@@ -122311,8 +122311,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -12,
           "unit": "dB"
         },
         {
@@ -122330,8 +122330,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1,
+          "uiMin": 0,
           "unit": "none"
         },
         {
@@ -122349,8 +122349,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -24,
           "unit": "dB"
         },
         {
@@ -123243,8 +123243,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 2,
+          "uiMin": 0,
           "unit": "none"
         },
         {
@@ -123262,8 +123262,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 24,
+          "uiMin": -24,
           "unit": "dB"
         },
         {
@@ -123281,8 +123281,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1,
+          "uiMin": 0,
           "unit": "none"
         },
         {
@@ -123333,8 +123333,8 @@
           "scale": "linear",
           "slot": null,
           "type": "number",
-          "uiMax": null,
-          "uiMin": null,
+          "uiMax": 1,
+          "uiMin": 0,
           "unit": "none"
         },
         {

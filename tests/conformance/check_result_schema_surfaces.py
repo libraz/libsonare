@@ -30,6 +30,7 @@ describing less of it than it claims.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import sys
@@ -71,6 +72,10 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
+            # The Python result types are TypedDicts: the runtime module and the
+            # stub that mypy reads each declare the same shape.
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "processor_catalog_schema_paths": {
@@ -79,6 +84,10 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
+            # The Python result types are TypedDicts: the runtime module and the
+            # stub that mypy reads each declare the same shape.
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "mix_assistant_result_schema_paths": {
@@ -114,6 +123,10 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "types_capabilities.ts",
             "wasm": WASM / "public_types.ts",
+            # The Python result types are TypedDicts: the runtime module and the
+            # stub that mypy reads each declare the same shape.
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_capabilities.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
 }
@@ -214,6 +227,63 @@ def scan_json_schema(paths: list[str], text: str, root: str) -> tuple[list, list
     return missing, unreached, comparisons
 
 
+def _typed_dict_fields(tree: ast.Module) -> dict[str, dict[str, set[str]]]:
+    """Each class's annotated fields, with the class names its annotation mentions."""
+    classes: dict[str, dict[str, set[str]]] = {}
+    for node in tree.body:
+        if not isinstance(node, ast.ClassDef):
+            continue
+        fields: dict[str, set[str]] = {}
+        for item in node.body:
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                fields[item.target.id] = {
+                    n.id for n in ast.walk(item.annotation) if isinstance(n, ast.Name)
+                }
+        classes[node.name] = fields
+    return classes
+
+
+def scan_python(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
+    """scan() for a Python module of TypedDicts, with the same three return meanings.
+
+    Anchored on the root class like the TypeScript walk. A segment is followed
+    through every class its field's annotation names, so `list[Element]` and
+    `Element | None` both reach `Element`.
+    """
+    classes = _typed_dict_fields(ast.parse(text))
+    if root not in classes:
+        return [], list(paths), 0
+    missing: list[str] = []
+    unreached: list[str] = []
+    comparisons = 0
+    for path in paths:
+        segments = [
+            segment
+            for segment in (s.replace("[]", "") for s in path.split("."))
+            if segment
+        ]
+        if not segments:
+            unreached.append(path)
+            continue
+        bodies = [root]
+        for segment in segments[:-1]:
+            bodies = [
+                target
+                for body in bodies
+                for target in classes[body].get(segment, set())
+                if target in classes
+            ]
+            if not bodies:
+                break
+        if not bodies:
+            unreached.append(path)
+            continue
+        comparisons += 1
+        if not any(segments[-1] in classes[body] for body in bodies):
+            missing.append(path)
+    return missing, unreached, comparisons
+
+
 def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, int]:
     """Walk one surface with the reader its file kind calls for.
 
@@ -224,6 +294,8 @@ def scan_surface(paths: list[str], path: Path, root: str) -> tuple[list, list, i
     """
     if path.suffix == ".json":
         return scan_json_schema(paths, path.read_text(), root)
+    if path.suffix in (".py", ".pyi"):
+        return scan_python(paths, path.read_text(), root)
     return scan(paths, with_imported_declarations(path), root)
 
 

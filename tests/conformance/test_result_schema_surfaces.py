@@ -265,5 +265,44 @@ class JsonSchemaSurface(unittest.TestCase):
         self.assertEqual(missing, [])
 
 
+PYTHON_SURFACE = """
+from typing import TypedDict
+
+class Dependency(TypedDict):
+    key: str
+
+class Entry(TypedDict):
+    name: str
+    dependsOn: list[Dependency]
+    other: Dependency | None
+"""
+
+
+class PythonSurface(unittest.TestCase):
+    def test_a_leaf_missing_from_the_root_class_is_reported(self):
+        missing, unreached, comparisons = check.scan_python(
+            ["[].name", "[].unit", "[].dependsOn[].key", "[].dependsOn[].relation"],
+            PYTHON_SURFACE,
+            "Entry",
+        )
+        self.assertEqual(unreached, [])
+        self.assertEqual(comparisons, 4)
+        self.assertEqual(missing, ["[].unit", "[].dependsOn[].relation"])
+
+    def test_a_block_that_is_not_a_class_fails_rather_than_passing(self):
+        missing, unreached, comparisons = check.scan_python(
+            ["[].name.inner"], PYTHON_SURFACE, "Entry"
+        )
+        self.assertEqual((missing, comparisons), ([], 0))
+        self.assertEqual(unreached, ["[].name.inner"])
+
+    def test_a_missing_root_class_fails_rather_than_reporting_clean(self):
+        missing, unreached, comparisons = check.scan_python(
+            ["[].name"], PYTHON_SURFACE, "Absent"
+        )
+        self.assertEqual((missing, comparisons), ([], 0))
+        self.assertEqual(unreached, ["[].name"])
+
+
 if __name__ == "__main__":
     unittest.main()

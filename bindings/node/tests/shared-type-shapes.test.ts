@@ -103,13 +103,13 @@ const catalogParameter = {
   maxExclusive: false,
   maxRelativeTo: null,
   default: null,
-  unit: null,
+  unit: 'Hz',
   uiMin: null,
   uiMax: null,
   scale: 'linear',
   choices: null,
   slot: 'band1',
-  dependsOn: [],
+  dependsOn: [{ key: 'maxHz', relation: 'le' }],
 } satisfies CapabilityCatalogParameter;
 
 const catalogSlot = {

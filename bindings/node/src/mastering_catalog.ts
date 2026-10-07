@@ -1,6 +1,9 @@
 import { addon } from './native.js';
 import type {
   MasteringInsertParamChoice,
+  MasteringInsertParamDependency,
+  MasteringInsertParamScale,
+  MasteringInsertParamUnit,
   MasteringInsertSlot,
   MasteringPreset,
   PairAnalysis,
@@ -123,13 +126,13 @@ export interface MasteringInsertParamInfo {
    */
   default: boolean | number | null;
   /** Declared unit of a number; null for any other type. */
-  unit: string | null;
+  unit: MasteringInsertParamUnit | null;
   /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMin: number | null;
   /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
   uiMax: number | null;
   /** Axis a control draws the value on. */
-  scale: 'linear' | 'log';
+  scale: MasteringInsertParamScale;
   /**
    * The accepted values, in value order, when they form a closed set: every
    * declared value of an enum that construction accepts, or the accepted
@@ -147,7 +150,7 @@ export interface MasteringInsertParamInfo {
    * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
    * empty for an independent key. `min` and `max` are measured with every sibling at its default.
    */
-  dependsOn: { key: string; relation: 'lt' | 'le' | 'gt' | 'ge' }[];
+  dependsOn: MasteringInsertParamDependency[];
 }
 
 /**

@@ -15,6 +15,31 @@ PlanarChannels: TypeAlias = Sequence[FloatSamples] | np.ndarray[Any, Any]
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
 MasteringPresetKind = Literal["mastering", "restoration"]
+MasteringInsertParamUnit = Literal[
+    "dB",
+    "dBFS",
+    "LUFS",
+    "Hz",
+    "ms",
+    "s",
+    "samples",
+    "m",
+    "cm",
+    "deg",
+    "percent",
+    "degC",
+    "V",
+    "inPerSec",
+    "dBPerOct",
+    "semitones",
+    "cents",
+    "ratio",
+    "bits",
+    "count",
+    "none",
+]
+MasteringInsertParamScale = Literal["linear", "log"]
+MasteringInsertParamRelation = Literal["lt", "le", "gt", "ge"]
 MasteringProcessorCategory = Literal[
     "dynamics",
     "effects",
@@ -112,6 +137,12 @@ class MasteringInsertSlot(TypedDict):
     activation: Literal["anyKey", "always"]
     minCrossoverCutoffs: int
 
+class MasteringInsertParamDependency(TypedDict):
+    """A sibling key whose value bounds this parameter's; ``relation`` reads from this parameter's side."""
+
+    key: str
+    relation: MasteringInsertParamRelation
+
 class MasteringInsertParamInfo(TypedDict):
     """One key an insert processor's construction or automation reads.
 
@@ -148,6 +179,14 @@ class MasteringInsertParamInfo(TypedDict):
     ``minExclusive`` true. ``maxRelativeTo`` is ``"nyquist"`` when the ceiling
     follows the processing rate: the effective ceiling is then the lower of
     ``max`` and the host's Nyquist frequency, both exclusive.
+
+    ``unit`` is declared for every numeric parameter (``"none"`` for a
+    fraction, a selector index or a seed) and ``None`` otherwise. ``scale`` is
+    the axis a control draws the value on. ``uiMin`` / ``uiMax``, when not
+    ``None``, are a display range inside ``[min, max]``; ``None`` means the
+    accepted range is also the display range. ``dependsOn`` lists the siblings
+    whose values bound this one; ``min`` / ``max`` stay what they are with the
+    siblings at their defaults.
     """
 
     name: str
@@ -160,7 +199,11 @@ class MasteringInsertParamInfo(TypedDict):
     maxExclusive: bool
     maxRelativeTo: Literal["nyquist"] | None
     default: float | bool | None
-    unit: str | None
+    unit: MasteringInsertParamUnit | None
+    uiMin: float | None
+    uiMax: float | None
+    scale: MasteringInsertParamScale
+    dependsOn: list[MasteringInsertParamDependency]
     choices: list[MasteringInsertParamChoice] | None
     slot: str | None
 
@@ -889,7 +932,7 @@ class ClipDetection:
     flat_run_count: int
     longest_flat_run_samples: int
     flat_sample_count: int
-    flat_level: float
+    flat_level: float  # largest run level once the two highest runs are set aside; 0 if none
     def __init__(
         self,
         sample_count: int,
@@ -2301,7 +2344,7 @@ class Section:
     type: SectionType
     start: float
     end: float
-    energy_level: float
+    energy_level: float  # median frame RMS in the section over the loudest section's, [0, 1]
     confidence: float
     canonical_name: str
     def __init__(
@@ -2400,7 +2443,7 @@ class QuantizeConfig:
 
 class StreamConfig:
     sample_rate: int
-    n_fft: int
+    n_fft: int  # window in samples at 44100 Hz; rescaled below that rate, never shorter than hop_length
     hop_length: int
     n_mels: int
     fmin: float
