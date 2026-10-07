@@ -1568,6 +1568,25 @@ TEST_CASE("Sf2Player takes the channel bend range from a MIDI 2.0 Registered Con
   REQUIRE(std::fabs(untouched - 200.0) < 5.0);
 }
 
+TEST_CASE("Sf2Player data entry after an NRPN selection with Rx NRPN off changes nothing",
+          "[midi][sf2][nrpn]") {
+  Sf2Player player = fixture_player();
+  // GM1 System On closes the NRPN receive switch.
+  const uint8_t gm1_on[] = {0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7};
+  REQUIRE(player.handle_sysex(gm1_on, sizeof(gm1_on)));
+  const auto cc = [&player](uint8_t number, uint8_t value) {
+    send(player, sonare::midi::make_midi1_control_change(0, 0, number, value));
+  };
+  cc(101, 0);  // RPN 0/2 master coarse tuning, +3 semitones
+  cc(100, 2);
+  cc(6, 67);
+  REQUIRE(player.pitch_coarse_tune(0) == 3);
+  cc(99, 1);  // NRPN selection, refused as an NRPN but still the current selection
+  cc(98, 8);
+  cc(6, 64);
+  REQUIRE(player.pitch_coarse_tune(0) == 3);
+}
+
 TEST_CASE("Sf2Player moves the master tuning by a relative RC 0/1 and 0/2", "[midi][sf2][midi2]") {
   Sf2Player player = fixture_player();
   // Coarse tuning: +3 semitones on the centre.

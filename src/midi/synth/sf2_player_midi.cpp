@@ -942,7 +942,26 @@ void Sf2Player::control_change(uint8_t channel, uint8_t controller, Control32 va
   // stop a note on a part that has stopped taking controllers.
   if (controller < 120 && !st.receives(GsRxSwitch::kControlChange)) return;
   const GsRxSwitch gated = rx_switch_for_controller(controller);
-  if (gated != GsRxSwitch::kCount && !st.receives(gated)) return;
+  if (gated != GsRxSwitch::kCount && !st.receives(gated)) {
+    // The parameter-number controllers still move the selection when their switch is off: the
+    // switches gate what data entry applies, and a selection left stale would send the next data
+    // entry to whichever parameter was chosen before.
+    if (controller == 98 || controller == 99) {
+      if (controller == 98) {
+        st.params.select_nrpn_lsb(value);
+      } else {
+        st.params.select_nrpn_msb(value);
+      }
+    } else if (controller == 100 || controller == 101) {
+      if (controller == 100) {
+        st.params.select_rpn_lsb(value);
+      } else {
+        st.params.select_rpn_msb(value);
+      }
+      st.params.deselect_on_rpn_null();
+    }
+    return;
+  }
   if (controller == 6 || controller == 38) {
     // Data entry carries whichever parameter number is selected, so the switch
     // that applies is the selection's. With neither selected the value reaches
