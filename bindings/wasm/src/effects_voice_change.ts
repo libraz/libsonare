@@ -1,7 +1,7 @@
-import { getSonareModule } from './module_state';
-import type { RealtimeVoiceChangerConfigInput } from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertSamples } from './validation';
+import { getSonareModule } from './module_state.js';
+import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

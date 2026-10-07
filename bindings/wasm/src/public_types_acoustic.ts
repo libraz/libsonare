@@ -1,4 +1,4 @@
-import type { ValidateOptions } from './validation';
+import type { ValidateOptions } from './validation.js';
 
 /** Options for `detectAcoustic`. All fields are optional. */
 export interface AcousticOptions extends ValidateOptions {

@@ -1,4 +1,4 @@
-import type { ProjectAutomationCurve } from './project_types';
+import type { ProjectAutomationCurve } from './project_types.js';
 import type {
   AutomationCurve,
   MeterTap,
@@ -8,7 +8,7 @@ import type {
   SidechainCheck,
   SidechainRefusal,
   SidechainSourceKind,
-} from './public_types';
+} from './public_types.js';
 
 /** Resolve a numeric ordinal in an inclusive range without coercion. */
 export function resolveOrdinalInRange(

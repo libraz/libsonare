@@ -1,13 +1,13 @@
-import type { EngineClip } from '../index';
-import { RealtimeEngine } from '../index';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
+import type { EngineClip } from '../index.js';
+import { RealtimeEngine } from '../index.js';
+import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
 import {
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
   SONARE_SCOPE_MAX_BANDS,
   SONARE_SCOPE_MAX_POINTS,
-} from './guards';
+} from './guards.js';
 import {
   DEFAULT_METRONOME_CONFIG,
   type ResolvedMetronomeConfig,
@@ -21,7 +21,7 @@ import {
   type SonareEngineTransportResponseMessage,
   type SonareRealtimeEngineWorkletProcessorOptions,
   type WorkletTransport,
-} from './messages';
+} from './messages.js';
 import {
   clipPageRequestRingFromSharedBuffer,
   encodeFrameHi,
@@ -54,7 +54,7 @@ import {
   telemetryFromEngine,
   writeInt64Words,
   writeSonareEngineTelemetryRingBuffer,
-} from './protocol';
+} from './protocol.js';
 
 function captureTransferList(channels: readonly Float32Array[]): Transferable[] {
   const transfers: ArrayBuffer[] = [];

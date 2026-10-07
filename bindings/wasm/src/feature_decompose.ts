@@ -3,9 +3,9 @@
  * the masks built over it, and the recurrence structure of a track.
  */
 
-import { resolveFftOptions } from './_fft_options';
-import { getSonareModule } from './module_state';
-import type { SegmentMatrix } from './public_types';
+import { resolveFftOptions } from './_fft_options.js';
+import { getSonareModule } from './module_state.js';
+import type { SegmentMatrix } from './public_types.js';
 import type {
   WasmDecomposeResult,
   WasmHpssWithResidualResult,
@@ -17,7 +17,7 @@ import {
   assertPositiveInteger,
   assertSamples,
   toInt32Array,
-} from './validation';
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();

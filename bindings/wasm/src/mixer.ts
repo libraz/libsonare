@@ -4,8 +4,8 @@ import {
   panLawCode,
   panModeCode,
   sendTimingCode,
-} from './codes';
-import { getSonareModule } from './module_state';
+} from './codes.js';
+import { getSonareModule } from './module_state.js';
 import type {
   AutomationCurve,
   GoniometerPoint,
@@ -16,8 +16,8 @@ import type {
   PanMode,
   SendTiming,
   SurroundPan,
-} from './public_types';
-import { assertSampleRate } from './validation';
+} from './public_types.js';
+import { assertSampleRate } from './validation.js';
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at

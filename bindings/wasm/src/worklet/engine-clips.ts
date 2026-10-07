@@ -1,6 +1,6 @@
-import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index';
-import type { ClipPageProvider } from '../realtime_engine';
-import type { SonareEngineSyncMessage } from './messages';
+import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
+import type { ClipPageProvider } from '../realtime_engine.js';
+import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the audio/MIDI clip scheduling helpers need from the

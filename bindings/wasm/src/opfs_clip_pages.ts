@@ -1,4 +1,4 @@
-import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine';
+import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
 
 export interface OpfsClipPageProviderOptions {
   path: string;

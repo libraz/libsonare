@@ -1,4 +1,4 @@
-import type { EqBand } from './public_types_realtime';
+import type { EqBand } from './public_types_realtime.js';
 
 export type PanMode =
   | 'balance'

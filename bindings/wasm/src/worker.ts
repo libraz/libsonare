@@ -7,26 +7,26 @@
  * make ownership and `delete()` semantics unsound.
  */
 
-import './lifetime';
-import { ErrorCode, SonareError } from './errors';
-import { init } from './index';
-import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain';
-import { masterAudio, masterAudioStereo } from './mastering_chain';
+import './lifetime.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { init } from './index.js';
+import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
+import { masterAudio, masterAudioStereo } from './mastering_chain.js';
 import type {
   DetectChordsRequest,
   DetectKeyRequest,
   MusicAnalyzeRequest,
   SamplesRequest,
-} from './quick_analysis';
-import { analyzeWithProgress, detectBpm, detectChords, detectKey } from './quick_analysis';
+} from './quick_analysis.js';
+import { analyzeWithProgress, detectBpm, detectChords, detectKey } from './quick_analysis.js';
 import type {
   OfflineWorkerErrorMessage,
   OfflineWorkerRequestMessage,
   OfflineWorkerResponseMessage,
   OfflineWorkerRunMessage,
-} from './worker_protocol';
+} from './worker_protocol.js';
 
-export type { OfflineWorkerOperation } from './worker_protocol';
+export type { OfflineWorkerOperation } from './worker_protocol.js';
 
 /** Minimal endpoint shared by browser Workers and the Node worker-thread test bridge. */
 export interface OfflineWorkerEndpoint {

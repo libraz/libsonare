@@ -1,4 +1,4 @@
-import type { ValidateOptions } from './validation';
+import type { ValidateOptions } from './validation.js';
 
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero

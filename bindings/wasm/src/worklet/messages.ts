@@ -16,15 +16,15 @@ import type {
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
   UmpWords,
-} from '../index';
-import type { AutomationCurve, SurroundPan } from '../public_types';
+} from '../index.js';
+import type { AutomationCurve, SurroundPan } from '../public_types.js';
 import type {
   SonareEngineCommandRecord,
   SonareEngineTelemetryRecord,
   SonareWorkletMeterSnapshot,
   SonareWorkletScopeSnapshot,
   SonareWorkletSpectrumSnapshot,
-} from './protocol';
+} from './protocol.js';
 
 export interface SonareWorkletProcessorOptions {
   sceneJson: string;

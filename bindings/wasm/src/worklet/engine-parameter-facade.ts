@@ -1,11 +1,11 @@
-import { trackMonitorModeCode } from '../codes';
+import { trackMonitorModeCode } from '../codes.js';
 import type {
   EngineAutomationPoint,
   EngineParameterInfo,
   EngineTrackMonitorMode,
   RealtimeEngine,
-} from '../index';
-import type { SonareEngineSyncMessage } from './messages';
+} from '../index.js';
+import type { SonareEngineSyncMessage } from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
@@ -13,7 +13,7 @@ import {
   engineMixerLaneTarget,
   engineMixerMasterTarget,
   SonareEngineCommandType,
-} from './protocol';
+} from './protocol.js';
 
 /**
  * Collaborator surface the parameter / automation-id resolution helpers need

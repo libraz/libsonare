@@ -1,8 +1,8 @@
-import type { EngineCaptureStatus, RealtimeEngine } from '../index';
-import type { SonareRealtimeEngineNode } from './engine-node';
-import { buildCaptureConfig, type CaptureOptions } from './engine-offline';
-import type { SonareEngineSyncCaptureMessage, SonareEngineSyncMessage } from './messages';
-import { SonareEngineCommandType } from './protocol';
+import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
+import type { SonareRealtimeEngineNode } from './engine-node.js';
+import { buildCaptureConfig, type CaptureOptions } from './engine-offline.js';
+import type { SonareEngineSyncCaptureMessage, SonareEngineSyncMessage } from './messages.js';
+import { SonareEngineCommandType } from './protocol.js';
 
 type CaptureConfig = Omit<SonareEngineSyncCaptureMessage, 'type'>;
 

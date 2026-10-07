@@ -1,5 +1,5 @@
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
@@ -16,7 +16,7 @@ import type {
   StereoAnalysis,
   StereoPairProcessor,
   StreamingPlatform,
-} from './public_types';
+} from './public_types.js';
 
 export type { MasteringInsertParamChoice, MasteringInsertSlot };
 

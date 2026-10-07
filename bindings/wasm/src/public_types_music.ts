@@ -1,4 +1,4 @@
-import type { ValidateOptions } from './validation';
+import type { ValidateOptions } from './validation.js';
 
 /**
  * Pitch class enum (C=0, C#=1, ..., B=11)

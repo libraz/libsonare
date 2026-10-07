@@ -1,16 +1,16 @@
-import { init as initSonareModule, isInitialized } from '../index';
+import { init as initSonareModule, isInitialized } from '../index.js';
 import type { SonareModule } from '../sonare.js';
-import type { WorkletInput, WorkletOutput } from './audio_types';
-import { SonareRealtimeEngineWorkletProcessor } from './engine-processor';
+import type { WorkletInput, WorkletOutput } from './audio_types.js';
+import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
 import {
   isEngineCaptureRequestMessage,
   isEngineCommandRecord,
   isEngineInsertGainReductionRequestMessage,
   isEngineSyncMessage,
   isEngineTransportRequestMessage,
-} from './guards';
-import type { SonareRealtimeEngineWorkletProcessorOptions, WorkletPort } from './messages';
-import { isRecord } from './protocol';
+} from './guards.js';
+import type { SonareRealtimeEngineWorkletProcessorOptions, WorkletPort } from './messages.js';
+import { isRecord } from './protocol.js';
 
 export function registerSonareRealtimeEngineWorkletProcessor(
   name = 'sonare-realtime-engine-processor',

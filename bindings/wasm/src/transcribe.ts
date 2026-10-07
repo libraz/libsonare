@@ -1,6 +1,6 @@
-import { projectModule } from './project_internal';
-import type { TranscribeOptions, TranscribeResult } from './project_types';
-import { assertSampleRate, assertSamples } from './validation';
+import { projectModule } from './project_internal.js';
+import type { TranscribeOptions, TranscribeResult } from './project_types.js';
+import { assertSampleRate, assertSamples } from './validation.js';
 
 /**
  * Canonical request form for {@link transcribe}.

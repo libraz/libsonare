@@ -33,7 +33,7 @@ export type {
   SynthOscWaveform,
   SynthPatch,
   SynthRetrigger,
-} from './instrument_types';
+} from './instrument_types.js';
 export {
   ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
@@ -53,8 +53,8 @@ export {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   SYNTH_RETRIGGERS,
-} from './instrument_types';
-export { Project, ProjectTimeline } from './project_class';
+} from './instrument_types.js';
+export { Project, ProjectTimeline } from './project_class.js';
 export {
   controllerProfileNames,
   projectAbiVersion,
@@ -65,7 +65,7 @@ export {
   synthPatchRoundTripForTest,
   synthPresetNames,
   synthPresetPatch,
-} from './project_synth';
+} from './project_synth.js';
 export type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
@@ -121,7 +121,7 @@ export type {
   TakeAlignment,
   TranscribeOptions,
   TranscribeResult,
-} from './project_types';
+} from './project_types.js';
 export {
   AutomationTargetKind,
   EXPECTED_PROJECT_ABI_VERSION,
@@ -129,6 +129,6 @@ export {
   PROJECT_AUTOMATION_TARGET_OPAQUE,
   PROJECT_AUTOMATION_TARGET_TRACK_FADER_DB,
   PROJECT_AUTOMATION_TARGET_TRACK_PAN,
-} from './project_types';
-export type * from './public_types_vocal_project';
-export { SampleBank } from './sample_bank';
+} from './project_types.js';
+export type * from './public_types_vocal_project.js';
+export { SampleBank } from './sample_bank.js';

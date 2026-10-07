@@ -1,6 +1,6 @@
-import { ErrorCode, SonareError } from '../errors';
-import type { EngineCaptureStatus, EngineTransportState } from '../index';
-import { engineCapabilities } from '../index';
+import { ErrorCode, SonareError } from '../errors.js';
+import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
+import { engineCapabilities } from '../index.js';
 import {
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
@@ -15,7 +15,7 @@ import {
   requireChannelCount,
   requireIntegerOption,
   resolveScopeBandCount,
-} from './guards';
+} from './guards.js';
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
@@ -26,7 +26,7 @@ import type {
   SonareRealtimeEngineNodeOptions,
   SonareRealtimeEngineWorkletProcessorOptions,
   SonareWorkletExternalMidiEvent,
-} from './messages';
+} from './messages.js';
 import {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -53,7 +53,7 @@ import {
   type SonareScopeRingBuffer,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
-} from './protocol';
+} from './protocol.js';
 
 function isFiniteInteger(value: number | bigint | undefined): boolean {
   if (value === undefined) {

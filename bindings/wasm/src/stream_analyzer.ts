@@ -1,6 +1,6 @@
-import { resolveOrdinalInRange } from './codes';
-import { getSonareModule } from './module_state';
-import type { ChordQuality, PitchClass } from './public_types';
+import { resolveOrdinalInRange } from './codes.js';
+import { getSonareModule } from './module_state.js';
+import type { ChordQuality, PitchClass } from './public_types.js';
 import type { WasmStreamAnalyzer } from './sonare.js';
 import type {
   AnalyzerStats,
@@ -10,7 +10,7 @@ import type {
   StreamFramesI16,
   StreamFramesU8,
   StreamQuantizeConfig,
-} from './stream_types';
+} from './stream_types.js';
 
 // ============================================================================
 // StreamAnalyzer Class

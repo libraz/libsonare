@@ -1,11 +1,11 @@
-export * from './public_types_acoustic';
-export * from './public_types_mastering';
-export * from './public_types_mixing';
-export * from './public_types_music';
-export * from './public_types_playback';
-export * from './public_types_realtime';
-export * from './public_types_repair';
-export * from './public_types_spectral';
+export * from './public_types_acoustic.js';
+export * from './public_types_mastering.js';
+export * from './public_types_mixing.js';
+export * from './public_types_music.js';
+export * from './public_types_playback.js';
+export * from './public_types_realtime.js';
+export * from './public_types_repair.js';
+export * from './public_types_spectral.js';
 
 /** Runtime capabilities reported by the loaded libsonare build. */
 export interface SonareCapabilities {

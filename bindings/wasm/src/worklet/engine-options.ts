@@ -1,5 +1,5 @@
-import type { RealtimeEngine } from '../index';
-import type { SonareRealtimeEngineNodeOptions } from './messages';
+import type { RealtimeEngine } from '../index.js';
+import type { SonareRealtimeEngineNodeOptions } from './messages.js';
 
 export interface SonareEngineOptions extends SonareRealtimeEngineNodeOptions {
   offlineEngine?: RealtimeEngine;

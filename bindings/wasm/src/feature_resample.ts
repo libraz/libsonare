@@ -1,4 +1,4 @@
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 
 function requireModule() {
   return getSonareModule();

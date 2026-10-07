@@ -1,13 +1,13 @@
-import type { MixerRealtimeBuffer } from '../index';
-import { Mixer } from '../index';
-import type { WorkletInput, WorkletOutput } from './audio_types';
-import { isWorkletMessage, requireIntegerOption } from './guards';
+import type { MixerRealtimeBuffer } from '../index.js';
+import { Mixer } from '../index.js';
+import type { WorkletInput, WorkletOutput } from './audio_types.js';
+import { isWorkletMessage, requireIntegerOption } from './guards.js';
 import type {
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
   WorkletPort,
   WorkletTransport,
-} from './messages';
+} from './messages.js';
 import {
   encodeFrameHi,
   encodeFrameLo,
@@ -20,7 +20,7 @@ import {
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
   spectrumRingFromSharedBuffer,
-} from './protocol';
+} from './protocol.js';
 
 /**
  * AudioWorklet-style mixer bridge backed by the package's single `sonare.wasm`.

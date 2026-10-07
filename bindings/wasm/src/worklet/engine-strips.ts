@@ -1,15 +1,15 @@
-import { panLawCode, panModeCode } from '../codes';
-import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index';
-import type { SurroundPan } from '../public_types';
-import type { InsertParamOverrideMap } from './engine-mixer-facade';
+import { panLawCode, panModeCode } from '../codes.js';
+import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
+import type { SurroundPan } from '../public_types.js';
+import type { InsertParamOverrideMap } from './engine-mixer-facade.js';
 import {
   emptyStripJson,
   type InsertParamOverride,
   insertParamOverrideKey,
   replaceStripScene,
   type StripJsonTarget,
-} from './engine-mixer-facade';
-import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages';
+} from './engine-mixer-facade.js';
+import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the strip/pan/EQ/insert/instrument/MIDI setters need from

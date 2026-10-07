@@ -3,10 +3,10 @@
  * STFT and resynthesized.
  */
 
-import { getSonareModule } from './module_state';
-import type { SpectralEditOptions, SpectralRegionOp } from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples } from './validation';
+import { getSonareModule } from './module_state.js';
+import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertSampleRate, assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

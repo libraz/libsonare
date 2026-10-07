@@ -1,4 +1,4 @@
-import type { ChordQuality, PitchClass } from './public_types';
+import type { ChordQuality, PitchClass } from './public_types.js';
 
 /**
  * A detected chord change in the progression

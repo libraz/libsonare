@@ -1,12 +1,12 @@
-import { ErrorCode, SonareError } from './errors';
-import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain';
+import { ErrorCode, SonareError } from './errors.js';
+import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain.js';
 import type {
   DetectChordsRequest,
   DetectKeyRequest,
   MusicAnalyzeRequest,
   SamplesRequest,
-} from './quick_analysis';
-import type { OfflineWorkerOperation, OfflineWorkerResponseMessage } from './worker_protocol';
+} from './quick_analysis.js';
+import type { OfflineWorkerOperation, OfflineWorkerResponseMessage } from './worker_protocol.js';
 
 type WorkerRequest<T> = Omit<T, 'onProgress'>;
 
@@ -198,7 +198,7 @@ export class OfflineWorkerClient {
   analyze(
     request: WorkerRequest<MusicAnalyzeRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis').analyze>> {
+  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').analyze>> {
     return this.call('analyze', request, options);
   }
 
@@ -214,7 +214,7 @@ export class OfflineWorkerClient {
   detectKey(
     request: DetectKeyRequest,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis').detectKey>> {
+  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').detectKey>> {
     return this.call('detectKey', request, options);
   }
 
@@ -222,7 +222,7 @@ export class OfflineWorkerClient {
   detectChords(
     request: DetectChordsRequest,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis').detectChords>> {
+  ): OfflineWorkerTask<ReturnType<typeof import('./quick_analysis.js').detectChords>> {
     return this.call('detectChords', request, options);
   }
 
@@ -230,7 +230,7 @@ export class OfflineWorkerClient {
   masterAudio(
     request: WorkerRequest<MasterAudioRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain').masterAudio>> {
+  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain.js').masterAudio>> {
     return this.call('masterAudio', request, options);
   }
 
@@ -238,7 +238,7 @@ export class OfflineWorkerClient {
   masterAudioStereo(
     request: WorkerRequest<MasterAudioStereoRequest>,
     options?: OfflineWorkerCallOptions,
-  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain').masterAudioStereo>> {
+  ): OfflineWorkerTask<ReturnType<typeof import('./mastering_chain.js').masterAudioStereo>> {
     return this.call('masterAudioStereo', request, options);
   }
 

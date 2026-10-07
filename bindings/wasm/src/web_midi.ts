@@ -1,5 +1,5 @@
-import type { MidiCcBindOptions } from './realtime_engine';
-import { assertNibble } from './validation';
+import type { MidiCcBindOptions } from './realtime_engine.js';
+import { assertNibble } from './validation.js';
 
 export interface WebMidiEngine {
   bindMidiCc(

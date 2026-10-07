@@ -1,7 +1,7 @@
-import { validatePositiveIntegers } from './_feature_validation';
-import { resolveFftOptions } from './_fft_options';
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+import { validatePositiveIntegers } from './_feature_validation.js';
+import { resolveFftOptions } from './_fft_options.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   AnalyzeSectionsOptions,
   BoundaryOptions,
@@ -12,16 +12,16 @@ import type {
   OnsetStrengthMultiResult,
   Section,
   SectionType,
-} from './public_types';
+} from './public_types.js';
 import type { WasmFourierTempogramResult, WasmNnlsChromaResult } from './sonare.js';
-import type { ValidateOptions } from './validation';
+import type { ValidateOptions } from './validation.js';
 import {
   assertFiniteScalar,
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
   assertVqtGamma,
-} from './validation';
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();

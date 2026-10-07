@@ -1,9 +1,9 @@
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type {
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
   VoicePresetId,
-} from './public_types';
+} from './public_types.js';
 
 /**
  * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono

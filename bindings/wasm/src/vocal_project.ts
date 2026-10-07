@@ -1,4 +1,4 @@
-import type { VocalStateToken, VocalUint64 } from './public_types_vocal_edit';
+import type { VocalStateToken, VocalUint64 } from './public_types_vocal_edit.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
@@ -6,8 +6,8 @@ import type {
   ProjectVocalOriginalSource,
   ProjectVocalReason,
   ProjectVocalRehydrateItem,
-} from './public_types_vocal_project';
-import { assertSampleRate } from './validation';
+} from './public_types_vocal_project.js';
+import { assertSampleRate } from './validation.js';
 
 /** The embind Project object is deliberately structural here. */
 export interface VocalProjectNative {

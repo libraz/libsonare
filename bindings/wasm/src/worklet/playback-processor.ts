@@ -1,8 +1,8 @@
-import { HrtfSet, PlaybackRenderer } from '../index';
-import type { PlaybackRendererConfig } from '../public_types_playback';
+import { HrtfSet, PlaybackRenderer } from '../index.js';
+import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { isPlaybackMessage, requireIntegerOption } from './guards';
+import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import { isPlaybackMessage, requireIntegerOption } from './guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -10,7 +10,7 @@ import type {
   SonarePlaybackNodeOptions,
   SonarePlaybackWorkletProcessorOptions,
   WorkletPort,
-} from './messages';
+} from './messages.js';
 
 /** Largest input channel count any layout accepts (7.1). */
 const MAX_INPUT_CHANNELS = 8;

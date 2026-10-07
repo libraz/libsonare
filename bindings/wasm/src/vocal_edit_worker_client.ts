@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors';
+import { ErrorCode, SonareError } from './errors.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -14,7 +14,7 @@ import type {
   VocalStateBytes,
   VocalStateToken,
   VocalUint64,
-} from './public_types_vocal_edit';
+} from './public_types_vocal_edit.js';
 import {
   compareUint64,
   stateTokenEquals,
@@ -26,7 +26,7 @@ import {
   type VocalWorkerPreviewMessage,
   type VocalWorkerRequestMessage,
   type VocalWorkerResponseMessage,
-} from './vocal_edit_worker_protocol';
+} from './vocal_edit_worker_protocol.js';
 
 export interface VocalEditWorker {
   postMessage(message: unknown, transfer?: Transferable[]): void;

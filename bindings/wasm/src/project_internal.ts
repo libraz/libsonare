@@ -1,5 +1,5 @@
-import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
-import { ErrorCode, SonareError } from './errors';
+import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes.js';
+import { ErrorCode, SonareError } from './errors.js';
 import type {
   BuiltinSynthBinding,
   PartRigEntry,
@@ -13,8 +13,8 @@ import type {
   Sf2ProgramStatus,
   SynthEnumTables,
   SynthPatch,
-} from './instrument_types';
-import { getSonareModule } from './module_state';
+} from './instrument_types.js';
+import { getSonareModule } from './module_state.js';
 import type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
@@ -53,15 +53,15 @@ import type {
   ProjectWarpMode,
   TranscribeOptions,
   TranscribeResult,
-} from './project_types';
+} from './project_types.js';
 // A value import, and this module's one import cycle: sample_bank.ts reaches
 // back here for projectModule(). Both directions are read inside function
 // bodies only, never while a module body runs, which is what makes the cycle
 // safe. Reading SampleBank at module scope here breaks ONE import order and
 // leaves the other working, so the property is pinned by
 // tests/sample-bank-module-cycle.test.ts rather than left to review.
-import { SampleBank } from './sample_bank';
-import { assertNibble, assertU7, assertU32 } from './validation';
+import { SampleBank } from './sample_bank.js';
+import { assertNibble, assertU7, assertU32 } from './validation.js';
 
 /**
  * A synth binding as the embind layer takes it: the public `sampleBank` handle

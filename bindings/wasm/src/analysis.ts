@@ -6,18 +6,18 @@
  * required.
  */
 
-import './lifetime';
+import './lifetime.js';
 import {
   assertAbiCompatible,
   assertSameInitOptions,
   notInitializedError,
   setSonareModule,
-} from './module_state';
-import type { SonareCapabilities } from './public_types';
+} from './module_state.js';
+import type { SonareCapabilities } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
-export { ErrorCode, isSonareError, SonareError } from './errors';
-export * from './feature_core';
+export { ErrorCode, isSonareError, SonareError } from './errors.js';
+export * from './feature_core.js';
 // Several modules here also hold functions the analysis-only embind source set
 // never registers, so those are re-exported by name rather than wholesale:
 // `export *` published symbols that imported fine and then threw
@@ -30,7 +30,7 @@ export * from './feature_core';
 // enums, emscripten internals and raw `_` / `Ex` variants this entry withholds
 // deliberately — so a name dropped from a list below shrinks the published
 // surface silently.
-export type * from './feature_decompose';
+export type * from './feature_decompose.js';
 export {
   segmentAgglomerative,
   segmentCrossSimilarity,
@@ -39,15 +39,19 @@ export {
   segmentRecurrenceMatrix,
   segmentRecurrenceToLag,
   segmentSubsegment,
-} from './feature_decompose';
-export type * from './feature_inverse';
-export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse';
-export type * from './feature_loudness';
-export { ebur128LoudnessRange, lufsInterleaved, lufsSeriesInterleaved } from './feature_loudness';
-export * from './feature_music';
-export * from './feature_pitch';
-export type * from './feature_resample';
-export type * from './feature_spectral';
+} from './feature_decompose.js';
+export type * from './feature_inverse.js';
+export { griffinLim, melToAudio, melToStft, mfccToAudio, mfccToMel } from './feature_inverse.js';
+export type * from './feature_loudness.js';
+export {
+  ebur128LoudnessRange,
+  lufsInterleaved,
+  lufsSeriesInterleaved,
+} from './feature_loudness.js';
+export * from './feature_music.js';
+export * from './feature_pitch.js';
+export type * from './feature_resample.js';
+export type * from './feature_spectral.js';
 export {
   polyFeatures,
   rmsEnergy,
@@ -59,8 +63,8 @@ export {
   spectralRolloff,
   zeroCrossingRate,
   zeroCrossings,
-} from './feature_spectral';
-export type * from './feature_spectrogram';
+} from './feature_spectral.js';
+export type * from './feature_spectrogram.js';
 export {
   bassChroma,
   chroma,
@@ -72,9 +76,9 @@ export {
   reassignedSpectrogram,
   stft,
   stftDb,
-} from './feature_spectrogram';
-export * from './metering';
-export * from './public_types';
+} from './feature_spectrogram.js';
+export * from './metering.js';
+export * from './public_types.js';
 export type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
@@ -97,7 +101,7 @@ export type {
   SamplesRequest,
   TimbreAnalysisResult,
   TimbreFrame,
-} from './quick_analysis';
+} from './quick_analysis.js';
 export {
   analyze,
   analyzeBpm,
@@ -117,7 +121,7 @@ export {
   detectOnsets,
   estimateMeter,
   hasFfmpegSupport,
-} from './quick_analysis';
+} from './quick_analysis.js';
 
 let module: SonareModule | null = null;
 let initPromise: Promise<void> | null = null;

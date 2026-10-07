@@ -4,24 +4,24 @@
 // AudioWorkletGlobalScope cannot resolve sibling chunks), so the public surface
 // is unchanged.
 
-import './lifetime';
+import './lifetime.js';
 
-export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer';
-export { attachOpfsClipStream } from './clip_page_streamer';
+export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer.js';
+export { attachOpfsClipStream } from './clip_page_streamer.js';
 // With code-splitting disabled, the worklet bundle carries its own copy of the
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
-export { init, isInitialized } from './index';
+export { init, isInitialized } from './index.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.
-export type { StreamingMasteringChainConfig } from './public_types';
-export { StreamingMasteringChain } from './streaming_processors';
-export { SonareEngine } from './worklet/engine';
-export { SonareRealtimeEngineNode } from './worklet/engine-node';
-export type { SonareEngineOptions } from './worklet/engine-options';
-export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor';
-export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register';
+export type { StreamingMasteringChainConfig } from './public_types.js';
+export { StreamingMasteringChain } from './streaming_processors.js';
+export { SonareEngine } from './worklet/engine.js';
+export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
+export type { SonareEngineOptions } from './worklet/engine-options.js';
+export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor.js';
+export { registerSonareRealtimeEngineWorkletProcessor } from './worklet/engine-register.js';
 export type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessage,
@@ -78,16 +78,16 @@ export type {
   SonareWorkletScheduleInsertAutomationMessage,
   SonareWorkletSetMeterIntervalMessage,
   SonareWorkletTransportMessage,
-} from './worklet/messages';
+} from './worklet/messages.js';
 export {
   registerSonareWorkletProcessor,
   SonareWorkletProcessor,
-} from './worklet/mixer-processor';
+} from './worklet/mixer-processor.js';
 export {
   createSonarePlaybackNode,
   registerSonarePlaybackWorkletProcessor,
   SonarePlaybackWorkletProcessor,
-} from './worklet/playback-processor';
+} from './worklet/playback-processor.js';
 export {
   createSonareClipPageRequestRingBuffer,
   createSonareEngineCommandRingBuffer,
@@ -150,8 +150,8 @@ export {
   sonareScopeRingBufferByteLength,
   sonareSpectrumRingBufferByteLength,
   writeSonareEngineTelemetryRingBuffer,
-} from './worklet/protocol';
+} from './worklet/protocol.js';
 export {
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,
-} from './worklet/voice-changer-processor';
+} from './worklet/voice-changer-processor.js';

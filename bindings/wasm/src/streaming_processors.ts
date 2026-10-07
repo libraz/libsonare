@@ -1,5 +1,5 @@
-import { flattenChainConfig } from './_chain_config';
-import { getSonareModule } from './module_state';
+import { flattenChainConfig } from './_chain_config.js';
+import { getSonareModule } from './module_state.js';
 import type {
   EqBand,
   EqMatchOptions,
@@ -8,7 +8,7 @@ import type {
   StreamingEqualizerConfig,
   StreamingMasteringChainConfig,
   StreamingRetuneConfig,
-} from './public_types';
+} from './public_types.js';
 
 type EqPhaseMode =
   | 'zero'

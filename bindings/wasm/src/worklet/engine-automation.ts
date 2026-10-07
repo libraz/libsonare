@@ -1,6 +1,6 @@
-import type { EngineAutomationPoint, RealtimeEngine } from '../index';
-import { curveCode } from './engine-sync';
-import type { SonareEngineSyncMessage } from './messages';
+import type { EngineAutomationPoint, RealtimeEngine } from '../index.js';
+import { curveCode } from './engine-sync.js';
+import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the automation-lane helpers need from the owning

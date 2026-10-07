@@ -1,5 +1,5 @@
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -20,7 +20,7 @@ import type {
   VocalSessionLimits,
   VocalStateToken,
   VocalUint64,
-} from './public_types_vocal_edit';
+} from './public_types_vocal_edit.js';
 import type { SonareModule } from './sonare.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
@@ -931,4 +931,4 @@ export type {
   VocalCreateRequest,
   VocalEditResult,
   VocalHistory,
-} from './public_types_vocal_edit';
+} from './public_types_vocal_edit.js';

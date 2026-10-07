@@ -3,11 +3,11 @@ import type {
   EngineTimeSignatureSegment,
   EngineTransportState,
   RealtimeEngine,
-} from '../index';
-import type { SonareRealtimeEngineNode } from './engine-node';
-import { buildTempoSync } from './engine-sync';
-import type { SonareEngineSyncMessage } from './messages';
-import { SonareEngineCommandType } from './protocol';
+} from '../index.js';
+import type { SonareRealtimeEngineNode } from './engine-node.js';
+import { buildTempoSync } from './engine-sync.js';
+import type { SonareEngineSyncMessage } from './messages.js';
+import { SonareEngineCommandType } from './protocol.js';
 
 interface TimeSignature {
   numerator: number;

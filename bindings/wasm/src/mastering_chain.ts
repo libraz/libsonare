@@ -1,14 +1,14 @@
-import { flattenChainConfig } from './_chain_config';
-import { getSonareModule } from './module_state';
+import { flattenChainConfig } from './_chain_config.js';
+import { getSonareModule } from './module_state.js';
 import type {
   MasteringChainConfig,
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringPreset,
-} from './public_types';
+} from './public_types.js';
 import type { ProgressCallback } from './sonare.js';
-import type { ValidateOptions } from './validation';
-import { assertSamples } from './validation';
+import type { ValidateOptions } from './validation.js';
+import { assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

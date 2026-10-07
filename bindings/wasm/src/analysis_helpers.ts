@@ -1,4 +1,4 @@
-import { resolveEnumOrdinal } from './codes';
+import { resolveEnumOrdinal } from './codes.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -9,8 +9,8 @@ import type {
   KeyProfileName,
   PitchClass,
   SectionType,
-} from './public_types';
-import { KeyProfile as KeyProfileValues, Mode } from './public_types';
+} from './public_types.js';
+import { KeyProfile as KeyProfileValues, Mode } from './public_types.js';
 import type {
   WasmAnalysisResult,
   WasmChordAnalysisResult,

@@ -18,19 +18,19 @@
  * ```
  */
 
-import './lifetime';
+import './lifetime.js';
 import {
   assertAbiCompatible,
   assertSameInitOptions,
   notInitializedError,
   setSonareModule,
-} from './module_state';
+} from './module_state.js';
 import type {
   CapabilityCatalog,
   RealtimeVoiceChangerPodConfig,
   SonareCapabilities,
   VoicePresetId,
-} from './public_types';
+} from './public_types.js';
 import type {
   SonareModule,
   WasmDecomposeResult,
@@ -38,9 +38,9 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 
-export { alignTakeToReference } from './align_take';
-export type { BrowserAudioDecodeOptions } from './audio';
-export { Audio } from './audio';
+export { alignTakeToReference } from './align_take.js';
+export type { BrowserAudioDecodeOptions } from './audio.js';
+export { Audio } from './audio.js';
 export type {
   ClipPageStreamerEngine,
   ClipPageStreamerOptions,
@@ -49,8 +49,8 @@ export type {
   OpfsClipStream,
   OpfsClipStreamOptions,
   WorkletOpfsClipStreamHost,
-} from './clip_page_streamer';
-export { attachOpfsClipStream, ClipPageStreamer } from './clip_page_streamer';
+} from './clip_page_streamer.js';
+export { attachOpfsClipStream, ClipPageStreamer } from './clip_page_streamer.js';
 export type {
   CompressorDetector,
   CompressorOptions,
@@ -126,7 +126,7 @@ export type {
   VoiceChangeRealtimeOptions,
   VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
-} from './effects_mastering';
+} from './effects_mastering.js';
 export {
   assignNoteTargets,
   decomposeNotePitch,
@@ -222,7 +222,7 @@ export {
   timeStretch,
   voiceChange,
   voiceChangeRealtime,
-} from './effects_mastering';
+} from './effects_mastering.js';
 export type {
   AssignNoteTargetsRequest,
   DecomposeNotePitchRequest,
@@ -234,22 +234,22 @@ export type {
   NoteTargetsFromSmfRequest,
   RenderNotesRequest,
   SplitNoteRequest,
-} from './effects_note_ops';
+} from './effects_note_ops.js';
 export type {
   ExtractPercussiveEventsRequest,
   PercussiveSeparationOptions,
   RenderPercussiveEventsRequest,
-} from './effects_percussive';
-export type { HarmonicRequest, HpssRequest, PercussiveRequest } from './effects_separation';
-export type { SpectralEditRequest } from './effects_spectral';
+} from './effects_percussive.js';
+export type { HarmonicRequest, HpssRequest, PercussiveRequest } from './effects_separation.js';
+export type { SpectralEditRequest } from './effects_spectral.js';
 export type {
   PitchCorrectTimevaryingRequest,
   PitchCorrectToMidiRequest,
   PitchCorrectToMidiTimevaryingRequest,
   PitchShiftRequest,
   TimeStretchRequest,
-} from './effects_timepitch';
-export { ErrorCode, isSonareError, SonareError } from './errors';
+} from './effects_timepitch.js';
+export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export type {
   ChirpRequest,
   ClicksRequest,
@@ -272,7 +272,7 @@ export type {
   ToneRequest,
   TonnetzRequest,
   VectorNormalizeRequest,
-} from './feature_core';
+} from './feature_core.js';
 export type {
   DecomposeRequest,
   DecomposeStemsLinkedRequest,
@@ -290,7 +290,7 @@ export type {
   SegmentRecurrenceMatrixRequest,
   SegmentRecurrenceToLagRequest,
   SegmentSubsegmentRequest,
-} from './feature_decompose';
+} from './feature_decompose.js';
 export type {
   GriffinLimRequest,
   MelToAudioRequest,
@@ -298,12 +298,12 @@ export type {
   MfccToAudioRequest,
   MfccToMelRequest,
   PhaseVocoderRequest,
-} from './feature_inverse';
+} from './feature_inverse.js';
 export type {
   Ebur128LoudnessRangeRequest,
   LufsInterleavedRequest,
   LufsSeriesInterleavedRequest,
-} from './feature_loudness';
+} from './feature_loudness.js';
 export type {
   AnalyzeMelodyRequest,
   AnalyzeSectionsRequest,
@@ -319,7 +319,7 @@ export type {
   TempogramRatioRequest,
   VqtRequest,
   VqtToAudioRequest,
-} from './feature_music';
+} from './feature_music.js';
 export type {
   EstimateTuningRequest,
   NoteSegmentsRequest,
@@ -327,8 +327,8 @@ export type {
   PitchPyinRequest,
   PitchTuningRequest,
   PitchYinRequest,
-} from './feature_pitch';
-export type { ResampleRequest } from './feature_resample';
+} from './feature_pitch.js';
+export type { ResampleRequest } from './feature_resample.js';
 export type {
   PolyFeaturesRequest,
   SpectralContrastRequest,
@@ -336,7 +336,7 @@ export type {
   SpectralRolloffRequest,
   ZeroCrossingRateRequest,
   ZeroCrossingsRequest,
-} from './feature_spectral';
+} from './feature_spectral.js';
 export type {
   BassChromaSpectrogramRequest,
   ChromaSpectrogramRequest,
@@ -346,7 +346,7 @@ export type {
   ReassignedSpectrogramRequest,
   SpectrogramRequest,
   TrimRequest,
-} from './feature_spectrogram';
+} from './feature_spectrogram.js';
 export {
   amplitudeToDb,
   analyzeMelody,
@@ -452,9 +452,9 @@ export {
   vqtToAudio,
   zeroCrossingRate,
   zeroCrossings,
-} from './features';
-export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio';
-export { bindMicrophoneInput } from './live_audio';
+} from './features.js';
+export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio.js';
+export { bindMicrophoneInput } from './live_audio.js';
 export type {
   MasterAudioRequest,
   MasterAudioStereoRequest,
@@ -464,8 +464,8 @@ export type {
   NormalizeRequest,
   NormalizeStereoRequest,
   NormalizeStereoResult,
-} from './mastering_chain';
-export type { MasteringRequest } from './mastering_core';
+} from './mastering_chain.js';
+export type { MasteringRequest } from './mastering_core.js';
 export type {
   ClippingRegion,
   ClippingReport,
@@ -490,7 +490,7 @@ export type {
   WaveformPeaksOptions,
   WaveformPeaksReport,
   WaveformPeaksRequest,
-} from './metering';
+} from './metering.js';
 export {
   meteringCrestFactorDb,
   meteringCrestFactorDbStereo,
@@ -511,31 +511,31 @@ export {
   meteringVectorscopeDecimated,
   waveformPeakPyramid,
   waveformPeaks,
-} from './metering';
-export type { SuggestMixSceneRequest } from './mixing_assistant';
+} from './metering.js';
+export type { SuggestMixSceneRequest } from './mixing_assistant.js';
 export {
   mixSourceClassFromName,
   mixSourceClassNames,
   suggestMixScene,
   suggestMixSceneJson,
-} from './mixing_assistant';
+} from './mixing_assistant.js';
 export type {
   OpfsClipPageProviderBinding,
   OpfsClipPageProviderOptions,
-} from './opfs_clip_pages';
+} from './opfs_clip_pages.js';
 export {
   createOpfsClipPageProvider,
   createOpfsClipPageWorker,
   opfsClipPageWorkerSource,
-} from './opfs_clip_pages';
+} from './opfs_clip_pages.js';
 export {
   HrtfSet,
   PlaybackLoudnessMeter,
   PlaybackRenderer,
   renderPlayback,
-} from './playback_renderer';
-export type { AnalyzePolyphonicRequest } from './polyphony';
-export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony';
+} from './playback_renderer.js';
+export type { AnalyzePolyphonicRequest } from './polyphony.js';
+export { analyzePolyphonic, PolyphonicAnalysis } from './polyphony.js';
 export type {
   AlignTakeToReferenceRequest,
   AlignTakeToReferenceResult,
@@ -618,7 +618,7 @@ export type {
   TakeAlignment,
   TranscribeOptions,
   TranscribeResult,
-} from './project';
+} from './project.js';
 export {
   ARTICULATIONS,
   AutomationTargetKind,
@@ -655,7 +655,7 @@ export {
   synthGsVariationIsVoicedApart,
   synthPresetNames,
   synthPresetPatch,
-} from './project';
+} from './project.js';
 export type {
   AcousticOptions,
   AcousticResult,
@@ -845,15 +845,15 @@ export type {
   UmpWords,
   VoicedFlags,
   VoicePresetId,
-} from './public_types';
+} from './public_types.js';
 export {
   ChordQuality,
   KeyProfile,
   Mode,
   PitchClass,
   SectionType,
-} from './public_types';
-export type * from './public_types_vocal_edit';
+} from './public_types.js';
+export type * from './public_types_vocal_edit.js';
 export type {
   AnalyzeBpmRequest,
   AnalyzeDynamicsRequest,
@@ -878,7 +878,7 @@ export type {
   SamplesRequest,
   TimbreAnalysisResult,
   TimbreFrame,
-} from './quick_analysis';
+} from './quick_analysis.js';
 export {
   analyze,
   analyzeBpm,
@@ -901,7 +901,7 @@ export {
   hasFfmpegSupport,
   roomMorph,
   synthesizeRir,
-} from './quick_analysis';
+} from './quick_analysis.js';
 export type {
   ClipPageRequest,
   EngineAutomationPoint,
@@ -934,16 +934,16 @@ export type {
   MidiCcBindOptions,
   RenderOfflineRequest,
   TrackMonitorMode,
-} from './realtime_engine';
+} from './realtime_engine.js';
 export {
   ClipPageProvider,
   EXPECTED_ENGINE_ABI_VERSION,
   engineCapabilities,
   RealtimeEngine,
-} from './realtime_engine';
-export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale';
+} from './realtime_engine.js';
+export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale.js';
 export type { ProgressCallback } from './sonare.js';
-export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer';
+export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer.js';
 export type {
   AnalyzerStats,
   BarChord,
@@ -956,7 +956,7 @@ export type {
   StreamFramesI16,
   StreamFramesU8,
   StreamQuantizeConfig,
-} from './stream_types';
+} from './stream_types.js';
 export type {
   MixerMeterSnapshot,
   MixerRealtimeBuffer,
@@ -964,7 +964,7 @@ export type {
   RealtimeVoiceChangerMonoBuffer,
   RealtimeVoiceChangerPlanarBuffer,
   StripMeteringOptions,
-} from './streaming_mixing';
+} from './streaming_mixing.js';
 export {
   Mixer,
   RealtimeVoiceChanger,
@@ -974,10 +974,10 @@ export {
   StreamingMasteringChain,
   StreamingRetune,
   validateRealtimeVoiceChangerPresetJson,
-} from './streaming_mixing';
-export type { TranscribeRequest } from './transcribe';
-export { transcribe } from './transcribe';
-export type { ValidateOptions } from './validation';
+} from './streaming_mixing.js';
+export type { TranscribeRequest } from './transcribe.js';
+export { transcribe } from './transcribe.js';
+export type { ValidateOptions } from './validation.js';
 export {
   createVocalEditSession,
   restoreVocalEditSession,
@@ -987,34 +987,34 @@ export {
   VocalRenderSnapshot,
   vocalEditApiVersion,
   vocalEditAvailable,
-} from './vocal_edit';
+} from './vocal_edit.js';
 export type {
   VocalEditWorker,
   VocalEditWorkerCallOptions,
   VocalEditWorkerClientOptions,
   VocalEditWorkerTransferOptions,
-} from './vocal_edit_worker_client';
+} from './vocal_edit_worker_client.js';
 export {
   VocalEditWorkerClient,
   VocalEditWorkerSession,
   VocalEditWorkerStaleResultError,
   VocalEditWorkerTask,
-} from './vocal_edit_worker_client';
-export type * from './vocal_edit_worker_protocol';
+} from './vocal_edit_worker_client.js';
+export type * from './vocal_edit_worker_protocol.js';
 export type {
   BindWebMidiOptions,
   WebMidiBinding,
   WebMidiCcBinding,
   WebMidiInputInfo,
-} from './web_midi';
-export { bindWebMidi, isWebMidiAvailable } from './web_midi';
+} from './web_midi.js';
+export { bindWebMidi, isWebMidiAvailable } from './web_midi.js';
 export type {
   OfflineWorker,
   OfflineWorkerCallOptions,
   OfflineWorkerClientOptions,
   OfflineWorkerProgress,
-} from './worker_client';
-export { OfflineWorkerClient, OfflineWorkerTask } from './worker_client';
+} from './worker_client.js';
+export { OfflineWorkerClient, OfflineWorkerTask } from './worker_client.js';
 
 /** Row-major 2-D matrix as a flat buffer plus its dimensions. */
 export type Matrix2dResult = WasmMatrix2dResult;
@@ -1201,6 +1201,6 @@ export function realtimeVoiceChangerPresetConfig(
 // Re-exports
 // ============================================================================
 
-export { PitchClass as Pitch } from './public_types';
+export { PitchClass as Pitch } from './public_types.js';
 
-export type * from './public_types_vocal_project';
+export type * from './public_types_vocal_project.js';

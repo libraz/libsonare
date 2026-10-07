@@ -2,8 +2,8 @@
  * Silence trimming, with the range detector it shares its geometry with.
  */
 
-import { getSonareModule } from './module_state';
-import type { MasteringRepairTrimSilenceStereoResult, TrimRange } from './public_types_repair';
+import { getSonareModule } from './module_state.js';
+import type { MasteringRepairTrimSilenceStereoResult, TrimRange } from './public_types_repair.js';
 
 function requireModule() {
   return getSonareModule();

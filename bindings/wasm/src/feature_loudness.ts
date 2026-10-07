@@ -3,10 +3,10 @@
  * it.
  */
 
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type { WasmLufsResult, WasmLufsSeriesResult } from './sonare.js';
-import type { ValidateOptions } from './validation';
-import { assertInterleavedSamples, assertSampleRate } from './validation';
+import type { ValidateOptions } from './validation.js';
+import { assertInterleavedSamples, assertSampleRate } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

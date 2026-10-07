@@ -1,6 +1,6 @@
-import { getSonareModule } from './module_state';
-import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types';
-import { assertSampleRate } from './validation';
+import { getSonareModule } from './module_state.js';
+import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types.js';
+import { assertSampleRate } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

@@ -3,12 +3,12 @@
  * correction onto a target pitch.
  */
 
-import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common';
-import { resolveFftOptions } from './_fft_options';
-import { getSonareModule } from './module_state';
-import type { PitchCorrectOptions, VoicedFlags } from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertFiniteScalar, assertSamples } from './validation';
+import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
+import { resolveFftOptions } from './_fft_options.js';
+import { getSonareModule } from './module_state.js';
+import type { PitchCorrectOptions, VoicedFlags } from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertFiniteScalar, assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

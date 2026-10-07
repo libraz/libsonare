@@ -2,8 +2,8 @@ import {
   ClipPageStreamer,
   type ClipPageStreamerRequest,
   type OpfsClipStreamOptions,
-} from '../clip_page_streamer';
-import { ErrorCode, SonareError } from '../errors';
+} from '../clip_page_streamer.js';
+import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -26,31 +26,34 @@ import type {
   SidechainCheck,
   SidechainSourceKind,
   UmpWords,
-} from '../index';
-import { RealtimeEngine } from '../index';
-import { createOpfsClipPageProvider, type OpfsClipPageProviderBinding } from '../opfs_clip_pages';
-import type { SurroundPan } from '../public_types';
-import type { ClipPageProvider } from '../realtime_engine';
-import type { EngineAutomationContext } from './engine-automation';
-import * as automation from './engine-automation';
-import type { EngineCaptureContext } from './engine-capture-facade';
-import * as capture from './engine-capture-facade';
-import type { EngineClipContext } from './engine-clips';
-import * as clips from './engine-clips';
-import type { EngineMarkerContext } from './engine-markers';
-import * as markers from './engine-markers';
-import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade';
-import * as mixer from './engine-mixer-facade';
-import { SonareRealtimeEngineNode } from './engine-node';
-import { buildTransportFacade, type CaptureOptions } from './engine-offline';
-import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options';
-import type { EngineParameterContext } from './engine-parameter-facade';
-import * as parameter from './engine-parameter-facade';
-import type { EngineStripContext } from './engine-strips';
-import * as strips from './engine-strips';
-import { resolveParamId, resolveTargetId } from './engine-sync';
-import type { EngineTempoContext } from './engine-tempo-facade';
-import * as tempo from './engine-tempo-facade';
+} from '../index.js';
+import { RealtimeEngine } from '../index.js';
+import {
+  createOpfsClipPageProvider,
+  type OpfsClipPageProviderBinding,
+} from '../opfs_clip_pages.js';
+import type { SurroundPan } from '../public_types.js';
+import type { ClipPageProvider } from '../realtime_engine.js';
+import type { EngineAutomationContext } from './engine-automation.js';
+import * as automation from './engine-automation.js';
+import type { EngineCaptureContext } from './engine-capture-facade.js';
+import * as capture from './engine-capture-facade.js';
+import type { EngineClipContext } from './engine-clips.js';
+import * as clips from './engine-clips.js';
+import type { EngineMarkerContext } from './engine-markers.js';
+import * as markers from './engine-markers.js';
+import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade.js';
+import * as mixer from './engine-mixer-facade.js';
+import { SonareRealtimeEngineNode } from './engine-node.js';
+import { buildTransportFacade, type CaptureOptions } from './engine-offline.js';
+import type { SonareEngineOptions, SuspendableAudioContext } from './engine-options.js';
+import type { EngineParameterContext } from './engine-parameter-facade.js';
+import * as parameter from './engine-parameter-facade.js';
+import type { EngineStripContext } from './engine-strips.js';
+import * as strips from './engine-strips.js';
+import { resolveParamId, resolveTargetId } from './engine-sync.js';
+import type { EngineTempoContext } from './engine-tempo-facade.js';
+import * as tempo from './engine-tempo-facade.js';
 import type {
   SonareEngineInstrumentSyncMessage,
   SonareEngineSyncCaptureMessage,
@@ -58,7 +61,7 @@ import type {
   SonareEngineTransportFacade,
   SonareRealtimeEngineNodeCapabilities,
   SonareWorkletExternalMidiEvent,
-} from './messages';
+} from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
@@ -68,7 +71,7 @@ import {
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
-} from './protocol';
+} from './protocol.js';
 
 const MAX_PENDING_WORKLET_CLIP_PAGE_REQUESTS = 256;
 

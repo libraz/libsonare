@@ -2,8 +2,8 @@
  * Input checks the spectrogram and inverse-transform entries share.
  */
 
-import type { ValidateOptions } from './validation';
-import { assertFiniteScalar, assertPositiveInteger } from './validation';
+import type { ValidateOptions } from './validation.js';
+import { assertFiniteScalar, assertPositiveInteger } from './validation.js';
 
 export type GuardedOptions = ValidateOptions;
 

@@ -2,8 +2,8 @@ import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
   type OpfsClipPageProviderOptions,
-} from './opfs_clip_pages';
-import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine';
+} from './opfs_clip_pages.js';
+import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
 
 /**
  * Minimal engine surface the streamer drives. {@link RealtimeEngine} satisfies

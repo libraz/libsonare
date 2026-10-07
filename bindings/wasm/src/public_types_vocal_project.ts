@@ -1,4 +1,4 @@
-import type { VocalStateToken, VocalUint64 } from './public_types_vocal_edit';
+import type { VocalStateToken, VocalUint64 } from './public_types_vocal_edit.js';
 
 /** A full source render and persisted vocal session ready for Project apply. */
 export interface ProjectVocalEditApplyRequest {

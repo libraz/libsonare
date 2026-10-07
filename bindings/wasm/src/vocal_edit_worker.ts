@@ -1,5 +1,5 @@
-import './lifetime';
-import { init } from './index';
+import './lifetime.js';
+import { init } from './index.js';
 import type {
   VocalAnalysis,
   VocalCapabilities,
@@ -13,13 +13,13 @@ import type {
   VocalRestoreRequest,
   VocalStateBytes,
   VocalStateToken,
-} from './public_types_vocal_edit';
+} from './public_types_vocal_edit.js';
 import {
   createVocalEditSession,
   restoreVocalEditSession,
   type VocalRenderJob,
   type VocalRenderSnapshot,
-} from './vocal_edit';
+} from './vocal_edit.js';
 import {
   compareUint64,
   type VocalWorkerCreateMessage,
@@ -30,7 +30,7 @@ import {
   type VocalWorkerRequestMessage,
   type VocalWorkerResponseMessage,
   type VocalWorkerResult,
-} from './vocal_edit_worker_protocol';
+} from './vocal_edit_worker_protocol.js';
 
 export interface VocalEditWorkerEndpoint {
   postMessage(message: VocalWorkerResponseMessage, transfer?: Transferable[]): void;

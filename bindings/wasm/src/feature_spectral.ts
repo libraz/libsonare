@@ -3,7 +3,7 @@
  * frame, and the zero-crossing counts beside them.
  */
 
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type { WasmMatrix2dResult } from './sonare.js';
 
 function requireModule() {

@@ -2,7 +2,7 @@
  * Input conversion the effect families share.
  */
 
-import type { VoicedFlags } from './public_types';
+import type { VoicedFlags } from './public_types.js';
 
 // The embind layer reads the companion voicing array as Float32Array. Keep the
 // public union a runtime contract before conversion: strings, Float64Arrays and

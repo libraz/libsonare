@@ -34,7 +34,7 @@ export {
   tonnetz,
   trimSilence,
   vectorNormalize,
-} from './feature_core';
+} from './feature_core.js';
 export {
   decompose,
   decomposeStems,
@@ -51,7 +51,7 @@ export {
   segmentRecurrenceMatrix,
   segmentRecurrenceToLag,
   segmentSubsegment,
-} from './feature_decompose';
+} from './feature_decompose.js';
 export {
   griffinLim,
   melToAudio,
@@ -59,8 +59,12 @@ export {
   mfccToAudio,
   mfccToMel,
   phaseVocoder,
-} from './feature_inverse';
-export { ebur128LoudnessRange, lufsInterleaved, lufsSeriesInterleaved } from './feature_loudness';
+} from './feature_inverse.js';
+export {
+  ebur128LoudnessRange,
+  lufsInterleaved,
+  lufsSeriesInterleaved,
+} from './feature_loudness.js';
 export {
   analyzeMelody,
   analyzeSections,
@@ -79,7 +83,7 @@ export {
   tempogramRatio,
   vqt,
   vqtToAudio,
-} from './feature_music';
+} from './feature_music.js';
 export {
   estimateTuning,
   noteSegments,
@@ -87,8 +91,8 @@ export {
   pitchPyin,
   pitchTuning,
   pitchYin,
-} from './feature_pitch';
-export { resample } from './feature_resample';
+} from './feature_pitch.js';
+export { resample } from './feature_resample.js';
 export {
   polyFeatures,
   rmsEnergy,
@@ -100,7 +104,7 @@ export {
   spectralRolloff,
   zeroCrossingRate,
   zeroCrossings,
-} from './feature_spectral';
+} from './feature_spectral.js';
 export {
   bassChroma,
   chroma,
@@ -113,4 +117,4 @@ export {
   stft,
   stftDb,
   trim,
-} from './feature_spectrogram';
+} from './feature_spectrogram.js';

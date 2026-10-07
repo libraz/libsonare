@@ -1,11 +1,11 @@
-import { RealtimeVoiceChanger } from '../index';
-import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types';
-import { isRealtimeVoiceChangerMessage, requireChannelCount } from './guards';
+import { RealtimeVoiceChanger } from '../index.js';
+import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import { isRealtimeVoiceChangerMessage, requireChannelCount } from './guards.js';
 import type {
   SonareRealtimeVoiceChangerMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
   WorkletPort,
-} from './messages';
+} from './messages.js';
 
 export class SonareRealtimeVoiceChangerWorkletProcessor {
   private static warnedMonoOverflow = false;

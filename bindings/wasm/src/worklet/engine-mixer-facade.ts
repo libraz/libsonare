@@ -1,15 +1,18 @@
-import { sidechainSourceKindCode } from '../codes';
+import { sidechainSourceKindCode } from '../codes.js';
 import type {
   EngineBus,
   EngineTrackLane,
   EngineTrackSend,
   RealtimeEngine,
   SidechainSourceKind,
-} from '../index';
-import { normalizeTrackLanes } from './engine-offline';
-import { buildMixerLanes, resolveTargetId } from './engine-sync';
-import type { SonareEngineSyncMessage, SonareEngineSyncMixerInsertParamOverride } from './messages';
-import { ENGINE_MIXER_PARAM_FADER_DB, engineMixerBusTarget } from './protocol';
+} from '../index.js';
+import { normalizeTrackLanes } from './engine-offline.js';
+import { buildMixerLanes, resolveTargetId } from './engine-sync.js';
+import type {
+  SonareEngineSyncMessage,
+  SonareEngineSyncMixerInsertParamOverride,
+} from './messages.js';
+import { ENGINE_MIXER_PARAM_FADER_DB, engineMixerBusTarget } from './protocol.js';
 
 /** A latest by-name insert value retained across a later topology replay. */
 export interface InsertParamOverride {

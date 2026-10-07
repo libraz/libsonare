@@ -1,5 +1,5 @@
-import { getSonareModule } from './module_state';
-import type { TempogramMode } from './public_types';
+import { getSonareModule } from './module_state.js';
+import type { TempogramMode } from './public_types.js';
 import type {
   WasmCyclicTempogramResult,
   WasmFrameResult,

@@ -3,23 +3,23 @@
  * their input checks.
  */
 
-import type { GuardedOptions } from './_feature_validation';
-import { validateMelFrequencyRange, validatePositiveIntegers } from './_feature_validation';
-import { resolveFftOptions } from './_fft_options';
-import { getSonareModule } from './module_state';
+import type { GuardedOptions } from './_feature_validation.js';
+import { validateMelFrequencyRange, validatePositiveIntegers } from './_feature_validation.js';
+import { resolveFftOptions } from './_fft_options.js';
+import { getSonareModule } from './module_state.js';
 import type {
   ChromaResult,
   MelSpectrogramResult,
   MfccResult,
   ReassignedSpectrogramResult,
   StftResult,
-} from './public_types';
+} from './public_types.js';
 import {
   assertFiniteScalar,
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
-} from './validation';
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();

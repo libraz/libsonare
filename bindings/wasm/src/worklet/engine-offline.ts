@@ -1,6 +1,11 @@
-import type { EngineCaptureStatus, EngineMarker, EngineTrackLane, RealtimeEngine } from '../index';
-import { requireChannelCount, requireInteger, requireIntegerOption } from './guards';
-import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages';
+import type {
+  EngineCaptureStatus,
+  EngineMarker,
+  EngineTrackLane,
+  RealtimeEngine,
+} from '../index.js';
+import { requireChannelCount, requireInteger, requireIntegerOption } from './guards.js';
+import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages.js';
 
 /** Capture configuration options accepted by the engine's `configureCapture`. */
 export interface CaptureOptions {

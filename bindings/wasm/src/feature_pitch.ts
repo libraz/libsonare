@@ -1,6 +1,6 @@
-import type { SpectralFrameRequest } from './feature_spectral';
-import { getSonareModule } from './module_state';
-import type { NoteSegment, PiptrackResult, PitchResult } from './public_types';
+import type { SpectralFrameRequest } from './feature_spectral.js';
+import { getSonareModule } from './module_state.js';
+import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
 
 function requireModule() {
   return getSonareModule();

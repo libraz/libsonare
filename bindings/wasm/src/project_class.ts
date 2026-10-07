@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors';
+import { ErrorCode, SonareError } from './errors.js';
 import type {
   BuiltinSynthBinding,
   BuiltinSynthWaveform,
@@ -10,7 +10,7 @@ import type {
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
-} from './instrument_types';
+} from './instrument_types.js';
 import {
   assertProjectMidiEvents,
   normalizeInstrumentBindings,
@@ -28,7 +28,7 @@ import {
   unregisterProjectTimeline,
   type WasmProject,
   type WasmProjectTimeline,
-} from './project_internal';
+} from './project_internal.js';
 import type {
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
@@ -73,26 +73,26 @@ import type {
   ProjectTranscribeRequest,
   ProjectWarpMapDesc,
   ProjectWarpMode,
-} from './project_types';
+} from './project_types.js';
 import type {
   ProjectVocalEditApplyRequest,
   ProjectVocalEditApplyResult,
   ProjectVocalEditDependency,
   ProjectVocalOriginalSource,
   ProjectVocalRehydrateItem,
-} from './public_types_vocal_project';
+} from './public_types_vocal_project.js';
 import {
   assertBoundedInteger,
   assertNibble,
   assertSampleRate,
   assertSamples,
   assertU7,
-} from './validation';
+} from './validation.js';
 import {
   projectApplyVocalEdit,
   projectGetVocalEditDependencies,
   projectRehydrateVocalEdits,
-} from './vocal_project';
+} from './vocal_project.js';
 
 /**
  * Folds the positional and request call forms of `bakeMidiFx` into one shape,

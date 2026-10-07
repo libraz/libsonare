@@ -5,9 +5,9 @@ import {
   convertKeyCandidate,
   keyModeValues,
   keyProfileValue,
-} from './analysis_helpers';
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+} from './analysis_helpers.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   AcousticOptions,
   AcousticResult,
@@ -28,16 +28,16 @@ import type {
   RoomEstimateResult,
   RoomMorphOptions,
   RoomMorphResult,
-} from './public_types';
-import { Mode, PitchClass } from './public_types';
+} from './public_types.js';
+import { Mode, PitchClass } from './public_types.js';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
-import type { ValidateOptions } from './validation';
+import type { ValidateOptions } from './validation.js';
 import {
   assertFiniteScalar,
   assertNonNegativeInteger,
   assertSampleRate,
   assertSamples,
-} from './validation';
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();

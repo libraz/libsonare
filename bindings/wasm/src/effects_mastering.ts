@@ -8,24 +8,24 @@ export {
   noteTargetsFromSmf,
   renderNotes,
   splitNote,
-} from './effects_note_ops';
-export { extractPercussiveEvents, renderPercussiveEvents } from './effects_percussive';
-export { harmonic, hpss, percussive } from './effects_separation';
-export { spectralEdit } from './effects_spectral';
+} from './effects_note_ops.js';
+export { extractPercussiveEvents, renderPercussiveEvents } from './effects_percussive.js';
+export { harmonic, hpss, percussive } from './effects_separation.js';
+export { spectralEdit } from './effects_spectral.js';
 export {
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
   pitchShift,
   timeStretch,
-} from './effects_timepitch';
+} from './effects_timepitch.js';
 export type {
   VoiceChangeOptions,
   VoiceChangeRealtimeOptions,
   VoiceChangeRealtimeRequest,
   VoiceChangeRequest,
-} from './effects_voice_change';
-export { voiceChange, voiceChangeRealtime } from './effects_voice_change';
+} from './effects_voice_change.js';
+export { voiceChange, voiceChangeRealtime } from './effects_voice_change.js';
 export {
   masterAudio,
   masterAudioStereo,
@@ -40,7 +40,7 @@ export {
   masteringPresetParams,
   normalize,
   normalizeStereo,
-} from './mastering_chain';
+} from './mastering_chain.js';
 export type {
   MasteringAbMatchLoudnessRequest,
   MasteringAbMatchLoudnessStereoRequest,
@@ -65,7 +65,7 @@ export type {
   MasteringStereoParamsRequest,
   MasteringStreamingPreviewRequest,
   MasteringStreamingPreviewStereoRequest,
-} from './mastering_core';
+} from './mastering_core.js';
 export {
   mastering,
   masteringAbMatchLoudness,
@@ -94,7 +94,7 @@ export {
   masteringStereoAnalyze,
   masteringStreamingPreview,
   masteringStreamingPreviewStereo,
-} from './mastering_core';
+} from './mastering_core.js';
 export type {
   CompressorDetector,
   CompressorOptions,
@@ -104,14 +104,14 @@ export type {
   MasteringDynamicsGateRequest,
   MasteringDynamicsTransientShaperRequest,
   TransientShaperOptions,
-} from './mastering_dynamics';
+} from './mastering_dynamics.js';
 export {
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
-} from './mastering_dynamics';
-export type { MixStereoRequest } from './mixing_oneshot';
-export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot';
+} from './mastering_dynamics.js';
+export type { MixStereoRequest } from './mixing_oneshot.js';
+export { mixingScenePresetJson, mixingScenePresetNames, mixStereo } from './mixing_oneshot.js';
 export type {
   DereverbClassicalOptions,
   MasteringRepairDereverbClassicalLinkedRequest,
@@ -119,14 +119,14 @@ export type {
   MasteringRepairDereverbClassicalStereoRequest,
   MasteringRepairDereverbConfigForRoomRequest,
   MasteringRepairDetectReverbRequest,
-} from './repair_dereverb';
+} from './repair_dereverb.js';
 export {
   masteringRepairDereverbClassical,
   masteringRepairDereverbClassicalLinked,
   masteringRepairDereverbClassicalStereo,
   masteringRepairDereverbConfigForRoom,
   masteringRepairDetectReverb,
-} from './repair_dereverb';
+} from './repair_dereverb.js';
 export type {
   DeclickOptions,
   DeclipOptions,
@@ -141,7 +141,7 @@ export type {
   MasteringRepairDetectClicksRequest,
   MasteringRepairDetectClippingRequest,
   MasteringRepairDetectCrackleRequest,
-} from './repair_impulsive';
+} from './repair_impulsive.js';
 export {
   masteringRepairDeclick,
   masteringRepairDeclickStereo,
@@ -152,7 +152,7 @@ export {
   masteringRepairDetectClicks,
   masteringRepairDetectClipping,
   masteringRepairDetectCrackle,
-} from './repair_impulsive';
+} from './repair_impulsive.js';
 export type {
   DehumMode,
   DehumOptions,
@@ -167,7 +167,7 @@ export type {
   MasteringRepairDetectHumRequest,
   MasteringRepairDetectNoiseFloorRequest,
   MasteringRepairNoiseBandBinsRequest,
-} from './repair_noise';
+} from './repair_noise.js';
 export {
   masteringRepairDehum,
   masteringRepairDehumStereo,
@@ -177,7 +177,7 @@ export {
   masteringRepairDetectHum,
   masteringRepairDetectNoiseFloor,
   masteringRepairNoiseBandBins,
-} from './repair_noise';
+} from './repair_noise.js';
 export type {
   MasteringRepairDetectTrimRangeRequest,
   MasteringRepairDetectTrimRangeStereoRequest,
@@ -185,10 +185,10 @@ export type {
   MasteringRepairTrimSilenceStereoRequest,
   TrimSilenceMode,
   TrimSilenceOptions,
-} from './repair_trim';
+} from './repair_trim.js';
 export {
   masteringRepairDetectTrimRange,
   masteringRepairDetectTrimRangeStereo,
   masteringRepairTrimSilence,
   masteringRepairTrimSilenceStereo,
-} from './repair_trim';
+} from './repair_trim.js';

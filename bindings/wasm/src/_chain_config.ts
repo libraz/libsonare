@@ -1,4 +1,4 @@
-import type { MasteringChainConfig } from './public_types';
+import type { MasteringChainConfig } from './public_types.js';
 
 type ChainSection = { [key: string]: number | boolean | ChainSection | undefined };
 

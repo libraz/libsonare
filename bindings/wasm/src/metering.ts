@@ -1,13 +1,13 @@
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
-import type { ValidateOptions } from './validation';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
+import type { ValidateOptions } from './validation.js';
 import {
   assertInterleavedSamples,
   assertNonNegativeInteger,
   assertPositiveInteger,
   assertSamples,
   assertSamplesInWindow,
-} from './validation';
+} from './validation.js';
 
 // The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
 // here so the windowed pre-scan covers exactly the span the call will read; a

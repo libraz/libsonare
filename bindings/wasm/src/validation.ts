@@ -1,4 +1,4 @@
-import { ErrorCode, SonareError } from './errors';
+import { ErrorCode, SonareError } from './errors.js';
 
 /**
  * Per-call validation options accepted by guarded wrappers. Empty-buffer

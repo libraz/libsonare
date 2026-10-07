@@ -3,10 +3,10 @@
  * edited set of them back.
  */
 
-import { getSonareModule } from './module_state';
-import type { PercussiveEvent, PercussiveEventInput } from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertPercussiveSeparation, assertSampleRate, assertSamples } from './validation';
+import { getSonareModule } from './module_state.js';
+import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertPercussiveSeparation, assertSampleRate, assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

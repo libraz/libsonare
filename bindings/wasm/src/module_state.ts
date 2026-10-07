@@ -1,5 +1,5 @@
-import { EXPECTED_ABI_VERSION } from './abi';
-import { ErrorCode, SonareError } from './errors';
+import { EXPECTED_ABI_VERSION } from './abi.js';
+import { ErrorCode, SonareError } from './errors.js';
 import type { SonareModule } from './sonare.js';
 
 let wrappedModule: SonareModule | null = null;

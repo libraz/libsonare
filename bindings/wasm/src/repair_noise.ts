@@ -2,14 +2,14 @@
  * Broadband and tonal noise repair: denoise and dehum, with their detectors.
  */
 
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type {
   HumDetection,
   MasteringRepairDehumStereoResult,
   MasteringRepairDenoiseClassicalLinkedResult,
   MasteringRepairDenoiseClassicalStereoResult,
   NoiseDetection,
-} from './public_types_repair';
+} from './public_types_repair.js';
 
 function requireModule() {
   return getSonareModule();

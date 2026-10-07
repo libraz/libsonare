@@ -1,4 +1,4 @@
-import type { VoiceChangeOptions } from './effects_mastering';
+import type { VoiceChangeOptions } from './effects_mastering.js';
 import {
   harmonic,
   hpss,
@@ -14,7 +14,7 @@ import {
   pitchShift,
   timeStretch,
   voiceChange,
-} from './effects_mastering';
+} from './effects_mastering.js';
 import {
   chroma,
   ebur128LoudnessRange,
@@ -37,7 +37,7 @@ import {
   stftDb,
   trim,
   zeroCrossingRate,
-} from './features';
+} from './features.js';
 import type {
   ClippingReport,
   DynamicRangeReport,
@@ -45,7 +45,7 @@ import type {
   MeteringDynamicRangeOptions,
   SpectrumOptions,
   SpectrumReport,
-} from './metering';
+} from './metering.js';
 import {
   meteringCrestFactorDb,
   meteringDcOffset,
@@ -57,8 +57,8 @@ import {
   meteringSpectrum,
   meteringSpectrumFrame,
   meteringTruePeakDb,
-} from './metering';
-import { getSonareModule } from './module_state';
+} from './metering.js';
+import { getSonareModule } from './module_state.js';
 import type {
   AnalysisResult,
   ChordAnalysisResult,
@@ -83,8 +83,8 @@ import type {
   PitchResult,
   SoloProcessor,
   StftResult,
-} from './public_types';
-import type { MusicAnalyzeOptions } from './quick_analysis';
+} from './public_types.js';
+import type { MusicAnalyzeOptions } from './quick_analysis.js';
 import {
   analyze,
   analyzeWithProgress,
@@ -96,10 +96,10 @@ import {
   detectKey,
   detectKeyCandidates,
   detectOnsets,
-} from './quick_analysis';
+} from './quick_analysis.js';
 import type { ProgressCallback, WasmNnlsChromaResult } from './sonare.js';
-import type { ValidateOptions } from './validation';
-import { validateAudioBuffer } from './validation';
+import type { ValidateOptions } from './validation.js';
+import { validateAudioBuffer } from './validation.js';
 
 // ============================================================================
 // Audio Class

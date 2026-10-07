@@ -1,14 +1,14 @@
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   NoteEditInput,
   NoteObject,
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
-} from './public_types';
+} from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
-import type { ValidateOptions } from './validation';
-import { assertSampleRate, assertSamples } from './validation';
+import type { ValidateOptions } from './validation.js';
+import { assertSampleRate, assertSamples } from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {

@@ -2,13 +2,13 @@
  * Reverberation repair, with its detector and the room-driven configuration.
  */
 
-import { getSonareModule } from './module_state';
-import type { RoomEstimateResult } from './public_types_acoustic';
+import { getSonareModule } from './module_state.js';
+import type { RoomEstimateResult } from './public_types_acoustic.js';
 import type {
   MasteringRepairDereverbClassicalLinkedResult,
   MasteringRepairDereverbClassicalStereoResult,
   ReverbDetection,
-} from './public_types_repair';
+} from './public_types_repair.js';
 
 function requireModule() {
   return getSonareModule();

@@ -7,8 +7,8 @@
  * rather than a stale artifact waiting on a rebuild.
  */
 
-import type { SplitSilenceCommonWithReportResult } from './feature_core';
-import type { StripMeteringOptions } from './mixer';
+import type { SplitSilenceCommonWithReportResult } from './feature_core.js';
+import type { StripMeteringOptions } from './mixer.js';
 import type {
   NoteEditInput,
   NoteObject,
@@ -24,8 +24,8 @@ import type {
   SonareCapabilities,
   SpectralRegionOp,
   SurroundPan,
-} from './public_types';
-import type { VocalWasmExports } from './vocal_edit';
+} from './public_types.js';
+import type { VocalWasmExports } from './vocal_edit.js';
 
 export interface SonareModuleOptions {
   locateFile?: (path: string, prefix: string) => string;
@@ -1573,13 +1573,13 @@ export interface WasmRealtimeEngine {
     minValue: number,
     maxValue: number,
   ) => void;
-  bindMidiCcBinding: (binding: import('./project_types').ProjectMidiCcBinding) => void;
+  bindMidiCcBinding: (binding: import('./project_types.js').ProjectMidiCcBinding) => void;
   clearMidiCcBindings: () => void;
   midiCcBindingCount: () => number;
   setControllerProfile: (destinationId: number, presetName: string) => void;
   bindController: (
     destinationId: number,
-    binding: import('./instrument_types').ControllerBinding,
+    binding: import('./instrument_types.js').ControllerBinding,
   ) => void;
   clearControllerBindings: (destinationId: number) => void;
   controllerBindingCount: (destinationId: number) => number;
@@ -1587,27 +1587,27 @@ export interface WasmRealtimeEngine {
   controllerVelocityMeaningful: (destinationId: number) => boolean;
   setControllerNoteTracking: (
     destinationId: number,
-    dimension: import('./instrument_types').MpeDimension | number,
-    tracking: import('./instrument_types').NoteTracking | number,
+    dimension: import('./instrument_types.js').MpeDimension | number,
+    tracking: import('./instrument_types.js').NoteTracking | number,
   ) => void;
   controllerNoteTracking: (
     destinationId: number,
-    dimension: import('./instrument_types').MpeDimension | number,
-  ) => import('./instrument_types').NoteTracking | number;
+    dimension: import('./instrument_types.js').MpeDimension | number,
+  ) => import('./instrument_types.js').NoteTracking | number;
   setArticulation: (
     destinationId: number,
     channel: number,
-    articulation: import('./instrument_types').Articulation | number,
+    articulation: import('./instrument_types.js').Articulation | number,
   ) => void;
   articulation: (
     destinationId: number,
     channel: number,
-  ) => import('./instrument_types').Articulation | number;
+  ) => import('./instrument_types.js').Articulation | number;
   legatoFallbackCount: (destinationId: number) => number;
   setPartRig: (
     destinationId: number,
     part: number,
-    mode: import('./instrument_types').PartRigMode | number,
+    mode: import('./instrument_types.js').PartRigMode | number,
     insertsJson: string | undefined,
   ) => void;
   setMidiFx: (destinationId: number, configJson: string) => void;
@@ -1771,7 +1771,7 @@ export interface WasmRealtimeEngine {
   delete: () => void;
 }
 
-export type { ProgressCallback } from './public_types';
+export type { ProgressCallback } from './public_types.js';
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 export interface WasmSynthEnumTables {

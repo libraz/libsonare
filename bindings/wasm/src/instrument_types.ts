@@ -3,7 +3,7 @@
  * patch, the SoundFont player, and the sample bank's descriptors.
  */
 
-import type { SampleBank } from './sample_bank';
+import type { SampleBank } from './sample_bank.js';
 
 /** Names accepted by the minimal built-in oscillator synth. */
 export const BUILTIN_SYNTH_WAVEFORMS = ['sine', 'saw', 'sawtooth', 'square', 'triangle'] as const;

@@ -51,6 +51,21 @@
       "arrowParentheses": "always"
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/**"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useImportExtensions": {
+              "level": "error",
+              "options": { "forceJsExtensions": true }
+            }
+          }
+        }
+      }
+    }
+  ],
   "files": {
     "includes": ["src/**/*.ts", "src/**/*.js", "tests/**/*.ts"]
   }

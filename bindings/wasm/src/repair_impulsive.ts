@@ -2,7 +2,7 @@
  * Impulsive-defect repair: declick, declip and decrackle, with their detectors.
  */
 
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type {
   ClickDetection,
   ClipDetection,
@@ -10,7 +10,7 @@ import type {
   MasteringRepairDeclickStereoResult,
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
-} from './public_types_repair';
+} from './public_types_repair.js';
 
 function requireModule() {
   return getSonareModule();

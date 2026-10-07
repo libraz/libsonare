@@ -5,9 +5,9 @@ import {
   sidechainCheckFromCode,
   sidechainSourceKindCode,
   trackMonitorModeCode,
-} from './codes';
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+} from './codes.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   Articulation,
   ControllerBinding,
@@ -18,13 +18,13 @@ import type {
   PartRigRequest,
   ProjectMidiCcBinding,
   SynthPatch,
-} from './project';
-import type { ProjectTimeline } from './project_class';
+} from './project.js';
+import type { ProjectTimeline } from './project_class.js';
 import {
   normalizePartRig,
   normalizeSynthInstrument,
   projectTimelineNativeId,
-} from './project_internal';
+} from './project_internal.js';
 import type {
   EqBand,
   PanLawInput,
@@ -34,7 +34,7 @@ import type {
   SidechainSourceKind,
   SurroundPan,
   UmpWords,
-} from './public_types';
+} from './public_types.js';
 import type {
   WasmClipPageRequest,
   WasmEngineAutomationPoint,

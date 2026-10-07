@@ -1,4 +1,4 @@
-import type { EngineCaptureStatus } from '../index';
+import type { EngineCaptureStatus } from '../index.js';
 import type {
   SonareEngineCaptureRequestMessage,
   SonareEngineCaptureResponseMessageInternal,
@@ -12,7 +12,7 @@ import type {
   SonareRealtimeVoiceChangerMessage,
   SonareWorkletExternalMidiMessage,
   SonareWorkletMessage,
-} from './messages';
+} from './messages.js';
 import {
   isRecord,
   SONARE_SCOPE_DEFAULT_BANDS,
@@ -20,7 +20,7 @@ import {
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
-} from './protocol';
+} from './protocol.js';
 
 export function isWorkletMessage(value: unknown): value is SonareWorkletMessage {
   if (!isRecord(value) || typeof value.type !== 'string') {

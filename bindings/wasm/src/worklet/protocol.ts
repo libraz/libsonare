@@ -1,4 +1,4 @@
-import type { EngineMeterTelemetry, EngineTelemetry } from '../index';
+import type { EngineMeterTelemetry, EngineTelemetry } from '../index.js';
 
 const ENGINE_MIXER_TARGET_BASE = 0x4d580000;
 export const ENGINE_MIXER_PARAM_FADER_DB = 1;

@@ -1,7 +1,7 @@
-import type { EngineMarker, RealtimeEngine } from '../index';
-import { resolveMarkerSet } from './engine-offline';
-import type { SonareEngineSyncMessage } from './messages';
-import { type SonareEngineCommandRecord, SonareEngineCommandType } from './protocol';
+import type { EngineMarker, RealtimeEngine } from '../index.js';
+import { resolveMarkerSet } from './engine-offline.js';
+import type { SonareEngineSyncMessage } from './messages.js';
+import { type SonareEngineCommandRecord, SonareEngineCommandType } from './protocol.js';
 
 /**
  * Collaborator surface the marker helpers need from the owning

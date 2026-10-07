@@ -3,11 +3,11 @@
  * that return a single component.
  */
 
-import { resolveFftOptions } from './_fft_options';
-import { getSonareModule } from './module_state';
-import type { HpssResult } from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertHpssKernels, assertSamples } from './validation';
+import { resolveFftOptions } from './_fft_options.js';
+import { getSonareModule } from './module_state.js';
+import type { HpssResult } from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertHpssKernels, assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

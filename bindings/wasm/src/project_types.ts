@@ -1,6 +1,6 @@
 // Type-only, so the erased import adds no runtime edge to the codes module.
-import type { PROJECT_AUTOMATION_CURVE_VALUES } from './codes';
-import type { Project, ProjectTimeline } from './project_class';
+import type { PROJECT_AUTOMATION_CURVE_VALUES } from './codes.js';
+import type { Project, ProjectTimeline } from './project_class.js';
 
 // ============================================================================
 // Headless DAW Project

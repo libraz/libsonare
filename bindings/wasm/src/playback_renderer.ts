@@ -1,11 +1,11 @@
-import { getSonareModule } from './module_state';
+import { getSonareModule } from './module_state.js';
 import type {
   PlaybackDiagnostics,
   PlaybackRendererConfig,
   PlaybackRendererOptions,
   RenderPlaybackRequest,
   RenderPlaybackResult,
-} from './public_types_playback';
+} from './public_types_playback.js';
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
 
 function configJsonText(config: PlaybackRendererConfig | string): string {

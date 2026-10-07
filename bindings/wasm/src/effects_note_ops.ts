@@ -3,9 +3,9 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common';
-import { ErrorCode, SonareError } from './errors';
-import { getSonareModule } from './module_state';
+import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
+import { ErrorCode, SonareError } from './errors.js';
+import { getSonareModule } from './module_state.js';
 import type {
   NoteExtractorOptions,
   NoteMoveOptions,
@@ -18,9 +18,9 @@ import type {
   NoteTargetUnmatchedPolicy,
   PitchDecompositionResult,
   VoicedFlags,
-} from './public_types';
-import type { ValidateOptions } from './validation';
-import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation';
+} from './public_types.js';
+import type { ValidateOptions } from './validation.js';
+import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation.js';
 
 function requireModule() {
   return getSonareModule();

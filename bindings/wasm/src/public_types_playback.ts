@@ -1,6 +1,6 @@
 // Type-only: erased before runtime, so this does not create a module cycle with
 // playback_renderer.ts, which imports the config types declared below.
-import type { HrtfSet } from './playback_renderer';
+import type { HrtfSet } from './playback_renderer.js';
 
 /**
  * The playback renderer configuration document, in the schema

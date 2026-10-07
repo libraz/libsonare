@@ -1,5 +1,5 @@
-import { getSonareModule } from './module_state';
-import { assertFiniteScalar } from './validation';
+import { getSonareModule } from './module_state.js';
+import { assertFiniteScalar } from './validation.js';
 
 // ============================================================================
 // Editing — 12-TET scale quantizer
