@@ -109,25 +109,6 @@ void RealtimeEngine::release_parameter_base_thunk(void* context, uint32_t param_
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
-bool command_targets_insert_selector(const rt::Command& command, uint32_t selector) noexcept {
-  switch (command.type) {
-    case rt::CommandType::kSetParam:
-    case rt::CommandType::kSetParamSmoothed:
-      return is_insert_param_id(command.target_id) &&
-             insert_param_strip(command.target_id) == selector;
-    case rt::CommandType::kSetTrackInsertParam:
-      // The legacy track command stores the lane selector in the high byte of
-      // target_id. Bus selectors must never match this positional vocabulary.
-      return selector < kInsertStripBusMin && ((command.target_id >> 16u) & 0xFFu) == selector;
-    case rt::CommandType::kSetMasterInsertParam:
-      // The legacy master command has no strip field; its only valid selector
-      // is the reserved master value.
-      return selector == kInsertStripMaster;
-    default:
-      return false;
-  }
-}
-
 template <size_t N, typename Predicate>
 void discard_insert_commands_if(std::array<rt::Command, N>& pending,
                                 std::array<bool, N>& pending_active,
@@ -165,43 +146,37 @@ void discard_insert_commands_if(std::array<rt::Command, N>& pending,
 
 }  // namespace
 
-void RealtimeEngine::discard_insert_commands_for_selector(uint32_t selector) noexcept {
+bool RealtimeEngine::insert_id_purged(uint32_t target_id, const InsertPurge& purge) const noexcept {
+  if (!is_insert_param_id(target_id)) return false;
+  const uint32_t selector = insert_param_strip(target_id);
+  const InsertAutomationTarget* target = insert_automation_targets_.minted(selector);
+  // An id not minted yet is not retired: its entry may still arrive with a later configuration.
+  if (target == nullptr) return false;
+  if (purge.retired_only) return insert_automation_targets_.live(selector) == nullptr;
+  return target->same_owner(purge.strip, purge.owner_id);
+}
+
+void RealtimeEngine::purge_insert_edits(const InsertPurge& purge) noexcept {
   discard_insert_commands_if(pending_, pending_active_, commands_,
-                             [selector](const rt::Command& command) noexcept {
-                               return command_targets_insert_selector(command, selector);
+                             [this, &purge](const rt::Command& command) noexcept {
+                               switch (command.type) {
+                                 case rt::CommandType::kSetParam:
+                                 case rt::CommandType::kSetParamSmoothed:
+                                   return insert_id_purged(command.target_id, purge);
+                                 case rt::CommandType::kSetTrackInsertParam:
+                                   // The legacy track command stores the lane position in
+                                   // bits 16..23.
+                                   return purge.legacy_track_lane >= 0 &&
+                                          ((command.target_id >> 16u) & 0xFFu) ==
+                                              static_cast<uint32_t>(purge.legacy_track_lane);
+                                 case rt::CommandType::kSetMasterInsertParam:
+                                   return purge.legacy_master;
+                                 default:
+                                   return false;
+                               }
                              });
-}
-
-void RealtimeEngine::discard_insert_commands_for_bus_id(uint32_t bus_id) noexcept {
-  if (bus_id == 0) return;
-  discard_insert_commands_if(
-      pending_, pending_active_, commands_, [this, bus_id](const rt::Command& command) noexcept {
-        if (command.type != rt::CommandType::kSetParam &&
-            command.type != rt::CommandType::kSetParamSmoothed) {
-          return false;
-        }
-        if (!is_insert_param_id(command.target_id)) return false;
-        const uint32_t selector = insert_param_strip(command.target_id);
-        return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
-               track_mixer_runtime_.bus_id_for_insert_automation_selector_for_clear(selector) ==
-                   bus_id;
-      });
-}
-
-void RealtimeEngine::discard_insert_commands_for_retired_bus_selectors() noexcept {
-  discard_insert_commands_if(
-      pending_, pending_active_, commands_, [this](const rt::Command& command) noexcept {
-        if (command.type != rt::CommandType::kSetParam &&
-            command.type != rt::CommandType::kSetParamSmoothed) {
-          return false;
-        }
-        if (!is_insert_param_id(command.target_id)) return false;
-        const uint32_t selector = insert_param_strip(command.target_id);
-        return selector >= kInsertStripBusMin && selector <= kInsertStripBusBase &&
-               track_mixer_runtime_.bus_id_for_insert_automation_selector_for_clear(selector) !=
-                   0 &&
-               track_mixer_runtime_.bus_id_for_insert_automation_selector(selector) == 0;
-      });
+  parameter_base_table_.erase_if(
+      [this, &purge](uint32_t id, float) noexcept { return insert_id_purged(id, purge); });
 }
 #endif
 
@@ -580,15 +555,9 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const size_t lane_index = (packed >> 16) & 0xFFu;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      if (track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index, param_id,
-                                                                command.arg.f)) {
-        // Keep the legacy public command vocabulary's manual edit semantics
-        // aligned with the generic reserved-id path. set_track_lanes remaps
-        // this positional selector and its retained base by track identity.
-        record_parameter_base(
-            make_insert_param_id(static_cast<uint32_t>(lane_index), insert_index, param_id),
-            command.arg.f);
-      }
+      // Positional legacy command: it carries no insert id, so it records no manual base.
+      (void)track_mixer_runtime_.route_lane_insert_param_smoothed(lane_index, insert_index,
+                                                                  param_id, command.arg.f);
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);
@@ -622,13 +591,8 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint32_t packed = command.target_id;
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
-      if (route_master_insert_param_smoothed(insert_index, param_id, command.arg.f)) {
-        // As above, retain the latest successful manual target so automation
-        // release restores it even for callers that construct legacy commands
-        // directly instead of using the by-name setter.
-        record_parameter_base(make_insert_param_id(kInsertStripMaster, insert_index, param_id),
-                              command.arg.f);
-      }
+      // Legacy command: it carries no insert id, so it records no manual base.
+      (void)route_master_insert_param_smoothed(insert_index, param_id, command.arg.f);
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                     transport_.sample_position(), command.target_id);

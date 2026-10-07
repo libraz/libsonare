@@ -78,6 +78,10 @@ class BusProcessor : public rt::ProcessorBase {
   // API: reads the processor's static descriptor table, touching no mutable audio
   // state. Mirrors ChannelStrip::insert_parameter_id_for_key.
   int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
+  /// The processor at @p insert_index, or nullptr. Allocation free.
+  const rt::ProcessorBase* insert_processor(unsigned int insert_index) const noexcept {
+    return insert_index < inserts_.size() ? inserts_[insert_index].get() : nullptr;
+  }
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
   // Drops every key for the next block. Slots once keyed through

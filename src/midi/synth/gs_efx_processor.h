@@ -65,6 +65,8 @@ class GsEfxProcessor final : public rt::ProcessorBase {
 
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
+  /// The EFX type: each byte position means something different per type.
+  uint64_t parameter_layout_variant() const noexcept override { return state_.type; }
 
  protected:
   bool set_parameter_impl(unsigned int param_id, float value) override;

@@ -541,22 +541,6 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     return false;
   }
 
-  // Reserve every selector entry the new bus identities may need (a stale tombstone counts as new).
-  size_t selectors_needed = 0;
-  for (const TrackBusConfig& config : buses) {
-    bool active = false;
-    for (const BusInsertSelectorBinding& binding : bus_insert_selectors_) {
-      active = active || (binding.active && binding.bus_id == config.bus_id);
-    }
-    if (!active) ++selectors_needed;
-  }
-  if (bus_insert_selectors_.size() + selectors_needed > kMaxBusInsertSelectors) return false;
-  try {
-    bus_insert_selectors_.reserve(bus_insert_selectors_.size() + selectors_needed);
-  } catch (...) {
-    return false;
-  }
-
   decltype(bus_sends_) sends{};
   try {
     for (size_t index = 0; index < buses.size(); ++index) {
@@ -639,21 +623,6 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   }
   bus_configs_ = std::move(buses);
   for (InsertGainReductionBoard& board : bus_insert_gr_boards_) board.clear();
-  // Retire selectors for buses that disappeared. Keeping the mapping entry as
-  // an inactive tombstone makes an old queued id a no-op; if the same numeric
-  // id is later reused, it receives a fresh selector instead of reviving the
-  // stale command.
-  for (BusInsertSelectorBinding& binding : bus_insert_selectors_) {
-    if (configured_bus_index(binding.bus_id) < 0) {
-      binding.active = false;
-    }
-  }
-  for (const TrackBusConfig& config : bus_configs_) {
-    // Reserve each active bus's selector by identity. Retired selectors remain
-    // tombstoned in bus_insert_selectors_ so stale commands cannot retarget a
-    // later bus after a reorder or removal.
-    (void)bus_insert_automation_selector(config.bus_id);
-  }
   bus_sends_ = std::move(sends);
   for (size_t lane_index = 0; lane_index < lanes.size(); ++lane_index) {
     if (staged_lane_owned[lane_index] == nullptr) continue;
@@ -895,7 +864,8 @@ void TrackMixerRuntime::erase_owned_strip(size_t index) noexcept {
   owned_strips_.erase(owned_strips_.begin() + static_cast<std::ptrdiff_t>(index));
 }
 
-bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec) {
+bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::Strip& spec,
+                                        StripAdmission admit, void* admit_context) {
   if (track_id == 0 || !strip_eq_acceptable(spec.eq, sample_rate_)) return false;
 
   // In-place fast path: when a strip already exists for this track and only its
@@ -928,6 +898,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   if (max_block_size_ > 0) {
     strip->prepare(sample_rate_, max_block_size_);
   }
+  if (admit != nullptr && !admit(admit_context, track_id, *strip)) return false;
 
   mixing::ChannelStrip* raw = strip.get();
   for (OwnedStrip& owned : owned_strips_) {
@@ -953,7 +924,8 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   return bound;
 }
 
-bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus) {
+bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus,
+                                      BusAdmission admit, void* admit_context) {
   const int found = configured_bus_index(bus_id);
   if (found < 0) return false;
   const size_t bus_index = static_cast<size_t>(found);
@@ -988,6 +960,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     if (max_block_size_ > 0) {
       fx->prepare(sample_rate_, max_block_size_);
     }
+    if (admit != nullptr && !admit(admit_context, bus_id, *fx)) return false;
   }
   state->input_trim_gain.set_target(db_to_linear(bus.input_trim_db));
   state->width.set_width(bus.width);
@@ -1385,13 +1358,9 @@ mixing::ChannelStrip* TrackMixerRuntime::bound_strip_for(uint32_t track_id) cons
   return nullptr;
 }
 
-bool TrackMixerRuntime::track_insert_processor_name(size_t lane_index, unsigned int insert_index,
+bool TrackMixerRuntime::track_insert_processor_name(uint32_t track_id, unsigned int insert_index,
                                                     std::string* out_name) const noexcept {
-  if (out_name == nullptr) return false;
-  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
-  if (lanes == nullptr || lane_index >= lanes->size()) return false;
-  const uint32_t track_id = (*lanes)[lane_index].track_id;
-  if (track_id == 0) return false;
+  if (out_name == nullptr || track_insert_count(track_id) == 0) return false;
   mixing::ChannelStrip* strip = bound_strip_for(track_id);
   if (strip == nullptr) return false;
   for (const OwnedStrip& owned : owned_strips_) {
@@ -1424,17 +1393,76 @@ bool TrackMixerRuntime::bus_insert_processor_name_by_id(uint32_t bus_id, unsigne
          bus_insert_processor_name(static_cast<size_t>(bus_index), insert_index, out_name);
 }
 
-bool TrackMixerRuntime::track_insert_automation_selector(uint32_t track_id,
-                                                         uint32_t* out_selector) const noexcept {
-  if (track_id == 0 || out_selector == nullptr) return false;
+bool TrackMixerRuntime::track_lane_position(uint32_t track_id,
+                                            uint32_t* out_position) const noexcept {
+  if (track_id == 0 || out_position == nullptr) return false;
   const std::shared_ptr<const std::vector<TrackLaneConfig>> lanes = lanes_.control_current();
   if (lanes == nullptr) return false;
   for (size_t index = 0; index < lanes->size() && index < kMaxTrackLanes; ++index) {
     if ((*lanes)[index].track_id != track_id) continue;
-    *out_selector = static_cast<uint32_t>(index);
+    *out_position = static_cast<uint32_t>(index);
     return true;
   }
   return false;
+}
+
+size_t TrackMixerRuntime::copy_control_lane_track_ids(uint32_t* out,
+                                                      size_t capacity) const noexcept {
+  const std::shared_ptr<const std::vector<TrackLaneConfig>> lanes = lanes_.control_current();
+  if (out == nullptr || lanes == nullptr) return 0;
+  size_t count = 0;
+  for (const TrackLaneConfig& lane : *lanes) {
+    if (count == capacity) break;
+    out[count++] = lane.track_id;
+  }
+  return count;
+}
+
+size_t TrackMixerRuntime::bound_track_insert_count(uint32_t track_id) const noexcept {
+  const mixing::ChannelStrip* strip = bound_strip_for(track_id);
+  return strip != nullptr ? strip->num_pre_inserts() + strip->num_post_inserts() : 0;
+}
+
+size_t TrackMixerRuntime::track_insert_count(uint32_t track_id) const noexcept {
+  uint32_t position = 0;
+  return track_lane_position(track_id, &position) ? bound_track_insert_count(track_id) : 0;
+}
+
+const rt::ProcessorBase* TrackMixerRuntime::track_insert_processor(
+    uint32_t track_id, unsigned int insert_index) const noexcept {
+  if (insert_index >= track_insert_count(track_id)) return nullptr;
+  return bound_strip_for(track_id)->insert_processor(insert_index);
+}
+
+size_t TrackMixerRuntime::bus_insert_count(uint32_t bus_id) const noexcept {
+  const int index = configured_bus_index(bus_id);
+  if (index < 0 || bus_states_[static_cast<size_t>(index)].bus == nullptr) return 0;
+  return bus_states_[static_cast<size_t>(index)].bus->num_inserts();
+}
+
+const rt::ProcessorBase* TrackMixerRuntime::bus_insert_processor(
+    uint32_t bus_id, unsigned int insert_index) const noexcept {
+  if (insert_index >= bus_insert_count(bus_id)) return nullptr;
+  return bus_states_[static_cast<size_t>(configured_bus_index(bus_id))].bus->insert_processor(
+      insert_index);
+}
+
+bool TrackMixerRuntime::lane_insert_holds(uint32_t track_id, unsigned int insert_index,
+                                          const InsertProcessorLayout& processor) const noexcept {
+  const int lane = lane_index_for_track(track_id);
+  if (lane < 0) return false;
+  const mixing::ChannelStrip* strip = lane_states_[static_cast<size_t>(lane)].strip;
+  return strip != nullptr &&
+         insert_processor_layout(strip->insert_processor(insert_index)) == processor;
+}
+
+bool TrackMixerRuntime::bus_insert_holds(uint32_t bus_id, unsigned int insert_index,
+                                         const InsertProcessorLayout& processor) const noexcept {
+  const int index = configured_bus_index(bus_id);
+  if (index < 0) return false;
+  const mixing::FxBus* bus = bus_states_[static_cast<size_t>(index)].bus.get();
+  return bus != nullptr &&
+         insert_processor_layout(bus->insert_processor(insert_index)) == processor;
 }
 
 void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::ChannelStrip* strip) {
@@ -1488,57 +1516,6 @@ int TrackMixerRuntime::configured_bus_index(uint32_t bus_id) const noexcept {
     if (bus_configs_[index].bus_id == bus_id) return static_cast<int>(index);
   }
   return -1;
-}
-
-uint32_t TrackMixerRuntime::bus_insert_automation_selector(uint32_t bus_id) noexcept {
-  if (bus_id == 0) return 0;
-  for (size_t index = 0; index < bus_insert_selectors_.size(); ++index) {
-    const BusInsertSelectorBinding& binding = bus_insert_selectors_[index];
-    if (binding.active && binding.bus_id == bus_id) {
-      return kInsertStripBusBase - static_cast<uint32_t>(index);
-    }
-  }
-  if (bus_insert_selectors_.size() >= kMaxBusInsertSelectors) return 0;
-  try {
-    bus_insert_selectors_.push_back(BusInsertSelectorBinding{bus_id, true});
-  } catch (...) {
-    return 0;
-  }
-  return kInsertStripBusBase - static_cast<uint32_t>(bus_insert_selectors_.size() - 1);
-}
-
-uint32_t TrackMixerRuntime::bus_insert_automation_selector_for_clear(
-    uint32_t bus_id) const noexcept {
-  if (bus_id == 0) return 0;
-  uint32_t tombstoned_selector = 0;
-  for (size_t index = 0; index < bus_insert_selectors_.size(); ++index) {
-    const BusInsertSelectorBinding& binding = bus_insert_selectors_[index];
-    if (binding.bus_id != bus_id) continue;
-    const uint32_t selector = kInsertStripBusBase - static_cast<uint32_t>(index);
-    if (binding.active) {
-      return selector;
-    }
-    if (tombstoned_selector == 0) {
-      tombstoned_selector = selector;
-    }
-  }
-  return tombstoned_selector;
-}
-
-uint32_t TrackMixerRuntime::bus_id_for_insert_automation_selector_for_clear(
-    uint32_t selector) const noexcept {
-  if (selector < kInsertStripBusMin || selector > kInsertStripBusBase) return 0;
-  const size_t index = static_cast<size_t>(kInsertStripBusBase - selector);
-  if (index >= bus_insert_selectors_.size()) return 0;
-  return bus_insert_selectors_[index].bus_id;
-}
-
-uint32_t TrackMixerRuntime::bus_id_for_insert_automation_selector(
-    uint32_t selector) const noexcept {
-  if (selector < kInsertStripBusMin || selector > kInsertStripBusBase) return 0;
-  const size_t index = static_cast<size_t>(kInsertStripBusBase - selector);
-  if (index >= bus_insert_selectors_.size() || !bus_insert_selectors_[index].active) return 0;
-  return bus_insert_selectors_[index].bus_id;
 }
 
 TrackMixerRuntime::BusState* TrackMixerRuntime::pannable_bus_state_for(uint32_t bus_id) noexcept {

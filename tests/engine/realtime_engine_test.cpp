@@ -179,6 +179,23 @@ class InsertCommandProbe final : public sonare::rt::ProcessorBase {
   int insert_count = 0;
   int unrelated_count = 0;
 };
+
+// Same parameter names as InsertCommandProbe, but another processor class.
+class ReplacementProbe final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  std::vector<sonare::rt::ParamDescriptor> parameter_descriptors() const override {
+    return {{"gain", 0}};
+  }
+  bool set_parameter_impl(unsigned int, float) override {
+    ++set_count;
+    return true;
+  }
+
+  int set_count = 0;
+};
 #endif
 
 #if defined(SONARE_WITH_GRAPH)
@@ -980,7 +997,9 @@ TEST_CASE("Clearing an insert base drops queued and pending stale commands",
   REQUIRE(engine.bind_track_strip(10, &strip));
   REQUIRE(engine.automation().bind_target(7, probe_ptr));
 
-  const uint32_t stale_id = sonare::engine::make_insert_param_id(0, 0, 0);
+  const int64_t resolved = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(resolved >= 0);
+  const uint32_t stale_id = static_cast<uint32_t>(resolved);
 
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
@@ -1211,30 +1230,6 @@ TEST_CASE("Queued track insert edits follow the track through a lane reorder",
 
   REQUIRE(probe_a_ptr->insert_value == Catch::Approx(0.25f));
   REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.5f));
-
-  // The raw legacy command must retain the same manual base as the generic
-  // helper. Automation release should return track 20 to 0.5, not its
-  // construction value of 1.0.
-  const int64_t target = engine.resolve_track_insert_automation_id(20, 0, "gain");
-  REQUIRE(target >= 0);
-  sonare::automation::AutomationLane automated(static_cast<uint32_t>(target));
-  automated.set_points({{0.0, 0.75f, sonare::automation::CurveType::Hold}});
-  engine.automation().set_lanes({automated});
-  sonare::rt::Command play{};
-  play.type = sonare::rt::CommandType::kTransportPlay;
-  play.sample_time = -1;
-  REQUIRE(engine.push_command(play));
-  std::array<float, kBlock> output{};
-  float* io[] = {output.data()};
-  engine.process(io, 1, kBlock);
-  engine.settle_parameters();
-  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.75f));
-
-  sonare::automation::AutomationLane released(static_cast<uint32_t>(target));
-  engine.automation().set_lanes({released});
-  engine.process(io, 1, kBlock);
-  engine.settle_parameters();
-  REQUIRE(probe_b_ptr->insert_value == Catch::Approx(0.5f));
 }
 
 TEST_CASE("Published track insert automation follows the track through a lane reorder",
@@ -1375,9 +1370,11 @@ TEST_CASE("Future queued track insert edits follow the track through a lane reor
   REQUIRE(engine.bind_track_strip(10, &track_a));
   REQUIRE(engine.bind_track_strip(20, &track_b));
 
+  const int64_t target = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(target >= 0);
   sonare::rt::Command future{};
   future.type = sonare::rt::CommandType::kSetParam;
-  future.target_id = sonare::engine::make_insert_param_id(0, 0, 0);
+  future.target_id = static_cast<uint32_t>(target);
   future.sample_time = engine.transport().render_frame() + 2 * kBlock;
   future.arg.f = 0.25f;
   REQUIRE(engine.push_command(future));
@@ -1593,6 +1590,49 @@ TEST_CASE("Removed and re-added track selectors drop queued commands and bases",
   // The removed track's 0.25 base was erased; release leaves the new track's
   // current 0.75 value in place instead of restoring stale state.
   REQUIRE(readded_probe_ptr->insert_value == Catch::Approx(0.75f));
+}
+
+TEST_CASE("An insert id applies nothing once its slot holds another processor, even unsynced",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  sonare::mixing::ChannelStrip original;
+  original.add_pre_insert(std::make_unique<InsertCommandProbe>());
+  REQUIRE(engine.bind_track_strip(10, &original));
+  const int64_t id = engine.resolve_track_insert_automation_id(10, 0, "gain");
+  REQUIRE(id >= 0);
+
+  // Swap the caller-owned strip behind the engine's back: the target table is not
+  // re-synced, so only the audio-thread layout check stands between the old id
+  // and the new processor.
+  sonare::mixing::ChannelStrip replacement;
+  auto probe = std::make_unique<ReplacementProbe>();
+  ReplacementProbe* probe_ptr = probe.get();
+  replacement.add_pre_insert(std::move(probe));
+  REQUIRE(engine.track_mixer().bind_track_strip(10, &replacement));
+
+  sonare::rt::Command command{};
+  command.type = sonare::rt::CommandType::kSetParam;
+  command.target_id = static_cast<uint32_t>(id);
+  command.sample_time = -1;
+  command.arg.f = 0.25f;
+  REQUIRE(engine.push_command(command));
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  for (int block = 0; block < 4; ++block) engine.process(io, 1, kBlock);
+  engine.settle_parameters();
+
+  REQUIRE(probe_ptr->set_count == 0);
+  bool unknown_target = false;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    unknown_target =
+        unknown_target || (telemetry.error == sonare::engine::TelemetryErrorCode::kUnknownTarget &&
+                           telemetry.value == static_cast<uint32_t>(id));
+  }
+  REQUIRE(unknown_target);
 }
 
 TEST_CASE("Queued master insert edits remain the latest manual base after automation release",

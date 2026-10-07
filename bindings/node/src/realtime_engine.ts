@@ -792,15 +792,14 @@ export class RealtimeEngine {
    * match stages) have no insert form and no automation id: they buffer the
    * entire signal by construction and do not run on the realtime path.
    *
-   * The returned id uses the track's current positional lane selector. When
-   * `setTrackLanes` successfully changes lane order or membership, the engine
-   * remaps already queued and published track automation by track id, but it
-   * cannot update a numeric id retained by the caller. Re-resolve every track
-   * insert id after such a topology change before passing it to
-   * `setAutomationLane`, `setParameter`, or `setParameterSmoothed`. Use
-   * `setTrackStripInsertParamByName` when the operation needs a stable track
-   * identity. Master and bus insert ids are separate and are not invalidated by
-   * track-lane changes.
+   * Track, bus and master insert ids share one lifetime rule: an id names its
+   * strip by identity and the kind of processor in its slot (for
+   * `effects.gsEfx`, its EFX type too), so it survives lane and bus reorders
+   * and the removal of other strips, and stays valid until its track or bus is
+   * removed or its slot comes to hold another kind of processor. After that it
+   * applies nothing, its queued edits are dropped, and it is never reissued;
+   * resolve again for the new processor. A change that would take the engine
+   * past its 8192 insert-id entries is refused.
    */
   resolveTrackInsertAutomationId(trackId: number, insertIndex: number, paramName: string): number {
     return this.native.resolveTrackInsertAutomationId(trackId, insertIndex, paramName);

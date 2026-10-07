@@ -42,6 +42,7 @@
 #include "engine/graph_runtime.h"
 #endif
 #if defined(SONARE_WITH_MIXING)
+#include "engine/insert_automation_targets.h"
 #include "engine/meter_telemetry.h"
 #include "engine/mixing_runtime.h"
 #include "engine/monitor_runtime.h"
@@ -993,18 +994,40 @@ class RealtimeEngine : private ClipPageRequestSink {
   void release_instrument_automations(uint32_t destination_id) noexcept;
 #endif
 #if defined(SONARE_WITH_MIXING)
-  // Control-thread-only invalidation used before a full insert-strip
-  // replacement. Removes queued and already-staged insert edits for one
-  // selector so a future command cannot retarget the replacement strip.
-  void discard_insert_commands_for_selector(uint32_t selector) noexcept;
-  // Removes queued and staged commands for every selector historically bound
-  // to one bus identity. A bus can have several generations after
-  // remove/re-add, so clearing only its active selector leaves stale ids.
-  void discard_insert_commands_for_bus_id(uint32_t bus_id) noexcept;
-  // Removes commands for retired bus selectors in one queue/pending pass after
-  // an accepted bus-list replacement. This keeps removal bounded by the live
-  // command storage rather than the full selector namespace.
-  void discard_insert_commands_for_retired_bus_selectors() noexcept;
+  // Which insert edits a purge reaches: ids whose entry belongs to one strip
+  // (live or retired), or every id whose entry is retired; plus, optionally, the
+  // positional legacy track command for one lane or the legacy master command.
+  struct InsertPurge {
+    bool retired_only = false;
+    InsertStripKind strip = InsertStripKind::kTrack;
+    uint32_t owner_id = 0;
+    int legacy_track_lane = -1;
+    bool legacy_master = false;
+  };
+  bool insert_id_purged(uint32_t target_id, const InsertPurge& purge) const noexcept;
+  // Control-thread-only, not concurrent with process(): removes queued and
+  // already-staged insert edits the purge reaches, then their manual bases.
+  void purge_insert_edits(const InsertPurge& purge) noexcept;
+  // Control thread, not concurrent with process(): retires entries whose strip
+  // left the mixer or whose slot changed processor layout, mints entries for
+  // every configured slot in canonical order (lanes, buses, master; slots in
+  // index order), then purges the edits and bases of any id it retired.
+  void sync_insert_automation_targets() noexcept;
+  // Control thread: true when @p needed more entries fit in the table.
+  bool insert_automation_room(size_t needed) const noexcept {
+    return needed <= insert_automation_targets_.remaining();
+  }
+  // Control thread: the processor a target's slot holds now, or nullptr.
+  const rt::ProcessorBase* current_insert_processor(
+      const InsertAutomationTarget& target) const noexcept;
+  // Any thread: the live entry an insert id names, or nullptr when it is retired
+  // or its insert field disagrees with the entry.
+  const InsertAutomationTarget* live_insert_target(uint32_t target_id) const noexcept;
+  // Audio-thread safe: true while the entry's slot still holds its processor layout.
+  bool insert_target_holds(const InsertAutomationTarget& target) const noexcept;
+  // Control thread: the reserved id for (live entry of @p target, @p param_id), or -1.
+  int64_t insert_automation_id(const InsertAutomationTarget& target,
+                               unsigned int param_id) const noexcept;
   // Fallback for insert ids whose manual table entry was purged during a full
   // strip replacement. The immutable construction metadata belongs to the
   // processor instance and is read without allocation on the audio thread.
@@ -1016,8 +1039,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // automation lane. The master insert chain lives outside TrackMixerRuntime, so
   // its automated params get a parallel slot table here, advanced once per
   // sub-block by tick_smoothed_params (same cadence as the lane/bus slots).
+  // @p base_id is the reserved id whose manual base seeds a fresh slot; 0 for none.
   bool route_master_insert_param_smoothed(unsigned int insert_index, unsigned int param_id,
-                                          float value) noexcept;
+                                          float value, uint32_t base_id = 0) noexcept;
   void advance_master_insert_automations(int num_steps) noexcept;
   void settle_master_insert_automations() noexcept;
   void clear_master_insert_automations() noexcept;
@@ -1472,6 +1496,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   };
   std::array<MasterInsertAutoSlot, kMaxMasterInsertAutomations> master_insert_auto_slots_{};
   uint32_t master_insert_automation_overflow_count_ = 0;
+  // Entries behind the strip field of every reserved insert id.
+  InsertAutomationTargetTable insert_automation_targets_{};
 #endif
   rt::SpscQueue<rt::Command> commands_{};
   rt::SpscQueue<Telemetry> telemetry_{};

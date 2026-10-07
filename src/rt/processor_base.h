@@ -229,6 +229,11 @@ class ProcessorBase {
   // safe to call concurrently with process() on the audio thread.
   virtual std::vector<ParamDescriptor> parameter_descriptors() const { return {}; }
 
+  /// Distinguishes parameter layouts within one processor class: two instances
+  /// of a class that report the same value give every param id the same
+  /// meaning. Default 0, for a class whose layout is fixed. Allocation free.
+  virtual uint64_t parameter_layout_variant() const noexcept { return 0; }
+
   /// The insert factory supplies the effective values of realtime parameters
   /// after aliases, presets, and construction-time conversions have resolved.
   /// Hosts adding processors directly can supply the same metadata so the

@@ -14,6 +14,7 @@
 
 #include "engine/clip_player.h"
 #include "engine/insert_automation_id.h"
+#include "engine/insert_automation_targets.h"
 #include "engine/insert_gain_reduction_board.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/api/scene.h"
@@ -284,7 +285,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// lane sidechain bindings. CONTROL thread only, not concurrent with process().
   /// True when nothing was bound.
   bool release_track_strip(uint32_t track_id);
-  bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip);
+  /// Asked with a rebuilt insert chain before it replaces the current one; false
+  /// refuses the change with nothing applied. Not asked when the chain is kept.
+  using StripAdmission = bool (*)(void* context, uint32_t track_id,
+                                  const mixing::ChannelStrip& strip);
+  using BusAdmission = bool (*)(void* context, uint32_t bus_id, const mixing::FxBus& bus);
+  bool set_track_strip(uint32_t track_id, const mixing::api::Strip& strip,
+                       StripAdmission admit = nullptr, void* admit_context = nullptr);
   bool set_track_insert_bypassed(uint32_t track_id, unsigned int insert_index, bool bypassed,
                                  bool reset_on_bypass = false) noexcept;
   // Toggles bypass for a bus insert. Control-thread only (not safe concurrently
@@ -318,11 +325,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool track_insert_constructed_parameter_value(uint32_t track_id, unsigned int insert_index,
                                                 unsigned int param_id,
                                                 float* out_value) const noexcept;
-  /// Same lookup addressed by the encoded lane selector used in an insert id.
-  bool track_insert_constructed_parameter_value_by_selector(uint32_t selector,
-                                                            unsigned int insert_index,
-                                                            unsigned int param_id,
-                                                            float* out_value) const noexcept;
+  /// Same lookup read from the audio-side lane state, so it is safe on the audio
+  /// thread; false when @p track_id has no prepared lane.
+  bool lane_insert_constructed_parameter_value(uint32_t track_id, unsigned int insert_index,
+                                               unsigned int param_id,
+                                               float* out_value) const noexcept;
   // Audio-thread application of a resolved insert-parameter change. Allocation
   // free; must run from the audio callback (engine command drain), never
   // concurrently with process().
@@ -349,13 +356,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Allocation free; mirrors apply_lane_insert_parameter for the bus chain.
   bool apply_bus_insert_parameter(size_t bus_index, unsigned int insert_index,
                                   unsigned int param_id, float value) noexcept;
-  // CONTROL thread: the registered processor name at (lane, insert), read from
+  // CONTROL thread: the registered processor name at (track, insert), read from
   // the retained strip spec rather than a live processor -- for parameterInfo,
   // which needs a name to look up in the insert catalog rather than a param id
   // to apply. False for an unbound lane, an out-of-range insert index, or a
   // strip with no retained spec (externally bound via bind_track_strip, or
   // automation-seeded with no inserts).
-  bool track_insert_processor_name(size_t lane_index, unsigned int insert_index,
+  bool track_insert_processor_name(uint32_t track_id, unsigned int insert_index,
                                    std::string* out_name) const noexcept;
   // Mirrors track_insert_processor_name for a bus, addressed by the positional
   // bus index used internally by the render graph.
@@ -364,27 +371,31 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   bool bus_insert_processor_name_by_id(uint32_t bus_id, unsigned int insert_index,
                                        std::string* out_name) const noexcept;
 
-  /// Resolves a track identity to the selector currently used by the reserved
-  /// insert-automation namespace. This is control-thread-only and is used when
-  /// purging a replaced strip's parameter bases. Returns false when the track
-  /// is not in the published lane snapshot.
-  bool track_insert_automation_selector(uint32_t track_id, uint32_t* out_selector) const noexcept;
-
-  /// Stable selector used in the reserved insert-automation id namespace.
-  /// The selector remains bound to @p bus_id for the lifetime of this runtime,
-  /// including after the bus is removed, so an old id can only become a stale
-  /// no-op. Returns 0 when the finite selector table is exhausted.
-  uint32_t bus_insert_automation_selector(uint32_t bus_id) noexcept;
-  /// Returns the selector for an active or tombstoned bus identity. Unlike
-  /// bus_insert_automation_selector(), this is only for purging old bases and
-  /// must never be used to route a command to a bus.
-  uint32_t bus_insert_automation_selector_for_clear(uint32_t bus_id) const noexcept;
-  /// Resolves an active or tombstoned selector for purge-only lookups.
-  uint32_t bus_id_for_insert_automation_selector_for_clear(uint32_t selector) const noexcept;
-  /// Resolves a reserved bus selector back to its identity. Returns 0 for an
-  /// unassigned or out-of-range selector; callers must not fall back to a bus
-  /// index because that would retarget stale automation after reorder.
-  uint32_t bus_id_for_insert_automation_selector(uint32_t selector) const noexcept;
+  /// CONTROL thread: @p track_id's position in the published lane snapshot, for
+  /// the positional legacy insert command. False when the track has no lane.
+  bool track_lane_position(uint32_t track_id, uint32_t* out_position) const noexcept;
+  /// CONTROL thread: insert count and per-slot processor of a track's bound strip
+  /// (0 / nullptr when the track has no lane in the published snapshot or no
+  /// strip) and of a configured bus (0 / nullptr when it is not configured).
+  size_t track_insert_count(uint32_t track_id) const noexcept;
+  /// CONTROL thread: insert count of the strip bound to @p track_id, lane or not.
+  size_t bound_track_insert_count(uint32_t track_id) const noexcept;
+  const rt::ProcessorBase* track_insert_processor(uint32_t track_id,
+                                                  unsigned int insert_index) const noexcept;
+  size_t bus_insert_count(uint32_t bus_id) const noexcept;
+  const rt::ProcessorBase* bus_insert_processor(uint32_t bus_id,
+                                                unsigned int insert_index) const noexcept;
+  /// CONTROL thread: track ids of the published lane snapshot and configured bus
+  /// ids, each in configuration order.
+  size_t copy_control_lane_track_ids(uint32_t* out, size_t capacity) const noexcept;
+  const std::vector<TrackBusConfig>& bus_configs() const noexcept { return bus_configs_; }
+  bool configured_bus(uint32_t bus_id) const noexcept { return configured_bus_index(bus_id) >= 0; }
+  /// AUDIO-thread safe: true when @p track_id's prepared lane, or configured bus
+  /// @p bus_id, holds a processor of layout @p processor at @p insert_index.
+  bool lane_insert_holds(uint32_t track_id, unsigned int insert_index,
+                         const InsertProcessorLayout& processor) const noexcept;
+  bool bus_insert_holds(uint32_t bus_id, unsigned int insert_index,
+                        const InsertProcessorLayout& processor) const noexcept;
 
   // Sets the smoothed target of a lane / bus insert parameter from a reserved
   // automation lane. The matching per-(strip, insert, param) one-pole smoother is
@@ -398,6 +409,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
                                        unsigned int param_id, float value) noexcept;
   bool route_bus_insert_param_smoothed_by_id(uint32_t bus_id, unsigned int insert_index,
                                              unsigned int param_id, float value) noexcept;
+  bool route_track_insert_param_smoothed_by_id(uint32_t track_id, unsigned int insert_index,
+                                               unsigned int param_id, float value) noexcept;
   // Number of insert-automation target requests dropped because the slot table
   // was full (advisory telemetry; mirrors the other *_overflow counters).
   uint32_t insert_automation_overflow_count() const noexcept {
@@ -434,7 +447,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // EQ is applied as a diff against the retained spec. False for an unknown
   // bus, a non-default pan on a bus wider than two channels, or an EQ band the
   // bus cannot host.
-  bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus);
+  bool set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus, BusAdmission admit = nullptr,
+                     void* admit_context = nullptr);
   // Granular bus output pan, mirroring the track pan setters: atomic writes,
   // safe concurrently with process(), also recorded in the retained spec.
   // False for an unknown bus or one wider than two channels.
@@ -1087,19 +1101,6 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Last committed raw-clip PDC target. The engine owns the common direct-clip
   // bank; this target is carried by each lane's staged bank.
   int clip_pdc_delay_q8_ = 0;
-  // A reserved insert id keeps its selector for the bus identity that minted
-  // it. Retired entries are intentionally never recycled: an old scheduled
-  // command therefore becomes a no-op instead of targeting a later bus.
-  static constexpr size_t kMaxBusInsertSelectors =
-      static_cast<size_t>(kInsertStripBusBase - kInsertStripBusMin + 1u);
-  struct BusInsertSelectorBinding {
-    uint32_t bus_id = 0;
-    bool active = false;
-  };
-  // This history is control-thread-owned. Keeping it dynamic avoids inflating
-  // every embedded RealtimeEngine by the full 13-bit selector namespace while
-  // still allowing the audio thread to perform allocation-free lookups.
-  std::vector<BusInsertSelectorBinding> bus_insert_selectors_;
   // Control-thread binding table; the audio thread never reads it.
   SidechainTable sidechains_{};
   rt::SeqlockCell<SidechainTable> sidechains_published_{};

@@ -304,6 +304,14 @@ class ChannelStrip : public rt::ProcessorBase {
   // insert at @p insert_index, or -1 if unknown or not realtime-safe. Control-thread API: reads the
   // processor's static descriptor table, touching no mutable audio state.
   int insert_parameter_id_for_key(unsigned int insert_index, const std::string& key) const noexcept;
+  /// The processor at @p insert_index of the combined pre-then-post sequence, or
+  /// nullptr. Allocation free; safe wherever apply_insert_parameter is.
+  const rt::ProcessorBase* insert_processor(unsigned int insert_index) const noexcept {
+    const size_t pre_count = pre_inserts_.size();
+    if (insert_index < pre_count) return pre_inserts_[insert_index].get();
+    const size_t post_index = insert_index - pre_count;
+    return post_index < post_inserts_.size() ? post_inserts_[post_index].get() : nullptr;
+  }
   void set_insert_sidechain(unsigned int insert_index, const float* const* channels,
                             int num_channels, int num_samples);
   // Drops every key for the next block. Slots once keyed through

@@ -619,11 +619,11 @@ uint32_t insert_level_param_id(const arr::CompiledTimeline& timeline,
                                const arr::ApplyOptions& options) {
   RealtimeEngine scratch;
   REQUIRE(arr::apply_to_engine(timeline, *prepared(scratch), options).ok());
-  size_t lane_index = 0;
-  unsigned int param_id = 0;
-  REQUIRE(scratch.track_mixer().resolve_track_insert_param(timeline.track_lanes.front().track_id, 0,
-                                                           "levelDb", &lane_index, &param_id));
-  return sonare::engine::make_insert_param_id(static_cast<uint32_t>(lane_index), 0, param_id);
+  // Entries are minted in configuration order, so an engine given the same apply numbers it alike.
+  const int64_t id = scratch.resolve_track_insert_automation_id(
+      timeline.track_lanes.front().track_id, 0, "levelDb");
+  REQUIRE(id >= 0);
+  return static_cast<uint32_t>(id);
 }
 
 /// @p b plus one lane ramping @p target well away from its static value inside one render.

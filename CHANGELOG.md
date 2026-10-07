@@ -45,6 +45,7 @@
 #### Mastering
 
 - The insert parameter descriptor states whether each bound is exclusive (`minExclusive`, `maxExclusive`) and marks a ceiling bounded by the processing rate's Nyquist (`maxRelativeTo: "nyquist"`; the effective ceiling is the lower of `max` and the Nyquist).
+- The insert parameter descriptor declares what a control needs beyond the accepted range: `unit` is read from the processor that consumes the key, from a closed set (`dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`, `cm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`, `cents`, `ratio`, `bits`, `count`, `none`) and is no longer derived from the key's spelling, so a key such as `decaySec` or `lengthM` now carries one and `modDepthSamples` reports `samples`; `scale` (`linear` or `log`) names the axis; `uiMin` / `uiMax` give an optional display range inside `[min, max]`; `dependsOn` lists the sibling keys whose live value bounds this one (`min` / `max` stay measured with every sibling at its default). All of these describe construction-time acceptance; the realtime parameter path clamps.
 - Resolve a Nyquist-bounded ceiling for a given processing rate: `masteringInsertParamInfo(name, sampleRate)` on Node and WASM, `mastering_insert_param_info(name, sample_rate=...)` in Python (C: `sonare_mastering_insert_param_info_at_rate`) report the bound the insert accepts at that rate.
 
 #### Packaging
@@ -84,6 +85,7 @@
 - The WASM worklet engine delivers per-channel meters of surround (5.1, 7.1) targets live on both meter paths: the meter snapshot keeps its stereo fields and gains `channelCount` plus `peakDb`, `rmsDb`, `truePeakDb` and `inputPeakDb` arrays when the target has more than two channels. The SharedArrayBuffer meter ring record grows from 16 to 49 floats and its header slot 3 now carries protocol version 2, so a main thread and a worklet from different package versions must not share a ring.
 - `sonare_engine_drain_meter_telemetry_wide_v2` (Node `drainMeterTelemetryWide`, Python `drain_meter_telemetry_wide`, WASM `drainMeterTelemetryWide`) is documented as the one meter drain, with a stereo target's left and right as planes 0 and 1; the other three drains stay and consume the same queue.
 - The worklet engine's meter interval is kept per target instead of across all targets, so one target's records no longer delay another's.
+- Track, bus and master insert automation ids share one lifetime rule: an id names its strip by identity and the kind of processor in its slot (for `effects.gsEfx`, its EFX type too), so a track insert id now survives `setTrackLanes` reorders and the removal of other tracks exactly as a bus id survives bus changes, and every insert id stays valid until its track or bus is removed or its slot comes to hold another kind of processor. An id held across such a change now applies nothing (an unknown target) instead of silently driving a parameter of the new processor, its queued edits and stored bases are dropped, and it is never reissued. Ids are assigned when the mixer is configured, so the WASM worklet's offline mirror and its audio-thread engine number them identically; an engine holds 8192 insert-id entries for its lifetime, and a strip, bus or lane change that would exceed them is refused with InvalidParameter (a rebuild that keeps every slot's kind needs no new entry). Solo/mute keeps taking a lane position, not an id.
 
 ### Fixes
 
@@ -96,6 +98,7 @@
 - The transient shaper and vocal rider report their gain reduction, in the per-insert gain-reduction readout and in the mastering chain's stage gain reductions.
 - A muted or solo-silenced lane reaches exactly zero gain, and an unmuted lane exactly unity, instead of approaching them without arriving.
 - A refused sidechain binding no longer publishes a provisional binding table to the audio thread before it is rolled back.
+- A track insert automation lane set before `setTrackLanes` reordered the lanes no longer moves to whichever track took its old position when another automation lane is set afterwards (C, Node, Python and WASM).
 
 ## v1.8.2 (2026-10-06)
 

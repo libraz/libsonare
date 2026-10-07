@@ -23,8 +23,6 @@ using sonare::engine::insert_param_index;
 using sonare::engine::insert_param_param;
 using sonare::engine::insert_param_strip;
 using sonare::engine::is_insert_param_id;
-using sonare::engine::kInsertStripBusBase;
-using sonare::engine::kInsertStripMaster;
 using sonare::engine::make_insert_param_id;
 
 namespace {
@@ -104,30 +102,12 @@ double block_energy(const float* data, int n) {
 }  // namespace
 
 TEST_CASE("Insert-automation ids round-trip strip/insert/param fields", "[mixing][automation]") {
-  // Track lane selector.
   {
     const uint32_t id = make_insert_param_id(/*strip=*/5, /*insert=*/3, /*param=*/7);
     REQUIRE(is_insert_param_id(id));
     REQUIRE(insert_param_strip(id) == 5u);
     REQUIRE(insert_param_index(id) == 3u);
     REQUIRE(insert_param_param(id) == 7u);
-  }
-  // Master strip selector.
-  {
-    const uint32_t id = make_insert_param_id(kInsertStripMaster, 2, 0);
-    REQUIRE(is_insert_param_id(id));
-    REQUIRE(insert_param_strip(id) == kInsertStripMaster);
-    REQUIRE(insert_param_index(id) == 2u);
-    REQUIRE(insert_param_param(id) == 0u);
-  }
-  // Bus selector (bus N occupies kInsertStripBusBase - N).
-  {
-    const uint32_t selector = kInsertStripBusBase - 4u;
-    const uint32_t id = make_insert_param_id(selector, 1, 255);
-    REQUIRE(is_insert_param_id(id));
-    REQUIRE(insert_param_strip(id) == selector);
-    REQUIRE(insert_param_index(id) == 1u);
-    REQUIRE(insert_param_param(id) == 255u);
   }
   // Field widths: each field is masked so the maximum value of one neighbour
   // never bleeds into another.
@@ -341,6 +321,17 @@ sonare::mixing::api::Strip compressor_strip(const char* id) {
   return strip;
 }
 
+// A strip of @p count pre-fader utility.gain inserts.
+sonare::mixing::api::Strip gain_strip(const char* id, size_t count) {
+  sonare::mixing::api::Strip strip;
+  strip.id = id;
+  for (size_t i = 0; i < count; ++i) {
+    strip.inserts.push_back(
+        {sonare::mixing::api::InsertSlot::PreFader, "utility.gain", R"({"levelDb":0})"});
+  }
+  return strip;
+}
+
 sonare::automation::AutomationLane step_lane(uint32_t target_id, float value) {
   sonare::automation::AutomationLane lane(target_id);
   lane.set_points({{0.0, value, sonare::automation::CurveType::Hold}});
@@ -374,12 +365,11 @@ TEST_CASE("Master insert automation lowers master energy through the engine",
   engine.prepare(kSr, kBlock);
   REQUIRE(engine.set_master_strip(compressor_strip("master")));
 
-  // Resolve the master compressor threshold to its reserved insert id and verify
-  // it carries the master strip selector.
+  // Resolve the master compressor threshold to its reserved insert id.
   const int64_t id = engine.resolve_master_insert_automation_id(0, "thresholdDb");
   REQUIRE(id >= 0);
   REQUIRE(is_insert_param_id(static_cast<uint32_t>(id)));
-  REQUIRE(insert_param_strip(static_cast<uint32_t>(id)) == kInsertStripMaster);
+  REQUIRE(insert_param_index(static_cast<uint32_t>(id)) == 0u);
 
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
@@ -450,7 +440,9 @@ TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetr
   constexpr int kBlock = 64;
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, kBlock);
-  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+  constexpr int kTargets = 20;
+  constexpr uint32_t kMasterSlots = 16;
+  REQUIRE(engine.set_master_strip(gain_strip("master", kTargets)));
 
   sonare::rt::Command play{};
   play.type = sonare::rt::CommandType::kTransportPlay;
@@ -458,15 +450,15 @@ TEST_CASE("Master insert automation slot-table overflow surfaces on the telemetr
   REQUIRE(engine.push_command(play));
 
   // Claim more distinct master insert targets than the 16-slot table holds by
-  // pushing reserved-id parameter commands. A slot keys on (insert_index,
-  // param_id) only, so distinct synthetic keys exhaust the table; the surplus
-  // must be dropped, counted, and surfaced on the telemetry channel.
-  constexpr int kTargets = 20;
-  constexpr uint32_t kMasterSlots = 16;
+  // pushing reserved-id parameter commands, one per insert; the surplus must be
+  // dropped, counted, and surfaced on the telemetry channel.
   for (int i = 0; i < kTargets; ++i) {
+    const int64_t id =
+        engine.resolve_master_insert_automation_id(static_cast<unsigned int>(i), "levelDb");
+    REQUIRE(id >= 0);
     sonare::rt::Command cmd{};
     cmd.type = sonare::rt::CommandType::kSetParam;
-    cmd.target_id = make_insert_param_id(kInsertStripMaster, static_cast<uint32_t>(i), 0u);
+    cmd.target_id = static_cast<uint32_t>(id);
     cmd.sample_time = -1;
     cmd.arg.f = 0.25f;
     REQUIRE(engine.push_command(cmd));
@@ -498,17 +490,36 @@ TEST_CASE("Settled master insert slots serve 65 sequential targets without overf
   constexpr int kBlock = 64;
   sonare::engine::RealtimeEngine engine;
   engine.prepare(48000.0, kBlock);
-  REQUIRE(engine.set_master_strip(compressor_strip("master")));
+  // Sixteen compressors carry more than 65 distinct realtime parameters.
+  sonare::mixing::api::Strip master;
+  for (int i = 0; i < 16; ++i) master.inserts.push_back(compressor_strip("master").inserts[0]);
+  REQUIRE(engine.set_master_strip(master));
+  // Each command targets its parameter's current value, so its slot settles within the block.
+  std::vector<uint32_t> ids;
+  std::vector<float> values;
+  for (unsigned int insert = 0; insert < 16; ++insert) {
+    for (const char* key : {"thresholdDb", "ratio", "attackMs", "releaseMs", "kneeDb"}) {
+      const int64_t id = engine.resolve_master_insert_automation_id(insert, key);
+      float constructed = 0.0f;
+      if (id >= 0 &&
+          engine.insert_parameter_constructed_value(static_cast<uint32_t>(id), &constructed)) {
+        ids.push_back(static_cast<uint32_t>(id));
+        values.push_back(constructed);
+      }
+    }
+  }
+  REQUIRE(ids.size() >= 65u);
 
   std::array<float, kBlock> left{};
   std::array<float, kBlock> right{};
   float* io[] = {left.data(), right.data()};
   for (uint32_t target = 0; target < 65; ++target) {
+    const uint32_t id = ids[target];
     sonare::rt::Command command{};
     command.type = sonare::rt::CommandType::kSetParam;
-    command.target_id = make_insert_param_id(kInsertStripMaster, target, 0u);
+    command.target_id = id;
     command.sample_time = -1;
-    command.arg.f = static_cast<float>(target) / 64.0f;
+    command.arg.f = values[target];
     REQUIRE(engine.push_command(command));
     engine.process(io, 2, kBlock);
   }
@@ -604,9 +615,6 @@ TEST_CASE("Bus insert automation lowers bus energy through the engine", "[mixing
   const int64_t id = engine.resolve_bus_insert_automation_id(1, 0, "thresholdDb");
   REQUIRE(id >= 0);
   REQUIRE(is_insert_param_id(static_cast<uint32_t>(id)));
-  // The bus selector lives in the [kInsertStripBusBase - kMaxBusLanes, base] band.
-  const uint32_t strip = insert_param_strip(static_cast<uint32_t>(id));
-  REQUIRE(strip == kInsertStripBusBase);  // bus index 0
 
   auto run = [&]() {
     double energy = 0.0;

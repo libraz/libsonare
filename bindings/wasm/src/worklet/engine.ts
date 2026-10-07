@@ -343,17 +343,19 @@ export class SonareEngine {
   /**
    * Resolves a track-lane insert parameter (JSON-key name) to the reserved
    * insert-automation id fed straight to setAutomationLane. Declares the track's
-   * mixer lane first (like automationParamId) so the offline engine resolves the
-   * same strip selector the realtime engine uses.
+   * mixer lane first (like automationParamId). The offline engine and the
+   * worklet's engine receive the same mixer configuration in the same order, so
+   * they number insert ids identically and an id resolved here drives the
+   * worklet.
    *
-   * The returned id uses the track's current positional lane selector. When
-   * setTrackLanes successfully changes lane order or membership, the engine
-   * remaps already queued and published track automation by track id, but it
-   * cannot update a numeric id retained by the caller. Re-resolve every track
-   * insert id after such a topology change before passing it to
-   * setAutomationLane. Use setTrackStripInsertParamByName when the operation
-   * needs a stable track identity. Master and bus insert ids are separate and
-   * are not invalidated by track-lane changes.
+   * Track, bus and master insert ids share one lifetime rule: an id names its
+   * strip by identity and the kind of processor in its slot (for
+   * `effects.gsEfx`, its EFX type too), so it survives lane and bus reorders
+   * and the removal of other strips, and stays valid until its track or bus is
+   * removed or its slot comes to hold another kind of processor. After that it
+   * applies nothing, its queued edits are dropped, and it is never reissued;
+   * resolve again for the new processor. A change that would take the engine
+   * past its 8192 insert-id entries is refused.
    *
    * @param target Track id (declares a mixer lane on first use).
    * @param insertIndex Index into the strip's combined insert sequence.
@@ -520,8 +522,8 @@ export class SonareEngine {
    *
    * A successful call may reorder existing track ids, remove track ids, or add
    * new ones. Existing queued and published track automation follows the track
-   * id, while numeric track-insert automation ids retained by the caller do
-   * not; re-resolve those ids after every topology change. Entries carrying
+   * id, and so do track insert automation ids (see
+   * resolveTrackInsertAutomationId). Entries carrying
    * `sends` replace that track's send list; entries without `sends` leave
    * existing sends untouched.
    *

@@ -238,14 +238,16 @@ bool TrackMixerRuntime::track_insert_constructed_parameter_value(uint32_t track_
          strip->constructed_insert_parameter_value(insert_index, param_id, out_value);
 }
 
-bool TrackMixerRuntime::track_insert_constructed_parameter_value_by_selector(
-    uint32_t selector, unsigned int insert_index, unsigned int param_id,
-    float* out_value) const noexcept {
-  if (out_value == nullptr || selector >= kMaxTrackLanes) return false;
+bool TrackMixerRuntime::lane_insert_constructed_parameter_value(uint32_t track_id,
+                                                                unsigned int insert_index,
+                                                                unsigned int param_id,
+                                                                float* out_value) const noexcept {
+  const int lane_index = lane_index_for_track(track_id);
+  if (out_value == nullptr || lane_index < 0) return false;
   // release_parameter_base() runs from the audio thread. Read the already
   // prepared lane state instead of the control-side binding/snapshot tables.
-  const LaneState& lane = lane_states_[selector];
-  return lane.track_id != 0 && lane.strip != nullptr &&
+  const LaneState& lane = lane_states_[static_cast<size_t>(lane_index)];
+  return lane.strip != nullptr &&
          lane.strip->constructed_insert_parameter_value(insert_index, param_id, out_value);
 }
 
@@ -404,6 +406,16 @@ bool TrackMixerRuntime::route_bus_insert_param_smoothed_by_id(uint32_t bus_id,
   if (bus_index < 0) return false;
   return route_bus_insert_param_smoothed(static_cast<size_t>(bus_index), insert_index, param_id,
                                          value);
+}
+
+bool TrackMixerRuntime::route_track_insert_param_smoothed_by_id(uint32_t track_id,
+                                                                unsigned int insert_index,
+                                                                unsigned int param_id,
+                                                                float value) noexcept {
+  const int lane_index = lane_index_for_track(track_id);
+  if (lane_index < 0) return false;
+  return route_lane_insert_param_smoothed(static_cast<size_t>(lane_index), insert_index, param_id,
+                                          value);
 }
 
 void TrackMixerRuntime::advance_insert_automations(int num_samples) noexcept {

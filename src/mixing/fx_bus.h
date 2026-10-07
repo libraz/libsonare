@@ -41,6 +41,10 @@ class FxBus : public rt::ProcessorBase {
                                   const std::string& key) const noexcept {
     return bus_.insert_parameter_id_for_key(insert_index, key);
   }
+  /// The processor at @p insert_index, or nullptr; forwards to BusProcessor.
+  const rt::ProcessorBase* insert_processor(unsigned int insert_index) const noexcept {
+    return bus_.insert_processor(insert_index);
+  }
   /// Toggles bypass for an insert; forwards to BusProcessor.
   bool set_insert_bypassed(unsigned int insert_index, bool bypassed,
                            bool reset_on_bypass = false) noexcept {

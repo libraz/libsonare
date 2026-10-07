@@ -888,6 +888,346 @@ TEST_CASE("sonare_engine_set_automation_lane with no points removes the lane", "
 
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("a track insert lane set before a lane reorder survives a later automation-lane edit",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 40;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  // Only track 20 sounds; track 10 is silent, so the output reads track 20's gain alone.
+  std::array<float, kFrames> source{};
+  source.fill(1.0f);
+  const float* source_channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 20;
+  clip.channels = source_channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  const char* gain_insert =
+      R"("inserts":[{"slot":"pre","processor":"utility.gain","params":"{\"levelDb\":0}"}])";
+  for (const char* track : {"10", "20"}) {
+    const std::string json = std::string(R"({"version":1,"strips":[{"id":"track-)") + track +
+                             R"(",)" + gain_insert + R"(}],"buses":[],"connections":[]})";
+    REQUIRE(sonare_engine_set_track_strip_json(engine, static_cast<uint32_t>(std::stoul(track)),
+                                               json.c_str()) == SONARE_OK);
+  }
+  const std::string master_json = std::string(R"({"version":1,"strips":[{"id":"master",)") +
+                                  gain_insert + R"(}],"buses":[],"connections":[]})";
+  REQUIRE(sonare_engine_set_master_strip_json(engine, master_json.c_str()) == SONARE_OK);
+
+  uint32_t track10_gain = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb",
+                                                           &track10_gain) == SONARE_OK);
+  const SonareAutomationPoint duck[] = {{0.0, -60.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, track10_gain, duck, 1) == SONARE_OK);
+
+  // Reorder, then edit an unrelated lane: the track 10 lane must still name track 10.
+  SonareEngineTrackLane reordered[] = {{20, nullptr, 0, 0, 1}, {10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, reordered, 2) == SONARE_OK);
+  uint32_t master_gain = 0;
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "levelDb", &master_gain) ==
+          SONARE_OK);
+  const SonareAutomationPoint unity[] = {{0.0, 0.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, master_gain, unity, 1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  for (int block = 0; block < 30; ++block) {
+    out.fill(0.0f);
+    REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+  }
+  REQUIRE(out.back() == Catch::Approx(1.0f).margin(1.0e-3));
+
+  sonare_engine_destroy(engine);
+}
+
+namespace {
+
+// A one-strip scene whose inserts are @p processors, pre-fader up to 32 and post-fader after,
+// each constructed from the escaped JSON object @p params.
+std::string insert_scene(const char* strip_key, const char* strip_id,
+                         const std::vector<const char*>& processors, const char* params = "{}") {
+  std::string inserts;
+  for (size_t i = 0; i < processors.size(); ++i) {
+    if (i > 0) inserts += ",";
+    inserts += std::string(R"({"slot":")") + (i < 32 ? "pre" : "post") + R"(","processor":")" +
+               processors[i] + R"(","params":")" + params + R"("})";
+  }
+  if (std::string(strip_key) == "buses") {
+    return std::string(R"({"version":1,"strips":[],"buses":[{"id":")") + strip_id +
+           R"(","inserts":[)" + inserts + R"(]}],"connections":[]})";
+  }
+  return std::string(R"({"version":1,"strips":[{"id":")") + strip_id + R"(","inserts":[)" +
+         inserts + R"(]}],"buses":[],"connections":[]})";
+}
+
+uint32_t insert_param_strip_of(uint32_t id) { return (id >> 16u) & 0x1FFFu; }
+
+bool id_alive(SonareRealtimeEngine* engine, uint32_t id) {
+  SonareParameterInfo info{};
+  return sonare_engine_parameter_info(engine, id, &info) == SONARE_OK;
+}
+
+}  // namespace
+
+TEST_CASE("track insert ids keep their track across lane reorders and removals",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10, insert_scene("strips", "track-10", {"utility.gain"}).c_str()) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 20, insert_scene("strips", "track-20", {"utility.gain"}).c_str()) ==
+          SONARE_OK);
+  uint32_t id10 = 0;
+  uint32_t id20 = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &id10) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 20, 0, "levelDb", &id20) ==
+          SONARE_OK);
+  REQUIRE(id10 != id20);
+
+  // A reorder leaves both ids as they were.
+  SonareEngineTrackLane reordered[] = {{20, nullptr, 0, 0, 1}, {10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, reordered, 2) == SONARE_OK);
+  uint32_t again = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &again) ==
+          SONARE_OK);
+  REQUIRE(again == id10);
+
+  // Removing another track leaves the id alive; removing its own track retires it for good.
+  SonareEngineTrackLane only10[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, only10, 1) == SONARE_OK);
+  REQUIRE(id_alive(engine, id10));
+  REQUIRE_FALSE(id_alive(engine, id20));
+  REQUIRE(sonare_engine_set_track_lanes(engine, reordered, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 20, insert_scene("strips", "track-20", {"utility.gain"}).c_str()) ==
+          SONARE_OK);
+  REQUIRE_FALSE(id_alive(engine, id20));
+  uint32_t readded = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 20, 0, "levelDb", &readded) ==
+          SONARE_OK);
+  REQUIRE(readded != id20);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("insert ids fail once their slot holds another processor type", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 1) == SONARE_OK);
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+
+  const auto set_all = [&](const char* processor) {
+    REQUIRE(sonare_engine_set_track_strip_json(
+                engine, 10, insert_scene("strips", "track-10", {processor}).c_str()) == SONARE_OK);
+    REQUIRE(sonare_engine_set_bus_strip_json(
+                engine, 1, insert_scene("buses", "1", {processor}).c_str()) == SONARE_OK);
+    REQUIRE(sonare_engine_set_master_strip_json(
+                engine, insert_scene("strips", "master", {processor}).c_str()) == SONARE_OK);
+  };
+  const auto resolve_all = [&](const char* key) {
+    std::array<uint32_t, 3> ids{};
+    REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, key, &ids[0]) ==
+            SONARE_OK);
+    REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, key, &ids[1]) ==
+            SONARE_OK);
+    REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, key, &ids[2]) ==
+            SONARE_OK);
+    return ids;
+  };
+
+  set_all("utility.gain");
+  const std::array<uint32_t, 3> gain_ids = resolve_all("levelDb");
+  // A rebuild with the same processor type keeps every id.
+  set_all("utility.gain");
+  REQUIRE(resolve_all("levelDb") == gain_ids);
+
+  set_all("dynamics.compressor");
+  for (const uint32_t id : gain_ids) REQUIRE_FALSE(id_alive(engine, id));
+  const std::array<uint32_t, 3> compressor_ids = resolve_all("thresholdDb");
+  for (size_t i = 0; i < compressor_ids.size(); ++i) {
+    REQUIRE(id_alive(engine, compressor_ids[i]));
+    REQUIRE(compressor_ids[i] != gain_ids[i]);
+  }
+  // Returning to the first type does not revive the retired ids.
+  set_all("utility.gain");
+  for (const uint32_t id : gain_ids) REQUIRE_FALSE(id_alive(engine, id));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("bus insert ids survive bus reorders and fail once the bus is removed",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}, {2, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
+  for (const char* bus : {"1", "2"}) {
+    REQUIRE(sonare_engine_set_bus_strip_json(
+                engine, static_cast<uint32_t>(std::stoul(bus)),
+                insert_scene("buses", bus, {"utility.gain"}).c_str()) == SONARE_OK);
+  }
+  uint32_t id1 = 0;
+  uint32_t id2 = 0;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "levelDb", &id1) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 2, 0, "levelDb", &id2) ==
+          SONARE_OK);
+
+  SonareEngineBus reordered[] = {{2, 0.0f, 1, 0, nullptr, 0}, {1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, reordered, 2) == SONARE_OK);
+  uint32_t again = 0;
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "levelDb", &again) ==
+          SONARE_OK);
+  REQUIRE(again == id1);
+  REQUIRE(id_alive(engine, id2));
+
+  REQUIRE(sonare_engine_set_track_buses(engine, reordered, 1) == SONARE_OK);
+  REQUIRE(id_alive(engine, id2));
+  REQUIRE_FALSE(id_alive(engine, id1));
+  REQUIRE(sonare_engine_set_track_buses(engine, reordered, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(
+              engine, 1, insert_scene("buses", "1", {"utility.gain"}).c_str()) == SONARE_OK);
+  REQUIRE_FALSE(id_alive(engine, id1));
+  REQUIRE(sonare_engine_resolve_bus_insert_automation_id(engine, 1, 0, "levelDb", &again) ==
+          SONARE_OK);
+  REQUIRE(again != id1);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a GS EFX type change retires the ids of its slot", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+  // Both types are one processor class; only the EFX type tells their byte layouts apart.
+  const std::string first =
+      insert_scene("strips", "master", {"effects.gsEfx"}, R"({\"typeMsb\":1,\"typeLsb\":16})");
+  const std::string second =
+      insert_scene("strips", "master", {"effects.gsEfx"}, R"({\"typeMsb\":2,\"typeLsb\":12})");
+  const auto resolve_any = [&]() {
+    for (int slot = 0; slot < 20; ++slot) {
+      uint32_t id = 0;
+      const std::string key = "byte" + std::to_string(slot);
+      if (sonare_engine_resolve_master_insert_automation_id(engine, 0, key.c_str(), &id) ==
+          SONARE_OK) {
+        return id;
+      }
+    }
+    return uint32_t{0};
+  };
+
+  REQUIRE(sonare_engine_set_master_strip_json(engine, first.c_str()) == SONARE_OK);
+  const uint32_t first_id = resolve_any();
+  REQUIRE(first_id != 0);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, second.c_str()) == SONARE_OK);
+  REQUIRE_FALSE(id_alive(engine, first_id));
+  const uint32_t second_id = resolve_any();
+  REQUIRE(second_id != 0);
+  REQUIRE(insert_param_strip_of(second_id) != insert_param_strip_of(first_id));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("track strip, lane and bus changes that would overflow the insert id table are refused",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
+
+  // 127 master rebuilds of 64 slots alternating the processor kind leave 64 of 8192 entries.
+  const std::string gain =
+      insert_scene("strips", "master", std::vector<const char*>(64, "utility.gain"));
+  const std::string tilt =
+      insert_scene("strips", "master", std::vector<const char*>(64, "eq.tilt"));
+  for (int round = 0; round < 127; ++round) {
+    REQUIRE(sonare_engine_set_master_strip_json(engine, (round % 2 == 0 ? gain : tilt).c_str()) ==
+            SONARE_OK);
+  }
+  SonareEngineTrackLane lane10[] = {{10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane10, 1) == SONARE_OK);
+  SonareEngineBus buses[] = {{1, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  const auto gains = [](size_t count) { return std::vector<const char*>(count, "utility.gain"); };
+  REQUIRE(
+      sonare_engine_set_bus_strip_json(engine, 1, insert_scene("buses", "1", gains(40)).c_str()) ==
+      SONARE_OK);  // 24 entries left
+
+  // Track strip: 30 new slots do not fit, 20 do.
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10, insert_scene("strips", "track-10", gains(30)).c_str()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10, insert_scene("strips", "track-10", gains(20)).c_str()) == SONARE_OK);
+  // 4 left. A rebuild that keeps every slot's kind needs no entry, on a track and on a bus.
+  const char* quieter = R"({\"levelDb\":-1})";
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 10, insert_scene("strips", "track-10", gains(20), quieter).c_str()) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_bus_strip_json(
+              engine, 1, insert_scene("buses", "1", gains(40), quieter).c_str()) == SONARE_OK);
+  // Bus: a new kind in 40 slots does not fit.
+  REQUIRE(
+      sonare_engine_set_bus_strip_json(
+          engine, 1, insert_scene("buses", "1", std::vector<const char*>(40, "eq.tilt")).c_str()) ==
+      SONARE_ERROR_INVALID_PARAMETER);
+  // Lane: a track entering with 10 slots does not fit.
+  REQUIRE(sonare_engine_set_track_strip_json(
+              engine, 20, insert_scene("strips", "track-20", gains(10)).c_str()) == SONARE_OK);
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a strip change that would overflow the insert id table is refused", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 64, 16) == SONARE_OK);
+
+  // Every rebuild of 64 slots (a strip's limit) with the other processor type
+  // mints 64 entries; the 13-bit selector field holds 8192, so rebuild 129 cannot fit.
+  constexpr size_t kInserts = 64;
+  const std::string gain =
+      insert_scene("strips", "master", std::vector<const char*>(kInserts, "utility.gain"));
+  const std::string tilt =
+      insert_scene("strips", "master", std::vector<const char*>(kInserts, "eq.tilt"));
+  for (int round = 0; round < 128; ++round) {
+    REQUIRE(sonare_engine_set_master_strip_json(engine, (round % 2 == 0 ? gain : tilt).c_str()) ==
+            SONARE_OK);
+  }
+  uint32_t before = 0;
+  REQUIRE(sonare_engine_resolve_master_insert_automation_id(engine, 0, "tiltDb", &before) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_set_master_strip_json(engine, gain.c_str()) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // The refused change left the strip and its ids untouched; an unchanged chain still applies.
+  REQUIRE(id_alive(engine, before));
+  REQUIRE(sonare_engine_set_master_strip_json(engine, tilt.c_str()) == SONARE_OK);
+
+  sonare_engine_destroy(engine);
+}
 #endif
 
 TEST_CASE("insert automation resolvers define out_id on every exit path",
@@ -1497,7 +1837,7 @@ TEST_CASE("sonare_mastering_insert_param_info reports realtime param descriptors
   // which grows allpass buffers); the descriptor must flag it accordingly.
   const std::string dat = sonare_mastering_insert_param_info("effects.reverb.dattorro");
   REQUIRE(dat.find("\"name\":\"modDepthSamples\"") != std::string::npos);
-  REQUIRE(dat.find("\"unit\":\"referenceSamples@29761Hz\"") != std::string::npos);
+  REQUIRE(dat.find("\"unit\":\"samples\"") != std::string::npos);
   REQUIRE(dat.find("\"rtSafe\":false") != std::string::npos);
 }
 #endif  // defined(SONARE_WITH_MASTERING)

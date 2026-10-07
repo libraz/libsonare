@@ -288,24 +288,17 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Replaces the configured track-lane order and membership.
 /// @details A successful call may reorder existing track ids, remove track ids,
-///   or add new ones. The engine remaps already queued commands and published
-///   track automation lanes by track id, so those existing targets keep their
-///   track identity. A track-insert automation id returned by
-///   @ref sonare_engine_resolve_track_insert_automation_id is a positional
-///   selector owned by the caller; the engine cannot update a numeric id that
-///   the caller retained. After every successful call that changes lane order
-///   or membership, resolve each track-insert automation id again before using
-///   it with @ref sonare_engine_set_automation_lane,
-///   @ref sonare_engine_set_parameter, or
-///   @ref sonare_engine_set_parameter_smoothed. For a stable track identity,
-///   use a track-id/name setter such as
-///   @ref sonare_engine_set_track_strip_insert_param_by_name. Master- and
-///   bus-strip automation ids are separate selectors and are not invalidated
-///   by a track-lane topology change. Control-thread only; do not call
-///   concurrently with @ref sonare_engine_process.
-/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list or a
-///   topology that cannot be published; SONARE_ERROR_NOT_SUPPORTED when
-///   mixing support is disabled.
+///   or add new ones. Insert automation ids keep naming their track across a
+///   reorder (see @ref sonare_engine_resolve_track_insert_automation_id); the
+///   ids of a removed track stop applying, and its queued insert edits are
+///   dropped. Positional lane targets -- the @p lane_index of
+///   @ref sonare_engine_set_solo_mute -- address whichever track holds that
+///   position after the call. Control-thread only; do not call concurrently
+///   with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list, a topology
+///   that cannot be published, or added tracks whose inserts would not fit the
+///   insert automation id table; SONARE_ERROR_NOT_SUPPORTED when mixing support
+///   is disabled.
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
@@ -536,16 +529,20 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngin
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
 ///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed,
-///   exactly like a fader/pan id. The id encodes the track's current positional
-///   lane selector. A successful @ref sonare_engine_set_track_lanes call that
-///   changes lane order or membership remaps existing queued/published track
-///   automation internally by track id, but cannot rewrite an id retained by
-///   the caller. Re-resolve after every such topology change before submitting
-///   new automation with the old id. Use a track-id/name setter when the intent
-///   is a stable track target. Master- and bus-strip ids use separate selectors
-///   and are not invalidated by track-lane changes. Returns
+///   exactly like a fader/pan id. Track, bus and master insert ids share one
+///   lifetime rule: an id names the strip by identity and the kind of processor
+///   in its slot (for `effects.gsEfx`, its EFX type too), so it survives lane
+///   and bus reorders and the removal of other strips, and stays valid until
+///   its track or bus is removed or its slot comes to hold another kind of
+///   processor. After that it applies nothing (an unknown target), its queued
+///   edits and stored bases are dropped, and it is never reissued; resolve
+///   again for the new processor. Every configured slot gets its id when the
+///   mixer is configured, so resolving never allocates; the id table holds 8192
+///   slot entries for the engine's lifetime, and a strip, bus or lane change
+///   that would exceed it is refused with SONARE_ERROR_INVALID_PARAMETER (a
+///   rebuild that keeps every slot's kind needs no new entry). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown
-///   (and leaves @p out_id untouched).
+///   (and sets @p out_id to 0).
 ///
 ///   This trio is how a mastering processor gets time-varying automation: the
 ///   `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
@@ -977,6 +974,11 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
 ///          20 ms; pass 0 for instant (un-ramped) changes. @p smoothing_ms must
 ///          be finite and >= 0.
 SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms);
+/// @brief Queues a lane's solo/mute state.
+/// @details @p lane_index is a lane position in the order of the last
+///   @ref sonare_engine_set_track_lanes call, not an automation id: after a
+///   reorder it addresses whichever track now holds that position. A command
+///   already queued when the lanes change keeps its track.
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame);
 /// @brief Schedules a per-track-lane PFL/AFL monitor tap.
