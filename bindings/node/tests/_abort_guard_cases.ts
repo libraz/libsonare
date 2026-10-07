@@ -338,6 +338,11 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   ['Project.setMixerSceneJson', 'sceneJson', () => withProject((p) => p.setMixerSceneJson(5))],
   ['Audio.silenceRatio', 'thresholdDb', () => readerAudio().silenceRatio('x')],
   ['Audio.truePeakDb', 'oversample', () => readerAudio().truePeakDb('x')],
+  [
+    'addon.masteringInsertParamInfo',
+    'sampleRate',
+    () => addon.masteringInsertParamInfo('limiter', 'x'),
+  ],
 ];
 
 export const CASES: AbortGuardCase[] = [
