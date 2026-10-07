@@ -3,8 +3,10 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/chord_templates.h"
 #include "core/fft.h"
+#include "core/spectrum.h"
 #include "core/window.h"
 #include "filters/chroma.h"
 #include "filters/mel.h"
@@ -131,7 +133,18 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     resample_ratio_ = 1.0f;
   }
 
-  int n_bins = config_.n_bins();
+  // n_fft is a duration in samples at 44100 Hz; the window never drops below the hop so no
+  // input sample is skipped.
+  if (internal_sample_rate_ == kInternalSampleRate) {
+    window_length_ = config_.n_fft;
+    fft_length_ = config_.n_fft;
+  } else {
+    const RateWindow w = window_at_rate(config_.n_fft, internal_sample_rate_, kInternalSampleRate);
+    window_length_ = std::max(w.win_length, config_.hop_length);
+    fft_length_ = window_length_ == w.win_length ? w.n_fft : fast_fft_length(window_length_);
+  }
+  window_offset_ = (fft_length_ - window_length_) / 2;
+  const int n_bins = this->n_bins();
 
   /// Size the bounded onset history window. Frames-per-second is
   /// internal_sample_rate_ / hop_length; multiply by kOnsetWindowSeconds to get
@@ -161,12 +174,12 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   full_chroma_history_.resize(kMaxChromaHistoryFrames);
 
   /// Initialize FFT
-  fft_ = std::make_unique<FFT>(config_.n_fft);
+  fft_ = std::make_unique<FFT>(fft_length_);
   /// compute_stft() transforms on the audio thread, which must not allocate
   fft_->prepare(/*real_forward=*/true, /*real_inverse=*/false, /*complex_forward=*/false);
 
   /// Cache window function
-  window_ = *get_window_cached(config_.window, config_.n_fft);
+  window_ = build_padded_window(config_.window, window_length_, fft_length_, true);
 
   /// Pre-compute mel filterbank (use internal sample rate)
   if (needs_mel_analysis_) {
@@ -176,7 +189,7 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     mel_config.fmax = needs_resampling_ ? std::min(config_.effective_fmax(),
                                                    static_cast<float>(internal_sample_rate_) * 0.5f)
                                         : config_.effective_fmax();
-    mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, config_.n_fft, mel_config);
+    mel_filterbank_ = create_mel_filterbank(internal_sample_rate_, fft_length_, mel_config);
   }
 
   /// Pre-compute chroma filterbank (use internal sample rate)
@@ -191,16 +204,17 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     /// This helps avoid interference from sub-bass and low-frequency noise.
     chroma_config.fmin = streaming_detail::kStreamingChromaFminHz;
     chroma_filterbank_ =
-        create_chroma_filterbank(internal_sample_rate_, config_.n_fft, chroma_config);
+        create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
   }
 
   /// Pre-compute frequencies for spectral features (use internal sample rate)
   if (config_.compute_spectral) {
-    frequencies_ = compute_bin_frequencies(n_bins, internal_sample_rate_, config_.n_fft);
+    frequencies_ = compute_bin_frequencies(n_bins, internal_sample_rate_, fft_length_);
   }
 
   /// Allocate working buffers
-  frame_buffer_.resize(config_.n_fft);
+  /// Zero padding outside the window is written once here; frames write only the window.
+  frame_buffer_.assign(static_cast<size_t>(fft_length_), 0.0f);
   spectrum_.resize(n_bins);
   magnitude_.resize(n_bins);
   power_.resize(n_bins);
@@ -224,10 +238,10 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
   // may grow these control buffers, but ordinary realtime callbacks do not.
   constexpr size_t kPreparedInputBlockSamples = 16384;
   const size_t prepared_input =
-      std::max(kPreparedInputBlockSamples, static_cast<size_t>(config_.n_fft));
+      std::max(kPreparedInputBlockSamples, static_cast<size_t>(window_length_));
   sanitize_buffer_.reserve(prepared_input);
   resample_buffer_.reserve(prepared_input);
-  overlap_buffer_.reserve(prepared_input + static_cast<size_t>(config_.n_fft));
+  overlap_buffer_.reserve(prepared_input + static_cast<size_t>(window_length_));
 
   output_buffer_.resize(config_.max_pending_frames);
   for (auto& frame : output_buffer_) {
@@ -249,7 +263,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples) {
   if (samples != nullptr && n_samples > 0) {
     /// Same class of misuse as a non-contiguous external offset, and rejected
     /// the same way: finalize() has already drained the overlap buffer, so
-    /// resuming would analyze the next chunk without the preceding n_fft-1
+    /// resuming would analyze the next chunk without the preceding window-1
     /// samples of context.
     if (finalized_) {
       throw SonareException(

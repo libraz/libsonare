@@ -147,10 +147,8 @@ std::vector<std::complex<float>> stft_with_window(
   return spectrum;
 }
 
-/// @brief Builds a window of @p win_length, zero-padded to @p n_fft.
-/// @details Shared math behind the padded-window construction Spectrogram::compute
-///          and Spectrogram::to_audio each inline; also used by griffin_lim to build
-///          the (fixed, for its whole call) analysis/synthesis windows once.
+}  // namespace
+
 std::vector<float> build_padded_window(WindowType window, int win_length, int n_fft,
                                        bool periodic) {
   const auto window_handle = get_window_cached(window, win_length, periodic);
@@ -160,6 +158,8 @@ std::vector<float> build_padded_window(WindowType window, int win_length, int n_
   std::copy(short_window.begin(), short_window.end(), padded.begin() + offset);
   return padded;
 }
+
+namespace {
 
 /// @brief iSTFT overlap-add for griffin_lim's iteration loop (n_frames > 1).
 /// @details Same per-frame extraction, inverse FFT and overlap-add as

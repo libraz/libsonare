@@ -66,7 +66,7 @@ void copy_append_only_history(const std::vector<T>& source, std::vector<T>& stor
 
 void StreamAnalyzer::prepare_output_frame(StreamFrame& frame) const {
   if (config_.compute_magnitude) {
-    frame.magnitude.reserve(static_cast<size_t>(config_.n_bins() / config_.magnitude_downsample));
+    frame.magnitude.reserve(static_cast<size_t>(n_bins() / config_.magnitude_downsample));
   }
   if (config_.compute_mel) {
     frame.mel.reserve(static_cast<size_t>(config_.n_mels));
@@ -488,7 +488,7 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
     /// Minimum frequency ~C2; see kStreamingChromaFminHz.
     chroma_config.fmin = kStreamingChromaFminHz;
     chroma_filterbank_ =
-        create_chroma_filterbank(internal_sample_rate_, config_.n_fft, chroma_config);
+        create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
   }
 }
 

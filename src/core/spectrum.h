@@ -80,6 +80,11 @@ struct StftConfig {
   int actual_win_length() const { return win_length > 0 ? win_length : n_fft; }
 };
 
+/// @brief Builds a window of @p win_length, centred and zero-padded to @p n_fft.
+/// @details Shared by Spectrogram::compute / to_audio, griffin_lim and the streaming
+///          analyzer, so every padded frame places the window the same way.
+std::vector<float> build_padded_window(WindowType window, int win_length, int n_fft, bool periodic);
+
 /// @brief Validation rules for @ref StftConfig.
 /// @details Found by argument-dependent lookup from @ref Validated, which
 ///          @ref Spectrogram::compute uses before it touches the framing loop.

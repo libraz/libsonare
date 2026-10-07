@@ -14,16 +14,16 @@ using sonare::constants::kEpsilon;
 using namespace streaming_detail;
 
 void StreamAnalyzer::compute_stft(const float* frame_start) {
-  /// Apply window
-  for (int i = 0; i < config_.n_fft; ++i) {
-    frame_buffer_[i] = frame_start[i] * window_[i];
+  /// Apply window; the padding around it stays zero from construction
+  for (int i = 0; i < window_length_; ++i) {
+    frame_buffer_[window_offset_ + i] = frame_start[i] * window_[window_offset_ + i];
   }
 
   /// Forward FFT
   fft_->forward(frame_buffer_.data(), spectrum_.data());
 
   /// Compute magnitude and power
-  int n_bins = config_.n_bins();
+  int n_bins = this->n_bins();
   for (int k = 0; k < n_bins; ++k) {
     float re = spectrum_[k].real();
     float im = spectrum_[k].imag();
@@ -36,7 +36,7 @@ void StreamAnalyzer::compute_mel() {
   /// Apply mel filterbank GEMV: mel = filterbank @ power
   /// Eigen GEMV is ~10x faster than scalar at M=128, N=1025.
   const int n_mels = config_.n_mels;
-  const int n_bins = config_.n_bins();
+  const int n_bins = this->n_bins();
 
   Eigen::Map<const Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>> fb_map(
       mel_filterbank_.data(), n_mels, n_bins);
@@ -51,7 +51,7 @@ void StreamAnalyzer::compute_mel() {
 
 void StreamAnalyzer::compute_chroma() {
   /// Apply chroma filterbank: chroma = filterbank @ power
-  int n_bins = config_.n_bins();
+  int n_bins = this->n_bins();
 
   for (int c = 0; c < 12; ++c) {
     float sum = 0.0f;
@@ -100,7 +100,7 @@ float StreamAnalyzer::compute_onset() {
 }
 
 void StreamAnalyzer::compute_spectral_features(StreamFrame& frame) {
-  int n_bins = config_.n_bins();
+  int n_bins = this->n_bins();
 
   /// Spectral centroid
   frame.spectral_centroid = compute_centroid_frame(magnitude_.data(), n_bins, frequencies_.data());

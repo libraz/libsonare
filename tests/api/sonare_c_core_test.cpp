@@ -785,23 +785,26 @@ TEST_CASE("sonare_stream_analyzer C API validates config and reads quantized fra
     REQUIRE(sonare_stream_analyzer_process(analyzer, samples.data(), samples.size()) == SONARE_OK);
 
     size_t available = 0;
-    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
-    REQUIRE(available == 0);
-
-    REQUIRE(sonare_stream_analyzer_finalize(analyzer) == SONARE_OK);
+    // window = 1024 * 22050 / 44100 = 512 samples, hop 256: 600 samples hold
+    // floor((600 - 512) / 256) + 1 = 1 full frame; finalize adds the zero-padded tail frame.
     REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
     REQUIRE(available == 1);
 
     REQUIRE(sonare_stream_analyzer_finalize(analyzer) == SONARE_OK);
     REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
-    REQUIRE(available == 1);
+    REQUIRE(available == 2);
+
+    REQUIRE(sonare_stream_analyzer_finalize(analyzer) == SONARE_OK);
+    REQUIRE(sonare_stream_analyzer_available_frames(analyzer, &available) == SONARE_OK);
+    REQUIRE(available == 2);
 
     SonareStreamFrames frames = {};
     REQUIRE(sonare_stream_analyzer_read_frames(analyzer, 2, &frames) == SONARE_OK);
-    REQUIRE(frames.n_frames == 1);
+    REQUIRE(frames.n_frames == 2);
     REQUIRE(frames.n_mels == config.n_mels);
     REQUIRE(frames.timestamps != nullptr);
     REQUIRE(frames.timestamps[0] == Catch::Approx(0.0f));
+    REQUIRE(frames.timestamps[1] == Catch::Approx(256.0f / 22050.0f));
     sonare_free_stream_frames(&frames);
 
     sonare_stream_analyzer_destroy(analyzer);

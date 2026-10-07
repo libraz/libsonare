@@ -111,7 +111,7 @@ class StreamAnalyzer {
   void process(const float* samples, size_t n_samples, size_t sample_offset);
 
   /// @brief Finalizes the current stream by analyzing the remaining partial frame.
-  /// @details If the stream ends with fewer than @ref StreamConfig::n_fft
+  /// @details If the stream ends with fewer than @ref analysis_window_length()
   ///          samples buffered, this zero-pads that tail and emits one final
   ///          frame. Calling finalize() more than once is idempotent, and a
   ///          call that throws leaves the stream un-finalized so a retry
@@ -207,6 +207,17 @@ class StreamAnalyzer {
   /// @brief Returns configuration.
   const StreamConfig& config() const { return config_; }
 
+  /// @brief Analysis window length in samples at the analysis rate.
+  /// @details @ref StreamConfig::n_fft is a duration in samples at 44100 Hz; this is that
+  ///          duration at @ref StreamConfig::analysis_sample_rate, never shorter than the hop.
+  int analysis_window_length() const { return window_length_; }
+
+  /// @brief FFT length the window is centred in and zero-padded to.
+  int fft_length() const { return fft_length_; }
+
+  /// @brief Bins per spectrum frame: fft_length() / 2 + 1.
+  int n_bins() const { return fft_length_ / 2 + 1; }
+
   /// @brief Returns total frames processed.
   int frame_count() const;
 
@@ -289,6 +300,9 @@ class StreamAnalyzer {
   static constexpr int kInternalSampleRate = kStreamInternalSampleRate;
   static constexpr int kMaxDirectSampleRate = kStreamMaxDirectSampleRate;
   int internal_sample_rate_;  // Actual rate used for analysis
+  int window_length_ = 0;     // Analysis window in samples at internal_sample_rate_
+  int fft_length_ = 0;        // FFT size; the window sits centred in it
+  int window_offset_ = 0;     // Leading zero padding: (fft_length_ - window_length_) / 2
   bool needs_resampling_ = false;
   bool needs_mel_analysis_ = false;
   float resample_ratio_ = 1.0f;
@@ -322,7 +336,7 @@ class StreamAnalyzer {
   int emitted_frame_count_ = 0;  // For emit_every_n_frames
   bool finalized_ = false;
 
-  // Overlap buffer (stores last n_fft - hop_length samples).
+  // Overlap buffer (stores last window_length_ - hop_length samples).
   // overlap_read_pos_ is the index of the current frame start within
   // overlap_buffer_; frames advance the read position by hop_length instead of
   // erasing per hop (O(N) memmove). The consumed prefix is compacted once per
@@ -346,7 +360,7 @@ class StreamAnalyzer {
   // FFT processor (reusable)
   std::unique_ptr<FFT> fft_;
 
-  // Cached window function
+  // Window centred in fft_length_ zeros
   std::vector<float> window_;
 
   // Pre-computed filterbanks
@@ -364,7 +378,7 @@ class StreamAnalyzer {
   bool has_prev_frame_ = false;
 
   // Working buffers (reused to avoid allocation)
-  std::vector<float> frame_buffer_;            // [n_fft]
+  std::vector<float> frame_buffer_;            // [fft_length_], zero outside the window
   std::vector<std::complex<float>> spectrum_;  // [n_bins]
   std::vector<float> magnitude_;               // [n_bins]
   std::vector<float> power_;                   // [n_bins]

@@ -241,7 +241,9 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   StreamConfig config;
   config.sample_rate = 22050;
   config.n_fft = 2048;
-  config.hop_length = 512;
+  // An 11.6 ms hop: the 1e-3 match below separates the chords' frames only at this
+  // resolution (a 23 ms hop fails at 44100 Hz as well).
+  config.hop_length = 256;
   config.compute_chroma = true;
 
   StreamAnalyzer analyzer(config);

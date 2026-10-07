@@ -62,8 +62,11 @@ struct StreamConfig {
   ///          keeps timestamps aligned with the audio clock. The analyzer
   ///          resamples internally only when the input exceeds 44100 Hz.
   int sample_rate = 44100;
-  int n_fft = 2048;                      ///< FFT size
-  int hop_length = 512;                  ///< Hop length between frames
+  /// @brief Analysis window as a duration, in samples at 44100 Hz.
+  /// @details Converted to the analysis rate at construction and widened to
+  ///          hop_length when shorter; see StreamAnalyzer::analysis_window_length().
+  int n_fft = 2048;
+  int hop_length = 512;                  ///< Hop between frames, in samples at the analysis rate
   WindowType window = WindowType::Hann;  ///< Window function type
 
   // Feature computation flags
@@ -120,10 +123,10 @@ struct StreamConfig {
 
   // Helper methods
 
-  /// @brief Returns number of frequency bins.
+  /// @brief Nominal bin count from n_fft; StreamAnalyzer::n_bins() is the emitted one.
   int n_bins() const { return n_fft / 2 + 1; }
 
-  /// @brief Returns overlap size in samples.
+  /// @brief Nominal overlap from n_fft; the analyzer overlaps by its window minus the hop.
   int overlap() const { return n_fft - hop_length; }
 
   /// @brief Returns the rate frames are analyzed at: the input rate, or

@@ -2,6 +2,7 @@
 /// @brief StreamAnalyzer core behavior tests.
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <limits>
 #include <thread>
@@ -13,6 +14,7 @@
 #include "stream_analyzer_test_helpers.h"
 #include "streaming/stream_resampler.h"
 #include "support/alloc_guard.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 TEST_CASE("StreamConfig helpers", "[streaming]") {
@@ -96,30 +98,34 @@ TEST_CASE("StreamAnalyzer finalize flushes a partial tail frame", "[streaming]")
 
   StreamAnalyzer analyzer(config);
 
+  // window = 1024 * 22050 / 44100 = 512 samples, hop 256. 600 samples hold
+  // floor((600 - 512) / 256) + 1 = 1 full frame (throttled by emit_every_n_frames),
+  // leaving 600 - 256 = 344 samples for the zero-padded tail frame at index 1.
+  REQUIRE(analyzer.analysis_window_length() == 512);
   std::vector<float> tail(600, 0.0f);
   analyzer.process(tail.data(), tail.size());
   REQUIRE(analyzer.available_frames() == 0);
-  REQUIRE(analyzer.frame_count() == 0);
+  REQUIRE(analyzer.frame_count() == 1);
 
   analyzer.finalize();
   REQUIRE(analyzer.available_frames() == 1);
-  REQUIRE(analyzer.frame_count() == 1);
+  REQUIRE(analyzer.frame_count() == 2);
   REQUIRE_THAT(analyzer.current_time(), WithinAbs(600.0f / 22050.0f, 1.0e-4f));
 
   analyzer.finalize();
   REQUIRE(analyzer.available_frames() == 1);
-  REQUIRE(analyzer.frame_count() == 1);
+  REQUIRE(analyzer.frame_count() == 2);
 
   auto frames = analyzer.read_frames(2);
   REQUIRE(frames.size() == 1);
-  REQUIRE(frames[0].frame_index == 0);
-  REQUIRE_THAT(frames[0].timestamp, WithinAbs(0.0f, 1.0e-6f));
+  REQUIRE(frames[0].frame_index == 1);
+  REQUIRE_THAT(frames[0].timestamp, WithinAbs(256.0f / 22050.0f, 1.0e-6f));
 
   analyzer.reset();
   analyzer.process(tail.data(), tail.size());
   analyzer.finalize();
   REQUIRE(analyzer.available_frames() == 1);
-  REQUIRE(analyzer.frame_count() == 1);
+  REQUIRE(analyzer.frame_count() == 2);
 }
 
 TEST_CASE("StreamAnalyzer finalize preserves short high-rate terminal impulses",
@@ -180,10 +186,10 @@ TEST_CASE("StreamAnalyzer overlap handling", "[streaming]") {
       analyzer.read_frames(100);  // Consume frames
     }
 
-    // After 5120 samples with n_fft=2048, hop=512:
-    // First frame after 2048 samples (4 chunks), then one per 512 samples
-    // Total: floor((5120 - 2048) / 512) + 1 = 7 frames
-    REQUIRE(total_frames == 7);
+    // window = 2048 * 22050 / 44100 = 1024 samples, hop 512, 5120 samples:
+    // floor((5120 - 1024) / 512) + 1 = 9 frames
+    REQUIRE(analyzer.analysis_window_length() == 1024);
+    REQUIRE(total_frames == 9);
   }
 }
 
@@ -593,7 +599,7 @@ TEST_CASE("StreamAnalyzer rejects degenerate sizing params", "[streaming][edge]"
   analyzer.process(audio.data(), audio.size());
   auto frames = analyzer.read_frames(16);
   REQUIRE_FALSE(frames.empty());
-  REQUIRE(frames[0].magnitude.size() == static_cast<size_t>(analyzer.config().n_bins()));
+  REQUIRE(frames[0].magnitude.size() == static_cast<size_t>(analyzer.n_bins()));
 }
 
 TEST_CASE("StreamAnalyzer rejects malformed config geometry", "[streaming][edge]") {
@@ -1885,5 +1891,166 @@ TEST_CASE("key_name spells like Key::to_string", "[streaming][naming]") {
     key.mode = Mode::Minor;
     CHECK(key_name(root, true, false) == key.to_string());
     CHECK(key_name(root, true, true) == key.to_short_string());
+  }
+}
+
+namespace {
+
+/// Input rates paired with a hop of about 5.8 ms at each.
+struct RateHop {
+  int sample_rate;
+  int hop_length;
+};
+constexpr std::array<RateHop, 3> kWindowRates = {{{22050, 128}, {32000, 186}, {44100, 256}}};
+
+/// Seconds of frames whose RMS clears the -120 dBFS floor around one click in silence.
+float click_span_sec(const RateHop& rate) {
+  StreamConfig config;
+  config.sample_rate = rate.sample_rate;
+  config.hop_length = rate.hop_length;
+  config.compute_spectral = true;
+  config.max_pending_frames = 1024;
+  StreamAnalyzer analyzer(config);
+  std::vector<float> audio(static_cast<size_t>(rate.sample_rate), 0.0f);
+  audio[static_cast<size_t>(rate.sample_rate / 2)] = 1.0f;
+  analyzer.process(audio.data(), audio.size());
+  const float floor = db_to_linear(constants::kFloorDb);
+  int above = 0;
+  for (const auto& frame : analyzer.read_frames(1024)) {
+    if (frame.rms_energy > floor) ++above;
+  }
+  return static_cast<float>(above) * config.frame_duration();
+}
+
+/// C-G-Am-F at one chord per bar with a 10 ms click on every beat at @p bpm.
+std::vector<float> chord_progression_with_clicks(int sr, float seconds, float bpm) {
+  const std::array<std::array<float, 3>, 4> chords = {{
+      {261.63f, 329.63f, 392.0f},  // C
+      {196.0f, 246.94f, 293.66f},  // G
+      {220.0f, 261.63f, 329.63f},  // Am
+      {174.61f, 220.0f, 261.63f},  // F
+  }};
+  const size_t n = static_cast<size_t>(seconds * static_cast<float>(sr));
+  const float beat_sec = 60.0f / bpm;
+  const float bar_sec = 4.0f * beat_sec;
+  const float click_sec = 0.01f;
+  const float click_decay_sec = 0.0023f;
+  std::vector<float> audio(n, 0.0f);
+  for (size_t i = 0; i < n; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sr);
+    const auto& chord = chords[static_cast<size_t>(t / bar_sec) % chords.size()];
+    for (float f : chord) audio[i] += 0.15f * std::sin(kTwoPi * f * t);
+    const float into_beat = std::fmod(t, beat_sec);
+    if (into_beat < click_sec) {
+      audio[i] +=
+          0.8f * std::exp(-into_beat / click_decay_sec) * std::sin(kTwoPi * 1000.0f * into_beat);
+    }
+  }
+  return audio;
+}
+
+}  // namespace
+
+TEST_CASE("StreamAnalyzer frame span is the same time across input rates", "[streaming]") {
+  std::array<float, kWindowRates.size()> spans{};
+  for (size_t i = 0; i < kWindowRates.size(); ++i) {
+    spans[i] = click_span_sec(kWindowRates[i]);
+    INFO("sr " << kWindowRates[i].sample_rate << " span " << spans[i]);
+    CHECK(spans[i] > 0.0f);
+  }
+  for (size_t a = 0; a < kWindowRates.size(); ++a) {
+    for (size_t b = a + 1; b < kWindowRates.size(); ++b) {
+      const float tolerance =
+          static_cast<float>(kWindowRates[a].hop_length) / kWindowRates[a].sample_rate +
+          static_cast<float>(kWindowRates[b].hop_length) / kWindowRates[b].sample_rate;
+      INFO("sr " << kWindowRates[a].sample_rate << " span " << spans[a] << " vs sr "
+                 << kWindowRates[b].sample_rate << " span " << spans[b]);
+      CHECK(std::abs(spans[a] - spans[b]) <= tolerance);
+    }
+  }
+}
+
+TEST_CASE("StreamAnalyzer key and tempo agree across input rates", "[streaming]") {
+  constexpr float kSeconds = 12.0f;
+  constexpr float kBpm = 120.0f;
+  std::array<ProgressiveEstimate, kWindowRates.size()> estimates{};
+  for (size_t i = 0; i < kWindowRates.size(); ++i) {
+    StreamConfig config;
+    config.sample_rate = kWindowRates[i].sample_rate;
+    config.hop_length = kWindowRates[i].hop_length;
+    config.max_pending_frames = 4096;
+    StreamAnalyzer analyzer(config);
+    const auto audio = chord_progression_with_clicks(config.sample_rate, kSeconds, kBpm);
+    analyzer.process(audio.data(), audio.size());
+    estimates[i] = analyzer.stats().estimate;
+    INFO("sr " << config.sample_rate << " key " << estimates[i].key << " minor "
+               << estimates[i].key_minor << " bpm " << estimates[i].bpm);
+    CHECK(estimates[i].key >= 0);
+    CHECK(estimates[i].bpm > 0.0f);
+  }
+  const ProgressiveEstimate& reference = estimates.back();
+  const int reference_rate = kWindowRates.back().sample_rate;
+  const float period_sec = 60.0f / reference.bpm;
+  for (size_t i = 0; i + 1 < kWindowRates.size(); ++i) {
+    // One autocorrelation lag at this rate, in BPM: 60 * (hop / sr) / period^2.
+    const float lag_bpm = 60.0f *
+                          (static_cast<float>(kWindowRates[i].hop_length) /
+                           static_cast<float>(kWindowRates[i].sample_rate)) /
+                          (period_sec * period_sec);
+    INFO("sr " << kWindowRates[i].sample_rate << " key " << estimates[i].key << "/"
+               << estimates[i].key_minor << " bpm " << estimates[i].bpm << " vs 44100 key "
+               << reference.key << "/" << reference.key_minor << " bpm " << reference.bpm << " lag "
+               << lag_bpm);
+    CHECK(std::abs(estimates[i].bpm - reference.bpm) <= lag_bpm);
+    // Key only at rates an octave apart: at 32000 the key estimate reads E minor on this
+    // progression with the unconverted window too, so it is not a window-length property.
+    if (kWindowRates[i].sample_rate * 2 == reference_rate) {
+      CHECK(estimates[i].key == reference.key);
+      CHECK(estimates[i].key_minor == reference.key_minor);
+    }
+  }
+}
+
+TEST_CASE("StreamAnalyzer converts n_fft from 44100 Hz samples to the analysis rate",
+          "[streaming]") {
+  struct Case {
+    int sample_rate;
+    int n_fft;
+    int hop_length;
+    int window;
+    int fft;
+  };
+  // window = max(round(n_fft * analysis_rate / 44100), hop); FFT = window when it is
+  // already 2^a 3^b 5^c and a multiple of 32, else the next such length.
+  const std::array<Case, 6> cases = {{
+      {44100, 2048, 512, 2048, 2048},   // factor 1
+      {96000, 2048, 512, 2048, 2048},   // resampled to 44100, factor 1
+      {22050, 2048, 512, 1024, 1024},   // 2048 * 0.5
+      {32000, 2048, 186, 1486, 1536},   // round(2048 * 32000 / 44100) = 1486
+      {22050, 1024, 1024, 1024, 1024},  // 512 widened to the hop
+      {8000, 32, 32, 32, 32},           // 6 widened to the hop
+  }};
+  for (const Case& c : cases) {
+    CAPTURE(c.sample_rate, c.n_fft, c.hop_length);
+    StreamConfig config;
+    config.sample_rate = c.sample_rate;
+    config.n_fft = c.n_fft;
+    config.hop_length = c.hop_length;
+    config.n_mels = 16;
+    StreamAnalyzer analyzer(config);
+    CHECK(analyzer.analysis_window_length() == c.window);
+    CHECK(analyzer.fft_length() == c.fft);
+    CHECK(analyzer.n_bins() == c.fft / 2 + 1);
+    CHECK(analyzer.config().n_fft == c.n_fft);
+
+    // The first frame needs exactly one window of analysis-rate input.
+    std::vector<float> below(static_cast<size_t>(c.window - 1), 0.0f);
+    if (c.sample_rate <= 44100) {
+      analyzer.process(below.data(), below.size());
+      CHECK(analyzer.frame_count() == 0);
+      const float one = 0.0f;
+      analyzer.process(&one, 1);
+      CHECK(analyzer.frame_count() == 1);
+    }
   }
 }

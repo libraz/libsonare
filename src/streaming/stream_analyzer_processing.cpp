@@ -69,7 +69,7 @@ void StreamAnalyzer::process(const float* samples, size_t n_samples, size_t samp
 void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
   /// finalized_ is cleared by reset() alone. Clearing it here made a
   /// process()-after-finalize() silently resume on a buffer finalize() had
-  /// already drained, so the resume boundary lost up to n_fft-1 samples of
+  /// already drained, so the resume boundary lost up to window-1 samples of
   /// real overlap context with nothing reported.
   if (samples == nullptr || n_samples == 0) {
     return;
@@ -123,12 +123,12 @@ void StreamAnalyzer::process_internal(const float* samples, size_t n_samples) {
 
 void StreamAnalyzer::process_complete_frames() {
   /// Process complete frames.
-  int n_fft = config_.n_fft;
+  const int window_length = window_length_;
   int hop_length = config_.hop_length;
 
   /// Process frames using a read offset into overlap_buffer_ instead of erasing
   /// hop_length samples per frame (which is an O(N) memmove every hop).
-  while (overlap_buffer_.size() - overlap_read_pos_ >= static_cast<size_t>(n_fft)) {
+  while (overlap_buffer_.size() - overlap_read_pos_ >= static_cast<size_t>(window_length)) {
     /// Calculate sample offset for this frame (in original sample rate)
     size_t frame_sample_offset = cumulative_samples_;
 
@@ -157,15 +157,15 @@ void StreamAnalyzer::process_complete_frames() {
   }
 
   /// Capacity guard (safety net): after compaction the unconsumed tail is
-  /// normally < n_fft, because the frame loop above drains every complete frame
-  /// whenever the buffer reaches n_fft samples. A pathological caller, however,
-  /// could feed sub-frame chunks (each smaller than n_fft) for a very long time
+  /// normally < the window, because the frame loop above drains every complete
+  /// frame whenever the buffer reaches a window. A pathological caller, however,
+  /// could feed sub-frame chunks (each smaller than a window) for a very long time
   /// in a config where a frame is never completed, letting overlap_buffer_ grow
-  /// without an upper bound. Cap it at a generous multiple of n_fft and drop the
+  /// without an upper bound. Cap it at a generous multiple of the window and drop the
   /// oldest excess so a long-running session cannot leak. Under correct
   /// frame-sized operation this branch is never taken, so normal behavior is
   /// unchanged.
-  const size_t kMaxOverlapSamples = static_cast<size_t>(config_.n_fft) * 10;
+  const size_t kMaxOverlapSamples = static_cast<size_t>(window_length_) * 10;
   if (overlap_buffer_.size() > kMaxOverlapSamples) {
     const size_t drop = overlap_buffer_.size() - kMaxOverlapSamples;
     overlap_buffer_.erase(overlap_buffer_.begin(),
@@ -210,7 +210,7 @@ void StreamAnalyzer::finalize() {
     return;
   }
 
-  std::vector<float> padded(static_cast<size_t>(config_.n_fft), 0.0f);
+  std::vector<float> padded(static_cast<size_t>(window_length_), 0.0f);
   const size_t copy_count = std::min(overlap_buffer_.size(), padded.size());
   std::copy(overlap_buffer_.begin(),
             overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(copy_count), padded.begin());
@@ -335,7 +335,7 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
   /// Copy magnitude if requested
   if (config_.compute_magnitude) {
     int downsample = config_.magnitude_downsample;
-    int output_bins = config_.n_bins() / downsample;
+    int output_bins = n_bins() / downsample;
     frame.magnitude.resize(output_bins);
     for (int i = 0; i < output_bins; ++i) {
       frame.magnitude[i] = magnitude_[i * downsample];
@@ -425,7 +425,7 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
   }
 
   /// Compute RMS energy (from time-domain)
-  frame.rms_energy = compute_rms_frame(frame_start, config_.n_fft);
+  frame.rms_energy = compute_rms_frame(frame_start, window_length_);
 }
 
 }  // namespace sonare
