@@ -2244,6 +2244,19 @@ export const CASES: AbortGuardCase[] = [
   // The shapes matter as much as the values: `new Mixer(2 ** 32, 128)` never
   // reaches the reader, because the sceneJson type check refuses it first.
   {
+    name: 'downmix',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'channels', call: () => addon.downmix('x', 1) },
+      { argument: 'targetLayout', call: () => addon.downmix([samples()], '1') },
+      {
+        argument: 'targetLayout past the int range',
+        call: () => addon.downmix([samples()], 2 ** 32),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'PlaybackRenderer',
     missingRequired: [],
     rejectsArgument: [

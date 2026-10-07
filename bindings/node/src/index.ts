@@ -1,5 +1,6 @@
 export * from './analysis.js';
 export * from './audio.js';
+export * from './audio_channels.js';
 export * from './effects_mastering.js';
 export * from './effects_polyphony.js';
 export * from './errors.js';

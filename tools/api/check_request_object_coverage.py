@@ -114,6 +114,10 @@ METADATA_HELPERS = {
     "voiceCharacterPresetId",
     "realtimeVoiceChangerPresetConfig",
 }
+# Channel-plane primitives beside `Audio.fromMemory(data)`: the decode takes the
+# encoded bytes alone and the fold takes planes plus a layout code, both
+# positional low-level building blocks with no options to name.
+CHANNEL_PRIMITIVES = {"decodeChannels", "downmix"}
 # These two functions were already object-shaped before this migration.  They
 # have semantic options types rather than a newly named *Request interface.
 OBJECT_SHAPED = {"synthesizeRir"}
@@ -167,6 +171,8 @@ def exemption(path: Path, name: str, text: str) -> str | None:
         return "scalar or small utility"
     if name in METADATA_HELPERS:
         return "catalog, capability, or version metadata"
+    if name in CHANNEL_PRIMITIVES:
+        return "low-level channel-plane primitive"
     if name in OBJECT_SHAPED:
         return "pre-existing object-shaped API"
     if name in STATEFUL_ATTACH_HELPERS:
