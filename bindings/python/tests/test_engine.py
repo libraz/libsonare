@@ -262,10 +262,31 @@ def test_engine_resolve_and_set_bus_master_insert_automation_ids() -> None:
         assert master_param != bus_param
 
 
-def test_engine_settle_insert_parameters_and_apply_commands_due_now() -> None:
-    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+def test_engine_apply_commands_due_now_preserves_future_commands() -> None:
+    block = 256
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=block) as engine:
         engine.settle_insert_parameters()
+        # Unscheduled (-1) and frame-0 seeks are due now and apply in FIFO order;
+        # the later two fall inside the second and third blocks.
+        engine.seek_sample(111, render_frame=-1)
+        engine.seek_sample(222, render_frame=0)
+        engine.seek_sample(5000, render_frame=300)
+        engine.seek_sample(6000, render_frame=600)
+        assert engine.transport_state().sample_position == 0
+
         engine.apply_commands_due_now_preserving_future()
+        assert engine.transport_state().sample_position == 222
+        # A second call applies nothing again and does not drain a future command.
+        engine.apply_commands_due_now_preserving_future()
+        assert engine.transport_state().sample_position == 222
+
+        silence = [[0.0] * block, [0.0] * block]
+        engine.process(silence)
+        assert engine.transport_state().sample_position == 222
+        engine.process(silence)
+        assert engine.transport_state().sample_position == 5000
+        engine.process(silence)
+        assert engine.transport_state().sample_position == 6000
 
 
 def test_engine_empty_automation_lane_removes_it() -> None:

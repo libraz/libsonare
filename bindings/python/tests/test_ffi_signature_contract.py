@@ -28,6 +28,8 @@ from pathlib import Path
 
 import pytest
 
+from libsonare._ffi_types_vocal import SONARE_VOCAL_EDIT_API_VERSION
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INCLUDE_DIR = REPO_ROOT / "include" / "sonare"
 
@@ -47,15 +49,14 @@ SIGNATURE_MODULES = (
     ("libsonare._ffi_signatures_playback", "configure_playback_signatures"),
     ("libsonare._ffi_signatures_project", "configure_project_signatures"),
     ("libsonare._ffi_signatures_repair_dynamics", "configure_repair_dynamics_signatures"),
+    ("libsonare._ffi_vocal", "configure_vocal_signatures"),
+    ("libsonare._ffi_vocal_project", "configure_vocal_project_signatures"),
 )
 
 # Pure-Python ctypes modules (no dlopen) holding the struct mirrors.
-FFI_TYPE_MODULES = (
-    "libsonare._ffi_types_core",
-    "libsonare._ffi_types_analysis",
-    "libsonare._ffi_types_mastering_project",
-    "libsonare._ffi_types_repair",
-    "libsonare._ffi_types_streaming",
+FFI_TYPE_MODULES = tuple(
+    f"libsonare.{path.stem}"
+    for path in sorted((REPO_ROOT / "bindings/python/src/libsonare").glob("_ffi_types_*.py"))
 )
 
 # Non-vacuity floors. A parser that silently stops matching would otherwise turn
@@ -255,14 +256,23 @@ def _actual_shape(ctypes_type: object) -> str:
     return f"{kind}{ctypes.sizeof(ctypes_type) * 8}"
 
 
+# Probes a configure function calls, with the value its own version check accepts.
+_VERSION_PROBES = {"sonare_vocal_edit_api_version": SONARE_VOCAL_EDIT_API_VERSION}
+
+
 class _SignatureRecorder:
     """Stands in for a ctypes function pointer, capturing what is assigned to it."""
 
-    def __init__(self) -> None:
+    def __init__(self, result: object = 0) -> None:
         object.__setattr__(self, "declared", {})
+        object.__setattr__(self, "result", result)
 
     def __setattr__(self, name: str, value: object) -> None:
         self.declared[name] = value
+
+    def __call__(self) -> object:
+        # A configure function may call a version probe and refuse a mismatch.
+        return self.result
 
 
 class _RecordingLib:
@@ -282,7 +292,8 @@ class _RecordingLib:
             raise AttributeError(name)
         if name in self.missing:
             raise AttributeError(name)
-        return self.functions.setdefault(name, _SignatureRecorder())
+        result = _VERSION_PROBES.get(name, 0)
+        return self.functions.setdefault(name, _SignatureRecorder(result))
 
 
 def _declared_signatures() -> dict[str, dict[str, dict[str, object]]]:
@@ -349,6 +360,18 @@ def test_header_scan_is_not_vacuous() -> None:
         "the header scan broke rather than the C ABI shrinking"
     )
     assert OPAQUE_HANDLES and ENUM_TYPEDEFS and CALLBACK_TYPEDEFS
+
+
+def test_every_configure_function_run_by_load_library_is_guarded() -> None:
+    """A configure module added to ``load_library`` must join SIGNATURE_MODULES."""
+    source = (REPO_ROOT / "bindings/python/src/libsonare/_ffi.py").read_text(encoding="utf-8")
+    called = set(re.findall(r"\b(configure_\w+_signatures)\(lib\)", source))
+    guarded = {entry for _, entry in SIGNATURE_MODULES}
+    assert called, "no configure_*_signatures call found in load_library"
+    assert called == guarded, (
+        f"configure functions not guarded: {sorted(called - guarded)}; "
+        f"guarded but not called: {sorted(guarded - called)}"
+    )
 
 
 def test_signature_scan_is_not_vacuous() -> None:
