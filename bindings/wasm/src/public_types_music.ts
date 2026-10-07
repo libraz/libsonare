@@ -380,6 +380,13 @@ export interface BoundaryOptions {
   nChroma?: number;
   /** Minimum spacing between peaks, in seconds. Default 2. */
   peakDistance?: number;
+  /**
+   * One-sided span in seconds over which the local novelty maximum that
+   * `threshold` is measured against is taken. Must be finite and non-negative;
+   * 0 makes each frame its own reference, which disables the relative threshold.
+   * Default 60.
+   */
+  referenceWindow?: number;
   /** Use MFCC features. Default `true`. */
   useMfcc?: boolean;
   /** Use chroma features. Default `true`. */

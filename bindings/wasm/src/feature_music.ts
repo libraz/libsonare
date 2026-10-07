@@ -621,7 +621,12 @@ export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResu
     }
   }
   validatePositiveIntegers('detectBoundaries', sizes);
-  for (const name of ['threshold', 'absoluteThreshold', 'peakDistance'] as const) {
+  for (const name of [
+    'threshold',
+    'absoluteThreshold',
+    'peakDistance',
+    'referenceWindow',
+  ] as const) {
     const value = request[name];
     if (value == null) {
       continue;

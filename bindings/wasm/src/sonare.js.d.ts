@@ -743,6 +743,7 @@ export interface WasmBoundaryOptions {
   nMfcc?: number;
   nChroma?: number;
   peakDistance?: number;
+  referenceWindow?: number;
   useMfcc?: boolean;
   useChroma?: boolean;
 }

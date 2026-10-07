@@ -119,6 +119,26 @@ describe('detectBoundaries', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('reaches the detector: disabling the reference window changes the boundary count', () => {
+    const samples = threeSections();
+    const windowed = detectBoundaries({ samples, sampleRate: SAMPLE_RATE, absoluteThreshold: 0 });
+    const unwindowed = detectBoundaries({
+      samples,
+      sampleRate: SAMPLE_RATE,
+      absoluteThreshold: 0,
+      referenceWindow: 0,
+    });
+    expect(unwindowed.boundaries.length).not.toBe(windowed.boundaries.length);
+    // The default is 60 s, so stating it changes nothing.
+    const explicit = detectBoundaries({
+      samples,
+      sampleRate: SAMPLE_RATE,
+      absoluteThreshold: 0,
+      referenceWindow: 60,
+    });
+    expect(explicit.boundaries).toEqual(windowed.boundaries);
+  });
+
   it('refuses a configuration with neither feature stream', () => {
     expect(() =>
       detectBoundaries({
@@ -159,6 +179,7 @@ describe('detectBoundaries', () => {
       nMfcc: 13,
       nChroma: 12,
       peakDistance: 2.0,
+      referenceWindow: 60,
       useMfcc: true,
       useChroma: true,
     };
@@ -173,6 +194,8 @@ describe('detectBoundaries', () => {
       { threshold: Number.NaN },
       { absoluteThreshold: -1 },
       { peakDistance: Number.POSITIVE_INFINITY },
+      { referenceWindow: -1 },
+      { referenceWindow: Number.NaN },
       { useMfcc: false, useChroma: false },
     ]) {
       expect(() => module.detectBoundaries(samples, SAMPLE_RATE, { ...valid, ...bad })).toThrow();
@@ -196,5 +219,15 @@ describe('detectBoundaries', () => {
     expect(() => detectBoundaries({ samples, sampleRate: SAMPLE_RATE, peakDistance: -1 })).toThrow(
       RangeError,
     );
+    expect(() =>
+      detectBoundaries({ samples, sampleRate: SAMPLE_RATE, referenceWindow: -1 }),
+    ).toThrow(RangeError);
+    expect(() =>
+      detectBoundaries({
+        samples,
+        sampleRate: SAMPLE_RATE,
+        referenceWindow: '60' as unknown as number,
+      }),
+    ).toThrow();
   });
 });

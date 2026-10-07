@@ -190,6 +190,7 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
     config.n_mfcc = intProperty(options, "nMfcc", config.n_mfcc);
     config.n_chroma = intProperty(options, "nChroma", config.n_chroma);
     config.peak_distance = floatProperty(options, "peakDistance", config.peak_distance);
+    config.reference_window = floatProperty(options, "referenceWindow", config.reference_window);
     config.use_mfcc = boolProperty(options, "useMfcc", config.use_mfcc);
     config.use_chroma = boolProperty(options, "useChroma", config.use_chroma);
   }
@@ -202,14 +203,16 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
                           "detectBoundaries: require nFft > 0, hopLength > 0, kernelSize > 0, "
                           "nMfcc > 0, nChroma > 0");
   }
-  // Both thresholds and the peak spacing are compared against measured values,
-  // so a non-finite one silently accepts or rejects every peak instead of failing.
+  // Both thresholds, the peak spacing and the reference span are compared against
+  // measured values, so a non-finite one silently accepts or rejects every peak
+  // instead of failing.
   if (!numeric::finite_non_negative(config.threshold) ||
       !numeric::finite_non_negative(config.absolute_threshold) ||
-      !numeric::finite_non_negative(config.peak_distance)) {
+      !numeric::finite_non_negative(config.peak_distance) ||
+      !numeric::finite_non_negative(config.reference_window)) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "detectBoundaries: threshold, absoluteThreshold and peakDistance must be "
-                          "finite and non-negative");
+                          "detectBoundaries: threshold, absoluteThreshold, peakDistance and "
+                          "referenceWindow must be finite and non-negative");
   }
   // The detector combines the two feature streams frame-for-frame; with neither
   // enabled there is nothing to combine and the novelty curve is undefined.
