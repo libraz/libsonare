@@ -554,6 +554,9 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(int_value("n-chroma", 12), greater_than(0.0, CliOptionDomainStage::Parameter)),
          with_domain(number_value("peak-distance", 2.0),
                      at_least(0.0, CliOptionDomainStage::Parameter)),
+         // One-sided seconds the relative threshold is measured against; 0 disables it.
+         with_domain(number_value("reference-window", 60.0),
+                     at_least(0.0, CliOptionDomainStage::Parameter)),
          flag("no-mfcc"), flag("no-chroma"), global_int("n-fft", 2048),
          global_int("hop-length", 512)},
         {}, validate_boundary_feature_streams);

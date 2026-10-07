@@ -96,6 +96,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "boundaries",
+      "option": "reference-window",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "chords",
       "option": "smoothing-window",
       "rejectExit": "invalid_parameter",

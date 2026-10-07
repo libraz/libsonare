@@ -418,6 +418,34 @@ TEST_CASE("CLI boundaries command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("\"count\""));
     REQUIRE_THAT(output, ContainsSubstring("\"boundaries\""));
   }
+
+  SECTION("reference-window changes the count and a negative value is refused") {
+    // Segments of different pitch and level: the quieter changes fall under the
+    // relative threshold of the largest one, unless the reference is the frame itself.
+    const std::vector<float> freqs = {220.0f, 440.0f, 330.0f, 880.0f, 262.0f, 523.0f, 349.0f};
+    const std::vector<float> gains = {0.5f, 0.5f, 0.1f, 0.5f, 0.05f, 0.5f, 0.1f};
+    const int rate = 22050;
+    const size_t segment = static_cast<size_t>(3 * rate);
+    std::vector<float> samples(segment * freqs.size());
+    for (size_t i = 0; i < samples.size(); ++i) {
+      const size_t k = i / segment;
+      const float t = static_cast<float>(i) / rate;
+      samples[i] =
+          gains[k] * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * freqs[k] * t);
+    }
+    save_wav(TEST_WAV, samples, rate);
+    const std::string base = CLI + " boundaries " + TEST_WAV + " --absolute-threshold 0 --json -q";
+    auto [local_code, local_output] = exec_command(base + " --reference-window 0");
+    auto [global_code, global_output] = exec_command(base);
+    REQUIRE(local_code == 0);
+    REQUIRE(global_code == 0);
+    const auto local = sonare::util::json::parse_strict(local_output);
+    const auto global = sonare::util::json::parse_strict(global_output);
+    REQUIRE(local["count"].as_int() != global["count"].as_int());
+
+    auto [bad_code, bad_output] = exec_command(base + " --reference-window -1");
+    REQUIRE(bad_code == 3);
+  }
 }
 
 TEST_CASE("CLI mel command", "[cli]") {

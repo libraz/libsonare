@@ -492,6 +492,7 @@ int cmd_boundaries(const CliArgs& args, const Audio& audio) {
   config.n_mfcc = args.get_int("n-mfcc", config.n_mfcc);
   config.n_chroma = args.get_int("n-chroma", config.n_chroma);
   config.peak_distance = args.get_float("peak-distance", config.peak_distance);
+  config.reference_window = args.get_float("reference-window", config.reference_window);
   config.use_mfcc = !args.has("no-mfcc");
   config.use_chroma = !args.has("no-chroma");
   config.n_fft = args.n_fft;
