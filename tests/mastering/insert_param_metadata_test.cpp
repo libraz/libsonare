@@ -29,10 +29,12 @@
 #include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
+#include "mastering/multiband/multiband_dynamic_eq.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
 #include "rt/processor_base.h"
 #include "support/schema_paths.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
 
@@ -686,6 +688,91 @@ TEST_CASE("any one key of an EQ band makes the band exist", "[mastering][catalog
   REQUIRE(ignored.empty());
   REQUIRE(make_insert("multiband.dynamicEq", R"({"band1.dyn2.ratio":3.0})", &ignored) != nullptr);
   REQUIRE(ignored.empty());
+}
+
+namespace {
+
+unsigned int descriptor_id(const sonare::rt::ProcessorBase& processor, const std::string& key) {
+  for (const auto& descriptor : processor.parameter_descriptors()) {
+    if (descriptor.key == key) return descriptor.id;
+  }
+  FAIL("no descriptor " << key);
+  return 0;
+}
+
+// Settled output RMS of a 60 Hz tone, which sits inside the lowest crossover band.
+float settled_low_band_rms(sonare::rt::ProcessorBase& processor) {
+  constexpr int kRate = 48000;
+  constexpr int kBlock = 512;
+  processor.prepare(kRate, kBlock);
+  double sum = 0.0;
+  int counted = 0;
+  for (int block = 0; block < 60; ++block) {
+    std::vector<float> left(kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      const double t = static_cast<double>(block * kBlock + i) / kRate;
+      left[static_cast<size_t>(i)] =
+          static_cast<float>(0.25 * std::sin(2.0 * sonare::constants::kPiD * 60.0 * t));
+    }
+    std::vector<float> right = left;
+    float* channels[] = {left.data(), right.data()};
+    processor.process(channels, 2, kBlock);
+    if (block >= 40) {
+      for (const float sample : left) sum += static_cast<double>(sample) * sample;
+      counted += kBlock;
+    }
+  }
+  return static_cast<float>(std::sqrt(sum / counted));
+}
+
+std::string static_cut_json(int slot) {
+  const std::string prefix = "\"band0.dyn" + std::to_string(slot) + ".";
+  return "{" + prefix + "frequencyHz\":60," + prefix + "staticGainDb\":-12," + prefix + "q\":1," +
+         prefix + "ratio\":1," + prefix + "thresholdDb\":0}";
+}
+
+}  // namespace
+
+TEST_CASE("sparse multiband dynamic EQ sub-bands keep the slot their keys name",
+          "[mastering][catalog]") {
+  using sonare::mastering::multiband::MultibandDynamicEq;
+  auto dense = make_insert("multiband.dynamicEq", static_cut_json(0));
+  auto sparse = make_insert("multiband.dynamicEq", static_cut_json(2));
+  REQUIRE(dense != nullptr);
+  REQUIRE(sparse != nullptr);
+
+  const auto& sparse_bands = dynamic_cast<MultibandDynamicEq&>(*sparse).config().bands[0];
+  REQUIRE(sparse_bands.size() == 3);
+  REQUIRE_FALSE(sparse_bands[0].enabled);
+  REQUIRE_FALSE(sparse_bands[1].enabled);
+  REQUIRE(sparse_bands[2].enabled);
+  REQUIRE(sparse_bands[2].static_gain_db == -12.0f);
+
+  const float cut = settled_low_band_rms(*dense);
+  REQUIRE(settled_low_band_rms(*sparse) == Catch::Approx(cut).margin(1.0e-5));
+
+  // The absent dyn0 slot must not reach the supplied dyn2 filter.
+  REQUIRE(sparse->set_parameter(descriptor_id(*sparse, "band0.dyn0.staticGainDb"), 6.0f));
+  REQUIRE(settled_low_band_rms(*sparse) == Catch::Approx(cut).margin(1.0e-5));
+  REQUIRE(sparse->set_parameter(descriptor_id(*sparse, "band0.dyn0.staticGainDb"), 0.0f));
+
+  // The dyn2 descriptor reaches the dyn2 filter, as dyn0 does in the dense layout.
+  REQUIRE(dense->set_parameter(descriptor_id(*dense, "band0.dyn0.staticGainDb"), 0.0f));
+  REQUIRE(sparse->set_parameter(descriptor_id(*sparse, "band0.dyn2.staticGainDb"), 0.0f));
+  const float open = settled_low_band_rms(*dense);
+  REQUIRE(open > cut * 2.0f);
+  REQUIRE(settled_low_band_rms(*sparse) == Catch::Approx(open).margin(1.0e-5));
+  REQUIRE(dynamic_cast<MultibandDynamicEq&>(*sparse).config().bands[0][2].static_gain_db == 0.0f);
+
+  // A gap between supplied slots keeps both at their own index.
+  auto gapped = make_insert("multiband.dynamicEq",
+                            R"({"band0.dyn0.frequencyHz":40,"band0.dyn2.frequencyHz":80})");
+  REQUIRE(gapped != nullptr);
+  const auto& gapped_bands = dynamic_cast<MultibandDynamicEq&>(*gapped).config().bands[0];
+  REQUIRE(gapped_bands.size() == 3);
+  REQUIRE(gapped_bands[0].frequency_hz == 40.0f);
+  REQUIRE_FALSE(gapped_bands[1].enabled);
+  REQUIRE(gapped_bands[2].frequency_hz == 80.0f);
 }
 
 TEST_CASE("the parameter info schema list matches what the writer emits", "[mastering][catalog]") {

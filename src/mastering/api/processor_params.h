@@ -814,7 +814,9 @@ inline void populate_imager_bands(multiband::MultibandImagerConfig& config,
 
 // Resize the dynamic-EQ crossover bands to match the crossover, then read each
 // crossover band's list of dynamic sub-bands from band{i}.dyn{j}.<field> keys.
-// A sub-band exists once any of its keys is supplied, as a DynamicEq band does.
+// A sub-band exists once any of its keys is supplied, as a DynamicEq band does,
+// and stays at slot j: absent lower slots hold disabled bands so the published
+// band{i}.dyn{j} parameter ids address it.
 inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& config,
                                       const ParamMap& params) {
   config.bands.resize(config.crossover.cutoffs_hz.size() + 1);
@@ -835,6 +837,7 @@ inline void populate_dynamic_eq_bands(multiband::MultibandDynamicEqConfig& confi
         continue;
       }
       if (supplied_slot(params, prefix, dynamic_eq_band_fields(), band)) {
+        config.bands[index].resize(sub);
         config.bands[index].push_back(dynamic_eq_band(params, prefix));
       }
     }
