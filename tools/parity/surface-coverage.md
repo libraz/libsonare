@@ -21,7 +21,7 @@ The two command-line front-ends get a column each because they are two binaries:
 | polyphony | 13 | 13/13 | 13/13 | 13/13 | 4/13 | 4/13 |
 | project & arrangement | 165 | 157/165 | 156/165 | 156/165 | 12/165 | 9/165 |
 | project part rig | 3 | 3/3 | 3/3 | 3/3 | 0/3 | 0/3 |
-| realtime engine | 174 | 171/174 | 171/174 | 171/174 | 5/174 | 5/174 |
+| realtime engine | 181 | 178/181 | 178/181 | 178/181 | 5/181 | 5/181 |
 | room acoustics | 5 | 5/5 | 5/5 | 5/5 | 5/5 | 5/5 |
 | sample bank | 6 | 6/6 | 6/6 | 6/6 | 2/6 | 2/6 |
 | streaming | 34 | 32/34 | 32/34 | 32/34 | 8/34 | 8/34 |
@@ -29,4 +29,4 @@ The two command-line front-ends get a column each because they are two binaries:
 | vocal edit | 58 | 44/58 | 44/58 | 44/58 | 11/58 | 11/58 |
 | vocal project | 10 | 5/10 | 5/10 | 5/10 | 2/10 | 2/10 |
 | voice changer | 20 | 20/20 | 20/20 | 19/20 | 3/20 | 3/20 |
-| **all domains** | **977** | **899/977** | **896/977** | **896/977** | **143/977** | **162/977** |
+| **all domains** | **984** | **906/984** | **903/984** | **903/984** | **143/984** | **162/984** |

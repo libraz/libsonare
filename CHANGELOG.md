@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### New
+
+#### Realtime engine and project
+
+- Run the offline pre-roll of bounce and freeze without rendering, so a host driving the engine block by block starts a repeat render from the same state: queued commands applied, mixer and effect processors reset, automation and lane gates resolved, smoothers snapped (C: `sonare_engine_prime_offline_parameters`; Node and raw WASM: `primeOfflineParameters`; Python: `prime_offline_parameters`).
+- Queue a reset of every mixer and effect processor to its prepared state at a render frame, so playback queued after it starts from the state an offline bounce starts from; instruments are not reset (C: `sonare_engine_reset_processor_state`; Node, WASM and the worklet engine: `resetProcessorState`; Python: `reset_processor_state`).
+- Read the engine's longest audible tail as an upper bound in samples, and its processing latency in 1/256 samples (C: `sonare_engine_tail_samples`, `sonare_engine_graph_latency_samples_q8`; Node, WASM and the worklet engine: `tailSamples`, `graphLatencySamplesQ8`; Python: `tail_samples`, `graph_latency_samples_q8`).
+
+#### Mixing
+
+- Ask whether a lane, bus or master sidechain binding would be accepted, and why not, without changing anything (C: `sonare_engine_can_set_lane_sidechain`, `sonare_engine_can_set_bus_sidechain`, `sonare_engine_can_set_master_sidechain`, `SonareSidechainRefusal`; Node, WASM and the worklet engine: `canSetLaneSidechain`, `canSetBusSidechain`, `canSetMasterSidechain` returning `SidechainCheck`; Python: `can_set_lane_sidechain`, `can_set_bus_sidechain`, `can_set_master_sidechain` returning `SidechainCheck`).
+
+### Behaviour changes
+
+- Pre-fader sends of a lane silenced by mute or solo are silenced with it.
+- A solo-safe lane keeps sounding while another lane is soloed.
+- Bounce and freeze of a live engine reset its mixer and effect processors before rendering, cutting insert tails and delay lines that were still ringing.
+
+### Fixes
+
+- A second bounce or freeze of the same engine renders the same audio as the first instead of starting from the processor state the first one left behind.
+- The WASM worklet engine's `renderOffline` primes its offline engine before rendering, so its first block no longer ramps in from default parameter values.
+- The transient shaper and vocal rider report their gain reduction, in the per-insert gain-reduction readout and in the mastering chain's stage gain reductions.
+- A muted or solo-silenced lane reaches exactly zero gain, and an unmuted lane exactly unity, instead of approaching them without arriving.
+- A refused sidechain binding no longer publishes a provisional binding table to the audio thread before it is rolled back.
+
 ## v1.8.2 (2026-10-06)
 
 This release adds offline monophonic vocal editing, compilation of a project into a timeline that a stopped realtime engine can play, per-part rigs with new overdrive and distortion pedal inserts, realtime surround pan on track lanes, and per-insert gain-reduction metering. It makes mixing, sidechain and offline bounce timing independent of lane order and block size, tightens validation across mastering, effects and MIDI file import, and changes how several mixing and repair processors sound.
