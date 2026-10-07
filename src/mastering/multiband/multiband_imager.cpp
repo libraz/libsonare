@@ -168,6 +168,9 @@ void MultibandImager::set_config(const MultibandImagerConfig& config) {
   // band-parameter-only updates. The allpass decorrelation state is rebuilt and
   // reset on every set_config (it was before this change too).
   const bool crossover_changed = config.crossover != config_.crossover;
+  // Before the mirror: an unprepared crossover must still adopt the new split,
+  // and a rejected one leaves config() untouched.
+  if (crossover_changed) crossover_.set_config(config.crossover);
   config_ = config;
   if (prepared_ && crossover_changed) {
     // Re-prepare (which rebuilds crossover state and the allpass stages) only

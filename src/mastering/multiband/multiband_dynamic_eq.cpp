@@ -106,11 +106,13 @@ void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   // band-parameter-only updates. Sub-processors are always rebuilt, prepared and
   // reconfigured.
   const bool crossover_changed = config.crossover != config_.crossover;
+  // Before the mirror: an unprepared crossover must still adopt the new split,
+  // and a rejected one leaves config() untouched.
+  if (crossover_changed) crossover_.set_config(config.crossover);
   config_ = config;
   rebuild_processors();
   if (prepared_) {
     if (crossover_changed) {
-      crossover_.set_config(config_.crossover);
       crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
     }
     for (size_t band = 0; band < processors_.size(); ++band) {

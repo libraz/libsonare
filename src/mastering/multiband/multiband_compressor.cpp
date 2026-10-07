@@ -116,10 +116,9 @@ void MultibandCompressor::set_config(const MultibandCompressorConfig& config) {
   // actually changed; a non-structural set_config() must leave the crossover
   // running so band-parameter tweaks don't re-zero the filters and click.
   const bool crossover_changed = !crossover_config_equal(config_.crossover, config.crossover);
+  // Before the mirror: a rejected crossover leaves config() untouched.
+  if (crossover_changed) crossover_.set_config(config.crossover);
   config_ = config;
-  if (crossover_changed) {
-    crossover_.set_config(config_.crossover);
-  }
   rebuild_processors();
   if (prepared_) {
     if (crossover_changed) {

@@ -1,8 +1,11 @@
 #include <algorithm>
+#include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
@@ -1188,4 +1191,85 @@ TEST_CASE("MultibandImager publishes band-prefixed descriptors for every band",
 TEST_CASE("Crossover validates FIR linear-phase kernel size", "[mastering][multiband]") {
   REQUIRE_THROWS(Crossover({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, 128}));
   REQUIRE_THROWS(Crossover({{1000.0f}, CrossoverSlope::LR4, CrossoverMode::FirLinearPhase, 1}));
+}
+
+namespace {
+
+template <typename Processor>
+using ConfigOf = std::decay_t<decltype(std::declval<Processor>().config())>;
+
+// Same band settings, re-split at @p cutoffs with a linear-phase FIR.
+template <typename Config>
+Config with_fir_split(Config config, std::vector<float> cutoffs, int kernel = 257) {
+  config.crossover.cutoffs_hz = std::move(cutoffs);
+  config.crossover.mode = CrossoverMode::FirLinearPhase;
+  config.crossover.fir_kernel_size = kernel;
+  config.bands.resize(config.crossover.cutoffs_hz.size() + 1, config.bands.front());
+  return config;
+}
+
+template <typename Processor>
+std::vector<float> render_stereo_blocks(Processor& processor) {
+  constexpr int kFrames = 4096;
+  constexpr int kBlock = 128;
+  std::vector<float> left(kFrames);
+  std::vector<float> right(kFrames);
+  for (int i = 0; i < kFrames; ++i) {
+    left[static_cast<size_t>(i)] = 0.1f * std::sin(0.131f * i) + 0.05f * std::cos(0.017f * i);
+    right[static_cast<size_t>(i)] = 0.08f * std::sin(0.071f * i + 0.4f);
+  }
+  for (int start = 0; start < kFrames; start += kBlock) {
+    float* planes[] = {left.data() + start, right.data() + start};
+    processor.process(planes, 2, kBlock);
+  }
+  left.insert(left.end(), right.begin(), right.end());
+  return left;
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE("Multiband setters adopt the crossover whatever the prepare state",
+                   "[mastering][multiband]", MultibandCompressor, MultibandSaturation,
+                   MultibandLimiter, MultibandExpander, MultibandDynamicEq, MultibandImager) {
+  using Config = ConfigOf<TestType>;
+  const Config three = with_fir_split(Config{}, {600.0f, 4000.0f});
+
+  TestType constructed(three);
+  constructed.prepare(48000.0, 128, 2);
+  const std::vector<float> expected = render_stereo_blocks(constructed);
+  REQUIRE(constructed.latency_samples() >= 128);
+
+  SECTION("set before prepare") {
+    TestType configured;
+    configured.set_config(three);
+    configured.prepare(48000.0, 128, 2);
+    CHECK(configured.latency_samples() == constructed.latency_samples());
+    CHECK(render_stereo_blocks(configured) == expected);
+  }
+
+  SECTION("set after prepare") {
+    TestType configured;
+    configured.prepare(48000.0, 128, 2);
+    configured.set_config(three);
+    configured.reset();
+    CHECK(configured.latency_samples() == constructed.latency_samples());
+    CHECK(render_stereo_blocks(configured) == expected);
+  }
+
+  SECTION("band count grows and shrinks with the split") {
+    for (const std::vector<float>& cutoffs :
+         {std::vector<float>{300.0f, 1500.0f, 6000.0f}, std::vector<float>{2000.0f}}) {
+      const Config changed = with_fir_split(Config{}, cutoffs);
+      TestType fresh(changed);
+      fresh.prepare(48000.0, 128, 2);
+      TestType moved(three);
+      moved.prepare(48000.0, 128, 2);
+      moved.set_config(changed);
+      moved.reset();
+      CAPTURE(cutoffs.size());
+      CHECK(moved.config().bands.size() == cutoffs.size() + 1);
+      CHECK(moved.latency_samples() == fresh.latency_samples());
+      CHECK(render_stereo_blocks(moved) == render_stereo_blocks(fresh));
+    }
+  }
 }
