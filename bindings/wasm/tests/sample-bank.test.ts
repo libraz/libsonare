@@ -241,7 +241,7 @@ describe('Sonare WASM sample bank', () => {
           { engineMode: 'sample', sampleBank: released },
           { totalFrames: 4800 },
         ),
-      ).toThrow(TypeError);
+      ).toThrow(/sampleBank is destroyed/);
       expect(() =>
         project.bounceWithSynthInstrument(
           { engineMode: 'sample', sampleBank: {} as unknown as SampleBank },

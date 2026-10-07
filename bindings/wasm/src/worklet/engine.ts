@@ -3,6 +3,7 @@ import {
   type ClipPageStreamerRequest,
   type OpfsClipStreamOptions,
 } from '../clip_page_streamer';
+import { ErrorCode, SonareError } from '../errors';
 import type {
   EngineAutomationPoint,
   EngineBus,
@@ -835,7 +836,7 @@ export class SonareEngine {
     options: OpfsClipStreamOptions,
   ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
     if (this.destroyed) {
-      throw new Error('SonareEngine is destroyed.');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     if (!this.capabilities.clipPageRequestsRealtimeSafe) {
       throw new Error(
@@ -914,7 +915,7 @@ export class SonareEngine {
    */
   setClipPagePrefetchFrames(frames: number): void {
     if (this.destroyed) {
-      throw new Error('SonareEngine is destroyed.');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     if (!Number.isFinite(frames) || frames < 0) {
       throw new Error('clip page prefetch frames must be a finite value >= 0.');
@@ -934,7 +935,7 @@ export class SonareEngine {
    */
   setWarpVoiceCapacity(voices: number): void {
     if (this.destroyed) {
-      throw new Error('SonareEngine is destroyed.');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     this.offlineEngine.setWarpVoiceCapacity(voices);
     this.postSync({ type: 'syncWarpVoiceCapacity', voices });

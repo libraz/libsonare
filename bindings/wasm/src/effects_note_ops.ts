@@ -4,6 +4,7 @@
  */
 
 import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common';
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   NoteExtractorOptions,
@@ -624,7 +625,11 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
   const module = requireModule();
   if (typeof module.noteTargetsFromSmf !== 'function') {
-    throw new Error('libsonare was built without arrangement support');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without arrangement support',
+    );
   }
   return module.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
 }

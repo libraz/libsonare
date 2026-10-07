@@ -45,10 +45,14 @@ describe('package.json shape', () => {
     }
   });
 
-  it('lists the worker entries as the only side-effectful files', () => {
-    expect(pkg.sideEffects).toEqual(['./dist/worker.js', './dist/vocal_edit_worker.js']);
+  it('lists the worker entries and the dispose polyfill as the only side-effectful files', () => {
+    expect(pkg.sideEffects).toEqual([
+      './dist/worker.js',
+      './dist/vocal_edit_worker.js',
+      './src/lifetime.ts',
+    ]);
     const importTargets = jsSubpaths.map(([, conditions]) => conditions.import);
-    for (const file of pkg.sideEffects) {
+    for (const file of pkg.sideEffects.filter((entry: string) => entry.startsWith('./dist/'))) {
       expect(importTargets).toContain(file);
     }
   });

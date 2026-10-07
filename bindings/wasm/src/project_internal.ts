@@ -1,4 +1,5 @@
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
+import { ErrorCode, SonareError } from './errors';
 import type {
   BuiltinSynthBinding,
   PartRigEntry,
@@ -146,7 +147,7 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
   if ((sampleBank as unknown as { released: boolean }).released) {
     // The id outlives the handle, so without this the native registry would be
     // the only thing that notices — and with a different error class than Node.
-    throw new TypeError('sampleBank is destroyed');
+    throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'sampleBank is destroyed');
   }
   return { ...rest, sampleBankId: sampleBank.nativeId };
 }
@@ -535,7 +536,11 @@ export interface ProjectModule {
 export function projectModule(): ProjectModule {
   const candidate = getSonareModule() as unknown as Partial<ProjectModule>;
   if (typeof candidate.projectAbiVersion !== 'function' || candidate.Project === undefined) {
-    throw new Error('libsonare was built without arrangement (headless DAW) support');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without arrangement (headless DAW) support',
+    );
   }
   return candidate as ProjectModule;
 }

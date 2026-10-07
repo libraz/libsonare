@@ -65,7 +65,8 @@
   ],
   "sideEffects": [
     "./dist/worker.js",
-    "./dist/vocal_edit_worker.js"
+    "./dist/vocal_edit_worker.js",
+    "./src/lifetime.ts"
   ],
   "scripts": {
     "build": "yarn build:wasm && yarn build:js",
@@ -85,7 +86,7 @@
     "lint:fix": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome check --write",
     "format": "git ls-files -z -- 'src/**' 'tests/**' | xargs -0 biome format --write",
     "test": "vitest run",
-    "test:types": "tsc --noEmit --ignoreConfig --strict --module ESNext --moduleResolution bundler --target ES2020 tests/typing/analysis-entry.ts tests/typing/dist-entry-shared-types.ts tests/typing/worklet-capture-response.ts && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test:types": "tsc --noEmit --ignoreConfig --strict --module ESNext --moduleResolution bundler --target ES2020 --lib ES2020,ESNext.Disposable,DOM tests/typing/analysis-entry.ts tests/typing/dist-entry-shared-types.ts tests/typing/worklet-capture-response.ts && tsc --noEmit -p tsconfig.json && tsc -p tsconfig.test.json",
     "test:browser": "node scripts/audio-worklet-smoke.mjs",
     "test:browser:worker": "node scripts/offline-worker-smoke.mjs",
     "test:browser:boundary": "node scripts/boundary-smoke.mjs",

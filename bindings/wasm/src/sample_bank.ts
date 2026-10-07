@@ -110,4 +110,9 @@ export class SampleBank {
   destroy(): void {
     this.delete();
   }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.delete();
+  }
 }

@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   VocalAnalysis,
@@ -183,7 +184,11 @@ function module(): VocalWasmModule {
 
 function requireHandle(handle: number, subject: string): void {
   if (!Number.isSafeInteger(handle) || handle <= 0) {
-    throw new TypeError(`${subject} has already been disposed`);
+    throw new SonareError(
+      ErrorCode.InvalidState,
+      'InvalidState',
+      `${subject} has already been disposed`,
+    );
   }
 }
 
@@ -437,7 +442,11 @@ export function vocalEditApiVersion(): number {
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
   validateCreate(request);
   if (!vocalEditAvailable()) {
-    throw new Error('vocal edit is unavailable in this WASM build');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'vocal edit is unavailable in this WASM build',
+    );
   }
   return new VocalEditSession(
     module().vocalEditSessionCreate(request.samples, request.sampleRate, request),
@@ -458,7 +467,11 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
   requireSampleRate(request.sampleRate);
   validateSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
-    throw new Error('vocal edit is unavailable in this WASM build');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'vocal edit is unavailable in this WASM build',
+    );
   }
   return new VocalEditSession(
     module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, request),
@@ -498,9 +511,18 @@ export class VocalEditSession {
     this.dispose();
   }
 
+  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+
   private native(): number {
     if (this.disposed) {
-      throw new TypeError('session has already been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'session has already been disposed',
+      );
     }
     requireHandle(this.handle, 'session');
     return this.handle;
@@ -623,7 +645,11 @@ export class VocalEditDraft {
 
   private native(): number {
     if (this.disposed) {
-      throw new TypeError('draft has already been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'draft has already been disposed',
+      );
     }
     requireHandle(this.handle, 'draft');
     return this.handle;
@@ -715,6 +741,11 @@ export class VocalEditDraft {
   destroy(): void {
     this.dispose();
   }
+
+  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }
 
 export class VocalRenderSnapshot {
@@ -729,7 +760,11 @@ export class VocalRenderSnapshot {
 
   private native(): number {
     if (this.disposed) {
-      throw new TypeError('snapshot has already been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'snapshot has already been disposed',
+      );
     }
     requireHandle(this.handle, 'snapshot');
     return this.handle;
@@ -822,6 +857,11 @@ export class VocalRenderSnapshot {
   destroy(): void {
     this.dispose();
   }
+
+  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
 }
 
 export class VocalRenderJob {
@@ -836,7 +876,11 @@ export class VocalRenderJob {
 
   private native(): number {
     if (this.disposed) {
-      throw new TypeError('render job has already been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'render job has already been disposed',
+      );
     }
     requireHandle(this.handle, 'render job');
     return this.handle;
@@ -872,6 +916,11 @@ export class VocalRenderJob {
   }
 
   destroy(): void {
+    this.dispose();
+  }
+
+  /** Releases the handle through {@link dispose}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.dispose();
   }
 }

@@ -7,6 +7,7 @@
  * make ownership and `delete()` semantics unsound.
  */
 
+import './lifetime';
 import { ErrorCode, SonareError } from './errors';
 import { init } from './index';
 import type { MasterAudioRequest, MasterAudioStereoRequest } from './mastering_chain';

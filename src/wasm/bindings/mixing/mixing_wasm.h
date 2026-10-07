@@ -15,6 +15,7 @@
 
 #include <optional>
 
+#include "c_api/sonare_c_error_mapping.h"
 #include "mixing/meter.h"
 #include "wasm/bindings/common/common.h"
 
@@ -25,6 +26,14 @@
 void registerMixingAssistantBindings();
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
+
+// Throws the failure a NULL-returning C-ABI constructor recorded: its thread-local
+// code (InvalidState if it reads Ok) with the context and the recorded detail text.
+[[noreturn]] inline void throwLastCError(const char* context) {
+  const char* detail = sonare_last_error_message();
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(sonare_last_error_code()),
+                                std::string(context) + (detail != nullptr ? detail : ""));
+}
 
 // ---------------------------------------------------------------------------
 // MixerWasm: persistent scene-based mixer wrapper around the C mixer API

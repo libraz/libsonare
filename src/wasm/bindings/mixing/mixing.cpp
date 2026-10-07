@@ -75,9 +75,7 @@ MixerWasm::~MixerWasm() {
 MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block_size) {
   SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), sample_rate, block_size);
   if (mixer == nullptr) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to build mixer from scene JSON: ") + sonare_last_error_message());
+    throwLastCError("failed to build mixer from scene JSON: ");
   }
   // Capture any non-fatal load warning (e.g. insert params no processor read)
   // before any later C-ABI call can overwrite the thread-local message.
@@ -412,9 +410,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   SonareMixer* mixer =
       sonare_mixer_create(sample_rate, static_cast<int>(std::max<size_t>(1, length)));
   if (mixer == nullptr) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to create mixer: ") + sonare_last_error_message());
+    throwLastCError("failed to create mixer: ");
   }
   std::vector<SonareStrip*> strips;
   std::vector<const float*> left_ptrs(static_cast<size_t>(count));

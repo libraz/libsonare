@@ -6,7 +6,13 @@
  * required.
  */
 
-import { assertSameInitOptions, notInitializedError, setSonareModule } from './module_state';
+import './lifetime';
+import {
+  assertAbiCompatible,
+  assertSameInitOptions,
+  notInitializedError,
+  setSonareModule,
+} from './module_state';
 import type { SonareCapabilities } from './public_types';
 import type { SonareModule } from './sonare.js';
 
@@ -138,7 +144,9 @@ export async function init(options?: {
   initPromise = (async () => {
     try {
       const createModule = options?.moduleFactory ?? (await import('./sonare-analysis.js')).default;
-      module = await createModule(options);
+      const created = await createModule(options);
+      assertAbiCompatible(created);
+      module = created;
       setSonareModule(module);
     } catch (error) {
       initPromise = null;

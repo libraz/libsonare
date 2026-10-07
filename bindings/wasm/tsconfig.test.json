@@ -7,7 +7,7 @@
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "lib": ["ES2022", "DOM"],
+    "lib": ["ES2022", "ESNext.Disposable", "DOM"],
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],

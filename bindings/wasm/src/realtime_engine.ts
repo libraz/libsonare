@@ -314,7 +314,9 @@ export class RealtimeEngine {
     const module = getSonareModule();
     const capabilities = engineCapabilities();
     if (!capabilities.abiCompatible) {
-      throw new Error(
+      throw new SonareError(
+        ErrorCode.AbiMismatch,
+        'AbiMismatch',
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
     }
@@ -2067,6 +2069,11 @@ export class RealtimeEngine {
   delete(): void {
     this.destroy();
   }
+
+  /** Releases the handle through {@link destroy}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
+  }
 }
 
 export class ClipPageProvider {
@@ -2079,7 +2086,11 @@ export class ClipPageProvider {
 
   supply(pageIndex: number, channels: Float32Array[]): void {
     if (this.disposed) {
-      throw new Error('ClipPageProvider is destroyed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'ClipPageProvider is destroyed',
+      );
     }
     this.engine.supplyClipPage(this.id, pageIndex, channels);
   }
@@ -2097,5 +2108,15 @@ export class ClipPageProvider {
     }
     this.disposed = true;
     this.engine.destroyClipPageProvider(this.id);
+  }
+
+  /** Alias for {@link destroy}, provided for cross-binding compatibility. */
+  delete(): void {
+    this.destroy();
+  }
+
+  /** Releases the provider through {@link destroy}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.destroy();
   }
 }

@@ -146,7 +146,7 @@ export class StreamingMasteringChain {
     right: Float32Array,
   ): { left: Float32Array; right: Float32Array } {
     if (left.length !== right.length) {
-      throw new Error('Stereo channel lengths must match.');
+      throw new RangeError('Stereo channel lengths must match.');
     }
     return this.chain.processStereo(left, right);
   }
@@ -261,6 +261,11 @@ export class StreamingMasteringChain {
   destroy(): void {
     this.delete();
   }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.delete();
+  }
 }
 
 // ============================================================================
@@ -353,7 +358,7 @@ export class StreamingEqualizer {
    */
   setSidechainStereo(left: Float32Array, right: Float32Array): void {
     if (left.length !== right.length) {
-      throw new Error('Sidechain channel lengths must match.');
+      throw new RangeError('Sidechain channel lengths must match.');
     }
     this.eq.setSidechainStereo(left, right);
   }
@@ -415,7 +420,7 @@ export class StreamingEqualizer {
     right: Float32Array,
   ): { left: Float32Array; right: Float32Array } {
     if (left.length !== right.length) {
-      throw new Error('Stereo channel lengths must match.');
+      throw new RangeError('Stereo channel lengths must match.');
     }
     return this.eq.processStereo(left, right);
   }
@@ -483,6 +488,11 @@ export class StreamingEqualizer {
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
   destroy(): void {
+    this.delete();
+  }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.delete();
   }
 }
@@ -561,6 +571,11 @@ export class StreamingRetune {
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
   destroy(): void {
+    this.delete();
+  }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.delete();
   }
 }

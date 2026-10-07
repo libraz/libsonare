@@ -31,9 +31,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
   if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
                                 true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("failed to add strip: ") + sonare_last_error_message());
+    throwLastCError("failed to add strip: ");
   }
   // Size the new strip's scratch planes before a realtime caller asks for its views.
   ensureScratchBuffers();

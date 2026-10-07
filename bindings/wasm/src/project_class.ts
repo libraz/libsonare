@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from './errors';
 import type {
   BuiltinSynthBinding,
   BuiltinSynthWaveform,
@@ -228,7 +229,7 @@ export class ProjectTimeline {
    */
   get nativeId(): number {
     if (this.native === null) {
-      throw new TypeError('ProjectTimeline is disposed');
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ProjectTimeline is disposed');
     }
     return this.native.id;
   }
@@ -241,6 +242,21 @@ export class ProjectTimeline {
     unregisterProjectTimeline(this);
     this.native.delete();
     this.native = null;
+  }
+
+  /** Alias for {@link dispose}, provided for cross-binding compatibility. */
+  delete(): void {
+    this.dispose();
+  }
+
+  /** Alias for {@link dispose}, provided for cross-binding compatibility. */
+  destroy(): void {
+    this.dispose();
+  }
+
+  /** Releases the timeline through {@link dispose}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.dispose();
   }
 }
 
@@ -1787,6 +1803,11 @@ export class Project {
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
   destroy(): void {
+    this.delete();
+  }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.delete();
   }
 }

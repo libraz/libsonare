@@ -71,6 +71,11 @@ export class HrtfSet {
   destroy(): void {
     this.delete();
   }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.delete();
+  }
 }
 
 /**
@@ -195,6 +200,11 @@ export class PlaybackRenderer {
   destroy(): void {
     this.delete();
   }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.delete();
+  }
 }
 
 /**
@@ -231,6 +241,11 @@ export class PlaybackLoudnessMeter {
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
   destroy(): void {
+    this.delete();
+  }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.delete();
   }
 }

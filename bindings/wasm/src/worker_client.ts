@@ -270,7 +270,11 @@ export class OfflineWorkerClient {
     options: OfflineWorkerCallOptions = {},
   ): OfflineWorkerTask<T> {
     if (this.closed) {
-      throw new Error('OfflineWorkerClient was disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'OfflineWorkerClient was disposed',
+      );
     }
     const id = this.nextId++;
     const transfers: Transferable[] = [];

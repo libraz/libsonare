@@ -1,3 +1,4 @@
+import './lifetime';
 import { init } from './index';
 import type {
   VocalAnalysis,

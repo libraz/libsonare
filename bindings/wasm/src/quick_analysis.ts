@@ -6,6 +6,7 @@ import {
   keyModeValues,
   keyProfileValue,
 } from './analysis_helpers';
+import { ErrorCode, SonareError } from './errors';
 import { getSonareModule } from './module_state';
 import type {
   AcousticOptions,
@@ -656,7 +657,11 @@ export function detectAcoustic(
 export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
   const module = requireModule();
   if (typeof module.synthesizeRir !== 'function') {
-    throw new Error('libsonare was built without acoustic-simulation support');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without acoustic-simulation support',
+    );
   }
   return module.synthesizeRir(options);
 }
@@ -678,7 +683,11 @@ export function estimateRoom(
 ): RoomEstimateResult {
   const module = requireModule();
   if (typeof module.estimateRoom !== 'function') {
-    throw new Error('libsonare was built without acoustic-simulation support');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without acoustic-simulation support',
+    );
   }
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('estimateRoom', request.samples, request.sampleRate ?? 48000, request);
@@ -706,7 +715,11 @@ export function roomMorph(
 ): RoomMorphResult {
   const module = requireModule();
   if (typeof module.roomMorph !== 'function') {
-    throw new Error('libsonare was built without acoustic-simulation support');
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without acoustic-simulation support',
+    );
   }
   const request =
     samples instanceof Float32Array

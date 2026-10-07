@@ -6,7 +6,14 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, SonareError, synthPresetPatch } from '../dist/index.js';
+import {
+  ErrorCode,
+  init,
+  isSonareError,
+  Mixer,
+  SonareError,
+  synthPresetPatch,
+} from '../dist/index.js';
 
 beforeAll(async () => {
   await init();
@@ -20,6 +27,21 @@ describe('SonareError', () => {
     expect(ErrorCode.NotSupported).toBe(6);
     expect(ErrorCode.InvalidState).toBe(7);
     expect(ErrorCode.Unknown).toBe(99);
+  });
+
+  it('carries the C-ABI code of a failed scene load, keeping the detail text', () => {
+    const load = (json: string): SonareError => {
+      try {
+        Mixer.fromSceneJson(json, 48000, 128);
+      } catch (e) {
+        return e as SonareError;
+      }
+      throw new Error('scene load unexpectedly succeeded');
+    };
+    const malformed = load('not json');
+    expect(malformed.code).toBe(ErrorCode.InvalidFormat);
+    expect(malformed.message).toContain('failed to build mixer from scene JSON');
+    expect(load('{"version":999}').code).toBe(ErrorCode.InvalidParameter);
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {

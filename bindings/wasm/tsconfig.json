@@ -13,7 +13,7 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2020", "DOM"],
+    "lib": ["ES2020", "ESNext.Disposable", "DOM"],
     "types": []
   },
   "include": ["src/**/*"],

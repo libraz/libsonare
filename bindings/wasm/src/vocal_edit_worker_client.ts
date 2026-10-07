@@ -1,4 +1,4 @@
-import { SonareError } from './errors';
+import { ErrorCode, SonareError } from './errors';
 import type {
   VocalAnalysis,
   VocalApplyRequest,
@@ -462,7 +462,11 @@ export class VocalEditWorkerClient {
     session?: VocalEditWorkerSession,
   ): VocalEditWorkerTask<{ result: T; token?: VocalStateToken }> {
     if (this.closed) {
-      throw new Error('VocalEditWorkerClient was disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'VocalEditWorkerClient was disposed',
+      );
     }
     const id = this.nextId++;
     const transfers: Transferable[] = [];
@@ -818,7 +822,11 @@ export class VocalEditWorkerSession {
 
   private requireAlive(): void {
     if (this.disposed) {
-      throw new TypeError('vocal Worker session has already been disposed');
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'vocal Worker session has already been disposed',
+      );
     }
   }
 }

@@ -335,4 +335,9 @@ export class StreamAnalyzer {
   dispose(): void {
     this.delete();
   }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.delete();
+  }
 }

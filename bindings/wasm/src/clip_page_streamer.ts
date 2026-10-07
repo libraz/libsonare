@@ -197,6 +197,21 @@ export class ClipPageStreamer {
     this.sources.clear();
   }
 
+  /** Alias for {@link close}, provided for cross-binding compatibility. */
+  delete(): void {
+    this.close();
+  }
+
+  /** Alias for {@link close}, provided for cross-binding compatibility. */
+  destroy(): void {
+    this.close();
+  }
+
+  /** Releases the streamer through {@link close}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
+    this.close();
+  }
+
   private serviceFrontier(state: SourceState, frontier: number): Promise<unknown>[] {
     // A lower frontier after a previously serviced high page is a seek/loop
     // discontinuity. Advance generation before scheduling its new window so an

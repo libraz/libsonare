@@ -520,7 +520,7 @@ export function masteringProcessStereo(
         }
       : processorName;
   if (request.left.length !== request.right.length) {
-    throw new Error('Stereo channel lengths must match.');
+    throw new RangeError('Stereo channel lengths must match.');
   }
   return requireModule().masteringProcessStereo(
     request.processorName,
@@ -608,10 +608,10 @@ export function masteringPairProcessStereo(
         }
       : processorName;
   if (request.sourceLeft.length !== request.sourceRight.length) {
-    throw new Error('Source left and right channel lengths must match.');
+    throw new RangeError('Source left and right channel lengths must match.');
   }
   if (request.referenceLeft.length !== request.referenceRight.length) {
-    throw new Error('Reference left and right channel lengths must match.');
+    throw new RangeError('Reference left and right channel lengths must match.');
   }
   return requireModule().masteringPairProcessStereo(
     request.processorName,
@@ -697,10 +697,10 @@ export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
   if (request.sourceLeft.length !== request.sourceRight.length) {
-    throw new Error('Source left and right channel lengths must match.');
+    throw new RangeError('Source left and right channel lengths must match.');
   }
   if (request.referenceLeft.length !== request.referenceRight.length) {
-    throw new Error('Reference left and right channel lengths must match.');
+    throw new RangeError('Reference left and right channel lengths must match.');
   }
   return requireModule().masteringAbMatchLoudnessStereo(
     request.sourceLeft,

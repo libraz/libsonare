@@ -155,7 +155,7 @@ export class Mixer {
    */
   processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
     if (leftChannels.length !== rightChannels.length) {
-      throw new Error('leftChannels and rightChannels must have the same length.');
+      throw new RangeError('leftChannels and rightChannels must have the same length.');
     }
     return this.mixer.processStereo(leftChannels, rightChannels);
   }
@@ -174,10 +174,10 @@ export class Mixer {
     outRight: Float32Array,
   ): void {
     if (leftChannels.length !== rightChannels.length) {
-      throw new Error('leftChannels and rightChannels must have the same length.');
+      throw new RangeError('leftChannels and rightChannels must have the same length.');
     }
     if (outLeft.length !== outRight.length) {
-      throw new Error('outLeft and outRight must have the same length.');
+      throw new RangeError('outLeft and outRight must have the same length.');
     }
     this.mixer.processStereoInto(leftChannels, rightChannels, outLeft, outRight);
   }
@@ -797,6 +797,11 @@ export class Mixer {
 
   /** Alias for {@link delete}, provided for cross-binding (Node) compatibility. */
   destroy(): void {
+    this.delete();
+  }
+
+  /** Releases the handle through {@link delete}, so the instance works with `using`. */
+  [Symbol.dispose](): void {
     this.delete();
   }
 }

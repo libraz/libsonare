@@ -1,3 +1,4 @@
+import { ErrorCode, SonareError } from '../errors';
 import type { EngineCaptureStatus, EngineTransportState } from '../index';
 import { engineCapabilities } from '../index';
 import {
@@ -279,7 +280,9 @@ export class SonareRealtimeEngineNode {
           }
         : engineCapabilities();
     if (options.requireAbiCompatible !== false && detectedCapabilities?.abiCompatible === false) {
-      throw new Error(
+      throw new SonareError(
+        ErrorCode.AbiMismatch,
+        'AbiMismatch',
         `Engine ABI mismatch: wasm=${detectedCapabilities.engineAbiVersion}, expected=${detectedCapabilities.expectedEngineAbiVersion}`,
       );
     }

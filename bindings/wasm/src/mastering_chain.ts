@@ -324,7 +324,7 @@ export function masteringChainStereo(
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
       : left;
   if (request.left.length !== request.right.length) {
-    throw new Error('Stereo channel lengths must match.');
+    throw new RangeError('Stereo channel lengths must match.');
   }
   if (request.onProgress || request.cancel) {
     return requireModule().masteringChainStereoWithProgress(
@@ -417,7 +417,7 @@ export function masteringChainStereoWithProgress(
     throw new TypeError('masteringChainStereoWithProgress: onProgress is required');
   }
   if (request.left.length !== request.right.length) {
-    throw new Error('Stereo channel lengths must match.');
+    throw new RangeError('Stereo channel lengths must match.');
   }
   return requireModule().masteringChainStereoWithProgress(
     request.left,
@@ -546,7 +546,7 @@ export function masterAudioStereo(
   );
   const flat = flattenChainConfig(request.overrides ?? {});
   if (request.left.length !== request.right.length) {
-    throw new Error('Stereo channel lengths must match.');
+    throw new RangeError('Stereo channel lengths must match.');
   }
   if (request.onProgress || request.cancel) {
     return requireModule().masterAudioStereoWithProgress(
@@ -637,7 +637,7 @@ export function masterAudioStereoWithProgress(
     throw new TypeError('masterAudioStereoWithProgress: onProgress is required');
   }
   if (request.left.length !== request.right.length) {
-    throw new Error('Stereo channel lengths must match.');
+    throw new RangeError('Stereo channel lengths must match.');
   }
   return requireModule().masterAudioStereoWithProgress(
     request.preset ?? 'pop',

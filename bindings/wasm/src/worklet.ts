@@ -4,6 +4,8 @@
 // AudioWorkletGlobalScope cannot resolve sibling chunks), so the public surface
 // is unchanged.
 
+import './lifetime';
+
 export type { OpfsClipStream, OpfsClipStreamOptions } from './clip_page_streamer';
 export { attachOpfsClipStream } from './clip_page_streamer';
 // With code-splitting disabled, the worklet bundle carries its own copy of the

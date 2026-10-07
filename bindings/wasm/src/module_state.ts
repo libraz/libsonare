@@ -1,7 +1,12 @@
+import { EXPECTED_ABI_VERSION } from './abi';
 import { ErrorCode, SonareError } from './errors';
 import type { SonareModule } from './sonare.js';
 
 let wrappedModule: SonareModule | null = null;
+
+/** The two messages embind uses for a call on, or an argument that is, a deleted instance. */
+const EMBIND_DELETED_PATTERN =
+  / instance already deleted$|^Cannot pass deleted object as a pointer of type /;
 
 /**
  * Shape of the structured info the native `sonareExceptionInfo(ptr)` returns.
@@ -90,6 +95,10 @@ function wrapModuleErrors(raw: SonareModule): SonareModule {
     const ptr = nativeExceptionPtr(error);
     if (ptr !== null) {
       throw makeSonareError(raw, ptr);
+    }
+    // embind's use-after-delete is a plain BindingError; report it as object state.
+    if (error instanceof Error && EMBIND_DELETED_PATTERN.test(error.message)) {
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', error.message);
     }
     throw error;
   };
@@ -205,6 +214,35 @@ export function notInitializedError(): SonareError {
     ErrorCode.InvalidState,
     'InvalidState',
     'Module not initialized. Call init() first.',
+  );
+}
+
+/** Format a packed ABI version as `0x` plus eight hex digits. */
+function hexAbi(version: number): string {
+  return `0x${(version >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+/**
+ * Throw an {@link ErrorCode.AbiMismatch} error unless the freshly created native
+ * module reports the C-ABI version this package's TypeScript was built against.
+ * A mismatch means the JS glue and the `.wasm` come from different builds, which
+ * the `wasmBinary`, `locateFile` and `moduleFactory` options or a stale cache
+ * can produce; running on would misread native structs.
+ */
+export function assertAbiCompatible(created: SonareModule): void {
+  const actual =
+    typeof created.abiVersion === 'function' ? (created.abiVersion() as number) : undefined;
+  if (actual === EXPECTED_ABI_VERSION) {
+    return;
+  }
+  throw new SonareError(
+    ErrorCode.AbiMismatch,
+    'AbiMismatch',
+    `libsonare ABI mismatch: wasm module reports ${
+      actual === undefined ? 'no ABI version' : hexAbi(actual)
+    }, this package expects ${hexAbi(EXPECTED_ABI_VERSION)}. ` +
+      'The JS glue and the .wasm binary come from different builds; check the wasmBinary, ' +
+      'locateFile and moduleFactory options and any cached copy of sonare.wasm.',
   );
 }
 

@@ -620,4 +620,7 @@ export class Audio {
   ebur128LoudnessRange(): number {
     return ebur128LoudnessRange(this._samples, this._sampleRate);
   }
+
+  /** No-op: Audio holds no native handle, so `using` works the same as on the other surfaces. */
+  [Symbol.dispose](): void {}
 }

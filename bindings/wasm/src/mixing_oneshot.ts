@@ -72,7 +72,7 @@ export function mixStereo(
     request.leftChannels.length === 0 ||
     request.leftChannels.length !== request.rightChannels.length
   ) {
-    throw new Error('leftChannels and rightChannels must have the same non-zero length.');
+    throw new RangeError('leftChannels and rightChannels must have the same non-zero length.');
   }
   const resolvedSampleRate = request.sampleRate ?? 48000;
   assertSampleRate('mixStereo', resolvedSampleRate);
