@@ -1944,6 +1944,34 @@ TEST_CASE("the cabinet's other drivers couple at the bottom and comb above it",
   }
 }
 
+TEST_CASE("a neighbour driver's in-band directivity corner stays active at low rates",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::CabIrSpec;
+  using sonare::mastering::saturation::generate_cab_ir;
+
+  auto response_db = [](const std::vector<float>& ir, double rate, double hz) {
+    std::complex<double> acc{0.0, 0.0};
+    for (size_t i = 0; i < ir.size(); ++i) {
+      acc += static_cast<double>(ir[i]) *
+             std::polar(1.0, -sonare::constants::kTwoPiD * hz * static_cast<double>(i) / rate);
+    }
+    return 20.0 * std::log10(std::max(1e-12, std::abs(acc)));
+  };
+  // At 100 cm the adjacent driver's corner is about 2.68 kHz, inside the band
+  // from 8 kHz up. No rate in the sweep may switch that stage off, so the level
+  // below the corner moves smoothly with the rate rather than jumping.
+  CabIrSpec spec;
+  spec.mic_distance_cm = 100.0f;
+  double previous = 0.0;
+  for (double rate = 7800.0; rate <= 12400.0; rate += 100.0) {
+    const std::vector<float> ir = generate_cab_ir(spec, rate);
+    const double level = response_db(ir, rate, 2000.0);
+    CAPTURE(rate, level, previous);
+    if (rate > 7800.0) CHECK(std::abs(level - previous) < 1.0);
+    previous = level;
+  }
+}
+
 TEST_CASE("a generated cabinet is re-derived at the processor's own rate",
           "[mastering][saturation][amp]") {
   using sonare::mastering::saturation::CabIrSpec;

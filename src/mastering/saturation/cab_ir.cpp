@@ -120,12 +120,11 @@ std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
   struct Neighbour {
     float gain;        // spherical spreading, relative to the miked driver
     float delay;       // path-difference delay in samples
-    float rolloff_hz;  // directivity corner, or <= 0 for none in band
+    float rolloff_w0;  // directivity corner in rad/sample, or 0 for none below Nyquist
   };
   std::vector<Neighbour> neighbours;
   if (spec.multi_driver) {
     const float x3 = piston_minus3db_argument();
-    const float nyquist = static_cast<float>(0.5 * sample_rate);
     for (int row = 0; row < geometry.rows; ++row) {
       for (int column = 0; column < geometry.columns; ++column) {
         if (row == 0 && column == 0) continue;
@@ -144,10 +143,12 @@ std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
         const float sin_theta = lateral / r;
         if (sin_theta > 1e-4f) {
           const float linear = x3 * kSoundSpeedMps / (kTwoPi * cone_radius_m * sin_theta);
-          out.rolloff_hz =
+          const float rolloff_hz =
               linear <= geometry.breakup_hz ? linear : linear * linear / geometry.breakup_hz;
+          // Unclamped w0: the bilinear low-pass tends to identity as w0 nears pi.
+          const float w0 = kTwoPi * rolloff_hz / static_cast<float>(sample_rate);
+          if (w0 < kPi) out.rolloff_w0 = w0;
         }
-        if (out.rolloff_hz >= 0.45f * nyquist) out.rolloff_hz = 0.0f;
         neighbours.push_back(out);
       }
     }
@@ -173,9 +174,9 @@ std::vector<float> generate_cab_ir(const CabIrSpec& spec, double sample_rate) {
       }
     }
     std::vector<float> path = render_cab_design(design, input);
-    if (neighbour.rolloff_hz > 0.0f) {
+    if (neighbour.rolloff_w0 > 0.0f) {
       rt::BiquadState lp;
-      lp.set(rt::first_order_lowpass(rt::frequency_to_w0(neighbour.rolloff_hz, sample_rate)));
+      lp.set(rt::first_order_lowpass(neighbour.rolloff_w0));
       for (float& v : path) v = lp.process(v);
     }
     for (size_t i = 0; i < n; ++i) ir[i] += path[i];
