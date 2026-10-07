@@ -228,6 +228,26 @@ TEST_CASE("RealtimeEngine pass-through output is deterministic", "[engine][realt
   REQUIRE(a.transport().sample_position() == kFrames);
 }
 
+TEST_CASE("RealtimeEngine offline entry points refuse a block above the prepared block",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128, 16, 16, 2);
+
+  std::array<float, 256> left{};
+  std::array<float, 256> right{};
+  left.fill(7.0f);
+  float* io[] = {left.data(), right.data()};
+
+  REQUIRE_THROWS_AS(engine.render_offline(io, 2, 256, 129), sonare::SonareException);
+  REQUIRE_THROWS_AS(engine.prime_offline_parameters(2, 129), sonare::SonareException);
+  // A refused render leaves the caller's buffer and the transport untouched.
+  REQUIRE(left[0] == Catch::Approx(7.0f));
+  REQUIRE(engine.transport().sample_position() == 0);
+
+  REQUIRE_NOTHROW(engine.render_offline(io, 2, 256, 128));
+  REQUIRE_NOTHROW(engine.prime_offline_parameters(2, 64));
+}
+
 TEST_CASE("RealtimeEngine control flush prevents an offline mirror command ring from filling",
           "[engine][realtime]") {
   sonare::engine::RealtimeEngine engine;

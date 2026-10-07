@@ -149,8 +149,8 @@ SonareError sonare_engine_settle_parameters(SonareRealtimeEngine* engine);
 ///   smoother, all without rendering. A host driving sonare_engine_render_offline
 ///   calls it once before the first chunk. Not safe concurrently with a running
 ///   audio thread.
-/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a channel or
-///   block count outside the prepared shape, @c SONARE_ERROR_INVALID_STATE when
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a channel
+///   count or block size above the prepared maximum, @c SONARE_ERROR_INVALID_STATE when
 ///   the engine was never prepared.
 SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine, int num_channels,
                                                    int block_size);
@@ -776,6 +776,11 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 ///   later block boundary relative to a continuous render. Such a split still
 ///   renders continuous audio -- no note is cut and no delay line is cleared --
 ///   but it is not bit-identical to the one-call result.
+///
+/// @return @c SONARE_ERROR_INVALID_PARAMETER when @p block_size exceeds the
+///   block size the engine was prepared with, or @p num_channels exceeds the
+///   prepared channel count; @c SONARE_ERROR_INVALID_STATE when the engine was
+///   never prepared.
 SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize);
@@ -822,7 +827,7 @@ SonareError sonare_engine_finish_offline_render(SonareRealtimeEngine* engine);
 ///         cap above, when a rate is negative, or when a non-zero
 ///         @c source_sample_rate differs from the prepared rate (0 selects the
 ///         prepared rate; a @c target_sample_rate of 0 keeps the source rate),
-///         among the other option validations;
+///         when @c block_size exceeds the prepared block size, among the other option validations;
 ///         @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineBounceOptions* options,
@@ -845,6 +850,9 @@ void sonare_free_bounce_result(SonareEngineBounceResult* result);
 /// @details Runs the same offline pre-roll as sonare_engine_bounce_offline, so
 ///   the frozen clip captures the lane at its settled values instead of carrying
 ///   a fade-in the live lane never had.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER when @c block_size exceeds the
+///   prepared block size or @c num_channels the prepared channel count;
+///   @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
 SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
                                          const SonareEngineFreezeOptions* options,
                                          SonareEngineFreezeResult* out);

@@ -743,7 +743,10 @@ SonareError sonare_engine_prime_offline_parameters(SonareRealtimeEngine* engine,
   SONARE_C_API_ENTRY;
   if (!engine || num_channels <= 0 || block_size <= 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (engine->engine.max_block_size() <= 0) return SONARE_ERROR_INVALID_STATE;
-  if (num_channels > engine->engine.prepared_channels()) return SONARE_ERROR_INVALID_PARAMETER;
+  if (num_channels > engine->engine.prepared_channels() ||
+      block_size > engine->engine.max_block_size()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   engine->engine.prime_offline_parameters(num_channels, block_size);
   return SONARE_OK;

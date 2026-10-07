@@ -795,6 +795,36 @@ describe('RealtimeEngine native binding', () => {
     expect(lastChunkRms(finalizedPerChunk)).toBeLessThan(0.5 * lastChunkRms(reference));
   });
 
+  it('refuses an offline block size above the prepared block size', () => {
+    const frames = 256;
+    const planes = () => [new Float32Array(frames), new Float32Array(frames)];
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      const refused = (run: () => unknown): void => {
+        let caught: unknown;
+        try {
+          run();
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught)).toBe(true);
+        if (isSonareError(caught)) {
+          expect(caught.code).toBe(ErrorCode.InvalidParameter);
+        }
+      };
+      refused(() => engine.renderOffline(planes(), 129));
+      refused(() => engine.renderOffline({ channels: planes(), blockSize: 129 }));
+      refused(() => engine.primeOfflineParameters(2, 129));
+      refused(() => engine.bounceOffline({ totalFrames: frames, blockSize: 129 }));
+      refused(() => engine.freezeOffline({ totalFrames: frames, blockSize: 129 }));
+      // The prepared block and anything smaller still render.
+      expect(() => engine.renderOffline(planes(), 128)).not.toThrow();
+      expect(() => engine.renderOffline(planes(), 64)).not.toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+
   it('accepts a custom smoothed-parameter ramp time and rejects bad values', () => {
     const engine = new RealtimeEngine(48000, 128);
     expect(() => engine.setParamSmoothingMs(0)).not.toThrow();

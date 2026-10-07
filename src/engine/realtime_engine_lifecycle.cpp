@@ -357,7 +357,11 @@ void RealtimeEngine::prime_offline_parameters(int num_channels, int block_size) 
   // An unprepared engine has nothing to settle; the offline entry points reject
   // it separately.
   if (max_block_size_ <= 0 || num_channels <= 0) return;
-  const int frames = std::max(1, std::min(block_size, max_block_size_));
+  if (block_size > max_block_size_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "prime_offline_parameters: block size exceeds the prepared block size");
+  }
+  const int frames = std::max(1, block_size);
 
   // Apply the queued commands first; they set the smoother targets this call
   // exists to snap.
@@ -405,7 +409,11 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
                           "count");
   }
 
-  const int frames_per_block = std::max(1, std::min(block_size, max_block_size_));
+  if (block_size > max_block_size_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "render_offline: block size exceeds the prepared block size");
+  }
+  const int frames_per_block = std::max(1, block_size);
   // Clips and sequenced MIDI only render (and the playhead only advances)
   // while the transport is rolling, so roll it for the duration of the render
   // and restore the prior state afterwards.

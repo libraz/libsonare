@@ -15,6 +15,7 @@ from libsonare import (
     EngineFreezeOptions,
     EngineMidiClipSchedule,
     EngineMidiEvent,
+    ErrorCode,
     RealtimeEngine,
     SonareError,
 )
@@ -267,6 +268,23 @@ def test_prime_offline_parameters_accepts_the_prepared_shape_and_refuses_others(
         for channels, block in ((0, _RESET_BLOCK), (2, 0), (-1, 1), (4096, _RESET_BLOCK)):
             with pytest.raises(SonareError):
                 engine.prime_offline_parameters(channels, block)
+
+
+def test_offline_entry_points_refuse_a_block_above_the_prepared_block() -> None:
+    frames = 256
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with pytest.raises(SonareError) as render_error:
+            engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=129)
+        assert render_error.value.code == ErrorCode.INVALID_PARAMETER
+        with pytest.raises(SonareError):
+            engine.prime_offline_parameters(2, 129)
+        with pytest.raises(SonareError):
+            engine.bounce_offline(EngineBounceOptions(total_frames=frames, block_size=129))
+        with pytest.raises(SonareError):
+            engine.freeze_offline(EngineFreezeOptions(total_frames=frames, block_size=129))
+        # The prepared block and anything smaller still render.
+        engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=128)
+        engine.render_offline([[0.0] * frames, [0.0] * frames], block_size=64)
 
 
 def test_tail_and_latency_follow_the_configured_strips() -> None:

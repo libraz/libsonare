@@ -289,6 +289,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @throws SonareException(InvalidParameter) when @p num_channels exceeds
   ///         @c prepared_channels(); the render would otherwise produce silence
   ///         that reads as a successful result.
+  /// @throws SonareException(InvalidParameter) when @p block_size exceeds
+  ///         @c max_block_size(); the render would otherwise run at a smaller
+  ///         block than the one requested.
   /// @param finalize Whether this call ENDS the timeline. True — the default,
   ///        and what a one-shot bounce wants — releases every sounding note and
   ///        flushes the PDC delay lines through @c finish_offline_render. False
@@ -889,6 +892,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// a chunked render would re-prime on every chunk. A host driving
   /// @ref render_offline itself calls this once before its first chunk.
   /// Control-thread only.
+  /// @throws SonareException(InvalidParameter) when @p block_size exceeds
+  ///         @c max_block_size().
   void prime_offline_parameters(int num_channels, int block_size);
   /// Applies commands queued on an offline/control-only engine immediately.
   /// @warning Not safe concurrently with @ref process. This exists for hosts

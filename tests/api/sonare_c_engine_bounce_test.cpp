@@ -380,6 +380,47 @@ TEST_CASE("offline render/bounce/freeze reject more channels than the prepared b
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("offline render/bounce/freeze/prime reject a block size above the prepared block",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+
+  constexpr int64_t kFrames = 256;
+  std::vector<float> left(kFrames), right(kFrames);
+  float* channels[] = {left.data(), right.data()};
+
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 129) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_render_offline_ex(engine, channels, 2, kFrames, 4096, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prime_offline_parameters(engine, 2, 129) == SONARE_ERROR_INVALID_PARAMETER);
+  // The prepared block itself, and anything smaller, still renders.
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 128) == SONARE_OK);
+  REQUIRE(sonare_engine_render_offline(engine, channels, 2, kFrames, 64) == SONARE_OK);
+
+  SonareEngineBounceOptions bounce{};
+  REQUIRE(sonare_engine_bounce_options_default(&bounce) == SONARE_OK);
+  bounce.total_frames = kFrames;
+  bounce.block_size = 129;
+  SonareEngineBounceResult bounce_result{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &bounce, &bounce_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(bounce_result.interleaved == nullptr);
+
+  SonareEngineFreezeOptions freeze{};
+  freeze.total_frames = kFrames;
+  freeze.block_size = 129;
+  freeze.num_channels = 2;
+  freeze.gain = 1.0f;
+  SonareEngineFreezeResult freeze_result{};
+  REQUIRE(sonare_engine_freeze_offline(engine, &freeze, &freeze_result) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(freeze_result.clip_id == 0u);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE(
     "engine bounce rejects a source rate different from the prepared rate without moving transport",
     "[c_api][engine][sample_rate]") {

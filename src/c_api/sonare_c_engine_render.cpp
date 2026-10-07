@@ -163,6 +163,11 @@ SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float*
   if (num_channels > engine->engine.prepared_channels()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
+  // A block larger than the prepared one cannot be rendered as asked; refuse it
+  // rather than render at the smaller block the engine would clamp to.
+  if (block_size > engine->engine.max_block_size()) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   SONARE_C_TRY
   engine->engine.render_offline(out, num_channels, total_frames, block_size, finalize != 0);
   return SONARE_OK;
@@ -253,7 +258,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // See sonare_engine_render_offline: bouncing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
-  if (options->num_channels > engine->engine.prepared_channels()) {
+  if (options->num_channels > engine->engine.prepared_channels() ||
+      options->block_size > engine->engine.max_block_size()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // The render runs at the prepared rate, which an explicit source_sample_rate must name exactly.
@@ -348,7 +354,8 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   // See sonare_engine_render_offline: freezing more channels than the engine
   // was prepared for would silently write zeros for every plane past the
   // bound instead of erroring.
-  if (options->num_channels > engine->engine.prepared_channels()) {
+  if (options->num_channels > engine->engine.prepared_channels() ||
+      options->block_size > engine->engine.max_block_size()) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
