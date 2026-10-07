@@ -399,8 +399,9 @@ TEST_CASE("CLI global DSP options reach the analysis on every path that reads th
   }
 
   SECTION("rhythm") {
-    create_test_wav(TEST_WAV);
-    const std::string base_command = CLI + " rhythm " + TEST_WAV + " --json -q";
+    const std::string clicks = unique_temp_path("_clicks.wav");
+    create_click_track_wav(clicks);
+    const std::string base_command = CLI + " rhythm " + clicks + " --json -q";
     const auto base = payload_of(base_command);
 
     const auto finer_hop = payload_of(base_command + " --hop-length 256");

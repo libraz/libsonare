@@ -84,6 +84,30 @@ inline void create_two_segment_wav(const std::string& path, int sample_rate = 22
   save_wav(path, samples, sample_rate);
 }
 
+/// @brief Creates a WAV of short 1 kHz bursts at a fixed tempo.
+/// @param path Output path
+/// @param bpm Click rate in beats per minute
+/// @param sample_rate Sample rate
+///
+/// The tempo reading reacts to the hop length and FFT size only through the
+/// beat grid, and a steady tone has no onsets to build one from.
+inline void create_click_track_wav(const std::string& path, float bpm = 130.0f,
+                                   int sample_rate = 22050) {
+  const size_t length = static_cast<size_t>(6.0f * sample_rate);
+  const size_t burst = static_cast<size_t>(0.03f * sample_rate);
+  const float period = 60.0f / bpm * sample_rate;
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  std::vector<float> samples(length, 0.0f);
+  for (float onset = 0.0f; onset < static_cast<float>(length); onset += period) {
+    const size_t start = static_cast<size_t>(onset);
+    for (size_t k = 0; k < burst && start + k < length; ++k) {
+      const float t = static_cast<float>(k) / sample_rate;
+      samples[start + k] = 0.8f * std::exp(-t / 0.004f) * std::sin(two_pi * 1000.0f * t);
+    }
+  }
+  save_wav(path, samples, sample_rate);
+}
+
 /// @brief Creates a WAV whose level steps between loud and quiet blocks.
 /// @param path Output path
 /// @param sample_rate Sample rate
