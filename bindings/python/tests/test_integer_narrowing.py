@@ -55,8 +55,9 @@ def test_a_wrapped_struct_field_is_refused_rather_than_read_as_a_smaller_one() -
         analyzer.process([0.01 * i for i in range(512)])
         return analyzer.stats().total_frames
 
-    assert frames(32) != frames(64)  # positive control
-    for value in (2**32 + 32, 2**32 + 64, 2**32):
+    # n_fft is samples at 44100 Hz; at 8000 Hz 256 and 512 stay wider than the hop.
+    assert frames(256) != frames(512)  # positive control
+    for value in (2**32 + 256, 2**32 + 512, 2**32):
         with pytest.raises(SonareValueError, match="n_fft"):
             frames(value)
 
