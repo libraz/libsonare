@@ -388,6 +388,74 @@ Napi::Value SonareWrap::MasteringChainStereo(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+Napi::Object StreamingLoudnessGainToObject(
+    Napi::Env env, const sonare::mastering::api::StreamingLoudnessGain& gain) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("loudnessStaticGainDb", Napi::Number::New(env, gain.loudness_static_gain_db));
+  out.Set("truePeakDb", Napi::Number::New(env, gain.true_peak_db));
+  out.Set("integratedLufs", Napi::Number::New(env, gain.integrated_lufs));
+  return out;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, config?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sample_rate = node_narrow_int(env, info[1], node_arg_label(1).c_str());
+  // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
+  sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(), sample_rate);
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 3 && info[2].IsObject()) {
+    params = ParamsFromObject(info[2].As<Napi::Object>());
+  }
+  const auto config =
+      sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+  return StreamingLoudnessGainToObject(
+      env, sonare::mastering::api::streaming_loudness_gain_mono(
+               config, typed.Data(), typed.ElementLength(), sample_rate));
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber()) {
+    Napi::TypeError::New(env, "Expected (left, right, sampleRate, config?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::RangeError::New(env, "left and right channel lengths must match")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int sample_rate = node_narrow_int(env, info[2], node_arg_label(2).c_str());
+  sonare::validate_offline_audio_input(left.Data(), left.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input(right.Data(), right.ElementLength(), sample_rate);
+  std::vector<sonare::mastering::api::Param> params;
+  if (info.Length() >= 4 && info[3].IsObject()) {
+    params = ParamsFromObject(info[3].As<Napi::Object>());
+  }
+  const auto config =
+      sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+  return StreamingLoudnessGainToObject(
+      env, sonare::mastering::api::streaming_loudness_gain_stereo(
+               config, left.Data(), right.Data(), left.ElementLength(), sample_rate));
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (info.Length() < 3 || !info[0].IsString() || !IsFloat32Array(info[1]) || !info[2].IsNumber()) {

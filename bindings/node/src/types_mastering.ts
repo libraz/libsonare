@@ -214,6 +214,146 @@ export type PairAnalysis =
 
 export type StereoAnalysis = 'stereo.monoCompatCheck' | 'stereo.monoCompatCheckLogBands';
 
+/**
+ * A JSON string known to parse to a `R`.
+ *
+ * The helpers that return one cross as a string each facade parses, so nothing
+ * type-checks the parse; this carries the result type at compile time only and
+ * is a plain `string` at run time. Read it back with {@link JsonResult}.
+ */
+export type TypedJson<R> = string & { readonly __jsonResult?: R };
+
+/** The result type a {@link TypedJson} string parses to. */
+export type JsonResult<J> = J extends { readonly __jsonResult?: infer R } ? NonNullable<R> : never;
+
+/**
+ * The chain document {@link masteringAssistantSuggest} suggests: a version and
+ * the flat `{ "module.param": value }` params. `params` keys depend on the
+ * suggested stages, so they are not enumerated; a version 2 document carries the
+ * multiband stage as a structured object under `dynamics.multibandComp`.
+ */
+export interface MasteringChainConfigDocument {
+  version: 1 | 2;
+  params: Record<string, number | boolean | Record<string, unknown>>;
+}
+
+/**
+ * The measurements the assistant summarises its suggestion from. Flat, unlike
+ * `MasteringAudioProfile`'s nested groups. A non-finite loudness is `null`.
+ */
+export interface MasteringAssistantProfile {
+  durationSec: number;
+  bpm: number;
+  bpmConfidence: number;
+  integratedLufs: number | null;
+  lraLu: number;
+  truePeakDb: number;
+  crestFactorDb: number;
+  spectralCentroidHz: number;
+  spectralFlatness: number;
+  attackDensity: number;
+  sustainRatio: number;
+}
+
+/** The shape {@link masteringAssistantSuggest}'s and its stereo form's JSON parses to. */
+export interface MasteringAssistantResult {
+  chainConfig: MasteringChainConfigDocument;
+  /** One line per decision the assistant made, in the order it made them. */
+  explanation: string[];
+  profile: MasteringAssistantProfile;
+}
+
+/** One delivery target in a {@link MasteringStreamingPreviewResult}. */
+export interface MasteringStreamingPreviewPlatform {
+  name: string;
+  /** `null` for a silent or below-gate take. */
+  integratedLufs: number | null;
+  truePeakDb: number;
+  /** Gain that lands the take on the platform's target; 0 when the loudness is `null`. */
+  normalizationGainDb: number;
+  /** True when that gain would push the true peak above the platform's ceiling. */
+  ceilingRisk: boolean;
+}
+
+/** The shape {@link masteringStreamingPreview}'s and its stereo form's JSON parses to. */
+export interface MasteringStreamingPreviewResult {
+  platforms: MasteringStreamingPreviewPlatform[];
+}
+
+/** Result of the `match.referenceLoudness` pair analysis. A silent take reads `null`. */
+export interface MatchReferenceLoudnessResult {
+  sourceLufs: number | null;
+  referenceLufs: number | null;
+  gainToMatchDb: number | null;
+}
+
+/** One band of the `match.tonalBalance` and `match.tonalBalanceLogBands` analyses. */
+export interface MatchTonalBalanceBand {
+  lowHz: number;
+  highHz: number;
+  sourceDb: number;
+  referenceDb: number;
+  deviationDb: number;
+}
+
+/** Result of the `match.tonalBalance` pair analysis. */
+export interface MatchTonalBalanceResult {
+  bands: MatchTonalBalanceBand[];
+}
+
+/** Result of the `match.tonalBalanceLogBands` pair analysis. */
+export interface MatchTonalBalanceLogBandsResult {
+  bands: MatchTonalBalanceBand[];
+}
+
+/** Result of the `match.matchEqCurve` pair analysis: `gainDb[i]` is the gain at `frequencies[i]`. */
+export interface MatchEqCurveResult {
+  frequencies: number[];
+  gainDb: number[];
+}
+
+/** Result of the `match.estimateReferenceDelaySamples` pair analysis. */
+export interface MatchEstimateReferenceDelaySamplesResult {
+  delaySamples: number;
+}
+
+/** What each {@link PairAnalysis} name's JSON parses to. */
+export interface PairAnalysisResultMap {
+  'match.referenceLoudness': MatchReferenceLoudnessResult;
+  'match.tonalBalance': MatchTonalBalanceResult;
+  'match.tonalBalanceLogBands': MatchTonalBalanceLogBandsResult;
+  'match.matchEqCurve': MatchEqCurveResult;
+  'match.estimateReferenceDelaySamples': MatchEstimateReferenceDelaySamplesResult;
+}
+
+/** Result of the `stereo.monoCompatCheck` analysis. `width` is `null` for a fully out-of-phase pair. */
+export interface StereoMonoCompatCheckResult {
+  correlation: number;
+  width: number | null;
+  monoPeak: number;
+  sideRms: number;
+  likelyMonoCompatible: boolean;
+}
+
+/** One band of the `stereo.monoCompatCheckLogBands` analysis. */
+export interface StereoMonoCompatBand {
+  lowHz: number;
+  highHz: number;
+  correlation: number;
+  sideRms: number;
+}
+
+/** Result of the `stereo.monoCompatCheckLogBands` analysis. */
+export interface StereoMonoCompatCheckLogBandsResult {
+  bands: StereoMonoCompatBand[];
+}
+
+/** What each {@link StereoAnalysis} name's JSON parses to. */
+export interface StereoAnalysisResultMap {
+  'stereo.monoCompatCheck': StereoMonoCompatCheckResult;
+  'stereo.monoCompatCheckLogBands': StereoMonoCompatCheckLogBandsResult;
+}
+
 export interface MasteringResult {
   samples: Float32Array;
   sampleRate: number;
@@ -269,6 +409,25 @@ export interface MasteringStereoResult {
    * channels.
    */
   nonFiniteSubstitutionCount: number;
+}
+
+/**
+ * The loudness numbers a {@link StreamingMasteringChain} is constructed with,
+ * measured at the loudness stage's input (after every earlier enabled stage),
+ * which is where the offline chain measures.
+ *
+ * `loudnessStaticGainDb` equals the gain {@link masteringChain} applies, ceiling
+ * clamp included, and 0 for a silent or below-gate stage input. Pass it and
+ * `truePeakDb` as the chain config's `loudnessStaticGainDb` and
+ * `loudnessStaticGainPeakDb`.
+ */
+export interface StreamingLoudnessGainResult {
+  /** Static gain in dB the offline loudness stage applies. */
+  loudnessStaticGainDb: number;
+  /** True peak in dBTP of the loudness stage's input; -120 for digital silence. */
+  truePeakDb: number;
+  /** Integrated loudness in LUFS of the loudness stage's input; `-Infinity` below the absolute gate. */
+  integratedLufs: number;
 }
 
 /** What gain-matching one take to another's loudness took, and produced. */

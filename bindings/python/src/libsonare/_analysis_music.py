@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ctypes
 import json
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import cast
 
 from ._errors import _not_supported, _unknown_error
@@ -12,6 +12,7 @@ from ._ffi import (
     SONARE_CHORD_DETECTION_OPTIONS_VERSION,
     SonareBoundaryOptions,
     SonareBoundaryResult,
+    SonareChord,
     SonareChordAnalysisResult,
     SonareChordDetectionOptions,
     SonareMelodyResult,
@@ -36,6 +37,8 @@ from .types import (
     Capabilities,
     Chord,
     ChordAnalysisResult,
+    FunctionalChord,
+    Key,
     MelodyPoint,
     MelodyResult,
     Mode,
@@ -44,6 +47,36 @@ from .types import (
     SectionResult,
     SectionType,
 )
+
+# SonareChordQuality ordinals (sonare_c_types_analysis.h) by the name a Chord carries.
+_CHORD_QUALITY_NAMES = {
+    0: "major",
+    1: "minor",
+    2: "diminished",
+    3: "augmented",
+    4: "dominant7",
+    5: "major7",
+    6: "minor7",
+    7: "sus2",
+    8: "sus4",
+    9: "unknown",
+    10: "add9",
+    11: "minorAdd9",
+    12: "dim7",
+    13: "halfDim7",
+    14: "major9",
+    15: "dominant9",
+    16: "sus2Add4",
+    17: "major6",
+    18: "minor6",
+    19: "minorMajor7",
+    20: "dominant7Sus4",
+    21: "dominant11",
+    22: "dominant13",
+    23: "dominant7Flat9",
+    24: "dominant7Sharp9",
+}
+_CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in _CHORD_QUALITY_NAMES.items()}
 
 
 @_guard_buffer("samples")
@@ -113,39 +146,12 @@ def detect_chords(
         ctypes.byref(out),
     )
     _check(rc)
-    quality_names = {
-        0: "major",
-        1: "minor",
-        2: "diminished",
-        3: "augmented",
-        4: "dominant7",
-        5: "major7",
-        6: "minor7",
-        7: "sus2",
-        8: "sus4",
-        9: "unknown",
-        10: "add9",
-        11: "minorAdd9",
-        12: "dim7",
-        13: "halfDim7",
-        14: "major9",
-        15: "dominant9",
-        16: "sus2Add4",
-        17: "major6",
-        18: "minor6",
-        19: "minorMajor7",
-        20: "dominant7Sus4",
-        21: "dominant11",
-        22: "dominant13",
-        23: "dominant7Flat9",
-        24: "dominant7Sharp9",
-    }
     try:
         return ChordAnalysisResult(
             chords=[
                 Chord(
                     root=PitchClass(out.chords[i].root),
-                    quality=quality_names.get(int(out.chords[i].quality), "unknown"),
+                    quality=_CHORD_QUALITY_NAMES.get(int(out.chords[i].quality), "unknown"),
                     start=float(out.chords[i].start),
                     end=float(out.chords[i].end),
                     confidence=float(out.chords[i].confidence),
@@ -228,6 +234,85 @@ def chord_functional_analysis(
         return [out.items[i].decode("utf-8") for i in range(out.count)]
     finally:
         lib.sonare_free_string_array(ctypes.byref(out))
+
+
+def _key_pair(key: object) -> tuple[ctypes.c_int32, ctypes.c_int32]:
+    """Reads a key given as an object with ``root`` / ``mode``, a mapping, or a pair."""
+    if isinstance(key, Mapping):
+        root, mode = key.get("root"), key.get("mode")
+    elif isinstance(key, tuple | list) and len(key) == 2:
+        root, mode = key
+    else:
+        root, mode = getattr(key, "root", None), getattr(key, "mode", None)
+    if root is None or mode is None:
+        raise SonareValueError("key must have a root and a mode")
+    return _to_c_int32(root, "key.root"), _to_c_int32(mode, "key.mode")
+
+
+def chord_functions(
+    chords: ChordAnalysisResult | Sequence[Chord],
+    key: Key | Mapping[str, object] | tuple[PitchClass, Mode],
+) -> list[FunctionalChord]:
+    """Label chords that are already known with their harmonic function in a key.
+
+    ``chords`` is :func:`detect_chords`' result (or its ``chords`` list), or the
+    same :class:`Chord` entries built by hand; only ``root`` and ``quality`` are
+    read for the labels and nothing is re-detected. ``key`` is a :class:`Key`
+    (e.g. from :func:`detect_key`), a ``{"root": ..., "mode": ...}`` mapping or a
+    ``(root, mode)`` pair.
+
+    Returns the same timed entries as :class:`FunctionalChord`, with ``roman``
+    (``"I"``, ``"V7"``, ``"vi"``; ``"N.C."`` for an unknown chord) and
+    ``function`` (``"tonic"``, ``"subdominant"``, ``"dominant"``, ``"chromatic"``
+    for a root outside the key's scale, ``"none"`` for an unknown chord) added.
+    Every mode other than minor reads the major scale.
+    """
+    entries = list(chords.chords if isinstance(chords, ChordAnalysisResult) else chords)
+    key_root, key_mode = _key_pair(key)
+    lib = _get_lib()
+    array = (SonareChord * len(entries))()
+    for i, chord in enumerate(entries):
+        ordinal = _CHORD_QUALITY_ORDINALS.get(chord.quality)
+        if ordinal is None:
+            raise SonareValueError(f"chords[{i}].quality {chord.quality!r} is not a chord quality")
+        array[i] = SonareChord(
+            _to_c_int32(chord.root, f"chords[{i}].root"),
+            ordinal,
+            chord.start,
+            chord.end,
+            chord.confidence,
+            _to_c_int32(chord.root if chord.bass is None else chord.bass, f"chords[{i}].bass"),
+        )
+    roman = SonareStringArray()
+    functions = SonareStringArray()
+    rc = lib.sonare_chord_functions(
+        array if entries else None,
+        len(entries),
+        key_root,
+        key_mode,
+        ctypes.byref(roman),
+        ctypes.byref(functions),
+    )
+    _check(rc)
+    try:
+        return [
+            FunctionalChord(
+                chord.root,
+                chord.quality,
+                chord.start,
+                chord.end,
+                chord.confidence,
+                chord.bass,
+                chord.canonical_name,
+                chord.roman_numeral,
+                roman.items[i].decode("utf-8"),
+                functions.items[i].decode("utf-8"),
+            )
+            for i, chord in enumerate(entries)
+        ]
+    finally:
+        lib.sonare_free_string_array(ctypes.byref(roman))
+        lib.sonare_free_string_array(ctypes.byref(functions))
 
 
 @_guard_buffer("samples")

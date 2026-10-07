@@ -510,6 +510,26 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareStringArray),
     ]
 
+    lib.sonare_chord_functions.restype = ctypes.c_int32
+    lib.sonare_chord_functions.argtypes = [
+        ctypes.POINTER(SonareChord),
+        ctypes.c_size_t,
+        ctypes.c_int32,
+        ctypes.c_int32,
+        ctypes.POINTER(SonareStringArray),
+        ctypes.POINTER(SonareStringArray),
+    ]
+
+    lib.sonare_material_preset_name.restype = ctypes.c_char_p
+    lib.sonare_material_preset_name.argtypes = [ctypes.c_int]
+    lib.sonare_acoustic_mode_name.restype = ctypes.c_char_p
+    lib.sonare_acoustic_mode_name.argtypes = [ctypes.c_int]
+    lib.sonare_room_geometry_from_estimate.restype = ctypes.c_int32
+    lib.sonare_room_geometry_from_estimate.argtypes = [
+        ctypes.POINTER(SonareRoomEstimate),
+        ctypes.POINTER(SonareRirSynthConfig),
+    ]
+
     if hasattr(lib, "sonare_synthesize_rir"):
         lib.sonare_synthesize_rir.restype = ctypes.c_int32
         lib.sonare_synthesize_rir.argtypes = [

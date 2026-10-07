@@ -281,6 +281,27 @@ std::string ChordAnalyzer::chord_to_roman_numeral(const Chord& chord, PitchClass
   return numeral;
 }
 
+std::string ChordAnalyzer::chord_function(const Chord& chord, PitchClass key_root, Mode mode) {
+  if (chord.quality == ChordQuality::Unknown) {
+    return "none";
+  }
+  const int interval = (static_cast<int>(chord.root) - static_cast<int>(key_root) + 12) % 12;
+  // Indexed by semitone distance from the tonic: T tonic, S subdominant, D dominant, - outside.
+  static const char kMajorFunctions[] = "TxSxTSxDxTxD";
+  static const char kMinorFunctions[] = "TxSTxSxDSxDx";
+  const char code = (mode == Mode::Minor ? kMinorFunctions : kMajorFunctions)[interval];
+  switch (code) {
+    case 'T':
+      return "tonic";
+    case 'S':
+      return "subdominant";
+    case 'D':
+      return "dominant";
+    default:
+      return "chromatic";
+  }
+}
+
 std::vector<std::string> ChordAnalyzer::functional_analysis(PitchClass key_root, Mode mode) const {
   std::vector<std::string> result;
   result.reserve(chords_.size());

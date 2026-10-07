@@ -23,17 +23,17 @@ import { assertExactInteger } from './validation.js';
  */
 export interface StreamingMasteringChainConfig extends Record<string, unknown> {
   /**
-   * Precomputed static loudness gain in dB. When `loudness.enabled` is set, the
-   * streaming chain cannot measure whole-signal integrated LUFS, so it applies
-   * this fixed gain per block before the loudness stage's true-peak limiter
-   * (e.g. `target_lufs - measured_integrated_lufs`). When omitted, an enabled
-   * loudness stage throws.
+   * Precomputed static loudness gain in dB, measured at the loudness stage's
+   * input ({@link streamingLoudnessGain} returns it). When `loudness.enabled` is
+   * set, the streaming chain cannot measure whole-signal integrated LUFS, so it
+   * applies this fixed gain per block before the loudness stage's true-peak
+   * limiter. When omitted, an enabled loudness stage throws.
    */
   loudnessStaticGainDb?: number;
 
   /**
-   * Offline-measured true-peak (dBFS) of the source the static gain was computed
-   * for. When provided, the static gain is clamped to
+   * True peak (dBFS) of the loudness stage's input the static gain was computed
+   * for (`truePeakDb` of {@link streamingLoudnessGain}). When provided, the static gain is clamped to
    * `(loudness.ceilingDb - loudnessStaticGainPeakDb) +
    * max(loudness.maxLimiterGainReductionDb, 0)` so the streaming preview
    * does not drive the loudness limiter harder than the offline chain. When

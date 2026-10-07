@@ -180,6 +180,11 @@ python = [
 #     which the name-matching extractor does not credit. WASM still constructs
 #     the NativeSynth directly, as above.
 node = [
+  # Name tables behind the string forms of materialPreset / mode: the facades
+  # resolve a name against the core's list and accept the integer unchanged, so
+  # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
+  "material_preset_name",
+  "acoustic_mode_name",
   # The C thread-local detail is consumed by the Node exception bridge; it is
   # not a second public operation beside the VocalEdit methods.
   "vocal_last_error_detail",
@@ -315,6 +320,11 @@ node = [
   "project_assist_apply_json",
 ]
 wasm = [
+  # Name tables behind the string forms of materialPreset / mode: the facades
+  # resolve a name against the core's list and accept the integer unchanged, so
+  # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
+  "material_preset_name",
+  "acoustic_mode_name",
   # The WASM module reads this thread-local detail to attach the matching
   # structured payload to the thrown exception.
   "vocal_last_error_detail",
@@ -426,6 +436,11 @@ wasm = [
   "project_assist_apply_json",
 ]
 python = [
+  # Name tables behind the string forms of materialPreset / mode: the facades
+  # resolve a name against the core's list and accept the integer unchanged, so
+  # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
+  "material_preset_name",
+  "acoustic_mode_name",
   # ctypes reads the thread-local detail after a failed call and folds it into
   # VocalEditError; callers do not invoke the ABI helper directly.
   "vocal_last_error_detail",
@@ -684,6 +699,13 @@ wasm = [
 # (root, mode_mask, midi, reference_midi=default) order as Node/WASM above,
 # remapped to the C order internally by the ctypes wrapper.
 python = [
+  # chord_functions: Python takes (chords, key) and derives the count from the list
+  # and splits `key` into the C root/mode pair; the C out-arrays become the added
+  # roman/function fields. room_geometry_from_estimate: the keyword-only source and
+  # listener are the placement the estimate lacks, and the C out-struct becomes the
+  # returned mapping.
+  "chord_functions",
+  "room_geometry_from_estimate",
   "detect_key_candidates",
   "strip_meter",
   "tempogram",

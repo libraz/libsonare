@@ -172,14 +172,6 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     "A callback instrument's reported release tail in samples: a plain quantity whose zero is no tail, not a request for a default.",
   ],
   [
-    'sonare_wrap_acoustic.cpp:materialPreset',
-    'Preset selectors start at 1; 0 is the no-preset branch, where the absorption and scattering fields decide the wall instead.',
-  ],
-  [
-    'sonare_wrap_acoustic.cpp:mode',
-    'Estimator mode ordinal, where 0 is the default arm of the switch — a named mode.',
-  ],
-  [
     'effects/note_editing.cpp:onsetSample',
     'An onset position in samples; 0 is the first sample of the buffer.',
   ],
@@ -308,6 +300,10 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
   ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],
   ['StringProperty', 'Reads a string, so it has no numeric fallback at all.'],
   ['GsEfxRealizationProperty', 'Reads a realisation name, so it has no numeric fallback at all.'],
+  [
+    'NamedSelectorProperty',
+    'Reads a selector by name or through IntProperty, whose fallback the caller states; a name never lands on a sentinel.',
+  ],
   [
     'FloatArrayProperty',
     'Reads a float array off a record and returns an empty vector when absent; there is no scalar fallback.',

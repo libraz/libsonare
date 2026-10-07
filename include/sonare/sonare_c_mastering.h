@@ -717,6 +717,19 @@ typedef struct {
   float ceiling_db;
 } SonareStreamingPlatform;
 
+/// @brief The loudness numbers a streaming mastering chain is constructed with,
+///        measured the way the offline chain measures them.
+typedef struct {
+  /// Static gain (dB) the offline loudness stage applies, ceiling-headroom bound
+  /// included. 0 for a silent or below-gate stage input.
+  float loudness_static_gain_db;
+  /// True peak (dBTP) of the loudness stage's input; -120 for digital silence.
+  float true_peak_db;
+  /// Integrated loudness (LUFS) of the loudness stage's input; -inf below the
+  /// absolute gate.
+  float integrated_lufs;
+} SonareStreamingLoudnessGain;
+
 /// @brief Preview platform normalization gain and ceiling risk as JSON.
 /// @details Pass NULL/0 for @p platforms to use the built-in platform list.
 /// The returned string must be released with sonare_free_string().
@@ -736,6 +749,28 @@ SonareError sonare_mastering_streaming_preview_stereo(const float* left, const f
                                                       size_t length, int sample_rate,
                                                       const SonareStreamingPlatform* platforms,
                                                       size_t platform_count, char** json_out);
+
+/// @brief Computes the loudness numbers for a streaming mastering chain.
+/// @details Runs the offline chain described by @p params up to its loudness
+/// stage and measures there, so @c loudness_static_gain_db equals the gain the
+/// offline chain applies (ceiling clamp included) and @c true_peak_db is the
+/// peak that clamp used. Pass them as @p loudness_static_gain_db and
+/// @p loudness_static_gain_peak_db of
+/// @ref sonare_streaming_mastering_chain_create_ex. The gain is computed from
+/// the @c loudness.* params whether or not the stage is enabled. @p params takes
+/// the keys @ref sonare_mastering_chain does.
+SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           SonareStreamingLoudnessGain* out);
+
+/// @brief Stereo counterpart of @ref sonare_streaming_loudness_gain.
+/// @details Measures the integrated loudness with BS.1770 channel summing and
+/// reports the larger of the two channel true peaks.
+SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count,
+                                                  SonareStreamingLoudnessGain* out);
 
 /// @brief Returns the delivery-target identifiers the mastering assistant
 ///        accepts, separated by '\n'.
@@ -1003,11 +1038,12 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create(
 /// @brief Create a streaming chain with a precomputed loudness static gain.
 /// @details Identical to @ref sonare_streaming_mastering_chain_create except
 /// that when the params enable the loudness stage, @p loudness_static_gain_db
-/// (e.g. `target_lufs - measured_integrated_lufs`, measured offline) is applied
-/// per block before the loudness stage's true-peak limiter instead of throwing.
+/// (measured at the loudness stage's input, which
+/// @ref sonare_streaming_loudness_gain returns) is applied per block
+/// before the loudness stage's true-peak limiter instead of throwing.
 /// Pass NaN to reproduce the throw-on-loudness behaviour of the non-_ex create.
-/// @param loudness_static_gain_peak_db Offline-measured true-peak (dBFS) of the
-///        source the static gain was computed for. When finite, the static gain
+/// @param loudness_static_gain_peak_db True peak (dBFS) of the loudness stage's
+///        input the static gain was computed for. When finite, the static gain
 ///        is clamped to `(ceiling_db - peak_db) +
 ///        max(max_limiter_gain_reduction_db, 0)` so the streaming preview does
 ///        not overdrive the loudness limiter harder than the offline chain

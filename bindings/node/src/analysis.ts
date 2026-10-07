@@ -13,11 +13,16 @@ import type {
   BoundaryOptions,
   BoundaryResult,
   BpmAnalysisResult,
+  Chord,
   ChordAnalysisResult,
   ChordChromaMethod,
   ChordDetectionOptions,
+  ChordFunction,
+  ChordFunctionsInput,
+  ChordFunctionsKey,
   DetectKeyOptions,
   DynamicsResult,
+  FunctionalChord,
   KeyCandidate,
   KeyDetection,
   KeyDetectionOptions,
@@ -29,6 +34,8 @@ import type {
   RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
+  RoomGeometryFromEstimateOptions,
+  RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
   Section,
@@ -91,6 +98,18 @@ export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, Samples
 
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
+/** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
+export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'length' | 'width' | 'height'> & {
+  absorptionBands?: Float32Array | number[];
+};
+export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimateOptions {
+  estimate: RoomGeometryEstimate;
+}
+export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
+  /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
+  chords: readonly T[] | { chords: readonly T[] };
+  key: ChordFunctionsKey;
+}
 
 export interface AnalyzeWithProgressRequest extends SamplesRequest, MusicAnalyzeOptions {
   onProgress?: AnalysisProgressCallback;
@@ -444,6 +463,52 @@ export function estimateRoom(
   const resolvedSampleRate = request.sampleRate ?? 48000;
   assertSampleRate('estimateRoom', resolvedSampleRate);
   return addon.estimateRoom(request.samples, resolvedSampleRate, request);
+}
+
+/**
+ * Turn a room estimate into the geometry {@link synthesizeRir} takes.
+ *
+ * The pair to {@link estimateRoom}: the estimate's `length`, `width` and `height`
+ * become `lengthM`, `widthM` and `heightM`, and its `absorptionBands` become
+ * `bandAbsorption`. The estimate carries no placement, so `source` and `listener`
+ * are set only when given; an omitted one is left to `synthesizeRir`'s own
+ * default, which may fall outside a small estimated room. Absorption bands that
+ * did not converge are left out, so the scalar `absorption` applies.
+ *
+ * @throws SonareError when the estimate has no measurable dimensions (NaN).
+ */
+export function roomGeometryFromEstimate(
+  request: RoomGeometryFromEstimateRequest,
+): RoomGeometryOptions;
+export function roomGeometryFromEstimate(
+  estimate: RoomGeometryEstimate,
+  options?: RoomGeometryFromEstimateOptions,
+): RoomGeometryOptions;
+export function roomGeometryFromEstimate(
+  estimate: RoomGeometryEstimate | RoomGeometryFromEstimateRequest,
+  options: RoomGeometryFromEstimateOptions = {},
+): RoomGeometryOptions {
+  if (typeof estimate !== 'object' || estimate === null) {
+    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
+  }
+  const request: RoomGeometryFromEstimateRequest =
+    'estimate' in estimate ? estimate : { estimate, ...options };
+  if (typeof request.estimate !== 'object' || request.estimate === null) {
+    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
+  }
+  const geometry: RoomGeometryOptions = addon.roomGeometryFromEstimate(request.estimate);
+  const { source, listener } = request;
+  if (source !== undefined) {
+    geometry.sourceX = source.x;
+    geometry.sourceY = source.y;
+    geometry.sourceZ = source.z;
+  }
+  if (listener !== undefined) {
+    geometry.listenerX = listener.x;
+    geometry.listenerY = listener.y;
+    geometry.listenerZ = listener.z;
+  }
+  return geometry;
 }
 
 /**
@@ -1097,6 +1162,38 @@ export function chordFunctionalAnalysis(
     p.tuning === 'auto' ? 0 : p.tuning,
     p.tuning === 'auto',
   );
+}
+
+/**
+ * Label chords that are already known with their Roman numeral and harmonic
+ * function in a key. Nothing is re-detected.
+ *
+ * `chords` is {@link detectChords}' result or its `chords` array, or the same
+ * shape built by hand (only `root` and `quality` are read). `key` is
+ * `{ root, mode }`, e.g. {@link detectKey}'s result. Returns the same timed
+ * entries with `roman` (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord)
+ * and `function` (`'tonic'`, `'subdominant'`, `'dominant'`, `'chromatic'` for a
+ * root outside the key's scale, `'none'` for an unknown chord) added. Every mode
+ * other than minor reads the major scale.
+ */
+export function chordFunctions(request: ChordFunctionsRequest): FunctionalChord[];
+export function chordFunctions<T extends ChordFunctionsInput>(
+  request: ChordFunctionsRequest<T>,
+): FunctionalChord<T>[];
+export function chordFunctions(
+  request: ChordFunctionsRequest<ChordFunctionsInput>,
+): FunctionalChord<ChordFunctionsInput>[] {
+  const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
+  const labels: { roman: string[]; functions: ChordFunction[] } = addon.chordFunctions(
+    entries,
+    request.key.root,
+    request.key.mode,
+  );
+  return entries.map((chord, i) => ({
+    ...chord,
+    roman: labels.roman[i],
+    function: labels.functions[i],
+  }));
 }
 
 function chordChromaMethodValue(method: ChordChromaMethod): number {

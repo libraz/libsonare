@@ -66,4 +66,15 @@ AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config 
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config = {});
 std::string assistant_result_to_json(const AssistantResult& result);
 
+/// @brief Every dotted field path @ref assistant_result_to_json emits, with the
+///        chain document left opaque below `chainConfig.params`.
+/// @details The JSON crosses to user code as a string each facade parses and
+///          casts, so nothing type-checks it on arrival; this list is what the
+///          per-surface declarations are compared against. `chainConfig` is the
+///          canonical chain document (`version` plus a `params` map keyed by
+///          dotted parameter names), whose keys depend on the suggested stages,
+///          so the list stops at `chainConfig.params`. An array contributes its
+///          element's paths under a `[]` segment and nothing of its own.
+const std::vector<std::string>& assistant_result_schema_paths();
+
 }  // namespace sonare::mastering::assistant

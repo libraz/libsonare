@@ -92,6 +92,35 @@ val js_mastering_chain_stereo(val left_samples, val right_samples, const val& sa
   return masteringStereoResultToVal(result);
 }
 
+val streamingLoudnessGainToVal(const mastering::api::StreamingLoudnessGain& gain) {
+  val out = val::object();
+  out.set("loudnessStaticGainDb", gain.loudness_static_gain_db);
+  out.set("truePeakDb", gain.true_peak_db);
+  out.set("integratedLufs", gain.integrated_lufs);
+  return out;
+}
+
+val js_mastering_streaming_loudness_gain(val samples, const val& sample_rate_val, val config) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  std::vector<float> data = float32ArrayToVector(samples);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_mono(
+      masteringChainConfigFromVal(config), data.data(), data.size(), sample_rate));
+}
+
+val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samples,
+                                                const val& sample_rate_val, val config) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
+                               "streamingLoudnessGainStereo input", true);
+  std::vector<float> left = float32ArrayToVector(left_samples);
+  std::vector<float> right = float32ArrayToVector(right_samples);
+  validate_offline_audio_input(left.data(), left.size(), sample_rate);
+  validate_offline_audio_input(right.data(), right.size(), sample_rate);
+  return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_stereo(
+      masteringChainConfigFromVal(config), left.data(), right.data(), left.size(), sample_rate));
+}
+
 // Mastering chain (mono) with progress callback
 val js_mastering_chain_with_progress(val samples, const val& sample_rate_val, val config,
                                      val progress_callback, val cancel_callback) {
@@ -135,6 +164,8 @@ void registerMasteringChainBindings() {
   function("mastering", &js_mastering);
   function("masteringChain", &js_mastering_chain);
   function("masteringChainStereo", &js_mastering_chain_stereo);
+  function("masteringStreamingLoudnessGain", &js_mastering_streaming_loudness_gain);
+  function("masteringStreamingLoudnessGainStereo", &js_mastering_streaming_loudness_gain_stereo);
   function("masteringChainWithProgress", &js_mastering_chain_with_progress);
   function("masteringChainStereoWithProgress", &js_mastering_chain_stereo_with_progress);
 }

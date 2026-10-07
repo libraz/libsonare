@@ -5,6 +5,7 @@ import type {
   MasteringChainResult,
   MasteringChainStereoResult,
   MasteringPreset,
+  StreamingLoudnessGainResult,
 } from './public_types.js';
 import type { ProgressCallback } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
@@ -191,6 +192,64 @@ export interface MasteringChainStereoRequest {
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
   cancel?: () => boolean;
+}
+
+/** Request for {@link streamingLoudnessGain}. */
+export interface StreamingLoudnessGainRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  /** The chain config the streaming chain will run; read like {@link masteringChain}'s. */
+  config?: MasteringChainConfig;
+}
+
+/** Request for {@link streamingLoudnessGainStereo}. */
+export interface StreamingLoudnessGainStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  config?: MasteringChainConfig;
+}
+
+/**
+ * Measures the loudness numbers a {@link StreamingMasteringChain} needs.
+ *
+ * Runs the offline chain described by `config` up to its loudness stage and
+ * measures there, so `loudnessStaticGainDb` equals the gain
+ * {@link masteringChain} applies (ceiling clamp included) and `truePeakDb` is
+ * the peak that clamp used. The gain is computed from `config.loudness` whether
+ * or not the stage is enabled; a silent or below-gate stage input yields 0 dB.
+ *
+ * @example
+ * const { loudnessStaticGainDb, truePeakDb } = streamingLoudnessGain({ samples, sampleRate, config });
+ * const chain = new StreamingMasteringChain({
+ *   ...config,
+ *   loudnessStaticGainDb,
+ *   loudnessStaticGainPeakDb: truePeakDb,
+ * });
+ */
+export function streamingLoudnessGain(
+  request: StreamingLoudnessGainRequest,
+): StreamingLoudnessGainResult {
+  return requireModule().masteringStreamingLoudnessGain(
+    request.samples,
+    request.sampleRate ?? 22050,
+    canonicalChainConfig(request.config ?? {}),
+  );
+}
+
+/** Stereo counterpart of {@link streamingLoudnessGain}, with BS.1770 channel summing. */
+export function streamingLoudnessGainStereo(
+  request: StreamingLoudnessGainStereoRequest,
+): StreamingLoudnessGainResult {
+  if (request.left.length !== request.right.length) {
+    throw new RangeError('Stereo channel lengths must match.');
+  }
+  return requireModule().masteringStreamingLoudnessGainStereo(
+    request.left,
+    request.right,
+    request.sampleRate ?? 22050,
+    canonicalChainConfig(request.config ?? {}),
+  );
 }
 
 /** Canonical request form for one-shot preset mastering. */

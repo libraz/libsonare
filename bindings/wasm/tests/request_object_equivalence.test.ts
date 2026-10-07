@@ -1974,6 +1974,21 @@ const ROWS: Row[] = [
   },
 
   {
+    name: 'roomGeometryFromEstimate',
+    fn: sonare.roomGeometryFromEstimate,
+    params: 'estimate ...options?',
+    values: {
+      estimate: {
+        length: 6,
+        width: 4.5,
+        height: 3,
+        absorptionBands: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
+      },
+      options: { source: { x: 1, y: 1, z: 1.2 }, listener: { x: 3, y: 2, z: 1.7 } },
+    },
+    invalid: { estimate: 'room' },
+  },
+  {
     name: 'roomMorph',
     fn: sonare.roomMorph,
     params: 'samples sampleRate ...options?',

@@ -11,6 +11,7 @@
 #include "core/audio.h"
 #include "mastering/common/loudness_measure.h"
 #include "metering/lufs.h"
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -88,6 +89,10 @@ struct LoudnessStageGain {
   float requested_db = std::numeric_limits<float>::quiet_NaN();
   // requested_db bounded by the ceiling; 0 when nothing was requested.
   float applied_db = 0.0f;
+  // Integrated loudness of the stage input; non-finite below the absolute gate.
+  float measured_lufs = -std::numeric_limits<float>::infinity();
+  // True peak (dBTP) of the stage input the gain was bounded against.
+  float true_peak_db = sonare::constants::kFloorDb;
 };
 
 // Bounds a static normalization gain. The gain may exceed the peak headroom
@@ -115,6 +120,8 @@ inline LoudnessStageGain loudness_stage_gain(const float* interleaved, std::size
   const metering::LufsGainToTarget solved =
       metering::gain_to_integrated_lufs(interleaved, frames, channels, sample_rate, target_lufs);
   LoudnessStageGain gain;
+  gain.measured_lufs = solved.measured_lufs;
+  gain.true_peak_db = peak_db;
   if (!std::isfinite(solved.measured_lufs)) {
     return gain;
   }

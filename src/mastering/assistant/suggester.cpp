@@ -250,4 +250,26 @@ std::string assistant_result_to_json(const AssistantResult& result) {
   return json::dump(json::Value(std::move(root)));
 }
 
+const std::vector<std::string>& assistant_result_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "chainConfig",
+      "chainConfig.params",
+      "chainConfig.version",
+      "explanation",
+      "profile",
+      "profile.attackDensity",
+      "profile.bpm",
+      "profile.bpmConfidence",
+      "profile.crestFactorDb",
+      "profile.durationSec",
+      "profile.integratedLufs",
+      "profile.lraLu",
+      "profile.spectralCentroidHz",
+      "profile.spectralFlatness",
+      "profile.sustainRatio",
+      "profile.truePeakDb",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::assistant

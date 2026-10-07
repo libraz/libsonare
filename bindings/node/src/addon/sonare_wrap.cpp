@@ -118,6 +118,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::SynthesizeRir, "synthesizeRir"));
   exports.Set("estimateRoom", Napi::Function::New(env, &SonareWrap::EstimateRoom, "estimateRoom"));
   exports.Set("roomMorph", Napi::Function::New(env, &SonareWrap::RoomMorph, "roomMorph"));
+  exports.Set(
+      "roomGeometryFromEstimate",
+      Napi::Function::New(env, &SonareWrap::RoomGeometryFromEstimate, "roomGeometryFromEstimate"));
   exports.Set("analyzeRhythm",
               Napi::Function::New(env, &SonareWrap::AnalyzeRhythm, "analyzeRhythm"));
   exports.Set("analyzeDynamics",
@@ -127,6 +130,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("detectChords", Napi::Function::New(env, &SonareWrap::DetectChords, "detectChords"));
   exports.Set("chordFunctionalAnalysis",
               Napi::Function::New(env, &SonareWrap::FunctionalAnalysis, "chordFunctionalAnalysis"));
+  exports.Set("chordFunctions",
+              Napi::Function::New(env, &SonareWrap::ChordFunctions, "chordFunctions"));
   exports.Set("lufs", Napi::Function::New(env, &SonareWrap::Lufs, "lufs"));
   exports.Set("momentaryLufs",
               Napi::Function::New(env, &SonareWrap::MomentaryLufs, "momentaryLufs"));
@@ -260,6 +265,12 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MasteringChain, "masteringChain"));
   exports.Set("masteringChainStereo",
               Napi::Function::New(env, &SonareWrap::MasteringChainStereo, "masteringChainStereo"));
+  exports.Set("masteringStreamingLoudnessGain",
+              Napi::Function::New(env, &SonareWrap::MasteringStreamingLoudnessGain,
+                                  "masteringStreamingLoudnessGain"));
+  exports.Set("masteringStreamingLoudnessGainStereo",
+              Napi::Function::New(env, &SonareWrap::MasteringStreamingLoudnessGainStereo,
+                                  "masteringStreamingLoudnessGainStereo"));
   exports.Set("masteringChainWithProgress",
               Napi::Function::New(env, &SonareWrap::MasteringChainWithProgress,
                                   "masteringChainWithProgress"));

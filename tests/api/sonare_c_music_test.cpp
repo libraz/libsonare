@@ -406,6 +406,74 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
   }
 }
 
+TEST_CASE("sonare_chord_functions labels given chords without analysing audio", "[c_api]") {
+  const SonareChord progression[] = {
+      {SONARE_PITCH_C, SONARE_CHORD_MAJOR, 0.0f, 1.0f, 0.9f, SONARE_PITCH_C},
+      {SONARE_PITCH_F, SONARE_CHORD_MAJOR, 1.0f, 2.0f, 0.9f, SONARE_PITCH_F},
+      {SONARE_PITCH_G, SONARE_CHORD_DOMINANT7, 2.0f, 3.0f, 0.9f, SONARE_PITCH_G},
+      {SONARE_PITCH_A, SONARE_CHORD_MINOR, 3.0f, 4.0f, 0.9f, SONARE_PITCH_A},
+      {SONARE_PITCH_CS, SONARE_CHORD_MAJOR, 4.0f, 5.0f, 0.9f, SONARE_PITCH_CS},
+      {SONARE_PITCH_C, SONARE_CHORD_UNKNOWN, 5.0f, 6.0f, 0.0f, SONARE_PITCH_C},
+  };
+  SonareStringArray roman = {};
+  SonareStringArray functions = {};
+
+  SECTION("C major progression") {
+    REQUIRE(sonare_chord_functions(progression, 6, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman,
+                                   &functions) == SONARE_OK);
+    REQUIRE(roman.count == 6);
+    REQUIRE(functions.count == 6);
+    const char* expected_roman[] = {"I", "IV", "V7", "vi", "bII", "N.C."};
+    const char* expected_function[] = {"tonic", "subdominant", "dominant",
+                                       "tonic", "chromatic",   "none"};
+    for (size_t i = 0; i < 6; ++i) {
+      CHECK(std::string(roman.items[i]) == expected_roman[i]);
+      CHECK(std::string(functions.items[i]) == expected_function[i]);
+    }
+    sonare_free_string_array(&roman);
+    sonare_free_string_array(&functions);
+  }
+
+  SECTION("a minor key reads the minor scale") {
+    REQUIRE(sonare_chord_functions(progression, 3, SONARE_PITCH_A, SONARE_MODE_MINOR, &roman,
+                                   &functions) == SONARE_OK);
+    CHECK(std::string(roman.items[0]) == "III");
+    CHECK(std::string(roman.items[1]) == "VI");
+    CHECK(std::string(roman.items[2]) == "VII7");
+    CHECK(std::string(functions.items[0]) == "tonic");
+    CHECK(std::string(functions.items[1]) == "subdominant");
+    CHECK(std::string(functions.items[2]) == "dominant");
+    sonare_free_string_array(&roman);
+    sonare_free_string_array(&functions);
+  }
+
+  SECTION("empty input yields empty arrays") {
+    REQUIRE(sonare_chord_functions(nullptr, 0, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman,
+                                   &functions) == SONARE_OK);
+    CHECK(roman.count == 0);
+    CHECK(functions.count == 0);
+    CHECK(roman.items == nullptr);
+  }
+
+  SECTION("rejects invalid input and leaves the outputs empty") {
+    CHECK(sonare_chord_functions(nullptr, 1, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman,
+                                 &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_chord_functions(progression, 1, SONARE_PITCH_C, SONARE_MODE_MAJOR, nullptr,
+                                 &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_chord_functions(progression, 1, static_cast<SonarePitchClass>(12),
+                                 SONARE_MODE_MAJOR, &roman,
+                                 &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_chord_functions(progression, 1, SONARE_PITCH_C, static_cast<SonareMode>(9), &roman,
+                                 &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    SonareChord bad = progression[0];
+    bad.quality = static_cast<SonareChordQuality>(SONARE_CHORD_QUALITY_COUNT);
+    CHECK(sonare_chord_functions(&bad, 1, SONARE_PITCH_C, SONARE_MODE_MAJOR, &roman, &functions) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(roman.items == nullptr);
+    CHECK(functions.items == nullptr);
+  }
+}
+
 TEST_CASE(
     "analysis wrappers zero owning out-pointers before a validating early-return, so free is "
     "always safe",

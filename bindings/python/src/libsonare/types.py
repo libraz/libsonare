@@ -8,10 +8,16 @@ and IDEs retain the same API surface as the former monolithic module.
 
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._types_acoustic import (
+    AcousticModeName as AcousticModeName,
+)
+from ._types_acoustic import (
     AcousticResult as AcousticResult,
 )
 from ._types_acoustic import (
     DereverbClassicalConfig as DereverbClassicalConfig,
+)
+from ._types_acoustic import (
+    MaterialPresetName as MaterialPresetName,
 )
 from ._types_acoustic import (
     RirDiagnostic as RirDiagnostic,
@@ -21,6 +27,9 @@ from ._types_acoustic import (
 )
 from ._types_acoustic import (
     RoomEstimate as RoomEstimate,
+)
+from ._types_acoustic import (
+    RoomGeometry as RoomGeometry,
 )
 from ._types_acoustic import (
     RoomMorphResult as RoomMorphResult,
@@ -62,6 +71,9 @@ from ._types_analysis import (
     ChordAnalysisResult as ChordAnalysisResult,
 )
 from ._types_analysis import (
+    ChordFunctionName as ChordFunctionName,
+)
+from ._types_analysis import (
     ChromaResult as ChromaResult,
 )
 from ._types_analysis import (
@@ -78,6 +90,9 @@ from ._types_analysis import (
 )
 from ._types_analysis import (
     EqSpectrumSnapshot as EqSpectrumSnapshot,
+)
+from ._types_analysis import (
+    FunctionalChord as FunctionalChord,
 )
 from ._types_analysis import (
     HpssResult as HpssResult,
@@ -402,6 +417,66 @@ from ._types_mastering import (
 )
 from ._types_mastering import (
     StageGainReduction as StageGainReduction,
+)
+from ._types_mastering import (
+    StreamingLoudnessGain as StreamingLoudnessGain,
+)
+from ._types_mastering_results import (
+    MasteringAssistantProfile as MasteringAssistantProfile,
+)
+from ._types_mastering_results import (
+    MasteringAssistantResult as MasteringAssistantResult,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfile as MasteringAudioProfile,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileDefects as MasteringAudioProfileDefects,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
+)
+from ._types_mastering_results import (
+    MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
+)
+from ._types_mastering_results import (
+    MasteringChainConfigDocument as MasteringChainConfigDocument,
+)
+from ._types_mastering_results import (
+    MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
+)
+from ._types_mastering_results import (
+    MasteringStreamingPreviewResult as MasteringStreamingPreviewResult,
+)
+from ._types_mastering_results import (
+    MatchEqCurveResult as MatchEqCurveResult,
+)
+from ._types_mastering_results import (
+    MatchEstimateReferenceDelaySamplesResult as MatchEstimateReferenceDelaySamplesResult,
+)
+from ._types_mastering_results import (
+    MatchReferenceLoudnessResult as MatchReferenceLoudnessResult,
+)
+from ._types_mastering_results import (
+    MatchTonalBalanceBand as MatchTonalBalanceBand,
+)
+from ._types_mastering_results import (
+    MatchTonalBalanceLogBandsResult as MatchTonalBalanceLogBandsResult,
+)
+from ._types_mastering_results import (
+    MatchTonalBalanceResult as MatchTonalBalanceResult,
+)
+from ._types_mastering_results import (
+    StereoMonoCompatBand as StereoMonoCompatBand,
+)
+from ._types_mastering_results import (
+    StereoMonoCompatCheckLogBandsResult as StereoMonoCompatCheckLogBandsResult,
+)
+from ._types_mastering_results import (
+    StereoMonoCompatCheckResult as StereoMonoCompatCheckResult,
 )
 from ._types_repair import (
     ClickDetection as ClickDetection,

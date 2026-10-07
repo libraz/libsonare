@@ -4,7 +4,14 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { detectAcoustic, estimateRoom, init, roomMorph, synthesizeRir } from '../src/index';
+import {
+  detectAcoustic,
+  estimateRoom,
+  init,
+  roomGeometryFromEstimate,
+  roomMorph,
+  synthesizeRir,
+} from '../src/index';
 
 beforeAll(async () => {
   await init();
@@ -413,5 +420,96 @@ describe('geometric room acoustics', () => {
         airHumidityPercent: 150,
       }),
     ).toThrow();
+  });
+});
+
+describe('named selectors and estimate-to-geometry', () => {
+  const room = { maxSeconds: 0.1, sampleRate: 22050, ismOrder: 2 };
+  const presets = ['none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'] as const;
+
+  it('gives the same RIR for a preset name and its integer', () => {
+    presets.forEach((name, value) => {
+      const byName = synthesizeRir({ ...room, materialPreset: name });
+      const byValue = synthesizeRir({ ...room, materialPreset: value });
+      expect(Array.from(byName.rir)).toEqual(Array.from(byValue.rir));
+    });
+    expect(Array.from(synthesizeRir({ ...room, materialPreset: 'glass' }).rir)).not.toEqual(
+      Array.from(synthesizeRir({ ...room, materialPreset: 'carpet' }).rir),
+    );
+  });
+
+  it('gives the same estimate for a mode name and its integer', () => {
+    const rir = synthesizeRir({ ...room, maxSeconds: 0.5 }).rir;
+    (['auto', 'blind', 'impulse_response'] as const).forEach((name, value) => {
+      const byName = estimateRoom(rir, 22050, { mode: name });
+      const byValue = estimateRoom(rir, 22050, { mode: value });
+      expect(JSON.stringify(byName)).toEqual(JSON.stringify(byValue));
+    });
+  });
+
+  it('refuses an unknown preset or mode name, naming the valid set', () => {
+    expect(() => synthesizeRir({ materialPreset: 'marble' as never })).toThrow(RangeError);
+    expect(() => synthesizeRir({ materialPreset: 'marble' as never })).toThrow(
+      /'none', 'concrete', 'wood', 'curtain', 'carpet', 'glass'/,
+    );
+    expect(() =>
+      roomMorph(new Float32Array(100), 48000, { materialPreset: 'Concrete' as never }),
+    ).toThrow(RangeError);
+    expect(() => estimateRoom(new Float32Array(1000), 48000, { mode: 'blinds' as never })).toThrow(
+      /'auto', 'blind', 'impulse_response'/,
+    );
+  });
+
+  it('feeds an estimate to synthesizeRir exactly as the hand-mapped call does', () => {
+    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const estimate = estimateRoom(rir.rir, 48000, {
+      aspectHintLw: 7 / 5,
+      aspectHintLh: 7 / 3,
+      referenceAbsorption: 0.15,
+    });
+    const source = { x: 1, y: 1, z: 1.2 };
+    const listener = { x: 3, y: 2, z: 1.7 };
+    const geometry = roomGeometryFromEstimate(estimate, { source, listener });
+    expect(Object.keys(geometry).sort()).toEqual(
+      [
+        'bandAbsorption',
+        'heightM',
+        'lengthM',
+        'listenerX',
+        'listenerY',
+        'listenerZ',
+        'sourceX',
+        'sourceY',
+        'sourceZ',
+        'widthM',
+      ].sort(),
+    );
+    expect(geometry.lengthM).toBeCloseTo(estimate.length, 5);
+    const options = { maxSeconds: 0.1, ismOrder: 2 };
+    const mapped = synthesizeRir({ ...geometry, ...options });
+    const byHand = synthesizeRir({
+      lengthM: estimate.length,
+      widthM: estimate.width,
+      heightM: estimate.height,
+      bandAbsorption: estimate.absorptionBands,
+      sourceX: 1,
+      sourceY: 1,
+      sourceZ: 1.2,
+      listenerX: 3,
+      listenerY: 2,
+      listenerZ: 1.7,
+      ...options,
+    });
+    expect(mapped.hasError).toBe(false);
+    expect(Array.from(mapped.rir)).toEqual(Array.from(byHand.rir));
+    // The request form and the positional form agree; omitted positions stay omitted.
+    expect(roomGeometryFromEstimate({ estimate, source, listener })).toEqual(geometry);
+    expect(Object.keys(roomGeometryFromEstimate(estimate))).not.toContain('sourceX');
+  });
+
+  it('refuses an estimate with no measurable room', () => {
+    const silent = estimateRoom(new Float32Array(48000), 48000);
+    expect(Number.isNaN(silent.length)).toBe(true);
+    expect(() => roomGeometryFromEstimate(silent)).toThrow();
   });
 });

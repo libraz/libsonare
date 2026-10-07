@@ -9503,6 +9503,30 @@
     ],
     "size": 272
   },
+  "SonareStreamingLoudnessGain": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "float",
+        "name": "loudness_static_gain_db",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "true_peak_db",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "integrated_lufs",
+        "offset": 8,
+        "size": 4
+      }
+    ],
+    "size": 12
+  },
   "SonareStreamingPlatform": {
     "align": 8,
     "fields": [

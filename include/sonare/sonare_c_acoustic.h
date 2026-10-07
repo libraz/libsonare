@@ -289,6 +289,29 @@ void sonare_free_room_estimate(SonareRoomEstimate* result);
 SonareError sonare_room_morph(const float* samples, size_t length, int sample_rate,
                               const SonareRoomMorphConfig* config, float** out, size_t* out_length);
 
+/// @brief Name of a SONARE_MATERIAL_PRESET_* value ("none", "concrete", "wood", "curtain",
+///        "carpet", "glass"), or NULL when @p preset is not one. The values are contiguous from
+///        0, so a caller lists the valid names by counting up until NULL and resolves a name to
+///        its value by position. Static storage.
+const char* sonare_material_preset_name(int preset);
+
+/// @brief Name of a SONARE_ACOUSTIC_MODE_* value ("auto", "blind", "impulse_response"), or NULL
+///        when @p mode is not one. Contiguous from 0, enumerated as sonare_material_preset_name.
+const char* sonare_acoustic_mode_name(int mode);
+
+/// @brief Room geometry for sonare_synthesize_rir taken from a room estimate.
+/// @details Zeroes @p out, then sets the three dimensions and borrows the estimate's per-band
+///   absorption as @c absorption_bands (so @p estimate must outlive any use of @p out).
+///   Source and listener stay at the zero value: the estimate carries no placement, so the
+///   caller sets both before synthesizing. Absorption bands that are missing or contain a
+///   non-finite value (the fit did not converge) are left unset, so the synthesizer's scalar
+///   absorption applies. Refuses (SONARE_ERROR_INVALID_PARAMETER, with a message) an estimate
+///   whose dimensions are not finite and positive, i.e. no decay was measurable.
+/// @param estimate Result of sonare_estimate_room.
+/// @param out      Receives the geometry; nothing to free.
+SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimate,
+                                               SonareRirSynthConfig* out);
+
 #ifdef __cplusplus
 }
 #endif

@@ -1126,4 +1126,50 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
   return json_ns::dump(json_ns::Value(std::move(root)));
 }
 
+const std::vector<std::string>& match_reference_loudness_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "gainToMatchDb",
+      "referenceLufs",
+      "sourceLufs",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& match_tonal_balance_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "bands",         "bands[].deviationDb", "bands[].highHz",
+      "bands[].lowHz", "bands[].referenceDb", "bands[].sourceDb",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& match_eq_curve_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "frequencies",
+      "gainDb",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& match_reference_delay_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "delaySamples",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& stereo_mono_compat_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "correlation", "likelyMonoCompatible", "monoPeak", "sideRms", "width",
+  };
+  return paths;
+}
+
+const std::vector<std::string>& stereo_mono_compat_log_bands_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "bands", "bands[].correlation", "bands[].highHz", "bands[].lowHz", "bands[].sideRms",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::api

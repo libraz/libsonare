@@ -170,7 +170,17 @@ def mastering_pair_analyze(
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
-    """Run a named two-input mastering analysis and return shared JSON."""
+    """Run a named two-input mastering analysis and return shared JSON.
+
+    The document's shape depends on ``analysis_name``; parse it with
+    :func:`json.loads` and read it as the matching ``TypedDict``:
+    ``match.referenceLoudness`` is :class:`MatchReferenceLoudnessResult`,
+    ``match.tonalBalance`` :class:`MatchTonalBalanceResult`,
+    ``match.tonalBalanceLogBands`` :class:`MatchTonalBalanceLogBandsResult`,
+    ``match.matchEqCurve`` :class:`MatchEqCurveResult` and
+    ``match.estimateReferenceDelaySamples``
+    :class:`MatchEstimateReferenceDelaySamplesResult`.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_analyze_pair"):
         raise _not_supported("libsonare was built without mastering support")
@@ -339,7 +349,13 @@ def mastering_stereo_analyze(
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
-    """Run a named stereo mastering analysis and return shared JSON."""
+    """Run a named stereo mastering analysis and return shared JSON.
+
+    The document's shape depends on ``analysis_name``; parse it with
+    :func:`json.loads` and read it as :class:`StereoMonoCompatCheckResult`
+    (``stereo.monoCompatCheck``) or :class:`StereoMonoCompatCheckLogBandsResult`
+    (``stereo.monoCompatCheckLogBands``).
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_analyze_stereo"):
         raise _not_supported("libsonare was built without mastering support")
@@ -395,7 +411,11 @@ def mastering_streaming_preview(
     sample_rate: int = 22050,
     platforms: Sequence[dict[str, float | str]] | None = None,
 ) -> str:
-    """Preview streaming-platform normalization and ceiling risk as shared JSON."""
+    """Preview streaming-platform normalization and ceiling risk as shared JSON.
+
+    Parse the result with :func:`json.loads`; it has the shape of
+    :class:`MasteringStreamingPreviewResult`.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_streaming_preview"):
         raise _not_supported("libsonare was built without mastering streaming preview support")
@@ -431,6 +451,9 @@ def mastering_assistant_suggest(
     :func:`mastering_platform_names`) and ``preset`` as the mastering preset the
     suggestion starts from (default ``"streaming"``; restoration presets are
     refused); every other key is numeric.
+
+    Parse the result with :func:`json.loads`; it has the shape of
+    :class:`MasteringAssistantResult`.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest"):
@@ -516,6 +539,9 @@ def mastering_audio_profile(
 ) -> str:
     """Analyze audio and return the mastering assistant profile as shared JSON.
 
+    Parse the result with :func:`json.loads`; it has the shape of
+    :class:`MasteringAudioProfile`.
+
     The ``nFft`` and ``hopLength`` params are the window length and hop in
     samples at 48000 Hz, rescaled to the input sample rate.
     """
@@ -592,6 +618,8 @@ def mastering_streaming_preview_stereo(
 ) -> str:
     """Preview streaming normalization for a stereo pair as shared JSON.
 
+    Parse the result as :class:`MasteringStreamingPreviewResult`.
+
     Measures the integrated loudness with BS.1770 channel summing and reports
     the larger of the two channel true peaks. Passing a ``0.5 * (left + right)``
     downmix to :func:`mastering_streaming_preview` instead reads roughly 6 dB
@@ -618,6 +646,8 @@ def mastering_assistant_suggest_stereo(
     params: dict[str, float | int | bool | str] | None = None,
 ) -> str:
     """Suggest a mastering chain for a stereo pair as shared JSON.
+
+    Parse the result as :class:`MasteringAssistantResult`.
 
     Profiles through :func:`mastering_audio_profile_stereo`, so the loudness
     stage of the suggestion is built on the channel-summed program. ``params``
@@ -696,6 +726,8 @@ def mastering_audio_profile_stereo(
     params: dict[str, float | int | bool] | None = None,
 ) -> str:
     """Return the mastering assistant profile of a stereo pair as shared JSON.
+
+    Parse the result as :class:`MasteringAudioProfile`.
 
     The ``loudness`` block is measured from the two channels; the
     spectral, dynamics and tempo fields describe shape and timing rather than

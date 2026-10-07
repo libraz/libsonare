@@ -806,6 +806,24 @@ class Chord:
         return f"{self.root}{suffixes.get(self.quality, '')}{slash}"
 
 
+ChordFunctionName = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
+
+
+@dataclass(frozen=True, slots=True)
+class FunctionalChord(Chord):
+    """A timed chord labelled relative to a key by :func:`chord_functions`.
+
+    Every :class:`Chord` field is carried over unchanged. ``roman`` is the Roman
+    numeral (``"I"``, ``"V7"``, ``"vi"``; ``"N.C."`` for an unknown chord) and
+    ``function`` its harmonic function: ``"tonic"``, ``"subdominant"``,
+    ``"dominant"``, ``"chromatic"`` for a root outside the key's scale, or
+    ``"none"`` for an unknown chord.
+    """
+
+    roman: str = ""
+    function: ChordFunctionName = "none"
+
+
 @dataclass(frozen=True, slots=True)
 class ChordAnalysisResult:
     """Chord detection primitives.

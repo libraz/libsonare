@@ -846,6 +846,12 @@ export interface WasmMasteringResult {
   nonFiniteSubstitutionCount: number;
 }
 
+export interface WasmStreamingLoudnessGainResult {
+  loudnessStaticGainDb: number;
+  truePeakDb: number;
+  integratedLufs: number;
+}
+
 export interface WasmLoudnessMatchResult {
   samples: Float32Array;
   sampleRate: number;
@@ -1922,6 +1928,12 @@ export interface SonareModule {
     chromaMethod: number,
     tuning: number | 'auto',
   ) => string[];
+  chordFunctions: (
+    chords: ArrayLike<{ root: number; quality: number }>,
+    keyRoot: number,
+    keyMode: number,
+  ) => { roman: string[]; functions: string[] };
+  acousticSelectorNames: () => { materialPreset: string[]; mode: string[] };
   analyze: (samples: Float32Array, sampleRate: number, options: object) => WasmAnalysisResult;
   estimateMeter: (
     beatTimes: ArrayLike<number>,
@@ -2024,6 +2036,12 @@ export interface SonareModule {
     sampleRate: number,
     options: WasmRoomMorphOptions,
   ) => WasmRoomMorphResult;
+  roomGeometryFromEstimate?: (estimate: {
+    length: number;
+    width: number;
+    height: number;
+    absorptionBands?: Float32Array | number[];
+  }) => WasmRoomGeometryOptions;
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,
@@ -2837,6 +2855,17 @@ export interface SonareModule {
     sampleRate: number,
     config: Record<string, unknown>,
   ) => WasmMasteringStereoChainResult;
+  masteringStreamingLoudnessGain: (
+    samples: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+  ) => WasmStreamingLoudnessGainResult;
+  masteringStreamingLoudnessGainStereo: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    config: Record<string, unknown>,
+  ) => WasmStreamingLoudnessGainResult;
   masteringChainWithProgress: (
     samples: Float32Array,
     sampleRate: number,

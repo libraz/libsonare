@@ -12,6 +12,7 @@ from typing import Any
 from ._errors import _invalid_state, _not_supported
 from ._ffi import (
     SonareEqSnapshot,
+    SonareStreamingLoudnessGain,
 )
 from ._mastering_offline import _chain_params
 from ._runtime import (
@@ -37,7 +38,101 @@ from ._runtime import (
 )
 from .types import (
     EqSpectrumSnapshot,
+    StreamingLoudnessGain,
 )
+
+
+def _streaming_loudness_gain_result(out: SonareStreamingLoudnessGain) -> StreamingLoudnessGain:
+    """Copy the C result into the public dataclass."""
+    return StreamingLoudnessGain(
+        loudness_static_gain_db=float(out.loudness_static_gain_db),
+        true_peak_db=float(out.true_peak_db),
+        integrated_lufs=float(out.integrated_lufs),
+    )
+
+
+@_guard_buffer("samples")
+def streaming_loudness_gain(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict[str, Any] | None = None,
+) -> StreamingLoudnessGain:
+    """Measure the loudness numbers a :class:`StreamingMasteringChain` needs.
+
+    Runs the offline chain described by ``config`` up to its loudness stage and
+    measures there, so ``loudness_static_gain_db`` equals the gain
+    :func:`mastering_chain` applies (ceiling clamp included) and ``true_peak_db``
+    is the peak that clamp used. The gain is computed from the ``loudness``
+    section whether or not the stage is enabled; a silent or below-gate stage
+    input yields a gain of 0.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        config: Chain config as accepted by :func:`mastering_chain`.
+
+    Returns:
+        :class:`StreamingLoudnessGain`.
+
+    Example::
+
+        gain = streaming_loudness_gain(samples, 48000, config)
+        chain = StreamingMasteringChain(
+            config,
+            loudness_static_gain_db=gain.loudness_static_gain_db,
+            loudness_static_gain_peak_db=gain.true_peak_db,
+        )
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_streaming_loudness_gain"):
+        raise _not_supported("libsonare was built without streaming loudness gain support")
+    c_array, length = _to_c_float_array(samples)
+    param_array, param_count = _chain_params(config)
+    out = SonareStreamingLoudnessGain()
+    rc = lib.sonare_streaming_loudness_gain(
+        c_array,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        param_array,
+        _to_c_size_t(param_count, "param_count"),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return _streaming_loudness_gain_result(out)
+
+
+@_guard_buffer("left", "right")
+def streaming_loudness_gain_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    config: dict[str, Any] | None = None,
+) -> StreamingLoudnessGain:
+    """Stereo counterpart of :func:`streaming_loudness_gain`.
+
+    The integrated loudness uses BS.1770 channel summing and ``true_peak_db`` is
+    the larger of the two channel peaks.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_streaming_loudness_gain_stereo"):
+        raise _not_supported("libsonare was built without streaming loudness gain support")
+    left_array, left_length = _to_c_float_array(left)
+    right_array, right_length = _to_c_float_array(right)
+    if left_length != right_length:
+        raise SonareValueError("left and right channel lengths must match")
+    param_array, param_count = _chain_params(config)
+    out = SonareStreamingLoudnessGain()
+    rc = lib.sonare_streaming_loudness_gain_stereo(
+        left_array,
+        right_array,
+        _to_c_size_t(left_length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        param_array,
+        _to_c_size_t(param_count, "param_count"),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    return _streaming_loudness_gain_result(out)
 
 
 class StreamingMasteringChain:
@@ -93,13 +188,14 @@ class StreamingMasteringChain:
         Args:
             config: Flat chain params (see :func:`mastering_chain`).
             loudness_static_gain_db: Precomputed loudness normalization gain in
-                dB (e.g. ``target_lufs - measured_integrated_lufs``, measured
-                offline). The streaming chain cannot measure whole-signal
-                integrated LUFS, so a ``loudness``-enabled config raises unless a
-                static gain is supplied here; when supplied it is applied per
-                block before the loudness stage's true-peak limiter.
-            loudness_static_gain_peak_db: Offline-measured true-peak (dBFS) of the
-                source the static gain was computed for. When given, the static
+                dB, measured at the loudness stage's input (see
+                :func:`streaming_loudness_gain`). The streaming chain cannot
+                measure whole-signal integrated LUFS, so a ``loudness``-enabled
+                config raises unless a static gain is supplied here; when
+                supplied it is applied per block before the loudness stage's
+                true-peak limiter.
+            loudness_static_gain_peak_db: True peak (dBFS) of the loudness
+                stage's input the static gain was computed for. When given, the static
                 gain is clamped to ``(ceiling_db - peak) +
                 max(max_limiter_gain_reduction_db, 0)`` so the streaming preview
                 does not overdrive the loudness limiter harder than the offline

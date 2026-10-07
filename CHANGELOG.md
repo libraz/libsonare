@@ -46,6 +46,9 @@
 - Convert between a reference pitch and the analysis unit with `tuningToReferenceHz(tuning, a4 = 440)` and `referenceHzToTuning(hz, a4 = 440)` (Python: `tuning_to_reference_hz`, `reference_hz_to_tuning`; C: `sonare_tuning_to_reference_hz`, `sonare_reference_hz_to_tuning`). The live `tuningRefHz` of the stream analyzer and `referenceHz` of transcription stay in Hz.
 
 - Mel and MFCC results carry the parameters of their forward transform (`nFft`, `fmin`, `fmax` as applied, `htk`, `isDb`; MFCC also `sampleRate`, `hopLength`, `nMels` and `lifter`), so a result is enough to invert it: the Node and WASM inverse requests take `{ result, ...overrides }` (`melToStft`, `melToAudio`, `mfccToMel`, `mfccToAudio`), refusing with a `RangeError` an explicit field that disagrees with the result and a result in dB with a message naming `dbToPower`; the existing `mel` / `melPower` request forms are unchanged. Python adds `mel_result_to_stft`, `mel_result_to_audio`, `mfcc_result_to_mel` and `mfcc_result_to_audio`; the positional librosa-mirror inverses are untouched. C adds the length-checked, lifter-aware `sonare_mfcc_to_mel_checked_ex` and `sonare_mfcc_to_audio_checked_ex2`.
+- `materialPreset` and `mode` of `synthesizeRir`, `roomMorph` and `estimateRoom` also accept names (`'concrete'`, `'impulse_response'`, ...) on Node, WASM and Python; the integer forms are unchanged.
+- `roomGeometryFromEstimate` (`room_geometry_from_estimate` in Python, `sonare_room_geometry_from_estimate` in C) turns an `estimateRoom` result into `synthesizeRir` input.
+- `chordFunctions` (`chord_functions` in Python, `sonare_chord_functions` in C) adds `roman` and `function` to chords already in hand without re-detecting.
 
 #### Project
 
@@ -60,6 +63,8 @@
 - Resolve a Nyquist-bounded ceiling for a given processing rate: `masteringInsertParamInfo(name, sampleRate)` on Node and WASM, `mastering_insert_param_info(name, sample_rate=...)` in Python (C: `sonare_mastering_insert_param_info_at_rate`) report the bound the insert accepts at that rate.
 - Every `repair.*` entry of the capability catalog publishes its parameters through the same measured descriptor as an insert (`unit`, `scale`, `uiMin` / `uiMax`, `dependsOn`, enum `choices`), measured through the stage's own configuration validation; the entries carry no automation `id` and are never `rtSafe`. `denoiseClassical` and `dereverbClassical` declare `hopLength` against `nFft`; `nFft` and `hopLength` publish no `min` / `max`, since only power-of-two sizes are accepted.
 - Every catalog entry carries `causal` (C JSON, Node, WASM and Python types, the schema): false for `repair.declick`, `repair.declip` and `repair.trimSilence`, true for the other repair stages and every insert.
+- Measure the loudness numbers a streaming mastering chain is built with, at the loudness stage's input where the offline chain measures them: `streamingLoudnessGain` / `streamingLoudnessGainStereo` on Node and WASM, `streaming_loudness_gain` / `streaming_loudness_gain_stereo` in Python, `sonare_streaming_loudness_gain[_stereo]` in C. The returned gain equals the one the offline chain applies, ceiling clamp included, and is 0 dB for silence.
+- Type the explainable-mastering results: Node and WASM declare the parsed shape of the assistant suggestion, streaming preview and every pair and stereo analysis (the analyze overloads carry the result of the analysis name given), and Python gains TypedDicts for them and for the audio profile. The functions still return JSON strings.
 
 #### Packaging
 
@@ -144,6 +149,7 @@
 - Generated cabinet impulse responses keep in-band driver directivity at low sample rates.
 - Multiband setters reconfigure the crossover the processor owns, before or after prepare. A sparse dynamic-EQ sub-band keeps the slot its parameter keys name.
 - Gated silence trimming no longer rescans the full RMS window for every sample.
+- The streaming chain's loudness errors and the `loudnessStaticGainDb` / `loudnessStaticGainPeakDb` docs said to measure the source; the measurement is taken at the loudness stage's input.
 
 ## v1.8.2 (2026-10-06)
 

@@ -16,9 +16,14 @@ import type {
   AnalyzeDynamicsOptions,
   AnalyzeRhythmOptions,
   AnalyzeTimbreOptions,
+  Chord,
   ChordAnalysisResult,
   ChordDetectionOptions,
+  ChordFunction,
+  ChordFunctionsInput,
+  ChordFunctionsKey,
   DetectKeyOptions,
+  FunctionalChord,
   KeyCandidate,
   KeyDetection,
   KeyDetectionOptions,
@@ -27,6 +32,8 @@ import type {
   RirSynthOptions,
   RoomEstimateOptions,
   RoomEstimateResult,
+  RoomGeometryFromEstimateOptions,
+  RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
 } from './public_types.js';
@@ -42,6 +49,46 @@ import {
 
 function requireModule() {
   return getSonareModule();
+}
+
+type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode'> & {
+  materialPreset?: number;
+  mode?: number;
+};
+
+/**
+ * Replaces a `materialPreset` / `mode` given by name with its integer value,
+ * leaving integers and absent fields untouched. The names are the core's, read
+ * from the module so no second table exists here.
+ */
+function resolveAcousticSelectors<T extends { materialPreset?: unknown; mode?: unknown }>(
+  options: T,
+): NamedSelectors<T> {
+  if (typeof options.materialPreset !== 'string' && typeof options.mode !== 'string') {
+    return options as NamedSelectors<T>;
+  }
+  const tables = requireModule().acousticSelectorNames();
+  const resolve = (key: 'materialPreset' | 'mode') => {
+    const value = options[key];
+    if (typeof value !== 'string') {
+      return value;
+    }
+    const names = tables[key];
+    const index = names.indexOf(value);
+    if (index < 0) {
+      const valid = names.map((name) => `'${name}'`).join(', ');
+      throw new RangeError(`${key} must be one of ${valid} or an integer, got '${value}'`);
+    }
+    return index;
+  };
+  const resolved = { ...options };
+  if (options.materialPreset !== undefined) {
+    resolved.materialPreset = resolve('materialPreset');
+  }
+  if (options.mode !== undefined) {
+    resolved.mode = resolve('mode');
+  }
+  return resolved as NamedSelectors<T>;
 }
 
 type GuardedOptions = ValidateOptions;
@@ -90,6 +137,13 @@ export interface ChordFunctionalAnalysisRequest extends DetectChordsRequest {
   keyMode?: Mode;
 }
 
+/** Canonical request form for labelling known chords with their function in a key. */
+export interface ChordFunctionsRequest<T extends ChordFunctionsInput = Chord> {
+  /** `detectChords`' timed result or its `chords` array, or the same shape built by hand. */
+  chords: readonly T[] | { chords: readonly T[] };
+  key: ChordFunctionsKey;
+}
+
 /** Canonical request form for impulse-response analysis. */
 export interface AnalyzeImpulseResponseRequest extends SamplesRequest {
   nOctaveBands?: number;
@@ -101,6 +155,16 @@ export interface DetectAcousticRequest extends AcousticOptions, SamplesRequest {
 
 /** Canonical request form for equivalent-room estimation. */
 export interface EstimateRoomRequest extends RoomEstimateOptions, SamplesRequest {}
+
+/** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
+export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'length' | 'width' | 'height'> & {
+  absorptionBands?: Float32Array | number[];
+};
+
+/** Canonical request form for {@link roomGeometryFromEstimate}. */
+export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimateOptions {
+  estimate: RoomGeometryEstimate;
+}
 
 /** Canonical request form for room-reverb morphing. */
 export interface RoomMorphRequest extends RoomMorphOptions, GuardedOptions {
@@ -346,6 +410,34 @@ export function detectChords(
     request.tuning ?? 0,
   );
   return convertChordAnalysisResult(result);
+}
+
+/**
+ * Label chords that are already known with their Roman numeral and harmonic
+ * function in a key. Nothing is re-detected.
+ *
+ * `chords` is {@link detectChords}' result or its `chords` array, or the same
+ * shape built by hand (only `root` and `quality` are read). `key` is
+ * `{ root, mode }`, e.g. {@link detectKey}'s result. Returns the same timed
+ * entries with `roman` (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord)
+ * and `function` (`'tonic'`, `'subdominant'`, `'dominant'`, `'chromatic'` for a
+ * root outside the key's scale, `'none'` for an unknown chord) added. Every mode
+ * other than minor reads the major scale.
+ */
+export function chordFunctions(request: ChordFunctionsRequest): FunctionalChord[];
+export function chordFunctions<T extends ChordFunctionsInput>(
+  request: ChordFunctionsRequest<T>,
+): FunctionalChord<T>[];
+export function chordFunctions(
+  request: ChordFunctionsRequest<ChordFunctionsInput>,
+): FunctionalChord<ChordFunctionsInput>[] {
+  const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
+  const labels = requireModule().chordFunctions(entries, request.key.root, request.key.mode);
+  return entries.map((chord, i) => ({
+    ...chord,
+    roman: labels.roman[i],
+    function: labels.functions[i] as ChordFunction,
+  }));
 }
 
 /**
@@ -669,7 +761,7 @@ export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
       'libsonare was built without acoustic-simulation support',
     );
   }
-  return module.synthesizeRir(options);
+  return module.synthesizeRir(resolveAcousticSelectors(options));
 }
 
 /**
@@ -697,7 +789,73 @@ export function estimateRoom(
   }
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   validateAnalysisInput('estimateRoom', request.samples, request.sampleRate ?? 48000, request);
-  return module.estimateRoom(request.samples, request.sampleRate ?? 48000, request);
+  return module.estimateRoom(
+    request.samples,
+    request.sampleRate ?? 48000,
+    resolveAcousticSelectors(request),
+  );
+}
+
+/**
+ * Turn a room estimate into the geometry {@link synthesizeRir} takes.
+ *
+ * The pair to {@link estimateRoom}: the estimate's `length`, `width` and `height`
+ * become `lengthM`, `widthM` and `heightM`, and its `absorptionBands` become
+ * `bandAbsorption`. The estimate carries no placement, so `source` and `listener`
+ * are set only when given; an omitted one is left to `synthesizeRir`'s own
+ * default, which may fall outside a small estimated room. Absorption bands that
+ * did not converge are left out, so the scalar `absorption` applies.
+ *
+ * @throws SonareError when the estimate has no measurable dimensions (NaN).
+ */
+export function roomGeometryFromEstimate(
+  request: RoomGeometryFromEstimateRequest,
+): RoomGeometryOptions;
+export function roomGeometryFromEstimate(
+  estimate: RoomGeometryEstimate,
+  options?: RoomGeometryFromEstimateOptions,
+): RoomGeometryOptions;
+export function roomGeometryFromEstimate(
+  estimate: RoomGeometryEstimate | RoomGeometryFromEstimateRequest,
+  options: RoomGeometryFromEstimateOptions = {},
+): RoomGeometryOptions {
+  const module = requireModule();
+  if (typeof module.roomGeometryFromEstimate !== 'function') {
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without acoustic-simulation support',
+    );
+  }
+  if (typeof estimate !== 'object' || estimate === null) {
+    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
+  }
+  const request: RoomGeometryFromEstimateRequest =
+    'estimate' in estimate ? estimate : { estimate, ...options };
+  if (typeof request.estimate !== 'object' || request.estimate === null) {
+    throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
+  }
+  const { absorptionBands, length, width, height } = request.estimate;
+  const geometry: RoomGeometryOptions = module.roomGeometryFromEstimate({
+    length,
+    width,
+    height,
+    ...(absorptionBands === undefined
+      ? {}
+      : { absorptionBands: Float32Array.from(absorptionBands) }),
+  });
+  const { source, listener } = request;
+  if (source !== undefined) {
+    geometry.sourceX = source.x;
+    geometry.sourceY = source.y;
+    geometry.sourceZ = source.z;
+  }
+  if (listener !== undefined) {
+    geometry.listenerX = listener.x;
+    geometry.listenerY = listener.y;
+    geometry.listenerZ = listener.z;
+  }
+  return geometry;
 }
 
 /**
@@ -732,7 +890,7 @@ export function roomMorph(
       ? { samples, sampleRate: sampleRate as number, ...options }
       : samples;
   validateAnalysisInput('roomMorph', request.samples, request.sampleRate, request);
-  return module.roomMorph(request.samples, request.sampleRate, request);
+  return module.roomMorph(request.samples, request.sampleRate, resolveAcousticSelectors(request));
 }
 
 /**

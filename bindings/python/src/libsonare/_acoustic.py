@@ -30,7 +30,15 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
 )
-from .types import RirDiagnostic, RirResult, RoomEstimate, RoomMorphResult
+from .types import (
+    AcousticModeName,
+    MaterialPresetName,
+    RirDiagnostic,
+    RirResult,
+    RoomEstimate,
+    RoomGeometry,
+    RoomMorphResult,
+)
 
 # SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h). DEFAULT (0) resolves to
 # the library default (Eyring); only SABINE selects Sabine explicitly.
@@ -68,6 +76,31 @@ def _read_diagnostics() -> list[RirDiagnostic]:
             )
         )
     return out
+
+
+def _named_selector(value: int | str, argument: str, prefix: str) -> int:
+    """Resolves a selector given by name, leaving an integer untouched.
+
+    ``prefix`` names the C ABI's ``sonare_<prefix>_name`` getter, whose values
+    are contiguous from 0, so a name's position is its selector value.
+    """
+    if not isinstance(value, str):
+        return value
+    name_of = getattr(_get_lib(), f"sonare_{prefix}_name")
+    valid: list[str] = []
+    while (name := name_of(len(valid))) is not None:
+        valid.append(name.decode())
+    if value not in valid:
+        raise SonareValueError(f"{argument} must be one of {valid} or an integer, got {value!r}")
+    return valid.index(value)
+
+
+def _material_preset(value: int | MaterialPresetName) -> int:
+    return _named_selector(value, "material_preset", "material_preset")
+
+
+def _acoustic_mode(value: int | AcousticModeName) -> int:
+    return _named_selector(value, "mode", "acoustic_mode")
 
 
 def _late_model(prefer_eyring: bool) -> int:
@@ -127,7 +160,7 @@ def synthesize_rir(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int = 0,
+    material_preset: int | MaterialPresetName = 0,
     sample_rate: int = 48000,
     ism_order: int = 3,
     prefer_eyring: bool = True,
@@ -158,9 +191,11 @@ def synthesize_rir(
             bands read as 0. Independent of ``absorption_bands`` and
             ``material_preset`` -- it applies to whichever material the
             absorption precedence selected.
-        material_preset: Named wall-material preset (0 = none; 1 concrete,
-            2 wood, 3 curtain, 4 carpet, 5 glass). A non-zero preset wins over
-            ``absorption_bands`` and ``absorption``.
+        material_preset: Named wall-material preset, by name (``"none"``,
+            ``"concrete"``, ``"wood"``, ``"curtain"``, ``"carpet"``, ``"glass"``)
+            or by integer (0 none, 1 concrete, 2 wood, 3 curtain, 4 carpet,
+            5 glass). Any preset but ``"none"`` wins over ``absorption_bands``
+            and ``absorption``. An unknown name raises ``SonareValueError``.
         sample_rate: Output sample rate in Hz.
         ism_order: Image-source reflection order.
         prefer_eyring: Use the Eyring statistical late-tail model (default);
@@ -222,7 +257,7 @@ def synthesize_rir(
         absorption_band_count=bands_count,
         scattering_bands=scatter_ptr,
         scattering_band_count=scatter_count,
-        material_preset=material_preset,
+        material_preset=_material_preset(material_preset),
     )
     out = SonareRirSynthResult()
     rc = lib.sonare_synthesize_rir(
@@ -262,7 +297,7 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
-    mode: int = 0,
+    mode: int | AcousticModeName = 0,
     min_decay_db: float = 0.0,
     noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate:
@@ -279,8 +314,9 @@ def estimate_room(
             estimate, computed from the clamped prior. The reported volume
             scales with the cube of the prior, so the substitution is worth
             three orders of magnitude at the low end.
-        mode: Analyzer routing -- 0 = auto (impulse-like inputs route to IR
-            analysis), 1 = blind, 2 = impulse-response.
+        mode: Analyzer routing, by name or integer -- ``"auto"`` / 0 (impulse-like
+            inputs route to IR analysis), ``"blind"`` / 1, ``"impulse_response"`` / 2.
+            An unknown name raises ``SonareValueError``.
         min_decay_db: Analyzer decay-fit span in dB (0 = library default).
         noise_floor_margin_db: Analyzer noise-floor margin in dB (0 = library
             default).
@@ -297,7 +333,7 @@ def estimate_room(
         noise_floor_margin_db=noise_floor_margin_db,
         prefer_eyring=1 if prefer_eyring else 0,
         n_octave_bands=n_octave_bands,
-        mode=mode,
+        mode=_acoustic_mode(mode),
     )
     out = SonareRoomEstimate()
     rc = lib.sonare_estimate_room(
@@ -324,6 +360,70 @@ def estimate_room(
         lib.sonare_free_room_estimate(ctypes.byref(out))
 
 
+def _placement(value: Sequence[float], argument: str) -> tuple[float, float, float]:
+    if len(value) != 3:
+        raise SonareValueError(f"{argument} must be an (x, y, z) triple")
+    return (float(value[0]), float(value[1]), float(value[2]))
+
+
+def room_geometry_from_estimate(
+    estimate: RoomEstimate,
+    *,
+    source: Sequence[float] | None = None,
+    listener: Sequence[float] | None = None,
+) -> RoomGeometry:
+    """Turn a room estimate into the geometry :func:`synthesize_rir` takes.
+
+    The pair to :func:`estimate_room`: the estimate's ``length``, ``width`` and
+    ``height`` become ``length_m``, ``width_m`` and ``height_m``, and its
+    ``absorption_bands`` carry over as the wall absorption::
+
+        geometry = libsonare.room_geometry_from_estimate(estimate, source=(1, 1, 1.2),
+                                                         listener=(3, 2, 1.7))
+        rir = libsonare.synthesize_rir(**geometry)
+
+    ``source`` and ``listener`` are (x, y, z) positions in metres; an estimate
+    carries no placement, so an omitted one is left out of the result and
+    :func:`synthesize_rir` applies its own default, which may fall outside a
+    small estimated room. Absorption bands that did not converge are left out
+    too, so the scalar ``absorption`` applies.
+
+    Raises:
+        SonareValueError: The estimate has no measurable dimensions (NaN).
+    """
+    lib = _get_lib()
+    bands_ptr, bands_count, _bands_owner = _band_array_args(
+        estimate.absorption_bands, arg_name="absorption_bands"
+    )
+    c_estimate = SonareRoomEstimate(
+        volume=estimate.volume,
+        length_m=estimate.length,
+        width_m=estimate.width,
+        height_m=estimate.height,
+        drr_db=estimate.drr_db,
+        confidence=estimate.confidence,
+        absorption_bands=bands_ptr,
+        rt60_bands=None,
+        band_count=bands_count,
+    )
+    config = SonareRirSynthConfig()
+    _check(lib.sonare_room_geometry_from_estimate(ctypes.byref(c_estimate), ctypes.byref(config)))
+    geometry: RoomGeometry = {
+        "length_m": float(config.length_m),
+        "width_m": float(config.width_m),
+        "height_m": float(config.height_m),
+    }
+    if config.absorption_band_count > 0:
+        geometry["absorption_bands"] = _optional_float_array_result(
+            config.absorption_bands, config.absorption_band_count
+        )
+    if source is not None:
+        geometry["source"] = _placement(source, "source")
+    if listener is not None:
+        geometry["listener"] = _placement(listener, "listener")
+    return geometry
+
+
 @_guard_buffer("samples")
 def room_morph(
     samples: Sequence[float] | list[float],
@@ -337,7 +437,7 @@ def room_morph(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int = 0,
+    material_preset: int | MaterialPresetName = 0,
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
     ism_order: int = 3,
@@ -416,7 +516,7 @@ def room_morph(
         absorption_band_count=bands_count,
         scattering_bands=scatter_ptr,
         scattering_band_count=scatter_count,
-        material_preset=material_preset,
+        material_preset=_material_preset(material_preset),
     )
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()

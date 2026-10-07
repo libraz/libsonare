@@ -353,6 +353,31 @@ export interface AnalysisChord extends Chord {
   romanNumeral: string;
 }
 
+/**
+ * Harmonic function of a chord in a key: `'chromatic'` for a root outside the
+ * key's scale and `'none'` for an unknown chord (`'N.C.'`).
+ */
+export type ChordFunction = 'tonic' | 'subdominant' | 'dominant' | 'chromatic' | 'none';
+
+/** The fields `chordFunctions` reads from a chord; everything else is carried through. */
+export interface ChordFunctionsInput {
+  root: PitchClass;
+  quality: ChordQuality;
+}
+
+/** A key given as `detectKey` reports it. */
+export interface ChordFunctionsKey {
+  root: PitchClass;
+  mode: Mode;
+}
+
+/** A timed chord with its Roman numeral and harmonic function in a key. */
+export type FunctionalChord<T extends ChordFunctionsInput = Chord> = T & {
+  /** Roman numeral relative to the key (`'I'`, `'V7'`, `'vi'`; `'N.C.'` for an unknown chord). */
+  roman: string;
+  function: ChordFunction;
+};
+
 export interface ChordAnalysisResult {
   chords: Chord[];
   /** Tuning the chroma was built with, in fractions of a semitone: the given value, or the measured one under `tuning: 'auto'`. */

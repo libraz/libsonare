@@ -890,4 +890,46 @@ std::optional<StereoChainResult> MasteringChain::process_stereo_cancellable(cons
                                                                             int sample_rate) {
   return process_stereo_impl(left, right, length, sample_rate, true);
 }
+
+namespace {
+
+// The offline chain with its loudness stage off: its output is the loudness
+// stage's input.
+MasteringChainConfig without_loudness_stage(MasteringChainConfig config) {
+  config.loudness.enabled = false;
+  return config;
+}
+
+StreamingLoudnessGain to_streaming_loudness_gain(const detail::LoudnessStageGain& stage_gain) {
+  StreamingLoudnessGain gain;
+  gain.loudness_static_gain_db = stage_gain.applied_db;
+  gain.true_peak_db = stage_gain.true_peak_db;
+  gain.integrated_lufs = stage_gain.measured_lufs;
+  return gain;
+}
+
+}  // namespace
+
+StreamingLoudnessGain streaming_loudness_gain_mono(const MasteringChainConfig& config,
+                                                   const float* samples, std::size_t length,
+                                                   int sample_rate) {
+  validate_mastering_chain_config(config);
+  MasteringChain chain(without_loudness_stage(config));
+  const MonoChainResult stage_input = chain.process_mono(samples, length, sample_rate);
+  return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
+      stage_input.samples, sample_rate, config.loudness.target_lufs, config.loudness.ceiling_db,
+      config.loudness.true_peak_oversample, config.loudness.max_limiter_gain_reduction_db));
+}
+
+StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig& config,
+                                                     const float* left, const float* right,
+                                                     std::size_t length, int sample_rate) {
+  validate_mastering_chain_config(config);
+  MasteringChain chain(without_loudness_stage(config));
+  const StereoChainResult stage_input = chain.process_stereo(left, right, length, sample_rate);
+  return to_streaming_loudness_gain(detail::loudness_gain_db_with_ceiling(
+      stage_input.left, stage_input.right, sample_rate, config.loudness.target_lufs,
+      config.loudness.ceiling_db, config.loudness.true_peak_oversample,
+      config.loudness.max_limiter_gain_reduction_db));
+}
 }  // namespace sonare::mastering::api

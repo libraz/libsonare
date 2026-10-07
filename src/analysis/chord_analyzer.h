@@ -182,6 +182,13 @@ class ChordAnalyzer {
   /// @return "N.C." for an Unknown chord.
   static std::string chord_to_roman_numeral(const Chord& chord, PitchClass key_root, Mode mode);
 
+  /// @brief Harmonic function of one chord relative to a key.
+  /// @details Classifies the root's scale degree: "tonic" (I, iii, vi; i, bIII), "subdominant"
+  ///          (ii, IV; ii, iv, bVI) or "dominant" (V, vii; v, bVII). A root outside the key's
+  ///          scale is "chromatic" and an Unknown chord is "none". Every mode other than Minor
+  ///          reads the major scale, as @ref chord_to_roman_numeral does.
+  static std::string chord_function(const Chord& chord, PitchClass key_root, Mode mode);
+
   /// @brief Returns chord at a specific time.
   /// @param time Time in seconds
   /// @return Chord at the given time (empty chord if none)

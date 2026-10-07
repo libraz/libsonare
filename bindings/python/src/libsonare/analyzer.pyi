@@ -7,6 +7,7 @@ from typing import Any, Literal, NamedTuple, TypeAlias
 import numpy as np
 
 from .types import (
+    AcousticModeName,
     AcousticResult,
     AnalysisResult,
     AutomationCurve,
@@ -14,6 +15,7 @@ from .types import (
     BpmAnalysisResult,
     Capabilities,
     CapabilityCatalog,
+    Chord,
     ChordAnalysisResult,
     ChromaResult,
     ClickDetection,
@@ -33,10 +35,12 @@ from .types import (
     DynamicRangeReport,
     DynamicsResult,
     EqSpectrumSnapshot,
+    FunctionalChord,
     GoniometerPoint,
     HpssResult,
     HumDetection,
     InverseResult,
+    Key,
     KeyCandidate,
     KeyDetection,
     KeyProfile,
@@ -50,6 +54,7 @@ from .types import (
     MasteringProcessorCatalogEntry,
     MasteringResult,
     MasteringStereoResult,
+    MaterialPresetName,
     MelodyResult,
     MelSpectrogramResult,
     MeterEstimate,
@@ -71,12 +76,14 @@ from .types import (
     RhythmResult,
     RirResult,
     RoomEstimate,
+    RoomGeometry,
     RoomMorphResult,
     SectionResult,
     SegmentMatrix,
     SendTiming,
     SpectrumReport,
     StftResult,
+    StreamingLoudnessGain,
     TimbreResult,
     TrimRange,
     TrimSilenceStereoResult,
@@ -404,7 +411,7 @@ def synthesize_rir(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int = 0,
+    material_preset: int | MaterialPresetName = 0,
     sample_rate: int = 48000,
     ism_order: int = 3,
     prefer_eyring: bool = True,
@@ -425,10 +432,16 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
-    mode: int = 0,
+    mode: int | AcousticModeName = 0,
     min_decay_db: float = 0.0,
     noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate: ...
+def room_geometry_from_estimate(
+    estimate: RoomEstimate,
+    *,
+    source: Sequence[float] | None = None,
+    listener: Sequence[float] | None = None,
+) -> RoomGeometry: ...
 def room_morph(
     samples: FloatSamples,
     sample_rate: int,
@@ -441,7 +454,7 @@ def room_morph(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int = 0,
+    material_preset: int | MaterialPresetName = 0,
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
     ism_order: int = 3,
@@ -523,6 +536,10 @@ def chord_functional_analysis(
     chroma_method: str = "stft",
     tuning: float | str = 0.0,
 ) -> list[str]: ...
+def chord_functions(
+    chords: ChordAnalysisResult | Sequence[Chord],
+    key: Key | Mapping[str, object] | tuple[PitchClass, Mode],
+) -> list[FunctionalChord]: ...
 def analyze_sections(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -1353,6 +1370,17 @@ def master_audio_stereo(
     *,
     cancel: CancelCallback | None = None,
 ) -> MasteringChainStereoResult: ...
+def streaming_loudness_gain(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    config: dict[str, Any] | None = None,
+) -> StreamingLoudnessGain: ...
+def streaming_loudness_gain_stereo(
+    left: FloatSamples,
+    right: FloatSamples,
+    sample_rate: int = 22050,
+    config: dict[str, Any] | None = None,
+) -> StreamingLoudnessGain: ...
 
 class StreamingMasteringChain:
     def __init__(

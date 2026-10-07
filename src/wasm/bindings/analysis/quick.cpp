@@ -8,6 +8,8 @@
 #include <string>
 #include <type_traits>
 
+#include "acoustic/estimate_geometry.h"
+#include "acoustic/selector_names.h"
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
 #include "analysis/music_analyzer.h"
@@ -1221,7 +1223,79 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;
 }
+
+// Shoebox geometry for synthesizeRir taken from an estimate result, under the synthesizer's own
+// field names. Absorption bands that did not converge are left out.
+val js_room_geometry_from_estimate(val estimate) {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+  const float length = floatOption(estimate, "length", nan);
+  const float width = floatOption(estimate, "width", nan);
+  const float height = floatOption(estimate, "height", nan);
+  if (!sonare::acoustic::estimated_dimensions_measured(length, width, height)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "room estimate has no measurable dimensions");
+  }
+  val out = val::object();
+  out.set("lengthM", length);
+  out.set("widthM", width);
+  out.set("heightM", height);
+  if (hasProperty(estimate, "absorptionBands")) {
+    const std::vector<float> bands = float32ArrayToVector(estimate["absorptionBands"]);
+    if (sonare::acoustic::estimated_absorption_measured(bands.data(), bands.size())) {
+      out.set("bandAbsorption", vectorToFloat32Array(bands));
+    }
+  }
+  return out;
+}
 #endif  // SONARE_WITH_ACOUSTIC_SIM
+
+// The selector names the room-acoustics options accept, in the order of their integer values.
+val js_acoustic_selector_names() {
+  const auto toArray = [](const auto& names) {
+    val array = val::array();
+    for (const char* name : names) array.call<void>("push", std::string(name));
+    return array;
+  };
+  val out = val::object();
+  out.set("materialPreset", toArray(sonare::acoustic::kMaterialPresetSelectorNames));
+  out.set("mode", toArray(sonare::acoustic::kAcousticModeSelectorNames));
+  return out;
+}
+
+// Roman numeral and harmonic function of each given chord, relative to a key.
+val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_val) {
+  const int key_root = checkedIntFromVal(key_root_val, "key.root");
+  const int key_mode = checkedIntFromVal(key_mode_val, "key.mode");
+  validateKey(key_root, key_mode);
+  const std::size_t count = wasmArrayLikeLength(chords, "chords");
+  val roman = val::array();
+  val functions = val::array();
+  for (std::size_t i = 0; i < count; ++i) {
+    const val entry = chords[static_cast<unsigned>(i)];
+    const std::string at = "chords[" + std::to_string(i) + "]";
+    const int root = checkedIntFromVal(entry["root"], (at + ".root").c_str());
+    const int quality = checkedIntFromVal(entry["quality"], (at + ".quality").c_str());
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        quality < 0 || quality >= sonare::kChordQualityCount) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    at + " has an invalid root or quality");
+    }
+    Chord chord{};
+    chord.root = static_cast<PitchClass>(root);
+    chord.quality = static_cast<ChordQuality>(quality);
+    chord.bass = chord.root;
+    roman.call<void>("push",
+                     ChordAnalyzer::chord_to_roman_numeral(chord, static_cast<PitchClass>(key_root),
+                                                           static_cast<Mode>(key_mode)));
+    functions.call<void>("push",
+                         ChordAnalyzer::chord_function(chord, static_cast<PitchClass>(key_root),
+                                                       static_cast<Mode>(key_mode)));
+  }
+  val out = val::object();
+  out.set("roman", roman);
+  out.set("functions", functions);
+  return out;
+}
 
 // Analyze with progress callback
 val js_analyze_with_progress(val samples, const val& sample_rate_val, val options,
@@ -1257,6 +1331,8 @@ void registerQuickAnalysisBindings() {
   function("detectDownbeats", &js_detect_downbeats);
   function("detectChords", &js_detect_chords);
   function("chordFunctionalAnalysis", &js_chord_functional_analysis);
+  function("chordFunctions", &js_chord_functions);
+  function("acousticSelectorNames", &js_acoustic_selector_names);
   function("analyze", &js_analyze);
   function("estimateMeter", &js_estimate_meter);
   function("_analysisResultSchemaPaths", &js_analysis_result_schema_paths);
@@ -1268,6 +1344,7 @@ void registerQuickAnalysisBindings() {
   function("synthesizeRir", &js_synthesize_rir);
   function("estimateRoom", &js_estimate_room);
   function("roomMorph", &js_room_morph);
+  function("roomGeometryFromEstimate", &js_room_geometry_from_estimate);
 #endif
   function("analyzeWithProgress", &js_analyze_with_progress);
 

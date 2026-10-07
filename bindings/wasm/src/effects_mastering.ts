@@ -40,6 +40,8 @@ export {
   masteringPresetParams,
   normalize,
   normalizeStereo,
+  streamingLoudnessGain,
+  streamingLoudnessGainStereo,
 } from './mastering_chain.js';
 export type {
   MasteringAbMatchLoudnessRequest,
@@ -47,6 +49,7 @@ export type {
   MasteringAmpPresetCatalogEntry,
   MasteringAssistantParamsRequest,
   MasteringAssistantStereoParamsRequest,
+  MasteringAudioProfile,
   MasteringChannelPolicy,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,

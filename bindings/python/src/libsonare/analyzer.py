@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ._acoustic import (
     estimate_room,
+    room_geometry_from_estimate,
     room_morph,
     synthesize_rir,
 )
@@ -20,6 +21,7 @@ from ._analysis import (
     analyze_with_progress,
     capabilities,
     chord_functional_analysis,
+    chord_functions,
     detect_acoustic,
     detect_beats,
     detect_boundaries,
@@ -282,6 +284,8 @@ from ._mastering import (
     mastering_stereo_analyze,
     mastering_streaming_preview,
     mastering_streaming_preview_stereo,
+    streaming_loudness_gain,
+    streaming_loudness_gain_stereo,
 )
 from ._mixing import (
     Mixer,
@@ -296,6 +300,7 @@ __all__ = [
     "analyze_bpm",
     "analyze_with_progress",
     "estimate_room",
+    "room_geometry_from_estimate",
     "room_morph",
     "synthesize_rir",
     "analyze_dynamics",
@@ -305,6 +310,7 @@ __all__ = [
     "analyze_sections",
     "analyze_timbre",
     "chord_functional_analysis",
+    "chord_functions",
     "detect_acoustic",
     "detect_beats",
     "detect_bpm",
@@ -432,6 +438,8 @@ __all__ = [
     "mastering_stereo_analyze",
     "mastering_streaming_preview",
     "mastering_streaming_preview_stereo",
+    "streaming_loudness_gain",
+    "streaming_loudness_gain_stereo",
     "Mixer",
     "MixerStereoResult",
     "mix_stereo",

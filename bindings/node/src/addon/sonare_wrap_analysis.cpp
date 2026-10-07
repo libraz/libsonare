@@ -1095,6 +1095,106 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+namespace {
+
+// Resolves a pitch class given as an ordinal in [0, 12) or as its name ("C", "C#", ..., "B").
+SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what) {
+  const Napi::Env env = value.Env();
+  if (value.IsNumber()) {
+    const int ordinal = node_narrow_int(env, value, what);
+    if (ordinal < SONARE_PITCH_C || ordinal > SONARE_PITCH_B) {
+      throw Napi::RangeError::New(env, std::string(what) + " must be in [0, 12)");
+    }
+    return static_cast<SonarePitchClass>(ordinal);
+  }
+  if (!value.IsString()) {
+    throw Napi::TypeError::New(env, std::string(what) + " must be a pitch class name or number");
+  }
+  const std::string name = value.As<Napi::String>().Utf8Value();
+  for (int pc = SONARE_PITCH_C; pc <= SONARE_PITCH_B; ++pc) {
+    if (name == PitchClassNameLocal(static_cast<SonarePitchClass>(pc))) {
+      return static_cast<SonarePitchClass>(pc);
+    }
+  }
+  throw Napi::RangeError::New(env,
+                              std::string(what) + " is not a pitch class name: '" + name + "'");
+}
+
+// Resolves a chord quality given as an ordinal or as the name a detected chord carries.
+SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what) {
+  const Napi::Env env = value.Env();
+  if (value.IsNumber()) {
+    const int ordinal = node_narrow_int(env, value, what);
+    if (ordinal < 0 || ordinal >= SONARE_CHORD_QUALITY_COUNT) {
+      throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality");
+    }
+    return static_cast<SonareChordQuality>(ordinal);
+  }
+  if (!value.IsString()) {
+    throw Napi::TypeError::New(env, std::string(what) + " must be a chord quality name or number");
+  }
+  const std::string name = value.As<Napi::String>().Utf8Value();
+  for (int quality = 0; quality < SONARE_CHORD_QUALITY_COUNT; ++quality) {
+    if (name == ChordQualityName(static_cast<SonareChordQuality>(quality))) {
+      return static_cast<SonareChordQuality>(quality);
+    }
+  }
+  throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality: '" + name + "'");
+}
+
+Napi::Array StringArrayToJs(Napi::Env env, const SonareStringArray& labels) {
+  Napi::Array result = Napi::Array::New(env, labels.count);
+  for (size_t i = 0; i < labels.count; ++i) {
+    result.Set(static_cast<uint32_t>(i),
+               Napi::String::New(env, labels.items[i] != nullptr ? labels.items[i] : ""));
+  }
+  return result;
+}
+
+}  // namespace
+
+Napi::Value SonareWrap::ChordFunctions(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 3 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "Expected (chords, keyRoot, keyMode)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const Napi::Array entries = info[0].As<Napi::Array>();
+  std::vector<SonareChord> chords(entries.Length());
+  for (uint32_t i = 0; i < entries.Length(); ++i) {
+    const Napi::Value entry = entries.Get(i);
+    if (!entry.IsObject()) {
+      throw Napi::TypeError::New(env, "chords[" + std::to_string(i) + "] must be an object");
+    }
+    const Napi::Object chord = entry.As<Napi::Object>();
+    const std::string at = "chords[" + std::to_string(i) + "]";
+    chords[i] = SonareChord{};
+    chords[i].root = PitchClassFromValue(chord.Get("root"), (at + ".root").c_str());
+    chords[i].quality = ChordQualityFromValue(chord.Get("quality"), (at + ".quality").c_str());
+    chords[i].bass = chords[i].root;
+  }
+  const SonarePitchClass key_root = PitchClassFromValue(info[1], "key.root");
+  const SonareMode key_mode = node_mode_from_value(info[2]);
+
+  SonareStringArray roman{};
+  SonareStringArray functions{};
+  const SonareError err =
+      sonare_chord_functions(chords.empty() ? nullptr : chords.data(), chords.size(), key_root,
+                             key_mode, &roman, &functions);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("roman", StringArrayToJs(env, roman));
+  result.Set("functions", StringArrayToJs(env, functions));
+  sonare_free_string_array(&roman);
+  sonare_free_string_array(&functions);
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::Version(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

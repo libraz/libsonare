@@ -10,12 +10,23 @@ import type {
   MasteringPreset,
   MasteringResult,
   MasteringStereoResult,
+  MatchEqCurveResult,
+  MatchEstimateReferenceDelaySamplesResult,
+  MatchReferenceLoudnessResult,
+  MatchTonalBalanceLogBandsResult,
+  MatchTonalBalanceResult,
   PairAnalysis,
+  PairAnalysisResultMap,
   PairProcessor,
   ProgressCallback,
   SoloProcessor,
   StereoAnalysis,
+  StereoAnalysisResultMap,
+  StereoMonoCompatCheckLogBandsResult,
+  StereoMonoCompatCheckResult,
   StereoPairProcessor,
+  StreamingLoudnessGainResult,
+  TypedJson,
 } from './types.js';
 import { assertSampleRate } from './validation.js';
 
@@ -97,16 +108,16 @@ export interface MasteringAbMatchLoudnessStereoRequest {
   sampleRate?: number;
 }
 
-export interface MasteringPairAnalyzeRequest {
-  analysisName: PairAnalysis;
+export interface MasteringPairAnalyzeRequest<N extends PairAnalysis = PairAnalysis> {
+  analysisName: N;
   source: Float32Array;
   reference: Float32Array;
   sampleRate?: number;
   params?: Record<string, number | boolean>;
 }
 
-export interface MasteringStereoAnalyzeRequest {
-  analysisName: StereoAnalysis;
+export interface MasteringStereoAnalyzeRequest<N extends StereoAnalysis = StereoAnalysis> {
+  analysisName: N;
   left: Float32Array;
   right: Float32Array;
   sampleRate?: number;
@@ -268,6 +279,65 @@ export function masteringChainStereo(
     );
   }
   return addon.masteringChainStereo(request.left, request.right, resolvedSampleRate, flat);
+}
+
+/** Request for {@link streamingLoudnessGain}. */
+export interface StreamingLoudnessGainRequest {
+  samples: Float32Array;
+  sampleRate?: number;
+  /** The chain config the streaming chain will run; read like {@link masteringChain}'s. */
+  config?: MasteringChainConfig;
+}
+
+/** Request for {@link streamingLoudnessGainStereo}. */
+export interface StreamingLoudnessGainStereoRequest {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  config?: MasteringChainConfig;
+}
+
+/**
+ * Measures the loudness numbers a {@link StreamingMasteringChain} needs.
+ *
+ * Runs the offline chain described by `config` up to its loudness stage and
+ * measures there, so `loudnessStaticGainDb` equals the gain
+ * {@link masteringChain} applies (ceiling clamp included) and `truePeakDb` is
+ * the peak that clamp used. The gain is computed from `config.loudness` whether
+ * or not the stage is enabled; a silent or below-gate stage input yields 0 dB.
+ *
+ * @example
+ * const { loudnessStaticGainDb, truePeakDb } = streamingLoudnessGain({ samples, sampleRate, config });
+ * const chain = new StreamingMasteringChain({
+ *   ...config,
+ *   loudnessStaticGainDb,
+ *   loudnessStaticGainPeakDb: truePeakDb,
+ * });
+ */
+export function streamingLoudnessGain(
+  request: StreamingLoudnessGainRequest,
+): StreamingLoudnessGainResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('streamingLoudnessGain', resolvedSampleRate);
+  return addon.masteringStreamingLoudnessGain(
+    request.samples,
+    resolvedSampleRate,
+    flattenChainConfig(request.config ?? {}),
+  );
+}
+
+/** Stereo counterpart of {@link streamingLoudnessGain}, with BS.1770 channel summing. */
+export function streamingLoudnessGainStereo(
+  request: StreamingLoudnessGainStereoRequest,
+): StreamingLoudnessGainResult {
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertSampleRate('streamingLoudnessGainStereo', resolvedSampleRate);
+  return addon.masteringStreamingLoudnessGainStereo(
+    request.left,
+    request.right,
+    resolvedSampleRate,
+    flattenChainConfig(request.config ?? {}),
+  );
 }
 
 /** Canonical request form for one-shot preset mastering. */
@@ -640,15 +710,71 @@ export function masteringAbMatchLoudnessStereo(
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths.
+ *
+ * Returns JSON whose shape depends on the analysis name; the overload for
+ * each analysis name carries its entry of {@link PairAnalysisResultMap}, which
+ * `JSON.parse(json) as JsonResult<typeof json>` reads back.
  */
-export function masteringPairAnalyze(request: MasteringPairAnalyzeRequest): string;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.referenceLoudness'>,
+): TypedJson<MatchReferenceLoudnessResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.tonalBalance'>,
+): TypedJson<MatchTonalBalanceResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.tonalBalanceLogBands'>,
+): TypedJson<MatchTonalBalanceLogBandsResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.matchEqCurve'>,
+): TypedJson<MatchEqCurveResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.estimateReferenceDelaySamples'>,
+): TypedJson<MatchEstimateReferenceDelaySamplesResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest,
+): TypedJson<PairAnalysisResultMap[PairAnalysis]>;
+export function masteringPairAnalyze(
+  analysisName: 'match.referenceLoudness',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<MatchReferenceLoudnessResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.tonalBalance',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<MatchTonalBalanceResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.tonalBalanceLogBands',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<MatchTonalBalanceLogBandsResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.matchEqCurve',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<MatchEqCurveResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.estimateReferenceDelaySamples',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<MatchEstimateReferenceDelaySamplesResult>;
 export function masteringPairAnalyze(
   analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
   sampleRate?: number,
   params?: Record<string, number | boolean>,
-): string;
+): TypedJson<PairAnalysisResultMap[PairAnalysis]>;
 export function masteringPairAnalyze(
   analysisName: PairAnalysis | MasteringPairAnalyzeRequest,
   source?: Float32Array,
@@ -677,14 +803,41 @@ export function masteringPairAnalyze(
   );
 }
 
-export function masteringStereoAnalyze(request: MasteringStereoAnalyzeRequest): string;
+/**
+ * Analyze a stereo pair. Returns JSON whose shape depends on the analysis name;
+ * the overload for
+ * each analysis name carries its entry of {@link StereoAnalysisResultMap}.
+ */
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest<'stereo.monoCompatCheck'>,
+): TypedJson<StereoMonoCompatCheckResult>;
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest<'stereo.monoCompatCheckLogBands'>,
+): TypedJson<StereoMonoCompatCheckLogBandsResult>;
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest,
+): TypedJson<StereoAnalysisResultMap[StereoAnalysis]>;
+export function masteringStereoAnalyze(
+  analysisName: 'stereo.monoCompatCheck',
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<StereoMonoCompatCheckResult>;
+export function masteringStereoAnalyze(
+  analysisName: 'stereo.monoCompatCheckLogBands',
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate?: number,
+  params?: Record<string, number | boolean>,
+): TypedJson<StereoMonoCompatCheckLogBandsResult>;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
   params?: Record<string, number | boolean>,
-): string;
+): TypedJson<StereoAnalysisResultMap[StereoAnalysis]>;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis | MasteringStereoAnalyzeRequest,
   left?: Float32Array,

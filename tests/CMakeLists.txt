@@ -276,6 +276,8 @@ if(BUILD_MASTERING)
     mastering/loudness_ceiling_test.cpp
     mastering/match_test.cpp
     mastering/maximizer_test.cpp
+    mastering/streaming_loudness_gain_test.cpp
+    mastering/result_schema_paths_test.cpp
     mastering/non_finite_substitution_count_test.cpp
     mastering/multiband_test.cpp
     mastering/offline_runner_blocking_test.cpp

@@ -174,4 +174,22 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
                                  std::size_t length, int sample_rate,
                                  const std::vector<Param>& params = {});
 
+/// @brief Every dotted field path the named analysis' JSON emits, one list per
+///        result shape because the shape depends on the analysis name.
+/// @details @ref analyze_named_pair and @ref analyze_named_stereo return a
+///          different object for each analysis, so each shape has its own list
+///          and its own declaration on every surface. `match.tonalBalance` and
+///          `match.tonalBalanceLogBands` write the same shape and share
+///          @ref match_tonal_balance_schema_paths. See
+///          `audio_profile_schema_paths` for the contract: an array contributes
+///          its element's paths under a `[]` segment and nothing of its own.
+/// @{
+const std::vector<std::string>& match_reference_loudness_schema_paths();
+const std::vector<std::string>& match_tonal_balance_schema_paths();
+const std::vector<std::string>& match_eq_curve_schema_paths();
+const std::vector<std::string>& match_reference_delay_schema_paths();
+const std::vector<std::string>& stereo_mono_compat_schema_paths();
+const std::vector<std::string>& stereo_mono_compat_log_bands_schema_paths();
+/// @}
+
 }  // namespace sonare::mastering::api

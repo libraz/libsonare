@@ -71,4 +71,12 @@ std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>&
   return json::dump(json::Value(std::move(root)));
 }
 
+const std::vector<std::string>& streaming_preview_schema_paths() {
+  static const std::vector<std::string> paths = {
+      "platforms",        "platforms[].ceilingRisk",         "platforms[].integratedLufs",
+      "platforms[].name", "platforms[].normalizationGainDb", "platforms[].truePeakDb",
+  };
+  return paths;
+}
+
 }  // namespace sonare::mastering::maximizer

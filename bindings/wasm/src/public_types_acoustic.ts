@@ -42,6 +42,12 @@ export interface AcousticResult {
   isBlind: boolean;
 }
 
+/** Names accepted for `materialPreset`, in the order of the integer values 0..5. */
+export type MaterialPresetName = 'none' | 'concrete' | 'wood' | 'curtain' | 'carpet' | 'glass';
+
+/** Names accepted for the room-estimate `mode`, in the order of the integer values 0..2. */
+export type AcousticModeName = 'auto' | 'blind' | 'impulse_response';
+
 /** Shoebox geometry + placement shared by RIR synthesis and the room morph. */
 export interface RoomGeometryOptions {
   lengthM?: number;
@@ -72,10 +78,13 @@ export interface RoomGeometryOptions {
    */
   bandScattering?: Float32Array | number[];
   /**
-   * Named wall-material preset (0 none; 1 concrete, 2 wood, 3 curtain,
-   * 4 carpet, 5 glass). A non-zero preset wins over `bandAbsorption`/`absorption`.
+   * Wall-material preset, by name (`'none'`, `'concrete'`, `'wood'`,
+   * `'curtain'`, `'carpet'`, `'glass'`) or by integer (0 none; 1 concrete,
+   * 2 wood, 3 curtain, 4 carpet, 5 glass). Any preset but `'none'` wins over
+   * `bandAbsorption`/`absorption`. An unknown name throws a `RangeError` listing
+   * the valid names.
    */
-  materialPreset?: number;
+  materialPreset?: number | MaterialPresetName;
   sourceX?: number;
   sourceY?: number;
   sourceZ?: number;
@@ -154,8 +163,12 @@ export interface RoomEstimateOptions {
   referenceAbsorption?: number;
   preferEyring?: boolean;
   nOctaveBands?: number;
-  /** Analyzer routing: 0 = auto, 1 = blind, 2 = impulse-response. */
-  mode?: number;
+  /**
+   * Analyzer routing, by name or integer: `'auto'` / 0, `'blind'` / 1,
+   * `'impulse_response'` / 2. An unknown name throws a `RangeError` listing the
+   * valid names.
+   */
+  mode?: number | AcousticModeName;
   /** Analyzer decay-fit span in dB (0 = library default). */
   minDecayDb?: number;
   /** Analyzer noise-floor margin in dB (0 = library default). */
@@ -177,6 +190,19 @@ export interface RoomEstimateResult {
   confidence: number;
   absorptionBands: Float32Array;
   rt60Bands: Float32Array;
+}
+
+/** A position inside a room, in metres. */
+export interface RoomPlacement {
+  x: number;
+  y: number;
+  z: number;
+}
+
+/** Positions for `roomGeometryFromEstimate`; an omitted one is left to `synthesizeRir`'s default. */
+export interface RoomGeometryFromEstimateOptions {
+  source?: RoomPlacement;
+  listener?: RoomPlacement;
 }
 
 export interface RoomMorphOptions extends RoomGeometryOptions {

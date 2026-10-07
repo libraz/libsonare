@@ -463,6 +463,80 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   });
 }
 
+namespace {
+
+// Copies labels into a heap-owned SonareStringArray; frees what it copied on failure.
+void fill_string_array(const std::vector<std::string>& labels, SonareStringArray* out) {
+  if (labels.empty()) return;
+  std::unique_ptr<char*[]> items(new char*[labels.size()]);
+  size_t filled = 0;
+  try {
+    for (; filled < labels.size(); ++filled) {
+      items[filled] = copy_string(labels[filled]);
+    }
+  } catch (...) {
+    for (size_t i = 0; i < filled; ++i) sonare_free_string(items[i]);
+    throw;
+  }
+  out->items = release_array(items);
+  out->count = labels.size();
+}
+
+}  // namespace
+
+SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
+                                   SonarePitchClass key_root, SonareMode key_mode,
+                                   SonareStringArray* roman, SonareStringArray* functions) {
+  SONARE_C_API_ENTRY;
+  if (!roman || !functions) return SONARE_ERROR_INVALID_PARAMETER;
+  roman->items = nullptr;
+  roman->count = 0;
+  functions->items = nullptr;
+  functions->count = 0;
+  if (count > 0 && !chords) return SONARE_ERROR_INVALID_PARAMETER;
+  const int key_root_value = static_cast<int>(key_root);
+  const int key_mode_value = static_cast<int>(key_mode);
+  if (key_root_value < static_cast<int>(PitchClass::C) ||
+      key_root_value > static_cast<int>(PitchClass::B) ||
+      key_mode_value < static_cast<int>(Mode::Major) ||
+      key_mode_value > static_cast<int>(Mode::Locrian)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  std::vector<Chord> input;
+  input.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    const int root = static_cast<int>(chords[i].root);
+    const int quality = static_cast<int>(chords[i].quality);
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        quality < 0 || quality >= SONARE_CHORD_QUALITY_COUNT) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    Chord chord{};
+    chord.root = static_cast<PitchClass>(root);
+    chord.quality = static_cast<ChordQuality>(quality);
+    chord.bass = chord.root;
+    input.push_back(chord);
+  }
+  const PitchClass tonic = from_c_pitch_class(key_root);
+  const Mode mode = from_c_mode(key_mode);
+  std::vector<std::string> numerals;
+  std::vector<std::string> names;
+  numerals.reserve(count);
+  names.reserve(count);
+  for (const Chord& chord : input) {
+    numerals.push_back(ChordAnalyzer::chord_to_roman_numeral(chord, tonic, mode));
+    names.push_back(ChordAnalyzer::chord_function(chord, tonic, mode));
+  }
+  fill_string_array(numerals, roman);
+  try {
+    fill_string_array(names, functions);
+  } catch (...) {
+    sonare_free_string_array(roman);
+    throw;
+  }
+  return SONARE_OK;
+}
+
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,
                                     int hop_length, float min_section_sec,
                                     SonareSectionResult* out) {

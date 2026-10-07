@@ -92,6 +92,21 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
                                              const SonareChordDetectionOptions* options,
                                              SonarePitchClass key_root, SonareMode key_mode,
                                              SonareStringArray* out);
+/// @brief Roman numeral and harmonic function of chords that are already known.
+/// @details Labels each entry of @p chords relative to the key without analysing any audio:
+///   @p roman receives the numeral ("I", "V7", "vi", "N.C." for an unknown chord) and
+///   @p functions the harmonic function ("tonic", "subdominant", "dominant", "chromatic" for a
+///   root outside the key's scale, "none" for an unknown chord). Both arrays have @p count
+///   entries in chord order; only root and quality are read. Every mode other than minor reads
+///   the major scale.
+/// @param chords Chords, e.g. the result of sonare_detect_chords; may be NULL when @p count is 0.
+/// @param key_root Tonic pitch class of the key.
+/// @param key_mode Mode of the key.
+/// @param roman Receives a heap-owned string array; free with sonare_free_string_array.
+/// @param functions Receives a heap-owned string array; free with sonare_free_string_array.
+SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
+                                   SonarePitchClass key_root, SonareMode key_mode,
+                                   SonareStringArray* roman, SonareStringArray* functions);
 /// @brief Detects song-structure sections (intro/verse/chorus/...).
 /// @param out Receives heap-owned arrays; free with sonare_free_section_result.
 SonareError sonare_analyze_sections(const float* samples, size_t length, int sample_rate, int n_fft,

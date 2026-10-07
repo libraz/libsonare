@@ -1038,3 +1038,83 @@ TEST_CASE("sonare acoustic C API applies wall scattering without per-band absorp
   sonare_free_rir_synth_result(&preset_smooth_rir);
   sonare_free_rir_synth_result(&preset_rough_rir);
 }
+
+TEST_CASE("sonare acoustic C API names its material presets and modes", "[c_api][acoustic]") {
+  const char* presets[] = {"none", "concrete", "wood", "curtain", "carpet", "glass"};
+  for (int i = 0; i < 6; ++i) {
+    REQUIRE(sonare_material_preset_name(i) != nullptr);
+    CHECK(std::string(sonare_material_preset_name(i)) == presets[i]);
+  }
+  CHECK(sonare_material_preset_name(6) == nullptr);
+  CHECK(sonare_material_preset_name(-1) == nullptr);
+
+  const char* modes[] = {"auto", "blind", "impulse_response"};
+  for (int i = 0; i < 3; ++i) {
+    REQUIRE(sonare_acoustic_mode_name(i) != nullptr);
+    CHECK(std::string(sonare_acoustic_mode_name(i)) == modes[i]);
+  }
+  CHECK(sonare_acoustic_mode_name(3) == nullptr);
+}
+
+TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesizer config",
+          "[c_api][acoustic]") {
+  float bands[] = {0.1f, 0.12f, 0.15f, 0.2f, 0.25f, 0.3f};
+  SonareRoomEstimate estimate{};
+  estimate.volume = 100.0f;
+  estimate.length_m = 6.0f;
+  estimate.width_m = 4.5f;
+  estimate.height_m = 3.0f;
+  estimate.absorption_bands = bands;
+  estimate.band_count = 6;
+
+  SonareRirSynthConfig geometry{};
+  geometry.seed = 99u;
+  REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
+  CHECK(geometry.length_m == 6.0f);
+  CHECK(geometry.width_m == 4.5f);
+  CHECK(geometry.height_m == 3.0f);
+  CHECK(geometry.absorption_bands == bands);
+  CHECK(geometry.absorption_band_count == 6);
+  CHECK(geometry.seed == 0u);
+
+  SECTION("feeds the synthesizer once a placement is set") {
+    geometry.source_x = 1.0f;
+    geometry.source_y = 1.0f;
+    geometry.source_z = 1.2f;
+    geometry.listener_x = 4.0f;
+    geometry.listener_y = 3.0f;
+    geometry.listener_z = 1.7f;
+    geometry.ism_order = 2;
+    geometry.max_seconds = 0.1f;
+    SonareRirSynthResult rir{};
+    REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
+    CHECK(rir.has_error == 0);
+    CHECK(rir.length > 0);
+    sonare_free_rir_synth_result(&rir);
+  }
+
+  SECTION("an estimate without bands leaves the absorption fields unset") {
+    estimate.absorption_bands = nullptr;
+    estimate.band_count = 0;
+    REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
+    CHECK(geometry.absorption_bands == nullptr);
+    CHECK(geometry.absorption_band_count == 0);
+  }
+
+  SECTION("bands that did not converge are left unset") {
+    bands[2] = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
+    CHECK(geometry.absorption_bands == nullptr);
+    CHECK(geometry.absorption_band_count == 0);
+    CHECK(geometry.length_m == 6.0f);
+  }
+
+  SECTION("refuses an unmeasured estimate") {
+    SonareRoomEstimate unmeasured = estimate;
+    unmeasured.length_m = std::numeric_limits<float>::quiet_NaN();
+    CHECK(sonare_room_geometry_from_estimate(&unmeasured, &geometry) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_room_geometry_from_estimate(nullptr, &geometry) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_room_geometry_from_estimate(&estimate, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}

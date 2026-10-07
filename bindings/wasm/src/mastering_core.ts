@@ -4,6 +4,7 @@ import type {
   LoudnessMatchResult,
   LoudnessMatchStereoResult,
   MasteringAssistantParams,
+  MasteringAssistantResult,
   MasteringInsertParamChoice,
   MasteringInsertParamDependency,
   MasteringInsertParamScale,
@@ -13,12 +14,23 @@ import type {
   MasteringProcessorParams,
   MasteringResult,
   MasteringStereoResult,
+  MasteringStreamingPreviewResult,
+  MatchEqCurveResult,
+  MatchEstimateReferenceDelaySamplesResult,
+  MatchReferenceLoudnessResult,
+  MatchTonalBalanceLogBandsResult,
+  MatchTonalBalanceResult,
   PairAnalysis,
+  PairAnalysisResultMap,
   PairProcessor,
   SoloProcessor,
   StereoAnalysis,
+  StereoAnalysisResultMap,
+  StereoMonoCompatCheckLogBandsResult,
+  StereoMonoCompatCheckResult,
   StereoPairProcessor,
   StreamingPlatform,
+  TypedJson,
 } from './public_types.js';
 
 export type { MasteringInsertParamChoice, MasteringInsertSlot };
@@ -87,8 +99,8 @@ export interface MasteringAbMatchLoudnessStereoRequest {
 }
 
 /** Canonical request form for a two-input match analysis. */
-export interface MasteringPairAnalyzeRequest {
-  analysisName: PairAnalysis;
+export interface MasteringPairAnalyzeRequest<N extends PairAnalysis = PairAnalysis> {
+  analysisName: N;
   source: Float32Array;
   reference: Float32Array;
   sampleRate?: number;
@@ -96,8 +108,8 @@ export interface MasteringPairAnalyzeRequest {
 }
 
 /** Canonical request form for a stereo analysis. */
-export interface MasteringStereoAnalyzeRequest {
-  analysisName: StereoAnalysis;
+export interface MasteringStereoAnalyzeRequest<N extends StereoAnalysis = StereoAnalysis> {
+  analysisName: N;
   left: Float32Array;
   right: Float32Array;
   sampleRate?: number;
@@ -670,15 +682,71 @@ export function masteringPairProcessStereo(
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
  * buffers may have independent lengths.
+ *
+ * Returns JSON whose shape depends on the analysis name; the overload for
+ * each analysis name carries its entry of {@link PairAnalysisResultMap}, which
+ * `JSON.parse(json) as JsonResult<typeof json>` reads back.
  */
-export function masteringPairAnalyze(request: MasteringPairAnalyzeRequest): string;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.referenceLoudness'>,
+): TypedJson<MatchReferenceLoudnessResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.tonalBalance'>,
+): TypedJson<MatchTonalBalanceResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.tonalBalanceLogBands'>,
+): TypedJson<MatchTonalBalanceLogBandsResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.matchEqCurve'>,
+): TypedJson<MatchEqCurveResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest<'match.estimateReferenceDelaySamples'>,
+): TypedJson<MatchEstimateReferenceDelaySamplesResult>;
+export function masteringPairAnalyze(
+  request: MasteringPairAnalyzeRequest,
+): TypedJson<PairAnalysisResultMap[PairAnalysis]>;
+export function masteringPairAnalyze(
+  analysisName: 'match.referenceLoudness',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<MatchReferenceLoudnessResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.tonalBalance',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<MatchTonalBalanceResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.tonalBalanceLogBands',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<MatchTonalBalanceLogBandsResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.matchEqCurve',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<MatchEqCurveResult>;
+export function masteringPairAnalyze(
+  analysisName: 'match.estimateReferenceDelaySamples',
+  source: Float32Array,
+  reference: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<MatchEstimateReferenceDelaySamplesResult>;
 export function masteringPairAnalyze(
   analysisName: PairAnalysis,
   source: Float32Array,
   reference: Float32Array,
   sampleRate?: number,
   params?: MasteringProcessorParams,
-): string;
+): TypedJson<PairAnalysisResultMap[PairAnalysis]>;
 export function masteringPairAnalyze(
   analysisName: PairAnalysis | MasteringPairAnalyzeRequest,
   source?: Float32Array,
@@ -754,14 +822,41 @@ export function masteringAbMatchLoudnessStereo(
   );
 }
 
-export function masteringStereoAnalyze(request: MasteringStereoAnalyzeRequest): string;
+/**
+ * Analyze a stereo pair. Returns JSON whose shape depends on the analysis name;
+ * the overload for
+ * each analysis name carries its entry of {@link StereoAnalysisResultMap}.
+ */
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest<'stereo.monoCompatCheck'>,
+): TypedJson<StereoMonoCompatCheckResult>;
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest<'stereo.monoCompatCheckLogBands'>,
+): TypedJson<StereoMonoCompatCheckLogBandsResult>;
+export function masteringStereoAnalyze(
+  request: MasteringStereoAnalyzeRequest,
+): TypedJson<StereoAnalysisResultMap[StereoAnalysis]>;
+export function masteringStereoAnalyze(
+  analysisName: 'stereo.monoCompatCheck',
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<StereoMonoCompatCheckResult>;
+export function masteringStereoAnalyze(
+  analysisName: 'stereo.monoCompatCheckLogBands',
+  left: Float32Array,
+  right: Float32Array,
+  sampleRate?: number,
+  params?: MasteringProcessorParams,
+): TypedJson<StereoMonoCompatCheckLogBandsResult>;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis,
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
   params?: MasteringProcessorParams,
-): string;
+): TypedJson<StereoAnalysisResultMap[StereoAnalysis]>;
 export function masteringStereoAnalyze(
   analysisName: StereoAnalysis | MasteringStereoAnalyzeRequest,
   left?: Float32Array,
@@ -788,12 +883,14 @@ export function masteringStereoAnalyze(
   );
 }
 
-export function masteringAssistantSuggest(request: MasteringAssistantParamsRequest): string;
+export function masteringAssistantSuggest(
+  request: MasteringAssistantParamsRequest,
+): TypedJson<MasteringAssistantResult>;
 export function masteringAssistantSuggest(
   samples: Float32Array,
   sampleRate?: number,
   params?: MasteringAssistantParams,
-): string;
+): TypedJson<MasteringAssistantResult>;
 export function masteringAssistantSuggest(
   samples: Float32Array | MasteringAssistantParamsRequest,
   sampleRate = 22050,
@@ -892,12 +989,14 @@ export interface MasteringAudioProfile {
   };
 }
 
-export function masteringAudioProfile(request: MasteringSamplesParamsRequest): string;
+export function masteringAudioProfile(
+  request: MasteringSamplesParamsRequest,
+): TypedJson<MasteringAudioProfile>;
 export function masteringAudioProfile(
   samples: Float32Array,
   sampleRate?: number,
   params?: MasteringProcessorParams,
-): string;
+): TypedJson<MasteringAudioProfile>;
 export function masteringAudioProfile(
   samples: Float32Array | MasteringSamplesParamsRequest,
   sampleRate = 22050,
@@ -911,12 +1010,14 @@ export function masteringAudioProfile(
   );
 }
 
-export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
+export function masteringStreamingPreview(
+  request: MasteringStreamingPreviewRequest,
+): TypedJson<MasteringStreamingPreviewResult>;
 export function masteringStreamingPreview(
   samples: Float32Array,
   sampleRate?: number,
   platforms?: StreamingPlatform[],
-): string;
+): TypedJson<MasteringStreamingPreviewResult>;
 export function masteringStreamingPreview(
   samples: Float32Array | MasteringStreamingPreviewRequest,
   sampleRate = 22050,
@@ -939,7 +1040,7 @@ export function masteringStreamingPreview(
  */
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantStereoParamsRequest,
-): string {
+): TypedJson<MasteringAssistantResult> {
   return requireModule().masteringAssistantSuggestStereo(
     request.left,
     request.right,
@@ -974,7 +1075,9 @@ export function masteringAssistantSuggestChainStereo(
  * comparable with {@link masteringAudioProfile}. Defect detectors run on each
  * channel and their results are aggregated.
  */
-export function masteringAudioProfileStereo(request: MasteringStereoParamsRequest): string {
+export function masteringAudioProfileStereo(
+  request: MasteringStereoParamsRequest,
+): TypedJson<MasteringAudioProfile> {
   return requireModule().masteringAudioProfileStereo(
     request.left,
     request.right,
@@ -994,7 +1097,7 @@ export function masteringAudioProfileStereo(request: MasteringStereoParamsReques
  */
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
-): string {
+): TypedJson<MasteringStreamingPreviewResult> {
   return requireModule().masteringStreamingPreviewStereo(
     request.left,
     request.right,

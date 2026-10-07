@@ -76,11 +76,13 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value SynthesizeRir(const Napi::CallbackInfo& info);
   static Napi::Value EstimateRoom(const Napi::CallbackInfo& info);
   static Napi::Value RoomMorph(const Napi::CallbackInfo& info);
+  static Napi::Value RoomGeometryFromEstimate(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeRhythm(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeDynamics(const Napi::CallbackInfo& info);
   static Napi::Value AnalyzeTimbre(const Napi::CallbackInfo& info);
   static Napi::Value DetectChords(const Napi::CallbackInfo& info);
   static Napi::Value FunctionalAnalysis(const Napi::CallbackInfo& info);
+  static Napi::Value ChordFunctions(const Napi::CallbackInfo& info);
   static Napi::Value Lufs(const Napi::CallbackInfo& info);
   static Napi::Value MomentaryLufs(const Napi::CallbackInfo& info);
   static Napi::Value ShortTermLufs(const Napi::CallbackInfo& info);
@@ -156,6 +158,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringProcessStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChain(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChainStereo(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringStreamingLoudnessGain(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringStreamingLoudnessGainStereo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChainWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringChainStereoWithProgress(const Napi::CallbackInfo& info);
   static Napi::Value MasteringPresetNames(const Napi::CallbackInfo& info);

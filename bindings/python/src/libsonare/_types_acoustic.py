@@ -7,7 +7,12 @@ between languages see the same names. They intentionally violate PEP8 N802.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TypedDict
+from typing import Literal, NotRequired, TypedDict
+
+#: Names accepted for ``material_preset`` (the ``SONARE_MATERIAL_PRESET_*`` values).
+MaterialPresetName = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
+#: Names accepted for the room-estimate ``mode`` (the ``SONARE_ACOUSTIC_MODE_*`` values).
+AcousticModeName = Literal["auto", "blind", "impulse_response"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -196,3 +201,19 @@ class DereverbClassicalConfig(TypedDict):
     wpe_iterations: int
     wpe_taps: int
     wpe_strength: float
+
+
+class RoomGeometry(TypedDict):
+    """Room geometry in the shape :func:`libsonare.synthesize_rir` takes.
+
+    Splat it into the call: ``synthesize_rir(**geometry)``. ``source``,
+    ``listener`` and ``absorption_bands`` are present only when there is a
+    value for them; an absent key leaves that argument at its default.
+    """
+
+    length_m: float
+    width_m: float
+    height_m: float
+    absorption_bands: NotRequired[list[float]]
+    source: NotRequired[tuple[float, float, float]]
+    listener: NotRequired[tuple[float, float, float]]

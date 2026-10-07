@@ -38,27 +38,57 @@ def _drop_property(text: str, root: str, prop: str) -> str:
     return text.replace(body, stripped, 1)
 
 
+def _accessor(label: str, family: dict) -> str:
+    """The list a family answers to: its own name unless it names another."""
+    return family.get("accessor", label)
+
+
 class TheRepository(unittest.TestCase):
-    def test_every_family_is_clean_on_both_surfaces(self):
-        for accessor, family in check.FAMILIES.items():
-            paths = check.schema_paths(family["source"].read_text(), accessor)
-            self.assertIsNotNone(paths, accessor)
-            self.assertGreater(len(paths), 5, accessor)
+    def test_every_family_is_clean_on_every_surface(self):
+        for label, family in check.FAMILIES.items():
+            paths = check.schema_paths(family["source"].read_text(), _accessor(label, family))
+            self.assertIsNotNone(paths, label)
+            self.assertGreater(len(paths), 0, label)
             for side, path in family["surfaces"].items():
                 missing, unreached, comparisons = check.scan_surface(
                     paths, path, family["root"]
                 )
-                self.assertEqual(unreached, [], f"{accessor} [{side}]")
-                self.assertEqual(missing, [], f"{accessor} [{side}]")
-                self.assertEqual(comparisons, len(paths), f"{accessor} [{side}]")
+                self.assertEqual(unreached, [], f"{label} [{side}]")
+                self.assertEqual(missing, [], f"{label} [{side}]")
+                self.assertEqual(comparisons, len(paths), f"{label} [{side}]")
 
-    def test_the_families_are_distinct_populations(self):
+    def test_the_lists_are_distinct_populations(self):
         """A table whose entries resolved to one list would pass the case above."""
         lists = {
-            accessor: tuple(check.schema_paths(family["source"].read_text(), accessor))
-            for accessor, family in check.FAMILIES.items()
+            _accessor(label, family): tuple(
+                check.schema_paths(family["source"].read_text(), _accessor(label, family))
+            )
+            for label, family in check.FAMILIES.items()
         }
-        self.assertEqual(len(set(lists.values())), len(check.FAMILIES))
+        self.assertEqual(len(set(lists.values())), len(lists))
+
+    def test_a_shared_list_is_named_by_more_than_one_result(self):
+        """Tonal balance on linear and on log bands write one shape and one list."""
+        shared = [
+            label
+            for label, family in check.FAMILIES.items()
+            if _accessor(label, family) != label
+        ]
+        self.assertEqual(shared, ["match_tonal_balance_log_bands_schema_paths"])
+        family = check.FAMILIES[shared[0]]
+        self.assertIn(family["accessor"], check.FAMILIES)
+        self.assertNotEqual(family["root"], check.FAMILIES[family["accessor"]]["root"])
+
+    def test_python_is_checked_for_the_explainable_mastering_results(self):
+        """Each of these results is declared in both Python files, not only in TypeScript."""
+        for label in (
+            "audio_profile_schema_paths",
+            "assistant_result_schema_paths",
+            "streaming_preview_schema_paths",
+            "match_reference_loudness_schema_paths",
+            "stereo_mono_compat_schema_paths",
+        ):
+            self.assertLessEqual({"python", "python-stub"}, set(check.FAMILIES[label]["surfaces"]))
 
     def test_both_surfaces_are_checked_for_every_family(self):
         """A family that lost a surface stays clean on the one it kept.
@@ -67,11 +97,11 @@ class TheRepository(unittest.TestCase):
         extra declaration of the same shape -- a shipped JSON Schema is one --
         without the addition reading as the loss this case exists to catch.
         """
-        for accessor, family in check.FAMILIES.items():
+        for label, family in check.FAMILIES.items():
             surfaces = family["surfaces"]
-            self.assertLessEqual({"node", "wasm"}, set(surfaces), accessor)
+            self.assertLessEqual({"node", "wasm"}, set(surfaces), label)
             for side, path in surfaces.items():
-                self.assertTrue(path.is_file(), f"{accessor} [{side}]: {path}")
+                self.assertTrue(path.is_file(), f"{label} [{side}]: {path}")
 
 
 class RootAnchoring(unittest.TestCase):

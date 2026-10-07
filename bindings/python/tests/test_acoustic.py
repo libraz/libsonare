@@ -430,3 +430,90 @@ def test_room_morph_reports_the_target_synthesis_warnings() -> None:
     # above is that run's rather than a slot nothing ever resets.
     quiet = libsonare.room_morph(samples, ism_order=2, **room)
     assert "acoustic.ism_order_clamped" not in [d.code for d in quiet.diagnostics]
+
+
+@acoustic
+def test_material_preset_names_match_the_integers() -> None:
+    room = dict(max_seconds=0.1, sample_rate=22050, ism_order=2)
+    for value, name in enumerate(["none", "concrete", "wood", "curtain", "carpet", "glass"]):
+        by_name = libsonare.synthesize_rir(material_preset=name, **room)
+        by_value = libsonare.synthesize_rir(material_preset=value, **room)
+        assert by_name.rir == by_value.rir
+    assert (
+        libsonare.synthesize_rir(material_preset="glass", **room).rir
+        != libsonare.synthesize_rir(material_preset="carpet", **room).rir
+    )
+
+
+@acoustic
+def test_mode_names_match_the_integers() -> None:
+    rir = libsonare.synthesize_rir(max_seconds=0.5, sample_rate=22050, ism_order=2).rir
+    for value, name in enumerate(["auto", "blind", "impulse_response"]):
+        by_name = libsonare.estimate_room(rir, sample_rate=22050, mode=name)
+        by_value = libsonare.estimate_room(rir, sample_rate=22050, mode=value)
+        # repr compares NaN fields as equal, which == would not.
+        assert repr(by_name) == repr(by_value)
+
+
+@acoustic
+def test_an_unknown_preset_or_mode_name_is_refused_naming_the_valid_set() -> None:
+    with pytest.raises(libsonare.SonareValueError, match="'concrete'.*'glass'"):
+        libsonare.synthesize_rir(material_preset="marble")
+    with pytest.raises(libsonare.SonareValueError, match="material_preset"):
+        libsonare.room_morph([0.0] * 100, 48000, 7.0, 5.0, 3.0, material_preset="Concrete")
+    with pytest.raises(libsonare.SonareValueError, match="'blind'.*'impulse_response'"):
+        libsonare.estimate_room([0.0] * 1000, mode="impulseResponse")
+
+
+@acoustic
+def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
+    rir = libsonare.synthesize_rir(
+        7.0, 5.0, 3.0, source=(1.5, 1.0, 1.2), listener=(5.0, 4.0, 1.7), absorption=0.15
+    )
+    estimate = libsonare.estimate_room(
+        rir.rir,
+        sample_rate=48000,
+        aspect_hint_lw=7.0 / 5.0,
+        aspect_hint_lh=7.0 / 3.0,
+        reference_absorption=0.15,
+    )
+    geometry = libsonare.room_geometry_from_estimate(
+        estimate, source=(1.0, 1.0, 1.2), listener=(3.0, 2.0, 1.7)
+    )
+    assert set(geometry) == {
+        "length_m",
+        "width_m",
+        "height_m",
+        "absorption_bands",
+        "source",
+        "listener",
+    }
+    assert geometry["length_m"] == pytest.approx(estimate.length, rel=1e-6)
+    assert geometry["absorption_bands"] == pytest.approx(estimate.absorption_bands, rel=1e-6)
+    options = dict(max_seconds=0.1, ism_order=2)
+    mapped = libsonare.synthesize_rir(**geometry, **options)
+    by_hand = libsonare.synthesize_rir(
+        estimate.length,
+        estimate.width,
+        estimate.height,
+        source=(1.0, 1.0, 1.2),
+        listener=(3.0, 2.0, 1.7),
+        absorption_bands=estimate.absorption_bands,
+        **options,
+    )
+    assert not mapped.has_error
+    assert mapped.rir == by_hand.rir
+    # Omitted positions are left to synthesize_rir's own defaults.
+    assert "source" not in libsonare.room_geometry_from_estimate(estimate)
+
+
+@acoustic
+def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
+    silent = libsonare.estimate_room([0.0] * 48000, sample_rate=48000)
+    assert math.isnan(silent.length)
+    with pytest.raises(libsonare.SonareValueError):
+        libsonare.room_geometry_from_estimate(silent)
+    with pytest.raises(libsonare.SonareValueError, match="triple"):
+        libsonare.room_geometry_from_estimate(
+            libsonare.RoomEstimate(100.0, 6.0, 5.0, 3.0, 1.0, 0.5, [], []), source=(1.0, 2.0)
+        )

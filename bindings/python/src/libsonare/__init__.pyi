@@ -135,6 +135,9 @@ from .analyzer import (
     chord_functional_analysis as chord_functional_analysis,
 )
 from .analyzer import (
+    chord_functions as chord_functions,
+)
+from .analyzer import (
     chroma as chroma,
 )
 from .analyzer import (
@@ -661,6 +664,9 @@ from .analyzer import (
     rms_energy as rms_energy,
 )
 from .analyzer import (
+    room_geometry_from_estimate as room_geometry_from_estimate,
+)
+from .analyzer import (
     room_morph as room_morph,
 )
 from .analyzer import (
@@ -708,6 +714,12 @@ from .analyzer import (
 )
 from .analyzer import (
     stft_db as stft_db,
+)
+from .analyzer import (
+    streaming_loudness_gain as streaming_loudness_gain,
+)
+from .analyzer import (
+    streaming_loudness_gain_stereo as streaming_loudness_gain_stereo,
 )
 from .analyzer import (
     subsegment as subsegment,
@@ -789,6 +801,9 @@ from .mixing_assistant import suggest_mix_scene as suggest_mix_scene
 from .mixing_assistant import suggest_mix_scene_json as suggest_mix_scene_json
 from .streaming import StreamAnalyzer as StreamAnalyzer
 from .types import (
+    AcousticModeName as AcousticModeName,
+)
+from .types import (
     AcousticResult as AcousticResult,
 )
 from .types import (
@@ -838,6 +853,9 @@ from .types import (
 )
 from .types import (
     ChordAnalysisResult as ChordAnalysisResult,
+)
+from .types import (
+    ChordFunctionName as ChordFunctionName,
 )
 from .types import (
     ChromaResult as ChromaResult,
@@ -953,6 +971,9 @@ from .types import (
     ExternalMidiEvent as ExternalMidiEvent,
 )
 from .types import (
+    FunctionalChord as FunctionalChord,
+)
+from .types import (
     GoniometerPoint as GoniometerPoint,
 )
 from .types import (
@@ -985,6 +1006,30 @@ from .types import (
     MasteringAmpPresetCatalogEntry as MasteringAmpPresetCatalogEntry,
 )
 from .types import (
+    MasteringAssistantProfile as MasteringAssistantProfile,
+)
+from .types import (
+    MasteringAssistantResult as MasteringAssistantResult,
+)
+from .types import (
+    MasteringAudioProfile as MasteringAudioProfile,
+)
+from .types import (
+    MasteringAudioProfileDefects as MasteringAudioProfileDefects,
+)
+from .types import (
+    MasteringAudioProfileDynamics as MasteringAudioProfileDynamics,
+)
+from .types import (
+    MasteringAudioProfileLoudness as MasteringAudioProfileLoudness,
+)
+from .types import (
+    MasteringAudioProfileSpectral as MasteringAudioProfileSpectral,
+)
+from .types import (
+    MasteringChainConfigDocument as MasteringChainConfigDocument,
+)
+from .types import (
     MasteringChainResult as MasteringChainResult,
 )
 from .types import (
@@ -1013,6 +1058,33 @@ from .types import (
 )
 from .types import (
     MasteringStereoResult as MasteringStereoResult,
+)
+from .types import (
+    MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
+)
+from .types import (
+    MasteringStreamingPreviewResult as MasteringStreamingPreviewResult,
+)
+from .types import (
+    MatchEqCurveResult as MatchEqCurveResult,
+)
+from .types import (
+    MatchEstimateReferenceDelaySamplesResult as MatchEstimateReferenceDelaySamplesResult,
+)
+from .types import (
+    MatchReferenceLoudnessResult as MatchReferenceLoudnessResult,
+)
+from .types import (
+    MatchTonalBalanceBand as MatchTonalBalanceBand,
+)
+from .types import (
+    MatchTonalBalanceLogBandsResult as MatchTonalBalanceLogBandsResult,
+)
+from .types import (
+    MatchTonalBalanceResult as MatchTonalBalanceResult,
+)
+from .types import (
+    MaterialPresetName as MaterialPresetName,
 )
 from .types import (
     MelodyPoint as MelodyPoint,
@@ -1100,6 +1172,9 @@ from .types import (
     RoomEstimate as RoomEstimate,
 )
 from .types import (
+    RoomGeometry as RoomGeometry,
+)
+from .types import (
     RoomMorphResult as RoomMorphResult,
 )
 from .types import (
@@ -1130,6 +1205,15 @@ from .types import (
     StageGainReduction as StageGainReduction,
 )
 from .types import (
+    StereoMonoCompatBand as StereoMonoCompatBand,
+)
+from .types import (
+    StereoMonoCompatCheckLogBandsResult as StereoMonoCompatCheckLogBandsResult,
+)
+from .types import (
+    StereoMonoCompatCheckResult as StereoMonoCompatCheckResult,
+)
+from .types import (
     StftResult as StftResult,
 )
 from .types import (
@@ -1149,6 +1233,9 @@ from .types import (
 )
 from .types import (
     StreamFramesU8 as StreamFramesU8,
+)
+from .types import (
+    StreamingLoudnessGain as StreamingLoudnessGain,
 )
 from .types import (
     StreamPatternScore as StreamPatternScore,

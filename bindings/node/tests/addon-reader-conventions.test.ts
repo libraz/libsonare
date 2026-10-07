@@ -1107,6 +1107,10 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ],
       ['editAutomationLane', 'Needs a project with an existing automation lane.'],
       ['estimateRoom', 'Needs a measured impulse response.'],
+      [
+        'roomGeometryFromEstimate',
+        'Reads an estimate record whose missing dimensions are refused rather than defaulted; covered by acoustic.test.ts.',
+      ],
       ['freezeOffline', 'Needs a prepared engine graph.'],
       ['importExternalStems', 'Needs external stem buffers; covered by project-edit tests.'],
       [

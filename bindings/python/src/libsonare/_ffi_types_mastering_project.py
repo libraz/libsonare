@@ -145,6 +145,16 @@ class SonareLoudnessMatch(CStruct):
     ]
 
 
+class SonareStreamingLoudnessGain(CStruct):
+    """Maps to SonareStreamingLoudnessGain in sonare_c.h."""
+
+    _fields_ = [
+        ("loudness_static_gain_db", ctypes.c_float),
+        ("true_peak_db", ctypes.c_float),
+        ("integrated_lufs", ctypes.c_float),
+    ]
+
+
 class SonareStreamingPlatform(CStruct):
     """Maps to SonareStreamingPlatform in sonare_c.h."""
 

@@ -1,5 +1,10 @@
 #include <sonare/sonare_c_acoustic.h>
 
+#include <array>
+
+#include "acoustic/estimate_geometry.h"
+#include "acoustic/selector_names.h"
+
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
 #include <algorithm>
 #include <cmath>
@@ -128,7 +133,49 @@ void publish_rir_diagnostics(const std::vector<sonare::Diagnostic>& diagnostics)
 }
 #endif
 
+static_assert(SONARE_MATERIAL_PRESET_GLASS + 1 ==
+                  sonare::acoustic::kMaterialPresetSelectorNames.size(),
+              "material preset names must cover the SONARE_MATERIAL_PRESET_* values");
+static_assert(SONARE_ACOUSTIC_MODE_IMPULSE_RESPONSE + 1 ==
+                  sonare::acoustic::kAcousticModeSelectorNames.size(),
+              "acoustic mode names must cover the SONARE_ACOUSTIC_MODE_* values");
+
+template <size_t N>
+const char* enum_name(const std::array<const char*, N>& names, int value) {
+  return value >= 0 && static_cast<size_t>(value) < N ? names[value] : nullptr;
+}
+
 }  // namespace
+
+const char* sonare_material_preset_name(int preset) {
+  return enum_name(sonare::acoustic::kMaterialPresetSelectorNames, preset);
+}
+
+const char* sonare_acoustic_mode_name(int mode) {
+  return enum_name(sonare::acoustic::kAcousticModeSelectorNames, mode);
+}
+
+SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimate,
+                                               SonareRirSynthConfig* out) {
+  SONARE_C_API_ENTRY;
+  if (!estimate || !out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = SonareRirSynthConfig{};
+  if (!sonare::acoustic::estimated_dimensions_measured(estimate->length_m, estimate->width_m,
+                                                       estimate->height_m)) {
+    sonare_c_detail::set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                                    "room estimate has no measurable dimensions");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  if (sonare::acoustic::estimated_absorption_measured(estimate->absorption_bands,
+                                                      estimate->band_count)) {
+    out->absorption_bands = estimate->absorption_bands;
+    out->absorption_band_count = estimate->band_count;
+  }
+  out->length_m = estimate->length_m;
+  out->width_m = estimate->width_m;
+  out->height_m = estimate->height_m;
+  return SONARE_OK;
+}
 
 SonareError sonare_synthesize_rir(const SonareRirSynthConfig* config, int sample_rate,
                                   SonareRirSynthResult* out) {

@@ -45,8 +45,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE = REPO_ROOT / "bindings/node/src"
 WASM = REPO_ROOT / "bindings/wasm/src"
 
-# One entry per published list: where it is defined, the TypeScript type its
-# paths are rooted at, and the file on each surface that declares that type. A
+# One entry per published result: where its list is defined, the TypeScript type
+# its paths are rooted at, and the file on each surface that declares that type.
+# The key is the list's accessor unless `accessor` names another, which is how two
+# results that write one shape (tonal balance on linear and on log bands) answer
+# to a single list. A
 # root-array writer roots its paths at the element, so its paths open with the
 # `[]` segment and the type named here is the element type.
 FAMILIES = {
@@ -115,6 +118,100 @@ FAMILIES = {
         "surfaces": {
             "node": NODE / "mastering_chain.ts",
             "wasm": WASM / "mastering_core.ts",
+            # TypedDicts, held to the list the way the capability results are.
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "assistant_result_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/assistant/suggester.cpp",
+        "root": "MasteringAssistantResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "streaming_preview_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/maximizer/streaming_preview.cpp",
+        "root": "MasteringStreamingPreviewResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "match_reference_loudness_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "MatchReferenceLoudnessResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "match_tonal_balance_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "MatchTonalBalanceResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "match_tonal_balance_log_bands_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "accessor": "match_tonal_balance_schema_paths",
+        "root": "MatchTonalBalanceLogBandsResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "match_eq_curve_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "MatchEqCurveResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "match_reference_delay_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "MatchEstimateReferenceDelaySamplesResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "stereo_mono_compat_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "StereoMonoCompatCheckResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
+        },
+    },
+    "stereo_mono_compat_log_bands_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/api/named_processor.cpp",
+        "root": "StereoMonoCompatCheckLogBandsResult",
+        "surfaces": {
+            "node": NODE / "types_mastering.ts",
+            "wasm": WASM / "public_types_mastering.ts",
+            "python": REPO_ROOT / "bindings/python/src/libsonare/_types_mastering_results.py",
+            "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
     "capability_catalog_schema_paths": {
@@ -370,20 +467,19 @@ def scan(paths: list[str], text: str, root: str) -> tuple[list, list, int]:
 
 def main() -> int:
     failed = False
-    for accessor, family in FAMILIES.items():
+    for label, family in FAMILIES.items():
+        accessor = family.get("accessor", label)
         paths = schema_paths(family["source"].read_text(), accessor)
         if not paths:
             print(
-                f"{accessor}: no literal path list was read -- it moved, was renamed, or computes its entries"
+                f"{label}: no literal path list was read -- it moved, was renamed, or computes its entries"
             )
             failed = True
             continue
         root = family["root"]
         for side, path in family["surfaces"].items():
             missing, unreached, comparisons = scan_surface(paths, path, root)
-            print(
-                f"{accessor} [{side}]: paths {len(paths)} | comparisons {comparisons}"
-            )
+            print(f"{label} [{side}]: paths {len(paths)} | comparisons {comparisons}")
             for entry in unreached:
                 print(f"NOT COMPARED {entry} [{side}]: no such path under {root}")
             for entry in missing:

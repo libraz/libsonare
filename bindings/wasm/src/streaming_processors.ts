@@ -84,10 +84,11 @@ const EQ_PHASE_MODES: Record<string, number> = {
  *   message handler, never from `AudioWorkletProcessor.process()`.
  * - {@link processMono}/{@link processStereo} return fresh arrays. On the render
  *   thread, reuse the returned reference for the block rather than retaining it.
- * - An enabled `loudness` stage needs `loudnessStaticGainDb` measured offline,
- *   because whole-signal integrated LUFS cannot be measured block by block. Pass
- *   `loudnessStaticGainPeakDb` too and the static gain is clamped exactly as the
- *   offline chain clamps it, so the live preview matches the render.
+ * - An enabled `loudness` stage needs `loudnessStaticGainDb` measured offline
+ *   ({@link streamingLoudnessGain} returns it), because whole-signal integrated
+ *   LUFS cannot be measured block by block. Pass `loudnessStaticGainPeakDb` too
+ *   and the static gain is clamped exactly as the offline chain clamps it, so
+ *   the live preview matches the render.
  * - {@link flush} output starts {@link latencySamples} samples early; discard
  *   that many leading samples when time alignment matters.
  *

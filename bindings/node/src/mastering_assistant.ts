@@ -1,5 +1,10 @@
 import { addon } from './native.js';
-import type { StreamingPlatform } from './types.js';
+import type {
+  MasteringAssistantResult,
+  MasteringStreamingPreviewResult,
+  StreamingPlatform,
+  TypedJson,
+} from './types.js';
 import { assertSampleRate } from './validation.js';
 
 /**
@@ -138,12 +143,14 @@ export interface MasteringStreamingPreviewStereoRequest {
   platforms?: StreamingPlatform[];
 }
 
-export function masteringAssistantSuggest(request: MasteringAssistantSuggestRequest): string;
+export function masteringAssistantSuggest(
+  request: MasteringAssistantSuggestRequest,
+): TypedJson<MasteringAssistantResult>;
 export function masteringAssistantSuggest(
   samples: Float32Array,
   sampleRate?: number,
   params?: MasteringAssistantParams,
-): string;
+): TypedJson<MasteringAssistantResult>;
 export function masteringAssistantSuggest(
   samples: Float32Array | MasteringAssistantSuggestRequest,
   sampleRate = 22050,
@@ -178,12 +185,14 @@ export function masteringAssistantSuggestChain(
   );
 }
 
-export function masteringAudioProfile(request: MasteringAudioProfileRequest): string;
+export function masteringAudioProfile(
+  request: MasteringAudioProfileRequest,
+): TypedJson<MasteringAudioProfile>;
 export function masteringAudioProfile(
   samples: Float32Array,
   sampleRate?: number,
   params?: Record<string, number | boolean>,
-): string;
+): TypedJson<MasteringAudioProfile>;
 export function masteringAudioProfile(
   samples: Float32Array | MasteringAudioProfileRequest,
   sampleRate = 22050,
@@ -195,12 +204,14 @@ export function masteringAudioProfile(
   return addon.masteringAudioProfile(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
-export function masteringStreamingPreview(request: MasteringStreamingPreviewRequest): string;
+export function masteringStreamingPreview(
+  request: MasteringStreamingPreviewRequest,
+): TypedJson<MasteringStreamingPreviewResult>;
 export function masteringStreamingPreview(
   samples: Float32Array,
   sampleRate?: number,
   platforms?: StreamingPlatform[],
-): string;
+): TypedJson<MasteringStreamingPreviewResult>;
 export function masteringStreamingPreview(
   samples: Float32Array | MasteringStreamingPreviewRequest,
   sampleRate = 22050,
@@ -225,7 +236,7 @@ export function masteringStreamingPreview(
  */
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
-): string {
+): TypedJson<MasteringAssistantResult> {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringAssistantSuggestStereo', resolvedSampleRate);
   return addon.masteringAssistantSuggestStereo(
@@ -270,7 +281,9 @@ export function masteringAssistantSuggestChainStereo(
  * comparable with {@link masteringAudioProfile}. Defect detectors run on each
  * channel and their results are aggregated.
  */
-export function masteringAudioProfileStereo(request: MasteringAudioProfileStereoRequest): string {
+export function masteringAudioProfileStereo(
+  request: MasteringAudioProfileStereoRequest,
+): TypedJson<MasteringAudioProfile> {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringAudioProfileStereo', resolvedSampleRate);
   return addon.masteringAudioProfileStereo(
@@ -292,7 +305,7 @@ export function masteringAudioProfileStereo(request: MasteringAudioProfileStereo
  */
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
-): string {
+): TypedJson<MasteringStreamingPreviewResult> {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringStreamingPreviewStereo', resolvedSampleRate);
   return addon.masteringStreamingPreviewStereo(

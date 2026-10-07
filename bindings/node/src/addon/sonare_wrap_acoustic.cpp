@@ -8,6 +8,7 @@
 #include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
+#include "acoustic/selector_names.h"
 #include "analysis/room_estimator.h"
 #include "core/audio.h"
 #include "effects/acoustic/room_morph.h"
@@ -157,8 +158,10 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
   // option bag builds the same room on every surface. Reading the options is
   // the only part that is Node's.
   WallMaterialRequest request;
-  request.has_preset =
-      MaterialPresetFromInt(IntProperty(opts, "materialPreset", 0), &request.preset);
+  request.has_preset = MaterialPresetFromInt(
+      NamedSelectorProperty(opts, "materialPreset", sonare::acoustic::kMaterialPresetSelectorNames,
+                            0),
+      &request.preset);
   request.absorption_bands = NodeFloatArrayOption(opts, "bandAbsorption");
   request.scattering_bands = NodeFloatArrayOption(opts, "bandScattering");
   request.absorption = FloatProperty(opts, "absorption", def_absorption);
@@ -319,7 +322,7 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   cfg.acoustic.noise_floor_margin_db =
       sonare::ZeroIsDefault(FloatProperty(opts, "noiseFloorMarginDb", 0.0f))
           .or_default(cfg.acoustic.noise_floor_margin_db);
-  switch (IntProperty(opts, "mode", 0)) {
+  switch (NamedSelectorProperty(opts, "mode", sonare::acoustic::kAcousticModeSelectorNames, 0)) {
     case 1:
       cfg.acoustic.mode = sonare::AcousticConfig::Mode::Blind;
       break;
@@ -354,6 +357,44 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   out.Set("confidence", Napi::Number::New(env, est.confidence));
   out.Set("absorptionBands", VecToFloat32(env, absorption_bands));
   out.Set("rt60Bands", VecToFloat32(env, rt60_bands));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 1 || !info[0].IsObject()) {
+    Napi::TypeError::New(env, "Expected (estimate)").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  const Napi::Object estimate = info[0].As<Napi::Object>();
+  constexpr float kUnmeasured = std::numeric_limits<float>::quiet_NaN();
+  std::vector<float> bands = FloatArrayProperty(estimate, "absorptionBands");
+  SonareRoomEstimate c_estimate{};
+  c_estimate.length_m = FloatProperty(estimate, "length", kUnmeasured);
+  c_estimate.width_m = FloatProperty(estimate, "width", kUnmeasured);
+  c_estimate.height_m = FloatProperty(estimate, "height", kUnmeasured);
+  c_estimate.absorption_bands = bands.empty() ? nullptr : bands.data();
+  c_estimate.band_count = bands.size();
+
+  SonareRirSynthConfig geometry{};
+  const SonareError err = sonare_room_geometry_from_estimate(&c_estimate, &geometry);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("lengthM", Napi::Number::New(env, geometry.length_m));
+  out.Set("widthM", Napi::Number::New(env, geometry.width_m));
+  out.Set("heightM", Napi::Number::New(env, geometry.height_m));
+  if (geometry.absorption_band_count > 0) {
+    out.Set("bandAbsorption",
+            VecToFloat32(env, std::vector<float>(
+                                  geometry.absorption_bands,
+                                  geometry.absorption_bands + geometry.absorption_band_count)));
+  }
   return out;
   SONARE_NODE_CATCH(env)
 }

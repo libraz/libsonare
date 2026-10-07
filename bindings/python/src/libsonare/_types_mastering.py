@@ -69,6 +69,24 @@ class LoudnessMatch:
 
 
 @dataclass(frozen=True, slots=True)
+class StreamingLoudnessGain:
+    """The loudness numbers a :class:`StreamingMasteringChain` is built with.
+
+    Measured at the loudness stage's input, after every earlier enabled stage,
+    which is where the offline chain measures, so ``loudness_static_gain_db``
+    equals the gain :func:`mastering_chain` applies, ceiling clamp included.
+    Pass ``loudness_static_gain_db`` and ``true_peak_db`` as the constructor's
+    ``loudness_static_gain_db`` and ``loudness_static_gain_peak_db``. A silent or
+    below-gate stage input reads a non-finite ``integrated_lufs`` and a gain of 0;
+    digital silence reads ``true_peak_db`` at the meter's -120 dB floor.
+    """
+
+    loudness_static_gain_db: float
+    true_peak_db: float
+    integrated_lufs: float
+
+
+@dataclass(frozen=True, slots=True)
 class StageGainReduction:
     """Gain reduction reported by a single dynamics/maximizer chain stage.
 

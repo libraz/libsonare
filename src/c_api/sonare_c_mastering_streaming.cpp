@@ -13,6 +13,7 @@
 #include "mastering/maximizer/streaming_preview.h"
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
+#include "util/constants.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -42,6 +43,61 @@ SonareError sonare_mastering_streaming_preview(const float* samples, size_t leng
     *json_out = copy_string(sonare::mastering::maximizer::streaming_preview_to_json(results));
     return SONARE_OK;
   });
+}
+
+namespace {
+
+SonareStreamingLoudnessGain undefined_streaming_loudness_gain() noexcept {
+  return {0.0f, sonare::constants::kFloorDb, -std::numeric_limits<float>::infinity()};
+}
+
+SonareStreamingLoudnessGain to_c_streaming_loudness_gain(
+    const sonare::mastering::api::StreamingLoudnessGain& gain) noexcept {
+  return {gain.loudness_static_gain_db, gain.true_peak_db, gain.integrated_lufs};
+}
+
+}  // namespace
+
+SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, int sample_rate,
+                                           const SonareMasteringParam* params, size_t param_count,
+                                           SonareStreamingLoudnessGain* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = undefined_streaming_loudness_gain();
+  SonareError err = validate_audio_params(samples, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  auto cpp_params = to_params(params, param_count);
+  const auto config =
+      sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+  *out = to_c_streaming_loudness_gain(
+      sonare::mastering::api::streaming_loudness_gain_mono(config, samples, length, sample_rate));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  const SonareMasteringParam* params,
+                                                  size_t param_count,
+                                                  SonareStreamingLoudnessGain* out) {
+  SONARE_C_API_ENTRY;
+  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  *out = undefined_streaming_loudness_gain();
+  SonareError err = validate_stereo_audio_params(left, right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  if (!params && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
+
+  SONARE_C_TRY
+  auto cpp_params = to_params(params, param_count);
+  const auto config =
+      sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+  *out = to_c_streaming_loudness_gain(sonare::mastering::api::streaming_loudness_gain_stereo(
+      config, left, right, length, sample_rate));
+  return SONARE_OK;
+  SONARE_C_CATCH
 }
 
 SonareError sonare_mastering_assistant_suggest(const float* samples, size_t length, int sample_rate,

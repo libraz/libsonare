@@ -195,6 +195,27 @@ def configure_mastering_signatures(lib: ctypes.CDLL) -> None:
                 ctypes.POINTER(SonareMasteringStereoResult),
                 ctypes.POINTER(SonareLoudnessMatch),
             ]
+        if hasattr(lib, "sonare_streaming_loudness_gain"):
+            lib.sonare_streaming_loudness_gain.restype = ctypes.c_int32
+            lib.sonare_streaming_loudness_gain.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamingLoudnessGain),
+            ]
+        if hasattr(lib, "sonare_streaming_loudness_gain_stereo"):
+            lib.sonare_streaming_loudness_gain_stereo.restype = ctypes.c_int32
+            lib.sonare_streaming_loudness_gain_stereo.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareMasteringParam),
+                ctypes.c_size_t,
+                ctypes.POINTER(SonareStreamingLoudnessGain),
+            ]
         if hasattr(lib, "sonare_mastering_streaming_preview"):
             lib.sonare_mastering_streaming_preview.restype = ctypes.c_int32
             lib.sonare_mastering_streaming_preview.argtypes = [

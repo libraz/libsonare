@@ -29,6 +29,7 @@
 #include "mastering/spectral/air_band.h"
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::api {
 
@@ -336,8 +337,10 @@ class MasteringChain {
 /// The streaming chain cannot measure whole-signal integrated LUFS, so the
 /// loudness stage (which every built-in preset enables) normally cannot run in
 /// a realtime preview. To let a preset's streaming preview match its offline
-/// render, the caller may precompute the loudness normalization gain offline
-/// (e.g. `target_lufs - measured_integrated_lufs`) and supply it here. When
+/// render, the caller precomputes the loudness normalization gain offline and
+/// supplies it here; @ref streaming_loudness_gain_mono produces it, measured at
+/// the loudness stage's input (after every earlier stage) like the offline
+/// chain, not on the source. When
 /// provided and `config.loudness.enabled` is set, the chain applies that fixed
 /// gain per block before the loudness stage's true-peak limiter instead of
 /// throwing. The true-peak ceiling is still enforced live by the loudness
@@ -350,8 +353,9 @@ struct StreamingMasteringChainOptions {
   /// provided"; in that case an enabled loudness stage still throws.
   float loudness_static_gain_db = std::numeric_limits<float>::quiet_NaN();
 
-  /// Offline-measured true-peak (dBFS) of the source the static gain was
-  /// computed for. When finite, the static gain is clamped to
+  /// True peak (dBFS) of the loudness stage's input, measured offline with the
+  /// static gain (@ref StreamingLoudnessGain::true_peak_db). When finite, the static gain is
+  /// clamped to
   /// `(loudness.ceiling_db - loudness_static_gain_peak_db) +
   /// max(loudness.max_limiter_gain_reduction_db, 0)` so the streaming preview
   /// does not drive the loudness limiter harder than the offline chain (which
@@ -477,6 +481,46 @@ class StreamingMasteringChain {
   // offline-rendered loudness without measuring whole-signal LUFS live.
   float loudness_static_gain_linear_ = 1.0f;
 };
+
+// ---------------------------------------------------------------------------
+// Streaming loudness gain
+// ---------------------------------------------------------------------------
+
+/// @brief The two numbers a StreamingMasteringChain needs for its loudness
+///        stage, plus the integrated loudness behind the gain.
+/// @details Measured at the loudness stage's input, i.e. on the signal after
+///          every earlier enabled stage, which is where the offline chain
+///          measures. Pass @ref loudness_static_gain_db and @ref true_peak_db as
+///          StreamingMasteringChainOptions::loudness_static_gain_db and
+///          loudness_static_gain_peak_db.
+struct StreamingLoudnessGain {
+  /// Static gain (dB) the offline loudness stage would apply, ceiling-headroom
+  /// bound included; 0 when the stage input is silent or below the absolute gate.
+  float loudness_static_gain_db = 0.0f;
+  /// True peak (dBTP) of the stage input, at `loudness.true_peak_oversample`.
+  /// The meter's silence floor (constants::kFloorDb) for digital silence.
+  float true_peak_db = ::sonare::constants::kFloorDb;
+  /// Integrated loudness (LUFS) of the stage input; -inf below the absolute gate.
+  float integrated_lufs = -std::numeric_limits<float>::infinity();
+};
+
+/// @brief Computes the streaming loudness gain for mono audio.
+/// @details Renders the offline chain with its loudness stage switched off,
+///          then solves the loudness stage's gain on that output with the
+///          stage's own target, ceiling and limiter-depth settings, so the
+///          result equals the gain MasteringChain::process_mono applies. The
+///          gain is computed from `config.loudness` whether or not the stage is
+///          enabled. Throws like MasteringChain on an invalid configuration or
+///          input.
+StreamingLoudnessGain streaming_loudness_gain_mono(const MasteringChainConfig& config,
+                                                   const float* samples, std::size_t length,
+                                                   int sample_rate);
+
+/// @brief Stereo counterpart of @ref streaming_loudness_gain_mono, measuring
+///        with BS.1770 channel summing and the larger of the two channel peaks.
+StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig& config,
+                                                     const float* left, const float* right,
+                                                     std::size_t length, int sample_rate);
 
 // ---------------------------------------------------------------------------
 // Flat-params config bridge (used by C / Python / Node bindings).

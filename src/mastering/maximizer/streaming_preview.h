@@ -52,4 +52,10 @@ std::vector<StreamingPreviewResult> streaming_preview_interleaved(
 
 std::string streaming_preview_to_json(const std::vector<StreamingPreviewResult>& results);
 
+/// @brief Every dotted field path @ref streaming_preview_to_json emits.
+/// @details See @ref audio_profile_schema_paths for the contract: an array
+///          contributes its element's paths under a `[]` segment and nothing of
+///          its own.
+const std::vector<std::string>& streaming_preview_schema_paths();
+
 }  // namespace sonare::mastering::maximizer

@@ -3,7 +3,7 @@ from __future__ import annotations
 import builtins
 from collections.abc import Sequence
 from enum import IntEnum
-from typing import Any, Literal, TypeAlias, TypedDict
+from typing import Any, Literal, NotRequired, TypeAlias, TypedDict
 
 import numpy as np
 from numpy.typing import NDArray
@@ -769,6 +769,17 @@ class RoomEstimate:
     @property
     def rt60Bands(self) -> list[float]: ...
 
+MaterialPresetName: TypeAlias = Literal["none", "concrete", "wood", "curtain", "carpet", "glass"]
+AcousticModeName: TypeAlias = Literal["auto", "blind", "impulse_response"]
+
+class RoomGeometry(TypedDict):
+    length_m: float
+    width_m: float
+    height_m: float
+    absorption_bands: NotRequired[list[float]]
+    source: NotRequired[tuple[float, float, float]]
+    listener: NotRequired[tuple[float, float, float]]
+
 class DereverbClassicalConfig(TypedDict):
     threshold: float
     attenuation: float
@@ -1132,6 +1143,25 @@ class ChordAnalysisResult:
     chords: list[Chord]
     tuning: float
     def __init__(self, chords: list[Chord], tuning: float = ...) -> None: ...
+
+ChordFunctionName: TypeAlias = Literal["tonic", "subdominant", "dominant", "chromatic", "none"]
+
+class FunctionalChord(Chord):
+    roman: str
+    function: ChordFunctionName
+    def __init__(
+        self,
+        root: PitchClass,
+        quality: str,
+        start: float,
+        end: float,
+        confidence: float,
+        bass: PitchClass | None = None,
+        canonical_name: str = "",
+        roman_numeral: str | None = None,
+        roman: str = "",
+        function: ChordFunctionName = "none",
+    ) -> None: ...
 
 class StftResult:
     n_bins: int
@@ -1632,6 +1662,146 @@ class StageGainReduction:
     stage: str
     gain_reduction_db: float
     def __init__(self, stage: str, gain_reduction_db: float) -> None: ...
+
+class MasteringAudioProfileLoudness(TypedDict):
+    integratedLufs: float
+    lraLu: float
+    truePeakDb: float
+    crestFactorDb: float
+
+class MasteringAudioProfileSpectral(TypedDict):
+    subRmsDb: float
+    lowRmsDb: float
+    lowMidRmsDb: float
+    midRmsDb: float
+    highMidRmsDb: float
+    highRmsDb: float
+    airRmsDb: float
+    centroidHz: float
+    flatness: float
+    rolloffHz: float
+
+class MasteringAudioProfileDynamics(TypedDict):
+    shortTermLufsStd: float
+    attackDensity: float
+    sustainRatio: float
+
+class MasteringAudioProfileDefects(TypedDict):
+    measured: bool
+    clickCount: int
+    clickRejected: int
+    clickLongestRunSamples: int
+    clickPerSecond: float
+    crackleSampleCount: int
+    crackleSampleFraction: float
+    cracklePerSecond: float
+    clipSampleCount: int
+    clipRunCount: int
+    clipLongestRunSamples: int
+    clipSampleFraction: float
+    clipFlatRunCount: int
+    clipFlatSampleCount: int
+    clipLongestFlatRunSamples: int
+    clipFlatLevel: float
+    noiseFloorDbfs: float
+    noiseBandPeakDbfs: float
+    noiseBandPeakIndex: int
+    humFundamentalHz: float
+    humFundamentalProminence: float
+    humHarmonics: int
+    humFundamentalDbfs: float
+    humPeakHarmonicDbfs: float
+    lateDecayRatioDb: float
+
+class MasteringAudioProfile(TypedDict):
+    durationSec: float
+    bpm: float
+    bpmConfidence: float
+    loudness: MasteringAudioProfileLoudness
+    spectral: MasteringAudioProfileSpectral
+    dynamics: MasteringAudioProfileDynamics
+    defects: MasteringAudioProfileDefects
+
+class MasteringChainConfigDocument(TypedDict):
+    version: int
+    params: dict[str, Any]
+
+class MasteringAssistantProfile(TypedDict):
+    durationSec: float
+    bpm: float
+    bpmConfidence: float
+    integratedLufs: float | None
+    lraLu: float
+    truePeakDb: float
+    crestFactorDb: float
+    spectralCentroidHz: float
+    spectralFlatness: float
+    attackDensity: float
+    sustainRatio: float
+
+class MasteringAssistantResult(TypedDict):
+    chainConfig: MasteringChainConfigDocument
+    explanation: list[str]
+    profile: MasteringAssistantProfile
+
+class MasteringStreamingPreviewPlatform(TypedDict):
+    name: str
+    integratedLufs: float | None
+    truePeakDb: float
+    normalizationGainDb: float
+    ceilingRisk: bool
+
+class MasteringStreamingPreviewResult(TypedDict):
+    platforms: list[MasteringStreamingPreviewPlatform]
+
+class MatchReferenceLoudnessResult(TypedDict):
+    sourceLufs: float | None
+    referenceLufs: float | None
+    gainToMatchDb: float | None
+
+class MatchTonalBalanceBand(TypedDict):
+    lowHz: float
+    highHz: float
+    sourceDb: float
+    referenceDb: float
+    deviationDb: float
+
+class MatchTonalBalanceResult(TypedDict):
+    bands: list[MatchTonalBalanceBand]
+
+class MatchTonalBalanceLogBandsResult(TypedDict):
+    bands: list[MatchTonalBalanceBand]
+
+class MatchEqCurveResult(TypedDict):
+    frequencies: list[float]
+    gainDb: list[float]
+
+class MatchEstimateReferenceDelaySamplesResult(TypedDict):
+    delaySamples: float
+
+class StereoMonoCompatCheckResult(TypedDict):
+    correlation: float
+    width: float | None
+    monoPeak: float
+    sideRms: float
+    likelyMonoCompatible: bool
+
+class StereoMonoCompatBand(TypedDict):
+    lowHz: float
+    highHz: float
+    correlation: float
+    sideRms: float
+
+class StereoMonoCompatCheckLogBandsResult(TypedDict):
+    bands: list[StereoMonoCompatBand]
+
+class StreamingLoudnessGain:
+    loudness_static_gain_db: float
+    true_peak_db: float
+    integrated_lufs: float
+    def __init__(
+        self, loudness_static_gain_db: float, true_peak_db: float, integrated_lufs: float
+    ) -> None: ...
 
 class MasteringLoudnessSummary:
     integrated_lufs: float
