@@ -92,9 +92,10 @@ struct SonareMixer {
   // leave it at 2; the project bounce sets it through set_output_channels().
   int output_channels = 2;
   sonare::graph::Graph graph;
+  // The graph node each strip's external input is written to, in strip order.
+  std::vector<std::string> input_node_ids;
   bool compiled_dirty = true;
   int latency_samples = 0;
-  int tail_samples = 0;
   int64_t timeline_sample_pos = 0;
 };
 
@@ -232,6 +233,9 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
 
 void apply_solo_mutes(SonareMixer* mixer);
 void build_and_compile(SonareMixer* mixer);
+/// @brief Longest audible tail to the master over the live graph, compiling
+///        first when the topology is dirty.
+int tail_samples(SonareMixer* mixer);
 
 /// @brief The strip named @p id, or nullptr. Records no error, for internal
 ///        callers that treat a miss as ordinary.

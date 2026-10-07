@@ -25,6 +25,11 @@ class Graph {
 
   bool compile();
   void prepare(double sample_rate, int max_block_size);
+  // Moves the queued compensation audio of every compiled edge that @p previous
+  // also carries with the same endpoints, ports, mix mode and delay, so a
+  // rebuild of an unchanged route does not drop what it was holding. Both
+  // graphs must be compiled and prepared; other edges keep their fresh state.
+  void adopt_connection_state(Graph& previous) noexcept;
   void reset();
   // Audio-thread path: noexcept so a throw never escapes into the noexcept
   // GraphRuntime::process chain (which would call std::terminate). An
@@ -40,6 +45,7 @@ class Graph {
   bool compiled() const noexcept { return compiled_; }
   size_t node_count() const noexcept { return nodes_.size(); }
   size_t connection_count() const noexcept { return connections_.size(); }
+  const Connection& connection(size_t connection_index) const;
   int connection_delay_samples(size_t connection_index) const;
   // Q8 delay inserted on a compiled connection by longest-path PDC. If the
   // value has a fractional part, Graph uses the same Lagrange3 fractional delay
@@ -69,6 +75,9 @@ class Graph {
   };
 
   bool validate_connection(const Connection& connection) const;
+  // Longest-path PDC over the topo order: fills node_latency_q8_ and builds one
+  // runtime connection per edge with the delay that lands it on its input tap.
+  void build_arrival_plan();
   void prepare_delay_lines(RuntimeConnection& runtime_connection);
   static float process_fractional_delay(RuntimeConnection::FractionalDelayLine& delay_line,
                                         int delay_samples_q8, float input) noexcept;

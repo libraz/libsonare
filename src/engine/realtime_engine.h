@@ -17,6 +17,7 @@
 #include "engine/metronome.h"
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
+#include "rt/bounded_staging.h"
 #include "rt/command.h"
 #include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
@@ -1051,7 +1052,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   void enqueue_error(TelemetryErrorCode code, int64_t render_frame, int64_t timeline_sample,
                      uint32_t value) noexcept;
   void on_clip_page_miss(const ClipPageRequest& request) noexcept override;
-  void compact_pending() noexcept;
   // Returns every mixer and effect processor to its prepared state; see
   // reset_processor_state. Not concurrent with process().
   void reset_processing_now() noexcept;
@@ -1509,8 +1509,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   // called on AUDIO and must never grow a default-capacity container there.
   midi::MidiSequencer::BoundaryOffsets midi_boundary_offsets_{};
 #endif
-  std::array<rt::Command, kMaxPendingCommands> pending_{};
-  std::array<bool, kMaxPendingCommands> pending_active_{};
+  // Packed in acceptance order, so same-time commands fire in the order they arrived.
+  rt::BoundedStaging<rt::Command, kMaxPendingCommands> pending_{};
 #if defined(SONARE_WITH_GRAPH)
   GraphRuntime graph_runtime_{};
 #endif

@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "c_api/mixing_internal.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mixing/channel_strip_eq.h"
 #include "util/json.h"
@@ -26,6 +27,58 @@ std::vector<std::string> unique_vca_members(const std::vector<std::string>& memb
 // non-finite policy of validate_audio_params. The scan is O(num_samples) per
 // channel, which this entry point can afford: it lazily compiles and allocates
 // (see sonare_mixer_process_stereo) and is therefore not an audio-thread entry.
+// The scene bag of @p insert with every realtime parameter @p live has moved
+// since construction (consumed automation) written back under its descriptor
+// key, so a reload rebuilds the settled state. When a construction-time alias in
+// the bag would shadow a written value, the one alias whose removal lets the bag
+// reproduce every live value is dropped.
+std::string live_insert_params(const sonare::mixing::api::Insert& insert,
+                               const sonare::rt::ProcessorBase& live) {
+  namespace json = sonare::util::json;
+  const std::vector<sonare::rt::ParamDescriptor> descriptors = live.parameter_descriptors();
+  std::vector<std::string> moved_keys;
+  json::Value bag =
+      insert.params_json.empty() ? json::Value(json::Object()) : json::parse(insert.params_json);
+  for (const auto& descriptor : descriptors) {
+    float constructed = 0.0f;
+    float applied = 0.0f;
+    if (!live.constructed_parameter_value(descriptor.id, &constructed) ||
+        !live.last_applied_parameter_value(descriptor.id, &applied) || applied == constructed) {
+      continue;
+    }
+    bag.as_object()[descriptor.key] = json::Value(static_cast<double>(applied));
+    moved_keys.push_back(descriptor.key);
+  }
+  if (moved_keys.empty()) return insert.params_json;
+
+  const auto reproduces = [&](const json::Value& candidate) {
+    const auto rebuilt =
+        sonare::mastering::api::make_insert(insert.processor_name, json::dump(candidate));
+    if (!rebuilt) return false;
+    for (const auto& descriptor : descriptors) {
+      float want = 0.0f;
+      float got = 0.0f;
+      if (!live.last_applied_parameter_value(descriptor.id, &want)) continue;
+      if (!rebuilt->constructed_parameter_value(descriptor.id, &got) ||
+          std::abs(got - want) > 1.0e-4f * std::max(1.0f, std::abs(want))) {
+        return false;
+      }
+    }
+    return true;
+  };
+  if (!reproduces(bag)) {
+    for (const auto& entry : bag.as_object()) {
+      if (std::find(moved_keys.begin(), moved_keys.end(), entry.first) != moved_keys.end()) {
+        continue;
+      }
+      json::Value candidate = bag;
+      candidate.as_object().erase(entry.first);
+      if (reproduces(candidate)) return json::dump(candidate);
+    }
+  }
+  return json::dump(bag);
+}
+
 bool block_finite(const float* samples, size_t num_samples) noexcept {
   for (size_t index = 0; index < num_samples; ++index) {
     if (!finite(samples[index])) {
@@ -115,6 +168,15 @@ SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id) {
       }
     }
   }
+  // A key taken from the removed bus would name a node the next compile cannot
+  // find; the keyed insert falls back to its own detector, as an unkeyed one does.
+  const auto drop_keys = [&](std::vector<sonare::mixing::api::Insert>& inserts) {
+    for (auto& insert : inserts) {
+      if (insert.sidechain_key == bus_id) insert.sidechain_key.clear();
+    }
+  };
+  for (const auto& strip : mixer->strips) drop_keys(strip->scene_strip.inserts);
+  for (auto& bus : mixer->buses) drop_keys(bus.inserts);
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH
@@ -511,6 +573,16 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     SONARE_C_TRY
     sonare::mixing::api::Scene scene;
     scene.buses = mixer->buses;
+    for (auto& bus : scene.buses) {
+      for (const auto& dsp : mixer->bus_dsp) {
+        if (dsp->id != bus.id) continue;
+        for (size_t i = 0; i < bus.inserts.size(); ++i) {
+          const auto* live = dsp->fx.insert_processor(static_cast<unsigned int>(i));
+          if (live != nullptr)
+            bus.inserts[i].params_json = live_insert_params(bus.inserts[i], *live);
+        }
+      }
+    }
     scene.vca_groups = mixer->vca_groups;
     if (scene.buses.empty()) {
       scene.buses.push_back({"master", "master"});
@@ -541,6 +613,20 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       scene_strip.polarity_invert_left = strip->strip.polarity_invert_left();
       scene_strip.polarity_invert_right = strip->strip.polarity_invert_right();
       scene_strip.channel_delay_samples = strip->strip.channel_delay_samples();
+      // Consumed send and insert automation, so a reload rebuilds the settled mix.
+      for (size_t i = 0; i < scene_strip.sends.size() && i < strip->strip.num_sends(); ++i) {
+        scene_strip.sends[i].send_db = strip->strip.send_db(i);
+      }
+      size_t pre_index = 0;
+      size_t post_index = 0;
+      const size_t pre_count = strip->strip.num_pre_inserts();
+      for (auto& insert : scene_strip.inserts) {
+        const size_t combined = insert.slot == sonare::mixing::api::InsertSlot::PreFader
+                                    ? pre_index++
+                                    : pre_count + post_index++;
+        const auto* live = strip->strip.insert_processor(static_cast<unsigned int>(combined));
+        if (live != nullptr) insert.params_json = live_insert_params(insert, *live);
+      }
       scene.strips.push_back(std::move(scene_strip));
     }
     *json_out = sonare_c_detail::copy_string(sonare::mixing::api::scene_to_json(scene));
@@ -579,10 +665,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     SONARE_C_TRY
-    if (mixer->compiled_dirty) {
-      build_and_compile(mixer);
-    }
-    *out_tail_samples = mixer->tail_samples;
+    *out_tail_samples = tail_samples(mixer);
     return SONARE_OK;
     SONARE_C_CATCH
   }
@@ -711,7 +794,7 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
     const int n = static_cast<int>(num_samples);
     mixer->graph.clear_inputs(n);
     for (size_t index = 0; index < count; ++index) {
-      const std::string& id = mixer->strips[index]->id;
+      const std::string& id = mixer->input_node_ids[index];
       mixer->graph.set_input(id, 0, input_left[index], n);
       mixer->graph.set_input(id, 1, input_right[index], n);
     }

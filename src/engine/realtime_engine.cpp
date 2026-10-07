@@ -148,9 +148,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
       boundary_splitter_.add_loop(loop_boundaries[i].offset);
     }
   }
-  for (size_t i = 0; i < pending_.size(); ++i) {
-    if (!pending_active_[i]) continue;
-    const auto sample_time = pending_[i].sample_time;
+  for (const rt::Command& command : pending_) {
+    const auto sample_time = command.sample_time;
     if (command_belongs_to_block(sample_time, state.render_frame, frames)) {
       boundary_splitter_.add_command(static_cast<int>(sample_time - state.render_frame));
     }

@@ -3734,3 +3734,120 @@ TEST_CASE("prepare_midi_clips stages without publishing and publish equals set_m
   REQUIRE(engine.midi_clip_count() == direct.midi_clip_count());
 }
 #endif
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Same-time commands apply in acceptance order when the pending bank is full",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  for (const bool saturate : {true, false}) {
+    INFO("saturated bank " << saturate);
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kBlock);
+    REQUIRE(engine.set_track_lanes({{10}}));
+    sonare::mixing::ChannelStrip track;
+    auto probe = std::make_unique<InsertCommandProbe>();
+    InsertCommandProbe* probe_ptr = probe.get();
+    track.add_pre_insert(std::move(probe));
+    REQUIRE(engine.bind_track_strip(10, &track));
+    const int64_t gain = engine.resolve_track_insert_automation_id(10, 0, "gain");
+    const int64_t unrelated = engine.resolve_track_insert_automation_id(10, 0, "unrelated");
+    REQUIRE(gain >= 0);
+    REQUIRE(unrelated >= 0);
+    auto command = [](int64_t target, int64_t sample_time, float value) {
+      sonare::rt::Command result{};
+      result.type = sonare::rt::CommandType::kSetParam;
+      result.target_id = static_cast<uint32_t>(target);
+      result.sample_time = sample_time;
+      result.arg.f = value;
+      return result;
+    };
+
+    std::array<float, kBlock> output{};
+    float* io[] = {output.data()};
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+    engine.process(io, 1, kBlock);
+    if (saturate) {
+      // Ascending far-future times put the eviction candidate at the bank's end.
+      for (size_t i = 0; i < sonare::engine::RealtimeEngine::kMaxPendingCommands; ++i) {
+        REQUIRE(engine.push_command(command(unrelated, 1'000'000 + static_cast<int64_t>(i), 0.0f)));
+      }
+      engine.process(io, 1, kBlock);
+    }
+    for (const float value : {0.1f, 0.2f, 0.3f}) {
+      REQUIRE(engine.push_command(command(gain, -1, value)));
+    }
+    engine.process(io, 1, kBlock);
+    engine.settle_parameters();
+    CHECK(probe_ptr->insert_value == Catch::Approx(0.3f));
+  }
+}
+#endif  // defined(SONARE_WITH_MIXING)
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("Re-enabled bus EQ does not replay filter history from before it was disabled",
+          "[engine][realtime][mixing]") {
+  constexpr int kBlock = 64;
+  constexpr int kLoudBlocks = 8;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  REQUIRE(engine.set_track_buses({{1, 0.0f}}));
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  sonare::mastering::eq::EqBand band;
+  band.type = sonare::mastering::eq::EqBandType::Peak;
+  band.frequency_hz = 60.0f;
+  band.gain_db = 18.0f;
+  band.q = 0.7f;
+  band.enabled = true;
+  bus.eq.bands.push_back(band);
+  REQUIRE(engine.set_bus_strip(1, bus));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.output_bus_id = 1;
+  REQUIRE(engine.set_track_lanes({lane}));
+
+  // Loud low-frequency material, then the clip ends and the lane is silent.
+  constexpr size_t kSourceFrames = static_cast<size_t>(kBlock * kLoudBlocks);
+  std::array<float, kSourceFrames> source{};
+  for (size_t i = 0; i < kSourceFrames; ++i) {
+    source[i] = 0.9f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 60.0 *
+                                                   static_cast<double>(i) / 48000.0));
+  }
+  const float* source_channels[] = {source.data()};
+  sonare::engine::ClipSchedule clip{};
+  clip.id = 1;
+  clip.track_id = 10;
+  clip.buffer = {source_channels, 1, kSourceFrames};
+  clip.length_samples = static_cast<int64_t>(kSourceFrames);
+  clip.gain = 1.0f;
+  engine.set_clips({clip});
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::array<float, kBlock> output{};
+  float* io[] = {output.data()};
+  float loud_peak = 0.0f;
+  for (int block = 0; block < kLoudBlocks; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+    for (const float sample : output) loud_peak = std::max(loud_peak, std::abs(sample));
+  }
+  REQUIRE(loud_peak > 0.5f);
+
+  bus.eq.enabled = false;
+  REQUIRE(engine.set_bus_strip(1, bus));
+  for (int block = 0; block < 4; ++block) {
+    output.fill(0.0f);
+    engine.process(io, 1, kBlock);
+  }
+  bus.eq.enabled = true;
+  REQUIRE(engine.set_bus_strip(1, bus));
+  output.fill(0.0f);
+  engine.process(io, 1, kBlock);
+  for (const float sample : output) CHECK(sample == 0.0f);
+}
+#endif  // defined(SONARE_WITH_MIXING)

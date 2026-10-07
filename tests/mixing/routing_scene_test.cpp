@@ -170,6 +170,72 @@ TEST_CASE("Removing a bus drops strip sends that targeted it", "[mixing][routing
   sonare_mixer_destroy(mixer);
 }
 
+TEST_CASE("Removing a bus that keys inserts leaves a processable mixer", "[mixing][routing]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 128;
+  const char* router = R"({"thresholdDb":-10,"rangeDb":18,"attackMs":0,"releaseMs":50})";
+  enum class Keyed { None, StripInsert, BusInsert };
+  const auto build = [&](Keyed keyed) {
+    sonare::mixing::api::Scene scene;
+    sonare::mixing::api::Bus master{"master", "master"};
+    if (keyed == Keyed::BusInsert) {
+      master.inserts.push_back({sonare::mixing::api::InsertSlot::PostFader,
+                                "dynamics.sidechainRouter", router, "keybus"});
+    }
+    scene.buses.push_back(master);
+    scene.buses.push_back({"keybus", "aux"});
+    sonare::mixing::api::Strip host;
+    host.id = "host";
+    sonare::mixing::api::Strip bed;
+    bed.id = "bed";
+    if (keyed == Keyed::StripInsert) {
+      bed.inserts.push_back({sonare::mixing::api::InsertSlot::PostFader, "dynamics.sidechainRouter",
+                             router, "keybus"});
+    }
+    scene.strips = {host, bed};
+    scene.connections.push_back({"host", "keybus"});
+    scene.connections.push_back({"bed", "master"});
+    const std::string json = sonare::mixing::api::scene_to_json(scene);
+    SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), kSr, kBlock);
+    REQUIRE(mixer != nullptr);
+    return mixer;
+  };
+  std::vector<float> in(kBlock, 0.1f);
+  const float* inputs[] = {in.data(), in.data()};
+  std::vector<float> out_l(kBlock);
+  std::vector<float> out_r(kBlock);
+  const auto process = [&](SonareMixer* mixer) {
+    return sonare_mixer_process_stereo(mixer, inputs, inputs, 2, out_l.data(), out_r.data(),
+                                       kBlock);
+  };
+  const auto exported = [](SonareMixer* mixer) {
+    char* json = nullptr;
+    REQUIRE(sonare_mixer_to_scene_json(mixer, &json) == SONARE_OK);
+    const std::string text(json);
+    sonare_free_string(json);
+    return text;
+  };
+
+  for (const Keyed keyed : {Keyed::None, Keyed::StripInsert, Keyed::BusInsert}) {
+    INFO("keyed " << static_cast<int>(keyed));
+    SonareMixer* mixer = build(keyed);
+    REQUIRE(process(mixer) == SONARE_OK);
+    // An unrelated bus leaves the key in place.
+    REQUIRE(sonare_mixer_add_bus(mixer, "unrelated", "aux") == SONARE_OK);
+    REQUIRE(sonare_mixer_remove_bus(mixer, "unrelated") == SONARE_OK);
+    REQUIRE(process(mixer) == SONARE_OK);
+    CHECK((exported(mixer).find("sidechainKey") != std::string::npos) == (keyed != Keyed::None));
+
+    REQUIRE(sonare_mixer_remove_bus(mixer, "keybus") == SONARE_OK);
+    CHECK(sonare_mixer_compile(mixer) == SONARE_OK);
+    CHECK(process(mixer) == SONARE_OK);
+    for (const float sample : out_l) CHECK(std::isfinite(sample));
+    CHECK(exported(mixer).find("keybus") == std::string::npos);
+    CHECK(exported(mixer).find("sidechainKey") == std::string::npos);
+    sonare_mixer_destroy(mixer);
+  }
+}
+
 TEST_CASE("Routed mixer delivers scene sidechain keys to strip inserts", "[mixing][routing]") {
   static constexpr int kSr = 48000;
   static constexpr int kBlock = 512;

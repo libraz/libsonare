@@ -120,7 +120,7 @@ class MixerWasm {
   // other strips; it is not latency, so compensation does not cancel it.
   void setChannelDelaySamples(const val& strip_index_val, const val& delay_samples_val);
 
-  // Sets the strip's live VCA gain offset in dB (not persisted to the scene).
+  // Sets the strip's direct VCA trim in dB (persisted as the scene's vcaOffsetDb).
   void setVcaOffsetDb(const val& strip_index_val, const val& offset_db_val);
 
   // Sets independent left/right pan positions (dual-pan mode).

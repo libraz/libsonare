@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "engine/track_mixer.h"
-#include "mixing/tail_utils.h"
+#include "mixing/tail_planner.h"
 
 namespace sonare::engine {
 
@@ -644,12 +644,16 @@ bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
 }
 
 int TrackMixerRuntime::tail_samples() const noexcept {
-  using mixing::combine_tail_samples;
-  using mixing::TailTopology;
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
   if (lanes == nullptr) return 0;
   const BusGraphView view = current_bus_graph_view();
+  const size_t lane_count = lanes->size();
   const size_t bus_count = bus_configs_.size();
+  // Nodes: lanes, then buses, then the master.
+  const size_t master = lane_count + bus_count;
+  const auto bus_node = [&](int bus_index) {
+    return bus_index < 0 ? master : lane_count + static_cast<size_t>(bus_index);
+  };
   const auto bus_index_of = [this, bus_count](uint32_t bus_id) -> int {
     if (bus_id == 0) return -1;
     for (size_t i = 0; i < bus_count; ++i) {
@@ -657,33 +661,79 @@ int TrackMixerRuntime::tail_samples() const noexcept {
     }
     return -1;
   };
-  // Tail from a bus input to the master; the master itself contributes 0.
-  std::array<int, kMaxBusLanes> to_master{};
-  const auto dest_tail = [&to_master](int index) {
-    return index < 0 ? 0 : to_master[static_cast<size_t>(index)];
+  const auto lane_of = [lanes](uint32_t track_id) -> int {
+    for (size_t i = 0; i < lanes->size(); ++i) {
+      if ((*lanes)[i].track_id == track_id) return static_cast<int>(i);
+    }
+    return -1;
   };
-  for (size_t order_index = bus_count; order_index-- > 0;) {
-    const size_t bus_index = view.order[order_index];
-    const BusRoute& route = view.routes[bus_index];
-    int downstream = dest_tail(route.output_index);
-    for (size_t i = 0; i < route.send_count; ++i) {
-      downstream = std::max(downstream, dest_tail(route.send_index[i]));
-    }
+  const auto bus_tail = [&view](size_t bus_index) {
     const mixing::FxBus* bus = view.bus[bus_index];
-    to_master[bus_index] = combine_tail_samples(bus != nullptr ? bus->tail_samples() : 0,
-                                                downstream, TailTopology::kSerial);
-  }
-  int result = 0;
-  for (const TrackLaneConfig& lane : *lanes) {
-    const mixing::ChannelStrip* strip = bound_strip_for(lane.track_id);
-    int downstream = dest_tail(bus_index_of(lane.output_bus_id));
-    for (const TrackLaneConfig::Send& send : lane.sends) {
-      downstream = std::max(downstream, dest_tail(bus_index_of(send.bus_id)));
+    return bus != nullptr ? bus->tail_samples() : 0;
+  };
+  try {
+    mixing::MixerTailPlanner planner(master + 1);
+    planner.reserve(lane_count * 2 + bus_count * 2 + sidechains_.count);
+    for (size_t lane_index = 0; lane_index < lane_count; ++lane_index) {
+      const TrackLaneConfig& lane = (*lanes)[lane_index];
+      const mixing::ChannelStrip* strip = bound_strip_for(lane.track_id);
+      planner.add_path(lane_index, bus_node(bus_index_of(lane.output_bus_id)),
+                       strip != nullptr ? strip->tail_samples() : 0);
+      for (const TrackLaneConfig::Send& send : lane.sends) {
+        const bool pre = send.timing == mixing::SendTiming::PreFader;
+        const int tap = strip == nullptr ? 0
+                        : pre            ? strip->pre_fader_tail_samples()
+                                         : strip->tail_samples();
+        planner.add_path(lane_index, bus_node(bus_index_of(send.bus_id)), tap);
+      }
     }
-    result = std::max(result, combine_tail_samples(strip != nullptr ? strip->tail_samples() : 0,
-                                                   downstream, TailTopology::kSerial));
+    for (size_t bus_index = 0; bus_index < bus_count; ++bus_index) {
+      const BusRoute& route = view.routes[bus_index];
+      const size_t node = bus_node(static_cast<int>(bus_index));
+      planner.add_path(node, bus_node(route.output_index), bus_tail(bus_index));
+      for (size_t i = 0; i < route.send_count; ++i) {
+        planner.add_path(node, bus_node(route.send_index[i]), bus_tail(bus_index));
+      }
+    }
+    // A key reaches the output only while its insert monitors it.
+    for (size_t i = 0; i < sidechains_.count; ++i) {
+      if (view.skip_binding[i]) continue;
+      const SidechainBinding& binding = sidechains_.bindings[i];
+      const rt::ProcessorBase* insert = nullptr;
+      size_t target = master;
+      if (binding.target_kind == static_cast<uint8_t>(SidechainTargetKind::Lane)) {
+        const int lane = lane_of(binding.target_id);
+        const mixing::ChannelStrip* strip = bound_strip_for(binding.target_id);
+        if (lane < 0 || strip == nullptr) continue;
+        target = static_cast<size_t>(lane);
+        insert = strip->insert_processor(binding.insert_index);
+      } else if (binding.target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus)) {
+        const int bus = bus_index_of(binding.target_id);
+        if (bus < 0 || view.bus[static_cast<size_t>(bus)] == nullptr) continue;
+        target = bus_node(bus);
+        insert = view.bus[static_cast<size_t>(bus)]->insert_processor(binding.insert_index);
+      } else if (master_strip_ != nullptr) {
+        insert = master_strip_->insert_processor(binding.insert_index);
+      }
+      if (insert == nullptr || !insert->sidechain_audible()) continue;
+      if (binding.source_kind == static_cast<uint8_t>(SidechainSourceKind::Bus)) {
+        const int bus = bus_index_of(binding.source_id);
+        if (bus < 0) continue;
+        planner.add_path(bus_node(bus), target, bus_tail(static_cast<size_t>(bus)));
+      } else {
+        const int lane = lane_of(binding.source_id);
+        const mixing::ChannelStrip* strip = bound_strip_for(binding.source_id);
+        if (lane < 0) continue;
+        planner.add_path(static_cast<size_t>(lane), target,
+                         strip != nullptr ? strip->tail_samples() : 0);
+      }
+    }
+    // The master contributes 0 here; the engine adds the master strip itself.
+    return planner.arriving(master);
+  } catch (...) {
+    // Out of memory planning the query: unbounded keeps it an upper bound.
+    return std::numeric_limits<int>::max();
   }
-  return result;
 }
 
 }  // namespace sonare::engine

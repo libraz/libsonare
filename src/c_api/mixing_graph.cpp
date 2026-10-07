@@ -5,7 +5,7 @@
 #include "mixing/gain.h"
 #include "mixing/solo_mute.h"
 #include "mixing/stereo_width.h"
-#include "mixing/tail_utils.h"
+#include "mixing/tail_planner.h"
 
 namespace sonare_c_mixing_detail {
 
@@ -93,6 +93,31 @@ class StripNode final : public sonare::rt::ProcessorBase {
   int latency_samples() const noexcept override { return strip_->latency_samples(); }
   int latency_samples_q8() const noexcept override { return strip_->latency_samples_q8(); }
   int tail_samples() const noexcept override { return strip_->tail_samples(); }
+  int input_tap_latency_samples_q8(int input_port) const noexcept override {
+    for (const auto& input : sidechain_inputs_) {
+      if (input.left_port == input_port || input.right_port == input_port) {
+        return strip_->insert_input_latency_samples_q8(input.insert_index).value_or(0);
+      }
+    }
+    return 0;
+  }
+  int output_tail_samples(int output_port) const noexcept override {
+    const int send_base = input_planes_ + scatter_planes_;
+    if (output_port >= send_base) {
+      return strip_->send_tail_samples(
+          static_cast<size_t>((output_port - send_base) / input_planes_));
+    }
+    return strip_->tail_samples();
+  }
+  bool input_port_audible(int input_port) const noexcept override {
+    for (const auto& input : sidechain_inputs_) {
+      if (input.left_port == input_port || input.right_port == input_port) {
+        const sonare::rt::ProcessorBase* insert = strip_->insert_processor(input.insert_index);
+        return insert != nullptr && insert->sidechain_audible();
+      }
+    }
+    return true;
+  }
   int output_latency_samples_q8(int output_port) const noexcept override {
     const int send_base = input_planes_ + scatter_planes_;
     if (output_port >= send_base) {
@@ -148,6 +173,15 @@ class DownmixNode final : public sonare::rt::ProcessorBase {
   sonare::ChannelLayout to_;
   int block_ = 0;
   std::vector<float> scratch_;
+};
+
+// Carries a strip's external block input into the graph, so the input reaches
+// the strip through an edge the arrival plan compensates like any other.
+class InputNode final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
 };
 
 class BusNode final : public sonare::rt::ProcessorBase {
@@ -226,6 +260,23 @@ class BusNode final : public sonare::rt::ProcessorBase {
   int latency_samples() const noexcept override { return bus_->latency_samples(); }
   int latency_samples_q8() const noexcept override { return bus_->latency_samples_q8(); }
   int tail_samples() const noexcept override { return bus_->tail_samples(); }
+  int input_tap_latency_samples_q8(int input_port) const noexcept override {
+    for (const auto& input : sidechain_inputs_) {
+      if (input.left_port == input_port || input.right_port == input_port) {
+        return bus_->insert_input_latency_samples_q8(input.insert_index).value_or(0);
+      }
+    }
+    return 0;
+  }
+  bool input_port_audible(int input_port) const noexcept override {
+    for (const auto& input : sidechain_inputs_) {
+      if (input.left_port == input_port || input.right_port == input_port) {
+        const sonare::rt::ProcessorBase* insert = bus_->insert_processor(input.insert_index);
+        return insert != nullptr && insert->sidechain_audible();
+      }
+    }
+    return true;
+  }
   sonare::mixing::MeterSnapshot meter_snapshot() const noexcept {
     return bus_->bus().meter_snapshot();
   }
@@ -319,8 +370,6 @@ void build_and_compile(SonareMixer* mixer) {
 
   sonare::graph::Graph graph;
   apply_solo_mutes(mixer);
-  std::unordered_map<std::string, int> local_tail_by_id;
-  std::unordered_map<std::string, std::vector<std::string>> audio_inputs_by_id;
   auto checked_connect = [&](sonare::graph::Connection connection) {
     if (!graph.connect(std::move(connection))) {
       throw SonareException(ErrorCode::InvalidParameter, "invalid or duplicate mixer connection");
@@ -560,7 +609,6 @@ void build_and_compile(SonareMixer* mixer) {
       checked_connect(
           {source.node, source.first_port + p, id, p, sonare::graph::Connection::Mix::Add});
     }
-    audio_inputs_by_id[id].push_back(source.node);
     const Span folded{id, 0, planes};
     downmix_by_key.emplace(key, folded);
     return folded;
@@ -573,7 +621,6 @@ void build_and_compile(SonareMixer* mixer) {
       checked_connect(
           {from.node, from.first_port + p, destination, p, sonare::graph::Connection::Mix::Add});
     }
-    audio_inputs_by_id[destination].push_back(from.node);
   };
   // Sidechain edge: always two planes, tapped before any scatter and folded
   // down when the source runs wider.
@@ -617,6 +664,30 @@ void build_and_compile(SonareMixer* mixer) {
     if (is_implicit_bus[bus.id] && !has_main_out[bus.id] && bus.id != master_id) {
       connect_audio(main_output(bus.id), master_id);
     }
+  }
+
+  // A strip's external block input enters through its own node, so the arrival
+  // plan delays it like any edge. A strip a main connection feeds takes that
+  // edge's signal on its main ports instead and has no input node.
+  std::unordered_map<std::string, bool> has_main_in;
+  for (const auto& conn : mixer->connections) {
+    has_main_in[conn.destination] = true;
+  }
+  std::vector<std::string> input_node_ids;
+  input_node_ids.reserve(mixer->strips.size());
+  for (const auto& strip : mixer->strips) {
+    if (has_main_in[strip->id]) {
+      input_node_ids.push_back(strip->id);
+      continue;
+    }
+    const std::string id = "__sonare_input__/" + strip->id;
+    if (!graph.add_node(id, std::make_unique<InputNode>(), 2)) {
+      throw SonareException(ErrorCode::InvalidParameter, "duplicate input node: " + id);
+    }
+    for (int p = 0; p < 2; ++p) {
+      checked_connect({id, p, strip->id, p, sonare::graph::Connection::Mix::Add});
+    }
+    input_node_ids.push_back(id);
   }
 
   // Explicit scene buses are allowed to remain unpatched. Do not report that as
@@ -685,17 +756,6 @@ void build_and_compile(SonareMixer* mixer) {
 
   graph.prepare(static_cast<double>(mixer->sample_rate), mixer->max_block_size);
 
-  // Tail values are prepared-state capabilities just like latency. Query the
-  // graph wrappers only after prepare() so config-dependent delay lengths are
-  // the exact values used by processing, rather than constructor fallbacks.
-  for (const std::string& node_id : graph.topo_order_ids()) {
-    const sonare::graph::Node* node = graph.node(node_id);
-    if (node == nullptr) {
-      throw SonareException(ErrorCode::InvalidState, "mixer tail node missing after compile");
-    }
-    local_tail_by_id[node_id] = std::max(0, node->processor().tail_samples());
-  }
-
   const sonare::graph::Node* master_node = graph.node(master_id);
   if (master_node == nullptr) {
     throw SonareException(ErrorCode::InvalidState, "mixer master node missing after compile");
@@ -703,40 +763,33 @@ void build_and_compile(SonareMixer* mixer) {
   const int master_latency_q8 =
       graph.node_latency_samples_q8(master_id) + master_node->processor().latency_samples_q8();
 
-  // Tail propagation follows only audible main/send edges. Sidechain edges are
-  // graph dependencies but do not feed their source audio into the keyed
-  // processor's output, so including them would overstate the master tail.
-  // Serial nodes add their local tails; merged main/send branches take max.
-  std::unordered_map<std::string, int> accumulated_tail_by_id;
-  for (const std::string& node_id : graph.topo_order_ids()) {
-    int upstream_tail = 0;
-    const auto inputs_it = audio_inputs_by_id.find(node_id);
-    if (inputs_it != audio_inputs_by_id.end()) {
-      for (const std::string& source_id : inputs_it->second) {
-        const auto source_it = accumulated_tail_by_id.find(source_id);
-        if (source_it == accumulated_tail_by_id.end()) {
-          throw SonareException(ErrorCode::InvalidState,
-                                "mixer tail topology is not in dependency order");
-        }
-        upstream_tail = sonare::mixing::combine_tail_samples(
-            upstream_tail, source_it->second, sonare::mixing::TailTopology::kParallel);
-      }
-    }
-    const auto local_it = local_tail_by_id.find(node_id);
-    const int local_tail = local_it == local_tail_by_id.end() ? 0 : local_it->second;
-    accumulated_tail_by_id[node_id] = sonare::mixing::combine_tail_samples(
-        upstream_tail, local_tail, sonare::mixing::TailTopology::kSerial);
-  }
-  const auto master_tail_it = accumulated_tail_by_id.find(master_id);
-  if (master_tail_it == accumulated_tail_by_id.end()) {
-    throw SonareException(ErrorCode::InvalidState, "mixer master tail path missing after compile");
-  }
-
+  graph.adopt_connection_state(mixer->graph);
   mixer->graph = std::move(graph);
+  mixer->input_node_ids = std::move(input_node_ids);
   mixer->master_id = std::move(master_id);
   mixer->latency_samples = std::max(0, master_latency_q8 >> 8);
-  mixer->tail_samples = master_tail_it->second;
   mixer->compiled_dirty = false;
+}
+
+int tail_samples(SonareMixer* mixer) {
+  if (mixer->compiled_dirty) {
+    build_and_compile(mixer);
+  }
+  const sonare::graph::Graph& graph = mixer->graph;
+  const auto& ids = graph.topo_order_ids();
+  std::unordered_map<std::string, size_t> index_of;
+  for (size_t i = 0; i < ids.size(); ++i) index_of.emplace(ids[i], i);
+  sonare::mixing::MixerTailPlanner planner(ids.size());
+  planner.reserve(graph.connection_count());
+  for (size_t c = 0; c < graph.connection_count(); ++c) {
+    const sonare::graph::Connection& edge = graph.connection(c);
+    if (!graph.node(edge.dest_node)->processor().input_port_audible(edge.dest_port)) continue;
+    planner.add_path(
+        index_of.at(edge.source_node), index_of.at(edge.dest_node),
+        graph.node(edge.source_node)->processor().output_tail_samples(edge.source_port));
+  }
+  return planner.leaving(index_of.at(mixer->master_id),
+                         graph.node(mixer->master_id)->processor().output_tail_samples(0));
 }
 
 }  // namespace sonare_c_mixing_detail

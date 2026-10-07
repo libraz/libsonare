@@ -22,6 +22,7 @@
 #include "mixing/send.h"
 #include "mixing/stereo_width.h"
 #include "mixing/surround_panner.h"
+#include "rt/bounded_staging.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mixing::api {
@@ -115,6 +116,8 @@ class ChannelStrip : public rt::ProcessorBase {
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
+  /// Tail of the pre-fader tap: channel delay and pre-fader inserts only.
+  int pre_fader_tail_samples() const noexcept;
   int pre_fader_latency_samples_q8() const noexcept;
   int post_fader_latency_samples_q8() const noexcept;
   /// PDC-compensable delay already incurred from the strip input to the
@@ -151,6 +154,12 @@ class ChannelStrip : public rt::ProcessorBase {
   ///          prepared for while a uniform delay was engaged, so those upper
   ///          planes ran un-delayed against the ones below them.
   int alignment_channel_overflow() const noexcept;
+  /// @brief Automation points the per-block staging refused since construction.
+  /// @details Blocks are staged in chunks sized to fit, so non-zero means the
+  ///          producer outpaced a block mid-flight and those points were lost.
+  uint32_t automation_staging_refusals() const noexcept {
+    return automation_staging_refusals_.load();
+  }
 
   void set_width(float width) noexcept { width_.set_width(width); }
   float width() const noexcept { return width_.width(); }
@@ -339,8 +348,12 @@ class ChannelStrip : public rt::ProcessorBase {
   void remove_send(size_t index);
   size_t num_sends() const noexcept { return sends_.size(); }
   void set_send_db(size_t index, float db);
+  /// Current send level in dB, including consumed automation; 0 when out of range.
+  float send_db(size_t index) const noexcept;
   SendTiming send_timing(size_t index) const;
   int send_latency_samples_q8(size_t index) const noexcept;
+  /// Tail of the tap the send at @p index reads.
+  int send_tail_samples(size_t index) const noexcept;
   bool schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                 AutomationCurveType curve = AutomationCurveType::Linear) noexcept;
   AutomationPushResult schedule_send_automation_result(
@@ -421,6 +434,19 @@ class ChannelStrip : public rt::ProcessorBase {
   static constexpr int kPreparedChannels = 2;
   static constexpr int kMaxStackChannels = 8;
   static constexpr size_t kMaxAutomationEventsPerBlock = 128;
+  using AutomationStaging = rt::BoundedStaging<AutomationBlockEvent, kMaxAutomationEventsPerBlock>;
+  // A one-sample chunk holds at most one offset per lane, so it always fits.
+  static_assert(kMaxInsertAutomationLanes <= kMaxAutomationEventsPerBlock,
+                "every insert lane must fit one offset in a one-sample chunk");
+
+  // Largest chunk from @p range_start, at most @p num_samples, whose automation
+  // fits the staging. Audio thread.
+  int automation_chunk_samples(int64_t range_start, int num_samples, size_t insert_lanes) noexcept;
+  // Consumes every lane over [range_start, range_start + num_samples) of the
+  // block at @p block_start into the stagings, insert events sorted by offset.
+  void stage_automation(int64_t block_start, int range_start, int num_samples, size_t insert_lanes,
+                        AutomationStaging& fader, AutomationStaging& pan, AutomationStaging& width,
+                        AutomationStaging& inserts);
 
   // Runs the send's gain and send automation over the first @p rows x @p n of
   // send_temp_ (already filled by the caller) and accumulates it into @p dest.
@@ -538,6 +564,7 @@ class ChannelStrip : public rt::ProcessorBase {
   AutomationLane fader_automation_;
   AutomationLane pan_automation_;
   AutomationLane width_automation_;
+  rt::OverflowCounter automation_staging_refusals_;
 
   std::atomic<float> polarity_left_{1.0f};
   std::atomic<float> polarity_right_{1.0f};

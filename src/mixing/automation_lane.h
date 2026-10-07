@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "util/automation_curve.h"
@@ -116,6 +117,43 @@ class AutomationLane {
 
   template <typename Callback>
   size_t consume_block(int64_t block_start, int num_samples, Callback&& callback) {
+    ConsumerState state{tail_.load(std::memory_order_relaxed), active_event_, has_active_event_,
+                        baseline_pending_};
+    const size_t consumed =
+        walk_block<true>(state, block_start, num_samples, std::forward<Callback>(callback));
+    active_event_ = state.active_event;
+    has_active_event_ = state.has_active_event;
+    baseline_pending_ = state.baseline_pending;
+    return consumed;
+  }
+
+  /// Number of distinct sample offsets consume_block() would deliver for the
+  /// same range, leaving the lane untouched. Audio thread, like consume_block().
+  size_t count_block_offsets(int64_t block_start, int num_samples) {
+    ConsumerState state{tail_.load(std::memory_order_relaxed), active_event_, has_active_event_,
+                        baseline_pending_};
+    size_t offsets = 0;
+    int last_offset = -1;
+    walk_block<false>(state, block_start, num_samples, [&](const AutomationBlockEvent& event) {
+      if (event.offset != last_offset) ++offsets;
+      last_offset = event.offset;
+    });
+    return offsets;
+  }
+
+ private:
+  struct ConsumerState {
+    size_t tail;
+    AutomationEvent active_event;
+    bool has_active_event;
+    bool baseline_pending;
+  };
+
+  // Shared by consume_block() and count_block_offsets(). kCommit publishes each
+  // consumed slot to the producer; otherwise only @p state moves.
+  template <bool kCommit, typename Callback>
+  size_t walk_block(ConsumerState& state, int64_t block_start, int num_samples,
+                    Callback&& callback) {
     if (num_samples <= 0) {
       return 0;
     }
@@ -124,26 +162,26 @@ class AutomationLane {
     size_t consumed = 0;
 
     // One-shot after a seek/discard: publish the value valid at block start at offset zero.
-    bool baseline_pending = baseline_pending_;
+    bool baseline_pending = state.baseline_pending;
     bool baseline_emitted = false;
 
     auto emit_baseline = [&](const AutomationEvent* next) {
-      if (!baseline_pending || baseline_emitted || !has_active_event_) {
+      if (!baseline_pending || baseline_emitted || !state.has_active_event) {
         return;
       }
       // A breakpoint at block start is authoritative; the event callback publishes it.
       if (next != nullptr && next->sample_pos == block_start) {
         baseline_pending = false;
-        baseline_pending_ = false;
+        state.baseline_pending = false;
         return;
       }
 
-      AutomationEvent baseline = active_event_;
-      if (next != nullptr && active_event_.target == next->target &&
-          active_event_.curve != AutomationCurveType::Hold && next->sample_pos > block_start) {
+      AutomationEvent baseline = state.active_event;
+      if (next != nullptr && state.active_event.target == next->target &&
+          state.active_event.curve != AutomationCurveType::Hold && next->sample_pos > block_start) {
         baseline.sample_pos = block_start;
-        baseline.value =
-            interpolate_automation_value(active_event_, *next, static_cast<double>(block_start));
+        baseline.value = interpolate_automation_value(state.active_event, *next,
+                                                      static_cast<double>(block_start));
       } else {
         baseline.sample_pos = block_start;
       }
@@ -151,7 +189,7 @@ class AutomationLane {
       ++consumed;
       baseline_emitted = true;
       baseline_pending = false;
-      baseline_pending_ = false;
+      state.baseline_pending = false;
     };
 
     auto emit_curve_events = [&](const AutomationEvent& start, const AutomationEvent& end,
@@ -180,7 +218,7 @@ class AutomationLane {
     };
 
     for (;;) {
-      const size_t tail = tail_.load(std::memory_order_relaxed);
+      const size_t tail = state.tail;
       const size_t head = head_.load(std::memory_order_acquire);
       if (tail == head) {
         emit_baseline(nullptr);
@@ -190,52 +228,51 @@ class AutomationLane {
       // Copy first: after the tail release store the producer may reuse this slot.
       const AutomationEvent event = buffer_[tail];
       if (event.sample_pos >= block_end) {
-        if (has_active_event_ && active_event_.sample_pos < block_start) {
+        if (state.has_active_event && state.active_event.sample_pos < block_start) {
           const bool baseline_was_pending = baseline_pending;
           emit_baseline(&event);
-          emit_curve_events(active_event_, event,
+          emit_curve_events(state.active_event, event,
                             baseline_was_pending ? block_start + 1 : block_start, block_end - 1);
         }
         return consumed;
       }
 
-      if (has_active_event_ && active_event_.sample_pos < block_start &&
+      if (state.has_active_event && state.active_event.sample_pos < block_start &&
           event.sample_pos > block_start) {
         const bool baseline_was_pending = baseline_pending;
         emit_baseline(&event);
-        emit_curve_events(active_event_, event,
+        emit_curve_events(state.active_event, event,
                           baseline_was_pending ? block_start + 1 : block_start,
                           event.sample_pos - 1);
       }
 
       const size_t next_tail = increment(tail);
-      tail_.store(next_tail, std::memory_order_release);
+      state.tail = next_tail;
+      if (kCommit) tail_.store(next_tail, std::memory_order_release);
 
       if (event.sample_pos < block_start) {
-        active_event_ = event;
-        has_active_event_ = true;
+        state.active_event = event;
+        state.has_active_event = true;
         baseline_pending = true;
-        baseline_pending_ = true;
+        state.baseline_pending = true;
         continue;
       }
 
       callback(AutomationBlockEvent{event, static_cast<int>(event.sample_pos - block_start)});
       ++consumed;
-      active_event_ = event;
-      has_active_event_ = true;
+      state.active_event = event;
+      state.has_active_event = true;
       baseline_pending = false;
-      baseline_pending_ = false;
+      state.baseline_pending = false;
 
-      const size_t peek_tail = next_tail;
       const size_t latest_head = head_.load(std::memory_order_acquire);
-      if (peek_tail != latest_head) {
-        const AutomationEvent& next_event = buffer_[peek_tail];
+      if (next_tail != latest_head) {
+        const AutomationEvent& next_event = buffer_[next_tail];
         emit_curve_events(event, next_event, event.sample_pos + 1, block_end - 1);
       }
     }
   }
 
- private:
   size_t increment(size_t index) const noexcept;
 
   size_t capacity_ = 0;

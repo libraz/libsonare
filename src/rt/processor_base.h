@@ -142,11 +142,33 @@ class ProcessorBase {
     (void)output_port;
     return latency_samples_q8();
   }
+  // Q8 compensable latency between the main input and the point where
+  // @p input_port is consumed, e.g. a sidechain detector behind latent inserts.
+  // Graph PDC aligns an edge into that port with the tap, not the node input.
+  virtual int input_tap_latency_samples_q8(int input_port) const noexcept {
+    (void)input_port;
+    return 0;
+  }
   // Optional decay length after input becomes silent, in samples. Hosts use
   // this to keep offline bounces from truncating reverb/delay/plugin tails.
   // INT_MAX means unbounded: nothing ends the sound, so a host sizing a render
   // from the tail has to be given a length instead.
   virtual int tail_samples() const noexcept { return 0; }
+  // Tail of the path that reaches @p output_port; a tap ahead of some stages
+  // (a pre-fader send) excludes theirs.
+  virtual int output_tail_samples(int output_port) const noexcept {
+    (void)output_port;
+    return tail_samples();
+  }
+  // Whether audio arriving on @p input_port can reach an output. A detector key
+  // is not audible unless a processor monitors it.
+  virtual bool input_port_audible(int input_port) const noexcept {
+    (void)input_port;
+    return true;
+  }
+  // Whether the external key set through set_sidechain() reaches the output
+  // (a key-listen monitor) rather than only steering the detector.
+  virtual bool sidechain_audible() const noexcept { return false; }
   virtual float last_gain_reduction_db() const { return 0.0f; }
 
   /// @brief Blocks in which this processor returned recursive state to its

@@ -180,8 +180,8 @@ SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
 // others. It is not latency: latency compensation does not undo it and the mixer's
 // reported latency is unchanged, while the mixer tail grows by the delay.
 SonareError sonare_strip_set_channel_delay_samples(SonareStrip* strip, int delay_samples);
-// Sets the strip's live VCA gain offset in dB. VCA is a group concept with no
-// per-strip scene field, so this is not persisted to the scene JSON.
+// Sets the strip's direct VCA trim in dB. It is persisted as the strip's
+// vcaOffsetDb scene field, separately from the offsets its VCA groups add.
 SonareError sonare_strip_set_vca_offset_db(SonareStrip* strip, float offset_db);
 // Snaps the strip's input-trim, fader, pan and width smoothers to the values
 // already set on it, so the next processed block opens at those values instead

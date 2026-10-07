@@ -193,43 +193,73 @@ bool Graph::compile() {
     });
   }
 
+  // incoming_by_topo_ indices also address runtime_connections_, which the plan
+  // builds 1:1 with connections_ in the same order.
+  build_arrival_plan();
+
+  compiled_ = true;
+  return true;
+}
+
+void Graph::build_arrival_plan() {
+  const auto source_path_q8 = [this](const Connection& connection) {
+    return node_latency_q8_[connection.source_node] +
+           node_map_.at(connection.source_node)
+               ->processor()
+               .output_latency_samples_q8(connection.source_port);
+  };
+  const auto tap_q8 = [this](const Connection& connection) {
+    return node_map_.at(connection.dest_node)
+        ->processor()
+        .input_tap_latency_samples_q8(connection.dest_port);
+  };
+
+  // A node's arrival is the latest any input reaches its main input, where an
+  // input consumed behind the node's own latent stages counts that prefix as
+  // already incurred. The floor of zero is an external input fed at time zero.
   for (size_t topo_position = 0; topo_position < topo_order_.size(); ++topo_position) {
-    Node* current = topo_order_[topo_position];
-    int max_incoming_latency_q8 = 0;
+    int arrival_q8 = 0;
     for (const int connection_index : incoming_by_topo_[topo_position]) {
       const Connection& connection = connections_[static_cast<size_t>(connection_index)];
-      const Node* source = node_map_.at(connection.source_node);
-      const int path_latency_q8 =
-          node_latency_q8_[connection.source_node] +
-          source->processor().output_latency_samples_q8(connection.source_port);
-      max_incoming_latency_q8 = std::max(max_incoming_latency_q8, path_latency_q8);
+      arrival_q8 = std::max(arrival_q8, source_path_q8(connection) - tap_q8(connection));
     }
-    node_latency_q8_[current->id()] = max_incoming_latency_q8;
+    node_latency_q8_[topo_order_ids_[topo_position]] = arrival_q8;
   }
 
+  // Each edge is delayed to land exactly on its own tap.
   for (const Connection& connection : connections_) {
     RuntimeConnection runtime_connection;
     runtime_connection.connection = connection;
     runtime_connection.source = node_map_.at(connection.source_node);
     runtime_connection.dest = node_map_.at(connection.dest_node);
-    const int source_path_latency_q8 =
-        node_latency_q8_[connection.source_node] +
-        runtime_connection.source->processor().output_latency_samples_q8(connection.source_port);
     runtime_connection.delay_samples_q8 =
-        std::max(0, node_latency_q8_[connection.dest_node] - source_path_latency_q8);
+        std::max(0, node_latency_q8_[connection.dest_node] + tap_q8(connection) -
+                        source_path_q8(connection));
     runtime_connection.delay_samples = runtime_connection.delay_samples_q8 >> 8;
     if (max_block_size_ > 0) {
       prepare_delay_lines(runtime_connection);
     }
     runtime_connections_.push_back(std::move(runtime_connection));
   }
+}
 
-  // incoming_by_topo_ was already built (above the PDC pass) from connections_,
-  // which is populated 1:1 with runtime_connections_ in the same order, so the
-  // stored indices also address runtime_connections_ for process_block().
-
-  compiled_ = true;
-  return true;
+void Graph::adopt_connection_state(Graph& previous) noexcept {
+  if (!compiled_ || !previous.compiled_ || max_block_size_ <= 0 || previous.max_block_size_ <= 0) {
+    return;
+  }
+  for (RuntimeConnection& current : runtime_connections_) {
+    const Connection& edge = current.connection;
+    for (RuntimeConnection& prior : previous.runtime_connections_) {
+      const Connection& old = prior.connection;
+      if (old.source_node == edge.source_node && old.source_port == edge.source_port &&
+          old.dest_node == edge.dest_node && old.dest_port == edge.dest_port &&
+          old.mix == edge.mix && prior.delay_samples_q8 == current.delay_samples_q8) {
+        current.delay_lines.swap(prior.delay_lines);
+        current.fractional_delay_lines.swap(prior.fractional_delay_lines);
+        break;
+      }
+    }
+  }
 }
 
 void Graph::prepare(double sample_rate, int max_block_size) {
@@ -356,6 +386,13 @@ Node* Graph::node(const std::string& id) {
 const Node* Graph::node(const std::string& id) const {
   const auto found = node_map_.find(id);
   return found == node_map_.end() ? nullptr : found->second;
+}
+
+const Connection& Graph::connection(size_t connection_index) const {
+  if (connection_index >= connections_.size()) {
+    throw SonareException(ErrorCode::InvalidParameter, "connection index out of range");
+  }
+  return connections_[connection_index];
 }
 
 int Graph::connection_delay_samples(size_t connection_index) const {

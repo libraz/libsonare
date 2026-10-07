@@ -95,7 +95,7 @@ void MixerWasm::setChannelDelaySamples(const val& strip_index_val, const val& de
                   "failed to set channel delay samples");
 }
 
-// Sets the strip's live VCA gain offset in dB (not persisted to the scene).
+// Sets the strip's direct VCA trim in dB (persisted as the scene's vcaOffsetDb).
 void MixerWasm::setVcaOffsetDb(const val& strip_index_val, const val& offset_db_val) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   const float offset_db = checkedFloatFromVal(offset_db_val, "offsetDb");

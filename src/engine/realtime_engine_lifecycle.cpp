@@ -264,7 +264,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   telemetry_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   clip_page_requests_.reserve(next_power_of_2(std::max<size_t>(telemetry_capacity, 2)));
   clip_page_request_overflow_count_.store(0, std::memory_order_relaxed);
-  pending_active_.fill(false);
+  pending_.clear();
 #if defined(SONARE_WITH_ARRANGEMENT)
   // The commands dropped above can no longer release their slots; hand them all back.
   for (UmpSlot& slot : ump_slots_) {

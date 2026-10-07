@@ -423,7 +423,7 @@ class Mixer:
         )
 
     def set_vca_offset_db(self, strip: StripRef, offset_db: float) -> None:
-        """Set a strip's live VCA gain offset in dB (not persisted to the scene)."""
+        """Set a strip's direct VCA trim in dB (persisted as the scene's ``vcaOffsetDb``)."""
         handle = self._strip_handle(strip)
         _check(
             _get_lib().sonare_strip_set_vca_offset_db(handle, _to_c_float(offset_db, "offset_db"))

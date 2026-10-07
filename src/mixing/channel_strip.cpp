@@ -81,33 +81,26 @@ float deepest_gain_reduction_db(const float* values, size_t count) noexcept {
   return reduction_db;
 }
 
-/// @brief Preserve the final event of a single-target lane when its storage fills.
-/// @details Deferring the overflow to the next block is not an option: an event
-///          before that block's start is reclassified as a baseline and loses its
-///          offset, so the last slot is overwritten and only the final value kept.
-template <size_t Capacity>
-void store_block_event(std::array<AutomationBlockEvent, Capacity>& dest, size_t& count,
-                       const AutomationBlockEvent& event) {
-  if (count < dest.size()) {
-    dest[count++] = event;
-  } else {
-    dest[dest.size() - 1] = event;
-  }
+// Stages @p lane's events for [range_start, range_start + num_samples) of the
+// block at @p block_start, with offsets relative to that block.
+template <typename Lane, typename Staging>
+void stage_events(Lane& lane, int64_t block_start, int range_start, int num_samples,
+                  Staging& dest) {
+  lane.consume_block(
+      block_start + range_start, num_samples, [&](const AutomationBlockEvent& event) {
+        AutomationBlockEvent shifted = event;
+        shifted.offset += range_start;
+        // Simultaneous points of one target resolve to the last.
+        dest.push_coalescing(
+            shifted, [](const AutomationBlockEvent& last, const AutomationBlockEvent& next) {
+              return last.offset == next.offset && last.event.target == next.event.target;
+            });
+      });
 }
 
-template <typename Lane, size_t Capacity>
-size_t consume_events(Lane& lane, int64_t block_start, int num_samples,
-                      std::array<AutomationBlockEvent, Capacity>& dest) {
-  size_t count = 0;
-  lane.consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
-    store_block_event(dest, count, event);
-  });
-  return count;
-}
-
-template <size_t Capacity>
-void sort_events_by_offset(std::array<AutomationBlockEvent, Capacity>& events, size_t count) {
-  insertion_sort(events.begin(), events.begin() + static_cast<std::ptrdiff_t>(count),
+template <typename Staging>
+void sort_events_by_offset(Staging& events) {
+  insertion_sort(events.begin(), events.end(),
                  [](const AutomationBlockEvent& lhs, const AutomationBlockEvent& rhs) {
                    if (lhs.offset != rhs.offset) return lhs.offset < rhs.offset;
                    return static_cast<int>(lhs.event.target.kind) <
@@ -115,10 +108,10 @@ void sort_events_by_offset(std::array<AutomationBlockEvent, Capacity>& events, s
                  });
 }
 
-template <size_t Capacity>
-int next_event_offset(const std::array<AutomationBlockEvent, Capacity>& events, size_t count,
-                      size_t index, int fallback) {
-  return index < count ? events[index].offset : fallback;
+// Offset of the staged event at @p index, or @p fallback past the end.
+template <typename Staging>
+int offset_or(const Staging& events, size_t index, int fallback) {
+  return index < events.size() ? events[index].offset : fallback;
 }
 
 }  // namespace
@@ -211,6 +204,49 @@ void ChannelStrip::process(float* const* channels, int num_channels, int num_sam
   process_at(channels, num_channels, num_samples, 0);
 }
 
+int ChannelStrip::automation_chunk_samples(int64_t range_start, int num_samples,
+                                           size_t insert_lanes) noexcept {
+  const auto fits = [&](int chunk) {
+    constexpr size_t kCap = kMaxAutomationEventsPerBlock;
+    if (fader_automation_.count_block_offsets(range_start, chunk) > kCap ||
+        pan_automation_.count_block_offsets(range_start, chunk) > kCap ||
+        width_automation_.count_block_offsets(range_start, chunk) > kCap) {
+      return false;
+    }
+    size_t inserts = 0;
+    for (size_t li = 0; li < insert_lanes; ++li) {
+      if (insert_automation_[li].lane) {
+        inserts += insert_automation_[li].lane->count_block_offsets(range_start, chunk);
+      }
+    }
+    return inserts <= kCap;
+  };
+  // One sample holds at most one offset per lane, and the lane cap is below the
+  // staging capacity, so the halving always ends.
+  int chunk = num_samples;
+  while (chunk > 1 && !fits(chunk)) chunk = (chunk + 1) / 2;
+  return chunk;
+}
+
+void ChannelStrip::stage_automation(int64_t block_start, int range_start, int num_samples,
+                                    size_t insert_lanes, AutomationStaging& fader,
+                                    AutomationStaging& pan, AutomationStaging& width,
+                                    AutomationStaging& inserts) {
+  fader.clear();
+  pan.clear();
+  width.clear();
+  inserts.clear();
+  stage_events(fader_automation_, block_start, range_start, num_samples, fader);
+  stage_events(pan_automation_, block_start, range_start, num_samples, pan);
+  stage_events(width_automation_, block_start, range_start, num_samples, width);
+  for (size_t li = 0; li < insert_lanes; ++li) {
+    if (insert_automation_[li].lane) {
+      stage_events(*insert_automation_[li].lane, block_start, range_start, num_samples, inserts);
+    }
+  }
+  sort_events_by_offset(inserts);
+}
+
 void ChannelStrip::process_at(float* const* channels, int num_channels, int num_samples,
                               int64_t block_start) {
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
@@ -245,53 +281,49 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // permanently lost on > kMaxStackChannels layouts (e.g. 7.1.4). We consume
   // first, then (for wide layouts) apply the events to advance parameter state
   // and fall back to the unsegmented path.
-  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> fader_events{};
-  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> pan_events{};
-  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> width_events{};
-  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> insert_events{};
-  const size_t fader_count =
-      consume_events(fader_automation_, block_start, num_samples, fader_events);
-  const size_t pan_count = consume_events(pan_automation_, block_start, num_samples, pan_events);
-  const size_t width_count =
-      consume_events(width_automation_, block_start, num_samples, width_events);
-  size_t insert_count = 0;
+  AutomationStaging fader_events;
+  AutomationStaging pan_events;
+  AutomationStaging width_events;
+  AutomationStaging insert_events;
   // Audio thread: read the published lane count with acquire ordering and
   // iterate by index over [0, lanes_size). Range-for would read the vector's
   // non-atomic size_ member, which races with the control thread's push_back.
   const size_t lanes_size = insert_automation_size_.load(std::memory_order_acquire);
-  for (size_t li = 0; li < lanes_size; ++li) {
-    InsertAutomationLane& lane = insert_automation_[li];
-    if (!lane.lane) continue;
-    const size_t lane_start = insert_count;
-    const size_t lane_limit = insert_events.size() - (lanes_size - li - 1);
-    lane.lane->consume_block(block_start, num_samples, [&](const AutomationBlockEvent& event) {
-      // Reserve a final-value slot for each remaining published lane.
-      if (insert_count > lane_start && insert_events[insert_count - 1].offset == event.offset) {
-        insert_events[insert_count - 1] = event;
-      } else if (insert_count < lane_limit) {
-        insert_events[insert_count++] = event;
-      } else {
-        insert_events[insert_count - 1] = event;
-      }
-    });
-  }
-  sort_events_by_offset(insert_events, insert_count);
+  // Automation denser than the staging holds is consumed and applied in shorter
+  // chunks, so no accepted breakpoint is dropped or moved.
+  const auto stage_chunk = [&](int chunk_start) {
+    const int chunk =
+        automation_chunk_samples(block_start + chunk_start, num_samples - chunk_start, lanes_size);
+    stage_automation(block_start, chunk_start, chunk, lanes_size, fader_events, pan_events,
+                     width_events, insert_events);
+    return chunk_start + chunk;
+  };
+  const auto staged_refusals = [&]() {
+    return fader_events.refused() + pan_events.refused() + width_events.refused() +
+           insert_events.refused();
+  };
+  int chunk_end = stage_chunk(0);
 
   const bool muted = effectively_muted();
   if (num_channels > kMaxStackChannels) {
     // Wide layouts cannot use the segmented stack-array path. Apply the drained
-    // events to advance fader / pan / width / insert parameters to their
+    // events in order to advance fader / pan / width / insert parameters to their
     // block-final values, then process unsegmented.
-    for (size_t i = 0; i < fader_count; ++i) apply_automation_event(fader_events[i].event);
-    for (size_t i = 0; i < pan_count; ++i) apply_automation_event(pan_events[i].event);
-    for (size_t i = 0; i < width_count; ++i) apply_automation_event(width_events[i].event);
-    for (size_t i = 0; i < insert_count; ++i) apply_automation_event(insert_events[i].event);
+    for (;;) {
+      for (const auto* staging : {&fader_events, &pan_events, &width_events, &insert_events}) {
+        for (size_t i = 0; i < staging->size(); ++i) apply_automation_event((*staging)[i].event);
+      }
+      if (chunk_end >= num_samples) break;
+      chunk_end = stage_chunk(chunk_end);
+    }
+    automation_staging_refusals_.add(static_cast<uint32_t>(staged_refusals()));
     process_unsegmented(channels, num_channels, num_samples);
     note_member_discards();
     return;
   }
 
-  if (fader_count == 0 && pan_count == 0 && width_count == 0 && insert_count == 0) {
+  if (chunk_end >= num_samples && fader_events.empty() && pan_events.empty() &&
+      width_events.empty() && insert_events.empty()) {
     process_unsegmented(channels, num_channels, num_samples);
     note_member_discards();
     return;
@@ -309,10 +341,6 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   zero_taps(pre_tap_, num_channels, 0, clamped_samples);
   zero_taps(post_tap_, num_channels, 0, clamped_samples);
 
-  size_t fader_index = 0;
-  size_t pan_index = 0;
-  size_t width_index = 0;
-  size_t insert_index = 0;
   int cursor = 0;
   // Track the block-representative (most-negative) gain reduction across every
   // segment. last_gain_reduction_db() reflects only the most recently processed
@@ -321,39 +349,47 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // so the segmented path agrees with the unsegmented path's block-level value.
   insert_gain_reduction_count_ = pre_inserts_.size() + post_inserts_.size();
   std::fill_n(insert_gain_reduction_db_.begin(), insert_gain_reduction_count_, 0.0f);
-  while (cursor < num_samples) {
-    while (fader_index < fader_count && fader_events[fader_index].offset == cursor) {
-      apply_automation_event(fader_events[fader_index++].event);
-    }
-    while (pan_index < pan_count && pan_events[pan_index].offset == cursor) {
-      apply_automation_event(pan_events[pan_index++].event);
-    }
-    while (width_index < width_count && width_events[width_index].offset == cursor) {
-      apply_automation_event(width_events[width_index++].event);
-    }
-    while (insert_index < insert_count && insert_events[insert_index].offset == cursor) {
-      apply_automation_event(insert_events[insert_index++].event);
-    }
-
-    const int next_offset = std::min(
-        {num_samples, next_event_offset(fader_events, fader_count, fader_index, num_samples),
-         next_event_offset(pan_events, pan_count, pan_index, num_samples),
-         next_event_offset(width_events, width_count, width_index, num_samples),
-         next_event_offset(insert_events, insert_count, insert_index, num_samples)});
-    const int segment_samples = std::max(0, next_offset - cursor);
-    if (segment_samples > 0) {
-      process_segment(channels, num_channels, cursor, segment_samples, cursor);
-      if (!muted) {
-        fold_insert_gain_reduction_db(pre_inserts_, insert_gain_reduction_db_.data());
-        fold_insert_gain_reduction_db(post_inserts_,
-                                      insert_gain_reduction_db_.data() + pre_inserts_.size());
+  for (;;) {
+    size_t fader_index = 0;
+    size_t pan_index = 0;
+    size_t width_index = 0;
+    size_t insert_index = 0;
+    while (cursor < chunk_end) {
+      while (fader_index < fader_events.size() && fader_events[fader_index].offset == cursor) {
+        apply_automation_event(fader_events[fader_index++].event);
       }
-      cursor += segment_samples;
-    } else {
-      // Defensive guard for duplicate or unsorted offsets; consume matching events next loop.
-      ++cursor;
+      while (pan_index < pan_events.size() && pan_events[pan_index].offset == cursor) {
+        apply_automation_event(pan_events[pan_index++].event);
+      }
+      while (width_index < width_events.size() && width_events[width_index].offset == cursor) {
+        apply_automation_event(width_events[width_index++].event);
+      }
+      while (insert_index < insert_events.size() && insert_events[insert_index].offset == cursor) {
+        apply_automation_event(insert_events[insert_index++].event);
+      }
+
+      const int next_offset = std::min({chunk_end, offset_or(fader_events, fader_index, chunk_end),
+                                        offset_or(pan_events, pan_index, chunk_end),
+                                        offset_or(width_events, width_index, chunk_end),
+                                        offset_or(insert_events, insert_index, chunk_end)});
+      const int segment_samples = std::max(0, next_offset - cursor);
+      if (segment_samples > 0) {
+        process_segment(channels, num_channels, cursor, segment_samples, cursor);
+        if (!muted) {
+          fold_insert_gain_reduction_db(pre_inserts_, insert_gain_reduction_db_.data());
+          fold_insert_gain_reduction_db(post_inserts_,
+                                        insert_gain_reduction_db_.data() + pre_inserts_.size());
+        }
+        cursor += segment_samples;
+      } else {
+        // Defensive guard for duplicate or unsorted offsets; consume matching events next loop.
+        ++cursor;
+      }
     }
+    if (chunk_end >= num_samples) break;
+    chunk_end = stage_chunk(chunk_end);
   }
+  automation_staging_refusals_.add(static_cast<uint32_t>(staged_refusals()));
 
   if (muted) {
     // Keep the inserts' state advance but publish exact silence.
@@ -703,11 +739,14 @@ int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8()
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
 
 int ChannelStrip::tail_samples() const noexcept {
+  return combine_tail_samples(pre_fader_tail_samples(), processor_chain_tail_samples(post_inserts_),
+                              TailTopology::kSerial);
+}
+
+int ChannelStrip::pre_fader_tail_samples() const noexcept {
   // The channel delay is not latency, so the audio it holds back is owed as tail.
-  const int insert_tail =
-      combine_tail_samples(processor_chain_tail_samples(pre_inserts_),
-                           processor_chain_tail_samples(post_inserts_), TailTopology::kSerial);
-  return combine_tail_samples(alignment_delay_.delay_samples(), insert_tail, TailTopology::kSerial);
+  return combine_tail_samples(alignment_delay_.delay_samples(),
+                              processor_chain_tail_samples(pre_inserts_), TailTopology::kSerial);
 }
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {
@@ -956,6 +995,10 @@ void ChannelStrip::set_send_db(size_t index, float db) {
   sends_[index]->set_send_db(db);
 }
 
+float ChannelStrip::send_db(size_t index) const noexcept {
+  return index < sends_.size() ? sends_[index]->send_db() : 0.0f;
+}
+
 bool ChannelStrip::schedule_send_automation(size_t index, int64_t sample_pos, float db,
                                             AutomationCurveType curve) noexcept {
   return schedule_send_automation_result(index, sample_pos, db, curve) ==
@@ -974,8 +1017,10 @@ AutomationPushResult ChannelStrip::schedule_send_automation_result(
   event.sample_pos = sample_pos;
   event.value = db;
   event.curve = curve;
+  // The lane is the send's identity. A slot index here would go stale when an
+  // earlier send is removed, and points straddling the removal would stop
+  // interpolating because their targets would differ.
   event.target.kind = AutomationTargetKind::Send;
-  event.target.param_id = static_cast<uint32_t>(index);
   return send_automation_[index]->try_push(event);
 }
 
@@ -989,6 +1034,10 @@ SendTiming ChannelStrip::send_timing(size_t index) const {
 int ChannelStrip::send_latency_samples_q8(size_t index) const noexcept {
   return send_timing(index) == SendTiming::PreFader ? pre_fader_latency_samples_q8()
                                                     : post_fader_latency_samples_q8();
+}
+
+int ChannelStrip::send_tail_samples(size_t index) const noexcept {
+  return send_timing(index) == SendTiming::PreFader ? pre_fader_tail_samples() : tail_samples();
 }
 
 void ChannelStrip::mix_send(size_t index, float* const* dest, int num_channels, int num_samples) {
@@ -1060,36 +1109,51 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
     send_temp_channels_[static_cast<size_t>(ch)] = send_temp_[static_cast<size_t>(ch)].data();
   }
 
-  std::array<AutomationBlockEvent, kMaxAutomationEventsPerBlock> send_events{};
-  const size_t send_count =
-      index < send_automation_.size() && send_automation_[index]
-          ? consume_events(*send_automation_[index], block_start, n, send_events)
-          : 0;
+  AutomationLane* lane = index < send_automation_.size() ? send_automation_[index].get() : nullptr;
+  AutomationStaging send_events;
+  // Same chunking as process_at(): a dense lane is staged in ranges it fits.
+  const auto stage_chunk = [&](int chunk_start) {
+    int chunk = n - chunk_start;
+    while (chunk > 1 && lane->count_block_offsets(block_start + chunk_start, chunk) >
+                            kMaxAutomationEventsPerBlock) {
+      chunk = (chunk + 1) / 2;
+    }
+    send_events.clear();
+    stage_events(*lane, block_start, chunk_start, chunk, send_events);
+    return chunk_start + chunk;
+  };
+  int chunk_end = lane != nullptr ? stage_chunk(0) : n;
 
-  if (send_count == 0) {
+  if (chunk_end >= n && send_events.empty()) {
     // Applies the smoothed send gain in place on the copied tap, leaving dest untouched.
     send.process(send_temp_channels_.data(), rows, n);
   } else {
-    size_t send_event_index = 0;
     int cursor = 0;
-    while (cursor < n) {
-      while (send_event_index < send_count && send_events[send_event_index].offset == cursor) {
-        send.set_send_db(send_events[send_event_index++].event.value);
-      }
-      const int next_offset = next_event_offset(send_events, send_count, send_event_index, n);
-      const int segment_samples = std::max(0, next_offset - cursor);
-      if (segment_samples > 0) {
-        for (int ch = 0; ch < rows; ++ch) {
-          send_temp_channels_[static_cast<size_t>(ch)] =
-              send_temp_[static_cast<size_t>(ch)].data() + cursor;
+    for (;;) {
+      size_t send_event_index = 0;
+      while (cursor < chunk_end) {
+        while (send_event_index < send_events.size() &&
+               send_events[send_event_index].offset == cursor) {
+          send.set_send_db(send_events[send_event_index++].event.value);
         }
-        send.process(send_temp_channels_.data(), rows, segment_samples);
-        cursor += segment_samples;
-      } else {
-        ++cursor;
+        const int next_offset = offset_or(send_events, send_event_index, chunk_end);
+        const int segment_samples = std::max(0, next_offset - cursor);
+        if (segment_samples > 0) {
+          for (int ch = 0; ch < rows; ++ch) {
+            send_temp_channels_[static_cast<size_t>(ch)] =
+                send_temp_[static_cast<size_t>(ch)].data() + cursor;
+          }
+          send.process(send_temp_channels_.data(), rows, segment_samples);
+          cursor += segment_samples;
+        } else {
+          ++cursor;
+        }
       }
+      if (chunk_end >= n) break;
+      chunk_end = stage_chunk(chunk_end);
     }
   }
+  automation_staging_refusals_.add(static_cast<uint32_t>(send_events.refused()));
 
   for (int ch = 0; ch < rows; ++ch) {
     if (dest[ch] == nullptr) {

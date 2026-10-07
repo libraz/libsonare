@@ -513,7 +513,7 @@ export class Mixer {
     this.mixer.setChannelDelaySamples(stripIndex, delaySamples);
   }
 
-  /** Set the strip's live VCA gain offset in dB (not persisted to the scene). */
+  /** Set the strip's direct VCA trim in dB (persisted as the scene's `vcaOffsetDb`). */
   setVcaOffsetDb(stripIndex: number, offsetDb: number): void {
     this.mixer.setVcaOffsetDb(stripIndex, offsetDb);
   }

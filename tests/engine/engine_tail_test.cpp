@@ -203,6 +203,59 @@ TEST_CASE("Engine tail: the longer of two parallel sends", "[engine][engine_tail
   CHECK(engine.tail_samples() == std::max(delay, plate));
 }
 
+TEST_CASE("Engine tail: a pre-fader send skips post-fader inserts", "[engine][engine_tail]") {
+  const int delay = standalone_tail(kDelay, kDelayParams);
+  const int plate = standalone_tail(kPlate, kPlateParams);
+  REQUIRE(delay > 0);
+  REQUIRE(plate > 0);
+
+  for (const auto timing :
+       {sonare::mixing::SendTiming::PreFader, sonare::mixing::SendTiming::PostFader}) {
+    const bool pre = timing == sonare::mixing::SendTiming::PreFader;
+    INFO("pre-fader send " << pre);
+    RealtimeEngine engine;
+    prepare(engine);
+    REQUIRE(engine.set_track_buses({bus_config(kBusA)}));
+    TrackLaneConfig lane{kTrack};
+    TrackLaneConfig::Send send = send_to(kBusA);
+    send.timing = timing;
+    lane.sends.push_back(send);
+    REQUIRE(engine.set_track_lanes({lane}));
+    Strip strip = strip_delay(0);
+    strip.inserts.push_back(Insert{InsertSlot::PostFader, kDelay, kDelayParams});
+    REQUIRE(engine.set_track_strip(kTrack, strip));
+    REQUIRE(engine.set_bus_strip(kBusA, bus_with(kBusA, kPlate, kPlateParams)));
+    // The output route carries the post-fader delay; a pre-fader send does not.
+    CHECK(engine.tail_samples() == (pre ? std::max(delay, plate) : delay + plate));
+  }
+}
+
+TEST_CASE("Engine tail: a monitored lane key carries its source tail", "[engine][engine_tail]") {
+  const int delay = standalone_tail(kDelay, kDelayParams);
+  const int plate = standalone_tail(kPlate, kPlateParams);
+  REQUIRE(delay > 0);
+  REQUIRE(plate > 0);
+  constexpr uint32_t kKey = kTrack + 1;
+
+  for (const bool key_listen : {true, false}) {
+    INFO("key listen " << key_listen);
+    RealtimeEngine engine;
+    prepare(engine);
+    REQUIRE(engine.set_track_lanes({TrackLaneConfig{kKey}, TrackLaneConfig{kTrack}}));
+    Strip key = strip_delay(0);
+    key.inserts.push_back(insert_of(kDelay, kDelayParams));
+    REQUIRE(engine.set_track_strip(kKey, key));
+    Strip target = strip_delay(0);
+    target.inserts.push_back(insert_of("dynamics.sidechainRouter", key_listen
+                                                                       ? R"({"keyListen":true})"
+                                                                       : R"({"keyListen":false})"));
+    target.inserts.push_back(Insert{InsertSlot::PostFader, kPlate, kPlateParams});
+    REQUIRE(engine.set_track_strip(kTrack, target));
+    REQUIRE(engine.set_lane_sidechain(kTrack, 0, kKey));
+    CHECK(engine.tail_samples() == (key_listen ? delay + plate : std::max(delay, plate)));
+  }
+}
+
 TEST_CASE("Engine tail: instrument tail in series with the track mixer", "[engine][engine_tail]") {
   RealtimeEngine engine;
   prepare(engine);

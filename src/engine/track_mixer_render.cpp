@@ -560,9 +560,12 @@ void TrackMixerRuntime::process_buses(float* const* channels, int master_channel
     }
     // Dedicated EQ (pre-insert), every plane alike. Skipped with no enabled band,
     // and before prepare(), which is what sizes its state for every plane.
+    // A skipped EQ is cleared, so re-enabling it never replays old filter history.
     if (bus.eq_enabled.load(std::memory_order_relaxed) &&
         bus.eq_active.load(std::memory_order_relaxed) && max_block_size_ > 0) {
       bus.eq.process(lane_channel_ptrs_.data(), bus_channels, num_samples);
+    } else {
+      bus.eq.reset();
     }
     bus.bus->process(lane_channel_ptrs_.data(), bus_channels, num_samples);
     bus_insert_gr_boards_[bus_index].publish(bus.bus->bus());

@@ -379,22 +379,10 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   if (ok) {
     automation_.commit_lane_remap_control_quiescent(std::move(automation_remap));
     // Remap queued commands and manual bases by track id so a lane reorder cannot retarget a strip.
-    size_t pending_out = 0;
-    for (size_t i = 0; i < pending_.size(); ++i) {
-      if (!pending_active_[i]) continue;
-      rt::Command command = pending_[i];
-      const TrackLaneRemapResult result = remap_track_command(
-          command, track_lane_ids_, track_lane_count_, new_lane_ids, new_lane_count);
-      if (result == TrackLaneRemapResult::kDrop) {
-        pending_active_[i] = false;
-        continue;
-      }
-      pending_[pending_out] = command;
-      pending_active_[pending_out] = true;
-      if (pending_out != i) pending_active_[i] = false;
-      ++pending_out;
-    }
-    for (size_t i = pending_out; i < pending_.size(); ++i) pending_active_[i] = false;
+    pending_.remove_if([&](rt::Command& command) noexcept {
+      return remap_track_command(command, track_lane_ids_, track_lane_count_, new_lane_ids,
+                                 new_lane_count) == TrackLaneRemapResult::kDrop;
+    });
 
     const size_t queued = commands_.size_approx();
     for (size_t i = 0; i < queued; ++i) {

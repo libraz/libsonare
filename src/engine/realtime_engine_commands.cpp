@@ -109,27 +109,11 @@ void RealtimeEngine::release_parameter_base_thunk(void* context, uint32_t param_
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
-template <size_t N, typename Predicate>
-void discard_insert_commands_if(std::array<rt::Command, N>& pending,
-                                std::array<bool, N>& pending_active,
-                                rt::SpscQueue<rt::Command>& commands,
+template <typename Staging, typename Predicate>
+void discard_insert_commands_if(Staging& pending, rt::SpscQueue<rt::Command>& commands,
                                 Predicate&& predicate) noexcept {
-  // Remove matching staged records and compact the fixed bank so unrelated
-  // records retain their order and their due-time behavior.
-  size_t out = 0;
-  for (size_t i = 0; i < pending.size(); ++i) {
-    if (!pending_active[i]) continue;
-    if (predicate(pending[i])) {
-      pending_active[i] = false;
-      continue;
-    }
-    if (out != i) {
-      pending[out] = pending[i];
-      pending_active[out] = true;
-      pending_active[i] = false;
-    }
-    ++out;
-  }
+  // Unrelated staged records keep their order and their due-time behavior.
+  pending.remove_if([&](const rt::Command& command) noexcept { return predicate(command); });
 
   // The command ring is control-thread-owned while strip/bus replacement runs
   // (the same contract as the clear_* APIs). Rotate exactly the snapshot that
@@ -157,7 +141,7 @@ bool RealtimeEngine::insert_id_purged(uint32_t target_id, const InsertPurge& pur
 }
 
 void RealtimeEngine::purge_insert_edits(const InsertPurge& purge) noexcept {
-  discard_insert_commands_if(pending_, pending_active_, commands_,
+  discard_insert_commands_if(pending_, commands_,
                              [this, &purge](const rt::Command& command) noexcept {
                                switch (command.type) {
                                  case rt::CommandType::kSetParam:
@@ -254,43 +238,22 @@ void RealtimeEngine::drain_commands(int64_t block_render_frame, int num_frames) 
 }
 
 void RealtimeEngine::store_pending(const rt::Command& command, bool prefer_current) noexcept {
-  for (size_t i = 0; i < pending_.size(); ++i) {
-    if (!pending_active_[i]) {
-      pending_[i] = command;
-      pending_active_[i] = true;
-      return;
-    }
-  }
-  // Bank is full. If this command must fire in the current block, evict the
-  // furthest-future pending entry to make room rather than dropping the
-  // current-block command. The evicted future command is the one whose loss is
-  // least disruptive (it would have fired latest, if at all).
-  if (prefer_current) {
-    size_t furthest = pending_.size();
-    int64_t furthest_time = command.sample_time;
-    for (size_t i = 0; i < pending_.size(); ++i) {
-      if (pending_[i].sample_time > furthest_time) {
-        furthest_time = pending_[i].sample_time;
-        furthest = i;
-      }
-    }
-    if (furthest < pending_.size()) {
+  // A current-block command evicts the furthest-future one rather than being
+  // dropped: that one would have fired latest, if at all. Either loss is reported.
+  const bool full = pending_.size() == pending_.kCapacity;
+  rt::Command evicted{};
+  const bool stored =
+      prefer_current
+          ? pending_.push_evicting_latest(
+                command, [](const rt::Command& entry) { return entry.sample_time; }, &evicted)
+          : pending_.push(command);
+  if (stored && !full) return;
+  const rt::Command& lost = stored ? evicted : command;
 #if defined(SONARE_WITH_ARRANGEMENT)
-      release_midi_ump_slot(pending_[furthest]);
-      release_midi_sysex_slot(pending_[furthest]);
-#endif
-      pending_[furthest] = command;
-      pending_active_[furthest] = true;
-      // The displaced far-future command is dropped; report it so hosts can
-      // observe the lost command rather than have it vanish silently.
-      enqueue_error(TelemetryErrorCode::kPendingCommandOverflow, transport_.render_frame(),
-                    transport_.sample_position(), 1);
-      return;
-    }
-  }
-#if defined(SONARE_WITH_ARRANGEMENT)
-  release_midi_ump_slot(command);
-  release_midi_sysex_slot(command);
+  release_midi_ump_slot(lost);
+  release_midi_sysex_slot(lost);
+#else
+  (void)lost;
 #endif
   enqueue_error(TelemetryErrorCode::kPendingCommandOverflow, transport_.render_frame(),
                 transport_.sample_position(), 1);
@@ -302,14 +265,12 @@ void RealtimeEngine::apply_due_commands(int64_t boundary_render_frame) noexcept 
   // pending command's offset as a sub-block boundary, so a command with
   // sample_time T fires precisely at the sub-block whose render-frame range
   // begins at T -- intra-block sample accuracy, not all-at-once at block head.
-  for (size_t i = 0; i < pending_.size(); ++i) {
-    if (!pending_active_[i]) continue;
-    if (pending_[i].sample_time <= boundary_render_frame) {
-      apply_command(pending_[i]);
-      pending_active_[i] = false;
-    }
-  }
-  compact_pending();
+  // Visited in acceptance order, so same-time commands keep their order.
+  pending_.remove_if([&](const rt::Command& command) noexcept {
+    if (command.sample_time > boundary_render_frame) return false;
+    apply_command(command);
+    return true;
+  });
 }
 
 void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
@@ -896,19 +857,6 @@ void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept 
     clip_page_underrun_reported_this_block_ = true;
     enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),
                   transport_.sample_position(), request.clip_id);
-  }
-}
-
-void RealtimeEngine::compact_pending() noexcept {
-  size_t out = 0;
-  for (size_t i = 0; i < pending_.size(); ++i) {
-    if (!pending_active_[i]) continue;
-    if (out != i) {
-      pending_[out] = pending_[i];
-      pending_active_[out] = true;
-      pending_active_[i] = false;
-    }
-    ++out;
   }
 }
 
