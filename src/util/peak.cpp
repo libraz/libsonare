@@ -4,6 +4,8 @@
 #include "util/peak.h"
 
 #include <algorithm>
+#include <cstdlib>
+#include <deque>
 
 #include "util/exception.h"
 
@@ -61,6 +63,52 @@ std::vector<int> peak_pick(const float* x, std::size_t n, int pre_max, int post_
 std::vector<int> peak_pick(const std::vector<float>& x, int pre_max, int post_max, int pre_avg,
                            int post_avg, float delta, int wait) {
   return peak_pick(x.data(), x.size(), pre_max, post_max, pre_avg, post_avg, delta, wait);
+}
+
+std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius) {
+  std::vector<float> y(n);
+  if (n == 0) return y;
+  if (x == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "sliding_max: null input with non-zero length");
+  }
+  // Indices whose values are decreasing; the front is the window maximum.
+  std::deque<std::size_t> window;
+  std::size_t next = 0;  // next index to push
+  for (std::size_t i = 0; i < n; ++i) {
+    const std::size_t hi = (radius >= n - 1 - i) ? n - 1 : i + radius;
+    for (; next <= hi; ++next) {
+      while (!window.empty() && x[window.back()] <= x[next]) window.pop_back();
+      window.push_back(next);
+    }
+    const std::size_t lo = (i > radius) ? i - radius : 0;
+    while (window.front() < lo) window.pop_front();
+    y[i] = x[window.front()];
+  }
+  return y;
+}
+
+std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, const float* values,
+                                           int min_distance) {
+  std::vector<int> order(candidates);
+  std::sort(order.begin(), order.end());
+  if (min_distance <= 1) return order;
+
+  std::stable_sort(order.begin(), order.end(),
+                   [values](int a, int b) { return values[a] > values[b]; });
+  std::vector<int> accepted;
+  for (int c : order) {
+    bool ok = true;
+    for (int j : accepted) {
+      if (std::abs(c - j) < min_distance) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) accepted.push_back(c);
+  }
+  std::sort(accepted.begin(), accepted.end());
+  return accepted;
 }
 
 }  // namespace sonare
