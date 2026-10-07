@@ -886,6 +886,8 @@ SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, u
                                                  uint32_t source_track_id, int* out_refusal) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined on every exit path; a feature-disabled build reports no valid target.
+  *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
   (void)track_id;
   (void)insert_index;
@@ -917,6 +919,8 @@ SonareError sonare_engine_can_set_bus_sidechain(SonareRealtimeEngine* engine, ui
                                                 uint32_t source_id, int* out_refusal) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined on every exit path; a feature-disabled build reports no valid target.
+  *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
   (void)bus_id;
   (void)insert_index;
@@ -935,6 +939,8 @@ SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
                                                    uint32_t source_id, int* out_refusal) {
   SONARE_C_API_ENTRY;
   if (!engine || !out_refusal) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined on every exit path; a feature-disabled build reports no valid target.
+  *out_refusal = SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET;
 #if !defined(SONARE_WITH_MIXING)
   (void)insert_index;
   (void)source_kind;

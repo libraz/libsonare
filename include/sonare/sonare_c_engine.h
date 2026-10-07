@@ -324,7 +324,8 @@ SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint3
 /// @details Changes nothing. @p out_refusal receives a SonareSidechainRefusal;
 ///   SONARE_SIDECHAIN_REFUSAL_NONE means the setter would accept it. Same
 ///   threading contract as the setter.
-/// @return @c SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+/// @return @c SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled, with
+///   @p out_refusal set to SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET.
 SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                                  unsigned int insert_index,
                                                  uint32_t source_track_id, int* out_refusal);
