@@ -122,6 +122,9 @@ from .analyzer import (
     assign_note_targets as assign_note_targets,
 )
 from .analyzer import (
+    auto_tune as auto_tune,
+)
+from .analyzer import (
     bass_chroma as bass_chroma,
 )
 from .analyzer import (
@@ -673,6 +676,7 @@ from .analyzer import (
     samples_to_frames as samples_to_frames,
 )
 from .analyzer import scale_correction_semitones as scale_correction_semitones
+from .analyzer import scale_mask_for_mode as scale_mask_for_mode
 from .analyzer import scale_pitch_class_enabled as scale_pitch_class_enabled
 from .analyzer import scale_quantize_midi as scale_quantize_midi
 from .analyzer import short_term_lufs as short_term_lufs
@@ -829,6 +833,9 @@ from .types import (
 )
 from .types import (
     AutomationPoint as AutomationPoint,
+)
+from .types import (
+    AutoTuneResult as AutoTuneResult,
 )
 from .types import (
     BpmAnalysisResult as BpmAnalysisResult,

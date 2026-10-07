@@ -865,10 +865,15 @@ class Audio:
         )
 
     def voice_change(
-        self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
+        self,
+        pitch_semitones: float = 0.0,
+        formant_factor: float = 1.0,
+        formant_mode: str = "relative",
     ) -> list[float]:
         """Apply a voice-change effect with independent pitch and formant control."""
-        return _voice_change(self.data, self.sample_rate, pitch_semitones, formant_factor)
+        return _voice_change(
+            self.data, self.sample_rate, pitch_semitones, formant_factor, formant_mode
+        )
 
     def voice_change_realtime(self, preset: str = "neutral-monitor") -> list[float]:
         """Apply the integrated realtime voice changer chain offline.

@@ -7,7 +7,9 @@
 #include <cmath>
 #include <limits>
 
+#include "analysis/key_profiles.h"
 #include "c_api/sonare_c_error_mapping.h"
+#include "editing/pitch_editor/auto_tune.h"
 #include "editing/pitch_editor/f0_provider.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/note_segmenter.h"
@@ -256,8 +258,12 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     }
     target_midi = floatProperty(options, "targetMidi", target_midi);
     config.scale.root = intProperty(options, "scaleRoot", config.scale.root);
+    const val mask_value =
+        hasProperty(options, "scaleModeMask") ? options["scaleModeMask"] : val::undefined();
     const int scale_mode_mask =
-        intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask));
+        mask_value.isString()
+            ? static_cast<int>(scale_mask_for_mode(modeFromVal(mask_value, "scaleModeMask")))
+            : intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask));
     if (scale_mode_mask < 0 || scale_mode_mask > 0x0FFF) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "scaleModeMask must be a non-zero 12-bit mask");
@@ -292,6 +298,44 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
   return vectorToFloat32Array(result.data(), result.size());
 }
 
+val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, val options) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  std::optional<Key> named;
+  if (!key_val.isUndefined() && !key_val.isNull()) {
+    const int root = checkedIntFromVal(key_val["root"], "key.root");
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B)) {
+      throw SonareException(ErrorCode::InvalidParameter, "key.root must be in [0, 11]");
+    }
+    named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
+  }
+
+  editing::pitch_editor::PitchCorrectionConfig config{};
+  if (!options.isUndefined() && !options.isNull()) {
+    config.retune_amount = floatProperty(options, "strength", config.retune_amount);
+    config.scale.reference_midi =
+        floatProperty(options, "referenceMidi", config.scale.reference_midi);
+    config.max_correction_semitones =
+        floatProperty(options, "maxCorrectionSemitones", config.max_correction_semitones);
+    config.retune_speed_ms = floatProperty(options, "retuneSpeedMs", config.retune_speed_ms);
+    config.vibrato_threshold_cents =
+        floatProperty(options, "vibratoThresholdCents", config.vibrato_threshold_cents);
+  }
+
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  const editing::pitch_editor::AutoTuneResult result =
+      editing::pitch_editor::auto_tune(audio, named, config);
+  val out = val::object();
+  out.set("samples", vectorToFloat32Array(result.audio.data(), result.audio.size()));
+  val key = val::object();
+  key.set("root", static_cast<int>(result.key.root));
+  key.set("mode", static_cast<int>(result.key.mode));
+  key.set("confidence", result.key.confidence);
+  key.set("name", result.key.to_string());
+  key.set("shortName", result.key.to_short_string());
+  out.set("key", key);
+  return out;
+}
+
 val js_note_stretch(val samples, const val& sample_rate, const val& onset_sample,
                     const val& offset_sample, const val& stretch_ratio_val) {
   const float stretch_ratio = checkedFloatFromVal(stretch_ratio_val, "stretchRatio");
@@ -317,13 +361,14 @@ val js_note_move(val samples, const val& sample_rate, const val& onset_sample,
 }
 
 val js_voice_change(val samples, const val& sample_rate, const val& pitch_semitones_val,
-                    const val& formant_factor_val) {
+                    const val& formant_factor_val, const std::string& formant_mode) {
   const float pitch_semitones = checkedFloatFromVal(pitch_semitones_val, "pitchSemitones");
   const float formant_factor = checkedFloatFromVal(formant_factor_val, "formantFactor");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
+  config.formant_mode = editing::voice_changer::parse_formant_mode(formant_mode);
   editing::voice_changer::VoiceChanger changer(config);
   Audio result = changer.process(audio);
   return vectorToFloat32Array(result.data(), result.size());
@@ -490,6 +535,7 @@ void registerEffectsAudioBindings() {
   function("pitchCorrectToMidi", &js_pitch_correct_to_midi);
   function("pitchCorrectToMidiTimevarying", &js_pitch_correct_to_midi_timevarying);
   function("pitchCorrectTimevarying", &js_pitch_correct_timevarying);
+  function("autoTune", &js_auto_tune);
   function("noteStretch", &js_note_stretch);
   function("noteMove", &js_note_move);
   function("voiceChange", &js_voice_change);

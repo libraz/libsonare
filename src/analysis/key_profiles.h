@@ -4,6 +4,7 @@
 /// @brief Key profiles for key detection (Krumhansl-Schmuckler algorithm).
 
 #include <array>
+#include <cstdint>
 
 #include "util/types.h"
 
@@ -150,6 +151,21 @@ enum class KeyProfileType {
   FaraldoEDMM,          ///< Faraldo EDMM-style profile
   BellmanBudge          ///< Bellman-Budge profile
 };
+
+/// @brief Semitone offsets of a mode's seven scale degrees above its tonic.
+/// @details The one table behind both the modal key profiles and
+///          @ref scale_mask_for_mode. Minor is the natural minor (Aeolian).
+/// @param mode Musical mode
+/// @return Ascending offsets in [0, 11], starting at 0
+std::array<int, 7> scale_intervals(Mode mode);
+
+/// @brief The 12-bit pitch-class mask of a mode's scale.
+/// @details Bit i (LSB = 0) is set when the semitone i above the tonic belongs
+///          to the scale, the layout the scale quantizer and the pitch
+///          corrector read. The mask is relative to the tonic, so it is the
+///          same for every root.
+/// @param mode Musical mode
+uint16_t scale_mask_for_mode(Mode mode);
 
 /// @brief Gets the major key profile for a given root.
 /// @param root Root pitch class (C=0, C#=1, ..., B=11)

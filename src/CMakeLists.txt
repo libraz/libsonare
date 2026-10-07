@@ -785,6 +785,7 @@ if(BUILD_PITCH_EDITOR)
     editing/note_model/note_target.cpp
     editing/note_model/note_transcriber.cpp
     editing/note_model/pitch_decomposition.cpp
+    editing/pitch_editor/auto_tune.cpp
     editing/pitch_editor/f0_provider.cpp
     editing/pitch_editor/note_editor.cpp
     editing/pitch_editor/note_segmenter.cpp

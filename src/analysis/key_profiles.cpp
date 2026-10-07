@@ -109,20 +109,20 @@ ModalSpec modal_spec(Mode mode) {
   switch (mode) {
     case Mode::Dorian:
       // Minor scale with a natural sixth; the sixth is what makes it not Aeolian.
-      return {{0, 2, 3, 5, 7, 9, 10}, true, 3, 7, 9};
+      return {scale_intervals(mode), true, 3, 7, 9};
     case Mode::Phrygian:
       // Minor scale with a flat second.
-      return {{0, 1, 3, 5, 7, 8, 10}, true, 3, 7, 1};
+      return {scale_intervals(mode), true, 3, 7, 1};
     case Mode::Lydian:
       // Major scale with a raised fourth.
-      return {{0, 2, 4, 6, 7, 9, 11}, true, 4, 7, 6};
+      return {scale_intervals(mode), true, 4, 7, 6};
     case Mode::Mixolydian:
       // Major scale with a flat seventh.
-      return {{0, 2, 4, 5, 7, 9, 10}, true, 4, 7, 10};
+      return {scale_intervals(mode), true, 4, 7, 10};
     case Mode::Locrian:
       // The only mode without a perfect fifth, which is also what names it, so
       // the diminished fifth takes both roles and gets the higher of the two.
-      return {{0, 1, 3, 5, 6, 8, 10}, true, 3, 6, 6};
+      return {scale_intervals(mode), true, 3, 6, 6};
     case Mode::Major:
     case Mode::Minor:
     default:
@@ -155,6 +155,32 @@ std::array<float, 12> modal_base_profile(Mode mode) {
 }
 
 }  // namespace
+
+std::array<int, 7> scale_intervals(Mode mode) {
+  switch (mode) {
+    case Mode::Minor:
+      return {0, 2, 3, 5, 7, 8, 10};
+    case Mode::Dorian:
+      return {0, 2, 3, 5, 7, 9, 10};
+    case Mode::Phrygian:
+      return {0, 1, 3, 5, 7, 8, 10};
+    case Mode::Lydian:
+      return {0, 2, 4, 6, 7, 9, 11};
+    case Mode::Mixolydian:
+      return {0, 2, 4, 5, 7, 9, 10};
+    case Mode::Locrian:
+      return {0, 1, 3, 5, 6, 8, 10};
+    case Mode::Major:
+    default:
+      return {0, 2, 4, 5, 7, 9, 11};
+  }
+}
+
+uint16_t scale_mask_for_mode(Mode mode) {
+  uint16_t mask = 0;
+  for (int interval : scale_intervals(mode)) mask |= static_cast<uint16_t>(1u << interval);
+  return mask;
+}
 
 std::array<float, 12> get_major_profile(PitchClass root, KeyProfileType profile_type) {
   return rotate_profile(major_base_profile(profile_type), static_cast<int>(root));

@@ -167,7 +167,7 @@ _VOICE_COMMON_KEYS = {
     "sample_rate",
     "latency_samples",
 }
-_VOICE_SIMPLE_KEYS = _VOICE_COMMON_KEYS | {"pitch_semitones", "formant_factor"}
+_VOICE_SIMPLE_KEYS = _VOICE_COMMON_KEYS | {"pitch_semitones", "formant_factor", "formant_mode"}
 _VOICE_PRESET_KEYS = _VOICE_COMMON_KEYS | {"preset"}
 _PROJECT_COMPILE_KEYS = {"has_timeline", "diagnostic_count", "diagnostics", "messages"}
 _PROJECT_COMPILE_DIAGNOSTIC_KEYS = {"code", "severity", "target_id", "message"}

@@ -3,6 +3,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "editing/note_model/note_split_merge.h"
 #include "editing/note_model/note_target.h"
 #include "editing/note_model/pitch_decomposition.h"
+#include "editing/pitch_editor/auto_tune.h"
 #include "editing/pitch_editor/note_editor.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #endif
@@ -124,6 +126,25 @@ bool valid_pitch_track(const float* f0_hz, const float* voiced_prob, const int32
       return false;
     }
   }
+  return true;
+}
+
+/// Validates the correction knobs shared by every config-driven entry point and
+/// copies them (and the scale reference) onto the core config.
+bool apply_correction_knobs(const SonarePitchCorrectionConfig& config,
+                            editing::pitch_editor::PitchCorrectionConfig& core_config) {
+  if (!std::isfinite(config.scale_reference_midi) || !std::isfinite(config.retune_amount) ||
+      config.retune_amount < 0.0f || config.retune_amount > 1.0f ||
+      !std::isfinite(config.max_correction_semitones) || config.max_correction_semitones < 0.0f ||
+      !std::isfinite(config.retune_speed_ms) || config.retune_speed_ms < 0.0f ||
+      !std::isfinite(config.vibrato_threshold_cents) || config.vibrato_threshold_cents < 0.0f) {
+    return false;
+  }
+  core_config.scale.reference_midi = config.scale_reference_midi;
+  core_config.retune_amount = config.retune_amount;
+  core_config.max_correction_semitones = config.max_correction_semitones;
+  core_config.retune_speed_ms = config.retune_speed_ms;
+  core_config.vibrato_threshold_cents = config.vibrato_threshold_cents;
   return true;
 }
 
@@ -536,21 +557,11 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
     if (!editing::pitch_editor::valid_scale_args(config->scale_root,
                                                  static_cast<uint16_t>(config->scale_mode_mask)) ||
         (config->scale_mode_mask & ~uint32_t{0x0FFF}) != 0 ||
-        !std::isfinite(config->scale_reference_midi) || !std::isfinite(config->retune_amount) ||
-        config->retune_amount < 0.0f || config->retune_amount > 1.0f ||
-        !std::isfinite(config->max_correction_semitones) ||
-        config->max_correction_semitones < 0.0f || !std::isfinite(config->retune_speed_ms) ||
-        config->retune_speed_ms < 0.0f || !std::isfinite(config->vibrato_threshold_cents) ||
-        config->vibrato_threshold_cents < 0.0f) {
+        !apply_correction_knobs(*config, core_config)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     core_config.scale.root = config->scale_root;
     core_config.scale.mode_mask = static_cast<uint16_t>(config->scale_mode_mask);
-    core_config.scale.reference_midi = config->scale_reference_midi;
-    core_config.retune_amount = config->retune_amount;
-    core_config.max_correction_semitones = config->max_correction_semitones;
-    core_config.retune_speed_ms = config->retune_speed_ms;
-    core_config.vibrato_threshold_cents = config->vibrato_threshold_cents;
   }
   const float target_midi = config ? config->target_midi : constants::kMidiA4;
 
@@ -570,6 +581,41 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, f0_hz, voiced_prob, voiced, n_frames,
                               hop_length, config, out, out_length);
+#endif
+}
+
+SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rate,
+                             const SonareKey* key, const SonarePitchCorrectionConfig* config,
+                             float** out, size_t* out_length, SonareKey* out_key) {
+  SONARE_C_API_ENTRY;
+  // Refused and zeroed before the gate, so the stub below leaves them defined too.
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!out_key) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_key = SonareKey{};
+#if defined(SONARE_WITH_PITCH_EDITOR)
+  if (key && (key->root < SONARE_PITCH_C || key->root > SONARE_PITCH_B ||
+              key->mode < SONARE_MODE_MAJOR || key->mode > SONARE_MODE_LOCRIAN)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  editing::pitch_editor::PitchCorrectionConfig core_config{};
+  if (config && !apply_correction_knobs(*config, core_config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  std::optional<Key> named;
+  if (key) {
+    named = Key{static_cast<PitchClass>(key->root), static_cast<Mode>(key->mode), 1.0f};
+  }
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    const editing::pitch_editor::AutoTuneResult result =
+        editing::pitch_editor::auto_tune(audio, named, core_config);
+    out_key->root = static_cast<SonarePitchClass>(result.key.root);
+    out_key->mode = static_cast<SonareMode>(result.key.mode);
+    out_key->confidence = result.key.confidence;
+    return copy_audio_result(result.audio, out, out_length);
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, key, config, out, out_length, out_key);
 #endif
 }
 

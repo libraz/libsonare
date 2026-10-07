@@ -13,6 +13,7 @@ export { extractPercussiveEvents, renderPercussiveEvents } from './effects_percu
 export { harmonic, hpss, percussive } from './effects_separation.js';
 export { spectralEdit } from './effects_spectral.js';
 export {
+  autoTune,
   pitchCorrectTimevarying,
   pitchCorrectToMidi,
   pitchCorrectToMidiTimevarying,
@@ -20,6 +21,7 @@ export {
   timeStretch,
 } from './effects_timepitch.js';
 export type {
+  FormantMode,
   VoiceChangeOptions,
   VoiceChangeRealtimeOptions,
   VoiceChangeRealtimeRequest,

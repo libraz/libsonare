@@ -87,6 +87,12 @@
 
 - Ask whether a lane, bus or master sidechain binding would be accepted, and why not, without changing anything (C: `sonare_engine_can_set_lane_sidechain`, `sonare_engine_can_set_bus_sidechain`, `sonare_engine_can_set_master_sidechain`, `SonareSidechainRefusal`; Node, WASM and the worklet engine: `canSetLaneSidechain`, `canSetBusSidechain`, `canSetMasterSidechain` returning `SidechainCheck`; Python: `can_set_lane_sidechain`, `can_set_bus_sidechain`, `can_set_master_sidechain` returning `SidechainCheck`).
 
+#### Editing and voice
+
+- `scaleMaskForMode(root, mode)` / `scale_mask_for_mode` / `sonare_scale_mask_for_mode` return the 12-bit scale mask of a mode (church-mode names as `detectKey` reports them), and `scaleModeMask` on pitch correction accepts a mode name as well as a mask on Node, WASM and Python.
+- `autoTune({ samples, sampleRate, key: 'detect' | { root, mode }, strength, ... })` / `auto_tune` / `sonare_auto_tune` tune a monophonic recording to a detected or named key offline and return the corrected samples plus the key used.
+- `voiceChange` / `voice_change` and the `voice-change` CLI take `formantMode` / `formant_mode`: `relative` (the default, unchanged output) or `absolute`, where `formantFactor` is the formant shift relative to the input whatever the pitch shift. An absolute request the formant warp cannot reach is refused with the reachable range. C: `sonare_voice_change_ex` with the versioned `SonareVoiceChangeConfig` and `SonareFormantMode`.
+
 ### Behaviour changes
 
 - Boundary detection gates each novelty peak against the largest novelty within `referenceWindow` seconds on either side instead of the whole-track maximum, so a dominant change no longer hides weaker section changes far from it. This affects tracks longer than 60 s and the sections `analyze()` reports. Minimum spacing keeps the strongest peaks first and no longer depends on peak order, so chains of peaks closer than `peakDistance` resolve differently. `strength` and `noveltyCurve` keep their meaning.

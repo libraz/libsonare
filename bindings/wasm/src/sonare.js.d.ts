@@ -2245,6 +2245,7 @@ export interface SonareModule {
     samplesPerBucket: number;
   }>;
 
+  scaleMaskForMode: (root: number, mode: number | string) => number;
   scaleQuantizeMidi: (
     root: number,
     modeMask: number,
@@ -2412,7 +2413,7 @@ export interface SonareModule {
       mode?: string;
       targetMidi?: number;
       scaleRoot?: number;
-      scaleModeMask?: number;
+      scaleModeMask?: number | string;
       referenceMidi?: number;
       retuneAmount?: number;
       maxCorrectionSemitones?: number;
@@ -2422,6 +2423,27 @@ export interface SonareModule {
       voicedProb?: Float32Array;
     },
   ) => Float32Array;
+  autoTune: (
+    samples: Float32Array,
+    sampleRate: number,
+    key: { root: number; mode: number | string } | null,
+    options: {
+      strength?: number;
+      retuneSpeedMs?: number;
+      vibratoThresholdCents?: number;
+      maxCorrectionSemitones?: number;
+      referenceMidi?: number;
+    },
+  ) => {
+    samples: Float32Array;
+    key: {
+      root: number;
+      mode: number;
+      confidence: number;
+      name: string;
+      shortName: string;
+    };
+  };
   noteStretch: (
     samples: Float32Array,
     sampleRate: number,
@@ -2551,6 +2573,7 @@ export interface SonareModule {
     sampleRate: number,
     pitchSemitones: number,
     formantFactor: number,
+    formantMode: string,
   ) => Float32Array;
   voiceChangeRealtime: (
     samples: Float32Array,

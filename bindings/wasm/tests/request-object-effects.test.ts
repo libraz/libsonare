@@ -93,6 +93,14 @@ describe('effects request-object compatibility (WASM)', () => {
     expect(voiceChange({ samples, sampleRate, pitchSemitones: 2, formantFactor: 1.1 })).toEqual(
       voiceChange(samples, sampleRate, { pitchSemitones: 2, formantFactor: 1.1 }),
     );
+    const absolute = {
+      pitchSemitones: 2,
+      formantFactor: 1.1,
+      formantMode: 'absolute' as const,
+    };
+    expect(voiceChange({ samples, sampleRate, ...absolute })).toEqual(
+      voiceChange(samples, sampleRate, absolute),
+    );
     expect(
       voiceChangeRealtime({
         samples,

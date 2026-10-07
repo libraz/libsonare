@@ -5,6 +5,7 @@ import json
 import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 import libsonare
@@ -337,6 +338,45 @@ def test_voice_change_function() -> None:
     assert hasattr(result, "__iter__")
     assert len(result) > 0
     assert all(math.isfinite(x) for x in result)
+
+
+def test_voice_change_formant_mode() -> None:
+    sr = 22050
+    samples = _tone(sr)
+
+    default = libsonare.voice_change(
+        samples, sample_rate=sr, pitch_semitones=3.0, formant_factor=1.1
+    )
+    relative = libsonare.voice_change(
+        samples, sample_rate=sr, pitch_semitones=3.0, formant_factor=1.1, formant_mode="relative"
+    )
+    assert list(default) == list(relative)
+
+    absolute = libsonare.voice_change(
+        samples, sample_rate=sr, pitch_semitones=3.0, formant_factor=1.1, formant_mode="absolute"
+    )
+    assert len(absolute) == len(relative)
+    assert list(absolute) != list(relative)
+
+    # No shift and unity factor: nothing is warped, so the input comes back.
+    identity = libsonare.voice_change(samples, sample_rate=sr, formant_mode="absolute")
+    assert list(identity) == list(np.asarray(samples, dtype=np.float32))
+
+
+def test_voice_change_absolute_mode_refuses_unreachable_factor() -> None:
+    sr = 22050
+    samples = _tone(sr)
+    # 2**(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+    with pytest.raises(libsonare.SonareValueError, match=r"\[0\.693, 2\.079\]"):
+        libsonare.voice_change(
+            samples,
+            sample_rate=sr,
+            pitch_semitones=4.0,
+            formant_factor=2.5,
+            formant_mode="absolute",
+        )
+    with pytest.raises(libsonare.SonareValueError, match="formant_mode"):
+        libsonare.voice_change(samples, sample_rate=sr, formant_mode="Absolute")
 
 
 def test_realtime_voice_changer_function_and_class() -> None:

@@ -297,6 +297,11 @@ void requireIntegral(double number, const char* key);
 ///          driving the embind classes directly.
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
+
+/// @brief Resolves a musical mode given as its ordinal (0..6) or its lowercase
+///        church-mode name ("major", "minor", "dorian", ...).
+/// @throws SonareException(InvalidParameter) naming @p what for any other value.
+Mode modeFromVal(const val& value, const char* what);
 /// @brief Presence- AND type-checked int reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number.

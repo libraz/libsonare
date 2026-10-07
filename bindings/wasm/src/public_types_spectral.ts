@@ -1,3 +1,4 @@
+import type { Key, Mode, PitchClass, ScaleName } from './public_types_music.js';
 import type { ValidateOptions } from './validation.js';
 
 /**
@@ -22,8 +23,11 @@ export interface PitchCorrectOptions extends ValidateOptions {
   targetMidi?: number;
   /** Scale root pitch class (0=C .. 11=B) when `mode` is `'scale'`. Default 0. */
   scaleRoot?: number;
-  /** 12-bit degree mask, bit `i` = semitone `i` above the root enabled. Default C major. */
-  scaleModeMask?: number;
+  /**
+   * Scale degrees enabled: a 12-bit mask (bit `i` = semitone `i` above the root)
+   * or a mode name, as `scaleMaskForMode` resolves it. Default C major.
+   */
+  scaleModeMask?: number | ScaleName;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
   referenceMidi?: number;
   /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
@@ -38,6 +42,38 @@ export interface PitchCorrectOptions extends ValidateOptions {
   voiced?: VoicedFlags | null;
   /** Per-frame voicing probability in `[0, 1]`; used only when `voiced` is omitted or `null`, and ignored when flags are supplied. */
   voicedProb?: Float32Array | null;
+}
+
+/** A key as `detectKey` reports it, which is what `autoTune` takes to name one. */
+export interface AutoTuneKey {
+  root: PitchClass;
+  /** A `Mode` ordinal or its name (a `ScaleName`). */
+  mode: Mode | ScaleName;
+}
+
+/** Tuning knobs of `autoTune`. All fields are optional. */
+export interface AutoTuneOptions extends ValidateOptions {
+  /** Correction strength in `[0, 1]`; 1 = full snap to the scale, 0 = bypass. Default 1. */
+  strength?: number;
+  /** Retune IIR time constant (ms); larger = slower glide. Default 50. */
+  retuneSpeedMs?: number;
+  /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
+  vibratoThresholdCents?: number;
+  /** Hard clamp on per-frame correction magnitude (semitones). Default 12. */
+  maxCorrectionSemitones?: number;
+  /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
+  referenceMidi?: number;
+}
+
+/** Result of `autoTune`. */
+export interface AutoTuneResult {
+  /** The corrected audio, the length of the input. */
+  samples: Float32Array;
+  /**
+   * The key the audio was tuned to: the detected one (with the model's own
+   * `confidence`, see `Key`) or the one the request named (`confidence` 1).
+   */
+  key: Key;
 }
 
 /** Options for `noteStretch`. All fields are optional. */

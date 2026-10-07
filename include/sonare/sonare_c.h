@@ -85,6 +85,18 @@ SonareError sonare_scale_correction_semitones(int root, uint16_t mode_mask, floa
 SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int pitch_class,
                                              int* out_enabled);
 
+/// @brief Returns the 12-bit scale mask of a mode, in the layout the other
+///        scale functions and @ref SonarePitchCorrectionConfig read.
+/// @details Bit i (LSB = 0) is set when the semitone i above the root belongs
+///          to the scale, so the mask is the same for every root; @p root is
+///          validated and otherwise unused. Major and minor are the ionian and
+///          natural-minor (aeolian) scales; the five church modes are the ones
+///          @ref sonare_detect_key reports.
+/// @param root Root pitch class in [0, 11] (0 = C, ... 11 = B).
+/// @param mode A @ref SonareMode.
+/// @param out_mask Receives the mask; 0 on failure.
+SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_mask);
+
 // ============================================================================
 // Core - Resample
 // ============================================================================

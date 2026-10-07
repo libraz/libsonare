@@ -18,8 +18,15 @@ using sonare::constants::kTwoPi;
 
 namespace {
 
-constexpr int kFrameSize = 1024;
-constexpr int kHopSize = 256;
+constexpr int kFrameRateReference = 48000;
+
+// Frame length in samples for the input rate; a multiple of four so the hop is exact.
+int frame_size_for(int sample_rate, bool in_time) {
+  if (!in_time) return kFormantWarpFrameAt48k;
+  const double scaled = static_cast<double>(kFormantWarpFrameAt48k) *
+                        static_cast<double>(sample_rate) / static_cast<double>(kFrameRateReference);
+  return std::max(16, 4 * static_cast<int>(std::lround(scaled / 4.0)));
+}
 
 // Periodic Hann window (good COLA at 75% overlap).
 std::vector<float> make_hann(int size) {
@@ -47,6 +54,8 @@ Audio FormantWarp::process(const Audio& audio) const {
   SONARE_CHECK(config_.lpc_order >= 0, ErrorCode::InvalidParameter);
 
   const int sr = audio.sample_rate();
+  const int frame_size = frame_size_for(sr, config_.frame_in_time);
+  const int hop_size = frame_size / 4;
   const size_t n = audio.size();
   const float* x = audio.data();
 
@@ -59,20 +68,20 @@ Audio FormantWarp::process(const Audio& audio) const {
   // Effective LPC order: explicit config, else sr-based heuristic.
   const int default_order = static_cast<int>(sr / 1000) + 2;
   int order = (config_.lpc_order > 0) ? config_.lpc_order : default_order;
-  order = std::max(2, std::min(order, kFrameSize - 1));
+  order = std::max(2, std::min(order, frame_size - 1));
 
   // kiss_fftr requires an even FFT size; 2*frame_size gives zero-padding headroom.
-  const int n_fft = 2 * kFrameSize;
+  const int n_fft = 2 * frame_size;
   const int n_bins = n_fft / 2 + 1;
   const float src_max = static_cast<float>(n_bins - 1);
 
-  const std::vector<float> hann = make_hann(kFrameSize);
+  const std::vector<float> hann = make_hann(frame_size);
   FFT fft(n_fft);
 
   std::vector<float> out(n, 0.0f);
   std::vector<float> norm(n, 0.0f);
 
-  std::vector<float> windowed(static_cast<size_t>(kFrameSize));
+  std::vector<float> windowed(static_cast<size_t>(frame_size));
   std::vector<float> padded(static_cast<size_t>(n_fft));
   std::vector<std::complex<float>> spec(static_cast<size_t>(n_bins));
   std::vector<float> env(static_cast<size_t>(n_bins));
@@ -83,9 +92,9 @@ Audio FormantWarp::process(const Audio& audio) const {
   std::vector<float> residual;
 
   // Start so that the first frame's analysis window is centred near sample 0.
-  for (long start = -kFrameSize / 2; start < static_cast<long>(n); start += kHopSize) {
+  for (long start = -frame_size / 2; start < static_cast<long>(n); start += hop_size) {
     // Extract windowed frame with edge zero-padding.
-    for (int i = 0; i < kFrameSize; ++i) {
+    for (int i = 0; i < frame_size; ++i) {
       const long idx = start + i;
       const float s = (idx >= 0 && idx < static_cast<long>(n)) ? x[idx] : 0.0f;
       windowed[static_cast<size_t>(i)] = s * hann[static_cast<size_t>(i)];
@@ -102,7 +111,7 @@ Audio FormantWarp::process(const Audio& audio) const {
     // frames; using the raw sample (s * win) would under-weight by one analysis
     // window factor.
     if (model.variance < kEpsilon || model.ar.size() < 2 || model.ar[0] == 0.0f) {
-      for (int i = 0; i < kFrameSize; ++i) {
+      for (int i = 0; i < frame_size; ++i) {
         const long idx = start + i;
         if (idx < 0 || idx >= static_cast<long>(n)) continue;
         const float win = hann[static_cast<size_t>(i)];
@@ -159,7 +168,7 @@ Audio FormantWarp::process(const Audio& audio) const {
     fft.inverse(spec.data(), time_frame.data());
 
     // Synthesis window + OLA.
-    for (int i = 0; i < kFrameSize; ++i) {
+    for (int i = 0; i < frame_size; ++i) {
       const long idx = start + i;
       if (idx < 0 || idx >= static_cast<long>(n)) continue;
       const float win = hann[static_cast<size_t>(i)];

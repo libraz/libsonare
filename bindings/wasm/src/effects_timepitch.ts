@@ -6,7 +6,13 @@
 import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
 import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
-import type { PitchCorrectOptions, VoicedFlags } from './public_types.js';
+import type {
+  AutoTuneKey,
+  AutoTuneOptions,
+  AutoTuneResult,
+  PitchCorrectOptions,
+  VoicedFlags,
+} from './public_types.js';
 import type { ValidateOptions } from './validation.js';
 import { assertFiniteScalar, assertSamples } from './validation.js';
 
@@ -52,6 +58,16 @@ export interface PitchCorrectTimevaryingRequest extends PitchCorrectOptions {
   f0Hz: Float32Array;
   sampleRate?: number;
   hopLength?: number;
+}
+
+export interface AutoTuneRequest extends AutoTuneOptions {
+  samples: Float32Array;
+  sampleRate?: number;
+  /**
+   * `'detect'` (default) finds the key with `detectKey`'s defaults; a
+   * `{ root, mode }` names it, as `detectKey`'s result does.
+   */
+  key?: 'detect' | AutoTuneKey;
 }
 
 /**
@@ -385,4 +401,33 @@ export function pitchCorrectTimevarying(
     request.hopLength ?? 512,
     nativeOptions,
   );
+}
+
+/**
+ * Snaps the voiced pitch of a monophonic recording to a scale, offline.
+ *
+ * Chains key detection (when `key` is `'detect'`), `scaleMaskForMode`, pYIN
+ * pitch tracking (2048-sample frames, 512-sample hop) and the time-varying scale
+ * corrector, so the options are `pitchCorrectTimevarying`'s with `strength` as
+ * `retuneAmount`. The output has the input's length. Unvoiced stretches and
+ * notes the corrector cannot repitch pass through unchanged.
+ *
+ * @example
+ * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, strength: 0.8 });
+ *
+ * @param request - Audio, the key (`'detect'` or `{ root, mode }`) and the tuning knobs
+ * @returns The corrected audio and the key it was tuned to
+ */
+export function autoTune(request: AutoTuneRequest): AutoTuneResult {
+  assertSamples('autoTune', request.samples, request.validate !== false);
+  const { samples, sampleRate, key = 'detect', validate: _validate, ...options } = request;
+  if (key !== 'detect' && (key === null || typeof key !== 'object')) {
+    throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
+  }
+  return requireModule().autoTune(
+    samples,
+    sampleRate ?? 22050,
+    key === 'detect' ? null : key,
+    options,
+  ) as AutoTuneResult;
 }

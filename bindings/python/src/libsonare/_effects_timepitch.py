@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import ctypes
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from ._errors import _not_supported
+from ._features_metering import scale_mask_for_mode
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
     SONARE_PITCH_TARGET_SCALE,
+    SonareKey,
     SonarePitchCorrectionConfig,
 )
 from ._runtime import (
@@ -23,6 +25,7 @@ from ._runtime import (
     _float_array_result,
     _get_lib,
     _guard_buffer,
+    _mode_value,
     _narrow_int,
     _out_float_array,
     _to_c_float,
@@ -34,6 +37,8 @@ from ._runtime import (
     _validate_effect_fft_options,
     _validate_samples,
 )
+from ._types_analysis import AutoTuneResult, Key
+from ._types_enums import Mode, PitchClass
 
 
 def time_stretch(
@@ -252,7 +257,7 @@ def pitch_correct_timevarying(
     mode: str = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
-    scale_mode_mask: int | None = None,
+    scale_mode_mask: int | str | Mode | None = None,
     reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
@@ -278,7 +283,9 @@ def pitch_correct_timevarying(
         mode: ``"midi"`` retunes toward ``target_midi``; ``"scale"`` snaps to the key.
         target_midi: Fixed target note when ``mode == "midi"`` (in ``[0, 127]``).
         scale_root: Scale root pitch class (0=C .. 11=B) when ``mode == "scale"``.
-        scale_mode_mask: 12-bit degree mask; ``None`` keeps the library default (C major).
+        scale_mode_mask: 12-bit degree mask, or a :class:`Mode` / mode name
+            (``"major"``, ``"dorian"``, ...) resolved by :func:`scale_mask_for_mode`;
+            ``None`` keeps the library default (C major).
         reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
         retune_amount: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
         max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
@@ -309,7 +316,9 @@ def pitch_correct_timevarying(
     config.scale_root = _narrow_int(
         scale_root, "pitch_correct_timevarying: scale_root", _C_INT_MIN, _C_INT_MAX
     )
-    if scale_mode_mask is not None:
+    if isinstance(scale_mode_mask, str | Mode):
+        config.scale_mode_mask = scale_mask_for_mode(0, scale_mode_mask)
+    elif scale_mode_mask is not None:
         config.scale_mode_mask = _narrow_int(
             scale_mode_mask, "pitch_correct_timevarying: scale_mode_mask", 0, _UINT32_MAX
         )
@@ -356,3 +365,95 @@ def pitch_correct_timevarying(
             )
         )
         return _float_array_result(out, out_length.value)
+
+
+def _auto_tune_key(key: object) -> SonareKey | None:
+    """Resolves ``key`` to the C key, or ``None`` for ``"detect"``."""
+    if isinstance(key, str):
+        if key != "detect":
+            raise SonareValueError("key must be 'detect' or a key with a root and a mode")
+        return None
+    if isinstance(key, Mapping):
+        root, mode = key.get("root"), key.get("mode")
+    elif isinstance(key, tuple | list) and len(key) == 2:
+        root, mode = key
+    else:
+        root, mode = getattr(key, "root", None), getattr(key, "mode", None)
+    if root is None or mode is None:
+        raise SonareValueError("key must be 'detect' or a key with a root and a mode")
+    return SonareKey(int(PitchClass(root)), _mode_value(mode), 1.0)
+
+
+@_guard_buffer("samples")
+def auto_tune(
+    samples: Sequence[float] | list[float],
+    sample_rate: int = 22050,
+    key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
+    *,
+    strength: float | None = None,
+    retune_speed_ms: float | None = None,
+    vibrato_threshold_cents: float | None = None,
+    max_correction_semitones: float | None = None,
+    reference_midi: float | None = None,
+) -> AutoTuneResult:
+    """Snap the voiced pitch of a monophonic recording to a scale, offline.
+
+    Chains key detection (when ``key`` is ``"detect"``), :func:`scale_mask_for_mode`,
+    pYIN pitch tracking (2048-sample frames, 512-sample hop) and the time-varying
+    scale corrector, so the knobs are :func:`pitch_correct_timevarying`'s with
+    ``strength`` as ``retune_amount``. The output has the input's length;
+    unvoiced stretches pass through unchanged.
+
+    Args:
+        samples: Mono audio samples.
+        sample_rate: Sample rate in Hz (default 22050).
+        key: ``"detect"`` finds the key with :func:`detect_key`'s defaults; or name
+            it with a :class:`Key` (e.g. :func:`detect_key`'s result), a
+            ``{"root": ..., "mode": ...}`` mapping or a ``(root, mode)`` pair, the
+            mode as a :class:`Mode`, its ordinal or its name.
+        strength: Correction strength in ``[0, 1]``; ``None`` keeps the default (1.0).
+        retune_speed_ms: Retune IIR time constant (ms); ``None`` keeps the default.
+        vibrato_threshold_cents: Vibrato-preserve threshold; ``None`` keeps the default.
+        max_correction_semitones: Per-frame correction clamp; ``None`` keeps the default.
+        reference_midi: Reference MIDI anchoring the scale grid; ``None`` keeps the default.
+
+    Returns:
+        :class:`AutoTuneResult` with the corrected ``samples`` and the ``key`` used.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_auto_tune"):
+        raise _not_supported("libsonare was built without pitch-editor support")
+
+    named = _auto_tune_key(key)
+    config = SonarePitchCorrectionConfig()
+    _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))
+    if strength is not None:
+        config.retune_amount = float(strength)
+    if reference_midi is not None:
+        config.scale_reference_midi = float(reference_midi)
+    if max_correction_semitones is not None:
+        config.max_correction_semitones = float(max_correction_semitones)
+    if retune_speed_ms is not None:
+        config.retune_speed_ms = float(retune_speed_ms)
+    if vibrato_threshold_cents is not None:
+        config.vibrato_threshold_cents = float(vibrato_threshold_cents)
+
+    c_array, length = _to_c_float_array(samples)
+    used = SonareKey()
+    with _out_float_array(lib) as (out, out_length):
+        _check(
+            lib.sonare_auto_tune(
+                c_array,
+                _to_c_size_t(length, "length"),
+                _to_c_int(sample_rate, "sample_rate"),
+                ctypes.byref(named) if named is not None else None,
+                ctypes.byref(config),
+                ctypes.byref(out),
+                ctypes.byref(out_length),
+                ctypes.byref(used),
+            )
+        )
+        return AutoTuneResult(
+            samples=_float_array_result(out, out_length.value),
+            key=Key(PitchClass(used.root), Mode(used.mode), float(used.confidence)),
+        )

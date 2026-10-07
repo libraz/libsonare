@@ -507,6 +507,25 @@ Napi::Value SonareWrap::ScaleQuantizeMidi(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::ScaleMaskForMode(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 2 || !info[0].IsNumber()) {
+    Napi::TypeError::New(env, "scaleMaskForMode: expected (root, mode)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const int root = node_narrow_int(env, info[0], node_arg_label(0).c_str());
+  uint16_t mask = 0;
+  const SonareError err = sonare_scale_mask_for_mode(root, node_mode_from_value(info[1]), &mask);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  return Napi::Number::New(env, mask);
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::ScaleCorrectionSemitones(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

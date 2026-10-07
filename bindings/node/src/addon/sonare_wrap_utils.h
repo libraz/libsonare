@@ -251,6 +251,9 @@ inline std::vector<float> FloatVectorFromValue(const Napi::Value& value, const c
 /// @return true when the dims are consistent (no exception thrown).
 bool ValidateMatrixDims(Napi::Env env, const char* fn_name, int rows, int cols, size_t length);
 const char* PitchClassNameLocal(SonarePitchClass pc);
+/// @brief Resolves a pitch class given as an ordinal in [0, 12) or as its name ("C", "C#", ...,
+/// "B").
+SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what);
 const char* ModeNameLocal(SonareMode mode);
 const char* ChordQualityName(SonareChordQuality quality);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);

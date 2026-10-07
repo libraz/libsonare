@@ -395,6 +395,30 @@ describe('editing effects', () => {
     expect(result.length).toBeGreaterThan(0);
   });
 
+  it('voiceChange formantMode defaults to relative and absolute changes the result', () => {
+    const options = { pitchSemitones: 3, formantFactor: 1.1 };
+    const byDefault = voiceChange(tone, SR, options);
+    expect(voiceChange(tone, SR, { ...options, formantMode: 'relative' })).toEqual(byDefault);
+    const absolute = voiceChange(tone, SR, { ...options, formantMode: 'absolute' });
+    expect(absolute.length).toBe(byDefault.length);
+    expect(absolute).not.toEqual(byDefault);
+    // No shift and unity factor: nothing is warped, so the input comes back.
+    expect(voiceChange(tone, SR, { formantMode: 'absolute' })).toEqual(tone);
+  });
+
+  it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
+    // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+    const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
+    expect(() => voiceChange(tone, SR, request)).toThrow(RangeError);
+    expect(() => voiceChange(tone, SR, request)).toThrow(/\[0\.693, 2\.079\]/);
+    expect(() =>
+      voiceChange(tone, SR, { formantMode: 'sideways' as unknown as 'relative' }),
+    ).toThrow(RangeError);
+    expect(() => voiceChange(tone, SR, { formantMode: 1 as unknown as 'relative' })).toThrow(
+      TypeError,
+    );
+  });
+
   it('RealtimeVoiceChanger processes blocks and exposes presets', () => {
     const changer = new RealtimeVoiceChanger({
       sampleRate: SR,

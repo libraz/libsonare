@@ -69,6 +69,7 @@ export type {
   DenoiseClassicalOptions,
   DereverbClassicalOptions,
   DynamicsProcessorResult,
+  FormantMode,
   GateOptions,
   MasteringAbMatchLoudnessRequest,
   MasteringAbMatchLoudnessStereoRequest,
@@ -134,6 +135,7 @@ export type {
 } from './effects_mastering.js';
 export {
   assignNoteTargets,
+  autoTune,
   decomposeNotePitch,
   extractNotes,
   extractPercussiveEvents,
@@ -250,6 +252,7 @@ export type {
 export type { HarmonicRequest, HpssRequest, PercussiveRequest } from './effects_separation.js';
 export type { SpectralEditRequest } from './effects_spectral.js';
 export type {
+  AutoTuneRequest,
   PitchCorrectTimevaryingRequest,
   PitchCorrectToMidiRequest,
   PitchCorrectToMidiTimevaryingRequest,
@@ -690,6 +693,9 @@ export type {
   AnalyzeSectionsOptions,
   AnalyzeTimbreOptions,
   AutomationCurve,
+  AutoTuneKey,
+  AutoTuneOptions,
+  AutoTuneResult,
   Beat,
   Boundary,
   BoundaryOptions,
@@ -865,6 +871,7 @@ export type {
   RoomMorphOptions,
   RoomMorphResult,
   RoomPlacement,
+  ScaleName,
   Section,
   SegmentMatrix,
   SendTiming,
@@ -1002,7 +1009,12 @@ export {
   engineCapabilities,
   RealtimeEngine,
 } from './realtime_engine.js';
-export { scaleCorrectionSemitones, scalePitchClassEnabled, scaleQuantizeMidi } from './scale.js';
+export {
+  scaleCorrectionSemitones,
+  scaleMaskForMode,
+  scalePitchClassEnabled,
+  scaleQuantizeMidi,
+} from './scale.js';
 export type { ProgressCallback } from './sonare.js';
 export { StreamAnalyzer, streamAnalyzerConfigDefaults } from './stream_analyzer.js';
 export type {

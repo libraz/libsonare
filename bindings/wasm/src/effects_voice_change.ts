@@ -1,3 +1,4 @@
+import { ErrorCode } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
@@ -7,12 +8,27 @@ function requireModule() {
   return getSonareModule();
 }
 
+/** How `formantFactor` relates to the pitch shift in {@link voiceChange}. */
+export type FormantMode = 'relative' | 'absolute';
+
 /** Options for {@link voiceChange}. All fields are optional. */
 export interface VoiceChangeOptions extends ValidateOptions {
   /** Pitch shift in semitones (negative = down). Default 0. */
   pitchSemitones?: number;
   /** Formant scale factor (>1 brightens, <1 darkens). Default 1. */
   formantFactor?: number;
+  /**
+   * How `formantFactor` relates to the pitch shift. Default `'relative'`.
+   *
+   * - `'relative'`: `formantFactor` is the warp applied after the pitch shift, so the
+   *   formants end up at `formantFactor * 2^(pitchSemitones / 12)` of the input's.
+   * - `'absolute'`: `formantFactor` is the formant shift relative to the input (1 keeps
+   *   the formants where they were); the warp applied is
+   *   `formantFactor / 2^(pitchSemitones / 12)`. A request whose warp falls outside
+   *   [0.55, 1.65] throws a `RangeError` naming the reachable `formantFactor` range for
+   *   the given `pitchSemitones`; it is never clamped.
+   */
+  formantMode?: FormantMode;
 }
 
 /** Canonical request form for one-shot voice changing. */
@@ -42,12 +58,26 @@ export function voiceChange(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('voiceChange', request.samples, request.validate !== false);
-  return requireModule().voiceChange(
-    request.samples,
-    request.sampleRate ?? 22050,
-    request.pitchSemitones ?? 0.0,
-    request.formantFactor ?? 1.0,
-  );
+  const formantMode = request.formantMode ?? 'relative';
+  try {
+    return requireModule().voiceChange(
+      request.samples,
+      request.sampleRate ?? 22050,
+      request.pitchSemitones ?? 0.0,
+      request.formantFactor ?? 1.0,
+      formantMode,
+    );
+  } catch (error) {
+    // An unreachable absolute request or an unknown mode is an argument refusal, so it is a
+    // RangeError like every other out-of-domain argument rather than a coded library failure.
+    if (
+      formantMode !== 'relative' &&
+      (error as { code?: unknown }).code === ErrorCode.InvalidParameter
+    ) {
+      throw new RangeError((error as Error).message);
+    }
+    throw error;
+  }
 }
 
 /** Options for the offline {@link voiceChangeRealtime} convenience wrapper. */

@@ -141,6 +141,7 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
     const defaults: Required<Omit<VoiceChangeOptions, 'validate'>> = {
       pitchSemitones: 0.0,
       formantFactor: 1.0,
+      formantMode: 'relative',
     };
     expect(voiceChange(x, SR)).toEqual(voiceChange(x, SR, defaults));
   });

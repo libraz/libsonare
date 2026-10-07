@@ -111,6 +111,34 @@ SonareError sonare_voice_change(const float* samples, size_t length, int sample_
 #endif
 }
 
+SonareError sonare_voice_change_ex(const float* samples, size_t length, int sample_rate,
+                                   const SonareVoiceChangeConfig* config, float** out,
+                                   size_t* out_length) {
+  SONARE_C_API_ENTRY;
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
+#if defined(SONARE_WITH_VOICE_CHANGER)
+  if (config == nullptr || config->struct_version < 0 || config->struct_version > 1 ||
+      (config->formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
+       config->formant_mode != SONARE_FORMANT_MODE_ABSOLUTE)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    editing::voice_changer::VoiceChangerConfig core_config;
+    core_config.pitch_semitones = config->pitch_semitones;
+    core_config.formant_factor = config->formant_factor;
+    core_config.formant_mode = config->formant_mode == SONARE_FORMANT_MODE_ABSOLUTE
+                                   ? editing::voice_changer::FormantMode::Absolute
+                                   : editing::voice_changer::FormantMode::Relative;
+    editing::voice_changer::VoiceChanger changer(core_config);
+    Audio result = changer.process(audio);
+    return copy_audio_result(result, out, out_length);
+  });
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
+#endif
+}
+
 SonareError sonare_voice_change_realtime(const float* samples, size_t length, int sample_rate,
                                          const char* preset, int channels, float** out,
                                          size_t* out_length) {

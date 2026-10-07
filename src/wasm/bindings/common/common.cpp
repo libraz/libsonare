@@ -466,6 +466,24 @@ int checkedIntFromVal(const val& value, const char* key) {
   return static_cast<int>(number);
 }
 
+Mode modeFromVal(const val& value, const char* what) {
+  if (value.isString()) {
+    const std::string name = value.as<std::string>();
+    for (int ordinal = static_cast<int>(Mode::Major); ordinal <= static_cast<int>(Mode::Locrian);
+         ++ordinal) {
+      if (name == mode_name(static_cast<Mode>(ordinal))) return static_cast<Mode>(ordinal);
+    }
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(what) + " is not a mode name: '" + name + "'");
+  }
+  const int ordinal = checkedIntFromVal(value, what);
+  if (ordinal < static_cast<int>(Mode::Major) || ordinal > static_cast<int>(Mode::Locrian)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          std::string(what) + " must be a mode name or an ordinal in [0, 6]");
+  }
+  return static_cast<Mode>(ordinal);
+}
+
 int intProperty(val object, const char* key, int default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);

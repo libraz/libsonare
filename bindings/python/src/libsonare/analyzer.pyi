@@ -11,6 +11,7 @@ from .types import (
     AcousticResult,
     AnalysisResult,
     AutomationCurve,
+    AutoTuneResult,
     BoundaryResult,
     BpmAnalysisResult,
     Capabilities,
@@ -678,7 +679,7 @@ def pitch_correct_timevarying(
     mode: str = "midi",
     target_midi: float = 69.0,
     scale_root: int = 0,
-    scale_mode_mask: int | None = None,
+    scale_mode_mask: int | str | Mode | None = None,
     reference_midi: float | None = None,
     retune_amount: float | None = None,
     max_correction_semitones: float | None = None,
@@ -687,6 +688,17 @@ def pitch_correct_timevarying(
     voiced: IntSamples | None = None,
     voiced_prob: FloatSamples | None = None,
 ) -> list[float]: ...
+def auto_tune(
+    samples: FloatSamples,
+    sample_rate: int = 22050,
+    key: str | Key | Mapping[str, object] | tuple[PitchClass, Mode] = "detect",
+    *,
+    strength: float | None = None,
+    retune_speed_ms: float | None = None,
+    vibrato_threshold_cents: float | None = None,
+    max_correction_semitones: float | None = None,
+    reference_midi: float | None = None,
+) -> AutoTuneResult: ...
 def note_stretch(
     samples: FloatSamples,
     sample_rate: int = 22050,
@@ -706,6 +718,7 @@ def voice_change(
     sample_rate: int = 22050,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
+    formant_mode: Literal["relative", "absolute"] = "relative",
 ) -> list[float]: ...
 
 class NoteEdit:
@@ -2457,6 +2470,7 @@ def scale_quantize_midi(
 def scale_correction_semitones(
     root: int, mode_mask: int, midi: float, reference_midi: float = 0.0
 ) -> float: ...
+def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int: ...
 def scale_pitch_class_enabled(root: int, mode_mask: int, pitch_class: int) -> bool: ...
 def mel_to_stft(
     mel: FloatSamples,

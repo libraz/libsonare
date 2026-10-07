@@ -608,9 +608,12 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   if (has_preset_pack && !has_preset) {
     throw std::invalid_argument("--preset-pack requires --preset to select an entry");
   }
-  if (selector_count > 0 && (args.has("pitch-semitones") || args.has("formant-factor"))) {
+  // The default mode is a no-op, so only an explicit absolute request conflicts with a preset.
+  if (selector_count > 0 && (args.has("pitch-semitones") || args.has("formant-factor") ||
+                             args.get_string("formant-mode", "relative") != "relative")) {
     throw std::invalid_argument(
-        "--pitch-semitones/--formant-factor cannot be combined with a realtime preset");
+        "--pitch-semitones/--formant-factor/--formant-mode cannot be combined with a realtime "
+        "preset");
   }
   if (args.has("set") && selector_count == 0) {
     throw std::invalid_argument("--set requires --preset, --preset-json, or --preset-pack");
@@ -622,6 +625,7 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
   int latency_samples = 0;
   float pitch_semitones = 0.0f;
   float formant_factor = 1.0f;
+  editing::voice_changer::FormantMode formant_mode = editing::voice_changer::FormantMode::Relative;
   if (uses_realtime_preset) {
     const std::string requested_preset = args.get_string("preset", "");
     // Only advertise an ID when it identifies the selected source. A
@@ -684,11 +688,17 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
     editing::voice_changer::VoiceChangerConfig config;
     config.pitch_semitones = pitch_semitones;
     config.formant_factor = formant_factor;
+    formant_mode =
+        editing::voice_changer::parse_formant_mode(args.get_string("formant-mode", "relative"));
+    config.formant_mode = formant_mode;
     editing::voice_changer::VoiceChanger changer(config);
     result = changer.process(audio);
-    // The warp resolves the factor into its own range, and the changer leaves the
-    // dry/wet amount at its default, so this is the value the audio was made with.
-    formant_factor = effective_formant_factor(formant_factor, FormantWarpConfig{}.amount);
+    // Relative mode resolves the factor into the warp's range, and the changer leaves the
+    // dry/wet amount at its default, so this is the value the audio was made with. Absolute
+    // mode refuses an unreachable factor instead, so the requested one is what was applied.
+    if (formant_mode == editing::voice_changer::FormantMode::Relative) {
+      formant_factor = effective_formant_factor(formant_factor, FormantWarpConfig{}.amount);
+    }
   }
 
   // Pitch/formant processing uses spectral transforms whose boundary
@@ -719,7 +729,9 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
       // Offline voice-change path: echo the simple pitch/formant knobs the
       // result was made with, so a JSON consumer reading the formant factor back
       // gets the value that shaped the audio rather than the one that was asked for.
-      json.kv("pitch_semitones", pitch_semitones).kv("formant_factor", formant_factor);
+      json.kv("pitch_semitones", pitch_semitones)
+          .kv("formant_factor", formant_factor)
+          .kv("formant_mode", editing::voice_changer::formant_mode_name(formant_mode));
     }
     json.end_object().print();
   } else if (!args.quiet) {

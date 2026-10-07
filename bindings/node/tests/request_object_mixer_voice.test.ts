@@ -28,6 +28,11 @@ describe('mixer and voice request objects', () => {
     expect(voiceChange({ samples, sampleRate, ...options })).toEqual(
       voiceChange(samples, sampleRate, options),
     );
+    // Absolute mode, so a dropped formantMode field cannot pass.
+    const absolute = { ...options, formantMode: 'absolute' as const };
+    const positional = voiceChange(samples, sampleRate, absolute);
+    expect(voiceChange({ samples, sampleRate, ...absolute })).toEqual(positional);
+    expect(positional).not.toEqual(voiceChange(samples, sampleRate, options));
   });
 
   it('keeps realtime voice-change request and positional forms equivalent', () => {

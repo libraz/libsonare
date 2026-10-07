@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "analysis/key_profiles.h"
 #include "editing/pitch_editor/scale_quantizer.h"
 #include "util/zero_is_default.h"
 #include "wasm/bindings/common/common.h"
@@ -222,6 +223,15 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
 
 }  // namespace
 
+int js_scale_mask_for_mode(const val& root_val, const val& mode_val) {
+  const int root = checkedIntFromVal(root_val, "root");
+  if (root < 0 || root > 11) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "scaleMaskForMode: root must be in [0, 11]");
+  }
+  return sonare::scale_mask_for_mode(modeFromVal(mode_val, "mode"));
+}
+
 float js_scale_quantize_midi(const val& root, const val& mode_mask, const val& midi,
                              const val& reference_midi_val) {
   const float reference_midi = checkedFloatFromVal(reference_midi_val, "referenceMidi");
@@ -280,6 +290,7 @@ void registerOfflineDynamicsEditingBindings() {
   function("masteringDynamicsTransientShaper", &js_mastering_dynamics_transient_shaper);
 
   // Editing — scale quantizer
+  function("scaleMaskForMode", &js_scale_mask_for_mode);
   function("scaleQuantizeMidi", &js_scale_quantize_midi);
   function("scaleCorrectionSemitones", &js_scale_correction_semitones);
   function("scalePitchClassEnabled", &js_scale_pitch_class_enabled);

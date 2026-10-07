@@ -6,7 +6,7 @@ import argparse
 import json
 import sys
 from collections.abc import Iterable
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
@@ -530,10 +530,21 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
         raise ValueError("--preset-pack requires --preset to select an entry")
     pitch_semitones = getattr(args, "pitch_semitones", None)
     formant_factor = getattr(args, "formant_factor", None)
+    raw_formant_mode = getattr(args, "formant_mode", None) or "relative"
+    # The parser accepts any text, so the handler is where an unknown mode is refused.
+    if raw_formant_mode not in {"relative", "absolute"}:
+        raise ValueError("--formant-mode must be 'relative' or 'absolute'")
+    formant_mode: Literal["relative", "absolute"] = (
+        "absolute" if raw_formant_mode == "absolute" else "relative"
+    )
     preset_source = bool(selectors or preset_pack)
-    if preset_source and (pitch_semitones is not None or formant_factor is not None):
+    # The default mode is a no-op, so only an explicit absolute request conflicts with a preset.
+    if preset_source and (
+        pitch_semitones is not None or formant_factor is not None or formant_mode != "relative"
+    ):
         raise ValueError(
-            "--pitch-semitones/--formant-factor cannot be combined with a realtime preset"
+            "--pitch-semitones/--formant-factor/--formant-mode cannot be combined with a "
+            "realtime preset"
         )
     if assignments and not preset_source:
         raise ValueError("--set requires --preset, --preset-json, or --preset-pack")
@@ -572,10 +583,12 @@ def cmd_voice_change(args: argparse.Namespace) -> int:
             sample_rate=sr,
             pitch_semitones=pitch_semitones if pitch_semitones is not None else 0.0,
             formant_factor=formant_factor if formant_factor is not None else 1.0,
+            formant_mode=formant_mode,
         )
         mode_metadata = {
             "pitch_semitones": pitch_semitones if pitch_semitones is not None else 0.0,
             "formant_factor": formant_factor if formant_factor is not None else 1.0,
+            "formant_mode": formant_mode,
         }
 
     # Spectral pitch/formant processing can differ by one sample at a frame
@@ -814,7 +827,20 @@ def register_effects_parsers(
     voice_change_p.add_argument(
         "--formant-factor",
         type=_finite_float,
-        help="Formant scaling factor (1.0 = unchanged)",
+        help=(
+            "Formant scaling factor. relative: warp applied after the pitch shift (the "
+            "formants follow the pitch); absolute: formant shift relative to the input "
+            "(1.0 keeps the formants)"
+        ),
+    )
+    _cli_domain(
+        voice_change_p.add_argument(
+            "--formant-mode",
+            default="relative",
+            help="How --formant-factor relates to the pitch shift: relative or absolute",
+        ),
+        choices=("relative", "absolute"),
+        reject_exit="invalid_parameter",
     )
     voice_change_p.add_argument("--preset", default="", help="Realtime voice changer preset id")
     voice_change_p.add_argument("--preset-json", help="Realtime voice changer preset JSON file")

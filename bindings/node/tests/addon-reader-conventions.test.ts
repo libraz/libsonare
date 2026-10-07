@@ -30,6 +30,7 @@ import {
   analyzePolyphonic,
   analyzeWithProgress,
   assignNoteTargets,
+  autoTune,
   decomposeStems,
   decomposeStemsLinked,
   detectBoundaries,
@@ -296,6 +297,18 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         pitchCorrectTimevarying(sine(4096, 220), new Float32Array(16).fill(220), SR, 256, o),
+      ),
+  },
+  {
+    jsName: 'autoTune',
+    invoke: (o) =>
+      Array.from(
+        autoTune({
+          ...o,
+          samples: sine(4096, 220),
+          sampleRate: SR,
+          key: { root: 'A', mode: 'minor' },
+        }).samples,
       ),
   },
   {

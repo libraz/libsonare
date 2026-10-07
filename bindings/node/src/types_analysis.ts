@@ -29,6 +29,9 @@ export type KeyMode =
   | 'mixolydian'
   | 'locrian';
 
+/** A scale named by the mode names {@link detectKey} reports. */
+export type ScaleName = KeyMode;
+
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 export type KeyProfile =

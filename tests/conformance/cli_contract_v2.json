@@ -4230,6 +4230,25 @@
           "domain": null
         },
         {
+          "name": "formant-mode",
+          "type": "string",
+          "default": "relative",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "relative",
+              "absolute"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -6240,6 +6259,25 @@
           "domain": null
         },
         {
+          "name": "formant-mode",
+          "type": "string",
+          "default": "relative",
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [
+              "relative",
+              "absolute"
+            ],
+            "minimum": null,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "json",
           "type": "boolean",
           "default": false,
@@ -6321,7 +6359,8 @@
             "sample_rate": "integer",
             "latency_samples": "integer",
             "pitch_semitones": "number",
-            "formant_factor": "number"
+            "formant_factor": "number",
+            "formant_mode": "string"
           }
         },
         "preset": {
@@ -6363,6 +6402,67 @@
           "payload": "simple",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "absolute",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--pitch-semitones",
+            "5",
+            "--formant-factor",
+            "1",
+            "--formant-mode",
+            "absolute",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "simple",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "absolute_unreachable",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--pitch-semitones",
+            "5",
+            "--formant-factor",
+            "3",
+            "--formant-mode",
+            "absolute",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "unknown_formant_mode",
+          "argv": [
+            "voice-change",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--formant-mode",
+            "sideways",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         },
         {
           "id": "preset",

@@ -65,6 +65,21 @@ class Key:
 
 
 @dataclass(frozen=True, slots=True)
+class AutoTuneResult:
+    """Result of :func:`auto_tune`.
+
+    Attributes:
+        samples: The corrected audio, the length of the input.
+        key: The key the audio was tuned to: the detected one (with the model's
+            own ``confidence``, see :class:`Key`) or the one the call named
+            (``confidence`` 1).
+    """
+
+    samples: list[float]
+    key: Key
+
+
+@dataclass(frozen=True, slots=True)
 class KeyCandidate:
     """Key candidate with raw profile correlation."""
 

@@ -629,7 +629,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(commands, "voice-change", true,
                 {string_value("preset", ""), path_value("preset-json"), path_value("preset-pack"),
                  string_value("set", "", false, true), number_value("pitch-semitones"),
-                 number_value("formant-factor"), required_output()});
+                 number_value("formant-factor"),
+                 with_domain(string_value("formant-mode", "relative"),
+                             choices_of({"relative", "absolute"}, CliOptionDomainStage::Parameter)),
+                 required_output()});
     add_command(commands, "voice-presets", false, {});
     add_command(commands, "voice-preset", false, {string_value("preset", "neutral-monitor")});
     // The preset document arrives as the positional rather than through an

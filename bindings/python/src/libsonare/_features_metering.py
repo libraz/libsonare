@@ -28,6 +28,7 @@ from ._runtime import (
     _check,
     _from_c_float_array,
     _get_lib,
+    _mode_value,
     _narrow_int,
     _optional_float_array_result,
     _out_float_array,
@@ -44,6 +45,7 @@ from .types import (
     ClippingReport,
     DynamicRangeReport,
     LufsResult,
+    Mode,
     PhaseScopeReport,
     SpectrumReport,
     VectorscopeReport,
@@ -1073,6 +1075,30 @@ def _scale_scalar(
     )
     _check(rc)
     return float(out.value)
+
+
+def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int:
+    """Return the 12-bit scale mask of a mode.
+
+    Bit ``i`` is set when the semitone ``i`` above ``root`` belongs to the scale,
+    the layout :func:`scale_quantize_midi` and :func:`pitch_correct_timevarying`
+    read. The mask is relative to the root, so it is the same for every ``root``,
+    which is still validated. ``mode`` is a :class:`Mode`, its ordinal, or a
+    church-mode name as :func:`detect_key` reports it (``"major"``, ``"minor"``,
+    ``"dorian"``, ``"phrygian"``, ``"lydian"``, ``"mixolydian"``,
+    ``"locrian"``); minor is the natural minor.
+
+    Example:
+        >>> scale_mask_for_mode(0, "major") == 0b101010110101
+        True
+    """
+    lib = _get_lib()
+    out = ctypes.c_uint16(0)
+    rc = lib.sonare_scale_mask_for_mode(
+        _to_c_int(root, "root"), ctypes.c_int32(_mode_value(mode)), ctypes.byref(out)
+    )
+    _check(rc)
+    return int(out.value)
 
 
 def scale_quantize_midi(

@@ -8,7 +8,13 @@ import { assertPitchTrackLengths, toVoicedInt32 } from './_effects_common.js';
 import { resolvePositiveIntegerOption } from './_feature_options.js';
 import { resolveEffectFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
-import type { PitchCorrectOptions, VoicedFlags } from './types.js';
+import type {
+  AutoTuneKey,
+  AutoTuneOptions,
+  AutoTuneResult,
+  PitchCorrectOptions,
+  VoicedFlags,
+} from './types.js';
 import { assertFiniteScalar } from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
@@ -39,6 +45,15 @@ export interface PitchCorrectToMidiTimevaryingRequest extends EffectSamplesReque
 export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, PitchCorrectOptions {
   f0Hz: Float32Array;
   hopLength?: number;
+}
+
+export interface AutoTuneRequest extends EffectSamplesRequest, AutoTuneOptions {
+  /**
+   * `'detect'` (default) finds the key with {@link detectKey}'s defaults; a
+   * `{ root, mode }` names it, as {@link detectKey}'s result does (pitch class
+   * and mode by name or ordinal).
+   */
+  key?: 'detect' | AutoTuneKey;
 }
 
 /**
@@ -322,4 +337,27 @@ export function pitchCorrectTimevarying(
       voicedProb: requestOptions.voicedProb ?? undefined,
     },
   );
+}
+
+/**
+ * Snaps the voiced pitch of a monophonic recording to a scale, offline.
+ *
+ * Chains key detection (when `key` is `'detect'`), {@link scaleMaskForMode}, pYIN
+ * pitch tracking (2048-sample frames, 512-sample hop) and the time-varying scale
+ * corrector, so the options are {@link pitchCorrectTimevarying}'s with `strength`
+ * as `retuneAmount`. The output has the input's length. Unvoiced stretches and
+ * notes the corrector cannot repitch pass through unchanged.
+ *
+ * @example
+ * const { samples: tuned, key } = autoTune({ samples, sampleRate: 44100, strength: 0.8 });
+ *
+ * @param request - Audio, the key (`'detect'` or `{ root, mode }`) and the tuning knobs
+ * @returns The corrected audio and the key it was tuned to
+ */
+export function autoTune(request: AutoTuneRequest): AutoTuneResult {
+  const { samples, sampleRate, key = 'detect', ...options } = request;
+  if (key !== 'detect' && (key === null || typeof key !== 'object')) {
+    throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
+  }
+  return addon.autoTune(samples, sampleRate ?? 22050, key === 'detect' ? null : key, options);
 }

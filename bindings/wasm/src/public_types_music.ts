@@ -35,6 +35,16 @@ export const Mode = {
 
 export type Mode = (typeof Mode)[keyof typeof Mode];
 
+/** A scale named by the church-mode names (`Mode` in lowercase), as `scaleMaskForMode` takes it. */
+export type ScaleName =
+  | 'major'
+  | 'minor'
+  | 'dorian'
+  | 'phrygian'
+  | 'lydian'
+  | 'mixolydian'
+  | 'locrian';
+
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
 export const KeyProfile = {

@@ -612,6 +612,45 @@ TEST_CASE("CLI voice-change compensates realtime chain latency", "[cli][voice-ch
   REQUIRE(peak > 0.05f);
 }
 
+TEST_CASE("CLI voice-change formant mode", "[cli][voice-change][argument-contract]") {
+  const std::string wav = unique_temp_path("_vc_mode.wav");
+  const std::string out = unique_temp_path("_vc_mode_out.wav");
+  create_test_wav(wav, 0.2f, 220.0f, 22050);
+
+  auto [relative_code, relative_output] =
+      exec_command(CLI + " voice-change --pitch-semitones 5 --formant-factor 1.1 " + wav + " -o " +
+                   out + " --json -q");
+  REQUIRE(relative_code == 0);
+  REQUIRE_THAT(relative_output, ContainsSubstring("\"formant_mode\": \"relative\""));
+
+  auto [absolute_code, absolute_output] = exec_command(
+      CLI + " voice-change --pitch-semitones 5 --formant-factor 1 --formant-mode absolute " + wav +
+      " -o " + out + " --json -q");
+  REQUIRE(absolute_code == 0);
+  REQUIRE_THAT(absolute_output, ContainsSubstring("\"formant_mode\": \"absolute\""));
+  REQUIRE_THAT(absolute_output, ContainsSubstring("\"formant_factor\": 1"));
+
+  // 2^(5/12) = 1.3348, so the warp range [0.55, 1.65] reaches [0.7342, 2.202] at +5 semitones.
+  auto [refused_code, refused_output] = exec_command(
+      CLI + " voice-change --pitch-semitones 5 --formant-factor 3 --formant-mode absolute " + wav +
+      " -o " + out + " 2>&1");
+  REQUIRE(refused_code == 3);
+  REQUIRE_THAT(refused_output, ContainsSubstring("[0.7342, 2.202]"));
+
+  auto [unknown_code, unknown_output] =
+      exec_command(CLI + " voice-change --formant-mode sideways " + wav + " -o " + out + " 2>&1");
+  REQUIRE(unknown_code == 3);
+
+  auto [preset_code, preset_output] =
+      exec_command(CLI + " voice-change --preset bright-idol --formant-mode absolute " + wav +
+                   " -o " + out + " 2>&1");
+  REQUIRE(preset_code == 3);
+  REQUIRE_THAT(preset_output, ContainsSubstring("cannot be combined with a realtime preset"));
+
+  std::remove(wav.c_str());
+  std::remove(out.c_str());
+}
+
 TEST_CASE("CLI voice-change rejects a realtime preset document with an unknown field",
           "[cli][voice-change][argument-contract]") {
   // Regression: the native voice-change realtime branch parsed the

@@ -72,6 +72,7 @@ SCALAR_HELPERS = {
     "scaleQuantizeMidi",
     "scaleCorrectionSemitones",
     "scalePitchClassEnabled",
+    "scaleMaskForMode",
 }
 # Do not add a zero-argument accessor here: the zero-argument clause in
 # exemption() already covers every one of them structurally, and it is the rule

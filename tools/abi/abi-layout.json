@@ -11711,6 +11711,36 @@
     ],
     "size": 40
   },
+  "SonareVoiceChangeConfig": {
+    "align": 4,
+    "fields": [
+      {
+        "kind": "signed",
+        "name": "struct_version",
+        "offset": 0,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "pitch_semitones",
+        "offset": 4,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "formant_factor",
+        "offset": 8,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "formant_mode",
+        "offset": 12,
+        "size": 4
+      }
+    ],
+    "size": 16
+  },
   "SonareWaveformPeakPyramidResult": {
     "align": 8,
     "fields": [

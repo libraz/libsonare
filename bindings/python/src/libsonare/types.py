@@ -53,6 +53,9 @@ from ._types_analysis import (
     AnalysisTimbre as AnalysisTimbre,
 )
 from ._types_analysis import (
+    AutoTuneResult as AutoTuneResult,
+)
+from ._types_analysis import (
     Beat as Beat,
 )
 from ._types_analysis import (

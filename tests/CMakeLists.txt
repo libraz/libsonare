@@ -166,6 +166,7 @@ add_executable(sonare_tests
   api/sonare_c_features_extra_test.cpp
   api/sonare_c_effects_extra_test.cpp
   api/sonare_c_note_objects_test.cpp
+  api/sonare_c_auto_tune_test.cpp
   api/sonare_c_vocal_edit_test.cpp
   api/sonare_c_note_split_merge_test.cpp
   api/sonare_c_note_targets_test.cpp
@@ -531,6 +532,7 @@ target_sources(sonare_tests PRIVATE
 if(BUILD_VOICE_CHANGER)
   target_sources(sonare_tests PRIVATE
     editing/voice_changer_retune_formant_test.cpp
+    editing/voice_changer_formant_mode_test.cpp
     editing/voice_changer_realtime_core_test.cpp
     editing/voice_changer_preset_capi_test.cpp
     editing/voice_changer_realtime_dsp_test.cpp

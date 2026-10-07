@@ -12,7 +12,7 @@ from typing import Any, cast
 
 import numpy as np
 
-from ._errors import _not_supported
+from ._errors import ErrorCode, SonareError, _not_supported
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_BRIGHT_IDOL,
@@ -22,6 +22,7 @@ from ._ffi import (
     SONARE_VC_PRESET_ROBOT_MASCOT,
     SONARE_VC_PRESET_SOFT_WHISPER,
     SonareRealtimeVoiceChangerConfig,
+    SonareVoiceChangeConfig,
 )
 from ._runtime import (
     _C_INT_MAX,
@@ -44,12 +45,16 @@ from ._runtime import (
     _validate_samples,
 )
 
+_VOICE_CHANGE_STRUCT_VERSION = 1
+_FORMANT_MODES = {"relative": 0, "absolute": 1}
+
 
 def voice_change(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
     pitch_semitones: float = 0.0,
     formant_factor: float = 1.0,
+    formant_mode: str = "relative",
 ) -> list[float]:
     """Apply a voice-change effect with independent pitch and formant control.
 
@@ -57,26 +62,54 @@ def voice_change(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         pitch_semitones: Pitch shift in semitones (positive = up).
-        formant_factor: Formant scaling factor (1.0 = unchanged).
+        formant_factor: Formant scaling factor. Its meaning depends on
+            ``formant_mode``.
+        formant_mode: ``"relative"`` (default) applies ``formant_factor`` as a
+            warp after the pitch shift, so the formants end up at the factor
+            times the pitch ratio ``2**(pitch_semitones / 12)``. ``"absolute"``
+            makes ``formant_factor`` the formant shift relative to the input
+            (1.0 keeps the formants where they were): the warp applied is
+            ``formant_factor / 2**(pitch_semitones / 12)``.
 
     Returns:
         List of voice-changed samples.
+
+    Raises:
+        SonareValueError: ``formant_mode`` is not ``"relative"`` or
+            ``"absolute"``, or an absolute request needs a warp outside
+            [0.55, 1.65]. The message names the reachable ``formant_factor``
+            range for the given ``pitch_semitones``; the request is refused,
+            not clamped.
     """
     _validate_samples("voice_change", samples, validate=True)
+    if not isinstance(formant_mode, str) or formant_mode not in _FORMANT_MODES:
+        raise SonareValueError(
+            f"voice_change: formant_mode must be 'relative' or 'absolute', got {formant_mode!r}"
+        )
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
+    config = SonareVoiceChangeConfig(
+        struct_version=_VOICE_CHANGE_STRUCT_VERSION,
+        pitch_semitones=_to_c_float(pitch_semitones, "pitch_semitones"),
+        formant_factor=_to_c_float(formant_factor, "formant_factor"),
+        formant_mode=_FORMANT_MODES[formant_mode],
+    )
     with _out_float_array(lib) as (out, out_length):
-        _check(
-            lib.sonare_voice_change(
-                c_array,
-                _to_c_size_t(length, "length"),
-                _to_c_int(sample_rate, "sample_rate"),
-                _to_c_float(pitch_semitones, "pitch_semitones"),
-                _to_c_float(formant_factor, "formant_factor"),
-                ctypes.byref(out),
-                ctypes.byref(out_length),
-            )
+        rc = lib.sonare_voice_change_ex(
+            c_array,
+            _to_c_size_t(length, "length"),
+            _to_c_int(sample_rate, "sample_rate"),
+            ctypes.byref(config),
+            ctypes.byref(out),
+            ctypes.byref(out_length),
         )
+        try:
+            _check(rc)
+        except SonareError as exc:
+            # An unreachable absolute request is an argument refusal, not a library failure.
+            if formant_mode == "absolute" and exc.code == int(ErrorCode.INVALID_PARAMETER):
+                raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
+            raise
         return _float_array_result(out, out_length.value)
 
 

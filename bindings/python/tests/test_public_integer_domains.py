@@ -106,6 +106,7 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_warp_mode_value": ((1.5,), ("off",)),
     "_profile_value": (("not-a-key-profile",), ("krumhansl",)),
     "_mode_values": (("not-a-mode",), ("major-minor",)),
+    "_mode_value": (("not-a-mode",), ("dorian",)),
 }
 
 # Guards with no integer domain to leave, so no probe of this shape exists. Not

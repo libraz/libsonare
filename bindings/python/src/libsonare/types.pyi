@@ -374,6 +374,11 @@ class KeyDetection(Key):
         self, root: PitchClass, mode: Mode, confidence: float, tuning: float = ...
     ) -> None: ...
 
+class AutoTuneResult:
+    samples: list[float]
+    key: Key
+    def __init__(self, samples: list[float], key: Key) -> None: ...
+
 class KeyCandidate:
     key: Key
     correlation: float

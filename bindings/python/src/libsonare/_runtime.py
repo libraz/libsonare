@@ -1094,6 +1094,13 @@ def _mode_values(modes: Sequence[Mode | str] | str | None) -> list[int]:
     return out
 
 
+def _mode_value(mode: Mode | str | int) -> int:
+    """Resolve one mode given as a :class:`Mode`, its name, or its ordinal."""
+    if isinstance(mode, str):
+        return _resolve_enum(mode, _MODE_NAMES, "mode", verb="invalid")
+    return int(Mode(mode))
+
+
 _MODE_NAMES = {
     "major": int(Mode.MAJOR),
     "maj": int(Mode.MAJOR),

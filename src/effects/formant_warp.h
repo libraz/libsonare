@@ -15,10 +15,18 @@ namespace sonare {
 inline constexpr float kFormantFactorMin = 0.55f;
 inline constexpr float kFormantFactorMax = 1.65f;
 
+/// Analysis frame of the warp, in samples at 48 kHz (about 21.3 ms). The hop is a
+/// quarter of the frame and the FFT twice the frame.
+inline constexpr int kFormantWarpFrameAt48k = 1024;
+
 struct FormantWarpConfig {
   float factor = 1.0f;
   int lpc_order = 12;
   float amount = 1.0f;
+  /// False keeps the frame at kFormantWarpFrameAt48k samples at every rate. True
+  /// defines it in time instead: that many samples at 48 kHz, rescaled to the
+  /// input rate and rounded to a multiple of four.
+  bool frame_in_time = false;
 };
 
 /// @brief Factor the warp actually applies, after the range clamp and the

@@ -674,6 +674,19 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "voice-change",
+      "option": "formant-mode",
+      "rejectExit": "invalid_parameter",
+      "choices": [
+        "relative",
+        "absolute"
+      ],
+      "minimum": null,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "time-stretch",
       "option": "n-fft",
       "rejectExit": "invalid_parameter",

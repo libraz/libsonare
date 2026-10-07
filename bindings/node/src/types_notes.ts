@@ -3,6 +3,8 @@
  * percussive decomposition produces, and the options that drive it.
  */
 
+import type { Key, ScaleName } from './types_analysis.js';
+
 /**
  * Per-frame voicing decision, one entry per `f0Hz` frame. A truthy or non-zero
  * entry marks the frame voiced. The union covers what the analysis side hands
@@ -25,8 +27,11 @@ export interface PitchCorrectOptions {
   targetMidi?: number;
   /** Scale root pitch class (0=C .. 11=B) when `mode` is `'scale'`. Default 0. */
   scaleRoot?: number;
-  /** 12-bit degree mask, bit `i` = semitone `i` above the root enabled. Default C major. */
-  scaleModeMask?: number;
+  /**
+   * Scale degrees enabled: a 12-bit mask (bit `i` = semitone `i` above the root)
+   * or a mode name, as {@link scaleMaskForMode} resolves it. Default C major.
+   */
+  scaleModeMask?: number | ScaleName;
   /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
   referenceMidi?: number;
   /** Correction strength in `[0, 1]`; 1 = full snap, 0 = bypass. Default 1. */
@@ -48,6 +53,39 @@ export interface PitchCorrectOptions {
    * is omitted or `null`, and is ignored when explicit flags are supplied.
    */
   voicedProb?: Float32Array | null;
+}
+
+/** A key as {@link detectKey} reports it, which is what {@link autoTune} takes to name one. */
+export interface AutoTuneKey {
+  /** Pitch class name (`'C'`, `'C#'`, ...) or ordinal 0..11. */
+  root: string | number;
+  /** Mode name (a {@link ScaleName}) or ordinal 0..6. */
+  mode: string | number;
+}
+
+/** Tuning knobs of {@link autoTune}. All fields are optional. */
+export interface AutoTuneOptions {
+  /** Correction strength in `[0, 1]`; 1 = full snap to the scale, 0 = bypass. Default 1. */
+  strength?: number;
+  /** Retune IIR time constant (ms); larger = slower glide. Default 50. */
+  retuneSpeedMs?: number;
+  /** Corrections below this are bypassed to preserve vibrato (cents). Default 20. */
+  vibratoThresholdCents?: number;
+  /** Hard clamp on per-frame correction magnitude (semitones). Default 12. */
+  maxCorrectionSemitones?: number;
+  /** Reference MIDI anchoring the scale grid. Default 69 (A4). */
+  referenceMidi?: number;
+}
+
+/** Result of {@link autoTune}. */
+export interface AutoTuneResult {
+  /** The corrected audio, the length of the input. */
+  samples: Float32Array;
+  /**
+   * The key the audio was tuned to: the detected one (with the model's own
+   * `confidence`, see {@link Key}) or the one the request named (`confidence` 1).
+   */
+  key: Key;
 }
 
 /** Options for {@link noteStretch}. All fields are optional. */

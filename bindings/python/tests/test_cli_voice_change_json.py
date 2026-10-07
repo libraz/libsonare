@@ -80,8 +80,10 @@ def test_voice_change_simple_json_has_sample_preserving_common_schema(tmp_path: 
         "latency_samples",
         "pitch_semitones",
         "formant_factor",
+        "formant_mode",
     }
     assert payload["output"] == str(output)
+    assert payload["formant_mode"] == "relative"
     assert payload["length"] == input_length
     assert payload["sample_rate"] == sample_rate
     assert payload["duration"] == input_length / sample_rate
@@ -91,6 +93,65 @@ def test_voice_change_simple_json_has_sample_preserving_common_schema(tmp_path: 
     with wave.open(str(output), "rb") as rendered:
         assert rendered.getnframes() == input_length
         assert rendered.getframerate() == sample_rate
+
+
+def test_voice_change_absolute_mode_reports_mode_and_refuses_unreachable_factor(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "input.wav"
+    _write_tone(source, sample_rate=22_050, length=2_205)
+
+    accepted = _run_cli(
+        "voice-change",
+        str(source),
+        "--output",
+        str(tmp_path / "absolute.wav"),
+        "--pitch-semitones",
+        "5",
+        "--formant-factor",
+        "1",
+        "--formant-mode",
+        "absolute",
+        "--json",
+    )
+    assert accepted.returncode == 0, accepted.stderr
+    payload = json.loads(accepted.stdout)
+    assert payload["formant_mode"] == "absolute"
+    assert payload["formant_factor"] == 1.0
+
+    refused = _run_cli(
+        "voice-change",
+        str(source),
+        "--output",
+        str(tmp_path / "refused.wav"),
+        "--pitch-semitones",
+        "5",
+        "--formant-factor",
+        "3",
+        "--formant-mode",
+        "absolute",
+        "--json",
+    )
+    assert refused.returncode == 3
+    assert "[0.7342, 2.202]" in refused.stderr
+
+    unknown = _run_cli(
+        "voice-change", str(source), "--output", str(tmp_path / "x.wav"), "--formant-mode", "no"
+    )
+    assert unknown.returncode == 3
+
+    with_preset = _run_cli(
+        "voice-change",
+        str(source),
+        "--output",
+        str(tmp_path / "y.wav"),
+        "--preset",
+        "bright-idol",
+        "--formant-mode",
+        "absolute",
+    )
+    assert with_preset.returncode == 3
+    assert "cannot be combined with a realtime preset" in with_preset.stderr
 
 
 def test_voice_change_preset_json_reports_resolved_chain_latency(tmp_path: Path) -> None:

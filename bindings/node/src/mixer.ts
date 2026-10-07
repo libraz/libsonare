@@ -11,6 +11,7 @@ import type {
   MixResult,
   PanLawInput,
   PanMode,
+  ScaleName,
   SendTiming,
   StripRef,
   SurroundPan,
@@ -64,6 +65,22 @@ export function capabilityCatalog(): CapabilityCatalog {
  */
 export function hasFfmpegSupport(): boolean {
   return addon.hasFfmpegSupport();
+}
+
+/**
+ * The 12-bit scale mask of a mode, in the layout {@link scaleQuantizeMidi} and
+ * the pitch correctors read: bit `i` is the semitone `i` above the root.
+ *
+ * The mask is relative to the root, so it is the same for every `root`, which is
+ * still validated. `mode` is a church-mode name as {@link detectKey} reports it
+ * (`'major'`, `'minor'`, `'dorian'`, `'phrygian'`, `'lydian'`, `'mixolydian'`,
+ * `'locrian'`) or its ordinal 0..6; minor is the natural minor.
+ *
+ * @example
+ * scaleMaskForMode(0, 'major'); // 0b101010110101
+ */
+export function scaleMaskForMode(root: number, mode: ScaleName | number): number {
+  return addon.scaleMaskForMode(root, mode);
 }
 
 export function scaleQuantizeMidi(

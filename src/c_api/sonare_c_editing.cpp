@@ -15,6 +15,7 @@
 #include <memory>
 #include <vector>
 
+#include "analysis/key_profiles.h"
 #include "core/audio.h"
 #if defined(SONARE_WITH_PITCH_EDITOR)
 #include "editing/pitch_editor/scale_quantizer.h"
@@ -786,4 +787,16 @@ SonareError sonare_scale_pitch_class_enabled(int root, uint16_t mode_mask, int p
 #else
   SONARE_C_STUB_NOT_SUPPORTED(root, mode_mask, pitch_class, out_enabled);
 #endif
+}
+
+SonareError sonare_scale_mask_for_mode(int root, SonareMode mode, uint16_t* out_mask) {
+  SONARE_C_API_ENTRY;
+  if (!out_mask) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_mask = 0;
+  if (root < SONARE_PITCH_C || root > SONARE_PITCH_B || mode < SONARE_MODE_MAJOR ||
+      mode > SONARE_MODE_LOCRIAN) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_mask = scale_mask_for_mode(static_cast<Mode>(mode));
+  return SONARE_OK;
 }

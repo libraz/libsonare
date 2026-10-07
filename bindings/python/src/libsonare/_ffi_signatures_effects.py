@@ -167,6 +167,20 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    # sonare_auto_tune
+    if hasattr(lib, "sonare_auto_tune"):
+        lib.sonare_auto_tune.restype = ctypes.c_int32
+        lib.sonare_auto_tune.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareKey),
+            ctypes.POINTER(SonarePitchCorrectionConfig),
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(SonareKey),
+        ]
+
     # sonare_note_stretch
     lib.sonare_note_stretch.restype = ctypes.c_int32
     lib.sonare_note_stretch.argtypes = [
@@ -439,6 +453,15 @@ def configure_effects_signatures(lib: ctypes.CDLL) -> None:
         ctypes.c_int,
         ctypes.c_float,
         ctypes.c_float,
+        ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ctypes.POINTER(ctypes.c_size_t),
+    ]
+    lib.sonare_voice_change_ex.restype = ctypes.c_int32
+    lib.sonare_voice_change_ex.argtypes = [
+        ctypes.POINTER(ctypes.c_float),
+        ctypes.c_size_t,
+        ctypes.c_int,
+        ctypes.POINTER(SonareVoiceChangeConfig),
         ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ctypes.POINTER(ctypes.c_size_t),
     ]

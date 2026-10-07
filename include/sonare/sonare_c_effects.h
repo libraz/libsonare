@@ -188,6 +188,29 @@ SonareError sonare_pitch_correct_timevarying(const float* samples, size_t length
                                              const int32_t* voiced, size_t n_frames, int hop_length,
                                              const SonarePitchCorrectionConfig* config, float** out,
                                              size_t* out_length);
+
+/// @brief Offline auto-tune: snaps the voiced pitch of a monophonic recording to
+///        the scale of a key, detected or named.
+/// @details Chains key detection (when @p key is NULL), @ref sonare_scale_mask_for_mode,
+///          pYIN pitch tracking (2048-sample frames, 512-sample hop, the hop
+///          @ref sonare_pitch_correct_timevarying defaults to) and the
+///          time-varying scale corrector. The output has the input's length.
+///          Key detection reads the recording at concert A440 with the default
+///          major/minor candidates, exactly as @ref sonare_detect_key does.
+/// @param key    The key to tune to, or NULL to detect it. A named key is taken
+///               as certain: @p out_key reports confidence 1.
+/// @param config Correction knobs, or NULL for the library defaults. Only
+///               @c scale_reference_midi, @c retune_amount,
+///               @c max_correction_semitones, @c retune_speed_ms and
+///               @c vibrato_threshold_cents are read; the key supplies the scale,
+///               so @c target_mode, @c target_midi, @c scale_root and
+///               @c scale_mode_mask are ignored.
+/// @param out_key Receives the key used (required).
+/// @note The returned array is heap-allocated and MUST be released with
+///       @ref sonare_free_floats.
+SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rate,
+                             const SonareKey* key, const SonarePitchCorrectionConfig* config,
+                             float** out, size_t* out_length, SonareKey* out_key);
 /// @param stretch_ratio Duration multiplier for the region; 1 leaves it as it
 ///        is. Must be finite and > 0; there is no spelling of "unspecified".
 ///        The refusal lives in the core rather than in this call, so an
@@ -834,7 +857,9 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
                                             size_t* out_length);
 
 /// @param pitch_semitones Transpose in semitones; 0 leaves the pitch alone.
-/// @param formant_factor Formant scale; 1 leaves the formants alone.
+/// @param formant_factor Formant warp applied after the pitch shift (relative mode); 1 applies
+///        no warp, so the formants follow the pitch. See @ref sonare_voice_change_ex for the
+///        mode that keeps them.
 /// @note Both must be finite; neither has a spelling of "unspecified". This call
 ///       assigns them into the config unchecked and the core refuses a
 ///       non-finite one, so either comes back as SONARE_ERROR_INVALID_PARAMETER
@@ -843,6 +868,40 @@ SonareError sonare_render_percussive_events(const float* samples, size_t length,
 SonareError sonare_voice_change(const float* samples, size_t length, int sample_rate,
                                 float pitch_semitones, float formant_factor, float** out,
                                 size_t* out_length);
+
+/// @brief How @ref SonareVoiceChangeConfig::formant_factor relates to the pitch shift.
+typedef enum {
+  /// The factor is the warp applied after the pitch shift, so the formants end up at the
+  /// factor times the pitch ratio 2^(semitones/12). This is what @ref sonare_voice_change does.
+  SONARE_FORMANT_MODE_RELATIVE = 0,
+  /// The factor is the formant shift relative to the input: the warp applied is the factor
+  /// divided by 2^(semitones/12), so 1 keeps the formants where they were.
+  SONARE_FORMANT_MODE_ABSOLUTE = 1
+} SonareFormantMode;
+
+/// @brief Versioned configuration for @ref sonare_voice_change_ex.
+/// @details No field has an "unspecified" spelling: set all four. @c struct_version 0 and
+///          1 both select the version-1 layout.
+typedef struct {
+  int32_t struct_version;
+  /// Transpose in semitones; 0 leaves the pitch alone. Must be finite.
+  float pitch_semitones;
+  /// Formant scale; its meaning is chosen by @c formant_mode. Must be finite.
+  float formant_factor;
+  /// A @ref SonareFormantMode.
+  int32_t formant_mode;
+} SonareVoiceChangeConfig;
+
+/// @brief @ref sonare_voice_change with a choice of formant mode.
+/// @param config Required. A @c formant_mode outside @ref SonareFormantMode, or an
+///        absolute-mode request whose warp (the factor divided by 2^(semitones/12)) falls
+///        outside [0.55, 1.65], is SONARE_ERROR_INVALID_PARAMETER; for the latter
+///        sonare_last_error_message() names the reachable formant-factor range for the
+///        given semitones. The request is refused rather than clamped.
+/// @note Free @p out with @ref sonare_free_floats.
+SonareError sonare_voice_change_ex(const float* samples, size_t length, int sample_rate,
+                                   const SonareVoiceChangeConfig* config, float** out,
+                                   size_t* out_length);
 /// @brief Convenience offline wrapper around the realtime voice changer chain.
 /// @details Creates a temporary @ref SonareRealtimeVoiceChanger from @p preset,
 ///          processes the whole mono or interleaved stereo buffer in realtime-

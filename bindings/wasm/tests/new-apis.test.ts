@@ -627,6 +627,26 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(allFinite(out)).toBe(true);
     });
 
+    it('voiceChange formantMode defaults to relative and absolute changes the result', () => {
+      const options = { pitchSemitones: 3, formantFactor: 1.1 };
+      const byDefault = voiceChange(signal, SR, options);
+      expect(voiceChange(signal, SR, { ...options, formantMode: 'relative' })).toEqual(byDefault);
+      const absolute = voiceChange(signal, SR, { ...options, formantMode: 'absolute' });
+      expect(absolute.length).toBe(byDefault.length);
+      expect(absolute).not.toEqual(byDefault);
+      expect(voiceChange(signal, SR, { formantMode: 'absolute' })).toEqual(signal);
+    });
+
+    it('voiceChange absolute mode refuses a factor the warp cannot reach', () => {
+      // 2^(4/12) = 1.2599, so the warp range [0.55, 1.65] reaches [0.693, 2.079].
+      const request = { pitchSemitones: 4, formantFactor: 2.5, formantMode: 'absolute' as const };
+      expect(() => voiceChange(signal, SR, request)).toThrow(RangeError);
+      expect(() => voiceChange(signal, SR, request)).toThrow(/\[0\.693, 2\.079\]/);
+      expect(() =>
+        voiceChange(signal, SR, { formantMode: 'sideways' as unknown as 'relative' }),
+      ).toThrow(RangeError);
+    });
+
     it('voiceChange preserves length and level', () => {
       const out = voiceChange(signal, SR, { pitchSemitones: 2, formantFactor: 1.1 });
       expect(out).toBeInstanceOf(Float32Array);

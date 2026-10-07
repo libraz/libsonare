@@ -180,6 +180,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::MeteringSpectrum, "meteringSpectrum"));
   exports.Set("meteringSpectrumFrame", Napi::Function::New(env, &SonareWrap::MeteringSpectrumFrame,
                                                            "meteringSpectrumFrame"));
+  exports.Set("scaleMaskForMode",
+              Napi::Function::New(env, &SonareWrap::ScaleMaskForMode, "scaleMaskForMode"));
   exports.Set("scaleQuantizeMidi",
               Napi::Function::New(env, &SonareWrap::ScaleQuantizeMidi, "scaleQuantizeMidi"));
   exports.Set(
@@ -210,6 +212,7 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set(
       "pitchCorrectTimevarying",
       Napi::Function::New(env, &SonareWrap::PitchCorrectTimevarying, "pitchCorrectTimevarying"));
+  exports.Set("autoTune", Napi::Function::New(env, &SonareWrap::AutoTune, "autoTune"));
   exports.Set("noteStretch", Napi::Function::New(env, &SonareWrap::NoteStretch, "noteStretch"));
   exports.Set("noteMove", Napi::Function::New(env, &SonareWrap::NoteMove, "noteMove"));
   exports.Set("extractNotes", Napi::Function::New(env, &SonareWrap::ExtractNotes, "extractNotes"));

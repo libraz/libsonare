@@ -112,6 +112,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
 
   // Editing - scale quantizer
   static Napi::Value ScaleQuantizeMidi(const Napi::CallbackInfo& info);
+  static Napi::Value ScaleMaskForMode(const Napi::CallbackInfo& info);
   static Napi::Value ScaleCorrectionSemitones(const Napi::CallbackInfo& info);
   static Napi::Value ScalePitchClassEnabled(const Napi::CallbackInfo& info);
   static Napi::Value Version(const Napi::CallbackInfo& info);
@@ -128,6 +129,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value PitchCorrectToMidi(const Napi::CallbackInfo& info);
   static Napi::Value PitchCorrectToMidiTimevarying(const Napi::CallbackInfo& info);
   static Napi::Value PitchCorrectTimevarying(const Napi::CallbackInfo& info);
+  static Napi::Value AutoTune(const Napi::CallbackInfo& info);
   static Napi::Value NoteStretch(const Napi::CallbackInfo& info);
   static Napi::Value NoteMove(const Napi::CallbackInfo& info);
   static Napi::Value ExtractNotes(const Napi::CallbackInfo& info);

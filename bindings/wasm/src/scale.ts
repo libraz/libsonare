@@ -1,9 +1,26 @@
 import { getSonareModule } from './module_state.js';
+import type { Mode, ScaleName } from './public_types_music.js';
 import { assertFiniteScalar } from './validation.js';
 
 // ============================================================================
 // Editing — 12-TET scale quantizer
 // ============================================================================
+
+/**
+ * The 12-bit scale mask of a mode, in the layout `scaleQuantizeMidi` and the
+ * pitch correctors read: bit `i` is the semitone `i` above the root.
+ *
+ * The mask is relative to the root, so it is the same for every `root`, which
+ * is still validated. `mode` is a church-mode name (`'major'`, `'minor'`,
+ * `'dorian'`, `'phrygian'`, `'lydian'`, `'mixolydian'`, `'locrian'`) or the
+ * `Mode` ordinal `detectKey` reports; minor is the natural minor.
+ *
+ * @example
+ * scaleMaskForMode(0, 'major'); // 0b101010110101
+ */
+export function scaleMaskForMode(root: number, mode: ScaleName | Mode): number {
+  return getSonareModule().scaleMaskForMode(root, mode);
+}
 
 /**
  * Snap a MIDI value to the nearest pitch class enabled by `modeMask`.

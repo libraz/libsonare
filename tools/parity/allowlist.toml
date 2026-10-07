@@ -88,6 +88,9 @@ python = [
 #   detect_chords_ex: the facade `detect_chords` IS the extended form (it
 #     exposes all SonareChordDetectionOptions fields and calls
 #     sonare_detect_chords_ex). So the `_ex` variant is covered, not missing.
+#   voice_change_ex: the facade `voiceChange` / `voice_change` IS the extended
+#     form -- its `formantMode` / `formant_mode` argument is the `_ex` field.
+#     Node and WASM pass it to the core directly; Python calls the C `_ex` entry.
 #   detect_key_with_options / _and_modes / _with_extended_options /
 #     _with_tuning and the detect_key_candidates_with_modes /
 #     _with_extended_options family: folded into the facade `detect_key` /
@@ -191,6 +194,7 @@ node = [
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
+  "voice_change_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
@@ -331,6 +335,7 @@ wasm = [
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
+  "voice_change_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
@@ -447,6 +452,7 @@ python = [
   "engine_set_synth_instrument_with_bank",
   "engine_set_synth_instrument_binding",
   "detect_chords_ex",
+  "voice_change_ex",
   "detect_key_with_options",
   "detect_key_with_options_and_modes",
   "detect_key_with_extended_options",
@@ -600,6 +606,9 @@ python = [
 # SonareChordDetectionOptions fields after them — the same ergonomic
 # options-inlining + key-first shape already used for detect_chords. Remapped
 # internally; not order drift.
+# voice_change (python): the facade appends `formant_mode`, which maps to the
+# `formant_mode` field of the C sonare_voice_change_ex config; the base C
+# voice_change lacks it. Folded extended-facade param, not order drift.
 # analyze_melody (python): the facade appends the extended use_pyin/center params
 # that map to C sonare_analyze_melody_ex; the base C analyze_melody lacks them.
 # Folded extended-facade params, not order drift.
@@ -715,6 +724,7 @@ python = [
   "lufs_series_interleaved",
   "chord_functional_analysis",
   "analyze_melody",
+  "voice_change",
   "pitch_correct_to_midi_timevarying",
   "pitch_correct_timevarying",
   "midi_cc_learn",

@@ -1097,29 +1097,6 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Resolves a pitch class given as an ordinal in [0, 12) or as its name ("C", "C#", ..., "B").
-SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what) {
-  const Napi::Env env = value.Env();
-  if (value.IsNumber()) {
-    const int ordinal = node_narrow_int(env, value, what);
-    if (ordinal < SONARE_PITCH_C || ordinal > SONARE_PITCH_B) {
-      throw Napi::RangeError::New(env, std::string(what) + " must be in [0, 12)");
-    }
-    return static_cast<SonarePitchClass>(ordinal);
-  }
-  if (!value.IsString()) {
-    throw Napi::TypeError::New(env, std::string(what) + " must be a pitch class name or number");
-  }
-  const std::string name = value.As<Napi::String>().Utf8Value();
-  for (int pc = SONARE_PITCH_C; pc <= SONARE_PITCH_B; ++pc) {
-    if (name == PitchClassNameLocal(static_cast<SonarePitchClass>(pc))) {
-      return static_cast<SonarePitchClass>(pc);
-    }
-  }
-  throw Napi::RangeError::New(env,
-                              std::string(what) + " is not a pitch class name: '" + name + "'");
-}
-
 // Resolves a chord quality given as an ordinal or as the name a detected chord carries.
 SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what) {
   const Napi::Env env = value.Env();

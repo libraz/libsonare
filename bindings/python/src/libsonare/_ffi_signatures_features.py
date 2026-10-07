@@ -1048,6 +1048,13 @@ def configure_features_signatures(lib: ctypes.CDLL) -> None:
         ]
 
     lib.sonare_scale_pitch_class_enabled.restype = ctypes.c_int32
+
+    lib.sonare_scale_mask_for_mode.restype = ctypes.c_int32
+    lib.sonare_scale_mask_for_mode.argtypes = [
+        ctypes.c_int,
+        ctypes.c_int32,
+        ctypes.POINTER(ctypes.c_uint16),
+    ]
     lib.sonare_scale_pitch_class_enabled.argtypes = [
         ctypes.c_int,
         ctypes.c_uint16,

@@ -237,3 +237,50 @@ TEST_CASE("auto genre can select a stronger non-KS profile without golden labels
   REQUIRE(auto_analyzer.key().mode == Mode::Minor);
   REQUIRE(auto_analyzer.candidates(1)[0].correlation > ks_analyzer.candidates(1)[0].correlation);
 }
+
+TEST_CASE("scale_mask_for_mode matches the scale each mode's key profile weights",
+          "[key_profiles]") {
+  const struct {
+    Mode mode;
+    uint16_t expected;
+  } kExpected[] = {
+      {Mode::Major, 0b101010110101},   {Mode::Minor, 0b010110101101},
+      {Mode::Dorian, 0b011010101101},  {Mode::Phrygian, 0b010110101011},
+      {Mode::Lydian, 0b101011010101},  {Mode::Mixolydian, 0b011010110101},
+      {Mode::Locrian, 0b010101101011},
+  };
+  for (const auto& row : kExpected) {
+    INFO(mode_name(row.mode));
+    REQUIRE(scale_mask_for_mode(row.mode) == row.expected);
+    uint16_t from_intervals = 0;
+    for (int interval : scale_intervals(row.mode)) from_intervals |= uint16_t{1} << interval;
+    REQUIRE(from_intervals == row.expected);
+
+    // The five church modes' profiles rank scale degrees above every other degree.
+    if (row.mode == Mode::Major || row.mode == Mode::Minor) continue;
+    const auto profile = get_mode_profile(PitchClass::C, row.mode);
+    const float floor = *std::min_element(profile.begin(), profile.end());
+    uint16_t weighted = 0;
+    for (int pc = 0; pc < 12; ++pc) {
+      if (profile[pc] > floor) weighted |= uint16_t{1} << pc;
+    }
+    REQUIRE(weighted == row.expected);
+  }
+}
+
+TEST_CASE("scale_mask_for_mode is the major scale rotated for the relative modes",
+          "[key_profiles]") {
+  // Every church mode is the major scale started from another degree.
+  const uint16_t major = scale_mask_for_mode(Mode::Major);
+  const struct {
+    Mode mode;
+    int degree_semitones;
+  } kRotations[] = {{Mode::Dorian, 2},     {Mode::Phrygian, 4}, {Mode::Lydian, 5},
+                    {Mode::Mixolydian, 7}, {Mode::Minor, 9},    {Mode::Locrian, 11}};
+  for (const auto& row : kRotations) {
+    INFO(mode_name(row.mode));
+    const unsigned rotated =
+        ((major >> row.degree_semitones) | (major << (12 - row.degree_semitones))) & 0x0FFFu;
+    REQUIRE(scale_mask_for_mode(row.mode) == rotated);
+  }
+}

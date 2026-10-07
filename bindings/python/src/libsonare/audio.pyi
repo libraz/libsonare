@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Literal
 
 import numpy as np
 
@@ -164,7 +164,10 @@ class Audio:
         target_onset_sample: int = 0,
     ) -> list[float]: ...
     def voice_change(
-        self, pitch_semitones: float = 0.0, formant_factor: float = 1.0
+        self,
+        pitch_semitones: float = 0.0,
+        formant_factor: float = 1.0,
+        formant_mode: Literal["relative", "absolute"] = "relative",
     ) -> list[float]: ...
     def voice_change_realtime(self, preset: str = "neutral-monitor") -> list[float]: ...
     def normalize(self, target_db: float = 0.0) -> list[float]: ...

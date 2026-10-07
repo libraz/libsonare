@@ -28,6 +28,7 @@
 #include "mastering/repair/dereverb_classical.h"
 #include "mastering/repair/trim_silence.h"
 #include "sonare_wrap.h"
+#include "sonare_wrap_key_options.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -336,8 +337,20 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
     }
     config.target_midi = sonare_node::FloatProperty(opts, "targetMidi", config.target_midi);
     config.scale_root = sonare_node::IntProperty(opts, "scaleRoot", config.scale_root);
-    config.scale_mode_mask = static_cast<uint32_t>(
-        sonare_node::IntProperty(opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
+    const Napi::Value mask_value = opts.Get("scaleModeMask");
+    if (mask_value.IsString()) {
+      uint16_t named_mask = 0;
+      const SonareError mask_err =
+          sonare_scale_mask_for_mode(0, node_mode_from_value(mask_value), &named_mask);
+      if (mask_err != SONARE_OK) {
+        sonare_node::ThrowSonareError(env, mask_err);
+        return env.Undefined();
+      }
+      config.scale_mode_mask = named_mask;
+    } else {
+      config.scale_mode_mask = static_cast<uint32_t>(sonare_node::IntProperty(
+          opts, "scaleModeMask", static_cast<int>(config.scale_mode_mask)));
+    }
     config.scale_reference_midi =
         sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);
     config.retune_amount = sonare_node::FloatProperty(opts, "retuneAmount", config.retune_amount);
@@ -382,6 +395,67 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
     std::memcpy(result.Data(), out, out_length * sizeof(float));
     sonare_free_floats(out);
   }
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::AutoTune(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+
+  // (samples, sampleRate, key | null, options?)
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() ||
+      !(info[2].IsNull() || info[2].IsUndefined() || info[2].IsObject())) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, key | null, options?)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sr");
+
+  SonareKey key{};
+  const SonareKey* key_ptr = nullptr;
+  if (info[2].IsObject()) {
+    const Napi::Object key_object = info[2].As<Napi::Object>();
+    key.root = PitchClassFromValue(key_object.Get("root"), "key.root");
+    key.mode = node_mode_from_value(key_object.Get("mode"));
+    key.confidence = 1.0f;
+    key_ptr = &key;
+  }
+
+  SonarePitchCorrectionConfig config{};
+  sonare_pitch_correction_config_default(&config);
+  if (info.Length() > 3 && info[3].IsObject()) {
+    const Napi::Object opts = info[3].As<Napi::Object>();
+    config.retune_amount = sonare_node::FloatProperty(opts, "strength", config.retune_amount);
+    config.scale_reference_midi =
+        sonare_node::FloatProperty(opts, "referenceMidi", config.scale_reference_midi);
+    config.max_correction_semitones =
+        sonare_node::FloatProperty(opts, "maxCorrectionSemitones", config.max_correction_semitones);
+    config.retune_speed_ms =
+        sonare_node::FloatProperty(opts, "retuneSpeedMs", config.retune_speed_ms);
+    config.vibrato_threshold_cents =
+        sonare_node::FloatProperty(opts, "vibratoThresholdCents", config.vibrato_threshold_cents);
+  }
+
+  float* out = nullptr;
+  size_t out_length = 0;
+  SonareKey used{};
+  const SonareError err = sonare_auto_tune(typed.Data(), typed.ElementLength(), sr, key_ptr,
+                                           &config, &out, &out_length, &used);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  auto samples = Napi::Float32Array::New(env, out_length);
+  if (out_length > 0 && out != nullptr) {
+    std::memcpy(samples.Data(), out, out_length * sizeof(float));
+    sonare_free_floats(out);
+  }
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("samples", samples);
+  result.Set("key", KeyToObject(env, used.root, used.mode, used.confidence));
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -454,7 +528,8 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
 
   if (info.Length() < 4 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsNumber() ||
       !info[3].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, pitchSemitones, formantFactor)")
+    Napi::TypeError::New(
+        env, "Expected (Float32Array, sampleRate, pitchSemitones, formantFactor, formantMode?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -466,6 +541,10 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   int sr = node_narrow_int(env, info[1], "sr");
   float pitch_semitones = node_narrow_finite_float(env, info[2], "pitchSemitones");
   float formant_factor = node_narrow_finite_float(env, info[3], "formantFactor");
+  std::string formant_mode;
+  if (!OptionalStringArg(env, info, 4, "formantMode", "relative", &formant_mode)) {
+    return env.Undefined();
+  }
 
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(data, length, sr);
@@ -473,6 +552,7 @@ Napi::Value SonareWrap::VoiceChange(const Napi::CallbackInfo& info) {
   sonare::editing::voice_changer::VoiceChangerConfig config;
   config.pitch_semitones = pitch_semitones;
   config.formant_factor = formant_factor;
+  config.formant_mode = sonare::editing::voice_changer::parse_formant_mode(formant_mode);
   sonare::editing::voice_changer::VoiceChanger changer(config);
   sonare::Audio result = changer.process(audio);
   std::vector<float> out_vec(result.data(), result.data() + result.size());
