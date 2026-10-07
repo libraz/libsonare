@@ -470,26 +470,56 @@ bool TrackMixerRuntime::set_track_eq_band(uint32_t track_id, size_t band_index,
   if (track_id == 0) return false;
   mixing::ChannelStrip* strip = bound_strip_for(track_id);
   if (strip == nullptr) return false;
+  // An externally bound strip has no retained spec; only an owned one records the band.
+  mixing::api::StripEq* spec_eq = nullptr;
+  for (OwnedStrip& owned : owned_strips_) {
+    if (owned.track_id == track_id && owned.strip.get() == strip) {
+      spec_eq = &owned.spec.eq;
+      break;
+    }
+  }
+  sonare::mastering::eq::EqBand previous_band;
+  sonare::mastering::eq::EqBand previous_spec_band;
+  const size_t previous_spec_size = spec_eq != nullptr ? spec_eq->bands.size() : 0;
+  const bool had_spec_band = previous_spec_size > band_index;
+  try {
+    previous_band = strip->eq().band(band_index);
+    if (had_spec_band) previous_spec_band = spec_eq->bands[band_index];
+  } catch (...) {
+    return false;
+  }
+  // Puts the stage and the retained spec back exactly as they were before the call.
+  const auto restore = [&]() noexcept {
+    try {
+      strip->set_eq_band(band_index, previous_band);
+    } catch (...) {
+    }
+    if (spec_eq == nullptr) return;
+    if (had_spec_band) {
+      spec_eq->bands[band_index] = previous_spec_band;
+    } else {
+      spec_eq->bands.resize(previous_spec_size);
+    }
+  };
   try {
     strip->set_eq_band(band_index, band);
-    // An externally bound strip has no retained spec; only an owned one records the band.
-    for (OwnedStrip& owned : owned_strips_) {
-      if (owned.track_id == track_id && owned.strip.get() == strip) {
-        store_eq_band(owned.spec.eq, band_index, band);
-        break;
-      }
-    }
+    if (spec_eq != nullptr) store_eq_band(*spec_eq, band_index, band);
   } catch (...) {
+    restore();
     return false;
   }
   // An EQ band change can shift the strip's latency, so refresh the PDC
   // alignment. recompute_lane_pdc reads the lane strips' latency through
   // lane_states_, which is why this setter keeps the control-thread contract
   // (not concurrent with process()); the strip resolution above is read-only
-  // regardless. It is noexcept and reports an allocation failure as false, so
-  // this setter's own noexcept bool contract holds on every exit path.
+  // regardless. It is noexcept and reports an allocation failure as false, in
+  // which case the band is taken back so a false return means nothing changed.
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    if (!recompute_lane_pdc(*lanes)) return false;
+    if (!recompute_lane_pdc(*lanes)) {
+      restore();
+      recompute_lane_pdc(*lanes);
+      return false;
+    }
   }
   return true;
 }
@@ -619,8 +649,10 @@ bool TrackMixerRuntime::set_bus_eq_band(uint32_t bus_id, size_t band_index,
     if (!strip_eq_acceptable(mixing::api::StripEq{true, {band}}, state.eq.sample_rate())) {
       return false;
     }
-    state.eq.set_band(band_index, band);
+    // The spec grows first: it is the only step that allocates, and the stage cannot refuse a
+    // band the check above accepted.
     store_eq_band(state.spec.eq, band_index, band);
+    state.eq.set_band(band_index, band);
   } catch (...) {
     return false;
   }

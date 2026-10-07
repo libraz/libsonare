@@ -70,6 +70,16 @@ class FixedLatencyProcessor final : public sonare::rt::ProcessorBase {
   int latency_samples_ = 0;
 };
 
+class MutableLatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override {}
+  int latency_samples() const noexcept override { return latency; }
+
+  int latency = 0;
+};
+
 class TailEchoProcessor final : public sonare::rt::ProcessorBase {
  public:
   void prepare(double, int) override {}
@@ -2288,6 +2298,58 @@ TEST_CASE("TrackMixerRuntime carries lane PDC history by track identity on reord
   }
 }
 
+TEST_CASE("TrackMixerRuntime set_track_eq_band reports whether the band took effect",
+          "[engine][track_mixer][pdc][allocation]") {
+  constexpr int kBlock = 16;
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  sonare::mixing::ChannelStrip dry;
+  sonare::mixing::ChannelStrip latent;
+  auto latency_source = std::make_unique<MutableLatencyProcessor>();
+  MutableLatencyProcessor* latency_control = latency_source.get();
+  latency_control->latency = 8;
+  latent.add_pre_insert(std::move(latency_source));
+  REQUIRE(mixer.bind_track_strip(10, &dry));
+  REQUIRE(mixer.bind_track_strip(20, &latent));
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  const sonare::mastering::eq::EqBand previous{sonare::mastering::eq::EqBandType::Peak, 500.0f,
+                                               -3.0f, 2.0f, true};
+  const sonare::mastering::eq::EqBand requested{sonare::mastering::eq::EqBandType::Peak, 1000.0f,
+                                                12.0f, 1.0f, true};
+  REQUIRE(mixer.set_track_eq_band(10, 0, previous));
+
+  // Every allocation the setter makes is failed in turn. The lane's latency moves before each
+  // call so the PDC refresh has a new delay bank to allocate. A false return must leave the
+  // strip's band untouched, and a true return must leave the requested band live.
+  bool refused = false;
+  bool accepted = false;
+  for (size_t nth = 1; nth <= 64; ++nth) {
+    latency_control->latency = 64 + 32 * static_cast<int>(nth);
+    bool result = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(nth);
+      result = mixer.set_track_eq_band(10, 0, requested);
+    }
+    const sonare::mastering::eq::EqBand& live = dry.eq().band(0);
+    INFO("failed allocation " << nth);
+    const sonare::mastering::eq::EqBand& expected = result ? requested : previous;
+    CHECK(live.frequency_hz == expected.frequency_hz);
+    CHECK(live.gain_db == expected.gain_db);
+    CHECK(live.q == expected.q);
+    refused = refused || !result;
+    accepted = accepted || result;
+    REQUIRE(mixer.set_track_eq_band(10, 0, previous));
+  }
+  CHECK(refused);
+  CHECK(accepted);
+
+  // A refused band index changes nothing either.
+  REQUIRE_FALSE(
+      mixer.set_track_eq_band(10, sonare::mastering::eq::ParametricEq::kMaxBands, requested));
+  CHECK(dry.eq().band(0).gain_db == previous.gain_db);
+}
+
 TEST_CASE("TrackMixerRuntime carries pre-send PDC history by track identity on reorder",
           "[engine][track_mixer][pdc]") {
   constexpr int kBlock = 16;
@@ -3910,6 +3972,50 @@ TEST_CASE("RealtimeEngine master strip resend keeps its inserts and follows its 
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine set_master_eq_band reports whether the band took effect",
+          "[engine][track_mixer][allocation]") {
+  constexpr int kBlocks = 4;
+  const EngineTone tone;
+  Strip verb;
+  verb.id = "master";
+  verb.inserts.push_back(
+      {InsertSlot::PreFader, "effects.reverb.fdn", R"({"decaySec":2,"dryWet":0.5})"});
+  Strip verb_eq = verb;
+  verb_eq.eq.bands.push_back(boost_band());
+
+  sonare::engine::RealtimeEngine boosted;
+  start_master_engine(boosted, tone, verb_eq);
+  StereoRender boosted_out;
+  render_engine(boosted, kBlocks, boosted_out);
+  sonare::engine::RealtimeEngine plain;
+  start_master_engine(plain, tone, verb);
+  StereoRender plain_out;
+  render_engine(plain, kBlocks, plain_out);
+  REQUIRE_FALSE(renders_equal(plain_out, boosted_out));
+
+  // Every allocation the setter makes is failed in turn: false must leave the master flat,
+  // true must leave the band audible.
+  bool refused = false;
+  bool accepted = false;
+  for (size_t nth = 1; nth <= 16; ++nth) {
+    sonare::engine::RealtimeEngine engine;
+    start_master_engine(engine, tone, verb);
+    bool result = false;
+    {
+      sonare::test::AllocationFailureAtGuard guard(nth);
+      result = engine.set_master_eq_band(0, boost_band());
+    }
+    StereoRender out;
+    render_engine(engine, kBlocks, out);
+    INFO("failed allocation " << nth);
+    CHECK(renders_equal(out, result ? boosted_out : plain_out));
+    refused = refused || !result;
+    accepted = accepted || result;
+  }
+  CHECK(refused);
+  CHECK(accepted);
+}
+
 TEST_CASE("RealtimeEngine processes a lane strip once when clip and instrument PDC are active",
           "[engine][track_mixer][pdc]") {
   constexpr int kFrames = 64;

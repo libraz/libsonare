@@ -834,12 +834,30 @@ bool RealtimeEngine::set_track_channel_delay_samples(uint32_t track_id,
 bool RealtimeEngine::set_master_eq_band(size_t band_index,
                                         const mastering::eq::EqBand& band) noexcept {
   if (owned_master_strip_ == nullptr) return false;
+  mixing::ChannelStrip& strip = *owned_master_strip_;
+  mastering::eq::EqBand previous_band;
+  mastering::eq::EqBand previous_spec_band;
+  auto& spec_bands = master_strip_spec_.eq.bands;
+  const size_t previous_spec_size = spec_bands.size();
+  const bool had_spec_band = previous_spec_size > band_index;
   try {
-    owned_master_strip_->set_eq_band(band_index, band);
+    previous_band = strip.eq().band(band_index);
+    if (had_spec_band) previous_spec_band = spec_bands[band_index];
+    strip.set_eq_band(band_index, band);
     store_eq_band(master_strip_spec_.eq, band_index, band);
     update_reported_graph_latency();
     return true;
   } catch (...) {
+    // A false return means nothing changed: put the stage and the spec back.
+    try {
+      strip.set_eq_band(band_index, previous_band);
+    } catch (...) {
+    }
+    if (had_spec_band) {
+      spec_bands[band_index] = previous_spec_band;
+    } else if (spec_bands.size() > previous_spec_size) {
+      spec_bands.resize(previous_spec_size);
+    }
     return false;
   }
 }
