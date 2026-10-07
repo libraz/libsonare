@@ -35,6 +35,7 @@ from ._cli_options import (
     _positive_int,
     _positive_pitch_frequency,
 )
+from ._errors import _unknown_error
 
 
 def cmd_version(args: argparse.Namespace) -> int:
@@ -59,7 +60,7 @@ def cmd_info(args: argparse.Namespace) -> int:
     # loads at all already exposes sonare_audio_file_channel_count.
     channels = Audio.file_channel_count(args.file)
     if channels <= 0:
-        raise RuntimeError("libsonare returned an invalid audio channel count")
+        raise _unknown_error("libsonare returned an invalid audio channel count")
     peak = float(np.max(np.abs(values))) if n else 0.0
     rms = float(np.sqrt(np.sum(np.square(values), dtype=np.float64) / n)) if n else 0.0
 

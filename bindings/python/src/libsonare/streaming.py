@@ -8,6 +8,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._errors import _invalid_state, _not_supported
 from ._runtime import (
     QuantizeConfig,
     SonareStreamConfig,
@@ -75,7 +76,7 @@ class StreamAnalyzer:
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_create"):
-            raise RuntimeError("libsonare was built without StreamAnalyzer support")
+            raise _not_supported("libsonare was built without StreamAnalyzer support")
         raw = SonareStreamConfig()
         # Seed real-time defaults from the native layer, then override.
         _check(lib.sonare_stream_analyzer_config_default(ctypes.byref(raw)))
@@ -134,7 +135,7 @@ class StreamAnalyzer:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None:
-            raise RuntimeError("StreamAnalyzer is closed")
+            raise _invalid_state("StreamAnalyzer is closed")
         return self._handle
 
     def process(self, samples: Sequence[float] | list[float]) -> None:
@@ -181,7 +182,7 @@ class StreamAnalyzer:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_stream_analyzer_finalize"):
-            raise RuntimeError("libsonare was built without StreamAnalyzer.finalize support")
+            raise _not_supported("libsonare was built without StreamAnalyzer.finalize support")
         _check(lib.sonare_stream_analyzer_finalize(self._require_handle()))
 
     def available_frames(self) -> int:

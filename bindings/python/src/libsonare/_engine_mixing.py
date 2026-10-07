@@ -7,6 +7,7 @@ from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
 from ._engine_conversions import _band_json_arg
+from ._errors import _unknown_error
 from ._ffi import SonareSurroundPan
 from ._runtime import (
     _UINT32_MAX,
@@ -46,7 +47,7 @@ _SIDECHAIN_REFUSALS = (
 
 def _sidechain_check(refusal: int) -> SidechainCheck:
     if not 0 <= refusal < len(_SIDECHAIN_REFUSALS):
-        raise RuntimeError(f"unknown sidechain refusal code {refusal}")
+        raise _unknown_error(f"unknown sidechain refusal code {refusal}")
     reason = _SIDECHAIN_REFUSALS[refusal]
     return SidechainCheck(ok=reason is None, reason=reason)
 

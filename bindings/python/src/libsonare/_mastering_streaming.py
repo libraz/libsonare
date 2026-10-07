@@ -9,6 +9,7 @@ import math
 from collections.abc import Sequence
 from typing import Any
 
+from ._errors import _invalid_state, _not_supported
 from ._ffi import (
     SonareEqSnapshot,
 )
@@ -16,11 +17,13 @@ from ._mastering_offline import _chain_params
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
+    ErrorCode,
     SonareValueError,
     _check,
     _check_realtime,
     _get_lib,
     _guard_buffer,
+    _last_error,
     _narrow_float,
     _narrow_int,
     _to_c_double,
@@ -107,11 +110,11 @@ class StreamingMasteringChain:
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
         if not hasattr(lib, "sonare_streaming_mastering_chain_create"):
-            raise RuntimeError("libsonare was built without streaming mastering chain support")
+            raise _not_supported("libsonare was built without streaming mastering chain support")
         param_array, param_count = _chain_params(config)
         if loudness_static_gain_db is not None:
             if not hasattr(lib, "sonare_streaming_mastering_chain_create_ex"):
-                raise RuntimeError(
+                raise _not_supported(
                     "libsonare was built without streaming loudness static-gain support"
                 )
             # NaN is how the C ABI spells "no offline peak measured", so the
@@ -133,15 +136,9 @@ class StreamingMasteringChain:
                 param_array, _to_c_size_t(param_count, "param_count")
             )
         if not handle:
-            detail = ""
-            if hasattr(lib, "sonare_last_error_message"):
-                raw = lib.sonare_last_error_message()
-                if raw:
-                    detail = raw.decode("utf-8", errors="replace")
-            message = "failed to create StreamingMasteringChain"
-            if detail:
-                message = f"{message}: {detail}"
-            raise RuntimeError(message)
+            raise _last_error(
+                int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingMasteringChain"
+            )
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
         self._max_block_size = 0
@@ -270,7 +267,7 @@ class StreamingMasteringChain:
         if not key:
             raise SonareValueError("key must not be empty")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_set_parameter"):
-            raise RuntimeError("libsonare was built without streaming parameter support")
+            raise _not_supported("libsonare was built without streaming parameter support")
         key_bytes = _utf8_arg(key, "key")
         rc = self._lib.sonare_streaming_mastering_chain_set_parameter(
             self._handle,
@@ -303,7 +300,7 @@ class StreamingMasteringChain:
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_substitution_count"):
-            raise RuntimeError(
+            raise _not_supported(
                 "libsonare was built without streaming mastering substitution telemetry"
             )
         out = ctypes.c_uint32()
@@ -336,7 +333,9 @@ class StreamingMasteringChain:
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_non_finite_discard_count"):
-            raise RuntimeError("libsonare was built without streaming mastering discard telemetry")
+            raise _not_supported(
+                "libsonare was built without streaming mastering discard telemetry"
+            )
         out = ctypes.c_uint32()
         rc = self._lib.sonare_streaming_mastering_chain_non_finite_discard_count(
             self._handle, ctypes.byref(out)
@@ -378,14 +377,14 @@ class StreamingMasteringChain:
 
     def _ensure_open(self) -> None:
         if self._handle is None or not self._handle:
-            raise RuntimeError("StreamingMasteringChain is closed")
+            raise _invalid_state("StreamingMasteringChain is closed")
 
     def _ensure_flush_ready(self) -> None:
         self._ensure_open()
         if self._max_block_size <= 0:
-            raise RuntimeError("StreamingMasteringChain must be prepared before flush")
+            raise _invalid_state("StreamingMasteringChain must be prepared before flush")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_flush_mono"):
-            raise RuntimeError("libsonare was built without streaming mastering flush support")
+            raise _not_supported("libsonare was built without streaming mastering flush support")
 
 
 class StreamingEqualizer:
@@ -417,7 +416,7 @@ class StreamingEqualizer:
         self._handle = ctypes.c_void_p(0)
         lib = _get_lib()
         if not hasattr(lib, "sonare_eq_create"):
-            raise RuntimeError("libsonare was built without streaming equalizer support")
+            raise _not_supported("libsonare was built without streaming equalizer support")
         # Narrowed rather than coerced: the rate reaches the C create as a float
         # but every later call as an int, so int() here would split the two.
         sample_rate_value = _narrow_int(sample_rate, "sample_rate", _C_INT_MIN, _C_INT_MAX)
@@ -426,7 +425,9 @@ class StreamingEqualizer:
             float(sample_rate_value), _to_c_int(max_block_value, "max_block_size")
         )
         if not handle:
-            raise RuntimeError("failed to create StreamingEqualizer")
+            raise _last_error(
+                int(ErrorCode.INVALID_PARAMETER), "failed to create StreamingEqualizer"
+            )
         self._lib = lib
         self._handle = ctypes.c_void_p(handle)
         self.sample_rate = sample_rate_value
@@ -660,7 +661,7 @@ class StreamingEqualizer:
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_eq_magnitude_response"):
-            raise RuntimeError("libsonare was built without EQ magnitude response support")
+            raise _not_supported("libsonare was built without EQ magnitude response support")
         key = placement.lower() if isinstance(placement, str) else ""
         ordinal = self._PLACEMENTS.get(key)
         if ordinal is None:
@@ -714,7 +715,7 @@ class StreamingEqualizer:
         """
         self._ensure_open()
         if not hasattr(self._lib, "sonare_eq_non_finite_discard_count"):
-            raise RuntimeError("libsonare was built without EQ discard-count support")
+            raise _not_supported("libsonare was built without EQ discard-count support")
         out = ctypes.c_uint32()
         _check(self._lib.sonare_eq_non_finite_discard_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -737,4 +738,4 @@ class StreamingEqualizer:
 
     def _ensure_open(self) -> None:
         if self._handle is None or not self._handle:
-            raise RuntimeError("StreamingEqualizer is closed")
+            raise _invalid_state("StreamingEqualizer is closed")

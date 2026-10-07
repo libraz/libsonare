@@ -19,6 +19,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
+from ._errors import _not_supported
 from ._mastering_offline import _mastering_params
 from ._runtime import (
     _C_INT_MAX,
@@ -424,7 +425,7 @@ def mix_source_class_names() -> list[str]:
     raw = lib.sonare_mixing_assistant_source_class_names()
     names = raw.decode("utf-8").splitlines() if raw else []
     if not names:
-        raise RuntimeError("libsonare was built without mixing assistant support")
+        raise _not_supported("libsonare was built without mixing assistant support")
     return names
 
 

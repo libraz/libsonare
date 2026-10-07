@@ -14,7 +14,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
-from ._errors import SonareValueError
+from ._errors import SonareValueError, _not_supported
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -191,7 +191,7 @@ def synthesize_rir(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synthesize_rir"):
-        raise RuntimeError("libsonare was built without acoustic-simulation support")
+        raise _not_supported("libsonare was built without acoustic-simulation support")
     bands_ptr, bands_count, _bands_owner = _band_array_args(
         absorption_bands, arg_name="absorption_bands"
     )
@@ -287,7 +287,7 @@ def estimate_room(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_estimate_room"):
-        raise RuntimeError("libsonare was built without acoustic-simulation support")
+        raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
     config = SonareRoomEstimateConfig(
         aspect_hint_lw=aspect_hint_lw,
@@ -382,7 +382,7 @@ def room_morph(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_room_morph"):
-        raise RuntimeError("libsonare was built without acoustic-simulation support")
+        raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
     bands_ptr, bands_count, _bands_owner = _band_array_args(
         absorption_bands, arg_name="absorption_bands"

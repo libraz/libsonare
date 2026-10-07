@@ -6,11 +6,13 @@ import ctypes
 import typing
 from collections.abc import Sequence
 
+from ._errors import _invalid_state, _not_supported
 from ._ffi import SonareMixGoniometerPoint, SonareSurroundPan
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
     AutomationCurve,
+    ErrorCode,
     MeterTap,
     MixMeterSnapshot,
     MixResult,
@@ -21,6 +23,7 @@ from ._runtime import (
     _check,
     _curve_value,
     _get_lib,
+    _last_error,
     _meter_tap_value,
     _mix_meter_from_c,
     _narrow_int,
@@ -69,7 +72,7 @@ def mixing_scene_preset_names() -> list[str]:
     """Return built-in mixer scene preset identifiers."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixing_scene_preset_names"):
-        raise RuntimeError("libsonare was built without mixing support")
+        raise _not_supported("libsonare was built without mixing support")
     raw = lib.sonare_mixing_scene_preset_names()
     return raw.decode("utf-8").splitlines() if raw else []
 
@@ -78,7 +81,7 @@ def mixing_scene_preset_json(preset_name: str) -> str:
     """Return the JSON scene template for a built-in mixer preset."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixing_scene_preset_json"):
-        raise RuntimeError("libsonare was built without mixing support")
+        raise _not_supported("libsonare was built without mixing support")
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mixing_scene_preset_json(
         _utf8_arg(preset_name, "preset_name"), ctypes.byref(json_ptr)
@@ -131,14 +134,16 @@ class Mixer:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_from_scene_json"):
-            raise RuntimeError("libsonare was built without mixing support")
+            raise _not_supported("libsonare was built without mixing support")
         handle = lib.sonare_mixer_from_scene_json(
             _utf8_arg(json, "json"),
             _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
             _to_c_int(block_size, "block_size"),
         )
         if not handle:
-            raise RuntimeError("failed to build mixer from scene JSON")
+            raise _last_error(
+                int(ErrorCode.INVALID_PARAMETER), "failed to build mixer from scene JSON"
+            )
         # Capture any non-fatal load warning (e.g. insert params no processor
         # read) immediately, before any later C-ABI call overwrites it.
         warnings: list[str] = []
@@ -173,7 +178,7 @@ class Mixer:
             _check(lib.sonare_mixer_get_strip_count(self._handle, ctypes.byref(out)))
             return int(out.value)
         if not hasattr(lib, "sonare_mixer_strip_count"):
-            raise RuntimeError("libsonare was built without insert-automation support")
+            raise _not_supported("libsonare was built without insert-automation support")
         return int(lib.sonare_mixer_strip_count(self._handle))
 
     def add_strip(
@@ -206,7 +211,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_add_strip_ex"):
-            raise RuntimeError("libsonare was built without mixing support")
+            raise _not_supported("libsonare was built without mixing support")
         # Returns the strip pointer rather than a SonareError, and NULL is the
         # whole failure signal -- the detail is in the thread-local error slot.
         # The pointer itself is mixer-owned and never surfaces: every strip op on
@@ -220,12 +225,7 @@ class Mixer:
             _to_c_int(true_peak_oversample, "true_peak_oversample"),
         )
         if not handle:
-            detail = ""
-            if hasattr(lib, "sonare_last_error_message"):
-                raw = lib.sonare_last_error_message()
-                if raw:
-                    detail = raw.decode("utf-8")
-            raise RuntimeError(detail or f"failed to add strip {strip_id!r}")
+            raise _last_error(int(ErrorCode.INVALID_PARAMETER), f"failed to add strip {strip_id!r}")
 
     def add_bus(self, bus_id: str, role: str = "aux") -> None:
         """Add a bus to the mixer topology.
@@ -238,7 +238,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_add_bus"):
-            raise RuntimeError("libsonare was built without mixer bus support")
+            raise _not_supported("libsonare was built without mixer bus support")
         _check(
             lib.sonare_mixer_add_bus(
                 self._handle,
@@ -252,7 +252,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_bus"):
-            raise RuntimeError("libsonare was built without mixer bus support")
+            raise _not_supported("libsonare was built without mixer bus support")
         _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(bus_id, "bus_id")))
 
     def bus_count(self) -> int:
@@ -260,7 +260,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_bus_count"):
-            raise RuntimeError("libsonare was built without mixer bus support")
+            raise _not_supported("libsonare was built without mixer bus support")
         out = ctypes.c_size_t()
         _check(lib.sonare_mixer_bus_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -272,7 +272,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_add_vca_group"):
-            raise RuntimeError("libsonare was built without mixer VCA support")
+            raise _not_supported("libsonare was built without mixer VCA support")
         member_list = list(members or [])
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
@@ -296,7 +296,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_vca_group"):
-            raise RuntimeError("libsonare was built without mixer VCA support")
+            raise _not_supported("libsonare was built without mixer VCA support")
         _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(group_id, "group_id")))
 
     def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None:
@@ -304,7 +304,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_set_vca_group_gain_db"):
-            raise RuntimeError("libsonare was built without mixer VCA support")
+            raise _not_supported("libsonare was built without mixer VCA support")
         _check(
             lib.sonare_mixer_set_vca_group_gain_db(
                 self._handle,
@@ -318,7 +318,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_set_vca_group_members"):
-            raise RuntimeError("libsonare was built without mutable mixer VCA support")
+            raise _not_supported("libsonare was built without mutable mixer VCA support")
         member_list = list(members)
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
@@ -341,7 +341,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_vca_group_count"):
-            raise RuntimeError("libsonare was built without mixer VCA support")
+            raise _not_supported("libsonare was built without mixer VCA support")
         out = ctypes.c_size_t()
         _check(lib.sonare_mixer_vca_group_count(self._handle, ctypes.byref(out)))
         return int(out.value)
@@ -356,7 +356,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_strip_at"):
-            raise RuntimeError("libsonare was built without strip-handle support")
+            raise _not_supported("libsonare was built without strip-handle support")
         if isinstance(strip, str):
             handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
@@ -582,7 +582,7 @@ class Mixer:
         handle = self._strip_handle(strip)
         lib = _get_lib()
         if not hasattr(lib, "sonare_strip_remove_send"):
-            raise RuntimeError("libsonare was built without strip remove_send support")
+            raise _not_supported("libsonare was built without strip remove_send support")
         _check(lib.sonare_strip_remove_send(handle, _to_c_uint32(index, "index")))
 
     def strip_meter(
@@ -622,7 +622,7 @@ class Mixer:
         """Read the post-insert meter for a compiled bus, including master."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_bus_meter"):
-            raise RuntimeError("libsonare was built without bus meter support")
+            raise _not_supported("libsonare was built without bus meter support")
         snapshot = SonareMixMeterSnapshot()
         _check(
             lib.sonare_mixer_bus_meter(
@@ -653,7 +653,7 @@ class Mixer:
         handle = self._strip_handle(strip)
         lib = _get_lib()
         if not hasattr(lib, "sonare_strip_non_finite_discard_count"):
-            raise RuntimeError("libsonare was built without strip discard-count support")
+            raise _not_supported("libsonare was built without strip discard-count support")
         out = ctypes.c_uint32()
         _check(lib.sonare_strip_non_finite_discard_count(handle, ctypes.byref(out)))
         return int(out.value)
@@ -675,7 +675,7 @@ class Mixer:
         self._require()
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_bus_non_finite_discard_count"):
-            raise RuntimeError("libsonare was built without bus discard-count support")
+            raise _not_supported("libsonare was built without bus discard-count support")
         out = ctypes.c_uint32()
         _check(
             lib.sonare_mixer_bus_non_finite_discard_count(
@@ -813,7 +813,7 @@ class Mixer:
         handle = self._strip_handle(strip_index)
         lib = _get_lib()
         if not hasattr(lib, "sonare_strip_schedule_insert_automation"):
-            raise RuntimeError("libsonare was built without insert-automation support")
+            raise _not_supported("libsonare was built without insert-automation support")
         _check(
             lib.sonare_strip_schedule_insert_automation(
                 handle,
@@ -980,7 +980,7 @@ class Mixer:
 
     def _require(self) -> None:
         if self._handle is None:
-            raise RuntimeError("Mixer has been closed")
+            raise _invalid_state("Mixer has been closed")
 
 
 def mix_stereo(
@@ -1028,7 +1028,7 @@ def mix_stereo(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):
-        raise RuntimeError("libsonare was built without mixing support")
+        raise _not_supported("libsonare was built without mixing support")
     if not strips:
         raise SonareValueError("mix_stereo: at least one strip is required")
     c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)
@@ -1087,14 +1087,14 @@ def mix_stereo(
 
     mixer = lib.sonare_mixer_create(c_sample_rate, _to_c_int(length, "length"))
     if not mixer:
-        raise RuntimeError("failed to create mixer")
+        raise _last_error(int(ErrorCode.UNKNOWN), "failed to create mixer")
 
     try:
         strip_handles: list[ctypes.c_void_p] = []
         for index in range(len(strips)):
             handle = lib.sonare_mixer_add_strip(mixer, _utf8_arg(f"strip{index}", "strip_id"))
             if not handle:
-                raise RuntimeError("failed to add mixer strip")
+                raise _last_error(int(ErrorCode.UNKNOWN), "failed to add mixer strip")
             strip_handles.append(ctypes.c_void_p(handle))
 
             if input_trim_db is not None and index < len(input_trim_db):

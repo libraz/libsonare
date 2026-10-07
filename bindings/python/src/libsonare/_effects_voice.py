@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._errors import _not_supported
 from ._ffi import (
     SONARE_OK,
     SONARE_VC_PRESET_BRIGHT_IDOL,
@@ -192,7 +193,7 @@ class RealtimeVoiceChanger:
         the C side and parsing on the Python side.
         """
         if not hasattr(self._lib, "sonare_realtime_voice_changer_get_config"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare is missing sonare_realtime_voice_changer_get_config; "
                 "rebuild the shared library."
             )
@@ -208,7 +209,7 @@ class RealtimeVoiceChanger:
         side still clamps out-of-range values rather than rejecting them.
         """
         if not hasattr(self._lib, "sonare_realtime_voice_changer_set_config"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare is missing sonare_realtime_voice_changer_set_config; "
                 "rebuild the shared library."
             )
@@ -597,7 +598,7 @@ def realtime_voice_changer_preset_config(preset: str | int) -> RealtimeVoiceChan
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_realtime_voice_changer_preset_config"):
-        raise RuntimeError(
+        raise _not_supported(
             "loaded libsonare is missing sonare_realtime_voice_changer_preset_config; "
             "rebuild the shared library."
         )

@@ -18,6 +18,7 @@ from typing import Any, cast
 
 import numpy as np
 
+from ._errors import _invalid_state, _not_supported
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
@@ -52,7 +53,7 @@ def _require_playback(lib: ctypes.CDLL) -> None:
     dylib backs every call on it.
     """
     if not hasattr(lib, "sonare_playback_renderer_create_json"):
-        raise RuntimeError(
+        raise _not_supported(
             "the loaded libsonare does not expose playback (built without BUILD_PLAYBACK)"
         )
 
@@ -110,7 +111,7 @@ class HrtfSet:
         matching :meth:`Audio._require_handle`.
         """
         if not self._handle:
-            raise RuntimeError("HrtfSet is closed")
+            raise _invalid_state("HrtfSet is closed")
         return self._handle
 
     def close(self) -> None:

@@ -16,6 +16,7 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
+from ._errors import _invalid_state, _not_supported
 from ._ffi_types_mastering_project import SonareSampleDesc, SonareSampleZoneDesc
 from ._runtime import (
     _UINT8_MAX,
@@ -234,7 +235,7 @@ def synth_enum_tables() -> dict[str, tuple[str, ...]]:
     """Canonical NativeSynth enum-name tables supplied by the C ABI."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_enum_names"):
-        raise RuntimeError("libsonare was built without the NativeSynth enum ABI")
+        raise _not_supported("libsonare was built without the NativeSynth enum ABI")
     out: dict[str, tuple[str, ...]] = {}
     for key, kind in _SYNTH_ENUM_KINDS.items():
         raw = lib.sonare_synth_enum_names(_to_c_int(kind, "kind"))
@@ -377,7 +378,7 @@ class SampleBank:
         self._handle: ctypes.c_void_p | None = None
         lib = _get_lib()
         if not hasattr(lib, "sonare_sample_bank_create"):
-            raise RuntimeError("libsonare was built without the sample-bank ABI")
+            raise _not_supported("libsonare was built without the sample-bank ABI")
         handle = lib.sonare_sample_bank_create()
         if not handle:
             raise _generic_error(int(ErrorCode.OUT_OF_MEMORY))
@@ -403,7 +404,7 @@ class SampleBank:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None:
-            raise RuntimeError("SampleBank is closed")
+            raise _invalid_state("SampleBank is closed")
         return self._handle
 
     # -- content ------------------------------------------------------------

@@ -21,7 +21,7 @@ from typing import Any, Self, SupportsFloat, TypeAlias, cast
 import numpy as np
 from numpy.typing import NDArray
 
-from ._errors import SonareError, SonareValueError
+from ._errors import SonareError, SonareValueError, _unknown_error
 from ._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_API_VERSION,
     VOCAL_MAX_SAMPLE_RATE,
@@ -148,11 +148,11 @@ def _enum(value: object, enum_type: type[IntEnum], name: str) -> int:
 def _copy_pointer(pointer: Any, count: int, dtype: np.dtype[Any]) -> np.ndarray:
     """Copy a native array, rejecting an impossible count before allocation."""
     if count < 0 or count > _MAX_RESULT_ITEMS:
-        raise RuntimeError(f"native vocal result count is unreasonable: {count}")
+        raise _unknown_error(f"native vocal result count is unreasonable: {count}")
     if count == 0:
         return np.empty(0, dtype=dtype)
     if not pointer:
-        raise RuntimeError("native vocal result contains a null array")
+        raise _unknown_error("native vocal result contains a null array")
     return np.ctypeslib.as_array(pointer, shape=(count,)).copy()
 
 
@@ -234,7 +234,7 @@ def _native_output_length(lib: ctypes.CDLL, symbol: str, handle: ctypes.c_void_p
     _vocal_check(getattr(lib, symbol)(handle, ctypes.byref(output_length)))
     length = int(output_length.value)
     if length <= 0:
-        raise RuntimeError(f"native vocal {symbol} returned an invalid output length: {length}")
+        raise _unknown_error(f"native vocal {symbol} returned an invalid output length: {length}")
     return length
 
 
@@ -1449,7 +1449,7 @@ class VocalRenderJob(_HandleOwner):
             if native_succeeded:
                 self.close()
         if result is None:
-            raise RuntimeError("native vocal render finalize produced no result")
+            raise _unknown_error("native vocal render finalize produced no result")
         return result
 
     def abort(self) -> None:

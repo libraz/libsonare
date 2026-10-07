@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ._errors import _not_supported
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _make_instrument_callbacks,
@@ -165,7 +166,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_bounce_with_builtin_instruments"):
-            raise RuntimeError("libsonare was built without the built-in instrument bounce ABI")
+            raise _not_supported("libsonare was built without the built-in instrument bounce ABI")
         if instruments is None:
             patch = instrument if instrument is not None else BuiltinSynthConfig()
             bindings = [(destination_id, patch)]
@@ -253,7 +254,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_bounce_with_synth_instruments"):
-            raise RuntimeError("libsonare was built without the NativeSynth bounce ABI")
+            raise _not_supported("libsonare was built without the NativeSynth bounce ABI")
         if instruments is None:
             bindings = [(destination_id, _synth_patch_arg(instrument))]
         else:
@@ -304,7 +305,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_load_soundfont"):
-            raise RuntimeError("libsonare was built without the SoundFont ABI")
+            raise _not_supported("libsonare was built without the SoundFont ABI")
         buf = bytes(data)
         if not buf:
             raise SonareValueError("SoundFont data must not be empty")
@@ -319,14 +320,14 @@ class _ProjectRenderMixin:
         """Release the project's loaded SoundFont (no-op when none is loaded)."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_clear_soundfont"):
-            raise RuntimeError("libsonare was built without the SoundFont ABI")
+            raise _not_supported("libsonare was built without the SoundFont ABI")
         _check(lib.sonare_project_clear_soundfont(self._require_handle()))
 
     def soundfont_preset_count(self) -> int:
         """Number of presets in the loaded SoundFont (0 when none is loaded)."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_soundfont_preset_count"):
-            raise RuntimeError("libsonare was built without the SoundFont ABI")
+            raise _not_supported("libsonare was built without the SoundFont ABI")
         out = ctypes.c_size_t()
         _check(lib.sonare_project_soundfont_preset_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
@@ -343,7 +344,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_soundfont_manifest"):
-            raise RuntimeError("libsonare was built without the SoundFont ABI")
+            raise _not_supported("libsonare was built without the SoundFont ABI")
         handle = self._require_handle()
         total = ctypes.c_size_t()
         _check(lib.sonare_project_soundfont_manifest(handle, None, 0, ctypes.byref(total)))
@@ -407,7 +408,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_bounce_with_sf2_instruments"):
-            raise RuntimeError("libsonare was built without the SoundFont ABI")
+            raise _not_supported("libsonare was built without the SoundFont ABI")
         if instruments is None:
             patch = instrument if instrument is not None else Sf2InstrumentConfig()
             bindings = [(destination_id, patch)]
@@ -484,7 +485,7 @@ class _ProjectRenderMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_bounce_with_instruments"):
-            raise RuntimeError("libsonare was built without the external-instrument bounce ABI")
+            raise _not_supported("libsonare was built without the external-instrument bounce ABI")
         if instruments is None:
             if instrument is None:
                 raise SonareValueError(

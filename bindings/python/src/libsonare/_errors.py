@@ -75,7 +75,19 @@ class SonareValueError(SonareError, ValueError):
 
 
 def _unsupported_effect_symbol(symbol: str) -> SonareError:
-    return SonareError(
-        int(ErrorCode.NOT_SUPPORTED),
-        f"libsonare does not export {symbol}; install a matching native library",
-    )
+    return _not_supported(f"libsonare does not export {symbol}; install a matching native library")
+
+
+def _not_supported(message: str) -> SonareError:
+    """Build the error for a capability the loaded native library lacks."""
+    return SonareError(int(ErrorCode.NOT_SUPPORTED), message)
+
+
+def _invalid_state(message: str) -> SonareError:
+    """Build the error for a call the object's current state refuses (e.g. closed)."""
+    return SonareError(int(ErrorCode.INVALID_STATE), message)
+
+
+def _unknown_error(message: str) -> SonareError:
+    """Build the error for a native result that fails the binding's sanity checks."""
+    return SonareError(int(ErrorCode.UNKNOWN), message)

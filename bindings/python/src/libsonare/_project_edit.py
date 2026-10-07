@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
+from ._errors import _not_supported
 from ._project_model import *  # noqa: F403
 from ._project_model import (
     _AUTOMATION_TARGET_KIND_UNSET,
@@ -197,7 +198,7 @@ def align_take_to_reference(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_align_take_to_reference"):
-        raise RuntimeError(
+        raise _not_supported(
             "loaded libsonare does not export sonare_align_take_to_reference; "
             "rebuild or upgrade the shared library before calling align_take_to_reference"
         )
@@ -319,7 +320,7 @@ class _ProjectEditMixin:
             raise TypeError("content_hash and external_stem_role must be strings")
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_set_audio_source_metadata"):
-            raise RuntimeError("loaded libsonare does not support audio-source metadata")
+            raise _not_supported("loaded libsonare does not support audio-source metadata")
         _check(
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
@@ -782,7 +783,7 @@ class _ProjectEditMixin:
         json_arg = _part_rig_inserts_arg(mode_value, inserts)
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_set_part_rig"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not export sonare_project_set_part_rig; "
                 "rebuild or upgrade the shared library before calling set_part_rig"
             )
@@ -808,7 +809,7 @@ class _ProjectEditMixin:
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_get_part_rig"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not export sonare_project_get_part_rig; "
                 "rebuild or upgrade the shared library before calling get_part_rig"
             )
@@ -851,7 +852,7 @@ class _ProjectEditMixin:
         """Remove one part-rig entry via an undoable edit (absent entries are a no-op)."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_clear_part_rig"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not export sonare_project_clear_part_rig; "
                 "rebuild or upgrade the shared library before calling clear_part_rig"
             )
@@ -1125,7 +1126,7 @@ class _ProjectEditMixin:
             )
         else:
             if not hasattr(lib, "sonare_project_add_automation_lane_ex"):
-                raise RuntimeError("loaded libsonare does not support typed automation lanes")
+                raise _not_supported("loaded libsonare does not support typed automation lanes")
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1187,7 +1188,7 @@ class _ProjectEditMixin:
             )
         else:
             if not hasattr(lib, "sonare_project_edit_automation_lane_ex"):
-                raise RuntimeError("loaded libsonare does not support typed automation lanes")
+                raise _not_supported("loaded libsonare does not support typed automation lanes")
             desc_ex = SonareAutomationLaneDescEx(
                 target_param_id=desc.target_param_id,
                 target_kind=kind,
@@ -1256,7 +1257,7 @@ class _ProjectEditMixin:
 
         lib = _get_lib()
         if not hasattr(lib, "sonare_project_set_max_history_bytes"):
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not export sonare_project_set_max_history_bytes; "
                 "rebuild or upgrade the shared library before calling "
                 "Project.set_max_history_bytes"

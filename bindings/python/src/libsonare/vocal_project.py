@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._errors import _unknown_error
 from ._ffi_types_vocal import (
     VOCAL_MAX_SAMPLE_RATE,
     VOCAL_MIN_SAMPLE_RATE,
@@ -221,9 +222,9 @@ def _rehydrate_item(raw: SonareProjectVocalRehydrateItem) -> ProjectVocalRehydra
 def _result_count(pointer: Any, count_value: int, name: str) -> int:
     count = int(count_value)
     if count < 0 or count > _MAX_RESULT_ITEMS:
-        raise RuntimeError(f"native vocal project {name} count is unreasonable: {count}")
+        raise _unknown_error(f"native vocal project {name} count is unreasonable: {count}")
     if count and not pointer:
-        raise RuntimeError(f"native vocal project {name} result contains a null array")
+        raise _unknown_error(f"native vocal project {name} result contains a null array")
     return count
 
 

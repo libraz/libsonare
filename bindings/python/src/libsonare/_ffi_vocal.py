@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import ctypes
 
+from ._errors import ErrorCode, SonareError
 from ._ffi_types_vocal import (
     SONARE_VOCAL_EDIT_API_VERSION,
     SonareVocalAnalysis,
@@ -44,10 +45,11 @@ def configure_vocal_signatures(lib: ctypes.CDLL) -> None:
     lib.sonare_vocal_edit_api_version.argtypes = []
     version = int(lib.sonare_vocal_edit_api_version())
     if version != SONARE_VOCAL_EDIT_API_VERSION:
-        raise RuntimeError(
+        raise SonareError(
+            int(ErrorCode.ABI_MISMATCH),
             f"libsonare ABI mismatch: native vocal-edit API reports {version}, "
             f"expected {SONARE_VOCAL_EDIT_API_VERSION}. The installed shared library is "
-            "incompatible with this Python binding."
+            "incompatible with this Python binding.",
         )
 
     for name, cls in (

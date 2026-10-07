@@ -138,11 +138,12 @@ def test_part_rig_methods_refuse_missing_native_symbols(
     with _project() as project:
         monkeypatch.setattr(_project_edit, "_get_lib", lambda: object())
 
-        with pytest.raises(RuntimeError) as failure:
+        with pytest.raises(SonareError) as failure:
             getattr(project, method_name)(*args, **kwargs)
 
+        assert failure.value.code == ErrorCode.NOT_SUPPORTED
         assert str(failure.value) == (
-            f"loaded libsonare does not export {symbol}; "
+            f"[{int(ErrorCode.NOT_SUPPORTED)}] loaded libsonare does not export {symbol}; "
             f"rebuild or upgrade the shared library before calling {method_name}"
         )
 

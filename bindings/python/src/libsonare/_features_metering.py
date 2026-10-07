@@ -8,6 +8,7 @@ from typing import Any
 
 import numpy as np
 
+from ._errors import _not_supported, _unknown_error
 from ._ffi import (
     SonareClippingResult,
     SonareDynamicRangeResult,
@@ -367,7 +368,7 @@ def metering_crest_factor_db_stereo(
     )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_crest_factor_db_stereo"):
-        raise RuntimeError("libsonare was built without the stereo crest factor meter")
+        raise _not_supported("libsonare was built without the stereo crest factor meter")
     left_array, left_length = _to_c_float_array(left_buf)
     right_array, right_length = _to_c_float_array(right_buf)
     if left_length != right_length:
@@ -556,7 +557,7 @@ def _scope_point_columns(
     """
     names = [name for name, *_ in point_type._fields_]
     if ctypes.sizeof(point_type) != 4 * len(names):
-        raise RuntimeError(f"{point_type.__name__} is not a packed float32 record")
+        raise _unknown_error(f"{point_type.__name__} is not a packed float32 record")
     if count == 0:
         return {name: np.empty(0, dtype=np.float32) for name in names}
     block = ctypes.cast(points, ctypes.POINTER(ctypes.c_float * (count * len(names))))
@@ -633,7 +634,7 @@ def metering_vectorscope_decimated(
     )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_vectorscope_decimated"):
-        raise RuntimeError("libsonare was built without sonare_metering_vectorscope_decimated")
+        raise _not_supported("libsonare was built without sonare_metering_vectorscope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
@@ -735,7 +736,7 @@ def metering_phase_scope_decimated(
     )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_phase_scope_decimated"):
-        raise RuntimeError("libsonare was built without sonare_metering_phase_scope_decimated")
+        raise _not_supported("libsonare was built without sonare_metering_phase_scope_decimated")
     left_array, left_len = _to_c_float_array(left_buf)
     right_array, right_len = _to_c_float_array(right_buf)
     if left_len != right_len:
@@ -862,7 +863,7 @@ def metering_spectrum_frame(
     )
     lib = _get_lib()
     if not hasattr(lib, "sonare_metering_spectrum_frame"):
-        raise RuntimeError("libsonare was built without sonare_metering_spectrum_frame")
+        raise _not_supported("libsonare was built without sonare_metering_spectrum_frame")
     c_array, length = _to_c_float_array(sample_buf)
     out = SonareSpectrumResult()
     rc = lib.sonare_metering_spectrum_frame(

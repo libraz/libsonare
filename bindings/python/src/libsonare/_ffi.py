@@ -8,6 +8,7 @@ import os
 import platform
 from pathlib import Path
 
+from ._errors import ErrorCode, SonareError
 from ._ffi_signatures_core import configure_core_signatures
 from ._ffi_signatures_effects import configure_effects_signatures
 from ._ffi_signatures_engine import configure_engine_signatures
@@ -97,17 +98,19 @@ def load_library(lib_path: str | None = None) -> ctypes.CDLL:
     # points, and should produce this actionable mismatch rather than an
     # unrelated AttributeError while assigning a later ``.restype``.
     if not hasattr(lib, "sonare_abi_version"):
-        raise RuntimeError(
-            "libsonare ABI mismatch: native binary does not expose sonare_abi_version"
+        raise SonareError(
+            int(ErrorCode.ABI_MISMATCH),
+            "libsonare ABI mismatch: native binary does not expose sonare_abi_version",
         )
     lib.sonare_abi_version.restype = ctypes.c_uint32
     lib.sonare_abi_version.argtypes = []
     abi = int(lib.sonare_abi_version())
     if abi != EXPECTED_ABI_VERSION:
-        raise RuntimeError(
+        raise SonareError(
+            int(ErrorCode.ABI_MISMATCH),
             f"libsonare ABI mismatch: native binary reports {abi}, "
             f"expected {EXPECTED_ABI_VERSION}. The installed shared library is "
-            "incompatible with this Python binding."
+            "incompatible with this Python binding.",
         )
 
     configure_core_signatures(lib)

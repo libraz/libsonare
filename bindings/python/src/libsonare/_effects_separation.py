@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 
 from ._effects_repair_common import _linked_channel_planes
+from ._errors import _not_supported
 from ._ffi import SonareDecomposeStemsConfig, SonareHpssResult
 from ._runtime import (
     _DEFAULT_EFFECT_HOP_LENGTH,
@@ -115,7 +116,7 @@ def decompose_with_init(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_decompose_with_init"):
-        raise RuntimeError("libsonare was built without sonare_decompose_with_init")
+        raise _not_supported("libsonare was built without sonare_decompose_with_init")
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
         raise SonareValueError("s length must equal n_features * n_frames")
@@ -489,7 +490,7 @@ def remix_aligned_intervals(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_remix_aligned_intervals"):
-        raise RuntimeError("loaded libsonare does not expose sonare_remix_aligned_intervals")
+        raise _not_supported("loaded libsonare does not expose sonare_remix_aligned_intervals")
     c_array, length = _to_c_float_array(samples)
     intervals_array, n_ints = _to_c_int_array(intervals, "intervals")
     with _out_int_array(lib) as (out, out_count):

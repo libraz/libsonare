@@ -22,6 +22,7 @@ from ._effects_note_model import (
     _NOTE_STRUCT_VERSION,
     _note_set_index,
 )
+from ._errors import _invalid_state
 from ._runtime import _unsupported_effect_symbol
 
 if TYPE_CHECKING:
@@ -366,7 +367,7 @@ class PolyphonicAnalysis:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None:
-            raise RuntimeError("PolyphonicAnalysis is closed")
+            raise _invalid_state("PolyphonicAnalysis is closed")
         return self._handle
 
     # -- what the analysis found -------------------------------------------

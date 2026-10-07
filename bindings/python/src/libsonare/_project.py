@@ -8,6 +8,7 @@ import ctypes
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Self
 
+from ._errors import _invalid_state
 from ._facade import rebind_facade_exports as _rebind_facade_exports
 from ._project_edit import TakeAlignment as TakeAlignment
 from ._project_edit import _ProjectEditMixin
@@ -120,7 +121,7 @@ class ProjectTimeline:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None:
-            raise RuntimeError("ProjectTimeline is closed")
+            raise _invalid_state("ProjectTimeline is closed")
         return self._handle
 
 
@@ -189,7 +190,7 @@ class Project(
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None or getattr(self, "_close_pending", False):
-            raise RuntimeError("Project is closed")
+            raise _invalid_state("Project is closed")
         return self._handle
 
     def compile_timeline(self) -> ProjectCompileResult:

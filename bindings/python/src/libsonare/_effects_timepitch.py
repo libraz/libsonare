@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+from ._errors import _not_supported
 from ._ffi import (
     SONARE_PITCH_TARGET_FIXED_MIDI,
     SONARE_PITCH_TARGET_SCALE,
@@ -206,7 +207,7 @@ def pitch_correct_to_midi_timevarying(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_correct_to_midi_timevarying"):
-        raise RuntimeError("libsonare was built without pitch-editor support")
+        raise _not_supported("libsonare was built without pitch-editor support")
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     voiced_array = None
@@ -295,7 +296,7 @@ def pitch_correct_timevarying(
         raise SonareValueError("mode must be 'midi' or 'scale'")
     lib = _get_lib()
     if not hasattr(lib, "sonare_pitch_correct_timevarying"):
-        raise RuntimeError("libsonare was built without pitch-editor support")
+        raise _not_supported("libsonare was built without pitch-editor support")
 
     config = SonarePitchCorrectionConfig()
     _check(lib.sonare_pitch_correction_config_default(ctypes.byref(config)))

@@ -7,6 +7,7 @@ import json
 from collections.abc import Sequence
 from typing import cast
 
+from ._errors import _not_supported, _unknown_error
 from ._ffi import (
     SonareBoundaryOptions,
     SonareBoundaryResult,
@@ -247,7 +248,7 @@ def analyze_sections(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_analyze_sections"):
-        raise RuntimeError("libsonare was built without section-analysis support")
+        raise _not_supported("libsonare was built without section-analysis support")
     c_array, length = _to_c_float_array(samples)
     out = SonareSectionResult()
     rc = lib.sonare_analyze_sections(
@@ -336,7 +337,7 @@ def detect_boundaries(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_detect_boundaries"):
-        raise RuntimeError("libsonare was built without boundary-detection support")
+        raise _not_supported("libsonare was built without boundary-detection support")
     c_array, length = _to_c_float_array(samples)
     options = SonareBoundaryOptions(
         n_fft=_to_c_int(n_fft, "n_fft"),
@@ -455,7 +456,7 @@ def analyze_melody(
             lib.sonare_free_melody_result(ctypes.byref(out))
 
     if not hasattr(lib, "sonare_analyze_melody"):
-        raise RuntimeError("libsonare was built without melody-analysis support")
+        raise _not_supported("libsonare was built without melody-analysis support")
     c_array, length = _to_c_float_array(samples)
     out = SonareMelodyResult()
     rc = lib.sonare_analyze_melody(
@@ -505,16 +506,16 @@ def capabilities() -> Capabilities:
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_capabilities_json"):
-        raise RuntimeError(
+        raise _not_supported(
             "loaded libsonare does not expose sonare_capabilities_json; "
             "rebuild or install a newer native library"
         )
     payload = lib.sonare_capabilities_json()
     if not payload:
-        raise RuntimeError("libsonare returned an empty capabilities descriptor")
+        raise _unknown_error("libsonare returned an empty capabilities descriptor")
     descriptor = json.loads(payload.decode("utf-8"))
     if not isinstance(descriptor, dict):
-        raise RuntimeError("libsonare returned a non-object capabilities descriptor")
+        raise _unknown_error("libsonare returned a non-object capabilities descriptor")
     return cast(Capabilities, descriptor)
 
 

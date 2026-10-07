@@ -42,6 +42,7 @@ from ._cli_repair import (
 from ._cli_repair import (
     register_repair_parsers,
 )
+from ._errors import _unknown_error
 
 if TYPE_CHECKING:
     from .analyzer import MasteringPreset, SoloProcessor
@@ -52,7 +53,7 @@ def _mastering_report_payload(report: Any) -> dict[str, object]:
     """Serialize the shared chain report without depending on dataclass internals."""
 
     if report is None:
-        raise RuntimeError("loaded libsonare did not return a mastering report")
+        raise _unknown_error("loaded libsonare did not return a mastering report")
     before = report.before
     after = report.after
     return {

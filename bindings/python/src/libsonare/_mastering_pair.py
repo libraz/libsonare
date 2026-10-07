@@ -9,6 +9,7 @@ from typing import Any
 
 import numpy as np
 
+from ._errors import _not_supported
 from ._ffi import (
     SonareLoudnessMatch,
     SonareMasteringResult,
@@ -59,7 +60,7 @@ def mastering_pair_process(
     """Apply a named two-input mastering processor."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_pair_processor"):
-        raise RuntimeError("libsonare was built without mastering support")
+        raise _not_supported("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
@@ -115,7 +116,7 @@ def mastering_pair_process_stereo(
     param_array, param_count = _stereo_pair_params(params)
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_pair_processor_stereo_ex"):
-        raise RuntimeError("libsonare was built without stereo pair mastering support")
+        raise _not_supported("libsonare was built without stereo pair mastering support")
     source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
     source_right_array, source_right_length = _to_c_float_array(
         source_right, arg_name="source_right"
@@ -172,7 +173,7 @@ def mastering_pair_analyze(
     """Run a named two-input mastering analysis and return shared JSON."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_analyze_pair"):
-        raise RuntimeError("libsonare was built without mastering support")
+        raise _not_supported("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source)
     reference_array, reference_length = _to_c_float_array(reference)
     param_array, param_count = _mastering_params(params)
@@ -238,7 +239,7 @@ def mastering_ab_match_loudness(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_ab_match_loudness"):
-        raise RuntimeError("libsonare was built without mastering support")
+        raise _not_supported("libsonare was built without mastering support")
     source_array, source_length = _to_c_float_array(source, arg_name="source")
     reference_array, reference_length = _to_c_float_array(reference, arg_name="reference")
     match = SonareLoudnessMatch() if with_match else None
@@ -284,7 +285,7 @@ def mastering_ab_match_loudness_stereo(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_ab_match_loudness_stereo"):
-        raise RuntimeError("libsonare was built without stereo A/B loudness-match support")
+        raise _not_supported("libsonare was built without stereo A/B loudness-match support")
     source_left_array, source_left_length = _to_c_float_array(source_left, arg_name="source_left")
     source_right_array, source_right_length = _to_c_float_array(
         source_right, arg_name="source_right"
@@ -341,7 +342,7 @@ def mastering_stereo_analyze(
     """Run a named stereo mastering analysis and return shared JSON."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_analyze_stereo"):
-        raise RuntimeError("libsonare was built without mastering support")
+        raise _not_supported("libsonare was built without mastering support")
     left_array, left_length = _to_c_float_array(left)
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
@@ -397,7 +398,7 @@ def mastering_streaming_preview(
     """Preview streaming-platform normalization and ceiling risk as shared JSON."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_streaming_preview"):
-        raise RuntimeError("libsonare was built without mastering streaming preview support")
+        raise _not_supported("libsonare was built without mastering streaming preview support")
     c_array, length = _to_c_float_array(samples)
     platform_array, platform_count, _buffers = _streaming_platforms(platforms)
 
@@ -433,7 +434,7 @@ def mastering_assistant_suggest(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest"):
-        raise RuntimeError("libsonare was built without mastering assistant support")
+        raise _not_supported("libsonare was built without mastering assistant support")
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _assistant_params(params)
     json_ptr = ctypes.c_char_p()
@@ -486,7 +487,7 @@ def mastering_assistant_suggest_chain(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_assistant_suggest_chain_json"):
-        raise RuntimeError("libsonare was built without mastering assistant support")
+        raise _not_supported("libsonare was built without mastering assistant support")
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _assistant_params(params)
     json_ptr = ctypes.c_char_p()
@@ -516,7 +517,7 @@ def mastering_audio_profile(
     """Analyze audio and return the mastering assistant profile as shared JSON."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_audio_profile"):
-        raise RuntimeError("libsonare was built without mastering audio profile support")
+        raise _not_supported("libsonare was built without mastering audio profile support")
     c_array, length = _to_c_float_array(samples)
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
@@ -558,7 +559,7 @@ def _stereo_analysis_json(
 ) -> str:
     lib = _get_lib()
     if not hasattr(lib, symbol):
-        raise RuntimeError(missing_message)
+        raise _not_supported(missing_message)
     left_array, right_array, length = _stereo_channels(left, right)
     json_ptr = ctypes.c_char_p()
     rc = getattr(lib, symbol)(
@@ -668,7 +669,7 @@ def mastering_preset_params(preset: str) -> dict[str, float | bool]:
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_preset_params_json"):
-        raise RuntimeError("libsonare was built without mastering preset support")
+        raise _not_supported("libsonare was built without mastering preset support")
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_preset_params_json(
         _utf8_arg(preset, "preset"),

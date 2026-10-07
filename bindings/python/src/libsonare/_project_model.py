@@ -29,6 +29,7 @@ import numpy as np
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
 
+from ._errors import ErrorCode, SonareError, _not_supported
 from ._ffi_types_mastering_project import (
     SONARE_SYNTH_FIELD_AMP_ATTACK_MS,
     SONARE_SYNTH_FIELD_AMP_DECAY_MS,
@@ -980,7 +981,7 @@ def synth_preset_names() -> list[str]:
     :class:`SynthPatch` preset names instead of hardcoding magic strings."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_preset_names"):
-        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
     raw = lib.sonare_synth_preset_names()
     if not raw:
         return []
@@ -997,7 +998,7 @@ def synth_gs_drum_kit_name(program: int) -> str | None:
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_gs_drum_kit_name"):
-        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
     raw = lib.sonare_synth_gs_drum_kit_name(_to_c_int(program, "program"))
     return raw.decode("utf-8") if raw else None
 
@@ -1015,7 +1016,7 @@ def synth_gs_drum_kit_is_voiced_apart(program: int) -> bool | None:
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_gs_drum_kit_is_voiced_apart"):
-        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
     r = lib.sonare_synth_gs_drum_kit_is_voiced_apart(_to_c_int(program, "program"))
     return None if r < 0 else bool(r)
 
@@ -1035,7 +1036,7 @@ def synth_gs_variation_is_voiced_apart(bank: int, program: int) -> bool | None:
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_gs_variation_is_voiced_apart"):
-        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
     r = lib.sonare_synth_gs_variation_is_voiced_apart(
         _to_c_int(bank, "bank"), _to_c_int(program, "program")
     )
@@ -1049,7 +1050,7 @@ def controller_profile_names() -> list[str]:
     magic strings."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_controller_profile_names"):
-        raise RuntimeError("libsonare was built without the controller-profile ABI")
+        raise _not_supported("libsonare was built without the controller-profile ABI")
     raw = lib.sonare_controller_profile_names()
     if not raw:
         return []
@@ -1063,7 +1064,7 @@ def synth_preset_patch(name: str) -> SynthPatch:
     :class:`SonareError` for unknown names."""
     lib = _get_lib()
     if not hasattr(lib, "sonare_synth_preset_patch"):
-        raise RuntimeError("libsonare was built without the NativeSynth ABI")
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
     out = SonareSynthPatch()
     _check(
         lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))
@@ -1224,14 +1225,15 @@ def project_abi_version() -> int:
 
 def _check_project_abi(lib: Any) -> None:
     if not hasattr(lib, "sonare_project_abi_version"):
-        raise RuntimeError("libsonare was built without arrangement support")
+        raise _not_supported("libsonare was built without arrangement support")
     abi = int(lib.sonare_project_abi_version())
     if abi != EXPECTED_PROJECT_ABI_VERSION:
-        raise RuntimeError(
+        raise SonareError(
+            int(ErrorCode.ABI_MISMATCH),
             f"libsonare project ABI mismatch: native binary reports {abi}, "
             f"expected {EXPECTED_PROJECT_ABI_VERSION}. The installed shared "
             "library is incompatible with this Python binding (0 = arrangement "
-            "support not compiled in)."
+            "support not compiled in).",
         )
 
 

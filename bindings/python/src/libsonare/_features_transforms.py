@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
+from ._errors import _not_supported
 from ._ffi import (
     SonareCqtResult,
     SonareInverseResult,
@@ -67,7 +68,7 @@ def cqt(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_cqt"):
-        raise RuntimeError("libsonare was built without CQT support")
+        raise _not_supported("libsonare was built without CQT support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = lib.sonare_cqt(
@@ -98,7 +99,7 @@ def _cqt_variant(
 ) -> CqtResult:
     lib = _get_lib()
     if not hasattr(lib, fn_name):
-        raise RuntimeError(f"libsonare was built without {fn_name} support")
+        raise _not_supported(f"libsonare was built without {fn_name} support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = getattr(lib, fn_name)(
@@ -219,14 +220,14 @@ def mel_to_stft(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_stft"):
-        raise RuntimeError("libsonare was built without inverse-reconstruction support")
+        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mel)
     if length != n_mels * n_frames:
         raise SonareValueError("mel length must equal n_mels * n_frames")
     out = SonareInverseResult()
     if htk:
         if not hasattr(lib, "sonare_mel_to_stft_ex"):
-            raise RuntimeError("libsonare was built without HTK inverse-reconstruction support")
+            raise _not_supported("libsonare was built without HTK inverse-reconstruction support")
         rc = lib.sonare_mel_to_stft_ex(
             c_array,
             _to_c_int(n_mels, "n_mels"),
@@ -274,7 +275,7 @@ def _inverse_audio(
     function_name = extended_name if htk else base_name
     if not hasattr(lib, function_name):
         feature = "HTK inverse-reconstruction" if htk else "inverse-reconstruction"
-        raise RuntimeError(f"libsonare was built without {feature} support")
+        raise _not_supported(f"libsonare was built without {feature} support")
     htk_arg = (ctypes.c_int(1),) if htk else ()
     with _out_float_array(lib) as (out, out_length):
         _check(
@@ -322,7 +323,7 @@ def mel_to_audio(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_audio"):
-        raise RuntimeError("libsonare was built without inverse-reconstruction support")
+        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mel)
     if length != n_mels * n_frames:
         raise SonareValueError("mel length must equal n_mels * n_frames")
@@ -399,7 +400,7 @@ def mfcc_to_mel(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_mel"):
-        raise RuntimeError("libsonare was built without inverse-reconstruction support")
+        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mfcc_coeffs)
     if length != n_mfcc * n_frames:
         raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
@@ -415,7 +416,7 @@ def mfcc_to_mel(
         )
     else:
         if lifter != 0.0:
-            raise RuntimeError("this libsonare build does not support inverse MFCC liftering")
+            raise _not_supported("this libsonare build does not support inverse MFCC liftering")
         rc = lib.sonare_mfcc_to_mel(
             c_array,
             _to_c_int(n_mfcc, "n_mfcc"),
@@ -470,7 +471,7 @@ def mfcc_to_audio(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mfcc_to_audio"):
-        raise RuntimeError("libsonare was built without inverse-reconstruction support")
+        raise _not_supported("libsonare was built without inverse-reconstruction support")
     c_array, length = _to_c_float_array(mfcc_coeffs)
     if length != n_mfcc * n_frames:
         raise SonareValueError("mfcc_coeffs length must equal n_mfcc * n_frames")
@@ -494,7 +495,7 @@ def mfcc_to_audio(
             htk,
         )
     if not hasattr(lib, "sonare_mfcc_to_audio_ex2"):
-        raise RuntimeError("this libsonare build does not support inverse MFCC liftering")
+        raise _not_supported("this libsonare build does not support inverse MFCC liftering")
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
     rc = lib.sonare_mfcc_to_audio_ex2(
@@ -547,7 +548,7 @@ def vqt(
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_vqt"):
-        raise RuntimeError("libsonare was built without VQT support")
+        raise _not_supported("libsonare was built without VQT support")
     c_array, length = _to_c_float_array(samples)
     out = SonareCqtResult()
     rc = lib.sonare_vqt(

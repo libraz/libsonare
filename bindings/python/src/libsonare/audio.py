@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from ._errors import _invalid_state, _not_supported, _unknown_error
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -234,7 +235,7 @@ class Audio:
         lib = _get_lib()
         load = getattr(lib, "sonare_audio_from_file_channel", None)
         if load is None:
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not expose sonare_audio_from_file_channel; "
                 "rebuild or install a newer native library"
             )
@@ -266,7 +267,7 @@ class Audio:
         lib = _get_lib()
         probe = getattr(lib, "sonare_audio_file_channel_count", None)
         if probe is None:
-            raise RuntimeError(
+            raise _not_supported(
                 "loaded libsonare does not expose sonare_audio_file_channel_count; "
                 "rebuild or install a newer native library"
             )
@@ -278,7 +279,7 @@ class Audio:
             # The C API promises a positive count on success. Treat a broken
             # or incompatible implementation as an error rather than letting
             # callers report a successful but meaningless ``channels=0``.
-            raise RuntimeError("libsonare returned an invalid audio channel count")
+            raise _unknown_error("libsonare returned an invalid audio channel count")
         return channels
 
     @classmethod
@@ -347,7 +348,7 @@ class Audio:
         returns a neutral value.
         """
         if not self._handle:
-            raise RuntimeError("Audio is closed")
+            raise _invalid_state("Audio is closed")
         return self._handle
 
     @property

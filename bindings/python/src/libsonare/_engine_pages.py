@@ -10,6 +10,7 @@ from typing import BinaryIO
 
 import numpy as np
 
+from ._errors import _invalid_state
 from ._runtime import (
     _INT64_MAX,
     _INT64_MIN,
@@ -60,7 +61,7 @@ class ClipPageProvider:
 
     def _require_handle(self) -> ctypes.c_void_p:
         if self._handle is None:
-            raise RuntimeError("ClipPageProvider is closed")
+            raise _invalid_state("ClipPageProvider is closed")
         return self._handle
 
     def supply(self, page_index: int, channels: Sequence[Sequence[float]]) -> None:
@@ -126,7 +127,7 @@ class FileClipPageProvider(ClipPageProvider):
 
     def supply_page(self, page_index: int) -> bool:
         if self._file is None:
-            raise RuntimeError("FileClipPageProvider is closed")
+            raise _invalid_state("FileClipPageProvider is closed")
         # Narrowed before the page arithmetic: int(2.5) is page 2, a whole page
         # of the wrong frames supplied under the caller's index.
         page = _narrow_int(page_index, "page_index", _INT64_MIN, _INT64_MAX)
