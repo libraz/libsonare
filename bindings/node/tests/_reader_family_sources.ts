@@ -85,6 +85,7 @@ export const READER_FAMILIES: Readonly<
     FiniteFloatProperty: 'refuse',
     FloatProperty: 'refuse',
     GsEfxRealizationProperty: 'refuse',
+    Int8Property: 'refuse',
     Int32Property: 'refuse',
     Int64Property: 'refuse',
     IntProperty: 'refuse',
@@ -106,29 +107,24 @@ export const READER_FAMILIES: Readonly<
     parse_frame_option: 'out-of-scope',
   },
   wasm: {
-    // Presence-checked only: the value is read through val::as<T>(), which
-    // COERCES -- a numeric string and a one-element array arrive as the number
-    // they spell, a boolean as 0 or 1.
-    boolProperty: 'coerce',
-    byteProperty: 'coerce',
-    doubleProperty: 'coerce',
-    floatProperty: 'coerce',
-    int64Property: 'coerce',
-    intProperty: 'coerce',
-    setNumberOption: 'coerce',
-    stringProperty: 'coerce',
-    uintProperty: 'coerce',
-    wordProperty: 'coerce',
-    // Type-checked first, so a wrong type is refused rather than converted.
+    // Presence- and type-checked: undefined/null takes the default, a present
+    // value of the wrong type is refused by key (numberFromVal and its string /
+    // boolean siblings), never converted through val::as<T>().
+    boolProperty: 'refuse',
+    byteProperty: 'refuse',
+    decimalUint64Property: 'refuse', // a decimal uint64 string; any other type is refused
+    doubleProperty: 'refuse',
     enumProperty: 'refuse',
     floatOption: 'refuse',
+    floatProperty: 'refuse',
     gsEfxRealizationProperty: 'refuse',
-    onsetWindowFrames: 'refuse', // extra: wraps typedIntProperty, then bounds it
-    typedBoolProperty: 'refuse',
-    typedDoubleProperty: 'refuse',
-    typedFloatProperty: 'refuse',
-    typedIntProperty: 'refuse',
-    decimalUint64Property: 'refuse', // a decimal uint64 string; any other type is refused
+    int64Property: 'refuse',
+    intProperty: 'refuse',
+    onsetWindowFrames: 'refuse', // extra: wraps intProperty, then bounds it
+    setNumberOption: 'refuse',
+    stringProperty: 'refuse',
+    uintProperty: 'refuse',
+    wordProperty: 'refuse',
     // Vocal edit's WASM adapter keeps the Node parser's absent/default and
     // present/wrong-type contract under a feature-local name.
     booleanProperty: 'refuse',
@@ -401,4 +397,95 @@ export function evaluateReaderFamilyScope(
     findings.push({ heading: 'these recorded divergences are no longer live', lines: dead });
   }
   return findings;
+}
+
+/**
+ * What a `refuse` reader's body must contain for the classification to be
+ * true: a type test on the value, or a call to a helper whose job is one.
+ *
+ * {@link READER_FAMILIES} is a hand-written table, so on its own it would keep
+ * calling a reader `refuse` after its body stopped testing the type -- which is
+ * exactly how `floatProperty` read as checked while it coerced. Each helper
+ * named here is itself held to carrying a typeOf/Is* test by
+ * {@link ungatedTypeGates}, so the chain ends in a real test.
+ */
+export const TYPE_GATE_HELPERS: Readonly<Record<'node' | 'wasm', readonly string[]>> = {
+  node: ['node_narrow_uint64', 'Int32Value', 'SynthEnumValue'],
+  wasm: ['typedPropertyValue', 'numberFromVal', 'enumFromVal'],
+};
+
+const DIRECT_TYPE_TEST =
+  /\.\s*typeOf\s*\(|\.\s*Is(?:Number|String|Boolean)\s*\(|\.\s*is(?:Number|String)\s*\(/;
+
+/** Comment-free text, so prose quoting a call does not read as one. */
+function codeOf(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/[^\n]*/g, ' ');
+}
+
+/** Every body defining @p name across @p sources, located by brace balance. */
+function definitionBodies(name: string, sources: readonly ReaderSource[]): string[] {
+  const head = new RegExp(
+    `^[ \\t]*(?:template\\s*<[^>]*>\\s*)?(?:inline\\s+|static\\s+)*[A-Za-z_][\\w:<>,\\s*&]*?\\b${name}\\s*\\([^;{]*\\)\\s*(?:const\\s*)?\\{`,
+    'gm',
+  );
+  const bodies: string[] = [];
+  for (const { text } of sources) {
+    const code = codeOf(text);
+    for (const match of code.matchAll(head)) {
+      const open = (match.index ?? 0) + match[0].length - 1;
+      let depth = 0;
+      for (let at = open; at < code.length; at++) {
+        if (code[at] === '{') {
+          depth++;
+        } else if (code[at] === '}' && --depth === 0) {
+          bodies.push(code.slice(open, at + 1));
+          break;
+        }
+      }
+    }
+  }
+  return bodies;
+}
+
+const callTo = (names: readonly string[]): RegExp =>
+  new RegExp(`(?<![.>\\w])(?:\\w+::)?(?:${names.join('|')})\\s*\\(`);
+
+/**
+ * Readers classified `refuse` whose body carries no type test: neither a direct
+ * typeOf/Is* test, nor a call to a {@link TYPE_GATE_HELPERS} member, nor a call
+ * to another reader already classified `refuse`. A reader with no definition in
+ * the tree is reported too, so a stale table entry cannot pass by absence.
+ *
+ * Takes its sources so the self-tests can drive this exact function.
+ */
+export function ungatedRefusers(
+  surface: 'node' | 'wasm',
+  sources: readonly ReaderSource[] = readerSources(treeOf(surface)),
+  families: Readonly<Record<string, Family | OutOfScope>> = READER_FAMILIES[surface],
+): string[] {
+  const refusing = Object.keys(families).filter((name) => families[name] === 'refuse');
+  const out: string[] = [];
+  for (const name of refusing) {
+    const bodies = definitionBodies(name, sources);
+    if (bodies.length === 0) {
+      out.push(`${name}: no definition found`);
+      continue;
+    }
+    const others = refusing.filter((other) => other !== name);
+    const delegates = callTo([...TYPE_GATE_HELPERS[surface], ...others]);
+    if (!bodies.some((body) => DIRECT_TYPE_TEST.test(body) || delegates.test(body))) {
+      out.push(`${name}: no type test in its body`);
+    }
+  }
+  return out.sort();
+}
+
+/** {@link TYPE_GATE_HELPERS} members whose own body carries no direct type test. */
+export function ungatedTypeGates(
+  surface: 'node' | 'wasm',
+  sources: readonly ReaderSource[] = readerSources(treeOf(surface)),
+): string[] {
+  return TYPE_GATE_HELPERS[surface]
+    .filter((name) => !definitionBodies(name, sources).some((body) => DIRECT_TYPE_TEST.test(body)))
+    .sort();
 }

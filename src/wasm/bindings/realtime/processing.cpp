@@ -452,9 +452,9 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     // never drifts away from the C/Node/Python bounce normalization target.
     // See SONARE_DEFAULT_BOUNCE_TARGET_LUFS in src/sonare_c_types.h and the
     // sentinel handling in sonare_engine_bounce_offline.
-    // floatOption covers the non-finite half of the sentinel; 0 is the other
-    // half and stays here because only this field spells the default that way.
-    float target_lufs = floatOption(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
+    // A non-finite target is refused (as on Node and Python); 0 is the C ABI's
+    // "use the default" sentinel and stays here.
+    float target_lufs = floatProperty(options_val, "targetLufs", SONARE_DEFAULT_BOUNCE_TARGET_LUFS);
     if (target_lufs == 0.0f) {
       target_lufs = SONARE_DEFAULT_BOUNCE_TARGET_LUFS;
     }
@@ -534,7 +534,7 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   // frozen clip at a large PPQ position to a different sample than the same
   // clip placed via setClips.
   schedule.start_ppq = hasProperty(options_val, "startPpq")
-                           ? objectProperty(options_val, "startPpq").as<double>()
+                           ? numberFromVal(objectProperty(options_val, "startPpq"), "startPpq")
                            : 0.0;
   schedule.clip_offset_samples = 0;
   schedule.length_samples = total_frames;

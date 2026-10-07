@@ -32,8 +32,7 @@ QuantizeConfig quantizeConfigFromVal(const val& config) {
   QuantizeConfig qconfig;
   if (config.isUndefined() || config.isNull()) return qconfig;
   const auto read = [&](const char* key, float& field) {
-    const val value = config[key];
-    if (!value.isUndefined() && !value.isNull()) field = value.as<float>();
+    field = floatProperty(config, key, field);
   };
   read("melDbMin", qconfig.mel_db_min);
   read("melDbMax", qconfig.mel_db_max);

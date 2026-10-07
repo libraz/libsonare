@@ -112,6 +112,7 @@ interface PendingCall {
   intent: VocalUint64;
   baseToken?: VocalStateToken;
   preview: boolean;
+  mutation: boolean;
   session?: VocalEditWorkerSession;
   cancelFlag?: Int32Array;
   signal?: AbortSignal;
@@ -491,6 +492,7 @@ export class VocalEditWorkerClient {
             ? message.baseToken
             : undefined,
         preview: message.type === 'sonare:vocal-preview',
+        mutation: message.type === 'sonare:vocal-mutate',
         session,
         cancelFlag,
         signal: options.signal,
@@ -567,6 +569,16 @@ export class VocalEditWorkerClient {
       sameSessionToken(message.token, pending.baseToken)
     ) {
       pending.session.updateToken(message.token);
+    }
+    // A mutation already ran in the Worker, so its caller gets the actual
+    // outcome; only previews and reads are discarded as superseded.
+    if (pending.mutation) {
+      if (message.type === 'sonare:vocal-error') {
+        pending.reject(workerError(message));
+      } else {
+        pending.resolve({ result: message.result, token: message.token });
+      }
+      return;
     }
     const latest = this.latestIntent.get(pending.sessionId) ?? pending.intent;
     if (compareUint64(pending.intent, latest) < 0) {

@@ -27,7 +27,7 @@ export interface DeclickOptions {
 
 export interface MasteringRepairDeclickRequest extends DeclickOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDeclickStereo`. */
@@ -54,7 +54,7 @@ export function masteringRepairDeclickStereo(
 export function masteringRepairDeclickStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DeclickOptions,
 ): MasteringRepairDeclickStereoResult;
 export function masteringRepairDeclickStereo(
@@ -80,7 +80,7 @@ export function masteringRepairDeclickStereo(
 export function masteringRepairDeclick(request: MasteringRepairDeclickRequest): Float32Array;
 export function masteringRepairDeclick(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DeclickOptions,
 ): Float32Array;
 export function masteringRepairDeclick(
@@ -88,11 +88,12 @@ export function masteringRepairDeclick(
   sampleRate?: number,
   options: DeclickOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDeclick(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDeclick(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /** Options for `masteringRepairDeclip`. */
@@ -105,7 +106,7 @@ export interface DeclipOptions {
 
 export interface MasteringRepairDeclipRequest extends DeclipOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDeclipStereo`. */
@@ -127,7 +128,7 @@ export interface DecrackleOptions {
 
 export interface MasteringRepairDecrackleRequest extends DecrackleOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDecrackleStereo`. */
@@ -151,7 +152,7 @@ export interface MasteringRepairDecrackleStereoRequest extends DecrackleOptions 
 export function masteringRepairDeclip(request: MasteringRepairDeclipRequest): Float32Array;
 export function masteringRepairDeclip(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DeclipOptions,
 ): Float32Array;
 export function masteringRepairDeclip(
@@ -159,11 +160,12 @@ export function masteringRepairDeclip(
   sampleRate?: number,
   options: DeclipOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDeclip(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDeclip(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /**
@@ -183,7 +185,7 @@ export function masteringRepairDeclipStereo(
 export function masteringRepairDeclipStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DeclipOptions,
 ): MasteringRepairDeclipStereoResult;
 export function masteringRepairDeclipStereo(
@@ -209,7 +211,7 @@ export function masteringRepairDeclipStereo(
 export function masteringRepairDecrackle(request: MasteringRepairDecrackleRequest): Float32Array;
 export function masteringRepairDecrackle(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DecrackleOptions,
 ): Float32Array;
 export function masteringRepairDecrackle(
@@ -217,11 +219,12 @@ export function masteringRepairDecrackle(
   sampleRate?: number,
   options: DecrackleOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDecrackle(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDecrackle(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /**
@@ -239,7 +242,7 @@ export function masteringRepairDecrackleStereo(
 export function masteringRepairDecrackleStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DecrackleOptions,
 ): MasteringRepairDecrackleStereoResult;
 export function masteringRepairDecrackleStereo(
@@ -264,19 +267,19 @@ export function masteringRepairDecrackleStereo(
 /** Request form of `masteringRepairDetectClicks`. */
 export interface MasteringRepairDetectClicksRequest extends DeclickOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDetectClipping`. */
 export interface MasteringRepairDetectClippingRequest extends DeclipOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDetectCrackle`. */
 export interface MasteringRepairDetectCrackleRequest extends DecrackleOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /**
@@ -299,7 +302,7 @@ export function masteringRepairDetectClicks(
 ): ClickDetection;
 export function masteringRepairDetectClicks(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DeclickOptions,
 ): ClickDetection;
 export function masteringRepairDetectClicks(
@@ -307,11 +310,12 @@ export function masteringRepairDetectClicks(
   sampleRate?: number,
   options: DeclickOptions = {},
 ): ClickDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDetectClicks(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDetectClicks(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /**
@@ -347,7 +351,7 @@ export function masteringRepairDetectClipping(
 ): ClipDetection;
 export function masteringRepairDetectClipping(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DeclipOptions,
 ): ClipDetection;
 export function masteringRepairDetectClipping(
@@ -355,13 +359,10 @@ export function masteringRepairDetectClipping(
   sampleRate?: number,
   options: DeclipOptions = {},
 ): ClipDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().masteringRepairDetectClipping(
     request.samples,
-    request.sampleRate,
+    request.sampleRate ?? 22050,
     request,
   );
 }
@@ -379,7 +380,7 @@ export function masteringRepairDetectCrackle(
 ): CrackleDetection;
 export function masteringRepairDetectCrackle(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DecrackleOptions,
 ): CrackleDetection;
 export function masteringRepairDetectCrackle(
@@ -387,9 +388,10 @@ export function masteringRepairDetectCrackle(
   sampleRate?: number,
   options: DecrackleOptions = {},
 ): CrackleDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDetectCrackle(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDetectCrackle(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }

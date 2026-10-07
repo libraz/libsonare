@@ -247,32 +247,19 @@ std::vector<int32_t> int32ArrayToVector(val arr);
 std::vector<uint8_t> uint8ArrayToVector(val arr);
 bool hasProperty(val object, const char* key);
 val objectProperty(val object, const char* key);
-/// @brief Presence-checked float reader: an absent field takes @p default_value,
-///        a present one is validated by @ref checkedFloatFromVal.
-/// @details Presence and validity are separate questions, and only the first one
-///          has a default. A present NaN is a caller error rather than a request
-///          to fall back: most options bags here are read straight into a config
-///          struct whose guards are written as `x > lo` or `isfinite(a) && a > b`,
-///          so a NaN lands on the permissive arm and the call returns a plausible
-///          finite result. Use @ref floatOption for the fields whose owner has a
-///          documented "non-finite means unspecified" convention.
-/// @throws SonareException(InvalidParameter) naming @p key.
-float floatProperty(val object, const char* key, float default_value);
 /// @brief Presence- AND type-checked float reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
-///        a JS number.
-/// @details The addon's FloatProperty spelled for this surface, for a field that
-///          is a QUANTITY -- it has no value meaning "unspecified", so omitting
-///          the key is the only way to ask for the default. @ref floatProperty
-///          reaches the same field through val::as<double>(), which COERCES: a
-///          numeric string and a one-element array arrive as the number they
-///          spell and a boolean as 0 or 1, so a caller error becomes a result
-///          indistinguishable from a value the caller chose, and the addon
-///          refuses the very same input. Which of the two a field takes is a
-///          contract decision; that the surfaces answer it differently is not.
-/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
-///         value and for one @ref checkedFloatFromVal refuses.
-float typedFloatProperty(val object, const char* key, float default_value);
+///        a JS number validated by @ref checkedFloatFromVal.
+/// @details Presence and validity are separate questions, and only the first one
+///          has a default. A present NaN, numeric string or boolean is a caller
+///          error rather than a request to fall back: val::as<double>() would
+///          coerce the last two into a number nobody wrote, and a NaN lands on
+///          the permissive arm of the `x > lo` guards most config structs use.
+///          Use @ref floatOption for the fields whose owner documents
+///          "non-finite means unspecified". Every property reader below shares
+///          this contract: absent is the only way to ask for the default.
+/// @throws SonareException(InvalidParameter) naming @p key.
+float floatProperty(val object, const char* key, float default_value);
 /// @brief Fallback float reader: a field that is absent, or present but not a
 ///        finite number, takes @p default_value. A wrong-typed value, and a
 ///        finite value outside the 32-bit float range, are refused rather than
@@ -310,22 +297,15 @@ void requireIntegral(double number, const char* key);
 ///          driving the embind classes directly.
 /// @throws SonareException(InvalidParameter) naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
-int intProperty(val object, const char* key, int default_value);
 /// @brief Presence- AND type-checked int reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number.
-/// @details The addon's IntProperty spelled for this surface, and @ref
-///          typedFloatProperty's integer sibling: for a COUNT or a SIZE, which
-///          has no value meaning "unspecified", so omitting the key is the only
-///          way to ask for the default. @ref intProperty reaches the same field
-///          through val::as<double>(), which COERCES, so `'1024'` and `[1024]`
-///          arrive as 1024 and `true` as 1 -- a caller error that lands inside
-///          the field's own domain, where no later range check can see it. The
-///          narrowing is unchanged: a present number still goes through @ref
-///          checkedIntFromVal, so out-of-range and fractional stay refused.
+/// @details @ref floatProperty's integer sibling, for a COUNT or a SIZE. A
+///          present number still goes through @ref checkedIntFromVal, so
+///          out-of-range and fractional stay refused.
 /// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
 ///         value and for one @ref checkedIntFromVal refuses.
-int typedIntProperty(val object, const char* key, int default_value);
+int intProperty(val object, const char* key, int default_value);
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands
@@ -386,23 +366,21 @@ float checkedFloatFromVal(const val& value, const char* key);
 ///          what a field added to one of those bags inherits.
 /// @throws SonareException(InvalidParameter) naming @p key.
 double checkedDoubleFromVal(const val& value, const char* key);
-/// @brief Presence-checked double reader: an absent field takes @p default_value,
-///        a present one is validated by @ref checkedDoubleFromVal.
-double doubleProperty(val object, const char* key, double default_value);
+/// @brief Reads a JS number as a double, refusing every other JS type.
+/// @details val::as<double>() accepts a boolean as 0 or 1, so a caller error would
+///          arrive as a value; every checked narrowing above starts here.
+/// @throws SonareException(InvalidParameter) naming @p key.
+double numberFromVal(const val& value, const char* key);
 /// @brief Presence- AND type-checked double reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS number.
-/// @details @ref typedFloatProperty's full-width sibling, for a field the C ABI
-///          declares as a double. @ref doubleProperty reaches the same field
-///          through val::as<double>(), which COERCES, so a numeric string
-///          arrives as the number it spells and the addon refuses the very same
-///          input. It carries no range check because a double IS what a JS
-///          number is -- there is nothing to narrow to, which is why
-///          @ref typedFloatProperty's 32-bit bound has no counterpart here.
-///          That absence is the type's, not an omission to copy forward.
+/// @details @ref floatProperty's full-width sibling, for a field the C ABI
+///          declares as a double. It carries no range check because a double IS
+///          what a JS number is, which is why @ref floatProperty's 32-bit bound
+///          has no counterpart here.
 /// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
 ///         value and for a non-finite one.
-double typedDoubleProperty(val object, const char* key, double default_value);
+double doubleProperty(val object, const char* key, double default_value);
 /// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
 ///        number to its @ref SonareSynthWaveform ordinal.
 /// @details Both spellings reach the same rejection naming the accepted set.
@@ -413,38 +391,33 @@ double typedDoubleProperty(val object, const char* key, double default_value);
 ///          for an int, so this is a domain check, not a narrowing check.
 /// @throws SonareException(InvalidParameter) for any value outside the set.
 int builtinWaveformFromVal(const val& value);
-bool boolProperty(val object, const char* key, bool default_value);
 /// @brief Presence- AND type-checked bool reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
 ///        a JS boolean.
-/// @details The addon's BoolProperty spelled for this surface, for a FLAG, whose
-///          two values are the whole domain -- there is no third one meaning
-///          "unspecified". @ref boolProperty reaches the same field through
-///          val::as<bool>(), which applies JS truthiness, so `'false'`, `[]` and
-///          `0` all arrive as a flag the caller never wrote and every one of them
-///          is a legal flag downstream. There is no narrowing to keep: a JS
-///          boolean is already the value, so the type test is the whole check.
+/// @details For a FLAG, whose two values are the whole domain. val::as<bool>()
+///          applies JS truthiness, so `'false'`, `[]` and `0` would each arrive
+///          as a flag the caller never wrote; the type test is the whole check.
 /// @throws SonareException(InvalidParameter) naming @p key.
-bool typedBoolProperty(val object, const char* key, bool default_value);
+bool boolProperty(val object, const char* key, bool default_value);
 /// @brief Reads the GS insertion-effect realisation ("modern" or "classic") as
 ///        its C ABI ordinal (0 or 1): absent, `undefined` or `null` is modern.
 /// @throws SonareException(InvalidParameter) naming @p key for a non-string or
 ///         any other name.
 int gsEfxRealizationProperty(val object, const char* key);
+/// @brief String reader: absent, `undefined` or `null` takes @p default_value, a
+///        present one must be a JS string.
+/// @throws SonareException(InvalidParameter) naming @p key.
 std::string stringProperty(val object, const char* key, const std::string& default_value);
-/// @brief Type-checked optional reader: returns the numeric value only when @p v
-/// is present (not undefined/null) and is a JS number, otherwise std::nullopt.
-/// Unlike floatProperty (presence-checked with fallback), a present-but-wrong-type
-/// value yields nullopt so the caller skips the assignment instead of coercing.
-/// @details A present number narrows through @ref checkedFloatFromVal. A wrong
-///          type is absent; a number float cannot hold is wrong, and reading it
-///          raw made it an infinity indistinguishable from a requested one.
-/// @throws SonareException(InvalidParameter) naming @p key when @p v is a number
-///         outside the 32-bit float range.
+/// @brief Optional number reader: std::nullopt only when @p v is undefined or
+///        null, so the caller skips the assignment.
+/// @details A present number narrows through @ref checkedFloatFromVal.
+/// @throws SonareException(InvalidParameter) naming @p key when @p v is not a
+///         number, or is one the 32-bit float cannot hold.
 std::optional<float> optionalNumber(const val& v, const char* key);
-/// @brief Boolean sibling of optionalNumber: returns the value only when @p v is
-/// present and a JS boolean, otherwise std::nullopt.
-std::optional<bool> optionalBool(const val& v);
+/// @brief Boolean sibling of optionalNumber.
+/// @throws SonareException(InvalidParameter) naming @p key when @p v is present
+///         and not a JS boolean.
+std::optional<bool> optionalBool(const val& v, const char* key);
 /// Invokes a JS cancellation callback and returns true only when it returns the
 /// literal boolean true. Undefined and all other values leave the operation running.
 bool cancelCallbackRequested(const val& callback);
@@ -472,8 +445,8 @@ void requireOrdinalInRange(int value, int min, int max, const char* subject);
 /// @brief Reads a REQUIRED field of exactly type T: throws InvalidParameter
 /// naming @p subject and @p key if the field is absent, null, or not the
 /// expected JS type (a non-bool T additionally requires a finite number).
-/// Unlike floatProperty/intProperty/boolProperty (presence-checked with a
-/// silent default), this never substitutes a value for a missing or
+/// Unlike floatProperty/intProperty/boolProperty (which take a default for an
+/// absent field), this never substitutes a value for a missing or
 /// malformed field. Use for POD-shaped inputs where every field is mandatory
 /// (e.g. the AudioWorklet's flat voice-changer config), so a partial object
 /// is rejected instead of zero-filled — a missing boolean silently read as

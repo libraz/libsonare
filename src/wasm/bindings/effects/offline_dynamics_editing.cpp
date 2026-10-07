@@ -92,13 +92,12 @@ val js_mastering_dynamics_compressor(val samples, const val& sample_rate_val, va
     if (hasProperty(options, "makeupGainDb")) {
       cfg.makeup_gain_db = checkedFloatFromVal(options["makeupGainDb"], "makeupGainDb");
     }
-    if (hasProperty(options, "autoMakeup")) cfg.auto_makeup = options["autoMakeup"].as<bool>();
+    cfg.auto_makeup = boolProperty(options, "autoMakeup", cfg.auto_makeup);
     if (hasProperty(options, "detector")) {
       cfg.detector = parseCompressorDetector(options["detector"], cfg.detector);
     }
-    if (hasProperty(options, "sidechainHpfEnabled")) {
-      cfg.sidechain_hpf_enabled = options["sidechainHpfEnabled"].as<bool>();
-    }
+    cfg.sidechain_hpf_enabled =
+        boolProperty(options, "sidechainHpfEnabled", cfg.sidechain_hpf_enabled);
     if (hasProperty(options, "sidechainHpfHz")) {
       cfg.sidechain_hpf_hz = checkedFloatFromVal(options["sidechainHpfHz"], "sidechainHpfHz");
     }

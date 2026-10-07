@@ -17,11 +17,11 @@ void ProjectWasm::setMidiEvents(const val& clip_id_val, val events) {
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
     if (val::global("Array").call<bool>("isArray", entry)) {
-      pods[i].ppq = entry[0].as<double>();
+      pods[i].ppq = numberFromVal(entry[0], "ppq");
       pods[i].data0 = checkedWordFromVal(entry[1], "data0");
       pods[i].data1 = checkedWordFromVal(entry[2], "data1");
     } else {
-      pods[i].ppq = entry["ppq"].as<double>();
+      pods[i].ppq = numberFromVal(entry["ppq"], "ppq");
       pods[i].data0 = checkedWordFromVal(entry["data0"], "data0");
       pods[i].data1 = wordProperty(entry, "data1", 0);
     }
@@ -332,7 +332,7 @@ val js_midi_bank_program(double ppq, const val& group_val, const val& channel_va
 
 SonareMidiEventPod js_midi_event_from_val(val event) {
   SonareMidiEventPod out{};
-  out.ppq = event["ppq"].as<double>();
+  out.ppq = numberFromVal(event["ppq"], "ppq");
   out.data0 = checkedWordFromVal(event["data0"], "data0");
   out.data1 = wordProperty(event, "data1", 0);
   return out;
@@ -355,8 +355,8 @@ SonareMidiCcBinding js_cc_binding_from_val(val object) {
   out.selector_msb = byteProperty(object, "selectorMsb", 0u);
   out.selector_lsb = byteProperty(object, "selectorLsb", 0u);
   out.param_id = checkedUintFromVal(object["paramId"], "paramId");
-  out.min_value = hasProperty(object, "minValue") ? object["minValue"].as<float>() : 0.0f;
-  out.max_value = hasProperty(object, "maxValue") ? object["maxValue"].as<float>() : 1.0f;
+  out.min_value = floatProperty(object, "minValue", 0.0f);
+  out.max_value = floatProperty(object, "maxValue", 1.0f);
   return out;
 }
 
@@ -456,7 +456,7 @@ val js_midi_route_events(val events, val config) {
   std::vector<SonareMidiEventPod> input(count);
   for (size_t i = 0; i < count; ++i) {
     val entry = events[i];
-    input[i].ppq = entry["ppq"].as<double>();
+    input[i].ppq = numberFromVal(entry["ppq"], "ppq");
     input[i].data0 = checkedWordFromVal(entry["data0"], "data0");
     input[i].data1 = wordProperty(entry, "data1", 0);
   }
@@ -471,7 +471,7 @@ val js_midi_route_events(val events, val config) {
     route.filter_channel = intProperty(config, "filterChannel", -1);
     route.remap_channel = intProperty(config, "remapChannel", -1);
     if (hasProperty(config, "thru")) {
-      route.thru = config["thru"].as<bool>() ? 1 : 0;
+      route.thru = boolProperty(config, "thru", false) ? 1 : 0;
     }
   }
 

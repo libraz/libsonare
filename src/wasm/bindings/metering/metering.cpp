@@ -361,9 +361,8 @@ val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
       }
       if (n > 0) cfg.n_fft = n;
     }
-    if (hasProperty(options, "applyOctaveSmoothing")) {
-      cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
-    }
+    cfg.apply_octave_smoothing =
+        boolProperty(options, "applyOctaveSmoothing", cfg.apply_octave_smoothing);
     if (hasProperty(options, "octaveFraction")) {
       const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
@@ -373,12 +372,14 @@ val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
       if (f > 0) cfg.octave_fraction = f;
     }
     if (hasProperty(options, "dbRef")) {
-      cfg.db_ref = sonare::ZeroIsDefault(options["dbRef"].as<float>())
-                       .checked_non_negative(cfg.db_ref, "meteringSpectrum: dbRef");
+      cfg.db_ref =
+          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbRef"], "dbRef")))
+              .checked_non_negative(cfg.db_ref, "meteringSpectrum: dbRef");
     }
     if (hasProperty(options, "dbAmin")) {
-      cfg.db_amin = sonare::ZeroIsDefault(options["dbAmin"].as<float>())
-                        .checked_non_negative(cfg.db_amin, "meteringSpectrum: dbAmin");
+      cfg.db_amin =
+          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbAmin"], "dbAmin")))
+              .checked_non_negative(cfg.db_amin, "meteringSpectrum: dbAmin");
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
@@ -425,9 +426,8 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
       }
       if (n > 0) cfg.n_fft = n;
     }
-    if (hasProperty(options, "applyOctaveSmoothing")) {
-      cfg.apply_octave_smoothing = options["applyOctaveSmoothing"].as<bool>();
-    }
+    cfg.apply_octave_smoothing =
+        boolProperty(options, "applyOctaveSmoothing", cfg.apply_octave_smoothing);
     if (hasProperty(options, "octaveFraction")) {
       const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
@@ -437,12 +437,14 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
       if (f > 0) cfg.octave_fraction = f;
     }
     if (hasProperty(options, "dbRef")) {
-      cfg.db_ref = sonare::ZeroIsDefault(options["dbRef"].as<float>())
-                       .checked_non_negative(cfg.db_ref, "meteringSpectrumFrame: dbRef");
+      cfg.db_ref =
+          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbRef"], "dbRef")))
+              .checked_non_negative(cfg.db_ref, "meteringSpectrumFrame: dbRef");
     }
     if (hasProperty(options, "dbAmin")) {
-      cfg.db_amin = sonare::ZeroIsDefault(options["dbAmin"].as<float>())
-                        .checked_non_negative(cfg.db_amin, "meteringSpectrumFrame: dbAmin");
+      cfg.db_amin =
+          sonare::ZeroIsDefault(static_cast<float>(numberFromVal(options["dbAmin"], "dbAmin")))
+              .checked_non_negative(cfg.db_amin, "meteringSpectrumFrame: dbAmin");
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {

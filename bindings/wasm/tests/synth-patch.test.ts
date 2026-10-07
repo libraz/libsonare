@@ -203,6 +203,24 @@ describe('Sonare WASM NativeSynth', () => {
     expect(() => synthPatchRoundTripForTest(true as unknown as SynthPatch)).toThrow(/synth patch/);
   });
 
+  it('reads a null enum field as absent and refuses a wrong type by name', () => {
+    // The reader family's contract: only undefined/null take the default.
+    const base = synthPatchRoundTripForTest({});
+    const fields = [
+      ['engineMode', 'synth engine mode'],
+      ['waveform', 'oscillator waveform'],
+      ['filterModel', 'filter model'],
+      ['filterOutput', 'filter output'],
+    ] as const;
+    for (const [field, label] of fields) {
+      const absent = synthPatchRoundTripForTest({ [field]: null } as unknown as SynthPatch);
+      expect(absent[field], field).toBe(base[field]);
+      expect(() => synthPatchRoundTripForTest({ [field]: true } as unknown as SynthPatch)).toThrow(
+        label,
+      );
+    }
+  });
+
   it('rejects a non-number, non-string enum field instead of coercing it', () => {
     // A boolean (or any non-number/non-string) for an enum field must throw,
     // matching the Node addon's enum reader, rather than silently coercing

@@ -23,7 +23,7 @@ export interface TrimSilenceOptions {
 
 export interface MasteringRepairTrimSilenceRequest extends TrimSilenceOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairTrimSilenceStereo`. */
@@ -39,7 +39,7 @@ export function masteringRepairTrimSilence(
 ): Float32Array;
 export function masteringRepairTrimSilence(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: TrimSilenceOptions,
 ): Float32Array;
 export function masteringRepairTrimSilence(
@@ -47,11 +47,12 @@ export function masteringRepairTrimSilence(
   sampleRate?: number,
   options: TrimSilenceOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairTrimSilence(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairTrimSilence(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /**
@@ -107,7 +108,7 @@ export function masteringRepairTrimSilenceStereo(
 export function masteringRepairTrimSilenceStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: TrimSilenceOptions,
 ): MasteringRepairTrimSilenceStereoResult;
 export function masteringRepairTrimSilenceStereo(
@@ -132,7 +133,7 @@ export function masteringRepairTrimSilenceStereo(
 /** Request form of `masteringRepairDetectTrimRange`. */
 export interface MasteringRepairDetectTrimRangeRequest extends TrimSilenceOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDetectTrimRangeStereo`. */
@@ -160,7 +161,7 @@ export function masteringRepairDetectTrimRange(
 ): TrimRange;
 export function masteringRepairDetectTrimRange(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: TrimSilenceOptions,
 ): TrimRange;
 export function masteringRepairDetectTrimRange(
@@ -168,13 +169,10 @@ export function masteringRepairDetectTrimRange(
   sampleRate?: number,
   options: TrimSilenceOptions = {},
 ): TrimRange {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().masteringRepairDetectTrimRange(
     request.samples,
-    request.sampleRate,
+    request.sampleRate ?? 22050,
     request,
   );
 }
@@ -203,7 +201,7 @@ export function masteringRepairDetectTrimRangeStereo(
 export function masteringRepairDetectTrimRangeStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: TrimSilenceOptions,
 ): TrimRange;
 export function masteringRepairDetectTrimRangeStereo(

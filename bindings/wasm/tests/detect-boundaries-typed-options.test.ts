@@ -106,16 +106,14 @@ describe('detectBoundaries wrong-typed options', () => {
     }
   });
 
-  it('leaves an untouched facade on the coercing readers', () => {
-    // The control for the claim above: this change moved ten fields, not the
-    // reader family's behaviour. `pcen` still reads its options through the
-    // presence-checked readers, so the same numeric string is still accepted
-    // there -- which is what `detectBoundaries` did before.
+  it('applies the same type check to every facade reading an options bag', () => {
+    // `pcen` reads its options through the shared property readers, so a numeric
+    // string is refused there as well.
     const bins = 4;
     const frames = 8;
     const matrix = new Float32Array(bins * frames).fill(0.25);
     expect(module.pcen(matrix, bins, frames, { sampleRate: 22050 }).length).toBe(bins * frames);
-    expect(module.pcen(matrix, bins, frames, { sampleRate: '22050' }).length).toBe(bins * frames);
-    expect(module.pcen(matrix, bins, frames, { hopLength: '512' }).length).toBe(bins * frames);
+    expect(() => module.pcen(matrix, bins, frames, { sampleRate: '22050' })).toThrow();
+    expect(() => module.pcen(matrix, bins, frames, { hopLength: '512' })).toThrow();
   });
 });

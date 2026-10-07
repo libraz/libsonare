@@ -343,10 +343,27 @@ void checkOneShotSetter(SonareError err, const char* what) {
 
 val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_val, val options) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  if (!options.isUndefined() && !options.isNull() &&
+      options.typeOf().as<std::string>() != "object") {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "options must be an object");
+  }
   // require_non_zero defaults to true: mixStereo has no meaning over zero
   // input channels, so requireMatchedLength rejects that itself now.
   const int count =
       requireMatchedLength(left_channels, right_channels, "leftChannels and rightChannels");
+  // A per-strip array may be shorter than the strip list (the rest keep their
+  // defaults) but never longer: the surplus entries would belong to no strip.
+  for (const char* key : {"inputTrimDb", "faderDb", "pan", "panMode", "width", "muted"}) {
+    if (!hasProperty(options, key)) continue;
+    const val value = options[key];
+    if (val::global("Array").call<bool>("isArray", value) &&
+        wasmArrayLikeLength(value, key) > static_cast<std::size_t>(count)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    std::string("mixStereo: '") + key +
+                                        "' has more entries than strips (" + std::to_string(count) +
+                                        ")");
+    }
+  }
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;
@@ -433,7 +450,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
       if (auto v = optionalNumberAt(options, "width", index)) {
         checkOneShotSetter(sonare_strip_set_width(strip, *v), "failed to set width");
       }
-      if (auto v = optionalBool(optionAt(options, "muted", index))) {
+      if (auto v = optionalBool(optionAt(options, "muted", index), "muted")) {
         checkOneShotSetter(sonare_strip_set_muted(strip, *v ? 1 : 0), "failed to set mute");
       }
 
@@ -495,7 +512,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     if (auto v = optionalNumberAt(options, "width", index)) {
       strip.set_width(*v);
     }
-    if (auto v = optionalBool(optionAt(options, "muted", index))) {
+    if (auto v = optionalBool(optionAt(options, "muted", index), "muted")) {
       strip.set_muted(*v);
     }
 

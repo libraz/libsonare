@@ -186,7 +186,7 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   ids.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) {
     val marker = markers[i];
-    const double ppq = objectProperty(marker, "ppq").as<double>();
+    const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
     if (!std::isfinite(ppq) || ppq < 0.0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "setMarkers: marker ppq must be finite and non-negative");
@@ -307,9 +307,10 @@ void RealtimeEngineWasm::setMetronome(val config) {
   // clickSeconds is optional: a value > 0 overrides the engine's 2 ms default
   // click length (parity with the C-ABI/Python/Node click_seconds field). A
   // missing or 0 value leaves the struct default in place.
-  const double click_seconds = hasProperty(config, "clickSeconds")
-                                   ? objectProperty(config, "clickSeconds").as<double>()
-                                   : 0.0;
+  const double click_seconds =
+      hasProperty(config, "clickSeconds")
+          ? numberFromVal(objectProperty(config, "clickSeconds"), "clickSeconds")
+          : 0.0;
   if (!std::isfinite(click_seconds) || click_seconds < 0.0 ||
       click_seconds > sonare::engine::kMaxMetronomeClickSeconds) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

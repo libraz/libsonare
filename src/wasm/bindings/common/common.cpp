@@ -368,14 +368,9 @@ val objectProperty(val object, const char* key) {
   return object[key];
 }
 
-float floatProperty(val object, const char* key, float default_value) {
-  val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
-}
-
 namespace {
 
-// The typed readers' shared half: undefined or null reads as absent (returned
+// The property readers' shared half: undefined or null reads as absent (returned
 // as undefined), and any JS type other than @p type is refused by name.
 val typedPropertyValue(const val& object, const char* key, const char* type) {
   val value = objectProperty(object, key);
@@ -388,7 +383,14 @@ val typedPropertyValue(const val& object, const char* key, const char* type) {
 
 }  // namespace
 
-float typedFloatProperty(val object, const char* key, float default_value) {
+double numberFromVal(const val& value, const char* key) {
+  if (value.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+  }
+  return value.as<double>();
+}
+
+float floatProperty(val object, const char* key, float default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedFloatFromVal(value, key);
 }
@@ -407,7 +409,7 @@ float floatOption(val object, const char* key, float default_value) {
   // Read as double, because as<float>() turns a finite value the float cannot
   // hold into an infinity, which then takes the substitution below -- the field
   // beside this one refuses that same value by name.
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
     throw SonareException(
@@ -432,7 +434,7 @@ namespace {
 // The unsigned narrowings share a [0, max] range on top of that, so they share
 // the whole body and pass their own bound.
 double checkedUnsignedNumber(const val& value, const char* key, double max) {
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < 0.0 || number > max) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a finite number within [0, " +
@@ -453,7 +455,7 @@ int checkedIntFromVal(const val& value, const char* key) {
   // and the existing guards reject them. Rejecting here is what makes the two
   // agree; widening the positional path to match the saturating one would look
   // consistent and remove the only range check this surface has.
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
       number > static_cast<double>(std::numeric_limits<int>::max())) {
     throw SonareException(
@@ -465,11 +467,6 @@ int checkedIntFromVal(const val& value, const char* key) {
 }
 
 int intProperty(val object, const char* key, int default_value) {
-  val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
-}
-
-int typedIntProperty(val object, const char* key, int default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedIntFromVal(value, key);
 }
@@ -480,14 +477,14 @@ uint32_t checkedUintFromVal(const val& value, const char* key) {
 }
 
 uint32_t uintProperty(val object, const char* key, uint32_t default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedUintFromVal(value, key);
 }
 
 uint32_t checkedWordFromVal(const val& value, const char* key) {
   static constexpr double kSignedMin = -2147483648.0;   // -2^31
   static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a finite 32-bit word value");
@@ -498,7 +495,7 @@ uint32_t checkedWordFromVal(const val& value, const char* key) {
 }
 
 uint32_t wordProperty(val object, const char* key, uint32_t default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedWordFromVal(value, key);
 }
 
@@ -508,7 +505,7 @@ uint8_t checkedByteFromVal(const val& value, const char* key) {
 }
 
 uint8_t byteProperty(val object, const char* key, uint8_t default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedByteFromVal(value, key);
 }
 
@@ -517,7 +514,7 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
   // representable as a double, and converting it rounds the bound up past the
   // values it is meant to exclude.
   static constexpr double kUpperBound = 9223372036854775808.0;  // 2^63
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < -kUpperBound || number >= kUpperBound) {
     throw SonareException(
         ErrorCode::InvalidParameter,
@@ -545,7 +542,7 @@ uint64_t checkedDecimalUint64FromVal(const val& value, const char* key) {
 }
 
 uint64_t decimalUint64Property(val object, const char* key, uint64_t default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "string");
   return value.isUndefined() ? default_value : checkedDecimalUint64FromVal(value, key);
 }
 
@@ -554,12 +551,12 @@ int64_t renderFrameFromVal(const val& value) {
 }
 
 int64_t int64Property(val object, const char* key, int64_t default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedInt64FromVal(value, key);
 }
 
 float checkedFloatFromVal(const val& value, const char* key) {
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number) ||
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
     throw SonareException(
@@ -574,7 +571,7 @@ double checkedDoubleFromVal(const val& value, const char* key) {
   // is the whole check. Every field reading through this today is also checked
   // by the site that reads it; the check is here so a field added to one of
   // those bags is covered without someone having to repeat it.
-  const double number = value.as<double>();
+  const double number = numberFromVal(value, key);
   if (!std::isfinite(number)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a finite number");
@@ -583,11 +580,6 @@ double checkedDoubleFromVal(const val& value, const char* key) {
 }
 
 double doubleProperty(val object, const char* key, double default_value) {
-  val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);
-}
-
-double typedDoubleProperty(val object, const char* key, double default_value) {
   val value = typedPropertyValue(object, key, "number");
   return value.isUndefined() ? default_value : checkedDoubleFromVal(value, key);
 }
@@ -624,11 +616,6 @@ int builtinWaveformFromVal(const val& value) {
 }
 
 bool boolProperty(val object, const char* key, bool default_value) {
-  val value = objectProperty(object, key);
-  return value.isUndefined() ? default_value : value.as<bool>();
-}
-
-bool typedBoolProperty(val object, const char* key, bool default_value) {
   val value = typedPropertyValue(object, key, "boolean");
   return value.isUndefined() ? default_value : value.as<bool>();
 }
@@ -644,20 +631,22 @@ int gsEfxRealizationProperty(val object, const char* key) {
 }
 
 std::string stringProperty(val object, const char* key, const std::string& default_value) {
-  val value = objectProperty(object, key);
+  val value = typedPropertyValue(object, key, "string");
   return value.isUndefined() ? default_value : value.as<std::string>();
 }
 
 std::optional<float> optionalNumber(const val& v, const char* key) {
-  if (v.isUndefined() || v.isNull() || v.typeOf().as<std::string>() != "number") {
-    return std::nullopt;
+  if (v.isUndefined() || v.isNull()) return std::nullopt;
+  if (v.typeOf().as<std::string>() != "number") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
   }
   return checkedFloatFromVal(v, key);
 }
 
-std::optional<bool> optionalBool(const val& v) {
-  if (v.isUndefined() || v.isNull() || v.typeOf().as<std::string>() != "boolean") {
-    return std::nullopt;
+std::optional<bool> optionalBool(const val& v, const char* key) {
+  if (v.isUndefined() || v.isNull()) return std::nullopt;
+  if (v.typeOf().as<std::string>() != "boolean") {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a boolean");
   }
   return v.as<bool>();
 }

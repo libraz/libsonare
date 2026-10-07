@@ -469,6 +469,21 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
     }
   });
 
+  it('settles every pipelined mutation with its own outcome', async () => {
+    const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
+    try {
+      const session = await client.create({ samples: new Float32Array([0]), sampleRate: 16000 });
+      await session.beginEdit();
+      const first = session.apply({ expectedGeneration: '0', operations: [] });
+      const second = session.apply({ expectedGeneration: '1', operations: [] });
+      const settled = await Promise.allSettled([first.result, second.result]);
+      expect(settled.map((outcome) => outcome.status)).toEqual(['fulfilled', 'fulfilled']);
+      expect(session.token().generation).toBe('2');
+    } finally {
+      client.dispose();
+    }
+  });
+
   it('renders the post-mutation state for a preview pipelined behind an apply', async () => {
     const client = new VocalEditWorkerClient({ worker: new BridgeWorker() });
     try {
@@ -476,12 +491,14 @@ describe('vocal edit Worker client pipelining and failure paths', () => {
       await session.beginEdit();
       const apply = session.apply({ expectedGeneration: '0', operations: [] });
       const applyOutcome = apply.result.then(
-        () => undefined,
+        (value) => value,
         (error: unknown) => error,
       );
       const preview = await session.preview({ requestId: '3' });
       expect(preview.token.generation).toBe('1');
-      expect(await applyOutcome).toMatchObject({ name: 'StaleResultError' });
+      // The apply ran in the Worker, so its task settles with that outcome
+      // even though the preview queued behind it is the newer intent.
+      expect(await applyOutcome).toMatchObject({ token: { generation: '1' } });
       expect(session.token().generation).toBe('1');
     } finally {
       client.dispose();

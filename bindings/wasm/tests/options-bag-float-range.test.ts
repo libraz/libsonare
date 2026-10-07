@@ -188,22 +188,15 @@ describe('floatProperty refuses a finite value wider than a float', () => {
     }
   });
 
-  it('coerces a non-number rather than type-checking it, unlike floatOption', () => {
-    // Recorded, not endorsed: floatProperty has no type check, so a string, an
-    // array and a boolean are coerced by val::as<double>() while `{}` becomes
-    // NaN and is refused. floatOption refuses all four by name. The sibling Node
-    // reader refuses all four too, so this is where the surfaces still part
-    // company on a numeric string. This assertion exists so a change to either
-    // reader shows up here rather than passing unnoticed.
-    const omitted = Array.from(pcenWith());
-    expect(Array.from(pcenWith('0.8'))).toEqual(Array.from(pcenWith(0.8)));
-    expect(Array.from(pcenWith([0.8]))).toEqual(Array.from(pcenWith(0.8)));
-    expect(Array.from(pcenWith(true))).toEqual(Array.from(pcenWith(1)));
-    expect(Array.from(pcenWith('0.8'))).not.toEqual(omitted);
-    expectRangeRefusal(
-      capture(() => pcenWith({})),
-      'gain',
-    );
+  it('refuses a non-number by name, as floatOption does', () => {
+    // A string, an array and a boolean are the shapes val::as<double>() would
+    // coerce into a number nobody wrote; none reaches the narrowing.
+    for (const value of ['0.8', [0.8], true, {}]) {
+      const caught = capture(() => pcenWith(value));
+      expect(isSonareError(caught), `gain ${JSON.stringify(value)}`).toBe(true);
+      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+      expect((caught as SonareError).message).toBe('gain must be a number');
+    }
   });
 });
 

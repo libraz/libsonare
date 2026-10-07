@@ -33,7 +33,7 @@ export interface DereverbClassicalOptions {
 
 export interface MasteringRepairDereverbClassicalRequest extends DereverbClassicalOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDereverbClassicalStereo`. */
@@ -62,7 +62,7 @@ export function masteringRepairDereverbClassical(
 ): Float32Array;
 export function masteringRepairDereverbClassical(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DereverbClassicalOptions,
 ): Float32Array;
 export function masteringRepairDereverbClassical(
@@ -70,13 +70,10 @@ export function masteringRepairDereverbClassical(
   sampleRate?: number,
   options: DereverbClassicalOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().masteringRepairDereverbClassical(
     request.samples,
-    request.sampleRate,
+    request.sampleRate ?? 22050,
     request,
   );
 }
@@ -122,7 +119,7 @@ export function masteringRepairDereverbClassicalStereo(
 export function masteringRepairDereverbClassicalStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DereverbClassicalOptions,
 ): MasteringRepairDereverbClassicalStereoResult;
 export function masteringRepairDereverbClassicalStereo(
@@ -185,7 +182,7 @@ export function masteringRepairDereverbClassicalLinked(
 ): MasteringRepairDereverbClassicalLinkedResult;
 export function masteringRepairDereverbClassicalLinked(
   channels: Float32Array[],
-  sampleRate: number,
+  sampleRate?: number,
   config?: DereverbClassicalOptions,
 ): MasteringRepairDereverbClassicalLinkedResult;
 export function masteringRepairDereverbClassicalLinked(
@@ -256,14 +253,20 @@ export function masteringRepairDereverbConfigForRoom(
   estimate: RoomEstimateResult | MasteringRepairDereverbConfigForRoomRequest,
   config: DereverbClassicalOptions = {},
 ): Required<DereverbClassicalOptions> {
-  const request = 'estimate' in estimate ? estimate : { estimate, ...config };
+  const request =
+    typeof estimate === 'object' && estimate !== null && 'estimate' in estimate
+      ? estimate
+      : { estimate, ...config };
+  if (typeof request.estimate !== 'object' || request.estimate === null) {
+    throw new TypeError('masteringRepairDereverbConfigForRoom: estimate must be a room estimate');
+  }
   return requireModule().masteringRepairDereverbConfigForRoom(request.estimate, request);
 }
 
 /** Request form of `masteringRepairDetectReverb`. */
 export interface MasteringRepairDetectReverbRequest extends DereverbClassicalOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /**
@@ -284,7 +287,7 @@ export function masteringRepairDetectReverb(
 ): ReverbDetection;
 export function masteringRepairDetectReverb(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DereverbClassicalOptions,
 ): ReverbDetection;
 export function masteringRepairDetectReverb(
@@ -292,9 +295,10 @@ export function masteringRepairDetectReverb(
   sampleRate?: number,
   options: DereverbClassicalOptions = {},
 ): ReverbDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDetectReverb(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDetectReverb(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }

@@ -27,8 +27,8 @@ void ProjectWasm::annotateKeys(val keys) {
     for (size_t i = 0; i < count; ++i) {
       val entry = keys[i];
       SonareProjectKeySegment seg{};
-      seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
-      seg.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
+      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+      seg.end_ppq = doubleProperty(entry, "endPpq", 0.0);
       seg.tonic_pc = uintProperty(entry, "tonicPc", 255u);
       seg.mode = uintProperty(entry, "mode", 0u);
       segments.push_back(seg);
@@ -55,14 +55,12 @@ void ProjectWasm::annotateChords(val chords) {
     for (size_t i = 0; i < count; ++i) {
       val entry = chords[i];
       SonareProjectChordSymbol sym{};
-      sym.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
-      sym.end_ppq = hasProperty(entry, "endPpq") ? entry["endPpq"].as<double>() : 0.0;
+      sym.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+      sym.end_ppq = doubleProperty(entry, "endPpq", 0.0);
       sym.root_pc = uintProperty(entry, "rootPc", 255u);
       sym.quality = uintProperty(entry, "quality", 0u);
       sym.slash_bass_pc = uintProperty(entry, "slashBassPc", 255u);
-      sym.modulation_boundary =
-          hasProperty(entry, "modulationBoundary") && entry["modulationBoundary"].as<bool>() ? 1
-                                                                                             : 0;
+      sym.modulation_boundary = boolProperty(entry, "modulationBoundary", false) ? 1 : 0;
       std::vector<uint8_t> exts;
       if (hasProperty(entry, "extensions")) {
         val ext_arr = entry["extensions"];
@@ -77,9 +75,7 @@ void ProjectWasm::annotateChords(val chords) {
       ext_storage.push_back(std::move(exts));
       sym.extensions = ext_storage.back().empty() ? nullptr : ext_storage.back().data();
       sym.extension_count = ext_storage.back().size();
-      roman_storage.push_back(hasProperty(entry, "romanNumeral")
-                                  ? entry["romanNumeral"].as<std::string>()
-                                  : std::string());
+      roman_storage.push_back(stringProperty(entry, "romanNumeral", std::string()));
       sym.roman_numeral = roman_storage.back().empty() ? nullptr : roman_storage.back().c_str();
       symbols.push_back(sym);
     }
@@ -178,7 +174,7 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", 0));
   desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", 0));
   desc.key_minor = static_cast<uint8_t>(boolProperty(marker, "keyMinor", false) ? 1 : 0);
-  desc.ppq = objectProperty(marker, "ppq").as<double>();
+  desc.ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
   const std::string name = stringProperty(marker, "name", "");
   uint32_t out_id = 0;
   const SonareError err =
@@ -375,9 +371,9 @@ void ProjectWasm::setTempoSegments(val segments) {
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];
       SonareProjectTempoSegment seg{};
-      seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
-      seg.bpm = hasProperty(entry, "bpm") ? entry["bpm"].as<double>() : 0.0;
-      seg.end_bpm = hasProperty(entry, "endBpm") ? entry["endBpm"].as<double>() : 0.0;
+      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
+      seg.bpm = doubleProperty(entry, "bpm", 0.0);
+      seg.end_bpm = doubleProperty(entry, "endBpm", 0.0);
       segs.push_back(seg);
     }
   }
@@ -396,7 +392,7 @@ void ProjectWasm::setTimeSignatures(val segments) {
     for (unsigned i = 0; i < count; ++i) {
       val entry = segments[i];
       SonareProjectTimeSignatureSegment seg{};
-      seg.start_ppq = hasProperty(entry, "startPpq") ? entry["startPpq"].as<double>() : 0.0;
+      seg.start_ppq = doubleProperty(entry, "startPpq", 0.0);
       seg.numerator = intProperty(entry, "numerator", 0);
       seg.denominator = intProperty(entry, "denominator", 0);
       segs.push_back(seg);

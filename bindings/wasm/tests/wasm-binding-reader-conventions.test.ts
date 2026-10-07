@@ -62,7 +62,7 @@ describe('WASM binding sources stay on the shared common.h field readers', () =>
     // A floor sized to the population this scan is meant to shrink would stop
     // checking the scanner and start checking that remediation did not
     // happen; this one only needs to stay comfortably above zero.
-    expect(sites.length).toBeGreaterThan(50);
+    expect(sites.length).toBeGreaterThan(5);
     for (const site of sites) {
       expect(site.id).toContain(site.expression);
       expect(site.id).not.toContain(`:${site.line}`);

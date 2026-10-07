@@ -335,7 +335,7 @@ int vocalProjectCancel(void* user_data) {
   if (storage == nullptr) return 0;
   const val outcome =
       val::take_ownership(sonare_project_invoke_cancel(storage->callback.as_handle()));
-  if (typedBoolProperty(outcome, "failed", false)) {
+  if (boolProperty(outcome, "failed", false)) {
     // The JS helper catches the exception because C++ cannot catch a JS throw
     // escaping emscripten::val::operator(). Keep the original value so it can
     // be returned once the C ABI has unwound, while reporting cancellation.
@@ -343,7 +343,7 @@ int vocalProjectCancel(void* user_data) {
     storage->callback_failure = outcome["error"];
     return 1;
   }
-  return typedBoolProperty(outcome, "cancelled", false) ? 1 : 0;
+  return boolProperty(outcome, "cancelled", false) ? 1 : 0;
 }
 
 }  // namespace

@@ -39,7 +39,7 @@ export interface DenoiseClassicalOptions {
 
 export interface MasteringRepairDenoiseClassicalRequest extends DenoiseClassicalOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDenoiseClassicalStereo`. */
@@ -62,7 +62,7 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array;
 export function masteringRepairDenoiseClassical(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DenoiseClassicalOptions,
 ): Float32Array;
 export function masteringRepairDenoiseClassical(
@@ -70,13 +70,10 @@ export function masteringRepairDenoiseClassical(
   sampleRate?: number,
   options: DenoiseClassicalOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().masteringRepairDenoiseClassical(
     request.samples,
-    request.sampleRate,
+    request.sampleRate ?? 22050,
     request,
   );
 }
@@ -120,7 +117,7 @@ export function masteringRepairDenoiseClassicalStereo(
 export function masteringRepairDenoiseClassicalStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DenoiseClassicalOptions,
 ): MasteringRepairDenoiseClassicalStereoResult;
 export function masteringRepairDenoiseClassicalStereo(
@@ -179,7 +176,7 @@ export function masteringRepairDenoiseClassicalLinked(
 ): MasteringRepairDenoiseClassicalLinkedResult;
 export function masteringRepairDenoiseClassicalLinked(
   channels: Float32Array[],
-  sampleRate: number,
+  sampleRate?: number,
   config?: DenoiseClassicalOptions,
 ): MasteringRepairDenoiseClassicalLinkedResult;
 export function masteringRepairDenoiseClassicalLinked(
@@ -220,7 +217,7 @@ export interface DehumOptions {
 
 export interface MasteringRepairDehumRequest extends DehumOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairDehumStereo`. */
@@ -234,7 +231,7 @@ export interface MasteringRepairDehumStereoRequest extends DehumOptions {
 export function masteringRepairDehum(request: MasteringRepairDehumRequest): Float32Array;
 export function masteringRepairDehum(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DehumOptions,
 ): Float32Array;
 export function masteringRepairDehum(
@@ -242,11 +239,12 @@ export function masteringRepairDehum(
   sampleRate?: number,
   options: DehumOptions = {},
 ): Float32Array {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDehum(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDehum(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }
 
 /**
@@ -266,7 +264,7 @@ export function masteringRepairDehumStereo(
 export function masteringRepairDehumStereo(
   left: Float32Array,
   right: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   config?: DehumOptions,
 ): MasteringRepairDehumStereoResult;
 export function masteringRepairDehumStereo(
@@ -291,7 +289,7 @@ export function masteringRepairDehumStereo(
 /** Request form of `masteringRepairDetectNoiseFloor`. */
 export interface MasteringRepairDetectNoiseFloorRequest extends DenoiseClassicalOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /** Request form of `masteringRepairNoiseBandBins`. */
@@ -303,7 +301,7 @@ export interface MasteringRepairNoiseBandBinsRequest {
 /** Request form of `masteringRepairDetectHum`. */
 export interface MasteringRepairDetectHumRequest extends DehumOptions {
   samples: Float32Array;
-  sampleRate: number;
+  sampleRate?: number;
 }
 
 /**
@@ -324,7 +322,7 @@ export function masteringRepairDetectNoiseFloor(
 ): NoiseDetection;
 export function masteringRepairDetectNoiseFloor(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DenoiseClassicalOptions,
 ): NoiseDetection;
 export function masteringRepairDetectNoiseFloor(
@@ -332,13 +330,10 @@ export function masteringRepairDetectNoiseFloor(
   sampleRate?: number,
   options: DenoiseClassicalOptions = {},
 ): NoiseDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   return requireModule().masteringRepairDetectNoiseFloor(
     request.samples,
-    request.sampleRate,
+    request.sampleRate ?? 22050,
     request,
   );
 }
@@ -410,7 +405,7 @@ export function masteringRepairNoiseBandBins(
 export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection;
 export function masteringRepairDetectHum(
   samples: Float32Array,
-  sampleRate: number,
+  sampleRate?: number,
   options?: DehumOptions,
 ): HumDetection;
 export function masteringRepairDetectHum(
@@ -418,9 +413,10 @@ export function masteringRepairDetectHum(
   sampleRate?: number,
   options: DehumOptions = {},
 ): HumDetection {
-  const request =
-    samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
-      : samples;
-  return requireModule().masteringRepairDetectHum(request.samples, request.sampleRate, request);
+  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  return requireModule().masteringRepairDetectHum(
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
 }

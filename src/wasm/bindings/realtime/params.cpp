@@ -116,7 +116,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   breakpoints.reserve(std::min(count, kMaxWasmObjectArrayReserve));
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];
-    const double ppq = objectProperty(point, "ppq").as<double>();
+    const double ppq = numberFromVal(objectProperty(point, "ppq"), "ppq");
     const float value = floatProperty(point, "value", 0.0f);
     // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).
     const int curve = intProperty(point, "curveToNext", 0);

@@ -263,7 +263,7 @@ void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val p
   // `useGmPrograms` is a binding convenience beside the patch fields. Keep
   // its strict boolean contract here, where realtime and offline synth
   // bindings meet, and leave the NativeSynth default disabled when omitted.
-  cfg.use_gm_programs = typedBoolProperty(patch, "useGmPrograms", false);
+  cfg.use_gm_programs = boolProperty(patch, "useGmPrograms", false);
   // Same injection as setSf2Instrument: the rig stages need the mastering inserts.
   cfg.insert_factory = [](std::string_view name, std::string_view json) {
     return sonare::mastering::api::make_insert(std::string(name), std::string(json));
@@ -308,9 +308,16 @@ double RealtimeEngineWasm::resolveInstrumentAutomationId(const val& destination_
 void RealtimeEngineWasm::loadSoundFont(val data) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   std::vector<uint8_t> bytes = uint8ArrayToVector(data);
+  // Empty input is a parameter error and oversized or unparsable bytes a format
+  // error, as in sonare_engine_load_soundfont; parse() applies the same SF2 file
+  // size limit, and the engine's SoundFont is replaced only after it succeeds.
+  if (bytes.empty()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "SoundFont data must not be empty");
+  }
   auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
   std::string error;
-  if (bytes.empty() || !soundfont->parse(bytes.data(), bytes.size(), &error)) {
+  if (!soundfont->parse(bytes.data(), bytes.size(), &error)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat,
                                   "failed to load SoundFont: " + error);
   }
@@ -570,12 +577,12 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
                                           SONARE_CONTROLLER_AXIS_COUNT, "controller axis", &axis);
   entry.input = static_cast<sonare::midi::ControllerInput>(input);
   entry.axis = static_cast<sonare::midi::ControllerAxis>(axis);
-  const int index = typedIntProperty(binding, "index", 0);
+  const int index = intProperty(binding, "index", 0);
   requireOrdinalInRange(index, 0, 127, "controller binding index");
   entry.index = static_cast<uint8_t>(index);
-  const float lo = typedFloatProperty(binding, "lo", 0.0f);
-  const float hi = typedFloatProperty(binding, "hi", 1.0f);
-  const float curve = typedFloatProperty(binding, "curve", 1.0f);
+  const float lo = floatProperty(binding, "lo", 0.0f);
+  const float hi = floatProperty(binding, "hi", 1.0f);
+  const float curve = floatProperty(binding, "curve", 1.0f);
 
   sonare::midi::ControllerProfile profile = wasmControllerProfile(engine_, destination_id);
   // A non-finite range or curve would reach the audio thread and stay there, so

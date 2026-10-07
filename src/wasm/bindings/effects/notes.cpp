@@ -457,10 +457,9 @@ UnmatchedTargetPolicy unmatchedTargetPolicyFromVal(const val& request) {
 NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
   NoteTargetAssignConfig config;
   config.unmatched_policy = unmatchedTargetPolicyFromVal(request);
-  config.min_overlap_ratio =
-      typedFloatProperty(request, "minOverlapRatio", config.min_overlap_ratio);
+  config.min_overlap_ratio = floatProperty(request, "minOverlapRatio", config.min_overlap_ratio);
   config.max_correction_semitones =
-      typedFloatProperty(request, "maxCorrectionSemitones", config.max_correction_semitones);
+      floatProperty(request, "maxCorrectionSemitones", config.max_correction_semitones);
   // Refused rather than left to the core, which reads a bad ratio as the
   // strictest one and saturates a bad bound to zero -- both in-domain values
   // nothing downstream can tell from a deliberate one. This is the C ABI's

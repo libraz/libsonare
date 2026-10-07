@@ -721,13 +721,7 @@ void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pan must be an object");
   }
   const auto field = [&](const char* key, float fallback) {
-    const val v = pan_val[key];
-    if (v.isUndefined() || v.isNull()) return fallback;
-    if (v.typeOf().as<std::string>() != "number") {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    std::string(key) + " must be a number");
-    }
-    return checkedFloatFromVal(v, key);
+    return floatProperty(pan_val, key, fallback);
   };
 #if defined(SONARE_WITH_MIXING)
   sonare::mixing::SurroundPanParams params;

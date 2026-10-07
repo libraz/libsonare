@@ -26,18 +26,18 @@ bool repairOptionValue(const val& options, const char* key, val* value) {
 // Read a dereverb options bag over `config`, leaving absent keys alone.
 mastering::repair::DereverbClassicalConfig readDereverbConfig(
     const val& options, mastering::repair::DereverbClassicalConfig config) {
-  config.threshold = typedFloatProperty(options, "threshold", config.threshold);
-  config.attenuation = typedFloatProperty(options, "attenuation", config.attenuation);
-  config.n_fft = typedIntProperty(options, "nFft", config.n_fft);
-  config.hop_length = typedIntProperty(options, "hopLength", config.hop_length);
-  config.t60_sec = typedFloatProperty(options, "t60Sec", config.t60_sec);
-  config.late_delay_ms = typedFloatProperty(options, "lateDelayMs", config.late_delay_ms);
-  config.over_subtraction = typedFloatProperty(options, "overSubtraction", config.over_subtraction);
-  config.spectral_floor = typedFloatProperty(options, "spectralFloor", config.spectral_floor);
-  config.wpe_enabled = typedBoolProperty(options, "wpeEnabled", config.wpe_enabled);
-  config.wpe_iterations = typedIntProperty(options, "wpeIterations", config.wpe_iterations);
-  config.wpe_taps = typedIntProperty(options, "wpeTaps", config.wpe_taps);
-  config.wpe_strength = typedFloatProperty(options, "wpeStrength", config.wpe_strength);
+  config.threshold = floatProperty(options, "threshold", config.threshold);
+  config.attenuation = floatProperty(options, "attenuation", config.attenuation);
+  config.n_fft = intProperty(options, "nFft", config.n_fft);
+  config.hop_length = intProperty(options, "hopLength", config.hop_length);
+  config.t60_sec = floatProperty(options, "t60Sec", config.t60_sec);
+  config.late_delay_ms = floatProperty(options, "lateDelayMs", config.late_delay_ms);
+  config.over_subtraction = floatProperty(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = floatProperty(options, "spectralFloor", config.spectral_floor);
+  config.wpe_enabled = boolProperty(options, "wpeEnabled", config.wpe_enabled);
+  config.wpe_iterations = intProperty(options, "wpeIterations", config.wpe_iterations);
+  config.wpe_taps = intProperty(options, "wpeTaps", config.wpe_taps);
+  config.wpe_strength = floatProperty(options, "wpeStrength", config.wpe_strength);
   return config;
 }
 
@@ -86,29 +86,28 @@ val stereoResultToVal(const Audio& left, const Audio& right) {
 mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, const char* entry) {
   mastering::repair::DeclickConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  cfg.threshold = typedFloatProperty(options, "threshold", cfg.threshold);
-  cfg.neighbor_ratio = typedFloatProperty(options, "neighborRatio", cfg.neighbor_ratio);
+  cfg.threshold = floatProperty(options, "threshold", cfg.threshold);
+  cfg.neighbor_ratio = floatProperty(options, "neighborRatio", cfg.neighbor_ratio);
   if (hasProperty(options, "maxClickSamples")) {
-    const int v =
-        typedIntProperty(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
+    const int v = intProperty(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
     if (v <= 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     std::string(entry) + ": maxClickSamples must be positive");
     }
     cfg.max_click_samples = static_cast<size_t>(v);
   }
-  cfg.lpc_order = typedIntProperty(options, "lpcOrder", cfg.lpc_order);
-  cfg.residual_ratio = typedFloatProperty(options, "residualRatio", cfg.residual_ratio);
+  cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
+  cfg.residual_ratio = floatProperty(options, "residualRatio", cfg.residual_ratio);
   return cfg;
 }
 
 mastering::repair::DeclipConfig readMasteringRepairDeclip(const val& options) {
   mastering::repair::DeclipConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  cfg.clip_threshold = typedFloatProperty(options, "clipThreshold", cfg.clip_threshold);
-  cfg.lpc_order = typedIntProperty(options, "lpcOrder", cfg.lpc_order);
-  cfg.iterations = typedIntProperty(options, "iterations", cfg.iterations);
-  cfg.lpc_blend = typedFloatProperty(options, "lpcBlend", cfg.lpc_blend);
+  cfg.clip_threshold = floatProperty(options, "clipThreshold", cfg.clip_threshold);
+  cfg.lpc_order = intProperty(options, "lpcOrder", cfg.lpc_order);
+  cfg.iterations = intProperty(options, "iterations", cfg.iterations);
+  cfg.lpc_blend = floatProperty(options, "lpcBlend", cfg.lpc_blend);
   return cfg;
 }
 
@@ -212,14 +211,14 @@ mastering::repair::DehumMode parseDehumMode(const std::string& name) {
 mastering::repair::DehumConfig readMasteringRepairDehum(const val& options) {
   mastering::repair::DehumConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  cfg.fundamental_hz = typedFloatProperty(options, "fundamentalHz", cfg.fundamental_hz);
-  cfg.harmonics = typedIntProperty(options, "harmonics", cfg.harmonics);
-  cfg.q = typedFloatProperty(options, "q", cfg.q);
-  cfg.adaptive = typedBoolProperty(options, "adaptive", cfg.adaptive);
-  cfg.search_range_hz = typedFloatProperty(options, "searchRangeHz", cfg.search_range_hz);
-  cfg.adaptation = typedFloatProperty(options, "adaptation", cfg.adaptation);
-  cfg.frame_size = typedIntProperty(options, "frameSize", cfg.frame_size);
-  cfg.pll_bandwidth = typedFloatProperty(options, "pllBandwidth", cfg.pll_bandwidth);
+  cfg.fundamental_hz = floatProperty(options, "fundamentalHz", cfg.fundamental_hz);
+  cfg.harmonics = intProperty(options, "harmonics", cfg.harmonics);
+  cfg.q = floatProperty(options, "q", cfg.q);
+  cfg.adaptive = boolProperty(options, "adaptive", cfg.adaptive);
+  cfg.search_range_hz = floatProperty(options, "searchRangeHz", cfg.search_range_hz);
+  cfg.adaptation = floatProperty(options, "adaptation", cfg.adaptation);
+  cfg.frame_size = intProperty(options, "frameSize", cfg.frame_size);
+  cfg.pll_bandwidth = floatProperty(options, "pllBandwidth", cfg.pll_bandwidth);
   if (hasProperty(options, "mode")) {
     val value = val::undefined();
     if (repairOptionValue(options, "mode", &value)) {
@@ -245,17 +244,17 @@ mastering::repair::DenoiseClassicalConfig readDenoiseConfig(
       config.noise_estimator = parseDenoiseNoiseEstimator(value.as<std::string>());
     }
   }
-  config.n_fft = typedIntProperty(options, "nFft", config.n_fft);
-  config.hop_length = typedIntProperty(options, "hopLength", config.hop_length);
-  config.dd_alpha = typedFloatProperty(options, "ddAlpha", config.dd_alpha);
-  config.reduction_db = typedFloatProperty(options, "reductionDb", config.reduction_db);
-  config.over_subtraction = typedFloatProperty(options, "overSubtraction", config.over_subtraction);
-  config.spectral_floor = typedFloatProperty(options, "spectralFloor", config.spectral_floor);
+  config.n_fft = intProperty(options, "nFft", config.n_fft);
+  config.hop_length = intProperty(options, "hopLength", config.hop_length);
+  config.dd_alpha = floatProperty(options, "ddAlpha", config.dd_alpha);
+  config.reduction_db = floatProperty(options, "reductionDb", config.reduction_db);
+  config.over_subtraction = floatProperty(options, "overSubtraction", config.over_subtraction);
+  config.spectral_floor = floatProperty(options, "spectralFloor", config.spectral_floor);
   config.noise_estimation_quantile =
-      typedFloatProperty(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
+      floatProperty(options, "noiseEstimationQuantile", config.noise_estimation_quantile);
   config.speech_presence_gain =
-      typedBoolProperty(options, "speechPresenceGain", config.speech_presence_gain);
-  config.gain_smoothing = typedBoolProperty(options, "gainSmoothing", config.gain_smoothing);
+      boolProperty(options, "speechPresenceGain", config.speech_presence_gain);
+  config.gain_smoothing = boolProperty(options, "gainSmoothing", config.gain_smoothing);
   return config;
 }
 
@@ -448,14 +447,14 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
 mastering::repair::DecrackleConfig readMasteringRepairDecrackle(const val& options) {
   mastering::repair::DecrackleConfig cfg;
   if (options.isUndefined() || options.isNull()) return cfg;
-  cfg.threshold = typedFloatProperty(options, "threshold", cfg.threshold);
+  cfg.threshold = floatProperty(options, "threshold", cfg.threshold);
   if (hasProperty(options, "mode")) {
     val value = val::undefined();
     if (repairOptionValue(options, "mode", &value)) {
       cfg.mode = parseDecrackleMode(value.as<std::string>());
     }
   }
-  cfg.levels = typedIntProperty(options, "levels", cfg.levels);
+  cfg.levels = intProperty(options, "levels", cfg.levels);
   return cfg;
 }
 
@@ -479,10 +478,9 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
 mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     const val& options, mastering::repair::TrimSilenceConfig config, const char* entry) {
   if (options.isUndefined() || options.isNull()) return config;
-  config.threshold = typedFloatProperty(options, "threshold", config.threshold);
+  config.threshold = floatProperty(options, "threshold", config.threshold);
   if (hasProperty(options, "paddingSamples")) {
-    const int v =
-        typedIntProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
+    const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
     if (v < 0) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     std::string(entry) + ": paddingSamples must be non-negative");
@@ -495,8 +493,8 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
       config.mode = parseTrimSilenceMode(value.as<std::string>());
     }
   }
-  config.gate_lufs = typedFloatProperty(options, "gateLufs", config.gate_lufs);
-  config.window_ms = typedFloatProperty(options, "windowMs", config.window_ms);
+  config.gate_lufs = floatProperty(options, "gateLufs", config.gate_lufs);
+  config.window_ms = floatProperty(options, "windowMs", config.window_ms);
   return config;
 }
 

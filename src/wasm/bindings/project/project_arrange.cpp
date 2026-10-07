@@ -57,12 +57,11 @@ uint32_t ProjectWasm::addClip(val desc) {
   std::vector<float> audio;
   std::string source_uri;
   d.track_id = uintProperty(desc, "trackId", 0);
-  d.is_midi = hasProperty(desc, "isMidi") && desc["isMidi"].as<bool>() ? 1 : 0;
-  d.start_ppq = hasProperty(desc, "startPpq") ? desc["startPpq"].as<double>() : 0.0;
-  d.length_ppq = hasProperty(desc, "lengthPpq") ? desc["lengthPpq"].as<double>() : 0.0;
-  d.source_offset_ppq =
-      hasProperty(desc, "sourceOffsetPpq") ? desc["sourceOffsetPpq"].as<double>() : 0.0;
-  d.gain = hasProperty(desc, "gain") ? desc["gain"].as<float>() : 1.0f;
+  d.is_midi = boolProperty(desc, "isMidi", false) ? 1 : 0;
+  d.start_ppq = doubleProperty(desc, "startPpq", 0.0);
+  d.length_ppq = doubleProperty(desc, "lengthPpq", 0.0);
+  d.source_offset_ppq = doubleProperty(desc, "sourceOffsetPpq", 0.0);
+  d.gain = floatProperty(desc, "gain", 1.0f);
   d.audio_channels = hasProperty(desc, "audioChannels")
                          ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
                          : 0;
@@ -96,8 +95,8 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   SonareProjectLoopRecordingDesc d{};
   std::vector<float> audio;
   d.track_id = uintProperty(desc, "trackId", 0);
-  d.start_ppq = hasProperty(desc, "startPpq") ? desc["startPpq"].as<double>() : 0.0;
-  d.loop_length_ppq = hasProperty(desc, "loopLengthPpq") ? desc["loopLengthPpq"].as<double>() : 0.0;
+  d.start_ppq = doubleProperty(desc, "startPpq", 0.0);
+  d.loop_length_ppq = doubleProperty(desc, "loopLengthPpq", 0.0);
   d.audio_channels = hasProperty(desc, "audioChannels")
                          ? checkedIntFromVal(desc["audioChannels"], "audioChannels")
                          : 1;
@@ -207,12 +206,11 @@ void ProjectWasm::setWarpMap(val desc) {
   for (size_t i = 0; i < count; ++i) {
     val anchor = desc["anchors"][static_cast<unsigned>(i)];
     SonareProjectWarpAnchor out{};
-    out.warp_sample = hasProperty(anchor, "warpSample") ? anchor["warpSample"].as<double>() : 0.0;
-    out.source_sample =
-        hasProperty(anchor, "sourceSample") ? anchor["sourceSample"].as<double>() : 0.0;
+    out.warp_sample = doubleProperty(anchor, "warpSample", 0.0);
+    out.source_sample = doubleProperty(anchor, "sourceSample", 0.0);
     anchors.push_back(out);
   }
-  std::string name = hasProperty(desc, "name") ? desc["name"].as<std::string>() : "";
+  std::string name = stringProperty(desc, "name", "");
   SonareProjectWarpMapDesc cdesc{};
   cdesc.id = uintProperty(desc, "id", 0u);
   cdesc.name = name.empty() ? nullptr : name.c_str();
@@ -246,8 +244,8 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   // than here: the resolution has to divide the twelve pitch classes and the hop
   // has to be positive, and neither condition belongs to this layer.
   SonareTakeAlignConfig resolved{};
-  resolved.hop_length = typedIntProperty(config, "hopLength", 0);
-  resolved.bins_per_octave = typedIntProperty(config, "binsPerOctave", 0);
+  resolved.hop_length = intProperty(config, "hopLength", 0);
+  resolved.bins_per_octave = intProperty(config, "binsPerOctave", 0);
 
   validateWasmFloat32ArrayPair(reference, "reference samples", take, "take samples",
                                "alignTakeToReference input", false);

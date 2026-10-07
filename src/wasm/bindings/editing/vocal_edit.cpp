@@ -199,7 +199,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     result.target_mode = SONARE_VOCAL_TARGET_NONE;
   } else if (targetMode == "center") {
     result.target_mode = SONARE_VOCAL_TARGET_CENTER;
-    result.target_midi = typedDoubleProperty(target, "midi", 0.0);
+    result.target_midi = doubleProperty(target, "midi", 0.0);
   } else if (targetMode == "curve") {
     result.target_mode = SONARE_VOCAL_TARGET_CURVE;
     const val points = property(target, "points");
@@ -211,8 +211,8 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     double previous = -std::numeric_limits<double>::infinity();
     for (std::size_t i = 0; i < count; ++i) {
       const val point = points[static_cast<unsigned>(i)];
-      const double source = typedDoubleProperty(point, "sourceSample", 0.0);
-      const double midi = typedDoubleProperty(point, "midi", 0.0);
+      const double source = doubleProperty(point, "sourceSample", 0.0);
+      const double midi = doubleProperty(point, "midi", 0.0);
       if (source <= previous) {
         throw SonareException(ErrorCode::InvalidParameter,
                               "target.points must be strictly increasing");
@@ -225,17 +225,17 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch target mode");
   }
-  result.amount = typedDoubleProperty(pitch, "amount", result.amount);
-  result.speed_ms = typedDoubleProperty(pitch, "speedMs", result.speed_ms);
+  result.amount = doubleProperty(pitch, "amount", result.amount);
+  result.speed_ms = doubleProperty(pitch, "speedMs", result.speed_ms);
   result.max_correction_semitones =
-      typedDoubleProperty(pitch, "maxCorrectionSemitones", result.max_correction_semitones);
+      doubleProperty(pitch, "maxCorrectionSemitones", result.max_correction_semitones);
   result.transpose_semitones =
-      typedDoubleProperty(pitch, "transposeSemitones", result.transpose_semitones);
-  result.drift_scale = typedDoubleProperty(pitch, "driftScale", result.drift_scale);
-  result.vibrato_scale = typedDoubleProperty(pitch, "vibratoScale", result.vibrato_scale);
+      doubleProperty(pitch, "transposeSemitones", result.transpose_semitones);
+  result.drift_scale = doubleProperty(pitch, "driftScale", result.drift_scale);
+  result.vibrato_scale = doubleProperty(pitch, "vibratoScale", result.vibrato_scale);
   result.destination_start_sample = int64Property(object, "destinationStartSample", 0);
   result.destination_length_samples = int64Property(object, "destinationLengthSamples", 0);
-  result.gain_db = typedDoubleProperty(object, "gainDb", 0.0);
+  result.gain_db = doubleProperty(object, "gainDb", 0.0);
   const val muted = property(object, "muted");
   if (!absent(muted)) {
     if (muted.typeOf().as<std::string>() != "boolean") {
@@ -252,7 +252,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
       result.formant_mode = SONARE_VOCAL_FORMANT_SHIFT;
     else
       throw SonareException(ErrorCode::InvalidParameter, "unsupported formant mode");
-    result.formant_shift_semitones = typedDoubleProperty(formant, "shiftSemitones", 0.0);
+    result.formant_shift_semitones = doubleProperty(formant, "shiftSemitones", 0.0);
   }
   const val envelope = property(object, "amplitudeEnvelope");
   if (!absent(envelope)) {
@@ -286,8 +286,7 @@ SonareVocalTransition transitionFromVal(const val& object) {
                                                  "transition.leftWindowSamples");
   result.right_window_samples = nonNegativeWindow(int64Property(object, "rightWindowSamples", -1),
                                                   "transition.rightWindowSamples");
-  result.strength =
-      typedDoubleProperty(object, "strength", std::numeric_limits<double>::quiet_NaN());
+  result.strength = doubleProperty(object, "strength", std::numeric_limits<double>::quiet_NaN());
   if (!(result.strength >= 0.0 && result.strength <= 1.0)) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "transition.strength must be a number in [0, 1]");
@@ -377,52 +376,51 @@ SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storag
   if (absent(object)) return storage->options;
   storage->options.output_length_samples = int64Property(object, "outputLengthSamples", 0);
   storage->options.edge_fade_ms =
-      typedDoubleProperty(object, "edgeFadeMs", storage->options.edge_fade_ms);
+      doubleProperty(object, "edgeFadeMs", storage->options.edge_fade_ms);
   storage->options.vibrato_cutoff_hz =
-      typedDoubleProperty(object, "vibratoCutoffHz", storage->options.vibrato_cutoff_hz);
-  storage->options.segmentation_threshold_cents = typedDoubleProperty(
+      doubleProperty(object, "vibratoCutoffHz", storage->options.vibrato_cutoff_hz);
+  storage->options.segmentation_threshold_cents = doubleProperty(
       object, "segmentationThresholdCents", storage->options.segmentation_threshold_cents);
-  storage->options.min_note_ms =
-      typedDoubleProperty(object, "minNoteMs", storage->options.min_note_ms);
+  storage->options.min_note_ms = doubleProperty(object, "minNoteMs", storage->options.min_note_ms);
   storage->options.frame_length_samples =
       uintProperty(object, "frameLengthSamples", storage->options.frame_length_samples);
   storage->options.hop_length_samples =
       uintProperty(object, "hopLengthSamples", storage->options.hop_length_samples);
-  storage->options.fmin_hz = typedDoubleProperty(object, "fminHz", storage->options.fmin_hz);
-  storage->options.fmax_hz = typedDoubleProperty(object, "fmaxHz", storage->options.fmax_hz);
+  storage->options.fmin_hz = doubleProperty(object, "fminHz", storage->options.fmin_hz);
+  storage->options.fmax_hz = doubleProperty(object, "fmaxHz", storage->options.fmax_hz);
   storage->options.yin_threshold =
-      typedDoubleProperty(object, "yinThreshold", storage->options.yin_threshold);
+      doubleProperty(object, "yinThreshold", storage->options.yin_threshold);
   storage->options.voiced_threshold =
-      typedDoubleProperty(object, "voicedThreshold", storage->options.voiced_threshold);
+      doubleProperty(object, "voicedThreshold", storage->options.voiced_threshold);
   storage->options.centered =
       booleanProperty(object, "centered", storage->options.centered != 0) ? 1u : 0u;
   storage->options.reference_hz =
-      typedDoubleProperty(object, "referenceHz", storage->options.reference_hz);
+      doubleProperty(object, "referenceHz", storage->options.reference_hz);
   readSessionLimits(object, &storage->options.max_history_bytes, &storage->options.max_cache_bytes,
                     &storage->options.max_undo_depth, &storage->options.max_render_jobs);
   const val analysis = property(object, "analysis");
   if (!absent(analysis)) {
     sonare_vocal_analysis_init(&storage->analysis);
-    storage->analysis.frame_origin_sample = typedDoubleProperty(analysis, "frameOriginSample", 0.0);
-    storage->analysis.samples_per_frame = typedDoubleProperty(analysis, "samplesPerFrame", 0.0);
+    storage->analysis.frame_origin_sample = doubleProperty(analysis, "frameOriginSample", 0.0);
+    storage->analysis.samples_per_frame = doubleProperty(analysis, "samplesPerFrame", 0.0);
     storage->analysis.frame_length_samples = uintProperty(analysis, "frameLengthSamples", 0);
     // A supplied analysis is authoritative for fields it carries; omitted
     // optional settings inherit the create options, matching the other
     // language facades.
-    storage->analysis.fmin_hz = typedDoubleProperty(analysis, "fminHz", storage->options.fmin_hz);
-    storage->analysis.fmax_hz = typedDoubleProperty(analysis, "fmaxHz", storage->options.fmax_hz);
+    storage->analysis.fmin_hz = doubleProperty(analysis, "fminHz", storage->options.fmin_hz);
+    storage->analysis.fmax_hz = doubleProperty(analysis, "fmaxHz", storage->options.fmax_hz);
     storage->analysis.yin_threshold =
-        typedDoubleProperty(analysis, "yinThreshold", storage->options.yin_threshold);
+        doubleProperty(analysis, "yinThreshold", storage->options.yin_threshold);
     storage->analysis.voiced_threshold =
-        typedDoubleProperty(analysis, "voicedThreshold", storage->options.voiced_threshold);
+        doubleProperty(analysis, "voicedThreshold", storage->options.voiced_threshold);
     storage->analysis.centered =
         booleanProperty(analysis, "centered", storage->options.centered != 0) ? 1u : 0u;
-    storage->analysis.segmentation_threshold_cents = typedDoubleProperty(
+    storage->analysis.segmentation_threshold_cents = doubleProperty(
         analysis, "segmentationThresholdCents", storage->options.segmentation_threshold_cents);
     storage->analysis.min_note_ms =
-        typedDoubleProperty(analysis, "minNoteMs", storage->options.min_note_ms);
+        doubleProperty(analysis, "minNoteMs", storage->options.min_note_ms);
     storage->analysis.reference_hz =
-        typedDoubleProperty(analysis, "referenceHz", storage->options.reference_hz);
+        doubleProperty(analysis, "referenceHz", storage->options.reference_hz);
     storage->f0 = floatArray(property(analysis, "f0Hz"), "analysis.f0Hz");
     storage->voiced = byteArray(property(analysis, "voiced"), "analysis.voiced");
     if (storage->f0.size() != storage->voiced.size()) {

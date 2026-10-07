@@ -243,19 +243,19 @@ SonareBuiltinInstrumentBinding ProjectWasm::builtinBindingFromVal(val desc) {
     binding.config.waveform = builtinWaveformFromVal(desc["waveform"]);
   }
   if (hasProperty(desc, "gain")) {
-    binding.config.gain = desc["gain"].as<float>();
+    binding.config.gain = checkedFloatFromVal(desc["gain"], "gain");
   }
   if (hasProperty(desc, "attackMs")) {
-    binding.config.attack_ms = desc["attackMs"].as<float>();
+    binding.config.attack_ms = checkedFloatFromVal(desc["attackMs"], "attackMs");
   }
   if (hasProperty(desc, "decayMs")) {
-    binding.config.decay_ms = desc["decayMs"].as<float>();
+    binding.config.decay_ms = checkedFloatFromVal(desc["decayMs"], "decayMs");
   }
   if (hasProperty(desc, "sustain")) {
-    binding.config.sustain = desc["sustain"].as<float>();
+    binding.config.sustain = checkedFloatFromVal(desc["sustain"], "sustain");
   }
   if (hasProperty(desc, "releaseMs")) {
-    binding.config.release_ms = desc["releaseMs"].as<float>();
+    binding.config.release_ms = checkedFloatFromVal(desc["releaseMs"], "releaseMs");
   }
   if (hasProperty(desc, "polyphony")) {
     binding.config.polyphony = checkedIntFromVal(desc["polyphony"], "polyphony");
@@ -409,7 +409,7 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   }
   binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
   if (hasProperty(desc, "gain")) {
-    binding.config.gain = desc["gain"].as<float>();
+    binding.config.gain = checkedFloatFromVal(desc["gain"], "gain");
   }
   if (hasProperty(desc, "polyphony")) {
     binding.config.polyphony = checkedIntFromVal(desc["polyphony"], "polyphony");
@@ -417,13 +417,13 @@ SonareSf2InstrumentBinding ProjectWasm::sf2BindingFromVal(val desc) {
   if (hasProperty(desc, "preferModelForModeledFamilies")) {
     binding.config.struct_version = 2;
     binding.config.prefer_model_for_modeled_families =
-        desc["preferModelForModeledFamilies"].as<bool>() ? 1 : 0;
+        boolProperty(desc, "preferModelForModeledFamilies", false) ? 1 : 0;
   }
   // Version 3 reads version 2's field as well, so raising it here covers both
   // whichever of the two the caller passed.
   if (hasProperty(desc, "clearBankRig")) {
     binding.config.struct_version = 3;
-    binding.config.clear_bank_rig = desc["clearBankRig"].as<bool>() ? 1 : 0;
+    binding.config.clear_bank_rig = boolProperty(desc, "clearBankRig", false) ? 1 : 0;
   }
   // Version 4 reads every earlier field too.
   if (hasProperty(desc, "gsEfxRealization")) {

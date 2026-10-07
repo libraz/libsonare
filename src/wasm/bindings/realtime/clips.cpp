@@ -205,7 +205,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     } else {
       schedule.buffer = {nullptr, channel_count, num_samples};
     }
-    schedule.start_ppq = objectProperty(clip_val, "startPpq").as<double>();
+    schedule.start_ppq = numberFromVal(objectProperty(clip_val, "startPpq"), "startPpq");
     if (!std::isfinite(schedule.start_ppq) ||
         !sonare::transport::valid_public_ppq(schedule.start_ppq)) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
@@ -282,8 +282,8 @@ void RealtimeEngineWasm::setClips(val clips) {
         for (int anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
           val anchor_val = anchors_val[anchor_index];
           const sonare::engine::WarpAnchor anchor{
-              objectProperty(anchor_val, "warpSample").as<double>(),
-              objectProperty(anchor_val, "sourceSample").as<double>()};
+              numberFromVal(objectProperty(anchor_val, "warpSample"), "warpSample"),
+              numberFromVal(objectProperty(anchor_val, "sourceSample"), "sourceSample")};
           if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
               anchor.warp_sample < 0.0 || anchor.source_sample < 0.0 ||
               (!anchors->empty() && (!(anchor.warp_sample > anchors->back().warp_sample) ||

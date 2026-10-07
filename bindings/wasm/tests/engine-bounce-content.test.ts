@@ -142,6 +142,12 @@ describe('RealtimeEngine offline bounce content', () => {
     expect(Number.isFinite(lufs)).toBe(true);
   });
 
+  it('refuses a non-finite loudness target by name', () => {
+    for (const targetLufs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+      expect(() => bounce({ normalizeLufs: true, targetLufs })).toThrow(/targetLufs/);
+    }
+  });
+
   it('normalizes to the requested loudness and honours the default sentinel', () => {
     for (const targetLufs of [-20, -9]) {
       expect(bounce({ normalizeLufs: true, targetLufs }).lufs).toBeCloseTo(targetLufs, 1);

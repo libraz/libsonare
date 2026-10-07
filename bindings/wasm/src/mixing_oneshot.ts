@@ -1,5 +1,6 @@
 import { getSonareModule } from './module_state';
 import type { MixOptions, MixResult } from './public_types';
+import { assertSampleRate } from './validation';
 
 function requireModule() {
   return getSonareModule();
@@ -45,7 +46,7 @@ export interface MixStereoRequest extends MixOptions {
  *
  * @param leftChannels - Per-strip left input buffers (all the same length)
  * @param rightChannels - Per-strip right input buffers (all the same length)
- * @param sampleRate - Sample rate in Hz
+ * @param sampleRate - Sample rate in Hz, `[8000, 384000]` (default: 48000)
  * @param options - Per-strip mix options (trim, fader, pan, width, mute)
  */
 export function mixStereo(request: MixStereoRequest): MixResult;
@@ -61,6 +62,9 @@ export function mixStereo(
   sampleRate = 48000,
   options: MixOptions = {},
 ): MixResult {
+  if (options !== null && typeof options !== 'object') {
+    throw new TypeError('mixStereo: options must be an object');
+  }
   const request = Array.isArray(leftChannels)
     ? { leftChannels, rightChannels: rightChannels ?? [], sampleRate, ...options }
     : leftChannels;
@@ -70,10 +74,12 @@ export function mixStereo(
   ) {
     throw new Error('leftChannels and rightChannels must have the same non-zero length.');
   }
+  const resolvedSampleRate = request.sampleRate ?? 48000;
+  assertSampleRate('mixStereo', resolvedSampleRate);
   return requireModule().mixStereo(
     request.leftChannels,
     request.rightChannels,
-    request.sampleRate ?? 48000,
+    resolvedSampleRate,
     request as unknown as Record<string, unknown>,
   );
 }

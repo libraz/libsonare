@@ -247,6 +247,10 @@ export interface MasteringResult {
   appliedGainDb: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited?: boolean;
+  /**
+   * The processor's own latency, already compensated in the returned audio;
+   * do not trim the returned audio by it.
+   */
   latencySamples?: number;
   /**
    * Samples the named processor replaced with a finite in-domain one,
@@ -673,6 +677,10 @@ export interface MasteringStereoResult {
   inputLufs: number;
   outputLufs: number;
   appliedGainDb: number;
+  /**
+   * The processor's own latency, already compensated in the returned audio;
+   * do not trim the returned audio by it.
+   */
   latencySamples: number;
   /** True when peak headroom prevented the requested LUFS target. */
   loudnessTargetLimited: boolean;

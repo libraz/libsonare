@@ -10,14 +10,15 @@
  * those agree.
  *
  * The one field is fixed. THIS FILE IS THE CLASS. It records every field both
- * surfaces read, which reader family each put it in, and -- for the ones that
- * still disagree -- the reader pair that explains the disagreement. A new field
- * put on mismatched readers is a finding rather than a quiet addition.
+ * surfaces read and which reader family each put it in, and any field still
+ * disagreeing has to be written down in ACCOUNTED with the reader pair that
+ * explains it. A new field put on mismatched readers is a finding rather than a
+ * quiet addition.
  *
- * WHAT A GREEN RUN DOES AND DOES NOT MEAN. Green says every cross-surface reader
- * disagreement in the scanned trees is one that was looked at and written down.
- * It does NOT say the surfaces agree -- 135 fields still diverge, in the
- * classes recorded below -- and it says nothing about fields the scan cannot
+ * WHAT A GREEN RUN DOES AND DOES NOT MEAN. Green says no paired field is read
+ * under different families on the two surfaces, that no reader in use on either
+ * surface coerces or substitutes, and that every reader classified as refusing
+ * carries a type test in its body. It says nothing about fields the scan cannot
  * pair, for the reasons `_reader_family_sources.ts` records.
  *
  * Every assertion below names the production edit that breaks it.
@@ -30,9 +31,10 @@ import {
   normalizeEntryPoint,
   type PairedField,
   pairedFields,
-  READER_FAMILIES,
   readSites,
   unclassifiedReaders,
+  ungatedRefusers,
+  ungatedTypeGates,
 } from './_reader_family_sources.js';
 
 /**
@@ -62,204 +64,7 @@ import {
  * than as loss. Moving an options read into a helper means giving it the name
  * the other surface's helper normalizes to.
  */
-const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map([
-  // THE ADDON REFUSES A WRONG TYPE WHERE EMBIND COERCES IT — 141 fields.
-  //
-  // The addon's presence-checked readers REFUSE a wrong-typed value by name; embind's read the
-  // same field through `val::as<T>()`, which COERCES. A numeric string and a one-element array
-  // arrive as the number they spell, a boolean as 0 or 1, so the WASM caller gets a result
-  // computed from a value it did not write while the addon caller gets a TypeError. Not a
-  // per-field decision: it is what the two presence-checked families do, and closing it means
-  // giving the embind readers a type test, which is a contract change on the published package.
-  [
-    'FloatProperty>floatProperty',
-    [
-      'bindmidiccbinding:maxValue',
-      'bindmidiccbinding:minValue',
-      'decomposestemsconfig:beta',
-      'decomposestemsconfig:maskPower',
-      'estimateroom:aspectHintLh',
-      'estimateroom:aspectHintLw',
-      'estimateroom:minDecayDb',
-      'estimateroom:noiseFloorMarginDb',
-      'estimateroom:referenceAbsorption',
-      'freezeoffline:gain',
-      'notesegments:minNoteMs',
-      'notesegments:referenceHz',
-      'notesegments:segmentationThresholdCents',
-      'notesegments:voicedThreshold',
-      'optionalsends:levelDb',
-      'pcen:bias',
-      'pcen:eps',
-      'pcen:gain',
-      'pcen:power',
-      'pcen:timeConstant',
-      'pitchcorrecttimevarying:maxCorrectionSemitones',
-      'pitchcorrecttimevarying:referenceMidi',
-      'pitchcorrecttimevarying:retuneAmount',
-      'pitchcorrecttimevarying:retuneSpeedMs',
-      'pitchcorrecttimevarying:targetMidi',
-      'pitchcorrecttimevarying:vibratoThresholdCents',
-      'rendernotes:fadeMs',
-      'rendernotes:frameRate',
-      'rendernotes:vibratoCutoffHz',
-      'roommorph:airHumidityPercent',
-      'roommorph:airTemperatureC',
-      'roommorph:crossfadeMs',
-      'setclips:gain',
-      'setmetronome:accentGain',
-      'setmetronome:beatGain',
-      'setmidiclips:gain',
-      'setsf2instrument:gain',
-      'settrackbuses:gainDb',
-      'synthesizerir:airHumidityPercent',
-      'synthesizerir:airTemperatureC',
-      'synthesizerir:crossfadeMs',
-    ],
-  ],
-  // Same class as above, one reader along: the addon reads these six through the
-  // FINITE float reader, so a non-finite is refused there as well as a wrong
-  // type. Embind still coerces, so the divergence and its reason are unchanged.
-  [
-    'FiniteFloatProperty>floatProperty',
-    [
-      'roommorph:maxSeconds',
-      'roommorph:mixingTimeMs',
-      'roommorph:sourceTailSuppression',
-      'roommorph:wet',
-      'synthesizerir:maxSeconds',
-      'synthesizerir:mixingTimeMs',
-    ],
-  ],
-  [
-    'IntProperty>intProperty',
-    [
-      'bounceoffline:blockSize',
-      'bounceoffline:dither',
-      'bounceoffline:ditherBits',
-      'bounceoffline:numChannels',
-      'bounceoffline:sourceSampleRate',
-      'bounceoffline:targetSampleRate',
-      'decomposestemsconfig:hopLength',
-      'decomposestemsconfig:nComponents',
-      'decomposestemsconfig:nFft',
-      'decomposestemsconfig:nIter',
-      'detectonsets:hopLength',
-      'detectonsets:nFft',
-      'estimateroom:mode',
-      'estimateroom:nOctaveBands',
-      'freezeoffline:blockSize',
-      'freezeoffline:numChannels',
-      'importexternalstems:sampleRate',
-      'midirouteevents:filterChannel',
-      'midirouteevents:filterGroup',
-      'midirouteevents:remapChannel',
-      'optionalsends:sendTiming',
-      'pcen:hopLength',
-      'pcen:sampleRate',
-      'pitchcorrecttimevarying:scaleModeMask',
-      'pitchcorrecttimevarying:scaleRoot',
-      'roommorph:ismOrder',
-      'setautomationlane:curveToNext',
-      'setgraph:mix',
-      'setgraph:numChannels',
-      'setgraph:numPorts',
-      'setmarkerex:id',
-      'setmarkerex:keyFifths',
-      'setmarkerex:kind',
-      'setmarkers:keyFifths',
-      'setmarkers:kind',
-      'setmetronome:clickSamples',
-      'setsf2instrument:polyphony',
-      'synthesizerir:ismOrder',
-      'synthesizerir:sampleRate',
-    ],
-  ],
-  [
-    'BoolProperty>boolProperty',
-    [
-      'bounceoffline:normalizeLufs',
-      'estimateroom:preferEyring',
-      'optionalsends:enabled',
-      'roommorph:airAbsorptionEnabled',
-      'roommorph:preferEyring',
-      'setclips:loop',
-      'setmarkerex:keyMinor',
-      'setmarkers:keyMinor',
-      'setmetronome:enabled',
-      'synthesizerir:airAbsorptionEnabled',
-      'synthesizerir:preferEyring',
-      'tempooptionsfrom:adaptiveTempo',
-      'tempooptionsfrom:includeOctaveCandidates',
-    ],
-  ],
-  [
-    'Int64Property>int64Property',
-    [
-      'bounceoffline:totalFrames',
-      'freezeoffline:totalFrames',
-      'importexternalstems:startFrame',
-      'setclips:clipOffsetSamples',
-      'setclips:fadeInSamples',
-      'setclips:fadeOutSamples',
-      'setclips:lengthSamples',
-      'setmidiclips:fadeInSamples',
-      'setmidiclips:fadeOutSamples',
-      'setmidiclips:lengthSamples',
-      'setmidiclips:loopLengthSamples',
-      'setmidiclips:startSample',
-    ],
-  ],
-  [
-    'IntProperty>uintProperty',
-    [
-      'addclip:trackId',
-      'addlooprecordingtakes:trackId',
-      'annotatechords:quality',
-      'annotatechords:rootPc',
-      'annotatechords:slashBassPc',
-      'annotatekeys:mode',
-      'annotatekeys:tonicPc',
-    ],
-  ],
-  [
-    'MidiByteProperty>byteProperty',
-    [
-      'bindmidiccbinding:ccLsbNumber',
-      'bindmidiccbinding:kind',
-      'bindmidiccbinding:selectorLsb',
-      'bindmidiccbinding:selectorMsb',
-    ],
-  ],
-  [
-    'Uint32Property>intProperty',
-    [
-      'setclips:trackId',
-      'settrackbuses:channelLayout',
-      'settrackbuses:outputBusId',
-      'settracklanes:outputBusId',
-      'settracklanes:sourceChannelLayout',
-    ],
-  ],
-  [
-    'Uint32Property>uintProperty',
-    ['setmidiclips:destinationId', 'setmidiclips:id', 'setmidiclips:trackId'],
-  ],
-  ['Int64Property>intProperty', ['bounceoffline:ditherSeed', 'freezeoffline:clipId']],
-  ['DoubleProperty>doubleProperty', ['setmidiclips:startPpq', 'settemposegments:endBpm']],
-  ['WordProperty>wordProperty', ['setmidievents:data1']],
-  ['DoubleProperty>floatProperty', ['tempooptionsfrom:rampThreshold']],
-  [
-    'FloatProperty>setNumberOption',
-    [
-      'estimatemeter:compoundSubdivisionThreshold',
-      'estimatemeter:downbeatWeight',
-      'estimatemeter:measureWeight',
-      'estimatemeter:subdivisionWeight',
-    ],
-  ],
-  ['IntProperty>setNumberOption', ['estimatemeter:denominator']],
-]);
+const ACCOUNTED: ReadonlyMap<string, readonly string[]> = new Map();
 
 /** Two surfaces reading one field two ways, the shape the register answers. */
 const DISAGREEING: PairedField[] = [
@@ -290,14 +95,24 @@ describe('a cross-surface reader-family disagreement is fixed or recorded', () =
     expect(new Set(paired.map((field) => field.id.split(':')[0])).size).toBeGreaterThan(30);
   });
 
-  it('sees every reader family on both surfaces', () => {
-    // RED WHEN: one surface's reader table stops matching. A scan that found
-    // only `coerce` sites on WASM would clear the floor above while being blind
-    // to the two families that make a disagreement visible at all.
+  it('finds no coercing or substituting reader in use on either surface', () => {
+    // RED WHEN: a field is read through a reader classified `coerce` or
+    // `substitute`, on either surface -- including a pair that would agree with
+    // each other, which the mismatch check above cannot see.
     const families = (surface: 'node' | 'wasm') =>
       [...new Set(readSites(surface).map((site) => site.family))].sort();
     expect(families('node')).toEqual(['refuse']);
-    expect(families('wasm')).toEqual(['coerce', 'refuse']);
+    expect(families('wasm')).toEqual(['refuse']);
+  });
+
+  it('holds every refusing reader to a type test in its own body', () => {
+    // RED WHEN: a reader stays classified `refuse` after its body stops testing
+    // the value's type (the table is hand-written; the body is the fact), or a
+    // classified reader no longer exists, or a gate helper stops testing.
+    expect(ungatedRefusers('node')).toEqual([]);
+    expect(ungatedRefusers('wasm')).toEqual([]);
+    expect(ungatedTypeGates('node')).toEqual([]);
+    expect(ungatedTypeGates('wasm')).toEqual([]);
   });
 
   it('demands a family for every name-shaped reader in use', () => {
@@ -310,7 +125,7 @@ describe('a cross-surface reader-family disagreement is fixed or recorded', () =
 
   it('holds detectOnsets threshold and delta in agreement', () => {
     // RED WHEN: either field goes back onto a reader whose family the other
-    // surface does not share -- floatProperty on the WASM side, or a
+    // surface does not share -- a coercing reader on the WASM side, or a
     // substituting reader on the addon side. The per-site ratchet for the one
     // field this register was opened by, kept apart from ACCOUNTED because its
     // claim is agreement rather than a recorded divergence.
@@ -389,9 +204,7 @@ describe('the scanner sees what it claims to', () => {
     const node = readSites('node').filter((site) => site.id === 'detectonsets:delta');
     const wasm = readSites('wasm').filter((site) => site.id === 'detectonsets:delta');
     expect(node.map((site) => [site.reader, site.family])).toEqual([['FloatProperty', 'refuse']]);
-    expect(wasm.map((site) => [site.reader, site.family])).toEqual([
-      ['typedFloatProperty', 'refuse'],
-    ]);
+    expect(wasm.map((site) => [site.reader, site.family])).toEqual([['floatProperty', 'refuse']]);
   });
 
   it('keeps the two spellings of one key in different bags apart', () => {
@@ -407,20 +220,62 @@ describe('the scanner sees what it claims to', () => {
   });
 
   it('classifies a reader by what its body does, not by its suffix', () => {
-    // `floatOption` and `floatProperty` are named for the opposite families to
-    // the ones they belong to: the Option suffix reads as a fallback and that
-    // reader refuses, the Property suffix reads as checked and that one coerces.
-    expect(READER_FAMILIES.wasm.floatOption).toBe('refuse');
-    expect(READER_FAMILIES.wasm.floatProperty).toBe('coerce');
-    expect(READER_FAMILIES.node.FloatProperty).toBe('refuse');
+    // A body that converts without testing is reported however it is filed.
+    const coercing = [
+      {
+        file: 'fake.cpp',
+        text: [
+          'float floatProperty(val object, const char* key, float fallback) {',
+          '  val value = object[key];',
+          '  return value.isUndefined() ? fallback : value.as<float>();',
+          '}',
+        ].join('\n'),
+      },
+    ];
+    expect(ungatedRefusers('wasm', coercing, { floatProperty: 'refuse' })).toEqual([
+      'floatProperty: no type test in its body',
+    ]);
+  });
+
+  it('accepts a body that tests the type directly or through a gate helper', () => {
+    const gated = [
+      {
+        file: 'fake.cpp',
+        text: [
+          'float floatProperty(val object, const char* key, float fallback) {',
+          '  val value = typedPropertyValue(object, key, "number");',
+          '  return value.isUndefined() ? fallback : value.as<float>();',
+          '}',
+          'bool boolProperty(val object, const char* key, bool fallback) {',
+          '  val value = object[key];',
+          '  if (value.typeOf().as<std::string>() != "boolean") throw 1;',
+          '  return value.as<bool>();',
+          '}',
+          'int windowFrames(val object, const char* key, int fallback) {',
+          '  return floatProperty(object, key, fallback);',
+          '}',
+        ].join('\n'),
+      },
+    ];
+    expect(
+      ungatedRefusers('wasm', gated, {
+        floatProperty: 'refuse',
+        boolProperty: 'refuse',
+        windowFrames: 'refuse',
+      }),
+    ).toEqual([]);
+  });
+
+  it('reports a refusing reader with no definition, so a stale entry cannot pass by absence', () => {
+    expect(ungatedRefusers('wasm', [], { goneProperty: 'refuse' })).toEqual([
+      'goneProperty: no definition found',
+    ]);
   });
 
   it('counts the live divergence classes it is recording', () => {
-    // RED WHEN: a class empties out or a new one appears. ACCOUNTED's per-field
-    // lists already catch both, but this states the number a reader of this file
-    // is being asked to believe.
-    const live = new Set(mismatchedFields().map((field) => field.readerPair));
-    expect(live.size).toBe(15);
-    expect([...live].every((pair) => ACCOUNTED.has(pair))).toBe(true);
+    // RED WHEN: a divergence class appears. The number a reader of this file is
+    // being asked to believe is zero, and ACCOUNTED is empty to match.
+    expect(mismatchedFields()).toEqual([]);
+    expect(ACCOUNTED.size).toBe(0);
   });
 });

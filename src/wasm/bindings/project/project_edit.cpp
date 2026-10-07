@@ -29,7 +29,7 @@ SonareProjectClipFade ProjectWasm::clipFadeFromVal(val desc) {
     return fade;
   }
   if (hasProperty(desc, "lengthPpq")) {
-    fade.length_ppq = desc["lengthPpq"].as<double>();
+    fade.length_ppq = numberFromVal(desc["lengthPpq"], "lengthPpq");
   }
   if (hasProperty(desc, "curve")) {
     val curve = desc["curve"];
@@ -112,7 +112,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
     take.id = checkedUintFromVal(entry["id"], "id");
     take.source_id = uintProperty(entry, "sourceId", take.source_id);
     if (hasProperty(entry, "sourceOffsetPpq")) {
-      take.source_offset_ppq = entry["sourceOffsetPpq"].as<double>();
+      take.source_offset_ppq = numberFromVal(entry["sourceOffsetPpq"], "sourceOffsetPpq");
     }
     if (hasProperty(entry, "name")) {
       name_storage.push_back(entry["name"].as<std::string>());
@@ -138,10 +138,10 @@ void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) 
   for (size_t i = 0; i < count; ++i) {
     val entry = segments_val[static_cast<unsigned>(i)];
     SonareProjectClipCompSegment segment{};
-    segment.start_ppq = entry["startPpq"].as<double>();
-    segment.end_ppq = entry["endPpq"].as<double>();
+    segment.start_ppq = numberFromVal(entry["startPpq"], "startPpq");
+    segment.end_ppq = numberFromVal(entry["endPpq"], "endPpq");
     segment.take_id = uintProperty(entry, "takeId", segment.take_id);
-    segment.crossfade_ppq = typedDoubleProperty(entry, "crossfadePpq", segment.crossfade_ppq);
+    segment.crossfade_ppq = doubleProperty(entry, "crossfadePpq", segment.crossfade_ppq);
     segments.push_back(segment);
   }
   checkCError(
@@ -255,8 +255,8 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
   for (size_t i = 0; i < count; ++i) {
     val point = points[i];
     SonareAutomationPoint p{};
-    p.ppq = hasProperty(point, "ppq") ? point["ppq"].as<double>() : 0.0;
-    p.value = hasProperty(point, "value") ? point["value"].as<float>() : 0.0f;
+    p.ppq = doubleProperty(point, "ppq", 0.0);
+    p.value = floatProperty(point, "value", 0.0f);
     // 'curveToNext' is the Node engine's spelling of the same field and the
     // Project types document it as an alias, so reading only 'curve' turned a
     // breakpoint Node renders as an S-curve into a silent Linear here.

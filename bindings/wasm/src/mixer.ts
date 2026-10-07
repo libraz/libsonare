@@ -17,6 +17,7 @@ import type {
   SendTiming,
   SurroundPan,
 } from './public_types';
+import { assertSampleRate } from './validation';
 
 /**
  * One master-output meter reading. All dB fields are finite and floored at
@@ -55,8 +56,8 @@ export interface StripMeteringOptions {
   /** Inter-sample (true) peak measurement. Default `true`. */
   truePeak?: boolean;
   /**
-   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves it
-   * to the nearest of 2x / 4x / 8x. `0` selects the library default (4x).
+   * Requested true-peak oversampling factor in `[0, 16]`; the meter resolves 2
+   * to 2x, 8..16 to 8x, and any other value to 4x. `0` selects the library default (4x).
    */
   truePeakOversample?: number;
 }
@@ -117,10 +118,11 @@ export class Mixer {
    * whose snapshots are never read.
    *
    * @param json - Scene JSON (strips, buses, sends, connections, inserts)
-   * @param sampleRate - Sample rate in Hz (default: 48000)
+   * @param sampleRate - Sample rate in Hz, `[8000, 384000]` (default: 48000)
    * @param blockSize - Maximum block size per {@link processStereo} call (default: 512)
    */
   static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
+    assertSampleRate('Mixer.fromSceneJson', sampleRate);
     const module = getSonareModule();
     return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize), blockSize);
   }

@@ -21,11 +21,11 @@ void MixerWasm::addStrip(std::string id, val metering) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "addStrip: metering must be a plain object");
   }
-  const bool enabled = typedBoolProperty(metering, "enabled", true);
-  const bool lufs = typedBoolProperty(metering, "lufs", true);
-  const bool true_peak = typedBoolProperty(metering, "truePeak", true);
+  const bool enabled = boolProperty(metering, "enabled", true);
+  const bool lufs = boolProperty(metering, "lufs", true);
+  const bool true_peak = boolProperty(metering, "truePeak", true);
   // 0 selects the library default (4x), the sentinel the C ABI documents.
-  const int true_peak_oversample = typedIntProperty(metering, "truePeakOversample", 0);
+  const int true_peak_oversample = intProperty(metering, "truePeakOversample", 0);
   // Returns the strip pointer rather than a SonareError, so NULL is the whole
   // failure signal and the detail is in the thread-local error slot. The pointer
   // is mixer-owned and never reaches JS: strips are addressed by index or id.

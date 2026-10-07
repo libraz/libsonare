@@ -688,6 +688,12 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     }
   });
 
+  type NativeBounce = (bindings: unknown, options: object) => Float32Array;
+  /** The embind handle, for a reader the facade's own checks no longer reach. */
+  function nativeOf(project: Project): Record<string, NativeBounce> {
+    return (project as unknown as { native: Record<string, NativeBounce> }).native;
+  }
+
   function buildMidiProject(): Project {
     const project = new Project();
     project.setSampleRate(48000);
@@ -715,10 +721,13 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ),
     ).toThrow();
     two.destroy();
-    // `Array.isArray` gates this site: a non-Array is read as one binding
-    // instead of reaching the count, so the attack needs a real Array too.
+    // The facade refuses the hole at index 0 before the count is read, so the
+    // embind reader's own length guard is reached through the native handle.
     const attack = buildMidiProject();
-    expectInvalidParameter(() => attack.bounceWithBuiltinInstrument(hugeArray() as never, {}));
+    expect(() => attack.bounceWithBuiltinInstrument(hugeArray() as never, {})).toThrow(
+      /instrument\[0\]/,
+    );
+    expectInvalidParameter(() => nativeOf(attack).bounceWithBuiltinInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
@@ -734,10 +743,11 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ),
     ).toThrow();
     two.destroy();
-    // Array.isArray(instrument) selects the array path in the facade too; a
-    // non-Array takes the single-instrument path instead.
     const attack = buildMidiProject();
-    expectInvalidParameter(() => attack.bounceWithSynthInstrument(hugeArray() as never, {}));
+    expect(() => attack.bounceWithSynthInstrument(hugeArray() as never, {})).toThrow(
+      /instrument\[0\]/,
+    );
+    expectInvalidParameter(() => nativeOf(attack).bounceWithSynthInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
@@ -751,7 +761,10 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     ).toThrow();
     two.destroy();
     const attack = buildMidiProject();
-    expectInvalidParameter(() => attack.bounceWithSf2Instrument(hugeArray() as never, {}));
+    expect(() => attack.bounceWithSf2Instrument(hugeArray() as never, {})).toThrow(
+      /instrument\[0\]/,
+    );
+    expectInvalidParameter(() => nativeOf(attack).bounceWithSf2Instrument(hugeArray(), {}));
     attack.destroy();
   });
 

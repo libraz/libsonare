@@ -24,7 +24,7 @@ std::vector<Mode> modesFromVal(val modes) {
   const int length = static_cast<int>(wasmArrayLikeLength(modes, "modes"));
   out.reserve(static_cast<size_t>(length));
   for (int i = 0; i < length; ++i) {
-    const int mode = modes[i].as<int>();
+    const int mode = checkedIntFromVal(modes[i], "modes");
     requireOrdinalInRange(mode, static_cast<int>(Mode::Major), static_cast<int>(Mode::Locrian),
                           "key mode");
     out.push_back(static_cast<Mode>(mode));
@@ -423,11 +423,11 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
 // the reader guarantees the value survived the conversion unchanged, and -1
 // survives it. Nothing downstream asks whether a negative frame count means
 // anything, so the peak picker returned a normal onset list for one.
-// typedIntProperty, not intProperty: these are peak-picking window widths with
-// no "unspecified" spelling, matching threshold/delta's typedFloatProperty on
+// intProperty refuses a wrong-typed value: these are peak-picking window widths
+// with no "unspecified" spelling, matching threshold/delta's floatProperty on
 // the same call and the addon's IntProperty on the same six keys.
 int onsetWindowFrames(val options, const char* key, int default_value) {
-  const int frames = typedIntProperty(options, key, default_value);
+  const int frames = intProperty(options, key, default_value);
   if (frames < 0) {
     throw SonareException(ErrorCode::InvalidParameter,
                           std::string(key) + " must be a non-negative frame count");
@@ -444,14 +444,14 @@ val js_detect_onsets(val samples, const val& sample_rate_val, val options) {
   // Type-checked to match the addon's FloatProperty on the same two keys. Both
   // are peak-picking quantities with no "unspecified" spelling, so a wrong-typed
   // value is a caller error rather than a request for the default.
-  config.threshold = typedFloatProperty(options, "threshold", config.threshold);
+  config.threshold = floatProperty(options, "threshold", config.threshold);
   config.pre_max = onsetWindowFrames(options, "preMax", config.pre_max);
   config.post_max = onsetWindowFrames(options, "postMax", config.post_max);
   config.pre_avg = onsetWindowFrames(options, "preAvg", config.pre_avg);
   config.post_avg = onsetWindowFrames(options, "postAvg", config.post_avg);
-  config.delta = typedFloatProperty(options, "delta", config.delta);
+  config.delta = floatProperty(options, "delta", config.delta);
   config.wait = onsetWindowFrames(options, "wait", config.wait);
-  config.backtrack = typedBoolProperty(options, "backtrack", config.backtrack);
+  config.backtrack = boolProperty(options, "backtrack", config.backtrack);
   config.backtrack_range = onsetWindowFrames(options, "backtrackRange", config.backtrack_range);
   // Through quick:: for the same reason the C ABI does: the peak-picking fields
   // are frame counts, and a frame is hop_length over the rate in force.
@@ -593,7 +593,7 @@ template <typename Field>
 void setNumberOption(const val& options, const char* key, const char* subject, Field* field) {
   const val value = options[key];
   if (value.isUndefined() || value.isNull()) return;
-  const double raw = value.as<double>();
+  const double raw = numberFromVal(value, key);
   Field converted{};
   bool converted_ok = false;
   if constexpr (std::is_integral_v<Field>) {
@@ -624,7 +624,7 @@ std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const ch
   out.reserve(length);
   for (int i = 0; i < static_cast<int>(length); ++i) {
     int converted = 0;
-    if (!sonare::numeric::checked_round_cast(numerators[i].as<double>(), &converted)) {
+    if (!sonare::numeric::checked_round_cast(numberFromVal(numerators[i], subject), &converted)) {
       throw SonareException(ErrorCode::InvalidParameter,
                             std::string(subject) + " entries must be finite in-range numbers");
     }
@@ -641,10 +641,7 @@ MusicAnalyzerConfig musicAnalyzerConfigFromVal(const val& options) {
   auto set_number = [&](const char* key, auto& field) {
     setNumberOption(options, key, "analyze", &field);
   };
-  auto set_bool = [&](const char* key, bool& field) {
-    const val value = options[key];
-    if (!value.isUndefined() && !value.isNull()) field = value.as<bool>();
-  };
+  auto set_bool = [&](const char* key, bool& field) { field = boolProperty(options, key, field); };
   set_number("nFft", config.n_fft);
   set_number("hopLength", config.hop_length);
   set_number("bpmMin", config.bpm_min);
