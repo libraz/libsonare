@@ -444,7 +444,7 @@ Audio percussive_wsola(const Audio& audio, float rate, size_t target_length,
 
   std::vector<float> out(target_length, 0.0f);
   for (size_t i = 0; i < target_length; ++i) {
-    out[i] = norm[i] > 1e-8f ? rendered[i] / norm[i] : 0.0f;
+    out[i] = norm[i] > constants::kSpectrumEpsilon ? rendered[i] / norm[i] : 0.0f;
   }
   return Audio::from_vector(std::move(out), audio.sample_rate());
 }
