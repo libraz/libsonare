@@ -158,11 +158,25 @@ double ProjectWasm::getSampleRate() const {
   return out;
 }
 
-void ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
+val ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
   const SonareError err = sonare_project_set_mixer_scene_json(project_.get(), scene_json.c_str());
   if (err != SONARE_OK) {
     throwCError(err, "failed to set mixer scene JSON");
   }
+  // The warning is newline-joined, one entry per unknown scene key; empty when clean.
+  const std::string warning = sonare_last_warning_message();
+  val out = val::array();
+  size_t start = 0;
+  while (!warning.empty() && start <= warning.size()) {
+    const size_t end = warning.find('\n', start);
+    if (end == std::string::npos) {
+      out.call<void>("push", warning.substr(start));
+      break;
+    }
+    out.call<void>("push", warning.substr(start, end - start));
+    start = end + 1;
+  }
+  return out;
 }
 
 uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std::string& name) {

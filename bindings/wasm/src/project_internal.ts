@@ -438,7 +438,7 @@ export interface WasmProject {
   setOverlapPolicy: (policy: number) => void;
   getOverlapPolicy: () => number;
   getSampleRate: () => number;
-  setMixerSceneJson: (sceneJson: string) => void;
+  setMixerSceneJson: (sceneJson: string) => string[];
   setMarker: (markerId: number, ppq: number, name: string) => number;
   setMarkerEx: (marker: ProjectMarker) => number;
   markerByIndex: (index: number) => ProjectMarker;

@@ -92,6 +92,8 @@ Value take_to_json(const arrangement::ClipTake& take) {
   if (take.source_offset_seconds.has_value()) {
     o["source_offset_seconds"] = *take.source_offset_seconds;
   }
+  // Optional; only emitted when set so existing projects round-trip byte-for-byte.
+  if (take.partial) o["partial"] = true;
   return o;
 }
 

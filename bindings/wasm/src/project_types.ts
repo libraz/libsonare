@@ -11,7 +11,7 @@ import type { Project, ProjectTimeline } from './project_class.js';
  * `src/sonare_c_project.h`; checked against {@link projectAbiVersion} to detect
  * a WASM build whose flat project POD layout has drifted from this wrapper.
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 3;
+export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
 /** Render options for {@link Project.bounce}. All fields are optional. */
 export interface ProjectBounceOptions {
@@ -175,6 +175,8 @@ export interface ProjectClipCompSegment {
  * active, except that a partial last take (the capture does not fill the last
  * loop) is kept but not made active when an earlier complete take exists. A
  * capture shorter than one loop has only the partial take, which stays active.
+ * A partial take is marked `"partial": true` in its `takes[]` entry of the project
+ * JSON (`toJson()`).
  */
 export interface ProjectLoopRecordingDesc {
   trackId: number;
@@ -196,10 +198,6 @@ export interface ProjectLoopRecordingDesc {
 export interface ProjectLoopRecordingResult {
   clipId: number;
   takeCount: number;
-  /** True when the last created take is shorter than one loop. */
-  partialTail: boolean;
-  /** Frame count of the last created take. */
-  lastTakeFrames: number;
 }
 
 /** Clip loop mode for {@link Project.setClipLoop}. */

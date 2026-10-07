@@ -121,16 +121,11 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   }
   uint32_t clip_id = 0;
   size_t take_count = 0;
-  uint8_t partial_tail_out = 0;
-  int64_t last_take_frames = 0;
-  checkCError(sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count,
-                                                      &partial_tail_out, &last_take_frames),
+  checkCError(sonare_project_add_loop_recording_takes(project_.get(), &d, &clip_id, &take_count),
               "failed to add loop recording takes");
   val out = val::object();
   out.set("clipId", clip_id);
   out.set("takeCount", static_cast<double>(take_count));
-  out.set("partialTail", partial_tail_out != 0);
-  out.set("lastTakeFrames", static_cast<double>(last_take_frames));
   return out;
 }
 

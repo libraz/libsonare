@@ -177,6 +177,10 @@ SonareError sonare_project_serialize(const SonareProject* project, char** out_js
 ///        warnings are what this reports. So a non-NULL string does NOT mean
 ///        failure -- the return code alone does -- and the caller owns the string
 ///        on every return code and must release it with @ref sonare_free_string.
+///        A key the embedded mixer scene does not consume (other than `$`- and
+///        `x-`-prefixed ones) is reported as `unknown scene key 'scene.strips[2].faderDB'`,
+///        its path rooted at the document's `scene` key; the rest of the document is not
+///        checked for unknown keys.
 ///        Pass NULL to ignore the diagnostics entirely. Malformed input returns
 ///        an error WITHOUT crashing.
 SonareError sonare_project_deserialize(const char* json, size_t len, SonareProject** out,
@@ -432,6 +436,10 @@ SonareError sonare_project_get_audio_source_uri(const SonareProject* project, ui
 void sonare_project_free_audio_source_metadata(SonareProjectAudioSourceMetadata* metadata);
 
 /// @brief Replaces the project's mixer scene from scene JSON.
+/// @details Keys the scene reader does not consume (other than `$`- and `x-`-prefixed
+///   ones) do not fail the call; each is one line of @ref sonare_last_warning_message,
+///   e.g. `unknown scene key 'strips[2].faderDB'`. The warning is cleared on entry, so
+///   an empty message after a successful call means the scene was clean.
 SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const char* scene_json);
 
 /// @brief Reads the project sample rate (Hz).

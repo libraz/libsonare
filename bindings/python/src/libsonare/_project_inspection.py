@@ -615,14 +615,27 @@ class _ProjectInspectionMixin:
             external_stem_role=external_stem_role,
         )
 
-    def set_mixer_scene_json(self, scene_json: str) -> None:
-        """Replace the project's mixer scene from scene JSON."""
+    def set_mixer_scene_json(self, scene_json: str) -> list[str]:
+        """Replace the project's mixer scene from scene JSON.
+
+        Returns one warning per scene key the reader does not recognise (reported as
+        ``unknown scene key 'strips[2].faderDB'``; keys starting with ``$`` or ``x-``
+        are exempt). The scene is still applied; the list is empty when every key was
+        consumed.
+        """
+        lib = _get_lib()
         _check(
-            _get_lib().sonare_project_set_mixer_scene_json(
+            lib.sonare_project_set_mixer_scene_json(
                 self._require_handle(),
                 _utf8_arg(scene_json, "scene_json"),
             )
         )
+        raw = (
+            lib.sonare_last_warning_message()
+            if hasattr(lib, "sonare_last_warning_message")
+            else b""
+        )
+        return raw.decode("utf-8").splitlines() if raw else []
 
     def set_tempo_segments(
         self,

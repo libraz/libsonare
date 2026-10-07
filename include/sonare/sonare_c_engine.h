@@ -370,13 +370,17 @@ SonareError sonare_engine_can_set_master_sidechain(SonareRealtimeEngine* engine,
                                                    uint32_t source_id, int* out_refusal);
 
 /// @brief Configure a bus strip from the first bus in a mixer scene JSON.
-/// @details The bus must already exist via sonare_engine_set_track_buses.
+/// @details The bus must already exist via sonare_engine_set_track_buses. A key the scene
+///          reader does not consume (other than `$`- and `x-`-prefixed ones) is refused with
+///          SONARE_ERROR_INVALID_PARAMETER and a message naming it, e.g.
+///          `unknown strip key 'strips[0].faderDB'`.
 SonareError sonare_engine_set_bus_strip_json(SonareRealtimeEngine* engine, uint32_t bus_id,
                                              const char* scene_json);
 /// @brief Builds an engine-owned ChannelStrip for @p track_id from a mixer scene JSON.
 /// @details The first `strips[0]` entry in @p scene_json is used as the track strip spec.
 ///          This is a control-thread structural mutation; do not call concurrently with
-///          @ref sonare_engine_process.
+///          @ref sonare_engine_process. An unknown key is refused as for
+///          @ref sonare_engine_set_bus_strip_json.
 SonareError sonare_engine_set_track_strip_json(SonareRealtimeEngine* engine, uint32_t track_id,
                                                const char* scene_json);
 /// @brief Sets one embedded EQ band on an engine-owned track strip.
@@ -394,7 +398,8 @@ SonareError sonare_engine_set_track_strip_insert_bypassed(SonareRealtimeEngine* 
 /// @brief Builds an engine-owned master ChannelStrip from a mixer scene JSON.
 /// @details The first `strips[0]` entry in @p scene_json is used as the master strip spec.
 ///          This is a control-thread structural mutation; do not call concurrently with
-///          @ref sonare_engine_process.
+///          @ref sonare_engine_process. An unknown key is refused as for
+///          @ref sonare_engine_set_bus_strip_json.
 SonareError sonare_engine_set_master_strip_json(SonareRealtimeEngine* engine,
                                                 const char* scene_json);
 /// @brief Sets one embedded EQ band on an engine-owned master strip.

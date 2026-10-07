@@ -161,6 +161,7 @@ Fixture make_fixture() {
   aclip.takes = {{1, 0, 120.0, "take A"}, {2, audio_sid, 360.0, "take B"}};
   aclip.takes[0].source_offset_seconds = 0.875;
   aclip.takes[1].source_offset_seconds = 1.625;
+  aclip.takes[1].partial = true;
   aclip.active_take_id = 1;
   // The second segment carries a non-zero crossfade so the seam field round-trips
   // as itself; the first cannot, having nothing in front of it to fade over.
@@ -430,7 +431,7 @@ static_assert(field_count<EditClip>() == 20,
 static_assert(field_count<ClipFade>() == 2,
               "ClipFade gained or lost a field: compare it in eq(const EditClip&) above and update "
               "this count");
-static_assert(field_count<ClipTake>() == 5,
+static_assert(field_count<ClipTake>() == 6,
               "ClipTake gained or lost a field: add it to ClipTake::operator== and update this "
               "count");
 static_assert(field_count<LoopAnchor>() == 2,

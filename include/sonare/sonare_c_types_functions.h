@@ -413,7 +413,8 @@ SonareError sonare_last_error_code(void);
 ///        thread, or "" when none.
 /// @details A SEPARATE channel from sonare_last_error_message so a warning on a
 ///   SUCCESS return never has to share storage with (or be mistaken for) an
-///   error. It is recorded by sonare_mixer_from_scene_json when a scene loads
+///   error. It is recorded by sonare_mixer_from_scene_json and
+///   sonare_project_set_mixer_scene_json when a scene loads
 ///   successfully but carries a key the scene reader does not consume or a
 ///   channel-strip insert was handed param keys it does not read (one line
 ///   each, newline-joined), and by @ref sonare_synthesize_rir for its recoverable acoustic

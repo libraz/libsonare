@@ -185,7 +185,9 @@ arrangement::KeySegment key_segment_from_json(const Value& v);
 void annotation_from_json(const Value& v, arrangement::ProjectAnnotation* a);
 bool sidecar_from_json(const Value& v, arrangement::AssistSidecar* out,
                        size_t max_payload_bytes = std::numeric_limits<size_t>::max());
-mixing::api::Scene scene_from_value(const Value& v);
+/// Reports each key the scene reader does not consume as an `unknown_scene_key` warning whose
+/// path starts at the document's `scene` key; null `diagnostics` drops them.
+mixing::api::Scene scene_from_value(const Value& v, BoundedDiagnostics* diagnostics);
 
 }  // namespace detail
 }  // namespace sonare::serialize

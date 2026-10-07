@@ -323,7 +323,7 @@ struct ProjectWasm {
   void setOverlapPolicy(const val& policy_val);
   uint32_t getOverlapPolicy() const;
   double getSampleRate() const;
-  void setMixerSceneJson(const std::string& scene_json);
+  val setMixerSceneJson(const std::string& scene_json);
   uint32_t setMarker(const val& marker_id_val, double ppq, const std::string& name);
   uint32_t setMarkerEx(val marker);
   val markerByIndex(const val& index_val) const;

@@ -729,6 +729,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_c_surface_test.cpp
     bindings/binding_project_bounce_test.cpp
     api/sonare_c_project_timeline_test.cpp
+    api/sonare_c_scene_warnings_test.cpp
     bindings/project_bounce_overflow_test.cpp
     bindings/project_bounce_tail_channel_test.cpp
     bindings/binding_project_editing_test.cpp

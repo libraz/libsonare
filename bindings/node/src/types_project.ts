@@ -19,7 +19,7 @@ export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMA
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 3;
+export const EXPECTED_PROJECT_ABI_VERSION = 2;
 
 /** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
@@ -247,6 +247,8 @@ export interface ExternalSeparatedStemImportResult {
  * active, except that a partial last take (the capture does not fill the last
  * loop) is kept but not made active when an earlier complete take exists. A
  * capture shorter than one loop has only the partial take, which stays active.
+ * A partial take is marked `"partial": true` in its `takes[]` entry of the project
+ * JSON (`toJson()`).
  */
 export interface ProjectLoopRecordingDesc {
   trackId: number;
@@ -268,10 +270,6 @@ export interface ProjectLoopRecordingDesc {
 export interface ProjectLoopRecordingResult {
   clipId: number;
   takeCount: number;
-  /** True when the last created take is shorter than one loop. */
-  partialTail: boolean;
-  /** Frame count of the last created take. */
-  lastTakeFrames: number;
 }
 
 /** `(trackId, clipId)` returned by {@link Project.addMidiClip}. */

@@ -353,17 +353,12 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
 
   uint32_t out_clip_id = 0;
   size_t out_take_count = 0;
-  uint8_t out_partial_tail = 0;
-  int64_t out_last_take_frames = 0;
   ThrowIfError(
-      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count,
-                                                   &out_partial_tail, &out_last_take_frames));
+      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, out_clip_id));
   out.Set("takeCount", Napi::Number::New(env, static_cast<double>(out_take_count)));
-  out.Set("partialTail", Napi::Boolean::New(env, out_partial_tail != 0));
-  out.Set("lastTakeFrames", Napi::Number::New(env, static_cast<double>(out_last_take_frames)));
   return out;
   SONARE_NODE_CATCH(env)
 }

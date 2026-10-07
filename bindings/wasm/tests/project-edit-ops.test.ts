@@ -39,6 +39,16 @@ const curveCorpus = JSON.parse(
   ),
 ) as AutomationCurveCorpus;
 
+/** Per clip, the ids of the takes the project JSON marks partial. */
+function partialTakeIds(project: { toJson(): string }): number[][] {
+  const { clips } = JSON.parse(project.toJson()) as {
+    clips: Array<{ takes?: Array<{ id: number; partial?: boolean }> }>;
+  };
+  return clips.map((clip) =>
+    (clip.takes ?? []).filter((take) => take.partial).map((take) => take.id),
+  );
+}
+
 describe('Sonare WASM Project edit ops', () => {
   beforeAll(async () => {
     await init();
@@ -382,8 +392,7 @@ describe('Sonare WASM Project edit ops', () => {
       });
       expect(result.clipId).toBeGreaterThan(0);
       expect(result.takeCount).toBe(2);
-      expect(result.partialTail).toBe(false);
-      expect(result.lastTakeFrames).toBe(24000);
+      expect(project.toJson()).not.toContain('"partial"');
       expect(project.toJson()).toContain('"active_take_id":2');
       project.undo();
       expect(project.toJson()).toContain('"clips":[]');
@@ -404,8 +413,7 @@ describe('Sonare WASM Project edit ops', () => {
         audio: new Float32Array(36000).fill(0.5),
       });
       expect(kept.takeCount).toBe(2);
-      expect(kept.partialTail).toBe(true);
-      expect(kept.lastTakeFrames).toBe(12000);
+      expect(partialTakeIds(project)).toEqual([[2]]);
       expect(project.toJson()).toContain('"active_take_id":1');
       const dropped = project.addLoopRecordingTakes({
         ...base,
@@ -414,15 +422,14 @@ describe('Sonare WASM Project edit ops', () => {
         partialTail: 'drop',
       });
       expect(dropped.takeCount).toBe(1);
-      expect(dropped.partialTail).toBe(false);
-      expect(dropped.lastTakeFrames).toBe(24000);
+      expect(partialTakeIds(project)).toEqual([[2], []]);
       const short = project.addLoopRecordingTakes({
         ...base,
         startPpq: 8,
         audio: new Float32Array(12000).fill(0.5),
       });
       expect(short.takeCount).toBe(1);
-      expect(short.partialTail).toBe(true);
+      expect(partialTakeIds(project)).toEqual([[2], [], [1]]);
       expect(() =>
         project.addLoopRecordingTakes({
           ...base,
@@ -431,6 +438,36 @@ describe('Sonare WASM Project edit ops', () => {
           partialTail: 'activate' as unknown as 'keep',
         }),
       ).toThrow(/partialTail/);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('addLoopRecordingTakes treats a one-frame remainder as rounding and the partial mark round-trips', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      const base = { trackId, loopLengthPpq: 1, audioSampleRate: 48000 };
+      const extra = project.addLoopRecordingTakes({
+        ...base,
+        startPpq: 0,
+        audio: new Float32Array(48001).fill(0.5),
+      });
+      expect(extra.takeCount).toBe(2);
+      expect(partialTakeIds(project)).toEqual([[]]);
+      project.addLoopRecordingTakes({
+        ...base,
+        startPpq: 4,
+        audio: new Float32Array(36000).fill(0.5),
+      });
+      expect(partialTakeIds(project)).toEqual([[], [2]]);
+      const reloaded = Project.fromJson(project.toJson());
+      try {
+        expect(partialTakeIds(reloaded)).toEqual([[], [2]]);
+      } finally {
+        reloaded.delete();
+      }
     } finally {
       project.delete();
     }

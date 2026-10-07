@@ -781,9 +781,15 @@ export class Project {
     return this.native.getOverlapPolicy();
   }
 
-  /** Replace the project's mixer scene from scene JSON (see {@link Mixer.fromSceneJson}). */
-  setMixerSceneJson(sceneJson: string): void {
-    this.native.setMixerSceneJson(sceneJson);
+  /**
+   * Replace the project's mixer scene from scene JSON (see {@link Mixer.fromSceneJson}).
+   *
+   * @returns One warning per key the scene reader does not recognise (e.g.
+   *   `unknown scene key 'strips[2].faderDB'`; `$`- and `x-`-prefixed keys are exempt).
+   *   The scene is still applied; empty when every key was consumed.
+   */
+  setMixerSceneJson(sceneJson: string): string[] {
+    return this.native.setMixerSceneJson(sceneJson);
   }
 
   /** Add or replace a marker; `markerId` 0 allocates a new id. Returns the marker id. */
@@ -963,7 +969,8 @@ export class Project {
    * Split captured loop-recording audio into takes and add one clip. `audio` may
    * be interleaved or planar (`Float32Array[]`). The last take is made active
    * unless it is partial and an earlier complete take exists; `partialTail:
-   * 'drop'` does not create the partial take.
+   * 'drop'` does not create the partial take. A partial take is marked
+   * `"partial": true` in its `takes[]` entry of `toJson()`.
    */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
     return this.native.addLoopRecordingTakes(interleaveLoopRecording(desc));

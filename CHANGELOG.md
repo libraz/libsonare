@@ -6,18 +6,19 @@
 
 #### Rebuild
 
-- The project ABI counter moved from 2 to 3 (packed `SONARE_ABI_VERSION` `0x04020306`): `sonare_project_add_loop_recording_takes` gained two optional out-parameters, and `SonareProjectLoopRecordingDesc.reserved` is now `flags`.
 - Every binding checks the loaded native module's ABI version when it loads and refuses a mismatch with the new error code `AbiMismatch` (10): Node when the addon is required, WASM in `init()`, Python on first library use (the Python CLI exits with 13). The code is binding-only; the core never reports it.
 
 #### Now refused
 
+- `sonare_project_add_loop_recording_takes` refuses a `SonareProjectLoopRecordingDesc.flags` word with any bit other than `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`; the word was reserved and ignored before, so C callers zero it.
+- `sonare_engine_set_track_strip_json`, `sonare_engine_set_bus_strip_json` and `sonare_engine_set_master_strip_json` (and the Node, WASM and Python setters over them) refuse a key the scene reader does not consume with InvalidParameter naming it, e.g. `unknown strip key 'strips[0].faderDB'`; keys starting with `$` or `x-` and the legacy snake_case aliases are still accepted, and a misspelled key used to be ignored.
 - A track lane whose source channel layout is not stereo is refused with InvalidParameter; mono, 5.1 and 7.1 were accepted but rendered as stereo. A zero-initialised C `SonareEngineTrackLane` reads as mono, so C callers set `SONARE_CHANNEL_LAYOUT_STEREO` (`sonare_engine_set_track_lanes`, `setTrackLanes`, `set_track_lanes`).
 
 #### Error classes
 
 - A failure that comes from the library or from an object's state is a `SonareError` carrying the C-ABI code on every surface. On Node and WASM a released, destroyed or uninitialised handle, including a WASM embind object already deleted, throws `SonareError` with `InvalidState` where it threw a plain `Error` or `TypeError`; in Python the bare `RuntimeError`s became `SonareError` (still a `RuntimeError` subclass) with `NOT_SUPPORTED`, `INVALID_STATE` or `UNKNOWN`.
 - Two buffers whose lengths must match are refused with a `RangeError` on Node and WASM, where some paths threw `TypeError` or a plain `Error`.
-- Python `Project.add_loop_recording_takes` returns a `LoopRecordingResult` instead of a `(clip_id, take_count)` tuple, and the streaming `ChordChange` / `BarChord` constructors take `name` after `quality`.
+- The streaming `ChordChange` / `BarChord` constructors take `name` after `quality`.
 
 ### New
 
@@ -33,11 +34,12 @@
 #### Project
 
 - List unresolved audio sources as full descriptors and read an audio source's URI untruncated (C: `sonare_project_unresolved_audio_source_by_index`, `sonare_project_get_audio_source_uri`; Node and WASM: `Project.unresolvedAudioSources`; Python: `unresolved_audio_sources`). `sourceByIndex` / `source_by_index` now return the full URI.
-- Loop recording takes accept planar audio (one array per channel) on Node, WASM and Python, and report whether the last take is partial and its length (`partialTail`, `lastTakeFrames`; Python `LoopRecordingResult`). `partialTail: 'drop'` (C: `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`) leaves the partial take out.
+- Loop recording takes accept planar audio (one array per channel) on Node, WASM and Python, and read whether a take is partial from the take itself: a partial last take carries `"partial": true` in its `takes[]` entry of the project JSON, which round-trips. `partialTail: 'drop'` (C: `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`, the former reserved word of `SonareProjectLoopRecordingDesc`, now `flags`) leaves the partial take out. The project ABI counter does not move: the add call's signature and the struct layout are unchanged, and an unknown flag bit is refused.
 
 #### Mastering
 
 - The insert parameter descriptor states whether each bound is exclusive (`minExclusive`, `maxExclusive`) and marks a ceiling bounded by the processing rate's Nyquist (`maxRelativeTo: "nyquist"`; the effective ceiling is the lower of `max` and the Nyquist).
+- Resolve a Nyquist-bounded ceiling for a given processing rate: `masteringInsertParamInfo(name, sampleRate)` on Node and WASM, `mastering_insert_param_info(name, sample_rate=...)` in Python (C: `sonare_mastering_insert_param_info_at_rate`) report the bound the insert accepts at that rate.
 
 #### Packaging
 
@@ -57,7 +59,7 @@
 ### Behaviour changes
 
 - A loop recording whose last loop is incomplete keeps the previous complete take active; the partial take is kept but not activated. A remainder of one frame or less no longer creates a take.
-- Loading a mixing scene reports every key the reader does not consume in `sceneWarnings()` / `scene_warnings` (keys starting with `$` or `x-` are exempt, and the scene schema accepts them).
+- Loading a mixing scene reports every key the reader does not consume in `sceneWarnings()` / `scene_warnings` (keys starting with `$` or `x-` are exempt, and the scene schema accepts them). `sonare_project_set_mixer_scene_json` reports them through `sonare_last_warning_message` and `Project.setMixerSceneJson` / `set_mixer_scene_json` return them as a list of strings (empty when the scene is clean), and `sonare_project_deserialize` reports those inside the embedded scene in `out_diag` as `unknown_scene_key` with a path from the document root, e.g. `scene.strips[2].faderDB`; the rest of the project document is not checked for unknown keys.
 - A malformed scene document passed to the mixer is `InvalidFormat`.
 - A call before WASM `init()` throws `SonareError` with `InvalidState`, and a second `init()` with different options throws `InvalidState` naming the option.
 - Pre-fader sends of a lane silenced by mute or solo are silenced with it.

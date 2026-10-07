@@ -422,18 +422,14 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
 /// @brief Splits captured loop-recording audio into takes and adds one clip.
 ///        Returns the allocated clip id and optional take count. All take
 ///        sources, decoded buffers, and the clip form one undo transaction.
-///        @p out_partial_tail (optional) is 1 when the last created take is
-///        partial (shorter than one loop), else 0; a partial last take is not
-///        made active when an earlier complete take exists. Under
-///        @ref SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL it is always 0.
-///        @p out_last_take_frames (optional) is the frame count of the last
-///        created take. A capture with no complete loop that drops its partial
-///        tail has no take to create and returns SONARE_ERROR_INVALID_PARAMETER.
+///        A partial last take is marked `"partial": true` in the take's project
+///        JSON object, and a partial last take is not made active when an
+///        earlier complete take exists. A capture with no complete loop that
+///        drops its partial tail has no take to create and returns
+///        SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     const SonareProjectLoopRecordingDesc* desc,
-                                                    uint32_t* out_clip_id, size_t* out_take_count,
-                                                    uint8_t* out_partial_tail,
-                                                    int64_t* out_last_take_frames);
+                                                    uint32_t* out_clip_id, size_t* out_take_count);
 
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
 ///        The track, source, and clip form one undo transaction. Returns the

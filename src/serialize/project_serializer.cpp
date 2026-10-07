@@ -706,7 +706,7 @@ DeserializeResult project_from_json(const std::string& json_text) {
 
     // Mixer scene.
     if (const auto* sv = root.find("scene"); sv != nullptr && sv->is_object()) {
-      project.scene() = scene_from_value(*sv);
+      project.scene() = scene_from_value(*sv, &decode_diagnostics);
     }
 
     // Assist sidecars (lossless, even for unregistered modules).

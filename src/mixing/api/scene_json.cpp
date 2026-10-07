@@ -94,6 +94,8 @@ std::string escape_key(const std::string& key) {
   return out;
 }
 
+constexpr char kUnknownKeyPrefix[] = "unknown scene key '";
+
 // `$`- and `x-`-prefixed keys are annotations, never reported.
 void report_unknown_keys(const JsonValue& object, const std::string& path, const KeySet& known,
                          std::vector<std::string>* warnings) {
@@ -103,8 +105,8 @@ void report_unknown_keys(const JsonValue& object, const std::string& path, const
     if (known.count(key) != 0 || key.compare(0, 1, "$") == 0 || key.compare(0, 2, "x-") == 0) {
       continue;
     }
-    warnings->push_back("unknown scene key '" + (path.empty() ? "" : path + ".") + escape_key(key) +
-                        "'");
+    warnings->push_back(std::string(kUnknownKeyPrefix) + (path.empty() ? "" : path + ".") +
+                        escape_key(key) + "'");
   }
 }
 
@@ -906,6 +908,21 @@ Scene scene_from_value(const JsonValue& root, std::vector<std::string>* warnings
 }
 
 // Budgeted like every caller-supplied document; duplicate keys stay tolerated.
+std::string unknown_scene_key_path(const std::string& warning) {
+  const size_t prefix = sizeof(kUnknownKeyPrefix) - 1;
+  if (warning.size() <= prefix || warning.compare(0, prefix, kUnknownKeyPrefix) != 0) {
+    return warning;
+  }
+  return warning.substr(prefix, warning.size() - prefix - 1);
+}
+
+void refuse_unknown_strip_keys(const std::vector<std::string>& warnings) {
+  if (warnings.empty()) return;
+  std::string message = "unknown strip key '" + unknown_scene_key_path(warnings.front()) + "'";
+  if (warnings.size() > 1) message += " (and " + std::to_string(warnings.size() - 1) + " more)";
+  throw SonareException(ErrorCode::InvalidParameter, message);
+}
+
 Scene scene_from_json(const std::string& json, std::vector<std::string>* warnings) {
   return scene_from_value(sonare::util::json::admit(json), warnings);
 }

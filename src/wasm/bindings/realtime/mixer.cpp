@@ -280,11 +280,13 @@ void RealtimeEngineWasm::setBusStripJson(const val& bus_id_val, const std::strin
   const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
 #if defined(SONARE_WITH_MIXING)
   sonare::mixing::api::Scene scene;
+  std::vector<std::string> unknown_keys;
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json);
+    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
   } catch (const std::exception& e) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
   }
+  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
   if (bus_id == 0 || scene.buses.empty() || !engine_.set_bus_strip(bus_id, scene.buses.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bus strip spec");
   }
@@ -303,11 +305,13 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val, const std::s
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "track id must be non-zero");
   }
   sonare::mixing::api::Scene scene;
+  std::vector<std::string> unknown_keys;
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json);
+    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
   } catch (const std::exception& e) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
   }
+  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
   if (scene.strips.empty() || !engine_.set_track_strip(track_id, scene.strips.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid track strip spec");
   }
@@ -381,11 +385,13 @@ void RealtimeEngineWasm::setTrackStripInsertBypassed(const val& track_id_val,
 void RealtimeEngineWasm::setMasterStripJson(const std::string& scene_json) {
 #if defined(SONARE_WITH_MIXING)
   sonare::mixing::api::Scene scene;
+  std::vector<std::string> unknown_keys;
   try {
-    scene = sonare::mixing::api::scene_from_json(scene_json);
+    scene = sonare::mixing::api::scene_from_json(scene_json, &unknown_keys);
   } catch (const std::exception& e) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, e.what());
   }
+  sonare::mixing::api::refuse_unknown_strip_keys(unknown_keys);
   if (scene.strips.empty() || !engine_.set_master_strip(scene.strips.front())) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid master strip spec");
   }

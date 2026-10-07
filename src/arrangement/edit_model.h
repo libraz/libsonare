@@ -132,9 +132,14 @@ struct ClipTake {
   /// PPQ interpretation above.
   std::optional<double> source_offset_seconds = std::nullopt;
 
+  /// True for the last take of a loop recording whose capture did not fill the
+  /// loop. Informational: it does not affect playback or which take is active.
+  bool partial = false;
+
   bool operator==(const ClipTake& o) const noexcept {
     return id == o.id && source_id == o.source_id && source_offset_ppq == o.source_offset_ppq &&
-           name == o.name && source_offset_seconds == o.source_offset_seconds;
+           name == o.name && source_offset_seconds == o.source_offset_seconds &&
+           partial == o.partial;
   }
   bool operator!=(const ClipTake& o) const noexcept { return !(*this == o); }
 };

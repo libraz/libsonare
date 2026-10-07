@@ -186,6 +186,14 @@ std::string scene_to_json(const Scene& scene);
 /// `params` bags are not walked. Unknown keys never fail the parse.
 Scene scene_from_json(const std::string& json, std::vector<std::string>* warnings = nullptr);
 
+/// Returns the path inside one `unknown scene key '<path>'` warning.
+std::string unknown_scene_key_path(const std::string& warning);
+
+/// Throws InvalidParameter naming the first of `warnings` (as produced by
+/// @ref scene_from_json) as `unknown strip key '<path>'`; no-op when empty. Partial strip
+/// fragments refuse an unknown key where a whole scene document only reports it.
+void refuse_unknown_strip_keys(const std::vector<std::string>& warnings);
+
 /// Canonical field paths for one Scene document, rooted at the document object
 /// (no leading `scene.`). Array item fields use `[]`, e.g. `strips[].id`. Kept
 /// literal, not composed, so a checker outside this language can parse it; see

@@ -26,14 +26,18 @@ namespace {
 /// to SONARE_ERROR_INVALID_FORMAT. Shared by the strip-setter entry points that
 /// accept a scene JSON payload. A semantic failure inside a well-formed document
 /// is left to SONARE_C_CATCH so it maps by exception class, which is what
-/// separates "your document is corrupt" from "this value is out of range".
+/// separates "your document is corrupt" from "this value is out of range". A key the
+/// scene reader does not consume is refused by name (InvalidParameter) rather than
+/// reported, because the fragment is applied to the live engine.
 SonareError parse_scene_json(const char* json, mixing::api::Scene* out) {
+  std::vector<std::string> unknown_keys;
   try {
-    *out = mixing::api::scene_from_json(json);
+    *out = mixing::api::scene_from_json(json, &unknown_keys);
   } catch (const util::json::JsonError& e) {
     set_last_error(SONARE_ERROR_INVALID_FORMAT, e.what());
     return SONARE_ERROR_INVALID_FORMAT;
   }
+  mixing::api::refuse_unknown_strip_keys(unknown_keys);
   return SONARE_OK;
 }
 
