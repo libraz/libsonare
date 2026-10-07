@@ -712,10 +712,12 @@ describe('Sonare WASM Module', () => {
         clipId: 308,
       });
       expect(frozen.clipId).toBe(308);
-      // The frozen clip is ordinary PCM, so neither the replaced tempo-baked
-      // id nor the new frozen id may report stale tempo-bake metadata.
+      // The replaced tempo-baked id reports nothing; the frozen clip reports its
+      // own engine-owned audio, which is what a host reads back to sync it.
       expect(engine.prebakedClipChannels(307)).toBeNull();
-      expect(engine.prebakedClipChannels(308)).toBeNull();
+      const frozenChannels = engine.prebakedClipChannels(308);
+      expect(frozenChannels?.length).toBe(1);
+      expect(frozenChannels?.[0].length).toBe(512);
       engine.destroy();
     });
 

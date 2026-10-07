@@ -6,9 +6,13 @@ import {
 import { ErrorCode, SonareError } from '../errors.js';
 import type {
   EngineAutomationPoint,
+  EngineBounceOptions,
+  EngineBounceResult,
   EngineBus,
   EngineCaptureStatus,
   EngineClip,
+  EngineFreezeOptions,
+  EngineFreezeResult,
   EngineMarker,
   EngineMetronomeConfig,
   EngineMidiClipSchedule,
@@ -40,6 +44,12 @@ import type { EngineCaptureContext } from './engine-capture-facade.js';
 import * as capture from './engine-capture-facade.js';
 import type { EngineClipContext } from './engine-clips.js';
 import * as clips from './engine-clips.js';
+import type {
+  EngineExportContext,
+  OpfsExportSource,
+  SonareRenderOfflineRequest,
+} from './engine-export.js';
+import * as exporter from './engine-export.js';
 import type { EngineMarkerContext } from './engine-markers.js';
 import * as markers from './engine-markers.js';
 import type { EngineMixerContext, InsertParamOverrideMap } from './engine-mixer-facade.js';
@@ -144,6 +154,8 @@ export class SonareEngine {
   // places a hard cap on work queued while OPFS I/O is stalled.
   private readonly workletClipPageRequests = new Map<number, ClipPageStreamerRequest>();
   private readonly workletPageProviderClipIds = new Map<number, number>();
+  private readonly opfsExportSources = new Map<number, OpfsExportSource>();
+  private readonly exportSession: { chunkOrigin: number | undefined } = { chunkOrigin: undefined };
   private workletClipStreamer: ClipPageStreamer | undefined;
   private workletClipPump: Promise<void> | undefined;
   private workletClipPagePollTimer: ReturnType<typeof setInterval> | undefined;
@@ -864,20 +876,29 @@ export class SonareEngine {
     binding = createOpfsClipPageProvider(this.offlineEngine, {
       ...providerOptions,
       onPageSupplied: (pageIndex, channels) => {
+        this.opfsExportSources.get(binding.provider.id)?.residentPages.add(pageIndex);
         this.postSync(
           { type: 'syncClipPage', clipId, pageIndex, channels },
           transferableAudioBuffers(channels),
         );
       },
       onPageCleared: (pageIndex) => {
+        this.opfsExportSources.get(binding.provider.id)?.residentPages.delete(pageIndex);
         this.postSync({ type: 'syncClipPageClear', clipId, pageIndex });
       },
       onClose: () => {
         this.workletPageProviderClipIds.delete(binding.provider.id);
+        this.opfsExportSources.delete(binding.provider.id);
         this.postSync({ type: 'syncClipPageDestroy', clipId });
       },
     });
     this.workletPageProviderClipIds.set(binding.provider.id, clipId);
+    this.opfsExportSources.set(binding.provider.id, {
+      binding,
+      pageFrames: providerOptions.pageFrames,
+      numSamples: providerOptions.numSamples,
+      residentPages: new Set(),
+    });
     const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
     const primed: number[] = [];
     try {
@@ -1333,14 +1354,52 @@ export class SonareEngine {
     return markers.setLoopFromMarkers(this.markerContext, startMarkerId, endMarkerId);
   }
 
-  async renderOffline(totalFrames: number): Promise<Float32Array[]> {
-    const frames = Math.max(0, Math.floor(totalFrames));
-    const inputs: Float32Array[] = [];
-    for (let ch = 0; ch < this.offlineChannelCount; ch++) {
-      inputs.push(new Float32Array(frames));
-    }
-    this.offlineEngine.primeOfflineParameters(this.offlineChannelCount, this.offlineBlockSize);
-    return this.offlineEngine.renderOffline(inputs, this.offlineBlockSize);
+  /**
+   * Renders the timeline offline through this thread's mirror engine, from the
+   * current transport position, and returns one planar buffer per offline
+   * channel. Primes the mirror first, so the result equals a bounce of the same
+   * span. Runs synchronously on the calling thread: the thread is blocked for
+   * the whole render.
+   *
+   * The request form takes `blockSize` (default and ceiling: the offline block
+   * size; a larger value throws `RangeError`) and `finalize`. With
+   * `finalize: false` a chunk leaves held notes and delay tails running into
+   * the next call, which does not prime again; end the series with
+   * {@link finishOfflineRender}. The mirror's transport position is restored
+   * when the timeline ends.
+   */
+  async renderOffline(request: number | SonareRenderOfflineRequest): Promise<Float32Array[]> {
+    return exporter.renderOffline(this.exportContext, request);
+  }
+
+  /**
+   * Ends a chunked {@link renderOffline} series: releases every held note,
+   * flushes the delay lines and restores the mirror's transport position.
+   */
+  finishOfflineRender(): void {
+    exporter.finishOfflineRender(this.exportContext);
+  }
+
+  /**
+   * Bounces the timeline to an interleaved buffer with the options, defaults
+   * and result of {@link RealtimeEngine.bounceOffline}; `blockSize` defaults to
+   * the offline block size and must not exceed it (`RangeError`). Runs
+   * synchronously on the calling thread. The mirror's transport position is
+   * restored afterwards. OPFS-streamed clips are paged in for the span first.
+   */
+  async bounceOffline(options: EngineBounceOptions): Promise<EngineBounceResult> {
+    return exporter.bounceOffline(this.exportContext, options);
+  }
+
+  /**
+   * Freezes the timeline to audio with the options, defaults and result of
+   * {@link RealtimeEngine.freezeOffline}. As there, the frozen clip replaces
+   * the clip set: the facade, the mirror and the worklet all end up holding
+   * only that clip. `blockSize` defaults to the offline block size and must not
+   * exceed it (`RangeError`). Runs synchronously on the calling thread.
+   */
+  async freezeOffline(options: EngineFreezeOptions): Promise<EngineFreezeResult> {
+    return exporter.freezeOffline(this.exportContext, options);
   }
 
   /**
@@ -1725,6 +1784,20 @@ export class SonareEngine {
         this.latestTransportState = state;
       },
       getLatestTransportState: () => this.latestTransportState,
+    };
+  }
+
+  private get exportContext(): EngineExportContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      offlineBlockSize: this.offlineBlockSize,
+      offlineChannelCount: this.offlineChannelCount,
+      clips: this.clips,
+      opfsSources: this.opfsExportSources,
+      session: this.exportSession,
+      flushOfflineMirror: () => this.flushOfflineMirror(),
+      commitFrozenClip: (clip, previousClipIds) =>
+        clips.replaceClips(this.clipContext, clip, previousClipIds),
     };
   }
 

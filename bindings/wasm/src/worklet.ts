@@ -18,6 +18,7 @@ export { init, isInitialized } from './index.js';
 export type { StreamingMasteringChainConfig } from './public_types.js';
 export { StreamingMasteringChain } from './streaming_processors.js';
 export { SonareEngine } from './worklet/engine.js';
+export type { SonareRenderOfflineRequest } from './worklet/engine-export.js';
 export { SonareRealtimeEngineNode } from './worklet/engine-node.js';
 export type { SonareEngineOptions } from './worklet/engine-options.js';
 export { SonareRealtimeEngineWorkletProcessor } from './worklet/engine-processor.js';

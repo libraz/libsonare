@@ -51,6 +51,23 @@ export function removeClip(ctx: EngineClipContext, clipId: number): void {
   syncClipsDelta(ctx, [], [clipId]);
 }
 
+/** Replaces the whole clip store with one clip and syncs the worklet, dropping every previous id. */
+export function replaceClips(
+  ctx: EngineClipContext,
+  clip: EngineClip,
+  previousClipIds: readonly number[],
+): void {
+  ctx.clips.clear();
+  if (clip.id !== undefined) {
+    ctx.clips.set(clip.id, clip);
+  }
+  syncClipsDelta(
+    ctx,
+    [clip],
+    previousClipIds.filter((id) => id !== clip.id),
+  );
+}
+
 export function setMidiClips(
   ctx: EngineClipContext,
   clips: readonly EngineMidiClipSchedule[],

@@ -1193,8 +1193,9 @@ export class RealtimeEngine {
   }
 
   /**
-   * Returns the PCM generated for a tempo-sync clip by the control-thread
-   * setter, or `null` when the clip did not require a tempo-sync bake.
+   * Returns the engine-owned PCM behind a clip: the audio generated for a
+   * tempo-sync clip by the control-thread setter, or the audio a
+   * {@link freezeOffline} produced. `null` for any other clip.
    */
   prebakedClipChannels(clipId: number): Float32Array[] | null {
     return this.native.prebakedClipChannels(clipId);

@@ -553,7 +553,8 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
   new_storage.push_back(owned);
   std::vector<uint32_t> new_clip_ids{schedule.id};
-  std::vector<uint8_t> new_clip_tempo_baked{0};
+  // The frozen audio is engine-owned, so prebakedClipChannels() can hand it back.
+  std::vector<uint8_t> new_clip_tempo_baked{1};
   engine_.set_clips({schedule});
   clip_storage_ = std::move(new_storage);
   clip_ids_ = std::move(new_clip_ids);
