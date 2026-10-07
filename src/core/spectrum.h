@@ -101,9 +101,10 @@ void validate_config(const StftConfig& config);
 /// @details The single source of truth for the STFT geometry the spectral
 ///          effects accept. Two rules on top of @ref validate_config's shape
 ///          checks:
-///          - @p n_fft must be even and >= 2, which is what the real FFT accepts
-///            (a one-sided spectrum has no n_fft/2 + 1 layout otherwise). Any
-///            even size works; the FFT is mixed-radix, not radix-2 only, so a
+///          - @p n_fft must be even, which is what the real FFT accepts (a
+///            one-sided spectrum has no n_fft/2 + 1 layout otherwise), and >= 4,
+///            because a two-point symmetric Hann synthesis window is all zeros.
+///            Any such size works; the FFT is mixed-radix, not radix-2 only, so a
 ///            power of two is a performance preference and not a requirement.
 ///          - @p hop_length must lie in (0, n_fft / 2], i.e. frames overlap by
 ///            at least half a window.
@@ -121,6 +122,20 @@ void validate_config(const StftConfig& config);
 /// @param hop_length Hop length between frames.
 /// @throws SonareException(InvalidParameter) if either rule is violated.
 void validate_cola_geometry(int n_fft, int hop_length);
+
+/// @brief Validates a resynthesis geometry together with its resolved window pair.
+/// @details Applies @ref validate_cola_geometry(int, int), then requires the
+///          overlap-added analysis*synthesis product of the padded pair
+///          @ref Spectrogram::to_audio uses (periodic analysis, symmetric synthesis)
+///          to exceed the normalization floor at every hop residue. A short
+///          @p win_length can leave residues no frame covers, and a two-point
+///          symmetric Hann is identically zero; either deletes input samples.
+/// @param n_fft FFT size.
+/// @param hop_length Hop length between frames.
+/// @param window Window family.
+/// @param win_length Window length in (0, n_fft].
+/// @throws SonareException(InvalidParameter) if any rule is violated.
+void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int win_length);
 
 /// @brief Builds an StftConfig with the given FFT and hop sizes.
 /// @details Convenience helper for the common case where callers only need to

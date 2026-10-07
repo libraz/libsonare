@@ -301,12 +301,30 @@ void validate_config(const StftConfig& config) {
 }
 
 void validate_cola_geometry(int n_fft, int hop_length) {
-  SONARE_CHECK_MSG(n_fft >= 2 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
-                   "StftConfig: nFft must be an even integer >= 2");
+  SONARE_CHECK_MSG(n_fft >= 4 && (n_fft % 2) == 0, ErrorCode::InvalidParameter,
+                   "StftConfig: nFft must be an even integer >= 4");
   SONARE_CHECK_MSG(hop_length > 0, ErrorCode::InvalidParameter,
                    "StftConfig: hopLength must be positive");
   SONARE_CHECK_MSG(hop_length <= n_fft / 2, ErrorCode::InvalidParameter,
                    "StftConfig: hopLength must not exceed nFft / 2 (constant overlap-add)");
+}
+
+void validate_cola_geometry(int n_fft, int hop_length, WindowType window, int win_length) {
+  validate_cola_geometry(n_fft, hop_length);
+  SONARE_CHECK_MSG(win_length > 0 && win_length <= n_fft, ErrorCode::InvalidParameter,
+                   "StftConfig: winLength must lie in (0, nFft]");
+  const std::vector<float> analysis = build_padded_window(window, win_length, n_fft, true);
+  const std::vector<float> synthesis = build_padded_window(window, win_length, n_fft, false);
+  for (int residue = 0; residue < hop_length; ++residue) {
+    double coverage = 0.0;
+    for (int i = residue; i < n_fft; i += hop_length) {
+      coverage += static_cast<double>(analysis[static_cast<size_t>(i)]) *
+                  static_cast<double>(synthesis[static_cast<size_t>(i)]);
+    }
+    SONARE_CHECK_MSG(coverage > static_cast<double>(sonare::constants::kSpectrumEpsilon),
+                     ErrorCode::InvalidParameter,
+                     "StftConfig: winLength leaves samples no overlap-added window covers");
+  }
 }
 
 Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,

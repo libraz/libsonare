@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <climits>
 #include <cmath>
 
 #include "CDSPResampler.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare {
 
@@ -25,9 +27,10 @@ std::vector<float> resample(const float* samples, size_t size, int src_sr, int t
     return std::vector<float>(samples, samples + size);
   }
 
-  // Calculate output size
-  const double ratio = static_cast<double>(target_sr) / static_cast<double>(src_sr);
-  const size_t expected_size = static_cast<size_t>(std::round(static_cast<double>(size) * ratio));
+  size_t expected_size = 0;
+  SONARE_CHECK(numeric::checked_converted_count(size, src_sr, target_sr,
+                                                static_cast<size_t>(INT_MAX), &expected_size),
+               ErrorCode::InvalidParameter);
 
   std::vector<float> result;
   result.reserve(expected_size + 1);

@@ -246,3 +246,22 @@ TEST_CASE("resample impulse response keeps same-rate coefficients bit-exact", "[
   REQUIRE(result.size() == source.size());
   CHECK(result == source);
 }
+
+TEST_CASE("resample keeps at least one sample for non-empty input shorter than a target sample",
+          "[resample]") {
+  const std::vector<float> one(1, 0.5f);
+  CHECK(resample(one.data(), one.size(), 384000, 8000).size() == 1);
+
+  std::vector<float> source(16, 0.0f);
+  source[0] = 1.0f;
+  const std::vector<float> response =
+      resample_impulse_response(source.data(), source.size(), 384000, 8000);
+  REQUIRE(response.size() == 1);
+  CHECK(std::abs(sum(response) - 1.0) < 1e-3);
+
+  // Lengths that already round to at least one sample keep round-to-nearest.
+  const std::vector<float> buffer(1001, 0.0f);
+  CHECK(resample(buffer.data(), buffer.size(), 22050, 16000).size() == 726);
+  CHECK(resample(buffer.data(), 48, 384000, 8000).size() == 1);
+  CHECK(resample(buffer.data(), 96, 384000, 8000).size() == 2);
+}

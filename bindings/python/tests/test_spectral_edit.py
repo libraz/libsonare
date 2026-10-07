@@ -101,6 +101,8 @@ def test_invalid_parameters_raise() -> None:
     x = sine(440.0, 0.25, amp=0.4)
     with pytest.raises((ValueError, Exception)):
         libsonare.spectral_edit(x, SR, [], n_fft=2000)  # not a power of two
+    with pytest.raises(ValueError, match="power of two >= 4"):
+        libsonare.spectral_edit(x, SR, [], n_fft=2, hop_length=1, window="rectangular")
     with pytest.raises((ValueError, Exception)):
         libsonare.spectral_edit(x, SR, [], n_fft=2048, hop_length=2048)  # hop > n_fft/2
     with pytest.raises((ValueError, Exception)):

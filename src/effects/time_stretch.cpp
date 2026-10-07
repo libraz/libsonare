@@ -23,14 +23,7 @@ Audio time_stretch(const Audio& audio, float rate, const TimeStretchConfig& conf
     return native_spectral_time_stretch(audio, rate, config.n_fft, config.hop_length);
   }
 
-  /// Compute STFT
-  StftConfig stft_config;
-  stft_config.n_fft = config.n_fft;
-  stft_config.hop_length = config.hop_length;
-  stft_config.window = WindowType::Hann;
-  stft_config.center = true;
-
-  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  Spectrogram spec = phase_vocoder_analysis(audio, config.n_fft, config.hop_length);
 
   /// Apply phase vocoder
   PhaseVocoderConfig pv_config;

@@ -250,6 +250,26 @@ TEST_CASE("sonare_normalize_rms clips and sonare_trim_ex uses custom framing", "
   }
 }
 
+TEST_CASE("effect _ex accepts input shorter than one analysis hop", "[c_api][effects]") {
+  const float sample = 0.25f;
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_pitch_shift_ex(&sample, 1, 22050, 0.0f, 2048, 512, &out, &out_length) ==
+          SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == 1);
+  REQUIRE(std::isfinite(out[0]));
+  sonare_free_floats(out);
+
+  out = nullptr;
+  out_length = 0;
+  REQUIRE(sonare_time_stretch_ex(&sample, 1, 22050, 0.5f, 2048, 512, &out, &out_length) ==
+          SONARE_OK);
+  REQUIRE(out != nullptr);
+  REQUIRE(out_length == 2);
+  sonare_free_floats(out);
+}
+
 TEST_CASE("effect _ex outputs are cleared before validation", "[c_api][effects]") {
   const float sample = 0.25f;
 
@@ -262,8 +282,8 @@ TEST_CASE("effect _ex outputs are cleared before validation", "[c_api][effects]"
 
   out = non_null_sentinel_float_ptr();
   out_length = 99;
-  REQUIRE(sonare_pitch_shift_ex(&sample, 1, 22050, 0.0f, 2048, 512, &out, &out_length) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_pitch_shift_ex(&sample, 1, 22050, std::numeric_limits<float>::quiet_NaN(), 2048,
+                                512, &out, &out_length) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(out == nullptr);
   REQUIRE(out_length == 0);
 

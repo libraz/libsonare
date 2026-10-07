@@ -176,8 +176,13 @@ def test_invalid_options_are_rejected_before_library_lookup(
         timepitch.time_stretch(_samples(), n_fft=1001)
     with pytest.raises(ValueError, match="n_fft"):
         timepitch.time_stretch(_samples(), n_fft=2**32)
+    # A two-point symmetric Hann synthesis window is all zeros.
+    with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
+        timepitch.pitch_shift(_samples(), n_fft=2, hop_length=1)
 
     monkeypatch.setattr(separation, "_get_lib", fail_lookup)
+    with pytest.raises(ValueError, match="n_fft must be an even signed 32-bit integer >= 4"):
+        separation.hpss(_samples(), n_fft=2, hop_length=1)
     with pytest.raises(ValueError, match="kernel_harmonic"):
         separation.hpss(_samples(), kernel_harmonic=2**32 + 1)
     with pytest.raises(ValueError, match="hop_length"):

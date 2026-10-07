@@ -19,7 +19,6 @@ namespace sonare::engine {
 namespace {
 
 using sonare::constants::kSpectrumEpsilon;
-using sonare::constants::kTwoPi;
 
 std::vector<float> stretch_segment(const float* source, size_t source_samples,
                                    size_t target_samples,
@@ -66,6 +65,8 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
                ErrorCode::InvalidParameter);
   const int output_frames = std::max(1, static_cast<int>(output_frame_count));
 
+  PhaseVocoderSynthesizer synth(n_fft, hop, config.sample_rate, WindowType::Hann, n_fft,
+                                config.phase_lock);
   FFT fft(n_fft);
   const auto analysis_window_handle = get_window_cached(WindowType::Hann, n_fft, true);
   const auto synthesis_window_handle = get_window_cached(WindowType::Hann, n_fft, false);
@@ -106,43 +107,30 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
       std::vector<float>(static_cast<size_t>(output_frames * hop + n_fft), 0.0f));
   std::vector<float> window_sum(static_cast<size_t>(output_frames * hop + n_fft), 0.0f);
   std::vector<std::complex<float>> synth_bins(static_cast<size_t>(n_bins));
-  std::vector<float> ref_mag(static_cast<size_t>(n_bins), 0.0f);
-  std::vector<float> ref_phase(static_cast<size_t>(n_bins), 0.0f);
-  std::vector<float> ref_inst_freq(static_cast<size_t>(n_bins), 0.0f);
+  std::vector<std::complex<float>> ref0(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> ref1(static_cast<size_t>(n_bins));
   std::vector<std::vector<float>> channel_mag(static_cast<size_t>(channels),
                                               std::vector<float>(static_cast<size_t>(n_bins)));
   std::vector<std::vector<float>> channel_phase(static_cast<size_t>(channels),
                                                 std::vector<float>(static_cast<size_t>(n_bins)));
-  std::vector<double> phase_acc(static_cast<size_t>(n_bins), 0.0);
-  std::vector<int> peaks;
-  std::vector<int> nearest_peak(static_cast<size_t>(n_bins), -1);
-  const double time_step = static_cast<double>(hop) / static_cast<double>(config.sample_rate);
 
   auto spectrum_at = [&](int ch, int frame_index, int bin) -> const std::complex<float>& {
     return spectra[static_cast<size_t>(ch)][static_cast<size_t>(frame_index * n_bins + bin)];
   };
 
   for (int t_out = 0; t_out < output_frames; ++t_out) {
-    float t_in_f = map.input_position(t_out);
-    int t_in = static_cast<int>(t_in_f);
-    float frac = t_in_f - static_cast<float>(t_in);
-    if (t_in >= input_frames - 1) {
-      t_in = input_frames - 2;
-      frac = 1.0f;
-    }
-    if (t_in < 0) {
-      t_in = 0;
-      frac = 0.0f;
-    }
+    int t_in = 0;
+    float frac = 0.0f;
+    PhaseVocoderSynthesizer::locate_input_frame(map, t_out, input_frames, &t_in, &frac);
 
     for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> ref0{};
-      std::complex<float> ref1{};
+      ref0[static_cast<size_t>(k)] = {};
+      ref1[static_cast<size_t>(k)] = {};
       for (int ch = 0; ch < channels; ++ch) {
         const auto frame0 = spectrum_at(ch, t_in, k);
         const auto frame1 = spectrum_at(ch, t_in + 1, k);
-        ref0 += frame0;
-        ref1 += frame1;
+        ref0[static_cast<size_t>(k)] += frame0;
+        ref1[static_cast<size_t>(k)] += frame1;
         channel_mag[static_cast<size_t>(ch)][static_cast<size_t>(k)] =
             std::abs(frame0) * (1.0f - frac) + std::abs(frame1) * frac;
         const float phase0 = std::arg(frame0);
@@ -150,21 +138,8 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
         channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)] =
             phase0 + frac * phase::wrap(phase1 - phase0);
       }
-      ref_mag[static_cast<size_t>(k)] = std::abs(ref0) * (1.0f - frac) + std::abs(ref1) * frac;
-      const float ref_phase0 = std::arg(ref0);
-      const float ref_phase1 = std::arg(ref1);
-      ref_phase[static_cast<size_t>(k)] = ref_phase0 + frac * phase::wrap(ref_phase1 - ref_phase0);
-      const float bin_freq = static_cast<float>(k) * static_cast<float>(config.sample_rate) /
-                             static_cast<float>(n_fft);
-      const float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-      const float phase_diff = phase::wrap(ref_phase1 - ref_phase0 - expected_advance);
-      ref_inst_freq[static_cast<size_t>(k)] =
-          bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
     }
-
-    phase::synthesize_locked_frame(ref_mag.data(), ref_phase.data(), ref_inst_freq.data(), n_bins,
-                                   config.phase_lock, t_out == 0, time_step, phase_acc, peaks,
-                                   nearest_peak);
+    synth.next_frame(ref0.data(), ref1.data(), frac);
 
     const size_t start = static_cast<size_t>(t_out) * static_cast<size_t>(hop);
     for (int ch = 0; ch < channels; ++ch) {
@@ -175,8 +150,8 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
         /// giving all channels a coherent time-stretch. For a single reference channel
         /// this reduces to the mono synthesis phase, so identical channels bake
         /// bit-identically to the mono path.
-        const double rotation = phase_acc[static_cast<size_t>(k)] -
-                                static_cast<double>(ref_phase[static_cast<size_t>(k)]);
+        const double rotation =
+            synth.synthesis_phase()[k] - static_cast<double>(synth.analysis_phase()[k]);
         const float synth_phase = static_cast<float>(phase::wrap(
             static_cast<double>(channel_phase[static_cast<size_t>(ch)][static_cast<size_t>(k)]) +
             rotation));

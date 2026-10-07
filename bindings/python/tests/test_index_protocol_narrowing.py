@@ -133,7 +133,7 @@ def _refusal(entry, **kwargs) -> str:
     ("keyword", "domain"),
     [
         ("kernel_harmonic", "hpss: kernel_harmonic must be a positive odd signed 32-bit integer"),
-        ("n_fft", "hpss: n_fft must be an even signed 32-bit integer >= 2"),
+        ("n_fft", "hpss: n_fft must be an even signed 32-bit integer >= 4"),
         ("hop_length", "hpss: hop_length must fit in a positive signed 32-bit integer"),
     ],
 )

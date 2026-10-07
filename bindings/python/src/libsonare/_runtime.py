@@ -858,11 +858,13 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
     """Validate an STFT size against the domain the core accepts.
 
     The core FFT is mixed-radix, so any even size transforms exactly; only the
-    real one-sided spectrum's ``n_fft / 2 + 1`` bin layout needs the evenness. A
-    power-of-two restriction here would reject sizes the C ABI and the native
-    CLI accept, which makes the facade diverge rather than merely be stricter.
+    real one-sided spectrum's ``n_fft / 2 + 1`` bin layout needs the evenness, and
+    four is the smallest size whose symmetric Hann synthesis window is not all
+    zeros. A power-of-two restriction here would reject sizes the C ABI and the
+    native CLI accept, which makes the facade diverge rather than merely be
+    stricter.
 
-    This is the single definition of the even-and-at-least-two domain, reached
+    This is the single definition of the even-and-at-least-four domain, reached
     through :func:`_validate_effect_fft_options`, so the entry points that hold
     it cannot drift apart. It is not the binding's only STFT size domain: other
     STFT-framed entry points deliberately require a power of two, and they are
@@ -878,14 +880,14 @@ def _validate_stft_n_fft(fn_name: str, n_fft: int) -> int:
 
     Raises:
         SonareValueError: If ``n_fft`` is not an even integer in
-            ``[2, 2**31 - 1]``.
+            ``[4, 2**31 - 1]``.
     """
-    domain = "must be an even signed 32-bit integer >= 2"
+    domain = "must be an even signed 32-bit integer >= 4"
     try:
         size = _narrow_int(n_fft, "n_fft", _C_INT_MIN, _C_INT_MAX)
     except SonareValueError as exc:
         raise _int_refusal(fn_name, n_fft, "n_fft", domain) from exc
-    if size < 2 or size % 2 != 0:
+    if size < 4 or size % 2 != 0:
         raise SonareValueError(f"{fn_name}: n_fft {domain}")
     return size
 

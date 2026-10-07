@@ -312,6 +312,18 @@ TEST_CASE("spectral_edit rejects invalid parameters", "[spectral_edit]") {
     cfg.n_fft = 2000;
     REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
   }
+  SECTION("n_fft below the four-point floor, whatever the window") {
+    SpectralEditConfig cfg = default_config();
+    cfg.n_fft = 2;
+    cfg.hop_length = 1;
+    for (const WindowType window : {WindowType::Hann, WindowType::Rectangular}) {
+      cfg.window = window;
+      REQUIRE_THROWS_AS(spectral_edit(audio, cfg, nullptr, 0), SonareException);
+    }
+    cfg.n_fft = 4;
+    cfg.hop_length = 2;
+    REQUIRE_NOTHROW(spectral_edit(audio, cfg, nullptr, 0));
+  }
   SECTION("hop_length exceeds n_fft/2") {
     SpectralEditConfig cfg = default_config();
     cfg.hop_length = cfg.n_fft;  // > n_fft/2

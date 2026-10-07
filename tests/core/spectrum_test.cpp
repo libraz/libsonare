@@ -124,7 +124,7 @@ TEST_CASE("validate_cola_geometry accepts every invertible geometry", "[spectrum
     // facades used to reject sizes like this while the C ABI accepted them.
     REQUIRE_NOTHROW(validate_cola_geometry(1500, 256));
     REQUIRE_NOTHROW(validate_cola_geometry(3000, 750));
-    REQUIRE_NOTHROW(validate_cola_geometry(2, 1));
+    REQUIRE_NOTHROW(validate_cola_geometry(4, 2));
   }
 }
 
@@ -143,6 +143,9 @@ TEST_CASE("validate_cola_geometry rejects geometries outside the half-overlap co
     REQUIRE_THROWS_AS(validate_cola_geometry(1023, 256), SonareException);
     REQUIRE_THROWS_AS(validate_cola_geometry(1, 1), SonareException);
     REQUIRE_THROWS_AS(validate_cola_geometry(0, 512), SonareException);
+  }
+  SECTION("a two-point frame, whose symmetric Hann synthesis window is all zeros") {
+    REQUIRE_THROWS_AS(validate_cola_geometry(2, 1), SonareException);
   }
 }
 

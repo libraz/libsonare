@@ -61,6 +61,12 @@ Spectrogram phase_vocoder(const Spectrogram& spec, float rate,
 Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
                                       const PhaseVocoderConfig& config = PhaseVocoderConfig());
 
+/// @brief Centered Hann STFT of @p audio holding the frame pair phase_vocoder() needs.
+/// @details Non-empty input shorter than one hop is zero-extended to a second
+///          analysis frame; resynthesize with to_audio(length) to trim it again.
+/// @throws SonareException if @p audio is empty or the geometry is invalid.
+Spectrogram phase_vocoder_analysis(const Audio& audio, int n_fft, int hop_length);
+
 /// @brief Computes instantaneous frequency from phase difference.
 /// @param phase Current phase values [n_bins]
 /// @param prev_phase Previous phase values [n_bins]
@@ -70,6 +76,50 @@ Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
 /// @return Instantaneous frequency in Hz [n_bins]
 std::vector<float> compute_instantaneous_frequency(const float* phase, const float* prev_phase,
                                                    int n_bins, int hop_length, int sample_rate);
+
+/// @brief Frame-by-frame phase-vocoder synthesis shared by the offline, streaming
+///        and multichannel tempo-sync paths.
+/// @details The constructor validates the resynthesis geometry, window pair
+///          included. Each next_frame() emits one output frame's synthesis phases
+///          and only then applies the analysis transition leading out of it, so at
+///          rate 1 output frame t carries the analysis phase of input frame t.
+class PhaseVocoderSynthesizer {
+ public:
+  PhaseVocoderSynthesizer(int n_fft, int hop_length, int sample_rate, WindowType window,
+                          int win_length, bool phase_lock);
+
+  /// @brief Makes the next frame the first of a new stream.
+  void reset() noexcept { first_frame_ = true; }
+
+  /// @brief Synthesizes one output frame interpolated at @p frac between two
+  ///        consecutive analysis frames of n_fft/2 + 1 bins each.
+  void next_frame(const std::complex<float>* frame0, const std::complex<float>* frame1, float frac);
+
+  /// @brief Clamped analysis frame pair (t_in, t_in + 1) and interpolation weight
+  ///        for output frame @p t_out over @p n_frames_in >= 2 analysis frames.
+  static void locate_input_frame(const TimeStretchMap& map, int t_out, int n_frames_in, int* t_in,
+                                 float* frac);
+
+  int n_bins() const noexcept { return n_bins_; }
+  const float* magnitude() const noexcept { return magnitude_.data(); }
+  const float* analysis_phase() const noexcept { return analysis_phase_.data(); }
+  const double* synthesis_phase() const noexcept { return synthesis_phase_.data(); }
+
+ private:
+  int n_fft_;
+  int n_bins_;
+  int sample_rate_;
+  bool phase_lock_;
+  bool first_frame_ = true;
+  double time_step_;
+  std::vector<float> magnitude_;
+  std::vector<float> analysis_phase_;
+  std::vector<float> inst_freq_;
+  std::vector<double> accumulator_;
+  std::vector<double> synthesis_phase_;
+  std::vector<int> peaks_;
+  std::vector<int> nearest_peak_;
+};
 
 /// @brief Chunked phase-vocoder prototype for Step 5 tempo-sync work.
 /// @details Mono/fixed-rate streaming-shaped prototype. It owns analysis STFT
@@ -115,6 +165,7 @@ class StreamingPhaseVocoder {
   const std::complex<float>& analysis_frame_at(int frame, int bin) const noexcept;
 
   StreamingPhaseVocoderConfig config_;
+  PhaseVocoderSynthesizer synth_;
   std::vector<float> input_;
   size_t input_base_sample_ = 0;
   size_t ola_base_sample_ = 0;
@@ -134,12 +185,6 @@ class StreamingPhaseVocoder {
   std::vector<float> frame_;
   std::vector<std::complex<float>> frame_spectrum_;
   std::vector<std::complex<float>> analysis_frames_;
-  std::vector<double> phase_acc_;
-  std::vector<float> mag_;
-  std::vector<float> ana_phase_;
-  std::vector<float> inst_freq_;
-  std::vector<int> peaks_;
-  std::vector<int> nearest_peak_;
   std::vector<float> ola_output_;
   std::vector<float> ola_window_sum_;
   int analysis_frame_base_ = 0;

@@ -1423,3 +1423,32 @@ TEST_CASE("the spectrogram-level harmonic and percussive match hpss and the audi
     REQUIRE(std::equal(via_audio.data(), via_audio.data() + via_audio.size(), via_spec.data()));
   }
 }
+
+TEST_CASE("audio hpss refuses a window that leaves samples uncovered", "[hpss]") {
+  std::vector<float> samples(8192, 0.0f);
+  samples[128] = 0.25f;
+  const Audio audio = Audio::from_vector(std::move(samples), 22050);
+  const HpssConfig config;
+
+  StftConfig short_window;
+  short_window.n_fft = 1024;
+  short_window.hop_length = 256;
+  short_window.win_length = 128;
+  StftConfig two_point;
+  two_point.n_fft = 2;
+  two_point.hop_length = 1;
+  for (const StftConfig& stft : {short_window, two_point}) {
+    INFO("n_fft " << stft.n_fft << ", win_length " << stft.actual_win_length());
+    CHECK_THROWS_AS(hpss(audio, config, stft), SonareException);
+    CHECK_THROWS_AS(harmonic(audio, config, stft), SonareException);
+    CHECK_THROWS_AS(percussive(audio, config, stft), SonareException);
+    CHECK_THROWS_AS(hpss_with_residual(audio, config, stft), SonareException);
+    CHECK_THROWS_AS(residual(audio, config, stft), SonareException);
+  }
+
+  StftConfig covered = short_window;
+  covered.win_length = 512;
+  CHECK_NOTHROW(hpss(audio, config, covered));
+  const HpssAudioResult result = hpss(audio, config);
+  CHECK(result.harmonic.size() == audio.size());
+}

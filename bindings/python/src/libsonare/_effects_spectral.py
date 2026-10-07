@@ -116,7 +116,7 @@ def spectral_edit(
         samples: Audio samples (mono).
         sample_rate: Sample rate in Hz.
         ops: Sequence of :class:`SpectralRegionOp` region edits, applied in order.
-        n_fft: STFT size; a power of two in ``[2, 262144]`` (default 2048).
+        n_fft: STFT size; a power of two in ``[4, 262144]`` (default 2048).
         hop_length: STFT hop; must satisfy ``0 < hop_length <= n_fft / 2``
             (default 512).
         window: Analysis window, one of ``"hann"``, ``"hamming"``,
@@ -153,6 +153,8 @@ def spectral_edit(
     # reports the same rejection eagerly and by name instead of as a generic
     # invalid-parameter return from the core.
     _require_power_of_two(n_fft, "n_fft")
+    if n_fft < 4:
+        raise SonareValueError("n_fft must be a power of two >= 4")
     if hop_length <= 0 or hop_length > n_fft // 2:
         raise SonareValueError("hop_length must satisfy 0 < hop_length <= n_fft / 2")
     if heal_radius_frames < 0:

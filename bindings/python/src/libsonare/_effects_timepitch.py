@@ -51,7 +51,7 @@ def time_stretch(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         rate: Stretch factor (>1 speeds up, <1 slows down).
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).
@@ -100,7 +100,7 @@ def pitch_shift(
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
         semitones: Number of semitones to shift (positive = up, negative = down).
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).

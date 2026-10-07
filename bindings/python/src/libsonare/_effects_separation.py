@@ -530,7 +530,7 @@ def hpss(
             even kernel is refused, so 524287 is the largest legal value.
         kernel_percussive: Percussive median filter kernel size, in STFT bins,
             under the same rule.
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).
@@ -694,7 +694,7 @@ def hpss_with_residual(
             even kernel is refused, so 524287 is the largest legal value.
         kernel_percussive: Vertical median filter size, in STFT bins, under the
             same rule.
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).
@@ -811,7 +811,7 @@ def phase_vocoder(
         samples: Input audio.
         sample_rate: Sample rate in Hz (default 22050).
         rate: Time stretch rate (< 1.0 slower, > 1.0 faster). Must be > 0.
-        n_fft: FFT size used for analysis/synthesis; an even integer >= 2
+        n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``
             so frames overlap by at least half a window (default 512).

@@ -39,7 +39,7 @@ SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, in
 ///                   legal size.
 /// @param kernel_percussive Vertical median filter size, in STFT bins, under the
 ///                   same rule.
-/// @param n_fft      FFT size: an even integer >= 2. Any even size is accepted;
+/// @param n_fft      FFT size: an even integer >= 4. Any even size is accepted;
 ///                   the FFT is mixed-radix, not power-of-two only.
 /// @param hop_length Hop in samples, in (0, n_fft/2]. The result is
 ///                   resynthesized by overlap-add and the phase-coherent
@@ -63,7 +63,7 @@ SonareError sonare_percussive(const float* samples, size_t length, int sample_ra
 SonareError sonare_time_stretch(const float* samples, size_t length, int sample_rate, float rate,
                                 float** out, size_t* out_length);
 /// @brief Native spectral time stretch with explicit FFT/hop configuration.
-/// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
+/// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_time_stretch_ex(const float* samples, size_t length, int sample_rate, float rate,
@@ -72,7 +72,7 @@ SonareError sonare_time_stretch_ex(const float* samples, size_t length, int samp
 SonareError sonare_pitch_shift(const float* samples, size_t length, int sample_rate,
                                float semitones, float** out, size_t* out_length);
 /// @brief Native spectral pitch shift with explicit FFT/hop configuration.
-/// @details @p n_fft must be an even integer >= 2 and @p hop_length must lie in
+/// @details @p n_fft must be an even integer >= 4 and @p hop_length must lie in
 ///          (0, n_fft/2]; see @ref sonare_hpss_ex for why.
 /// @note Free @p out with @ref sonare_free_floats.
 SonareError sonare_pitch_shift_ex(const float* samples, size_t length, int sample_rate,
@@ -1160,7 +1160,7 @@ SonareError sonare_hpss_with_residual(const float* samples, size_t length, int s
 /// @param length Number of samples.
 /// @param sample_rate Sample rate.
 /// @param rate Time stretch rate (< 1.0 = slower, > 1.0 = faster). Must be > 0.
-/// @param n_fft FFT size used for analysis/synthesis: an even integer >= 2.
+/// @param n_fft FFT size used for analysis/synthesis: an even integer >= 4.
 /// @param hop_length Hop length used for analysis/synthesis, in (0, n_fft/2];
 ///        see @ref sonare_hpss_ex for why the overlap bound applies.
 /// @param out Receives the time-stretched audio buffer.
@@ -1183,7 +1183,7 @@ typedef enum SONARE_ENUM_BASE {
 /// @details Zero-init friendly: every "0 => default" field below picks the
 ///          documented default so a memset(0) config is the all-defaults case.
 typedef struct {
-  int n_fft;              /* 0 => default 2048; a power of two in [2, 262144] */
+  int n_fft;              /* 0 => default 2048; a power of two in [4, 262144] */
   int hop_length;         /* 0 => default 512; must satisfy 0 < hop <= n_fft/2 */
   int window;             /* SonareWindowType (sonare_c_streaming.h); 0 = Hann */
   int heal_radius_frames; /* 0 => default 2; neighbour frames each side used by Heal */

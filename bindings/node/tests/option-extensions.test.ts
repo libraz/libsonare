@@ -108,10 +108,18 @@ describe('STFT entry points share one nFft rule', () => {
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](1536)).not.toThrow();
   });
 
+  it.each(Object.keys(stftEntryPoints))('%s rejects a two-point nFft', (name) => {
+    // A two-point symmetric Hann synthesis window is all zeros.
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(RangeError);
+    expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(
+      /nFft must be an even integer >= 4/,
+    );
+  });
+
   it.each(Object.keys(stftEntryPoints))('%s rejects an odd nFft the same way', (name) => {
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(RangeError);
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](511)).toThrow(
-      /nFft must be an even integer >= 2/,
+      /nFft must be an even integer >= 4/,
     );
   });
 });

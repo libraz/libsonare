@@ -307,3 +307,54 @@ TEST_CASE("resampling scales the ITD table by the sample rate ratio", "[playback
     CHECK(std::abs(half.itd_samples(0, az) - expected) < 1e-3f);
   }
 }
+
+TEST_CASE("resampling a short set to a low rate keeps a non-empty unit-gain response",
+          "[playback][hrtf]") {
+  constexpr int kSourceRate = 384000;
+  for (const int taps : {16, 23, 24, 48, 96}) {
+    for (const int target_rate : {8000, 48000}) {
+      INFO("taps " << taps << ", target rate " << target_rate);
+      ShrfFixtureSpec spec;
+      spec.sample_rate = kSourceRate;
+      spec.taps = taps;
+      spec.n_az = 4;
+      spec.az_step_deg = 90.0f;
+      const std::unique_ptr<HrtfSet> source = load(make_shrf_fixture(spec));
+      const HrtfSet resampled = source->resampled(target_rate);
+
+      REQUIRE(resampled.taps() >= 1);
+      for (int az = 0; az < spec.n_az; ++az) {
+        for (int ear = 0; ear < 2; ++ear) {
+          double sum = 0.0;
+          const float* coefficients = resampled.hrir(0, az, ear);
+          for (int tap = 0; tap < resampled.taps(); ++tap) {
+            REQUIRE(std::isfinite(coefficients[tap]));
+            sum += coefficients[tap];
+          }
+          INFO("azimuth " << az << ", ear " << ear << ", tap sum " << sum);
+          CHECK(std::abs(sum - 1.0) < 1e-3);
+        }
+      }
+
+      std::vector<float> left(static_cast<size_t>(resampled.taps()));
+      std::vector<float> right(static_cast<size_t>(resampled.taps()));
+      float itd = 0.0f;
+      resampled.interpolate(45.0f, 0.0f, left.data(), right.data(), &itd);
+      double left_energy = 0.0;
+      double right_energy = 0.0;
+      for (size_t tap = 0; tap < left.size(); ++tap) {
+        left_energy += static_cast<double>(left[tap]) * left[tap];
+        right_energy += static_cast<double>(right[tap]) * right[tap];
+      }
+      CHECK(left_energy > 0.0);
+      CHECK(right_energy > 0.0);
+    }
+  }
+
+  ShrfFixtureSpec same_rate;
+  same_rate.sample_rate = kSourceRate;
+  same_rate.n_az = 4;
+  same_rate.az_step_deg = 90.0f;
+  const std::unique_ptr<HrtfSet> source = load(make_shrf_fixture(same_rate));
+  CHECK(source->resampled(kSourceRate).taps() == same_rate.taps);
+}

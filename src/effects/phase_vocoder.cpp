@@ -31,10 +31,123 @@ int checked_output_frames(int n_bins, int input_frames, const TimeStretchMap& ma
                                              kMaxAudioBufferSize, &output_elements),
                ErrorCode::InvalidParameter);
   (void)output_elements;
-  return std::max(1, static_cast<int>(output_frames));
+  return static_cast<int>(output_frames);
+}
+
+StreamingPhaseVocoderConfig normalized_streaming_config(StreamingPhaseVocoderConfig config) {
+  if (config.win_length <= 0) config.win_length = config.n_fft;
+  return config;
+}
+
+Spectrogram stretch_spectrogram(const Spectrogram& spec, float rate,
+                                const PhaseVocoderConfig& config, bool phase_lock) {
+  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
+  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
+
+  const int n_bins = spec.n_bins();
+  const int n_frames_in = spec.n_frames();
+  const int n_fft = spec.n_fft();
+  const int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
+  // The stretched spectrum is only ever resynthesized by overlap-add at this
+  // same hop, so the geometry is checked on the resolved pair rather than on
+  // whichever of the two sources supplied it.
+  PhaseVocoderSynthesizer synth(n_fft, hop_length, spec.sample_rate(), spec.window(),
+                                spec.win_length(), phase_lock);
+  SONARE_CHECK(synth.n_bins() == n_bins, ErrorCode::InvalidParameter);
+
+  const TimeStretchMap map(rate);
+  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, map);
+  const std::complex<float>* input = spec.complex_data();
+  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) *
+                                          static_cast<size_t>(n_frames_out));
+  std::vector<std::complex<float>> frame0(static_cast<size_t>(n_bins));
+  std::vector<std::complex<float>> frame1(static_cast<size_t>(n_bins));
+
+  for (int t_out = 0; t_out < n_frames_out; ++t_out) {
+    int t_in = 0;
+    float frac = 0.0f;
+    PhaseVocoderSynthesizer::locate_input_frame(map, t_out, n_frames_in, &t_in, &frac);
+    for (int k = 0; k < n_bins; ++k) {
+      const size_t column = static_cast<size_t>(k) * static_cast<size_t>(n_frames_in);
+      frame0[static_cast<size_t>(k)] = input[column + static_cast<size_t>(t_in)];
+      frame1[static_cast<size_t>(k)] = input[column + static_cast<size_t>(t_in) + 1];
+    }
+    synth.next_frame(frame0.data(), frame1.data(), frac);
+    for (int k = 0; k < n_bins; ++k) {
+      output[static_cast<size_t>(k) * static_cast<size_t>(n_frames_out) +
+             static_cast<size_t>(t_out)] =
+          std::polar(synth.magnitude()[k], static_cast<float>(synth.synthesis_phase()[k]));
+    }
+  }
+
+  return Spectrogram::from_complex(output.data(), n_bins, n_frames_out, n_fft, hop_length,
+                                   spec.sample_rate(), spec.window(), spec.center(),
+                                   spec.win_length());
 }
 
 }  // namespace
+
+PhaseVocoderSynthesizer::PhaseVocoderSynthesizer(int n_fft, int hop_length, int sample_rate,
+                                                 WindowType window, int win_length, bool phase_lock)
+    : n_fft_(n_fft), n_bins_(n_fft / 2 + 1), sample_rate_(sample_rate), phase_lock_(phase_lock) {
+  SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
+  validate_cola_geometry(n_fft, hop_length, window, win_length);
+  time_step_ = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
+  const size_t bins = static_cast<size_t>(n_bins_);
+  magnitude_.assign(bins, 0.0f);
+  analysis_phase_.assign(bins, 0.0f);
+  inst_freq_.assign(bins, 0.0f);
+  accumulator_.assign(bins, 0.0);
+  synthesis_phase_.assign(bins, 0.0);
+  peaks_.reserve(bins);
+  nearest_peak_.assign(bins, -1);
+}
+
+void PhaseVocoderSynthesizer::locate_input_frame(const TimeStretchMap& map, int t_out,
+                                                 int n_frames_in, int* t_in, float* frac) {
+  const float t_in_f = map.input_position(t_out);
+  *t_in = static_cast<int>(t_in_f);
+  *frac = t_in_f - static_cast<float>(*t_in);
+  if (*t_in >= n_frames_in - 1) {
+    *t_in = n_frames_in - 2;
+    *frac = 1.0f;
+  }
+  if (*t_in < 0) {
+    *t_in = 0;
+    *frac = 0.0f;
+  }
+}
+
+void PhaseVocoderSynthesizer::next_frame(const std::complex<float>* frame0,
+                                         const std::complex<float>* frame1, float frac) {
+  const float time_step = static_cast<float>(time_step_);
+  for (int k = 0; k < n_bins_; ++k) {
+    const size_t bin = static_cast<size_t>(k);
+    magnitude_[bin] = std::abs(frame0[k]) * (1.0f - frac) + std::abs(frame1[k]) * frac;
+    const float phase0 = std::arg(frame0[k]);
+    const float phase1 = std::arg(frame1[k]);
+    analysis_phase_[bin] = phase0 + frac * phase::wrap(phase1 - phase0);
+    const float bin_freq =
+        static_cast<float>(k) * static_cast<float>(sample_rate_) / static_cast<float>(n_fft_);
+    const float expected_advance = kTwoPi * bin_freq * time_step;
+    const float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
+    inst_freq_[bin] = bin_freq + phase_diff / (kTwoPi * time_step);
+  }
+
+  if (first_frame_) {
+    std::copy(analysis_phase_.begin(), analysis_phase_.end(), accumulator_.begin());
+    first_frame_ = false;
+  }
+  phase::synthesize_locked_frame(magnitude_.data(), analysis_phase_.data(), accumulator_.data(),
+                                 n_bins_, phase_lock_, synthesis_phase_.data(), peaks_,
+                                 nearest_peak_);
+  // The transition leading out of this frame is applied only after it is emitted.
+  for (size_t bin = 0; bin < synthesis_phase_.size(); ++bin) {
+    accumulator_[bin] = phase::wrap(synthesis_phase_[bin] +
+                                    kTwoPiD * static_cast<double>(inst_freq_[bin]) * time_step_);
+  }
+}
 
 std::vector<float> compute_instantaneous_frequency(const float* phase, const float* prev_phase,
                                                    int n_bins, int hop_length, int sample_rate) {
@@ -68,12 +181,10 @@ std::vector<float> compute_instantaneous_frequency(const float* phase, const flo
   return inst_freq;
 }
 
-StreamingPhaseVocoder::StreamingPhaseVocoder(StreamingPhaseVocoderConfig config) : config_(config) {
-  SONARE_CHECK(config_.sample_rate > 0, ErrorCode::InvalidParameter);
-  validate_cola_geometry(config_.n_fft, config_.hop_length);
-  if (config_.win_length <= 0) config_.win_length = config_.n_fft;
-  SONARE_CHECK(config_.win_length <= config_.n_fft, ErrorCode::InvalidParameter);
-}
+StreamingPhaseVocoder::StreamingPhaseVocoder(StreamingPhaseVocoderConfig config)
+    : config_(normalized_streaming_config(config)),
+      synth_(config_.n_fft, config_.hop_length, config_.sample_rate, WindowType::Hann,
+             config_.win_length, config_.phase_lock) {}
 
 void StreamingPhaseVocoder::reset() {
   input_.clear();
@@ -83,8 +194,7 @@ void StreamingPhaseVocoder::reset() {
   map_bound_ = false;
   finalized_ = false;
   analysis_frames_.clear();
-  std::fill(phase_acc_.begin(), phase_acc_.end(), 0.0);
-  peaks_.clear();
+  synth_.reset();
   ola_output_.clear();
   ola_window_sum_.clear();
   analysis_frame_base_ = 0;
@@ -172,23 +282,22 @@ void StreamingPhaseVocoder::ensure_stream_state() {
         analysis_window_[static_cast<size_t>(i)] * synthesis_window_[static_cast<size_t>(i)];
   }
 
-  const int n_bins = config_.n_fft / 2 + 1;
   frame_.assign(static_cast<size_t>(config_.n_fft), 0.0f);
-  frame_spectrum_.assign(static_cast<size_t>(n_bins), {});
-  phase_acc_.assign(static_cast<size_t>(n_bins), 0.0);
-  mag_.assign(static_cast<size_t>(n_bins), 0.0f);
-  ana_phase_.assign(static_cast<size_t>(n_bins), 0.0f);
-  inst_freq_.assign(static_cast<size_t>(n_bins), 0.0f);
-  nearest_peak_.assign(static_cast<size_t>(n_bins), -1);
-  peaks_.reserve(static_cast<size_t>(n_bins));
+  frame_spectrum_.assign(static_cast<size_t>(synth_.n_bins()), {});
 }
 
 void StreamingPhaseVocoder::analyze_available_frames(bool final) {
   ensure_stream_state();
   const int pad = config_.n_fft / 2;
   const size_t absolute_input_end = input_base_sample_ + input_.size();
-  const size_t padded_length =
+  size_t padded_length =
       absolute_input_end + static_cast<size_t>(pad) + (final ? static_cast<size_t>(pad) : 0);
+  // Synthesis interpolates between frame pairs, so non-empty input shorter than
+  // a hop is padded to a second analysis frame rather than left unsynthesized.
+  if (final && absolute_input_end > 0) {
+    padded_length = std::max(padded_length, static_cast<size_t>(config_.hop_length) +
+                                                static_cast<size_t>(config_.n_fft));
+  }
 
   while (true) {
     const size_t start =
@@ -247,48 +356,15 @@ const std::complex<float>& StreamingPhaseVocoder::analysis_frame_at(int frame,
 
 void StreamingPhaseVocoder::synthesize_output_frame(int t_out) {
   ensure_stream_state();
-  const int n_bins = config_.n_fft / 2 + 1;
-  const int n_frames_in = next_analysis_frame_;
-  const double time_step =
-      static_cast<double>(config_.hop_length) / static_cast<double>(config_.sample_rate);
-
-  float t_in_f = active_map_.input_position(t_out);
-  int t_in = static_cast<int>(t_in_f);
-  float frac = t_in_f - static_cast<float>(t_in);
-  if (t_in >= n_frames_in - 1) {
-    t_in = n_frames_in - 2;
-    frac = 1.0f;
-  }
-  if (t_in < 0) {
-    t_in = 0;
-    frac = 0.0f;
-  }
-
+  const int n_bins = synth_.n_bins();
+  int t_in = 0;
+  float frac = 0.0f;
+  PhaseVocoderSynthesizer::locate_input_frame(active_map_, t_out, next_analysis_frame_, &t_in,
+                                              &frac);
+  synth_.next_frame(&analysis_frame_at(t_in, 0), &analysis_frame_at(t_in + 1, 0), frac);
   for (int k = 0; k < n_bins; ++k) {
-    const auto frame0 = analysis_frame_at(t_in, k);
-    const auto frame1 = analysis_frame_at(t_in + 1, k);
-    const float mag0 = std::abs(frame0);
-    const float mag1 = std::abs(frame1);
-    mag_[static_cast<size_t>(k)] = mag0 * (1.0f - frac) + mag1 * frac;
-
-    const float phase0 = std::arg(frame0);
-    const float phase1 = std::arg(frame1);
-    ana_phase_[static_cast<size_t>(k)] = phase0 + frac * phase::wrap(phase1 - phase0);
-
-    const float bin_freq = static_cast<float>(k) * static_cast<float>(config_.sample_rate) /
-                           static_cast<float>(config_.n_fft);
-    const float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-    const float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
-    inst_freq_[static_cast<size_t>(k)] =
-        bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
-  }
-
-  phase::synthesize_locked_frame(mag_.data(), ana_phase_.data(), inst_freq_.data(), n_bins,
-                                 config_.phase_lock, t_out == 0, time_step, phase_acc_, peaks_,
-                                 nearest_peak_);
-  for (int k = 0; k < n_bins; ++k) {
-    frame_spectrum_[static_cast<size_t>(k)] = std::polar(
-        mag_[static_cast<size_t>(k)], static_cast<float>(phase_acc_[static_cast<size_t>(k)]));
+    frame_spectrum_[static_cast<size_t>(k)] =
+        std::polar(synth_.magnitude()[k], static_cast<float>(synth_.synthesis_phase()[k]));
   }
 
   fft_->inverse(frame_spectrum_.data(), frame_.data());
@@ -371,8 +447,8 @@ void StreamingPhaseVocoder::compact_buffers() {
 Audio StreamingPhaseVocoder::drain_available(bool final) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples = std::max<size_t>(
-        1, active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length));
+    stable_user_samples =
+        active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length);
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -396,8 +472,8 @@ Audio StreamingPhaseVocoder::drain_available(bool final) {
 size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
   size_t stable_user_samples = 0;
   if (final) {
-    stable_user_samples = std::max<size_t>(
-        1, active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length));
+    stable_user_samples =
+        active_map_.output_sample_count(input_base_sample_ + input_.size(), config_.hop_length);
   } else {
     const size_t stable_full_samples =
         static_cast<size_t>(next_output_frame_) * static_cast<size_t>(config_.hop_length);
@@ -468,174 +544,29 @@ Audio StreamingPhaseVocoder::finish(float rate) {
   return finalize(rate);
 }
 
-Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocoderConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
-
-  int n_bins = spec.n_bins();
-  int n_frames_in = spec.n_frames();
-  int n_fft = spec.n_fft();
-  int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
-  int sample_rate = spec.sample_rate();
-  // The stretched spectrum is only ever resynthesized by overlap-add at this
-  // same hop, so the geometry is checked on the resolved pair rather than on
-  // whichever of the two sources supplied it.
-  validate_cola_geometry(n_fft, hop_length);
-
-  /// Calculate output number of frames
-  const TimeStretchMap map(rate);
-  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, map);
-
-  /// Get input complex spectrum
-  const std::complex<float>* input = spec.complex_data();
-
-  /// Output complex spectrum
-  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames_out);
-
-  /// Phase accumulator (double precision to avoid drift over long signals).
-  std::vector<double> phase_acc(n_bins, 0.0);
-
-  /// Time step ratio (double precision: hop/sr is used to scale every per-frame
-  /// phase advance, so single-precision rounding here biases the accumulator).
-  const double time_step = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
-
-  for (int t_out = 0; t_out < n_frames_out; ++t_out) {
-    /// Input time position
-    float t_in_f = map.input_position(t_out);
-    int t_in = static_cast<int>(t_in_f);
-    float frac = t_in_f - static_cast<float>(t_in);
-
-    /// Clamp to valid range
-    if (t_in >= n_frames_in - 1) {
-      t_in = n_frames_in - 2;
-      frac = 1.0f;
-    }
-    if (t_in < 0) {
-      t_in = 0;
-      frac = 0.0f;
-    }
-
-    for (int k = 0; k < n_bins; ++k) {
-      /// Get adjacent frames
-      std::complex<float> frame0 = input[k * n_frames_in + t_in];
-      std::complex<float> frame1 = input[k * n_frames_in + t_in + 1];
-
-      /// Interpolate magnitude
-      float mag0 = std::abs(frame0);
-      float mag1 = std::abs(frame1);
-      float mag = mag0 * (1.0f - frac) + mag1 * frac;
-
-      /// Compute phase advance (analysis side stays in float — bounded per-frame).
-      float phase0 = std::arg(frame0);
-      float phase1 = std::arg(frame1);
-
-      /// Expected phase advance based on bin frequency
-      float bin_freq =
-          static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-      float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-
-      /// Phase difference with unwrapping
-      float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
-      float inst_freq = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
-
-      /// Accumulate phase in double precision.
-      if (t_out == 0) {
-        phase_acc[k] =
-            static_cast<double>(phase0) +
-            static_cast<double>(frac) * static_cast<double>(phase::wrap(phase1 - phase0));
-      } else {
-        phase_acc[k] += kTwoPiD * static_cast<double>(inst_freq) * time_step;
-        phase_acc[k] = phase::wrap(phase_acc[k]);
-      }
-
-      /// Construct output complex value (cast back to float for FFT-domain storage).
-      output[k * n_frames_out + t_out] = std::polar(mag, static_cast<float>(phase_acc[k]));
-    }
+Spectrogram phase_vocoder_analysis(const Audio& audio, int n_fft, int hop_length) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  StftConfig stft_config;
+  stft_config.n_fft = n_fft;
+  stft_config.hop_length = hop_length;
+  stft_config.window = WindowType::Hann;
+  stft_config.center = true;
+  if (hop_length <= 0 || audio.size() >= static_cast<size_t>(hop_length)) {
+    return Spectrogram::compute(audio, stft_config);
   }
+  std::vector<float> extended(audio.begin(), audio.end());
+  extended.resize(static_cast<size_t>(hop_length), 0.0f);
+  return Spectrogram::compute(Audio::from_vector(std::move(extended), audio.sample_rate()),
+                              stft_config);
+}
 
-  return Spectrogram::from_complex(output.data(), n_bins, n_frames_out, n_fft, hop_length,
-                                   sample_rate, spec.window(), spec.center(), spec.win_length());
+Spectrogram phase_vocoder(const Spectrogram& spec, float rate, const PhaseVocoderConfig& config) {
+  return stretch_spectrogram(spec, rate, config, /*phase_lock=*/false);
 }
 
 Spectrogram phase_vocoder_phaselocked(const Spectrogram& spec, float rate,
                                       const PhaseVocoderConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(spec.n_frames() >= 2, ErrorCode::InvalidParameter);
-  SONARE_CHECK(numeric::finite_positive(rate), ErrorCode::InvalidParameter);
-
-  int n_bins = spec.n_bins();
-  int n_frames_in = spec.n_frames();
-  int n_fft = spec.n_fft();
-  int hop_length = config.hop_length > 0 ? config.hop_length : spec.hop_length();
-  int sample_rate = spec.sample_rate();
-  validate_cola_geometry(n_fft, hop_length);
-
-  const TimeStretchMap map(rate);
-  const int n_frames_out = checked_output_frames(n_bins, n_frames_in, map);
-
-  const std::complex<float>* input = spec.complex_data();
-  std::vector<std::complex<float>> output(static_cast<size_t>(n_bins) * n_frames_out);
-
-  /// Synthesis phase accumulator (per bin, double precision to avoid drift).
-  std::vector<double> phase_acc(n_bins, 0.0);
-
-  /// Time step ratio in double precision (see phase_vocoder() for rationale).
-  const double time_step = static_cast<double>(hop_length) / static_cast<double>(sample_rate);
-
-  /// Reused per-frame scratch buffers (avoid per-frame heap churn).
-  std::vector<float> mag(n_bins, 0.0f);
-  std::vector<float> ana_phase(n_bins, 0.0f);
-  std::vector<float> inst_freq(n_bins, 0.0f);
-  std::vector<int> peaks;
-  peaks.reserve(n_bins);
-  std::vector<int> nearest_peak(n_bins, -1);
-
-  for (int t_out = 0; t_out < n_frames_out; ++t_out) {
-    float t_in_f = map.input_position(t_out);
-    int t_in = static_cast<int>(t_in_f);
-    float frac = t_in_f - static_cast<float>(t_in);
-
-    if (t_in >= n_frames_in - 1) {
-      t_in = n_frames_in - 2;
-      frac = 1.0f;
-    }
-    if (t_in < 0) {
-      t_in = 0;
-      frac = 0.0f;
-    }
-
-    /// Magnitude, analysis phase and instantaneous frequency per bin (same path as
-    /// phase_vocoder()).
-    for (int k = 0; k < n_bins; ++k) {
-      std::complex<float> frame0 = input[k * n_frames_in + t_in];
-      std::complex<float> frame1 = input[k * n_frames_in + t_in + 1];
-
-      float mag0 = std::abs(frame0);
-      float mag1 = std::abs(frame1);
-      mag[k] = mag0 * (1.0f - frac) + mag1 * frac;
-
-      float phase0 = std::arg(frame0);
-      float phase1 = std::arg(frame1);
-      ana_phase[k] = phase0 + frac * phase::wrap(phase1 - phase0);
-
-      float bin_freq =
-          static_cast<float>(k) * static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-      float expected_advance = kTwoPi * bin_freq * static_cast<float>(time_step);
-      float phase_diff = phase::wrap(phase1 - phase0 - expected_advance);
-      inst_freq[k] = bin_freq + phase_diff / (kTwoPi * static_cast<float>(time_step));
-    }
-
-    phase::synthesize_locked_frame(mag.data(), ana_phase.data(), inst_freq.data(), n_bins,
-                                   /*phase_lock=*/true, t_out == 0, time_step, phase_acc, peaks,
-                                   nearest_peak);
-    for (int k = 0; k < n_bins; ++k) {
-      output[k * n_frames_out + t_out] = std::polar(mag[k], static_cast<float>(phase_acc[k]));
-    }
-  }
-
-  return Spectrogram::from_complex(output.data(), n_bins, n_frames_out, n_fft, hop_length,
-                                   sample_rate, spec.window(), spec.center(), spec.win_length());
+  return stretch_spectrogram(spec, rate, config, /*phase_lock=*/true);
 }
 
 }  // namespace sonare

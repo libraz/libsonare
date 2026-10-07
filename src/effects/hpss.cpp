@@ -429,7 +429,8 @@ HpssSpectrogramResult hpss(const Spectrogram& spec, const HpssConfig& config) {
 
 HpssAudioResult hpss(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                         stft_config.actual_win_length());
 
   /// Compute the STFT and separate it. The analysis spectrogram is passed as a
   /// temporary so it and its magnitude cache are released when this statement
@@ -454,7 +455,8 @@ Spectrogram percussive(const Spectrogram& spec, const HpssConfig& config) {
 
 Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                         stft_config.actual_win_length());
 
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
   return hpss_component(spec, config, HpssComponent::kHarmonic)
@@ -463,7 +465,8 @@ Audio harmonic(const Audio& audio, const HpssConfig& config, const StftConfig& s
 
 Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                         stft_config.actual_win_length());
 
   const Spectrogram spec = Spectrogram::compute(audio, stft_config);
   return hpss_component(spec, config, HpssComponent::kPercussive)
@@ -547,7 +550,8 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
 HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssConfig& config,
                                                const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                         stft_config.actual_win_length());
 
   /// Compute the STFT and separate it. Passing the analysis spectrogram as a
   /// temporary releases it and its magnitude cache when this statement ends,
@@ -566,7 +570,8 @@ HpssAudioResultWithResidual hpss_with_residual(const Audio& audio, const HpssCon
 
 Audio residual(const Audio& audio, const HpssConfig& config, const StftConfig& stft_config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length);
+  validate_cola_geometry(stft_config.n_fft, stft_config.hop_length, stft_config.window,
+                         stft_config.actual_win_length());
 
   /// Only the residual is reconstructed. Routing through the audio-level
   /// hpss_with_residual ran three inverse transforms and discarded two of them.

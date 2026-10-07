@@ -176,6 +176,21 @@ inline bool checked_projected_count(std::size_t input_count, Float rate, std::si
   return true;
 }
 
+/// Computes round(input_count * target_rate / source_rate), the length of a
+/// sample-rate conversion, clamped to at least one sample for non-empty input so
+/// a short buffer never converts to nothing. Non-positive rates and results above
+/// `limit` are rejected.
+inline bool checked_converted_count(std::size_t input_count, int source_rate, int target_rate,
+                                    std::size_t limit, std::size_t* out) noexcept {
+  if (out == nullptr || source_rate <= 0 || target_rate <= 0) return false;
+  const double rate_ratio = static_cast<double>(target_rate) / static_cast<double>(source_rate);
+  double converted = std::round(static_cast<double>(input_count) * rate_ratio);
+  if (input_count > 0 && converted < 1.0) converted = 1.0;
+  if (!std::isfinite(converted) || converted > static_cast<double>(limit)) return false;
+  *out = static_cast<std::size_t>(converted);
+  return true;
+}
+
 /// Computes ceil(numerator / denominator) as a bounded size_t without a
 /// floating-to-integral overflow. Useful for iteration counts where both terms
 /// are floating-point timeline durations.

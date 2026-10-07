@@ -47,7 +47,7 @@ export interface PitchCorrectTimevaryingRequest extends EffectSamplesRequest, Pi
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
  * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
- * @param nFft - FFT size: an even integer >= 2 (default 2048)
+ * @param nFft - FFT size: an even integer >= 4 (default 2048)
  * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
  *   frames overlap by at least half a window
  * @returns Time-stretched audio
@@ -86,7 +86,7 @@ export function timeStretch(
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
  * @param semitones - Pitch shift in semitones (+12 = one octave up, -12 = one octave down)
- * @param nFft - FFT size: an even integer >= 2 (default 2048)
+ * @param nFft - FFT size: an even integer >= 4 (default 2048)
  * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
  *   frames overlap by at least half a window
  * @returns Pitch-shifted audio

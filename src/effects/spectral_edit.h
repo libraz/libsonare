@@ -41,7 +41,7 @@ inline constexpr int kSpectralEditMaxNFft = 262144;
 
 /// @brief STFT + heal parameters for a spectral edit pass.
 struct SpectralEditConfig {
-  int n_fft = 2048;      ///< FFT size; a power of two in [2, @ref kSpectralEditMaxNFft].
+  int n_fft = 2048;      ///< FFT size; a power of two in [4, @ref kSpectralEditMaxNFft].
   int hop_length = 512;  ///< Hop length; must satisfy 0 < hop <= n_fft/2 (COLA).
   WindowType window = WindowType::Hann;  ///< Analysis + synthesis window.
   int heal_radius_frames = 2;            ///< Neighbour frames each side used by Heal (>= 1).
@@ -63,7 +63,7 @@ struct SpectralEditConfig {
 /// @param n_ops Number of region ops.
 /// @return Edited audio, same length and sample rate as @p audio.
 /// @throws SonareException(InvalidParameter) if @p audio is empty, @p n_fft is not
-///         a power of two in [2, @ref kSpectralEditMaxNFft], @p hop_length is out of
+///         a power of two in [4, @ref kSpectralEditMaxNFft], @p hop_length is out of
 ///         (0, n_fft/2], or @p ops is null with @p n_ops > 0.
 Audio spectral_edit(const Audio& audio, const SpectralEditConfig& config,
                     const SpectralRegionOp* ops, std::size_t n_ops);

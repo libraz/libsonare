@@ -544,7 +544,7 @@ export interface SpectralRegionOp {
 
 /** STFT + heal parameters for `spectralEdit`. All fields are optional. */
 export interface SpectralEditOptions {
-  /** FFT size; a power of two in `[2, 262144]`. Default 2048. */
+  /** FFT size; a power of two in `[4, 262144]`. Default 2048. */
   nFft?: number;
   /** Hop length; must satisfy 0 < hop <= nFft/2. Default 512. */
   hopLength?: number;

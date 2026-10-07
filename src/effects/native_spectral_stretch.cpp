@@ -32,20 +32,13 @@ Audio native_spectral_time_stretch(const Audio& audio, float rate, int n_fft, in
   // error rather than something to repair.
   validate_cola_geometry(n_fft, hop_length);
 
-  StftConfig stft_config;
-  stft_config.n_fft = n_fft;
-  stft_config.hop_length = hop_length;
-  stft_config.window = WindowType::Hann;
-  stft_config.center = true;
-
-  Spectrogram spec = Spectrogram::compute(audio, stft_config);
+  Spectrogram spec = phase_vocoder_analysis(audio, n_fft, hop_length);
 
   PhaseVocoderConfig pv_config;
-  pv_config.hop_length = stft_config.hop_length;
+  pv_config.hop_length = hop_length;
 
   Spectrogram stretched = phase_vocoder_phaselocked(spec, rate, pv_config);
-  const int output_samples = std::max(1, static_cast<int>(output_size));
-  return stretched.to_audio(output_samples);
+  return stretched.to_audio(static_cast<int>(output_size));
 }
 
 Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio, int n_fft,
