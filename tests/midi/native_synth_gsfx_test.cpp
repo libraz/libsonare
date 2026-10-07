@@ -1,6 +1,6 @@
 /// @file native_synth_gsfx_test.cpp
-/// @brief GS insertion effects on NativeSynth: the EFX block and the resets are
-///        the only GS it reads, only under GM program resolution, offline from
+/// @brief GS insertion effects on NativeSynth: the EFX block and the part
+///        assignment are read only under GM program resolution, offline from
 ///        the event stream and live from the host's pushed SysEx alone.
 
 #include <algorithm>
@@ -591,13 +591,33 @@ TEST_CASE("native: a GS reset clears the insertion effect", "[midi][native][gsfx
   REQUIRE(same(reset, dry));
 }
 
-TEST_CASE("native: without GM program resolution GS SysEx is ignored", "[midi][native][gsfx]") {
+TEST_CASE("native: without GM program resolution the GS EFX block is ignored",
+          "[midi][native][gsfx]") {
   NativeSynthConfig cfg = offline_config();
   cfg.use_gm_programs = false;
   const Lanes dry = render_lanes(cfg, {});
   const Lanes sent = render_lanes(cfg, {kDistortion, kPart0On});
   REQUIRE(energy(dry.assigned_l) > 1.0e-6);
   REQUIRE(same(sent, dry));
+}
+
+TEST_CASE("native: without GM program resolution the GS part edits and resets still apply",
+          "[midi][native][gsfx][native-gs]") {
+  NativeSynthConfig cfg = offline_config();
+  cfg.use_gm_programs = false;
+  // 40 11 32 TONE MODIFY TVF cutoff on part 0, and 40 11 15 USE FOR RHYTHM PART.
+  const Bytes cutoff = dt1(0x401132u, {0x10});
+  const Bytes rhythm = dt1(0x401115u, {0x01});
+  const Lanes dry = render_lanes(cfg, {});
+  const Lanes edited = render_lanes(cfg, {cutoff});
+  REQUIRE_FALSE(same(edited, dry));
+  // The EFX block stays inert beside an edit that lands.
+  CHECK(same(render_lanes(cfg, {kDistortion, kPart0On, cutoff}), edited));
+  // GS Reset and GM System On return the edit to its default in this mode too.
+  CHECK(same(render_lanes(cfg, {cutoff, kGsReset}), dry));
+  CHECK(same(render_lanes(cfg, {cutoff, Bytes{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7}}), dry));
+  // The rhythm flag selects a GM drum map, which a fixed patch does not consult.
+  CHECK(same(render_lanes(cfg, {rhythm}), dry));
 }
 
 TEST_CASE("native live: a host-pushed EFX SysEx takes effect", "[midi][native][gsfx][live]") {

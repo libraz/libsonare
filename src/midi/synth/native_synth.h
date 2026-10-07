@@ -706,8 +706,9 @@ ControllerProfile default_controller_profile() noexcept;
 ///
 /// With an insert factory, a part with a rig or a GS insertion-effect route
 /// renders through PartFxStage: its voices sum into the part's bus, which the
-/// rig runs on in place. The GS layer this synth reads is the EFX block and the
-/// resets alone, and only under use_gm_programs.
+/// rig runs on in place. The GS EFX block and part assignment are read only
+/// under use_gm_programs; the part edits (TONE MODIFY, Rx NRPN) and the resets
+/// that clear them apply in both modes (docs/gs.md).
 class NativeSynth final : public MidiInstrument, private PartFxHost {
  public:
   explicit NativeSynth(const NativeSynthConfig& config = {});
