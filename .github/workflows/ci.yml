@@ -404,6 +404,23 @@ jobs:
           python -m pip install pytest
           SONARE_LIB_PATH="$libpath" python -m pytest tests/ -q
 
+      - name: Python binding tests at the numpy floor
+        # The numpy minimum in pyproject.toml is only a claim until the suite
+        # runs on it. A venv keeps the floor install apart from the interpreter
+        # the later steps use, and the pin must equal the declared floor.
+        env:
+          SONARE_LIB_DIR: ${{ github.workspace }}/build-shared/lib
+        working-directory: bindings/python
+        run: |
+          libpath="$(ls "$SONARE_LIB_DIR"/libsonare.so "$SONARE_LIB_DIR"/libsonare.dylib 2>/dev/null | head -n 1)"
+          if [ -z "$libpath" ]; then
+            echo "No shared sonare library found under $SONARE_LIB_DIR" >&2
+            exit 1
+          fi
+          python -m venv "$RUNNER_TEMP/numpy-floor"
+          "$RUNNER_TEMP/numpy-floor/bin/python" -m pip install -e . pytest numpy==2.0.2
+          SONARE_LIB_PATH="$libpath" "$RUNNER_TEMP/numpy-floor/bin/python" -m pytest tests/ -q
+
       - name: Type-check Node preset literals
         working-directory: bindings/node
         run: |

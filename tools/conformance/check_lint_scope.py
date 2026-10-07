@@ -30,6 +30,7 @@ WORKFLOWS = (
     REPO_ROOT / ".github/workflows/develop-ci.yml",
 )
 LOCK = REPO_ROOT / "bindings/python/requirements-dev.lock"
+PYPROJECT = REPO_ROOT / "bindings/python/pyproject.toml"
 
 #: `ruff check <target>`, however the interpreter in front of it is spelled and
 #: whatever flags sit between. Only the target is scope: `make format` runs the
@@ -89,6 +90,14 @@ def locked_versions(text: str) -> dict[str, str]:
     return versions
 
 
+def declared_floors(text: str) -> dict[str, str]:
+    """The `name>=version` floors pyproject declares, keyed by normalized name."""
+    return {
+        normalize(m.group("name")): m.group("version")
+        for m in re.finditer(r'"(?P<name>[A-Za-z0-9._-]+)>=(?P<version>[A-Za-z0-9._-]+)"', text)
+    }
+
+
 def pinned_installs(text: str) -> list[tuple[str, str]]:
     """Every `name==version` a pip install line in @p text asks for."""
     out = []
@@ -132,6 +141,7 @@ def main() -> int:
     )
 
     locked = locked_versions(LOCK.read_text())
+    floors = declared_floors(PYPROJECT.read_text())
     lock_name = LOCK.relative_to(REPO_ROOT).as_posix()
     checked = 0
     for name, text in sources.items():
@@ -143,6 +153,11 @@ def main() -> int:
                 # A CI-only tool the binding does not depend on -- librosa, for the
                 # reference-generation job. The lock cannot speak for it, so there is
                 # nothing here to disagree with.
+                continue
+            # A floor job installs the declared minimum on purpose; it answers to
+            # pyproject, not to the lock.
+            if version == floors.get(normalize(package)):
+                checked += 1
                 continue
             if want != version:
                 failures.append(

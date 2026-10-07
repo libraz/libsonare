@@ -61,10 +61,11 @@ dependencies = [
     # shared `_to_c_float_array` ctypes bridge) rely on numpy buffers for
     # zero-copy marshalling. Element-wise ctypes conversion was a real-time
     # blocker (128-sample / 2.9 ms blocks could not meet deadline at 44.1 kHz).
-    # The floor is the version the test suite and the lock files exercise, so a
-    # declared minimum is one that has been run rather than one merely allowed.
-    # The lock stays on 2.4.x because numpy 2.5 requires Python >= 3.12.
-    "numpy>=2.4.6",
+    # The floor is the oldest numpy the CI floor job installs and runs the
+    # default suite against, so a declared minimum is one that has been run.
+    # The lock files stay on 2.4.x, the version development and the type
+    # check use; numpy 2.5 requires Python >= 3.12, above requires-python.
+    "numpy>=2.0.2",
 ]
 
 [project.scripts]
