@@ -149,6 +149,20 @@ class MarkerKind(IntEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class SidechainCheck:
+    """Outcome of a ``can_set_*_sidechain`` query.
+
+    ``ok`` is True when the matching setter would accept the binding;
+    otherwise ``reason`` names the first refusal: ``"invalid_target"``,
+    ``"insert_out_of_range"``, ``"undeclared_source"``, ``"invalid_source_kind"``,
+    ``"self_key"``, ``"cycle"``, ``"table_full"`` or ``"plan_refused"``.
+    """
+
+    ok: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class EngineMarker:
     """Timeline marker used by the realtime engine transport.
 

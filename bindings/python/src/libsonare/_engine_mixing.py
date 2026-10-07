@@ -29,6 +29,26 @@ from ._runtime import (
     _to_c_uint32,
     _utf8_arg,
 )
+from ._types_engine import SidechainCheck
+
+_SIDECHAIN_REFUSALS = (
+    None,
+    "invalid_target",
+    "insert_out_of_range",
+    "undeclared_source",
+    "invalid_source_kind",
+    "self_key",
+    "cycle",
+    "table_full",
+    "plan_refused",
+)
+
+
+def _sidechain_check(refusal: int) -> SidechainCheck:
+    if not 0 <= refusal < len(_SIDECHAIN_REFUSALS):
+        raise RuntimeError(f"unknown sidechain refusal code {refusal}")
+    reason = _SIDECHAIN_REFUSALS[refusal]
+    return SidechainCheck(ok=reason is None, reason=reason)
 
 
 class _EngineMixingMixin:
@@ -120,6 +140,62 @@ class _EngineMixingMixin:
                 _to_c_uint32(source_track_id, "source_track_id"),
             )
         )
+
+    def can_set_lane_sidechain(
+        self, track_id: int, insert_index: int, source_track_id: int
+    ) -> SidechainCheck:
+        """Report whether :meth:`set_lane_sidechain` would accept a binding.
+
+        Changes nothing; same threading contract as the setter.
+        """
+        refusal = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_can_set_lane_sidechain(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_uint32(source_track_id, "source_track_id"),
+                ctypes.byref(refusal),
+            )
+        )
+        return _sidechain_check(refusal.value)
+
+    def can_set_bus_sidechain(
+        self,
+        bus_id: int,
+        insert_index: int,
+        source_kind: SidechainSourceKind | str | int,
+        source_id: int,
+    ) -> SidechainCheck:
+        """Report whether :meth:`set_bus_sidechain` would accept a binding."""
+        refusal = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_can_set_bus_sidechain(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
+                _to_c_uint32(source_id, "source_id"),
+                ctypes.byref(refusal),
+            )
+        )
+        return _sidechain_check(refusal.value)
+
+    def can_set_master_sidechain(
+        self, insert_index: int, source_kind: SidechainSourceKind | str | int, source_id: int
+    ) -> SidechainCheck:
+        """Report whether :meth:`set_master_sidechain` would accept a binding."""
+        refusal = ctypes.c_int()
+        _check(
+            _get_lib().sonare_engine_can_set_master_sidechain(
+                self._require_handle(),
+                _to_c_uint(insert_index, "insert_index"),
+                _to_c_int(_sidechain_source_kind_value(source_kind), "source_kind"),
+                _to_c_uint32(source_id, "source_id"),
+                ctypes.byref(refusal),
+            )
+        )
+        return _sidechain_check(refusal.value)
 
     def set_bus_sidechain(
         self,

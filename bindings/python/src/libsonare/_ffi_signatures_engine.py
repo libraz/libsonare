@@ -47,6 +47,28 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_void_p,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_reset_processor_state"):
+        lib.sonare_engine_reset_processor_state.restype = ctypes.c_int32
+        lib.sonare_engine_reset_processor_state.argtypes = [ctypes.c_void_p, ctypes.c_int64]
+    if hasattr(lib, "sonare_engine_prime_offline_parameters"):
+        lib.sonare_engine_prime_offline_parameters.restype = ctypes.c_int32
+        lib.sonare_engine_prime_offline_parameters.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_int,
+            ctypes.c_int,
+        ]
+    if hasattr(lib, "sonare_engine_graph_latency_samples_q8"):
+        lib.sonare_engine_graph_latency_samples_q8.restype = ctypes.c_int32
+        lib.sonare_engine_graph_latency_samples_q8.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    if hasattr(lib, "sonare_engine_tail_samples"):
+        lib.sonare_engine_tail_samples.restype = ctypes.c_int32
+        lib.sonare_engine_tail_samples.argtypes = [
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_int),
+        ]
     lib.sonare_engine_settle_parameters.restype = ctypes.c_int32
     lib.sonare_engine_settle_parameters.argtypes = [ctypes.c_void_p]
     lib.sonare_engine_flush_control_commands.restype = ctypes.c_int32
@@ -215,6 +237,34 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_uint,
             ctypes.c_int,
             ctypes.c_uint32,
+        ]
+    if hasattr(lib, "sonare_engine_can_set_lane_sidechain"):
+        lib.sonare_engine_can_set_lane_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_can_set_lane_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    if hasattr(lib, "sonare_engine_can_set_bus_sidechain"):
+        lib.sonare_engine_can_set_bus_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_can_set_bus_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    if hasattr(lib, "sonare_engine_can_set_master_sidechain"):
+        lib.sonare_engine_can_set_master_sidechain.restype = ctypes.c_int32
+        lib.sonare_engine_can_set_master_sidechain.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint,
+            ctypes.c_int,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_int),
         ]
     if hasattr(lib, "sonare_engine_set_track_lanes"):
         lib.sonare_engine_set_track_lanes.restype = ctypes.c_int32

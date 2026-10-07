@@ -323,6 +323,9 @@ from ._types_engine import (
     SectionResult as SectionResult,
 )
 from ._types_engine import (
+    SidechainCheck as SidechainCheck,
+)
+from ._types_engine import (
     TransportState as TransportState,
 )
 from ._types_enums import (

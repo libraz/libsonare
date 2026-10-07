@@ -1768,6 +1768,11 @@ class MarkerKind(IntEnum):
     CUE_POINT = 3
     KEY_SIGNATURE = 4
 
+class SidechainCheck:
+    ok: bool
+    reason: str | None
+    def __init__(self, ok: bool, reason: str | None = None) -> None: ...
+
 class EngineMarker:
     id: int
     ppq: float

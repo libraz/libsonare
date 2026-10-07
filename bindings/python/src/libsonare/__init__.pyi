@@ -1101,6 +1101,9 @@ from .types import (
     SendTiming as SendTiming,
 )
 from .types import (
+    SidechainCheck as SidechainCheck,
+)
+from .types import (
     SidechainSourceKind as SidechainSourceKind,
 )
 from .types import (

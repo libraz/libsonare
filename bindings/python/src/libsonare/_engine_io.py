@@ -421,6 +421,23 @@ class _EngineIoMixin:
             )
         )
 
+    def reset_processor_state(self, render_frame: int = -1) -> None:
+        """Queue a reset of every lane, bus, master and graph processor state.
+
+        At ``render_frame`` (negative: the next block head) tails, delay lines
+        and envelopes are dropped, automation is applied at the transport
+        position and every smoother is snapped to its target. Instruments keep
+        their state. Raises when the command queue is full.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_reset_processor_state"):
+            raise RuntimeError("libsonare was built without processor-state reset support")
+        _check(
+            lib.sonare_engine_reset_processor_state(
+                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+            )
+        )
+
     def pop_clip_page_request(self) -> ClipPageRequest | None:
         raw = SonareClipPageRequest()
         has_request = ctypes.c_int()

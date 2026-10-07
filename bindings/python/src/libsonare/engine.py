@@ -279,11 +279,60 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """Snap every in-flight parameter ramp to its target value.
 
         Covers engine-level smoothed parameters and the mixer's lane
-        fader/pan/gate and bus gain smoothers. Offline renders call this after
-        a priming process() block so the first audible block renders at the
-        settled values instead of ramping in from defaults.
+        fader/pan/gate and bus gain smoothers. It is one step of
+        :meth:`prime_offline_parameters`, which offline renders call before the
+        first audible block so it renders at the settled values instead of
+        ramping in from defaults.
         """
         _check(_get_lib().sonare_engine_settle_parameters(self._require_handle()))
+
+    def prime_offline_parameters(self, num_channels: int, block_size: int) -> None:
+        """Bring an offline engine to its start-of-render state without rendering.
+
+        Applies queued commands, returns the mixer and effect processors to
+        their prepared state, adopts the published snapshots, resolves
+        automation and lane gates at the transport position and snaps every
+        smoother. Call once before the first :meth:`render_offline` chunk. Raises
+        for a channel or block count outside the prepared shape or an engine
+        that was never prepared. Not concurrent with processing.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_prime_offline_parameters"):
+            raise RuntimeError("libsonare was built without offline priming support")
+        _check(
+            lib.sonare_engine_prime_offline_parameters(
+                self._require_handle(),
+                _to_c_int(num_channels, "num_channels"),
+                _to_c_int(block_size, "block_size"),
+            )
+        )
+
+    def tail_samples(self) -> int:
+        """Longest audible tail after the last input, in samples (an upper bound).
+
+        2147483647 means the tail is unbounded. Control thread only; not
+        concurrent with processing.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_tail_samples"):
+            raise RuntimeError("libsonare was built without tail-length support")
+        out = ctypes.c_int()
+        _check(lib.sonare_engine_tail_samples(self._require_handle(), ctypes.byref(out)))
+        return int(out.value)
+
+    def graph_latency_samples_q8(self) -> int:
+        """Processing latency of the engine in 1/256 samples.
+
+        The value telemetry records carry as ``graph_latency_samples_q8``.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_graph_latency_samples_q8"):
+            raise RuntimeError("libsonare was built without latency query support")
+        out = ctypes.c_int()
+        _check(
+            lib.sonare_engine_graph_latency_samples_q8(self._require_handle(), ctypes.byref(out))
+        )
+        return int(out.value)
 
     def flush_control_commands(self) -> None:
         """Apply commands queued on an offline/control-only engine immediately.

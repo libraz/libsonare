@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 
 import numpy as np
@@ -15,6 +16,7 @@ from libsonare import (
     EngineMidiClipSchedule,
     EngineMidiEvent,
     RealtimeEngine,
+    SonareError,
 )
 
 from ._helpers import _midi1_word
@@ -171,3 +173,148 @@ def test_render_offline_chunks_concatenate_to_one_continuous_render() -> None:
     assert float(np.sqrt(np.mean(finalized[tail] ** 2))) < 0.5 * float(
         np.sqrt(np.mean(continuous[tail] ** 2))
     )
+
+
+_RESET_BLOCK = 128
+_RESET_FRAMES = 9600
+_PLATE_STRIP = json.dumps(
+    {
+        "version": 1,
+        "strips": [
+            {
+                "id": "s",
+                "inserts": [
+                    {
+                        "slot": "pre",
+                        "processor": "effects.reverb.plate",
+                        "params": json.dumps({"decaySec": 2.0, "dryWet": 0.5}),
+                    }
+                ],
+            }
+        ],
+    }
+)
+
+
+def _plate_engine() -> RealtimeEngine:
+    """One lane of tone bursts with silent gaps through a plate reverb."""
+    burst = [
+        0.4 * math.sin(2.0 * math.pi * 330.0 * i / 48000.0) if i % 2400 < 1200 else 0.0
+        for i in range(_RESET_FRAMES)
+    ]
+    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK)
+    engine.set_clips(
+        [
+            EngineClip(
+                id=1,
+                track_id=10,
+                channels=[burst, burst],
+                start_ppq=0.0,
+                length_samples=_RESET_FRAMES,
+            )
+        ]
+    )
+    engine.set_track_lanes([10])
+    engine.set_track_strip_json(10, _PLATE_STRIP)
+    return engine
+
+
+def _play_from(engine: RealtimeEngine, start: int, blocks: int, *, reset: bool) -> np.ndarray:
+    engine.seek_sample(start)
+    if reset:
+        engine.reset_processor_state()
+    engine.play()
+    silence = [[0.0] * _RESET_BLOCK, [0.0] * _RESET_BLOCK]
+    rendered: list[float] = []
+    for _ in range(blocks):
+        rendered.extend(engine.process(silence)[0])
+    return np.asarray(rendered, dtype=np.float32)
+
+
+def test_reset_processor_state_matches_a_fresh_engine_after_idle_advance() -> None:
+    blocks = 24
+    with _plate_engine() as fresh:
+        expected = _play_from(fresh, 1200, blocks, reset=False)
+    assert float(np.max(np.abs(expected))) > 0.0
+
+    with _plate_engine() as engine:
+        # Ring the plate, stop, then let the idle engine run on.
+        engine.play()
+        for _ in range(30):
+            engine.process([[0.0] * _RESET_BLOCK, [0.0] * _RESET_BLOCK])
+        engine.stop()
+        for _ in range(3):
+            engine.process([[0.0] * _RESET_BLOCK, [0.0] * _RESET_BLOCK])
+        reset = _play_from(engine, 1200, blocks, reset=True)
+    tolerance = 1e-6 * max(1.0, float(np.max(np.abs(expected))))
+    assert float(np.max(np.abs(reset - expected))) <= tolerance
+
+    # Non-vacuity: without the reset the ringing tail leaks into the render.
+    with _plate_engine() as engine:
+        engine.play()
+        for _ in range(30):
+            engine.process([[0.0] * _RESET_BLOCK, [0.0] * _RESET_BLOCK])
+        engine.stop()
+        for _ in range(3):
+            engine.process([[0.0] * _RESET_BLOCK, [0.0] * _RESET_BLOCK])
+        leaked = _play_from(engine, 1200, blocks, reset=False)
+    assert float(np.max(np.abs(leaked - expected))) > tolerance
+
+
+def test_prime_offline_parameters_accepts_the_prepared_shape_and_refuses_others() -> None:
+    with _plate_engine() as engine:
+        engine.prime_offline_parameters(2, _RESET_BLOCK)
+        for channels, block in ((0, _RESET_BLOCK), (2, 0), (-1, 1), (4096, _RESET_BLOCK)):
+            with pytest.raises(SonareError):
+                engine.prime_offline_parameters(channels, block)
+
+
+def test_tail_and_latency_follow_the_configured_strips() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
+        assert engine.tail_samples() == 0
+        assert engine.graph_latency_samples_q8() == 0
+        engine.set_track_lanes([10])
+        # A 1 ms limiter lookahead is 48 samples at 48 kHz: 48 * 256 in q8.
+        engine.set_track_strip_json(
+            10,
+            json.dumps(
+                {
+                    "version": 1,
+                    "strips": [
+                        {
+                            "id": "s",
+                            "inserts": [
+                                {
+                                    "slot": "pre",
+                                    "processor": "dynamics.limiter",
+                                    "params": json.dumps(
+                                        {"thresholdDb": 24.0, "releaseMs": 50.0, "lookaheadMs": 1.0}
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ),
+        )
+        assert engine.graph_latency_samples_q8() == 48 * 256
+
+
+def test_tail_samples_reports_a_lane_channel_delay() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_RESET_BLOCK) as engine:
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(
+            10,
+            json.dumps(
+                {
+                    "version": 1,
+                    "strips": [{"id": "s", "inserts": []}],
+                    "buses": [],
+                    "connections": [],
+                }
+            ),
+        )
+        # An insert-free strip adds nothing, so the tail is the channel delay alone.
+        assert engine.tail_samples() == 0
+        engine.set_track_strip_channel_delay_samples(10, 300)
+        assert engine.tail_samples() == 300

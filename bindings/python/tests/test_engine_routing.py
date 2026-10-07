@@ -19,10 +19,12 @@ from libsonare import (
     EngineMidiClipSchedule,
     EngineMidiEvent,
     RealtimeEngine,
+    SidechainCheck,
     SidechainSourceKind,
     SonareError,
     SonareValueError,
 )
+from libsonare._engine_mixing import _sidechain_check
 from libsonare._ffi_types_core import SonareEngineBus as _RawEngineBus
 from libsonare._ffi_types_mastering_project import (
     SonareEngineMidiClipSchedule as _RawMidiClipSchedule,
@@ -372,3 +374,112 @@ def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -
             engine.set_lane_sidechain(10, 0, 20)
     finally:
         engine.destroy()
+
+
+def _strip_json(strip_id: int, inserts: list[tuple[str, dict[str, float]]]) -> str:
+    return json.dumps(
+        {
+            "version": 1,
+            "strips": [
+                {
+                    "id": str(strip_id),
+                    "inserts": [
+                        {"slot": "pre", "processor": name, "params": json.dumps(params)}
+                        for name, params in inserts
+                    ],
+                }
+            ],
+            "buses": [],
+            "connections": [],
+        }
+    )
+
+
+def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> None:
+    engine = _make_keyed_rig()
+    seen: set[str | None] = set()
+
+    def check(result: SidechainCheck, reason: str | None) -> None:
+        assert result.ok is (reason is None)
+        assert result.reason == reason
+        seen.add(result.reason)
+
+    try:
+        # Lane keys.
+        check(engine.can_set_lane_sidechain(0, 0, 30), "invalid_target")
+        check(engine.can_set_lane_sidechain(10, 0, 10), "self_key")
+        check(engine.can_set_lane_sidechain(10, 0, 30), None)
+        engine.set_lane_sidechain(10, 0, 30)
+        check(engine.can_set_lane_sidechain(30, 0, 10), "cycle")
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(30, 0, 10)
+        # Bus keys; the rig already keys bus 2 insert 0 from bus 1.
+        check(engine.can_set_bus_sidechain(9, 0, "track", 10), "invalid_target")
+        check(engine.can_set_bus_sidechain(1, 1, "track", 30), "insert_out_of_range")
+        check(engine.can_set_bus_sidechain(1, 0, "track", 99), "undeclared_source")
+        with pytest.raises(SonareValueError):
+            engine.can_set_bus_sidechain(1, 0, 2, 30)
+        check(engine.can_set_bus_sidechain(1, 0, "bus", 1), "self_key")
+        check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
+        check(engine.can_set_bus_sidechain(2, 0, SidechainSourceKind.TRACK, 30), None)
+        # Master keys.
+        check(engine.can_set_master_sidechain(1, "track", 30), "insert_out_of_range")
+        check(engine.can_set_master_sidechain(0, "track", 99), "undeclared_source")
+        with pytest.raises(SonareValueError):
+            engine.can_set_master_sidechain(0, 2, 30)
+        check(engine.can_set_master_sidechain(0, "bus", 1), None)
+        # Queries leave the bindings alone: the refused reverse bus key stays refused.
+        check(engine.can_set_bus_sidechain(1, 0, "bus", 2), "cycle")
+    finally:
+        engine.destroy()
+
+    # Table full: every slot of the binding table taken by lane 10, then a new key.
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:
+        full.set_track_lanes([10, 30])
+        for insert in range(32):
+            full.set_lane_sidechain(10, insert, 30)
+        check(full.can_set_lane_sidechain(10, 32, 30), "table_full")
+        with pytest.raises(SonareError):
+            full.set_lane_sidechain(10, 32, 30)
+
+    # Plan refused: lane 20 reports 4 s (192000 samples) of lookahead, so keying
+    # lane 30's insert 1 from it needs an alignment past the delay ceiling.
+    limiter = ("dynamics.limiter", {"thresholdDb": 24.0, "releaseMs": 50.0})
+    long_limiter = (limiter[0], {**limiter[1], "lookaheadMs": 4000.0})
+    ducker = (
+        "dynamics.duckingProcessor",
+        {"thresholdDb": -20.0, "ratio": 20.0, "attackMs": 0.05, "releaseMs": 80.0, "rangeDb": 30.0},
+    )
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as plan:
+        plan.set_track_lanes([10, 20, 30])
+        plan.set_track_strip_json(20, _strip_json(20, [long_limiter]))
+        plan.set_track_strip_json(
+            30, _strip_json(30, [(limiter[0], {**limiter[1], "lookaheadMs": 1.0}), ducker])
+        )
+        check(plan.can_set_lane_sidechain(30, 1, 20), "plan_refused")
+        with pytest.raises(SonareError):
+            plan.set_lane_sidechain(30, 1, 20)
+        check(plan.can_set_lane_sidechain(30, 1, 10), None)
+
+    # The facade refuses a bad source kind before the C ABI can report it, so the
+    # code-to-reason table is exercised directly.
+    check(_sidechain_check(4), "invalid_source_kind")
+    assert seen == {
+        None,
+        "invalid_target",
+        "insert_out_of_range",
+        "undeclared_source",
+        "invalid_source_kind",
+        "self_key",
+        "cycle",
+        "table_full",
+        "plan_refused",
+    }
+
+
+def test_sidechain_check_is_a_frozen_value() -> None:
+    check = SidechainCheck(ok=False, reason="cycle")
+    assert check == SidechainCheck(False, "cycle")
+    assert SidechainCheck(True).reason is None
+    with pytest.raises(AttributeError):
+        check.ok = True  # type: ignore[misc]
