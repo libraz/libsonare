@@ -37,16 +37,7 @@ SonareError sonare_mastering_chain(const float* samples, size_t length, int samp
   auto result = sonare::mastering::api::run_chain_mono_params(cpp_params.data(), cpp_params.size(),
                                                               samples, length, sample_rate);
 
-  out->length = result.samples.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
-
-  out->samples = copy_vector(result.samples);
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  set_chain_metrics(result, out);
+  fill_mono_chain_result(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -81,17 +72,7 @@ SonareError sonare_mastering_chain_stereo(const float* left, const float* right,
   auto result = sonare::mastering::api::run_chain_stereo_params(
       cpp_params.data(), cpp_params.size(), left, right, length, sample_rate);
 
-  out->length = result.left.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
-
-  out->left = copy_vector(result.left);
-  out->right = copy_vector(result.right);
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  set_chain_metrics(result, out);
+  fill_stereo_chain_result(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -132,16 +113,7 @@ SonareError sonare_mastering_chain_with_progress_ex(
   }
   auto result = chain.process_mono(samples, length, sample_rate);
 
-  out->length = result.samples.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
-
-  out->samples = copy_vector(result.samples);
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  set_chain_metrics(result, out);
+  fill_mono_chain_result(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -186,17 +158,7 @@ SonareError sonare_mastering_chain_stereo_with_progress_ex(
   }
   auto result = chain.process_stereo(left, right, length, sample_rate);
 
-  out->length = result.left.size();
-  out->sample_rate = result.sample_rate;
-  out->input_lufs = result.input_lufs;
-  out->output_lufs = result.output_lufs;
-  out->applied_gain_db = result.applied_gain_db;
-
-  out->left = copy_vector(result.left);
-  out->right = copy_vector(result.right);
-  out->stages = copy_stage_array(result.stages);
-  out->stages_count = result.stages.size();
-  set_chain_metrics(result, out);
+  fill_stereo_chain_result(result, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }

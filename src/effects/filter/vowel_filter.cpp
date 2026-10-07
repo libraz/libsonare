@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/parameter_domain.h"
 #include "rt/scoped_no_denormals.h"
 
 namespace sonare::effects::filter {
@@ -202,7 +203,7 @@ bool VowelFilter::set_parameter_impl(unsigned int param_id, float value) {
       drive_gain_ = std::pow(10.0f, config_.drive * kDriveMaxDb / kDbPerAmplitudeDecade);
       return true;
     case 3:
-      if (value != 0.0f && value != 1.0f) return false;
+      if (!mastering::common::valid_switch_value(value)) return false;
       config_.drive_on = value == 1.0f;
       return true;
     case 4:

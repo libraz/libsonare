@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/dynamics/transient_shaper.h"
@@ -197,8 +198,8 @@ void validate_realtime_parameter_domain(const std::string& key, float value, dou
   // Live setters clamp these instead of throwing; rejecting here keeps config()
   // equal to what the DSP holds. Bounds mirror each processor's clamp.
   if ((key == "maximizer.truePeakLimiter.ceilingDb" || key == "loudness.ceilingDb") &&
-      value > 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, key + " must be <= 0");
+      !common::valid_ceiling_db(value)) {
+    throw SonareException(ErrorCode::InvalidParameter, key + " must be finite and <= 0");
   }
   if (key == "dynamics.deesser.frequencyHz") {
     const float maximum = static_cast<float>(sample_rate * 0.49);

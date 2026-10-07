@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "mastering/common/parameter_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -107,6 +108,10 @@ bool SoftKneeMax::parameter_is_realtime_safe(unsigned int param_id) const noexce
 }
 
 void SoftKneeMax::validate_config(const SoftKneeMaxConfig& config) {
+  if (!common::valid_ceiling_db(config.ceiling_db)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "soft knee maximizer ceiling must be finite and <= 0");
+  }
   if (config.knee_db < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid soft knee maximizer configuration");
   }

@@ -24,11 +24,14 @@
 
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/match/reference_loudness.h"
+#include "mastering/maximizer/loudness_optimize.h"
+#include "mastering/maximizer/true_peak_limiter.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/json.h"
@@ -533,6 +536,62 @@ TEST_CASE("parse_chain_config_params builds nested config from flat params", "[m
   REQUIRE_THAT(config.dynamics.compressor.config.ratio, WithinAbs(2.0f, 1e-6f));
   REQUIRE(config.loudness.enabled);
   REQUIRE_THAT(config.loudness.target_lufs, WithinAbs(-14.0f, 1e-6f));
+}
+
+TEST_CASE("a negative maxClickSamples is refused on the chain and named-processor paths",
+          "[mastering][chain][validation]") {
+  Param chain_params[] = {{"repair.declick.maxClickSamples", -1.0}};
+  REQUIRE_THROWS_AS(parse_chain_config_params(chain_params, 1), SonareException);
+
+  const std::vector<float> samples(2048, 0.1f);
+  const std::vector<Param> named_params = {{"maxClickSamples", -1.0}};
+  REQUIRE_THROWS_AS(
+      apply_named_processor("repair.declick", samples.data(), samples.size(), 48000, named_params),
+      SonareException);
+
+  Param valid[] = {{"repair.declick.maxClickSamples", 7.0}};
+  REQUIRE(parse_chain_config_params(valid, 1).repair.declick.config.max_click_samples == 7u);
+}
+
+TEST_CASE("an insert switch value other than 0 or 1 is refused by name at construction",
+          "[mastering][chain][validation]") {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  for (const double bad : {2.0, 0.5, -1.0, nan}) {
+    INFO("value=" << bad);
+    const std::vector<Param> insert_params = {{"driveOn", bad}};
+    REQUIRE_THROWS_AS(make_insert_from_params("effects.filter.vowel", insert_params),
+                      SonareException);
+  }
+  const std::vector<Param> drive_on = {{"driveOn", 1.0}};
+  REQUIRE(make_insert_from_params("effects.filter.vowel", drive_on) != nullptr);
+  const std::vector<Param> drive_off = {{"driveOn", 0.0}};
+  REQUIRE(make_insert_from_params("effects.filter.vowel", drive_off) != nullptr);
+}
+
+TEST_CASE("a ceiling above full scale is refused by construction and by the streaming setter",
+          "[mastering][chain][validation]") {
+  const std::vector<float> samples(4096, 0.1f);
+  REQUIRE_THROWS_AS(
+      sonare::mastering::maximizer::loudness_optimize(
+          Audio::from_buffer(samples.data(), samples.size(), 48000), {-14.0f, 1.0f, 4}),
+      SonareException);
+  REQUIRE_THROWS_AS(sonare::mastering::maximizer::TruePeakLimiter({1.0f, 1.0f, 20.0f, 4}),
+                    SonareException);
+
+  MasteringChainConfig config;
+  config.maximizer.true_peak_limiter.enabled = true;
+  config.maximizer.true_peak_limiter.config.ceiling_db = 1.0f;
+  REQUIRE_THROWS_AS(MasteringChain(config), SonareException);
+
+  config.maximizer.true_peak_limiter.config.ceiling_db = -1.0f;
+  StreamingMasteringChain streaming(config);
+  streaming.prepare(48000.0, 512, 1);
+  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb", 1.0),
+                    SonareException);
+  REQUIRE_THROWS_AS(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb",
+                                            std::numeric_limits<double>::quiet_NaN()),
+                    SonareException);
+  REQUIRE_NOTHROW(streaming.set_parameter("maximizer.truePeakLimiter.ceilingDb", -3.0));
 }
 
 TEST_CASE("parse_chain_config_params rejects unknown keys", "[mastering][chain]") {

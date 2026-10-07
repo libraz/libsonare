@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -178,10 +179,11 @@ std::vector<rt::ParamDescriptor> BrickwallLimiter::parameter_descriptors() const
 }
 
 void BrickwallLimiter::validate_config(const BrickwallLimiterConfig& config) {
-  if (!std::isfinite(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
+  if (!common::valid_ceiling_db(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
       !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "brickwall limiter values must be finite and timing values non-negative");
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "brickwall limiter ceiling must be finite and <= 0, timing values finite and non-negative");
   }
 }
 

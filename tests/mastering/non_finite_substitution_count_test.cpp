@@ -240,8 +240,8 @@ constexpr float kHugeInputGainDb = 760.0f;
 /// Normalization gain the loudness cases ask for, relative to the measured input:
 /// finite in linear form, and enough to overflow the hot fixture's peaks.
 constexpr float kHugeLoudnessGainDb = 740.0f;
-/// A loudness ceiling far enough up that its headroom never bounds that gain.
-constexpr float kOpenCeilingDb = 1000.0f;
+/// A limiter gain-reduction depth deep enough that the headroom never bounds that gain.
+constexpr float kOpenGainBoundDb = 1000.0f;
 
 /// Integrated loudness of @p program, so a target can sit a fixed gain above it.
 float program_lufs(const std::vector<float>& program) {
@@ -745,20 +745,20 @@ TEST_CASE("loudness_optimize reports the substitutions its internal limiter made
   SECTION("a normalization gain whose linear form overflows is refused") {
     LoudnessOptimizeConfig config;
     config.target_lufs = 1.0e6f;
-    config.ceiling_db = 1.0e6f;
+    config.max_limiter_gain_reduction_db = 1.0e6f;
     REQUIRE_THROWS_AS(loudness_optimize(audio, config), sonare::SonareException);
   }
 
   SECTION("a normalization gain that overflows the program moves the count") {
     // The gain itself is finite in linear form, so it is accepted, and the open
-    // ceiling does not bound it back down; on the hot fixture the static multiply
+    // gain-reduction depth does not bound it back down; on the hot fixture the static multiply
     // overflows and hands the limiter an infinity the caller never supplied.
     const std::vector<float> hot = chain_program(kHotChainPeak);
     const sonare::Audio hot_audio =
         sonare::Audio::from_buffer(hot.data(), hot.size(), kChainSampleRate);
     LoudnessOptimizeConfig config;
     config.target_lufs = program_lufs(hot) + kHugeLoudnessGainDb;
-    config.ceiling_db = kOpenCeilingDb;
+    config.max_limiter_gain_reduction_db = kOpenGainBoundDb;
     const auto result = loudness_optimize(hot_audio, config);
     REQUIRE(result.non_finite_substitution_count > 0u);
   }
@@ -775,12 +775,13 @@ TEST_CASE("maximizer.loudnessOptimize's mono branch reports the substitutions it
 
   const std::vector<float> program = chain_program(kHotChainPeak);
   const std::vector<sonare::mastering::api::Param> refused{{"targetLufs", 1.0e6},
-                                                           {"ceilingDb", 1.0e6}};
+                                                           {"maxLimiterGainReductionDb", 1.0e6}};
   REQUIRE_THROWS_AS(apply_named_processor("maximizer.loudnessOptimize", program.data(),
                                           program.size(), kChainSampleRate, refused),
                     sonare::SonareException);
   const std::vector<sonare::mastering::api::Param> params{
-      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb}, {"ceilingDb", kOpenCeilingDb}};
+      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb},
+      {"maxLimiterGainReductionDb", kOpenGainBoundDb}};
   const auto result = apply_named_processor("maximizer.loudnessOptimize", program.data(),
                                             program.size(), kChainSampleRate, params);
   REQUIRE(result.non_finite_substitution_count > 0u);
@@ -799,14 +800,15 @@ TEST_CASE("maximizer.loudnessOptimize's stereo branch reports the substitutions 
   // shared one does.
   const std::vector<float> program = chain_program(kHotChainPeak);
   const std::vector<sonare::mastering::api::Param> refused{{"targetLufs", 1.0e6},
-                                                           {"ceilingDb", 1.0e6}};
+                                                           {"maxLimiterGainReductionDb", 1.0e6}};
   REQUIRE_THROWS_AS(
       apply_named_processor_stereo("maximizer.loudnessOptimize", program.data(), program.data(),
                                    program.size(), kChainSampleRate, refused),
       sonare::SonareException);
   // The pair measures about 3 LU above one channel; the gain stays in range either way.
   const std::vector<sonare::mastering::api::Param> params{
-      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb}, {"ceilingDb", kOpenCeilingDb}};
+      {"targetLufs", program_lufs(program) + kHugeLoudnessGainDb},
+      {"maxLimiterGainReductionDb", kOpenGainBoundDb}};
   const auto result =
       apply_named_processor_stereo("maximizer.loudnessOptimize", program.data(), program.data(),
                                    program.size(), kChainSampleRate, params);

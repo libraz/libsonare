@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/parameter_domain.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -81,6 +82,9 @@ bool Maximizer::parameter_is_realtime_safe(unsigned int param_id) const noexcept
 }
 
 void Maximizer::validate_config(const MaximizerConfig& config) {
+  if (!common::valid_ceiling_db(config.ceiling_db)) {
+    throw SonareException(ErrorCode::InvalidParameter, "maximizer ceiling must be finite and <= 0");
+  }
   if (config.lookahead_ms < 0.0f || config.release_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "maximizer timing values must be non-negative");

@@ -173,10 +173,10 @@ std::uint32_t narrow_substitutions(std::size_t count) noexcept {
 
 // Run a processor over the whole channel set with latency compensation. One
 // processor instance handles every channel, so a channel-linked detector stays
-// linked. The reported latency is captured into @p outcome for informational
-// purposes (`MonoResult::latency_samples`); the returned audio is already
-// time-aligned (leading `latency` samples have been dropped and the tail has
-// been flushed via zero-padding by the shared runner).
+// linked. The reported latency is the processor's own, captured into @p outcome
+// (`MonoResult::latency_samples`); the returned audio is already time-aligned
+// (leading `latency` samples have been dropped and the tail has been flushed
+// via zero-padding by the shared runner).
 template <typename Processor>
 void run_processor(Processor& processor, ChannelSet& channels, int sample_rate,
                    ProcessorOutcome& outcome) {
@@ -370,13 +370,6 @@ Enum checked_enum(int value, const char* what) {
   return static_cast<Enum>(value);
 }
 
-std::size_t checked_nonnegative_size(int value, const char* what) {
-  if (value < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(what) + " must be non-negative");
-  }
-  return static_cast<std::size_t>(value);
-}
-
 // Sample rate handed to the branch-set probe. Nothing is rendered at it (the
 // probe passes an empty buffer), it only has to be a legal rate.
 constexpr int kProbeSampleRate = 48000;
@@ -518,6 +511,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
       auto result = maximizer::loudness_optimize(audio, config);
       applied_gain_db += result.applied_gain_db;
       outcome.loudness_target_limited = result.loudness_target_limited;
+      outcome.latency_samples = result.latency_samples;
       accumulate_substitutions(outcome.non_finite_substitution_count,
                                result.non_finite_substitution_count);
       return result.audio;
@@ -611,8 +605,9 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     repair::DeclickConfig config;
     config.threshold = f(params, "threshold", config.threshold);
     config.neighbor_ratio = f(params, "neighborRatio", config.neighbor_ratio);
-    config.max_click_samples =
-        static_cast<size_t>(i(params, "maxClickSamples", config.max_click_samples));
+    config.max_click_samples = checked_nonnegative_size(
+        i(params, "maxClickSamples", static_cast<int>(config.max_click_samples)),
+        "maxClickSamples");
     config.lpc_order = i(params, "lpcOrder", config.lpc_order);
     config.residual_ratio = f(params, "residualRatio", config.residual_ratio);
     apply_linked_or_per_channel(
@@ -973,10 +968,6 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     }
     maximizer::TruePeakLimiter p(config);
     run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
-    // The shared runner has already drained and trimmed the limiter's internal
-    // delay, exactly like loudness_optimize() on the mono path. Do not make the
-    // caller compensate an output that is already time-aligned.
-    outcome.latency_samples = 0;
   } else if (name == "repair.trimSilence") {
     // One range cuts both channels, so they stay equal length. The rule that
     // picks it lives in trim_silence_stereo rather than here.

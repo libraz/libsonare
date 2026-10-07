@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/dsp_primitives.h"
@@ -178,10 +179,10 @@ bool AdaptiveRelease::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void AdaptiveRelease::validate_config(const AdaptiveReleaseConfig& config) {
-  if (config.lookahead_ms < 0.0f || config.min_release_ms < 0.0f ||
-      config.max_release_ms < config.min_release_ms || config.crest_window_ms <= 0.0f ||
-      config.crest_low <= 0.0f || config.crest_high < config.crest_low ||
-      config.release_smoothing_ms < 0.0f) {
+  if (!common::valid_ceiling_db(config.ceiling_db) || config.lookahead_ms < 0.0f ||
+      config.min_release_ms < 0.0f || config.max_release_ms < config.min_release_ms ||
+      config.crest_window_ms <= 0.0f || config.crest_low <= 0.0f ||
+      config.crest_high < config.crest_low || config.release_smoothing_ms < 0.0f) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid adaptive release configuration");
   }
 }

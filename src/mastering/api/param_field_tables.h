@@ -637,6 +637,14 @@ namespace sonare::mastering::api {
   throw SonareException(ErrorCode::InvalidParameter, subject + " is out of range");
 }
 
+/// @brief Converts a flat integer to a size, refusing a negative one by name.
+inline std::size_t checked_nonnegative_size(int value, const std::string& subject) {
+  if (value < 0) {
+    throw SonareException(ErrorCode::InvalidParameter, subject + " must be non-negative");
+  }
+  return static_cast<std::size_t>(value);
+}
+
 /// @brief Assigns a flat param to an integral config field, naming its key.
 /// @details The flat API carries every value as a double, so a bare cast folds
 /// a fraction onto a legal count and saturates an out-of-range value, which a

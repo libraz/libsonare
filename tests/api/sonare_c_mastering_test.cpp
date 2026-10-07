@@ -138,8 +138,8 @@ TEST_CASE("sonare_mastering_process", "[c_api][mastering]") {
     REQUIRE(std::isfinite(result.output_lufs));
     REQUIRE(std::isfinite(result.applied_gain_db));
     // The offline helper returns time-aligned audio (it compensates the internal
-    // true-peak limiter's look-ahead itself), so it reports zero latency.
-    REQUIRE(result.latency_samples == 0);
+    // true-peak limiter's look-ahead itself) and reports that look-ahead.
+    REQUIRE(result.latency_samples > 0);
     REQUIRE(result.output_lufs > -18.2f);
     REQUIRE(result.output_lufs < -17.8f);
     REQUIRE(result.loudness_target_limited == 0);
@@ -2181,6 +2181,61 @@ TEST_CASE("mastering chain entry points define the result on a rejected call",
   CHECK(stereo.right == nullptr);
   CHECK(stereo.length == 0);
   CHECK(stereo.stages == nullptr);
+}
+
+TEST_CASE("every mastering chain entry point reports the true non-finite substitution count",
+          "[c_api][mastering][non_finite]") {
+  constexpr int kSampleRate = 48000;
+  // A constant level whose makeup multiply overflows on every sample: the
+  // compressor emits non-finite samples and the true-peak limiter replaces them.
+  const std::vector<float> samples(4800, 1.0e4f);
+  const SonareMasteringParam params[] = {{"dynamics.compressor.enabled", 1.0},
+                                         {"dynamics.compressor.makeupGainDb", 760.0},
+                                         {"maximizer.truePeakLimiter.enabled", 1.0},
+                                         {"maximizer.truePeakLimiter.ceilingDb", -20.0},
+                                         {"maximizer.truePeakLimiter.oversampleFactor", 1.0}};
+  const auto never_cancel = [](void*) { return 0; };
+
+  SonareMasteringChainResult reference{};
+  REQUIRE(sonare_mastering_chain(samples.data(), samples.size(), kSampleRate, params, 5,
+                                 &reference) == SONARE_OK);
+  const uint32_t expected = reference.non_finite_substitution_count;
+  REQUIRE(expected > 0);
+  sonare_free_mastering_chain_result(&reference);
+
+  SonareMasteringChainResult mono{};
+  REQUIRE(sonare_mastering_chain_with_progress(samples.data(), samples.size(), kSampleRate, params,
+                                               5, nullptr, nullptr, &mono) == SONARE_OK);
+  CHECK(mono.non_finite_substitution_count == expected);
+  sonare_free_mastering_chain_result(&mono);
+
+  SonareMasteringChainResult mono_cancel{};
+  REQUIRE(sonare_mastering_chain_with_progress_ex(samples.data(), samples.size(), kSampleRate,
+                                                  params, 5, nullptr, nullptr, &mono_cancel,
+                                                  never_cancel, nullptr) == SONARE_OK);
+  CHECK(mono_cancel.non_finite_substitution_count == expected);
+  sonare_free_mastering_chain_result(&mono_cancel);
+
+  SonareMasteringChainStereoResult stereo{};
+  REQUIRE(sonare_mastering_chain_stereo(samples.data(), samples.data(), samples.size(), kSampleRate,
+                                        params, 5, &stereo) == SONARE_OK);
+  CHECK(stereo.non_finite_substitution_count > 0);
+  const uint32_t stereo_expected = stereo.non_finite_substitution_count;
+  sonare_free_mastering_chain_stereo_result(&stereo);
+
+  SonareMasteringChainStereoResult stereo_progress{};
+  REQUIRE(sonare_mastering_chain_stereo_with_progress(
+              samples.data(), samples.data(), samples.size(), kSampleRate, params, 5, nullptr,
+              nullptr, &stereo_progress) == SONARE_OK);
+  CHECK(stereo_progress.non_finite_substitution_count == stereo_expected);
+  sonare_free_mastering_chain_stereo_result(&stereo_progress);
+
+  SonareMasteringChainStereoResult stereo_cancel{};
+  REQUIRE(sonare_mastering_chain_stereo_with_progress_ex(
+              samples.data(), samples.data(), samples.size(), kSampleRate, params, 5, nullptr,
+              nullptr, &stereo_cancel, never_cancel, nullptr) == SONARE_OK);
+  CHECK(stereo_cancel.non_finite_substitution_count == stereo_expected);
+  sonare_free_mastering_chain_stereo_result(&stereo_cancel);
 }
 
 #endif

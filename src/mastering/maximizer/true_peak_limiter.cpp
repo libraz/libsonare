@@ -7,6 +7,7 @@
 #include <limits>
 #include <vector>
 
+#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
@@ -502,7 +503,7 @@ bool TruePeakLimiter::parameter_is_realtime_safe(unsigned int param_id) const no
 }
 
 void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
-  if (!std::isfinite(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
+  if (!common::valid_ceiling_db(config.ceiling_db) || !std::isfinite(config.lookahead_ms) ||
       !std::isfinite(config.release_ms) || config.lookahead_ms < 0.0f || config.release_ms < 0.0f ||
       (config.oversample_factor != 1 && config.oversample_factor != 2 &&
        config.oversample_factor != 4 && config.oversample_factor != 8 &&

@@ -36,6 +36,9 @@ struct MonoAudioResult {
   /// Static gain applied by loudness normalization before any limiter gain
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
+  /// The processor's own latency, in samples, which the offline runner has
+  /// already compensated: the returned audio is time-aligned, so a caller must
+  /// not trim it again.
   int latency_samples = 0;
   /// Samples a stage replaced with a finite in-domain one, keeping the output
   /// finite and in range. A non-finite sample supplied by the caller is
@@ -101,6 +104,7 @@ struct StereoAudioResult {
   /// Static gain applied by loudness normalization before any limiter gain
   /// reduction. Limiter GR is reported separately in stage_gain_reductions.
   float applied_gain_db = 0.0f;
+  /// @copydoc MonoAudioResult::latency_samples
   int latency_samples = 0;
   /// @copydoc MonoAudioResult::non_finite_substitution_count
   std::uint32_t non_finite_substitution_count = 0;

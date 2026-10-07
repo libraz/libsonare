@@ -52,6 +52,8 @@ typedef struct {
   float input_lufs;
   float output_lufs;
   float applied_gain_db;
+  /// The processor's own latency in samples. The returned audio is already
+  /// compensated for it and is time-aligned with the input, so do not trim it.
   int latency_samples;
   /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
   int loudness_target_limited;
@@ -78,6 +80,8 @@ typedef struct {
   float input_lufs;
   float output_lufs;
   float applied_gain_db;
+  /// The processor's own latency in samples. The returned audio is already
+  /// compensated for it and is time-aligned with the input, so do not trim it.
   int latency_samples;
   /// Non-zero when the true-peak ceiling prevented reaching target_lufs.
   int loudness_target_limited;

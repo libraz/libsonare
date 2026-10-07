@@ -131,7 +131,7 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.declick.maxClickSamples") {
-    cfg.repair.declick.config.max_click_samples = static_cast<size_t>(vi());
+    cfg.repair.declick.config.max_click_samples = checked_nonnegative_size(vi(), key);
     mark_field(flags.declick);
     return true;
   }

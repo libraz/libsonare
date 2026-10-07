@@ -1007,18 +1007,17 @@ TEST_CASE("maximizer.loudnessOptimize releaseMs 0 runs the library default relea
   CHECK(stereo_sentinel.left != stereo_immediate.left);
 }
 
-TEST_CASE("LoudnessOptimize returns time-aligned output with zero reported latency",
+TEST_CASE("LoudnessOptimize returns time-aligned output and reports the latency it removed",
           "[mastering][maximizer]") {
   // The helper pads by the internal true-peak limiter's look-ahead, processes,
   // and drops the leading delayed samples, so the returned audio is already
-  // time-aligned. It must therefore report zero latency (not the internal
-  // limiter latency, which would make a caller double-compensate an already
-  // aligned buffer).
+  // time-aligned. The reported latency is that look-ahead, as it is for every
+  // other processor, and is not to be trimmed again.
   const Audio input = sine_audio(0.05f);
   const auto result = loudness_optimize(input, {-20.0f, -1.0f, 4});
 
   REQUIRE(result.audio.size() == input.size());
-  REQUIRE(result.latency_samples == 0);
+  REQUIRE(result.latency_samples > 0);
 }
 
 TEST_CASE("LoudnessOptimize accepts meter-supported true-peak oversample factors",

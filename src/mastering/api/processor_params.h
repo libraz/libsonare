@@ -20,6 +20,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
+#include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/deesser.h"
@@ -317,7 +318,10 @@ inline bool b(const ParamMap& params, const char* key, bool default_value) {
   params.note_kind(key, ParamKind::Boolean);
   params.note_default(key, default_value ? 1.0 : 0.0);
   auto it = params.find(key);
-  const bool value = it == params.end() ? default_value : it->second != 0.0;
+  if (it != params.end() && !common::valid_switch_value(it->second)) {
+    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be 0 or 1");
+  }
+  const bool value = it == params.end() ? default_value : it->second == 1.0;
   params.note_effective(key, value ? 1.0 : 0.0);
   return value;
 }

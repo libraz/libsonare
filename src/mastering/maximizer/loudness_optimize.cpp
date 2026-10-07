@@ -8,6 +8,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/common/loudness_measure.h"
+#include "mastering/common/parameter_domain.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -18,8 +19,10 @@ namespace sonare::mastering::maximizer {
 
 float validate_loudness_params(float target_lufs, float ceiling_db, float release_ms,
                                float max_limiter_gain_reduction_db, int true_peak_oversample) {
-  SONARE_CHECK_MSG(std::isfinite(target_lufs) && std::isfinite(ceiling_db),
-                   ErrorCode::InvalidParameter, "target_lufs and ceiling_db must be finite");
+  SONARE_CHECK_MSG(std::isfinite(target_lufs), ErrorCode::InvalidParameter,
+                   "target_lufs must be finite");
+  SONARE_CHECK_MSG(common::valid_ceiling_db(ceiling_db), ErrorCode::InvalidParameter,
+                   "ceiling_db must be finite and <= 0");
   SONARE_CHECK_MSG(std::isfinite(release_ms) && release_ms >= 0.0f, ErrorCode::InvalidParameter,
                    "release_ms must be 0 (the library default) or a finite positive value");
   SONARE_CHECK_MSG(
@@ -86,11 +89,7 @@ LoudnessOptimizeResult loudness_optimize(const Audio& audio, const LoudnessOptim
       std::isfinite(input_lufs) &&
       api::detail::loudness_target_was_limited(requested_gain_db, gain_db, config.target_lufs,
                                                result.output_lufs);
-  // The returned audio is time-aligned: the limiter's look-ahead latency was
-  // streamed and dropped above, so no downstream compensation is
-  // needed. Report zero rather than the internal limiter latency, which would
-  // otherwise make a caller double-compensate an already-aligned buffer.
-  result.latency_samples = 0;
+  result.latency_samples = limiter.latency_samples();
   return result;
 }
 

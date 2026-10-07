@@ -42,8 +42,9 @@ struct LoudnessOptimizeResult {
   /// either peak headroom clamped the requested normalization gain, or the
   /// true-peak limiter pulled the achieved loudness back below the target.
   bool loudness_target_limited = false;
-  /// Always 0: the returned audio is time-aligned because this helper
-  /// compensates the internal true-peak limiter's look-ahead latency itself.
+  /// The internal true-peak limiter's look-ahead latency, which this helper has
+  /// already compensated: the returned audio is time-aligned, so a caller must
+  /// not trim it again.
   int latency_samples = 0;
   /// Non-finite samples the internal true-peak limiter replaced with a finite
   /// in-domain one, so the output is finite and in range while carrying samples
