@@ -142,7 +142,7 @@ describe('STFT entry points share one nFft rule', () => {
     // A two-point symmetric Hann synthesis window is all zeros.
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(RangeError);
     expect(() => stftEntryPoints[name as keyof typeof stftEntryPoints](2)).toThrow(
-      /nFft must be an even integer >= 4/,
+      /nFft must be an integer in \[4, /,
     );
   });
 

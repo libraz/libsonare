@@ -4,7 +4,7 @@
  */
 
 import type { EffectSamplesRequest } from './_effects_common.js';
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type { HpssResult } from './types.js';
 import { assertHpssKernels } from './validation.js';
@@ -56,7 +56,7 @@ export function hpss(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;

@@ -4,7 +4,7 @@
  */
 
 import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { PitchCorrectOptions, VoicedFlags } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
@@ -119,7 +119,7 @@ export function timeStretch(
   // Number.isFinite(1e39) is true and the demotion to the f32 parameter makes it
   // an infinity, which only the binding-side narrowing can see.
   assertFiniteScalar('timeStretch', request.rate as number, 'rate');
-  const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
   return requireModule().timeStretchEx(
     request.samples,
     request.sampleRate ?? 22050,
@@ -191,7 +191,7 @@ export function pitchShift(
   assertSamples('pitchShift', request.samples, request.validate !== false);
   // See timeStretch above for what this does and does not cover.
   assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
-  const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
   return requireModule().pitchShiftEx(
     request.samples,
     request.sampleRate ?? 22050,

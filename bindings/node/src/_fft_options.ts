@@ -29,10 +29,31 @@ export function resolveFftOptions(
   nFft: unknown,
   hopLength: unknown,
 ): { nFft: number; hopLength: number } {
+  return resolveWithMinimum(fnName, nFft, hopLength, 2);
+}
+
+/**
+ * The same pair for an effect that resynthesizes audio: the symmetric Hann
+ * synthesis window is all zeros at two points, so the smallest size is 4.
+ */
+export function resolveEffectFftOptions(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+): { nFft: number; hopLength: number } {
+  return resolveWithMinimum(fnName, nFft, hopLength, 4);
+}
+
+function resolveWithMinimum(
+  fnName: string,
+  nFft: unknown,
+  hopLength: unknown,
+  minNFft: number,
+): { nFft: number; hopLength: number } {
   const resolvedNFft = nFft === undefined ? 2048 : nFft;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
   assertIntegerValue(fnName, resolvedNFft, 'nFft');
-  assertEvenIntegerAtLeast(fnName, resolvedNFft, 'nFft', 2, 2 ** 30);
+  assertEvenIntegerAtLeast(fnName, resolvedNFft, 'nFft', minNFft, 2 ** 30);
   assertIntegerValue(fnName, resolvedHopLength, 'hopLength');
   assertPositiveInteger(fnName, resolvedHopLength, 'hopLength');
   return { nFft: resolvedNFft, hopLength: resolvedHopLength };

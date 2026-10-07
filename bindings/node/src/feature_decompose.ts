@@ -1,5 +1,5 @@
 import { resolvePositiveIntegerOption } from './_feature_options.js';
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
@@ -543,7 +543,7 @@ export function hpssWithResidual(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveFftOptions('hpssWithResidual', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('hpssWithResidual', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;

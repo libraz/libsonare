@@ -6,7 +6,7 @@
 import type { EffectSamplesRequest } from './_effects_common.js';
 import { assertPitchTrackLengths, toVoicedInt32 } from './_effects_common.js';
 import { resolvePositiveIntegerOption } from './_feature_options.js';
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type { PitchCorrectOptions, VoicedFlags } from './types.js';
 import { assertFiniteScalar } from './validation.js';
@@ -70,7 +70,7 @@ export function timeStretch(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
   assertFiniteScalar('timeStretch', request.rate as number, 'rate');
-  const fftOptions = resolveFftOptions('timeStretch', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
   return addon.timeStretch(
     request.samples,
     request.sampleRate ?? 22050,
@@ -109,7 +109,7 @@ export function pitchShift(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, semitones, nFft, hopLength } : samples;
   assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
-  const fftOptions = resolveFftOptions('pitchShift', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
   return addon.pitchShift(
     request.samples,
     request.sampleRate ?? 22050,

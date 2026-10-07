@@ -3,7 +3,7 @@
  * that return a single component.
  */
 
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
@@ -87,7 +87,7 @@ export function hpss(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
-  const fftOptions = resolveFftOptions('hpss', request.nFft, request.hopLength);
+  const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;

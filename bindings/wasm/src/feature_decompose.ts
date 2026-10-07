@@ -3,7 +3,7 @@
  * the masks built over it, and the recurrence structure of a track.
  */
 
-import { resolveFftOptions } from './_fft_options.js';
+import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { SegmentMatrix } from './public_types.js';
 import type {
@@ -503,7 +503,7 @@ export function hpssWithResidual(
       r.hardMask,
     );
   }
-  const fftOptions = resolveFftOptions('hpssWithResidual', nFft, hopLength);
+  const fftOptions = resolveEffectFftOptions('hpssWithResidual', nFft, hopLength);
   const resolvedHardMask = resolveHardMask('hpssWithResidual', hardMask);
   assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);
   return requireModule().hpssWithResidualEx(
