@@ -202,8 +202,8 @@ class Mixer:
         (LUFS + true peak at 4x, about 1.4 MB per strip at 48 kHz).
         ``enabled=False`` drops both meters for a strip whose snapshots are never
         read. ``true_peak_oversample`` is the requested factor; 0 selects the
-        library default (4), and the realtime meter resolves it to the nearest
-        factor it implements (2x, 4x, 8x).
+        library default (4), and the realtime meter resolves 2 to 2x, 8..16 to
+        8x, and any other value (0, 1, 3..7) to 4x.
 
         The routing graph is marked dirty; call :meth:`compile` (or
         :meth:`process_stereo`) to rebuild.
