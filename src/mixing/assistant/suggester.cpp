@@ -429,6 +429,11 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
   // output, not the mix. The number itself comes from the gain-staging module
   // rather than being invented here.
   if (config.enable_gain) {
+    for (const auto& profile : profiles) {
+      if (profile.usable || profile.peak_measured) continue;
+      notes.push_back("the master headroom estimate leaves out " + profile.strip_id +
+                      " because its peak could not be measured (" + profile.exclusion_reason + ")");
+    }
     const float headroom_db = decide_master_headroom_db(profiles, result.scene, config);
     if (headroom_db < 0.0f) {
       const auto master = std::find_if(result.scene.buses.begin(), result.scene.buses.end(),

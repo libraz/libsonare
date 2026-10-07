@@ -369,3 +369,43 @@ TEST_CASE("a full session's pairwise pass stays inside its budget",
                      << elapsed_ms / static_cast<double>(alignments.size()) << " ms/pair)");
   REQUIRE(elapsed_ms < kBudgetMs);
 }
+
+// A short shared burst near the end of an activity block must land in the
+// correlation core, not only in the lag margin the search reads around it.
+TEST_CASE("phase alignment measures a burst wherever it sits in an activity block",
+          "[mixing][assistant]") {
+  constexpr std::size_t kTwoSeconds = 2 * kSampleRate;
+  const std::vector<float> burst = noise(960, 7u);
+  auto placed = [&](std::size_t at) {
+    std::vector<float> samples(kTwoSeconds, 0.0f);
+    std::copy(burst.begin(), burst.end(), samples.begin() + static_cast<std::ptrdiff_t>(at));
+    return samples;
+  };
+
+  // 93600 ends on the last sample any core reaches; 1440 starts on the first.
+  for (std::size_t at : {std::size_t{92040}, std::size_t{93600}, std::size_t{3000},
+                         std::size_t{47000}, std::size_t{1440}}) {
+    CAPTURE(at);
+    const std::vector<float> reference = placed(at);
+    const assistant::PairAlignment same = measure(reference, reference);
+    REQUIRE(same.related);
+    CHECK(same.lag_samples == 0);
+    CHECK_THAT(same.correlation, WithinAbs(1.0f, 1e-5f));
+    for (int shift : {120, -120}) {
+      CAPTURE(shift);
+      const std::vector<float> target = placed(at + static_cast<std::size_t>(shift));
+      const assistant::PairAlignment moved = measure(reference, target);
+      REQUIRE(moved.related);
+      CHECK(moved.lag_samples == shift);
+      CHECK_THAT(moved.correlation, WithinAbs(1.0f, 1e-5f));
+    }
+  }
+
+  // Controls: silence stays unmeasured, and unrelated bursts stay unrelated.
+  const std::vector<float> silent(kTwoSeconds, 0.0f);
+  CHECK_FALSE(measure(placed(92040), silent).related);
+  std::vector<float> other(kTwoSeconds, 0.0f);
+  const std::vector<float> unrelated = noise(960, 99u);
+  std::copy(unrelated.begin(), unrelated.end(), other.begin() + 92040);
+  CHECK_FALSE(measure(placed(92040), other).related);
+}

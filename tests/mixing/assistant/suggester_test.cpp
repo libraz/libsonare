@@ -1209,3 +1209,66 @@ TEST_CASE("a headroom correction with no master bus is reported", "[mixing][assi
                        [](const sonare::mixing::api::Bus& bus) { return bus.role == "master"; }));
   CHECK(mentions(without_master, "headroom"));
 }
+
+// A track too short to stage is still routed and heard, so its measured peak has
+// to be in the amplitude bound the master trim is computed from.
+TEST_CASE("the master headroom bound counts a routed track too short to stage",
+          "[mixing][assistant]") {
+  constexpr int kRate = 48000;
+  auto tone = [](std::size_t frames, float amplitude) {
+    std::vector<float> out(frames);
+    for (std::size_t i = 0; i < frames; ++i) {
+      out[i] = amplitude * std::sin(sonare::constants::kTwoPi * 440.0f * static_cast<float>(i) /
+                                    static_cast<float>(kRate));
+    }
+    return out;
+  };
+  const std::vector<float> quiet = tone(2 * kRate, 0.0316f);
+  const std::vector<float> loud = tone(kRate / 10, 0.9f);
+  const std::vector<TrackInput> tracks = {
+      {"quiet", {}, quiet.data(), nullptr, quiet.size(), kRate},
+      {"short", {}, loud.data(), nullptr, loud.size(), kRate},
+  };
+
+  auto check_bound = [](const MixAssistantResult& result) {
+    double amplitude = 0.0;
+    for (const TrackProfile& profile : result.tracks) {
+      REQUIRE(profile.peak_measured);
+      REQUIRE(std::isfinite(profile.base.loudness.true_peak_db));
+      const auto strip = std::find_if(
+          result.scene.strips.begin(), result.scene.strips.end(),
+          [&](const sonare::mixing::api::Strip& s) { return s.id == profile.strip_id; });
+      REQUIRE(strip != result.scene.strips.end());
+      const double gain_db = strip->input_trim_db + strip->fader_db + strip->vca_offset_db;
+      amplitude += std::pow(10.0, (profile.base.loudness.true_peak_db + gain_db) / 20.0);
+    }
+    const auto master =
+        std::find_if(result.scene.buses.begin(), result.scene.buses.end(),
+                     [](const sonare::mixing::api::Bus& bus) { return bus.role == "master"; });
+    REQUIRE(master != result.scene.buses.end());
+    const double expected = std::min(0.0, -6.0 - 20.0 * std::log10(amplitude));
+    CAPTURE(amplitude, expected, master->input_trim_db);
+    REQUIRE(expected < -1.0);
+    CHECK_THAT(master->input_trim_db, Catch::Matchers::WithinAbs(expected, 0.01));
+    CHECK(std::any_of(result.scene.connections.begin(), result.scene.connections.end(),
+                      [&](const sonare::mixing::api::Connection& c) {
+                        return c.source == "short" && c.destination == master->id;
+                      }));
+  };
+
+  MixAssistantConfig config = all_domains_off();
+  config.enable_gain = true;
+  config.enable_structure = true;
+  const auto excluded = sonare::mixing::assistant::suggest_scene(tracks, config);
+  REQUIRE_FALSE(excluded.tracks[1].usable);
+  check_bound(excluded);
+
+  // Eligibility is the only change; the peak still counts.
+  sonare::mixing::assistant::TrackProfileConfig eligible;
+  eligible.min_duration_sec = 0.05f;
+  const auto profiles = sonare::mixing::assistant::analyze_track_profiles(tracks, eligible);
+  const auto staged = sonare::mixing::assistant::suggest_scene(
+      profiles, sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, config), config);
+  REQUIRE(staged.tracks[1].usable);
+  check_bound(staged);
+}

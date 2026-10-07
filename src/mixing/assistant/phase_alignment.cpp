@@ -118,33 +118,52 @@ ActivityEnvelope build_envelope(const TrackInput& track, bool usable, float wind
 ///          is the stretch where both tracks are simultaneously at their most
 ///          active — a sum would instead be satisfied by one loud track over the
 ///          other's silence, where there is no relationship to measure.
+///
+///          Activity is scored over the correlation core only — the excerpt less
+///          @p lag_range at each end, which the search reads only as lag margin —
+///          with a block counting by the fraction of it inside the core.
+///          Candidates put a block edge on either end of the core, so any one
+///          block the excerpt can reach is scored whole by some candidate.
 std::size_t choose_window_start(const ActivityEnvelope& reference, const ActivityEnvelope& target,
-                                std::size_t shared_frames, std::size_t window_samples) {
+                                std::size_t shared_frames, std::size_t window_samples,
+                                std::size_t lag_range) {
   if (shared_frames <= window_samples) return 0;
 
   const std::size_t block_size = reference.block_size;
-  const std::size_t shared_blocks =
-      std::min({reference.activity.size(), target.activity.size(), shared_frames / block_size});
-  const std::size_t window_blocks = std::max<std::size_t>(1, window_samples / block_size);
-  if (shared_blocks <= window_blocks) return 0;
+  const std::size_t shared_blocks = std::min({reference.activity.size(), target.activity.size(),
+                                              (shared_frames + block_size - 1) / block_size});
+  const std::size_t last_start = shared_frames - window_samples;
+  const std::size_t margin = std::min(lag_range, window_samples / 2);
+  const std::size_t core = window_samples - 2 * margin;
 
-  const auto joint = [&](std::size_t block) {
-    return std::min(reference.activity[block], target.activity[block]);
-  };
+  std::vector<std::size_t> candidates;
+  for (std::size_t edge = 0; edge <= shared_frames; edge += block_size) {
+    candidates.push_back(std::min(edge, last_start));
+    if (edge >= margin) candidates.push_back(std::min(edge - margin, last_start));
+    if (edge >= margin + core) candidates.push_back(std::min(edge - margin - core, last_start));
+  }
+  std::sort(candidates.begin(), candidates.end());
+  candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
 
-  double running = 0.0;
-  for (std::size_t block = 0; block < window_blocks; ++block) running += joint(block);
-  double best = running;
-  std::size_t best_block = 0;
-  for (std::size_t block = window_blocks; block < shared_blocks; ++block) {
-    running += joint(block) - joint(block - window_blocks);
-    if (running > best) {
-      best = running;
-      best_block = block + 1 - window_blocks;
+  double best = -1.0;
+  std::size_t best_start = 0;
+  for (const std::size_t start : candidates) {
+    const std::size_t core_begin = start + margin;
+    const std::size_t core_end = core_begin + core;
+    double score = 0.0;
+    for (std::size_t block = core_begin / block_size;
+         block < shared_blocks && block * block_size < core_end; ++block) {
+      const std::size_t lo = std::max(core_begin, block * block_size);
+      const std::size_t hi = std::min(core_end, (block + 1) * block_size);
+      const double joint = std::min(reference.activity[block], target.activity[block]);
+      score += joint * static_cast<double>(hi - lo) / static_cast<double>(block_size);
+    }
+    if (score > best) {
+      best = score;
+      best_start = start;
     }
   }
-
-  return std::min(best_block * block_size, shared_frames - window_samples);
+  return best_start;
 }
 
 std::vector<float> mono_excerpt(const TrackInput& track, std::size_t start, std::size_t count) {
@@ -378,8 +397,8 @@ void measure_pair(const TrackInput& reference_track, const ActivityEnvelope& ref
   lag_range = std::min(lag_range, region_limit);
   if (lag_range < 0) return;
 
-  const std::size_t start =
-      choose_window_start(reference_envelope, target_envelope, shared_frames, region);
+  const std::size_t start = choose_window_start(reference_envelope, target_envelope, shared_frames,
+                                                region, static_cast<std::size_t>(lag_range));
   const std::vector<float> reference = mono_excerpt(reference_track, start, region);
   const std::vector<float> target = mono_excerpt(target_track, start, region);
 

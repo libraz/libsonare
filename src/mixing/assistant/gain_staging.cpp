@@ -139,8 +139,10 @@ float decide_master_headroom_db(const std::vector<TrackProfile>& profiles, const
   if (!std::isfinite(config.mix_bus_headroom_dbtp)) return 0.0f;
 
   double peak_amplitude = 0.0;
+  // Every routed track is heard, so a measured peak counts whether or not the
+  // track was usable for staging.
   for (const auto& profile : profiles) {
-    if (!profile.usable) continue;
+    if (!profile.usable && !profile.peak_measured) continue;
     if (!std::isfinite(profile.base.loudness.true_peak_db)) continue;
 
     float gain_db = 0.0f;

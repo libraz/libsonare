@@ -319,6 +319,7 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   const StftConfig geometry =
       mastering::assistant::profile_stft_config(base_config, track.sample_rate);
   validate_reused_geometry(spec, geometry, track.sample_rate, frames);
+  profile.peak_measured = true;
   profile.bands = fold_bands(spec, track.sample_rate, config.n_fft);
   profile.spectrum = mean_power_spectrum(spec, track.sample_rate, config.n_fft);
 

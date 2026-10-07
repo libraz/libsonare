@@ -240,6 +240,10 @@ struct TrackProfile {
   bool usable = false;
   /// @brief Why the track was excluded; empty when @ref usable is true.
   std::string exclusion_reason;
+  /// @brief True once the loudness profile ran, so `base.loudness.true_peak_db`
+  ///        is a measurement even when the track is not @ref usable. A
+  ///        @ref usable profile's peak is always taken as measured.
+  bool peak_measured = false;
 };
 
 /// @brief Tunables for @ref analyze_track_profiles.

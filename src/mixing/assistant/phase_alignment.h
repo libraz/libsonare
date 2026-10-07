@@ -95,7 +95,8 @@ struct PhaseAlignmentConfig {
 ///          cross-correlation does.
 ///
 ///          Both tracks are excerpted at the **same time position**, the window
-///          where they are jointly most active, because a lag measured between
+///          whose correlation core (the excerpt less the lag search at each end)
+///          is jointly most active, because a lag measured between
 ///          two different passages means nothing. Pairs recorded at different
 ///          sample rates go unmeasured for the same reason.
 ///

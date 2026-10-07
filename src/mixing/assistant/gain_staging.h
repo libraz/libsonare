@@ -66,7 +66,9 @@ std::vector<SceneDelta> decide_gain_staging(const std::vector<TrackProfile>& pro
 ///
 /// @details The estimate is analytic, since the assistant never processes audio:
 ///          each strip contributes its measured true peak shifted by the gain the
-///          scene gives it, summed as AMPLITUDES. That sum is a genuine upper
+///          scene gives it, summed as AMPLITUDES. A track excluded from staging
+///          is still routed and heard, so its peak counts whenever it was
+///          measured (@ref TrackProfile::peak_measured). That sum is a genuine upper
 ///          bound, where a power sum would assume material a kick and a bass are
 ///          not — uncorrelated.
 ///
