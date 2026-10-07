@@ -281,6 +281,27 @@ TEST_CASE("controller profile calls name the destination that has no instrument"
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("an instrument without a controller profile refuses with a specific message",
+          "[c_api][controller]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+  SonareEngineBuiltinSynthConfig builtin{};
+  REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);
+
+  const auto names_cause = [] {
+    const std::string message = sonare_last_error_message();
+    return !message.empty() && message != sonare_error_message(SONARE_ERROR_NOT_SUPPORTED);
+  };
+  const SonareControllerBinding binding = breath_to_excitation();
+  REQUIRE(sonare_engine_set_controller_profile(engine, 5, "gm") == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(names_cause());
+  REQUIRE(sonare_engine_bind_controller(engine, 5, &binding) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(names_cause());
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("a binding made through the C ABI reaches the sound", "[c_api][controller]") {
   // Bound: CC2 drives the reed's excitation axis.
   SonareRealtimeEngine* bound = make_reed_engine(3);

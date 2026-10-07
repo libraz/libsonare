@@ -165,13 +165,24 @@ TEST_CASE("articulation keeps its three refusals apart", "[c_api][articulation]"
 
   SonareEngineBuiltinSynthConfig builtin{};
   REQUIRE(sonare_engine_set_builtin_instrument(engine, 5, &builtin) == SONARE_OK);
+  // A refusal by the instrument names itself; it is not the build-time text.
+  const auto refusal_names_cause = [] {
+    const std::string message = sonare_last_error_message();
+    return !message.empty() && message != sonare_error_message(SONARE_ERROR_NOT_SUPPORTED);
+  };
   REQUIRE(sonare_engine_set_articulation(engine, 5, 0, SONARE_ARTICULATION_MONO_LEGATO) ==
           SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(refusal_names_cause());
   REQUIRE(sonare_engine_articulation(engine, 5, 0, &mode) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(refusal_names_cause());
+  REQUIRE(sonare_engine_set_part_rig(engine, 5, 0, SONARE_PART_RIG_NONE, nullptr) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(refusal_names_cause());
   // The counter refuses on the same terms rather than answering zero. All
   // three of these are asked together by a host, and a zero here would read as
   // "every slur took" on an instrument that never had a slur to take.
   REQUIRE(sonare_engine_legato_fallback_count(engine, 5, &fallbacks) == SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(refusal_names_cause());
   REQUIRE(fallbacks == 0);
 
   sonare_engine_destroy(engine);

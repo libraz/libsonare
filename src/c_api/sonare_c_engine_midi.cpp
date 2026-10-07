@@ -430,10 +430,12 @@ SonareError sonare_engine_set_articulation(SonareRealtimeEngine* engine, uint32_
   SONARE_C_TRY
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  return instrument->set_articulation(channel,
-                                      static_cast<sonare::midi::ArticulationMode>(articulation))
-             ? SONARE_OK
-             : SONARE_ERROR_NOT_SUPPORTED;
+  if (instrument->set_articulation(channel,
+                                   static_cast<sonare::midi::ArticulationMode>(articulation))) {
+    return SONARE_OK;
+  }
+  set_last_error("destination instrument does not support articulation modes");
+  return SONARE_ERROR_NOT_SUPPORTED;
   SONARE_C_CATCH
 #endif
 }
@@ -453,7 +455,10 @@ SonareError sonare_engine_articulation(SonareRealtimeEngine* engine, uint32_t de
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   sonare::midi::ArticulationMode mode = sonare::midi::ArticulationMode::kPoly;
-  if (!instrument->articulation(channel, &mode)) return SONARE_ERROR_NOT_SUPPORTED;
+  if (!instrument->articulation(channel, &mode)) {
+    set_last_error("destination instrument does not support articulation modes");
+    return SONARE_ERROR_NOT_SUPPORTED;
+  }
   *out_articulation = static_cast<int>(mode);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -473,7 +478,10 @@ SonareError sonare_engine_legato_fallback_count(SonareRealtimeEngine* engine,
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   uint64_t counted = 0;
-  if (!instrument->legato_fallback_count(&counted)) return SONARE_ERROR_NOT_SUPPORTED;
+  if (!instrument->legato_fallback_count(&counted)) {
+    set_last_error("destination instrument does not count legato fallbacks");
+    return SONARE_ERROR_NOT_SUPPORTED;
+  }
   *out_count = counted > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(counted);
   return SONARE_OK;
   SONARE_C_CATCH
@@ -492,6 +500,7 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
   }
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)destination_id;
+  set_last_error("part rigs require a build with arrangement");
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   SONARE_C_TRY
@@ -505,11 +514,16 @@ SonareError sonare_engine_set_part_rig(SonareRealtimeEngine* engine, uint32_t de
 #if defined(SONARE_WITH_MASTERING)
   if (!validate_part_rig_chain(rig.stages)) return SONARE_ERROR_INVALID_PARAMETER;
 #else
-  if (rig.mode == sonare::midi::PartRigMode::kChain) return SONARE_ERROR_NOT_SUPPORTED;
+  if (rig.mode == sonare::midi::PartRigMode::kChain) {
+    set_last_error("chain part rigs require a build with mastering");
+    return SONARE_ERROR_NOT_SUPPORTED;
+  }
 #endif
   sonare::midi::MidiInstrument* instrument = engine->engine.midi_instrument(destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  return instrument->set_part_rig(part, rig) ? SONARE_OK : SONARE_ERROR_NOT_SUPPORTED;
+  if (instrument->set_part_rig(part, rig)) return SONARE_OK;
+  set_last_error("destination instrument does not support part rigs");
+  return SONARE_ERROR_NOT_SUPPORTED;
   SONARE_C_CATCH
 #endif
 }

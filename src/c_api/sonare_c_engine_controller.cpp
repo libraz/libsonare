@@ -51,7 +51,10 @@ SonareError profile_of(SonareRealtimeEngine* engine, uint32_t destination_id,
   sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   const sonare::midi::ControllerProfile* profile = instrument->controller_profile();
-  if (profile == nullptr) return SONARE_ERROR_NOT_SUPPORTED;
+  if (profile == nullptr) {
+    set_last_error("destination instrument holds no controller profile");
+    return SONARE_ERROR_NOT_SUPPORTED;
+  }
   *out = *profile;
   return SONARE_OK;
 }
@@ -64,7 +67,9 @@ SonareError install(SonareRealtimeEngine* engine, uint32_t destination_id,
                     const sonare::midi::ControllerProfile& profile) noexcept {
   sonare::midi::MidiInstrument* instrument = instrument_of(engine, destination_id);
   if (instrument == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
-  return instrument->set_controller_profile(profile) ? SONARE_OK : SONARE_ERROR_NOT_SUPPORTED;
+  if (instrument->set_controller_profile(profile)) return SONARE_OK;
+  set_last_error("destination instrument does not accept a controller profile");
+  return SONARE_ERROR_NOT_SUPPORTED;
 }
 
 /// The tracking field @p dimension names. A pointer rather than a copy so the
