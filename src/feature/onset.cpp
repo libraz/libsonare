@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "util/constants.h"
 #include "util/exception.h"
@@ -15,6 +16,19 @@ namespace {
 
 // librosa power_to_db amin floor (1e-10); equals the generic epsilon value.
 constexpr float kAmin = constants::kEpsilon;
+
+/// Right-shifts @p onset_env by @p frame_offset frames, keeping its length.
+/// Downstream beat/tempo/meter analyzers rely on the Mel frame count, so terminal
+/// frames shifted past the end are intentionally discarded.
+std::vector<float> shift_onset_frames(std::vector<float> onset_env, int frame_offset) {
+  if (frame_offset <= 0) return onset_env;
+  std::vector<float> shifted(onset_env.size(), 0.0f);
+  for (size_t i = 0; i < onset_env.size(); ++i) {
+    const size_t shifted_index = i + static_cast<size_t>(frame_offset);
+    if (shifted_index < shifted.size()) shifted[shifted_index] = onset_env[i];
+  }
+  return shifted;
+}
 
 }  // namespace
 
@@ -77,18 +91,7 @@ std::vector<float> center_onset_strength(std::vector<float> onset_env, int n_fft
 
   // Frames to right-shift so onset spikes line up with centered STFT frame
   // times. Integer division deliberately matches librosa's floor division.
-  const int frame_offset = n_fft / (2 * hop_length);
-  if (frame_offset <= 0) return onset_env;
-
-  // Keep the envelope length equal to the Mel frame count: downstream
-  // beat/tempo/meter analyzers rely on that fixed size, so terminal frames
-  // shifted past the end are intentionally discarded.
-  std::vector<float> shifted(onset_env.size(), 0.0f);
-  for (size_t i = 0; i < onset_env.size(); ++i) {
-    const size_t shifted_index = i + static_cast<size_t>(frame_offset);
-    if (shifted_index < shifted.size()) shifted[shifted_index] = onset_env[i];
-  }
-  return shifted;
+  return shift_onset_frames(std::move(onset_env), n_fft / (2 * hop_length));
 }
 
 std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& mel_config,
@@ -98,10 +101,18 @@ std::vector<float> compute_onset_strength(const Audio& audio, const MelConfig& m
   MelSpectrogram mel_spec = MelSpectrogram::compute(audio, aligned_mel_config);
   std::vector<float> onset_env = compute_onset_strength(mel_spec, onset_config);
 
-  // Centering follows the window, not the zero-padded FFT length.
-  return center_onset_strength(std::move(onset_env),
-                               aligned_mel_config.to_stft_config().actual_win_length(),
-                               aligned_mel_config.hop_length, onset_config.center);
+  // Centering follows the window, not the zero-padded FFT length. An explicit
+  // (rate-converted) window rounds the half-window to frames; the default keeps floor.
+  const int win_length = aligned_mel_config.win_length;
+  const int hop_length = aligned_mel_config.hop_length;
+  if (win_length <= 0 || !onset_config.center || onset_env.empty() || hop_length <= 0) {
+    return center_onset_strength(std::move(onset_env),
+                                 aligned_mel_config.to_stft_config().actual_win_length(),
+                                 hop_length, onset_config.center);
+  }
+  const int frame_offset = static_cast<int>(
+      std::lround(static_cast<double>(win_length) / (2.0 * static_cast<double>(hop_length))));
+  return shift_onset_frames(std::move(onset_env), frame_offset);
 }
 
 std::vector<float> onset_strength_multi(const MelSpectrogram& mel_spec, int n_bands,

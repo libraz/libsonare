@@ -3,10 +3,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <functional>
 #include <limits>
 #include <numeric>
 #include <utility>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/bpm_analyzer.h"
 #include "analysis/downbeat_analyzer.h"
 #include "analysis/meter_analyzer.h"
@@ -26,6 +28,12 @@ namespace {
 /// @details Matches the beat-local window the downbeat pass scores, and stays
 ///          well inside one beat at the tempi the tracker admits.
 constexpr double kAccentWindowSeconds = 0.08;
+
+/// Trim keeps beats above this fraction of the reference onset, the 3rd-highest envelope peak so a
+/// single burst cannot set it: a +24 dB burst gives max 58.6 / reference 18.0, putting 3.1-high
+/// edge beats at 0.17 of the reference (0.05 of the max); a noise prelude stays at 0.03.
+constexpr float kTrimRelativeThreshold = 0.1f;
+constexpr size_t kTrimIgnoredTopPeaks = 2;
 
 /// @brief Converts BPM to period in frames.
 float bpm_to_period(float bpm, int sr, int hop_length) {
@@ -187,8 +195,11 @@ BeatAnalyzer::BeatAnalyzer(const Audio& audio, const BeatConfig& config)
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
   // Compute onset strength
+  // The window is a time quantity (samples at 22050 Hz); the hop stays in input samples.
+  const RateWindow window = window_at_rate(config.n_fft, sr_);
   MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
+  mel_config.n_fft = window.n_fft;
+  mel_config.win_length = window.win_length;
   mel_config.hop_length = config.hop_length;
   mel_config.n_mels = constants::kDefaultNMels;
 
@@ -459,16 +470,38 @@ void BeatAnalyzer::track_beats() {
 
   // Trim leading/trailing beats if requested
   if (config_.trim && !beat_frames_vec.empty()) {
-    // Find first frame with significant onset
-    float threshold = 0.1f;
-    int first_valid = -1;
     // Clamp frame indices into [0, n_frames-1]: the adaptive DP backtracer and
     // prepend_missed_initial_beat can emit frames slightly outside the valid
     // local_score / onset_strength_ range, which would otherwise be UB.
     const int max_frame_index = n_frames - 1;
+    std::vector<float> beat_onsets(beat_frames_vec.size());
     for (size_t i = 0; i < beat_frames_vec.size(); ++i) {
-      const int idx = std::clamp(beat_frames_vec[i], 0, max_frame_index);
-      if (local_score[idx] > threshold) {
+      beat_onsets[i] = onset_strength_[std::clamp(beat_frames_vec[i], 0, max_frame_index)];
+    }
+    // Reference onset: the highest envelope peak once the loudest few are set aside.
+    std::vector<float> peaks;
+    for (int i = 1; i + 1 < n_frames; ++i) {
+      const size_t k = static_cast<size_t>(i);
+      if (onset_strength_[k] > onset_strength_[k - 1] &&
+          onset_strength_[k] >= onset_strength_[k + 1]) {
+        peaks.push_back(onset_strength_[k]);
+      }
+    }
+    float reference = 0.0f;
+    if (peaks.size() > kTrimIgnoredTopPeaks) {
+      std::nth_element(peaks.begin(), peaks.begin() + kTrimIgnoredTopPeaks, peaks.end(),
+                       std::greater<float>());
+      reference = peaks[kTrimIgnoredTopPeaks];
+    } else {
+      reference = *std::max_element(onset_strength_.begin(), onset_strength_.end());
+    }
+    const float threshold = kTrimRelativeThreshold * reference;
+    const bool has_reference = reference >= kEpsilon;
+
+    // Find first frame with significant onset
+    int first_valid = -1;
+    for (size_t i = 0; has_reference && i < beat_frames_vec.size(); ++i) {
+      if (beat_onsets[i] > threshold) {
         first_valid = static_cast<int>(i);
         break;
       }
@@ -476,9 +509,8 @@ void BeatAnalyzer::track_beats() {
 
     // Find last frame with significant onset
     int last_valid = -1;
-    for (int i = static_cast<int>(beat_frames_vec.size()) - 1; i >= 0; --i) {
-      const int idx = std::clamp(beat_frames_vec[i], 0, max_frame_index);
-      if (local_score[idx] > threshold) {
+    for (int i = static_cast<int>(beat_frames_vec.size()) - 1; has_reference && i >= 0; --i) {
+      if (beat_onsets[static_cast<size_t>(i)] > threshold) {
         last_valid = i;
         break;
       }

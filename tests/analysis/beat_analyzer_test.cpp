@@ -8,10 +8,12 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <random>
 #include <vector>
 
 #include "analysis/meter_analyzer.h"
 #include "quick.h"
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -741,4 +743,121 @@ TEST_CASE("BeatAnalyzer with trim returns no beats for silent input", "[beat_ana
 
   REQUIRE(analyzer.beats().empty());
   REQUIRE(analyzer.time_signature().confidence == 0.0f);
+}
+
+namespace {
+
+constexpr int kTrimSr = 22050;
+constexpr float kTrimBodySeconds = 30.0f;
+
+/// @brief Deterministic white noise of the given RMS, mixed into @p samples over [start,
+/// start+len).
+void add_white_noise(std::vector<float>& samples, size_t start, size_t len, float rms,
+                     std::mt19937& rng) {
+  const float peak = rms * std::sqrt(3.0f);  // uniform [-peak, peak] has RMS peak / sqrt(3)
+  for (size_t i = start; i < start + len && i < samples.size(); ++i) {
+    const float u = static_cast<float>(rng()) / 4294967295.0f;
+    samples[i] += peak * (2.0f * u - 1.0f);
+  }
+}
+
+/// @brief 120 BPM 1 kHz decaying clicks over [start_sec, start_sec + seconds).
+void add_click_train(std::vector<float>& samples, float start_sec, float seconds, float amplitude) {
+  constexpr int kClickLength = 400;
+  const float beat_interval = 0.5f;
+  for (float t = 0.0f; t < seconds; t += beat_interval) {
+    const size_t start = static_cast<size_t>((start_sec + t) * static_cast<float>(kTrimSr));
+    for (int n = 0; n < kClickLength && start + static_cast<size_t>(n) < samples.size(); ++n) {
+      const float fn = static_cast<float>(n);
+      samples[start + static_cast<size_t>(n)] +=
+          amplitude * std::sin(constants::kTwoPi * 1000.0f * fn / static_cast<float>(kTrimSr)) *
+          std::exp(-fn / 60.0f);
+    }
+  }
+}
+
+int count_beats_in(const BeatAnalyzer& analyzer, float from_sec, float to_sec) {
+  int count = 0;
+  for (const auto& beat : analyzer.beats()) {
+    if (beat.time >= from_sec && beat.time < to_sec) ++count;
+  }
+  return count;
+}
+
+/// @brief Body clicks + 10 s of -30 dB edge clicks, -90 dB noise floor, optional +24 dB burst.
+int count_edge_beats(bool with_burst) {
+  constexpr float kBodyAmp = 0.5f;
+  const size_t total = static_cast<size_t>(40.0f * static_cast<float>(kTrimSr));
+  std::vector<float> samples(total, 0.0f);
+  std::mt19937 rng(12345);
+  add_click_train(samples, 0.0f, kTrimBodySeconds, kBodyAmp);
+  add_click_train(samples, kTrimBodySeconds, 10.0f, kBodyAmp * std::pow(10.0f, -30.0f / 20.0f));
+  add_white_noise(samples, 0, total, std::pow(10.0f, -90.0f / 20.0f), rng);
+  if (with_burst) {
+    add_white_noise(samples, static_cast<size_t>(15.0f * kTrimSr), kTrimSr / 20,
+                    kBodyAmp * std::pow(10.0f, 24.0f / 20.0f), rng);
+  }
+
+  BeatConfig config;
+  config.trim = true;
+  BeatAnalyzer analyzer(Audio::from_vector(std::move(samples), kTrimSr), config);
+  const int edge = count_beats_in(analyzer, 30.2f, 41.0f);
+  INFO("with_burst=" << with_burst << " edge beats=" << edge
+                     << " total=" << analyzer.beats().size());
+  return edge;
+}
+
+}  // namespace
+
+TEST_CASE("a single loud burst does not trim quiet but clear edge beats", "[beat_analyzer]") {
+  const int without_burst = count_edge_beats(false);
+  REQUIRE(without_burst >= 15);
+
+  const int with_burst = count_edge_beats(true);
+  REQUIRE(with_burst >= 15);
+}
+
+TEST_CASE("a noise prelude is still trimmed", "[beat_analyzer]") {
+  constexpr float kPreludeSeconds = 20.0f;
+  const size_t prelude = static_cast<size_t>(kPreludeSeconds * static_cast<float>(kTrimSr));
+  const size_t body = static_cast<size_t>(kTrimBodySeconds * static_cast<float>(kTrimSr));
+  std::vector<float> samples(prelude + body, 0.0f);
+  std::mt19937 rng(777);
+  add_white_noise(samples, 0, prelude, std::pow(10.0f, -40.0f / 20.0f), rng);
+  add_click_train(samples, kPreludeSeconds, kTrimBodySeconds, 0.5f);
+  add_white_noise(samples, prelude, body, std::pow(10.0f, -90.0f / 20.0f), rng);
+
+  BeatConfig config;
+  config.trim = true;
+  BeatAnalyzer analyzer(Audio::from_vector(std::move(samples), kTrimSr), config);
+
+  INFO("beats=" << analyzer.beats().size());
+  REQUIRE(!analyzer.beats().empty());
+  REQUIRE(count_beats_in(analyzer, 0.0f, 19.8f) == 0);
+}
+
+TEST_CASE("beats and tempo of the same content agree across input sample rates",
+          "[analysis_rate][beat_analyzer]") {
+  using test::RateMaterial;
+  const BeatAnalyzer base(test::make_rate_material(RateMaterial::TriadTurnaround, 22050));
+  const std::vector<float> base_times = base.beat_times();
+  for (int sr : {32000, 44100, 48000}) {
+    const BeatAnalyzer at_rate(test::make_rate_material(RateMaterial::TriadTurnaround, sr));
+    const std::vector<float> times = at_rate.beat_times();
+    float max_time_dev = 0.0f;
+    for (size_t i = 0; i < std::min(times.size(), base_times.size()); ++i) {
+      max_time_dev = std::max(max_time_dev, std::abs(times[i] - base_times[i]));
+    }
+    const float bpm_dev = std::abs(at_rate.bpm() - base.bpm()) / base.bpm();
+    CAPTURE(sr, base_times.size(), times.size(), base.bpm(), at_rate.bpm(), max_time_dev, bpm_dev);
+    CAPTURE(base_times, times);
+    CHECK(times.size() == base_times.size());
+    // One frame of tie-ordering drift in each grid's DP.
+    const float time_tolerance =
+        static_cast<float>(base.hop_length()) / static_cast<float>(constants::kDefaultSampleRate) +
+        static_cast<float>(at_rate.hop_length()) / static_cast<float>(sr);
+    CAPTURE(time_tolerance);
+    CHECK(max_time_dev <= time_tolerance);
+    CHECK(bpm_dev <= 0.02f);
+  }
 }

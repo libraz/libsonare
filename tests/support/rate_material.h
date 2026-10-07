@@ -14,7 +14,7 @@
 namespace sonare::test {
 
 enum class RateMaterial {
-  TriadTurnaround,  ///< C, Am, F, G triads, 2 s each, 0.5 s rests
+  TriadTurnaround,  ///< C, Am, F, G triads, 1.5 s each then 0.5 s rest (8 s)
   Cadence,          ///< F, G7, C, 1.5 s each
   Clicks            ///< 120 BPM, 1 kHz bursts from 0.25 s, 8.25 s
 };
@@ -64,8 +64,7 @@ inline Audio make_rate_material(RateMaterial m, int sr) {
           {60, 64, 67}, {57, 60, 64}, {53, 57, 60}, {55, 59, 62}};
       samples.assign(static_cast<size_t>(kBaseRate * 2.0 * voicings.size()), 0.0f);
       for (size_t b = 0; b < voicings.size(); ++b) {
-        const double len = b + 1 == voicings.size() ? 2.0 : 1.5;
-        add_chord(samples, voicings[b], 2.0 * static_cast<double>(b), len);
+        add_chord(samples, voicings[b], 2.0 * static_cast<double>(b), 1.5);
       }
       break;
     }

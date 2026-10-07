@@ -9,6 +9,8 @@
 #include <cmath>
 #include <vector>
 
+#include "support/rate_material.h"
+
 using namespace sonare;
 using Catch::Matchers::WithinAbs;
 using Catch::Matchers::WithinRel;
@@ -585,4 +587,20 @@ TEST_CASE("RhythmAnalyzer fallback time signature carries zero confidence", "[rh
   REQUIRE(rhythm_analyzer.time_signature().numerator == 4);
   REQUIRE(rhythm_analyzer.time_signature().confidence == 0.0f);
   REQUIRE(beat_analyzer.time_signature().confidence == 0.0f);
+}
+
+TEST_CASE("time signature and tempo of the same content agree across input sample rates",
+          "[analysis_rate][rhythm_analyzer]") {
+  using test::RateMaterial;
+  const RhythmAnalyzer base(test::make_rate_material(RateMaterial::TriadTurnaround, 22050));
+  for (int sr : {32000, 44100, 48000}) {
+    const RhythmAnalyzer at_rate(test::make_rate_material(RateMaterial::TriadTurnaround, sr));
+    const float bpm_dev = std::abs(at_rate.bpm() - base.bpm()) / base.bpm();
+    CAPTURE(sr, base.bpm(), at_rate.bpm(), bpm_dev, base.time_signature().numerator,
+            at_rate.time_signature().numerator, base.time_signature().denominator,
+            at_rate.time_signature().denominator);
+    CHECK(at_rate.time_signature().numerator == base.time_signature().numerator);
+    CHECK(at_rate.time_signature().denominator == base.time_signature().denominator);
+    CHECK(bpm_dev <= 0.02f);
+  }
 }

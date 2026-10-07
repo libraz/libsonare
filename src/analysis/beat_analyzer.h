@@ -38,8 +38,8 @@ struct BeatConfig {
   float bpm_max = 300.0f;               ///< Maximum BPM to consider
   float tightness = 100.0f;             ///< Tightness of beat distribution
   bool trim = true;                     ///< Trim leading/trailing silent beats
-  int n_fft = 2048;                     ///< FFT size for onset detection
-  int hop_length = 512;                 ///< Hop length for onset detection
+  int n_fft = 2048;                     ///< Onset window, samples at 22050 Hz (rate-scaled)
+  int hop_length = 512;                 ///< Onset hop, samples of the input buffer
   bool adaptive_tempo = false;          ///< Locally update tempo prior during DP
   int tempo_update_interval_beats = 8;  ///< Local tempo context length in beats
   /// @brief Meter numerators handed to the meter estimator.
