@@ -160,8 +160,26 @@ float RealtimeEngineWasm::meterScratchValue(const val& field_val) const {
       return meter_telemetry_scratch_.integrated_lufs;
     case 10:
       return meter_telemetry_scratch_.gain_reduction_db;
-    default:
-      return 0.0f;
+    case 11:
+      return static_cast<float>(meter_telemetry_scratch_.channel_count);
+    default: {
+      // Fields 12..43: peak, rms, true peak and input peak, eight planes each.
+      constexpr int kPlaneBase = 12;
+      constexpr int kPlanes = static_cast<int>(sonare::mixing::kMaxMeterChannels);
+      const int rel = field - kPlaneBase;
+      if (rel < 0 || rel >= 4 * kPlanes) return 0.0f;
+      const size_t plane = static_cast<size_t>(rel % kPlanes);
+      switch (rel / kPlanes) {
+        case 0:
+          return meter_telemetry_scratch_.peak_db[plane];
+        case 1:
+          return meter_telemetry_scratch_.rms_db[plane];
+        case 2:
+          return meter_telemetry_scratch_.true_peak_db[plane];
+        default:
+          return meter_telemetry_scratch_.input_peak_db[plane];
+      }
+    }
   }
 }
 
@@ -173,9 +191,9 @@ float RealtimeEngineWasm::meterScratchInputPeakDbR() const {
   return meter_telemetry_scratch_.input_peak_db[1];
 }
 
-// Per-plane meter drain for surround targets. peakDb/rmsDb/truePeakDb are JS
-// arrays of channelCount planes (canonical WAVE order); drainMeterTelemetry
-// stays the stereo fast path. Shares one queue with it — call only one.
+// Per-plane meter drain: peakDb/rmsDb/truePeakDb/inputPeakDb are JS arrays of
+// channelCount planes (canonical WAVE order), stereo being planes 0/1. It is the
+// one drain; drainMeterTelemetry consumes the same queue and stays for compatibility.
 val RealtimeEngineWasm::drainMeterTelemetryWide(const val& max_records_val) {
   const int max_records = checkedIntFromVal(max_records_val, "maxRecords");
   val out = val::array();

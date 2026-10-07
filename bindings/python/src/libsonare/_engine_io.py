@@ -492,7 +492,11 @@ class _EngineIoMixin:
         return int(out.value)
 
     def drain_meter_telemetry(self, max_records: int = 1024) -> list[MeterTelemetryRecord]:
-        """Drain pending meter telemetry records published by the engine."""
+        """Drain pending stereo meter telemetry records published by the engine.
+
+        Compatibility drain: it consumes the same queue as
+        :meth:`drain_meter_telemetry_wide`, which is the one drain to use.
+        """
         if max_records <= 0:
             return []
         lib = _get_lib()
@@ -509,11 +513,11 @@ class _EngineIoMixin:
         return [_meter_telemetry_from_c(raw[i]) for i in range(written.value)]
 
     def drain_meter_telemetry_wide(self, max_records: int = 1024) -> list[MeterTelemetryRecordWide]:
-        """Drain pending per-plane meter telemetry for a surround target.
+        """Drain pending per-plane meter telemetry for every target.
 
-        Use this drain for a surround mix target; :meth:`drain_meter_telemetry`
-        stays the stereo fast path. The two share one queue and each consumes
-        every target's records, so an engine uses only one of them.
+        This is the one meter drain: a stereo target's left and right are
+        planes 0 and 1. Use it alone; :meth:`drain_meter_telemetry` consumes
+        the same queue and stays for compatibility.
         """
         if max_records <= 0:
             return []

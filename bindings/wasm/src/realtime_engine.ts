@@ -1995,13 +1995,13 @@ export class RealtimeEngine {
   }
 
   /**
-   * Drains pending meter telemetry as per-plane (wide) records for a surround
-   * target. Use this for a surround mix target; {@link drainMeterTelemetry}
-   * stays the stereo fast path. The two share one queue and each consumes every
-   * target's records, so an engine uses only one of them. The live AudioWorklet
-   * path owns the queue via the stereo drain, so this wide drain is for an
-   * offline (non-worklet) engine instance; per-plane
-   * surround meters are not delivered over the live worklet meter ring.
+   * Drains pending meter telemetry as per-plane (wide) records. This is the one
+   * meter drain: a stereo target's left and right are planes 0 and 1, and a
+   * surround target carries every plane. Use it alone; {@link drainMeterTelemetry}
+   * consumes the same queue (every target's records) and stays for
+   * compatibility. The live AudioWorklet engine drains through this one, so a
+   * worklet-driven engine delivers per-plane meters on both the postMessage and
+   * the SharedArrayBuffer meter paths.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);

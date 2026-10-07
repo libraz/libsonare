@@ -39,6 +39,9 @@ import {
   type SharedScopeRingWriter,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
   SONARE_ENGINE_TELEMETRY_RECORD_BYTES,
+  SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
+  SONARE_METER_RING_MAX_CHANNELS,
+  SONARE_METER_RING_PLANES_OFFSET,
   SONARE_METER_RING_RECORD_FLOATS,
   SONARE_SCOPE_RING_RECORD_PREFIX_FLOATS,
   type SonareEngineCommandRecord,
@@ -72,6 +75,11 @@ function captureTransferList(channels: readonly Float32Array[]): Transferable[] 
   return transfers;
 }
 
+const METER_TARGET_SLOTS = 42;
+// `meterScratchValue` fields past the stereo set: channel count, then four 8-plane blocks.
+const METER_SCRATCH_CHANNEL_COUNT = 11;
+const METER_SCRATCH_PLANES = 12;
+
 /**
  * AudioWorklet-style bridge for the DAW realtime engine facade.
  *
@@ -92,7 +100,10 @@ export class SonareRealtimeEngineWorkletProcessor {
   private externalMidiRing?: SharedExternalMidiRingWriter;
   private transport?: WorkletTransport;
   private meterIntervalFrames: number;
-  private lastMeterFrame = Number.NEGATIVE_INFINITY;
+  // Last delivered meter frame per target slot: master, 32 lanes, 8 buses, then every other id.
+  private readonly lastMeterFrameBySlot = new Float64Array(METER_TARGET_SLOTS).fill(
+    Number.NEGATIVE_INFINITY,
+  );
   private scopeIntervalFrames: number;
   private scopeEnabled: boolean;
   private scopeBands: number;
@@ -1157,32 +1168,21 @@ export class SonareRealtimeEngineWorkletProcessor {
     this.transport?.postMessage?.(record);
   }
 
-  // Drains the engine meter telemetry queue into the stereo meter ring / transport.
+  // Drains the engine meter telemetry queue into the meter ring / transport.
   //
-  // Shared-queue contract: `drainMeterTelemetry` and `drainMeterTelemetryWide`
-  // pop the SAME single-consumer telemetry queue, so exactly ONE of them may run
-  // per engine. The live worklet path owns the queue via the stereo drain below;
-  // the worklet meter ring (SONARE_METER_RING_RECORD_FLOATS) is a fixed stereo
-  // layout carrying planes 0/1 plus the correlation/LUFS summary. Per-plane
-  // surround meters are NOT delivered over the live worklet ring — a host that
-  // needs them must use the offline `drainMeterTelemetryWide()` API on a
-  // non-worklet engine instance (do not also call it on a worklet-driven engine,
-  // or the two drains will starve each other).
+  // The wide drain is the one meter drain: it carries every plane of every
+  // target (stereo is planes 0/1), so both transports deliver surround meters
+  // and nothing else may pop this queue on a worklet-driven engine.
   private publishMeters(): void {
     if (this.meterIntervalFrames <= 0 || (!this.transport && !this.meterRing)) {
       return;
     }
     if (this.meterRing) {
       for (let count = 0; count < 64 && this.engine.popMeterTelemetryToScratch(); count++) {
-        const frame = this.engine.meterScratchRenderFrame();
         if (
-          frame !== this.lastMeterFrame &&
-          frame - this.lastMeterFrame < this.meterIntervalFrames
+          !this.meterDue(this.engine.meterScratchTargetId(), this.engine.meterScratchRenderFrame())
         ) {
           continue;
-        }
-        if (frame !== this.lastMeterFrame) {
-          this.lastMeterFrame = frame;
         }
         this.writeMeterScratch(this.meterRing);
       }
@@ -1190,16 +1190,10 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     const delivered: SonareWorkletMeterSnapshot[] = [];
     const newestByTarget = new Map<number, SonareWorkletMeterSnapshot>();
-    for (const item of this.engine.drainMeterTelemetry(64)) {
+    for (const item of this.engine.drainMeterTelemetryWide(64)) {
       const meter = meterFromEngine(item);
-      if (
-        meter.frame !== this.lastMeterFrame &&
-        meter.frame - this.lastMeterFrame < this.meterIntervalFrames
-      ) {
+      if (!this.meterDue(meter.targetId, meter.frame)) {
         continue;
-      }
-      if (meter.frame !== this.lastMeterFrame) {
-        this.lastMeterFrame = meter.frame;
       }
       delivered.push(meter);
       newestByTarget.set(meter.targetId, meter);
@@ -1224,6 +1218,17 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  // Interval gate per target, so one busy target cannot hold back another's cadence.
+  private meterDue(targetId: number, frame: number): boolean {
+    const slot = targetId < METER_TARGET_SLOTS - 1 ? targetId : METER_TARGET_SLOTS - 1;
+    const last = this.lastMeterFrameBySlot[slot];
+    if (frame !== last && frame - last < this.meterIntervalFrames) {
+      return false;
+    }
+    this.lastMeterFrameBySlot[slot] = frame;
+    return true;
+  }
+
   private writeMeterScratch(ring: SharedMeterRingWriter): void {
     const writeIndex = Atomics.load(ring.header, 0);
     const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
@@ -1236,6 +1241,19 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
     ring.records[offset + 14] = this.engine.meterScratchInputPeakDbL();
     ring.records[offset + 15] = this.engine.meterScratchInputPeakDbR();
+    const channelCount = this.engine.meterScratchValue(METER_SCRATCH_CHANNEL_COUNT);
+    ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = channelCount;
+    if (channelCount > 2) {
+      const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
+      for (let kind = 0; kind < 4; kind++) {
+        const out =
+          offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS;
+        const field = METER_SCRATCH_PLANES + kind * SONARE_METER_RING_MAX_CHANNELS;
+        for (let ch = 0; ch < planes; ch++) {
+          ring.records[out + ch] = this.engine.meterScratchValue(field + ch);
+        }
+      }
+    }
     Atomics.store(ring.header, 0, writeIndex + 1);
   }
 

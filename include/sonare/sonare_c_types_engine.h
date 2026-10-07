@@ -98,8 +98,9 @@ typedef struct {
    engine::MeterTelemetryRecord with the per-channel peak/rms/true_peak arrays
    exposed (planes [0, channel_count)). Drained with
    sonare_engine_drain_meter_telemetry_wide. The legacy stereo
-   SonareMeterTelemetryRecord stays the byte-identical fast path for <=2ch
-   targets; hosts pick the drain matching their target's bus layout.
+   SonareMeterTelemetryRecord stays byte-identical for compatibility; the one
+   drain to use is sonare_engine_drain_meter_telemetry_wide_v2, where a stereo
+   target's L/R are planes 0 and 1.
    See the target-id range above for how target_id encodes the mix target. */
 typedef struct {
   uint32_t target_id;
@@ -129,7 +130,8 @@ typedef struct {
 /* Versioned meter records append the pre-trim input peaks without changing the
    legacy 80-byte/160-byte records above. They are drained from the same queue as
    the legacy records; each drain consumes records for all targets. A consumer
-   chooses one record shape per drain and cannot retrieve consumed records again. */
+   uses sonare_engine_drain_meter_telemetry_wide_v2 alone and cannot retrieve
+   consumed records again. */
 typedef struct {
   uint32_t target_id;
   int64_t render_frame;

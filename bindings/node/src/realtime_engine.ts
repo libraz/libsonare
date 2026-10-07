@@ -1167,16 +1167,19 @@ export class RealtimeEngine {
     return this.native.drainTelemetry(maxRecords);
   }
 
-  /** Drain pending meter telemetry records published by the engine's meter tap. */
+  /**
+   * Drain pending stereo meter telemetry records published by the engine's meter tap.
+   * Compatibility drain over the queue {@link drainMeterTelemetryWide} reads; use that one alone.
+   */
   drainMeterTelemetry(maxRecords = 1024): EngineMeterTelemetry[] {
     return this.native.drainMeterTelemetry(maxRecords);
   }
 
   /**
-   * Drain pending meter telemetry as per-plane (wide) records for a surround
-   * target. Use this for a surround mix target; {@link drainMeterTelemetry}
-   * stays the stereo fast path. The two share one queue and each consumes every
-   * target's records, so an engine uses only one of them.
+   * Drain pending meter telemetry as per-plane (wide) records. This is the one
+   * meter drain: a stereo target's left and right are planes 0 and 1. Use it
+   * alone; {@link drainMeterTelemetry} consumes the same queue (every target's
+   * records) and stays for compatibility.
    */
   drainMeterTelemetryWide(maxRecords = 1024): EngineMeterTelemetryWide[] {
     return this.native.drainMeterTelemetryWide(maxRecords);

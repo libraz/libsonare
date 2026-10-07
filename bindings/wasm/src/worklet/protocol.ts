@@ -1,4 +1,4 @@
-import type { EngineMeterTelemetry, EngineTelemetry } from '../index.js';
+import type { EngineMeterTelemetryWide, EngineTelemetry } from '../index.js';
 
 const ENGINE_MIXER_TARGET_BASE = 0x4d580000;
 export const ENGINE_MIXER_PARAM_FADER_DB = 1;
@@ -55,6 +55,20 @@ export interface SonareWorkletMeterSnapshot {
    * does not carry it, so ring hosts read it with `pollInsertGainReduction(targetId)`.
    */
   insertGainReductionDb?: number[];
+  /**
+   * Number of metered planes of the target, present together with the per-channel
+   * arrays below only when it exceeds 2 (a 5.1 or 7.1 bus). The stereo fields
+   * above always hold planes 0 and 1.
+   */
+  channelCount?: number;
+  /** Per-plane peak in dBFS (length `channelCount`), canonical WAVE order. */
+  peakDb?: number[];
+  /** Per-plane RMS in dBFS (length `channelCount`). */
+  rmsDb?: number[];
+  /** Per-plane inter-sample (true) peak in dB (length `channelCount`). See {@link truePeakDbL}. */
+  truePeakDb?: number[];
+  /** Per-plane pre-trim input peak in dBFS (length `channelCount`). */
+  inputPeakDb?: number[];
 }
 
 export interface SonareWorkletSpectrumSnapshot {
@@ -66,12 +80,20 @@ export interface SonareWorkletSpectrumSnapshot {
 export const SONARE_METER_RING_HEADER_INTS = 4;
 // Record layout: [frameLo, frameHi, targetId, peakDbL, peakDbR, rmsDbL, rmsDbR,
 // correlation, truePeakDbL, truePeakDbR, momentaryLufs, shortTermLufs,
-// integratedLufs, gainReductionDb, inputPeakDbL, inputPeakDbR].
+// integratedLufs, gainReductionDb, inputPeakDbL, inputPeakDbR, channelCount,
+// peakDb[0..7], rmsDb[0..7], truePeakDb[0..7], inputPeakDb[0..7]].
+// Header slot 3 holds SONARE_METER_RING_PROTOCOL_VERSION; version 1 records
+// stop after inputPeakDbR (16 floats) and carry no per-plane data.
 // The sample-frame index is monotonically increasing and quickly exceeds the
 // 2^24 exact-integer range of a single Float32 slot (~349 s at 48 kHz), so it is
 // stored split across two Float32 lanes (low 24 bits + high bits) for exact
 // reconstruction. See encodeFrameLo/encodeFrameHi/decodeFrame.
-export const SONARE_METER_RING_RECORD_FLOATS = 16;
+export const SONARE_METER_RING_PROTOCOL_VERSION = 2;
+export const SONARE_METER_RING_MAX_CHANNELS = 8;
+export const SONARE_METER_RING_CHANNEL_COUNT_OFFSET = 16;
+export const SONARE_METER_RING_PLANES_OFFSET = 17;
+export const SONARE_METER_RING_RECORD_FLOATS =
+  SONARE_METER_RING_PLANES_OFFSET + 4 * SONARE_METER_RING_MAX_CHANNELS;
 export const SONARE_SPECTRUM_RING_HEADER_INTS = 5;
 // Scope ring header: [writeIndex, capacity, recordFloats, bands, maxPoints,
 // reserved]. Record layout: [frameLo, frameHi, targetId, bandCount, pointCount,
@@ -381,7 +403,7 @@ export function createSonareMeterRingBuffer(capacity = 128): SonareMeterRingBuff
   Atomics.store(ring.header, 0, 0);
   Atomics.store(ring.header, 1, clampedCapacity);
   Atomics.store(ring.header, 2, SONARE_METER_RING_RECORD_FLOATS);
-  Atomics.store(ring.header, 3, 0);
+  Atomics.store(ring.header, 3, SONARE_METER_RING_PROTOCOL_VERSION);
   return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
 }
 
@@ -391,12 +413,15 @@ export function readSonareMeterRingBuffer(
 ): SonareMeterRingReadResult {
   const writeIndex = Atomics.load(ring.header, 0);
   const recordFloats = Atomics.load(ring.header, 2) || SONARE_METER_RING_RECORD_FLOATS;
+  const hasPlanes =
+    Atomics.load(ring.header, 3) >= SONARE_METER_RING_PROTOCOL_VERSION &&
+    recordFloats >= SONARE_METER_RING_RECORD_FLOATS;
   const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
   const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
   const meters: SonareWorkletMeterSnapshot[] = [];
   for (let index = firstReadable; index < writeIndex; index++) {
     const offset = (index % ring.capacity) * recordFloats;
-    meters.push({
+    const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
       frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
       targetId: ring.records[offset + 2],
@@ -413,7 +438,29 @@ export function readSonareMeterRingBuffer(
       gainReductionDb: ring.records[offset + 13],
       inputPeakDbL: ring.records[offset + 14],
       inputPeakDbR: ring.records[offset + 15],
-    });
+    };
+    if (hasPlanes) {
+      const channelCount = ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET];
+      if (channelCount > 2) {
+        const planes = Math.min(channelCount, SONARE_METER_RING_MAX_CHANNELS);
+        const plane = (kind: number): number[] =>
+          Array.from(
+            ring.records.subarray(
+              offset + SONARE_METER_RING_PLANES_OFFSET + kind * SONARE_METER_RING_MAX_CHANNELS,
+              offset +
+                SONARE_METER_RING_PLANES_OFFSET +
+                kind * SONARE_METER_RING_MAX_CHANNELS +
+                planes,
+            ),
+          );
+        meter.channelCount = planes;
+        meter.peakDb = plane(0);
+        meter.rmsDb = plane(1);
+        meter.truePeakDb = plane(2);
+        meter.inputPeakDb = plane(3);
+      }
+    }
+    meters.push(meter);
   }
   return { nextReadIndex: writeIndex, meters };
 }
@@ -917,6 +964,7 @@ export function meterRingFromSharedBuffer(
   }
   Atomics.store(header, 1, capacity);
   Atomics.store(header, 2, SONARE_METER_RING_RECORD_FLOATS);
+  Atomics.store(header, 3, SONARE_METER_RING_PROTOCOL_VERSION);
   return {
     header,
     records: new Float32Array(
@@ -1118,25 +1166,34 @@ export function telemetryFromEngine(telemetry: EngineTelemetry): SonareEngineTel
   };
 }
 
-export function meterFromEngine(meter: EngineMeterTelemetry): SonareWorkletMeterSnapshot {
-  return {
+// A plane the target does not have (the right side of a mono lane) reads as the floor.
+export function meterFromEngine(meter: EngineMeterTelemetryWide): SonareWorkletMeterSnapshot {
+  const snapshot: SonareWorkletMeterSnapshot = {
     type: 'meter',
     targetId: meter.targetId,
     frame: meter.renderFrame,
-    peakDbL: meter.peakDbL,
-    peakDbR: meter.peakDbR,
-    rmsDbL: meter.rmsDbL,
-    rmsDbR: meter.rmsDbR,
+    peakDbL: meter.peakDb[0] ?? SONARE_FLOOR_DB,
+    peakDbR: meter.peakDb[1] ?? SONARE_FLOOR_DB,
+    rmsDbL: meter.rmsDb[0] ?? SONARE_FLOOR_DB,
+    rmsDbR: meter.rmsDb[1] ?? SONARE_FLOOR_DB,
     correlation: meter.correlation,
-    truePeakDbL: meter.truePeakDbL,
-    truePeakDbR: meter.truePeakDbR,
+    truePeakDbL: meter.truePeakDb[0] ?? SONARE_FLOOR_DB,
+    truePeakDbR: meter.truePeakDb[1] ?? SONARE_FLOOR_DB,
     momentaryLufs: meter.momentaryLufs,
     shortTermLufs: meter.shortTermLufs,
     integratedLufs: meter.integratedLufs,
     gainReductionDb: meter.gainReductionDb,
-    inputPeakDbL: meter.inputPeakDbL,
-    inputPeakDbR: meter.inputPeakDbR,
+    inputPeakDbL: meter.inputPeakDb[0] ?? SONARE_FLOOR_DB,
+    inputPeakDbR: meter.inputPeakDb[1] ?? SONARE_FLOOR_DB,
   };
+  if (meter.channelCount > 2) {
+    snapshot.channelCount = meter.channelCount;
+    snapshot.peakDb = meter.peakDb;
+    snapshot.rmsDb = meter.rmsDb;
+    snapshot.truePeakDb = meter.truePeakDb;
+    snapshot.inputPeakDb = meter.inputPeakDb;
+  }
+  return snapshot;
 }
 
 export function magnitudeToDb(value: number): number {

@@ -16,6 +16,7 @@ import {
   type SharedMeterRingWriter,
   type SharedSpectrumRingWriter,
   SONARE_FLOOR_DB,
+  SONARE_METER_RING_CHANNEL_COUNT_OFFSET,
   SONARE_METER_RING_RECORD_FLOATS,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
@@ -316,6 +317,7 @@ export class SonareWorkletProcessor {
     ring.records[offset + 13] = meter.gainReductionDb;
     ring.records[offset + 14] = meter.inputPeakDbL;
     ring.records[offset + 15] = meter.inputPeakDbR;
+    ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = 2;
     Atomics.store(ring.header, 0, writeIndex + 1);
     // writeIndex is a free-running monotonic counter, so an overflow guard here
     // would fire on essentially every write past the first `capacity` records

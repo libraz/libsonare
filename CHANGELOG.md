@@ -78,6 +78,9 @@
 - Pre-fader sends of a lane silenced by mute or solo are silenced with it.
 - A solo-safe lane keeps sounding while another lane is soloed.
 - Bounce and freeze of a live engine reset its mixer and effect processors before rendering, cutting insert tails and delay lines that were still ringing.
+- The WASM worklet engine delivers per-channel meters of surround (5.1, 7.1) targets live on both meter paths: the meter snapshot keeps its stereo fields and gains `channelCount` plus `peakDb`, `rmsDb`, `truePeakDb` and `inputPeakDb` arrays when the target has more than two channels. The SharedArrayBuffer meter ring record grows from 16 to 49 floats and its header slot 3 now carries protocol version 2, so a main thread and a worklet from different package versions must not share a ring.
+- `sonare_engine_drain_meter_telemetry_wide_v2` (Node `drainMeterTelemetryWide`, Python `drain_meter_telemetry_wide`, WASM `drainMeterTelemetryWide`) is documented as the one meter drain, with a stereo target's left and right as planes 0 and 1; the other three drains stay and consume the same queue.
+- The worklet engine's meter interval is kept per target instead of across all targets, so one target's records no longer delay another's.
 
 ### Fixes
 

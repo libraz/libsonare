@@ -863,6 +863,9 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
 SonareError sonare_engine_drain_telemetry(SonareRealtimeEngine* engine, SonareEngineTelemetry* out,
                                           size_t max_records, size_t* written);
 /// @brief Drains pending meter telemetry records published by the engine.
+/// @details Compatibility drain: it consumes the same queue as
+///   @ref sonare_engine_drain_meter_telemetry_wide_v2, which is the one drain to
+///   use. Do not mix drains on one engine.
 /// @param out Caller-owned array receiving up to @p max_records entries.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
 ///   nothing is copied or drained and @p out_count is always set to 0. This
@@ -875,10 +878,10 @@ SonareError sonare_engine_drain_meter_telemetry(SonareRealtimeEngine* engine,
                                                 SonareMeterTelemetryRecord* out, size_t max_records,
                                                 size_t* out_count);
 /// @brief Drains pending meter telemetry as per-plane (wide) records for
-///   surround targets. Same underlying queue as
-///   @ref sonare_engine_drain_meter_telemetry — a host picks the drain matching
-///   its target's bus layout; do not call both for one target. Each record
-///   carries channel_count valid planes in peak_db/rms_db/true_peak_db.
+///   surround targets. Compatibility drain: it consumes the same queue as
+///   @ref sonare_engine_drain_meter_telemetry_wide_v2, which is the one drain to
+///   use. Each record carries channel_count valid planes in
+///   peak_db/rms_db/true_peak_db.
 /// @param out Caller-owned array receiving up to @p max_records entries.
 /// @param max_records Capacity of @p out. May be 0, which is a safe no-op:
 ///   nothing is copied or drained and @p out_count is always set to 0. This
@@ -891,15 +894,20 @@ SonareError sonare_engine_drain_meter_telemetry_wide(SonareRealtimeEngine* engin
                                                      SonareMeterTelemetryRecordWide* out,
                                                      size_t max_records, size_t* out_count);
 /// @brief Drains meter telemetry with pre-trim input peaks appended to each record.
-/// @details Every meter drain pops from one shared queue and consumes the
-///   records of all targets, so an engine reads its meters through one drain only.
+/// @details Compatibility drain for stereo records. Every meter drain pops from
+///   one shared queue and consumes the records of all targets, so an engine reads
+///   its meters through one drain only. Prefer
+///   @ref sonare_engine_drain_meter_telemetry_wide_v2.
 /// @param out Receives up to @p max_records records; written only on success.
 SonareError sonare_engine_drain_meter_telemetry_v2(SonareRealtimeEngine* engine,
                                                    SonareMeterTelemetryRecordV2* out,
                                                    size_t max_records, size_t* out_count);
-/// @brief Drains surround meter telemetry with pre-trim input peaks appended.
-/// @details Every meter drain pops from one shared queue and consumes the
-///   records of all targets, so an engine reads its meters through one drain only.
+/// @brief Drains meter telemetry as per-plane records with pre-trim input peaks.
+/// @details This is the one meter drain: every target's record carries all its
+///   channel_count planes, and a stereo target's L/R are planes 0 and 1. Use it
+///   alone. The other three drains consume the same shared queue (all targets'
+///   records) and remain for compatibility, so an engine reads its meters through
+///   one drain only.
 /// @param out Receives up to @p max_records records; written only on success.
 SonareError sonare_engine_drain_meter_telemetry_wide_v2(SonareRealtimeEngine* engine,
                                                         SonareMeterTelemetryRecordWideV2* out,
