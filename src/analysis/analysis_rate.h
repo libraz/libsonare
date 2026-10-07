@@ -34,15 +34,17 @@ struct RateWindow {
   int n_fft;
 };
 
-/// @brief Converts @p n_fft_at_analysis_rate to the window and FFT length for @p sample_rate.
-/// @details Factor 1 returns `{0, n_fft}` unchanged. Throws if the FFT length exceeds
-///          @ref kMaxStftNFft.
-inline RateWindow window_at_rate(int n_fft_at_analysis_rate, int sample_rate) {
-  SONARE_CHECK(n_fft_at_analysis_rate > 0, ErrorCode::InvalidParameter);
+/// @brief Converts @p n_fft_at_reference_rate to the window and FFT length for @p sample_rate.
+/// @details The window is a time quantity in samples at @p reference_rate. Factor 1 returns
+///          `{0, n_fft}` unchanged. Throws if the FFT length exceeds @ref kMaxStftNFft.
+inline RateWindow window_at_rate(int n_fft_at_reference_rate, int sample_rate,
+                                 int reference_rate = kAnalysisSampleRate) {
+  SONARE_CHECK(n_fft_at_reference_rate > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(sample_rate > 0, ErrorCode::InvalidParameter);
-  if (sample_rate == kAnalysisSampleRate) return {0, n_fft_at_analysis_rate};
-  const double scaled = static_cast<double>(n_fft_at_analysis_rate) *
-                        static_cast<double>(sample_rate) / kAnalysisSampleRate;
+  SONARE_CHECK(reference_rate > 0, ErrorCode::InvalidParameter);
+  if (sample_rate == reference_rate) return {0, n_fft_at_reference_rate};
+  const double scaled = static_cast<double>(n_fft_at_reference_rate) *
+                        static_cast<double>(sample_rate) / reference_rate;
   SONARE_CHECK(scaled <= static_cast<double>(kMaxStftNFft), ErrorCode::InvalidParameter);
   const int win = std::max(2, static_cast<int>(std::lround(scaled)));
   const int fft = fast_fft_length(win);
@@ -51,8 +53,10 @@ inline RateWindow window_at_rate(int n_fft_at_analysis_rate, int sample_rate) {
 }
 
 /// @brief StftConfig with the window converted to @p sample_rate; other fields are defaults.
-inline StftConfig stft_config_at_rate(int n_fft_at_analysis_rate, int hop_length, int sample_rate) {
-  const RateWindow w = window_at_rate(n_fft_at_analysis_rate, sample_rate);
+/// @details @p hop_length is used as given (samples of the input buffer).
+inline StftConfig stft_config_at_rate(int n_fft_at_reference_rate, int hop_length, int sample_rate,
+                                      int reference_rate = kAnalysisSampleRate) {
+  const RateWindow w = window_at_rate(n_fft_at_reference_rate, sample_rate, reference_rate);
   StftConfig config;
   config.n_fft = w.n_fft;
   config.hop_length = hop_length;

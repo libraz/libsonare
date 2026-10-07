@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/source_classifier.h"
@@ -42,11 +43,9 @@ constexpr int kUnbandedBin = -1;
 constexpr float kSilenceMarginLu = 5.0f;
 constexpr float kSilenceLufsThreshold = kFloorDb + kSilenceMarginLu;
 
-// Coherent gain of the Hann analysis window as a fraction of n_fft
-// (sum(w) = n_fft / 2). The STFT is unnormalized, so band power scales with it;
-// dividing it out expresses band content as a signal amplitude rather than an
-// FFT-size dependent number. This profiler never overrides the StftConfig
-// window, so the Hann figure is the only one that applies.
+// Coherent gain of the Hann analysis window as a fraction of its length
+// (sum(w) = length / 2). Band power is held in the 48 kHz reference geometry,
+// so the reference window's gain divides it out into a signal amplitude.
 constexpr double kHannCoherentGain = 0.5;
 
 // Equivalent-amplitude floor below which a track carries no spectral content
@@ -97,11 +96,13 @@ std::vector<int> make_bin_band_map(int n_bins, int n_fft, int sample_rate) {
   return bin_band;
 }
 
-// Folds the power spectrum into per-band linear power over time.
-BandEnergyEnvelope fold_bands(const Spectrogram& spec, int sample_rate) {
+// Folds the power spectrum into per-band linear power over time, in the reference geometry.
+BandEnergyEnvelope fold_bands(const Spectrogram& spec, int sample_rate,
+                              int n_fft_at_reference_rate) {
   BandEnergyEnvelope bands;
   bands.n_frames = spec.n_frames();
   bands.n_fft = spec.n_fft();
+  bands.win_length = spec.win_length();
   bands.hop_length = spec.hop_length();
   bands.sample_rate = sample_rate;
 
@@ -115,22 +116,28 @@ BandEnergyEnvelope fold_bands(const Spectrogram& spec, int sample_rate) {
   // Spectrogram is [n_bins x n_frames] row-major, so a bin's frames are
   // contiguous and the fold runs bin-major.
   const std::vector<float>& power = spec.power();
+  const double scale =
+      mastering::assistant::reference_power_scale(spec, n_fft_at_reference_rate) *
+      mastering::assistant::reference_bin_width_ratio(spec, n_fft_at_reference_rate);
+  const bool rescale = scale != 1.0;
   for (int bin = 0; bin < n_bins; ++bin) {
     const int band = bin_band[static_cast<std::size_t>(bin)];
     if (band == kUnbandedBin) continue;
     const std::size_t source = static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames);
     const std::size_t target = static_cast<std::size_t>(band) * static_cast<std::size_t>(n_frames);
     for (int frame = 0; frame < n_frames; ++frame) {
+      const float value = power[source + static_cast<std::size_t>(frame)];
       bands.energy[target + static_cast<std::size_t>(frame)] +=
-          power[source + static_cast<std::size_t>(frame)];
+          rescale ? static_cast<float>(static_cast<double>(value) * scale) : value;
     }
   }
   return bands;
 }
 
-// Averages the power spectrum over frames. Bin-major like the fold above, for
-// the same reason: a bin's frames are contiguous.
-MeanPowerSpectrum mean_power_spectrum(const Spectrogram& spec, int sample_rate) {
+// Averages the power spectrum over frames, per bin in the reference geometry. Bin-major
+// like the fold above, for the same reason: a bin's frames are contiguous.
+MeanPowerSpectrum mean_power_spectrum(const Spectrogram& spec, int sample_rate,
+                                      int n_fft_at_reference_rate) {
   MeanPowerSpectrum spectrum;
   spectrum.n_fft = spec.n_fft();
   spectrum.sample_rate = sample_rate;
@@ -142,6 +149,7 @@ MeanPowerSpectrum mean_power_spectrum(const Spectrogram& spec, int sample_rate) 
   spectrum.n_bins = n_bins;
   spectrum.power.assign(static_cast<std::size_t>(n_bins), 0.0f);
   const std::vector<float>& power = spec.power();
+  const double scale = mastering::assistant::reference_power_scale(spec, n_fft_at_reference_rate);
   for (int bin = 0; bin < n_bins; ++bin) {
     const std::size_t source = static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames);
     // Accumulated in double: a long track sums tens of thousands of frames, and
@@ -151,7 +159,7 @@ MeanPowerSpectrum mean_power_spectrum(const Spectrogram& spec, int sample_rate) 
       sum += static_cast<double>(power[source + static_cast<std::size_t>(frame)]);
     }
     spectrum.power[static_cast<std::size_t>(bin)] =
-        static_cast<float>(sum / static_cast<double>(n_frames));
+        static_cast<float>(sum / static_cast<double>(n_frames) * scale);
   }
   return spectrum;
 }
@@ -183,12 +191,12 @@ std::array<float, kBandCount> band_occupancy(const BandTotals& totals) {
 
 // Loudest band's mean per-frame power, mapped back to an equivalent signal
 // amplitude so it can be compared against an absolute, FFT-size independent
-// floor.
-float peak_band_amplitude(const BandTotals& totals, int n_frames, int n_fft) {
-  if (n_frames <= 0 || n_fft <= 0) return 0.0f;
+// floor. @p reference_window is the window length the band power is held at.
+float peak_band_amplitude(const BandTotals& totals, int n_frames, int reference_window) {
+  if (n_frames <= 0 || reference_window <= 0) return 0.0f;
   const double peak = *std::max_element(totals.per_band.begin(), totals.per_band.end());
   if (!(peak > 0.0)) return 0.0f;
-  const double window_gain = kHannCoherentGain * static_cast<double>(n_fft);
+  const double window_gain = kHannCoherentGain * static_cast<double>(reference_window);
   return static_cast<float>(std::sqrt(peak / static_cast<double>(n_frames)) / window_gain);
 }
 
@@ -203,7 +211,9 @@ double sum_square_energy(const float* samples, std::size_t frames) noexcept {
 
 void validate_track_profile_config(const TrackProfileConfig& config) {
   // Analysis-only STFT geometry does not require reconstruction COLA constraints.
-  sonare::validate_config(sonare::make_stft_config(config.n_fft, config.hop_length));
+  sonare::validate_config(stft_config_at_rate(config.n_fft, config.hop_length,
+                                              mastering::assistant::kProfileReferenceRate,
+                                              mastering::assistant::kProfileReferenceRate));
   SONARE_CHECK_MSG(std::isfinite(config.min_duration_sec) && config.min_duration_sec >= 0.0f,
                    ErrorCode::InvalidParameter,
                    "TrackProfileConfig.minDurationSec must be finite and non-negative");
@@ -306,10 +316,11 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
 
   // The framing the bands are read on is checked against the one this profiler
   // asked for, not assumed from the two configs sharing their defaults.
-  validate_reused_geometry(spec, make_stft_config(config.n_fft, config.hop_length),
-                           track.sample_rate, frames);
-  profile.bands = fold_bands(spec, track.sample_rate);
-  profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
+  const StftConfig geometry =
+      mastering::assistant::profile_stft_config(base_config, track.sample_rate);
+  validate_reused_geometry(spec, geometry, track.sample_rate, frames);
+  profile.bands = fold_bands(spec, track.sample_rate, config.n_fft);
+  profile.spectrum = mean_power_spectrum(spec, track.sample_rate, config.n_fft);
 
   BandTotals totals = band_totals(profile.bands);
   profile.band_occupancy = band_occupancy(totals);
@@ -322,8 +333,7 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
   // Recover whole-band downmix cancellation from one channel, preserving channel-summed loudness.
   if (stereo && std::isfinite(profile.base.loudness.integrated_lufs) &&
       profile.base.loudness.integrated_lufs > kSilenceLufsThreshold &&
-      peak_band_amplitude(totals, profile.bands.n_frames, profile.bands.n_fft) <
-          kMinBandAmplitude) {
+      peak_band_amplitude(totals, profile.bands.n_frames, config.n_fft) < kMinBandAmplitude) {
     const double left_energy = sum_square_energy(track.left, frames);
     const double right_energy = sum_square_energy(track.right, frames);
     const float* representative = left_energy >= right_energy ? track.left : track.right;
@@ -337,10 +347,9 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
     profile.base.loudness = summed_loudness;
     spec = std::move(representative_spec);
 
-    validate_reused_geometry(spec, make_stft_config(config.n_fft, config.hop_length),
-                             track.sample_rate, frames);
-    profile.bands = fold_bands(spec, track.sample_rate);
-    profile.spectrum = mean_power_spectrum(spec, track.sample_rate);
+    validate_reused_geometry(spec, geometry, track.sample_rate, frames);
+    profile.bands = fold_bands(spec, track.sample_rate, config.n_fft);
+    profile.spectrum = mean_power_spectrum(spec, track.sample_rate, config.n_fft);
     totals = band_totals(profile.bands);
     profile.band_occupancy = band_occupancy(totals);
   }
@@ -352,8 +361,7 @@ TrackProfile analyze_track_profile(const TrackInput& track, const TrackProfileCo
     profile.exclusion_reason = "track is silent";
     return profile;
   }
-  if (peak_band_amplitude(totals, profile.bands.n_frames, profile.bands.n_fft) <
-      kMinBandAmplitude) {
+  if (peak_band_amplitude(totals, profile.bands.n_frames, config.n_fft) < kMinBandAmplitude) {
     profile.exclusion_reason = "track has no energy in the analysis bands";
     return profile;
   }

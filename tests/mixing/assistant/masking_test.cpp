@@ -376,13 +376,16 @@ TEST_CASE("analyze_track_profiles does not mask bursts from different sample clo
   constexpr int kFirstSampleRate = 48000;
   constexpr int kSecondSampleRate = 24000;
   constexpr float kDurationSec = 0.55f;
-  constexpr int kBurstFirstFrame = 10000;
-  constexpr int kBurstLastFrame = 12000;
-
-  const auto first = burst_tone(static_cast<std::size_t>(kFirstSampleRate * kDurationSec),
-                                kFirstSampleRate, kBurstFirstFrame, kBurstLastFrame, 1000.0f);
-  const auto second = burst_tone(static_cast<std::size_t>(kSecondSampleRate * kDurationSec),
-                                 kSecondSampleRate, kBurstFirstFrame, kBurstLastFrame, 1000.0f);
+  // The burst spans the same seconds at both rates, so its start and end are per-rate frames.
+  constexpr double kBurstStartSec = 0.20;
+  constexpr double kBurstEndSec = 0.30;
+  const auto burst_at = [&](int sample_rate) {
+    return burst_tone(static_cast<std::size_t>(sample_rate * kDurationSec), sample_rate,
+                      static_cast<int>(kBurstStartSec * sample_rate),
+                      static_cast<int>(kBurstEndSec * sample_rate), 1000.0f);
+  };
+  const auto first = burst_at(kFirstSampleRate);
+  const auto second = burst_at(kSecondSampleRate);
   const std::vector<TrackInput> inputs{make_input("wide", first, kFirstSampleRate),
                                        make_input("fast-clock", second, kSecondSampleRate)};
   TrackProfileConfig config;
@@ -396,8 +399,8 @@ TEST_CASE("analyze_track_profiles does not mask bursts from different sample clo
   REQUIRE(profiles[0].bands.sample_rate == kFirstSampleRate);
   REQUIRE(profiles[1].bands.sample_rate == kSecondSampleRate);
 
-  // The bursts share sample indices but occur at different physical times
-  // (about 0.21-0.25 s versus 0.42-0.50 s), so they overlap by frame index only.
+  // The bursts coincide in time and, since the hop is converted per rate, in frame index
+  // too: only the differing sample clocks keep them from being compared.
   int frame_index_overlap = 0;
   const int shared_frames = std::min(profiles[0].bands.n_frames, profiles[1].bands.n_frames);
   for (int frame = 0; frame < shared_frames; ++frame) {

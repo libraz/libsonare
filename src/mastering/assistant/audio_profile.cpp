@@ -11,8 +11,10 @@
 #include <utility>
 #include <vector>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/bpm_analyzer.h"
 #include "core/spectrum.h"
+#include "core/window.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
 #include "feature/spectral.h"
@@ -68,8 +70,9 @@ float power_to_db(double power) {
   return power_to_db_scalar(power);
 }
 
+// Mean per-bin power over the band; @p power_scale maps it to the reference geometry.
 float band_rms_db(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft, int sr,
-                  float min_hz, float max_hz) {
+                  double power_scale, float min_hz, float max_hz) {
   double power_sum = 0.0;
   int count = 0;
   for (int bin = 0; bin < n_bins; ++bin) {
@@ -82,7 +85,7 @@ float band_rms_db(const std::vector<float>& magnitude, int n_bins, int n_frames,
     }
   }
   if (count == 0) return kMinDb;
-  return power_to_db(power_sum / count);
+  return power_to_db(power_sum / count * power_scale);
 }
 
 float attack_density(const std::vector<float>& onset, float duration_sec) {
@@ -383,9 +386,7 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
   OnsetConfig onset_config;
   onset_config.detrend = true;
 
-  StftConfig stft_config;
-  stft_config.n_fft = config.n_fft;
-  stft_config.hop_length = config.hop_length;
+  const StftConfig stft_config = profile_stft_config(config, audio.sample_rate());
   // One STFT feeds both the spectral block and the onset envelope below, so the framing the
   // onset path asks for is the framing this spectrogram is built with rather than a second
   // default that happens to agree.
@@ -403,21 +404,19 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
     mag[i] = std::abs(spectrum[i]);
   }
 
-  profile.spectral.sub_rms_db =
-      band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 20, 60);
-  profile.spectral.low_rms_db =
-      band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 60, 250);
-  profile.spectral.low_mid_rms_db =
-      band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 250, 500);
-  profile.spectral.mid_rms_db = band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(),
-                                            audio.sample_rate(), 500, 2000);
-  profile.spectral.high_mid_rms_db = band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(),
-                                                 audio.sample_rate(), 2000, 6000);
-  profile.spectral.high_rms_db = band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(),
-                                             audio.sample_rate(), 6000, 12000);
+  const double power_scale = reference_power_scale(spec, config.n_fft);
+  const auto band_db = [&](float min_hz, float max_hz) {
+    return band_rms_db(mag, n_bins, n_frames, spec.n_fft(), audio.sample_rate(), power_scale,
+                       min_hz, max_hz);
+  };
+  profile.spectral.sub_rms_db = band_db(20, 60);
+  profile.spectral.low_rms_db = band_db(60, 250);
+  profile.spectral.low_mid_rms_db = band_db(250, 500);
+  profile.spectral.mid_rms_db = band_db(500, 2000);
+  profile.spectral.high_mid_rms_db = band_db(2000, 6000);
+  profile.spectral.high_rms_db = band_db(6000, 12000);
   profile.spectral.air_rms_db =
-      band_rms_db(mag, spec.n_bins(), spec.n_frames(), spec.n_fft(), audio.sample_rate(), 12000,
-                  static_cast<float>(audio.sample_rate()) * 0.5f + 1.0f);
+      band_db(12000, static_cast<float>(audio.sample_rate()) * 0.5f + 1.0f);
   profile.spectral.centroid_hz = mean_finite(
       spectral_centroid(mag.data(), n_bins, n_frames, audio.sample_rate(), spec.n_fft()));
   profile.spectral.flatness = mean_finite(spectral_flatness(mag.data(), n_bins, n_frames));
@@ -433,8 +432,9 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
       stddev_finite(short_term_series != nullptr ? *short_term_series : measured_short_term);
 
   MelConfig mel_config;
-  mel_config.n_fft = config.n_fft;
-  mel_config.hop_length = config.hop_length;
+  mel_config.n_fft = stft_config.n_fft;
+  mel_config.hop_length = stft_config.hop_length;
+  mel_config.win_length = stft_config.win_length;
   // The Audio overload of compute_onset_strength would run its own STFT of this same geometry;
   // splitting it at the Mel spectrogram reuses the one above and keeps the trailing alignment
   // step the overload applies.
@@ -443,18 +443,18 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
   // Last read of the STFT; the caller takes it from here rather than paying for
   // a second one over the same signal.
   if (spec_out != nullptr) *spec_out = std::move(spec);
-  const auto onset =
-      center_onset_strength(compute_onset_strength(mel, onset_config), stft_config.n_fft,
-                            stft_config.hop_length, onset_config.center);
+  const auto onset = center_onset_strength(compute_onset_strength(mel, onset_config),
+                                           stft_config.actual_win_length(), stft_config.hop_length,
+                                           onset_config.center);
   profile.dynamics.attack_density = attack_density(onset, profile.duration_sec);
   profile.dynamics.sustain_ratio =
-      sustain_ratio(rms_energy(audio, config.n_fft, config.hop_length));
+      sustain_ratio(rms_energy(audio, stft_config.actual_win_length(), stft_config.hop_length));
 
   try {
+    // The envelope is already framed; the onset-envelope constructor reads no window length.
     BpmConfig bpm_config;
-    bpm_config.n_fft = config.n_fft;
-    bpm_config.hop_length = config.hop_length;
-    BpmAnalyzer bpm(onset, audio.sample_rate(), config.hop_length, bpm_config);
+    bpm_config.hop_length = stft_config.hop_length;
+    BpmAnalyzer bpm(onset, audio.sample_rate(), stft_config.hop_length, bpm_config);
     profile.bpm = bpm.bpm();
     profile.bpm_confidence = bpm.confidence();
   } catch (...) {
@@ -464,6 +464,42 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
 }
 
 }  // namespace
+
+StftConfig profile_stft_config(const AudioProfileConfig& config, int sample_rate) {
+  int hop_length = config.hop_length;
+  if (sample_rate != kProfileReferenceRate && sample_rate > 0) {
+    hop_length = std::max(1, static_cast<int>(std::lround(static_cast<double>(hop_length) *
+                                                          sample_rate / kProfileReferenceRate)));
+  }
+  return stft_config_at_rate(config.n_fft, hop_length, sample_rate, kProfileReferenceRate);
+}
+
+double reference_power_scale(const Spectrogram& spec, int n_fft_at_reference_rate) {
+  const int win_length = spec.win_length();
+  if (spec.sample_rate() == kProfileReferenceRate && win_length == n_fft_at_reference_rate &&
+      spec.window() == WindowType::Hann) {
+    return 1.0;
+  }
+  const auto sum_of_squares = [](const std::vector<float>& window) {
+    double sum = 0.0;
+    for (float w : window) sum += static_cast<double>(w) * w;
+    return sum;
+  };
+  const double actual = sum_of_squares(create_window(spec.window(), win_length, true));
+  const double reference =
+      sum_of_squares(create_window(WindowType::Hann, n_fft_at_reference_rate, true));
+  if (!(actual > 0.0) || spec.sample_rate() <= 0) return 1.0;
+  return (static_cast<double>(kProfileReferenceRate) * reference) /
+         (static_cast<double>(spec.sample_rate()) * actual);
+}
+
+double reference_bin_width_ratio(const Spectrogram& spec, int n_fft_at_reference_rate) {
+  if (spec.sample_rate() == kProfileReferenceRate && spec.n_fft() == n_fft_at_reference_rate) {
+    return 1.0;
+  }
+  return (static_cast<double>(spec.sample_rate()) * n_fft_at_reference_rate) /
+         (static_cast<double>(kProfileReferenceRate) * spec.n_fft());
+}
 
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config) {
   return analyze_audio_profile(audio, config, nullptr);

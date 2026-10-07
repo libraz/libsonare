@@ -72,12 +72,20 @@ int band_of_frequency(float hz) noexcept {
 
 /// @brief The analysis geometry the profile was measured with, so a band energy
 ///        computed here lines up with the one cached in the profile.
-sonare::StftConfig stft_config_for(const TrackProfile& profile) {
+/// @details A field the profile does not record falls back to the default
+///          configuration converted to @p sample_rate, as the profiler would.
+sonare::StftConfig stft_config_for(const TrackProfile& profile, int sample_rate) {
   const TrackProfileConfig defaults;
-  const int n_fft = profile.bands.n_fft > 0 ? profile.bands.n_fft : defaults.n_fft;
-  const int hop_length =
-      profile.bands.hop_length > 0 ? profile.bands.hop_length : defaults.hop_length;
-  return sonare::make_stft_config(n_fft, hop_length);
+  mastering::assistant::AudioProfileConfig default_geometry;
+  default_geometry.n_fft = defaults.n_fft;
+  default_geometry.hop_length = defaults.hop_length;
+  sonare::StftConfig config =
+      mastering::assistant::profile_stft_config(default_geometry, sample_rate);
+  if (profile.bands.hop_length > 0) config.hop_length = profile.bands.hop_length;
+  if (profile.bands.n_fft <= 0) return config;
+  config.n_fft = profile.bands.n_fft;
+  config.win_length = profile.bands.win_length;
+  return config;
 }
 
 /// @brief Folds one track's channels into per-band linear power.
@@ -97,7 +105,7 @@ TrackChannelEnergy measure_band_energy(const TrackInput& track, const TrackProfi
   TrackChannelEnergy energy;
   if (track.left == nullptr || track.frame_count == 0 || track.sample_rate <= 0) return energy;
 
-  const sonare::StftConfig config = stft_config_for(profile);
+  const sonare::StftConfig config = stft_config_for(profile, track.sample_rate);
   const sonare::Spectrogram left_spec = sonare::Spectrogram::compute(
       sonare::Audio::from_buffer(track.left, track.frame_count, track.sample_rate), config);
   const int n_bins = left_spec.n_bins();

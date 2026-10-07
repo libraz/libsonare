@@ -4,6 +4,7 @@
 #include "mixing/assistant/track_profile.h"
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstddef>
@@ -557,4 +558,67 @@ TEST_CASE("Track profile measures stereo loudness with channel summing", "[mixin
   REQUIRE(std::isfinite(stereo.base.loudness.integrated_lufs));
   REQUIRE(std::isfinite(mono.base.loudness.integrated_lufs));
   CHECK(stereo.base.loudness.integrated_lufs > mono.base.loudness.integrated_lufs + 3.0f);
+}
+
+TEST_CASE("Track profile band energy and spectrum do not depend on the input rate",
+          "[mixing][assistant][analysis_rate]") {
+  constexpr int kReferenceRate = sonare::mastering::assistant::kProfileReferenceRate;
+  struct Reading {
+    std::vector<double> band_db;  // mean per-frame band energy, in dB
+    double spectrum_db = 0.0;     // power density integrated over the spectrum, in dB
+    std::array<float, assistant::kBandCount> occupancy{};
+  };
+  // One partial in each of the low, low-mid and mid bands, each well clear of a band edge:
+  // a partial beside an edge moves between bands with the bin grid, which is not what is
+  // measured here.
+  const auto measure = [](int sr) {
+    std::vector<float> samples(static_cast<std::size_t>(2 * sr), 0.0f);
+    for (float frequency : {110.0f, 330.0f, 1000.0f}) {
+      for (std::size_t i = 0; i < samples.size(); ++i) {
+        const double t = static_cast<double>(i) / sr;
+        samples[i] +=
+            static_cast<float>(0.2 * std::sin(sonare::constants::kTwoPiD * frequency * t));
+      }
+    }
+    assistant::TrackInput track;
+    track.id = "partials";
+    track.left = samples.data();
+    track.frame_count = samples.size();
+    track.sample_rate = sr;
+    const assistant::TrackProfile profile = assistant::analyze_track_profile(track);
+    REQUIRE(profile.usable);
+    Reading reading;
+    reading.occupancy = profile.band_occupancy;
+    for (int band = 0; band < assistant::kBandCount; ++band) {
+      double sum = 0.0;
+      for (int frame = 0; frame < profile.bands.n_frames; ++frame) {
+        sum += static_cast<double>(profile.bands.at(band, frame));
+      }
+      reading.band_db.push_back(10.0 * std::log10(sum / profile.bands.n_frames + 1.0e-30));
+    }
+    double total = 0.0;
+    for (float value : profile.spectrum.power) total += static_cast<double>(value);
+    const double bin_hz = static_cast<double>(sr) / profile.spectrum.n_fft;
+    reading.spectrum_db = 10.0 * std::log10(total * bin_hz);
+    return reading;
+  };
+
+  const Reading reference = measure(kReferenceRate);
+  for (int sr : {22050, 32000, 44100}) {
+    const Reading reading = measure(sr);
+    double band_deviation_db = 0.0;
+    for (int band = 1; band <= 3; ++band) {
+      band_deviation_db =
+          std::max(band_deviation_db, std::abs(reading.band_db[static_cast<std::size_t>(band)] -
+                                               reference.band_db[static_cast<std::size_t>(band)]));
+    }
+    const double spectrum_deviation_db = std::abs(reading.spectrum_db - reference.spectrum_db);
+    CAPTURE(sr, band_deviation_db, spectrum_deviation_db);
+    CHECK(band_deviation_db <= 0.05);
+    CHECK(spectrum_deviation_db <= 0.05);
+    for (int band = 1; band <= 3; ++band) {
+      CHECK(std::abs(reading.occupancy[static_cast<std::size_t>(band)] -
+                     reference.occupancy[static_cast<std::size_t>(band)]) <= 0.01f);
+    }
+  }
 }

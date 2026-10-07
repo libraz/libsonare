@@ -12,6 +12,7 @@
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 namespace assistant = sonare::mastering::assistant;
@@ -709,4 +710,60 @@ TEST_CASE("Assistant delivery target yields to a named loudness, default-valued 
       assistant::suggest_chain(profile, assistant::assistant_config_from_params(platform_only, 1));
   REQUIRE(full.config.loudness.target_lufs == -9.0f);
   REQUIRE(full.config.loudness.ceiling_db == -0.3f);
+}
+
+TEST_CASE("Assistant AudioProfile dynamics and band levels do not depend on the input rate",
+          "[mastering][assistant][analysis_rate]") {
+  using sonare::test::make_rate_material;
+  using sonare::test::RateMaterial;
+  constexpr int kReferenceRate = assistant::kProfileReferenceRate;
+  // Attack density from the click train (C); sustain and band levels from the triads (T).
+  // All content is below 10 kHz.
+  const auto material = [](RateMaterial m, int sr) {
+    const sonare::Audio audio = make_rate_material(m, sr);
+    return assistant::analyze_audio_profile(audio.data(), audio.size(), sr);
+  };
+  // The bands at or below 10 kHz (sub to high-mid); the rest reach past the material.
+  const auto bands = [](const assistant::AudioProfile& p) {
+    return std::vector<float>{p.spectral.sub_rms_db, p.spectral.low_rms_db,
+                              p.spectral.low_mid_rms_db, p.spectral.mid_rms_db,
+                              p.spectral.high_mid_rms_db};
+  };
+
+  const auto reference_clicks = material(RateMaterial::Clicks, kReferenceRate);
+  const auto reference = material(RateMaterial::TriadTurnaround, kReferenceRate);
+  REQUIRE(reference_clicks.dynamics.attack_density > 0.0f);
+  REQUIRE(reference.dynamics.sustain_ratio > 0.0f);
+  const std::vector<float> reference_bands = bands(reference);
+  // T has nothing in the sub and high-mid bands; their 40-70 dB lower floor is window
+  // leakage, so only bands within 30 dB of the loudest one are compared.
+  const float loudest = *std::max_element(reference_bands.begin(), reference_bands.end());
+  std::vector<bool> carries_content;
+  for (float level : reference_bands) carries_content.push_back(level >= loudest - 30.0f);
+  REQUIRE(std::count(carries_content.begin(), carries_content.end(), true) >= 3);
+
+  for (int sr : {22050, 32000, 44100}) {
+    const auto clicks = material(RateMaterial::Clicks, sr);
+    const auto profile = material(RateMaterial::TriadTurnaround, sr);
+    const float attack_deviation =
+        std::abs(clicks.dynamics.attack_density / reference_clicks.dynamics.attack_density - 1.0f);
+    const float sustain_deviation =
+        std::abs(profile.dynamics.sustain_ratio / reference.dynamics.sustain_ratio - 1.0f);
+    const std::vector<float> rate_bands = bands(profile);
+    float band_deviation_db = 0.0f;
+    size_t worst_band = 0;
+    for (size_t band = 0; band < rate_bands.size(); ++band) {
+      if (!carries_content[band]) continue;
+      const float deviation = std::abs(rate_bands[band] - reference_bands[band]);
+      if (deviation > band_deviation_db) {
+        band_deviation_db = deviation;
+        worst_band = band;
+      }
+    }
+    CAPTURE(sr, attack_deviation, sustain_deviation, band_deviation_db, worst_band);
+    CHECK(attack_deviation <= 0.10f);
+    CHECK(sustain_deviation <= 0.10f);
+    // A partial beside a band edge moves across it with the bin grid (0.56 dB at 250 Hz).
+    CHECK(band_deviation_db <= 1.0f);
+  }
 }

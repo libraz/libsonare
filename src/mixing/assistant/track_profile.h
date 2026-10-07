@@ -134,7 +134,9 @@ struct TrackInput {
 ///          Layout is `[band][frame]`, i.e. `energy[band * n_frames + frame]`,
 ///          which matches @ref Spectrogram's band-major convention. Values are
 ///          **linear power** (sum of `|X|^2` over the band's bins), not dB and
-///          not amplitude.
+///          not amplitude, rescaled to a Hann window of
+///          @ref TrackProfileConfig::n_fft samples at 48 kHz so a band's level
+///          does not move with the input rate.
 ///
 ///          Frame `f` covers the analysis window centred at
 ///          `frames_to_time(f, sample_rate, hop_length)` seconds, which for the
@@ -143,7 +145,10 @@ struct TrackInput {
 ///          @ref n_fft, and @ref hop_length; masking skips incompatible pairs.
 struct BandEnergyEnvelope {
   int n_frames = 0;
+  /// @brief FFT length actually used at @ref sample_rate.
   int n_fft = 0;
+  /// @brief Window length actually used at @ref sample_rate (0 = @ref n_fft).
+  int win_length = 0;
   int hop_length = 0;
   int sample_rate = 0;
   /// @brief `[band * n_frames + frame]`, linear power.
@@ -177,12 +182,14 @@ struct BandEnergyEnvelope {
 ///          that share a band but never sound at the same moment.
 ///
 ///          Values are **linear power** (the mean of `|X|^2` over frames), not
-///          dB and not amplitude. Bin `k` is centred at
+///          dB and not amplitude, rescaled per bin to the 48 kHz reference
+///          window like @ref BandEnergyEnvelope. Bin `k` is centred at
 ///          `k * sample_rate / n_fft`, and the bin's span is taken as half a bin
 ///          either side of that centre.
 struct MeanPowerSpectrum {
   /// @brief `n_fft / 2 + 1` for a measured track; zero when nothing was measured.
   int n_bins = 0;
+  /// @brief FFT length actually used at @ref sample_rate.
   int n_fft = 0;
   int sample_rate = 0;
   /// @brief One entry per bin, linear power averaged over frames.
@@ -242,6 +249,8 @@ struct TrackProfileConfig {
   ///        no stricter reconstruction geometry is imposed here. Mismatched
   ///        geometry would make frame indices incomparable in the cross-track
   ///        phase.
+  /// @details @ref n_fft and @ref hop_length are samples at 48 kHz, converted to
+  ///          each track's rate (@ref mastering::assistant::profile_stft_config).
   int n_fft = 2048;
   int hop_length = 512;
   /// @brief Tracks shorter than this cannot produce a meaningful gated

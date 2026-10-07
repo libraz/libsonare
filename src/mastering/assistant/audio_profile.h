@@ -8,10 +8,8 @@
 #include <vector>
 
 #include "core/audio.h"
-
-namespace sonare {
-class Spectrogram;
-}  // namespace sonare
+#include "core/spectrum.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::assistant {
 
@@ -137,8 +135,15 @@ struct AudioProfile {
   DefectProfile defects{};
 };
 
+/// @brief Rate at which @ref AudioProfileConfig states its window and hop.
+inline constexpr int kProfileReferenceRate =
+    static_cast<int>(sonare::constants::kDefaultDawSampleRate);
+
 struct AudioProfileConfig {
+  /// Window length in samples at @ref kProfileReferenceRate, converted to the input
+  /// rate. Band levels are normalized to a Hann window of this length at that rate.
   int n_fft = 2048;
+  /// Hop in samples at @ref kProfileReferenceRate, converted to the input rate.
   int hop_length = 512;
   int true_peak_oversample = 4;
   /// Measure @ref AudioProfile::defects. Off by default: the six detectors are
@@ -196,6 +201,24 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
                                                int channels, int sample_rate,
                                                const AudioProfileConfig& config,
                                                Spectrogram* spec_out);
+/// @brief The STFT geometry @p config describes at @p sample_rate.
+/// @details Window and hop are converted from @ref kProfileReferenceRate; the hop is
+///          at least one sample. Unchanged at the reference rate.
+StftConfig profile_stft_config(const AudioProfileConfig& config, int sample_rate);
+
+/// @brief Factor that rescales one bin of @p spec's power to the reference geometry.
+/// @details The reference is a Hann window of @p n_fft_at_reference_rate samples at
+///          @ref kProfileReferenceRate. The factor is the density ratio
+///          `(ref_sr * Σw_ref²) / (sr * Σw²)` over the spectrogram's actual window, so a
+///          bin's power describes the same spectral density whatever the input rate. A
+///          sum over a band's bins also needs @ref reference_bin_width_ratio. Exactly 1
+///          at the reference rate with the reference window.
+double reference_power_scale(const Spectrogram& spec, int n_fft_at_reference_rate);
+
+/// @brief `(sr / n_fft) / (ref_sr / n_fft_at_reference_rate)`: the spectrogram's bin
+///        width over the reference bin width. Exactly 1 at the reference rate.
+double reference_bin_width_ratio(const Spectrogram& spec, int n_fft_at_reference_rate);
+
 std::string audio_profile_to_json(const AudioProfile& profile);
 
 /// @brief Every dotted field path @ref audio_profile_to_json emits.

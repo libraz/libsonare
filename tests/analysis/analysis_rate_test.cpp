@@ -82,6 +82,26 @@ TEST_CASE("stft_config_at_rate leaves the window unset at the analysis rate",
   CHECK(hi.hop_length == 512);
 }
 
+TEST_CASE("window_at_rate converts from a caller-named reference rate", "[analysis_rate][helper]") {
+  constexpr int kReference = 48000;
+  const RateWindow same = window_at_rate(2048, kReference, kReference);
+  CHECK(same.win_length == 0);
+  CHECK(same.n_fft == 2048);
+
+  const RateWindow low = window_at_rate(2048, 22050, kReference);
+  CHECK(low.win_length == 941);
+  CHECK(low.n_fft == 960);
+  const RateWindow cd = window_at_rate(2048, 44100, kReference);
+  CHECK(cd.win_length == 1882);
+  CHECK(cd.n_fft == 1920);
+
+  const StftConfig config = stft_config_at_rate(2048, 512, kReference, kReference);
+  CHECK(config.n_fft == 2048);
+  CHECK(config.win_length == 0);
+  CHECK(config.hop_length == 512);
+  CHECK_THROWS_AS(window_at_rate(2048, 48000, 0), SonareException);
+}
+
 TEST_CASE("rate material has the specified length at each rate", "[analysis_rate][helper]") {
   for (int sr : {22050, 48000}) {
     CAPTURE(sr);
