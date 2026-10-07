@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <deque>
+#include <functional>
 
 #include "util/exception.h"
 
@@ -109,6 +110,14 @@ std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, c
   }
   std::sort(accepted.begin(), accepted.end());
   return accepted;
+}
+
+float max_excluding_top(std::vector<float> values, std::size_t ignored) {
+  if (values.empty()) return 0.0f;
+  if (values.size() <= ignored) return *std::max_element(values.begin(), values.end());
+  const auto nth = values.begin() + static_cast<std::ptrdiff_t>(ignored);
+  std::nth_element(values.begin(), nth, values.end(), std::greater<float>());
+  return *nth;
 }
 
 }  // namespace sonare

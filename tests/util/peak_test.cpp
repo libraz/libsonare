@@ -239,3 +239,26 @@ TEST_CASE("far_event cases have the layout the design states", "[util][peak]") {
   for (float s : c.base) ss += static_cast<double>(s) * s;
   REQUIRE(std::sqrt(ss / c.base.size()) == Catch::Approx(0.1).epsilon(0.02));
 }
+
+TEST_CASE("max_excluding_top is not moved by one dominant outlier", "[util][peak]") {
+  std::vector<float> body = {0.4f, 0.5f, 0.6f, 0.55f, 0.45f, 0.7f};
+  const float without = max_excluding_top(body, kReferenceIgnoredTopEvents);
+
+  body.push_back(100.0f);
+  CHECK(max_excluding_top(body, 1) == Catch::Approx(0.7f));
+  // Two ignored: the outlier and the body's own maximum are both set aside.
+  CHECK(max_excluding_top(body, kReferenceIgnoredTopEvents) == Catch::Approx(0.6f));
+  CHECK(without == Catch::Approx(0.55f));
+  CHECK(max_excluding_top(body, 0) == Catch::Approx(100.0f));
+}
+
+TEST_CASE("max_excluding_top falls back to the plain maximum on short input", "[util][peak]") {
+  CHECK(max_excluding_top({3.0f, 9.0f}, 2) == Catch::Approx(9.0f));
+  CHECK(max_excluding_top({3.0f, 9.0f, 5.0f}, 3) == Catch::Approx(9.0f));
+  CHECK(max_excluding_top({7.0f}, 2) == Catch::Approx(7.0f));
+}
+
+TEST_CASE("max_excluding_top of an empty population is zero", "[util][peak]") {
+  CHECK(max_excluding_top({}, 0) == 0.0f);
+  CHECK(max_excluding_top({}, kReferenceIgnoredTopEvents) == 0.0f);
+}

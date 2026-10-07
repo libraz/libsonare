@@ -17,6 +17,7 @@
 #include "feature/onset.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/peak.h"
 
 namespace sonare {
 
@@ -33,7 +34,6 @@ constexpr double kAccentWindowSeconds = 0.08;
 /// single burst cannot set it: a +24 dB burst gives max 58.6 / reference 18.0, putting 3.1-high
 /// edge beats at 0.17 of the reference (0.05 of the max); a noise prelude stays at 0.03.
 constexpr float kTrimRelativeThreshold = 0.1f;
-constexpr size_t kTrimIgnoredTopPeaks = 2;
 
 /// @brief Converts BPM to period in frames.
 float bpm_to_period(float bpm, int sr, int hop_length) {
@@ -487,14 +487,9 @@ void BeatAnalyzer::track_beats() {
         peaks.push_back(onset_strength_[k]);
       }
     }
-    float reference = 0.0f;
-    if (peaks.size() > kTrimIgnoredTopPeaks) {
-      std::nth_element(peaks.begin(), peaks.begin() + kTrimIgnoredTopPeaks, peaks.end(),
-                       std::greater<float>());
-      reference = peaks[kTrimIgnoredTopPeaks];
-    } else {
-      reference = *std::max_element(onset_strength_.begin(), onset_strength_.end());
-    }
+    const float reference = peaks.size() > kReferenceIgnoredTopEvents
+                                ? max_excluding_top(std::move(peaks), kReferenceIgnoredTopEvents)
+                                : *std::max_element(onset_strength_.begin(), onset_strength_.end());
     const float threshold = kTrimRelativeThreshold * reference;
     const bool has_reference = reference >= kEpsilon;
 

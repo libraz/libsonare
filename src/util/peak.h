@@ -8,6 +8,9 @@
 
 namespace sonare {
 
+/// @brief Number of largest events set aside when a reference level is taken over a population.
+inline constexpr std::size_t kReferenceIgnoredTopEvents = 2;
+
 /// @brief Pick peaks in a 1-D signal using local maxima with hysteresis.
 /// @param x Input array
 /// @param n Length of x
@@ -47,5 +50,13 @@ std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius
 ///          `find_peaks(distance=)`. `min_distance <= 1` returns every candidate.
 std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, const float* values,
                                            int min_distance);
+
+/// @brief Maximum of `values` after setting aside the `ignored` largest.
+/// @param values Population to take the reference from (taken by value, reordered internally)
+/// @param ignored Number of largest values to set aside
+/// @return The largest remaining value; the plain maximum when `values.size() <= ignored`; 0 when
+/// empty.
+/// @details A single dominant event cannot set the level every other value is judged against.
+float max_excluding_top(std::vector<float> values, std::size_t ignored);
 
 }  // namespace sonare
