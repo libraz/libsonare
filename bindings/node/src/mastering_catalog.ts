@@ -122,8 +122,14 @@ export interface MasteringInsertParamInfo {
    * fallback.
    */
   default: boolean | number | null;
-  /** Physical unit, or null when the parameter is unitless. */
+  /** Declared unit of a number; null for any other type. */
   unit: string | null;
+  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  uiMin: number | null;
+  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  uiMax: number | null;
+  /** Axis a control draws the value on. */
+  scale: 'linear' | 'log';
   /**
    * The accepted values, in value order, when they form a closed set: every
    * declared value of an enum that construction accepts, or the accepted
@@ -137,6 +143,11 @@ export interface MasteringInsertParamInfo {
    * always exists.
    */
   slot: string | null;
+  /**
+   * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
+   * empty for an independent key. `min` and `max` are measured with every sibling at its default.
+   */
+  dependsOn: { key: string; relation: 'lt' | 'le' | 'gt' | 'ge' }[];
 }
 
 /**

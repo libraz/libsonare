@@ -98,7 +98,9 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         whether the limit itself is rejected, and `maxRelativeTo`
 ///         `"nyquist"` when the effective ceiling is the lower of `max` and the
 ///         host's Nyquist frequency) or choices, default, unit and the slot it
-///         belongs to (see insert_slot_info_json()), or null. See
+///         belongs to (see insert_slot_info_json()), or null. Its unit,
+///         axis scale, display range and sibling bounds are declared by the
+///         builder that reads the key rather than measured. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be
 ///         measured. Returns `[]` for an unknown @p name.

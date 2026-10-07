@@ -104,8 +104,12 @@ const catalogParameter = {
   maxRelativeTo: null,
   default: null,
   unit: null,
+  uiMin: null,
+  uiMax: null,
+  scale: 'linear',
   choices: null,
   slot: 'band1',
+  dependsOn: [],
 } satisfies CapabilityCatalogParameter;
 
 const catalogSlot = {

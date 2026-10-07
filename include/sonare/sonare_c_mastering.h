@@ -479,7 +479,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @return A JSON array string
-///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","choices","slot"},
+///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn"},
 ///   ...]` (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a thread-local
 ///   valid only until the next API call on the same thread; the caller must NOT free it.
 /// @details Entries come in two runs. The first lists the processor's realtime
@@ -542,6 +542,21 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   crossover band, a dynamic sub-band), or is null for a key that always
 ///   exists; @ref sonare_mastering_processor_catalog's `slots` says when each
 ///   group exists.
+///
+///   `unit`, `uiMin`, `uiMax`, `scale` and `dependsOn` are declared where the
+///   processor reads the key, not measured. `unit` is null for a non-number and,
+///   for a number, one of `dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`,
+///   `cm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`,
+///   `cents`, `ratio`, `bits`, `count` or `none` (a fraction, a selector index or
+///   a seed). `uiMin` and `uiMax` are a display range inside `[min, max]`, or null
+///   where the accepted range is also the display range. `scale` is `"linear"` or
+///   `"log"`, the axis a control draws the key on. `dependsOn` lists
+///   `[{"key","relation"}]`, each naming a sibling whose live value bounds this key
+///   (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> sibling`) and is
+///   empty for an independent key; it is how a control narrows `min` and `max`,
+///   which are measured with every sibling at its default. All of these describe
+///   what construction accepts; the realtime parameter path clamps instead of
+///   refusing.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 const char* sonare_mastering_insert_param_info(const char* name);
 /// @brief @ref sonare_mastering_insert_param_info with the rate-following ceilings

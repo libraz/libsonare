@@ -1,17 +1,22 @@
 // The host-facing parameter metadata every insert publishes: its type, its
-// design default, and the range construction accepts.
+// design default, the range construction accepts, and the unit, axis scale,
+// display range and sibling bounds its reader declares.
 //
-// All three are DERIVED rather than declared — the type and the default come
+// The type, default and bounds are DERIVED — the type and the default come
 // from the config builder's own accessors, the bounds are measured by handing
-// candidate values to the same construction path a caller uses. Nothing here is
-// a hand-maintained table, so what these cases pin is the derivation: that it
-// covers every construction key, that it agrees with the config structs, and
-// that the published range really is the range construction enforces.
+// candidate values to the same construction path a caller uses. What these
+// cases pin is the derivation: that it covers every construction key, that it
+// agrees with the config structs, and that the published range really is the
+// range construction enforces. The unit, scale, display range and sibling
+// bounds are declared at the read site; the cases pin that every numeric key
+// declares them consistently and that a declared bound is one construction
+// enforces.
 
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cctype>
 #include <cmath>
 #include <memory>
 #include <set>
@@ -780,6 +785,303 @@ TEST_CASE("a slotted key supplied the way its slot's rule says is read", "[maste
   }
   REQUIRE(slotted > 0);
   REQUIRE(gated_by_crossover > 0);
+}
+
+namespace {
+
+// The closed unit vocabulary the catalog schema publishes.
+const std::set<std::string>& unit_vocabulary() {
+  static const std::set<std::string> units = {
+      "dB",       "dBFS",      "LUFS",  "Hz",      "ms",   "s",     "samples",
+      "m",        "cm",        "deg",   "percent", "degC", "V",     "inPerSec",
+      "dBPerOct", "semitones", "cents", "ratio",   "bits", "count", "none"};
+  return units;
+}
+
+// What is wrong with a descriptor list, one line per defect. Takes the parsed
+// list rather than an insert name so a hand-built list can show each rule bites.
+std::vector<std::string> descriptor_defects(const json::Array& params) {
+  std::vector<std::string> defects;
+  std::set<std::string> names;
+  for (const json::Value& parameter : params) names.insert(field(parameter, "name").as_string());
+  for (const json::Value& parameter : params) {
+    const std::string name = field(parameter, "name").as_string();
+    const json::Value& unit = field(parameter, "unit");
+    if (field(parameter, "type").as_string() == "number") {
+      if (!unit.is_string()) {
+        defects.push_back(name + ": numeric parameter declares no unit");
+      } else if (unit_vocabulary().count(unit.as_string()) == 0) {
+        defects.push_back(name + ": unit outside the vocabulary");
+      }
+    } else if (!unit.is_null()) {
+      defects.push_back(name + ": non-numeric parameter carries a unit");
+    }
+    const std::string scale = field(parameter, "scale").as_string();
+    if (scale != "linear" && scale != "log") defects.push_back(name + ": unknown scale");
+
+    const json::Value& ui_min = field(parameter, "uiMin");
+    const json::Value& ui_max = field(parameter, "uiMax");
+    const json::Value& min = field(parameter, "min");
+    const json::Value& max = field(parameter, "max");
+    for (const json::Value* ui : {&ui_min, &ui_max}) {
+      if (ui->is_null()) continue;
+      if (min.is_number() && ui->as_number() < min.as_number()) {
+        defects.push_back(name + ": display range below the accepted range");
+      }
+      if (max.is_number() && ui->as_number() > max.as_number()) {
+        defects.push_back(name + ": display range above the accepted range");
+      }
+    }
+    if (ui_min.is_number() && ui_max.is_number() && ui_min.as_number() > ui_max.as_number()) {
+      defects.push_back(name + ": display range is inverted");
+    }
+
+    for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
+      const std::string sibling = field(dependency, "key").as_string();
+      const std::string relation = field(dependency, "relation").as_string();
+      if (sibling == name || names.count(sibling) == 0) {
+        defects.push_back(name + ": dependsOn names no sibling");
+      }
+      if (relation != "lt" && relation != "le" && relation != "gt" && relation != "ge") {
+        defects.push_back(name + ": dependsOn relation is unknown");
+      }
+    }
+  }
+  return defects;
+}
+
+json::Array parse_descriptors(const std::string& text) {
+  const json::Value parsed = json::parse_strict(text);
+  REQUIRE(parsed.is_array());
+  return parsed.as_array();
+}
+
+// One descriptor in the writer's shape, with @p overrides spliced over the valid defaults.
+std::string descriptor_text(const std::string& overrides) {
+  return R"([{"name":"a","id":null,"rtSafe":false,"type":"number","min":0,"max":10,)"
+         R"("minExclusive":false,"maxExclusive":false,"maxRelativeTo":null,"default":1,)"
+         R"("unit":"Hz","uiMin":null,"uiMax":null,"scale":"linear","choices":null,"slot":null,)"
+         R"("dependsOn":[]})" +
+         overrides + "]";
+}
+
+}  // namespace
+
+TEST_CASE("every numeric parameter declares a unit, a scale and a consistent display range",
+          "[mastering][catalog]") {
+  size_t numeric = 0;
+  std::vector<std::string> defects;
+  for (const std::string& name : insert_factory_names()) {
+    const json::Array params = param_info(name);
+    for (const json::Value& parameter : params) {
+      if (field(parameter, "type").as_string() == "number") ++numeric;
+    }
+    for (const std::string& defect : descriptor_defects(params)) {
+      defects.push_back(name + " " + defect);
+    }
+  }
+  CHECK(numeric > 1000);
+  INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
+  CHECK(defects.empty());
+}
+
+TEST_CASE("the descriptor check reports each defect it exists to catch", "[mastering][catalog]") {
+  REQUIRE(descriptor_defects(parse_descriptors(descriptor_text(""))).empty());
+
+  const auto defects_of = [](const std::string& from, const std::string& to) {
+    std::string text = descriptor_text("");
+    const size_t at = text.find(from);
+    REQUIRE(at != std::string::npos);
+    text.replace(at, from.size(), to);
+    return descriptor_defects(parse_descriptors(text));
+  };
+  CHECK(defects_of(R"("unit":"Hz")", R"("unit":null)").size() == 1);
+  CHECK(defects_of(R"("unit":"Hz")", R"("unit":"furlongs")").size() == 1);
+  CHECK(defects_of(R"("unit":"Hz")", R"("unit":"none")").empty());
+  CHECK(defects_of(R"("scale":"linear")", R"("scale":"sideways")").size() == 1);
+  CHECK(defects_of(R"("uiMin":null)", R"("uiMin":-1)").size() == 1);
+  CHECK(defects_of(R"("uiMax":null)", R"("uiMax":11)").size() == 1);
+  CHECK(defects_of(R"("uiMax":null)", R"("uiMax":10)").empty());
+  CHECK(defects_of(R"("uiMin":null,"uiMax":null)", R"("uiMin":6,"uiMax":5)").size() == 1);
+  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le"}])").size() ==
+        1);
+  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"a","relation":"le"}])").size() ==
+        1);
+  CHECK(defects_of(R"("type":"number")", R"("type":"boolean")").size() == 1);
+}
+
+TEST_CASE("declared units follow what each reader declared, not the key's spelling",
+          "[mastering][catalog]") {
+  const auto unit_of = [](const std::string& insert, const std::string& key) {
+    const json::Array params = param_info(insert);
+    const json::Value* parameter = find_param(params, key);
+    REQUIRE(parameter != nullptr);
+    return field(*parameter, "unit").is_null() ? std::string("null")
+                                               : field(*parameter, "unit").as_string();
+  };
+  const auto scale_of = [](const std::string& insert, const std::string& key) {
+    const json::Array params = param_info(insert);
+    const json::Value* parameter = find_param(params, key);
+    REQUIRE(parameter != nullptr);
+    return field(*parameter, "scale").as_string();
+  };
+  CHECK(unit_of("dynamics.compressor", "thresholdDb") == "dB");
+  CHECK(unit_of("dynamics.compressor", "ratio") == "ratio");
+  CHECK(unit_of("dynamics.compressor", "attackMs") == "ms");
+  CHECK(unit_of("dynamics.compressor", "sidechainHpfHz") == "Hz");
+  CHECK(unit_of("maximizer.truePeakLimiter", "ceilingDb") == "dBFS");
+  CHECK(unit_of("maximizer.truePeakLimiter", "oversampleFactor") == "ratio");
+  CHECK(unit_of("eq.linearPhase", "fftSize") == "samples");
+  CHECK(unit_of("eq.parametric", "band0.slopeDbOct") == "dBPerOct");
+  CHECK(unit_of("eq.parametric", "band0.q") == "none");
+  CHECK(unit_of("saturation.tape", "speedIps") == "inPerSec");
+  CHECK(unit_of("saturation.tube", "biasV") == "V");
+  CHECK(unit_of("saturation.bitcrusher", "bitDepth") == "bits");
+  CHECK(unit_of("saturation.bitcrusher", "mix") == "none");
+  CHECK(unit_of("stereo.binaural", "azimuthDeg") == "deg");
+  CHECK(unit_of("stereo.autoPan", "phase") == "none");
+
+  CHECK(scale_of("dynamics.compressor", "attackMs") == "log");
+  CHECK(scale_of("dynamics.compressor", "thresholdDb") == "linear");
+  CHECK(scale_of("dynamics.deesser", "frequencyHz") == "log");
+  CHECK(scale_of("multiband.compressor", "cutoff0Hz") == "log");
+  CHECK(scale_of("dynamics.compressor", "ratio") == "linear");
+
+#ifdef SONARE_WITH_FX
+  CHECK(unit_of("effects.reverb.room", "lengthM") == "m");
+  CHECK(unit_of("effects.reverb.room", "airHumidityPercent") == "percent");
+  CHECK(unit_of("effects.reverb.room", "airTemperatureC") == "degC");
+  CHECK(unit_of("effects.reverb.fdn", "decaySec") == "s");
+  CHECK(unit_of("effects.modulation.pitchShifter", "cents") == "cents");
+  CHECK(unit_of("effects.modulation.pitchShifter", "semitones") == "semitones");
+  CHECK(unit_of("effects.reverb.plate", "modDepthSamples") == "samples");
+  CHECK(unit_of("saturation.ampSim", "micDistanceCm") == "cm");
+#endif
+}
+
+namespace {
+
+struct DeclaredDependency {
+  std::string insert;
+  std::string key;
+  std::string sibling;
+  std::string relation;
+};
+
+std::vector<DeclaredDependency> declared_dependencies() {
+  std::vector<DeclaredDependency> found;
+  for (const std::string& name : insert_factory_names()) {
+    for (const json::Value& parameter : param_info(name)) {
+      for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
+        found.push_back({name, field(parameter, "name").as_string(),
+                         field(dependency, "key").as_string(),
+                         field(dependency, "relation").as_string()});
+      }
+    }
+  }
+  return found;
+}
+
+bool has_dependency(const std::vector<DeclaredDependency>& all, const std::string& insert,
+                    const std::string& key, const std::string& sibling,
+                    const std::string& relation) {
+  for (const DeclaredDependency& entry : all) {
+    if (entry.insert == insert && entry.key == key && entry.sibling == sibling &&
+        entry.relation == relation) {
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+TEST_CASE("sibling dependencies are declared for every coupled pair", "[mastering][catalog]") {
+  const auto all = declared_dependencies();
+  CHECK(has_dependency(all, "dynamics.gate", "closeThresholdDb", "thresholdDb", "le"));
+  CHECK(has_dependency(all, "dynamics.gate", "thresholdDb", "closeThresholdDb", "ge"));
+  CHECK(has_dependency(all, "maximizer.adaptiveRelease", "minReleaseMs", "maxReleaseMs", "le"));
+  CHECK(has_dependency(all, "maximizer.adaptiveRelease", "maxReleaseMs", "minReleaseMs", "ge"));
+  CHECK(has_dependency(all, "maximizer.adaptiveRelease", "crestLow", "crestHigh", "le"));
+  CHECK(has_dependency(all, "maximizer.adaptiveRelease", "crestHigh", "crestLow", "ge"));
+  CHECK(has_dependency(all, "spectral.spectralShaper", "frequencyHz", "highFrequencyHz", "lt"));
+  CHECK(has_dependency(all, "spectral.spectralShaper", "highFrequencyHz", "frequencyHz", "gt"));
+  CHECK(has_dependency(all, "eq.linearPhase", "kernelSize", "fftSize", "le"));
+  CHECK(has_dependency(all, "eq.equalizer", "kernelSize", "fftSize", "le"));
+  CHECK(has_dependency(all, "multiband.compressor", "cutoff0Hz", "cutoff1Hz", "lt"));
+  CHECK(has_dependency(all, "multiband.compressor", "cutoff1Hz", "cutoff0Hz", "gt"));
+  CHECK(has_dependency(all, "saturation.multibandExciter", "cutoff1Hz", "cutoff0Hz", "gt"));
+#ifdef SONARE_WITH_FX
+  CHECK(has_dependency(all, "effects.reverb.room", "sourceX", "lengthM", "le"));
+  CHECK(has_dependency(all, "effects.reverb.room", "listenerY", "widthM", "le"));
+  CHECK(has_dependency(all, "effects.reverb.room", "sourceZ", "heightM", "le"));
+#endif
+#ifdef SONARE_HAVE_ACOUSTIC
+  CHECK(has_dependency(all, "effects.acoustic.roomMorph", "listenerX", "lengthM", "le"));
+#endif
+}
+
+TEST_CASE("a declared sibling bound is one construction enforces", "[mastering][catalog]") {
+  // Every declaration is held to the validation it describes: with the sibling
+  // at its default, a value on the wrong side of it is refused when the insert
+  // is built.
+  size_t checked = 0;
+  std::vector<std::string> unenforced;
+  // One representative per distinct pair: the indexed keys of a crossover and the
+  // processors sharing a pair read it through the same builder.
+  std::set<std::string> seen;
+  const auto collapsed = [](std::string text) {
+    text.erase(std::remove_if(text.begin(), text.end(),
+                              [](unsigned char c) { return std::isdigit(c) != 0; }),
+               text.end());
+    return text;
+  };
+  for (const DeclaredDependency& entry : declared_dependencies()) {
+    if (!seen.insert(collapsed(entry.key) + collapsed(entry.sibling) + entry.relation).second) {
+      continue;
+    }
+    const json::Array params = param_info(entry.insert);
+    const json::Value* sibling = find_param(params, entry.sibling);
+    REQUIRE(sibling != nullptr);
+    const json::Value& fallback = field(*sibling, "default");
+    if (!fallback.is_number()) continue;
+    const bool upper = entry.relation == "lt" || entry.relation == "le";
+    const double violating = fallback.as_number() + (upper ? 1.0 : -1.0);
+
+    json::Object body;
+    for (const auto& param : insert_probe_params(entry.insert, entry.key, 0.0)) {
+      if (param.key != entry.key && param.key != entry.sibling) {
+        body.emplace(param.key, json::Value(param.value));
+      }
+    }
+    body.emplace(entry.sibling, fallback);
+    body.emplace(entry.key, json::Value(violating));
+    ++checked;
+    bool refused = false;
+    try {
+      auto processor = make_insert(entry.insert, json::dump(json::Value(std::move(body))));
+      refused = processor == nullptr;
+    } catch (...) {
+      refused = true;
+    }
+    if (!refused) {
+      unenforced.push_back(entry.insert + " " + entry.key + " " + entry.relation + " " +
+                           entry.sibling);
+    }
+  }
+  CHECK(checked >= 12);
+  INFO(unenforced.size() << " unenforced, first: " << (unenforced.empty() ? "" : unenforced[0]));
+  CHECK(unenforced.empty());
+}
+
+TEST_CASE("a linear-phase kernel longer than its FFT is refused when the insert is built",
+          "[mastering][catalog]") {
+  for (const char* name : {"eq.linearPhase", "eq.equalizer"}) {
+    INFO(name);
+    CHECK_THROWS(make_insert(name, R"({"fftSize":1024,"kernelSize":2047})"));
+    CHECK_THROWS(make_insert(name, R"({"fftSize":1024,"kernelSize":1025})"));
+    CHECK(make_insert(name, R"({"fftSize":1024,"kernelSize":1023})") != nullptr);
+  }
 }
 
 #ifdef SONARE_WITH_FX

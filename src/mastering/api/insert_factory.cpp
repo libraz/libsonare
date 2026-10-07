@@ -117,6 +117,22 @@ using detail::b;
 using detail::compressor_config;
 using detail::crossover_config;
 using detail::f;
+using detail::kCents;
+using detail::kCount;
+using detail::kDb;
+using detail::kDegrees;
+using detail::kDegreesCelsius;
+using detail::kHz;
+using detail::kHzLog;
+using detail::kMeters;
+using detail::kMs;
+using detail::kMsLog;
+using detail::kNone;
+using detail::kPercent;
+using detail::kSamples;
+using detail::kSeconds;
+using detail::kSecondsLog;
+using detail::kSemitones;
 using detail::limiter_config;
 using detail::ParamKind;
 using detail::ParamMap;
@@ -359,7 +375,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   if (name == "eq.graphic") {
     auto p = std::make_unique<eq::GraphicEq>();
     detail::configure_graphic(*p, params);
-    p->set_q(f(params, "q", 0.0f));
+    p->set_q(f(params, "q", 0.0f, kNone));
     return p;
   }
   if (name == "eq.midSide") {
@@ -433,7 +449,7 @@ std::unique_ptr<Processor> build_saturation(const std::string& name, const Param
     // Probed unconditionally, not inside the `if`: the catalog discovers a
     // processor's params by building it against an empty bag, so a key only read
     // when an IR happens to be present would never be published.
-    const double ir_rate = static_cast<double>(detail::f(params, "cabIrSampleRate", 0.0f));
+    const double ir_rate = static_cast<double>(detail::f(params, "cabIrSampleRate", 0.0f, kHz));
     // A cabinet can also be SYNTHESIZED rather than supplied, which is how a
     // caller gets an IR cab without sourcing a recording. The spec follows the
     // cabinet and mic already configured above, so there is no second set of
@@ -640,17 +656,17 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
                                                       const Value* json_root) {
   using namespace sonare::acoustic;
 
-  const RoomDimensions dims{f(params, "lengthM", 7.0f), f(params, "widthM", 5.0f),
-                            f(params, "heightM", 3.0f)};
+  const RoomDimensions dims{f(params, "lengthM", 7.0f, kMeters), f(params, "widthM", 5.0f, kMeters),
+                            f(params, "heightM", 3.0f, kMeters)};
   // The precedence, the [0, 1] coefficient rejection and the band-wise
   // scattering come from the core builder the offline acoustic facade calls, so
   // an insert and a synthesizeRir call resolve the same option bag identically
   // — including rejecting an out-of-range scalar absorption rather than
   // clamping it, which is the one place these two used to disagree.
   WallMaterialRequest request;
-  request.has_preset =
-      acoustic_material_preset_from_int(detail::i(params, "materialPreset", 0), &request.preset);
-  request.absorption = f(params, "absorption", 0.2f);
+  request.has_preset = acoustic_material_preset_from_int(
+      detail::i(params, "materialPreset", 0, kNone), &request.preset);
+  request.absorption = f(params, "absorption", 0.2f, kNone);
   if (json_root != nullptr) {
     request.absorption_bands =
         acoustic_material_bands(json_root->find("bandAbsorption"), "bandAbsorption");
@@ -658,6 +674,16 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
         acoustic_material_bands(json_root->find("bandScattering"), "bandScattering");
   }
   return make_uniform_room(dims, request);
+}
+// Source and listener sit inside the shoebox, so each coordinate is bounded by its dimension.
+void note_room_containment(const ParamMap& params) {
+  static constexpr const char* kAxes[3][3] = {{"sourceX", "listenerX", "lengthM"},
+                                              {"sourceY", "listenerY", "widthM"},
+                                              {"sourceZ", "listenerZ", "heightM"}};
+  for (const auto& axis : kAxes) {
+    params.note_depends(axis[0], axis[2], detail::Relation::Le);
+    params.note_depends(axis[1], axis[2], detail::Relation::Le);
+  }
 }
 #endif
 
@@ -679,38 +705,41 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // after T60 seconds gives decay = exp(-ln(1000) * Tloop / (4 * T60)).
     // Read only when present, so the key has a type and no fallback.
     params.note_kind("decaySec", ParamKind::Number);
+    params.note_meta("decaySec", kSecondsLog);
     params.note_kind("preDelayMs", ParamKind::Number);
+    params.note_meta("preDelayMs", kMs);
     if (params.find("decaySec") != params.end()) {
       constexpr float kTankLoopSeconds = 21589.0f / 29761.0f;  // both halves at ref rate
-      const float decay_sec = std::max(0.05f, f(params, "decaySec", 5.0f));
+      const float decay_sec = std::max(0.05f, f(params, "decaySec", 5.0f, kSecondsLog));
       const float feedback = std::exp(-6.907755f * kTankLoopSeconds / (4.0f * decay_sec));
       config.decay = std::min(0.98f, std::max(0.0f, feedback));
     } else {
-      config.decay = f(params, "decay", config.decay);
+      config.decay = f(params, "decay", config.decay, kNone);
     }
     params.note_effective("decay", config.decay);
-    config.damping = f(params, "damping", config.damping);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.damping = f(params, "damping", config.damping, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     // Figure-8 tank modulation (the plate's chorused tail); wire both fields so
     // they are reachable at construction, matching Velvet's full-field mapping.
-    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz);
-    config.mod_depth_samples = f(params, "modDepthSamples", config.mod_depth_samples);
+    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz, kHz);
+    // Samples at the tank's 29761 Hz reference rate; prepare() rescales them.
+    config.mod_depth_samples = f(params, "modDepthSamples", config.mod_depth_samples, kSamples);
     // pre_delay_samples is defined at the reverb's reference rate (header
     // comment), so convert preDelayMs using kReferenceSampleRate; prepare()
     // rescales the resulting sample count to the working sample rate.
     if (params.find("preDelayMs") != params.end()) {
-      config.pre_delay_samples = f(params, "preDelayMs", 0.0f) *
+      config.pre_delay_samples = f(params, "preDelayMs", 0.0f, kMs) *
                                  static_cast<float>(DattorroReverb::kReferenceSampleRate) / 1000.0f;
     }
     params.note_effective("preDelayMs",
                           config.pre_delay_samples * 1000.0f /
                               static_cast<float>(DattorroReverb::kReferenceSampleRate));
-    config.damping_hz = f(params, "dampingHz", config.damping_hz);
-    config.gate_threshold_db = f(params, "gateThresholdDb", config.gate_threshold_db);
-    config.gate_hold_ms = f(params, "gateHoldMs", config.gate_hold_ms);
+    config.damping_hz = f(params, "dampingHz", config.damping_hz, kHz);
+    config.gate_threshold_db = f(params, "gateThresholdDb", config.gate_threshold_db, kDb);
+    config.gate_hold_ms = f(params, "gateHoldMs", config.gate_hold_ms, kMs);
     detail::read_field(params, "gateType", config.gate_type);
     // Also realtime id 10; every tank set's lines are prepared up front.
-    detail::read_field(params, "character", config.character);
+    detail::read_field(params, "character", config.character, kNone);
     return make<DattorroReverb>(config);
   }
   if (name == "effects.reverb.fdn") {
@@ -721,6 +750,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // tail at audio rate must target those, not decaySec/hfDamping.
     FdnReverbConfig config;
     params.note_kind("decaySec", ParamKind::Number);
+    params.note_meta("decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // decaySec is the approximate RT60 tail length in seconds. The FDN's
       // T60_lf = max(0.01, clamp(decay, 0, 1.5) * 10), so decaySec maps to
@@ -728,35 +758,37 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
       // (T60 = 15 s); clamp here too so an out-of-range request like
       // {decaySec:40} resolves to the documented 15 s ceiling rather than being
       // silently truncated only after construction.
-      config.decay = std::clamp(f(params, "decaySec", 5.5f) / 10.0f, 0.0f, 1.5f);
+      config.decay = std::clamp(f(params, "decaySec", 5.5f, kSecondsLog) / 10.0f, 0.0f, 1.5f);
     } else {
-      config.decay = f(params, "decay", config.decay);
+      config.decay = f(params, "decay", config.decay, kNone);
     }
     params.note_effective("decay", config.decay);
-    config.hf_damping = f(params, "damping", f(params, "hfDamping", config.hf_damping));
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.hf_damping =
+        f(params, "damping", f(params, "hfDamping", config.hf_damping, kNone), kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     return make<FdnReverb>(config);
   }
   if (name == "effects.reverb.velvet") {
     VelvetReverbConfig config;
-    config.decay = f(params, "decay", config.decay);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.decay = f(params, "decay", config.decay, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     params.note_kind("decaySec", ParamKind::Number);
+    params.note_meta("decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // Velvet's effective T60 = reverb_time_s * (0.5 + decay). To make decaySec
       // mean approximately the same RT60 as FDN (decaySec == ~T60), set
       // reverb_time_s = decaySec / (0.5 + decay) so the product lands on decaySec.
       const float decay_factor = 0.5f + std::clamp(config.decay, 0.0f, 1.0f);
       config.reverb_time_s =
-          std::clamp(std::max(0.0f, f(params, "decaySec", config.reverb_time_s)) /
+          std::clamp(std::max(0.0f, f(params, "decaySec", config.reverb_time_s, kSecondsLog)) /
                          std::max(0.01f, decay_factor),
                      0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
     } else {
-      config.reverb_time_s = std::clamp(f(params, "reverbTimeS", config.reverb_time_s), 0.05f,
-                                        VelvetReverbConfig::kMaxReverbTimeSeconds);
+      config.reverb_time_s = std::clamp(f(params, "reverbTimeS", config.reverb_time_s, kSecondsLog),
+                                        0.05f, VelvetReverbConfig::kMaxReverbTimeSeconds);
     }
     params.note_effective("reverbTimeS", config.reverb_time_s);
-    config.density_hz = f(params, "densityHz", config.density_hz);
+    config.density_hz = f(params, "densityHz", config.density_hz, kHz);
     config.enable_shelf = b(params, "enableShelf", config.enable_shelf);
     return make<VelvetReverb>(config);
   }
@@ -772,16 +804,17 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::note_side_channel_key(params, "irF32Base64", ParamKind::String);
     ConvolutionReverbConfig config;
     params.note_kind("decaySec", ParamKind::Number);
+    params.note_meta("decaySec", kSecondsLog);
     if (params.find("decaySec") != params.end()) {
       // Clamp to the synthesizer's ceiling at construction so an out-of-range
       // request like {decaySec:40} resolves to the documented maximum tail
       // rather than being silently truncated only later in prepare().
-      config.decay_sec = std::clamp(f(params, "decaySec", config.decay_sec), 0.0f,
+      config.decay_sec = std::clamp(f(params, "decaySec", config.decay_sec, kSecondsLog), 0.0f,
                                     ConvolutionReverbConfig::kMaxDecaySeconds);
     }
-    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed)));
+    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.seed = static_cast<uint32_t>(std::max(0, detail::i(params, "seed", config.seed, kNone)));
     auto reverb = std::make_unique<ConvolutionReverb>(config);
     const std::vector<float> ir = read_ir_f32_base64_key(json_root, "irF32Base64");
     if (!ir.empty()) {
@@ -794,31 +827,34 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     // Geometry-driven 5th engine: the RIR is synthesized from the shoebox
     // dimensions + uniform absorption at prepare() time, then convolved.
     RoomReverbConfig config;
-    config.dims = {f(params, "lengthM", config.dims.length), f(params, "widthM", config.dims.width),
-                   f(params, "heightM", config.dims.height)};
-    config.source = {f(params, "sourceX", config.source.x), f(params, "sourceY", config.source.y),
-                     f(params, "sourceZ", config.source.z)};
-    config.listener = {f(params, "listenerX", config.listener.x),
-                       f(params, "listenerY", config.listener.y),
-                       f(params, "listenerZ", config.listener.z)};
+    config.dims = {f(params, "lengthM", config.dims.length, kMeters),
+                   f(params, "widthM", config.dims.width, kMeters),
+                   f(params, "heightM", config.dims.height, kMeters)};
+    config.source = {f(params, "sourceX", config.source.x, kMeters),
+                     f(params, "sourceY", config.source.y, kMeters),
+                     f(params, "sourceZ", config.source.z, kMeters)};
+    config.listener = {f(params, "listenerX", config.listener.x, kMeters),
+                       f(params, "listenerY", config.listener.y, kMeters),
+                       f(params, "listenerZ", config.listener.z, kMeters)};
+    note_room_containment(params);
     // Rejected rather than clamped, matching sonare_synthesize_rir: the same
     // out-of-range absorption has to surface the same error whether the room is
     // built offline or as an insert.
-    config.absorption = f(params, "absorption", config.absorption);
+    config.absorption = f(params, "absorption", config.absorption, kNone);
     sonare::acoustic::validate_material_coefficient(config.absorption, "absorption");
-    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order));
+    config.ism_order = std::max(0, detail::i(params, "ismOrder", config.ism_order, kCount));
     config.seed = static_cast<unsigned>(
-        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
-    config.max_seconds = f(params, "maxSeconds", config.max_seconds);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed), kNone)));
+    config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
     // The climate pair follows the acoustic ABI's "0 selects the library value"
     // rule (the ISO reference climate), so the same option bag resolves to the
     // same room here as on the offline facade.
-    config.air.temperature_c =
-        ZeroIsDefault(f(params, "airTemperatureC", 0.0f)).or_default(config.air.temperature_c);
-    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f))
+    config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
+                                   .or_default(config.air.temperature_c);
+    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
                                       .or_default(config.air.humidity_percent);
     return make<RoomReverb>(config);
   }
@@ -832,114 +868,117 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::note_side_channel_key(params, "bandAbsorption", ParamKind::Array);
     detail::note_side_channel_key(params, "bandScattering", ParamKind::Array);
     config.target = acoustic_room_from_json(params, json_root);
-    config.placement.source = {f(params, "sourceX", 1.0f), f(params, "sourceY", 1.0f),
-                               f(params, "sourceZ", 1.2f)};
-    config.placement.listener = {f(params, "listenerX", 5.0f), f(params, "listenerY", 4.0f),
-                                 f(params, "listenerZ", 1.7f)};
+    config.placement.source = {f(params, "sourceX", 1.0f, kMeters),
+                               f(params, "sourceY", 1.0f, kMeters),
+                               f(params, "sourceZ", 1.2f, kMeters)};
+    config.placement.listener = {f(params, "listenerX", 5.0f, kMeters),
+                                 f(params, "listenerY", 4.0f, kMeters),
+                                 f(params, "listenerZ", 1.7f, kMeters)};
+    note_room_containment(params);
     config.source_tail_suppression =
-        f(params, "sourceTailSuppression", config.source_tail_suppression);
-    config.wet = f(params, "dryWet", config.wet);
-    config.ism_order = detail::i(params, "ismOrder", config.ism_order);
+        f(params, "sourceTailSuppression", config.source_tail_suppression, kNone);
+    config.wet = f(params, "dryWet", config.wet, kNone);
+    config.ism_order = detail::i(params, "ismOrder", config.ism_order, kCount);
     config.seed = static_cast<unsigned>(
-        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed))));
-    config.max_seconds = f(params, "maxSeconds", config.max_seconds);
+        std::max(0, detail::i(params, "seed", static_cast<int>(config.seed), kNone)));
+    config.max_seconds = f(params, "maxSeconds", config.max_seconds, kSeconds);
     config.late_model = b(params, "preferEyring", true) ? sonare::acoustic::ReverbModel::Eyring
                                                         : sonare::acoustic::ReverbModel::Sabine;
-    config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms);
+    config.mixing_time_ms = f(params, "mixingTimeMs", config.mixing_time_ms, kMs);
     // A zero crossfade means "use the library default" on the offline acoustic
     // facade; preserve that normalization for the streaming insert as well.
-    config.crossfade_ms = ZeroIsDefault(f(params, "crossfadeMs", 0.0f))
+    config.crossfade_ms = ZeroIsDefault(f(params, "crossfadeMs", 0.0f, kMs))
                               .checked(config.crossfade_ms, 0.0f,
                                        sonare::acoustic::kMaxRirCrossfadeMs, "crossfadeMs");
     config.air_absorption_enabled =
         b(params, "airAbsorptionEnabled", config.air_absorption_enabled);
     // Same climate convention as effects.reverb.room above.
-    config.air.temperature_c =
-        ZeroIsDefault(f(params, "airTemperatureC", 0.0f)).or_default(config.air.temperature_c);
-    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f))
+    config.air.temperature_c = ZeroIsDefault(f(params, "airTemperatureC", 0.0f, kDegreesCelsius))
+                                   .or_default(config.air.temperature_c);
+    config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
                                       .or_default(config.air.humidity_percent);
     return make<effects::acoustic::RoomMorphProcessor>(config);
   }
 #endif
   if (name == "effects.modulation.chorus") {
     effects::modulation::ChorusConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.depth_ms = f(params, "depthMs", config.depth_ms);
-    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms, kMs);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms, kMs);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz, kHz);
     // Enum selectors go through the field overlay, which refuses a fractional
     // value rather than rounding it onto a neighbouring mode.
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
-    config.feedback = f(params, "feedback", config.feedback);
-    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
+    config.feedback = f(params, "feedback", config.feedback, kNone);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
     detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Chorus>(config);
   }
   if (name == "effects.modulation.ensemble") {
     effects::modulation::EnsembleConfig config;
-    config.rate_slow_hz = f(params, "rateSlowHz", config.rate_slow_hz);
-    config.rate_fast_hz = f(params, "rateFastHz", config.rate_fast_hz);
-    config.depth_slow_ms = f(params, "depthSlowMs", config.depth_slow_ms);
-    config.depth_fast_ms = f(params, "depthFastMs", config.depth_fast_ms);
-    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
-    config.tone_hz = f(params, "toneHz", config.tone_hz);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.pre_delay_dev_ms = f(params, "preDelayDevMs", config.pre_delay_dev_ms);
-    config.depth_dev = f(params, "depthDev", config.depth_dev);
-    config.pan_dev = f(params, "panDev", config.pan_dev);
+    config.rate_slow_hz = f(params, "rateSlowHz", config.rate_slow_hz, kHz);
+    config.rate_fast_hz = f(params, "rateFastHz", config.rate_fast_hz, kHz);
+    config.depth_slow_ms = f(params, "depthSlowMs", config.depth_slow_ms, kMs);
+    config.depth_fast_ms = f(params, "depthFastMs", config.depth_fast_ms, kMs);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms, kMs);
+    config.tone_hz = f(params, "toneHz", config.tone_hz, kHzLog);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.pre_delay_dev_ms = f(params, "preDelayDevMs", config.pre_delay_dev_ms, kMs);
+    config.depth_dev = f(params, "depthDev", config.depth_dev, kNone);
+    config.pan_dev = f(params, "panDev", config.pan_dev, kNone);
     detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Ensemble>(config);
   }
   if (name == "effects.modulation.flanger") {
     effects::modulation::FlangerConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.depth_ms = f(params, "depthMs", config.depth_ms);
-    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms);
-    config.feedback = f(params, "feedback", config.feedback);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms, kMs);
+    config.center_delay_ms = f(params, "centerDelayMs", config.center_delay_ms, kMs);
+    config.feedback = f(params, "feedback", config.feedback, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.pre_filter_hz = f(params, "preFilterHz", config.pre_filter_hz, kHz);
     detail::read_field(params, "preFilterMode", config.pre_filter_mode);
-    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
-    config.step_rate_hz = f(params, "stepRateHz", config.step_rate_hz);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
+    config.step_rate_hz = f(params, "stepRateHz", config.step_rate_hz, kHz);
     detail::read_field(params, "interpolation", config.interpolation);
     return make<effects::modulation::Flanger>(config);
   }
   if (name == "effects.modulation.phaser") {
     effects::modulation::PhaserConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.min_hz = f(params, "minHz", config.min_hz);
-    config.max_hz = f(params, "maxHz", config.max_hz);
-    config.stages = detail::i(params, "stages", config.stages);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.feedback = f(params, "feedback", config.feedback);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.min_hz = f(params, "minHz", config.min_hz, kHzLog);
+    config.max_hz = f(params, "maxHz", config.max_hz, kHzLog);
+    config.stages = detail::i(params, "stages", config.stages, kCount);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.feedback = f(params, "feedback", config.feedback, kNone);
     detail::read_field(params, "mixMode", config.mix_mode);
-    config.depth = f(params, "depth", config.depth);
+    config.depth = f(params, "depth", config.depth, kNone);
     return make<effects::modulation::Phaser>(config);
   }
   if (name == "effects.modulation.wah") {
     effects::modulation::WahConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.min_hz = f(params, "minHz", config.min_hz);
-    config.max_hz = f(params, "maxHz", config.max_hz);
-    config.resonance = f(params, "resonance", config.resonance);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.min_hz = f(params, "minHz", config.min_hz, kHzLog);
+    config.max_hz = f(params, "maxHz", config.max_hz, kHzLog);
+    config.resonance = f(params, "resonance", config.resonance, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     detail::read_field(params, "filterType", config.filter_type);
     detail::read_field(params, "sweepLaw", config.sweep_law);
     return make<effects::modulation::Wah>(config);
   }
   if (name == "effects.modulation.autoWah") {
     effects::modulation::AutoWahConfig config;
-    config.sensitivity = f(params, "sensitivity", config.sensitivity);
-    config.min_hz = f(params, "minHz", config.min_hz);
-    config.max_hz = f(params, "maxHz", config.max_hz);
-    config.resonance = f(params, "resonance", config.resonance);
-    config.attack_ms = f(params, "attackMs", config.attack_ms);
-    config.release_ms = f(params, "releaseMs", config.release_ms);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.lfo_rate_hz = f(params, "lfoRateHz", config.lfo_rate_hz);
-    config.lfo_depth = f(params, "lfoDepth", config.lfo_depth);
+    config.sensitivity = f(params, "sensitivity", config.sensitivity, kNone);
+    config.min_hz = f(params, "minHz", config.min_hz, kHzLog);
+    config.max_hz = f(params, "maxHz", config.max_hz, kHzLog);
+    config.resonance = f(params, "resonance", config.resonance, kNone);
+    config.attack_ms = f(params, "attackMs", config.attack_ms, kMsLog);
+    config.release_ms = f(params, "releaseMs", config.release_ms, kMsLog);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.lfo_rate_hz = f(params, "lfoRateHz", config.lfo_rate_hz, kHz);
+    config.lfo_depth = f(params, "lfoDepth", config.lfo_depth, kNone);
     detail::read_field(params, "filterType", config.filter_type);
     detail::read_field(params, "direction", config.direction);
     detail::read_field(params, "sweepLaw", config.sweep_law);
@@ -947,59 +986,59 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   if (name == "effects.filter.vowel") {
     effects::filter::VowelFilterConfig config;
-    config.vowel = f(params, "vowel", config.vowel);
-    config.accel_ms = f(params, "accelMs", config.accel_ms);
-    config.drive = f(params, "drive", config.drive);
+    config.vowel = f(params, "vowel", config.vowel, kNone);
+    config.accel_ms = f(params, "accelMs", config.accel_ms, kMs);
+    config.drive = f(params, "drive", config.drive, kNone);
     config.drive_on = b(params, "driveOn", config.drive_on);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     return make<effects::filter::VowelFilter>(config);
   }
   if (name == "effects.modulation.rotary") {
     effects::modulation::RotaryConfig config;
-    config.rate_hz = f(params, "rateHz", config.rate_hz);
-    config.drum_rate_hz = f(params, "drumRateHz", config.drum_rate_hz);
-    config.depth_ms = f(params, "depthMs", config.depth_ms);
-    config.tremolo = f(params, "tremolo", config.tremolo);
-    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.accel_tau_s = f(params, "accelTauS", config.accel_tau_s);
-    config.decel_tau_s = f(params, "decelTauS", config.decel_tau_s);
-    config.undershoot_hz = f(params, "undershootHz", config.undershoot_hz);
-    config.drum_undershoot_hz = f(params, "drumUndershootHz", config.drum_undershoot_hz);
-    config.horn_slow_hz = f(params, "hornSlowHz", config.horn_slow_hz);
-    config.horn_fast_hz = f(params, "hornFastHz", config.horn_fast_hz);
-    config.drum_slow_hz = f(params, "drumSlowHz", config.drum_slow_hz);
-    config.drum_fast_hz = f(params, "drumFastHz", config.drum_fast_hz);
-    config.speed = f(params, "speed", config.speed);
-    config.horn_level_db = f(params, "hornLevelDb", config.horn_level_db);
-    config.drum_level_db = f(params, "drumLevelDb", config.drum_level_db);
+    config.rate_hz = f(params, "rateHz", config.rate_hz, kHz);
+    config.drum_rate_hz = f(params, "drumRateHz", config.drum_rate_hz, kHz);
+    config.depth_ms = f(params, "depthMs", config.depth_ms, kMs);
+    config.tremolo = f(params, "tremolo", config.tremolo, kNone);
+    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.accel_tau_s = f(params, "accelTauS", config.accel_tau_s, kSeconds);
+    config.decel_tau_s = f(params, "decelTauS", config.decel_tau_s, kSeconds);
+    config.undershoot_hz = f(params, "undershootHz", config.undershoot_hz, kHz);
+    config.drum_undershoot_hz = f(params, "drumUndershootHz", config.drum_undershoot_hz, kHz);
+    config.horn_slow_hz = f(params, "hornSlowHz", config.horn_slow_hz, kHz);
+    config.horn_fast_hz = f(params, "hornFastHz", config.horn_fast_hz, kHz);
+    config.drum_slow_hz = f(params, "drumSlowHz", config.drum_slow_hz, kHz);
+    config.drum_fast_hz = f(params, "drumFastHz", config.drum_fast_hz, kHz);
+    config.speed = f(params, "speed", config.speed, kNone);
+    config.horn_level_db = f(params, "hornLevelDb", config.horn_level_db, kDb);
+    config.drum_level_db = f(params, "drumLevelDb", config.drum_level_db, kDb);
     detail::read_field(params, "interpolation", config.interpolation);
     detail::read_field(params, "model", config.model);
     return make<effects::modulation::Rotary>(config);
   }
   if (name == "effects.modulation.ringModulator") {
     effects::modulation::RingModulatorConfig config;
-    config.carrier_hz = f(params, "carrierHz", config.carrier_hz);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.carrier_hz = f(params, "carrierHz", config.carrier_hz, kHzLog);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     detail::read_field(params, "shape", config.shape);
-    config.phase_deg = f(params, "phaseDeg", config.phase_deg);
-    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread);
+    config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
+    config.stereo_spread = f(params, "stereoSpread", config.stereo_spread, kNone);
     return make<effects::modulation::RingModulator>(config);
   }
   if (name == "effects.modulation.pitchShifter") {
     effects::modulation::PitchShifterConfig config;
-    config.semitones = f(params, "semitones", config.semitones);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.window_ms = f(params, "windowMs", config.window_ms);
-    config.cents = f(params, "cents", config.cents);
-    config.pan = f(params, "pan", config.pan);
-    config.semitones2 = f(params, "semitones2", config.semitones2);
-    config.cents2 = f(params, "cents2", config.cents2);
-    config.level2 = f(params, "level2", config.level2);
-    config.pan2 = f(params, "pan2", config.pan2);
-    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms);
-    config.pre_delay2_ms = f(params, "preDelay2Ms", config.pre_delay2_ms);
-    config.feedback = f(params, "feedback", config.feedback);
+    config.semitones = f(params, "semitones", config.semitones, kSemitones);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.window_ms = f(params, "windowMs", config.window_ms, kMs);
+    config.cents = f(params, "cents", config.cents, kCents);
+    config.pan = f(params, "pan", config.pan, kNone);
+    config.semitones2 = f(params, "semitones2", config.semitones2, kSemitones);
+    config.cents2 = f(params, "cents2", config.cents2, kCents);
+    config.level2 = f(params, "level2", config.level2, kNone);
+    config.pan2 = f(params, "pan2", config.pan2, kNone);
+    config.pre_delay_ms = f(params, "preDelayMs", config.pre_delay_ms, kMs);
+    config.pre_delay2_ms = f(params, "preDelay2Ms", config.pre_delay2_ms, kMs);
+    config.feedback = f(params, "feedback", config.feedback, kNone);
     detail::read_field(params, "mixLaw", config.mix_law);
     detail::read_field(params, "interpolation", config.interpolation);
     config.anti_alias = b(params, "antiAlias", config.anti_alias);
@@ -1007,26 +1046,26 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
   }
   if (name == "effects.delay.stereo") {
     effects::delay::StereoDelayConfig config;
-    config.delay_time_l_ms = f(params, "delayTimeLMs", config.delay_time_l_ms);
-    config.delay_time_r_ms = f(params, "delayTimeRMs", config.delay_time_r_ms);
-    config.feedback = f(params, "feedback", config.feedback);
-    config.ping_pong = f(params, "pingPong", config.ping_pong);
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
-    config.damping_hz = f(params, "dampingHz", config.damping_hz);
-    config.tap3_ms = f(params, "tap3Ms", config.tap3_ms);
-    config.tap4_ms = f(params, "tap4Ms", config.tap4_ms);
-    config.tap1_level_db = f(params, "tap1LevelDb", config.tap1_level_db);
-    config.tap2_level_db = f(params, "tap2LevelDb", config.tap2_level_db);
-    config.tap3_level_db = f(params, "tap3LevelDb", config.tap3_level_db);
-    config.tap4_level_db = f(params, "tap4LevelDb", config.tap4_level_db);
-    config.tap3_pan = f(params, "tap3Pan", config.tap3_pan);
-    config.tap4_pan = f(params, "tap4Pan", config.tap4_pan);
+    config.delay_time_l_ms = f(params, "delayTimeLMs", config.delay_time_l_ms, kMs);
+    config.delay_time_r_ms = f(params, "delayTimeRMs", config.delay_time_r_ms, kMs);
+    config.feedback = f(params, "feedback", config.feedback, kNone);
+    config.ping_pong = f(params, "pingPong", config.ping_pong, kNone);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
+    config.damping_hz = f(params, "dampingHz", config.damping_hz, kHz);
+    config.tap3_ms = f(params, "tap3Ms", config.tap3_ms, kMs);
+    config.tap4_ms = f(params, "tap4Ms", config.tap4_ms, kMs);
+    config.tap1_level_db = f(params, "tap1LevelDb", config.tap1_level_db, kDb);
+    config.tap2_level_db = f(params, "tap2LevelDb", config.tap2_level_db, kDb);
+    config.tap3_level_db = f(params, "tap3LevelDb", config.tap3_level_db, kDb);
+    config.tap4_level_db = f(params, "tap4LevelDb", config.tap4_level_db, kDb);
+    config.tap3_pan = f(params, "tap3Pan", config.tap3_pan, kNone);
+    config.tap4_pan = f(params, "tap4Pan", config.tap4_pan, kNone);
     config.invert_l = b(params, "invertL", config.invert_l);
     config.invert_r = b(params, "invertR", config.invert_r);
-    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz);
-    config.mod_depth_ms = f(params, "modDepthMs", config.mod_depth_ms);
-    config.mod_phase_deg = f(params, "modPhaseDeg", config.mod_phase_deg);
-    config.glide_ms = f(params, "glideMs", config.glide_ms);
+    config.mod_rate_hz = f(params, "modRateHz", config.mod_rate_hz, kHz);
+    config.mod_depth_ms = f(params, "modDepthMs", config.mod_depth_ms, kMs);
+    config.mod_phase_deg = f(params, "modPhaseDeg", config.mod_phase_deg, kDegrees);
+    config.glide_ms = f(params, "glideMs", config.glide_ms, kMs);
     detail::read_field(params, "crossMode", config.cross_mode);
     detail::read_field(params, "mixLaw", config.mix_law);
     detail::read_field(params, "interpolation", config.interpolation);
@@ -1048,8 +1087,8 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "effects.gsEfx requires typeMsb and typeLsb together");
   }
-  const int msb = detail::i(params, "typeMsb", 0);
-  const int lsb = detail::i(params, "typeLsb", 0);
+  const int msb = detail::i(params, "typeMsb", 0, kNone);
+  const int lsb = detail::i(params, "typeLsb", 0, kNone);
   if (msb < 0 || msb > 127 || lsb < 0 || lsb > 127) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "effects.gsEfx type bytes must be in [0, 127]");
@@ -1078,7 +1117,7 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
 
   for (std::size_t slot = 0; slot < state.params.size(); ++slot) {
     const std::string key = "byte" + std::to_string(slot);
-    const int value = detail::i(params, key.c_str(), state.params[slot]);
+    const int value = detail::i(params, key.c_str(), state.params[slot], kNone);
     if (value < 0 || value > 127) {
       throw SonareException(ErrorCode::InvalidParameter,
                             "effects.gsEfx " + key + " must be in [0, 127]");
@@ -1184,7 +1223,7 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
     const std::vector<Param> param_list = insert_params_from_root(json_root, name);
     const ParamMap params = detail::make_map(param_list);
     effects::reverb::ConvolutionReverbConfig config;
-    config.dry_wet = f(params, "dryWet", config.dry_wet);
+    config.dry_wet = f(params, "dryWet", config.dry_wet, kNone);
     auto reverb = std::make_unique<effects::reverb::ConvolutionReverb>(config);
     reverb->load_ir(impulse_response, ir_num_samples);
     attach_constructed_parameter_values(reverb.get(), params);
@@ -1719,25 +1758,6 @@ std::string format_catalog_number(double value) {
   return widest;
 }
 
-// The unit a parameter's value carries, derived from the key's own suffix
-// convention. Unlike `type` and the bounds this cannot be measured: the suffix
-// IS the declaration.
-std::string catalog_unit(const std::string& name, const std::string& key) {
-  const auto ends_with = [&key](const char* suffix) {
-    const size_t length = std::strlen(suffix);
-    return key.size() >= length && key.compare(key.size() - length, length, suffix) == 0;
-  };
-  if ((name == "effects.reverb.plate" || name == "effects.reverb.dattorro") &&
-      key == "modDepthSamples") {
-    return "\"referenceSamples@29761Hz\"";
-  }
-  if (ends_with("Db")) return "\"dB\"";
-  if (ends_with("Hz")) return "\"Hz\"";
-  if (ends_with("Ms")) return "\"ms\"";
-  if (ends_with("Samples")) return "\"samples\"";
-  return "null";
-}
-
 const char* catalog_type(ParamKind kind, bool is_enum) {
   switch (kind) {
     case ParamKind::Boolean:
@@ -1781,7 +1801,12 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   bool has_choices = false;
   std::vector<detail::EnumChoice> choices;
   MeasuredBounds bounds;
-  const bool unit_is_hz = catalog_unit(name, key) == "\"Hz\"";
+  // The declaration the reader made beside the type and default; a key no
+  // reader declared carries none, which the catalog test refuses for a number.
+  const auto declared_meta = params.probed_meta().find(key);
+  const bool has_meta = declared_meta != params.probed_meta().end();
+  const detail::ParamMeta meta = has_meta ? declared_meta->second : detail::ParamMeta{};
+  const bool unit_is_hz = has_meta && meta.unit == detail::Unit::Hz;
   if (construction_reads_key && measurable && !coupled_gs_type_selector) {
     if (is_enum) {
       choices = measure_enum_choices(name, key, declared->second);
@@ -1835,8 +1860,23 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
     out += format_catalog_number(fallback->second.value);
   }
 
+  // A unit is a numeric parameter's declaration; a toggle, a selector or an array has none.
+  const bool numeric_param = measurable && !is_enum;
   out += ",\"unit\":";
-  out += catalog_unit(name, key);
+  if (numeric_param && has_meta) {
+    out += '"';
+    out += detail::unit_name(meta.unit);
+    out += '"';
+  } else {
+    out += "null";
+  }
+  out += ",\"uiMin\":";
+  out += std::isnan(meta.ui_min) ? "null" : format_catalog_number(meta.ui_min);
+  out += ",\"uiMax\":";
+  out += std::isnan(meta.ui_max) ? "null" : format_catalog_number(meta.ui_max);
+  out += ",\"scale\":\"";
+  out += meta.scale == detail::Scale::Log ? "log" : "linear";
+  out += '"';
 
   out += ",\"choices\":";
   if (!has_choices) {
@@ -1862,7 +1902,22 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
     out += slot->first;
     out += '"';
   }
-  out += '}';
+
+  out += ",\"dependsOn\":[";
+  const auto depends = params.probed_depends().find(key);
+  if (depends != params.probed_depends().end()) {
+    bool first_dependency = true;
+    for (const auto& dependency : depends->second) {
+      if (!first_dependency) out += ',';
+      first_dependency = false;
+      out += "{\"key\":\"";
+      out += dependency.key;
+      out += "\",\"relation\":\"";
+      out += detail::relation_name(dependency.relation);
+      out += "\"}";
+    }
+  }
+  out += "]}";
 }
 
 std::string build_insert_param_info_json(const std::string& name, double sample_rate) {
@@ -1958,10 +2013,16 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].maxRelativeTo",
       "[].default",
       "[].unit",
+      "[].uiMin",
+      "[].uiMax",
+      "[].scale",
       "[].choices",
       "[].choices[].name",
       "[].choices[].value",
       "[].slot",
+      "[].dependsOn",
+      "[].dependsOn[].key",
+      "[].dependsOn[].relation",
   };
   return paths;
 }

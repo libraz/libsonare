@@ -78,8 +78,12 @@
                 "maxRelativeTo",
                 "default",
                 "unit",
+                "uiMin",
+                "uiMax",
+                "scale",
                 "choices",
-                "slot"
+                "slot",
+                "dependsOn"
               ],
               "properties": {
                 "name": { "type": "string", "minLength": 1 },
@@ -92,7 +96,35 @@
                 "maxExclusive": { "type": "boolean" },
                 "maxRelativeTo": { "enum": ["nyquist", null] },
                 "default": { "type": ["number", "boolean", "null"] },
-                "unit": { "type": ["string", "null"] },
+                "unit": {
+                  "enum": [
+                    "dB",
+                    "dBFS",
+                    "LUFS",
+                    "Hz",
+                    "ms",
+                    "s",
+                    "samples",
+                    "m",
+                    "cm",
+                    "deg",
+                    "percent",
+                    "degC",
+                    "V",
+                    "inPerSec",
+                    "dBPerOct",
+                    "semitones",
+                    "cents",
+                    "ratio",
+                    "bits",
+                    "count",
+                    "none",
+                    null
+                  ]
+                },
+                "uiMin": { "type": ["number", "null"] },
+                "uiMax": { "type": ["number", "null"] },
+                "scale": { "enum": ["linear", "log"] },
                 "choices": {
                   "type": ["array", "null"],
                   "items": {
@@ -105,7 +137,19 @@
                     }
                   }
                 },
-                "slot": { "type": ["string", "null"], "minLength": 1 }
+                "slot": { "type": ["string", "null"], "minLength": 1 },
+                "dependsOn": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["key", "relation"],
+                    "properties": {
+                      "key": { "type": "string", "minLength": 1 },
+                      "relation": { "enum": ["lt", "le", "gt", "ge"] }
+                    }
+                  }
+                }
               }
             }
           },

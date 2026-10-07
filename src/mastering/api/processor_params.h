@@ -20,6 +20,7 @@
 
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
+#include "mastering/api/param_meta.h"
 #include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "mastering/dynamics/compressor.h"
@@ -115,6 +116,12 @@ struct ParamDefault {
   bool ambiguous = false;
 };
 
+/// @brief A sibling key whose live value bounds another key's.
+struct ParamDependency {
+  std::string key;
+  Relation relation = Relation::Le;
+};
+
 /// @brief A group of keys that exists only under a condition: an EQ band, a
 ///        multiband crossover band, or a dynamic sub-band inside one.
 /// @details Recorded by the builder at the point it decides whether the group
@@ -198,6 +205,31 @@ class ParamMap {
   }
   const std::unordered_map<std::string, double>& effective_values() const { return effective_; }
 
+  /// @brief Records the unit, scale and display range a builder declared for @p key.
+  /// @details The first record wins: every reader of one key states the same meaning.
+  void note_meta(const std::string& key, ParamMeta meta) const {
+    if (records_declarations_) meta_.emplace(key, meta);
+  }
+
+  /// @brief Declared metadata of every numeric key probed with one, keyed by name.
+  const std::unordered_map<std::string, ParamMeta>& probed_meta() const { return meta_; }
+
+  /// @brief Records that @p key's value is bounded by @p sibling's under @p relation
+  ///        (`key <relation> sibling`).
+  void note_depends(const std::string& key, const std::string& sibling, Relation relation) const {
+    if (!records_declarations_) return;
+    auto& list = depends_[key];
+    for (const auto& existing : list) {
+      if (existing.key == sibling) return;
+    }
+    list.push_back(ParamDependency{sibling, relation});
+  }
+
+  /// @brief Sibling bounds declared for each key, in declaration order.
+  const std::unordered_map<std::string, std::vector<ParamDependency>>& probed_depends() const {
+    return depends_;
+  }
+
   /// @brief Records the declared values of the enum a builder read @p key as.
   /// @details The first record wins: a later one comes from the same enum type.
   void note_choices(const std::string& key, std::vector<EnumChoice> choices) const {
@@ -243,6 +275,10 @@ class ParamMap {
   ///          exactly as they were.
   void adopt_declarations(const ParamMap& other) const {
     for (const auto& [key, kind] : other.kinds_) note_kind(key, kind);
+    for (const auto& [key, meta] : other.meta_) note_meta(key, meta);
+    for (const auto& [key, list] : other.depends_) {
+      for (const auto& dependency : list) note_depends(key, dependency.key, dependency.relation);
+    }
     for (const auto& [key, value] : other.effective_) effective_.try_emplace(key, value);
     for (const auto& [key, choices] : other.choices_) note_choices(key, choices);
     for (const auto& [key, fallback] : other.defaults_) {
@@ -271,6 +307,8 @@ class ParamMap {
   Map map_;
   mutable std::unordered_set<std::string> probed_;
   mutable std::unordered_map<std::string, ParamKind> kinds_;
+  mutable std::unordered_map<std::string, ParamMeta> meta_;
+  mutable std::unordered_map<std::string, std::vector<ParamDependency>> depends_;
   mutable std::unordered_map<std::string, ParamDefault> defaults_;
   mutable std::unordered_map<std::string, double> effective_;
   mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
@@ -296,6 +334,11 @@ inline float f(const ParamMap& params, const char* key, float default_value) {
   return value;
 }
 
+inline float f(const ParamMap& params, const char* key, float default_value, ParamMeta meta) {
+  params.note_meta(key, meta);
+  return f(params, key, default_value);
+}
+
 inline int i(const ParamMap& params, const char* key, int default_value) {
   params.note_kind(key, ParamKind::Integer);
   params.note_default(key, static_cast<double>(default_value));
@@ -312,6 +355,11 @@ inline int i(const ParamMap& params, const char* key, int default_value) {
   // Named, because the key is in hand: a caller who wrote 512.7 needs to know
   // which field refused it and that a whole number is what it wants.
   reject_integer_param(key, it->second);
+}
+
+inline int i(const ParamMap& params, const char* key, int default_value, ParamMeta meta) {
+  params.note_meta(key, meta);
+  return i(params, key, default_value);
 }
 
 inline bool b(const ParamMap& params, const char* key, bool default_value) {
@@ -408,6 +456,20 @@ inline void read_field(const ParamMap& params, const char* key, T& dst) {
   }
 }
 
+/// @brief @ref read_field for a field table row, which also declares the key's metadata.
+template <typename T>
+inline void read_field(const ParamMap& params, const char* key, T& dst, ParamMeta meta) {
+  params.note_meta(key, meta);
+  read_field(params, key, dst);
+}
+
+/// @brief Declares `first <relation> second` on both keys, so each names the other as its bound.
+inline void note_pair_order(const ParamMap& params, const char* first, Relation relation,
+                            const char* second) {
+  params.note_depends(first, second, relation);
+  params.note_depends(second, first, inverse(relation));
+}
+
 /// Most `cutoff<i>Hz` keys a crossover reads, so one fewer than the most bands it splits into.
 inline constexpr int kMaxCrossoverCutoffs = 8;
 inline constexpr size_t kMaxCrossoverBands = kMaxCrossoverCutoffs + 1;
@@ -418,6 +480,11 @@ inline std::vector<float> cutoffs(const ParamMap& params) {
   for (int index = 0; index < kMaxCrossoverCutoffs; ++index) {
     const std::string key = "cutoff" + std::to_string(index) + "Hz";
     params.note_kind(key, ParamKind::Number);
+    params.note_meta(key, kHzLog);
+    if (index > 0) {
+      note_pair_order(params, ("cutoff" + std::to_string(index - 1) + "Hz").c_str(), Relation::Lt,
+                      key.c_str());
+    }
     // A cutoff beyond the default split has no fallback to publish.
     if (static_cast<size_t>(index) < defaults.cutoffs_hz.size()) {
       params.note_default(key, static_cast<double>(defaults.cutoffs_hz[index]));
@@ -434,35 +501,35 @@ inline eq::EqBand eq_band(const ParamMap& params, const std::string& prefix) {
   eq::EqBand band;
   band.type = read_enum(params, (prefix + "type").c_str(), band.type);
   band.coeff_mode = read_enum(params, (prefix + "coeffMode").c_str(), band.coeff_mode);
-  band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
-  band.gain_db = f(params, (prefix + "gainDb").c_str(), band.gain_db);
-  band.q = f(params, (prefix + "q").c_str(), band.q);
+  band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz, kHzLog);
+  band.gain_db = f(params, (prefix + "gainDb").c_str(), band.gain_db, kDb);
+  band.q = f(params, (prefix + "q").c_str(), band.q, kNone);
   band.enabled = b(params, (prefix + "enabled").c_str(), true);
-  band.slope_db_oct = i(params, (prefix + "slopeDbOct").c_str(), band.slope_db_oct);
+  band.slope_db_oct = i(params, (prefix + "slopeDbOct").c_str(), band.slope_db_oct, kDbPerOctave);
   band.placement = read_enum(params, (prefix + "placement").c_str(), band.placement);
   band.phase = read_enum(params, (prefix + "phase").c_str(), band.phase);
   band.soloed = b(params, (prefix + "soloed").c_str(), band.soloed);
   band.bypassed = b(params, (prefix + "bypassed").c_str(), band.bypassed);
   band.proportional_q = b(params, (prefix + "proportionalQ").c_str(), band.proportional_q);
   band.proportional_q_strength =
-      f(params, (prefix + "proportionalQStrength").c_str(), band.proportional_q_strength);
+      f(params, (prefix + "proportionalQStrength").c_str(), band.proportional_q_strength, kNone);
   band.dyn.enabled = b(params, (prefix + "dynamic").c_str(), band.dyn.enabled);
-  band.dyn.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.dyn.threshold_db);
+  band.dyn.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.dyn.threshold_db, kDb);
   band.dyn.auto_threshold = b(params, (prefix + "autoThreshold").c_str(), band.dyn.auto_threshold);
-  band.dyn.ratio = f(params, (prefix + "ratio").c_str(), band.dyn.ratio);
-  band.dyn.range_db = f(params, (prefix + "rangeDb").c_str(), band.dyn.range_db);
-  band.dyn.attack_ms = f(params, (prefix + "attackMs").c_str(), band.dyn.attack_ms);
-  band.dyn.release_ms = f(params, (prefix + "releaseMs").c_str(), band.dyn.release_ms);
+  band.dyn.ratio = f(params, (prefix + "ratio").c_str(), band.dyn.ratio, kRatio);
+  band.dyn.range_db = f(params, (prefix + "rangeDb").c_str(), band.dyn.range_db, kDb);
+  band.dyn.attack_ms = f(params, (prefix + "attackMs").c_str(), band.dyn.attack_ms, kMsLog);
+  band.dyn.release_ms = f(params, (prefix + "releaseMs").c_str(), band.dyn.release_ms, kMsLog);
   // "lookaheadMs" is the field's former (misleading) spelling; still accepted
   // so a stored config using it keeps working, but "detectorDelayMs" wins if
   // both are present.
   band.dyn.detector_delay_ms =
-      f(params, (prefix + "lookaheadMs").c_str(), band.dyn.detector_delay_ms);
+      f(params, (prefix + "lookaheadMs").c_str(), band.dyn.detector_delay_ms, kMs);
   band.dyn.detector_delay_ms =
-      f(params, (prefix + "detectorDelayMs").c_str(), band.dyn.detector_delay_ms);
+      f(params, (prefix + "detectorDelayMs").c_str(), band.dyn.detector_delay_ms, kMs);
   band.dyn.sidechain_freq_hz =
-      f(params, (prefix + "sidechainFreqHz").c_str(), band.dyn.sidechain_freq_hz);
-  band.dyn.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.dyn.sidechain_q);
+      f(params, (prefix + "sidechainFreqHz").c_str(), band.dyn.sidechain_freq_hz, kHz);
+  band.dyn.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.dyn.sidechain_q, kNone);
   return band;
 }
 
@@ -486,22 +553,24 @@ inline void declare_eq_band_params(const ParamMap& params, const std::string& pr
 inline eq::DynamicEqBand dynamic_eq_band(const ParamMap& params, const std::string& prefix) {
   eq::DynamicEqBand band;
   band.type = read_enum(params, (prefix + "type").c_str(), band.type);
-  band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
-  band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db);
-  band.q = f(params, (prefix + "q").c_str(), band.q);
-  band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-  band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio);
-  band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db);
+  band.frequency_hz = f(params, (prefix + "frequencyHz").c_str(), band.frequency_hz, kHzLog);
+  band.static_gain_db = f(params, (prefix + "staticGainDb").c_str(), band.static_gain_db, kDb);
+  band.q = f(params, (prefix + "q").c_str(), band.q, kNone);
+  band.threshold_db = f(params, (prefix + "thresholdDb").c_str(), band.threshold_db, kDb);
+  band.ratio = f(params, (prefix + "ratio").c_str(), band.ratio, kRatio);
+  band.range_db = f(params, (prefix + "rangeDb").c_str(), band.range_db, kDb);
   band.enabled = b(params, (prefix + "enabled").c_str(), true);
-  band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q);
-  band.sidechain_freq_hz = f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz);
-  band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms);
-  band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms);
+  band.sidechain_q = f(params, (prefix + "sidechainQ").c_str(), band.sidechain_q, kNone);
+  band.sidechain_freq_hz =
+      f(params, (prefix + "sidechainFreqHz").c_str(), band.sidechain_freq_hz, kHz);
+  band.attack_ms = f(params, (prefix + "attackMs").c_str(), band.attack_ms, kMsLog);
+  band.release_ms = f(params, (prefix + "releaseMs").c_str(), band.release_ms, kMsLog);
   // "lookaheadMs" is the field's former (misleading) spelling; still accepted
   // so a stored config using it keeps working, but "detectorDelayMs" wins if
   // both are present.
-  band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms);
-  band.detector_delay_ms = f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms);
+  band.detector_delay_ms = f(params, (prefix + "lookaheadMs").c_str(), band.detector_delay_ms, kMs);
+  band.detector_delay_ms =
+      f(params, (prefix + "detectorDelayMs").c_str(), band.detector_delay_ms, kMs);
   return band;
 }
 
@@ -576,9 +645,9 @@ inline void configure_parametric(eq::ParametricEq& processor, const ParamMap& pa
 inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMap& params,
                                 const std::string& prefix = "band") {
   processor.set_auto_gain_enabled(b(params, "autoGain", processor.auto_gain_enabled()));
-  processor.set_gain_scale(f(params, "gainScale", processor.gain_scale()));
-  processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db()));
-  processor.set_output_pan(f(params, "outputPan", processor.output_pan()));
+  processor.set_gain_scale(f(params, "gainScale", processor.gain_scale(), kNone));
+  processor.set_output_gain_db(f(params, "outputGainDb", processor.output_gain_db(), kDb));
+  processor.set_output_pan(f(params, "outputPan", processor.output_pan(), kNone));
   processor.set_phase_mode(read_enum(params, "phaseMode", processor.phase_mode()));
   for (size_t index = 0; index < eq::EqualizerProcessor::kMaxBands; ++index) {
     const std::string band_prefix = prefix + std::to_string(index) + ".";
@@ -592,7 +661,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
 // Expands one SONARE_FIELDS_* table row into a field overlay. A config builder
 // is then just `Config config; SONARE_FIELDS_X(SONARE_READ_FIELD); return ...`,
 // equivalent to the prior per-field `config.x = f(params, "x", config.x)` lines.
-#define SONARE_READ_FIELD(key, member) read_field(params, key, config.member);
+#define SONARE_READ_FIELD(key, member, meta) read_field(params, key, config.member, meta);
 
 inline dynamics::CompressorConfig compressor_config(const ParamMap& params) {
   dynamics::CompressorConfig config;
@@ -614,7 +683,7 @@ inline multiband::CrossoverConfig crossover_config(const ParamMap& params) {
   }
   config.slope = read_enum(params, "slope", config.slope);
   config.mode = read_enum(params, "mode", config.mode);
-  config.fir_kernel_size = i(params, "firKernelSize", config.fir_kernel_size);
+  config.fir_kernel_size = i(params, "firKernelSize", config.fir_kernel_size, kSamples);
   return config;
 }
 
@@ -670,13 +739,14 @@ inline void populate_compressor_bands(multiband::MultibandCompressorConfig& conf
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio);
-        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms);
-        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
-        band.knee_db = f(band_params, (prefix + "kneeDb").c_str(), band.knee_db);
+        band.threshold_db =
+            f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db, kDb);
+        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio, kRatio);
+        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms, kMsLog);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms, kMsLog);
+        band.knee_db = f(band_params, (prefix + "kneeDb").c_str(), band.knee_db, kDb);
         band.makeup_gain_db =
-            f(band_params, (prefix + "makeupGainDb").c_str(), band.makeup_gain_db);
+            f(band_params, (prefix + "makeupGainDb").c_str(), band.makeup_gain_db, kDb);
       });
 }
 
@@ -685,11 +755,12 @@ inline void populate_expander_bands(multiband::MultibandExpanderConfig& config,
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio);
-        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms);
-        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
-        band.range_db = f(band_params, (prefix + "rangeDb").c_str(), band.range_db);
+        band.threshold_db =
+            f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db, kDb);
+        band.ratio = f(band_params, (prefix + "ratio").c_str(), band.ratio, kRatio);
+        band.attack_ms = f(band_params, (prefix + "attackMs").c_str(), band.attack_ms, kMsLog);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms, kMsLog);
+        band.range_db = f(band_params, (prefix + "rangeDb").c_str(), band.range_db, kDb);
       });
 }
 
@@ -698,9 +769,11 @@ inline void populate_limiter_bands(multiband::MultibandLimiterConfig& config,
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.threshold_db = f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db);
-        band.lookahead_ms = f(band_params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms);
-        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms);
+        band.threshold_db =
+            f(band_params, (prefix + "thresholdDb").c_str(), band.threshold_db, kDb);
+        band.lookahead_ms =
+            f(band_params, (prefix + "lookaheadMs").c_str(), band.lookahead_ms, kMs);
+        band.release_ms = f(band_params, (prefix + "releaseMs").c_str(), band.release_ms, kMsLog);
       });
 }
 
@@ -713,10 +786,10 @@ inline void populate_saturation_bands(multiband::MultibandSaturationConfig& conf
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db);
-        band.mix = f(band_params, (prefix + "mix").c_str(), band.mix);
+        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db, kDb);
+        band.mix = f(band_params, (prefix + "mix").c_str(), band.mix, kNone);
         band.output_gain_db =
-            f(band_params, (prefix + "outputGainDb").c_str(), band.output_gain_db);
+            f(band_params, (prefix + "outputGainDb").c_str(), band.output_gain_db, kDb);
         band.type = read_enum(band_params, (prefix + "type").c_str(), band.type);
         band.enabled = b(band_params, (prefix + "enabled").c_str(), band.enabled);
       });
@@ -730,9 +803,9 @@ inline void populate_imager_bands(multiband::MultibandImagerConfig& config,
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.width = f(band_params, (prefix + "width").c_str(), band.width);
-        band.decorrelation_amount =
-            f(band_params, (prefix + "decorrelationAmount").c_str(), band.decorrelation_amount);
+        band.width = f(band_params, (prefix + "width").c_str(), band.width, kNone);
+        band.decorrelation_amount = f(band_params, (prefix + "decorrelationAmount").c_str(),
+                                      band.decorrelation_amount, kNone);
         band.enabled = b(band_params, (prefix + "enabled").c_str(), band.enabled);
         band.preserve_energy =
             b(band_params, (prefix + "preserveEnergy").c_str(), band.preserve_energy);
@@ -793,6 +866,7 @@ inline dynamics::ExpanderConfig expander_config(const ParamMap& params) {
 inline dynamics::GateConfig gate_config(const ParamMap& params) {
   dynamics::GateConfig config;
   SONARE_FIELDS_GATE(SONARE_READ_FIELD)
+  note_pair_order(params, "closeThresholdDb", Relation::Le, "thresholdDb");
   return config;
 }
 
@@ -843,19 +917,19 @@ inline dynamics::VocalRiderConfig vocal_rider_config(const ParamMap& params) {
 // ---------------------------------------------------------------------------
 
 inline void configure_tilt(eq::TiltEq& p, const ParamMap& params) {
-  p.set_tilt_db(f(params, "tiltDb", 0.0f));
-  p.set_pivot_hz(f(params, "pivotHz", 1000.0f));
+  p.set_tilt_db(f(params, "tiltDb", 0.0f, kDb));
+  p.set_pivot_hz(f(params, "pivotHz", 1000.0f, kHzLog));
 }
 
 inline void configure_api_style(eq::ApiStyleEq& p, const ParamMap& params) {
-  p.set_band(eq::ApiStyleEq::Band::Low, f(params, "lowFrequencyHz", 100.0f),
-             f(params, "lowGainDb", 0.0f));
-  p.set_band(eq::ApiStyleEq::Band::LowMid, f(params, "lowMidFrequencyHz", 400.0f),
-             f(params, "lowMidGainDb", 0.0f));
-  p.set_band(eq::ApiStyleEq::Band::HighMid, f(params, "highMidFrequencyHz", 3000.0f),
-             f(params, "highMidGainDb", 0.0f));
-  p.set_band(eq::ApiStyleEq::Band::High, f(params, "highFrequencyHz", 10000.0f),
-             f(params, "highGainDb", 0.0f));
+  p.set_band(eq::ApiStyleEq::Band::Low, f(params, "lowFrequencyHz", 100.0f, kHzLog),
+             f(params, "lowGainDb", 0.0f, kDb));
+  p.set_band(eq::ApiStyleEq::Band::LowMid, f(params, "lowMidFrequencyHz", 400.0f, kHzLog),
+             f(params, "lowMidGainDb", 0.0f, kDb));
+  p.set_band(eq::ApiStyleEq::Band::HighMid, f(params, "highMidFrequencyHz", 3000.0f, kHzLog),
+             f(params, "highMidGainDb", 0.0f, kDb));
+  p.set_band(eq::ApiStyleEq::Band::High, f(params, "highFrequencyHz", 10000.0f, kHzLog),
+             f(params, "highGainDb", 0.0f, kDb));
 }
 
 inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& params) {
@@ -871,11 +945,12 @@ inline void configure_minimum_phase(eq::MinimumPhaseEq& p, const ParamMap& param
 inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   eq::LinearPhaseEqConfig config;
   config.resolution = read_enum(params, "resolution", config.resolution);
-  config.fft_size = i(params, "fftSize", config.fft_size);
-  config.kernel_size = i(params, "kernelSize", config.kernel_size);
+  config.fft_size = i(params, "fftSize", config.fft_size, kSamples);
+  config.kernel_size = i(params, "kernelSize", config.kernel_size, kSamples);
+  note_pair_order(params, "kernelSize", Relation::Le, "fftSize");
   config.use_partitioned_convolution =
       b(params, "usePartitionedConvolution", config.use_partitioned_convolution);
-  config.partition_size = i(params, "partitionSize", config.partition_size);
+  config.partition_size = i(params, "partitionSize", config.partition_size, kSamples);
   return config;
 }
 
@@ -907,40 +982,42 @@ inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params)
 }
 
 inline void configure_pultec(eq::PultecEq& p, const ParamMap& params) {
-  p.set_low_frequency(f(params, "lowFrequencyHz", 60.0f));
-  p.set_low_boost(f(params, "lowBoost", 0.0f));
-  p.set_low_attenuation(f(params, "lowAttenuation", 0.0f));
-  p.set_high_boost(f(params, "highBoostFrequencyHz", 8000.0f), f(params, "highBoost", 0.0f),
-                   f(params, "highBandwidth", 0.5f));
-  p.set_high_attenuation(f(params, "highAttenuationFrequencyHz", 10000.0f),
-                         f(params, "highAttenuation", 0.0f));
+  p.set_low_frequency(f(params, "lowFrequencyHz", 60.0f, kHzLog));
+  p.set_low_boost(f(params, "lowBoost", 0.0f, kNone));
+  p.set_low_attenuation(f(params, "lowAttenuation", 0.0f, kNone));
+  p.set_high_boost(f(params, "highBoostFrequencyHz", 8000.0f, kHzLog),
+                   f(params, "highBoost", 0.0f, kNone), f(params, "highBandwidth", 0.5f, kNone));
+  p.set_high_attenuation(f(params, "highAttenuationFrequencyHz", 10000.0f, kHzLog),
+                         f(params, "highAttenuation", 0.0f, kNone));
   p.set_component_model(read_enum(params, "componentModel", eq::PultecComponentModel::CurveOnly));
-  p.set_output_drive(f(params, "outputDrive", 0.0f));
+  p.set_output_drive(f(params, "outputDrive", 0.0f, kNone));
 }
 
 inline void configure_cut_filter(eq::CutFilter& p, const ParamMap& params) {
-  p.set_high_pass(f(params, "highPassFrequencyHz", 20.0f),
-                  f(params, "highPassQ", constants::kButterworthQ),
+  p.set_high_pass(f(params, "highPassFrequencyHz", 20.0f, kHzLog),
+                  f(params, "highPassQ", constants::kButterworthQ, kNone),
                   read_enum(params, "highPassSlope", eq::CutFilterSlope::Db12PerOct),
                   b(params, "highPassEnabled", false));
-  p.set_low_pass(f(params, "lowPassFrequencyHz", 20000.0f),
-                 f(params, "lowPassQ", constants::kButterworthQ),
+  p.set_low_pass(f(params, "lowPassFrequencyHz", 20000.0f, kHzLog),
+                 f(params, "lowPassQ", constants::kButterworthQ, kNone),
                  read_enum(params, "lowPassSlope", eq::CutFilterSlope::Db12PerOct),
                  b(params, "lowPassEnabled", false));
 }
 
 inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {
-  p.set_band_pass(f(params, "bandPassFrequencyHz", 1000.0f), f(params, "bandPassQ", 1.0f),
-                  b(params, "bandPassEnabled", true));
-  p.set_notch(f(params, "notchFrequencyHz", 1000.0f), f(params, "notchQ", 1.0f),
+  p.set_band_pass(f(params, "bandPassFrequencyHz", 1000.0f, kHzLog),
+                  f(params, "bandPassQ", 1.0f, kNone), b(params, "bandPassEnabled", true));
+  p.set_notch(f(params, "notchFrequencyHz", 1000.0f, kHzLog), f(params, "notchQ", 1.0f, kNone),
               b(params, "notchEnabled", false));
 }
 
 inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
-  p.set_low_shelf(f(params, "lowFrequencyHz", 100.0f), f(params, "lowGainDb", 0.0f),
-                  f(params, "lowQ", constants::kButterworthQ), b(params, "lowEnabled", true));
-  p.set_high_shelf(f(params, "highFrequencyHz", 10000.0f), f(params, "highGainDb", 0.0f),
-                   f(params, "highQ", constants::kButterworthQ), b(params, "highEnabled", true));
+  p.set_low_shelf(f(params, "lowFrequencyHz", 100.0f, kHzLog), f(params, "lowGainDb", 0.0f, kDb),
+                  f(params, "lowQ", constants::kButterworthQ, kNone),
+                  b(params, "lowEnabled", true));
+  p.set_high_shelf(
+      f(params, "highFrequencyHz", 10000.0f, kHzLog), f(params, "highGainDb", 0.0f, kDb),
+      f(params, "highQ", constants::kButterworthQ, kNone), b(params, "highEnabled", true));
 }
 
 inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
@@ -950,7 +1027,7 @@ inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
     // catalog; only applying it is conditional, so an unsupplied band keeps the
     // processor's own gain. The read cannot throw and probes the key the
     // presence test probes anyway, so nothing else changes.
-    const float gain_db = f(params, key.c_str(), 0.0f);
+    const float gain_db = f(params, key.c_str(), 0.0f, kDb);
     if (params.find(key) != params.end()) p.set_gain_db(index, gain_db);
   }
 }
@@ -1040,11 +1117,13 @@ inline saturation::MultibandExciterConfig multiband_exciter_config(const ParamMa
   populate_crossover_bands(
       config.bands, config.crossover, params,
       [](const ParamMap& band_params, const std::string& prefix, auto& band) {
-        band.frequency_hz = f(band_params, (prefix + "frequencyHz").c_str(), band.frequency_hz);
-        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db);
-        band.amount = f(band_params, (prefix + "amount").c_str(), band.amount);
-        band.q = f(band_params, (prefix + "q").c_str(), band.q);
-        band.even_odd_mix = f(band_params, (prefix + "evenOddMix").c_str(), band.even_odd_mix);
+        band.frequency_hz =
+            f(band_params, (prefix + "frequencyHz").c_str(), band.frequency_hz, kHzLog);
+        band.drive_db = f(band_params, (prefix + "driveDb").c_str(), band.drive_db, kDb);
+        band.amount = f(band_params, (prefix + "amount").c_str(), band.amount, kNone);
+        band.q = f(band_params, (prefix + "q").c_str(), band.q, kNone);
+        band.even_odd_mix =
+            f(band_params, (prefix + "evenOddMix").c_str(), band.even_odd_mix, kNone);
       });
   return config;
 }
@@ -1080,39 +1159,39 @@ inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
   // here — but that channel is C++-only, so the flat list every binding and the
   // CLI speak had no way to choose an amplifier at all, only to turn the knobs
   // of whichever one it was given. The index is `amp_preset_names()`'s order.
-  const int preset = i(params, "presetIndex", -1);
+  const int preset = i(params, "presetIndex", -1, kNone);
   saturation::AmpSimConfig config =
       preset >= 0 && preset < static_cast<int>(saturation::amp_preset_names().size())
           ? saturation::amp_preset_config(static_cast<saturation::AmpPreset>(preset))
           : base;
-  config.drive = f(params, "drive", config.drive);
-  config.bass_db = f(params, "bassDb", config.bass_db);
-  config.mid_db = f(params, "midDb", config.mid_db);
-  config.treble_db = f(params, "trebleDb", config.treble_db);
-  config.presence_db = f(params, "presenceDb", config.presence_db);
+  config.drive = f(params, "drive", config.drive, kNone);
+  config.bass_db = f(params, "bassDb", config.bass_db, kDb);
+  config.mid_db = f(params, "midDb", config.mid_db, kDb);
+  config.treble_db = f(params, "trebleDb", config.treble_db, kDb);
+  config.presence_db = f(params, "presenceDb", config.presence_db, kDb);
   config.cab = b(params, "cab", config.cab);
   config.cab_model = read_enum(params, "cabModel", config.cab_model);
   config.amp_model = read_enum(params, "ampModel", config.amp_model);
-  config.input_db = f(params, "inputDb", config.input_db);
-  config.level_db = f(params, "levelDb", config.level_db);
-  config.power = f(params, "power", config.power);
-  config.sag = f(params, "sag", config.sag);
-  config.transformer = f(params, "transformer", config.transformer);
-  config.nfb = f(params, "nfb", config.nfb);
+  config.input_db = f(params, "inputDb", config.input_db, kDb);
+  config.level_db = f(params, "levelDb", config.level_db, kDb);
+  config.power = f(params, "power", config.power, kNone);
+  config.sag = f(params, "sag", config.sag, kNone);
+  config.transformer = f(params, "transformer", config.transformer, kNone);
+  config.nfb = f(params, "nfb", config.nfb, kNone);
   config.mic_model = read_enum(params, "micModel", config.mic_model);
-  config.mic_axis = f(params, "micAxis", config.mic_axis);
-  config.mic_distance_cm = f(params, "micDistanceCm", config.mic_distance_cm);
-  config.mic_blend = f(params, "micBlend", config.mic_blend);
+  config.mic_axis = f(params, "micAxis", config.mic_axis, kNone);
+  config.mic_distance_cm = f(params, "micDistanceCm", config.mic_distance_cm, kCentimeters);
+  config.mic_blend = f(params, "micBlend", config.mic_blend, kNone);
   config.mic_b_model = read_enum(params, "micBModel", config.mic_b_model);
-  config.mic_b_axis = f(params, "micBAxis", config.mic_b_axis);
-  config.mic_b_distance_cm = f(params, "micBDistanceCm", config.mic_b_distance_cm);
+  config.mic_b_axis = f(params, "micBAxis", config.mic_b_axis, kNone);
+  config.mic_b_distance_cm = f(params, "micBDistanceCm", config.mic_b_distance_cm, kCentimeters);
   config.mic_b_invert = b(params, "micBInvert", config.mic_b_invert);
-  config.cone = f(params, "cone", config.cone);
-  config.doppler = f(params, "doppler", config.doppler);
+  config.cone = f(params, "cone", config.cone, kNone);
+  config.doppler = f(params, "doppler", config.doppler, kNone);
   config.topology = read_enum(params, "topology", config.topology);
-  config.preamp_stages = i(params, "preampStages", config.preamp_stages);
-  config.bias_shift = f(params, "biasShift", config.bias_shift);
-  config.crossover = f(params, "crossover", config.crossover);
+  config.preamp_stages = i(params, "preampStages", config.preamp_stages, kCount);
+  config.bias_shift = f(params, "biasShift", config.bias_shift, kNone);
+  config.crossover = f(params, "crossover", config.crossover, kNone);
   config.power_tube = read_enum(params, "powerTube", config.power_tube);
   return config;
 }
@@ -1142,6 +1221,7 @@ inline spectral::PresenceEnhancerConfig presence_enhancer_config(const ParamMap&
 inline spectral::SpectralShaperConfig spectral_shaper_config(const ParamMap& params) {
   spectral::SpectralShaperConfig config;
   SONARE_FIELDS_SPECTRAL_SHAPER(SONARE_READ_FIELD)
+  note_pair_order(params, "frequencyHz", Relation::Lt, "highFrequencyHz");
   return config;
 }
 
@@ -1228,6 +1308,8 @@ inline maximizer::SoftKneeMaxConfig soft_knee_max_config(const ParamMap& params)
 inline maximizer::AdaptiveReleaseConfig adaptive_release_config(const ParamMap& params) {
   maximizer::AdaptiveReleaseConfig config;
   SONARE_FIELDS_ADAPTIVE_RELEASE(SONARE_READ_FIELD)
+  note_pair_order(params, "minReleaseMs", Relation::Le, "maxReleaseMs");
+  note_pair_order(params, "crestLow", Relation::Le, "crestHigh");
   return config;
 }
 

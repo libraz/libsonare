@@ -410,7 +410,7 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.tilt, v);
     return true;
   }
-#define X(jkey, member)                          \
+#define X(jkey, member, meta)                    \
   if (key == "eq.tilt." jkey) {                  \
     detail::assign_field(cfg.eq.tilt.member, v); \
     mark_field(flags.tilt);                      \
@@ -424,7 +424,7 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.deesser, v);
     return true;
   }
-#define X(jkey, member)                                          \
+#define X(jkey, member, meta)                                    \
   if (key == "dynamics.deesser." jkey) {                         \
     detail::assign_field(cfg.dynamics.deesser.config.member, v); \
     mark_field(flags.deesser);                                   \
@@ -438,7 +438,7 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.transient_shaper, v);
     return true;
   }
-#define X(jkey, member)                                                   \
+#define X(jkey, member, meta)                                             \
   if (key == "dynamics.transientShaper." jkey) {                          \
     detail::assign_field(cfg.dynamics.transient_shaper.config.member, v); \
     mark_field(flags.transient_shaper);                                   \
@@ -454,7 +454,7 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
     mark_enabled(flags.compressor, v);
     return true;
   }
-#define X(jkey, member)                                             \
+#define X(jkey, member, meta)                                       \
   if (key == "dynamics.compressor." jkey) {                         \
     detail::assign_field(cfg.dynamics.compressor.config.member, v); \
     mark_field(flags.compressor);                                   \
@@ -572,7 +572,7 @@ bool apply_saturation_param(MasteringChainConfig& cfg, const std::string& key, d
     mark_enabled(flags.tape, v);
     return true;
   }
-#define X(jkey, member)                                         \
+#define X(jkey, member, meta)                                   \
   if (key == "saturation.tape." jkey) {                         \
     detail::assign_field(cfg.saturation.tape.config.member, v); \
     mark_field(flags.tape);                                     \
@@ -586,7 +586,7 @@ bool apply_saturation_param(MasteringChainConfig& cfg, const std::string& key, d
     mark_enabled(flags.exciter, v);
     return true;
   }
-#define X(jkey, member)                                            \
+#define X(jkey, member, meta)                                      \
   if (key == "saturation.exciter." jkey) {                         \
     detail::assign_field(cfg.saturation.exciter.config.member, v); \
     mark_field(flags.exciter);                                     \
@@ -606,7 +606,7 @@ bool apply_spectral_stereo_param(MasteringChainConfig& cfg, const std::string& k
     mark_enabled(flags.air_band, v);
     return true;
   }
-#define X(jkey, member)                                           \
+#define X(jkey, member, meta)                                     \
   if (key == "spectral.airBand." jkey) {                          \
     detail::assign_field(cfg.spectral.air_band.config.member, v); \
     mark_field(flags.air_band);                                   \
@@ -620,7 +620,7 @@ bool apply_spectral_stereo_param(MasteringChainConfig& cfg, const std::string& k
     mark_enabled(flags.imager, v);
     return true;
   }
-#define X(jkey, member)                                       \
+#define X(jkey, member, meta)                                 \
   if (key == "stereo.imager." jkey) {                         \
     detail::assign_field(cfg.stereo.imager.config.member, v); \
     mark_field(flags.imager);                                 \
@@ -634,7 +634,7 @@ bool apply_spectral_stereo_param(MasteringChainConfig& cfg, const std::string& k
     mark_enabled(flags.mono_maker, v);
     return true;
   }
-#define X(jkey, member)                                           \
+#define X(jkey, member, meta)                                     \
   if (key == "stereo.monoMaker." jkey) {                          \
     detail::assign_field(cfg.stereo.mono_maker.config.member, v); \
     mark_field(flags.mono_maker);                                 \
@@ -654,7 +654,7 @@ bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string
     mark_enabled(flags.true_peak, v);
     return true;
   }
-#define X(jkey, member)                                                     \
+#define X(jkey, member, meta)                                               \
   if (key == "maximizer.truePeakLimiter." jkey) {                           \
     detail::assign_field(cfg.maximizer.true_peak_limiter.config.member, v); \
     mark_field(flags.true_peak);                                            \
@@ -668,7 +668,7 @@ bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string
     mark_enabled(flags.loudness, v);
     return true;
   }
-#define X(jkey, member)                           \
+#define X(jkey, member, meta)                     \
   if (key == "loudness." jkey) {                  \
     detail::assign_field(cfg.loudness.member, v); \
     mark_field(flags.loudness);                   \

@@ -134,12 +134,23 @@ export interface CapabilityCatalogParameter {
   maxRelativeTo: 'nyquist' | null;
   default: boolean | number | null;
   unit: string | null;
+  /** Lowest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  uiMin: number | null;
+  /** Highest value a control should draw, inside `min` / `max`; null when the accepted range is also the display range. */
+  uiMax: number | null;
+  /** Axis a control draws the value on. */
+  scale: 'linear' | 'log';
   choices: MasteringInsertParamChoice[] | null;
   /**
    * The {@link MasteringInsertSlot} this key belongs to, or null for a key that
    * always exists.
    */
   slot: string | null;
+  /**
+   * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
+   * empty for an independent key. `min` and `max` are measured with every sibling at its default.
+   */
+  dependsOn: { key: string; relation: 'lt' | 'le' | 'gt' | 'ge' }[];
 }
 
 /** One named mastering processor and its host-facing capabilities. */

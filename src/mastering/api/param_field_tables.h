@@ -737,10 +737,11 @@ inline double field_as_double(Enum value) {
 }  // namespace sonare::mastering::api::detail
 
 // ---------------------------------------------------------------------------
-// Field tables. X(jsonKey, member) — jsonKey is the flat parameter name (the
+// Field tables. X(jsonKey, member, meta) — jsonKey is the flat parameter name (the
 // chain surface prefixes it with the stage path); member is the field on the
-// processor's *Config struct. Order matches the historical serialization order
-// so chain_config_to_json output is byte-stable.
+// processor's *Config struct; meta is the unit and axis the reader declares for
+// the key (param_meta.h), which only the config builder consumes. Order matches the historical
+// serialization order so chain_config_to_json output is byte-stable.
 // ---------------------------------------------------------------------------
 
 // Coverage guard. A config field with no table row is unreachable from every
@@ -756,7 +757,7 @@ inline double field_as_double(Enum value) {
 // A non-zero `unexposed` needs a one-line reason at the call site naming the
 // omitted fields -- an unexplained count is how a coverage gap gets laundered
 // into an approved exception.
-#define SONARE_COUNT_FIELD(key, member) +1
+#define SONARE_COUNT_FIELD(key, member, meta) +1
 #define SONARE_FIELD_TABLE_SIZE(table) (0 table(SONARE_COUNT_FIELD))
 #define SONARE_ASSERT_TABLE_COVERS(table, Config, unexposed)                                   \
   static_assert(SONARE_FIELD_TABLE_SIZE(table) + (unexposed) ==                                \
@@ -786,311 +787,311 @@ inline double field_as_double(Enum value) {
 
 // --- Dynamics ---
 
-#define SONARE_FIELDS_COMPRESSOR(X)               \
-  X("thresholdDb", threshold_db)                  \
-  X("ratio", ratio)                               \
-  X("attackMs", attack_ms)                        \
-  X("releaseMs", release_ms)                      \
-  X("kneeDb", knee_db)                            \
-  X("makeupGainDb", makeup_gain_db)               \
-  X("autoMakeup", auto_makeup)                    \
-  X("detector", detector)                         \
-  X("sidechainHpfEnabled", sidechain_hpf_enabled) \
-  X("sidechainHpfHz", sidechain_hpf_hz)           \
-  X("pdrTimeMs", pdr_time_ms)                     \
-  X("pdrReleaseScale", pdr_release_scale)
+#define SONARE_FIELDS_COMPRESSOR(X)                      \
+  X("thresholdDb", threshold_db, kDb)                    \
+  X("ratio", ratio, kRatio)                              \
+  X("attackMs", attack_ms, kMsLog)                       \
+  X("releaseMs", release_ms, kMsLog)                     \
+  X("kneeDb", knee_db, kDb)                              \
+  X("makeupGainDb", makeup_gain_db, kDb)                 \
+  X("autoMakeup", auto_makeup, kNone)                    \
+  X("detector", detector, kNone)                         \
+  X("sidechainHpfEnabled", sidechain_hpf_enabled, kNone) \
+  X("sidechainHpfHz", sidechain_hpf_hz, kHzLog)          \
+  X("pdrTimeMs", pdr_time_ms, kMs)                       \
+  X("pdrReleaseScale", pdr_release_scale, kNone)
 
-#define SONARE_FIELDS_LIMITER(X) \
-  X("thresholdDb", threshold_db) \
-  X("lookaheadMs", lookahead_ms) \
-  X("releaseMs", release_ms)     \
-  X("ratio", ratio)              \
-  X("postGainDb", post_gain_db)
+#define SONARE_FIELDS_LIMITER(X)      \
+  X("thresholdDb", threshold_db, kDb) \
+  X("lookaheadMs", lookahead_ms, kMs) \
+  X("releaseMs", release_ms, kMsLog)  \
+  X("ratio", ratio, kRatio)           \
+  X("postGainDb", post_gain_db, kDb)
 
 #define SONARE_FIELDS_BRICKWALL_LIMITER(X) \
-  X("ceilingDb", ceiling_db)               \
-  X("lookaheadMs", lookahead_ms)           \
-  X("releaseMs", release_ms)
+  X("ceilingDb", ceiling_db, kDbfs)        \
+  X("lookaheadMs", lookahead_ms, kMs)      \
+  X("releaseMs", release_ms, kMsLog)
 
-#define SONARE_FIELDS_DEESSER(X) \
-  X("frequencyHz", frequency_hz) \
-  X("thresholdDb", threshold_db) \
-  X("ratio", ratio)              \
-  X("attackMs", attack_ms)       \
-  X("releaseMs", release_ms)     \
-  X("rangeDb", range_db)         \
-  X("bandpassQ", bandpass_q)
+#define SONARE_FIELDS_DEESSER(X)         \
+  X("frequencyHz", frequency_hz, kHzLog) \
+  X("thresholdDb", threshold_db, kDb)    \
+  X("ratio", ratio, kRatio)              \
+  X("attackMs", attack_ms, kMsLog)       \
+  X("releaseMs", release_ms, kMsLog)     \
+  X("rangeDb", range_db, kDb)            \
+  X("bandpassQ", bandpass_q, kNone)
 
-#define SONARE_FIELDS_EXPANDER(X) \
-  X("thresholdDb", threshold_db)  \
-  X("ratio", ratio)               \
-  X("attackMs", attack_ms)        \
-  X("releaseMs", release_ms)      \
-  X("rangeDb", range_db)
+#define SONARE_FIELDS_EXPANDER(X)     \
+  X("thresholdDb", threshold_db, kDb) \
+  X("ratio", ratio, kRatio)           \
+  X("attackMs", attack_ms, kMsLog)    \
+  X("releaseMs", release_ms, kMsLog)  \
+  X("rangeDb", range_db, kDb)
 
-#define SONARE_FIELDS_GATE(X)               \
-  X("thresholdDb", threshold_db)            \
-  X("attackMs", attack_ms)                  \
-  X("releaseMs", release_ms)                \
-  X("rangeDb", range_db)                    \
-  X("holdMs", hold_ms)                      \
-  X("closeThresholdDb", close_threshold_db) \
-  X("keyHpfHz", key_hpf_hz)
+#define SONARE_FIELDS_GATE(X)                    \
+  X("thresholdDb", threshold_db, kDb)            \
+  X("attackMs", attack_ms, kMsLog)               \
+  X("releaseMs", release_ms, kMsLog)             \
+  X("rangeDb", range_db, kDb)                    \
+  X("holdMs", hold_ms, kMs)                      \
+  X("closeThresholdDb", close_threshold_db, kDb) \
+  X("keyHpfHz", key_hpf_hz, kHz)
 
-#define SONARE_FIELDS_PARALLEL_COMP(X)   \
-  X("thresholdDb", threshold_db)         \
-  X("ratio", ratio)                      \
-  X("attackMs", attack_ms)               \
-  X("releaseMs", release_ms)             \
-  X("makeupGainDb", makeup_gain_db)      \
-  X("mix", mix)                          \
-  X("linkedDetection", linked_detection) \
-  X("outputLimiter", output_limiter)     \
-  X("outputCeilingDb", output_ceiling_db)
+#define SONARE_FIELDS_PARALLEL_COMP(X)          \
+  X("thresholdDb", threshold_db, kDb)           \
+  X("ratio", ratio, kRatio)                     \
+  X("attackMs", attack_ms, kMsLog)              \
+  X("releaseMs", release_ms, kMsLog)            \
+  X("makeupGainDb", makeup_gain_db, kDb)        \
+  X("mix", mix, kNone)                          \
+  X("linkedDetection", linked_detection, kNone) \
+  X("outputLimiter", output_limiter, kNone)     \
+  X("outputCeilingDb", output_ceiling_db, kDbfs)
 
-#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)         \
-  X("thresholdDb", threshold_db)                  \
-  X("ratio", ratio)                               \
-  X("attackMs", attack_ms)                        \
-  X("releaseMs", release_ms)                      \
-  X("rangeDb", range_db)                          \
-  X("sidechainHpfEnabled", sidechain_hpf_enabled) \
-  X("sidechainHpfHz", sidechain_hpf_hz)           \
-  X("monoSumming", mono_summing)                  \
-  X("keyListen", key_listen)                      \
-  X("lookaheadMs", lookahead_ms)
+#define SONARE_FIELDS_SIDECHAIN_ROUTER(X)                \
+  X("thresholdDb", threshold_db, kDb)                    \
+  X("ratio", ratio, kRatio)                              \
+  X("attackMs", attack_ms, kMsLog)                       \
+  X("releaseMs", release_ms, kMsLog)                     \
+  X("rangeDb", range_db, kDb)                            \
+  X("sidechainHpfEnabled", sidechain_hpf_enabled, kNone) \
+  X("sidechainHpfHz", sidechain_hpf_hz, kHzLog)          \
+  X("monoSumming", mono_summing, kNone)                  \
+  X("keyListen", key_listen, kNone)                      \
+  X("lookaheadMs", lookahead_ms, kMs)
 
-#define SONARE_FIELDS_DUCKING(X) \
-  X("thresholdDb", threshold_db) \
-  X("ratio", ratio)              \
-  X("attackMs", attack_ms)       \
-  X("releaseMs", release_ms)     \
-  X("rangeDb", range_db)         \
-  X("lookaheadMs", lookahead_ms)
+#define SONARE_FIELDS_DUCKING(X)      \
+  X("thresholdDb", threshold_db, kDb) \
+  X("ratio", ratio, kRatio)           \
+  X("attackMs", attack_ms, kMsLog)    \
+  X("releaseMs", release_ms, kMsLog)  \
+  X("rangeDb", range_db, kDb)         \
+  X("lookaheadMs", lookahead_ms, kMs)
 
-#define SONARE_FIELDS_TRANSIENT_SHAPER(X) \
-  X("attackGainDb", attack_gain_db)       \
-  X("sustainGainDb", sustain_gain_db)     \
-  X("fastAttackMs", fast_attack_ms)       \
-  X("fastReleaseMs", fast_release_ms)     \
-  X("slowAttackMs", slow_attack_ms)       \
-  X("slowReleaseMs", slow_release_ms)     \
-  X("sensitivity", sensitivity)           \
-  X("maxGainDb", max_gain_db)             \
-  X("gainSmoothingMs", gain_smoothing_ms) \
-  X("lookaheadMs", lookahead_ms)
+#define SONARE_FIELDS_TRANSIENT_SHAPER(X)      \
+  X("attackGainDb", attack_gain_db, kDb)       \
+  X("sustainGainDb", sustain_gain_db, kDb)     \
+  X("fastAttackMs", fast_attack_ms, kMsLog)    \
+  X("fastReleaseMs", fast_release_ms, kMsLog)  \
+  X("slowAttackMs", slow_attack_ms, kMsLog)    \
+  X("slowReleaseMs", slow_release_ms, kMsLog)  \
+  X("sensitivity", sensitivity, kNone)         \
+  X("maxGainDb", max_gain_db, kDb)             \
+  X("gainSmoothingMs", gain_smoothing_ms, kMs) \
+  X("lookaheadMs", lookahead_ms, kMs)
 
 #define SONARE_FIELDS_UPWARD_COMPRESSOR(X) \
-  X("thresholdDb", threshold_db)           \
-  X("ratio", ratio)                        \
-  X("attackMs", attack_ms)                 \
-  X("releaseMs", release_ms)               \
-  X("rangeDb", range_db)
+  X("thresholdDb", threshold_db, kDb)      \
+  X("ratio", ratio, kRatio)                \
+  X("attackMs", attack_ms, kMsLog)         \
+  X("releaseMs", release_ms, kMsLog)       \
+  X("rangeDb", range_db, kDb)
 
 #define SONARE_FIELDS_UPWARD_EXPANDER(X) SONARE_FIELDS_UPWARD_COMPRESSOR(X)
 
-#define SONARE_FIELDS_VOCAL_RIDER(X)      \
-  X("targetDb", target_db)                \
-  X("maxBoostDb", max_boost_db)           \
-  X("maxCutDb", max_cut_db)               \
-  X("attackMs", attack_ms)                \
-  X("releaseMs", release_ms)              \
-  X("outputGainDb", output_gain_db)       \
-  X("gainSmoothingMs", gain_smoothing_ms) \
-  X("noiseFloorDb", noise_floor_db)       \
-  X("linkedDetection", linked_detection)
+#define SONARE_FIELDS_VOCAL_RIDER(X)           \
+  X("targetDb", target_db, kDb)                \
+  X("maxBoostDb", max_boost_db, kDb)           \
+  X("maxCutDb", max_cut_db, kDb)               \
+  X("attackMs", attack_ms, kMsLog)             \
+  X("releaseMs", release_ms, kMsLog)           \
+  X("outputGainDb", output_gain_db, kDb)       \
+  X("gainSmoothingMs", gain_smoothing_ms, kMs) \
+  X("noiseFloorDb", noise_floor_db, kDb)       \
+  X("linkedDetection", linked_detection, kNone)
 
 // --- Saturation ---
 
-#define SONARE_FIELDS_TAPE(X)       \
-  X("driveDb", drive_db)            \
-  X("saturation", saturation)       \
-  X("hysteresis", hysteresis)       \
-  X("outputGainDb", output_gain_db) \
-  X("speedIps", speed_ips)          \
-  X("headBumpDb", head_bump_db)     \
-  X("bias", bias)                   \
-  X("gapLoss", gap_loss)            \
-  X("oversampleFactor", oversample_factor)
+#define SONARE_FIELDS_TAPE(X)                \
+  X("driveDb", drive_db, kDb)                \
+  X("saturation", saturation, kNone)         \
+  X("hysteresis", hysteresis, kNone)         \
+  X("outputGainDb", output_gain_db, kDb)     \
+  X("speedIps", speed_ips, kInchesPerSecond) \
+  X("headBumpDb", head_bump_db, kDb)         \
+  X("bias", bias, kNone)                     \
+  X("gapLoss", gap_loss, kNone)              \
+  X("oversampleFactor", oversample_factor, kRatio)
 
-#define SONARE_FIELDS_EXCITER(X) \
-  X("frequencyHz", frequency_hz) \
-  X("driveDb", drive_db)         \
-  X("amount", amount)            \
-  X("q", q)                      \
-  X("evenOddMix", even_odd_mix)  \
-  X("aliasing", aliasing)
+#define SONARE_FIELDS_EXCITER(X)         \
+  X("frequencyHz", frequency_hz, kHzLog) \
+  X("driveDb", drive_db, kDb)            \
+  X("amount", amount, kNone)             \
+  X("q", q, kNone)                       \
+  X("evenOddMix", even_odd_mix, kNone)   \
+  X("aliasing", aliasing, kNone)
 
-#define SONARE_FIELDS_BITCRUSHER(X)        \
-  X("bitDepth", bit_depth)                 \
-  X("downsampleFactor", downsample_factor) \
-  X("mix", mix)                            \
-  X("ditherType", dither_type)             \
-  X("ditherSeed", dither_seed)             \
-  X("holdHz", hold_hz)                     \
-  X("quantizerMode", quantizer_mode)       \
-  X("radioNoiseLevel", radio_noise_level)  \
-  X("wpNoiseLevel", wp_noise_level)        \
-  X("discNoiseLevel", disc_noise_level)    \
-  X("humLevel", hum_level)                 \
-  X("noiseDetune", noise_detune)           \
-  X("wpNoisePink", wp_noise_pink)          \
-  X("discType", disc_type)                 \
-  X("humHz", hum_hz)                       \
-  X("noiseLpfHz", noise_lpf_hz)            \
-  X("wpNoiseLpfHz", wp_noise_lpf_hz)       \
-  X("discNoiseLpfHz", disc_noise_lpf_hz)   \
-  X("humLpfHz", hum_lpf_hz)                \
-  X("preFilterHz", pre_filter_hz)          \
-  X("postFilterHz", post_filter_hz)        \
-  X("filterType", filter_type)             \
-  X("mono", mono)                          \
-  X("typeLadder", type_ladder)
+#define SONARE_FIELDS_BITCRUSHER(X)                \
+  X("bitDepth", bit_depth, kBits)                  \
+  X("downsampleFactor", downsample_factor, kRatio) \
+  X("mix", mix, kNone)                             \
+  X("ditherType", dither_type, kNone)              \
+  X("ditherSeed", dither_seed, kNone)              \
+  X("holdHz", hold_hz, kHz)                        \
+  X("quantizerMode", quantizer_mode, kNone)        \
+  X("radioNoiseLevel", radio_noise_level, kNone)   \
+  X("wpNoiseLevel", wp_noise_level, kNone)         \
+  X("discNoiseLevel", disc_noise_level, kNone)     \
+  X("humLevel", hum_level, kNone)                  \
+  X("noiseDetune", noise_detune, kNone)            \
+  X("wpNoisePink", wp_noise_pink, kNone)           \
+  X("discType", disc_type, kNone)                  \
+  X("humHz", hum_hz, kHz)                          \
+  X("noiseLpfHz", noise_lpf_hz, kHz)               \
+  X("wpNoiseLpfHz", wp_noise_lpf_hz, kHz)          \
+  X("discNoiseLpfHz", disc_noise_lpf_hz, kHz)      \
+  X("humLpfHz", hum_lpf_hz, kHz)                   \
+  X("preFilterHz", pre_filter_hz, kHz)             \
+  X("postFilterHz", post_filter_hz, kHz)           \
+  X("filterType", filter_type, kNone)              \
+  X("mono", mono, kNone)                           \
+  X("typeLadder", type_ladder, kNone)
 
 #define SONARE_FIELDS_HARD_CLIPPER(X) \
-  X("ceiling", ceiling)               \
-  X("aliasing", aliasing)
+  X("ceiling", ceiling, kNone)        \
+  X("aliasing", aliasing, kNone)
 
 #define SONARE_FIELDS_SOFT_CLIPPER(X) \
-  X("driveDb", drive_db)              \
-  X("ceiling", ceiling)               \
-  X("mix", mix)                       \
-  X("aliasing", aliasing)
+  X("driveDb", drive_db, kDb)         \
+  X("ceiling", ceiling, kNone)        \
+  X("mix", mix, kNone)                \
+  X("aliasing", aliasing, kNone)
 
-#define SONARE_FIELDS_WAVESHAPER(X) \
-  X("driveDb", drive_db)            \
-  X("mix", mix)                     \
-  X("outputGainDb", output_gain_db) \
-  X("bias", bias)                   \
-  X("curve", curve)                 \
-  X("aliasing", aliasing)
+#define SONARE_FIELDS_WAVESHAPER(X)      \
+  X("driveDb", drive_db, kDb)            \
+  X("mix", mix, kNone)                   \
+  X("outputGainDb", output_gain_db, kDb) \
+  X("bias", bias, kNone)                 \
+  X("curve", curve, kNone)               \
+  X("aliasing", aliasing, kNone)
 
-#define SONARE_FIELDS_TUBE(X)              \
-  X("driveDb", drive_db)                   \
-  X("bias", bias)                          \
-  X("mix", mix)                            \
-  X("oversampleFactor", oversample_factor) \
-  X("biasV", bias_v)                       \
-  X("harmonicDrive", harmonic_drive)
+#define SONARE_FIELDS_TUBE(X)                      \
+  X("driveDb", drive_db, kDb)                      \
+  X("bias", bias, kNone)                           \
+  X("mix", mix, kNone)                             \
+  X("oversampleFactor", oversample_factor, kRatio) \
+  X("biasV", bias_v, kVolts)                       \
+  X("harmonicDrive", harmonic_drive, kNone)
 
 #define SONARE_FIELDS_TRANSFORMER(X) \
-  X("driveDb", drive_db)             \
-  X("asymmetry", asymmetry)          \
-  X("mix", mix)
+  X("driveDb", drive_db, kDb)        \
+  X("asymmetry", asymmetry, kNone)   \
+  X("mix", mix, kNone)
 
 // Shared by saturation.overdrive and saturation.distortion.
 #define SONARE_FIELDS_PEDAL(X) \
-  X("gainDb", gain_db)         \
-  X("toneHz", tone_hz)         \
-  X("levelDb", level_db)
+  X("gainDb", gain_db, kDb)    \
+  X("toneHz", tone_hz, kHzLog) \
+  X("levelDb", level_db, kDb)
 
 // --- Spectral ---
 
-#define SONARE_FIELDS_AIR_BAND(X)               \
-  X("amount", amount)                           \
-  X("shelfFrequencyHz", shelf_frequency_hz)     \
-  X("dynamicThresholdDb", dynamic_threshold_db) \
-  X("dynamicRangeDb", dynamic_range_db)
+#define SONARE_FIELDS_AIR_BAND(X)                    \
+  X("amount", amount, kNone)                         \
+  X("shelfFrequencyHz", shelf_frequency_hz, kHzLog)  \
+  X("dynamicThresholdDb", dynamic_threshold_db, kDb) \
+  X("dynamicRangeDb", dynamic_range_db, kDb)
 
-#define SONARE_FIELDS_LOW_END_FOCUS(X)       \
-  X("cutoffHz", cutoff_hz)                   \
-  X("width", width)                          \
-  X("subharmonicAmount", subharmonic_amount) \
-  X("transientTightness", transient_tightness)
+#define SONARE_FIELDS_LOW_END_FOCUS(X)              \
+  X("cutoffHz", cutoff_hz, kHzLog)                  \
+  X("width", width, kNone)                          \
+  X("subharmonicAmount", subharmonic_amount, kNone) \
+  X("transientTightness", transient_tightness, kNone)
 
-#define SONARE_FIELDS_PRESENCE_ENHANCER(X)    \
-  X("amount", amount)                         \
-  X("drive", drive)                           \
-  X("centerFrequencyHz", center_frequency_hz) \
-  X("q", q)                                   \
-  X("aliasing", aliasing)
+#define SONARE_FIELDS_PRESENCE_ENHANCER(X)            \
+  X("amount", amount, kNone)                          \
+  X("drive", drive, kNone)                            \
+  X("centerFrequencyHz", center_frequency_hz, kHzLog) \
+  X("q", q, kNone)                                    \
+  X("aliasing", aliasing, kNone)
 
-#define SONARE_FIELDS_SPECTRAL_SHAPER(X)  \
-  X("threshold", threshold)               \
-  X("amount", amount)                     \
-  X("frequencyHz", frequency_hz)          \
-  X("highFrequencyHz", high_frequency_hz) \
-  X("attackMs", attack_ms)                \
-  X("releaseMs", release_ms)              \
-  X("rangeDb", range_db)
+#define SONARE_FIELDS_SPECTRAL_SHAPER(X)          \
+  X("threshold", threshold, kNone)                \
+  X("amount", amount, kNone)                      \
+  X("frequencyHz", frequency_hz, kHzLog)          \
+  X("highFrequencyHz", high_frequency_hz, kHzLog) \
+  X("attackMs", attack_ms, kMsLog)                \
+  X("releaseMs", release_ms, kMsLog)              \
+  X("rangeDb", range_db, kDb)
 
 // --- Stereo ---
 
 #define SONARE_FIELDS_AUTO_PAN(X) \
-  X("rateHz", rate_hz)            \
-  X("depth", depth)               \
-  X("phase", phase)               \
-  X("shape", shape)
+  X("rateHz", rate_hz, kHz)       \
+  X("depth", depth, kNone)        \
+  X("phase", phase, kNone)        \
+  X("shape", shape, kNone)
 
 #define SONARE_FIELDS_BINAURAL_PANNER(X) \
-  X("azimuthDeg", azimuth_deg)           \
-  X("autoTurn", auto_turn)               \
-  X("turnRateHz", turn_rate_hz)          \
-  X("clockwise", clockwise)              \
-  X("output", output)                    \
-  X("dryWet", dry_wet)
+  X("azimuthDeg", azimuth_deg, kDegrees) \
+  X("autoTurn", auto_turn, kNone)        \
+  X("turnRateHz", turn_rate_hz, kHz)     \
+  X("clockwise", clockwise, kNone)       \
+  X("output", output, kNone)             \
+  X("dryWet", dry_wet, kNone)
 
 #define SONARE_FIELDS_HAAS_ENHANCER(X) \
-  X("delayMs", delay_ms)               \
-  X("mix", mix)                        \
-  X("delayRight", delay_right)
+  X("delayMs", delay_ms, kMs)          \
+  X("mix", mix, kNone)                 \
+  X("delayRight", delay_right, kNone)
 
 // The imager additionally range-checks width/decorrelationAmount in its config
 // builder; only the field overlay is table-driven.
-#define SONARE_FIELDS_IMAGER(X)                  \
-  X("width", width)                              \
-  X("outputGainDb", output_gain_db)              \
-  X("decorrelationAmount", decorrelation_amount) \
-  X("preserveEnergy", preserve_energy)
+#define SONARE_FIELDS_IMAGER(X)                         \
+  X("width", width, kNone)                              \
+  X("outputGainDb", output_gain_db, kDb)                \
+  X("decorrelationAmount", decorrelation_amount, kNone) \
+  X("preserveEnergy", preserve_energy, kNone)
 
 #define SONARE_FIELDS_MONO_MAKER(X) \
-  X("amount", amount)               \
-  X("frequencyHz", frequency_hz)
+  X("amount", amount, kNone)        \
+  X("frequencyHz", frequency_hz, kHzLog)
 
-#define SONARE_FIELDS_PHASE_ALIGN(X) \
-  X("delaySamples", delay_samples)   \
-  X("delayRight", delay_right)       \
-  X("fractionalDelaySamples", fractional_delay_samples)
+#define SONARE_FIELDS_PHASE_ALIGN(X)         \
+  X("delaySamples", delay_samples, kSamples) \
+  X("delayRight", delay_right, kNone)        \
+  X("fractionalDelaySamples", fractional_delay_samples, kSamples)
 
-#define SONARE_FIELDS_STEREO_BALANCE(X) \
-  X("balance", balance)                 \
-  X("constantPower", constant_power)    \
-  X("law", law)
+#define SONARE_FIELDS_STEREO_BALANCE(X)     \
+  X("balance", balance, kNone)              \
+  X("constantPower", constant_power, kNone) \
+  X("law", law, kNone)
 
 // --- Utility ---
 
-#define SONARE_FIELDS_GAIN(X) X("levelDb", level_db)
+#define SONARE_FIELDS_GAIN(X) X("levelDb", level_db, kDb)
 
 // --- Maximizer ---
 
-#define SONARE_FIELDS_MAXIMIZER(X) \
-  X("inputGainDb", input_gain_db)  \
-  X("ceilingDb", ceiling_db)       \
-  X("lookaheadMs", lookahead_ms)   \
-  X("releaseMs", release_ms)
+#define SONARE_FIELDS_MAXIMIZER(X)     \
+  X("inputGainDb", input_gain_db, kDb) \
+  X("ceilingDb", ceiling_db, kDbfs)    \
+  X("lookaheadMs", lookahead_ms, kMs)  \
+  X("releaseMs", release_ms, kMsLog)
 
-#define SONARE_FIELDS_TRUE_PEAK_LIMITER(X) \
-  X("ceilingDb", ceiling_db)               \
-  X("lookaheadMs", lookahead_ms)           \
-  X("releaseMs", release_ms)               \
-  X("oversampleFactor", oversample_factor) \
-  X("applyGainAtInputRate", apply_gain_at_input_rate)
+#define SONARE_FIELDS_TRUE_PEAK_LIMITER(X)         \
+  X("ceilingDb", ceiling_db, kDbfs)                \
+  X("lookaheadMs", lookahead_ms, kMs)              \
+  X("releaseMs", release_ms, kMsLog)               \
+  X("oversampleFactor", oversample_factor, kRatio) \
+  X("applyGainAtInputRate", apply_gain_at_input_rate, kNone)
 
 #define SONARE_FIELDS_SOFT_KNEE_MAX(X) \
-  X("inputGainDb", input_gain_db)      \
-  X("ceilingDb", ceiling_db)           \
-  X("kneeDb", knee_db)                 \
-  X("releaseMs", release_ms)
+  X("inputGainDb", input_gain_db, kDb) \
+  X("ceilingDb", ceiling_db, kDbfs)    \
+  X("kneeDb", knee_db, kDb)            \
+  X("releaseMs", release_ms, kMsLog)
 
-#define SONARE_FIELDS_ADAPTIVE_RELEASE(X) \
-  X("ceilingDb", ceiling_db)              \
-  X("lookaheadMs", lookahead_ms)          \
-  X("minReleaseMs", min_release_ms)       \
-  X("maxReleaseMs", max_release_ms)       \
-  X("crestWindowMs", crest_window_ms)     \
-  X("crestLow", crest_low)                \
-  X("crestHigh", crest_high)              \
-  X("releaseSmoothingMs", release_smoothing_ms)
+#define SONARE_FIELDS_ADAPTIVE_RELEASE(X)   \
+  X("ceilingDb", ceiling_db, kDbfs)         \
+  X("lookaheadMs", lookahead_ms, kMs)       \
+  X("minReleaseMs", min_release_ms, kMsLog) \
+  X("maxReleaseMs", max_release_ms, kMsLog) \
+  X("crestWindowMs", crest_window_ms, kMs)  \
+  X("crestLow", crest_low, kNone)           \
+  X("crestHigh", crest_high, kNone)         \
+  X("releaseSmoothingMs", release_smoothing_ms, kMs)
 
 // --- Chain-only stages ---
 // These do not have a processor_params.h config builder, but their flat-key
@@ -1099,13 +1100,13 @@ inline double field_as_double(Enum value) {
 // member), so the chain consumers supply the matching accessor.
 
 #define SONARE_FIELDS_EQ_TILT(X) \
-  X("tiltDb", tilt_db)           \
-  X("pivotHz", pivot_hz)
+  X("tiltDb", tilt_db, kDb)      \
+  X("pivotHz", pivot_hz, kHzLog)
 
-#define SONARE_FIELDS_LOUDNESS(X)                     \
-  X("targetLufs", target_lufs)                        \
-  X("ceilingDb", ceiling_db)                          \
-  X("truePeakOversample", true_peak_oversample)       \
-  X("releaseMs", release_ms)                          \
-  X("applyGainAtInputRate", apply_gain_at_input_rate) \
-  X("maxLimiterGainReductionDb", max_limiter_gain_reduction_db)
+#define SONARE_FIELDS_LOUDNESS(X)                            \
+  X("targetLufs", target_lufs, kLufs)                        \
+  X("ceilingDb", ceiling_db, kDbfs)                          \
+  X("truePeakOversample", true_peak_oversample, kRatio)      \
+  X("releaseMs", release_ms, kMsLog)                         \
+  X("applyGainAtInputRate", apply_gain_at_input_rate, kNone) \
+  X("maxLimiterGainReductionDb", max_limiter_gain_reduction_db, kDb)

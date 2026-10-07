@@ -29,6 +29,7 @@
     "CapabilityCatalogParameter": [
       "choices",
       "default",
+      "dependsOn",
       "id",
       "max",
       "maxExclusive",
@@ -37,8 +38,11 @@
       "minExclusive",
       "name",
       "rtSafe",
+      "scale",
       "slot",
       "type",
+      "uiMax",
+      "uiMin",
       "unit"
     ],
     "CapabilityCatalogPresets": [

@@ -76,7 +76,7 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
   bands.reserve(cfg.dynamics.multiband_comp.config.bands.size());
   for (const CompressorConfig& band_config : cfg.dynamics.multiband_comp.config.bands) {
     sonare::util::json::Object band;
-#define X(key, member) add_field(band, key, band_config.member);
+#define X(key, member, meta) add_field(band, key, band_config.member);
     SONARE_FIELDS_COMPRESSOR(X)
 #undef X
     bands.emplace_back(JsonValue(std::move(band)));
@@ -157,18 +157,18 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   add_field(params, "repair.denoise.gainSmoothing", cfg.repair.denoise.config.gain_smoothing);
 
   add_field(params, "eq.tilt.enabled", cfg.eq.tilt.enabled);
-#define X(key, member) add_field(params, "eq.tilt." key, cfg.eq.tilt.member);
+#define X(key, member, meta) add_field(params, "eq.tilt." key, cfg.eq.tilt.member);
   SONARE_FIELDS_EQ_TILT(X)
 #undef X
 
   add_field(params, "dynamics.deesser.enabled", cfg.dynamics.deesser.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "dynamics.deesser." key, cfg.dynamics.deesser.config.member);
   SONARE_FIELDS_DEESSER(X)
 #undef X
 
   add_field(params, "dynamics.transientShaper.enabled", cfg.dynamics.transient_shaper.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "dynamics.transientShaper." key, cfg.dynamics.transient_shaper.config.member);
   SONARE_FIELDS_TRANSIENT_SHAPER(X)
 #undef X
@@ -176,7 +176,7 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   // `detector` is an enum serialized as its integer value via the enum add_field
   // overload; the parser restores it with static_cast in chain_params.cpp.
   add_field(params, "dynamics.compressor.enabled", cfg.dynamics.compressor.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "dynamics.compressor." key, cfg.dynamics.compressor.config.member);
   SONARE_FIELDS_COMPRESSOR(X)
 #undef X
@@ -213,42 +213,44 @@ sonare::util::json::Object build_chain_params(const MasteringChainConfig& cfg,
   }
 
   add_field(params, "saturation.tape.enabled", cfg.saturation.tape.enabled);
-#define X(key, member) add_field(params, "saturation.tape." key, cfg.saturation.tape.config.member);
+#define X(key, member, meta) \
+  add_field(params, "saturation.tape." key, cfg.saturation.tape.config.member);
   SONARE_FIELDS_TAPE(X)
 #undef X
 
   add_field(params, "saturation.exciter.enabled", cfg.saturation.exciter.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "saturation.exciter." key, cfg.saturation.exciter.config.member);
   SONARE_FIELDS_EXCITER(X)
 #undef X
 
   add_field(params, "spectral.airBand.enabled", cfg.spectral.air_band.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "spectral.airBand." key, cfg.spectral.air_band.config.member);
   SONARE_FIELDS_AIR_BAND(X)
 #undef X
 
   add_field(params, "stereo.imager.enabled", cfg.stereo.imager.enabled);
-#define X(key, member) add_field(params, "stereo.imager." key, cfg.stereo.imager.config.member);
+#define X(key, member, meta) \
+  add_field(params, "stereo.imager." key, cfg.stereo.imager.config.member);
   SONARE_FIELDS_IMAGER(X)
 #undef X
 
   add_field(params, "stereo.monoMaker.enabled", cfg.stereo.mono_maker.enabled);
-#define X(key, member) \
+#define X(key, member, meta) \
   add_field(params, "stereo.monoMaker." key, cfg.stereo.mono_maker.config.member);
   SONARE_FIELDS_MONO_MAKER(X)
 #undef X
 
   add_field(params, "maximizer.truePeakLimiter.enabled", cfg.maximizer.true_peak_limiter.enabled);
-#define X(key, member)                                \
+#define X(key, member, meta)                          \
   add_field(params, "maximizer.truePeakLimiter." key, \
             cfg.maximizer.true_peak_limiter.config.member);
   SONARE_FIELDS_TRUE_PEAK_LIMITER(X)
 #undef X
 
   add_field(params, "loudness.enabled", cfg.loudness.enabled);
-#define X(key, member) add_field(params, "loudness." key, cfg.loudness.member);
+#define X(key, member, meta) add_field(params, "loudness." key, cfg.loudness.member);
   SONARE_FIELDS_LOUDNESS(X)
 #undef X
 

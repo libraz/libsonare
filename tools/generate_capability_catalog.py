@@ -9,6 +9,30 @@ import sys
 from pathlib import Path
 from typing import Any
 
+PARAMETER_UNITS = {
+    "dB",
+    "dBFS",
+    "LUFS",
+    "Hz",
+    "ms",
+    "s",
+    "samples",
+    "m",
+    "cm",
+    "deg",
+    "percent",
+    "degC",
+    "V",
+    "inPerSec",
+    "dBPerOct",
+    "semitones",
+    "cents",
+    "ratio",
+    "bits",
+    "count",
+    "none",
+}
+DEPENDENCY_RELATIONS = {"lt", "le", "gt", "ge"}
 PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger", "playbackRoom")
 MASTERING_PRESET_KEYS = {
     "name",
@@ -138,8 +162,40 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
             raise ValueError(f"{path} is boolean and must publish no bounds")
     elif not optional_number(parameter["default"]):
         raise ValueError(f"{path}.default must be a number or null for a number param")
-    if parameter["unit"] is not None and not isinstance(parameter["unit"], str):
-        raise ValueError(f"{path}.unit must be a string or null")
+    unit = parameter["unit"]
+    if parameter["type"] == "number":
+        # `none` is a declaration; an absent unit is a parameter nobody declared.
+        if unit not in PARAMETER_UNITS:
+            raise ValueError(f"{path}.unit must be one of the declared units for a number")
+    elif unit is not None:
+        raise ValueError(f"{path} is not a number and must publish no unit")
+    if parameter["scale"] not in {"linear", "log"}:
+        raise ValueError(f"{path}.scale must be linear or log")
+    for bound in ("uiMin", "uiMax"):
+        if not optional_number(parameter[bound]):
+            raise ValueError(f"{path}.{bound} must be a number or null")
+        if parameter[bound] is None:
+            continue
+        if parameter["min"] is not None and parameter[bound] < parameter["min"]:
+            raise ValueError(f"{path}.{bound} lies below min")
+        if parameter["max"] is not None and parameter[bound] > parameter["max"]:
+            raise ValueError(f"{path}.{bound} lies above max")
+    if (
+        parameter["uiMin"] is not None
+        and parameter["uiMax"] is not None
+        and parameter["uiMin"] > parameter["uiMax"]
+    ):
+        raise ValueError(f"{path} publishes a uiMin above its uiMax")
+    if not isinstance(parameter["dependsOn"], list):
+        raise TypeError(f"{path}.dependsOn must be an array")
+    for dependency_index, dependency_value in enumerate(parameter["dependsOn"]):
+        dependency_path = f"{path}.dependsOn[{dependency_index}]"
+        dependency = require_object(dependency_value, dependency_path)
+        require_keys(dependency, dependency_path, {"key", "relation"})
+        if not isinstance(dependency["key"], str) or not dependency["key"]:
+            raise ValueError(f"{dependency_path}.key must be a non-empty string")
+        if dependency["relation"] not in DEPENDENCY_RELATIONS:
+            raise ValueError(f"{dependency_path}.relation must be lt, le, gt or ge")
 
 
 def validate_slots(processor: dict[str, Any], path: str) -> set[str]:
@@ -272,11 +328,21 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                     "maxRelativeTo",
                     "default",
                     "unit",
+                    "uiMin",
+                    "uiMax",
+                    "scale",
                     "choices",
                     "slot",
+                    "dependsOn",
                 },
             )
             validate_parameter(parameter, path)
+            sibling_names = {sibling["name"] for sibling in processor["params"]}
+            for dependency in parameter["dependsOn"]:
+                if dependency["key"] == parameter["name"] or dependency["key"] not in sibling_names:
+                    raise ValueError(
+                        f"{path}.dependsOn must name another parameter of the processor"
+                    )
             if parameter["slot"] is not None and parameter["slot"] not in slot_names:
                 raise ValueError(f"{path}.slot must name one of the processor's slots or be null")
     presets = require_object(root["presets"], "catalog.presets")
