@@ -139,7 +139,9 @@ class DynamicEq : public rt::ProcessorBase {
       filter_a.reset();
       filter_b.reset();
       envelope = 0.0;
-      std::fill(look_ring.begin(), look_ring.end(), 0.0f);
+      // Only the live FIFO is ever read; a window that grows is zeroed by ensure_detector().
+      std::fill(look_ring.begin(), look_ring.begin() + static_cast<std::ptrdiff_t>(look_size),
+                0.0f);
       look_pos = 0;
     }
   };
