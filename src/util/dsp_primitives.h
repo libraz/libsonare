@@ -80,6 +80,70 @@ inline float rms(const float* data, size_t n) noexcept {
   return static_cast<float>(std::sqrt(sum_sq / static_cast<double>(n)));
 }
 
+/// @brief Mean square over the clipped centered window `[c - radius, c + radius]` of a
+///   buffer, kept as a running sum while the center moves.
+/// @details A query adds and removes only the samples that entered or left the previous
+///   window, and resums from scratch after one window length of edge travel so the running
+///   double sum cannot drift; a scan over adjacent centers therefore reads each sample a
+///   bounded number of times regardless of the radius.
+class CenteredWindowEnergy {
+ public:
+  CenteredWindowEnergy(const float* data, size_t size, size_t radius) noexcept
+      : data_(data), size_(size), radius_(radius), resync_travel_(2 * radius + 1) {}
+
+  /// @pre `center < size`.
+  double mean_square_at(size_t center) noexcept {
+    const size_t begin = center > radius_ ? center - radius_ : 0;
+    const size_t end = std::min(size_, center + radius_ + 1);
+    const bool overlaps = valid_ && begin < end_ && begin_ < end;
+    if (!overlaps || travel_ >= resync_travel_) {
+      sum_ = accumulate(begin, end);
+      travel_ = 0;
+      valid_ = true;
+    } else {
+      travel_ += (begin > begin_ ? begin - begin_ : begin_ - begin) +
+                 (end > end_ ? end - end_ : end_ - end);
+      if (begin > begin_) {
+        sum_ -= accumulate(begin_, begin);
+      } else {
+        sum_ += accumulate(begin, begin_);
+      }
+      if (end > end_) {
+        sum_ += accumulate(end_, end);
+      } else {
+        sum_ -= accumulate(end, end_);
+      }
+    }
+    begin_ = begin;
+    end_ = end;
+    return std::max(0.0, sum_) / static_cast<double>(end - begin);
+  }
+
+  /// @brief Samples read since construction; the work a scan costs.
+  size_t samples_read() const noexcept { return samples_read_; }
+
+ private:
+  double accumulate(size_t from, size_t to) noexcept {
+    double sum = 0.0;
+    for (size_t i = from; i < to; ++i) {
+      sum += static_cast<double>(data_[i]) * static_cast<double>(data_[i]);
+    }
+    samples_read_ += to - from;
+    return sum;
+  }
+
+  const float* data_;
+  size_t size_;
+  size_t radius_;
+  size_t resync_travel_;
+  size_t begin_ = 0;
+  size_t end_ = 0;
+  size_t travel_ = 0;
+  size_t samples_read_ = 0;
+  double sum_ = 0.0;
+  bool valid_ = false;
+};
+
 /// @brief Peak absolute amplitude of a contiguous sample buffer.
 inline float peak_abs(const float* data, size_t n) noexcept {
   if (data == nullptr || n == 0) {

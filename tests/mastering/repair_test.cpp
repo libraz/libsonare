@@ -24,6 +24,7 @@
 #include "mastering/repair/trim_silence.h"
 #include "support/audio_fixtures.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 using Catch::Matchers::WithinAbs;
 using namespace sonare;
@@ -56,6 +57,131 @@ TEST_CASE("TrimSilence supports LUFS-gated trimming", "[mastering][repair]") {
   REQUIRE(result.size() < samples.size());
   REQUIRE(result.size() >= 20);
   REQUIRE(rms(result) > 0.05f);
+}
+
+namespace {
+
+// Brute-force gated range: every candidate re-sums its whole clipped centered window.
+TrimRange reference_gated_range(const std::vector<float>& samples, int sample_rate,
+                                const TrimSilenceConfig& config) {
+  const size_t size = samples.size();
+  const size_t radius =
+      std::max<size_t>(1, static_cast<size_t>(sample_rate * config.window_ms * 0.0005f));
+  const auto active = [&](size_t center) {
+    const size_t begin = center > radius ? center - radius : 0;
+    const size_t end = std::min(size, center + radius + 1);
+    double sum = 0.0;
+    for (size_t i = begin; i < end; ++i) sum += static_cast<double>(samples[i]) * samples[i];
+    const float window_rms = static_cast<float>(std::sqrt(sum / static_cast<double>(end - begin)));
+    const float db = window_rms <= 1.0e-12f ? -120.0f : 20.0f * std::log10(window_rms);
+    return db > config.gate_lufs;
+  };
+  size_t first = 0;
+  while (first < size && !active(first)) ++first;
+  if (first == size) return {size, size};
+  size_t last = size - 1;
+  while (last > first && !active(last)) --last;
+  first = first > config.padding_samples ? first - config.padding_samples : 0;
+  last = std::min(size - 1, last + config.padding_samples);
+  return {first, last + 1};
+}
+
+std::vector<float> quiet_with_burst(size_t size, size_t burst_begin, size_t burst_end) {
+  std::vector<float> samples(size);
+  for (size_t i = 0; i < size; ++i) {
+    const float tone = std::sin(0.05f * static_cast<float>(i));
+    samples[i] = (i >= burst_begin && i < burst_end) ? 0.3f * tone : 1.0e-4f * tone;
+  }
+  return samples;
+}
+
+void require_same_range(const TrimRange& actual, const TrimRange& expected) {
+  REQUIRE(actual.first == expected.first);
+  REQUIRE(actual.last_exclusive == expected.last_exclusive);
+}
+
+}  // namespace
+
+TEST_CASE("TrimSilence gated ranges match a whole-window reference", "[mastering][repair]") {
+  constexpr int kRate = 8000;
+  TrimSilenceConfig config{0.001f, 0, TrimSilenceMode::LufsGated, -50.0f, 50.0f};
+
+  struct Fixture {
+    const char* name;
+    std::vector<float> samples;
+    size_t padding;
+  };
+  const std::vector<Fixture> fixtures = {
+      {"silence", std::vector<float>(4000, 0.0f), 0},
+      {"middle burst", quiet_with_burst(8000, 3000, 4000), 0},
+      {"head clipped", quiet_with_burst(8000, 0, 150), 0},
+      {"tail clipped", quiet_with_burst(8000, 7900, 8000), 0},
+      {"padded", quiet_with_burst(8000, 3000, 4000), 37},
+  };
+  for (const auto& fixture : fixtures) {
+    INFO(fixture.name);
+    config.padding_samples = fixture.padding;
+    const TrimRange expected = reference_gated_range(fixture.samples, kRate, config);
+    require_same_range(
+        detect_trim_range(fixture.samples.data(), fixture.samples.size(), kRate, config), expected);
+  }
+  // The non-silent fixtures really trim something on both sides.
+  config.padding_samples = 0;
+  const TrimRange middle = reference_gated_range(quiet_with_burst(8000, 3000, 4000), kRate, config);
+  REQUIRE(middle.first > 2000);
+  REQUIRE(middle.last_exclusive < 5000);
+
+  const auto left = quiet_with_burst(8000, 1000, 2000);
+  const auto right = quiet_with_burst(8000, 5000, 6000);
+  const TrimRange left_expected = reference_gated_range(left, kRate, config);
+  const TrimRange right_expected = reference_gated_range(right, kRate, config);
+  const TrimRange union_expected{left_expected.first, right_expected.last_exclusive};
+  require_same_range(
+      detect_trim_range_stereo(left.data(), right.data(), left.size(), kRate, config),
+      union_expected);
+  const auto stereo =
+      trim_silence_stereo(Audio::from_buffer(left.data(), left.size(), kRate),
+                          Audio::from_buffer(right.data(), right.size(), kRate), config);
+  require_same_range(stereo.left_range, left_expected);
+  require_same_range(stereo.right_range, right_expected);
+  require_same_range(stereo.report.range, union_expected);
+  REQUIRE(stereo.left.size() == union_expected.last_exclusive - union_expected.first);
+}
+
+TEST_CASE("CenteredWindowEnergy reads each sample a bounded number of times",
+          "[mastering][repair]") {
+  constexpr size_t kSize = 480000;
+  constexpr size_t kRadius = 9600;
+  std::vector<float> samples(kSize);
+  uint32_t state = 0x2468ace1u;
+  for (float& sample : samples) {
+    state = state * 1664525u + 1013904223u;
+    sample = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
+  }
+  CenteredWindowEnergy energy(samples.data(), kSize, kRadius);
+  const auto brute = [&](size_t center) {
+    const size_t begin = center > kRadius ? center - kRadius : 0;
+    const size_t end = std::min(kSize, center + kRadius + 1);
+    double sum = 0.0;
+    for (size_t i = begin; i < end; ++i) sum += static_cast<double>(samples[i]) * samples[i];
+    return sum / static_cast<double>(end - begin);
+  };
+  for (size_t center = 0; center < kSize; ++center) {
+    const double value = energy.mean_square_at(center);
+    if (center % 40000 == 0 || center == kSize - 1) {
+      INFO("center " << center);
+      REQUIRE(std::abs(value - brute(center)) <= 1.0e-9 * brute(center));
+    }
+  }
+  for (size_t center = kSize; center-- > 0;) {
+    const double value = energy.mean_square_at(center);
+    if (center % 40000 == 0) {
+      INFO("center " << center);
+      REQUIRE(std::abs(value - brute(center)) <= 1.0e-9 * brute(center));
+    }
+  }
+  // Two full passes; a per-candidate window resum would read about 2 * kSize * (2 * kRadius + 1).
+  REQUIRE(energy.samples_read() < 2 * 6 * kSize);
 }
 
 TEST_CASE("TrimSilence shares enum and range validation across direct entrypoints",

@@ -14,19 +14,15 @@
 namespace sonare::mastering::repair {
 namespace {
 
-float sample_loudness_db(const float* samples, size_t size, size_t center, size_t radius) {
-  const size_t begin = center > radius ? center - radius : 0;
-  const size_t end = std::min(size, center + radius + 1);
-  const float window_rms = rms(samples + begin, std::max<size_t>(1, end - begin));
-  return window_rms <= 1.0e-12f ? sonare::constants::kFloorDb : linear_to_db(window_rms);
-}
-
-bool is_active_sample(const float* samples, size_t size, size_t index,
-                      const TrimSilenceConfig& config, size_t loudness_radius) {
+bool is_active_sample(const float* samples, size_t index, const TrimSilenceConfig& config,
+                      CenteredWindowEnergy& energy) {
   if (config.mode == TrimSilenceMode::Peak) {
     return std::abs(samples[index]) > config.threshold;
   }
-  return sample_loudness_db(samples, size, index, loudness_radius) > config.gate_lufs;
+  const float window_rms = static_cast<float>(std::sqrt(energy.mean_square_at(index)));
+  const float loudness_db =
+      window_rms <= 1.0e-12f ? sonare::constants::kFloorDb : linear_to_db(window_rms);
+  return loudness_db > config.gate_lufs;
 }
 
 bool is_empty_range(const TrimRange& range) { return range.first >= range.last_exclusive; }
@@ -46,8 +42,9 @@ TrimRange scan(const float* samples, size_t size, int sample_rate,
 
   const size_t loudness_radius =
       std::max<size_t>(1, static_cast<size_t>(sample_rate * config.window_ms * 0.0005f));
+  CenteredWindowEnergy energy(samples, size, loudness_radius);
   size_t first = 0;
-  while (first < size && !is_active_sample(samples, size, first, config, loudness_radius)) ++first;
+  while (first < size && !is_active_sample(samples, first, config, energy)) ++first;
   if (first == size) {
     range.first = size;
     range.last_exclusive = size;
@@ -55,12 +52,18 @@ TrimRange scan(const float* samples, size_t size, int sample_rate,
   }
 
   size_t last = size - 1;
-  while (last > first && !is_active_sample(samples, size, last, config, loudness_radius)) --last;
+  while (last > first && !is_active_sample(samples, last, config, energy)) --last;
   first = first > config.padding_samples ? first - config.padding_samples : 0;
   last = std::min(size - 1, last + config.padding_samples);
   range.first = first;
   range.last_exclusive = last + 1;
   return range;
+}
+
+TrimRange union_range(const TrimRange& left, const TrimRange& right) {
+  if (is_empty_range(left)) return right;
+  if (is_empty_range(right)) return left;
+  return {std::min(left.first, right.first), std::max(left.last_exclusive, right.last_exclusive)};
 }
 
 }  // namespace
@@ -101,12 +104,8 @@ TrimRange detect_trim_range_stereo(const float* left, const float* right, size_t
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (left == nullptr || right == nullptr || size == 0) return {};
-  const TrimRange left_range = scan(left, size, sample_rate, validated.get());
-  const TrimRange right_range = scan(right, size, sample_rate, validated.get());
-  if (is_empty_range(left_range)) return right_range;
-  if (is_empty_range(right_range)) return left_range;
-  return {std::min(left_range.first, right_range.first),
-          std::max(left_range.last_exclusive, right_range.last_exclusive)};
+  return union_range(scan(left, size, sample_rate, validated.get()),
+                     scan(right, size, sample_rate, validated.get()));
 }
 
 Audio trim_silence(const Audio& audio, const TrimSilenceConfig& config) {
@@ -134,8 +133,7 @@ TrimSilenceStereoResult trim_silence_stereo(const Audio& left, const Audio& righ
   TrimSilenceStereoResult result;
   result.left_range = detect_trim_range(left.data(), size, sample_rate, validated.get());
   result.right_range = detect_trim_range(right.data(), size, sample_rate, validated.get());
-  const TrimRange shared =
-      detect_trim_range_stereo(left.data(), right.data(), size, sample_rate, validated.get());
+  const TrimRange shared = union_range(result.left_range, result.right_range);
   result.report = to_report(shared, size);
   if (is_empty_range(shared)) {
     result.left = Audio::from_vector({}, sample_rate);
