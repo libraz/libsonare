@@ -216,6 +216,15 @@ struct ProjectWasm {
   // arrangement plus the synth release tail.
   val bounceWithBuiltinInstrument(val bindings, val options);
 
+  // Compiles + renders the project, driving MIDI tracks through JS instruments
+  // whose { prepare?, onEvent?, render } callbacks run synchronously on this
+  // thread. @p bindings is an array of instrument objects (each may carry
+  // destinationId / latencySamples / tailSamples), a single one, or
+  // null/undefined for none. A throwing callback (or one returning a Promise)
+  // stops further callbacks and is returned as `{ instrumentFailure }` for the
+  // TypeScript facade to rethrow.
+  val bounceWithInstruments(val bindings, val options);
+
   // Compiles + renders the project, routing MIDI tracks through the
   // patch-driven NativeSynth (the full synthesizer; see the SynthPatch TS
   // type). @p bindings is a SynthPatch object, a preset-name string

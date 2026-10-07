@@ -4,6 +4,11 @@
 
 #ifdef __EMSCRIPTEN__
 
+#include <emscripten/emscripten.h>
+#include <emscripten/val.h>
+
+#include <algorithm>
+#include <climits>
 #include <unordered_map>
 
 #include "project_wasm.h"
@@ -11,6 +16,49 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 #include "midi/controller_profile.h"
+
+// Runs one instrument callback behind a JS try/catch, because C++ cannot catch a
+// JS throw escaping emscripten::val::operator(). A thenable result is a failure
+// too: an async instrument cannot finish inside the synchronous render.
+// clang-format off
+EM_JS(EM_VAL, sonare_project_invoke_instrument,
+      (EM_VAL callback, EM_VAL self, EM_VAL args, const char* name), {
+  try {
+    const result = Emval.toValue(callback).apply(Emval.toValue(self), Emval.toValue(args));
+    if (result !== null && (typeof result === 'object' || typeof result === 'function') &&
+        typeof result.then === 'function') {
+      return Emval.toHandle({
+        failed: true,
+        error: new TypeError('bounceWithInstruments: instrument ' + UTF8ToString(name) +
+                             ' must not return a Promise; instruments are synchronous'),
+      });
+    }
+    return Emval.toHandle({ failed: false });
+  } catch (error) {
+    return Emval.toHandle({ failed: true, error });
+  }
+});
+// clang-format on
+
+// Whether a JS scratch array still holds `frames` samples (a transferred buffer
+// leaves it empty).
+// clang-format off
+EM_JS(bool, sonare_project_scratch_ready, (EM_VAL scratch, int frames), {
+  return Emval.toValue(scratch).length >= frames;
+});
+// clang-format on
+
+// Adds the first `frames` samples of a JS scratch array into the engine's planar
+// buffer at linear-memory address `dst`; a scratch shorter than that (its buffer
+// was transferred away) adds nothing.
+// clang-format off
+EM_JS(void, sonare_project_add_scratch, (EM_VAL scratch, float* dst, int frames), {
+  const src = Emval.toValue(scratch);
+  if (src.length < frames) return;
+  const base = dst >> 2;
+  for (let i = 0; i < frames; ++i) HEAPF32[base + i] += src[i];
+});
+// clang-format on
 
 namespace {
 
@@ -78,6 +126,124 @@ int sampleDescLoopMode(val desc) {
         "Unknown sample loop mode name: '" + name + "' (expected none, continuous or key-down)");
   }
   return static_cast<int>(integerField(desc, "loopMode", "sample descriptor", 3.0));
+}
+
+/// The engine hosts every callback instrument as a stereo source, whatever the
+/// bounce's output channel count.
+constexpr int kInstrumentChannels = 2;
+
+/// The first failure of any instrument callback; later callbacks are skipped.
+struct InstrumentFailure {
+  bool failed = false;
+  val error;
+};
+
+/// One JS instrument for the duration of a synchronous bounce; the C callbacks
+/// hold a raw pointer to it.
+struct JsInstrumentSlot {
+  val self;
+  val prepare;
+  val onEvent;
+  val render;
+  bool hasPrepare = false;
+  bool hasOnEvent = false;
+  InstrumentFailure* failure = nullptr;
+  int maxBlock = 1;
+  /// JS-owned scratch the instrument renders into, one array per channel.
+  std::vector<val> scratch;
+};
+
+void invokeInstrument(JsInstrumentSlot* slot, const val& callback, const char* name,
+                      const val& args) {
+  const val outcome = val::take_ownership(sonare_project_invoke_instrument(
+      callback.as_handle(), slot->self.as_handle(), args.as_handle(), name));
+  if (boolProperty(outcome, "failed", false)) {
+    slot->failure->failed = true;
+    slot->failure->error = outcome["error"];
+  }
+}
+
+void jsInstrumentPrepare(void* userData, double sampleRate, int maxBlockSize) {
+  auto* slot = static_cast<JsInstrumentSlot*>(userData);
+  slot->maxBlock = std::max(maxBlockSize, 1);
+  if (slot->failure->failed || !slot->hasPrepare) return;
+  val args = val::array();
+  args.call<void>("push", sampleRate);
+  args.call<void>("push", maxBlockSize);
+  args.call<void>("push", kInstrumentChannels);
+  invokeInstrument(slot, slot->prepare, "prepare", args);
+}
+
+void jsInstrumentOnEvent(void* userData, uint32_t destinationId, const uint32_t* umpWords,
+                         int wordCount, int64_t renderFrame) {
+  auto* slot = static_cast<JsInstrumentSlot*>(userData);
+  if (slot->failure->failed || !slot->hasOnEvent) return;
+  val words = val::array();
+  for (int i = 0; i < wordCount; ++i) words.call<void>("push", umpWords[i]);
+  val event = val::object();
+  event.set("destinationId", destinationId);
+  event.set("words", words);
+  event.set("renderFrame", static_cast<double>(renderFrame));
+  val args = val::array();
+  args.call<void>("push", event);
+  invokeInstrument(slot, slot->onEvent, "onEvent", args);
+}
+
+void jsInstrumentRender(void* userData, float* const* channels, int numChannels, int numFrames) {
+  auto* slot = static_cast<JsInstrumentSlot*>(userData);
+  if (slot->failure->failed || numChannels <= 0 || numFrames <= 0) return;
+  const size_t frames = static_cast<size_t>(numFrames);
+  // Zeroed views over JS-owned scratch; the instrument's output is added into
+  // the engine's buffers only after the call returns normally.
+  if (slot->scratch.size() < static_cast<size_t>(numChannels)) {
+    slot->scratch.resize(static_cast<size_t>(numChannels));
+  }
+  val outputs = val::array();
+  for (int ch = 0; ch < numChannels; ++ch) {
+    val& base = slot->scratch[static_cast<size_t>(ch)];
+    if (base.isUndefined() || !sonare_project_scratch_ready(base.as_handle(), numFrames)) {
+      base =
+          val::global("Float32Array").new_(std::max(frames, static_cast<size_t>(slot->maxBlock)));
+    }
+    val view = base.call<val>("subarray", 0, numFrames);
+    view.call<void>("fill", 0);
+    outputs.call<void>("push", view);
+  }
+  val args = val::array();
+  args.call<void>("push", outputs);
+  args.call<void>("push", numFrames);
+  invokeInstrument(slot, slot->render, "render", args);
+  if (slot->failure->failed) return;
+  for (int ch = 0; ch < numChannels; ++ch) {
+    sonare_project_add_scratch(slot->scratch[static_cast<size_t>(ch)].as_handle(), channels[ch],
+                               numFrames);
+  }
+}
+
+JsInstrumentSlot instrumentSlotFromVal(const val& desc, InstrumentFailure* failure,
+                                       SonareInstrumentBinding* binding) {
+  if (desc.typeOf().as<std::string>() != "object" || desc.isNull()) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "instrument bindings must be objects");
+  }
+  JsInstrumentSlot slot;
+  slot.self = desc;
+  slot.render = desc["render"];
+  slot.prepare = desc["prepare"];
+  slot.onEvent = desc["onEvent"];
+  slot.hasPrepare = slot.prepare.typeOf().as<std::string>() == "function";
+  slot.hasOnEvent = slot.onEvent.typeOf().as<std::string>() == "function";
+  slot.failure = failure;
+  *binding = SonareInstrumentBinding{};
+  binding->destination_id = uintProperty(desc, "destinationId", 0u);
+  binding->callbacks.latency_samples =
+      static_cast<int>(integerField(desc, "latencySamples", "instrument", INT_MAX));
+  binding->callbacks.tail_samples =
+      static_cast<int>(integerField(desc, "tailSamples", "instrument", INT_MAX));
+  binding->callbacks.prepare = &jsInstrumentPrepare;
+  binding->callbacks.on_event = &jsInstrumentOnEvent;
+  binding->callbacks.render = &jsInstrumentRender;
+  return slot;
 }
 
 }  // namespace
@@ -311,6 +477,50 @@ val ProjectWasm::bounceWithBuiltinInstrument(val bindings, val options) {
   return vectorToFloat32Array(samples);
 }
 
+val ProjectWasm::bounceWithInstruments(val bindings, val options) {
+  // A callback may delete() the JS project wrapper mid-bounce; the local copy
+  // keeps the C handle alive until the bounce and the result conversion finish.
+  const auto project_keepalive = project_;
+  InstrumentFailure failure;
+  std::vector<JsInstrumentSlot> slots;
+  std::vector<SonareInstrumentBinding> instruments;
+  if (!bindings.isUndefined() && !bindings.isNull()) {
+    const bool isList = val::global("Array").call<bool>("isArray", bindings);
+    const size_t count = isList ? wasmArrayLikeLength(bindings, "bindings") : 1;
+    slots.reserve(count);
+    instruments.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      SonareInstrumentBinding binding{};
+      slots.push_back(instrumentSlotFromVal(isList ? bindings[i] : bindings, &failure, &binding));
+      instruments.push_back(binding);
+    }
+    // The slots vector no longer grows, so these addresses stay valid.
+    for (size_t i = 0; i < slots.size(); ++i) instruments[i].callbacks.user_data = &slots[i];
+  }
+  SonareProjectBounceOptions opts = bounceOptionsFromVal(options);
+  float* interleaved = nullptr;
+  size_t len = 0;
+  const SonareError err = sonare_project_bounce_with_instruments(
+      project_keepalive.get(), &opts, instruments.empty() ? nullptr : instruments.data(),
+      instruments.size(), &interleaved, &len);
+  // A JS throw from here would skip every destructor in this frame, so a
+  // throwing callback is returned as data and the TypeScript facade rethrows it.
+  // The native failure is reported ahead of a callback's, as in the Python binding.
+  if (err != SONARE_OK) {
+    sonare_free_floats(interleaved);
+    throwCError(err, "failed to bounce project with callback instrument");
+  }
+  if (failure.failed) {
+    sonare_free_floats(interleaved);
+    val result = val::object();
+    result.set("instrumentFailure", failure.error);
+    return result;
+  }
+  std::vector<float> samples(interleaved, interleaved + len);
+  sonare_free_floats(interleaved);
+  return vectorToFloat32Array(samples);
+}
+
 val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
   std::vector<SonareSynthInstrumentBinding> synths;
   if (!bindings.isUndefined() && !bindings.isNull()) {
@@ -533,6 +743,7 @@ void registerProjectBounce(class_<ProjectWasm>& cls) {
       .function("compileTimeline", &ProjectWasm::compileTimeline)
       .function("bounce", &ProjectWasm::bounce)
       .function("bounceWithBuiltinInstrument", &ProjectWasm::bounceWithBuiltinInstrument)
+      .function("bounceWithInstruments", &ProjectWasm::bounceWithInstruments)
       .function("bounceWithSynthInstrument", &ProjectWasm::bounceWithSynthInstrument)
       .function("loadSoundFont", &ProjectWasm::loadSoundFont)
       .function("clearSoundFont", &ProjectWasm::clearSoundFont)

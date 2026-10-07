@@ -1091,6 +1091,7 @@ const UNCOVERED_OPTION_READERS: ReadonlyMap<string, string> = new Map(
       ['bounce', 'Covered by project.test.ts; needs a fully built project.'],
       ['bounceOffline', 'Needs a prepared engine graph.'],
       ['bounceWithBuiltinInstruments', 'Covered by project.test.ts.'],
+      ['bounceWithInstruments', 'Covered by project-bounce-instruments.test.ts.'],
       ['bounceWithSf2Instruments', 'Needs a loaded SoundFont.'],
       ['bounceWithSynthInstruments', 'Covered by project.test.ts.'],
       ['detectKey', 'Instance method on Audio; needs a decoded Audio handle.'],

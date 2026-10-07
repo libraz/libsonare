@@ -6,6 +6,8 @@ export type {
   ControllerAxis,
   ControllerBinding,
   ControllerInput,
+  ExternalInstrument,
+  ExternalInstrumentEvent,
   MpeDimension,
   NoteTracking,
   PartRig,

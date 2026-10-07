@@ -2,6 +2,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import { addon } from './native.js';
 import type {
   BuiltinInstrumentConfig,
+  ExternalInstrument,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
@@ -277,7 +278,21 @@ export class ProjectTimeline {
  * ```
  */
 export class Project {
-  private native: InstanceType<typeof addon.Project>;
+  private readonly handle: InstanceType<typeof addon.Project>;
+
+  /** The native project; refused while an instrument bounce is calling back into JavaScript. */
+  private get native(): InstanceType<typeof addon.Project> {
+    if (this.instrumentBounceActive) {
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
+      );
+    }
+    return this.handle;
+  }
+
+  private instrumentBounceActive = false;
 
   applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
     this.assertAlive();
@@ -306,7 +321,7 @@ export class Project {
   private disposed = false;
 
   private constructor(native: InstanceType<typeof addon.Project>) {
-    this.native = native;
+    this.handle = native;
   }
 
   /** Create a new empty project (throws on a project ABI mismatch). */
@@ -1565,6 +1580,67 @@ export class Project {
   bounce(options: ProjectBounceOptions = {}): Float32Array {
     assertBounceOptions('bounce', options);
     return this.native.bounce(options);
+  }
+
+  /**
+   * Like {@link bounce}, but drives MIDI tracks routed to a destination through
+   * instruments you implement in JavaScript. Each entry of `instruments` binds
+   * an {@link ExternalInstrument} to its `destinationId` (default `0`).
+   *
+   * Every callback runs synchronously on the calling thread while this method
+   * is blocked, so there is no async instrument: a callback that returns a
+   * Promise is refused with a `TypeError`. A callback that throws stops all
+   * further callbacks, and the bounce rethrows that first error once it
+   * returns (a native failure is reported ahead of it). The `outputs` passed to
+   * `render` are zero-filled scratch arrays, added into the engine's buffers
+   * when `render` returns normally.
+   *
+   * While the bounce runs, using this project from inside a callback (a
+   * mutation, a nested bounce, or `destroy`) throws `InvalidState`.
+   *
+   * One instrument shared by tracks that feed different channel strips throws
+   * a `SonareError` with `NOT_SUPPORTED`, because callback audio carries no
+   * source-track attribution; bind one destination per strip instead.
+   *
+   * Argument order is instrument-first to match the built-in families.
+   */
+  bounceWithInstruments(
+    instruments: ReadonlyArray<ExternalInstrument> = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    assertBounceOptions('bounceWithInstruments', options);
+    return this.bounceWithExternalInstruments(
+      normalizeInstrumentBindings('bounceWithInstruments', true, instruments, false, (b) => b),
+      options,
+    );
+  }
+
+  /**
+   * Convenience wrapper over {@link bounceWithInstruments} for the common
+   * single-instrument case; an array is the list form.
+   */
+  bounceWithInstrument(
+    instrument: ExternalInstrument | ReadonlyArray<ExternalInstrument>,
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    assertBounceOptions('bounceWithInstrument', options);
+    return this.bounceWithExternalInstruments(
+      normalizeInstrumentBindings('bounceWithInstrument', false, instrument, false, (b) => b),
+      options,
+    );
+  }
+
+  private bounceWithExternalInstruments(
+    instruments: ExternalInstrument[],
+    options: ProjectBounceOptions,
+  ): Float32Array {
+    const native = this.native;
+    this.instrumentBounceActive = true;
+    try {
+      return native.bounceWithInstruments(instruments, options);
+    } finally {
+      this.instrumentBounceActive = false;
+    }
   }
 
   /**

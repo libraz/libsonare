@@ -2,6 +2,7 @@ import { ErrorCode, SonareError } from './errors.js';
 import type {
   BuiltinSynthBinding,
   BuiltinSynthWaveform,
+  ExternalInstrument,
   PartRigEntry,
   PartRigInsert,
   PartRigKey,
@@ -308,7 +309,25 @@ export class ProjectTimeline {
  * ```
  */
 export class Project {
-  private native: WasmProject;
+  private nativeHandle: WasmProject;
+
+  /** The native project; refused while an instrument bounce is calling back into JavaScript. */
+  private get native(): WasmProject {
+    if (this.instrumentBounceActive) {
+      throw new SonareError(
+        ErrorCode.InvalidState,
+        'InvalidState',
+        'Project is busy: it cannot be used from inside a bounceWithInstruments callback',
+      );
+    }
+    return this.nativeHandle;
+  }
+
+  private set native(handle: WasmProject) {
+    this.nativeHandle = handle;
+  }
+
+  private instrumentBounceActive = false;
 
   applyVocalEdit(request: ProjectVocalEditApplyRequest): ProjectVocalEditApplyResult {
     return projectApplyVocalEdit(this.native, request);
@@ -338,7 +357,7 @@ export class Project {
   private activeVocalRehydrateCalls = 0;
 
   constructor() {
-    this.native = new (projectModule().Project)();
+    this.nativeHandle = new (projectModule().Project)();
   }
 
   /** Create a new empty project. */
@@ -1332,6 +1351,81 @@ export class Project {
       ),
       options,
     );
+  }
+
+  /**
+   * Like {@link bounce}, but drives MIDI tracks routed to a destination through
+   * instruments you implement in JavaScript. Each entry of `instruments` binds
+   * an {@link ExternalInstrument} to its `destinationId` (default `0`).
+   *
+   * Every callback runs synchronously while this method is blocked, so there is
+   * no async instrument: a callback that returns a Promise is refused with a
+   * `TypeError`. A callback that throws stops all further callbacks, and the
+   * bounce rethrows that first error once it returns (a native failure is
+   * reported ahead of it). The `outputs` passed to `render` are zero-filled
+   * scratch arrays, added into the engine's buffers when `render` returns
+   * normally.
+   *
+   * While the bounce runs, using this project from inside a callback (a
+   * mutation, a nested bounce, or `delete`) throws `InvalidState`.
+   *
+   * One instrument shared by tracks that feed different channel strips throws
+   * a `SonareError` with `NOT_SUPPORTED`, because callback audio carries no
+   * source-track attribution; bind one destination per strip instead.
+   */
+  bounceWithInstruments(
+    instruments: ReadonlyArray<ExternalInstrument> = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.bounceWithExternalInstruments(
+      'bounceWithInstruments',
+      normalizeInstrumentBindings('bounceWithInstruments', true, instruments, false, (b) => b),
+      options,
+    );
+  }
+
+  /**
+   * Single-instrument form of {@link bounceWithInstruments}; an array is the
+   * list form.
+   */
+  bounceWithInstrument(
+    instrument: ExternalInstrument | ReadonlyArray<ExternalInstrument>,
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.bounceWithExternalInstruments(
+      'bounceWithInstrument',
+      normalizeInstrumentBindings('bounceWithInstrument', false, instrument, false, (b) => b),
+      options,
+    );
+  }
+
+  private bounceWithExternalInstruments(
+    method: string,
+    instruments: ExternalInstrument[],
+    options: ProjectBounceOptions,
+  ): Float32Array {
+    instruments.forEach((instrument, index) => {
+      for (const key of ['prepare', 'onEvent', 'render'] as const) {
+        const callback = instrument[key];
+        if (typeof callback !== 'function' && (key === 'render' || (callback ?? null) !== null)) {
+          throw new TypeError(`${method}: instruments[${index}].${key} must be a function`);
+        }
+      }
+    });
+    const native = this.native;
+    this.instrumentBounceActive = true;
+    let result: ReturnType<WasmProject['bounceWithInstruments']>;
+    try {
+      result = native.bounceWithInstruments(instruments, options);
+    } finally {
+      this.instrumentBounceActive = false;
+    }
+    // The adapter reports a throwing callback as data instead of throwing
+    // through C++ frames, whose destructors a JS exception would skip.
+    if (!(result instanceof Float32Array)) {
+      throw result.instrumentFailure;
+    }
+    return result;
   }
 
   /**

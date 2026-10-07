@@ -140,6 +140,7 @@ Napi::Object ProjectWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&ProjectWrap::Bounce>("bounce"),
           InstanceMethod<&ProjectWrap::BounceWithBuiltinInstruments>(
               "bounceWithBuiltinInstruments"),
+          InstanceMethod<&ProjectWrap::BounceWithInstruments>("bounceWithInstruments"),
           InstanceMethod<&ProjectWrap::BounceWithSynthInstruments>("bounceWithSynthInstruments"),
           InstanceMethod<&ProjectWrap::LoadSoundFont>("loadSoundFont"),
           InstanceMethod<&ProjectWrap::ClearSoundFont>("clearSoundFont"),

@@ -119,6 +119,8 @@ export type {
   EngineTransportState,
   EqBandInput,
   EqSpectrumSnapshot,
+  ExternalInstrument,
+  ExternalInstrumentEvent,
   ExternalSeparatedStem,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,

@@ -1,7 +1,16 @@
+#include <uv.h>
+
+#include <algorithm>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
+#include <exception>
+#include <mutex>
+#include <optional>
 #include <sstream>
 #include <string>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 #include "project/common.h"
@@ -75,6 +84,293 @@ Napi::Object CompileResultToObject(Napi::Env env, SonareProjectCompileResult* re
   return out;
 }
 
+// The offline bounce keeps close to a megabyte of locals live while it renders,
+// which is the whole of V8's stack budget, so a JS call made from inside it
+// overflows at once. The bounce therefore runs on a thread with its own large
+// stack, and every instrument callback is handed back here, to the JS thread,
+// which is blocked in Serve() for the duration and so still the calling thread
+// as far as the JS callbacks can tell.
+constexpr size_t kBounceStackBytes = size_t{16} << 20;
+
+// The engine hosts every callback instrument as a stereo source, whatever the
+// bounce's output channel count.
+constexpr int kInstrumentChannels = 2;
+
+class JsThreadBridge {
+ public:
+  // Worker thread: runs `fn` on the JS thread and waits for it to finish. After
+  // Abort() it returns at once without running `fn`.
+  template <typename Fn>
+  void Run(Fn&& fn) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (aborted_) return;
+    job_ = [](void* arg) { (*static_cast<std::remove_reference_t<Fn>*>(arg))(); };
+    job_arg_ = &fn;
+    state_ = State::kRequested;
+    cv_.notify_all();
+    cv_.wait(lock, [this] { return state_ == State::kServed; });
+    state_ = State::kIdle;
+  }
+
+  // Worker thread: no further Run() will follow.
+  void Finish() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    finished_ = true;
+    cv_.notify_all();
+  }
+
+  // JS thread: stops serving, so the worker runs to its end without calling JS.
+  void Abort() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    aborted_ = true;
+    if (state_ == State::kRequested) state_ = State::kServed;
+    cv_.notify_all();
+  }
+
+  // JS thread: executes requested jobs until the worker finishes. A job that
+  // throws aborts the bridge and keeps the exception for TakeError().
+  void Serve() {
+    std::unique_lock<std::mutex> lock(mutex_);
+    for (;;) {
+      cv_.wait(lock, [this] { return state_ == State::kRequested || finished_; });
+      if (state_ != State::kRequested) return;
+      void (*job)(void*) = job_;
+      void* arg = job_arg_;
+      lock.unlock();
+      try {
+        job(arg);
+      } catch (...) {
+        lock.lock();
+        error_ = std::current_exception();
+        aborted_ = true;
+        state_ = State::kServed;
+        cv_.notify_all();
+        return;
+      }
+      lock.lock();
+      state_ = State::kServed;
+      cv_.notify_all();
+    }
+  }
+
+  std::exception_ptr TakeError() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return std::exchange(error_, nullptr);
+  }
+
+ private:
+  enum class State { kIdle, kRequested, kServed };
+  std::mutex mutex_;
+  std::condition_variable cv_;
+  State state_ = State::kIdle;
+  bool finished_ = false;
+  bool aborted_ = false;
+  std::exception_ptr error_;
+  void (*job_)(void*) = nullptr;
+  void* job_arg_ = nullptr;
+};
+
+// Owns the bounce thread: whatever path leaves the calling frame, the worker is
+// told to stop calling JS and is joined before the frame it reads from dies.
+class BounceThread {
+ public:
+  explicit BounceThread(JsThreadBridge* bridge) : bridge_(bridge) {}
+  BounceThread(const BounceThread&) = delete;
+  BounceThread& operator=(const BounceThread&) = delete;
+  ~BounceThread() {
+    if (!started_) return;
+    bridge_->Abort();
+    uv_thread_join(&thread_);
+  }
+
+  bool Start(uv_thread_cb entry, void* arg) {
+    uv_thread_options_t options{};
+    options.flags = UV_THREAD_HAS_STACK_SIZE;
+    options.stack_size = kBounceStackBytes;
+    started_ = uv_thread_create_ex(&thread_, &options, entry, arg) == 0;
+    return started_;
+  }
+
+  void Join() {
+    if (!started_) return;
+    uv_thread_join(&thread_);
+    started_ = false;
+  }
+
+ private:
+  JsThreadBridge* bridge_;
+  uv_thread_t thread_{};
+  bool started_ = false;
+};
+
+// One JS instrument for the duration of a synchronous callback bounce. It lives
+// on the caller's stack, so the C callbacks can hold a raw pointer to it.
+struct JsInstrumentSlot {
+  Napi::Env env;
+  Napi::Object self;
+  std::optional<Napi::Function> prepare;
+  std::optional<Napi::Function> on_event;
+  Napi::Function render;
+  JsThreadBridge* bridge;
+  int max_block = 1;
+  // JS-owned scratch the instrument renders into, one array per channel.
+  std::vector<Napi::Reference<Napi::Float32Array>> scratch;
+};
+
+// Throws a TypeError and returns true when a callback result is a thenable: an
+// async instrument cannot finish inside the synchronous render.
+bool RefuseThenable(Napi::Env env, const Napi::Value& result, const char* callback) {
+  if (!result.IsObject()) return false;
+  const Napi::Value then = result.As<Napi::Object>().Get("then");
+  if (env.IsExceptionPending()) return true;
+  if (!then.IsFunction()) return false;
+  Napi::TypeError::New(env, std::string("bounceWithInstruments: instrument ") + callback +
+                                " must not return a Promise; instruments are synchronous")
+      .ThrowAsJavaScriptException();
+  return true;
+}
+
+// Reads an optional instrument callback, refusing any non-function by name.
+bool ReadInstrumentCallback(Napi::Env env, const Napi::Value& value, const std::string& label,
+                            std::optional<Napi::Function>* out) {
+  if (value.IsUndefined() || value.IsNull()) return true;
+  if (!value.IsFunction()) {
+    Napi::TypeError::New(env, "bounceWithInstruments: " + label + " must be a function")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  out->emplace(value.As<Napi::Function>());
+  return true;
+}
+
+// A callback is skipped once any earlier one has thrown, so the throw is
+// rethrown after the bounce as the first failure.
+void PrepareOnJsThread(JsInstrumentSlot* slot, double sample_rate, int max_block_size) {
+  slot->max_block = std::max(max_block_size, 1);
+  if (slot->env.IsExceptionPending() || !slot->prepare) return;
+  Napi::HandleScope scope(slot->env);
+  const Napi::Value result =
+      slot->prepare->Call(slot->self, {Napi::Number::New(slot->env, sample_rate),
+                                       Napi::Number::New(slot->env, max_block_size),
+                                       Napi::Number::New(slot->env, kInstrumentChannels)});
+  if (slot->env.IsExceptionPending()) return;
+  RefuseThenable(slot->env, result, "prepare");
+}
+
+void OnEventOnJsThread(JsInstrumentSlot* slot, uint32_t destination_id, const uint32_t* ump_words,
+                       int word_count, int64_t render_frame) {
+  if (slot->env.IsExceptionPending() || !slot->on_event) return;
+  Napi::Env env = slot->env;
+  Napi::HandleScope scope(env);
+  const uint32_t count = static_cast<uint32_t>(std::max(word_count, 0));
+  Napi::Array words = Napi::Array::New(env, count);
+  for (uint32_t i = 0; i < count; ++i) {
+    words.Set(i, Napi::Number::New(env, ump_words[i]));
+  }
+  Napi::Object event = Napi::Object::New(env);
+  event.Set("destinationId", Napi::Number::New(env, destination_id));
+  event.Set("words", words);
+  event.Set("renderFrame", Napi::Number::New(env, static_cast<double>(render_frame)));
+  const Napi::Value result = slot->on_event->Call(slot->self, {event});
+  if (env.IsExceptionPending()) return;
+  RefuseThenable(env, result, "onEvent");
+}
+
+// Makes scratch channel `ch` hold at least `frames` samples; a view whose buffer
+// the instrument transferred away is replaced.
+Napi::Float32Array ScratchChannel(JsInstrumentSlot* slot, size_t ch, size_t frames) {
+  Napi::Env env = slot->env;
+  const size_t capacity = std::max(frames, static_cast<size_t>(slot->max_block));
+  if (ch >= slot->scratch.size()) slot->scratch.resize(ch + 1);
+  Napi::Reference<Napi::Float32Array>& ref = slot->scratch[ch];
+  if (ref.IsEmpty() || ref.Value().ElementLength() < frames ||
+      ref.Value().ArrayBuffer().IsDetached()) {
+    ref = Napi::Persistent(Napi::Float32Array::New(env, capacity));
+  }
+  return ref.Value();
+}
+
+void RenderOnJsThread(JsInstrumentSlot* slot, float* const* channels, int num_channels,
+                      int num_frames) {
+  Napi::Env env = slot->env;
+  if (env.IsExceptionPending() || num_channels <= 0 || num_frames <= 0) return;
+  Napi::HandleScope scope(env);
+  const size_t frames = static_cast<size_t>(num_frames);
+  // Zeroed scratch views; the instrument's output is added into the engine's
+  // buffers only after the call returns normally.
+  Napi::Array outputs = Napi::Array::New(env, static_cast<size_t>(num_channels));
+  for (int ch = 0; ch < num_channels; ++ch) {
+    Napi::Float32Array base = ScratchChannel(slot, static_cast<size_t>(ch), frames);
+    std::memset(base.Data(), 0, frames * sizeof(float));
+    outputs.Set(static_cast<uint32_t>(ch),
+                Napi::Float32Array::New(env, frames, base.ArrayBuffer(), base.ByteOffset()));
+  }
+  const Napi::Value result =
+      slot->render.Call(slot->self, {outputs, Napi::Number::New(env, num_frames)});
+  if (env.IsExceptionPending() || RefuseThenable(env, result, "render")) return;
+  for (int ch = 0; ch < num_channels; ++ch) {
+    Napi::Float32Array base = ScratchChannel(slot, static_cast<size_t>(ch), frames);
+    // A scratch the instrument transferred away was just replaced by zeros.
+    const float* src = base.Data();
+    float* dst = channels[ch];
+    for (size_t i = 0; i < frames; ++i) dst[i] += src[i];
+  }
+}
+
+// C callbacks, called on the bounce thread: each forwards to the JS thread.
+void JsInstrumentPrepare(void* user_data, double sample_rate, int max_block_size) {
+  auto* slot = static_cast<JsInstrumentSlot*>(user_data);
+  slot->bridge->Run([&] { PrepareOnJsThread(slot, sample_rate, max_block_size); });
+}
+
+void JsInstrumentOnEvent(void* user_data, uint32_t destination_id, const uint32_t* ump_words,
+                         int word_count, int64_t render_frame) {
+  auto* slot = static_cast<JsInstrumentSlot*>(user_data);
+  slot->bridge->Run(
+      [&] { OnEventOnJsThread(slot, destination_id, ump_words, word_count, render_frame); });
+}
+
+void JsInstrumentRender(void* user_data, float* const* channels, int num_channels, int num_frames) {
+  auto* slot = static_cast<JsInstrumentSlot*>(user_data);
+  slot->bridge->Run([&] { RenderOnJsThread(slot, channels, num_channels, num_frames); });
+}
+
+// Everything the bounce thread reads and writes, so it touches no JS state.
+struct BounceJob {
+  JsThreadBridge* bridge;
+  SonareProject* project;
+  const SonareProjectBounceOptions* options;
+  const SonareInstrumentBinding* bindings;
+  size_t binding_count;
+  float* interleaved = nullptr;
+  size_t len = 0;
+  SonareError error = SONARE_OK;
+  std::string detail;
+
+  BounceJob(JsThreadBridge* bridge_in, SonareProject* project_in,
+            const SonareProjectBounceOptions* options_in,
+            const SonareInstrumentBinding* bindings_in, size_t binding_count_in)
+      : bridge(bridge_in),
+        project(project_in),
+        options(options_in),
+        bindings(bindings_in),
+        binding_count(binding_count_in) {}
+  BounceJob(const BounceJob&) = delete;
+  BounceJob& operator=(const BounceJob&) = delete;
+  ~BounceJob() {
+    if (interleaved != nullptr) sonare_free_floats(interleaved);
+  }
+};
+
+void RunBounceJob(void* arg) {
+  auto* job = static_cast<BounceJob*>(arg);
+  job->error = sonare_project_bounce_with_instruments(
+      job->project, job->options, job->bindings, job->binding_count, &job->interleaved, &job->len);
+  // The detail slot is thread-local, so it is read here and not on the JS thread.
+  const char* detail = sonare_last_error_message();
+  if (job->error != SONARE_OK && detail != nullptr) job->detail = detail;
+  job->bridge->Finish();
+}
 }  // namespace
 
 Napi::Value ProjectWrap::Compile(const Napi::CallbackInfo& info) {
@@ -117,6 +413,7 @@ Napi::Value ProjectWrap::Bounce(const Napi::CallbackInfo& info) {
   SonareProjectBounceOptions options{};
   if (info.Length() > 0 && info[0].IsObject()) {
     FillBounceOptions(info[0].As<Napi::Object>(), &options);
+    if (env.IsExceptionPending()) return env.Undefined();
   }
   float* interleaved = nullptr;
   size_t len = 0;
@@ -139,6 +436,7 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   SonareProjectBounceOptions options{};
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
+    if (env.IsExceptionPending()) return env.Undefined();
   }
   std::vector<SonareBuiltinInstrumentBinding> bindings;
   if (info.Length() > 0 && info[0].IsArray()) {
@@ -174,6 +472,98 @@ Napi::Value ProjectWrap::BounceWithBuiltinInstruments(const Napi::CallbackInfo& 
   SONARE_NODE_CATCH(env)
 }
 
+// Compiles + renders the project, driving MIDI tracks through JS instruments
+// whose callbacks run synchronously on this thread for the whole bounce:
+//   bounceWithInstruments(instruments, options?)
+// A throw from any callback skips the remaining callbacks and surfaces after
+// the bounce returns.
+Napi::Value ProjectWrap::BounceWithInstruments(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  SonareProjectBounceOptions options{};
+  if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
+    FillBounceOptions(info[1].As<Napi::Object>(), &options);
+    if (env.IsExceptionPending()) return env.Undefined();
+  }
+  JsThreadBridge bridge;
+  std::vector<JsInstrumentSlot> slots;
+  std::vector<SonareInstrumentBinding> bindings;
+  if (!info[0].IsUndefined() && !info[0].IsNull()) {
+    Napi::Array arr;
+    if (!RequiredArrayValue(env, info[0], "instruments", &arr)) return env.Undefined();
+    slots.reserve(arr.Length());
+    bindings.reserve(arr.Length());
+    for (uint32_t i = 0; i < arr.Length(); ++i) {
+      const Napi::Value element = arr.Get(i);
+      if (!element.IsObject()) {
+        Napi::TypeError::New(env, "bounceWithInstruments: instrument bindings must be objects")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      const Napi::Object obj = element.As<Napi::Object>();
+      JsInstrumentSlot slot{env, obj, std::nullopt, std::nullopt, Napi::Function(), &bridge, 1, {}};
+      const std::string label = "instruments[" + std::to_string(i) + "]";
+      std::optional<Napi::Function> render;
+      if (!ReadInstrumentCallback(env, obj.Get("prepare"), label + ".prepare", &slot.prepare) ||
+          !ReadInstrumentCallback(env, obj.Get("onEvent"), label + ".onEvent", &slot.on_event) ||
+          !ReadInstrumentCallback(env, obj.Get("render"), label + ".render", &render)) {
+        return env.Undefined();
+      }
+      if (!render) {
+        Napi::TypeError::New(env, "bounceWithInstruments: " + label + ".render must be a function")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+      }
+      slot.render = *render;
+      SonareInstrumentBinding binding{};
+      binding.destination_id = Uint32Property(obj, "destinationId", 0u);
+      binding.callbacks.latency_samples = IntProperty(obj, "latencySamples", 0);
+      binding.callbacks.tail_samples = IntProperty(obj, "tailSamples", 0);
+      if (env.IsExceptionPending()) return env.Undefined();
+      binding.callbacks.prepare = &JsInstrumentPrepare;
+      binding.callbacks.on_event = &JsInstrumentOnEvent;
+      binding.callbacks.render = &JsInstrumentRender;
+      slots.push_back(std::move(slot));
+      bindings.push_back(binding);
+    }
+    // The slots vector no longer grows, so these addresses stay valid.
+    for (size_t i = 0; i < slots.size(); ++i) bindings[i].callbacks.user_data = &slots[i];
+  }
+  auto busy_call = BeginBusyCall();
+  BounceJob job(&bridge, project_, &options, bindings.empty() ? nullptr : bindings.data(),
+                bindings.size());
+  BounceThread worker(&bridge);
+  if (!worker.Start(RunBounceJob, &job)) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_UNKNOWN,
+                                         "bounceWithInstruments: cannot start the bounce thread");
+    return env.Undefined();
+  }
+  bridge.Serve();
+  worker.Join();
+  if (const std::exception_ptr failure = bridge.TakeError()) std::rethrow_exception(failure);
+  // The native failure outranks a callback's error, as in the Python binding;
+  // the callback's pending exception is dropped to report it.
+  if (job.error != SONARE_OK) {
+    if (env.IsExceptionPending()) (void)env.GetAndClearPendingException();
+    if (!job.detail.empty()) {
+      sonare_node::ThrowSonareErrorMessage(env, job.error, job.detail);
+    } else {
+      // The detail slot is thread-local and was read on the bounce thread.
+      sonare_node::ThrowIfRealtimeError(env, job.error);
+    }
+    return env.Undefined();
+  }
+  if (env.IsExceptionPending()) return env.Undefined();
+  const float* const interleaved = job.interleaved;
+  const size_t len = job.len;
+  Napi::Float32Array out = Napi::Float32Array::New(env, len);
+  if (len > 0 && interleaved != nullptr) {
+    std::memcpy(out.Data(), interleaved, len * sizeof(float));
+  }
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
 // Compiles + renders the project, routing MIDI tracks through the patch-driven
 // NativeSynth (the full synthesizer; see SonareSynthPatch). Argument order is
 // instrument-first to match the WASM and Python bindings:
@@ -187,6 +577,7 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
   SonareProjectBounceOptions options{};
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
+    if (env.IsExceptionPending()) return env.Undefined();
   }
   std::vector<SonareSynthInstrumentBinding> bindings;
   if (info.Length() > 0 && info[0].IsArray()) {
@@ -302,6 +693,7 @@ Napi::Value ProjectWrap::BounceWithSf2Instruments(const Napi::CallbackInfo& info
   SonareProjectBounceOptions options{};
   if (info.Length() > 1 && info[1].IsObject() && !info[1].IsArray()) {
     FillBounceOptions(info[1].As<Napi::Object>(), &options);
+    if (env.IsExceptionPending()) return env.Undefined();
   }
   std::vector<SonareSf2InstrumentBinding> bindings;
   if (!info[0].IsUndefined() && !info[0].IsNull()) {

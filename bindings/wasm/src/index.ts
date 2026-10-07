@@ -551,6 +551,8 @@ export type {
   ControllerAxis,
   ControllerBinding,
   ControllerInput,
+  ExternalInstrument,
+  ExternalInstrumentEvent,
   ExternalSeparatedStem,
   ExternalSeparatedStemImportRequest,
   ExternalSeparatedStemImportResult,

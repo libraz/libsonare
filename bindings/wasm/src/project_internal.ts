@@ -2,6 +2,7 @@ import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
   BuiltinSynthBinding,
+  ExternalInstrument,
   PartRigEntry,
   PartRigInsert,
   PartRigKey,
@@ -375,6 +376,10 @@ export interface WasmProject {
     bindings: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> | undefined,
     options: ProjectBounceOptions,
   ) => Float32Array;
+  bounceWithInstruments: (
+    bindings: ExternalInstrument | ReadonlyArray<ExternalInstrument> | undefined,
+    options: ProjectBounceOptions,
+  ) => Float32Array | { instrumentFailure: unknown };
   bounceWithSynthInstrument: (
     bindings: NativeSynthBinding | string | ReadonlyArray<NativeSynthBinding | string> | undefined,
     options: ProjectBounceOptions,

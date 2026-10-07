@@ -279,11 +279,6 @@ node = [
   # default and an explicit 0 survives. It cannot inline them: 0 is legal for
   # both. Not a facade member.
   "note_target_assign_config_default",
-  # External-instrument bounce is deliberately Python-only: Node batch jobs never
-  # play instruments, and a synchronous JS render callback fired from deep in the
-  # offline graph overflows V8's shared C++/JS stack. The interactive/native path
-  # is served by built-in instruments, not host callbacks. (See _project.py.)
-  "project_bounce_with_instruments",
   # C-only enum parser used internally while resolving typed builtin waveform
   # names. Facades expose the accepted string union on synth constructors, not
   # this integer conversion helper.
@@ -398,9 +393,6 @@ wasm = [
   # dependency as audio_from_file above; a WASM caller already holds the samples
   # and builds each channel through Audio.fromBuffer.
   "audio_from_file_channel",
-  # External-instrument bounce is Python-only by design (see node note); WASM is
-  # additionally single-threaded and cannot host a synchronous render callback.
-  "project_bounce_with_instruments",
   # WASM exposes a zero-copy planar realtime path (getPlanarChannelBuffer +
   # processPreparedPlanar) suited to AudioWorklet instead of a copy-in
   # process_planar_stereo(left, right); same capability, AudioWorklet-shaped API.

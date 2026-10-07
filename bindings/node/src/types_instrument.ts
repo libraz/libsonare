@@ -50,6 +50,51 @@ export interface BuiltinInstrumentConfig {
 }
 
 /**
+ * One dispatched MIDI event delivered to {@link ExternalInstrument.onEvent}.
+ */
+export interface ExternalInstrumentEvent {
+  /** MIDI destination id the event is routed to. */
+  destinationId: number;
+  /** The event's 32-bit UMP words (one or two), as unsigned integers. */
+  words: number[];
+  /**
+   * Sample-accurate position in frames this instrument has been asked to
+   * render so far; the events that close the bounce sit one past the last frame.
+   */
+  renderFrame: number;
+}
+
+/**
+ * A JavaScript instrument driven during {@link Project.bounceWithInstruments}.
+ * Only `render` is required. Every callback runs synchronously on the calling
+ * thread and must not return a Promise.
+ */
+export interface ExternalInstrument {
+  /** MIDI destination id this instrument renders. Defaults to `0`. */
+  destinationId?: number;
+  /**
+   * Called once per render pass, before the first block, with the sample rate,
+   * the largest block `render` will receive, and the number of arrays `render`
+   * gets (always 2: the engine hosts an instrument as a stereo source whatever
+   * the bounce's `numChannels`).
+   */
+  prepare?(sampleRate: number, maxBlockFrames: number, channels: number): void;
+  /** Called for each dispatched MIDI event, just before the block it falls in is rendered. */
+  onEvent?(event: ExternalInstrumentEvent): void;
+  /**
+   * Write `frames` of audio into `outputs`, one `Float32Array` per channel. The
+   * arrays are scratch space that arrive zero-filled; whatever they hold when
+   * `render` returns normally is added into the engine's buffers (nothing is
+   * added if it throws). They are reused for the next block, so do not keep them.
+   */
+  render(outputs: Float32Array[], frames: number): void;
+  /** Reported instrument latency in samples (plugin delay compensation); defaults to 0. */
+  latencySamples?: number;
+  /** Release / effect tail in samples, used to extend an auto-length bounce; defaults to 0. */
+  tailSamples?: number;
+}
+
+/**
  * Cross-binding alias of {@link BuiltinInstrumentConfig}. The same built-in-synth
  * patch concept is named `BuiltinSynthConfig` in the Python binding; this alias
  * lets portable code use that shared name on the Node surface too.

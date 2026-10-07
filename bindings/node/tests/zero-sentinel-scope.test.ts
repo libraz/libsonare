@@ -161,7 +161,15 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
   ],
   [
     'project/render.cpp:instrumentLatencySamples',
-    'Host-instrument PDC fed to the compiler. Unsettled rather than inert: a control that moves the render needs a latency-reporting host instrument, which the JS surface cannot install, so what its zero does here has not been observed.',
+    'Host-instrument PDC fed to the compiler. Unsettled rather than inert: a control that moves the render needs a latency-reporting host instrument, so what its zero does here has not been observed.',
+  ],
+  [
+    'project/render.cpp:latencySamples',
+    "A callback instrument's reported delay in samples: a plain quantity whose zero is no latency, not a request for a default.",
+  ],
+  [
+    'project/render.cpp:tailSamples',
+    "A callback instrument's reported release tail in samples: a plain quantity whose zero is no tail, not a request for a default.",
   ],
   [
     'sonare_wrap_acoustic.cpp:materialPreset',
