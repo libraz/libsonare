@@ -408,6 +408,8 @@ class ReedVoiceCore {
   // back into the loop reflection, imposing a pressure node at the hole so the
   // bore resonates a register higher.
   float hole_gain_ = 0.0f;
+  // Ratio-1 reed<->hole round trip in samples. render() divides this by the
+  // live pitch ratio and reads the resulting fractional delay.
   int hole_delay_samples_ = 0;
   float hole_refl_ = 0.0f;
 };

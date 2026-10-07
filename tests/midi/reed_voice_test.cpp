@@ -98,6 +98,33 @@ std::vector<float> render_with_initial_cc(const NativeSynthPatch& patch, uint8_t
   return render_left(synth, num);
 }
 
+std::vector<float> render_reed_core(const ReedPatchParams& params, uint8_t note, float ratio,
+                                    int warmup_samples, int measured_samples) {
+  std::vector<float> bore(static_cast<size_t>(sonare::midi::synth::reed_slab_capacity(kRate)));
+  ReedVoiceCore core;
+  core.attach(bore.data(), sonare::midi::synth::reed_buffer_capacity(kRate));
+  core.start(params, kRate, note, Velocity16::from7(110), 0x52454544ULL);
+  for (int i = 0; i < warmup_samples; ++i) static_cast<void>(core.render(ratio));
+  std::vector<float> out(static_cast<size_t>(measured_samples));
+  for (float& sample : out) sample = core.render(ratio);
+  return out;
+}
+
+std::vector<float> render_live_reed_ratio(const ReedPatchParams& params, uint8_t note,
+                                          float initial_ratio, float settled_ratio,
+                                          int initial_samples, int settle_samples,
+                                          int measured_samples) {
+  std::vector<float> bore(static_cast<size_t>(sonare::midi::synth::reed_slab_capacity(kRate)));
+  ReedVoiceCore core;
+  core.attach(bore.data(), sonare::midi::synth::reed_buffer_capacity(kRate));
+  core.start(params, kRate, note, Velocity16::from7(110), 0x52454544ULL);
+  for (int i = 0; i < initial_samples; ++i) static_cast<void>(core.render(initial_ratio));
+  for (int i = 0; i < settle_samples; ++i) static_cast<void>(core.render(settled_ratio));
+  std::vector<float> out(static_cast<size_t>(measured_samples));
+  for (float& sample : out) sample = core.render(settled_ratio);
+  return out;
+}
+
 float rms(const std::vector<float>& buf, size_t from, size_t to) {
   double acc = 0.0;
   size_t n = 0;
@@ -637,6 +664,58 @@ TEST_CASE("tonehole scattering stays bounded across the keyboard", "[midi][synth
       REQUIRE(std::isfinite(tone.back()));
     }
   }
+}
+
+TEST_CASE("tonehole scattering follows a live pitch retune", "[midi][synth][reed]") {
+  // The bore delay follows the per-sample pitch ratio. The tonehole's round-trip
+  // tap must follow the same ratio rather than leaving a reflection at the old
+  // note's tap position. The fresh-note render is a positive control for the
+  // same target pitch; the live render must remain an oscillatory tone instead
+  // of collapsing near DC.
+  ReedPatchParams params{};
+  params.conical = true;
+  params.tonehole = 1.0f;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+
+  constexpr uint8_t kInitialNote = 58;     // A#3
+  constexpr uint8_t kEquivalentNote = 70;  // one octave above
+  constexpr float kLiveRatio = 2.0f;
+  const double initial_f0 = 440.0 * std::pow(2.0, (kInitialNote - 69) / 12.0);
+  const double bent_f0 = initial_f0 * kLiveRatio;
+  const double expected_target = bent_f0;
+
+  const std::vector<float> live =
+      render_live_reed_ratio(params, kInitialNote, 1.0f, kLiveRatio, 24000, 24000, 8192);
+  const std::vector<float> fresh = render_reed_core(params, kEquivalentNote, 1.0f, 24000, 8192);
+  const auto ac_ratio = [](const std::vector<float>& samples) {
+    double signal = 0.0;
+    double difference = 0.0;
+    for (size_t i = 0; i < samples.size(); ++i) {
+      signal += static_cast<double>(samples[i]) * samples[i];
+      if (i > 0) {
+        const double delta = static_cast<double>(samples[i]) - samples[i - 1];
+        difference += delta * delta;
+      }
+    }
+    return signal > 0.0 ? std::sqrt(difference / signal) : 0.0;
+  };
+  const float live_rms = rms(live, 0, live.size());
+  const float fresh_rms = rms(fresh, 0, fresh.size());
+  const double live_ac_ratio = ac_ratio(live);
+  const double fresh_ac_ratio = ac_ratio(fresh);
+  const double live_hz = fft_fundamental(live, 0, expected_target);
+  const double fresh_hz = fft_fundamental(fresh, 0, expected_target);
+  INFO("live rms=" << live_rms << ", fresh rms=" << fresh_rms << ", live AC/RMS=" << live_ac_ratio
+                   << ", fresh AC/RMS=" << fresh_ac_ratio << ", live Hz=" << live_hz
+                   << ", fresh Hz=" << fresh_hz);
+
+  REQUIRE(fresh_rms > 0.01f);
+  REQUIRE(fresh_ac_ratio > 0.05);
+  REQUIRE(std::fabs(fresh_hz / expected_target - 1.0) < 0.12);
+  REQUIRE(live_rms > 0.01f);
+  REQUIRE(live_ac_ratio > 0.05);
+  REQUIRE(std::fabs(live_hz / fresh_hz - 1.0) < 0.12);
 }
 
 TEST_CASE("advanced reed gates are off by default (bit-identical)", "[midi][synth][reed]") {

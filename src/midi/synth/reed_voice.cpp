@@ -510,13 +510,17 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
 
   // Tonehole scattering (gated): read the bore (read-only) at the reed<->hole
   // round trip and store the open hole's inverting partial reflection for the
-  // next sample's loop reflection. bore_.write now points past the just-written
-  // injection, so the tap sits hole_delay_samples_ behind it.
+  // next sample's loop reflection. The hole tap follows the bore's pitch ratio
+  // through a fractional read over the ratio-1 delay, exact at ratio 1. bore_.write
+  // points past the just-written injection, so the tap's reference is the last sample.
   if (hole_delay_samples_ > 0) {
-    const int d = hole_delay_samples_;
-    const size_t idx = (bore_.write + static_cast<size_t>(bore_.capacity - 1 - d)) %
-                       static_cast<size_t>(bore_.capacity);
-    hole_refl_ = -hole_gain_ * bore_.buffer[idx];
+    const float delay = std::clamp(static_cast<float>(hole_delay_samples_) / ratio, 1.0f,
+                                   static_cast<float>(bore_.capacity - 4));
+    const int delay_q8 = static_cast<int>(delay * 256.0f);
+    const size_t last_write = (bore_.write + static_cast<size_t>(bore_.capacity - 1)) %
+                              static_cast<size_t>(bore_.capacity);
+    hole_refl_ = -hole_gain_ * rt::lagrange3_read(bore_.buffer, static_cast<size_t>(bore_.capacity),
+                                                  last_write, delay_q8);
   }
 
   // Growth cone (gated, conical only): the bore delay line carries the
