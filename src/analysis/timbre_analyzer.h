@@ -22,8 +22,8 @@ struct Timbre {
 
 /// @brief Configuration for timbre analysis.
 struct TimbreConfig {
-  int n_fft = 2048;         ///< FFT size
-  int hop_length = 512;     ///< Hop length
+  int n_fft = 2048;         ///< Window length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 512;     ///< Hop length in input samples
   int n_mels = 128;         ///< Number of mel bands
   int n_mfcc = 13;          ///< Number of MFCC coefficients
   float window_sec = 0.5f;  ///< Window size for time-varying analysis

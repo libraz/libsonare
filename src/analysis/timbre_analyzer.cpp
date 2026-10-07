@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_rate.h"
 #include "core/spectrum.h"
 #include "feature/mel_spectrogram.h"
 #include "feature/onset.h"
@@ -50,7 +51,8 @@ TimbreAnalyzer::TimbreAnalyzer(const Audio& audio, const TimbreConfig& config)
 
   // Compute spectrogram once and derive the mel spectrogram from it so the
   // STFT pass is not repeated inside MelSpectrogram::compute.
-  Spectrogram spec = Spectrogram::compute(audio, make_stft_config(config.n_fft, config.hop_length));
+  Spectrogram spec = Spectrogram::compute(
+      audio, stft_config_at_rate(config.n_fft, config.hop_length, audio.sample_rate()));
 
   MelFilterConfig mel_filter_config;
   mel_filter_config.n_mels = config.n_mels;

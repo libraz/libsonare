@@ -8,6 +8,7 @@
 #include <cmath>
 #include <vector>
 
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -423,4 +424,55 @@ TEST_CASE("TimbreAnalyzer complexity comparison", "[timbre_analyzer]") {
   // Complex sound should have higher complexity
   // (This may vary depending on implementation)
   REQUIRE(complex_analyzer.complexity() >= 0.0f);
+}
+
+namespace {
+
+/// Mean of @p v over frames whose input neighbourhood (hop-centered, +-hop samples) is audible.
+/// The rests of the material are digital silence at 22050 Hz but carry resampler residue at other
+/// rates, where the centroid of a near-empty frame is meaningless.
+float active_mean(const std::vector<float>& v, const Audio& audio, int hop) {
+  const float* x = audio.data();
+  const int n = static_cast<int>(audio.size());
+  double sum = 0.0;
+  int count = 0;
+  for (size_t f = 0; f < v.size(); ++f) {
+    const int c = static_cast<int>(f) * hop;
+    double energy = 0.0;
+    int len = 0;
+    for (int i = std::max(0, c - hop); i < std::min(n, c + hop); ++i, ++len) energy += x[i] * x[i];
+    if (len > 0 && std::sqrt(energy / len) > 0.01) {
+      sum += v[f];
+      ++count;
+    }
+  }
+  REQUIRE(count > 0);
+  return static_cast<float>(sum / count);
+}
+
+}  // namespace
+
+TEST_CASE("TimbreAnalyzer centroid and rolloff are invariant to the input rate",
+          "[analysis_rate][timbre_analyzer]") {
+  using sonare::test::make_rate_material;
+  using sonare::test::RateMaterial;
+  const Audio ref_audio = make_rate_material(RateMaterial::TriadTurnaround, 22050);
+  TimbreAnalyzer ref(ref_audio);
+  const float ref_centroid = active_mean(ref.spectral_centroid(), ref_audio, 512);
+  const float ref_rolloff = active_mean(ref.spectral_rolloff(), ref_audio, 512);
+  REQUIRE(ref_centroid > 0.0f);
+  REQUIRE(ref_rolloff > 0.0f);
+
+  for (int sr : {32000, 44100, 48000}) {
+    DYNAMIC_SECTION("sr " << sr) {
+      const Audio audio = make_rate_material(RateMaterial::TriadTurnaround, sr);
+      TimbreAnalyzer a(audio);
+      const float centroid = active_mean(a.spectral_centroid(), audio, 512);
+      const float rolloff = active_mean(a.spectral_rolloff(), audio, 512);
+      INFO("centroid " << centroid << " vs " << ref_centroid << ", rolloff " << rolloff << " vs "
+                       << ref_rolloff);
+      CHECK(std::abs(centroid / ref_centroid - 1.0f) <= 0.05f);
+      CHECK(std::abs(rolloff / ref_rolloff - 1.0f) <= 0.05f);
+    }
+  }
 }
