@@ -73,6 +73,12 @@ export type {
   SonareRealtimeVoiceChangerResetMessage,
   SonareRealtimeVoiceChangerSetConfigMessage,
   SonareRealtimeVoiceChangerWorkletProcessorOptions,
+  SonareStreamAnalyzerChunkMessage,
+  SonareStreamAnalyzerDestroyMessage,
+  SonareStreamAnalyzerMessage,
+  SonareStreamAnalyzerNodeOptions,
+  SonareStreamAnalyzerRecycleMessage,
+  SonareStreamAnalyzerWorkletProcessorOptions,
   SonareWorkletDestroyMessage,
   SonareWorkletMessage,
   SonareWorkletProcessorOptions,
@@ -152,6 +158,11 @@ export {
   sonareSpectrumRingBufferByteLength,
   writeSonareEngineTelemetryRingBuffer,
 } from './worklet/protocol.js';
+export { SonareStreamAnalyzerNode } from './worklet/stream-analyzer-node.js';
+export {
+  registerSonareStreamAnalyzerWorkletProcessor,
+  SonareStreamAnalyzerWorkletProcessor,
+} from './worklet/stream-analyzer-processor.js';
 export {
   registerSonareRealtimeVoiceChangerWorkletProcessor,
   SonareRealtimeVoiceChangerWorkletProcessor,

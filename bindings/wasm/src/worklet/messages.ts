@@ -15,6 +15,7 @@ import type {
   PlaybackRendererConfig,
   RealtimeVoiceChangerConfigInput,
   RealtimeVoiceChangerPodConfig,
+  StreamConfig,
   UmpWords,
 } from '../index.js';
 import type { AutomationCurve, SurroundPan } from '../public_types.js';
@@ -117,6 +118,48 @@ export type SonareRealtimeVoiceChangerMessage =
   | SonareRealtimeVoiceChangerSetConfigMessage
   | SonareRealtimeVoiceChangerResetMessage
   | SonareRealtimeVoiceChangerDestroyMessage;
+
+export interface SonareStreamAnalyzerWorkletProcessorOptions {
+  /** Mono samples per posted chunk. Integer of at least 128. Default 4096. */
+  chunkFrames?: number;
+}
+
+export interface SonareStreamAnalyzerNodeOptions
+  extends SonareStreamAnalyzerWorkletProcessorOptions {
+  /** Analyzer configuration, passed to `StreamAnalyzer` as given. `sampleRate` defaults to the context's. */
+  config?: StreamConfig;
+  processorName?: string;
+  moduleUrl?: string | URL;
+  nodeFactory?: (
+    context: BaseAudioContext,
+    processorName: string,
+    options: AudioWorkletNodeOptions,
+  ) => AudioWorkletNode;
+}
+
+/** Returns a consumed chunk buffer to the processor's pool. */
+export interface SonareStreamAnalyzerRecycleMessage {
+  type: 'recycle';
+  samples: Float32Array;
+}
+
+export interface SonareStreamAnalyzerDestroyMessage {
+  type: 'destroy';
+}
+
+export type SonareStreamAnalyzerMessage =
+  | SonareStreamAnalyzerRecycleMessage
+  | SonareStreamAnalyzerDestroyMessage;
+
+/** One chunk of the mono downmix, transferred from the processor. */
+export interface SonareStreamAnalyzerChunkMessage {
+  type: 'chunk';
+  samples: Float32Array;
+  /** Samples the processor has produced before this chunk, dropped chunks included. */
+  startSample: number;
+  /** True when audio before this chunk was lost, so it does not continue the previous one. */
+  discontinuity: boolean;
+}
 
 export interface SonarePlaybackWorkletProcessorOptions {
   /** Renderer configuration; parsed once, in the processor constructor. Default `{}`. */

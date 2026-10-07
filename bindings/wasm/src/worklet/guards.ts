@@ -10,6 +10,8 @@ import type {
   SonareEngineTransportResponseMessage,
   SonarePlaybackMessage,
   SonareRealtimeVoiceChangerMessage,
+  SonareStreamAnalyzerChunkMessage,
+  SonareStreamAnalyzerMessage,
   SonareWorkletExternalMidiMessage,
   SonareWorkletMessage,
 } from './messages.js';
@@ -287,6 +289,27 @@ export function isRealtimeVoiceChangerMessage(
     return false;
   }
   return value.type === 'setConfig' || value.type === 'reset' || value.type === 'destroy';
+}
+
+export function isStreamAnalyzerMessage(value: unknown): value is SonareStreamAnalyzerMessage {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    value.type === 'destroy' || (value.type === 'recycle' && value.samples instanceof Float32Array)
+  );
+}
+
+export function isStreamAnalyzerChunkMessage(
+  value: unknown,
+): value is SonareStreamAnalyzerChunkMessage {
+  return (
+    isRecord(value) &&
+    value.type === 'chunk' &&
+    value.samples instanceof Float32Array &&
+    typeof value.startSample === 'number' &&
+    typeof value.discontinuity === 'boolean'
+  );
 }
 
 const isOptionalNumber = (value: unknown): boolean =>
