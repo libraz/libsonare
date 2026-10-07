@@ -65,15 +65,6 @@ _MIN_SAMPLE_RATE = 8000
 _MAX_SAMPLE_RATE = 384000
 
 
-def _check_sample_rate(fn_name: str, sample_rate: object) -> ctypes.c_int:
-    """Narrow ``sample_rate`` onto a C ``int`` and refuse one outside the supported range."""
-    rate = _to_c_int(sample_rate, "sample_rate")
-    if not _MIN_SAMPLE_RATE <= rate.value <= _MAX_SAMPLE_RATE:
-        span = f"[{_MIN_SAMPLE_RATE}, {_MAX_SAMPLE_RATE}]"
-        raise SonareValueError(f"{fn_name}: sample_rate out of supported range {span}")
-    return rate
-
-
 def mixing_scene_preset_names() -> list[str]:
     """Return built-in mixer scene preset identifiers."""
     lib = _get_lib()
@@ -143,7 +134,7 @@ class Mixer:
             raise RuntimeError("libsonare was built without mixing support")
         handle = lib.sonare_mixer_from_scene_json(
             _utf8_arg(json, "json"),
-            _check_sample_rate("Mixer.from_scene_json", sample_rate),
+            _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE),
             _to_c_int(block_size, "block_size"),
         )
         if not handle:
@@ -1040,7 +1031,7 @@ def mix_stereo(
         raise RuntimeError("libsonare was built without mixing support")
     if not strips:
         raise SonareValueError("mix_stereo: at least one strip is required")
-    c_sample_rate = _check_sample_rate("mix_stereo", sample_rate)
+    c_sample_rate = _narrow_int(sample_rate, "sample_rate", _MIN_SAMPLE_RATE, _MAX_SAMPLE_RATE)
 
     # A per-strip option may be shorter than the strip list (the remaining
     # strips keep their defaults, as on Node and WASM) but never longer: the
