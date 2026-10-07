@@ -179,6 +179,35 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   /// by reset().
   uint64_t skipped_event_count() const noexcept { return skipped_events_; }
 
+  /// Which bank answers a note-on (resolve_note_on).
+  enum class NoteBackend : uint8_t {
+    kNone,        ///< The part refuses the note: key range, RX NOTE ON, or no fallback.
+    kSoundFont,   ///< A SoundFont preset has a renderable zone for it.
+    kModelFloor,  ///< The GM fallback synth bank plays it.
+  };
+  /// What one part sounds for one note-on under its current state.
+  struct NoteResolution {
+    NoteBackend backend = NoteBackend::kNone;
+    /// Index into soundfont()->presets() when backend is kSoundFont, else -1.
+    int preset_index = -1;
+    /// The part's effective SF2 bank (128 = drums) and its program.
+    uint16_t bank = 0;
+    uint8_t program = 0;
+  };
+  /// The parts a channel-voice message @p u reaches, one bit per part: GS RX
+  /// CHANNEL and the part's receive switch for the message's class. The mask
+  /// on_event dispatches over.
+  uint16_t parts_receiving(const Ump& u) const noexcept;
+  /// CONTROL thread, after prepare(): what part @p part would sound for a
+  /// note-on of @p note at @p velocity, without starting a voice. The same
+  /// resolution note_on() acts on — key range, velocity sense, RX NOTE ON, the
+  /// tone map's kit fallback, user drum sets, PLAY NOTE NUMBER and the zone
+  /// checks — so a host reporting coverage asks the player rather than
+  /// re-deriving it. Allocation-free.
+  NoteResolution resolve_note_on(uint8_t part, uint8_t note, Velocity16 velocity,
+                                 uint8_t attribute_type = 0,
+                                 uint16_t attribute_data = 0) const noexcept;
+
   /// Feeds a SysEx payload (with or without F0/F7 framing) to the GS layer:
   /// GM System On, GS Reset and "use for rhythm part" are recognised. Hosts
   /// that own the SysEx store call this when a SysEx event is due. Safe on
@@ -522,6 +551,34 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     float coeff = 0.0f;  ///< Per-sample one-pole decay (0 = no glide).
   };
 
+  /// Where a note-on goes, decided from the part's state alone.
+  enum class NoteStage : uint8_t {
+    kNotReceived,     ///< Outside KEY RANGE: nothing else the note-on does happens.
+    kRefused,         ///< RX NOTE ON off: portamento and the mono choke still apply.
+    kModelPreferred,  ///< Model-first for a dedicated melodic family.
+    kNoPreset,        ///< No SoundFont preset answers it.
+    kPreset,          ///< preset_index answers it, if a zone renders.
+  };
+  /// Everything note_on() and resolve_note_on() read off the part's state.
+  struct NoteRoute {
+    NoteStage stage = NoteStage::kNotReceived;
+    Velocity16 velocity;  ///< After VELOCITY SENSE.
+    uint16_t bank = 0;
+    GsDrumNoteParams gd;
+    Sf2PerNoteVoice per_note;
+    ComposedPitch note_pitch;
+    float note_pitch_cents = 0.0f;
+    int preset_index = -1;
+    uint8_t sound_note = 0;
+  };
+  NoteRoute route_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+                          uint8_t attribute_type, uint16_t attribute_data) const noexcept;
+  /// Calls @p on_zone(params) for every zone of preset @p preset_index that
+  /// renders @p sound_note at @p velocity, until it returns false. Returns
+  /// whether any zone rendered.
+  template <typename OnZone>
+  bool for_each_renderable_zone(int preset_index, uint8_t sound_note, Velocity16 velocity,
+                                OnZone&& on_zone) const noexcept;
   void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
                uint16_t attribute_data, uint32_t source_track_id) noexcept;
   /// Data-free floor: plays the note through the GM fallback synth bank.

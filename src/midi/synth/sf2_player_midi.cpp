@@ -263,51 +263,46 @@ GsDrumNoteParams Sf2Player::drum_note_params(const ChannelState& ch, bool is_dru
   return gs_layer_drum_note_params(user_drum_params_[static_cast<size_t>(set)][note & 0x7Fu], live);
 }
 
-void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
-                        uint16_t attribute_data, uint32_t source_track_id) noexcept {
-  if (!prepared_) return;
+Sf2Player::NoteRoute Sf2Player::route_note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
+                                              uint8_t attribute_type,
+                                              uint16_t attribute_data) const noexcept {
+  NoteRoute route;
   const ChannelState& ch = channels_[channel & 0x0Fu];
   // GS KEY RANGE (40 1x 1D/1E): a key the part does not receive is not a silent
   // note. It takes no voice, chokes nothing and does not spend the armed
   // portamento, so the test precedes all three as well as both voice banks.
-  if (!ch.receives_key(note)) return;
+  if (!ch.receives_key(note)) return route;
   // GS VELOCITY SENSE (40 1x 1A/1B): the part reshapes the struck velocity, so
   // this precedes both voice banks and the zone velocity ranges a preset
   // switches its layers on — a part made insensitive picks the layer the shaped
   // velocity names rather than the one the wire carried. One conversion, not one
   // per bank. Identity at the power-on 40/40, so an untouched part is bit-exact.
-  velocity = gs_velocity_sense(ch.velocity_sense_depth, ch.velocity_sense_offset, velocity);
-  const Portamento porta = take_portamento(channel, note);
-  // Mono already stops everything the part is sounding, so it subsumes SINGLE.
-  if (ch.mono_poly == kGsMonoPolyMono && !ch.is_drum()) {
-    choke_part(channel, -1);
-  } else if (ch.assign_mode == kGsAssignModeSingle) {
-    choke_part(channel, note & 0x7F);
-  }
-  const uint16_t bank = effective_bank(channel);
-  const bool is_drum = bank == kDrumBank;
+  route.velocity = gs_velocity_sense(ch.velocity_sense_depth, ch.velocity_sense_offset, velocity);
+  route.bank = effective_bank(channel);
+  const bool is_drum = route.bank == kDrumBank;
   // The two per-note pitch offsets: a temperament indexed by the struck key,
   // and PITCH OFFSET FINE, whose Hertz become an interval only once there is a
   // note to work it out against.
   // An absolute pitch (attribute 7.9 or Pitch 7.25) overrides tuning tables, so neither is added
   // to it (M2-104-UM §7.4.15.2).
-  Sf2PerNoteVoice per_note;
-  bind_per_note(per_note, channel, note, attribute_type, attribute_data);
-  const ComposedPitch note_pitch = compose_per_note(per_note);
-  const float note_pitch_cents = note_pitch.absolute
-                                     ? 0.0f
-                                     : gs_scale_tuning_cents(ch.scale_tuning, note) +
-                                           gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
-  const GsDrumNoteParams gd = drum_note_params(ch, is_drum, note);
+  bind_per_note(route.per_note, channel, note, attribute_type, attribute_data);
+  route.note_pitch = compose_per_note(route.per_note);
+  route.note_pitch_cents = route.note_pitch.absolute
+                               ? 0.0f
+                               : gs_scale_tuning_cents(ch.scale_tuning, note) +
+                                     gs_pitch_offset_fine_cents(ch.pitch_offset_fine, note);
+  route.gd = drum_note_params(ch, is_drum, note);
   // GS RX NOTE ON (41 m8 rr / 21 d8 rr): a note the kit has switched off is not
   // sounded at all, so this precedes every choice of bank below — a note refused
   // here must not reach the model floor either.
-  if ((gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && gd.rx_note_on == 0) return;
+  if ((route.gd.flags & GsDrumNoteParams::kRxNoteOn) != 0 && route.gd.rx_note_on == 0) {
+    route.stage = NoteStage::kRefused;
+    return route;
+  }
   if (config_.synth_fallback && config_.prefer_model_for_modeled_families && !is_drum &&
-      gm_program_has_dedicated_model(bank, ch.program)) {
-    fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
-                     attribute_data);
-    return;
+      gm_program_has_dedicated_model(route.bank, ch.program)) {
+    route.stage = NoteStage::kModelPreferred;
+    return route;
   }
   // GS user drum set (21 dn rr): rhythm programs 64 and 65 play a kit the file
   // built note by note, so both the kit this strike sounds and the note within
@@ -324,47 +319,40 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
     kit_program = 0;
   }
   // No SoundFont / uncovered program -> the data-free synth floor.
-  const int preset_idx = soundfont_ != nullptr ? resolve_preset(bank, kit_program) : -1;
-  if (preset_idx < 0) {
-    if (config_.synth_fallback) {
-      fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
-                       attribute_data);
-    }
-    return;
+  route.preset_index = soundfont_ != nullptr ? resolve_preset(route.bank, kit_program) : -1;
+  if (route.preset_index < 0) {
+    route.stage = NoteStage::kNoPreset;
+    return route;
   }
-  const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_idx)];
-  const auto& instruments = soundfont_->instruments();
-  const float* pool_data = soundfont_->sample_pool().data();
-  const float vel_gain = sf2_velocity_gain(velocity);
-
-  const Sf2Zone* preset_global =
-      !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
-
-  // SoundFont 2.04 section 8.1.2 scopes exclusiveClass to notes that are ALREADY
-  // sounding, so the layers this one note-on allocates must not choke each
-  // other — a stereo hi-hat's two legs, or a layered kit piece, share one class
-  // by design. Voice ages are monotonic, so every voice allocated below carries
-  // an age at or above this mark and is excluded from the choke.
-  const uint64_t age_before_note_on = pool_.next_age();
-
+  route.stage = NoteStage::kPreset;
   // GS PLAY NOTE NUMBER (41 m1 rr): the note whose SOUND this strike plays.
   // Zone selection and the resolved params follow it; the per-note slab, the
   // choke and the voice's own note stay on the struck note. The map's edit sits
   // ON TOP of the user set's source note, which is the stored kit it edits.
-  uint8_t sound_note = gs_user_drum_sound_note(us, note);
-  if ((gd.flags & GsDrumNoteParams::kPlayNote) != 0) sound_note = gd.play_note;
+  route.sound_note = gs_user_drum_sound_note(us, note);
+  if ((route.gd.flags & GsDrumNoteParams::kPlayNote) != 0) route.sound_note = route.gd.play_note;
   // The sample zone follows the integer part of an absolute pitch (§7.4.15.3), so a far
   // transposition does not stretch one recording across the keyboard.
-  if (note_pitch.absolute) {
-    sound_note = static_cast<uint8_t>(std::clamp(
-        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
-        127));
+  if (route.note_pitch.absolute) {
+    route.sound_note = static_cast<uint8_t>(
+        std::clamp(static_cast<int>(
+                       std::floor(static_cast<double>(note) + route.note_pitch.per_note_semitones)),
+                   0, 127));
     // A play-note substitution plays at its own root, so only a pitch-chosen zone moves the key
     // the per-note offset is measured from.
-    per_note.zone_key = sound_note;
+    route.per_note.zone_key = route.sound_note;
   }
-  per_note.cents = per_note_cents(per_note, note_pitch);
+  route.per_note.cents = per_note_cents(route.per_note, route.note_pitch);
+  return route;
+}
 
+template <typename OnZone>
+bool Sf2Player::for_each_renderable_zone(int preset_index, uint8_t sound_note, Velocity16 velocity,
+                                         OnZone&& on_zone) const noexcept {
+  const Sf2Preset& preset = soundfont_->presets()[static_cast<size_t>(preset_index)];
+  const auto& instruments = soundfont_->instruments();
+  const Sf2Zone* preset_global =
+      !preset.zones.empty() && preset.zones[0].is_global() ? &preset.zones[0] : nullptr;
   bool has_renderable_zone = false;
   for (const Sf2Zone& pzone : preset.zones) {
     if (pzone.is_global() || !pzone.matches(sound_note, velocity)) continue;
@@ -400,37 +388,121 @@ void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint
         continue;
       }
       has_renderable_zone = true;
-
-      // GS layer: NRPN part edits + per-note drum-kit overrides.
-      apply_gs_part_params(params, ch.gs);
-      apply_gs_drum_params(params, gd);
-      // Both offsets are the struck key's, not the sounding note's: a
-      // temperament belongs to the keyboard, so a kit piece PLAY NOTE NUMBER
-      // redirected to keeps the tuning of the key that asked for it.
-      if (note_pitch_cents != 0.0f) {
-        params.pitch_increment *= std::exp2(static_cast<double>(note_pitch_cents) / 1200.0);
-      }
-      // A TVF CUTOFF CONTROL destination engages the filter the way a TONE
-      // MODIFY cutoff does, and on the part rather than on the controller: a
-      // controller rises after the note-on as often as before it, and a
-      // bypassed filter cannot open. Either source is enough on its own.
-      if (gs_part_has_filter_destination(ch.ctrl_dest)) params.filter_bypass = false;
-
-      // Exclusive class: choke same-group voices on this channel (hi-hats), in
-      // either pool. The age gate keeps a later zone of this same note-on from
-      // choking an earlier zone's voice.
-      choke_exclusive_group(channel & 0x0Fu, params.exclusive_class, age_before_note_on);
-
-      Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
-      if (voice == nullptr) continue;
-      voice->start(pool_data, params, sample_rate_, vel_gain);
-      voice->glide_cents = porta.cents;
-      voice->glide_coeff = porta.coeff;
-      voice->per_note = per_note;
+      if (!on_zone(params)) return true;
     }
   }
+  return has_renderable_zone;
+}
+
+uint16_t Sf2Player::parts_receiving(const Ump& u) const noexcept {
+  // GS RX CHANNEL (40 1x 02): which parts a channel message reaches. At the
+  // power-on map this word carries the channel's own part and nothing else.
+  // Several parts on one channel is what real files use the parameter for — a
+  // layer — and a part set to RX CHANNEL OFF is in no word at all.
+  const uint16_t listening = rx_parts_[u.channel() & 0x0Fu];
+  uint16_t parts = 0;
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    // GS RX switches (40 1x 03-12): whether the part receives this class of
+    // message at all. A dropped message leaves the part holding what the last
+    // received one left, which is not the same as receiving a neutral value.
+    if ((listening & (1u << ch)) != 0 && receives_message(channels_[ch].rx_switches, u)) {
+      parts |= static_cast<uint16_t>(1u << ch);
+    }
+  }
+  return parts;
+}
+
+Sf2Player::NoteResolution Sf2Player::resolve_note_on(uint8_t part, uint8_t note,
+                                                     Velocity16 velocity, uint8_t attribute_type,
+                                                     uint16_t attribute_data) const noexcept {
+  NoteResolution out;
+  const uint8_t p = part & 0x0Fu;
+  out.bank = effective_bank(p);
+  out.program = channels_[p].program;
+  const NoteRoute route = route_note_on(p, note & 0x7Fu, velocity, attribute_type, attribute_data);
+  const NoteBackend floor = config_.synth_fallback ? NoteBackend::kModelFloor : NoteBackend::kNone;
+  switch (route.stage) {
+    case NoteStage::kNotReceived:
+    case NoteStage::kRefused:
+      break;
+    case NoteStage::kModelPreferred:
+    case NoteStage::kNoPreset:
+      out.backend = floor;
+      break;
+    case NoteStage::kPreset:
+      if (for_each_renderable_zone(route.preset_index, route.sound_note, route.velocity,
+                                   [](const Sf2VoiceParams&) { return false; })) {
+        out.backend = NoteBackend::kSoundFont;
+        out.preset_index = route.preset_index;
+      } else {
+        out.backend = floor;
+      }
+      break;
+  }
+  return out;
+}
+
+void Sf2Player::note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
+                        uint16_t attribute_data, uint32_t source_track_id) noexcept {
+  if (!prepared_) return;
+  const ChannelState& ch = channels_[channel & 0x0Fu];
+  const NoteRoute route = route_note_on(channel, note, velocity, attribute_type, attribute_data);
+  if (route.stage == NoteStage::kNotReceived) return;
+  const Portamento porta = take_portamento(channel, note);
+  // Mono already stops everything the part is sounding, so it subsumes SINGLE.
+  if (ch.mono_poly == kGsMonoPolyMono && !ch.is_drum()) {
+    choke_part(channel, -1);
+  } else if (ch.assign_mode == kGsAssignModeSingle) {
+    choke_part(channel, note & 0x7F);
+  }
+  if (route.stage == NoteStage::kRefused) return;
+  if (route.stage != NoteStage::kPreset) {
+    if (config_.synth_fallback) {
+      fallback_note_on(channel, note, route.velocity, source_track_id, porta, attribute_type,
+                       attribute_data);
+    }
+    return;
+  }
+  const float* pool_data = soundfont_->sample_pool().data();
+  const float vel_gain = sf2_velocity_gain(route.velocity);
+  // SoundFont 2.04 section 8.1.2 scopes exclusiveClass to notes that are ALREADY
+  // sounding, so the layers this one note-on allocates must not choke each
+  // other — a stereo hi-hat's two legs, or a layered kit piece, share one class
+  // by design. Voice ages are monotonic, so every voice allocated below carries
+  // an age at or above this mark and is excluded from the choke.
+  const uint64_t age_before_note_on = pool_.next_age();
+  const bool has_renderable_zone = for_each_renderable_zone(
+      route.preset_index, route.sound_note, route.velocity, [&](Sf2VoiceParams& params) {
+        // GS layer: NRPN part edits + per-note drum-kit overrides.
+        apply_gs_part_params(params, ch.gs);
+        apply_gs_drum_params(params, route.gd);
+        // Both offsets are the struck key's, not the sounding note's: a
+        // temperament belongs to the keyboard, so a kit piece PLAY NOTE NUMBER
+        // redirected to keeps the tuning of the key that asked for it.
+        if (route.note_pitch_cents != 0.0f) {
+          params.pitch_increment *= std::exp2(static_cast<double>(route.note_pitch_cents) / 1200.0);
+        }
+        // A TVF CUTOFF CONTROL destination engages the filter the way a TONE
+        // MODIFY cutoff does, and on the part rather than on the controller: a
+        // controller rises after the note-on as often as before it, and a
+        // bypassed filter cannot open. Either source is enough on its own.
+        if (gs_part_has_filter_destination(ch.ctrl_dest)) params.filter_bypass = false;
+
+        // Exclusive class: choke same-group voices on this channel (hi-hats), in
+        // either pool. The age gate keeps a later zone of this same note-on from
+        // choking an earlier zone's voice.
+        choke_exclusive_group(channel & 0x0Fu, params.exclusive_class, age_before_note_on);
+
+        Sf2Voice* voice = pool_.allocate(channel & 0x0Fu, note, source_track_id);
+        if (voice == nullptr) return true;
+        voice->start(pool_data, params, sample_rate_, vel_gain);
+        voice->glide_cents = porta.cents;
+        voice->glide_coeff = porta.coeff;
+        voice->per_note = route.per_note;
+        return true;
+      });
   if (!has_renderable_zone && config_.synth_fallback) {
-    fallback_note_on(channel, note, velocity, source_track_id, porta, attribute_type,
+    fallback_note_on(channel, note, route.velocity, source_track_id, porta, attribute_type,
                      attribute_data);
   }
 }
@@ -1240,21 +1312,13 @@ void Sf2Player::on_event(uint32_t /*destination_id*/, const MidiEvent& event) no
     ++skipped_events_;  // Reserved status.
     return;
   }
-  // GS RX CHANNEL (40 1x 02): which parts a channel message reaches. At the
-  // power-on map this word carries the channel's own part and nothing else, so
-  // the loop is a direct index until a file says otherwise. Several parts on one
-  // channel is what real files use the parameter for — a layer — and a part set
-  // to RX CHANNEL OFF is in no word at all.
-  uint16_t parts = rx_parts_[u.channel() & 0x0Fu];
+  // A channel-voice message never moves a receive channel or switch, so the mask
+  // taken before the loop is the one every part in it would have answered.
+  const uint16_t parts = parts_receiving(u);
   if (parts == 0) return;
   bool skipped = false;
   for (uint8_t ch = 0; ch < 16; ++ch) {
     if ((parts & (1u << ch)) == 0) continue;
-    // GS RX switches (40 1x 03-12): whether the part receives this class of
-    // message at all. A dropped message leaves the part holding what the last
-    // received one left, which is not the same as receiving a neutral value.
-    // Polyphonic pressure has no branch below, so its switch guards nothing.
-    if (!receives_message(channels_[ch].rx_switches, u)) continue;
     switch (ev.kind) {
       case ChannelVoiceKind::NoteOn:
         note_on(ch, ev.note, ev.velocity, ev.index, ev.attribute_data, event.source_track_id);

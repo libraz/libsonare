@@ -115,6 +115,96 @@ SonareMidiEventPod pod(double ppq, const sonare::midi::Ump& ump) {
   return e;
 }
 
+/// Presets the GS manifest cases tell apart: (0, 0) answers velocities 64-127
+/// only, (0, 1) and its bank-8 variation, and two drum kits, of which program 3
+/// is a kit no GS tone map defines.
+std::vector<uint8_t> make_gs_manifest_sf2_bytes() {
+  sonare::test::Sf2Builder b;
+  std::vector<float> sine(96);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sine_id = b.add_sample("sine1k", sine, 32000, 60, 32, 96);
+  sonare::test::Sf2Builder::ZoneSpec looped;
+  looped.gens.push_back({54 /*sampleModes*/, 1});
+  looped.target = sine_id;
+  const int full = b.add_instrument("full", {looped});
+  sonare::test::Sf2Builder::ZoneSpec loud = looped;
+  loud.vel_lo = 64;
+  const int loud_only = b.add_instrument("loud-only", {loud});
+  const auto preset = [&](const char* name, uint16_t bank, uint16_t program, int instrument) {
+    sonare::test::Sf2Builder::ZoneSpec zone;
+    zone.target = instrument;
+    b.add_preset(name, bank, program, {zone});
+  };
+  preset("Loud Only", 0, 0, loud_only);
+  preset("Piano 2", 0, 1, full);
+  preset("Piano 2 Var", 8, 1, full);
+  preset("Standard Kit", 128, 0, full);
+  preset("Kit Three", 128, 3, full);
+  return b.build();
+}
+
+/// A framed Roland DT1 write of @p value at 40 @p block @p lo.
+std::vector<uint8_t> gs_dt1(uint8_t block, uint8_t lo, uint8_t value) {
+  const int sum = 0x40 + block + lo + value;
+  return {0xF0, 0x41,  0x10, 0x42,  0x12,
+          0x40, block, lo,   value, static_cast<uint8_t>((128 - (sum % 128)) & 0x7F),
+          0xF7};
+}
+
+/// A one-track format-0 SMF playing @p messages one tick apart, so no two share
+/// a time, with each note-on followed by its note-off a quarter later. SysEx
+/// reaches a project only through SMF import.
+std::vector<uint8_t> smf_of(const std::vector<std::vector<uint8_t>>& messages) {
+  std::vector<uint8_t> body;
+  for (const std::vector<uint8_t>& m : messages) {
+    body.push_back(0x01);
+    if (m.front() == 0xF0) {
+      body.push_back(0xF0);
+      body.push_back(static_cast<uint8_t>(m.size() - 1));
+      body.insert(body.end(), m.begin() + 1, m.end());
+      continue;
+    }
+    body.insert(body.end(), m.begin(), m.end());
+    if ((m.front() & 0xF0u) == 0x90u) {
+      body.insert(body.end(),
+                  {0x83, 0x60, static_cast<uint8_t>(0x80u | (m.front() & 0x0Fu)), m[1], 0x00});
+    }
+  }
+  body.insert(body.end(), {0x00, 0xFF, 0x2F, 0x00});
+  std::vector<uint8_t> smf;
+  push_tag(&smf, "MThd");
+  push_u32(&smf, 6);
+  push_u16(&smf, 0);
+  push_u16(&smf, 1);
+  push_u16(&smf, 480);
+  push_tag(&smf, "MTrk");
+  push_u32(&smf, static_cast<uint32_t>(body.size()));
+  smf.insert(smf.end(), body.begin(), body.end());
+  return smf;
+}
+
+/// The manifest of a project importing @p messages, against make_gs_manifest_sf2_bytes.
+std::vector<SonareSf2ProgramStatus> gs_manifest_of(
+    const std::vector<std::vector<uint8_t>>& messages) {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  const std::vector<uint8_t> smf = smf_of(messages);
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_import_smf(project, smf.data(), smf.size(), &clip) == SONARE_OK);
+  const std::vector<uint8_t> sf2 = make_gs_manifest_sf2_bytes();
+  REQUIRE(sonare_project_load_soundfont(project, sf2.data(), sf2.size()) == SONARE_OK);
+  size_t total = 0;
+  REQUIRE(sonare_project_soundfont_manifest(project, nullptr, 0, &total) == SONARE_OK);
+  std::vector<SonareSf2ProgramStatus> out(total);
+  REQUIRE(sonare_project_soundfont_manifest(project, out.data(), out.size(), &total) == SONARE_OK);
+  sonare_project_destroy(project);
+  return out;
+}
+
 }  // namespace
 
 TEST_CASE("sonare_project_load_soundfont parses, replaces and clears", "[project][sf2]") {
@@ -373,6 +463,60 @@ TEST_CASE("sonare_project_soundfont_manifest resolves GM2 Bank Select LSB", "[pr
   REQUIRE(std::string(manifest.preset_name) == "Piano GM2 LSB");
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("sonare_project_soundfont_manifest reports what the player resolves under GS part state",
+          "[project][sf2]") {
+  constexpr uint8_t kPart1 = 0x11;  // GS part block of MIDI channel 0.
+  const std::vector<uint8_t> note60 = {0x90, 60, 100};
+
+  SECTION("a key outside KEY RANGE plays nothing and is not reported") {
+    REQUIRE(gs_manifest_of({note60}).size() == 1);
+    CHECK(gs_manifest_of({gs_dt1(kPart1, 0x1E, 48), note60}).empty());
+  }
+  SECTION("VELOCITY SENSE decides which velocity layer the preset is asked for") {
+    const auto plain = gs_manifest_of({note60});
+    REQUIRE(plain.size() == 1);
+    REQUIRE(plain[0].backend == SONARE_SOURCE_BACKEND_SF2);
+    // Depth 0 and offset 10 shape every strike to velocity 10, below the zone.
+    const auto shaped =
+        gs_manifest_of({gs_dt1(kPart1, 0x1A, 0x00), gs_dt1(kPart1, 0x1B, 0x0A), note60});
+    REQUIRE(shaped.size() == 1);
+    CHECK(shaped[0].backend == SONARE_SOURCE_BACKEND_SYNTH);
+    CHECK(std::string(shaped[0].preset_name).empty());
+  }
+  SECTION("a kit the tone map does not define is looked up as Standard") {
+    const auto kit = gs_manifest_of({{0xC9, 3}, {0x99, 36, 100}});
+    REQUIRE(kit.size() == 1);
+    CHECK(kit[0].bank == 128);
+    CHECK(kit[0].program == 3);
+    CHECK(kit[0].backend == SONARE_SOURCE_BACKEND_SF2);
+    CHECK(std::string(kit[0].preset_name) == "Standard Kit");
+  }
+  SECTION("GM System On closes bank select") {
+    const std::vector<std::vector<uint8_t>> variation = {{0xB0, 0, 8}, {0xC0, 1}, note60};
+    const auto gs = gs_manifest_of(variation);
+    REQUIRE(gs.size() == 1);
+    REQUIRE(gs[0].bank == 8);
+    REQUIRE(std::string(gs[0].preset_name) == "Piano 2 Var");
+    std::vector<std::vector<uint8_t>> gm1 = {{0xF0, 0x7E, 0x7F, 0x09, 0x01, 0xF7}};
+    gm1.insert(gm1.end(), variation.begin(), variation.end());
+    const auto after_gm1 = gs_manifest_of(gm1);
+    REQUIRE(after_gm1.size() == 1);
+    CHECK(after_gm1[0].bank == 0);
+    CHECK(after_gm1[0].program == 1);
+    CHECK(std::string(after_gm1[0].preset_name) == "Piano 2");
+  }
+  SECTION("RX CHANNEL layers a second part under one channel's notes") {
+    // Part 2 listens to channel 0 and holds program 1; part 1 keeps program 0.
+    const auto layered = gs_manifest_of({{0xC1, 1}, gs_dt1(0x12, 0x02, 0x00), note60});
+    REQUIRE(layered.size() == 2);
+    CHECK(layered[0].channel == 0);
+    CHECK(layered[0].program == 0);
+    CHECK(layered[1].channel == 0);
+    CHECK(layered[1].program == 1);
+    CHECK(std::string(layered[1].preset_name) == "Piano 2");
+  }
 }
 
 TEST_CASE("bounce_with_sf2_instruments renders the loaded SoundFont", "[project][sf2]") {

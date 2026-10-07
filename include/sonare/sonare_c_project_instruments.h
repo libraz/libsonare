@@ -349,9 +349,14 @@ typedef struct {
 ///        arrangement plays a note through, in first-use order, and reports
 ///        whether each resolves in the loaded SoundFont (GS variation/drum
 ///        fallbacks included) or would fall back to the built-in synth.
-///        Bank select (CC0) and program-change events are tracked per
-///        (destination, channel) in event order; channel 10 and GM2 CC0=120
-///        rhythm parts resolve drums via bank 128. @p out may be NULL when
+///        Each destination's events drive the SoundFont player's own part
+///        state in event order and every note-on is resolved by that player,
+///        so bank select, program change, GS/GM resets, GS part SysEx (tone
+///        number, rhythm part, receive channel and switches, key range,
+///        velocity sense) and the kit fallback reach the report exactly as
+///        they reach a bounce. A note-on the part refuses plays nothing and is
+///        not reported. Channel 10 and GM2 CC0=120 rhythm parts resolve drums
+///        via bank 128. @p out may be NULL when
 ///        @p max_entries is 0 to query the
 ///        count: @p out_count always receives the TOTAL entry count and at most
 ///        @p max_entries entries are written.
