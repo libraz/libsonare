@@ -201,6 +201,27 @@ function builtinInstrumentConfig(
   return typeof binding === 'string' ? { waveform: binding } : binding;
 }
 
+/** Interleave planar loop-recording audio; an interleaved array passes through. */
+function interleaveLoopRecording(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingDesc {
+  const { audio } = desc;
+  if (!Array.isArray(audio)) {
+    return desc;
+  }
+  const channels = audio.length;
+  const frames = channels > 0 ? audio[0].length : 0;
+  if (audio.some((plane) => plane.length !== frames)) {
+    throw new RangeError('addLoopRecordingTakes: planar audio channels must have equal lengths');
+  }
+  const interleaved = new Float32Array(frames * channels);
+  for (let c = 0; c < channels; c++) {
+    const plane = audio[c];
+    for (let i = 0; i < frames; i++) {
+      interleaved[i * channels + c] = plane[i];
+    }
+  }
+  return { ...desc, audio: interleaved, audioChannels: channels };
+}
+
 /**
  * Immutable compiled playback snapshot of a {@link Project}, produced by
  * {@link Project.compileTimeline} and installed with
@@ -938,9 +959,14 @@ export class Project {
     });
   }
 
-  /** Split captured loop-recording audio into takes and add one clip. */
+  /**
+   * Split captured loop-recording audio into takes and add one clip. `audio` may
+   * be interleaved or planar (`Float32Array[]`). The last take is made active
+   * unless it is partial and an earlier complete take exists; `partialTail:
+   * 'drop'` does not create the partial take.
+   */
   addLoopRecordingTakes(desc: ProjectLoopRecordingDesc): ProjectLoopRecordingResult {
-    return this.native.addLoopRecordingTakes(desc);
+    return this.native.addLoopRecordingTakes(interleaveLoopRecording(desc));
   }
 
   /** Create a MIDI track + clip; returns `{ trackId, clipId }`. */

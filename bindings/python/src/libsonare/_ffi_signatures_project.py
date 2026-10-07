@@ -225,6 +225,8 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareProjectLoopRecordingDesc),
             ctypes.POINTER(ctypes.c_uint32),
             ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.POINTER(ctypes.c_int64),
         ]
 
         lib.sonare_project_add_midi_clip.restype = ctypes.c_int32

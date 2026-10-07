@@ -327,6 +327,14 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
   desc.loop_length_ppq = DoubleProperty(obj, "loopLengthPpq", 0.0);
   desc.audio_channels = IntProperty(obj, "audioChannels", 1);
   desc.audio_sample_rate = IntProperty(obj, "audioSampleRate", 48000);
+  const std::string partial_tail = StringProperty(obj, "partialTail", "keep");
+  if (partial_tail == "drop") {
+    desc.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;
+  } else if (partial_tail != "keep") {
+    Napi::RangeError::New(env, "partialTail must be 'keep' or 'drop', got '" + partial_tail + "'")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
 
   std::vector<float> audio;
   Napi::Value audio_value = obj.Get("audio");
@@ -345,12 +353,17 @@ Napi::Value ProjectWrap::AddLoopRecordingTakes(const Napi::CallbackInfo& info) {
 
   uint32_t out_clip_id = 0;
   size_t out_take_count = 0;
+  uint8_t out_partial_tail = 0;
+  int64_t out_last_take_frames = 0;
   ThrowIfError(
-      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count));
+      env, sonare_project_add_loop_recording_takes(project_, &desc, &out_clip_id, &out_take_count,
+                                                   &out_partial_tail, &out_last_take_frames));
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Object out = Napi::Object::New(env);
   out.Set("clipId", Napi::Number::New(env, out_clip_id));
   out.Set("takeCount", Napi::Number::New(env, static_cast<double>(out_take_count)));
+  out.Set("partialTail", Napi::Boolean::New(env, out_partial_tail != 0));
+  out.Set("lastTakeFrames", Napi::Number::New(env, static_cast<double>(out_last_take_frames)));
   return out;
   SONARE_NODE_CATCH(env)
 }

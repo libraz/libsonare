@@ -26,7 +26,7 @@ from ._ffi_vocal_project import configure_vocal_project_signatures
 
 _type_exports = [name for name in globals() if name.startswith(("Sonare", "SONARE_"))]
 
-EXPECTED_ABI_VERSION = 0x04020206
+EXPECTED_ABI_VERSION = 0x04020306
 
 # --- Library discovery ---
 

@@ -824,10 +824,14 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   desc.audio_sample_rate = 48000;
   uint32_t clip_id = 0;
   size_t take_count = 0;
-  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==
-          SONARE_OK);
+  uint8_t partial_tail = 9;
+  int64_t last_take_frames = 0;
+  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count,
+                                                  &partial_tail, &last_take_frames) == SONARE_OK);
   REQUIRE(clip_id != 0);
   REQUIRE(take_count == 2);
+  REQUIRE(partial_tail == 0);
+  REQUIRE(last_take_frames == 24000);
   REQUIRE(project->audio.sources.size() == 2);
 
   const std::string json = serialize(project);
@@ -857,8 +861,8 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   REQUIRE(project->audio.sources.empty());
 
   desc.track_id = 9999;
-  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count, nullptr,
+                                                  nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   sonare_project_destroy(project);
 
   REQUIRE(sonare_project_create(&project) == SONARE_OK);
@@ -869,14 +873,101 @@ TEST_CASE("C-ABI loop recording audio is split into clip takes", "[project][c-ab
   desc.loop_length_ppq = 1.0;
   clip_id = 0;
   take_count = 0;
-  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count) ==
-          SONARE_ERROR_INVALID_STATE);
+  REQUIRE(sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &take_count, nullptr,
+                                                  nullptr) == SONARE_ERROR_INVALID_STATE);
   REQUIRE(clip_id == 0);
   REQUIRE(take_count == 0);
   REQUIRE(serialize(project) == before_failed_add);
   REQUIRE(sonare_project_undo(project) == SONARE_OK);
   REQUIRE(serialize(project).find("\"clips\":[]") != std::string::npos);
   sonare_project_destroy(project);
+}
+
+namespace {
+
+struct LoopCaptureResult {
+  SonareError error = SONARE_OK;
+  size_t take_count = 0;
+  uint8_t partial_tail = 0;
+  int64_t last_take_frames = 0;
+  std::string json;
+};
+
+LoopCaptureResult add_loop_capture(int64_t frames, uint32_t flags) {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  SonareProjectTrackDesc track{};
+  track.kind = SONARE_TRACK_AUDIO;
+  uint32_t track_id = 0;
+  REQUIRE(sonare_project_add_track(project, &track, &track_id) == SONARE_OK);
+
+  std::vector<float> audio(static_cast<size_t>(frames), 0.5f);
+  SonareProjectLoopRecordingDesc desc{};
+  desc.track_id = track_id;
+  desc.flags = flags;
+  desc.start_ppq = 0.0;
+  desc.loop_length_ppq = 1.0;
+  desc.audio_interleaved = audio.data();
+  desc.audio_frames = frames;
+  desc.audio_channels = 1;
+  desc.audio_sample_rate = 48000;
+  LoopCaptureResult out;
+  uint32_t clip_id = 0;
+  out.error = sonare_project_add_loop_recording_takes(project, &desc, &clip_id, &out.take_count,
+                                                      &out.partial_tail, &out.last_take_frames);
+  out.json = serialize(project);
+  sonare_project_destroy(project);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("C-ABI loop recording keeps a partial last take inactive", "[project][c-abi-edit]") {
+  // One loop at the default tempo is 24000 frames at 48 kHz.
+  const auto partial = add_loop_capture(36000, 0);
+  REQUIRE(partial.error == SONARE_OK);
+  REQUIRE(partial.take_count == 2);
+  REQUIRE(partial.partial_tail == 1);
+  REQUIRE(partial.last_take_frames == 12000);
+  REQUIRE(partial.json.find("\"active_take_id\":1") != std::string::npos);
+
+  const auto dropped = add_loop_capture(36000, SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL);
+  REQUIRE(dropped.error == SONARE_OK);
+  REQUIRE(dropped.take_count == 1);
+  REQUIRE(dropped.partial_tail == 0);
+  REQUIRE(dropped.last_take_frames == 24000);
+
+  const auto shorter = add_loop_capture(12000, 0);
+  REQUIRE(shorter.error == SONARE_OK);
+  REQUIRE(shorter.take_count == 1);
+  REQUIRE(shorter.partial_tail == 1);
+  REQUIRE(shorter.last_take_frames == 12000);
+  REQUIRE(shorter.json.find("\"active_take_id\":1") != std::string::npos);
+
+  const auto shorter_dropped =
+      add_loop_capture(12000, SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL);
+  REQUIRE(shorter_dropped.error == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("C-ABI loop recording treats a one-frame remainder as rounding",
+          "[project][c-abi-edit]") {
+  const auto extra_frame = add_loop_capture(48001, 0);
+  REQUIRE(extra_frame.error == SONARE_OK);
+  REQUIRE(extra_frame.take_count == 2);
+  REQUIRE(extra_frame.partial_tail == 0);
+  REQUIRE(extra_frame.last_take_frames == 24000);
+  REQUIRE(extra_frame.json.find("\"active_take_id\":2") != std::string::npos);
+
+  const auto short_frame = add_loop_capture(47999, 0);
+  REQUIRE(short_frame.error == SONARE_OK);
+  REQUIRE(short_frame.take_count == 2);
+  REQUIRE(short_frame.partial_tail == 0);
+  REQUIRE(short_frame.last_take_frames == 23999);
+  REQUIRE(short_frame.json.find("\"active_take_id\":2") != std::string::npos);
+}
+
+TEST_CASE("C-ABI loop recording rejects unknown flag bits", "[project][c-abi-edit]") {
+  REQUIRE(add_loop_capture(48000, 2u).error == SONARE_ERROR_INVALID_PARAMETER);
 }
 
 TEST_CASE("C-ABI set_clip_source rebinds and undo restores", "[project][c-abi-edit]") {

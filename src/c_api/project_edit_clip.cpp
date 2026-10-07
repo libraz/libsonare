@@ -565,14 +565,20 @@ SonareError sonare_project_set_audio_source_metadata(SonareProject* project, uin
 
 SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     const SonareProjectLoopRecordingDesc* desc,
-                                                    uint32_t* out_clip_id, size_t* out_take_count) {
+                                                    uint32_t* out_clip_id, size_t* out_take_count,
+                                                    uint8_t* out_partial_tail,
+                                                    int64_t* out_last_take_frames) {
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (out_clip_id) *out_clip_id = 0;
   if (out_take_count) *out_take_count = 0;
-  if (!project || !desc || !out_clip_id || desc->track_id == 0 ||
-      !finite_non_negative(desc->start_ppq) || !finite_positive(desc->loop_length_ppq) ||
-      !desc->audio_interleaved || desc->audio_frames <= 0 || desc->audio_channels <= 0 ||
+  if (out_partial_tail) *out_partial_tail = 0;
+  if (out_last_take_frames) *out_last_take_frames = 0;
+  if (!project || !desc || !out_clip_id ||
+      (desc->flags & ~SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL) != 0 ||
+      desc->track_id == 0 || !finite_non_negative(desc->start_ppq) ||
+      !finite_positive(desc->loop_length_ppq) || !desc->audio_interleaved ||
+      desc->audio_frames <= 0 || desc->audio_channels <= 0 ||
       desc->audio_sample_rate < kMinSampleRate || desc->audio_sample_rate > kMaxSampleRate) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -623,8 +629,16 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   const int64_t loop_audio_frames = std::max<int64_t>(1, std::llround(loop_audio_frames_f));
-  const size_t take_count =
-      static_cast<size_t>((desc->audio_frames + loop_audio_frames - 1) / loop_audio_frames);
+  const int64_t full_loops = desc->audio_frames / loop_audio_frames;
+  const int64_t remainder = desc->audio_frames - full_loops * loop_audio_frames;
+  // A remainder of one frame or less is rounding noise once a full loop exists.
+  const bool has_tail = remainder > (full_loops > 0 ? 1 : 0);
+  const bool tail_complete = has_tail && loop_audio_frames - remainder <= 1;
+  const bool tail_partial = has_tail && !tail_complete;
+  const bool drop_tail = (desc->flags & SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL) != 0;
+  const bool make_tail = has_tail && !(tail_partial && drop_tail);
+  const size_t take_count = static_cast<size_t>(full_loops) + (make_tail ? 1 : 0);
+  if (take_count == 0 && tail_partial && drop_tail) return SONARE_ERROR_INVALID_PARAMETER;
   if (take_count == 0 || take_count > kMaxBufferSize ||
       take_count > static_cast<size_t>(std::numeric_limits<uint32_t>::max())) {
     return SONARE_ERROR_INVALID_PARAMETER;
@@ -678,7 +692,9 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   for (size_t i = 0; i < source_ids.size(); ++i) {
     const auto take_id = static_cast<arr::TakeId>(i + 1);
     clip.takes.push_back({take_id, source_ids[i], 0.0, "take " + std::to_string(i + 1)});
-    clip.active_take_id = take_id;
+    // A partial last take stays inactive while an earlier complete take exists.
+    const bool is_partial_last = tail_partial && i + 1 == source_ids.size() && i > 0;
+    if (!is_partial_last) clip.active_take_id = take_id;
   }
 
   auto command = std::make_unique<arr::AddClip>(clip);
@@ -689,12 +705,21 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
   }
   *out_clip_id = clip_id;
   if (out_take_count) *out_take_count = source_ids.size();
+  if (out_partial_tail) *out_partial_tail = (tail_partial && make_tail) ? 1 : 0;
+  if (out_last_take_frames) {
+    *out_last_take_frames = std::min<int64_t>(
+        loop_audio_frames,
+        desc->audio_frames - static_cast<int64_t>(source_ids.size() - 1) * loop_audio_frames);
+  }
   return SONARE_OK;
   SONARE_C_CATCH
 #else
   if (out_clip_id) *out_clip_id = {};
   if (out_take_count) *out_take_count = {};
-  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id, out_take_count);
+  if (out_partial_tail) *out_partial_tail = {};
+  if (out_last_take_frames) *out_last_take_frames = {};
+  SONARE_C_STUB_NOT_SUPPORTED(project, desc, out_clip_id, out_take_count, out_partial_tail,
+                              out_last_take_frames);
 #endif
 }
 

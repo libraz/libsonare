@@ -42,7 +42,7 @@
 /// in-development edit. The structs below have shipped since v1.6.0, so a
 /// consumer compiled against a released header is holding the old layout: a
 /// field added to any of them is a bump, not an additive change.
-#define SONARE_PROJECT_ABI_VERSION 2u
+#define SONARE_PROJECT_ABI_VERSION 3u
 
 // This header is the single public entry point for the headless arrangement /
 // DAW project C ABI; every consumer includes <sonare/sonare_c_project.h>. Its

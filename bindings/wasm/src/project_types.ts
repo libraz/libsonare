@@ -11,7 +11,7 @@ import type { Project, ProjectTimeline } from './project_class';
  * `src/sonare_c_project.h`; checked against {@link projectAbiVersion} to detect
  * a WASM build whose flat project POD layout has drifted from this wrapper.
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 2;
+export const EXPECTED_PROJECT_ABI_VERSION = 3;
 
 /** Render options for {@link Project.bounce}. All fields are optional. */
 export interface ProjectBounceOptions {
@@ -168,20 +168,38 @@ export interface ProjectClipCompSegment {
   crossfadePpq?: number;
 }
 
-/** Descriptor for {@link Project.addLoopRecordingTakes}. */
+/**
+ * Descriptor for {@link Project.addLoopRecordingTakes}.
+ *
+ * Each loop-length span of the capture becomes a take and the last take is made
+ * active, except that a partial last take (the capture does not fill the last
+ * loop) is kept but not made active when an earlier complete take exists. A
+ * capture shorter than one loop has only the partial take, which stays active.
+ */
 export interface ProjectLoopRecordingDesc {
   trackId: number;
   startPpq?: number;
   loopLengthPpq: number;
-  audio: Float32Array;
+  /**
+   * Interleaved capture (with `audioChannels`), or planar: one `Float32Array`
+   * per channel, all the same length, whose count is the channel count and
+   * makes `audioChannels` irrelevant.
+   */
+  audio: Float32Array | Float32Array[];
   audioChannels?: number;
   audioSampleRate?: number;
+  /** `'keep'` (default) keeps a partial last take; `'drop'` does not create it. */
+  partialTail?: 'keep' | 'drop';
 }
 
 /** Result returned by {@link Project.addLoopRecordingTakes}. */
 export interface ProjectLoopRecordingResult {
   clipId: number;
   takeCount: number;
+  /** True when the last created take is shorter than one loop. */
+  partialTail: boolean;
+  /** Frame count of the last created take. */
+  lastTakeFrames: number;
 }
 
 /** Clip loop mode for {@link Project.setClipLoop}. */

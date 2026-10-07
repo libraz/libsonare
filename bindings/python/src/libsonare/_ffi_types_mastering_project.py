@@ -879,7 +879,7 @@ class SonareProjectLoopRecordingDesc(CStruct):
 
     _fields_ = [
         ("track_id", ctypes.c_uint32),
-        ("reserved", ctypes.c_uint32),
+        ("flags", ctypes.c_uint32),
         ("start_ppq", ctypes.c_double),
         ("loop_length_ppq", ctypes.c_double),
         ("audio_interleaved", ctypes.POINTER(ctypes.c_float)),

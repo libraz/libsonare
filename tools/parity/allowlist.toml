@@ -888,6 +888,12 @@ fields = [
   "project_loop_recording_desc.audio_frames",
   "project_loop_recording_desc.audio",
 
+  # --- category 1: flag word -> string option ---
+  # C `flags` (SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL) is spelled
+  # `partialTail: 'keep' | 'drop'` on both JS facades.
+  "project_loop_recording_desc.flags",
+  "project_loop_recording_desc.partial_tail",
+
   # --- category 1: ordinal -> string union, and a clearer field name ---
   # C `kind` (SonareProjectTempoCandidateKind ordinal) is spelled `label`
   # ('primary' | 'half' | 'double'); C `first_time_signature` is `timeSignature`.

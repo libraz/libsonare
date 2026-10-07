@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import ctypes
 import json
+from typing import Any
 
 import numpy as np
 import pytest
 
 from libsonare import (
+    LoopRecordingResult,
     MarkerKind,
     Project,
     ProjectMarker,
@@ -618,7 +620,7 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         audio[:24000] = 0.25
         audio[24000:] = 0.75
 
-        clip_id, take_count = project.add_loop_recording_takes(
+        result = project.add_loop_recording_takes(
             track_id,
             start_ppq=0.0,
             loop_length_ppq=1.0,
@@ -626,8 +628,10 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
             audio_channels=1,
             audio_sample_rate=48000,
         )
-        assert clip_id != 0
-        assert take_count == 2
+        assert result.clip_id != 0
+        assert result.take_count == 2
+        assert result.partial_tail is False
+        assert result.last_take_frames == 24000
         json = project.to_json_bytes()
         assert b'"takes"' in json
         assert b'"active_take_id":2' in json
@@ -639,6 +643,89 @@ def test_add_loop_recording_takes_splits_capture_into_active_take() -> None:
         project.redo()
         assert project.to_json_bytes() == json
         assert project.source_count() == 2
+    finally:
+        project.close()
+
+
+def _loop_recording_active_take(project: Project) -> int:
+    return int(json.loads(project.to_json_bytes())["clips"][0]["active_take_id"])
+
+
+def _capture(frames: int, **kwargs: Any) -> tuple[LoopRecordingResult, int]:
+    """Add a mono capture of ``frames`` to a fresh project; return the result and active take."""
+    project = Project()
+    try:
+        project.set_sample_rate(48000.0)
+        track_id = project.add_track("audio", "record")
+        result = project.add_loop_recording_takes(
+            track_id,
+            0.0,
+            1.0,
+            np.full(frames, 0.5, dtype=np.float32),
+            audio_sample_rate=48000,
+            **kwargs,
+        )
+        return result, _loop_recording_active_take(project)
+    finally:
+        project.close()
+
+
+def test_add_loop_recording_takes_partial_last_take_is_not_active() -> None:
+    result, active = _capture(36000)
+    assert (result.take_count, result.partial_tail, result.last_take_frames) == (2, True, 12000)
+    assert active == 1
+
+
+def test_add_loop_recording_takes_drop_policy_and_short_capture() -> None:
+    dropped, _ = _capture(36000, partial_tail="drop")
+    assert (dropped.take_count, dropped.partial_tail, dropped.last_take_frames) == (1, False, 24000)
+    short, active = _capture(12000)
+    assert (short.take_count, short.partial_tail, short.last_take_frames) == (1, True, 12000)
+    assert active == 1
+    with pytest.raises(ValueError, match="partial_tail"):
+        _capture(100, partial_tail="activate")
+
+
+def test_add_loop_recording_takes_planar_matches_interleaved() -> None:
+    left = np.linspace(-0.5, 0.5, 48000, dtype=np.float32)
+    right = np.linspace(0.5, -0.5, 48000, dtype=np.float32)
+    interleaved = np.stack([left, right], axis=1).reshape(-1)
+    outputs = []
+    for form in ("interleaved", "list", "matrix"):
+        project = Project()
+        try:
+            project.set_sample_rate(48000.0)
+            track_id = project.add_track("audio", "record")
+            if form == "interleaved":
+                result = project.add_loop_recording_takes(
+                    track_id, 0.0, 1.0, interleaved, audio_channels=2, audio_sample_rate=48000
+                )
+            elif form == "list":
+                result = project.add_loop_recording_takes(
+                    track_id, 0.0, 1.0, [left, right], audio_sample_rate=48000
+                )
+            else:
+                result = project.add_loop_recording_takes(
+                    track_id, 0.0, 1.0, np.stack([left, right]), audio_sample_rate=48000
+                )
+            assert result.take_count == 2
+            outputs.append(project.to_json_bytes())
+        finally:
+            project.close()
+    assert outputs[0] == outputs[1] == outputs[2]
+
+
+def test_add_loop_recording_takes_refuses_mismatched_planar_lengths() -> None:
+    project = Project()
+    try:
+        track_id = project.add_track("audio", "record")
+        with pytest.raises(ValueError, match="equal lengths"):
+            project.add_loop_recording_takes(
+                track_id,
+                0.0,
+                1.0,
+                [np.zeros(100, dtype=np.float32), np.zeros(99, dtype=np.float32)],
+            )
     finally:
         project.close()
 

@@ -6556,7 +6556,7 @@
       },
       {
         "kind": "unsigned",
-        "name": "reserved",
+        "name": "flags",
         "offset": 4,
         "size": 4
       },

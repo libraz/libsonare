@@ -19,7 +19,7 @@ export type ProjectAutomationCurve = 0 | 1 | 2 | 3 | keyof typeof PROJECT_AUTOMA
  * that differs means the native binary lays out the flat project PODs
  * differently than this binding expects (0 = arrangement support compiled out).
  */
-export const EXPECTED_PROJECT_ABI_VERSION = 2;
+export const EXPECTED_PROJECT_ABI_VERSION = 3;
 
 /** Track kind for {@link ProjectTrackDesc} (mirrors SonareProjectTrackKind). */
 export type ProjectTrackKind = 'audio' | 'midi' | 'aux' | 0 | 1 | 2;
@@ -240,20 +240,38 @@ export interface ExternalSeparatedStemImportResult {
   clipIds: number[];
 }
 
-/** Descriptor for {@link Project.addLoopRecordingTakes}. */
+/**
+ * Descriptor for {@link Project.addLoopRecordingTakes}.
+ *
+ * Each loop-length span of the capture becomes a take and the last take is made
+ * active, except that a partial last take (the capture does not fill the last
+ * loop) is kept but not made active when an earlier complete take exists. A
+ * capture shorter than one loop has only the partial take, which stays active.
+ */
 export interface ProjectLoopRecordingDesc {
   trackId: number;
   startPpq?: number;
   loopLengthPpq: number;
-  audio: Float32Array;
+  /**
+   * Interleaved capture (with `audioChannels`), or planar: one `Float32Array`
+   * per channel, all the same length, whose count is the channel count and
+   * makes `audioChannels` irrelevant.
+   */
+  audio: Float32Array | Float32Array[];
   audioChannels?: number;
   audioSampleRate?: number;
+  /** `'keep'` (default) keeps a partial last take; `'drop'` does not create it. */
+  partialTail?: 'keep' | 'drop';
 }
 
 /** Result returned by {@link Project.addLoopRecordingTakes}. */
 export interface ProjectLoopRecordingResult {
   clipId: number;
   takeCount: number;
+  /** True when the last created take is shorter than one loop. */
+  partialTail: boolean;
+  /** Frame count of the last created take. */
+  lastTakeFrames: number;
 }
 
 /** `(trackId, clipId)` returned by {@link Project.addMidiClip}. */

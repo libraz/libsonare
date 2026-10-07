@@ -22,6 +22,7 @@ import {
   detectKey,
   detectOnsets,
   ErrorCode,
+  EXPECTED_PROJECT_ABI_VERSION,
   fixFrames,
   fixLength,
   frameSignal,
@@ -91,7 +92,10 @@ describe('standalone functions', () => {
       'hardwareConcurrency',
     ]);
     expect(report.version).toBe(version());
-    expect(report.abi).toEqual({ project: 2, engine: expect.any(Number) });
+    expect(report.abi).toEqual({
+      project: EXPECTED_PROJECT_ABI_VERSION,
+      engine: expect.any(Number),
+    });
     expect(report.platform).toEqual(expect.any(String));
     expect(report.features).toEqual({
       mastering: expect.any(Boolean),
@@ -116,7 +120,7 @@ describe('standalone functions', () => {
   it('capabilityCatalog aggregates processors and built-in presets', () => {
     const catalog = capabilityCatalog();
     expect(catalog.version).toBe(version());
-    expect(catalog.abi.project).toBe(2);
+    expect(catalog.abi.project).toBe(EXPECTED_PROJECT_ABI_VERSION);
     expect(catalog.processors.length).toBeGreaterThan(0);
     expect(catalog.presets.mastering).toContain('pop');
     const compressor = catalog.processors.find(({ id }) => id === 'dynamics.compressor');

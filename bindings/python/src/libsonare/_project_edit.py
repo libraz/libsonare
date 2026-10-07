@@ -126,6 +126,40 @@ class TakeAlignment:
     take_frames: int
 
 
+# Mirrors SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL.
+_LOOP_RECORDING_DROP_PARTIAL_TAIL = 1
+
+
+@dataclass(frozen=True)
+class LoopRecordingResult:
+    """Outcome of :meth:`Project.add_loop_recording_takes`.
+
+    ``partial_tail`` is true when the last created take is shorter than one loop
+    (it is then not the active take unless it is the only one), and
+    ``last_take_frames`` is that take's frame count.
+    """
+
+    clip_id: int
+    take_count: int
+    partial_tail: bool
+    last_take_frames: int
+
+
+def _planar_channels(audio: object) -> list[np.ndarray] | None:
+    """Return per-channel float32 buffers when ``audio`` is channels-first, else ``None``."""
+    if isinstance(audio, np.ndarray):
+        if audio.ndim != 2:
+            return None
+        return [_as_float32_buffer(row, arg_name="audio") for row in audio]
+    if isinstance(audio, Sequence) and len(audio) > 0:
+        first = audio[0]
+        if isinstance(first, np.ndarray) or (
+            isinstance(first, Sequence) and not isinstance(first, (str, bytes))
+        ):
+            return [_as_float32_buffer(row, arg_name="audio") for row in audio]
+    return None
+
+
 @_guard_buffer("reference", "take")
 def align_take_to_reference(
     reference: Sequence[float] | list[float] | np.ndarray,
@@ -512,27 +546,52 @@ class _ProjectEditMixin:
         track_id: int,
         start_ppq: float,
         loop_length_ppq: float,
-        audio: Sequence[float] | np.ndarray,
+        audio: Sequence[float] | Sequence[Sequence[float]] | np.ndarray,
         *,
         audio_channels: int = 1,
         audio_sample_rate: int = 48000,
-    ) -> tuple[int, int]:
+        partial_tail: str = "keep",
+    ) -> LoopRecordingResult:
         """Split a captured loop recording into takes and add one clip.
 
-        Returns ``(clip_id, take_count)``. ``audio`` is interleaved float32
-        capture data; each loop-length span becomes a separate take and the
-        newest take is made active.
+        ``audio`` is either interleaved float32 capture data (with
+        ``audio_channels``) or planar: a channels-first 2-D array or a sequence
+        of equal-length per-channel sequences, whose channel count is the number
+        of rows and which makes ``audio_channels`` irrelevant. Each loop-length
+        span becomes a separate take and the last take is made active, except
+        that a partial last take (the capture does not fill the last loop) is
+        kept but not made active when an earlier complete take exists. A capture
+        shorter than one loop has only the partial take, which stays active.
+
+        ``partial_tail`` is ``"keep"`` (default) to keep the partial take, or
+        ``"drop"`` to not create it. The result reports whether the last take is
+        partial and its frame count.
         """
-        # Narrowed before the frame count is derived from it, so a fractional
-        # channel count is refused rather than silently becoming its floor.
-        channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
+        if partial_tail == "keep":
+            flags = 0
+        elif partial_tail == "drop":
+            flags = _LOOP_RECORDING_DROP_PARTIAL_TAIL
+        else:
+            raise SonareValueError("partial_tail must be 'keep' or 'drop'")
+        planar = _planar_channels(audio)
+        if planar is not None:
+            if not planar:
+                raise SonareValueError("audio must not be empty")
+            if any(plane.shape[0] != planar[0].shape[0] for plane in planar):
+                raise SonareValueError("planar audio channels must have equal lengths")
+            channels = len(planar)
+            audio = np.stack(planar, axis=1).reshape(-1)
+        else:
+            # Narrowed before the frame count is derived from it, so a fractional
+            # channel count is refused rather than silently becoming its floor.
+            channels = _narrow_int(audio_channels, "audio_channels", _C_INT_MIN, _C_INT_MAX)
         backing, total = _to_c_float_array(audio, arg_name="audio")
         if channels <= 0 or total % channels != 0:
             raise SonareValueError("audio length must be a multiple of audio_channels")
         frames = total // channels
         desc = SonareProjectLoopRecordingDesc(
             track_id=track_id,
-            reserved=0,
+            flags=flags,
             start_ppq=float(start_ppq),
             loop_length_ppq=float(loop_length_ppq),
             audio_interleaved=backing,
@@ -542,16 +601,25 @@ class _ProjectEditMixin:
         )
         out_clip = ctypes.c_uint32()
         out_take_count = ctypes.c_size_t()
+        out_partial = ctypes.c_uint8()
+        out_last_frames = ctypes.c_int64()
         _check(
             _get_lib().sonare_project_add_loop_recording_takes(
                 self._require_handle(),
                 ctypes.byref(desc),
                 ctypes.byref(out_clip),
                 ctypes.byref(out_take_count),
+                ctypes.byref(out_partial),
+                ctypes.byref(out_last_frames),
             )
         )
         del backing
-        return int(out_clip.value), int(out_take_count.value)
+        return LoopRecordingResult(
+            clip_id=int(out_clip.value),
+            take_count=int(out_take_count.value),
+            partial_tail=bool(out_partial.value),
+            last_take_frames=int(out_last_frames.value),
+        )
 
     def add_midi_clip(self, start_ppq: float, length_ppq: float) -> tuple[int, int]:
         """Create a MIDI track + clip; return ``(track_id, clip_id)``."""

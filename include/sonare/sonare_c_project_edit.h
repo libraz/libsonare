@@ -93,16 +93,26 @@ static_assert(sizeof(SonareProjectClipDesc) ==
               "SonareProjectClipDesc layout drift");
 #endif
 
+/// @brief Do not create the partial last take of a loop recording.
+#define SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL 1u
+
 /// @brief Description for @ref sonare_project_add_loop_recording_takes.
 ///
 /// The input is a captured interleaved audio buffer. The project tempo map is
 /// used to convert @p loop_length_ppq at @p start_ppq into an audio-frame loop
 /// span; each loop span becomes a separate audio source/take, and one clip of
-/// length @p loop_length_ppq is added to @p track_id. The newest take is made
-/// active. A final partial loop is kept as the last take.
+/// length @p loop_length_ppq is added to @p track_id. The last take is made
+/// active, except that a partial last take (the capture does not fill the last
+/// loop) is kept but NOT made active when an earlier complete take exists; the
+/// previous take stays active. A capture shorter than one loop has only the
+/// partial take, which stays active. A remainder of at most one frame creates no
+/// take, and a last take within one frame of the loop length counts as complete.
+/// @p flags selects the partial-tail policy: 0 keeps the partial take (default),
+/// @ref SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL does not create it.
+/// Unknown flag bits are rejected.
 typedef struct {
   uint32_t track_id;
-  uint32_t reserved;
+  uint32_t flags;
   double start_ppq;
   double loop_length_ppq;
   const float* audio_interleaved;
@@ -114,8 +124,8 @@ typedef struct {
 #ifdef __cplusplus
 static_assert(offsetof(SonareProjectLoopRecordingDesc, track_id) == 0,
               "LoopRecordingDesc.track_id offset");
-static_assert(offsetof(SonareProjectLoopRecordingDesc, reserved) == sizeof(uint32_t),
-              "LoopRecordingDesc.reserved offset");
+static_assert(offsetof(SonareProjectLoopRecordingDesc, flags) == sizeof(uint32_t),
+              "LoopRecordingDesc.flags offset");
 static_assert(offsetof(SonareProjectLoopRecordingDesc, start_ppq) == sizeof(double),
               "LoopRecordingDesc.start_ppq offset");
 static_assert(offsetof(SonareProjectLoopRecordingDesc, loop_length_ppq) == 2u * sizeof(double),
@@ -412,9 +422,18 @@ SonareError sonare_project_add_clip(SonareProject* project, const SonareProjectC
 /// @brief Splits captured loop-recording audio into takes and adds one clip.
 ///        Returns the allocated clip id and optional take count. All take
 ///        sources, decoded buffers, and the clip form one undo transaction.
+///        @p out_partial_tail (optional) is 1 when the last created take is
+///        partial (shorter than one loop), else 0; a partial last take is not
+///        made active when an earlier complete take exists. Under
+///        @ref SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL it is always 0.
+///        @p out_last_take_frames (optional) is the frame count of the last
+///        created take. A capture with no complete loop that drops its partial
+///        tail has no take to create and returns SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
                                                     const SonareProjectLoopRecordingDesc* desc,
-                                                    uint32_t* out_clip_id, size_t* out_take_count);
+                                                    uint32_t* out_clip_id, size_t* out_take_count,
+                                                    uint8_t* out_partial_tail,
+                                                    int64_t* out_last_take_frames);
 
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
 ///        The track, source, and clip form one undo transaction. Returns the

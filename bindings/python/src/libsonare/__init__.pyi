@@ -8,6 +8,7 @@ from ._playback import render_playback as render_playback
 from ._project import AssistSidecar as AssistSidecar
 from ._project import BuiltinSynthConfig as BuiltinSynthConfig
 from ._project import ExternalInstrument as ExternalInstrument
+from ._project import LoopRecordingResult as LoopRecordingResult
 from ._project import MidiCcBinding as MidiCcBinding
 from ._project import MidiRouteResult as MidiRouteResult
 from ._project import NotePairValidation as NotePairValidation

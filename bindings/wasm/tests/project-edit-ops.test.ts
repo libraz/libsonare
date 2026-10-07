@@ -382,9 +382,101 @@ describe('Sonare WASM Project edit ops', () => {
       });
       expect(result.clipId).toBeGreaterThan(0);
       expect(result.takeCount).toBe(2);
+      expect(result.partialTail).toBe(false);
+      expect(result.lastTakeFrames).toBe(24000);
       expect(project.toJson()).toContain('"active_take_id":2');
       project.undo();
       expect(project.toJson()).toContain('"clips":[]');
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('addLoopRecordingTakes keeps a partial last take inactive and honours partialTail', () => {
+    const project = new Project();
+    try {
+      project.setSampleRate(48000);
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      const base = { trackId, startPpq: 0, loopLengthPpq: 1, audioSampleRate: 48000 };
+      const kept = project.addLoopRecordingTakes({
+        ...base,
+        startPpq: 0,
+        audio: new Float32Array(36000).fill(0.5),
+      });
+      expect(kept.takeCount).toBe(2);
+      expect(kept.partialTail).toBe(true);
+      expect(kept.lastTakeFrames).toBe(12000);
+      expect(project.toJson()).toContain('"active_take_id":1');
+      const dropped = project.addLoopRecordingTakes({
+        ...base,
+        startPpq: 4,
+        audio: new Float32Array(36000).fill(0.5),
+        partialTail: 'drop',
+      });
+      expect(dropped.takeCount).toBe(1);
+      expect(dropped.partialTail).toBe(false);
+      expect(dropped.lastTakeFrames).toBe(24000);
+      const short = project.addLoopRecordingTakes({
+        ...base,
+        startPpq: 8,
+        audio: new Float32Array(12000).fill(0.5),
+      });
+      expect(short.takeCount).toBe(1);
+      expect(short.partialTail).toBe(true);
+      expect(() =>
+        project.addLoopRecordingTakes({
+          ...base,
+          startPpq: 12,
+          audio: new Float32Array(100),
+          partialTail: 'activate' as unknown as 'keep',
+        }),
+      ).toThrow(/partialTail/);
+    } finally {
+      project.delete();
+    }
+  });
+
+  it('addLoopRecordingTakes accepts planar audio equal to the interleaved form', () => {
+    const left = new Float32Array(48000).map((_, i) => i / 48000 - 0.5);
+    const right = new Float32Array(48000).map((_, i) => 0.5 - i / 48000);
+    const interleaved = new Float32Array(96000);
+    for (let i = 0; i < 48000; i++) {
+      interleaved[2 * i] = left[i];
+      interleaved[2 * i + 1] = right[i];
+    }
+    const run = (audio: Float32Array | Float32Array[], audioChannels?: number) => {
+      const project = new Project();
+      try {
+        project.setSampleRate(48000);
+        const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+        project.addLoopRecordingTakes({
+          trackId,
+          startPpq: 0,
+          loopLengthPpq: 1,
+          audio,
+          audioChannels,
+          audioSampleRate: 48000,
+        });
+        return project.toJson();
+      } finally {
+        project.delete();
+      }
+    };
+    expect(run([left, right])).toBe(run(interleaved, 2));
+  });
+
+  it('addLoopRecordingTakes refuses planar channels of different lengths', () => {
+    const project = new Project();
+    try {
+      const trackId = project.addTrack({ kind: 'audio', name: 'record' });
+      expect(() =>
+        project.addLoopRecordingTakes({
+          trackId,
+          startPpq: 0,
+          loopLengthPpq: 1,
+          audio: [new Float32Array(100), new Float32Array(99)],
+        }),
+      ).toThrow(RangeError);
     } finally {
       project.delete();
     }
