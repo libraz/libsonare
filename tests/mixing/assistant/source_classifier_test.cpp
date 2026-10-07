@@ -13,8 +13,10 @@
 #include <string>
 #include <vector>
 
+#include "mix_eval.h"
 #include "mixing/assistant/track_profile.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace assistant = sonare::mixing::assistant;
 using assistant::SourceClass;
@@ -596,4 +598,43 @@ TEST_CASE("a silent track is excluded before classification", "[mixing][assistan
   const auto classification = assistant::classify_source(profile);
   REQUIRE(classification.source == SourceClass::Unknown);
   REQUIRE(classification.confidence == 0.0f);
+}
+
+TEST_CASE("one dominant burst does not move a kit's hit shares", "[mixing][assistant][.][slow]") {
+  // The mixing fixture's kick and hats under a snare-like hit once a second, 24 s long.
+  constexpr float kKitSeconds = 24.0f;
+  constexpr float kSnareToneHz = 200.0f;
+  constexpr float kSnareDecayPerSec = 20.0f;
+  constexpr float kBurstGainDb = 24.0f;
+  constexpr float kBurstSeconds = 0.05f;
+  const auto fixture = assistant::test::make_demo_tracks(kSampleRate, kKitSeconds);
+  REQUIRE(fixture.ids[0] == "kick");
+  REQUIRE(fixture.ids[4] == "hats");
+  std::vector<float> kit = fixture.left[0];
+  const std::vector<float> wires = bright_noise(kit.size());
+  for (std::size_t i = 0; i < kit.size(); ++i) {
+    const float t = seconds_at(i);
+    const float envelope = std::exp(-kSnareDecayPerSec * std::fmod(t, 1.0f));
+    kit[i] += fixture.left[4][i] +
+              envelope * (0.3f * std::sin(kTwoPi * kSnareToneHz * t) + 0.2f * wires[i]);
+  }
+
+  // A 50 ms white-noise burst 24 dB above the kit's peak, just past the middle.
+  std::vector<float> burst = kit;
+  float peak = 0.0f;
+  for (const float sample : kit) peak = std::max(peak, std::abs(sample));
+  std::mt19937 rng(kNoiseSeed);
+  std::uniform_real_distribution<float> dist(-1.0f, 1.0f);
+  const std::size_t start = burst.size() / 2 + sample_count(0.03f);
+  for (std::size_t n = 0; n < sample_count(kBurstSeconds); ++n) {
+    burst[start + n] += peak * sonare::db_to_linear(kBurstGainDb) * dist(rng);
+  }
+
+  const auto plain = assistant::detail::hit_shares(profile_of(kit).bands);
+  const auto with_burst = assistant::detail::hit_shares(profile_of(burst).bands);
+  CAPTURE(plain.low, plain.high, with_burst.low, with_burst.high);
+  REQUIRE(plain.low > 0.15f);
+  REQUIRE(plain.high > 0.15f);
+  CHECK(std::abs(with_burst.low - plain.low) <= 0.01f);
+  CHECK(std::abs(with_burst.high - plain.high) <= 0.01f);
 }

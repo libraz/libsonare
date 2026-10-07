@@ -31,6 +31,7 @@
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/json.h"
+#include "util/peak.h"
 
 namespace sonare::mastering::assistant {
 
@@ -38,6 +39,16 @@ using sonare::constants::kEpsilon;
 namespace {
 
 constexpr float kMinDb = sonare::constants::kFloorDb;
+
+// Onset rise (mel-band mean dB per 512-sample hop at 48 kHz) an attack must exceed; calibrated
+// at the default hop. Geometric mean of the -40 dBFS white-noise peak (2.17, not counted) and a
+// kick's peak under a +24 dB burst (8.44, counted): about 2x margin to each.
+constexpr float kAttackOnsetFloor = 4.3f;
+// Signal length per event a summary reference may set aside: a 1.2 s kit (two large hits) and a
+// five-pluck guitar need none set aside, one burst in 12 s needs one.
+constexpr float kRobustReferenceSecondsPerEvent = 10.0f;
+// An RMS maximum is a sustain event when it doubles the minimum of the window before it.
+constexpr float kSustainEventRise = 2.0f;
 
 float mean_finite(const std::vector<float>& values) {
   double sum = 0.0;
@@ -92,23 +103,31 @@ float attack_density(const std::vector<float>& onset, float duration_sec) {
   if (onset.size() < 3 || duration_sec <= 0.0f) return 0.0f;
   const float max_value = *std::max_element(onset.begin(), onset.end());
   if (max_value <= sonare::constants::kEpsilon) return 0.0f;
-  const float threshold = max_value * 0.30f;
+  const auto is_peak = [&onset](size_t i) {
+    return onset[i] >= onset[i - 1] && onset[i] > onset[i + 1];
+  };
+  std::vector<float> events;
+  for (size_t i = 1; i + 1 < onset.size(); ++i) {
+    if (is_peak(i) && onset[i] > kAttackOnsetFloor) events.push_back(onset[i]);
+  }
+  const float reference = summary_reference(std::move(events), duration_sec, max_value);
+  const float threshold = std::max(reference * 0.30f, kAttackOnsetFloor);
   int peaks = 0;
   for (size_t i = 1; i + 1 < onset.size(); ++i) {
-    if (onset[i] > threshold && onset[i] >= onset[i - 1] && onset[i] > onset[i + 1]) {
-      ++peaks;
-    }
+    if (onset[i] > threshold && is_peak(i)) ++peaks;
   }
   return static_cast<float>(peaks) / duration_sec;
 }
 
-float sustain_ratio(const std::vector<float>& rms) {
+float sustain_ratio(const std::vector<float>& rms, float duration_sec, int lookback) {
   if (rms.empty()) return 0.0f;
   const float max_value = *std::max_element(rms.begin(), rms.end());
-  if (max_value <= sonare::constants::kSpectrumEpsilon) return 0.0f;
+  const float reference = summary_reference(rising_peak_heights(rms, lookback, kSustainEventRise),
+                                            duration_sec, max_value);
+  if (reference <= sonare::constants::kSpectrumEpsilon) return 0.0f;
   int sustained = 0;
   for (float value : rms) {
-    if (value >= max_value * 0.35f) ++sustained;
+    if (value >= reference * 0.35f) ++sustained;
   }
   return static_cast<float>(sustained) / static_cast<float>(rms.size());
 }
@@ -458,8 +477,13 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
                                            stft_config.actual_win_length(), stft_config.hop_length,
                                            onset_config.center);
   profile.dynamics.attack_density = attack_density(onset, profile.duration_sec);
+  const int win_length = stft_config.actual_win_length();
+  // Frames one RMS window spans, plus one: the minimum a maximum rises from predates its window.
+  const int sustain_lookback =
+      (win_length + stft_config.hop_length - 1) / stft_config.hop_length + 1;
   profile.dynamics.sustain_ratio =
-      sustain_ratio(rms_energy(audio, stft_config.actual_win_length(), stft_config.hop_length));
+      sustain_ratio(rms_energy(audio, win_length, stft_config.hop_length), profile.duration_sec,
+                    sustain_lookback);
 
   try {
     // The envelope is already framed; the onset-envelope constructor reads no window length.
@@ -510,6 +534,26 @@ double reference_bin_width_ratio(const Spectrogram& spec, int n_fft_at_reference
   }
   return (static_cast<double>(spec.sample_rate()) * n_fft_at_reference_rate) /
          (static_cast<double>(kProfileReferenceRate) * spec.n_fft());
+}
+
+std::vector<float> rising_peak_heights(const std::vector<float>& series, int lookback, float rise) {
+  std::vector<float> heights;
+  for (size_t i = 1; i + 1 < series.size(); ++i) {
+    if (!(series[i] > series[i - 1] && series[i] >= series[i + 1])) continue;
+    const size_t first = i > static_cast<size_t>(lookback) ? i - static_cast<size_t>(lookback) : 0;
+    const float recent = *std::min_element(series.begin() + static_cast<std::ptrdiff_t>(first),
+                                           series.begin() + static_cast<std::ptrdiff_t>(i));
+    if (series[i] > rise * recent) heights.push_back(series[i]);
+  }
+  return heights;
+}
+
+float summary_reference(std::vector<float> events, float duration_sec, float series_max) {
+  const auto by_duration =
+      static_cast<std::size_t>(std::max(0.0f, duration_sec / kRobustReferenceSecondsPerEvent));
+  const std::size_t ignored = std::min(kReferenceIgnoredTopEvents, by_duration);
+  if (ignored == 0 || events.size() <= ignored) return series_max;
+  return max_excluding_top(std::move(events), ignored);
 }
 
 AudioProfile analyze_audio_profile(const Audio& audio, const AudioProfileConfig& config) {

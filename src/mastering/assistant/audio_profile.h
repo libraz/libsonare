@@ -35,8 +35,11 @@ struct SpectralProfile {
 
 struct DynamicsProfile {
   float short_term_lufs_std = 0.0f;
-  float attack_density = 0.0f;  ///< Onset peaks per second.
-  float sustain_ratio = 0.0f;   ///< 0 = transient-heavy, 1 = sustained.
+  /// Onset peaks per second above a fixed floor of percussive rise; 0 for steady material.
+  float attack_density = 0.0f;
+  /// Share of frames at or above 0.35 of the RMS reference, which sets aside outlying
+  /// events (@ref summary_reference): 0 = transient-heavy, 1 = sustained.
+  float sustain_ratio = 0.0f;
 };
 
 /// @brief What the six repair detectors measured in the profiled signal.
@@ -220,6 +223,22 @@ double reference_power_scale(const Spectrogram& spec, int n_fft_at_reference_rat
 /// @brief `(sr / n_fft) / (ref_sr / n_fft_at_reference_rate)`: the spectrogram's bin
 ///        width over the reference bin width. Exactly 1 at the reference rate.
 double reference_bin_width_ratio(const Spectrogram& spec, int n_fft_at_reference_rate);
+
+/// @brief Heights of an envelope's local maxima that rise out of the frames before them.
+/// @return `series[i]` for each i with `series[i] > series[i - 1]`, `series[i] >= series[i + 1]`
+///         and `series[i] > rise * min(series[i - lookback .. i - 1])`, in frame order.
+std::vector<float> rising_peak_heights(const std::vector<float>& series, int lookback, float rise);
+
+/// @brief Level an assistant summary measure takes its relative threshold against.
+/// @param events Heights of the measured events.
+/// @param duration_sec Length of the measured signal.
+/// @param series_max Maximum of the whole series.
+/// @return `max_excluding_top(events, K)` with K = min(kReferenceIgnoredTopEvents,
+///         floor(duration_sec / 10 s)); @p series_max when K is 0 or @p events holds no more
+///         than K values.
+/// @details Below ten seconds there are too few events to tell an outlier from the body,
+///          so nothing is set aside.
+float summary_reference(std::vector<float> events, float duration_sec, float series_max);
 
 std::string audio_profile_to_json(const AudioProfile& profile);
 

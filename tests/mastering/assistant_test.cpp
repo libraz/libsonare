@@ -2,6 +2,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <utility>
@@ -12,8 +14,10 @@
 #include "mastering/assistant/config_from_params.h"
 #include "mastering/assistant/platform_targets.h"
 #include "mastering/assistant/suggester.h"
+#include "mixing/assistant/mix_eval.h"
 #include "support/rate_material.h"
 #include "util/constants.h"
+#include "util/db.h"
 
 namespace assistant = sonare::mastering::assistant;
 
@@ -839,4 +843,124 @@ TEST_CASE("Assistant AudioProfile dynamics and band levels do not depend on the 
     // A partial beside a band edge moves across it with the bin grid (0.56 dB at 250 Hz).
     CHECK(band_deviation_db <= 1.0f);
   }
+}
+
+namespace {
+
+using sonare::mixing::assistant::test::make_demo_tracks;
+
+constexpr int kSummaryRate = assistant::kProfileReferenceRate;
+constexpr float kBurstGainDb = 24.0f;
+constexpr float kBurstSeconds = 0.05f;
+constexpr std::size_t kDemoKick = 0;
+constexpr std::size_t kDemoHats = 4;
+constexpr float kClickAmplitude = 0.2f;
+
+// Deterministic white noise in [-1, 1].
+std::vector<float> white_noise(std::size_t length, std::uint32_t seed) {
+  std::vector<float> out(length);
+  for (float& value : out) {
+    seed = seed * 1664525u + 1013904223u;
+    value = static_cast<float>(static_cast<double>(seed) / 4294967295.0) * 2.0f - 1.0f;
+  }
+  return out;
+}
+
+float abs_peak(const std::vector<float>& samples) {
+  float peak = 0.0f;
+  for (float value : samples) peak = std::max(peak, std::abs(value));
+  return peak;
+}
+
+// A 50 ms white-noise burst kBurstGainDb above the material's own peak, 30 ms past its middle.
+std::vector<float> with_burst(std::vector<float> samples) {
+  const float amplitude = abs_peak(samples) * sonare::db_to_linear(kBurstGainDb);
+  const std::size_t start = samples.size() / 2 + static_cast<std::size_t>(0.03f * kSummaryRate);
+  const auto noise =
+      white_noise(static_cast<std::size_t>(kBurstSeconds * kSummaryRate), 0x2468ACE1u);
+  for (std::size_t i = 0; i < noise.size() && start + i < samples.size(); ++i) {
+    samples[start + i] += amplitude * noise[i];
+  }
+  return samples;
+}
+
+std::vector<float> demo_track(std::size_t index, float seconds, const char* id) {
+  auto fixture = make_demo_tracks(kSummaryRate, seconds);
+  REQUIRE(fixture.ids[index] == id);
+  return std::move(fixture.left[index]);
+}
+
+assistant::DynamicsProfile dynamics_of(const std::vector<float>& samples) {
+  return assistant::analyze_audio_profile(samples.data(), samples.size(), kSummaryRate).dynamics;
+}
+
+float relative_change(float after, float before) { return std::abs(after / before - 1.0f); }
+
+}  // namespace
+
+TEST_CASE("Assistant attack density and sustain ratio ignore one dominant burst",
+          "[mastering][assistant][.][slow]") {
+  constexpr float kSeconds = 24.0f;
+  for (const auto& [index, id] : {std::pair{kDemoKick, "kick"}, std::pair{kDemoHats, "hats"}}) {
+    const auto samples = demo_track(index, kSeconds, id);
+    const auto plain = dynamics_of(samples);
+    const auto burst = dynamics_of(with_burst(samples));
+    CAPTURE(id, plain.attack_density, burst.attack_density, plain.sustain_ratio,
+            burst.sustain_ratio);
+    REQUIRE(plain.attack_density > 1.0f);
+    REQUIRE(plain.sustain_ratio > 0.1f);
+    // The burst's own onset peak is one count in 24 s (2.1 %).
+    CHECK(relative_change(burst.attack_density, plain.attack_density) <= 0.10f);
+    CHECK(relative_change(burst.sustain_ratio, plain.sustain_ratio) <= 0.10f);
+  }
+}
+
+TEST_CASE("Assistant attack density of a steady tone is zero", "[mastering][assistant]") {
+  // Phase in double: a float phase at 24 s jitters by several ulps and adds onsets of its own.
+  std::vector<float> samples(static_cast<std::size_t>(24.0f * kSummaryRate));
+  for (std::size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / kSummaryRate;
+    samples[i] = 0.4f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 220.0 * t));
+  }
+  const auto dynamics = dynamics_of(samples);
+  CAPTURE(dynamics.attack_density);
+  CHECK(dynamics.attack_density == 0.0f);
+}
+
+TEST_CASE("Assistant attack density counts one click over -40 dBFS noise and not the noise",
+          "[mastering][assistant]") {
+  constexpr float kSeconds = 24.0f;
+  auto samples = white_noise(static_cast<std::size_t>(kSeconds * kSummaryRate), 0x13572468u);
+  const float noise_amplitude = sonare::db_to_linear(-40.0f);
+  for (float& value : samples) value *= noise_amplitude;
+  // A 5 ms broadband click, decaying linearly.
+  const auto click = white_noise(static_cast<std::size_t>(0.005f * kSummaryRate), 0x0BADF00Du);
+  const std::size_t at = samples.size() / 2;
+  for (std::size_t i = 0; i < click.size(); ++i) {
+    const float envelope = 1.0f - static_cast<float>(i) / static_cast<float>(click.size());
+    samples[at + i] += kClickAmplitude * envelope * click[i];
+  }
+  const auto dynamics = dynamics_of(samples);
+  CAPTURE(dynamics.attack_density);
+  CHECK_THAT(dynamics.attack_density, Catch::Matchers::WithinRel(1.0f / kSeconds, 1.0e-4f));
+}
+
+TEST_CASE("Assistant summary references set nothing aside below ten seconds",
+          "[mastering][assistant][.][slow]") {
+  // 12 s sets one event aside, so the burst stops setting the level; 6 s sets none aside,
+  // so the burst still does -- both sides, or the duration rule could vanish unnoticed.
+  const auto at_12 = demo_track(kDemoKick, 12.0f, "kick");
+  const auto plain_12 = dynamics_of(at_12);
+  const auto burst_12 = dynamics_of(with_burst(at_12));
+  const auto at_6 = demo_track(kDemoKick, 6.0f, "kick");
+  const auto plain_6 = dynamics_of(at_6);
+  const auto burst_6 = dynamics_of(with_burst(at_6));
+  CAPTURE(plain_12.attack_density, burst_12.attack_density, plain_12.sustain_ratio,
+          burst_12.sustain_ratio, plain_6.attack_density, burst_6.attack_density,
+          plain_6.sustain_ratio, burst_6.sustain_ratio);
+  CHECK(relative_change(burst_12.attack_density, plain_12.attack_density) <= 0.10f);
+  CHECK(relative_change(burst_12.sustain_ratio, plain_12.sustain_ratio) <= 0.10f);
+  // At 6 s the burst is the reference: only its own frames and onset clear the threshold.
+  CHECK(burst_6.sustain_ratio < 0.2f * plain_6.sustain_ratio);
+  CHECK(burst_6.attack_density < 0.2f * plain_6.attack_density);
 }

@@ -92,4 +92,20 @@ float source_base_confidence(SourceClass source) noexcept;
 /// @param profiles Profiles to classify, modified in place.
 void classify_sources(std::vector<TrackProfile>& profiles);
 
+namespace detail {
+
+/// @brief Fractions of detected hits that are low-dominated and high-bearing.
+struct HitShares {
+  float low = 0.0f;
+  float high = 0.0f;
+};
+
+/// @brief Hit shares the classifier reads as LowHitShare / HighHitShare.
+/// @details A whole kit plays both kinds; a single drum, a hat or a hand
+///          percussion part plays almost only one. Zero for a track with no
+///          envelope or no hits. Exposed for tests.
+HitShares hit_shares(const BandEnergyEnvelope& bands);
+
+}  // namespace detail
+
 }  // namespace sonare::mixing::assistant

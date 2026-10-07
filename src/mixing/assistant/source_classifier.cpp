@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "mastering/assistant/audio_profile.h"
+
 namespace sonare::mixing::assistant {
 namespace {
 
@@ -387,7 +389,7 @@ constexpr float kHitLookbackSec = 0.032f;
 constexpr float kHitMinGapSec = 0.064f;
 // A band rising 6 dB (power x4) over its recent minimum marks a hit, provided
 // the band holds a real share of the frame and the frame is within 30 dB of
-// the track's loudest.
+// the track's reference level (its loudest event, outliers set aside).
 constexpr float kHitRisePowerRatio = 4.0f;
 constexpr float kHitBandMinShare = 0.05f;
 constexpr float kHitFloorBelowPeak = 1.0e-3f;
@@ -396,15 +398,10 @@ constexpr float kHitFloorBelowPeak = 1.0e-3f;
 constexpr float kLowHitFrameShare = 0.5f;
 constexpr float kHighHitFrameShare = 0.10f;
 
-struct HitShares {
-  float low = 0.0f;
-  float high = 0.0f;
-};
+}  // namespace
 
-/// @brief Fractions of detected hits that are low-dominated and high-bearing.
-/// @details A whole kit plays both kinds; a single drum, a hat or a hand
-///          percussion part plays almost only one. Zero for a track with no
-///          envelope or no hits.
+namespace detail {
+
 HitShares hit_shares(const BandEnergyEnvelope& bands) {
   HitShares shares;
   const int frames = bands.n_frames;
@@ -423,6 +420,10 @@ HitShares hit_shares(const BandEnergyEnvelope& bands) {
     peak = std::max(peak, sum);
   }
   if (!(peak > 0.0f)) return shares;
+  const float duration_sec = static_cast<float>(frames) / frame_rate;
+  const float reference = mastering::assistant::summary_reference(
+      mastering::assistant::rising_peak_heights(total, lookback, kHitRisePowerRatio), duration_sec,
+      peak);
 
   int hits = 0;
   int low_hits = 0;
@@ -430,7 +431,7 @@ HitShares hit_shares(const BandEnergyEnvelope& bands) {
   int last_hit = -min_gap;
   for (int frame = lookback; frame < frames; ++frame) {
     const float frame_total = total[static_cast<std::size_t>(frame)];
-    if (frame - last_hit < min_gap || !(frame_total >= kHitFloorBelowPeak * peak)) continue;
+    if (frame - last_hit < min_gap || !(frame_total >= kHitFloorBelowPeak * reference)) continue;
     bool rises = false;
     for (int band = 0; band < kBandCount && !rises; ++band) {
       const float now = bands.at(band, frame);
@@ -456,6 +457,10 @@ HitShares hit_shares(const BandEnergyEnvelope& bands) {
   return shares;
 }
 
+}  // namespace detail
+
+namespace {
+
 std::array<float, kFeatureCount> extract_features(const TrackProfile& profile) {
   const auto& occupancy = profile.band_occupancy;
   const auto& spectral = profile.base.spectral;
@@ -476,7 +481,7 @@ std::array<float, kFeatureCount> extract_features(const TrackProfile& profile) {
   features[static_cast<std::size_t>(Feature::AttackDensity)] = dynamics.attack_density;
   features[static_cast<std::size_t>(Feature::CrestFactorDb)] =
       profile.base.loudness.crest_factor_db;
-  const HitShares hits = hit_shares(profile.bands);
+  const detail::HitShares hits = detail::hit_shares(profile.bands);
   features[static_cast<std::size_t>(Feature::LowHitShare)] = hits.low;
   features[static_cast<std::size_t>(Feature::HighHitShare)] = hits.high;
   return features;
