@@ -12,6 +12,7 @@
 
 #include "analysis/beat_analyzer.h"
 #include "core/resample.h"
+#include "support/rate_material.h"
 #include "util/constants.h"
 
 using namespace sonare;
@@ -810,5 +811,41 @@ TEST_CASE("beat-synchronised detection keeps the opening chord of a triad turnar
     std::vector<float> beats = BeatAnalyzer(audio).beat_times();
     CAPTURE(names, beats);
     CHECK(names == expected);
+  }
+}
+
+TEST_CASE("beat-synchronised chord names do not depend on the sample rate",
+          "[analysis_rate][chord_analyzer]") {
+  using sonare::test::make_rate_material;
+  using sonare::test::RateMaterial;
+  // Leading and trailing N.C. shorter than one beat period are edge artifacts of the beat grid.
+  auto names_at = [](int sr) {
+    ChordConfig config;
+    config.use_triads_only = true;
+    config.min_duration = 0.3f;
+    config.use_beat_sync = true;
+    const Audio audio = make_rate_material(RateMaterial::TriadTurnaround, sr);
+    const std::vector<float> beats = BeatAnalyzer(audio).beat_times();
+    std::vector<float> intervals;
+    for (size_t i = 1; i < beats.size(); ++i) intervals.push_back(beats[i] - beats[i - 1]);
+    REQUIRE_FALSE(intervals.empty());
+    std::nth_element(intervals.begin(), intervals.begin() + intervals.size() / 2, intervals.end());
+    const float period = intervals[intervals.size() / 2];
+    std::vector<Chord> chords = detect_chords(audio, config);
+    auto is_edge_nc = [period](const Chord& c) {
+      return c.quality == ChordQuality::Unknown && c.duration() < period;
+    };
+    while (!chords.empty() && is_edge_nc(chords.back())) chords.pop_back();
+    size_t first = 0;
+    while (first < chords.size() && is_edge_nc(chords[first])) ++first;
+    std::vector<std::string> names;
+    for (size_t i = first; i < chords.size(); ++i) names.push_back(chords[i].to_string());
+    return names;
+  };
+  const auto reference = names_at(22050);
+  CHECK_FALSE(reference.empty());
+  for (int sr : {32000, 44100, 48000}) {
+    CAPTURE(sr);
+    CHECK(names_at(sr) == reference);
   }
 }

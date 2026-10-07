@@ -232,6 +232,10 @@ class ChordAnalyzer {
   Chroma chroma_;
   Chroma bass_chroma_;
   ChordConfig config_;
+  /// Input signal length in seconds; 0 when built from a chromagram (the frame grid's end then).
+  float signal_duration_ = 0.0f;
+  /// Analysis end in seconds: the signal's, never the centered frame grid's overhang past it.
+  float analysis_end() const;
 };
 
 /// @brief Quick chord detection function.

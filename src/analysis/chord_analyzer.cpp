@@ -7,6 +7,7 @@
 #include <limits>
 #include <map>
 
+#include "analysis/analysis_rate.h"
 #include "analysis/beat_analyzer.h"
 #include "core/convert.h"
 #include "feature/nnls_chroma.h"
@@ -16,6 +17,12 @@
 
 namespace sonare {
 
+float ChordAnalyzer::analysis_end() const {
+  const float grid_end = static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
+                         static_cast<float>(std::max(chroma_.sample_rate(), 1));
+  return signal_duration_ > 0.0f ? std::min(grid_end, signal_duration_) : grid_end;
+}
+
 ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : config_(config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config_.min_duration) && config_.min_duration >= 0.0f &&
@@ -23,6 +30,7 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
                    std::isfinite(config_.threshold) && config_.threshold >= 0.0f &&
                    config_.threshold <= 1.0f,
                ErrorCode::InvalidParameter);
+  signal_duration_ = static_cast<float>(audio.size()) / static_cast<float>(audio.sample_rate());
   SONARE_CHECK_MSG(is_valid_chroma_tuning(config_.tuning), ErrorCode::InvalidParameter,
                    "ChordConfig: tuning must be finite and in [-0.5, 0.5)");
 
@@ -45,13 +53,10 @@ ChordAnalyzer::ChordAnalyzer(const Audio& audio, const ChordConfig& config) : co
   } else {
     // n_fft names the window at the 22050 Hz analysis rate: a fixed sample count would narrow
     // the window, and widen the bin spacing, as the rate rises, smearing low chord tones.
-    const double window_wide = static_cast<double>(config.n_fft) * audio.sample_rate() /
-                               static_cast<double>(constants::kDefaultSampleRate);
-    SONARE_CHECK(config.n_fft > 0 && window_wide <= static_cast<double>(1 << 30),
-                 ErrorCode::InvalidParameter);
+    const RateWindow window = window_at_rate(config.n_fft, audio.sample_rate());
     ChromaConfig chroma_config;
-    chroma_config.win_length = std::max(1, static_cast<int>(std::lround(window_wide)));
-    chroma_config.n_fft = next_power_of_2(chroma_config.win_length);
+    chroma_config.win_length = window.win_length;
+    chroma_config.n_fft = window.n_fft;
     chroma_config.hop_length = config.hop_length;
     chroma_config.tuning = config.tuning;
     chroma_ = Chroma::compute(audio, chroma_config);
@@ -520,7 +525,7 @@ void ChordAnalyzer::analyze_chords() {
       chord.root = no_chord ? PitchClass::C : templates_[current_chord].root;
       chord.quality = no_chord ? ChordQuality::Unknown : templates_[current_chord].quality;
       chord.start = static_cast<float>(segment_start) * hop_duration;
-      chord.end = static_cast<float>(f) * hop_duration;
+      chord.end = is_last ? analysis_end() : static_cast<float>(f) * hop_duration;
       chord.confidence = segment_confidence / static_cast<float>(confidence_count);
       chord.bass = chord.root;
       if (!no_chord && config_.detect_inversions) {
@@ -583,9 +588,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
     analyze_chords();
     return;
   }
-  const std::vector<float> beat_times = extend_beat_grid(
-      tracked_beats, static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
-                         static_cast<float>(std::max(chroma_.sample_rate(), 1)));
+  const std::vector<float> beat_times = extend_beat_grid(tracked_beats, analysis_end());
 
   // The per-beat chroma buffer is fixed at 12 pitch classes; clamp iteration so
   // a chromagram with more than 12 bins cannot overrun it.
@@ -681,9 +684,7 @@ void ChordAnalyzer::analyze_chords_beat_sync(const std::vector<float>& tracked_b
 
     if (chord_changed || is_last) {
       // End current segment
-      const float chroma_duration = static_cast<float>(chroma_.n_frames() * chroma_.hop_length()) /
-                                    static_cast<float>(std::max(chroma_.sample_rate(), 1));
-      float segment_end = is_last ? chroma_duration : beat_times[i];
+      float segment_end = is_last ? analysis_end() : beat_times[i];
 
       Chord chord;
       const bool no_chord = current_chord < 0;
