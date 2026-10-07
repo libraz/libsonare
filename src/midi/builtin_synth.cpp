@@ -424,11 +424,19 @@ void BuiltinSynth::control_change(uint8_t channel, uint8_t controller, Control32
         }
       }
       break;
+    case 98:  // NRPN selection, so a later data entry is not read as an RPN.
+      params_[channel & 0x0Fu].select_nrpn_lsb(value7);
+      break;
+    case 99:
+      params_[channel & 0x0Fu].select_nrpn_msb(value7);
+      break;
     case 100:
       params_[channel & 0x0Fu].select_rpn_lsb(value7);
+      params_[channel & 0x0Fu].deselect_on_rpn_null();
       break;
     case 101:
       params_[channel & 0x0Fu].select_rpn_msb(value7);
+      params_[channel & 0x0Fu].deselect_on_rpn_null();
       break;
     case 64:  // Damper/sustain pedal: >=64 holds released keys.
       sustain_pedal(channel, value7 >= 64);

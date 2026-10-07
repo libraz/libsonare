@@ -1009,3 +1009,19 @@ TEST_CASE("BuiltinSynth All Sound Off keeps sustain for a new note", "[midi][syn
   render_peak(&synth, 2048);
   REQUIRE(render_peak(&synth, 512) == 0.0f);
 }
+
+TEST_CASE("BuiltinSynth ignores data entry once an NRPN replaces the selected RPN",
+          "[midi][synth][mpe]") {
+  constexpr uint16_t kBendUp = 8192 + 2048;
+  BuiltinSynth synth = mpe_synth();
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 101, 0));
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 100, 6));
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 99, 1));
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 98, 8));
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 6, 7));
+  mpe_send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, kBendUp));
+  // No zone was configured, so the fixed 2-semitone range still reads the bend.
+  const double cents = mpe_cents(synth, 2, 50.0);
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 50.0) < 5.0);
+}
