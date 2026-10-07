@@ -91,20 +91,24 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         mean_chroma[c] = chroma_sum_[c] / chroma_frame_count_;
         sum += mean_chroma[c];
       }
-      if (sum > kEpsilon) {
+      if (has_tonal_evidence(sum)) {
         for (int c = 0; c < 12; ++c) {
           mean_chroma[c] /= sum;
         }
+
+        const MajorMinorKeyMatch key_match = find_best_major_minor_key(mean_chroma);
+        current_estimate_.key = key_match.root;
+        current_estimate_.key_minor = key_match.minor;
+
+        /// Confidence based on correlation strength and time
+        float time_factor = std::min(1.0f, elapsed / kConfidenceRampSeconds);
+        float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
+        current_estimate_.key_confidence = corr_factor * time_factor;
+      } else {
+        current_estimate_.key = -1;
+        current_estimate_.key_minor = false;
+        current_estimate_.key_confidence = 0.0f;
       }
-
-      const MajorMinorKeyMatch key_match = find_best_major_minor_key(mean_chroma);
-      current_estimate_.key = key_match.root;
-      current_estimate_.key_minor = key_match.minor;
-
-      /// Confidence based on correlation strength and time
-      float time_factor = std::min(1.0f, elapsed / kConfidenceRampSeconds);
-      float corr_factor = (key_match.correlation + 1.0f) / 2.0f;  // Normalize [-1, 1] to [0, 1]
-      current_estimate_.key_confidence = corr_factor * time_factor;
 
       last_key_update_time_ = elapsed;
       current_estimate_.updated = true;
@@ -132,7 +136,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       float new_confidence = std::max(0.0f, chord_corr);
 
       /// Only update if confidence is above threshold
-      if (new_confidence >= kChordConfidenceThreshold) {
+      if (has_chord_evidence(new_confidence)) {
         current_estimate_.chord_root = new_root;
         current_estimate_.chord_quality = new_quality;
         current_estimate_.chord_confidence = new_confidence;
@@ -144,7 +148,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
       /// Track chord progression incrementally from the same smoothed chord
       /// stream used for per-frame output. This avoids recomputing the whole
       /// progression in a getter or periodically discarding this state.
-      if (new_confidence >= kChordConfidenceThreshold) {
+      if (has_chord_evidence(new_confidence)) {
         float frame_duration =
             static_cast<float>(config_.hop_length) / static_cast<float>(internal_sample_rate_);
 
@@ -315,7 +319,7 @@ void StreamAnalyzer::update_bar_chord_tracking(float current_time) {
     }
 
     /// Only vote if confidence is above threshold
-    if (frame_corr >= kChordConfidenceThreshold) {
+    if (has_chord_evidence(frame_corr)) {
       /// Index: root * kNumChordQualities + quality.
       /// Sized to cover every ChordQuality enumerator so 7ths / sus / extended
       /// chords are no longer silently dropped when the underlying template
@@ -436,7 +440,7 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
 
       /// Detect chord
       auto [chord, corr] = find_best_chord(smoothed.data(), chord_templates_);
-      if (corr >= kChordConfidenceThreshold) {
+      if (has_chord_evidence(corr)) {
         int idx =
             static_cast<int>(chord.root) * kNumChordQualities + static_cast<int>(chord.quality);
         if (idx >= 0 && idx < StreamAnalyzer::kBarVoteSlots) {
@@ -445,6 +449,9 @@ void StreamAnalyzer::compute_retroactive_bar_chords() {
         }
       }
     }
+
+    /// A bar with no vote carries no chord, as in the live path
+    if (vote_count == 0) continue;
 
     /// Find best chord
     int best_idx = 0;

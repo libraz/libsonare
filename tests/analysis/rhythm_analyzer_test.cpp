@@ -574,3 +574,15 @@ TEST_CASE("a straight 16th click track reads as straight and a triplet shuffle d
   const RhythmAnalyzer shuffle(create_subdivided_clicks(100.0f, {2.0f / 3.0f}));
   CHECK(shuffle.groove_type() != "straight");
 }
+
+TEST_CASE("RhythmAnalyzer fallback time signature carries zero confidence", "[rhythm_analyzer]") {
+  // 60 BPM over 4 s yields too few beats for a meter estimate on either analyzer.
+  Audio audio = create_click_track(60.0f, 22050, 4.0f);
+  BeatAnalyzer beat_analyzer(audio);
+  RhythmAnalyzer rhythm_analyzer(beat_analyzer);
+
+  REQUIRE(beat_analyzer.beats().size() < 8);
+  REQUIRE(rhythm_analyzer.time_signature().numerator == 4);
+  REQUIRE(rhythm_analyzer.time_signature().confidence == 0.0f);
+  REQUIRE(beat_analyzer.time_signature().confidence == 0.0f);
+}

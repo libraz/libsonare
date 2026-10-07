@@ -170,10 +170,10 @@ void RhythmAnalyzer::detect_time_signature() {
   meter_config.candidate_numerators = config_.meter_candidate_numerators;
   meter_config.denominator = config_.meter_denominator;
 
-  // Default to 4 over the requested beat unit
+  // Unmeasured default: 4 over the requested beat unit, confidence 0 as in BeatAnalyzer
   features_.time_signature.numerator = 4;
   features_.time_signature.denominator = meter_config.denominator;
-  features_.time_signature.confidence = 0.5f;
+  features_.time_signature.confidence = 0.0f;
 
   if (beats_.size() < 8) {
     return;

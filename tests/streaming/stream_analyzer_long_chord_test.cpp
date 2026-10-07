@@ -487,3 +487,31 @@ TEST_CASE("StreamAnalyzer finalize on a single sustained chord yields exactly on
   REQUIRE(prog.size() == 1);
   REQUIRE(prog[0].root >= 0);
 }
+
+TEST_CASE("StreamAnalyzer reports the unknown sentinel on pure silence", "[streaming][silence]") {
+  StreamConfig config;
+  config.sample_rate = 22050;
+  config.n_fft = 2048;
+  config.hop_length = 512;
+  config.compute_chroma = true;
+  config.key_update_interval_sec = 0.5f;
+
+  StreamAnalyzer analyzer(config);
+  const std::vector<float> silence(static_cast<size_t>(config.sample_rate) * 6, 0.0f);
+  analyzer.process(silence.data(), silence.size());
+
+  const auto frames = analyzer.read_frames(100000);
+  REQUIRE_FALSE(frames.empty());
+  for (const auto& frame : frames) {
+    REQUIRE(frame.chord_root == -1);
+    REQUIRE(frame.chord_quality == -1);
+  }
+
+  const auto& estimate = analyzer.progressive_estimate_for_test();
+  REQUIRE(estimate.key == -1);
+  REQUIRE(estimate.key_confidence == 0.0f);
+
+  // Retroactive pass over the same silent history: no bar carries a vote, so none is recorded.
+  analyzer.compute_retroactive_bar_chords_for_test(0.5f);
+  REQUIRE(analyzer.progressive_estimate_for_test().bar_chord_progression.empty());
+}

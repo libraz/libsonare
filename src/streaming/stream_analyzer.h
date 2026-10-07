@@ -271,6 +271,13 @@ class StreamAnalyzer {
   /// @brief Test-only entry point running the pattern scoring pass.
   void detect_progression_pattern_for_test() { detect_progression_pattern(); }
 
+  /// @brief Test-only entry point running the retroactive bar-chord pass over the stored chroma
+  ///        history with the given bar length.
+  void compute_retroactive_bar_chords_for_test(float bar_duration_sec) {
+    bar_duration_ = bar_duration_sec;
+    compute_retroactive_bar_chords();
+  }
+
   /// @brief Test-only accessor for the in-progress progressive estimate.
   const ProgressiveEstimate& progressive_estimate_for_test() const { return current_estimate_; }
 
@@ -433,7 +440,15 @@ class StreamAnalyzer {
   static constexpr int kChordSmoothingFrames =
       12;  ///< Number of frames to smooth (~0.25s at default settings)
   static constexpr float kChordConfidenceThreshold = 0.5f;  ///< Min correlation for chord detection
-  std::vector<std::array<float, 12>> chroma_history_;       ///< Prepared chord-smoothing ring
+  /// No-evidence gate shared by the per-frame chord, progressive key and bar-chord paths: without
+  /// evidence they emit the unknown sentinel (-1 / confidence 0 / no BarChord) instead of a guess.
+  static bool has_chord_evidence(float correlation) {
+    return correlation >= kChordConfidenceThreshold;
+  }
+  static bool has_tonal_evidence(float chroma_sum) {
+    return chroma_sum > sonare::constants::kEpsilon;
+  }
+  std::vector<std::array<float, 12>> chroma_history_;  ///< Prepared chord-smoothing ring
   size_t chroma_history_start_ = 0;
   size_t chroma_history_size_ = 0;
   std::array<float, kChordSmoothingFrames> median_chroma_scratch_ = {};

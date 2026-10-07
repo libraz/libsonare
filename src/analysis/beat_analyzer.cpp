@@ -461,7 +461,7 @@ void BeatAnalyzer::track_beats() {
   if (config_.trim && !beat_frames_vec.empty()) {
     // Find first frame with significant onset
     float threshold = 0.1f;
-    int first_valid = 0;
+    int first_valid = -1;
     // Clamp frame indices into [0, n_frames-1]: the adaptive DP backtracer and
     // prepend_missed_initial_beat can emit frames slightly outside the valid
     // local_score / onset_strength_ range, which would otherwise be UB.
@@ -475,7 +475,7 @@ void BeatAnalyzer::track_beats() {
     }
 
     // Find last frame with significant onset
-    int last_valid = static_cast<int>(beat_frames_vec.size()) - 1;
+    int last_valid = -1;
     for (int i = static_cast<int>(beat_frames_vec.size()) - 1; i >= 0; --i) {
       const int idx = std::clamp(beat_frames_vec[i], 0, max_frame_index);
       if (local_score[idx] > threshold) {
@@ -484,9 +484,12 @@ void BeatAnalyzer::track_beats() {
       }
     }
 
-    if (first_valid <= last_valid) {
+    if (first_valid >= 0 && first_valid <= last_valid) {
       beat_frames_vec = std::vector<int>(beat_frames_vec.begin() + first_valid,
                                          beat_frames_vec.begin() + last_valid + 1);
+    } else {
+      // No beat carries onset evidence: there is no grid to keep.
+      beat_frames_vec.clear();
     }
   }
   prepend_missed_initial_beat(beat_frames_vec, period);

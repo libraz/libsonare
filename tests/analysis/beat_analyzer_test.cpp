@@ -730,3 +730,15 @@ TEST_CASE("detect_downbeats finds the bar when a 4/4 clip opens mid-bar",
   const auto downbeats = quick::detect_downbeats(samples.data(), samples.size(), kSr);
   require_bar_starts(downbeats, 1.0f, 2.0f, 9.0f);
 }
+
+TEST_CASE("BeatAnalyzer with trim returns no beats for silent input", "[beat_analyzer]") {
+  const int sr = 22050;
+  Audio silence = Audio::from_vector(std::vector<float>(static_cast<size_t>(sr) * 6, 0.0f), sr);
+
+  BeatConfig config;
+  config.trim = true;
+  BeatAnalyzer analyzer(silence, config);
+
+  REQUIRE(analyzer.beats().empty());
+  REQUIRE(analyzer.time_signature().confidence == 0.0f);
+}
