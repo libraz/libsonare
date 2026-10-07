@@ -626,11 +626,15 @@ float sonare_note_to_hz(const char* note) {
 }
 
 float sonare_frames_to_time(int frames, int sr, int hop_length) {
+  SONARE_C_TRY
   return frames_to_time(frames, sr, hop_length);
+  SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
 int sonare_time_to_frames(float time, int sr, int hop_length) {
+  SONARE_C_TRY
   return time_to_frames(time, sr, hop_length);
+  SONARE_C_CATCH_RETURN(0)
 }
 
 SonareError sonare_resample(const float* samples, size_t length, int src_sr, int target_sr,

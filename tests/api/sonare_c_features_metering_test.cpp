@@ -1,6 +1,7 @@
 /// @file sonare_c_features_metering_test.cpp
 /// @brief Feature and metering C API tests.
 
+#include <cmath>
 #include <cstring>
 #include <limits>
 #include <vector>
@@ -190,6 +191,20 @@ TEST_CASE("sonare_hz_to_note honours its documented borrow contract", "[c_api]")
   REQUIRE(std::string(sonare_hz_to_note(0.0f)) == "?");
   REQUIRE(std::string(sonare_hz_to_note(-1.0f)) == "?");
   REQUIRE(std::string(sonare_hz_to_note(std::numeric_limits<float>::quiet_NaN())) == "?");
+}
+
+TEST_CASE("frame/time conversions return a sentinel instead of throwing on invalid rate or hop",
+          "[c_api]") {
+  REQUIRE(std::isnan(sonare_frames_to_time(10, 0, 512)));
+  REQUIRE(std::isnan(sonare_frames_to_time(10, 22050, 0)));
+  REQUIRE(std::isnan(sonare_frames_to_time(10, -1, 512)));
+  REQUIRE(sonare_time_to_frames(1.0f, 0, 512) == 0);
+  REQUIRE(sonare_time_to_frames(1.0f, 22050, 0) == 0);
+  REQUIRE(sonare_time_to_frames(1.0f, 22050, -512) == 0);
+
+  REQUIRE(sonare_frames_to_time(43, 22050, 512) ==
+          Catch::Approx(43.0f * 512 / 22050).epsilon(1e-6));
+  REQUIRE(sonare_time_to_frames(1.0f, 22050, 512) == 43);
 }
 
 TEST_CASE("sonare_peak_pick delta is in the units of its input", "[c_api]") {

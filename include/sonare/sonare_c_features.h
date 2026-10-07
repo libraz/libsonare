@@ -833,7 +833,11 @@ float sonare_midi_to_hz(float midi);
 ///   thread exits. Copy it to keep it across either; never free it.
 const char* sonare_hz_to_note(float hz);
 float sonare_note_to_hz(const char* note);
+/// @brief Frame index to seconds. Returns NaN when @p sr or @p hop_length is not positive
+///   (detail in @ref sonare_last_error_message).
 float sonare_frames_to_time(int frames, int sr, int hop_length);
+/// @brief Seconds to frame index. Returns 0 when @p sr or @p hop_length is not positive
+///   (detail in @ref sonare_last_error_message).
 int sonare_time_to_frames(float time, int sr, int hop_length);
 
 int sonare_frames_to_samples(int frames, int hop_length, int n_fft);
