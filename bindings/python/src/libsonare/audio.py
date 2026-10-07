@@ -8,7 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from ._errors import _invalid_state, _not_supported, _unknown_error
+from ._effects_repair_common import _linked_channel_planes
+from ._errors import SonareValueError, _invalid_state, _not_supported, _unknown_error
 from ._runtime import (
     _check,
     _from_c_float_array,
@@ -154,6 +155,7 @@ from .types import (
     AcousticResult,
     AnalysisResult,
     BpmAnalysisResult,
+    ChannelLayout,
     ChordAnalysisResult,
     ChromaResult,
     ClippingRegion,
@@ -180,6 +182,123 @@ from .types import (
 
 if TYPE_CHECKING:
     pass
+
+# Plane count of each layout, the same table as the core's channel_count().
+_LAYOUT_CHANNEL_COUNTS = {
+    ChannelLayout.MONO: 1,
+    ChannelLayout.STEREO: 2,
+    ChannelLayout.FIVE_POINT_ONE: 6,
+    ChannelLayout.SEVEN_POINT_ONE: 8,
+}
+
+
+def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
+    """Decode audio bytes once and keep every source channel.
+
+    :meth:`Audio.from_memory` folds a multi-channel source to mono as it
+    decodes; this returns the channels instead. The format set, size ceiling and
+    decoded-buffer contract are :meth:`Audio.from_memory`'s.
+
+    Args:
+        data: Raw file bytes (WAV / MP3 in default builds; also
+            M4A/AAC/FLAC/OGG/Opus when libsonare is built with
+            ``-DSONARE_WITH_FFMPEG=ON``).
+
+    Returns:
+        ``(channels, sample_rate)``. ``channels`` is a channel-planar 2-D
+        ``float32`` array of shape ``(channel_count, frames)`` in the source's
+        own channel order (5.1 is L R C LFE Ls Rs), the shape the N-channel
+        entry points take.
+
+    Raises:
+        RuntimeError: If the loaded native library predates this additive
+            entry point.
+        SonareError: If the bytes are empty, cannot be decoded, hold a
+            non-finite sample, or declare a sample rate outside the supported
+            range.
+    """
+    lib = _get_lib()
+    decode = getattr(lib, "sonare_decode_channels", None)
+    if decode is None:
+        raise _not_supported(
+            "loaded libsonare does not expose sonare_decode_channels; "
+            "rebuild or install a newer native library"
+        )
+    encoded = np.frombuffer(data, dtype=np.uint8)
+    c_array = encoded.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
+    channels = ctypes.c_int()
+    sample_rate = ctypes.c_int()
+    with _out_float_array(lib) as (out, frames):
+        _check(
+            decode(
+                c_array,
+                _to_c_size_t(int(encoded.size), "length"),
+                ctypes.byref(out),
+                ctypes.byref(frames),
+                ctypes.byref(channels),
+                ctypes.byref(sample_rate),
+            )
+        )
+        planar = _from_c_float_array(out, channels.value * frames.value)
+        return planar.reshape(channels.value, frames.value), int(sample_rate.value)
+
+
+def downmix(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    target_layout: ChannelLayout | int,
+) -> np.ndarray:
+    """Downmix channels to a narrower layout with the ITU-R BS.775 rule.
+
+    Center and surround enter the front pair at -3 dB and the LFE plane is
+    dropped; a stereo, 5.1 or 7.1 source folds to mono through the same matrix
+    the decoders use. The source layout is the one the channel count names (1, 2,
+    6 or 8). Supported targets narrow the bed (7.1 to 5.1, 5.1 or 7.1 to stereo,
+    anything modelled to mono) or copy it. A channel count outside 1/2/6/8 folds
+    to ``ChannelLayout.MONO`` as the unweighted mean of its channels, as the
+    decoders do, and has no other target.
+
+    Args:
+        channels: One buffer per channel, or a 2-D ``(channels, frames)`` array.
+            All channels must be the same length.
+        target_layout: A :class:`ChannelLayout` (or its integer value).
+
+    Returns:
+        A channel-planar 2-D ``float32`` array of shape
+        ``(target_channel_count, frames)``.
+
+    Raises:
+        RuntimeError: If the loaded native library predates this additive
+            entry point.
+        SonareValueError: If ``channels`` is empty, not planar, or its channels
+            differ in length.
+        SonareError: For an upmix or an unknown ``target_layout``.
+    """
+    lib = _get_lib()
+    mix = getattr(lib, "sonare_downmix", None)
+    if mix is None:
+        raise _not_supported(
+            "loaded libsonare does not expose sonare_downmix; "
+            "rebuild or install a newer native library"
+        )
+    layout = ChannelLayout(int(target_layout))
+    planes = _linked_channel_planes("downmix", channels)
+    frame_count = int(planes[0].shape[0])
+    if any(int(plane.shape[0]) != frame_count for plane in planes):
+        raise SonareValueError("downmix: channels must all be the same length")
+    packed = np.ascontiguousarray(np.stack(planes), dtype=np.float32)
+    with _out_float_array(lib) as (out, _unused):
+        _check(
+            mix(
+                packed.ctypes.data_as(ctypes.POINTER(ctypes.c_float)),
+                _to_c_size_t(frame_count, "frames"),
+                _to_c_int(len(planes), "channels"),
+                _to_c_int(int(layout), "target_layout"),
+                ctypes.byref(out),
+            )
+        )
+        out_channels = _LAYOUT_CHANNEL_COUNTS[layout]
+        planar = _from_c_float_array(out, out_channels * frame_count)
+        return planar.reshape(out_channels, frame_count)
 
 
 class Audio:
@@ -294,8 +413,8 @@ class Audio:
         Args:
             data: Mono audio samples. Accepts ``list[float]``, ``tuple[float, ...]``,
                 ``array.array``, or a numpy 1D array of dtype ``float32`` (or
-                anything castable to ``float``). Stereo input must be downmixed
-                first (e.g. ``samples.mean(axis=1, dtype=np.float32)``).
+                anything castable to ``float``). Multi-channel input must be
+                folded first with :func:`downmix` (``downmix(channels, 0)[0]``).
                 Values are nominally in ``[-1.0, 1.0]``.
             sample_rate: Sample rate in Hz (default 48000).
 
@@ -325,6 +444,9 @@ class Audio:
             data: Raw file bytes (WAV / MP3 in default builds; also
                 M4A/AAC/FLAC/OGG/Opus when libsonare is built with
                 ``-DSONARE_WITH_FFMPEG=ON``).
+
+        A multi-channel source is folded to mono; :func:`decode_channels` keeps
+        its channels.
         """
         lib = _get_lib()
         encoded = np.frombuffer(data, dtype=np.uint8)

@@ -769,6 +769,8 @@ from .analyzer import (
     zero_crossings as zero_crossings,
 )
 from .audio import Audio as Audio
+from .audio import decode_channels as decode_channels
+from .audio import downmix as downmix
 from .engine import ClipPageProvider as ClipPageProvider
 from .engine import FileClipPageProvider as FileClipPageProvider
 from .engine import RealtimeEngine as RealtimeEngine

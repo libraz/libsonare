@@ -1,10 +1,12 @@
 #include "sonare_wrap.h"
 
+#include <algorithm>
 #include <cstring>
 #include <memory>
 #include <string>
 #include <vector>
 
+#include "core/channel_layout.h"
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_mixer.h"
 #include "sonare_wrap_options.h"
@@ -230,6 +232,9 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
   exports.Set("realtimeVoiceChangerPresetConfig",
               Napi::Function::New(env, &SonareWrap::RealtimeVoiceChangerPresetConfig,
                                   "realtimeVoiceChangerPresetConfig"));
+  exports.Set("decodeChannels",
+              Napi::Function::New(env, &SonareWrap::DecodeChannels, "decodeChannels"));
+  exports.Set("downmix", Napi::Function::New(env, &SonareWrap::Downmix, "downmix"));
   exports.Set("decompose", Napi::Function::New(env, &SonareWrap::Decompose, "decompose"));
   exports.Set("decomposeStems",
               Napi::Function::New(env, &SonareWrap::DecomposeStems, "decomposeStems"));
@@ -788,6 +793,101 @@ Napi::Value SonareWrap::FromMemory(const Napi::CallbackInfo& info) {
   auto result = info.This().As<Napi::Function>().New({external});
   audio_guard.release();
   return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::DecodeChannels(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  const uint8_t* data = nullptr;
+  size_t len = 0;
+  if (info.Length() >= 1 && info[0].IsBuffer()) {
+    auto buf = info[0].As<Napi::Buffer<uint8_t>>();
+    data = buf.Data();
+    len = buf.Length();
+  } else if (info.Length() >= 1 && IsUint8Array(info[0])) {
+    auto arr = info[0].As<Napi::Uint8Array>();
+    data = arr.Data();
+    len = arr.ByteLength();
+  } else {
+    Napi::TypeError::New(env, "Expected Buffer or Uint8Array argument")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  float* planar = nullptr;
+  size_t frames = 0;
+  int channels = 0;
+  int sample_rate = 0;
+  SonareError err = sonare_decode_channels(data, len, &planar, &frames, &channels, &sample_rate);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<float, decltype(&sonare_free_floats)> guard(planar, sonare_free_floats);
+
+  Napi::Array planes = Napi::Array::New(env, static_cast<size_t>(channels));
+  for (int channel = 0; channel < channels; ++channel) {
+    auto plane = Napi::Float32Array::New(env, frames);
+    std::memcpy(plane.Data(), planar + static_cast<size_t>(channel) * frames,
+                frames * sizeof(float));
+    planes.Set(static_cast<uint32_t>(channel), plane);
+  }
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("sampleRate", Napi::Number::New(env, sample_rate));
+  result.Set("channels", planes);
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+
+  if (info.Length() < 1 || !info[0].IsArray()) {
+    Napi::TypeError::New(env, "Expected (Float32Array[] channels, targetLayout)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  sonare_node::ChannelInputs inputs;
+  if (!sonare_node::ReadChannelInputs(env, info[0], "downmix", &inputs)) {
+    return env.Undefined();
+  }
+  int target = 0;
+  if (!sonare_node::RequiredIntArg(env, info, 1, "targetLayout", &target)) {
+    return env.Undefined();
+  }
+  if (inputs.ptrs.empty()) {
+    Napi::RangeError::New(env, "downmix: channels must not be empty").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  // The C entry takes one planar block, so the planes are packed back to back.
+  const size_t frames = inputs.length;
+  std::vector<float> packed(inputs.ptrs.size() * frames);
+  for (size_t channel = 0; channel < inputs.ptrs.size(); ++channel) {
+    std::copy_n(inputs.ptrs[channel], frames,
+                packed.begin() + static_cast<std::ptrdiff_t>(channel * frames));
+  }
+  float* out = nullptr;
+  SonareError err =
+      sonare_downmix(packed.data(), frames, static_cast<int>(inputs.ptrs.size()), target, &out);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  std::unique_ptr<float, decltype(&sonare_free_floats)> guard(out, sonare_free_floats);
+
+  const size_t out_channels =
+      static_cast<size_t>(sonare::channel_count(static_cast<sonare::ChannelLayout>(target)));
+  Napi::Array planes = Napi::Array::New(env, out_channels);
+  for (size_t channel = 0; channel < out_channels; ++channel) {
+    auto plane = Napi::Float32Array::New(env, frames);
+    std::memcpy(plane.Data(), out + channel * frames, frames * sizeof(float));
+    planes.Set(static_cast<uint32_t>(channel), plane);
+  }
+  return planes;
   SONARE_NODE_CATCH(env)
 }
 

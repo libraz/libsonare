@@ -143,28 +143,140 @@ function getBrowserAudioContextFactory():
   return Ctor ? (options?: AudioContextOptions) => new Ctor(options) : undefined;
 }
 
-function audioBufferToMono(buffer: AudioBuffer): Float32Array {
-  const samples = new Float32Array(buffer.length);
-  if (buffer.numberOfChannels <= 0) {
-    return samples;
+function audioBufferChannels(buffer: AudioBuffer): Float32Array[] {
+  return Array.from({ length: buffer.numberOfChannels }, (_, channel) =>
+    buffer.getChannelData(channel),
+  );
+}
+
+/** Folds decoded channels to mono through {@link downmix}, the same rule the native decoder applies. */
+function foldToMono(channels: Float32Array[], length: number): Float32Array {
+  if (channels.length === 0 || length === 0) {
+    return new Float32Array(length);
   }
-  if (buffer.numberOfChannels === 1) {
-    samples.set(buffer.getChannelData(0));
-    return samples;
-  }
-  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-    const data = buffer.getChannelData(channel);
-    for (let i = 0; i < buffer.length; i++) {
-      samples[i] += data[i] / buffer.numberOfChannels;
-    }
-  }
-  return samples;
+  return downmix(channels, 0)[0];
 }
 
 async function closeCreatedContext(context: BrowserDecodeContext): Promise<void> {
   const maybeClosable = context as BrowserDecodeContext & { close?: () => Promise<void> };
   if (maybeClosable.close) {
     await maybeClosable.close();
+  }
+}
+
+/** Result of {@link decodeChannels}. */
+export interface DecodedChannels {
+  /** Sample rate of the decoded audio, in Hz. */
+  sampleRate: number;
+  /** One plane per source channel, in the source's own channel order. All the same length. */
+  channels: Float32Array[];
+}
+
+/**
+ * Speaker bed layout, mirroring the C enum `SonareChannelLayout`: `0` = mono,
+ * `1` = stereo, `2` = 5.1 (L R C LFE Ls Rs), `3` = 7.1 (L R C LFE Ls Rs Lss Rss).
+ */
+export type ChannelLayout = 0 | 1 | 2 | 3;
+
+/**
+ * Decode audio bytes once and keep every source channel.
+ *
+ * {@link Audio.fromMemory} folds a multi-channel source to mono as it decodes;
+ * this returns the planes instead. Same format set, size ceiling and
+ * decoded-buffer contract as `Audio.fromMemory`. A 5.1 source arrives as
+ * `L R C LFE Ls Rs`.
+ *
+ * @param bytes - Encoded audio bytes such as WAV or MP3.
+ * @throws SonareError with `codeName: 'DecodeFailed'` for an empty decode or a
+ *   non-finite sample, `'InvalidFormat'` for a declared rate outside the
+ *   supported range, and `'InvalidParameter'` for empty input.
+ *
+ * @example
+ * ```typescript
+ * const { sampleRate, channels } = decodeChannels(bytes);
+ * const stereo = channels.length > 2 ? downmix(channels, 1) : channels;
+ * ```
+ */
+export function decodeChannels(bytes: Uint8Array): DecodedChannels {
+  return getSonareModule().decodeChannels(bytes);
+}
+
+/**
+ * Downmix channels to a narrower layout with the ITU-R BS.775 rule.
+ *
+ * Center and surround enter the front pair at -3 dB and the LFE plane is
+ * dropped; a stereo, 5.1 or 7.1 source folds to mono through the same matrix
+ * the decoders use. The source layout is the one the channel count names
+ * (1, 2, 6 or 8). Supported targets narrow the bed (7.1 to 5.1, 5.1 or 7.1 to
+ * stereo, anything modelled to mono) or copy it. A channel count outside
+ * 1/2/6/8 folds to mono (`0`) as the unweighted mean of its planes, as the
+ * decoders do, and has no other target.
+ *
+ * @param channels - One `Float32Array` per channel, all of the same length.
+ * @param targetLayout - `0` mono, `1` stereo, `2` 5.1, `3` 7.1.
+ * @throws SonareError with `codeName: 'InvalidParameter'` for an upmix, an
+ *   unknown layout, no channels, or channels of differing length.
+ * @returns One `Float32Array` per channel of the target layout.
+ */
+export function downmix(channels: Float32Array[], targetLayout: ChannelLayout): Float32Array[] {
+  return getSonareModule().downmix(channels, targetLayout);
+}
+
+/**
+ * {@link decodeChannels} with the same browser codec fallback as
+ * {@link Audio.fromMemoryWithBrowserFallback}: formats the native decoder does
+ * not carry (AAC, OGG, FLAC) go through `decodeAudioData`, and every channel the
+ * browser returns is kept.
+ */
+export async function decodeChannelsWithBrowserFallback(
+  bytes: Uint8Array,
+  options: BrowserAudioDecodeOptions = {},
+): Promise<DecodedChannels> {
+  try {
+    return decodeChannels(bytes);
+  } catch (nativeError) {
+    return decodeWithBrowserCodec(bytes, options, nativeError, 'decodeChannels');
+  }
+}
+
+async function decodeWithBrowserCodec(
+  bytes: Uint8Array,
+  options: BrowserAudioDecodeOptions,
+  nativeError: unknown,
+  caller: string,
+): Promise<DecodedChannels> {
+  const contextFactory = options.createAudioContext ?? getBrowserAudioContextFactory();
+  const context =
+    options.audioContext ??
+    contextFactory?.(
+      options.targetSampleRate ? { sampleRate: options.targetSampleRate } : undefined,
+    );
+
+  if (!context) {
+    throw new Error(
+      `${caller} failed and browser decodeAudioData is unavailable: ${
+        nativeError instanceof Error ? nativeError.message : String(nativeError)
+      }`,
+    );
+  }
+
+  const createdContext = !options.audioContext;
+  try {
+    const decoded = await context.decodeAudioData(encodedBytesToArrayBuffer(bytes));
+    return {
+      sampleRate: decoded.sampleRate || context.sampleRate,
+      channels: audioBufferChannels(decoded),
+    };
+  } catch (fallbackError) {
+    throw new Error(
+      `${caller} failed and browser decodeAudioData fallback failed: ${
+        fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
+      }`,
+    );
+  } finally {
+    if (createdContext) {
+      await closeCreatedContext(context);
+    }
   }
 }
 
@@ -226,7 +338,8 @@ export class Audio {
    * Decode audio bytes with the native WASM decoder first, then fall back to the
    * browser codec stack (`AudioContext.decodeAudioData`) for formats such as
    * AAC, OGG, and FLAC when available. Browser-decoded multi-channel audio is
-   * mixed down to mono to match the `Audio` wrapper contract.
+   * folded to mono with {@link downmix}, the rule the native decoder applies, so
+   * a file folds to the same samples whichever decoder ran.
    */
   static async fromMemoryWithBrowserFallback(
     bytes: Uint8Array,
@@ -235,37 +348,9 @@ export class Audio {
     try {
       return Audio.fromMemory(bytes);
     } catch (nativeError) {
-      let createdContext = false;
-      const contextFactory = options.createAudioContext ?? getBrowserAudioContextFactory();
-      const context =
-        options.audioContext ??
-        contextFactory?.(
-          options.targetSampleRate ? { sampleRate: options.targetSampleRate } : undefined,
-        );
-
-      if (!context) {
-        throw new Error(
-          `Audio.fromMemory failed and browser decodeAudioData is unavailable: ${
-            nativeError instanceof Error ? nativeError.message : String(nativeError)
-          }`,
-        );
-      }
-
-      createdContext = !options.audioContext;
-      try {
-        const decoded = await context.decodeAudioData(encodedBytesToArrayBuffer(bytes));
-        return new Audio(audioBufferToMono(decoded), decoded.sampleRate || context.sampleRate);
-      } catch (fallbackError) {
-        throw new Error(
-          `Audio.fromMemory failed and browser decodeAudioData fallback failed: ${
-            fallbackError instanceof Error ? fallbackError.message : String(fallbackError)
-          }`,
-        );
-      } finally {
-        if (createdContext) {
-          await closeCreatedContext(context);
-        }
-      }
+      const decoded = await decodeWithBrowserCodec(bytes, options, nativeError, 'Audio.fromMemory');
+      const length = decoded.channels[0]?.length ?? 0;
+      return new Audio(foldToMono(decoded.channels, length), decoded.sampleRate);
     }
   }
 

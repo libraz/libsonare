@@ -465,8 +465,9 @@ function audioBufferChannels(buffer: AudioBuffer): Float32Array[] {
 
 /**
  * Decodes `source` and writes it with {@link writeOpfsClip}. An `AudioBuffer`
- * keeps all its channels; encoded bytes (`ArrayBuffer` or `Blob`) go through
- * the package decoder, which folds to mono. No resampling is applied: pass the
+ * keeps all its channels, and so do encoded bytes (`ArrayBuffer` or `Blob`),
+ * which go through `decodeChannels` (with the browser codec fallback for formats
+ * the native decoder does not carry). No resampling is applied: pass the
  * returned `sampleRate` as the clip's source rate.
  *
  * @param path - OPFS path, as for {@link writeOpfsClip}.
@@ -498,10 +499,10 @@ export async function importOpfsClip(
       throw new TypeError('source must be an ArrayBuffer, Blob or AudioBuffer');
     }
     // Loaded on demand so the worklet entry does not carry the decoder.
-    const { Audio } = await import('./audio.js');
-    const audio = await Audio.fromMemoryWithBrowserFallback(new Uint8Array(bytes));
-    channels = [audio.data];
-    sampleRate = audio.sampleRate;
+    const { decodeChannelsWithBrowserFallback } = await import('./audio.js');
+    const decoded = await decodeChannelsWithBrowserFallback(new Uint8Array(bytes));
+    channels = decoded.channels;
+    sampleRate = decoded.sampleRate;
   }
   const written = await writeOpfsClip(path, channels, options);
   return { ...written, sampleRate };

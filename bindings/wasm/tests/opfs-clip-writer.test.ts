@@ -125,7 +125,8 @@ function floatsOf(bytes: Uint8Array): Float32Array {
   );
 }
 
-function pcm16Wav(samples: number[], sampleRate: number): ArrayBuffer {
+/** Frame-interleaved 16-bit PCM WAV; `samples` holds `channels` values per frame. */
+function pcm16Wav(samples: number[], sampleRate: number, channels = 1): ArrayBuffer {
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   const tag = (offset: number, text: string) => {
@@ -139,10 +140,10 @@ function pcm16Wav(samples: number[], sampleRate: number): ArrayBuffer {
   tag(12, 'fmt ');
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint16(22, channels, true);
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
+  view.setUint32(28, sampleRate * 2 * channels, true);
+  view.setUint16(32, 2 * channels, true);
   view.setUint16(34, 16, true);
   tag(36, 'data');
   view.setUint32(40, samples.length * 2, true);
@@ -337,6 +338,24 @@ describe('importOpfsClip', () => {
     });
     expect(result).toMatchObject({ numChannels: 1, numSamples: 8, sampleRate: 16000 });
     expect(floatsOf(harness.files.get('i/b.f32') as Uint8Array).length).toBe(8);
+  });
+
+  it('imports encoded stereo keeping both channels', async () => {
+    const harness = new OpfsWorkerHarness();
+    const frames = [
+      [8192, -8192],
+      [16384, 4096],
+      [0, -16384],
+    ];
+    const result = await importOpfsClip('i/s.f32', pcm16Wav(frames.flat(), 32000, 2), {
+      worker: harness.asWorker(),
+    });
+    expect(result).toEqual({ path: 'i/s.f32', numChannels: 2, numSamples: 3, sampleRate: 32000 });
+    const out = floatsOf(harness.files.get('i/s.f32') as Uint8Array);
+    expect(out.length).toBe(6);
+    frames.flat().forEach((v, i) => {
+      expect(out[i]).toBeCloseTo(v / 32768, 4);
+    });
   });
 
   it('imports an AudioBuffer keeping every channel', async () => {

@@ -2,6 +2,7 @@
 /// @brief Core C API tests.
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <fstream>
 #include <limits>
@@ -190,6 +191,200 @@ sonare::AnalysisResult make_analysis_schema_fixture() {
 }
 
 }  // namespace
+
+namespace {
+
+/// Frame-interleaved float32 WAV with @p channels planes, built in memory.
+std::vector<uint8_t> interleaved_float_wav(const std::vector<float>& interleaved, int channels,
+                                           int sample_rate) {
+  std::vector<uint8_t> out;
+  const auto put = [&out](const void* data, size_t n) {
+    const auto* bytes = static_cast<const uint8_t*>(data);
+    out.insert(out.end(), bytes, bytes + n);
+  };
+  const uint32_t data_size = static_cast<uint32_t>(interleaved.size() * sizeof(float));
+  const uint32_t riff_size = 36 + data_size;
+  const uint32_t fmt_size = 16;
+  const uint16_t format = 3;
+  const uint16_t ch = static_cast<uint16_t>(channels);
+  const uint32_t rate = static_cast<uint32_t>(sample_rate);
+  const uint16_t block = static_cast<uint16_t>(channels * 4);
+  const uint32_t byte_rate = rate * block;
+  const uint16_t bits = 32;
+  put("RIFF", 4);
+  put(&riff_size, 4);
+  put("WAVEfmt ", 8);
+  put(&fmt_size, 4);
+  put(&format, 2);
+  put(&ch, 2);
+  put(&rate, 4);
+  put(&byte_rate, 4);
+  put(&block, 2);
+  put(&bits, 2);
+  put("data", 4);
+  put(&data_size, 4);
+  put(interleaved.data(), data_size);
+  return out;
+}
+
+std::vector<float> channel_test_signal(size_t frames, int channels) {
+  std::vector<float> interleaved(frames * static_cast<size_t>(channels));
+  for (size_t frame = 0; frame < frames; ++frame) {
+    for (int channel = 0; channel < channels; ++channel) {
+      interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)] =
+          0.05f * static_cast<float>(channel + 1) *
+          std::sin(0.01f * static_cast<float>(frame * static_cast<size_t>(channel + 2)));
+    }
+  }
+  return interleaved;
+}
+
+}  // namespace
+
+TEST_CASE("sonare_decode_channels returns every source channel the core decoder reads",
+          "[c_api][audio_io]") {
+  constexpr size_t kFrames = 480;
+  for (const int channels : {1, 2, 6}) {
+    const auto interleaved = channel_test_signal(kFrames, channels);
+    const auto wav = interleaved_float_wav(interleaved, channels, 22050);
+    const auto [core_samples, core_rate, core_channels] =
+        sonare::load_buffer_interleaved(wav.data(), wav.size());
+
+    float* planar = nullptr;
+    size_t frames = 0;
+    int out_channels = 0;
+    int rate = 0;
+    REQUIRE(sonare_decode_channels(wav.data(), wav.size(), &planar, &frames, &out_channels,
+                                   &rate) == SONARE_OK);
+    REQUIRE(planar != nullptr);
+    REQUIRE(out_channels == core_channels);
+    REQUIRE(rate == core_rate);
+    REQUIRE(frames == kFrames);
+    for (int channel = 0; channel < channels; ++channel) {
+      for (size_t frame = 0; frame < frames; ++frame) {
+        REQUIRE(planar[static_cast<size_t>(channel) * frames + frame] ==
+                core_samples[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)]);
+      }
+    }
+    // Folding the decoded planes lands on the samples the mono decoder returns.
+    const auto [mono_samples, mono_rate] = sonare::load_buffer(wav.data(), wav.size());
+    float* folded = nullptr;
+    REQUIRE(sonare_downmix(planar, frames, out_channels, SONARE_CHANNEL_LAYOUT_MONO, &folded) ==
+            SONARE_OK);
+    REQUIRE(mono_samples.size() == frames);
+    for (size_t frame = 0; frame < frames; ++frame) {
+      REQUIRE(folded[frame] == mono_samples[frame]);
+    }
+    sonare_free_floats(folded);
+    sonare_free_floats(planar);
+  }
+}
+
+TEST_CASE("sonare_decode_channels refuses unusable input and clears its outputs",
+          "[c_api][audio_io]") {
+  const auto wav = interleaved_float_wav(channel_test_signal(64, 2), 2, 22050);
+  float* planar = reinterpret_cast<float*>(0x1);
+  size_t frames = 7;
+  int channels = 7;
+  int rate = 7;
+  REQUIRE(sonare_decode_channels(nullptr, wav.size(), &planar, &frames, &channels, &rate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(planar == nullptr);
+  REQUIRE(frames == 0);
+  REQUIRE(channels == 0);
+  REQUIRE(rate == 0);
+  REQUIRE(sonare_decode_channels(wav.data(), 0, &planar, &frames, &channels, &rate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_decode_channels(wav.data(), wav.size(), nullptr, &frames, &channels, &rate) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  const std::vector<uint8_t> garbage(256, 0x5A);
+  REQUIRE(sonare_decode_channels(garbage.data(), garbage.size(), &planar, &frames, &channels,
+                                 &rate) != SONARE_OK);
+  REQUIRE(planar == nullptr);
+
+  auto nan_signal = channel_test_signal(64, 2);
+  nan_signal[5] = std::numeric_limits<float>::quiet_NaN();
+  const auto nan_wav = interleaved_float_wav(nan_signal, 2, 22050);
+  REQUIRE(sonare_decode_channels(nan_wav.data(), nan_wav.size(), &planar, &frames, &channels,
+                                 &rate) == SONARE_ERROR_DECODE_FAILED);
+  REQUIRE(planar == nullptr);
+}
+
+TEST_CASE("sonare_downmix applies the BS.775 coefficients", "[c_api][audio_io]") {
+  using sonare::constants::kInvSqrt2;
+  constexpr size_t kFrames = 32;
+  // L R C LFE Ls Rs, each plane a distinct constant so the matrix is readable.
+  const float plane_values[6] = {0.10f, 0.20f, 0.30f, 0.40f, 0.05f, 0.15f};
+  std::vector<float> surround(6 * kFrames);
+  for (size_t channel = 0; channel < 6; ++channel) {
+    std::fill_n(surround.begin() + static_cast<std::ptrdiff_t>(channel * kFrames), kFrames,
+                plane_values[channel]);
+  }
+
+  float* stereo = nullptr;
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &stereo) ==
+          SONARE_OK);
+  const float left = 0.10f + kInvSqrt2 * 0.30f + kInvSqrt2 * 0.05f;
+  const float right = 0.20f + kInvSqrt2 * 0.30f + kInvSqrt2 * 0.15f;
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    REQUIRE(stereo[frame] == Catch::Approx(left).margin(1e-6));
+    REQUIRE(stereo[kFrames + frame] == Catch::Approx(right).margin(1e-6));
+  }
+  sonare_free_floats(stereo);
+
+  float* mono = nullptr;
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_MONO, &mono) ==
+          SONARE_OK);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    REQUIRE(mono[frame] == Catch::Approx(0.5f * (left + right)).margin(1e-6));
+  }
+  sonare_free_floats(mono);
+
+  // Stereo to mono is the plain average, and 5.1 to 5.1 is a copy.
+  const float pair[4] = {0.5f, 0.5f, -0.25f, 0.75f};
+  REQUIRE(sonare_downmix(pair, 2, 2, SONARE_CHANNEL_LAYOUT_MONO, &mono) == SONARE_OK);
+  REQUIRE(mono[0] == Catch::Approx(0.125f).margin(1e-7));
+  REQUIRE(mono[1] == Catch::Approx(0.625f).margin(1e-7));
+  sonare_free_floats(mono);
+  float* copy = nullptr;
+  REQUIRE(sonare_downmix(surround.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_5_1, &copy) ==
+          SONARE_OK);
+  REQUIRE(std::equal(surround.begin(), surround.end(), copy));
+  sonare_free_floats(copy);
+}
+
+TEST_CASE("sonare_downmix folds an unmodelled channel count to mono by mean", "[c_api][audio_io]") {
+  const float planes[9] = {0.3f, 0.6f, 0.9f, 0.0f, 0.3f, 0.6f, 0.6f, 0.0f, 0.3f};
+  float* mono = nullptr;
+  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_MONO, &mono) == SONARE_OK);
+  REQUIRE(mono[0] == Catch::Approx(0.3f).margin(1e-6));
+  REQUIRE(mono[1] == Catch::Approx(0.3f).margin(1e-6));
+  REQUIRE(mono[2] == Catch::Approx(0.6f).margin(1e-6));
+  sonare_free_floats(mono);
+  REQUIRE(sonare_downmix(planes, 3, 3, SONARE_CHANNEL_LAYOUT_STEREO, &mono) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(mono == nullptr);
+}
+
+TEST_CASE("sonare_downmix refuses an upmix, an unknown layout and malformed arguments",
+          "[c_api][audio_io]") {
+  const std::vector<float> stereo(16, 0.25f);
+  float* out = reinterpret_cast<float*>(0x1);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_5_1, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(out == nullptr);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, 4, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, -1, &out) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 0, 2, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 0, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(nullptr, 8, 2, SONARE_CHANNEL_LAYOUT_MONO, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_downmix(stereo.data(), 8, 2, SONARE_CHANNEL_LAYOUT_MONO, nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+}
 
 #ifndef __EMSCRIPTEN__
 TEST_CASE("sonare_audio_file_channel_count reports source channels", "[c_api][audio_io]") {

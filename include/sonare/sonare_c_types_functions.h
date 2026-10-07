@@ -18,6 +18,41 @@ SonareError sonare_audio_from_buffer(const float* data, size_t length, int sampl
 ///       sonare_free_* buffer.
 SonareError sonare_audio_from_memory(const uint8_t* data, size_t length, SonareAudio** out);
 
+/// @brief Decodes audio bytes once and returns every source channel, without a
+///        downmix.
+/// @details Same format set, size ceiling and decoded-buffer contract as
+///          @ref sonare_audio_from_memory (an empty decode or a non-finite sample
+///          is @c SONARE_ERROR_DECODE_FAILED, a declared rate outside the
+///          supported range is @c SONARE_ERROR_INVALID_FORMAT); only the channel
+///          fold differs. @p out_samples holds @p out_channels planes of
+///          @p out_frames samples each, plane after plane in the source's own
+///          channel order (5.1 = L R C LFE Ls Rs). A NULL @p data or a zero
+///          @p length returns @c SONARE_ERROR_INVALID_PARAMETER. Every output
+///          is written only on @c SONARE_OK; on failure @p out_samples is NULL
+///          and the counts are 0.
+/// @note Free @p out_samples with @ref sonare_free_floats.
+SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** out_samples,
+                                   size_t* out_frames, int* out_channels, int* out_sample_rate);
+
+/// @brief Downmixes planar channels to a narrower layout (ITU-R BS.775).
+/// @details @p channels holds @p channel_count planes of @p frames samples each. The
+///          source layout is the one @p channel_count names (1 mono, 2 stereo, 6 5.1,
+///          8 7.1; plane order as in @ref sonare_decode_channels). Center and
+///          surround enter the front pair at -3 dB, the LFE plane is dropped, and
+///          a stereo/5.1/7.1 source folds to mono through the same matrix the
+///          decoders use. @p target_layout is a @ref SonareChannelLayout value. Supported targets
+///          narrow the bed: 7.1 to 5.1, 5.1 and 7.1 to stereo, stereo/5.1/7.1 to mono, and the
+///          identity copy. A channel count outside 1/2/6/8 folds to
+///          @c SONARE_CHANNEL_LAYOUT_MONO as the unweighted mean of its planes,
+///          which is what the decoders do for such a source, and has no other
+///          target. Anything else (an upmix, an unknown @p target_layout, a zero
+///          @p frames or @p channel_count, a NULL pointer) returns
+///          @c SONARE_ERROR_INVALID_PARAMETER. @p out_samples receives the
+///          target layout's channel count of planes, @p frames samples each.
+/// @note Free @p out_samples with @ref sonare_free_floats.
+SonareError sonare_downmix(const float* channels, size_t frames, int channel_count,
+                           int target_layout, float** out_samples);
+
 #ifndef __EMSCRIPTEN__
 /// @note Release @p out with @ref sonare_audio_free; it is a handle, not a
 ///       sonare_free_* buffer.

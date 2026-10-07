@@ -39,8 +39,12 @@ import type {
 } from './sonare.js';
 
 export { alignTakeToReference } from './align_take.js';
-export type { BrowserAudioDecodeOptions } from './audio.js';
-export { Audio } from './audio.js';
+export type {
+  BrowserAudioDecodeOptions,
+  ChannelLayout,
+  DecodedChannels,
+} from './audio.js';
+export { Audio, decodeChannels, downmix } from './audio.js';
 export type {
   ClipPageStreamerEngine,
   ClipPageStreamerOptions,

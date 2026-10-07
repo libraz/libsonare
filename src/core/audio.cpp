@@ -135,6 +135,27 @@ Audio Audio::from_memory(const uint8_t* data, size_t size) {
   return validated_decoded_audio(std::move(samples), sample_rate);
 }
 
+std::vector<Audio> Audio::from_memory_channels(const uint8_t* data, size_t size) {
+  SONARE_CHECK_MSG(data != nullptr, ErrorCode::InvalidParameter,
+                   "Audio::from_memory_channels: data is null");
+  SONARE_CHECK_MSG(size > 0, ErrorCode::InvalidParameter,
+                   "Audio::from_memory_channels: size is zero");
+  auto [interleaved, sample_rate, channels] = load_buffer_interleaved(data, size);
+  SONARE_CHECK_MSG(channels > 0, ErrorCode::DecodeFailed, "decoded audio reports no channels");
+  const std::size_t stride = static_cast<std::size_t>(channels);
+  const std::size_t frames = interleaved.size() / stride;
+  std::vector<Audio> planes;
+  planes.reserve(stride);
+  for (std::size_t channel = 0; channel < stride; ++channel) {
+    std::vector<float> plane(frames);
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+      plane[frame] = interleaved[frame * stride + channel];
+    }
+    planes.push_back(validated_decoded_audio(std::move(plane), sample_rate));
+  }
+  return planes;
+}
+
 const float* Audio::data() const {
   if (!buffer_) {
     return nullptr;

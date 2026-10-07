@@ -74,6 +74,16 @@ class Audio {
   /// @throws SonareException on decode error (see from_file).
   static Audio from_memory(const uint8_t* data, size_t size);
 
+  /// @brief Decodes a memory buffer once and returns every source channel.
+  /// @details Same format set and decoded-buffer contract as @ref from_memory,
+  ///          with no downmix: element @c i is source channel @c i, in the
+  ///          source's own channel order.
+  /// @param data Pointer to audio data
+  /// @param size Size of data in bytes
+  /// @return One Audio per source channel, all the same length and sample rate.
+  /// @throws SonareException on decode error (see from_file).
+  static std::vector<Audio> from_memory_channels(const uint8_t* data, size_t size);
+
   /// @brief Returns pointer to sample data.
   const float* data() const;
 

@@ -7,6 +7,7 @@
 #include <emscripten/emscripten.h>
 
 #include "bindings/common/common.h"
+#include "c_api/sonare_c_error_mapping.h"
 #include "util/error_classification.h"
 
 // Pulled in for the compile-time SONARE_ABI_VERSION macro only. The macro packs
@@ -416,6 +417,79 @@ val js_audio_from_memory(val bytes) {
   return out;
 }
 
+namespace {
+
+// Raises a C-ABI failure as the core exception the JS facade already classifies.
+[[noreturn]] void throw_c_error(SonareError err, const char* context) {
+  const char* detail = sonare_last_error_message();
+  const char* text = detail != nullptr && detail[0] != '\0' ? detail : sonare_error_message(err);
+  throw SonareException(sonare_c_detail::error_code_from_c_error(err),
+                        std::string(context) + ": " + text);
+}
+
+struct CFloatBuffer {
+  float* data = nullptr;
+  ~CFloatBuffer() { sonare_free_floats(data); }
+};
+
+}  // namespace
+
+val js_decode_channels(val bytes) {
+  std::vector<uint8_t> data = uint8ArrayToVector(bytes);
+  CFloatBuffer planar;
+  size_t frames = 0;
+  int channels = 0;
+  int sample_rate = 0;
+  const SonareError err = sonare_decode_channels(data.data(), data.size(), &planar.data, &frames,
+                                                 &channels, &sample_rate);
+  if (err != SONARE_OK) throw_c_error(err, "decodeChannels");
+  val planes = val::array();
+  for (int channel = 0; channel < channels; ++channel) {
+    planes.call<void>(
+        "push", vectorToFloat32Array(planar.data + static_cast<size_t>(channel) * frames, frames));
+  }
+  val out = val::object();
+  out.set("sampleRate", sample_rate);
+  out.set("channels", planes);
+  return out;
+}
+
+val js_downmix(val channels, int target_layout) {
+  if (channels.isUndefined() || channels.isNull()) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "downmix: channels must be an array of Float32Array");
+  }
+  const size_t count = wasmArrayLikeLength(channels, "channels");
+  if (count == 0) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "downmix: channels must hold at least one channel");
+  }
+  // The C entry takes one planar block, so the planes are packed back to back.
+  std::vector<float> packed;
+  size_t frames = 0;
+  for (size_t index = 0; index < count; ++index) {
+    const std::vector<float> plane = float32ArrayToVector(channels[index]);
+    if (index == 0) {
+      frames = plane.size();
+      packed.reserve(frames * count);
+    } else if (plane.size() != frames) {
+      throw SonareException(ErrorCode::InvalidParameter, "downmix: channel lengths must match");
+    }
+    packed.insert(packed.end(), plane.begin(), plane.end());
+  }
+  CFloatBuffer mixed;
+  const SonareError err =
+      sonare_downmix(packed.data(), frames, static_cast<int>(count), target_layout, &mixed.data);
+  if (err != SONARE_OK) throw_c_error(err, "downmix");
+  const size_t out_channels =
+      static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));
+  val planes = val::array();
+  for (size_t channel = 0; channel < out_channels; ++channel) {
+    planes.call<void>("push", vectorToFloat32Array(mixed.data + channel * frames, frames));
+  }
+  return planes;
+}
+
 // ============================================================================
 // Embind Registrations
 // ============================================================================
@@ -494,6 +568,8 @@ EMSCRIPTEN_BINDINGS(sonare) {
   function("realtimeVoiceChangerPresetConfig", &js_realtime_voice_changer_preset_config);
 #endif
   function("audioFromMemory", &js_audio_from_memory);
+  function("decodeChannels", &js_decode_channels);
+  function("downmix", &js_downmix);
 
   registerQuickAnalysisBindings();
 #if defined(SONARE_WASM_ANALYSIS_ONLY)

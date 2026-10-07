@@ -28,6 +28,29 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(ctypes.c_void_p),
     ]
 
+    # sonare_decode_channels / sonare_downmix
+    # Additive to the audio ABI; optional for the same reason as the channel-count
+    # probe below.
+    if hasattr(lib, "sonare_decode_channels"):
+        lib.sonare_decode_channels.restype = ctypes.c_int32
+        lib.sonare_decode_channels.argtypes = [
+            ctypes.POINTER(ctypes.c_uint8),
+            ctypes.c_size_t,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_size_t),
+            ctypes.POINTER(ctypes.c_int),
+            ctypes.POINTER(ctypes.c_int),
+        ]
+    if hasattr(lib, "sonare_downmix"):
+        lib.sonare_downmix.restype = ctypes.c_int32
+        lib.sonare_downmix.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ]
+
     # sonare_audio_from_file
     lib.sonare_audio_from_file.restype = ctypes.c_int32
     lib.sonare_audio_from_file.argtypes = [

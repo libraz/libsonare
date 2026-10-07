@@ -126,6 +126,15 @@ int audio_channel_count(const std::string& path,
 /// @throws SonareException on unknown format or decode error
 AudioLoadResult load_buffer(const uint8_t* data, size_t size);
 
+/// @brief Loads audio from a memory buffer with its source channels kept.
+/// @details Same format dispatch and size ceiling as @ref load_buffer; what
+///          differs is that nothing is folded to mono.
+/// @param data Pointer to audio data
+/// @param size Size of data in bytes
+/// @return Frame-interleaved normalized samples, sample rate, and source channel count.
+/// @throws SonareException on unknown format or decode error
+InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data, size_t size);
+
 /// @brief Saves audio samples to a WAV file.
 /// @param path Output file path
 /// @param samples Audio samples (mono, normalized to [-1,1])

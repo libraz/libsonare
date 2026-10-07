@@ -10,6 +10,7 @@ from .types import (
     AcousticResult,
     AnalysisResult,
     BpmAnalysisResult,
+    ChannelLayout,
     ChordAnalysisResult,
     ChromaResult,
     ClippingReport,
@@ -32,6 +33,12 @@ from .types import (
     StftResult,
     TimbreResult,
 )
+
+def decode_channels(data: bytes) -> tuple[np.ndarray, int]: ...
+def downmix(
+    channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
+    target_layout: ChannelLayout | int,
+) -> np.ndarray: ...
 
 class Audio:
     @classmethod

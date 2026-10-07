@@ -527,4 +527,31 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
   return result;
 }
 
+bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
+                       ChannelInputs* inputs) {
+  Napi::Array channels = value.As<Napi::Array>();
+  const uint32_t count = channels.Length();
+  inputs->arrays.reserve(count);
+  inputs->ptrs.reserve(count);
+  for (uint32_t index = 0; index < count; ++index) {
+    Napi::Value channel = channels.Get(index);
+    if (!IsFloat32Array(channel)) {
+      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    inputs->arrays.push_back(channel.As<Napi::Float32Array>());
+    const size_t length = inputs->arrays.back().ElementLength();
+    if (index == 0) {
+      inputs->length = length;
+    } else if (length != inputs->length) {
+      Napi::RangeError::New(env, std::string(fn_name) + ": every channel must have the same length")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    inputs->ptrs.push_back(inputs->arrays.back().Data());
+  }
+  return true;
+}
+
 }  // namespace sonare_node

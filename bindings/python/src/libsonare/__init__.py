@@ -308,7 +308,7 @@ from .analyzer import (
     zero_crossing_rate,
     zero_crossings,
 )
-from .audio import Audio
+from .audio import Audio, decode_channels, downmix
 from .engine import ClipPageProvider, FileClipPageProvider, RealtimeEngine
 from .mixing_assistant import (
     MixTrackInput,
@@ -778,6 +778,7 @@ __all__ = [
     "cyclic_tempogram",
     "db_to_amplitude",
     "db_to_power",
+    "decode_channels",
     "decompose",
     "decompose_stems",
     "decompose_stems_linked",
@@ -792,6 +793,7 @@ __all__ = [
     "detect_key_candidates",
     "detect_key",
     "detect_onsets",
+    "downmix",
     "ebur128_loudness_range",
     "engine_abi_version",
     "estimate_meter",

@@ -69,45 +69,6 @@ Napi::Value EffectsCheckCResult(Napi::Env env, SonareError err) {
   return env.Undefined();
 }
 
-// Input planes for a channel-linked call that returns a freshly heap-allocated
-// result rather than writing into caller-owned output planes (unlike the
-// repair family's LinkedPlanes), so only the input side is read here.
-struct ChannelInputs {
-  std::vector<Napi::Float32Array> arrays;
-  std::vector<const float*> ptrs;
-  size_t length = 0;
-};
-
-// Refuses what the C form cannot express: a non-Float32Array element, and a
-// length disagreement, which the single `length` argument has no way to carry.
-// An empty list goes through to the C entry, which owns that rejection.
-bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
-                       ChannelInputs* inputs) {
-  Napi::Array channels = value.As<Napi::Array>();
-  const uint32_t count = channels.Length();
-  inputs->arrays.reserve(count);
-  inputs->ptrs.reserve(count);
-  for (uint32_t index = 0; index < count; ++index) {
-    Napi::Value channel = channels.Get(index);
-    if (!IsFloat32Array(channel)) {
-      Napi::TypeError::New(env, std::string(fn_name) + ": every channel must be a Float32Array")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    inputs->arrays.push_back(channel.As<Napi::Float32Array>());
-    const size_t length = inputs->arrays.back().ElementLength();
-    if (index == 0) {
-      inputs->length = length;
-    } else if (length != inputs->length) {
-      Napi::RangeError::New(env, std::string(fn_name) + ": every channel must have the same length")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    inputs->ptrs.push_back(inputs->arrays.back().Data());
-  }
-  return true;
-}
-
 // Shared by decomposeStems and decomposeStemsLinked. @p init receives the
 // "init" string so its storage outlives the C call that reads config.init.
 SonareDecomposeStemsConfig ReadDecomposeStemsConfig(const Napi::Value& value, std::string* init) {

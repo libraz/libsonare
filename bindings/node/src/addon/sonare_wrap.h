@@ -53,6 +53,8 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value FileChannelCount(const Napi::CallbackInfo& info);
   static Napi::Value FromBuffer(const Napi::CallbackInfo& info);
   static Napi::Value FromMemory(const Napi::CallbackInfo& info);
+  static Napi::Value DecodeChannels(const Napi::CallbackInfo& info);
+  static Napi::Value Downmix(const Napi::CallbackInfo& info);
 
   // Static analysis functions (standalone, exported on module)
   static Napi::Value DetectBpm(const Napi::CallbackInfo& info);

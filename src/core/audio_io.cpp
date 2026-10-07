@@ -470,8 +470,8 @@ InterleavedAudioLoadResult load_buffer_mp3_interleaved(const uint8_t* data, size
 // @p max_bytes is the ceiling the caller is under, with 0 meaning no limit, so
 // the path loader hands its own AudioLoadOptions::max_file_size down rather than
 // meeting a second fixed one it cannot raise.
-[[maybe_unused]] InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data,
-                                                                    size_t size, size_t max_bytes) {
+InterleavedAudioLoadResult load_buffer_interleaved_bounded(const uint8_t* data, size_t size,
+                                                           size_t max_bytes) {
   SONARE_CHECK_MSG(max_bytes == 0 || size <= max_bytes, ErrorCode::InvalidParameter,
                    "Audio buffer too large: " + std::to_string(size) +
                        " bytes (max: " + std::to_string(max_bytes) + ")");
@@ -604,11 +604,15 @@ AudioLoadResult load_buffer_mp3(const uint8_t* data, size_t size) {
   return {std::move(mono), sample_rate};
 }
 
+InterleavedAudioLoadResult load_buffer_interleaved(const uint8_t* data, size_t size) {
+  return load_buffer_interleaved_bounded(data, size, resource::kMaxAudioFileBytes);
+}
+
 #ifndef __EMSCRIPTEN__
 InterleavedAudioLoadResult load_audio_interleaved(const std::string& path,
                                                   const AudioLoadOptions& options) {
   const std::vector<uint8_t> data = read_file(path, options.max_file_size);
-  return load_buffer_interleaved(data.data(), data.size(), options.max_file_size);
+  return load_buffer_interleaved_bounded(data.data(), data.size(), options.max_file_size);
 }
 
 AudioLoadResult load_wav(const std::string& path) {

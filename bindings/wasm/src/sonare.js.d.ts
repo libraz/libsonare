@@ -1829,6 +1829,8 @@ export interface SonareModule {
   vocalEditLastErrorDetail: VocalWasmExports['vocalEditLastErrorDetail'];
 
   audioFromMemory: (bytes: Uint8Array) => WasmAudioFromMemoryResult;
+  decodeChannels: (bytes: Uint8Array) => { sampleRate: number; channels: Float32Array[] };
+  downmix: (channels: Float32Array[], targetLayout: number) => Float32Array[];
 
   // Quick API (high-level)
   detectBpm: (samples: Float32Array, sampleRate: number) => number;

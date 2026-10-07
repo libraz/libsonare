@@ -128,6 +128,22 @@ bool ReadHpssArguments(Napi::Env env, const Napi::CallbackInfo& info, HpssArgume
 /// of it would be a second contract for `ProjectMidiEvent`.
 Napi::Object MidiEventToObject(Napi::Env env, const SonareMidiEventPod& event);
 
+/// @brief Input planes for a call that takes a `Float32Array[]` of channels.
+struct ChannelInputs {
+  std::vector<Napi::Float32Array> arrays;
+  std::vector<const float*> ptrs;
+  size_t length = 0;
+};
+
+/// @brief Reads a `Float32Array[]` into @p inputs, refusing what the C form
+///        cannot express: a non-Float32Array element (TypeError) and a length
+///        disagreement between channels (RangeError), which the single `length`
+///        argument has no way to carry. An empty list goes through to the C
+///        entry, which owns that rejection. Returns false with a JS exception
+///        pending on refusal.
+bool ReadChannelInputs(Napi::Env env, const Napi::Value& value, const char* fn_name,
+                       ChannelInputs* inputs);
+
 bool IsFloat32Array(const Napi::Value& value);
 bool IsUint8Array(const Napi::Value& value);
 bool IsInt32Array(const Napi::Value& value);
