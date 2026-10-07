@@ -15,6 +15,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cctype>
 #include <cmath>
@@ -32,6 +33,7 @@
 #include "mastering/stereo/imager.h"
 #include "rt/processor_base.h"
 #include "support/schema_paths.h"
+#include "util/exception.h"
 #include "util/json.h"
 
 #ifdef SONARE_WITH_FX
@@ -57,6 +59,13 @@ using sonare::mastering::api::insert_param_info_json_at_rate;
 using sonare::mastering::api::insert_param_names;
 using sonare::mastering::api::insert_probe_params;
 using sonare::mastering::api::make_insert;
+using sonare::mastering::api::repair_param_info_json;
+
+json::Array repair_param_info(const std::string& name) {
+  const json::Value parsed = json::parse_strict(repair_param_info_json(name));
+  REQUIRE(parsed.is_array());
+  return parsed.as_array();
+}
 
 json::Array param_info(const std::string& name) {
   const json::Value parsed = json::parse_strict(insert_param_info_json(name));
@@ -1161,3 +1170,152 @@ TEST_CASE("every effects-insert config field has a construction key", "[masterin
         sonare::mastering::api::detail::field_count<PhaserConfigPlusOne>());
 }
 #endif
+
+namespace {
+
+const std::vector<std::string>& repair_stage_ids() {
+  static const std::vector<std::string> ids = {
+      "repair.declick",    "repair.declip",           "repair.decrackle",
+      "repair.dehum",      "repair.denoiseClassical", "repair.dereverbClassical",
+      "repair.trimSilence"};
+  return ids;
+}
+
+// A noise burst long enough for every stage's analysis geometry at the bounds below.
+std::vector<float> repair_probe_signal() {
+  std::vector<float> samples(8192);
+  unsigned state = 12345u;
+  for (float& sample : samples) {
+    state = state * 1664525u + 1013904223u;
+    sample = 0.1f * (static_cast<float>(state >> 8) / 8388608.0f - 1.0f);
+  }
+  return samples;
+}
+
+// Whether the offline named path accepts @p key = @p value on stage @p id.
+bool repair_accepts(const std::string& id, const std::string& key, double value) {
+  static const std::vector<float> samples = repair_probe_signal();
+  try {
+    (void)sonare::mastering::api::apply_named_processor(
+        id, samples.data(), samples.size(), 48000,
+        std::vector<sonare::mastering::api::Param>{{key, value}});
+    return true;
+  } catch (const sonare::SonareException&) {
+    return false;
+  }
+}
+
+}  // namespace
+
+TEST_CASE("every repair stage publishes declared, finite-ranged parameters",
+          "[mastering][catalog]") {
+  // Power-of-two sizes and the hop that follows them are accepted on a set with gaps, which a
+  // bisection cannot bound: they publish no limit, as eq.linearPhase's fftSize does.
+  const std::set<std::string> gapped = {"nFft", "hopLength"};
+  std::vector<std::string> defects;
+  size_t numeric = 0;
+  for (const std::string& id : repair_stage_ids()) {
+    const json::Array params = repair_param_info(id);
+    REQUIRE_FALSE(params.empty());
+    for (const std::string& defect : descriptor_defects(params))
+      defects.push_back(id + " " + defect);
+    for (const json::Value& parameter : params) {
+      const std::string name = field(parameter, "name").as_string();
+      CHECK(field(parameter, "id").is_null());
+      CHECK_FALSE(field(parameter, "rtSafe").as_bool());
+      if (field(parameter, "type").as_string() != "number") continue;
+      ++numeric;
+      if (gapped.count(name) != 0) continue;
+      INFO(id << " " << name);
+      CHECK(field(parameter, "min").is_number());
+      CHECK(field(parameter, "max").is_number());
+    }
+  }
+  CHECK(numeric >= 40);
+  INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
+  CHECK(defects.empty());
+}
+
+TEST_CASE("each repair bound is published and enforced by the stage", "[mastering][catalog]") {
+  struct Bound {
+    const char* id;
+    const char* key;
+    double max;
+  };
+  const std::vector<Bound> bounds = {
+      {"repair.declick", "threshold", 10.0},
+      {"repair.declick", "neighborRatio", 100.0},
+      {"repair.declick", "maxClickSamples", 512.0},
+      {"repair.declick", "lpcOrder", 36.0},
+      {"repair.declick", "residualRatio", 1000.0},
+      {"repair.declip", "lpcOrder", 36.0},
+      {"repair.declip", "iterations", 8.0},
+      {"repair.decrackle", "threshold", 1000.0},
+      {"repair.decrackle", "levels", 24.0},
+      {"repair.dehum", "fundamentalHz", 5000.0},
+      {"repair.dehum", "q", 100.0},
+      {"repair.dehum", "searchRangeHz", 100.0},
+      {"repair.dehum", "frameSize", 16384.0},
+      {"repair.dehum", "pllBandwidth", 1.0},
+      {"repair.denoiseClassical", "reductionDb", 120.0},
+      {"repair.dereverbClassical", "t60Sec", 10.0},
+      {"repair.dereverbClassical", "lateDelayMs", 500.0},
+      {"repair.trimSilence", "threshold", 1.0},
+      {"repair.trimSilence", "paddingSamples", 960000.0},
+      {"repair.trimSilence", "gateLufs", 0.0},
+      {"repair.trimSilence", "windowMs", 10000.0},
+  };
+  for (const Bound& bound : bounds) {
+    INFO(bound.id << " " << bound.key);
+    const json::Array params = repair_param_info(bound.id);
+    const json::Value* parameter = find_param(params, bound.key);
+    REQUIRE(parameter != nullptr);
+    REQUIRE(field(*parameter, "max").is_number());
+    CHECK(field(*parameter, "max").as_number() == Catch::Approx(bound.max));
+    CHECK_FALSE(field(*parameter, "maxExclusive").as_bool());
+    CHECK(repair_accepts(bound.id, bound.key, bound.max));
+    CHECK_FALSE(repair_accepts(bound.id, bound.key, bound.max * 1.01 + 1.0));
+  }
+}
+
+TEST_CASE("a repair sibling bound is one the stage enforces", "[mastering][catalog]") {
+  size_t checked = 0;
+  for (const std::string& id : repair_stage_ids()) {
+    for (const json::Value& parameter : repair_param_info(id)) {
+      const std::string key = field(parameter, "name").as_string();
+      for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
+        const std::string sibling = field(dependency, "key").as_string();
+        const std::string relation = field(dependency, "relation").as_string();
+        const json::Array params = repair_param_info(id);
+        const json::Value* other = find_param(params, sibling);
+        REQUIRE(other != nullptr);
+        REQUIRE(field(*other, "default").is_number());
+        const bool upper = relation == "lt" || relation == "le";
+        const double violating = field(*other, "default").as_number() + (upper ? 1.0 : -1.0);
+        INFO(id << " " << key << " " << relation << " " << sibling);
+        CHECK_FALSE(repair_accepts(id, key, violating));
+        ++checked;
+      }
+    }
+  }
+  CHECK(checked >= 4);
+}
+
+TEST_CASE("the catalog marks which repair stages can run causally", "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  std::set<std::string> causal;
+  std::set<std::string> acausal;
+  for (const json::Value& entry : catalog.as_array()) {
+    REQUIRE(field(entry, "causal").is_bool());
+    const std::string id = field(entry, "id").as_string();
+    (field(entry, "causal").as_bool() ? causal : acausal).insert(id);
+    if (id.rfind("repair.", 0) == 0) CHECK_FALSE(field(entry, "params").as_array().empty());
+  }
+  CHECK(acausal.count("repair.declick") == 1);
+  CHECK(acausal.count("repair.declip") == 1);
+  CHECK(acausal.count("repair.trimSilence") == 1);
+  for (const char* id : {"repair.decrackle", "repair.dehum", "repair.denoiseClassical",
+                         "repair.dereverbClassical", "dynamics.compressor"}) {
+    CHECK(causal.count(id) == 1);
+  }
+}

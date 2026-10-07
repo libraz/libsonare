@@ -77,9 +77,10 @@ void gs_efx_balance(uint8_t value, float* direct, float* effect) noexcept;
 /// pair has the measured left/right ratio. A receiver applies its own pan law.
 float gs_efx_pan_position(uint8_t value) noexcept;
 
-/// BALANCE byte -> the effect's share effect / (direct + effect) of the measured
-/// pair, the fraction a dry/wet control takes.
-float gs_efx_balance_fraction(uint8_t value) noexcept;
+/// BALANCE byte -> the dry/wet position from which the two-ramp mix law
+/// (effects::common::MixLaw::kTwoRamps) gives back the measured direct and
+/// effect gains exactly, level as well as ratio: one ramp is always whole.
+float gs_efx_balance_position(uint8_t value) noexcept;
 
 /// AZIMUTH byte -> one of the 31 measured stereo positions, in degrees.
 int gs_efx_azimuth_deg(uint8_t value) noexcept;

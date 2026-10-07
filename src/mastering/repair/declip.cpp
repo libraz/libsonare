@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -169,11 +170,14 @@ void validate_config(const DeclipConfig& config) {
   if (!(config.clip_threshold > 0.0f) || !(config.clip_threshold <= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "clip_threshold must be in (0, 1]");
   }
-  if (config.lpc_order < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "lpc_order must be non-negative");
+  if (config.lpc_order < 0 || config.lpc_order > kDeclipMaxLpcOrder) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "lpc_order must be in [0, " + std::to_string(kDeclipMaxLpcOrder) + "]");
   }
-  if (config.iterations < 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "iterations must be positive");
+  if (config.iterations < 1 || config.iterations > kDeclipMaxIterations) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "iterations must be in [1, " + std::to_string(kDeclipMaxIterations) + "]");
   }
   if (!(config.lpc_blend >= 0.0f) || !(config.lpc_blend <= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "lpc_blend must be in [0, 1]");

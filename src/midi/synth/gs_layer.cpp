@@ -10,10 +10,12 @@
 #include <tuple>
 #include <utility>
 
+#include "effects/common/mix_law.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/pitch.h"
+#include "midi/sysex_framing.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -352,13 +354,9 @@ GsSysEx parse_gs_sysex(const uint8_t* data, size_t size) noexcept {
 
   // GM System On / GM2 System On is Universal SysEx rather than a Roland frame,
   // so it is matched ahead of the address table: 7E dd 09 01 / 03.
-  const uint8_t* body = data;
-  size_t body_size = size;
-  if (body[0] == 0xF0) {
-    ++body;
-    --body_size;
-  }
-  if (body_size > 0 && body[body_size - 1] == 0xF7) --body_size;
+  const SysExBody framed = sysex_body(data, size);
+  const uint8_t* body = framed.data;
+  const size_t body_size = framed.size;
   const bool body_is_7bit = body_size == 4 && (body[0] & 0x80u) == 0 && (body[1] & 0x80u) == 0 &&
                             (body[2] & 0x80u) == 0 && (body[3] & 0x80u) == 0;
   if (body_is_7bit && body[0] == 0x7E && body[2] == 0x09 && (body[3] == 0x01 || body[3] == 0x03)) {
@@ -895,8 +893,14 @@ void apply_bindings(std::vector<GsEfxStage>& chain, const GsEfx& efx, const GsEf
 
     ParamsJson one;
     write_bound(one, std::string(key).c_str(), row, efx_byte(efx, row.slot));
+    // A balance byte is a two-ramp position, which only that law reads back
+    // as the measured direct and effect gains.
+    if (row.conv_class == kGsEfxClassBalance && row.law.form == kGsEfxFormNone) {
+      drop_key(found->params_json, "mixLaw");
+      one.integer("mixLaw", static_cast<int>(sonare::effects::common::MixLaw::kTwoRamps));
+    }
     const std::string rendered = one.str();
-    // ParamsJson closes itself, so unwrap the single pair it just wrote.
+    // ParamsJson closes itself, so unwrap the pairs it just wrote.
     merge_key(found->params_json, rendered.substr(1, rendered.size() - 2));
   }
 }

@@ -156,6 +156,18 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert by_id["effects.reverb.velvet"]["realtimeCost"] == "high"
     assert by_id["effects.reverb.fdn"]["realtimeCost"] == "moderate"
 
+    # A repair stage publishes the bounds its own validation enforces, and says whether it can
+    # be causal.
+    assert by_id["repair.declick"]["causal"] is False
+    assert by_id["repair.declip"]["causal"] is False
+    for stage in ("decrackle", "dehum", "denoiseClassical", "dereverbClassical"):
+        assert by_id[f"repair.{stage}"]["causal"] is True
+    assert compressor["causal"] is True
+    click_run = next(p for p in by_id["repair.declick"]["params"] if p["name"] == "maxClickSamples")
+    assert (click_run["min"], click_run["max"], click_run["unit"]) == (1, 512, "samples")
+    assert click_run["id"] is None
+    assert click_run["rtSafe"] is False
+
 
 def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
     """The amp-sim rig catalog lists built-in rigs in presetIndex order."""

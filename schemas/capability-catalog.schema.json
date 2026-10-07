@@ -46,6 +46,7 @@
           "realtimeCost",
           "channelPolicy",
           "category",
+          "causal",
           "params",
           "slots"
         ],
@@ -61,6 +62,7 @@
             "enum": ["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
           },
           "category": { "type": "string", "pattern": "^[a-z]+$" },
+          "causal": { "type": "boolean" },
           "params": {
             "type": "array",
             "items": {

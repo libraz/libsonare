@@ -249,76 +249,13 @@ float lufs_for(const std::vector<float>& samples, int sample_rate) {
 //
 // Lives here, in named_processor.cpp's anonymous namespace, rather than in
 // each enum's own header: checked_enum() is this TU's only consumer, the
-// eight enums it validates share no common header of their own, and adding
+// enums it validates share no common header of their own, and adding
 // this mechanism to mastering/repair/*.h or mastering/final/dither.h would
 // pull an unrelated validation concern into headers the C ABI, bindings and
 // tests all include for the enum definitions alone. Promote it if a second
 // consumer needs it.
 template <typename Enum>
 struct EnumDomain;
-
-template <>
-struct EnumDomain<repair::DecrackleMode> {
-  static constexpr int kCount = 2;
-};
-[[maybe_unused]] void assert_enum_domain(repair::DecrackleMode value) {
-  switch (value) {
-    case repair::DecrackleMode::Median:
-    case repair::DecrackleMode::WaveletShrinkage:
-      break;
-  }
-}
-
-template <>
-struct EnumDomain<repair::DehumMode> {
-  static constexpr int kCount = 2;
-};
-[[maybe_unused]] void assert_enum_domain(repair::DehumMode value) {
-  switch (value) {
-    case repair::DehumMode::Subtract:
-    case repair::DehumMode::Notch:
-      break;
-  }
-}
-
-template <>
-struct EnumDomain<repair::DenoiseMode> {
-  static constexpr int kCount = 3;
-};
-[[maybe_unused]] void assert_enum_domain(repair::DenoiseMode value) {
-  switch (value) {
-    case repair::DenoiseMode::LogMmse:
-    case repair::DenoiseMode::MmseStsa:
-    case repair::DenoiseMode::SpectralSubtraction:
-      break;
-  }
-}
-
-template <>
-struct EnumDomain<repair::DenoiseNoiseEstimator> {
-  static constexpr int kCount = 4;
-};
-[[maybe_unused]] void assert_enum_domain(repair::DenoiseNoiseEstimator value) {
-  switch (value) {
-    case repair::DenoiseNoiseEstimator::Quantile:
-    case repair::DenoiseNoiseEstimator::Mcra:
-    case repair::DenoiseNoiseEstimator::Imcra:
-    case repair::DenoiseNoiseEstimator::Spp:
-      break;
-  }
-}
-
-template <>
-struct EnumDomain<repair::TrimSilenceMode> {
-  static constexpr int kCount = 2;
-};
-[[maybe_unused]] void assert_enum_domain(repair::TrimSilenceMode value) {
-  switch (value) {
-    case repair::TrimSilenceMode::Peak:
-    case repair::TrimSilenceMode::LufsGated:
-      break;
-  }
-}
 
 template <>
 struct EnumDomain<final::DitherType> {
@@ -602,96 +539,41 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     multiband::MultibandDynamicEq p(config);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "repair.declick") {
-    repair::DeclickConfig config;
-    config.threshold = f(params, "threshold", config.threshold);
-    config.neighbor_ratio = f(params, "neighborRatio", config.neighbor_ratio);
-    config.max_click_samples = checked_nonnegative_size(
-        i(params, "maxClickSamples", static_cast<int>(config.max_click_samples)),
-        "maxClickSamples");
-    config.lpc_order = i(params, "lpcOrder", config.lpc_order);
-    config.residual_ratio = f(params, "residualRatio", config.residual_ratio);
+    const repair::DeclickConfig config = detail::declick_config(params);
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::declick_stereo(l, r, config); },
         [&](const Audio& audio, int) { return repair::declick(audio, config); });
   } else if (name == "repair.declip") {
-    repair::DeclipConfig config;
-    config.clip_threshold = f(params, "clipThreshold", config.clip_threshold);
-    config.lpc_order = i(params, "lpcOrder", config.lpc_order);
-    config.iterations = i(params, "iterations", config.iterations);
-    config.lpc_blend = f(params, "lpcBlend", config.lpc_blend);
+    const repair::DeclipConfig config = detail::declip_config(params);
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::declip_stereo(l, r, config); },
         [&](const Audio& audio, int) { return repair::declip(audio, config); });
   } else if (name == "repair.decrackle") {
-    repair::DecrackleConfig config;
-    config.threshold = f(params, "threshold", config.threshold);
-    config.mode = checked_enum<repair::DecrackleMode>(i(params, "mode", 0), "decrackle mode");
-    config.levels = i(params, "levels", config.levels);
+    const repair::DecrackleConfig config = detail::decrackle_config(params);
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::decrackle_stereo(l, r, config); },
         [&](const Audio& audio, int) { return repair::decrackle(audio, config); });
   } else if (name == "repair.dehum") {
-    repair::DehumConfig config;
-    config.fundamental_hz = f(params, "fundamentalHz", config.fundamental_hz);
-    config.harmonics = i(params, "harmonics", config.harmonics);
-    config.q = f(params, "q", config.q);
-    config.adaptive = b(params, "adaptive", config.adaptive);
-    config.search_range_hz = f(params, "searchRangeHz", config.search_range_hz);
-    config.adaptation = f(params, "adaptation", config.adaptation);
-    config.frame_size = i(params, "frameSize", config.frame_size);
-    config.pll_bandwidth = f(params, "pllBandwidth", config.pll_bandwidth);
-    config.mode = checked_enum<repair::DehumMode>(i(params, "mode", 0), "dehum mode");
+    const repair::DehumConfig config = detail::dehum_config(params);
     apply_linked_or_per_channel(
         channels, sample_rate,
         [&](const Audio& l, const Audio& r) { return repair::dehum_stereo(l, r, config); },
         [&](const Audio& audio, int) { return repair::dehum(audio, config); });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
-    repair::DenoiseClassicalConfig config;
-    config.mode = checked_enum<repair::DenoiseMode>(i(params, "mode", 0), "denoise mode");
-    config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(params, "noiseEstimator", 0), "denoise noise estimator");
-    config.n_fft = i(params, "nFft", config.n_fft);
-    config.hop_length = i(params, "hopLength", config.hop_length);
-    config.dd_alpha = f(params, "ddAlpha", config.dd_alpha);
-    config.reduction_db = f(params, "reductionDb", config.reduction_db);
-    config.over_subtraction = f(params, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = f(params, "spectralFloor", config.spectral_floor);
-    config.noise_estimation_quantile =
-        f(params, "noiseEstimationQuantile", config.noise_estimation_quantile);
-    config.speech_presence_gain = b(params, "speechPresenceGain", config.speech_presence_gain);
-    config.gain_smoothing = b(params, "gainSmoothing", config.gain_smoothing);
+    const repair::DenoiseClassicalConfig config = detail::denoise_classical_config(params);
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int) {
       return repair::denoise_classical(audio, config);
     });
   } else if (name == "repair.dereverbClassical") {
-    repair::DereverbClassicalConfig config;
-    config.threshold = f(params, "threshold", config.threshold);
-    config.attenuation = f(params, "attenuation", config.attenuation);
-    config.n_fft = i(params, "nFft", config.n_fft);
-    config.hop_length = i(params, "hopLength", config.hop_length);
-    config.t60_sec = f(params, "t60Sec", config.t60_sec);
-    config.late_delay_ms = f(params, "lateDelayMs", config.late_delay_ms);
-    config.over_subtraction = f(params, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = f(params, "spectralFloor", config.spectral_floor);
-    config.wpe_enabled = b(params, "wpeEnabled", config.wpe_enabled);
-    config.wpe_iterations = i(params, "wpeIterations", config.wpe_iterations);
-    config.wpe_taps = i(params, "wpeTaps", config.wpe_taps);
-    config.wpe_strength = f(params, "wpeStrength", config.wpe_strength);
+    const repair::DereverbClassicalConfig config = detail::dereverb_classical_config(params);
     apply_per_channel(channels, sample_rate, [&](const Audio& audio, int) {
       return repair::dereverb_classical(audio, config);
     });
   } else if (name == "repair.trimSilence") {
-    repair::TrimSilenceConfig config;
-    config.threshold = f(params, "threshold", config.threshold);
-    config.padding_samples = checked_nonnegative_size(
-        i(params, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
-    config.mode = checked_enum<repair::TrimSilenceMode>(i(params, "mode", 0), "trim silence mode");
-    config.gate_lufs = f(params, "gateLufs", config.gate_lufs);
-    config.window_ms = f(params, "windowMs", config.window_ms);
-    repair::validate_config(config);
+    const repair::TrimSilenceConfig config = detail::trim_silence_config(params);
     apply_per_channel(channels, sample_rate,
                       [&](const Audio& audio, int) { return repair::trim_silence(audio, config); });
   } else if (name == "final.bitDepth") {
@@ -971,51 +853,19 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
   } else if (name == "repair.trimSilence") {
     // One range cuts both channels, so they stay equal length. The rule that
     // picks it lives in trim_silence_stereo rather than here.
-    repair::TrimSilenceConfig config;
-    config.threshold = f(map, "threshold", config.threshold);
-    config.padding_samples = checked_nonnegative_size(
-        i(map, "paddingSamples", static_cast<int>(config.padding_samples)), "paddingSamples");
-    config.mode = checked_enum<repair::TrimSilenceMode>(i(map, "mode", 0), "trim silence mode");
-    config.gate_lufs = f(map, "gateLufs", config.gate_lufs);
-    config.window_ms = f(map, "windowMs", config.window_ms);
-    repair::validate_config(config);
+    const repair::TrimSilenceConfig config = detail::trim_silence_config(map);
     detail::apply_stereo_repair(result.left, result.right, sample_rate,
                                 [&config](const Audio& left, const Audio& right) {
                                   return repair::trim_silence_stereo(left, right, config);
                                 });
   } else if (name == "repair.denoiseClassical" || name == "repair.denoise") {
-    repair::DenoiseClassicalConfig config;
-    config.mode = checked_enum<repair::DenoiseMode>(i(map, "mode", 0), "denoise mode");
-    config.noise_estimator = checked_enum<repair::DenoiseNoiseEstimator>(
-        i(map, "noiseEstimator", 0), "denoise noise estimator");
-    config.n_fft = i(map, "nFft", config.n_fft);
-    config.hop_length = i(map, "hopLength", config.hop_length);
-    config.dd_alpha = f(map, "ddAlpha", config.dd_alpha);
-    config.reduction_db = f(map, "reductionDb", config.reduction_db);
-    config.over_subtraction = f(map, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = f(map, "spectralFloor", config.spectral_floor);
-    config.noise_estimation_quantile =
-        f(map, "noiseEstimationQuantile", config.noise_estimation_quantile);
-    config.speech_presence_gain = b(map, "speechPresenceGain", config.speech_presence_gain);
-    config.gain_smoothing = b(map, "gainSmoothing", config.gain_smoothing);
+    const repair::DenoiseClassicalConfig config = detail::denoise_classical_config(map);
     detail::apply_stereo_repair(result.left, result.right, sample_rate,
                                 [&config](const Audio& left, const Audio& right) {
                                   return repair::denoise_classical_stereo(left, right, config);
                                 });
   } else if (name == "repair.dereverbClassical") {
-    repair::DereverbClassicalConfig config;
-    config.threshold = f(map, "threshold", config.threshold);
-    config.attenuation = f(map, "attenuation", config.attenuation);
-    config.n_fft = i(map, "nFft", config.n_fft);
-    config.hop_length = i(map, "hopLength", config.hop_length);
-    config.t60_sec = f(map, "t60Sec", config.t60_sec);
-    config.late_delay_ms = f(map, "lateDelayMs", config.late_delay_ms);
-    config.over_subtraction = f(map, "overSubtraction", config.over_subtraction);
-    config.spectral_floor = f(map, "spectralFloor", config.spectral_floor);
-    config.wpe_enabled = b(map, "wpeEnabled", config.wpe_enabled);
-    config.wpe_iterations = i(map, "wpeIterations", config.wpe_iterations);
-    config.wpe_taps = i(map, "wpeTaps", config.wpe_taps);
-    config.wpe_strength = f(map, "wpeStrength", config.wpe_strength);
+    const repair::DereverbClassicalConfig config = detail::dereverb_classical_config(map);
     detail::apply_stereo_repair(result.left, result.right, sample_rate,
                                 [&config](const Audio& left, const Audio& right) {
                                   return repair::dereverb_classical_stereo(left, right, config);

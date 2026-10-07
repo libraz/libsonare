@@ -215,7 +215,7 @@ describe('masteringRepairTrimSilenceStereo', () => {
   it('refuses a negative paddingSamples by name instead of folding it to a default', () => {
     const pair = offsetPair();
     // The field is a size_t, so -1 would arrive as SIZE_MAX -- above the core's
-    // own SIZE_MAX/2 bound, where it reads as an out-of-range padding rather
+    // own padding bound, where it reads as an out-of-range padding rather
     // than as the negative that was written. Either way it must not become 0.
     // Measured: RangeError "paddingSamples must be a finite non-negative
     // integer ...", so the field is named rather than the core's own bound.

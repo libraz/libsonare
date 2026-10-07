@@ -201,6 +201,8 @@ export interface CapabilityCatalogProcessor {
   realtimeCost: 'low' | 'moderate' | 'high' | null;
   channelPolicy: 'multichannel' | 'stereoPairOnly' | 'perChannel' | 'passthrough';
   category: string;
+  /** Whether the processor has a causal configuration; false for declick, declip and trimSilence. */
+  causal: boolean;
   params: CapabilityCatalogParameter[];
   /**
    * The insert's conditional key groups in declaration order, named by each

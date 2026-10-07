@@ -105,6 +105,22 @@ describe('insert param validation (WASM)', () => {
     expect(byId.get('stereo.phaseAlign')?.tailSamples).toBe(0);
     expect(byId.get('effects.reverb.velvet')?.realtimeCost).toBe('high');
     expect(byId.get('effects.reverb.fdn')?.realtimeCost).toBe('moderate');
+    // A repair stage publishes the bounds its own validation enforces, and says whether it can be causal.
+    expect(byId.get('repair.declick')?.causal).toBe(false);
+    expect(byId.get('repair.declip')?.causal).toBe(false);
+    for (const id of [
+      'repair.decrackle',
+      'repair.dehum',
+      'repair.denoiseClassical',
+      'repair.dereverbClassical',
+    ]) {
+      expect(byId.get(id)?.causal).toBe(true);
+    }
+    expect(byId.get('dynamics.compressor')?.causal).toBe(true);
+    const clickRun = byId
+      .get('repair.declick')
+      ?.params.find((param) => param.name === 'maxClickSamples');
+    expect(clickRun).toMatchObject({ min: 1, max: 512, unit: 'samples', id: null, rtSafe: false });
     // realtimeInsertable entries form the always-succeeds scene-insert set.
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
     expect(insertable).toContain('dynamics.compressor');
@@ -128,6 +144,7 @@ describe('insert param validation (WASM)', () => {
       realtimeCost: true,
       channelPolicy: true,
       category: true,
+      causal: true,
       params: true,
       slots: true,
     };

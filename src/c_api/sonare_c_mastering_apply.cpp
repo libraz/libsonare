@@ -382,6 +382,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "processors[].realtimeCost",
       "processors[].channelPolicy",
       "processors[].category",
+      "processors[].causal",
       "processors[].params",
       "processors[].params[].name",
       "processors[].params[].id",

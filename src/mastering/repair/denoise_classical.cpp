@@ -636,11 +636,10 @@ void validate_config(const DenoiseClassicalConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "denoise dd_alpha must be finite and in [0, 1)");
   }
-  // No upper bound: the derived floor is 10^(-reduction_db/20), which already
-  // lands in (0, 1] for every finite non-negative depth.
-  if (!std::isfinite(config.reduction_db) || config.reduction_db < 0.0f) {
+  if (!std::isfinite(config.reduction_db) || config.reduction_db < 0.0f ||
+      config.reduction_db > kDenoiseMaxReductionDb) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise reduction_db must be finite and non-negative");
+                          "denoise reduction_db must be finite and in [0, 120]");
   }
   if (!std::isfinite(config.over_subtraction) || config.over_subtraction < 0.0f ||
       config.over_subtraction > 16.0f) {

@@ -351,7 +351,7 @@ TEST_CASE("Declick detection recovers the corpus click count", "[repair][stereo]
   // the only seed and the count follows it.
   DeclickConfig threshold_only = kCorpusDeclick;
   threshold_only.neighbor_ratio = 4.0f;
-  threshold_only.residual_ratio = 1.0e9f;
+  threshold_only.residual_ratio = kDeclickMaxResidualRatio;
   threshold_only.threshold = 0.8f;
   REQUIRE(detect_clicks(samples.data(), samples.size(), kSampleRate, threshold_only).count == 2);
   threshold_only.threshold = 0.6f;

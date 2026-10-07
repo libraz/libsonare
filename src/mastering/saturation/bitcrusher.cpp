@@ -92,6 +92,8 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   const bool prefilter = pre_gain_ > 0.0;
   const bool postfilter = post_gain_ > 0.0;
   const bool highpass = config_.filter_type == BitCrusherFilterType::kHighpass;
+  const effects::common::MixGains mix =
+      effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));
   const bool noisy = config_.radio_noise_level * config_.noise_detune > 0.0f ||
                      config_.wp_noise_level > 0.0f || config_.disc_noise_level > 0.0f ||
                      config_.hum_level > 0.0f;
@@ -135,7 +137,7 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
           wet = highpass ? wet - low : low;
         }
         if (noisy) wet += noise_[static_cast<size_t>(i)];
-        data[i] = dry * (1.0f - config_.mix) + wet * config_.mix;
+        data[i] = dry * mix.dry + wet * mix.wet;
       }
       discarded |= discard_non_finite_state(c);
     }
@@ -274,6 +276,8 @@ bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {
       update_hold_increment();
       return true;
     }
+    case 20:
+      return effects::common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
@@ -285,7 +289,7 @@ bool BitCrusher::parameter_is_realtime_safe(unsigned int param_id) const noexcep
   // without changing what the processor is made of. quantizer_mode remains a
   // construction choice; unknown ids are rejected by set_parameter before this
   // query is reached.
-  return param_id <= 19;
+  return param_id <= 20;
 }
 
 std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
@@ -298,7 +302,8 @@ std::vector<rt::ParamDescriptor> BitCrusher::parameter_descriptors() const {
           {"preFilterHz", 12},    {"postFilterHz", 13},
           {"humHz", 14},          {"wpNoisePink", 15},
           {"discType", 16},       {"filterType", 17},
-          {"mono", 18},           {"typeLadder", 19}};
+          {"mono", 18},           {"typeLadder", 19},
+          {"mixLaw", 20}};
 }
 
 void BitCrusher::validate_config(const BitCrusherConfig& config) {

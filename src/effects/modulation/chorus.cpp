@@ -3,19 +3,22 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 
 namespace sonare::effects::modulation {
+
+using common::kMaxFeedback;
+using common::kMaxModulationPreDelayMs;
 
 namespace {
 // Minimum delay-buffer length so the buffer is never smaller than a typical
 // chorus range even for tiny configured delays.
 constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms
-// Maximum automatable center delay / modulation depth (each). set_parameter
-// clamps to this so the LFO peak (center + depth) stays within the buffer the
-// prepare() pass sizes for, and a later automation cannot be silently truncated.
-constexpr float kMaxChorusDelayMs = 50.0f;
-constexpr float kMaxFeedback = 0.95f;
+// Maximum automatable modulation depth. The centre delay takes the shared
+// pre-delay ceiling; both clamps keep the LFO peak (center + depth) within the
+// buffer prepare() sizes, so a later automation cannot be silently truncated.
+constexpr float kMaxChorusDepthMs = 50.0f;
 // Corner of the low-pass in the feedback return.
 constexpr float kFeedbackCornerHz = 6000.0f;
 constexpr float kMaxPhaseDeg = 180.0f;
@@ -29,19 +32,19 @@ Chorus::Chorus(ChorusConfig config) : config_(config) {
   // buffer prepare() sizes for. Without this, an out-of-range constructed delay
   // would be silently truncated by the ModDelayLine read clamp instead of
   // clamped consistently with set_parameter.
-  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxChorusDelayMs);
-  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxChorusDelayMs);
+  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxModulationPreDelayMs);
+  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxChorusDepthMs);
   config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
 }
 
 void Chorus::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   // Size the buffer for the maximum AUTOMATABLE modulated delay (center + depth,
-  // each clamped to kMaxChorusDelayMs by set_parameter), not just the initial
-  // config, so later automation up to the clamped range is fully representable
-  // rather than silently truncated by the delay-line read clamp. The 100 ms
-  // floor keeps a sane minimum. (The read clamp still prevents OOB access.)
-  const float max_delay_ms = 2.0f * kMaxChorusDelayMs;
+  // each clamped by set_parameter), not just the initial config, so later
+  // automation up to the clamped range is fully representable rather than
+  // silently truncated by the delay-line read clamp. The 100 ms floor keeps a
+  // sane minimum. (The read clamp still prevents OOB access.)
+  const float max_delay_ms = kMaxModulationPreDelayMs + kMaxChorusDepthMs;
   const float max_delay_seconds = std::max(kMinDelayBufferSeconds, max_delay_ms * 0.001f);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
   for (auto& delay : delays_) {
@@ -73,8 +76,10 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
   // smoothed); zipper-free automation relies on the engine's parameter slot
   // smoother ramping config_ across blocks. A direct RT command bypasses that
   // smoother, so very fast large jumps on a big block may zipper faintly.
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const float wet = mix.wet;
+  const float dry = mix.dry;
   const float fb = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
@@ -132,10 +137,10 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.depth_ms = std::clamp(value, 0.0f, kMaxChorusDelayMs);
+      config_.depth_ms = std::clamp(value, 0.0f, kMaxChorusDepthMs);
       return true;
     case 2:
-      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxChorusDelayMs);
+      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxModulationPreDelayMs);
       return true;
     case 3:
       config_.dry_wet = value;
@@ -178,6 +183,8 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
       return true;
     }
+    case 9:
+      return common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
@@ -185,15 +192,15 @@ bool Chorus::set_parameter_impl(unsigned int param_id, float value) {
 
 bool Chorus::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
-  // delay lines are pre-sized to kMaxChorusDelayMs at prepare(), so no id
+  // delay lines are pre-sized to the clamped range at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 8;
+  return param_id <= 9;
 }
 
 std::vector<rt::ParamDescriptor> Chorus::parameter_descriptors() const {
-  return {{"rateHz", 0},   {"depthMs", 1},       {"centerDelayMs", 2},
-          {"dryWet", 3},   {"preFilterHz", 4},   {"feedback", 5},
-          {"phaseDeg", 6}, {"preFilterMode", 7}, {"interpolation", 8}};
+  return {{"rateHz", 0},        {"depthMs", 1},  {"centerDelayMs", 2}, {"dryWet", 3},
+          {"preFilterHz", 4},   {"feedback", 5}, {"phaseDeg", 6},      {"preFilterMode", 7},
+          {"interpolation", 8}, {"mixLaw", 9}};
 }
 
 void Chorus::reset() {

@@ -105,9 +105,18 @@ void PartFxStage::acquire() noexcept {
   });
 }
 
-void PartFxStage::acquire_control_quiescent() noexcept {
-  pub_->acquire_control_quiescent();
+void PartFxStage::acquire_control_quiescent() noexcept { pub_->acquire_control_quiescent(); }
+
+void PartFxStage::settle_quiescent(const PartFxHost& host) noexcept {
+  acquire_control_quiescent();
+  settle_block(host);
+  // Quiescent, so the bound may lower to the settled graph's own.
   set_quiescent_tail(pub_->current());
+}
+
+void PartFxStage::settle_block(const PartFxHost& host) noexcept {
+  drain_param_updates();
+  if (!host.drives_efx_controls()) apply_controls(host);
 }
 
 void PartFxStage::prepare(double sample_rate) {
@@ -483,6 +492,15 @@ void PartFxStage::build_legacy_plan(Sf2EfxUnitRt& unit, size_t unit_index, const
   unit.legacy_classic_slot_count = 0;
   if (unit.stages.empty()) return;
 
+  const GsEfxRowView& rows = row_view();
+  // Unit 0 alone has EFX CONTROL; resolve it whatever the current source byte,
+  // under either realisation, so a later source write reaches a retained plan.
+  if (unit_index == 0) {
+    for (size_t k = 0; k < unit.legacy_controls.size(); ++k) {
+      unit.legacy_controls[k] = sf2_resolve_efx_control(unit, rows, efx.type, k);
+    }
+  }
+
   if (unit.realization == GsEfxRealization::kClassic) {
     const rt::ProcessorBase* proc = unit.stages.front().proc.get();
     if (proc == nullptr) return;
@@ -493,46 +511,10 @@ void PartFxStage::build_legacy_plan(Sf2EfxUnitRt& unit, size_t unit_index, const
     return;
   }
 
-  const GsEfxRowView& rows = row_view();
   const uint16_t row_type = gs_efx_binding_type(rows, efx.type);
 
   // All on, as a prepared node: the enable plans below carry every selector rule.
   unit.legacy_default_enabled.assign(unit.stages.size(), 1);
-
-  // Unit 0 alone has EFX CONTROL; resolve it whatever the current source byte.
-  if (unit_index == 0) {
-    for (size_t k = 0; k < unit.legacy_controls.size(); ++k) {
-      Sf2EfxLegacyControlPlan& control = unit.legacy_controls[k];
-      const char mark = k == 0 ? '+' : '#';
-      const GsEfxBindingRow* first = nullptr;
-      for (size_t i = 0; i < rows.n_rows; ++i) {
-        const GsEfxBindingRow& row = rows.rows[i];
-        if (row.type != row_type || row.printed_mark != mark) continue;
-        if (first == nullptr) first = &row;
-        if (row.slot != first->slot) continue;
-        if (control.n_dest >= control.dest.size()) break;
-        const Sf2EfxRowTarget target = sf2_resolve_efx_row(unit, row);
-        if (target.status != Sf2EfxRowResolution::kResolved) continue;
-        control.dest[control.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id,
-                                          &row};
-      }
-      if (first == nullptr || control.n_dest == 0) continue;
-      control.slot = first->slot;
-      const int states = gs_efx_printed_states(efx.type, control.slot);
-      if (states > 0) {
-        control.lo = 0;
-        control.hi = static_cast<uint8_t>(states - 1);
-      } else if (first->byte_lo < first->byte_hi) {
-        control.lo = first->byte_lo;
-        control.hi = first->byte_hi;
-        if (first->kind == kGsEfxRowDesigned && first->law.form == kGsEfxFormEnum) {
-          control.states = first->law.n_states;
-        }
-      } else {
-        control.hi = 0x7F;
-      }
-    }
-  }
 
   for (size_t i = 0; i < rows.n_rows; ++i) {
     const GsEfxBindingRow& row = rows.rows[i];
@@ -661,64 +643,21 @@ void PartFxStage::build_controls(PartFxSnapshot& out) const {
   if (part >= 16) return;
   const GsEfx& efx = efx_[0];
   const GsEfxRowView& rows = row_view();
-  const uint16_t type = gs_efx_binding_type(rows, efx.type);
-  const bool classic = unit.realization == GsEfxRealization::kClassic;
   for (size_t k = 0; k < out.controls.size(); ++k) {
     const uint8_t source = efx.control_source[k];
     if (source == 0 || source > kEfxSourceBend) continue;
-    // CONTROL 1 drives the type's `+` slot, CONTROL 2 its `#` slot.
-    const uint8_t mark = k == 0 ? '+' : '#';
+    const Sf2EfxLegacyControlPlan plan = sf2_resolve_efx_control(unit, rows, efx.type, k);
+    if (plan.n_dest == 0) continue;
     Sf2EfxControlRt control;
     control.part = part;
     control.source = source;
     control.depth = efx.control_depth[k];
-    const GsEfxBindingRow* first = nullptr;
-    for (size_t i = 0; i < rows.n_rows; ++i) {
-      const GsEfxBindingRow& row = rows.rows[i];
-      if (row.type != type || row.printed_mark != mark) continue;
-      if (first == nullptr) first = &row;
-      if (row.slot != first->slot) continue;
-      if (classic) {
-        // The classic unit reads the wire byte itself.
-        control.dest[0] = {0, row.slot, nullptr};
-        control.n_dest = 1;
-        break;
-      }
-      if (control.n_dest >= control.dest.size()) break;
-      const std::string_view stage_name = kGsEfxRowStages[row.stage];
-      const std::string_view key = kGsEfxRowKeys[row.key];
-      for (size_t s = 0; s < unit.stages.size(); ++s) {
-        const Sf2EfxStageRt& stage = unit.stages[s];
-        if (stage.proc == nullptr || stage.name != stage_name || stage.ordinal != row.ordinal) {
-          continue;
-        }
-        for (const rt::ParamDescriptor& d : stage.proc->parameter_descriptors()) {
-          // A control that is not realtime-safe cannot be written per block.
-          if (d.key != key || !stage.proc->parameter_is_realtime_safe(d.id)) continue;
-          control.dest[control.n_dest++] = {static_cast<uint8_t>(s), d.id, &row};
-          break;
-        }
-        break;
-      }
-    }
-    if (control.n_dest == 0) continue;
-    control.slot = first->slot;
-    // A printed list of states takes its first bytes, a printed range is the
-    // row's own, and a slot printing neither takes the whole byte.
-    const int states = gs_efx_printed_states(efx.type, control.slot);
-    if (states > 0) {
-      control.lo = 0;
-      control.hi = static_cast<uint8_t>(states - 1);
-    } else if (first->byte_lo < first->byte_hi) {
-      control.lo = first->byte_lo;
-      control.hi = first->byte_hi;
-      if (first->kind == kGsEfxRowDesigned && first->law.form == kGsEfxFormEnum) {
-        control.states = first->law.n_states;
-      }
-    } else {
-      control.lo = 0x00;
-      control.hi = 0x7F;
-    }
+    control.slot = plan.slot;
+    control.lo = plan.lo;
+    control.hi = plan.hi;
+    control.states = plan.states;
+    control.n_dest = plan.n_dest;
+    control.dest = plan.dest;
     control.base_byte = efx.params[control.slot];
     // The unit was built at the base, so that is what its destinations hold.
     control.applied_byte = control.base_byte;

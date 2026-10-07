@@ -60,7 +60,7 @@ Napi::Object EmitTrimReport(Napi::Env env, const SonareTrimReport& report) {
 ///        names as the mono entry above reads onto the C++ config.
 /// @details `paddingSamples` goes through NonNegativeSizeTProperty rather than
 ///   an int reader: the field is a size_t, so -1 arrives as SIZE_MAX and lands
-///   above the core's SIZE_MAX/2 bound, where it reads as an out-of-range
+///   above the core's padding bound, where it reads as an out-of-range
 ///   padding rather than as the negative the caller wrote. Refusing it by name
 ///   here reports what was actually wrong, and the false return is why this
 ///   reports success rather than returning the config.

@@ -14,6 +14,7 @@
 #include <array>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
@@ -43,6 +44,8 @@ struct EnsembleConfig {
   float pan_dev = 0.0f;
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
+  /// How dry_wet maps onto the dry and wet gains.
+  common::MixLaw mix_law = common::MixLaw::kCrossfade;
 };
 
 class Ensemble : public rt::ProcessorBase {
@@ -58,7 +61,7 @@ class Ensemble : public rt::ProcessorBase {
   //   1 = rate_fast_hz   (>= 0)
   //   2 = depth_slow_ms  (clamped to [0, 10])
   //   3 = depth_fast_ms  (clamped to [0, 10])
-  //   4 = center_delay_ms (clamped to [0, 25])
+  //   4 = center_delay_ms (clamped to [0, common::kMaxModulationPreDelayMs])
   //   5 = tone_hz        (clamped to [500, 20000])
   //   6 = dry_wet        (clamped to [0, 1])
   //   7 = rate_hz        (>= 0; 0 = independent slow/fast rates)
@@ -67,6 +70,7 @@ class Ensemble : public rt::ProcessorBase {
   //   9 = depth_dev      (clamped to [-1, 1])
   //  10 = pan_dev        (clamped to [0, 1])
   //  11 = interpolation  (0 linear, 1 Lagrange3)
+  //  12 = mix_law        (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

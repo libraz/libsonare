@@ -857,6 +857,23 @@ describe('RealtimeEngine native binding', () => {
     expect(byId('effects.reverb.velvet')?.realtimeCost).toBe('high');
     expect(byId('effects.reverb.fdn')?.realtimeCost).toBe('moderate');
 
+    // A repair stage publishes the bounds its own validation enforces, and says whether it can be causal.
+    expect(byId('repair.declick')?.causal).toBe(false);
+    expect(byId('repair.declip')?.causal).toBe(false);
+    for (const id of [
+      'repair.decrackle',
+      'repair.dehum',
+      'repair.denoiseClassical',
+      'repair.dereverbClassical',
+    ]) {
+      expect(byId(id)?.causal).toBe(true);
+    }
+    expect(byId('dynamics.compressor')?.causal).toBe(true);
+    const clickRun = byId('repair.declick')?.params.find(
+      (param) => param.name === 'maxClickSamples',
+    );
+    expect(clickRun).toMatchObject({ min: 1, max: 512, unit: 'samples', id: null, rtSafe: false });
+
     // The registry emits `category` and `params` unconditionally, but the TS
     // interface stopped at `channelPolicy`, so reading either was a TS2339 on a
     // value that was already there. Compare the runtime key set against the
@@ -872,6 +889,7 @@ describe('RealtimeEngine native binding', () => {
       realtimeCost: true,
       channelPolicy: true,
       category: true,
+      causal: true,
       params: true,
       slots: true,
     };

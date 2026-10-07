@@ -18,6 +18,7 @@
 #include <cmath>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
@@ -76,12 +77,14 @@ struct ChorusConfig {
   float pre_filter_hz = 0.0f;
   PreFilterMode pre_filter_mode = PreFilterMode::kOff;
   /// Gain of the return from the delay's output, through a one-pole low-pass at
-  /// 6 kHz, to its input. Clamped to +-0.95 in process(); zero leaves the path out.
+  /// 6 kHz, to its input. Clamped to +-common::kMaxFeedback in process(); zero leaves the path out.
   float feedback = 0.0f;
   /// Phase of the right LFO ahead of the left, in degrees, clamped to [0, 180].
   float phase_deg = 90.0f;
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
+  /// How dry_wet maps onto the dry and wet gains.
+  common::MixLaw mix_law = common::MixLaw::kCrossfade;
 };
 
 class Chorus : public rt::ProcessorBase {
@@ -98,10 +101,11 @@ class Chorus : public rt::ProcessorBase {
   //   2 = center_delay_ms
   //   3 = dry_wet
   //   4 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
-  //   5 = feedback (clamped to [-0.95, 0.95] in process(); the sign is carried)
+  //   5 = feedback (clamped to +-common::kMaxFeedback in process(); the sign is carried)
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
   //   7 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   //   8 = interpolation (0 linear, 1 Lagrange3)
+  //   9 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

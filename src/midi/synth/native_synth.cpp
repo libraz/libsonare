@@ -113,7 +113,7 @@ void NativeSynth::raise_tail() noexcept {
 bool NativeSynth::materialize_tail_probe() {
   if (!prepared_ || !config_.realize_efx_inline || !part_fx_.enabled()) return true;
   if (part_fx_.dirty()) realize_part_fx();
-  part_fx_.acquire_control_quiescent();
+  part_fx_.settle_quiescent(*this);
   return true;
 }
 
@@ -313,7 +313,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // bussed part routes from the first block.
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_part_rig(ch);
   part_fx_.publish();
-  part_fx_.acquire_control_quiescent();
+  part_fx_.settle_quiescent(*this);
   part_fx_.clear_dirty();
 }
 
@@ -369,7 +369,7 @@ void NativeSynth::reset() {
   // A fresh snapshot rebuilds the chains, which is their reset.
   if (prepared_) {
     part_fx_.publish();
-    part_fx_.acquire_control_quiescent();
+    part_fx_.settle_quiescent(*this);
   }
   part_fx_.clear_dirty();
   if (prepared_) tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
@@ -1680,8 +1680,7 @@ void NativeSynth::process_impl(float* const* channels,
   if (part_fx_.enabled()) {
     if (config_.realize_efx_inline && part_fx_.dirty()) realize_part_fx();
     part_fx_.acquire();
-    part_fx_.drain_param_updates();
-    part_fx_.apply_controls(*this);
+    part_fx_.settle_block(*this);
   }
   // Automation written since the last block: re-derive the latched state of
   // the voices playing config_.patch (GM voices point elsewhere).

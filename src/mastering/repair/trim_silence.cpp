@@ -66,8 +66,8 @@ TrimRange scan(const float* samples, size_t size, int sample_rate,
 }  // namespace
 
 void validate_config(const TrimSilenceConfig& config) {
-  if (!std::isfinite(config.threshold) || config.threshold < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be finite and non-negative");
+  if (!std::isfinite(config.threshold) || config.threshold < 0.0f || config.threshold > 1.0f) {
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be in [0, 1]");
   }
   if (config.padding_samples > kMaxTrimPaddingSamples) {
     throw SonareException(ErrorCode::InvalidParameter, "padding_samples is out of range");
@@ -75,11 +75,13 @@ void validate_config(const TrimSilenceConfig& config) {
   if (config.mode != TrimSilenceMode::Peak && config.mode != TrimSilenceMode::LufsGated) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid trim silence mode");
   }
-  if (!std::isfinite(config.gate_lufs)) {
-    throw SonareException(ErrorCode::InvalidParameter, "gate_lufs must be finite");
+  if (!std::isfinite(config.gate_lufs) || config.gate_lufs < kMinTrimGateLufs ||
+      config.gate_lufs > kMaxTrimGateLufs) {
+    throw SonareException(ErrorCode::InvalidParameter, "gate_lufs must be in [-144, 0]");
   }
-  if (!std::isfinite(config.window_ms) || config.window_ms <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "window_ms must be finite and positive");
+  if (!std::isfinite(config.window_ms) || config.window_ms <= 0.0f ||
+      config.window_ms > kMaxTrimWindowMs) {
+    throw SonareException(ErrorCode::InvalidParameter, "window_ms must be in (0, 10000]");
   }
 }
 

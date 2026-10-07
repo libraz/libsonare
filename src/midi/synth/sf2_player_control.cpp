@@ -880,41 +880,15 @@ std::shared_ptr<Sf2Player::PreparedEfxNode> Sf2Player::find_or_build_prepared_no
 
   // Freeze the CONTROL fan-out, every marked row for the slot, with the node.
   for (size_t k = 0; k < node->controls.size(); ++k) {
+    const Sf2EfxLegacyControlPlan plan = sf2_resolve_efx_control(node->unit_rt, rows, type, k);
+    if (plan.n_dest == 0) continue;
     Sf2EfxControlRt& control = node->controls[k];
-    const uint8_t mark = k == 0 ? '+' : '#';
-    const GsEfxBindingRow* first = nullptr;
-    for (size_t i = 0; i < rows.n_rows; ++i) {
-      const GsEfxBindingRow& row = rows.rows[i];
-      if (row.type != row_type || row.printed_mark != mark) continue;
-      if (first == nullptr) first = &row;
-      if (row.slot != first->slot) continue;
-      if (realization == GsEfxRealization::kClassic) {
-        control.dest[0] = {0, row.slot, nullptr};
-        control.n_dest = 1;
-        break;
-      }
-      const Sf2EfxRowTarget target = sf2_resolve_efx_row(node->unit_rt, row);
-      if (target.status != Sf2EfxRowResolution::kResolved) continue;
-      if (control.n_dest >= control.dest.size()) continue;
-      control.dest[control.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id,
-                                        &row};
-    }
-    if (first == nullptr || control.n_dest == 0) continue;
-    control.slot = first->slot;
-    const int states = gs_efx_printed_states(type, control.slot);
-    if (states > 0) {
-      control.lo = 0;
-      control.hi = static_cast<uint8_t>(states - 1);
-    } else if (first->byte_lo < first->byte_hi) {
-      control.lo = first->byte_lo;
-      control.hi = first->byte_hi;
-      if (first->kind == kGsEfxRowDesigned && first->law.form == kGsEfxFormEnum) {
-        control.states = first->law.n_states;
-      }
-    } else {
-      control.lo = 0;
-      control.hi = 0x7F;
-    }
+    control.slot = plan.slot;
+    control.lo = plan.lo;
+    control.hi = plan.hi;
+    control.states = plan.states;
+    control.n_dest = plan.n_dest;
+    control.dest = plan.dest;
     control.base_byte = defaults.params[control.slot];
     control.applied_byte = control.base_byte;
   }
@@ -1140,9 +1114,12 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
     }
   };
 
+  // The tail is raised after the destinations move, so the bound a block
+  // publishes covers the configuration it renders.
   if (prepared_active_nodes_[0] != nullptr && prepared_unit_overridden_[0]) {
     PreparedEfxNode& node = *prepared_active_nodes_[0];
     apply_controls(node.controls, node.unit_rt.stages);
+    raise_prepared_fx_tail();
     return;
   }
   if (prepared_unit_overridden_[0]) return;
@@ -1151,6 +1128,7 @@ void Sf2Player::apply_prepared_efx_controls() noexcept {
     return;
   }
   apply_controls(snapshot->units[0].legacy_controls, snapshot->units[0].stages);
+  raise_prepared_fx_tail();
 }
 
 void Sf2Player::apply_prepared_candidate(const PreparedSysEx& token,

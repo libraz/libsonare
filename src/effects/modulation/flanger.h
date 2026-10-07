@@ -26,7 +26,7 @@ struct FlangerConfig {
   float rate_hz = 0.25f;
   float depth_ms = 2.0f;
   float center_delay_ms = 3.0f;
-  /// Gain of the loop around the delay, clamped to +-0.95 in process(). Negative
+  /// Gain of the loop around the delay, clamped to +-common::kMaxFeedback in process(). Negative
   /// values invert the loop's return, which moves the teeth by half a spacing.
   float feedback = 0.3f;
   float dry_wet = 0.5f;
@@ -41,6 +41,8 @@ struct FlangerConfig {
   float step_rate_hz = 0.0f;
   /// How the delay lines read between samples; see DelayInterpolation.
   DelayInterpolation interpolation = DelayInterpolation::kLinear;
+  /// How dry_wet maps onto the dry and wet gains.
+  common::MixLaw mix_law = common::MixLaw::kCrossfade;
 };
 
 class Flanger : public rt::ProcessorBase {
@@ -55,13 +57,14 @@ class Flanger : public rt::ProcessorBase {
   //   0 = rate_hz (clamped to >= 0; updates both LFOs in place)
   //   1 = depth_ms
   //   2 = center_delay_ms
-  //   3 = feedback (clamped to [-0.95, 0.95] in process(); the sign is carried)
+  //   3 = feedback (clamped to +-common::kMaxFeedback in process(); the sign is carried)
   //   4 = dry_wet
   //   5 = pre_filter_hz (re-derives the pole in place; the filter keeps its state)
   //   6 = phase_deg (clamped to [0, 180]; re-phases the right LFO in place)
   //   7 = step_rate_hz (clamped to >= 0; 0 = continuous LFO)
   //   8 = pre_filter_mode (0 off, 1 low-pass, 2 high-pass; the filter keeps its state)
   //   9 = interpolation (0 linear, 1 Lagrange3)
+  //  10 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

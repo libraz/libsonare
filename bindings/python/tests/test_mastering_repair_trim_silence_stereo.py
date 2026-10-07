@@ -296,7 +296,7 @@ class TestMasteringRepairTrimSilenceStereo:
     def test_rejects_a_negative_padding_count_before_it_becomes_a_size_t(self) -> None:
         """``padding_samples`` is a ``size_t``, so -1 would arrive near SIZE_MAX.
 
-        The core does refuse that -- anything above SIZE_MAX/2 is out of range --
+        The core does refuse that -- anything above its padding bound is out of range --
         but as a statement about the wrapped value, not about what was passed.
         This wrapper refuses it by name first, matching the mono entry. The
         second half pins that the native refusal is still reachable, so the

@@ -41,6 +41,13 @@
 #include "mastering/final/dither.h"
 #include "mastering/multiband/crossover.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/repair/declick.h"
+#include "mastering/repair/declip.h"
+#include "mastering/repair/decrackle.h"
+#include "mastering/repair/dehum.h"
+#include "mastering/repair/denoise_classical.h"
+#include "mastering/repair/dereverb_classical.h"
+#include "mastering/repair/trim_silence.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
 #include "mastering/saturation/cab_voicing.h"
@@ -150,6 +157,62 @@ constexpr const char* enum_choice_name(sonare::mastering::final::DitherType valu
       return "tpdf";
     case sonare::mastering::final::DitherType::NoiseShaped:
       return "noiseShaped";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::repair::DecrackleMode value) {
+  switch (value) {
+    case sonare::mastering::repair::DecrackleMode::Median:
+      return "median";
+    case sonare::mastering::repair::DecrackleMode::WaveletShrinkage:
+      return "waveletShrinkage";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::repair::DehumMode value) {
+  switch (value) {
+    case sonare::mastering::repair::DehumMode::Subtract:
+      return "subtract";
+    case sonare::mastering::repair::DehumMode::Notch:
+      return "notch";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::repair::DenoiseMode value) {
+  switch (value) {
+    case sonare::mastering::repair::DenoiseMode::LogMmse:
+      return "logMmse";
+    case sonare::mastering::repair::DenoiseMode::MmseStsa:
+      return "mmseStsa";
+    case sonare::mastering::repair::DenoiseMode::SpectralSubtraction:
+      return "spectralSubtraction";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::repair::DenoiseNoiseEstimator value) {
+  switch (value) {
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Quantile:
+      return "quantile";
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Mcra:
+      return "mcra";
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Imcra:
+      return "imcra";
+    case sonare::mastering::repair::DenoiseNoiseEstimator::Spp:
+      return "spp";
+  }
+  return nullptr;
+}
+
+constexpr const char* enum_choice_name(sonare::mastering::repair::TrimSilenceMode value) {
+  switch (value) {
+    case sonare::mastering::repair::TrimSilenceMode::Peak:
+      return "peak";
+    case sonare::mastering::repair::TrimSilenceMode::LufsGated:
+      return "lufsGated";
   }
   return nullptr;
 }
@@ -946,7 +1009,8 @@ inline double field_as_double(Enum value) {
   X("postFilterHz", post_filter_hz, kHz)           \
   X("filterType", filter_type, kNone)              \
   X("mono", mono, kNone)                           \
-  X("typeLadder", type_ladder, kNone)
+  X("typeLadder", type_ladder, kNone)              \
+  X("mixLaw", mix_law, kNone)
 
 #define SONARE_FIELDS_HARD_CLIPPER(X) \
   X("ceiling", ceiling, kNone)        \
@@ -1092,6 +1156,73 @@ inline double field_as_double(Enum value) {
   X("crestLow", crest_low, kNone)           \
   X("crestHigh", crest_high, kNone)         \
   X("releaseSmoothingMs", release_smoothing_ms, kMs)
+
+// --- Repair ---
+// A repair stage is read from the flat keys the offline named path has always used; the
+// stage's own validate_config states every accepted range, so the descriptors measure it.
+
+#define SONARE_FIELDS_DECLICK(X)                                          \
+  X("threshold", threshold, display_range(kNone, 0.1, 1))                 \
+  X("neighborRatio", neighbor_ratio, display_range(kRatio, 1, 20))        \
+  X("maxClickSamples", max_click_samples, display_range(kSamples, 1, 64)) \
+  X("lpcOrder", lpc_order, kCount)                                        \
+  X("residualRatio", residual_ratio, display_range(kRatio, 1, 50))
+
+#define SONARE_FIELDS_DECLIP(X)                                    \
+  X("clipThreshold", clip_threshold, display_range(kNone, 0.5, 1)) \
+  X("lpcOrder", lpc_order, kCount)                                 \
+  X("iterations", iterations, kCount)                              \
+  X("lpcBlend", lpc_blend, kNone)
+
+#define SONARE_FIELDS_DECRACKLE(X)                         \
+  X("threshold", threshold, display_range(kNone, 0.05, 1)) \
+  X("mode", mode, kNone)                                   \
+  X("levels", levels, kCount)
+
+#define SONARE_FIELDS_DEHUM(X)                                        \
+  X("fundamentalHz", fundamental_hz, display_range(kHzLog, 20, 1000)) \
+  X("harmonics", harmonics, kCount)                                   \
+  X("q", q, display_range(kNone, 1, 100))                             \
+  X("adaptive", adaptive, kNone)                                      \
+  X("searchRangeHz", search_range_hz, display_range(kHz, 0, 20))      \
+  X("adaptation", adaptation, kNone)                                  \
+  X("frameSize", frame_size, display_range(kSamples, 256, 8192))      \
+  X("pllBandwidth", pll_bandwidth, kNone)                             \
+  X("mode", mode, kNone)
+
+#define SONARE_FIELDS_DENOISE_CLASSICAL(X)                       \
+  X("mode", mode, kNone)                                         \
+  X("noiseEstimator", noise_estimator, kNone)                    \
+  X("nFft", n_fft, kSamples)                                     \
+  X("hopLength", hop_length, kSamples)                           \
+  X("ddAlpha", dd_alpha, kNone)                                  \
+  X("reductionDb", reduction_db, kDb)                            \
+  X("overSubtraction", over_subtraction, kRatio)                 \
+  X("spectralFloor", spectral_floor, kNone)                      \
+  X("noiseEstimationQuantile", noise_estimation_quantile, kNone) \
+  X("speechPresenceGain", speech_presence_gain, kNone)           \
+  X("gainSmoothing", gain_smoothing, kNone)
+
+#define SONARE_FIELDS_DEREVERB_CLASSICAL(X)                \
+  X("threshold", threshold, kNone)                         \
+  X("attenuation", attenuation, kNone)                     \
+  X("nFft", n_fft, kSamples)                               \
+  X("hopLength", hop_length, kSamples)                     \
+  X("t60Sec", t60_sec, display_range(kSecondsLog, 0.1, 3)) \
+  X("lateDelayMs", late_delay_ms, kMs)                     \
+  X("overSubtraction", over_subtraction, kRatio)           \
+  X("spectralFloor", spectral_floor, kNone)                \
+  X("wpeEnabled", wpe_enabled, kNone)                      \
+  X("wpeIterations", wpe_iterations, kCount)               \
+  X("wpeTaps", wpe_taps, kCount)                           \
+  X("wpeStrength", wpe_strength, kNone)
+
+#define SONARE_FIELDS_TRIM_SILENCE(X)                                     \
+  X("threshold", threshold, display_range(kNone, 0, 0.1))                 \
+  X("paddingSamples", padding_samples, display_range(kSamples, 0, 48000)) \
+  X("mode", mode, kNone)                                                  \
+  X("gateLufs", gate_lufs, kLufs)                                         \
+  X("windowMs", window_ms, display_range(kMs, 100, 1000))
 
 // --- Chain-only stages ---
 // These do not have a processor_params.h config builder, but their flat-key

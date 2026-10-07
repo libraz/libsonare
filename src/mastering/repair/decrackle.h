@@ -12,6 +12,17 @@ enum class DecrackleMode {
   WaveletShrinkage,
 };
 
+/// @brief Largest accepted @c DecrackleConfig::threshold.
+/// @details A deviation from the local median in the median mode and a cap on the shrinkage
+/// threshold in the wavelet mode; the wavelet mode is exercised at 1000, where the cap no longer
+/// binds.
+inline constexpr float kDecrackleMaxThreshold = 1000.0f;
+
+/// @brief Most Haar decomposition levels a decrackle pass accepts.
+/// @details Levels past log2 of the signal length are skipped, so 24 covers inputs of 16 million
+/// samples; the shipped presets and the corpus use 4.
+inline constexpr int kDecrackleMaxLevels = 24;
+
 struct DecrackleConfig {
   float threshold = 0.4f;
   DecrackleMode mode = DecrackleMode::Median;

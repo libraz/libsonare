@@ -129,6 +129,7 @@ const catalogProcessor = {
   realtimeCost: null,
   channelPolicy: 'perChannel',
   category: 'saturation',
+  causal: true,
   params: [catalogParameter],
   slots: [catalogSlot],
 } satisfies CapabilityCatalogProcessor;

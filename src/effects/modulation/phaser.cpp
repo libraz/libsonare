@@ -3,12 +3,14 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
+using common::kMaxFeedback;
 using sonare::constants::kPi;
 using sonare::constants::kTwoPiD;
 
@@ -20,8 +22,7 @@ namespace {
 constexpr double kLoopHighpassHz = 20.0;
 
 // A cascade of allpass sections passes every frequency at unit gain, so a loop
-// closed around it is stable only while its gain stays under one.
-constexpr float kMaxFeedback = 0.95f;
+// closed around it is stable while its gain stays under one (kMaxFeedback).
 
 double effective_sample_rate(double sample_rate) noexcept {
   return sample_rate > 0.0 && std::isfinite(sample_rate) ? sample_rate : 48000.0;
@@ -137,7 +138,7 @@ bool Phaser::set_parameter_impl(unsigned int param_id, float value) {
       config_.dry_wet = value;
       return true;
     case 4:
-      // process() clamps feedback to [-0.95, 0.95]; store the raw target.
+      // process() clamps feedback to +-kMaxFeedback; store the raw target.
       config_.feedback = value;
       return true;
     case 5:

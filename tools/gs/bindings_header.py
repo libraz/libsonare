@@ -43,6 +43,18 @@ from pathlib import Path
 GENERATED_BY = "tools/gs/bindings_header.py"
 ROOT = Path(__file__).resolve().parents[2]
 CONVERT_HEADER = ROOT / "src" / "midi" / "synth" / "gs_efx_convert.h"
+RANGES_HEADER = ROOT / "src" / "effects" / "common" / "control_ranges.h"
+
+# Controls whose accepted range src/effects/common/control_ranges.h defines once,
+# on the inserts that clamp to it. A row reaching past one would be flattened at
+# the receiver, so the header is refused instead.
+SHARED_LIMIT_STAGES = ("effects.modulation.", "effects.delay.stereo")
+SHARED_LIMITS = {
+    "feedback": "kMaxFeedback",
+    "centerDelayMs": "kMaxModulationPreDelayMs",
+    "preDelayMs": "kMaxModulationPreDelayMs",
+    "preDelay2Ms": "kMaxModulationPreDelayMs",
+}
 
 # Laws no measured table holds, numbered after the classes gs_efx_tables.h
 # numbers. A table names the printed unit the endpoints are spelled in: percent
@@ -172,6 +184,56 @@ def check_convert_constants(order: tuple[str, ...], header: Path) -> None:
     match = re.search(r"\bkGsEfxEnableMaxStages\s*=\s*(\d+)\s*;", text)
     if match is None or int(match.group(1)) != coverage.MAX_ENABLE_STAGES:
         sys.exit(f"{header}: kGsEfxEnableMaxStages is not {coverage.MAX_ENABLE_STAGES}")
+
+
+def shared_limits(header: Path) -> dict[str, float]:
+    """The float constants the shared range header defines, by name."""
+    text = header.read_text(encoding="utf-8")
+    found = {
+        name: float(value)
+        for name, value in re.findall(r"inline constexpr float (k\w+) = (-?[0-9.]+)f;", text)
+    }
+    for name in set(SHARED_LIMITS.values()):
+        if name not in found:
+            sys.exit(f"{header}: {name} is not defined")
+    return found
+
+
+def reach(entry: dict, classes: dict) -> float | None:
+    """The largest magnitude a row's byte can produce, or None where nothing here spells it."""
+    if entry["law"] is not None:
+        return max(abs(float(entry["law"]["lo"])), abs(float(entry["law"]["hi"])))
+    gs_class, _, table = entry["label"].partition(".")
+    if gs_class == "ratio":
+        scale = 100.0 if table == "percent" else 1.0
+        return max(abs(unit) for unit in entry["unit"]) / scale
+    body = classes.get(gs_class, {}).get("tables", {}).get(table, {})
+    if body.get("kind") != "breakpoints":
+        return None
+    values = [
+        abs(float(value))
+        for knot in body["breakpoints"]
+        for name, value in knot.items()
+        if name != "setting" and isinstance(value, (int, float)) and not isinstance(value, bool)
+    ]
+    return max(values) if values else None
+
+
+def check_shared_limits(entries: list[dict], classes: dict, limits: dict[str, float]) -> None:
+    """Refuse a row whose byte reaches past the shared limit of the control it drives."""
+    for e in entries:
+        constant = SHARED_LIMITS.get(e["key"])
+        if constant is None or not e["stage"].startswith(SHARED_LIMIT_STAGES):
+            continue
+        where = f"{e['type']:04X} slot {e['slot']} ({e['label']} -> {e['stage']}.{e['key']})"
+        reached = reach(e, classes)
+        if reached is None:
+            sys.exit(f"{where}: no reach can be read for a control limited by {constant}")
+        if reached > limits[constant] + 1e-6:
+            sys.exit(
+                f"{where}: reaches {reached:g}, past {constant} = {limits[constant]:g} in "
+                f"{RANGES_HEADER.relative_to(ROOT)}; the receiver would flatten the top of it"
+            )
 
 
 def collect_rows(
@@ -425,6 +487,7 @@ def main() -> int:
     row_entries, enables = collect_rows(rows, classes, order, coverage.load_laws(args.laws))
     if not row_entries:
         sys.exit("no binding row carries a stage; the header would bind nothing")
+    check_shared_limits(row_entries, classes, shared_limits(RANGES_HEADER))
     rendered = laid_out(render(row_entries, enables), args.header)
 
     if args.check:

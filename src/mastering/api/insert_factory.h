@@ -106,6 +106,13 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         measured. Returns `[]` for an unknown @p name.
 std::string insert_param_info_json(const std::string& name);
 
+/// @brief Parameter descriptors for a repair stage, in the shape of insert_param_info_json().
+/// @details A repair stage is offline-only, so no parameter carries an automation id or is
+///          realtime-safe. Bounds are measured through the stage's own configuration
+///          validation, exactly as an insert's are measured through its construction.
+/// @return A JSON array string; `[]` when @p name is not a repair stage.
+std::string repair_param_info_json(const std::string& name);
+
 /// @brief insert_param_info_json() with the Nyquist-following ceilings
 ///        (`maxRelativeTo` `"nyquist"`) resolved for @p sample_rate.
 /// @details Such a key's `max` and `maxExclusive` are re-measured by building

@@ -496,7 +496,7 @@ TEST_CASE("queued EFX enable updates survive a unit reset", "[gs-efx-realization
   for (const bool on : {false, true}) {
     const auto update = slot_write(slot, on ? 0x7F : 0x00);
     REQUIRE_FALSE(fx.apply_control_sysex(update.data(), update.size()));
-    fx.drain_param_updates();
+    fx.settle_block(LiveTailHost{});
     CHECK(fx.generation() == generation);
     CHECK(stage.enabled_now == on);
     CHECK(stage.enabled_target == on);
@@ -587,7 +587,7 @@ TEST_CASE("a live EFX tail raises metadata without rebuilding its generation",
   const auto raise = slot_write(2, 0x71);
   REQUIRE_FALSE(fx.apply_control_sysex(raise.data(), raise.size()));
   REQUIRE(fx.generation() == generation);
-  fx.drain_param_updates();
+  fx.settle_block(LiveTailHost{});
   REQUIRE(state->updates > updates_before_raise);
   REQUIRE(fx.tail_samples() == 8192);
 
@@ -598,7 +598,7 @@ TEST_CASE("a live EFX tail raises metadata without rebuilding its generation",
   const auto lower = slot_write(2, 0x40);
   REQUIRE_FALSE(fx.apply_control_sysex(lower.data(), lower.size()));
   REQUIRE(fx.generation() == generation);
-  fx.drain_param_updates();
+  fx.settle_block(LiveTailHost{});
   REQUIRE(fx.tail_samples() == 8192);
 }
 
@@ -623,7 +623,7 @@ TEST_CASE("a live EFX CONTROL tail raises metadata without rebuilding its genera
   state->next_tail = 8192;
   const int updates_before_control = state->updates;
   LiveTailHost host;
-  fx.apply_controls(host);
+  fx.settle_block(host);
   REQUIRE(state->updates > updates_before_control);
   REQUIRE(fx.generation() == generation);
   REQUIRE(fx.tail_samples() == 8192);
@@ -674,7 +674,7 @@ TEST_CASE("a queued EFX update from a stale generation cannot raise the new grap
   fx.acquire();
   state->runtime_update = true;
   const int updates_before_drain = state->updates;
-  fx.drain_param_updates();
+  fx.settle_block(LiveTailHost{});
   REQUIRE(state->updates == updates_before_drain);
   REQUIRE(fx.tail_samples() == 64);
 }

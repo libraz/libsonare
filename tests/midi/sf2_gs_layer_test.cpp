@@ -636,8 +636,8 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
   REQUIRE(gs_efx_insert_chain(dist).front().name == "saturation.distortion");
 
   // Output Level (EFX PARAMETER 20) -> levelDb, the multiplier the unit stores
-  // for the byte read in dB over a -24 dB floor. A byte of 0 is the value zero
-  // and takes the floor rather than reading as an absence: selecting a type
+  // for the byte read in dB. A byte of 0 is the value zero and takes the level
+  // floor rather than reading as an absence: selecting a type
   // loads that type's own twenty bytes, so a zero here is one the file asked for.
   // It is the unit's own output stage that carries it, not the drive block:
   // every type holds the level at this slot, so it is read once for all of them.
@@ -651,7 +651,7 @@ TEST_CASE("gs_efx_insert_params translates the drive per mapped type", "[midi][s
   lvl.type = 0x0110;
   lvl.params[0] = 100;
   lvl.params[19] = 0;
-  REQUIRE(level_of(lvl).find("\"levelDb\":-24") != std::string::npos);
+  REQUIRE(level_of(lvl).find("\"levelDb\":-120") != std::string::npos);
   lvl.params[19] = 64;  // ~half of unity -> a negative levelDb
   REQUIRE(level_of(lvl).find("\"levelDb\":-") != std::string::npos);
   lvl.params[19] = 127;  // unity -> 0 dB

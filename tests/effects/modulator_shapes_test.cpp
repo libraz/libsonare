@@ -172,7 +172,9 @@ TEST_CASE("ring modulator: new keys are realtime and validated", "[modulator-sha
   REQUIRE(rm.set_parameter(4, 0.5f));
   REQUIRE_FALSE(rm.set_parameter(2, 0.5f));
   REQUIRE_FALSE(rm.set_parameter(2, 5.0f));
-  REQUIRE_FALSE(rm.set_parameter(5, 0.0f));
+  REQUIRE(rm.set_parameter(5, 1.0f));  // mix law
+  REQUIRE_FALSE(rm.set_parameter(5, 0.5f));
+  REQUIRE_FALSE(rm.set_parameter(6, 0.0f));
 }
 
 TEST_CASE("phaser: depth sweeps from minHz to minHz * (maxHz / minHz)^depth",

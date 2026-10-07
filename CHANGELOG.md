@@ -18,6 +18,7 @@
 - A track lane whose source channel layout is not stereo is refused with InvalidParameter; mono, 5.1 and 7.1 were accepted but rendered as stereo. A zero-initialised C `SonareEngineTrackLane` reads as mono, so C callers set `SONARE_CHANNEL_LAYOUT_STEREO` (`sonare_engine_set_track_lanes`, `setTrackLanes`, `set_track_lanes`).
 - An offline render, bounce, freeze or pre-roll whose block size is larger than the block size the engine was prepared with is refused with InvalidParameter (`sonare_engine_render_offline`, `sonare_engine_render_offline_ex`, `sonare_engine_bounce_offline`, `sonare_engine_freeze_offline`, `sonare_engine_prime_offline_parameters`, and the Node, WASM and Python methods over them); the render used to run silently at the prepared block size. The WASM worklet facade refuses it with a `RangeError`.
 - An explicit polyphony `nFft` is rescaled with the input rate, so a size that fit at 44.1 kHz can exceed the STFT limit at a much higher rate and is refused.
+- Repair stages refuse a value above a new upper bound, on every surface and in the named-processor path (`InvalidParameter` / `SONARE_ERROR_INVALID_PARAMETER`): declick `threshold` above 10, `neighborRatio` above 100, `maxClickSamples` above 512 (the longest gap the AR fill solves), `lpcOrder` above 36 and `residualRatio` above 1000; declip `lpcOrder` above 36 and `iterations` above 8; decrackle `threshold` above 1000 and `levels` above 24; dehum `fundamentalHz` above 5000, `q` above 100, `searchRangeHz` above 100, `frameSize` above 16384 and `pllBandwidth` above 1; denoise `reductionDb` above 120; dereverb `t60Sec` above 10 and `lateDelayMs` above 500; trim silence `threshold` above 1, `paddingSamples` above 960000 (it was SIZE_MAX/2), `windowMs` above 10000 and `gateLufs` outside [-144, 0]. Each bound is the largest value the stage is exercised at or the limit its own algorithm states.
 
 #### Error classes
 
@@ -48,6 +49,8 @@
 - The insert parameter descriptor states whether each bound is exclusive (`minExclusive`, `maxExclusive`) and marks a ceiling bounded by the processing rate's Nyquist (`maxRelativeTo: "nyquist"`; the effective ceiling is the lower of `max` and the Nyquist).
 - The insert parameter descriptor declares what a control needs beyond the accepted range: `unit` is read from the processor that consumes the key, from a closed set (`dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`, `cm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`, `cents`, `ratio`, `bits`, `count`, `none`) and is no longer derived from the key's spelling, so a key such as `decaySec` or `lengthM` now carries one and `modDepthSamples` reports `samples`; `scale` (`linear` or `log`) names the axis; `uiMin` / `uiMax` give an optional display range inside `[min, max]`; `dependsOn` lists the sibling keys whose live value bounds this one (`min` / `max` stay measured with every sibling at its default). The display ranges of the common dynamics, saturation, stereo and maximizer controls are declared in the library. All of these describe construction-time acceptance; the realtime parameter path clamps. Node and WASM type `unit`, `scale` and the `dependsOn` relation as unions (`MasteringInsertParamUnit`, `MasteringInsertParamScale`, `MasteringInsertParamRelation`), and Python types the descriptor as `MasteringInsertParamInfo` with `MasteringInsertParamDependency` and the same three as `Literal`s.
 - Resolve a Nyquist-bounded ceiling for a given processing rate: `masteringInsertParamInfo(name, sampleRate)` on Node and WASM, `mastering_insert_param_info(name, sample_rate=...)` in Python (C: `sonare_mastering_insert_param_info_at_rate`) report the bound the insert accepts at that rate.
+- Every `repair.*` entry of the capability catalog publishes its parameters through the same measured descriptor as an insert (`unit`, `scale`, `uiMin` / `uiMax`, `dependsOn`, enum `choices`), measured through the stage's own configuration validation; the entries carry no automation `id` and are never `rtSafe`. `denoiseClassical` and `dereverbClassical` declare `hopLength` against `nFft`; `nFft` and `hopLength` publish no `min` / `max`, since only power-of-two sizes are accepted.
+- Every catalog entry carries `causal` (C JSON, Node, WASM and Python types, the schema): false for `repair.declick`, `repair.declip` and `repair.trimSilence`, true for the other repair stages and every insert.
 
 #### Packaging
 
@@ -95,6 +98,9 @@
 - `MelodyAnalyzer` reads `frameLength` as samples at 22050 Hz and rescales it to the input rate; `hopLength` stays in input samples. Unchanged at 22050 Hz.
 - The streaming analyzer reads `nFft` as samples at 44100 Hz; below that rate the window is rescaled to the analysis rate (never shorter than `hopLength`), so a 22050 Hz stream emits more frames with a smaller magnitude spectrum. Unchanged at 44100 Hz and above.
 - Polyphony analysis reads `nFft`, `winLength` and `hopLength` — defaults and explicit values alike — as samples at 44100 Hz and rescales window and hop to the input rate; the note transcriber's polyphonic path follows. Unchanged at 44100 Hz.
+- GS insertion-effect balance follows the measured two-ramp law: the louder side of dry and effect stays at full level, so the default centre byte now plays both at unity where it played each at half (about 6 dB quieter). Output and tap level bytes no longer stop at −24 dB; each byte maps to its own level and 0 is silence.
+- Feedback in the stereo delay, chorus, flanger, phaser and pitch shifter now reaches 98% (was 95%), and chorus and ensemble pre-delay reach 100 ms (were 50 and 25 ms), so GS EFX bytes past those points are no longer clipped.
+- Chorus, flanger, ensemble, ring modulator, Dattorro reverb and bitcrusher accept `mixLaw`, as the stereo delay and pitch shifter already did.
 
 ### Fixes
 
@@ -108,6 +114,7 @@
 - A muted or solo-silenced lane reaches exactly zero gain, and an unmuted lane exactly unity, instead of approaching them without arriving.
 - A refused sidechain binding no longer publishes a provisional binding table to the audio thread before it is rolled back.
 - A track insert automation lane set before `setTrackLanes` reordered the lanes no longer moves to whichever track took its old position when another automation lane is set afterwards (C, Node, Python and WASM).
+- After an instrument switches to the classic GS EFX realisation, retained EFX CONTROL modulation keeps working, and an offline bounce sizes the GS EFX tail from the controller-applied parameters.
 
 ## v1.8.2 (2026-10-06)
 

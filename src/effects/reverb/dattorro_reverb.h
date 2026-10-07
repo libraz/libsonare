@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "rt/processor_base.h"
 #include "util/constants.h"
 
@@ -49,6 +50,8 @@ struct DattorroReverbConfig {
   /// four tank delay lines and the output taps that read them. The maximum line sizes are
   /// prepared up front, so this can be changed by its realtime parameter.
   int character = 0;
+  /// How dry_wet maps onto the dry and wet gains.
+  common::MixLaw mix_law = common::MixLaw::kCrossfade;
 };
 
 class DattorroReverb : public rt::ProcessorBase {
@@ -76,6 +79,7 @@ class DattorroReverb : public rt::ProcessorBase {
   //   5 = damping_hz (0 restores `damping`), 6 = gate_threshold_db,
   //   7 = gate_hold_ms, 8 = gate_type (a whole number naming a type, refused otherwise)
   //   9 = pre_delay_ms, 10 = character (a whole number naming a tank set)
+  //   11 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;

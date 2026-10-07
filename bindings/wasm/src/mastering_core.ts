@@ -469,9 +469,15 @@ export interface MasteringProcessorCatalogEntry {
   /** Grouping for a processor picker; see {@link MasteringProcessorCategory}. */
   category: MasteringProcessorCategory;
   /**
-   * The processor's construction parameters, the same list
-   * {@link masteringInsertParamInfo} returns. Empty for entries that are not
-   * realtime-insertable.
+   * Whether the processor has a configuration whose output at a sample depends only on the
+   * input up to it, plus its reported latency. False for `repair.declick`, `repair.declip` and
+   * `repair.trimSilence`; true for the other repair stages and every insert.
+   */
+  causal: boolean;
+  /**
+   * The processor's construction parameters: for an insert the list
+   * {@link masteringInsertParamInfo} returns, for a `repair.*` stage the bounds its own
+   * configuration validation enforces (no `id`, never `rtSafe`). Empty for any other offline entry.
    */
   params: MasteringInsertParamInfo[];
   /**

@@ -47,6 +47,14 @@ inline constexpr float kDeclipFlatRunLevelWindowDb = 1.0f;
 /// not treated as repairable clipping.
 inline constexpr float kDeclipFlatRunAbsoluteFloor = 0.01f;
 
+/// @brief Largest accepted @c DeclipConfig::lpc_order: the order declip ships with.
+inline constexpr int kDeclipMaxLpcOrder = 36;
+
+/// @brief Most outer reconstruction rounds a declip pass accepts.
+/// @details Each round re-estimates the AR model over the whole input; the estimate has
+/// converged by the second, and the detection sweeps run up to 7.
+inline constexpr int kDeclipMaxIterations = 8;
+
 struct DeclipConfig {
   float clip_threshold = 0.98f;
   int lpc_order = 36;

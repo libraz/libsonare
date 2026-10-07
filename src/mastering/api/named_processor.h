@@ -94,7 +94,7 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 //   {"id":string,"kind":"realtime"|"offline"|"pair",
 //    "realtimeInsertable":bool,"stereoOnly":bool,"latencySamples":int,
 //    "tailSamples":int,"realtimeCost":"low"|"moderate"|"high"|null,
-//    "channelPolicy":string,"category":string,
+//    "channelPolicy":string,"category":string,"causal":bool,
 //    "params":array}
 // where kind takes pair > realtime > offline by precedence; realtimeInsertable
 // and stereoOnly are membership in insert_factory_names() and
@@ -103,10 +103,14 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept;
 // representative rather than exact (both 0 for offline ids); realtimeCost is a
 // coarse algorithmic estimate for choosing between inserts, not a hardware
 // benchmark (null for non-inserts); category is the UI group derived from the id
-// namespace, with match.* reported as `reference`; params carries the
-// realtime-insert parameter descriptors; slots lists the insert's conditional
-// key groups (insert_slot_info_json(), [] for non-inserts); and channelPolicy is channel_policy(id)
-// as a wire string, i.e. how the mixer wraps a >2ch bus insert. The id universe
+// namespace, with match.* reported as `reference`; causal says whether the
+// stage has a configuration whose output at a sample depends only on the input up
+// to it (false for repair.declick, repair.declip and repair.trimSilence, true
+// for the other repair stages and every insert); params carries the
+// parameter descriptors, measured through insert construction for inserts and
+// through the stage's own configuration validation for repair stages; slots lists the insert's
+// conditional key groups (insert_slot_info_json(), [] for non-inserts); and channelPolicy is
+// channel_policy(id) as a wire string, i.e. how the mixer wraps a >2ch bus insert. The id universe
 // is the union of the three lists, so realtime-only and pair ids absent from
 // processor_names() are still reported. Ids are emitted sorted.
 std::string processor_catalog_json();

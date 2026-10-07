@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstddef>
 
+#include "effects/common/control_ranges.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "util/constants.h"
 
@@ -18,8 +19,6 @@ constexpr int kDriveFloorByte = 2;
 constexpr float kDriveUnityByte = 48.0f;
 /// dB per decade of amplitude.
 constexpr float kDbPerDecade = 20.0f;
-/// The output-level floor, dB.
-constexpr float kLevelFloorDb = -24.0f;
 
 /// Keeps a ladder knot that lands on a whole sample from falling one ulp short of it.
 constexpr double kSampleCutGuard = 1e-6;
@@ -76,10 +75,12 @@ double accel_step_hz() noexcept {
   return static_cast<double>(kGsEfxUnitClockHz) / static_cast<double>(kGsEfxAccelShift);
 }
 
-/// An output-level byte as dB over the level floor, from the measured multiplier.
+/// An output-level byte as dB, from the measured multiplier; the silent byte
+/// takes the level floor every level control accepts.
 float level_db(uint8_t value) noexcept {
-  // std::max returns its first argument for the silent byte's -inf.
-  return std::max(kLevelFloorDb, kDbPerDecade * std::log10(gs_efx_level_mul(value)));
+  const float multiplier = gs_efx_level_mul(value);
+  if (multiplier <= 0.0f) return sonare::effects::common::kLevelFloorDb;
+  return kDbPerDecade * std::log10(multiplier);
 }
 
 }  // namespace
@@ -164,12 +165,13 @@ float gs_efx_pan_position(uint8_t value) noexcept {
   return std::clamp(position, -1.0f, 1.0f);
 }
 
-float gs_efx_balance_fraction(uint8_t value) noexcept {
+float gs_efx_balance_position(uint8_t value) noexcept {
   float direct = 0.0f;
   float effect = 0.0f;
   gs_efx_balance(value, &direct, &effect);
-  assert(direct + effect > 0.0f);
-  return effect / (direct + effect);
+  assert(direct == 1.0f || effect == 1.0f);
+  // The two-ramp law holds the direct side whole up to the centre and the effect side past it.
+  return direct == 1.0f ? 0.5f * effect : 1.0f - 0.5f * direct;
 }
 
 int gs_efx_azimuth_deg(uint8_t value) noexcept {
@@ -315,7 +317,7 @@ float gs_efx_binding_value(const GsEfxBindingRow& row, uint8_t byte) noexcept {
     case kGsEfxClassPan:
       return gs_efx_pan_position(byte);
     case kGsEfxClassBalance:
-      return gs_efx_balance_fraction(byte);
+      return gs_efx_balance_position(byte);
     case kGsEfxRowClassRatio: {
       float units = 0.0f;
       const bool whole =

@@ -1886,7 +1886,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
   // Mirrors mastering::repair::kMaxTrimPaddingSamples. kSizeMax is what a -1
   // padding count becomes on the way across a language boundary.
   constexpr size_t kSizeMax = static_cast<size_t>(-1);
-  constexpr size_t kMaxPadding = kSizeMax / 2;
+  constexpr size_t kMaxPadding = 960000;
 
   std::vector<float> left(kLength, 0.0f);
   std::vector<float> right(kLength, 0.0f);
@@ -2006,7 +2006,7 @@ TEST_CASE("sonare_mastering_repair_trim_silence_stereo", "[c_api][mastering]") {
     REQUIRE(out.report.range.last_exclusive == kLength);
   }
 
-  SECTION("accepts a padding count of SIZE_MAX/2 and refuses the next one up") {
+  SECTION("accepts the largest padding count and refuses the next one up") {
     // The bound is CLOSED, so the largest legal count is the endpoint itself --
     // asserting only that a huge value is refused would leave the interval's
     // last step untested and could not tell `>` from `>=`.

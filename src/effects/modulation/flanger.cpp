@@ -3,13 +3,18 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
+
+using common::kMaxFeedback;
+using common::kMaxModulationPreDelayMs;
+
 namespace {
 
-constexpr float kMaxFlangerDelayMs = 100.0f;
+constexpr float kMaxFlangerDepthMs = 100.0f;
 // Minimum delay-buffer length so the buffer is never smaller than a typical
 // flanger range even for tiny configured delays.
 constexpr float kMinDelayBufferMs = 100.0f;  // 100 ms
@@ -20,20 +25,21 @@ constexpr unsigned int kPreFilterModeCount = 3;
 }  // namespace
 
 Flanger::Flanger(FlangerConfig config) : config_(config) {
-  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxFlangerDelayMs);
-  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxFlangerDelayMs);
+  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxModulationPreDelayMs);
+  config_.depth_ms = std::clamp(config_.depth_ms, 0.0f, kMaxFlangerDepthMs);
   config_.phase_deg = std::clamp(config_.phase_deg, 0.0f, kMaxPhaseDeg);
 }
 
 void Flanger::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   // Size the buffer for the maximum AUTOMATABLE modulated delay, not just the
-  // initial config: set_parameter clamps both center and depth to
-  // kMaxFlangerDelayMs, so the LFO peak can reach center+depth = 2x that. Sizing
-  // to the initial config would let later automation exceed the buffer and be
-  // silently truncated by the delay-line read clamp. The floor keeps a sane
-  // minimum. (The read clamp still prevents any out-of-bounds access.)
-  const float buffer_ms = std::max(kMinDelayBufferMs, 2.0f * kMaxFlangerDelayMs);
+  // initial config: set_parameter clamps center and depth, so the LFO peak can
+  // reach the sum of both ceilings. Sizing to the initial config would let later
+  // automation exceed the buffer and be silently truncated by the delay-line
+  // read clamp. The floor keeps a sane minimum. (The read clamp still prevents
+  // any out-of-bounds access.)
+  const float buffer_ms =
+      std::max(kMinDelayBufferMs, kMaxModulationPreDelayMs + kMaxFlangerDepthMs);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(buffer_ms) * 0.001) + 1;
   for (auto& delay : delays_) {
     delay.prepare(max_delay);
@@ -59,9 +65,11 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
   const bool stereo = right != left;
   // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
   // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
-  const float fb = std::clamp(config_.feedback, -0.95f, 0.95f);
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const float wet = mix.wet;
+  const float dry = mix.dry;
+  const float fb = std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback);
   // Derived from the rate in hertz each block, so the hold survives a rate change.
   const double step_per_sample =
       static_cast<double>(std::max(0.0f, config_.step_rate_hz)) / sample_rate_;
@@ -132,13 +140,13 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       lfos_[1].set_rate_hz(config_.rate_hz);
       return true;
     case 1:
-      config_.depth_ms = std::clamp(value, 0.0f, kMaxFlangerDelayMs);
+      config_.depth_ms = std::clamp(value, 0.0f, kMaxFlangerDepthMs);
       return true;
     case 2:
-      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxFlangerDelayMs);
+      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxModulationPreDelayMs);
       return true;
     case 3:
-      // process() clamps feedback to [-0.95, 0.95]; store the raw target.
+      // process() clamps feedback to +-kMaxFeedback; store the raw target.
       config_.feedback = value;
       return true;
     case 4:
@@ -182,6 +190,8 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
       return true;
     }
+    case 10:
+      return common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
@@ -189,15 +199,15 @@ bool Flanger::set_parameter_impl(unsigned int param_id, float value) {
 
 bool Flanger::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
-  // delay lines are pre-sized to kMaxFlangerDelayMs at prepare(), so no id
+  // delay lines are pre-sized to the clamped range at prepare(), so no id
   // allocates or resets audio state. Unknown ids are rejected by set_parameter.
-  return param_id <= 9;
+  return param_id <= 10;
 }
 
 std::vector<rt::ParamDescriptor> Flanger::parameter_descriptors() const {
-  return {{"rateHz", 0},        {"depthMs", 1},      {"centerDelayMs", 2}, {"feedback", 3},
-          {"dryWet", 4},        {"preFilterHz", 5},  {"phaseDeg", 6},      {"stepRateHz", 7},
-          {"preFilterMode", 8}, {"interpolation", 9}};
+  return {{"rateHz", 0},        {"depthMs", 1},       {"centerDelayMs", 2}, {"feedback", 3},
+          {"dryWet", 4},        {"preFilterHz", 5},   {"phaseDeg", 6},      {"stepRateHz", 7},
+          {"preFilterMode", 8}, {"interpolation", 9}, {"mixLaw", 10}};
 }
 
 void Flanger::reset() {

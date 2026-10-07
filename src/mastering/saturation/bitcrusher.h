@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "mastering/final/dither.h"
 #include "rt/processor_base.h"
 
@@ -102,6 +103,8 @@ struct BitCrusherConfig {
   /// 0 leaves the hold cadence to hold_hz / downsample_factor; 1-9 selects the
   /// hold rate kTypeLadderHoldHz[type_ladder - 1] in their place.
   int type_ladder = 0;
+  /// How mix maps onto the dry and wet gains.
+  effects::common::MixLaw mix_law = effects::common::MixLaw::kCrossfade;
 };
 
 class BitCrusher : public rt::ProcessorBase {
@@ -122,7 +125,7 @@ class BitCrusher : public rt::ProcessorBase {
   //   8-11 = noise_lpf_hz / wp / disc / hum (refused when negative or non-finite)
   //   12 = pre_filter_hz, 13 = post_filter_hz
   //   14 = hum_hz, 15 = wp_noise_pink, 16 = disc_type, 17 = filter_type, 18 = mono,
-  //   19 = type_ladder
+  //   19 = type_ladder, 20 = mix_law (a whole number naming a law, refused otherwise)
   // downsample_factor changes the hold cadence in samples, dither_type is an
   // enum and quantizer_mode selects whether the quantizer is in the path at all,
   // so none of the three is exposed. type_ladder is exposed: every ladder rate is
@@ -133,7 +136,7 @@ class BitCrusher : public rt::ProcessorBase {
   // 4=wpNoiseLevel, 5=discNoiseLevel, 6=humLevel, 7=noiseDetune, 8=noiseLpfHz,
   // 9=wpNoiseLpfHz, 10=discNoiseLpfHz, 11=humLpfHz, 12=preFilterHz,
   // 13=postFilterHz, 14=humHz, 15=wpNoisePink, 16=discType, 17=filterType, 18=mono,
-  // 19=typeLadder
+  // 19=typeLadder, 20=mixLaw
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
  private:

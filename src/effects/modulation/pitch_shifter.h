@@ -30,15 +30,16 @@ struct PitchShifterConfig {
   float pan = 0.0f;
   float semitones2 = 0.0f;  ///< voice 2 shift, clamped to [-24, 24].
   float cents2 = 0.0f;      ///< voice 2 fine offset, in [-100, 100].
-  float level2 = 0.0f;      ///< voice 2 linear gain in [0, 1]; 0 switches the voice off.
-  float pan2 = 0.0f;        ///< voice 2 balance, as `pan`.
+  float level2 = 0.0f;  ///< voice 2 gain in [0, 1]; 0 switches it off. Under the two-ramp mix law,
+                        ///< the voices' balance.
+  float pan2 = 0.0f;    ///< voice 2 balance, as `pan`.
   /// Delay of each voice's read-out ahead of the shifter, in milliseconds. The
   /// delay line is prepared for the larger of the configured value and the GS
   /// EFX ceiling, so a live change clamps to that instead of reallocating;
   /// reported latency does not include them.
   float pre_delay_ms = 0.0f;
   float pre_delay2_ms = 0.0f;
-  /// Fraction of the shifted sum written back into the delay line, in [-0.95, 0.95].
+  /// Fraction of the shifted sum written back into the delay line, within +-common::kMaxFeedback.
   float feedback = 0.0f;
   common::MixLaw mix_law = common::MixLaw::kCrossfade;
   /// How the taps read between samples; see DelayInterpolation. Lagrange3 reads

@@ -40,6 +40,23 @@ struct DehumConfig {
 /// hum carries energy worth notching.
 inline constexpr int kDehumMaxHarmonics = 16;
 
+/// @brief Largest accepted @c DehumConfig::fundamental_hz.
+/// @details Detection runs at fundamentals up to 5 kHz; mains hum sits at 50 or 60 Hz.
+inline constexpr float kDehumMaxFundamentalHz = 5000.0f;
+
+/// @brief Largest accepted @c DehumConfig::q; the corpus runs use at most 48.
+inline constexpr float kDehumMaxQ = 100.0f;
+
+/// @brief Largest accepted @c DehumConfig::search_range_hz; the adaptive runs use at most 35.
+inline constexpr float kDehumMaxSearchRangeHz = 100.0f;
+
+/// @brief Largest accepted @c DehumConfig::frame_size, in samples (8 times the default).
+/// @details The frame is both the adaptive analysis block and its look-ahead.
+inline constexpr int kDehumMaxFrameSize = 16384;
+
+/// @brief Largest accepted @c DehumConfig::pll_bandwidth, a fraction of the tracked frequency.
+inline constexpr float kDehumMaxPllBandwidth = 1.0f;
+
 /// Validates every public DehumConfig field. The mono, stereo and detection
 /// entrypoints share this oracle so range handling cannot drift between them.
 void validate_config(const DehumConfig& config);

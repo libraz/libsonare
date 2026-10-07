@@ -224,14 +224,16 @@ std::vector<float> wavelet_shrink_spun(const std::vector<float>& samples,
 }  // namespace detail
 
 void validate_config(const DecrackleConfig& config) {
-  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be finite and positive");
+  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f) ||
+      config.threshold > kDecrackleMaxThreshold) {
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be in (0, 1000]");
   }
   if (config.mode != DecrackleMode::Median && config.mode != DecrackleMode::WaveletShrinkage) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid decrackle mode");
   }
-  if (config.levels < 1) {
-    throw SonareException(ErrorCode::InvalidParameter, "levels must be positive");
+  if (config.levels < 1 || config.levels > kDecrackleMaxLevels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "levels must be in [1, " + std::to_string(kDecrackleMaxLevels) + "]");
   }
 }
 

@@ -514,30 +514,36 @@ void fill_report(DehumReport* report, const PassTrace& trace, const float* sampl
 }  // namespace
 
 void validate_config(const DehumConfig& config) {
-  if (!std::isfinite(config.fundamental_hz) || !(config.fundamental_hz > 0.0f)) {
+  if (!std::isfinite(config.fundamental_hz) || !(config.fundamental_hz > 0.0f) ||
+      config.fundamental_hz > kDehumMaxFundamentalHz) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "fundamental_hz must be finite and positive");
+                          "fundamental_hz must be in (0, " +
+                              std::to_string(static_cast<int>(kDehumMaxFundamentalHz)) + "]");
   }
   if (config.harmonics < 1 || config.harmonics > kDehumMaxHarmonics) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "harmonics must be in [1, " + std::to_string(kDehumMaxHarmonics) + "]");
   }
-  if (!std::isfinite(config.q) || !(config.q > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "q must be finite and positive");
-  }
-  if (!std::isfinite(config.search_range_hz) || config.search_range_hz < 0.0f) {
+  if (!std::isfinite(config.q) || !(config.q > 0.0f) || config.q > kDehumMaxQ) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "search_range_hz must be finite and non-negative");
+                          "q must be in (0, " + std::to_string(static_cast<int>(kDehumMaxQ)) + "]");
+  }
+  if (!std::isfinite(config.search_range_hz) || config.search_range_hz < 0.0f ||
+      config.search_range_hz > kDehumMaxSearchRangeHz) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "search_range_hz must be in [0, " +
+                              std::to_string(static_cast<int>(kDehumMaxSearchRangeHz)) + "]");
   }
   if (!(config.adaptation >= 0.0f) || !(config.adaptation <= 1.0f)) {
     throw SonareException(ErrorCode::InvalidParameter, "adaptation must be in [0, 1]");
   }
-  if (config.frame_size < 16) {
-    throw SonareException(ErrorCode::InvalidParameter, "frame_size must be at least 16");
-  }
-  if (!std::isfinite(config.pll_bandwidth) || config.pll_bandwidth < 0.0f) {
+  if (config.frame_size < 16 || config.frame_size > kDehumMaxFrameSize) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "pll_bandwidth must be finite and non-negative");
+                          "frame_size must be in [16, " + std::to_string(kDehumMaxFrameSize) + "]");
+  }
+  if (!std::isfinite(config.pll_bandwidth) || config.pll_bandwidth < 0.0f ||
+      config.pll_bandwidth > kDehumMaxPllBandwidth) {
+    throw SonareException(ErrorCode::InvalidParameter, "pll_bandwidth must be in [0, 1]");
   }
   if (config.mode != DehumMode::Subtract && config.mode != DehumMode::Notch) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid dehum mode");

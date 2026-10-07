@@ -323,8 +323,10 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
                            : std::clamp(config_.damping, 0.0f, 1.0f) * 0.4f;
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const float wet = mix.wet;
+  const float dry = mix.dry;
 
   const bool gate_on = config_.gate_threshold_db > kDattorroGateOffDb;
   const float gate_threshold = gate_on ? std::pow(10.0f, config_.gate_threshold_db / 20.0f) : 0.0f;
@@ -567,6 +569,8 @@ bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
       config_.character = static_cast<int>(value);
       update_character_geometry();
       return true;
+    case 11:
+      return common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
@@ -580,7 +584,7 @@ bool DattorroReverb::parameter_is_realtime_safe(unsigned int param_id) const noe
 std::vector<rt::ParamDescriptor> DattorroReverb::parameter_descriptors() const {
   return {{"decay", 0},           {"damping", 1},    {"dryWet", 2},          {"modRateHz", 3},
           {"modDepthSamples", 4}, {"dampingHz", 5},  {"gateThresholdDb", 6}, {"gateHoldMs", 7},
-          {"gateType", 8},        {"preDelayMs", 9}, {"character", 10}};
+          {"gateType", 8},        {"preDelayMs", 9}, {"character", 10},      {"mixLaw", 11}};
 }
 
 void DattorroReverb::reset() {

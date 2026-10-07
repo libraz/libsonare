@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -144,7 +145,7 @@ constexpr int kDeclickArIterations = 2;
 /// cap. The solver's dense matrices are sized from the gap, so anything past this
 /// takes the linear fill and per-run compute stays bounded by the cap rather than
 /// by the input.
-constexpr size_t kDeclickMaxArGapSamples = 512;
+constexpr size_t kDeclickMaxArGapSamples = kDeclickMaxClickSamples;
 
 /// @brief Longest one-sided context window handed to the AR solver.
 /// @details Bounds the context even when @c DeclickConfig::lpc_order is large.
@@ -229,22 +230,30 @@ DeclickReport to_report(const ChannelAnalysis& analysis, const std::vector<Click
 }  // namespace
 
 void validate_config(const DeclickConfig& config) {
-  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "threshold must be finite and positive");
+  if (!std::isfinite(config.threshold) || !(config.threshold > 0.0f) ||
+      config.threshold > kDeclickMaxThreshold) {
+    throw SonareException(ErrorCode::InvalidParameter, "threshold must be in (0, 10]");
   }
-  if (!std::isfinite(config.neighbor_ratio) || !(config.neighbor_ratio > 0.0f)) {
+  if (!std::isfinite(config.neighbor_ratio) || !(config.neighbor_ratio > 0.0f) ||
+      config.neighbor_ratio > kDeclickMaxNeighborRatio) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "neighbor_ratio must be finite and positive");
+                          "neighbor_ratio must be in (0, " +
+                              std::to_string(static_cast<int>(kDeclickMaxNeighborRatio)) + "]");
   }
-  if (config.max_click_samples == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_click_samples must be positive");
+  if (config.max_click_samples == 0 || config.max_click_samples > kDeclickMaxClickSamples) {
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "max_click_samples must be in [1, " + std::to_string(kDeclickMaxClickSamples) + "]");
   }
-  if (config.lpc_order < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "lpc_order must be non-negative");
-  }
-  if (!std::isfinite(config.residual_ratio) || !(config.residual_ratio > 0.0f)) {
+  if (config.lpc_order < 0 || config.lpc_order > kDeclickMaxLpcOrder) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "residual_ratio must be finite and positive");
+                          "lpc_order must be in [0, " + std::to_string(kDeclickMaxLpcOrder) + "]");
+  }
+  if (!std::isfinite(config.residual_ratio) || !(config.residual_ratio > 0.0f) ||
+      config.residual_ratio > kDeclickMaxResidualRatio) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "residual_ratio must be in (0, " +
+                              std::to_string(static_cast<int>(kDeclickMaxResidualRatio)) + "]");
   }
 }
 

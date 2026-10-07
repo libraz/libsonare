@@ -12,6 +12,8 @@
 #include <cmath>
 #include <cstdint>
 
+#include "effects/common/control_ranges.h"
+#include "effects/common/mix_law.h"
 #include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/gs_efx_tables.h"
 #include "util/constants.h"
@@ -192,9 +194,11 @@ TEST_CASE("binding_value reads every measured class exactly as its own function 
 
     CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassGain, 0), b) ==
           gs_efx_gain_db(b));
-    // Level is a gain in dB over a -24 dB floor, from the measured multiplier.
-    CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), b) ==
-          Approx(std::max(-24.0f, 20.0f * std::log10(gs_efx_level_mul(b)))));
+    // Level is the measured multiplier in dB, whole down to the smallest nonzero entry.
+    if (gs_efx_level_mul(b) > 0.0f) {
+      CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), b) ==
+            Approx(20.0f * std::log10(gs_efx_level_mul(b))));
+    }
     CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassWidth, 0), b) ==
           gs_efx_width_q(b));
     CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassPostGain, 0), b) ==
@@ -208,8 +212,15 @@ TEST_CASE("binding_value reads every measured class exactly as its own function 
     CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxRowClassDrive, 0), b) ==
           synth::gs_efx_drive_db(b));
   }
-  // The silent level byte is -inf dB before the floor, which the floor holds.
-  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), 0) >= -24.0f);
+  // The silent level byte is -inf dB, and lands on the floor every level control accepts.
+  REQUIRE(gs_efx_level_mul(0) == 0.0f);
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), 0) ==
+        sonare::effects::common::kLevelFloorDb);
+  // The low nonzero entries keep their own levels rather than sharing a floor.
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), 4) ==
+        Approx(20.0f * std::log10(3.0f / 127.0f)));
+  CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassLevel, 0), 8) ==
+        Approx(20.0f * std::log10(6.0f / 127.0f)));
 }
 
 TEST_CASE("binding_value picks the acceleration quantity from the row's out", "[gs-efx-designed]") {
@@ -361,7 +372,7 @@ TEST_CASE("binding_value reads a pan byte as the position of its measured pair",
   });
 }
 
-TEST_CASE("binding_value reads a balance byte as the effect's share", "[gs-efx-designed]") {
+TEST_CASE("binding_value reads a balance byte as a two-ramp position", "[gs-efx-designed]") {
   // All direct at 0, all effect at 127: the two ramps meet at full and each
   // closes at its own end.
   CHECK(synth::gs_efx_binding_value(class_row(synth::kGsEfxClassBalance, 0), 0) == 0.0f);
@@ -373,7 +384,11 @@ TEST_CASE("binding_value reads a balance byte as the effect's share", "[gs-efx-d
     synth::gs_efx_balance(b, &direct, &effect);
     const float v = synth::gs_efx_binding_value(class_row(synth::kGsEfxClassBalance, 0), b);
     INFO("balance byte " << int(b));
-    CHECK(v == Approx(effect / (direct + effect)));
+    // The two-ramp law gives both measured gains back from the one position.
+    const auto gains =
+        sonare::effects::common::mix_gains(sonare::effects::common::MixLaw::kTwoRamps, v);
+    CHECK(gains.dry == direct);
+    CHECK(gains.wet == effect);
     CHECK(v >= prev);
     prev = v;
   });

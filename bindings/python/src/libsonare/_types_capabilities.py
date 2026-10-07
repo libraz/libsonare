@@ -212,6 +212,7 @@ class MasteringProcessorCatalogEntry(TypedDict):
     realtimeCost: Literal["low", "moderate", "high"] | None
     channelPolicy: MasteringChannelPolicy
     category: MasteringProcessorCategory
+    causal: bool
     params: list[MasteringInsertParamInfo]
     slots: list[MasteringInsertSlot]
 

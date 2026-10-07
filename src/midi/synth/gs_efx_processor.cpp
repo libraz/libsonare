@@ -79,6 +79,52 @@ Sf2EfxRowTarget sf2_resolve_efx_row(const Sf2EfxUnitRt& unit, const GsEfxBinding
   return target;
 }
 
+Sf2EfxLegacyControlPlan sf2_resolve_efx_control(const Sf2EfxUnitRt& unit, const GsEfxRowView& rows,
+                                                uint16_t type, size_t control) {
+  Sf2EfxLegacyControlPlan plan;
+  const uint16_t row_type = gs_efx_binding_type(rows, type);
+  const uint8_t mark = control == 0 ? '+' : '#';
+  const bool classic = unit.realization == GsEfxRealization::kClassic;
+  const GsEfxBindingRow* first = nullptr;
+  for (size_t i = 0; i < rows.n_rows; ++i) {
+    const GsEfxBindingRow& row = rows.rows[i];
+    if (row.type != row_type || row.printed_mark != mark) continue;
+    if (first == nullptr) first = &row;
+    if (row.slot != first->slot) continue;
+    if (classic) {
+      plan.dest[0] = {0, row.slot, nullptr};
+      plan.n_dest = 1;
+      break;
+    }
+    if (plan.n_dest >= plan.dest.size()) break;
+    const Sf2EfxRowTarget target = sf2_resolve_efx_row(unit, row);
+    if (target.status != Sf2EfxRowResolution::kResolved) continue;
+    plan.dest[plan.n_dest++] = {static_cast<uint8_t>(target.stage_index), target.param_id, &row};
+  }
+  if (first == nullptr || plan.n_dest == 0) {
+    plan.n_dest = 0;
+    return plan;
+  }
+  plan.slot = first->slot;
+  // A printed list of states takes its first bytes, a printed range is the
+  // row's own, and a slot printing neither takes the whole byte.
+  const int states = gs_efx_printed_states(type, plan.slot);
+  if (states > 0) {
+    plan.lo = 0;
+    plan.hi = static_cast<uint8_t>(states - 1);
+  } else if (first->byte_lo < first->byte_hi) {
+    plan.lo = first->byte_lo;
+    plan.hi = first->byte_hi;
+    if (first->kind == kGsEfxRowDesigned && first->law.form == kGsEfxFormEnum) {
+      plan.states = first->law.n_states;
+    }
+  } else {
+    plan.lo = 0x00;
+    plan.hi = 0x7F;
+  }
+  return plan;
+}
+
 Sf2EfxUnitRt sf2_build_efx_unit(const GsEfx& efx, const std::vector<GsEfxStage>& stages,
                                 GsEfxRealization realization, const GsEfxStageFactory& factory,
                                 double sample_rate, int max_block) {

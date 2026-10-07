@@ -54,6 +54,7 @@
     ],
     "CapabilityCatalogProcessor": [
       "category",
+      "causal",
       "channelPolicy",
       "id",
       "kind",

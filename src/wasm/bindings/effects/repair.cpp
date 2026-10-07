@@ -473,7 +473,7 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
 // Read a trim options bag over `config`, leaving absent keys alone. `entry`
 // names the caller in the paddingSamples message -- the one field here that is
 // refused rather than defaulted, because the core field is a size_t and a
-// negative count arrives past the validator's SIZE_MAX/2 bound rather than
+// negative count arrives past the validator's padding bound rather than
 // below zero.
 mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
     const val& options, mastering::repair::TrimSilenceConfig config, const char* entry) {

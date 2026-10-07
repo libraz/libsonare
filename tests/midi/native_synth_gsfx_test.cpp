@@ -236,7 +236,8 @@ TEST_CASE("native: one bulk run realizes every EFX unit before its assignments",
           "[midi][native][gsfx][bulk]") {
   std::vector<uint8_t> data(130, 0x00);
   data[0] = 0x01;
-  data[1] = 0x11;  // unit 0: Distortion
+  data[1] = 0x11;     // unit 0: Distortion
+  data[0x16] = 0x7F;  // its output level; a zero level byte is silence
   data[0x20] = 0x01;
   data[0x21] = 0x50;  // reserved 40 30 20: must not alter unit 0
   data[128] = 0x01;

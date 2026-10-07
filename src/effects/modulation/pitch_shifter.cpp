@@ -3,10 +3,13 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
+
+using common::kMaxFeedback;
 
 namespace {
 
@@ -21,11 +24,11 @@ constexpr float kMaxWindowMs = 1000.0f;
 constexpr float kMaxPreDelayMs = 1000.0f;
 
 // Live ceilings: the largest values the GS EFX bindings can request (the splice
-// window table in gs_efx_tables.h tops at 128 ms, the pre-delay ladder at 100 ms).
-// prepare() sizes the delay line for max(live ceiling, configured value).
+// window table in gs_efx_tables.h tops at 128 ms, the pre-delay ladder at the
+// shared pre-delay ceiling). prepare() sizes the delay line for max(live
+// ceiling, configured value).
 constexpr float kLiveMaxWindowMs = 128.0f;
-constexpr float kLiveMaxPreDelayMs = 100.0f;
-constexpr float kMaxFeedback = 0.95f;
+constexpr float kLiveMaxPreDelayMs = common::kMaxModulationPreDelayMs;
 constexpr float kMaxCents = 100.0f;
 constexpr float kCentsPerSemitone = 100.0f;
 // The corner stays below this fraction of the rate so a ratio just above 1
@@ -215,7 +218,13 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const bool unity2 = ratio2 == 1.0f;
   const float pre = pre_delay_samples_[0];
   const float pre2 = pre_delay_samples_[1];
-  const float level2 = config_.level2;
+  // Under the two-ramp law level2 balances the voices as dry_wet balances the
+  // mix; otherwise the first voice stays whole and level2 is the second's gain.
+  const common::MixGains voices = config_.mix_law == common::MixLaw::kTwoRamps
+                                      ? common::mix_gains(config_.mix_law, config_.level2)
+                                      : common::MixGains{1.0f, config_.level2};
+  const float level1 = voices.dry;
+  const float level2 = voices.wet;
   const bool second = level2 > 0.0f;
   const bool anti_alias = config_.anti_alias;
   if (anti_alias) {
@@ -271,7 +280,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
       const float voice =
           unity ? read_tap(ch, pre)
                 : g.g1 * read_tap(ch, g.phase + pre) + g.g2 * read_tap(ch, g.phase2 + pre);
-      float shifted = voice * pan[c];
+      float shifted = level1 * voice * pan[c];
       if (second) {
         const float voice2 = unity2 ? read_tap(ch, pre2)
                                     : g_2.g1 * read_tap(ch, g_2.phase + pre2) +
@@ -325,13 +334,7 @@ bool PitchShifter::set_parameter_impl(unsigned int param_id, float value) {
       config_.feedback = std::clamp(value, -kMaxFeedback, kMaxFeedback);
       return true;
     case 9:
-      // An unnamed law is refused rather than rounded onto a neighbour.
-      if (value < 0.0f || value != std::floor(value) ||
-          value >= static_cast<float>(common::kMixLawCount)) {
-        return false;
-      }
-      config_.mix_law = static_cast<common::MixLaw>(static_cast<int>(value));
-      return true;
+      return common::mix_law_from_value(value, &config_.mix_law);
     case 10:
       if (!delay_interpolation_acceptable(value)) return false;
       config_.interpolation = static_cast<DelayInterpolation>(static_cast<int>(value));

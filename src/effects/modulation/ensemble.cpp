@@ -3,30 +3,32 @@
 #include <algorithm>
 #include <cmath>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
 
+using common::kMaxModulationPreDelayMs;
 using constants::kTwoPi;
 
 namespace {
 constexpr float kMaxDepthMs = 10.0f;
-constexpr float kMaxCenterDelayMs = 25.0f;
 constexpr float kMaxPreDelayDevMs = 20.0f;
+constexpr float kMaxDepthDev = 1.0f;
 constexpr float kMinDelayBufferSeconds = 0.1f;  // 100 ms, matching Chorus
 }  // namespace
 
 Ensemble::Ensemble(EnsembleConfig config) : config_(config) {
   config_.depth_slow_ms = std::clamp(config_.depth_slow_ms, 0.0f, kMaxDepthMs);
   config_.depth_fast_ms = std::clamp(config_.depth_fast_ms, 0.0f, kMaxDepthMs);
-  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxCenterDelayMs);
+  config_.center_delay_ms = std::clamp(config_.center_delay_ms, 0.0f, kMaxModulationPreDelayMs);
   config_.tone_hz = std::clamp(config_.tone_hz, 500.0f, 20000.0f);
   config_.dry_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
   config_.rate_hz = std::max(0.0f, config_.rate_hz);
   config_.pre_delay_dev_ms = std::clamp(config_.pre_delay_dev_ms, 0.0f, kMaxPreDelayDevMs);
-  config_.depth_dev = std::clamp(config_.depth_dev, -1.0f, 1.0f);
+  config_.depth_dev = std::clamp(config_.depth_dev, -kMaxDepthDev, kMaxDepthDev);
   config_.pan_dev = std::clamp(config_.pan_dev, 0.0f, 1.0f);
 }
 
@@ -47,8 +49,11 @@ void Ensemble::apply_rates() noexcept {
 void Ensemble::prepare(double sample_rate, int) {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   // Size for the maximum automatable modulated delay so later automation is
-  // never silently truncated by the delay-line read clamp.
-  const float max_delay_ms = kMaxCenterDelayMs + 2.0f * kMaxDepthMs;
+  // never silently truncated by the delay-line read clamp: the outer voice sits
+  // the deviation past the centre, and its sweep is both depths scaled by the
+  // depth deviation.
+  const float max_delay_ms =
+      kMaxModulationPreDelayMs + kMaxPreDelayDevMs + 2.0f * kMaxDepthMs * (1.0f + kMaxDepthDev);
   const float max_delay_seconds = std::max(kMinDelayBufferSeconds, max_delay_ms * 0.001f);
   const int max_delay = static_cast<int>(sample_rate_ * static_cast<double>(max_delay_seconds)) + 1;
   for (auto& delay : delays_) {
@@ -83,8 +88,10 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
   const bool stereo = right != left;
   // Block-rate dry/wet + modulation depth: smoothed across blocks by the engine
   // parameter slot smoother, not per-sample (see Chorus::process for the rationale).
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const float wet = mix.wet;
+  const float dry = mix.dry;
   const float ms_to_samples = 0.001f * static_cast<float>(sample_rate_);
   const float tone_alpha = std::clamp(
       1.0f - std::exp(-kTwoPi * config_.tone_hz / static_cast<float>(sample_rate_)), 0.01f, 1.0f);
@@ -158,7 +165,7 @@ bool Ensemble::set_parameter_impl(unsigned int param_id, float value) {
       config_.depth_fast_ms = std::clamp(value, 0.0f, kMaxDepthMs);
       return true;
     case 4:
-      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxCenterDelayMs);
+      config_.center_delay_ms = std::clamp(value, 0.0f, kMaxModulationPreDelayMs);
       return true;
     case 5:
       config_.tone_hz = std::clamp(value, 500.0f, 20000.0f);
@@ -174,7 +181,7 @@ bool Ensemble::set_parameter_impl(unsigned int param_id, float value) {
       config_.pre_delay_dev_ms = std::clamp(value, 0.0f, kMaxPreDelayDevMs);
       return true;
     case 9:
-      config_.depth_dev = std::clamp(value, -1.0f, 1.0f);
+      config_.depth_dev = std::clamp(value, -kMaxDepthDev, kMaxDepthDev);
       return true;
     case 10:
       config_.pan_dev = std::clamp(value, 0.0f, 1.0f);
@@ -185,6 +192,8 @@ bool Ensemble::set_parameter_impl(unsigned int param_id, float value) {
       for (auto& delay : delays_) delay.set_interpolation(config_.interpolation);
       return true;
     }
+    case 12:
+      return common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
@@ -192,16 +201,17 @@ bool Ensemble::set_parameter_impl(unsigned int param_id, float value) {
 
 bool Ensemble::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
   // Every automatable id performs an in-place scalar/coefficient update; the
-  // delay lines are pre-sized to kMaxCenterDelayMs + kMaxDepthMs at prepare(),
-  // so no id allocates or resets audio state. Unknown ids are rejected by
+  // delay lines are pre-sized to the clamped range at prepare(), so no id
+  // allocates or resets audio state. Unknown ids are rejected by
   // set_parameter.
-  return param_id <= 11;
+  return param_id <= 12;
 }
 
 std::vector<rt::ParamDescriptor> Ensemble::parameter_descriptors() const {
   return {{"rateSlowHz", 0},    {"rateFastHz", 1}, {"depthSlowMs", 2}, {"depthFastMs", 3},
           {"centerDelayMs", 4}, {"toneHz", 5},     {"dryWet", 6},      {"rateHz", 7},
-          {"preDelayDevMs", 8}, {"depthDev", 9},   {"panDev", 10},     {"interpolation", 11}};
+          {"preDelayDevMs", 8}, {"depthDev", 9},   {"panDev", 10},     {"interpolation", 11},
+          {"mixLaw", 12}};
 }
 
 }  // namespace sonare::effects::modulation

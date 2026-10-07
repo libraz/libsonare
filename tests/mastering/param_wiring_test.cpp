@@ -370,13 +370,15 @@ TEST_CASE("named-processor enum params reject a value past the enum's cardinalit
     });
   };
 
-  CHECK(mono("repair.decrackle", "mode", 2.0) == "invalid decrackle mode");
-  CHECK(mono("repair.decrackle", "mode", -1.0) == "invalid decrackle mode");
-  CHECK(mono("repair.dehum", "mode", 2.0) == "invalid dehum mode");
-  CHECK(mono("repair.denoiseClassical", "mode", 3.0) == "invalid denoise mode");
-  CHECK(mono("repair.denoiseClassical", "noiseEstimator", 4.0) ==
-        "invalid denoise noise estimator");
-  CHECK(mono("repair.trimSilence", "mode", 2.0) == "invalid trim silence mode");
+  // The repair enums are read through the field tables, whose enum reader names every
+  // declared enumerator, so they share its refusal.
+  const std::string table_refusal = "mastering enum parameter is out of range";
+  CHECK(mono("repair.decrackle", "mode", 2.0) == table_refusal);
+  CHECK(mono("repair.decrackle", "mode", -1.0) == table_refusal);
+  CHECK(mono("repair.dehum", "mode", 2.0) == table_refusal);
+  CHECK(mono("repair.denoiseClassical", "mode", 3.0) == table_refusal);
+  CHECK(mono("repair.denoiseClassical", "noiseEstimator", 4.0) == table_refusal);
+  CHECK(mono("repair.trimSilence", "mode", 2.0) == table_refusal);
 
   CHECK(pair("match.applyMatchEq", "phase", 2.0) == "invalid match EQ FIR phase");
   CHECK(pair("match.abSwitch", "selection", 2.0) == "invalid A/B selection");

@@ -19,12 +19,18 @@ struct TrimSilenceConfig {
   float window_ms = 400.0f;
 };
 
-/// @brief Largest accepted padding_samples.
-/// @details The padded tail is `last + padding_samples`, so a value above this
-/// wraps before it is compared against the input length and shortens the kept
-/// range instead of extending it. Only a negative count that crossed a language
-/// boundary reaches this size.
-inline constexpr size_t kMaxTrimPaddingSamples = static_cast<size_t>(-1) / 2;
+/// @brief Largest accepted padding_samples: 5 s at 192 kHz.
+/// @details Padding past the buffer keeps everything, so a count this large already means
+/// "keep it all" at every supported rate. The bound also keeps `last + padding_samples` from
+/// wrapping, which a negative count that crossed a language boundary would otherwise reach.
+inline constexpr size_t kMaxTrimPaddingSamples = 960000;
+
+/// @brief Largest accepted @c TrimSilenceConfig::window_ms; the gate window defaults to 400 ms.
+inline constexpr float kMaxTrimWindowMs = 10000.0f;
+
+/// @brief Range accepted for @c TrimSilenceConfig::gate_lufs: from the 24-bit floor to full scale.
+inline constexpr float kMinTrimGateLufs = -144.0f;
+inline constexpr float kMaxTrimGateLufs = 0.0f;
 
 struct TrimRange {
   size_t first = 0;

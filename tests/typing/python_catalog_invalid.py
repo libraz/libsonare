@@ -11,6 +11,7 @@ entry: libsonare.MasteringProcessorCatalogEntry = {
     "tailSamples": 0,
     "channelPolicy": "multichannel",
     "category": "dynamics",
+    "causal": True,
     "params": [],
     "realtimeCost": "low",
     "slots": [],

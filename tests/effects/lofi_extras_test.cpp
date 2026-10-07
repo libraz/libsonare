@@ -304,14 +304,18 @@ TEST_CASE("the automation keys include the type ladder and refuse unknown values
           "[lofi-extras]") {
   BitCrusher crusher;
   crusher.prepare(kRate, 64);
-  for (unsigned id = 0; id <= 19; ++id) {
+  for (unsigned id = 0; id <= 20; ++id) {
     INFO("id " << id);
     CHECK(crusher.parameter_is_realtime_safe(id));
   }
-  CHECK_FALSE(crusher.parameter_is_realtime_safe(20));
-  CHECK_FALSE(crusher.set_parameter(20, 1.0f));
+  CHECK_FALSE(crusher.parameter_is_realtime_safe(21));
+  CHECK_FALSE(crusher.set_parameter(21, 1.0f));
+  // The mix law takes a named law and refuses a fraction or one past the list.
+  CHECK(crusher.set_parameter(20, 1.0f));
+  CHECK_FALSE(crusher.set_parameter(20, 0.5f));
+  CHECK_FALSE(crusher.set_parameter(20, 2.0f));
   const auto descriptors = crusher.parameter_descriptors();
-  CHECK(descriptors.size() == 20);
+  CHECK(descriptors.size() == 21);
   CHECK(std::any_of(descriptors.begin(), descriptors.end(), [](const auto& descriptor) {
     return descriptor.id == 19 && descriptor.key == "typeLadder";
   }));

@@ -292,10 +292,13 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                 "realtimeCost",
                 "channelPolicy",
                 "category",
+                "causal",
                 "params",
                 "slots",
             },
         )
+        if not isinstance(processor["causal"], bool):
+            raise ValueError(f"catalog.processors[{index}].causal must be a boolean")
         if not isinstance(processor["params"], list):
             raise ValueError(  # noqa: TRY004 -- one error class per document
                 f"catalog.processors[{index}].params must be an array"

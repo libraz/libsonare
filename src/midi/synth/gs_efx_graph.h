@@ -196,6 +196,15 @@ int sf2_find_efx_stage(const Sf2EfxUnitRt& unit, std::string_view name, uint8_t 
 /// the row's key, which must be realtime-safe. Allocates.
 Sf2EfxRowTarget sf2_resolve_efx_row(const Sf2EfxUnitRt& unit, const GsEfxBindingRow& row);
 
+/// CONTROL thread: EFX CONTROL @p control (0 drives the type's `+` slot, 1 its
+/// `#` slot) of EFX type @p type, resolved against @p unit over @p rows. A
+/// classic unit reads the slot's wire byte, so its one destination is the slot
+/// itself; a modern unit takes every realtime-safe control the slot's rows
+/// reach. n_dest is 0 where the type marks no slot or nothing resolved.
+/// Allocates.
+Sf2EfxLegacyControlPlan sf2_resolve_efx_control(const Sf2EfxUnitRt& unit, const GsEfxRowView& rows,
+                                                uint16_t type, size_t control);
+
 /// CONTROL thread: realise one insertion unit. kModern builds @p stages
 /// through @p factory, keeping a null processor where a stage cannot be built;
 /// kClassic ignores @p stages and makes the type's classic unit the only stage,

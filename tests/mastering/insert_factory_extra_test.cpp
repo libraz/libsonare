@@ -1163,7 +1163,7 @@ TEST_CASE("processor_catalog_json classifies every id consistently with the sour
       json.find("{\"id\":\"eq.midSide\",\"kind\":\"realtime\",\"realtimeInsertable\":true,"
                 "\"stereoOnly\":true,\"latencySamples\":0,\"tailSamples\":0,"
                 "\"realtimeCost\":\"low\",\"channelPolicy\":\"stereoPairOnly\",\"category\":\"eq\","
-                "\"params\":") != std::string::npos);
+                "\"causal\":true,\"params\":") != std::string::npos);
 
   // Delay-like stereo tools publish their prepared audible tail through the
   // same probe used for latency. Default Haas is 12 ms at 48 kHz; default

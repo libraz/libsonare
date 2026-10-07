@@ -273,13 +273,15 @@ void validate_config(const DereverbClassicalConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "dereverb hop_length must be in (0, n_fft / 2]");
   }
-  if (!std::isfinite(config.t60_sec) || config.t60_sec <= 0.0f) {
+  if (!std::isfinite(config.t60_sec) || config.t60_sec <= 0.0f ||
+      config.t60_sec > kDereverbMaxT60Sec) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb t60_sec must be finite and positive");
+                          "dereverb t60_sec must be finite and in (0, 10]");
   }
-  if (!std::isfinite(config.late_delay_ms) || config.late_delay_ms < 0.0f) {
+  if (!std::isfinite(config.late_delay_ms) || config.late_delay_ms < 0.0f ||
+      config.late_delay_ms > kDereverbMaxLateDelayMs) {
     throw SonareException(ErrorCode::InvalidParameter,
-                          "dereverb late_delay_ms must be finite and non-negative");
+                          "dereverb late_delay_ms must be finite and in [0, 500]");
   }
   if (!std::isfinite(config.over_subtraction) || config.over_subtraction < 0.0f ||
       config.over_subtraction > 16.0f) {

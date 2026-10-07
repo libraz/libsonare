@@ -883,14 +883,11 @@ void Sf2Player::process_impl(float* const* channels,
   drain_direct_system_patch();
   drain_direct_gs_nodes();
   sync_prepared_base();
-  // Apply any pending GS EFX parameter automation to the adopted chain, on this
-  // (audio) thread, before rendering — the sanctioned resolve-on-control /
-  // apply-on-audio path. A no-op cost (two atomic loads) when the queue is empty.
-  part_fx_.drain_param_updates();
-  // EFX CONTROL modulation after the drain, so a destination an update just
-  // rewrote at its base takes its modulated value again before the block runs.
-  // While the prepared overlay is active it is the only writer of these destinations.
-  if (!prepared_runtime_active_) part_fx_.apply_controls(*this);
+  // Pending GS EFX parameter automation, then EFX CONTROL modulation over it,
+  // applied to the adopted chain on this (audio) thread before rendering. While
+  // the prepared overlay is active it is the only writer of the CONTROL
+  // destinations (drives_efx_controls), and raises its own tail after them.
+  part_fx_.settle_block(*this);
   apply_prepared_efx_controls();
   // Diagnostic, offline only: the path this block renders through.
   if (path_recorder_ != nullptr) record_render_path();

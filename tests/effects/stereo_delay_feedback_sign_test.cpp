@@ -11,10 +11,12 @@
 #include <cstddef>
 #include <vector>
 
+#include "effects/common/control_ranges.h"
 #include "effects/delay/stereo_delay.h"
 
 namespace {
 
+using sonare::effects::common::kMaxFeedback;
 using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
 
@@ -76,13 +78,13 @@ TEST_CASE("a negative stereo-delay feedback inverts every pass", "[effects][dela
 TEST_CASE("the stereo-delay feedback clamps symmetrically on every path",
           "[effects][delay][stereo]") {
   StereoDelay built(looped(-2.0f));
-  CHECK(built.config().feedback == -0.95f);
+  CHECK(built.config().feedback == -kMaxFeedback);
 
   StereoDelay automated(looped(0.0f));
   REQUIRE(automated.set_parameter(2, -2.0f));
-  CHECK(automated.config().feedback == -0.95f);
+  CHECK(automated.config().feedback == -kMaxFeedback);
   REQUIRE(automated.set_parameter(2, 2.0f));
-  CHECK(automated.config().feedback == 0.95f);
+  CHECK(automated.config().feedback == kMaxFeedback);
 }
 
 TEST_CASE("an inverted loop rings as long as an upright one", "[effects][delay][stereo]") {

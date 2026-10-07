@@ -311,9 +311,9 @@ TEST_CASE("an EFX type write loads that type's defaults at LSB resolution", "[gs
 
     REQUIRE(write_param(efx, 20, 0));
     tally.same(efx.params[19] == 0, "a written zero stands rather than reading as unset");
-    // -24 dB is the floor the translation carries, so the silent byte lands on
-    // it rather than being dropped.
-    tally.same(stage_params(gs_efx_insert_chain(efx), "utility.gain").find("\"levelDb\":-24") !=
+    // The level floor is what the translation carries for the silent byte, so
+    // it lands there rather than being dropped.
+    tally.same(stage_params(gs_efx_insert_chain(efx), "utility.gain").find("\"levelDb\":-120") !=
                    std::string::npos,
                "output level 0 translates to the floor rather than to no key");
 

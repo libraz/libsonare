@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "effects/common/mix_law.h"
 #include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
 
@@ -20,6 +21,8 @@ struct RingModulatorConfig {
   /// 0-1: how far the right carrier is additionally turned toward antiphase
   /// (half a turn at 1), on top of `phase_deg`.
   float stereo_spread = 0.0f;
+  /// How dry_wet maps onto the dry and wet gains.
+  common::MixLaw mix_law = common::MixLaw::kCrossfade;
 };
 
 /// Multiplies the signal by a sine carrier, producing the sum/difference
@@ -40,6 +43,7 @@ class RingModulator : public rt::ProcessorBase {
   //   2 = shape (LfoShape; a fractional or unnamed value is refused)
   //   3 = phase_deg (clamped to [0, 360])
   //   4 = stereo_spread (clamped to [0, 1])
+  //   5 = mix_law (a whole number naming a law, refused otherwise)
   bool set_parameter_impl(unsigned int param_id, float value) override;
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 

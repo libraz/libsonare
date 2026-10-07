@@ -165,6 +165,10 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   }
   /// A received GS envelope-time edit raises the tail (raise_tail).
   bool tail_follows_events() const noexcept override { return true; }
+  /// Offline: realises a pending EFX change and settles the units at the
+  /// controllers the probe events left, so tail_samples() covers the
+  /// configuration the next render adopts. No DSP time passes.
+  bool materialize_tail_probe() override;
   void on_event(uint32_t destination_id, const MidiEvent& event) noexcept override;
   /// CONTROL thread: prepare an immutable SysEx operation for a scheduled
   /// event. The returned token carries only fixed plans; its DSP nodes stay
@@ -674,6 +678,9 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   float part_pan_units(int part) const noexcept override {
     return channel_mods_[static_cast<size_t>(part & 0x0F)].pan_units;
   }
+  /// PartFxHost: while the prepared overlay runs, it drives the CONTROL
+  /// destinations (apply_prepared_efx_controls).
+  bool drives_efx_controls() const noexcept override { return prepared_runtime_active_; }
   /// Recompute the cached Sf2ChannelMod for @p channel after a CC/bend change.
   void refresh_channel_mod(uint8_t channel) noexcept;
   /// Rebuilds rx_parts_ from the parts' rx_channel. Called after any write to

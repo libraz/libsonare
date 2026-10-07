@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -11,6 +12,8 @@
 
 namespace sonare::effects::delay {
 
+using common::kLevelFloorDb;
+using common::kMaxFeedback;
 using constants::kPiD;
 using constants::kTwoPiD;
 
@@ -20,10 +23,6 @@ constexpr float kDelaySmoothingTimeSeconds = 0.010f;
 constexpr float kMaxDelayMs = 4000.0f;
 constexpr float kMaxModRateHz = 100.0f;
 constexpr float kMaxGlideMs = 10000.0f;
-/// Loop gain magnitude ceiling, either sign; the flanger's loop stops at the same.
-constexpr float kMaxFeedback = 0.95f;
-
-constexpr float kMinLevelDb = -120.0f;
 constexpr float kMaxLevelDb = 40.0f;
 
 float clamp_feedback(float feedback) noexcept {
@@ -58,10 +57,10 @@ StereoDelayConfig sanitize_config(StereoDelayConfig config) noexcept {
   }
   config.tap3_ms = finite_clamp(config.tap3_ms, 0.0f, kMaxDelayMs, 0.0f);
   config.tap4_ms = finite_clamp(config.tap4_ms, 0.0f, kMaxDelayMs, 0.0f);
-  config.tap1_level_db = finite_clamp(config.tap1_level_db, kMinLevelDb, kMaxLevelDb, 0.0f);
-  config.tap2_level_db = finite_clamp(config.tap2_level_db, kMinLevelDb, kMaxLevelDb, 0.0f);
-  config.tap3_level_db = finite_clamp(config.tap3_level_db, kMinLevelDb, kMaxLevelDb, 0.0f);
-  config.tap4_level_db = finite_clamp(config.tap4_level_db, kMinLevelDb, kMaxLevelDb, 0.0f);
+  config.tap1_level_db = finite_clamp(config.tap1_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
+  config.tap2_level_db = finite_clamp(config.tap2_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
+  config.tap3_level_db = finite_clamp(config.tap3_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
+  config.tap4_level_db = finite_clamp(config.tap4_level_db, kLevelFloorDb, kMaxLevelDb, 0.0f);
   config.tap3_pan = finite_clamp(config.tap3_pan, -1.0f, 1.0f, 0.0f);
   config.tap4_pan = finite_clamp(config.tap4_pan, -1.0f, 1.0f, 0.0f);
   config.mod_rate_hz = finite_clamp(config.mod_rate_hz, 0.0f, kMaxModRateHz, 0.0f);
@@ -345,16 +344,16 @@ bool StereoDelay::set_parameter_impl(unsigned int param_id, float value) {
       config_.tap4_ms = std::clamp(value, 0.0f, kMaxDelayMs);
       return true;
     case 8:
-      config_.tap1_level_db = std::clamp(value, kMinLevelDb, kMaxLevelDb);
+      config_.tap1_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
       return true;
     case 9:
-      config_.tap2_level_db = std::clamp(value, kMinLevelDb, kMaxLevelDb);
+      config_.tap2_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
       return true;
     case 10:
-      config_.tap3_level_db = std::clamp(value, kMinLevelDb, kMaxLevelDb);
+      config_.tap3_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
       return true;
     case 11:
-      config_.tap4_level_db = std::clamp(value, kMinLevelDb, kMaxLevelDb);
+      config_.tap4_level_db = std::clamp(value, kLevelFloorDb, kMaxLevelDb);
       return true;
     case 12:
       config_.tap3_pan = std::clamp(value, -1.0f, 1.0f);
@@ -381,19 +380,15 @@ bool StereoDelay::set_parameter_impl(unsigned int param_id, float value) {
       config_.glide_ms = std::clamp(value, 0.0f, kMaxGlideMs);
       return true;
     case 20:
-    case 21: {
       // An unnamed mode is refused rather than rounded onto a neighbour.
-      const int count = param_id == 20 ? kStereoDelayCrossModeCount : common::kMixLawCount;
-      if (value < 0.0f || value != std::floor(value) || value >= static_cast<float>(count)) {
+      if (value < 0.0f || value != std::floor(value) ||
+          value >= static_cast<float>(kStereoDelayCrossModeCount)) {
         return false;
       }
-      if (param_id == 20) {
-        config_.cross_mode = static_cast<StereoDelayCrossMode>(static_cast<int>(value));
-      } else {
-        config_.mix_law = static_cast<common::MixLaw>(static_cast<int>(value));
-      }
+      config_.cross_mode = static_cast<StereoDelayCrossMode>(static_cast<int>(value));
       return true;
-    }
+    case 21:
+      return common::mix_law_from_value(value, &config_.mix_law);
     case 22:
       if (!modulation::delay_interpolation_acceptable(value)) return false;
       config_.interpolation = static_cast<modulation::DelayInterpolation>(static_cast<int>(value));

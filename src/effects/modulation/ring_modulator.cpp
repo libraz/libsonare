@@ -31,8 +31,10 @@ void RingModulator::process(float* const* channels, int num_channels, int num_sa
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const float dry = 1.0f - wet;
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const float wet = mix.wet;
+  const float dry = mix.dry;
   const double increment = static_cast<double>(config_.carrier_hz) / sample_rate_;
   const LfoShape shape = config_.shape;
   // Right carrier's lead over the left, in turns; zero keeps one shared carrier.
@@ -78,13 +80,16 @@ bool RingModulator::set_parameter_impl(unsigned int param_id, float value) {
     case 4:
       config_.stereo_spread = std::clamp(value, 0.0f, 1.0f);
       return true;
+    case 5:
+      return common::mix_law_from_value(value, &config_.mix_law);
     default:
       return false;
   }
 }
 
 std::vector<rt::ParamDescriptor> RingModulator::parameter_descriptors() const {
-  return {{"carrierHz", 0}, {"dryWet", 1}, {"shape", 2}, {"phaseDeg", 3}, {"stereoSpread", 4}};
+  return {{"carrierHz", 0}, {"dryWet", 1},       {"shape", 2},
+          {"phaseDeg", 3},  {"stereoSpread", 4}, {"mixLaw", 5}};
 }
 
 }  // namespace sonare::effects::modulation

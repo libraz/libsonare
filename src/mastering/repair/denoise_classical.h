@@ -50,6 +50,11 @@ enum class DenoiseNoiseEstimator {
 /// fraction of frames (typically 10%). The decision-directed a priori SNR is
 /// then computed via the Ephraim-Malah recursion with smoothing factor
 /// `dd_alpha` (0.98 is the literature standard).
+/// @brief Largest accepted @c DenoiseClassicalConfig::reduction_db.
+/// @details 120 dB leaves the floor at 1e-6 of the input, below a 24-bit signal's own
+/// quantization step; the shipped presets use at most 32.
+inline constexpr float kDenoiseMaxReductionDb = 120.0f;
+
 struct DenoiseClassicalConfig {
   DenoiseMode mode = DenoiseMode::LogMmse;
   DenoiseNoiseEstimator noise_estimator = DenoiseNoiseEstimator::Quantile;

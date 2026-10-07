@@ -21,6 +21,14 @@ inline constexpr int kDereverbMaxWpeTaps = 32;
 /// well before this, so the ceiling bounds the cost rather than the quality.
 inline constexpr int kDereverbMaxWpeIterations = 16;
 
+/// @brief Largest accepted @c DereverbClassicalConfig::t60_sec, in seconds.
+/// @details Past 10 s the decay model describes a cavern; the corpus rooms measure up to 1.2 s.
+inline constexpr float kDereverbMaxT60Sec = 10.0f;
+
+/// @brief Largest accepted @c DereverbClassicalConfig::late_delay_ms.
+/// @details Late reverberation begins well inside half a second; the default is 50 ms.
+inline constexpr float kDereverbMaxLateDelayMs = 500.0f;
+
 struct DereverbClassicalConfig {
   /// Late-reverberation detection threshold, relative to a bin's own power. A
   /// bin whose estimated late PSD does not exceed `threshold * power` is not

@@ -36,7 +36,7 @@ struct PhaserConfig {
   float max_hz = 1600.0f;
   int stages = 4;
   float dry_wet = 0.5f;
-  /// Gain of the feedback loop closed around the cascade, clamped to +-0.95 in
+  /// Gain of the feedback loop closed around the cascade, clamped to +-common::kMaxFeedback in
   /// process(). Zero leaves the loop open and the cascade is then feed-forward.
   float feedback = 0.0f;
   PhaserMixMode mix_mode = PhaserMixMode::kCrossfade;
@@ -60,7 +60,7 @@ class Phaser : public rt::ProcessorBase {
   //   The lower/upper roles of 1 and 2 are resolved at use (min/max of the pair),
   //   so the state after a set of writes does not depend on their order.
   //   3 = dry_wet
-  //   4 = feedback (clamped to [-0.95, 0.95] in process())
+  //   4 = feedback (clamped to +-common::kMaxFeedback in process())
   //   5 = depth (clamped to [0, 1])
   // Note: `stages` is not automatable; changing it reallocates the allpass
   // state and requires prepare(). `mix_mode` is not automatable either: it

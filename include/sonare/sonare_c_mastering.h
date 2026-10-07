@@ -399,7 +399,12 @@ const char* sonare_mastering_stereo_analysis_names(void);
 /// @return A JSON array string whose entries contain `id`, `kind`,
 ///   `realtimeInsertable`, `stereoOnly`, `latencySamples`, `tailSamples`,
 ///   `realtimeCost`,
-///   `channelPolicy`, `category`, `params` and `slots` (UTF-8). `kind` is one of
+///   `channelPolicy`, `category`, `causal`, `params` and `slots` (UTF-8). `causal` is
+///   false for `repair.declick`, `repair.declip` and `repair.trimSilence`, which need
+///   the far side of a defect or the whole signal, and true for the other repair
+///   stages and every insert. A `repair.*` entry's `params` are measured through the
+///   stage's configuration validation, so each numeric parameter's bounds are the
+///   ones the stage enforces. `kind` is one of
 ///   "realtime" / "offline" / "pair"
 ///   (pair > realtime > offline precedence); `realtimeInsertable` is true exactly
 ///   for ids usable as live inserts. `realtimeCost` is `"low"`, `"moderate"`,
@@ -1926,8 +1931,8 @@ typedef struct {
 ///
 ///   @c padding_samples widens the kept range in both directions and is clamped
 ///   to the buffer, so it can never reach past either end; a pass that kept
-///   nothing is not padded. A count above SIZE_MAX/2 is rejected, which is where
-///   a negative one that crossed a language boundary lands.
+///   nothing is not padded. A count above 960000 (5 s at 192 kHz) is rejected,
+///   which is also where a negative one that crossed a language boundary lands.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const float* right,
                                                         size_t length, int sample_rate,

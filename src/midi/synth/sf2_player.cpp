@@ -256,6 +256,16 @@ void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
   }
 }
 
+bool Sf2Player::materialize_tail_probe() {
+  if (!prepared_ || !config_.realize_efx_inline || !part_fx_.enabled()) return true;
+  if (part_fx_.dirty()) realize_gs_efx();
+  part_fx_.settle_quiescent(*this);
+  // The overlay's own controls, in the order a block applies them.
+  sync_prepared_base();
+  apply_prepared_efx_controls();
+  return true;
+}
+
 void Sf2Player::recompute_tail() noexcept {
   tail_samples_->store(tail_bound(), std::memory_order_relaxed);
 }
@@ -444,7 +454,7 @@ void Sf2Player::prepare(double sample_rate, int /*max_block_size*/) {
   // prepare() is a quiescent boundary, so adopt the initial publication now.
   // Prepared metadata can be queried immediately after an event, before the
   // first process() has had an opportunity to acquire the snapshot.
-  part_fx_.acquire_control_quiescent();
+  part_fx_.settle_quiescent(*this);
   part_fx_.clear_dirty();
 }
 
@@ -475,7 +485,7 @@ void Sf2Player::reset() {
     part_fx_.publish();
     // reset() is also quiescent; make the rebuilt host-chain metadata visible
     // to prepared events dispatched before the next audio block.
-    part_fx_.acquire_control_quiescent();
+    part_fx_.settle_quiescent(*this);
     part_fx_.clear_dirty();
   }
 #if defined(SONARE_MIDI_WITH_FX)

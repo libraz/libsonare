@@ -592,7 +592,7 @@ std::unique_ptr<Processor> build_multiband(const std::string& name, const ParamM
 // The nested members are pinned separately: a field added to a room's
 // dimensions or to its climate does not move the arity of the config holding
 // them, and would otherwise arrive unreachable with nothing red.
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::DattorroReverbConfig, 11);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::DattorroReverbConfig, 12);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::FdnReverbConfig, 3);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::VelvetReverbConfig, 5);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::ConvolutionReverbConfig, 4);
@@ -741,6 +741,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::read_field(params, "gateType", config.gate_type);
     // Also realtime id 10; every tank set's lines are prepared up front.
     detail::read_field(params, "character", config.character, kNone);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<DattorroReverb>(config);
   }
   if (name == "effects.reverb.fdn") {
@@ -914,6 +915,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.feedback = f(params, "feedback", config.feedback, kNone);
     config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
     detail::read_field(params, "interpolation", config.interpolation);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::modulation::Chorus>(config);
   }
   if (name == "effects.modulation.ensemble") {
@@ -930,6 +932,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.depth_dev = f(params, "depthDev", config.depth_dev, kNone);
     config.pan_dev = f(params, "panDev", config.pan_dev, kNone);
     detail::read_field(params, "interpolation", config.interpolation);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::modulation::Ensemble>(config);
   }
   if (name == "effects.modulation.flanger") {
@@ -944,6 +947,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
     config.step_rate_hz = f(params, "stepRateHz", config.step_rate_hz, kHz);
     detail::read_field(params, "interpolation", config.interpolation);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::modulation::Flanger>(config);
   }
   if (name == "effects.modulation.phaser") {
@@ -1024,6 +1028,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::read_field(params, "shape", config.shape);
     config.phase_deg = f(params, "phaseDeg", config.phase_deg, kDegrees);
     config.stereo_spread = f(params, "stereoSpread", config.stereo_spread, kNone);
+    detail::read_field(params, "mixLaw", config.mix_law);
     return make<effects::modulation::RingModulator>(config);
   }
   if (name == "effects.modulation.pitchShifter") {
@@ -1364,6 +1369,36 @@ std::vector<std::string> insert_param_names(const std::string& name) {
 
 namespace {
 
+// Reads and validates the configuration of repair stage @p name from @p params; false when
+// @p name is no repair stage. A repair stage is not an insert, so the catalog measures this
+// builder where it would otherwise measure an insert's construction.
+bool read_repair_config(const std::string& name, const ParamMap& params) {
+  if (name == "repair.declick") {
+    (void)detail::declick_config(params);
+  } else if (name == "repair.declip") {
+    (void)detail::declip_config(params);
+  } else if (name == "repair.decrackle") {
+    (void)detail::decrackle_config(params);
+  } else if (name == "repair.dehum") {
+    (void)detail::dehum_config(params);
+  } else if (name == "repair.denoiseClassical") {
+    (void)detail::denoise_classical_config(params);
+  } else if (name == "repair.dereverbClassical") {
+    (void)detail::dereverb_classical_config(params);
+  } else if (name == "repair.trimSilence") {
+    (void)detail::trim_silence_config(params);
+  } else {
+    return false;
+  }
+  return true;
+}
+
+// Whether @p name, an insert or a repair stage, constructs from @p params. Throws what
+// construction throws.
+bool constructs(const std::string& name, const ParamMap& params) {
+  return read_repair_config(name, params) || build_insert(name, params) != nullptr;
+}
+
 // What an insert's empty build declares, memoized because every probe of the
 // catalog's measurement asks for it.
 const ParamMap& empty_build(const std::string& name) {
@@ -1371,7 +1406,7 @@ const ParamMap& empty_build(const std::string& name) {
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
   ParamMap params;
-  (void)build_insert(name, params);
+  (void)constructs(name, params);
   return memo.emplace(name, std::move(params)).first->second;
 }
 
@@ -1513,7 +1548,7 @@ using AcceptFn = std::function<bool(double)>;
 // exist in this build configuration.
 bool insert_accepts(const std::string& name, const std::string& key, double value) {
   try {
-    return build_insert(name, probe_map(name, key, value)) != nullptr;
+    return constructs(name, probe_map(name, key, value));
   } catch (...) {
     return false;
   }
@@ -1524,7 +1559,9 @@ bool insert_accepts(const std::string& name, const std::string& key, double valu
 bool insert_accepts_at_rate(const std::string& name, const std::string& key, double value,
                             double sample_rate) {
   try {
-    auto processor = build_insert(name, probe_map(name, key, value));
+    const ParamMap probe = probe_map(name, key, value);
+    if (read_repair_config(name, probe)) return true;
+    auto processor = build_insert(name, probe);
     if (processor == nullptr) return false;
     processor->prepare(sample_rate, kInsertProbeBlockSize);
     return true;
@@ -1953,6 +1990,21 @@ std::string build_insert_param_info_json(const std::string& name, double sample_
 }
 
 }  // namespace
+
+std::string repair_param_info_json(const std::string& name) {
+  static thread_local std::unordered_map<std::string, std::string> memo;
+  const auto cached = memo.find(name);
+  if (cached != memo.end()) return cached->second;
+  ParamMap params;
+  if (!read_repair_config(name, params)) return "[]";
+  std::string out = "[";
+  for (const std::string& key : construction_keys(params)) {
+    if (out.size() > 1) out += ',';
+    append_param_entry(out, name, key, "null", false, params, 0.0);
+  }
+  out += ']';
+  return memo.emplace(name, std::move(out)).first->second;
+}
 
 std::string insert_slot_info_json(const std::string& name) {
   // Same declarations the param entries' `slot` field is read from.

@@ -6,6 +6,26 @@
 
 namespace sonare::mastering::repair {
 
+/// @brief Largest accepted @c DeclickConfig::max_click_samples.
+/// @details The longest gap the AR solver reconstructs; a longer run takes the linear fill, so
+/// a larger cap only widens the runs repaired by interpolation. The shipped presets use at most 16.
+inline constexpr size_t kDeclickMaxClickSamples = 512;
+
+/// @brief Largest accepted @c DeclickConfig::threshold, a sample magnitude.
+/// @details Full scale is 1; float audio can carry overs, and the request-object tests run it at 3.
+inline constexpr float kDeclickMaxThreshold = 10.0f;
+
+/// @brief Largest accepted @c DeclickConfig::neighbor_ratio; the corpus sweeps run 2 to 50.
+inline constexpr float kDeclickMaxNeighborRatio = 100.0f;
+
+/// @brief Largest accepted @c DeclickConfig::residual_ratio.
+/// @details Above this the residual criterion selects nothing and only the threshold mask remains.
+inline constexpr float kDeclickMaxResidualRatio = 1000.0f;
+
+/// @brief Largest accepted @c DeclickConfig::lpc_order; the corpus runs use 20 and declip's default
+/// is 36.
+inline constexpr int kDeclickMaxLpcOrder = 36;
+
 struct DeclickConfig {
   float threshold = 0.8f;
   float neighbor_ratio = 4.0f;

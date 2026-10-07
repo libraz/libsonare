@@ -122,10 +122,10 @@ describe('masteringRepairDetectClicks', () => {
   });
 
   it('counts by the declicker criteria the options select', () => {
-    // A neighbour ratio nothing can meet rejects every run, which is what says
+    // The largest accepted neighbour ratio is one nothing meets, so it rejects every run, which says
     // the options bag reaches the analysis rather than being read and dropped.
     expect(
-      masteringRepairDetectClicks({ samples: clicky(), sampleRate: SR, neighborRatio: 1e6 }).count,
+      masteringRepairDetectClicks({ samples: clicky(), sampleRate: SR, neighborRatio: 100 }).count,
     ).toBe(0);
   });
 });

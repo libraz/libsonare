@@ -250,7 +250,7 @@ describe('masteringRepairTrimSilenceStereo (WASM)', () => {
     const base = { left, right, sampleRate: SR, threshold: MID_THRESHOLD };
 
     // The core field is unsigned, so -1 crossing the boundary unchanged lands
-    // at SIZE_MAX -- past the validator's SIZE_MAX/2 bound, not below zero.
+    // at SIZE_MAX -- past the validator's padding bound, not below zero.
     // Substituting 0 or the default instead would make a caller's mistake
     // indistinguishable from a deliberate no-padding call.
     // Matched by message, not merely by throwing: an absent export throws too,

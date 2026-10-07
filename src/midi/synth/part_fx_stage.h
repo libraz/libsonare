@@ -120,6 +120,10 @@ class PartFxHost {
   virtual float part_controller_position(int part, uint8_t source) const noexcept = 0;
   /// The part's pan in voice pan units, restored after a mono rig prefix.
   virtual float part_pan_units(int part) const noexcept = 0;
+  /// Whether the owner drives unit 0's EFX CONTROL destinations itself (an
+  /// overlay running in place of the snapshot's controls), so the stage leaves
+  /// them to it.
+  virtual bool drives_efx_controls() const noexcept { return false; }
 
  protected:
   ~PartFxHost() = default;
@@ -226,19 +230,20 @@ class PartFxStage {
   const PartFxSnapshot* current() const noexcept { return pub_->current(); }
   void acquire() noexcept;
   /// CONTROL thread at a quiescent boundary: adopt every published snapshot,
-  /// including a coalesced pending replacement left behind by a full burst.
-  /// Unlike acquire(), this may reclaim the retire ring between iterations.
-  void acquire_control_quiescent() noexcept;
+  /// including a coalesced pending replacement left behind by a full burst,
+  /// settle it as settle_block() does, then publish the tail of the result.
+  /// The one entry an owner calls before a chain or a tail is read without
+  /// rendering, so neither is observable ahead of the retained controllers.
+  void settle_quiescent(const PartFxHost& host) noexcept;
+  /// AUDIO thread, after acquire(): apply every pending parameter update, then
+  /// move each EFX CONTROL's slot to where its source now puts it, unless
+  /// @p host drives the controls itself. The tail is raised over the result.
+  void settle_block(const PartFxHost& host) noexcept;
   /// CONTROL thread: the last published snapshot.
   const PartFxSnapshot* control_current() const noexcept { return pub_->control_current().get(); }
   /// How many snapshots have been published.
   uint32_t generation() const noexcept { return generation_; }
 
-  /// AUDIO thread: apply every pending parameter update to the current units.
-  void drain_param_updates() noexcept;
-  /// AUDIO thread, after drain_param_updates(): move each EFX CONTROL's slot to
-  /// where its source now puts it.
-  void apply_controls(const PartFxHost& host) noexcept;
   /// AUDIO thread: apply the published unit's retained plan for @p target in
   /// place. EFX CONTROL reads @p control_part; a negative part skips CONTROL
   /// and the enable rules.
@@ -352,6 +357,13 @@ class PartFxStage {
     alignas(64) std::atomic<size_t> tail_{0};  // audio thread (consumer)
   };
 
+  /// Adopt every published snapshot; may reclaim the retire ring between
+  /// iterations, which acquire() may not.
+  void acquire_control_quiescent() noexcept;
+  /// Apply every pending parameter update to the current units.
+  void drain_param_updates() noexcept;
+  /// Move each EFX CONTROL's slot to where its source now puts it.
+  void apply_controls(const PartFxHost& host) noexcept;
   /// The rig in force for @p part and, for kChain, the entry carrying it.
   PartRigMode effective_mode(int part, const PartRig** entry) const noexcept;
   /// Recompute bank_parts_ from the entries.

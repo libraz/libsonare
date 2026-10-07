@@ -261,6 +261,16 @@ const char* catalog_category(const std::string& id) {
   return "other";
 }
 
+// Whether the stage has a causal configuration: its output at a sample depends only on the
+// input up to it plus the latency it reports. Declick and declip need the far side of a defect
+// to reconstruct it, and a trim chooses its range from the whole signal; the other repair
+// stages have a causal setting, and every insert is causal by construction.
+bool catalog_causal(const std::string& id, bool realtime_insertable) {
+  if (id == "repair.declick" || id == "repair.declip" || id == "repair.trimSilence") return false;
+  if (id.rfind("repair.", 0) == 0) return true;
+  return realtime_insertable;
+}
+
 std::string build_processor_catalog_json() {
   const std::set<std::string> insert_set = [] {
     const auto names = insert_factory_names();
@@ -316,8 +326,10 @@ std::string build_processor_catalog_json() {
     out += '"';
     out += ",\"category\":\"";
     out += catalog_category(id);
-    out += "\",\"params\":";
-    out += realtime_insertable ? insert_param_info_json(id) : "[]";
+    out += "\",\"causal\":";
+    out += catalog_causal(id, realtime_insertable) ? "true" : "false";
+    out += ",\"params\":";
+    out += realtime_insertable ? insert_param_info_json(id) : repair_param_info_json(id);
     out += ",\"slots\":";
     out += realtime_insertable ? insert_slot_info_json(id) : "[]";
     out += '}';
@@ -346,6 +358,7 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].realtimeCost",
       "[].channelPolicy",
       "[].category",
+      "[].causal",
       "[].params",
       "[].params[].name",
       "[].params[].id",
