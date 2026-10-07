@@ -2,7 +2,47 @@
 
 ## Unreleased
 
+### Upgrade notes
+
+#### Rebuild
+
+- The project ABI counter moved from 2 to 3 (packed `SONARE_ABI_VERSION` `0x04020306`): `sonare_project_add_loop_recording_takes` gained two optional out-parameters, and `SonareProjectLoopRecordingDesc.reserved` is now `flags`.
+- Every binding checks the loaded native module's ABI version when it loads and refuses a mismatch with the new error code `AbiMismatch` (10): Node when the addon is required, WASM in `init()`, Python on first library use (the Python CLI exits with 13). The code is binding-only; the core never reports it.
+
+#### Now refused
+
+- A track lane whose source channel layout is not stereo is refused with InvalidParameter; mono, 5.1 and 7.1 were accepted but rendered as stereo. A zero-initialised C `SonareEngineTrackLane` reads as mono, so C callers set `SONARE_CHANNEL_LAYOUT_STEREO` (`sonare_engine_set_track_lanes`, `setTrackLanes`, `set_track_lanes`).
+
+#### Error classes
+
+- A failure that comes from the library or from an object's state is a `SonareError` carrying the C-ABI code on every surface. On Node and WASM a released, destroyed or uninitialised handle, including a WASM embind object already deleted, throws `SonareError` with `InvalidState` where it threw a plain `Error` or `TypeError`; in Python the bare `RuntimeError`s became `SonareError` (still a `RuntimeError` subclass) with `NOT_SUPPORTED`, `INVALID_STATE` or `UNKNOWN`.
+- Two buffers whose lengths must match are refused with a `RangeError` on Node and WASM, where some paths threw `TypeError` or a plain `Error`.
+- Python `Project.add_loop_recording_takes` returns a `LoopRecordingResult` instead of a `(clip_id, take_count)` tuple, and the streaming `ChordChange` / `BarChord` constructors take `name` after `quality`.
+
 ### New
+
+#### Errors and lifetime
+
+- Read the code recorded beside the last error message, so a function that returns a NULL handle reports why (C: `sonare_last_error_code`). Node, WASM and Python use it for the mixer scene load, strip creation and the streaming mastering constructors.
+- Release every WASM handle class with `using` (`[Symbol.dispose]`), as on Node; `ProjectTimeline`, `ClipPageProvider` and `ClipPageStreamer` gain the `delete` / `destroy` aliases.
+
+#### Analysis
+
+- Name the streaming key and chords: the progressive estimate carries `keyName`, `keyShortName` and `chordName`, and each chord change and bar chord a `name`, spelled by the same functions batch analysis uses (Python: `key_name`, `key_short_name`, `chord_name`, `name`). No chord reads `N.C.`; an unknown key has no name.
+
+#### Project
+
+- List unresolved audio sources as full descriptors and read an audio source's URI untruncated (C: `sonare_project_unresolved_audio_source_by_index`, `sonare_project_get_audio_source_uri`; Node and WASM: `Project.unresolvedAudioSources`; Python: `unresolved_audio_sources`). `sourceByIndex` / `source_by_index` now return the full URI.
+- Loop recording takes accept planar audio (one array per channel) on Node, WASM and Python, and report whether the last take is partial and its length (`partialTail`, `lastTakeFrames`; Python `LoopRecordingResult`). `partialTail: 'drop'` (C: `SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL`) leaves the partial take out.
+
+#### Mastering
+
+- The insert parameter descriptor states whether each bound is exclusive (`minExclusive`, `maxExclusive`) and marks a ceiling bounded by the processing rate's Nyquist (`maxRelativeTo: "nyquist"`; the effective ceiling is the lower of `max` and the Nyquist).
+
+#### Packaging
+
+- The WASM package resolves every entry under the `default` condition and TypeScript's node10 resolution, exports the analysis-only module as `./wasm/analysis`, and its glue no longer makes webpack or esbuild fail on `node:module`.
+- The installed pkg-config file resolves its prefix relative to itself, and the exported CMake targets require C++17.
 
 #### Realtime engine and project
 
@@ -16,12 +56,20 @@
 
 ### Behaviour changes
 
+- A loop recording whose last loop is incomplete keeps the previous complete take active; the partial take is kept but not activated. A remainder of one frame or less no longer creates a take.
+- Loading a mixing scene reports every key the reader does not consume in `sceneWarnings()` / `scene_warnings` (keys starting with `$` or `x-` are exempt, and the scene schema accepts them).
+- A malformed scene document passed to the mixer is `InvalidFormat`.
+- A call before WASM `init()` throws `SonareError` with `InvalidState`, and a second `init()` with different options throws `InvalidState` naming the option.
 - Pre-fader sends of a lane silenced by mute or solo are silenced with it.
 - A solo-safe lane keeps sounding while another lane is soloed.
 - Bounce and freeze of a live engine reset its mixer and effect processors before rendering, cutting insert tails and delay lines that were still ringing.
 
 ### Fixes
 
+- Published insert parameter bounds are rounded inward, so a gain ceiling such as 770.637 that the insert itself refused is no longer advertised.
+- Percussion keeps its strike level under pitch bend, the organ wind chest stops loading the regulator when a release ends mid-block, harpsichord tails fade with the release law on choke, and SF2 applies GS scale tuning live.
+- MIDI FX transpose and chord fan-out follow MIDI 2.0 per-note pitch bend, per-note management and absolute-pitch attributes; same-frame pending FX events keep their order.
+- The reed tonehole reflection follows the bent pitch.
 - A second bounce or freeze of the same engine renders the same audio as the first instead of starting from the processor state the first one left behind.
 - The WASM worklet engine's `renderOffline` primes its offline engine before rendering, so its first block no longer ramps in from default parameter values.
 - The transient shaper and vocal rider report their gain reduction, in the per-insert gain-reduction readout and in the mastering chain's stage gain reductions.
