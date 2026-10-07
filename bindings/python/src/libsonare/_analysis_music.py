@@ -291,6 +291,7 @@ def detect_boundaries(
     n_mfcc: int = 13,
     n_chroma: int = 12,
     peak_distance: float = 2.0,
+    reference_window: float = 60.0,
     use_mfcc: bool = True,
     use_chroma: bool = True,
 ) -> BoundaryResult:
@@ -324,6 +325,10 @@ def detect_boundaries(
         n_mfcc: Number of MFCC coefficients.
         n_chroma: Number of chroma bins.
         peak_distance: Minimum spacing between peaks, in seconds.
+        reference_window: One-sided span in seconds (default 60) over which the
+            local novelty maximum that ``threshold`` is measured against is taken.
+            Must be finite and non-negative; 0 makes each frame its own
+            reference, which disables the relative threshold.
         use_mfcc: Use MFCC features.
         use_chroma: Use chroma features.
 
@@ -348,6 +353,7 @@ def detect_boundaries(
         n_mfcc=_to_c_int(n_mfcc, "n_mfcc"),
         n_chroma=_to_c_int(n_chroma, "n_chroma"),
         peak_distance=_to_c_float(peak_distance, "peak_distance"),
+        reference_window=_to_c_float(reference_window, "reference_window"),
         use_mfcc=1 if use_mfcc else 0,
         use_chroma=1 if use_chroma else 0,
     )

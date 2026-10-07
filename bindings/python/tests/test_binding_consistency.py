@@ -744,7 +744,7 @@ def test_detect_boundaries_keyword_defaults_match_the_core() -> None:
         assert parameters[name].default == getattr(core, name), name
     # Stored as C float, so compare at float32 precision rather than pinning a
     # decimal literal that only happens to round-trip.
-    for name in ("threshold", "absolute_threshold", "peak_distance"):
+    for name in ("threshold", "absolute_threshold", "peak_distance", "reference_window"):
         assert parameters[name].default == pytest.approx(getattr(core, name), rel=1e-6), name
     # The C struct spells the two flags as int32; Python spells them as bool.
     for name in ("use_mfcc", "use_chroma"):

@@ -541,9 +541,19 @@ def detect_boundaries(
     n_mfcc: int = 13,
     n_chroma: int = 12,
     peak_distance: float = 2.0,
+    reference_window: float = 60.0,
     use_mfcc: bool = True,
     use_chroma: bool = True,
-) -> BoundaryResult: ...
+) -> BoundaryResult:
+    """Detect structural boundaries and return the novelty curve behind them.
+
+    ``reference_window`` is a one-sided span in seconds (default 60) for the local
+    reference the relative ``threshold`` is measured against; 0 disables that
+    threshold. Boundaries with ``strength`` below ``threshold`` can still be
+    returned, because the gate is local while ``strength`` ranks within the track.
+    """
+    ...
+
 def analyze_melody(
     samples: FloatSamples,
     sample_rate: int = 22050,

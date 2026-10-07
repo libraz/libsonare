@@ -208,6 +208,7 @@ class SonareBoundaryOptions(CStruct):
         ("peak_distance", ctypes.c_float),
         ("use_mfcc", ctypes.c_int32),
         ("use_chroma", ctypes.c_int32),
+        ("reference_window", ctypes.c_float),
     ]
 
 

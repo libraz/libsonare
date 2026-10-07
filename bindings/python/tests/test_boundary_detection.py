@@ -145,3 +145,35 @@ def test_disabling_both_feature_streams_is_refused(three_sections) -> None:
 def test_non_positive_grid_options_are_refused(three_sections, option) -> None:
     with pytest.raises(libsonare.SonareError):
         libsonare.detect_boundaries(three_sections[:_SR], sample_rate=_SR, **{option: 0})
+
+
+def test_reference_window_default_matches_the_c_default() -> None:
+    import ctypes
+    import inspect
+
+    from libsonare._ffi_types_streaming import SonareBoundaryOptions
+    from libsonare._runtime import _get_lib
+
+    lib = _get_lib()
+    lib.sonare_boundary_options_default.restype = SonareBoundaryOptions
+    lib.sonare_boundary_options_default.argtypes = []
+    core = lib.sonare_boundary_options_default()
+    default = inspect.signature(libsonare.detect_boundaries).parameters["reference_window"].default
+    assert default == 60.0
+    assert core.reference_window == default
+    assert ctypes.sizeof(SonareBoundaryOptions) == 44
+
+
+@pytest.mark.parametrize("value", [-1.0, float("nan"), float("inf"), float("-inf")])
+def test_invalid_reference_window_is_refused(three_sections, value) -> None:
+    with pytest.raises(libsonare.SonareError):
+        libsonare.detect_boundaries(three_sections[:_SR], sample_rate=_SR, reference_window=value)
+
+
+def test_reference_window_zero_disables_the_relative_threshold(three_sections) -> None:
+    """A mirror that dropped the field would read zero for both calls and agree."""
+    gated = libsonare.detect_boundaries(three_sections, sample_rate=_SR, absolute_threshold=0.0)
+    ungated = libsonare.detect_boundaries(
+        three_sections, sample_rate=_SR, absolute_threshold=0.0, reference_window=0.0
+    )
+    assert len(ungated.boundaries) != len(gated.boundaries)
