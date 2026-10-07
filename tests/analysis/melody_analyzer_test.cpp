@@ -3,6 +3,7 @@
 
 #include "analysis/melody_analyzer.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -296,4 +297,48 @@ TEST_CASE("MelodyAnalyzer reports no vibrato on a steady tone", "[melody_analyze
   MelodyAnalyzer analyzer(generate_sine_audio(440.0f, 22050, 3.0f, 0.5f));
   REQUIRE(analyzer.has_melody());
   CHECK(analyzer.contour().vibrato_rate < 1.0f);
+}
+
+TEST_CASE("MelodyAnalyzer onset time and pitch agree across input rates", "[melody_analyzer]") {
+  constexpr float kSilenceSec = 0.5f;
+  constexpr float kToneSec = 1.5f;
+  constexpr float kToneHz = 440.0f;
+  constexpr int kHop = 128;
+  const int rates[] = {22050, 44100, 48000};
+
+  float first_voiced[3] = {};
+  for (int r = 0; r < 3; ++r) {
+    const int sr = rates[r];
+    const size_t n_silence = static_cast<size_t>(kSilenceSec * sr);
+    const size_t n_tone = static_cast<size_t>(kToneSec * sr);
+    std::vector<float> samples(n_silence + n_tone, 0.0f);
+    for (size_t i = 0; i < n_tone; ++i) {
+      samples[n_silence + i] =
+          0.5f * std::sin(2.0f * sonare::constants::kPi * kToneHz * static_cast<float>(i) / sr);
+    }
+    MelodyConfig config;
+    config.hop_length = kHop;
+    MelodyAnalyzer analyzer(Audio::from_vector(std::move(samples), sr), config);
+
+    std::vector<float> voiced;
+    first_voiced[r] = -1.0f;
+    for (const auto& p : analyzer.contour().pitches) {
+      if (p.frequency <= 0.0f) continue;
+      if (first_voiced[r] < 0.0f) first_voiced[r] = p.time;
+      voiced.push_back(p.frequency);
+    }
+    INFO("sr=" << sr << " first voiced=" << first_voiced[r]);
+    REQUIRE_FALSE(voiced.empty());
+    std::sort(voiced.begin(), voiced.end());
+    float median = voiced[voiced.size() / 2];
+    float cents = sonare::constants::kCentsPerOctave * std::log2(median / kToneHz);
+    CHECK(std::abs(cents) <= 10.0f);
+  }
+  for (int a = 0; a < 3; ++a) {
+    for (int b = a + 1; b < 3; ++b) {
+      INFO("rates " << rates[a] << " vs " << rates[b]);
+      CHECK(std::abs(first_voiced[a] - first_voiced[b]) <=
+            static_cast<float>(kHop) / rates[a] + static_cast<float>(kHop) / rates[b]);
+    }
+  }
 }

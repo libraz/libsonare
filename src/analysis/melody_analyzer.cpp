@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "analysis/analysis_rate.h"
 #include "feature/pitch.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -24,12 +25,19 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
     : config_(config), sr_(audio.sample_rate()) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
 
+  // frame_length is samples at kAnalysisSampleRate; convert to the input rate.
+  int frame_size = config.frame_length;
+  if (frame_size > 0) {
+    frame_size = std::max(2, static_cast<int>(std::lround(static_cast<double>(frame_size) * sr_ /
+                                                          kAnalysisSampleRate)));
+  }
+
   if (config.use_pyin) {
     // pYIN path: Viterbi-smoothed contour with (optional) frame centering, so
     // the contour and timestamps match librosa.pyin(center=...). Frame i is
     // centered at i*hop_length when center=true.
     PitchConfig pc;
-    pc.frame_length = config.frame_length;
+    pc.frame_length = frame_size;
     pc.hop_length = config.hop_length;
     pc.fmin = config.fmin;
     pc.fmax = config.fmax;
@@ -65,7 +73,6 @@ MelodyAnalyzer::MelodyAnalyzer(const Audio& audio, const MelodyConfig& config)
   const float* samples = audio.data();
   size_t n_samples = audio.size();
 
-  int frame_size = config.frame_length;
   int hop = config.hop_length;
 
   for (size_t start = 0; start + frame_size <= n_samples; start += hop) {

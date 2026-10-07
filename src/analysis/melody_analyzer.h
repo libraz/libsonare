@@ -29,8 +29,8 @@ struct MelodyContour {
 struct MelodyConfig {
   float fmin = 65.0f;       ///< Minimum frequency in Hz (C2)
   float fmax = 2093.0f;     ///< Maximum frequency in Hz (C7)
-  int frame_length = 2048;  ///< Frame length in samples
-  int hop_length = 256;     ///< Hop length in samples
+  int frame_length = 2048;  ///< Frame length in samples at 22050 Hz, rescaled to the input rate
+  int hop_length = 256;     ///< Hop length in input-buffer samples
   float threshold = 0.1f;   ///< YIN threshold (lower = stricter)
 
   /// @brief Use the pYIN tracker (Viterbi-smoothed) instead of plain per-frame
