@@ -91,6 +91,9 @@ int same_time_rank(const Ump& ump) noexcept;
 /// their own bytes: see @ref render_event_before.
 constexpr int kGeneralRank = 4;
 
+/// The highest rank @ref same_time_rank returns, held by a note-on.
+constexpr int kMaxSameTimeRank = 5;
+
 /// Strict-weak ordering used by every render-event sort: ascending render_frame,
 /// then same_time_rank (note-off before note-on), then a deterministic
 /// note/channel/first-word tiebreak. Exposed so fixed-capacity buffers (e.g.

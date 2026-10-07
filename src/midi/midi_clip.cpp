@@ -54,7 +54,7 @@ int same_time_rank(const Ump& ump) noexcept {
     // the same timestamp uses the new program/bank.
     if (static_cast<UmpStatus>(ump.status_nibble()) == UmpStatus::kProgramChange) return 3;
   }
-  if (ump.is_note_on()) return 5;
+  if (ump.is_note_on()) return kMaxSameTimeRank;
   return kGeneralRank;
 }
 

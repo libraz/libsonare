@@ -410,8 +410,7 @@ void MidiSequencer::clear_pending_note_events_for_channel(uint32_t destination_i
       continue;
     }
     clear_pending_note_tracking_for_event(pending);
-    runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
+    erase_pending(i);
   }
 }
 
@@ -462,36 +461,12 @@ void MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& ev
       PendingFxEvent{destination_id, event, clip_id, from_clip};
 }
 
-void MidiSequencer::dispatch_pending_through(int64_t block_start_frame, int64_t block_end_frame,
-                                             int64_t through_frame) noexcept {
-  if (runtime_storage_ == nullptr) return;
-  for (;;) {
-    size_t selected = pending_fx_count_;
-    int64_t selected_frame = 0;
-    for (size_t i = 0; i < pending_fx_count_; ++i) {
-      const int64_t frame =
-          std::max(runtime_storage_->pending_fx[i].event.render_frame, block_start_frame);
-      if (frame >= block_end_frame || frame > through_frame) continue;
-      if (selected == pending_fx_count_ || frame < selected_frame) {
-        selected = i;
-        selected_frame = frame;
-      }
-    }
-    if (selected == pending_fx_count_) return;
-
-    PendingFxEvent pending = runtime_storage_->pending_fx[selected];
-    // Remove before dispatch: a channel-mode reset may clear other pending slots.
-    runtime_storage_->pending_fx[selected] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
-    // An event carried over from an earlier block still holds that block's
-    // render_frame; clamp it to the current block start so sample-accurate
-    // consumers never see a timestamp in the past. (BuiltinSynth ignores the
-    // frame, but external/sample-accurate instruments would mis-place it.)
-    if (pending.event.render_frame < block_start_frame) {
-      pending.event.render_frame = block_start_frame;
-    }
-    dispatch_transformed(pending.destination_id, pending.event, pending.from_clip, pending.clip_id);
+void MidiSequencer::erase_pending(size_t index) noexcept {
+  if (runtime_storage_ == nullptr || index >= pending_fx_count_) return;
+  for (size_t i = index + 1; i < pending_fx_count_; ++i) {
+    runtime_storage_->pending_fx[i - 1] = runtime_storage_->pending_fx[i];
   }
+  --pending_fx_count_;
 }
 
 void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexcept {
@@ -503,8 +478,7 @@ void MidiSequencer::clear_pending_for_destination(uint32_t destination_id) noexc
       continue;
     }
     clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
-    runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
+    erase_pending(i);
   }
 }
 
@@ -518,8 +492,7 @@ void MidiSequencer::clear_pending_for_clip(uint32_t clip_id) noexcept {
       continue;
     }
     clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[i]);
-    runtime_storage_->pending_fx[i] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
+    erase_pending(i);
   }
 }
 
@@ -588,8 +561,7 @@ void MidiSequencer::release_notes_for_absent_clips(const std::vector<MidiClipSch
       continue;
     }
     clear_pending_note_tracking_for_event(runtime_storage_->pending_fx[p]);
-    runtime_storage_->pending_fx[p] = runtime_storage_->pending_fx[pending_fx_count_ - 1];
-    --pending_fx_count_;
+    erase_pending(p);
   }
 }
 
@@ -696,6 +668,45 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
     }
   };
 
+  // Pending MIDI-FX output joins clip output in one timestamp/rank merge, in insertion order.
+  auto dispatch_pending_at_rank = [&](int64_t frame, int rank) noexcept {
+    if (runtime_storage_ == nullptr) return;
+    size_t i = 0;
+    while (i < pending_fx_count_) {
+      const PendingFxEvent pending = runtime_storage_->pending_fx[i];
+      const int64_t pending_frame = std::max(pending.event.render_frame, block_start_frame);
+      if (pending_frame != frame || same_time_rank(pending.event.ump) != rank) {
+        ++i;
+        continue;
+      }
+
+      // Remove before dispatch, since a channel-mode reset may clear other pending slots.
+      erase_pending(i);
+      MidiEvent event = pending.event;
+      if (event.render_frame < block_start_frame) event.render_frame = block_start_frame;
+      dispatch_transformed(pending.destination_id, event, pending.from_clip, pending.clip_id);
+      // The dispatch may have shifted the queue; restart so no same-rank event is skipped.
+      i = 0;
+    }
+  };
+  auto dispatch_pending_before = [&](int64_t frame) noexcept {
+    if (runtime_storage_ == nullptr) return;
+    for (;;) {
+      int64_t earliest = frame;
+      for (size_t i = 0; i < pending_fx_count_; ++i) {
+        const int64_t pending_frame =
+            std::max(runtime_storage_->pending_fx[i].event.render_frame, block_start_frame);
+        if (pending_frame < earliest && pending_frame < block_end_frame) {
+          earliest = pending_frame;
+        }
+      }
+      if (earliest == frame) return;
+      for (int rank = 0; rank <= kMaxSameTimeRank; ++rank) {
+        dispatch_pending_at_rank(earliest, rank);
+      }
+    }
+  };
+
   int64_t cursor = block_start_frame;
   while (cursor < block_end_frame) {
     int64_t next_frame = block_end_frame;
@@ -712,19 +723,26 @@ void MidiSequencer::process_block(int64_t block_start_frame, int num_frames) noe
                     });
     if (next_frame >= block_end_frame) break;
 
-    dispatch_pending_through(block_start_frame, block_end_frame, next_frame);
-    visit_scheduled(next_frame, [&](const MidiClipSchedule& clip, const MidiEvent* event,
-                                    int64_t frame, bool clear_pending) noexcept {
-      if (frame != next_frame) return;
-      if (event != nullptr) {
-        MidiEvent scheduled = *event;
-        scheduled.render_frame = frame;
-        scheduled.source_track_id = clip.track_id;
-        process_event(clip.destination_id, scheduled, block_end_frame, /*from_clip=*/true, clip.id);
-      } else {
-        release_notes_for_clip(clip.id, frame, clear_pending);
-      }
-    });
+    // Flush earlier carried events, then merge both sources at this frame by same_time_rank.
+    dispatch_pending_before(next_frame);
+    for (int rank = 0; rank <= kMaxSameTimeRank; ++rank) {
+      dispatch_pending_at_rank(next_frame, rank);
+      visit_scheduled(next_frame, [&](const MidiClipSchedule& clip, const MidiEvent* event,
+                                      int64_t frame, bool clear_pending) noexcept {
+        if (frame != next_frame) return;
+        const int scheduled_rank = event == nullptr ? 0 : same_time_rank(event->ump);
+        if (scheduled_rank != rank) return;
+        if (event != nullptr) {
+          MidiEvent scheduled = *event;
+          scheduled.render_frame = frame;
+          scheduled.source_track_id = clip.track_id;
+          process_event(clip.destination_id, scheduled, block_end_frame, /*from_clip=*/true,
+                        clip.id);
+        } else {
+          release_notes_for_clip(clip.id, frame, clear_pending);
+        }
+      });
+    }
     cursor = next_frame + 1;
   }
 

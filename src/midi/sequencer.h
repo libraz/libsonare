@@ -323,8 +323,10 @@ class MidiSequencer {
                             uint32_t clip_id) noexcept;
   void enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                        uint32_t clip_id) noexcept;
-  void dispatch_pending_through(int64_t block_start_frame, int64_t block_end_frame,
-                                int64_t through_frame) noexcept;
+  // Remove one pending FX event without changing the order of the remaining
+  // fixed-capacity queue. The audio path uses this instead of swap-remove so
+  // same-frame controller gestures retain their stream order.
+  void erase_pending(size_t index) noexcept;
   void clear_active_notes_for_channel(uint32_t destination_id, uint8_t group,
                                       uint8_t channel) noexcept;
   void clear_pending_note_events_for_channel(uint32_t destination_id, uint8_t group,

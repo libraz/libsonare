@@ -1254,6 +1254,214 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   REQUIRE(seq.active_note_count() == 0);
 }
 
+TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI FX", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  // A same-timestamp RPN gesture must retain its written order after all four
+  // controllers are delayed into the pending-FX queue. The selector bytes
+  // (101, 100) give the following Data Entry pair its meaning.
+  MidiClipSchedule clip;
+  clip.id = 1201;
+  clip.destination_id = 9;
+  clip.events = {
+      {60, sonare::midi::make_midi1_control_change(0, 0, 101, 0)},
+      {60, sonare::midi::make_midi1_control_change(0, 0, 100, 0)},
+      {60, sonare::midi::make_midi1_control_change(0, 0, 6, 12)},
+      {60, sonare::midi::make_midi1_control_change(0, 0, 38, 0)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 4);
+  constexpr std::array<uint8_t, 4> kWritten{101, 100, 6, 38};
+  for (size_t i = 0; i < kWritten.size(); ++i) {
+    REQUIRE(sink.events[i].destination == 9);
+    REQUIRE(sink.events[i].event.render_frame == 100);
+    REQUIRE(sink.events[i].event.ump.note_number() == kWritten[i]);
+  }
+}
+
+TEST_CASE("MidiSequencer ranks same-frame note-off before note-on across clips", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiClipSchedule incoming;
+  incoming.id = 1206;
+  incoming.track_id = 91;
+  incoming.destination_id = 9;
+  incoming.events = {{100, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+
+  MidiClipSchedule old;
+  old.id = 1207;
+  old.track_id = 91;
+  old.destination_id = 9;
+  old.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+
+  // The incoming clip is deliberately first in the published vector. Its
+  // note-on must still follow the old clip's same-frame note-off after the
+  // sequencer merges events from all clips.
+  seq.set_midi_clips({incoming, old});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 3);
+  REQUIRE(sink.events[0].event.render_frame == 0);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[1].event.render_frame == 100);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[2].event.render_frame == 100);
+  REQUIRE(sink.events[2].event.ump.is_note_on());
+  REQUIRE(seq.active_note_count() == 1);
+}
+
+TEST_CASE("MidiSequencer globally ranks a scheduled note-off before a pending note-on", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  // The note-on is moved from 60 to 100 and therefore waits in the FX queue.
+  // The other clip's note-off is already scheduled at 100. Both clips share a
+  // track, destination, group, channel and key, so the off-before-on ordering
+  // is observable in both the sink stream and the active-note ledger.
+  MidiClipSchedule pending_on;
+  pending_on.id = 1202;
+  pending_on.track_id = 77;
+  pending_on.destination_id = 9;
+  pending_on.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  MidiClipSchedule scheduled_off;
+  scheduled_off.id = 1203;
+  scheduled_off.track_id = 77;
+  scheduled_off.destination_id = 9;
+  scheduled_off.events = {{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+
+  seq.set_midi_clips({pending_on, scheduled_off});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.render_frame == 100);
+  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[1].event.render_frame == 100);
+  REQUIRE(sink.events[1].event.ump.is_note_on());
+  REQUIRE(seq.active_note_count() == 1);
+}
+
+TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a note", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule clip;
+  clip.id = 1208;
+  clip.track_id = 92;
+  clip.destination_id = 9;
+  // The three source frames quantize to 100 in this order, producing a
+  // pending queue of note-on(rank 5), reset(rank 4), CC(rank 4). Dispatching
+  // the reset removes the pending note-on, so the iterator must rescan the
+  // shifted slot and still dispatch the CC at frame 100.
+  clip.events = {
+      {60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+      {61, sonare::midi::make_midi1_control_change(0, 0, 120, 0)},
+      {62, sonare::midi::make_midi1_control_change(0, 0, 1, 64)},
+  };
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 2);
+  REQUIRE(sink.events[0].event.render_frame == 100);
+  REQUIRE(sink.events[0].event.ump.note_number() == 120);
+  REQUIRE(sink.events[1].event.render_frame == 100);
+  REQUIRE(sink.events[1].event.ump.note_number() == 1);
+  REQUIRE(seq.active_note_count() == 0);
+
+  // A skipped CC must not be carried into the following block.
+  seq.process_block(128, 128);
+  REQUIRE(sink.events.size() == 2);
+}
+
+TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end release", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(0);
+
+  MidiClipSchedule ending;
+  ending.id = 1204;
+  ending.track_id = 88;
+  ending.destination_id = 9;
+  ending.loop_mode = sonare::midi::MidiLoopMode::kOneShot;
+  ending.length_samples = 100;
+  ending.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+
+  // This note is transformed at frame 60 and becomes a pending note-on at the
+  // exact exclusive end of the first clip. The synthetic clip-end release for
+  // the first clip must still be emitted before that note-on.
+  MidiClipSchedule incoming;
+  incoming.id = 1205;
+  incoming.track_id = 88;
+  incoming.destination_id = 9;
+  incoming.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+
+  seq.set_midi_clips({incoming, ending});
+  seq.acquire_midi_clips();
+  seq.process_block(0, 128);
+
+  REQUIRE(sink.events.size() == 3);
+  REQUIRE(sink.events[0].event.render_frame == 0);
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[1].event.render_frame == 100);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(sink.events[2].event.render_frame == 100);
+  REQUIRE(sink.events[2].event.ump.is_note_on());
+  REQUIRE(seq.active_note_count() == 1);
+}
+
 TEST_CASE("MidiSequencer humanize advances ordinals like offline MIDI FX", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;
@@ -2582,9 +2790,21 @@ TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order",
   const int block_frames = 256;
   std::vector<std::pair<int64_t, uint32_t>> expected;
   for (int64_t frame = block_start; frame < block_start + block_frames; ++frame) {
-    if (frame % 10 == 0) expected.emplace_back(frame, 5u);
-    if (frame % 10 == 5) expected.emplace_back(frame, 5u);
-    if ((frame % 1000) % 7 == 0) expected.emplace_back(frame, 6u);
+    const bool has_even_clip_event = frame % 10 == 0;
+    const bool has_odd_clip_event = frame % 10 == 5;
+    const bool even_is_on = has_even_clip_event && ((frame / 10) % 2 == 0);
+    const bool odd_is_on = has_odd_clip_event && (((frame - 5) / 10) % 2 == 0);
+    const bool has_loop_controller = (frame % 1000) % 7 == 0;
+
+    // This expected stream is the same merged set as before, with the
+    // same_time_rank contract made explicit for collisions: note-off (rank 0),
+    // general controller (rank 4), then note-on (rank 5). The odd/even source
+    // event index identifies whether each note is an off or an on.
+    if (has_even_clip_event && !even_is_on) expected.emplace_back(frame, 5u);
+    if (has_odd_clip_event && !odd_is_on) expected.emplace_back(frame, 5u);
+    if (has_loop_controller) expected.emplace_back(frame, 6u);
+    if (has_even_clip_event && even_is_on) expected.emplace_back(frame, 5u);
+    if (has_odd_clip_event && odd_is_on) expected.emplace_back(frame, 5u);
   }
 
   seq.process_block(block_start, block_frames);
