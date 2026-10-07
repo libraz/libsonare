@@ -23,7 +23,11 @@ export interface TempogramRequest {
   center?: boolean;
   norm?: boolean;
 }
-export interface CyclicTempogramRequest extends TempogramRequest {
+export interface CyclicTempogramRequest {
+  onsetEnvelope: Float32Array;
+  sampleRate?: number;
+  hopLength?: number;
+  winLength?: number;
   bpmMin?: number;
   nBins?: number;
 }
@@ -211,8 +215,6 @@ export function cyclicTempogram(
   sampleRate?: number,
   hopLength?: number,
   winLength?: number,
-  center?: boolean,
-  norm?: boolean,
   bpmMin?: number,
   nBins?: number,
 ): { nFrames: number; nBins: number; data: Float32Array };
@@ -221,14 +223,12 @@ export function cyclicTempogram(
   sampleRate = 22050,
   hopLength = 512,
   winLength = 384,
-  center = true,
-  norm = true,
   bpmMin = 60.0,
   nBins = 60,
 ): { nFrames: number; nBins: number; data: Float32Array } {
   const request =
     onsetEnvelope instanceof Float32Array
-      ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm, bpmMin, nBins }
+      ? { onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins }
       : onsetEnvelope;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('cyclicTempogram', resolvedSampleRate);

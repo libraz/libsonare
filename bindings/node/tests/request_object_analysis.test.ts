@@ -1,92 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import {
-  analyze,
-  analyzeAsync,
-  analyzeBpm,
-  analyzeDynamics,
-  analyzeImpulseResponse,
-  analyzeMelody,
-  analyzeRhythm,
-  analyzeSections,
-  analyzeTimbre,
-  analyzeWithProgress,
-  chordFunctionalAnalysis,
-  detectAcoustic,
-  detectBeats,
-  detectBpm,
-  detectChords,
-  detectDownbeats,
-  detectKey,
-  detectKeyCandidates,
-  detectOnsets,
-  estimateRoom,
-  roomMorph,
-} from '../src/index.js';
+import { analyze, analyzeWithProgress } from '../src/index.js';
 
 const sampleRate = 22050;
-const samples = new Float32Array(sampleRate / 2);
+// Request-versus-positional equivalence for these functions lives in the
+// table-driven request_object_equivalence.test.ts; this file keeps the
+// request-shape behaviour that table cannot express.
+const tone = new Float32Array(sampleRate * 2).map(
+  (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate),
+);
 
 describe('analysis request-object compatibility', () => {
-  it('preserves basic analysis calls', () => {
-    expect(detectBpm({ samples, sampleRate })).toEqual(detectBpm(samples, sampleRate));
-    expect(detectBeats({ samples, sampleRate })).toEqual(detectBeats(samples, sampleRate));
-    expect(detectDownbeats({ samples, sampleRate })).toEqual(detectDownbeats(samples, sampleRate));
-    expect(detectOnsets({ samples, sampleRate })).toEqual(detectOnsets(samples, sampleRate));
-    expect(analyze({ samples, sampleRate })).toEqual(analyze(samples, sampleRate));
-  });
-
-  it('preserves onset peak-picking options', () => {
-    const options = { nFft: 256, hopLength: 64, delta: 0.02, backtrack: true };
-    expect(Array.from(detectOnsets({ samples, sampleRate, ...options }))).toEqual(
-      Array.from(detectOnsets(samples, sampleRate, options)),
-    );
-  });
-
   it('accepts complete analyzer options', () => {
-    const result = analyze({
-      samples,
-      sampleRate,
+    const options = {
       bpmMin: 30,
       bpmMax: 90,
       startBpm: 55,
       useHpss: false,
       useChordHmm: true,
       detectChordInversions: true,
-    });
+    };
+    const result = analyze({ samples: tone, sampleRate, ...options });
     expect(result.bpm).toBeGreaterThanOrEqual(30);
     expect(result.bpm).toBeLessThanOrEqual(90);
-  });
-
-  it('preserves key options', () => {
-    const options = { useHpss: true, highPassHz: 80 };
-    expect(detectKey({ samples, sampleRate, ...options })).toEqual(
-      detectKey(samples, sampleRate, options),
+    // The control: the bounds reached the tempo search rather than the input
+    // landing inside them on its own.
+    expect(analyze({ samples: tone, sampleRate, bpmMin: 190, bpmMax: 210 }).bpm).not.toBe(
+      result.bpm,
     );
-    expect(detectKeyCandidates({ samples, sampleRate, ...options })).toEqual(
-      detectKeyCandidates(samples, sampleRate, options),
-    );
-  });
-
-  it('preserves async and progress calls', async () => {
-    await expect(analyzeAsync({ samples, sampleRate })).resolves.toEqual(
-      await analyzeAsync(samples, sampleRate),
-    );
-    let positionalCalls = 0;
-    let requestCalls = 0;
-    expect(
-      analyzeWithProgress(samples, sampleRate, () => {
-        positionalCalls++;
-      }),
-    ).toEqual(
-      analyzeWithProgress({
-        samples,
-        sampleRate,
-        onProgress: () => {
-          requestCalls++;
-        },
-      }),
-    );
-    expect(requestCalls).toBe(positionalCalls);
   });
 
   it('honours MusicAnalyzeOptions flattened onto an analyzeWithProgress request', () => {
@@ -96,13 +36,6 @@ describe('analysis request-object compatibility', () => {
     // it carries is optional there -- so a caller reusing one across both used
     // to have the flattened bounds silently dropped by analyzeWithProgress,
     // which only ever read request.options.
-    //
-    // A steady tone, not the file's silent `samples`: bpmMin/bpmMax constrain
-    // the tempo search, and silence has no periodicity for that search to land
-    // on, so it reports the same value regardless of the bounds reaching it.
-    const tone = new Float32Array(sampleRate * 2).map(
-      (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate),
-    );
     const flatRequest = { samples: tone, sampleRate, bpmMin: 190, bpmMax: 210 };
     const viaAnalyze = analyze(flatRequest);
     const viaProgress = analyzeWithProgress({ ...flatRequest, onProgress: () => {} });
@@ -116,9 +49,6 @@ describe('analysis request-object compatibility', () => {
   });
 
   it('lets a nested `options` field win over the same field flattened onto the request', () => {
-    const tone = new Float32Array(sampleRate * 2).map(
-      (_, i) => 0.3 * Math.sin((2 * Math.PI * 440 * i) / sampleRate),
-    );
     const request = {
       samples: tone,
       sampleRate,
@@ -131,89 +61,4 @@ describe('analysis request-object compatibility', () => {
     expect(result.bpm).toBeGreaterThanOrEqual(80);
     expect(result.bpm).toBeLessThanOrEqual(90);
   });
-
-  it('preserves advanced analysis option calls', () => {
-    expect(analyzeSections({ samples, sampleRate, minSectionSec: 1 })).toEqual(
-      analyzeSections(samples, sampleRate, { minSectionSec: 1 }),
-    );
-    expect(analyzeMelody({ samples, sampleRate, fmin: 80, usePyin: false })).toEqual(
-      analyzeMelody(samples, sampleRate, { fmin: 80, usePyin: false }),
-    );
-    expect(analyzeBpm({ samples, sampleRate, bpmMin: 60 })).toEqual(
-      analyzeBpm(samples, sampleRate, { bpmMin: 60 }),
-    );
-    expect(analyzeRhythm({ samples, sampleRate, bpmMin: 70 })).toEqual(
-      analyzeRhythm(samples, sampleRate, { bpmMin: 70 }),
-    );
-    expect(analyzeDynamics({ samples, sampleRate, windowSec: 0.2 })).toEqual(
-      analyzeDynamics(samples, sampleRate, { windowSec: 0.2 }),
-    );
-    expect(analyzeTimbre({ samples, sampleRate, nMels: 32 })).toEqual(
-      analyzeTimbre(samples, sampleRate, { nMels: 32 }),
-    );
-  });
-
-  it('preserves acoustic and chord request calls', () => {
-    expect(analyzeImpulseResponse({ samples, sampleRate, nOctaveBands: 4 })).toEqual(
-      analyzeImpulseResponse(samples, sampleRate, 4),
-    );
-    expect(detectAcoustic({ samples, sampleRate, nOctaveBands: 4 })).toEqual(
-      detectAcoustic(samples, sampleRate, { nOctaveBands: 4 }),
-    );
-    const chordOptions = { minDuration: 0.1, nFft: 512, hopLength: 128 };
-    expect(detectChords({ samples, sampleRate, ...chordOptions })).toEqual(
-      detectChords(samples, sampleRate, chordOptions),
-    );
-    expect(
-      chordFunctionalAnalysis({ samples, sampleRate, keyRoot: 0, keyMode: 0, ...chordOptions }),
-    ).toEqual(chordFunctionalAnalysis(samples, 0, 0, sampleRate, chordOptions));
-  });
-
-  it('preserves room request calls', () => {
-    const estimateOptions = { referenceAbsorption: 0.2 };
-    expect(estimateRoom({ samples, sampleRate, ...estimateOptions })).toEqual(
-      estimateRoom(samples, sampleRate, estimateOptions),
-    );
-    // Both keys are swept to a value that measurably moves the output: with an
-    // option bag the call ignores, the two forms agree on the default result and
-    // the comparison says nothing about whether options reach the call at all.
-    // `targetRt60` and `mix` were exactly that -- neither exists on
-    // RoomMorphOptions, and the output was byte-identical to passing `{}`.
-    const morphOptions = { wet: 0.25, lengthM: 12, widthM: 9, heightM: 4 };
-    expect(roomMorph({ samples, sampleRate, ...morphOptions })).toEqual(
-      roomMorph(samples, sampleRate, morphOptions),
-    );
-    // The bag is not inert: dropping it changes the result, so the equivalence
-    // above is over a non-default configuration.
-    expect(roomMorph(samples, sampleRate, morphOptions)).not.toEqual(
-      roomMorph(samples, sampleRate, {}),
-    );
-  });
-
-  // Both call shapes funnel through one private normalizer, so an invalid input
-  // must fail identically either way — the positive-path equivalence above does
-  // not prove the error path stays in lockstep.
-  it('throws identically on invalid input in both call forms', () => {
-    const empty = new Float32Array(0);
-    const pos = captureThrow(() => detectBpm(empty, sampleRate));
-    const req = captureThrow(() => detectBpm({ samples: empty, sampleRate }));
-    expect(pos.threw).toBe(true);
-    expect(req.threw).toBe(true);
-    expect(req.message).toBe(pos.message);
-
-    const posT = captureThrow(() => analyzeTimbre(empty, sampleRate, { nMels: 32 }));
-    const reqT = captureThrow(() => analyzeTimbre({ samples: empty, sampleRate, nMels: 32 }));
-    expect(posT.threw).toBe(true);
-    expect(reqT.threw).toBe(true);
-    expect(reqT.message).toBe(posT.message);
-  });
 });
-
-function captureThrow(fn: () => unknown): { threw: boolean; message: string } {
-  try {
-    fn();
-    return { threw: false, message: '' };
-  } catch (error) {
-    return { threw: true, message: error instanceof Error ? error.message : String(error) };
-  }
-}

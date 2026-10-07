@@ -59,16 +59,21 @@ describe('mastering request-object compatibility', () => {
     expect(request).toEqual(positional);
 
     const left = signal();
-    const right = signal();
+    const right = signal().map((v, i) => v * (i % 3 === 0 ? -0.5 : 0.8));
+    // A width away from the default 1, so a dropped params field cannot pass.
+    const widened = masteringProcessStereo('stereo.imager', left, right, sampleRate, {
+      width: 1.6,
+    });
     expect(
       masteringProcessStereo({
         processorName: 'stereo.imager',
         left,
         right,
         sampleRate,
-        params: { width: 1 },
+        params: { width: 1.6 },
       }),
-    ).toEqual(masteringProcessStereo('stereo.imager', left, right, sampleRate, { width: 1 }));
+    ).toEqual(widened);
+    expect(masteringProcessStereo('stereo.imager', left, right, sampleRate)).not.toEqual(widened);
   });
 
   it('mastering chains preserve positional results', () => {

@@ -31,10 +31,13 @@ describe('mixer and voice request objects', () => {
   });
 
   it('keeps realtime voice-change request and positional forms equivalent', () => {
-    const options = { channels: 1 as const };
+    // Two channels, not the default one, so a dropped field cannot pass.
+    const options = { channels: 2 as const };
+    const positional = voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', options);
     expect(
       voiceChangeRealtime({ samples, sampleRate, preset: 'neutral-monitor', ...options }),
-    ).toEqual(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor', options));
+    ).toEqual(positional);
+    expect(voiceChangeRealtime(samples, sampleRate, 'neutral-monitor')).not.toEqual(positional);
   });
 
   // Both call shapes funnel through one private normalizer, so an invalid input

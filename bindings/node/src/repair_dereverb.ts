@@ -234,7 +234,10 @@ export function masteringRepairDereverbConfigForRoom(
   estimate: RoomEstimateResult | MasteringRepairDereverbConfigForRoomRequest,
   config: DereverbClassicalOptions = {},
 ): Required<DereverbClassicalOptions> {
-  const request = 'estimate' in estimate ? estimate : { estimate, ...config };
+  const request =
+    typeof estimate === 'object' && estimate !== null && 'estimate' in estimate
+      ? estimate
+      : { estimate, ...config };
   assertRepairGeometry('masteringRepairDereverbConfigForRoom', request);
   return addon.masteringRepairDereverbConfigForRoom(request.estimate, request);
 }
