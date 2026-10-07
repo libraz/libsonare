@@ -1,9 +1,11 @@
 import { projectAutomationCurveCode, resolveEnumOrdinal } from './codes';
 import type {
   BuiltinSynthBinding,
-  PartRig,
+  PartRigEntry,
   PartRigInsert,
+  PartRigKey,
   PartRigMode,
+  PartRigRequest,
   SampleDesc,
   SampleZoneDesc,
   Sf2InstrumentConfig,
@@ -150,10 +152,47 @@ export function normalizeSynthInstrument(patch: unknown): NativeSynthBinding | s
 }
 
 /**
- * Serializes a part rig's inserts into the JSON array the native layer reads
- * (`params` always a JSON object string), or undefined when none were given.
+ * Resolve a `bounceWith*Instrument(s)` binding argument to the list the native
+ * layer reads, so the singular and plural forms share one shape check. `null`
+ * means no bindings; the singular form also takes one binding on its own. Each
+ * element must be a plain object, or a name where the family has a string
+ * shorthand (`allowName`); anything else — an array included — is refused by
+ * name before any render starts.
  */
-export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
+export function normalizeInstrumentBindings<E, R>(
+  method: string,
+  plural: boolean,
+  value: E | ReadonlyArray<E> | null,
+  allowName: boolean,
+  entry: (binding: E) => R,
+): R[] {
+  if (value === null) {
+    return [];
+  }
+  const isList = Array.isArray(value);
+  if (!isList && plural) {
+    throw new TypeError(`${method}: instruments must be an array`);
+  }
+  const list = (isList ? value : [value]) as ReadonlyArray<E>;
+  const out: R[] = [];
+  for (let index = 0; index < list.length; index += 1) {
+    const binding = list[index];
+    const isObject = typeof binding === 'object' && binding !== null && !Array.isArray(binding);
+    if (!isObject && !(allowName && typeof binding === 'string')) {
+      const label = isList ? `${plural ? 'instruments' : 'instrument'}[${index}]` : 'instrument';
+      const expected = allowName ? 'an object or a name' : 'an object';
+      throw new TypeError(`${method}: ${label} must be ${expected}`);
+    }
+    out.push(entry(binding));
+  }
+  return out;
+}
+
+/**
+ * Serialize a part-rig request's inserts to the C ABI JSON form, refusing a
+ * wrong shape by field name. Returns `undefined` when there are none.
+ */
+function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string | undefined {
   if (inserts === undefined || inserts === null) {
     return undefined;
   }
@@ -161,19 +200,73 @@ export function partRigInsertsJson(inserts: PartRigInsert[] | undefined): string
     throw new TypeError('inserts must be an array');
   }
   return JSON.stringify(
-    inserts.map((insert) => {
-      const { processor, params } = insert;
-      return params === undefined
-        ? { processor }
-        : { processor, params: typeof params === 'string' ? params : JSON.stringify(params) };
+    inserts.map((insert, index) => {
+      if (typeof insert !== 'object' || insert === null) {
+        throw new TypeError(`inserts[${index}] must be an object`);
+      }
+      if (typeof insert.processor !== 'string') {
+        throw new TypeError(`inserts[${index}].processor must be a string`);
+      }
+      const { params } = insert;
+      if (params === undefined) {
+        return { processor: insert.processor, params: '{}' };
+      }
+      if (typeof params === 'string') {
+        return { processor: insert.processor, params };
+      }
+      if (typeof params !== 'object' || params === null || Array.isArray(params)) {
+        throw new TypeError(`inserts[${index}].params must be an object or a JSON string`);
+      }
+      return { processor: insert.processor, params: JSON.stringify(params) };
     }),
   );
 }
 
+/** A part-rig call resolved to the native argument list; `mode` is unset for a key. */
+export interface NormalizedPartRig {
+  destinationId: number;
+  part: number;
+  mode: PartRigMode | number | undefined;
+  insertsJson: string | undefined;
+}
+
+/**
+ * Resolve either part-rig call form — a {@link PartRigRequest} / {@link PartRigKey}
+ * object, or positional `(destinationId, part, mode?, inserts?)` — to the native
+ * arguments, so both forms share one validation path. A request object takes no
+ * further arguments.
+ */
+export function normalizePartRig(
+  method: string,
+  requestOrDestinationId: PartRigRequest | PartRigKey | number,
+  part?: number,
+  mode?: PartRigMode | number,
+  inserts?: PartRigInsert[],
+): NormalizedPartRig {
+  if (typeof requestOrDestinationId === 'object' && requestOrDestinationId !== null) {
+    if (part !== undefined || mode !== undefined || inserts !== undefined) {
+      throw new TypeError(`${method}: a request object takes no further arguments`);
+    }
+    const request = requestOrDestinationId as Partial<PartRigRequest>;
+    return {
+      destinationId: request.destinationId as number,
+      part: request.part as number,
+      mode: request.mode,
+      insertsJson: partRigInsertsJson(request.inserts),
+    };
+  }
+  return {
+    destinationId: requestOrDestinationId,
+    part: part as number,
+    mode,
+    insertsJson: partRigInsertsJson(inserts),
+  };
+}
+
 /** Reads a native `{ mode, insertsJson }` part rig back into the public shape. */
 export function partRigFromNative(
-  native: { mode: PartRig['mode']; insertsJson: string | null } | null,
-): PartRig | null {
+  native: { mode: PartRigEntry['mode']; insertsJson: string | null } | null,
+): PartRigEntry | null {
   if (native === null) {
     return null;
   }

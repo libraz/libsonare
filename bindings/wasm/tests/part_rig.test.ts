@@ -144,3 +144,103 @@ describe('Sonare WASM part rig', () => {
     }
   });
 });
+
+describe('Sonare WASM part rig request and positional forms', () => {
+  beforeAll(async () => {
+    await init();
+    const createModule = (await import('../dist/sonare.js')).default;
+    setSonareModule(await createModule());
+  });
+
+  const LOUDER: PartRigInsert = { processor: 'dynamics.limiter', params: { thresholdDb: -12 } };
+
+  /** `name: message` of what a call throws, or a marker when it does not. */
+  const capture = (call: () => unknown): string => {
+    try {
+      call();
+    } catch (error) {
+      return `${(error as Error).name}: ${(error as Error).message}`;
+    }
+    return 'did not throw';
+  };
+
+  it('stores, reads and clears the same entry through either form', () => {
+    const byRequest = new Project();
+    const byPosition = new Project();
+    try {
+      byRequest.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: [LIMITER] });
+      byPosition.setPartRig(4, 2, 'chain', [LIMITER]);
+      const stored = byRequest.getPartRig({ destinationId: 4, part: 2 });
+      expect(stored?.inserts?.[0].params).toEqual(LIMITER.params);
+      expect(byPosition.getPartRig(4, 2)).toEqual(stored);
+      expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toEqual(stored);
+      // The control: other inserts read back differently, so the equality above
+      // cannot hold because a form dropped the inserts.
+      byPosition.setPartRig(4, 3, 'chain', [LOUDER]);
+      expect(byPosition.getPartRig(4, 3)).not.toEqual(stored);
+      byRequest.clearPartRig({ destinationId: 4, part: 2 });
+      byPosition.clearPartRig(4, 2);
+      expect(byRequest.getPartRig(4, 2)).toBeNull();
+      expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toBeNull();
+    } finally {
+      byRequest.destroy();
+      byPosition.destroy();
+    }
+  });
+
+  it.each([
+    ['an unknown mode', { mode: 'loud' }],
+    ['a non-numeric part', { part: 'x' }],
+    ['a non-numeric destination', { destinationId: 'x' }],
+    ['a non-array inserts', { mode: 'chain', inserts: 'nope' }],
+    ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }],
+    ['an out-of-range part', { part: 16 }],
+  ])('refuses %s identically in both forms', (_, change) => {
+    const project = new Project();
+    try {
+      const r = { destinationId: 4, part: 0, mode: 'none', ...change } as Record<string, unknown>;
+      const positional = [r.destinationId, r.part, r.mode, r.inserts] as [
+        never,
+        never,
+        never,
+        never,
+      ];
+      const viaRequest = capture(() => project.setPartRig(r as never));
+      expect(viaRequest).not.toBe('did not throw');
+      expect(capture(() => project.setPartRig(...positional))).toBe(viaRequest);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a request object followed by positional arguments', () => {
+    const project = new Project();
+    try {
+      expect(() =>
+        project.setPartRig({ destinationId: 4, part: 0, mode: 'none' } as never, 0 as never),
+      ).toThrow(new TypeError('setPartRig: a request object takes no further arguments'));
+      expect(() => project.getPartRig({ destinationId: 4, part: 0 } as never, 0 as never)).toThrow(
+        /getPartRig: a request object/,
+      );
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('answers the engine the same through either form', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.setBuiltinInstrument({});
+      expect(capture(() => engine.setPartRig({ destinationId: 0, part: 0, mode: 'none' }))).toBe(
+        capture(() => engine.setPartRig(0, 0, 'none')),
+      );
+      engine.setSynthInstrument({ engineMode: 'reed' });
+      expect(() =>
+        engine.setPartRig({ destinationId: 0, part: 0, mode: 'chain', inserts: [LIMITER] }),
+      ).not.toThrow();
+      expect(() => engine.setPartRig(0, 0, 'none', [LIMITER])).toThrow();
+    } finally {
+      engine.destroy();
+    }
+  });
+});

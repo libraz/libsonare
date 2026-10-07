@@ -14,13 +14,14 @@ import type {
   NoteTracking,
   PartRigInsert,
   PartRigMode,
+  PartRigRequest,
   ProjectMidiCcBinding,
   SynthPatch,
 } from './project';
 import type { ProjectTimeline } from './project_class';
 import {
+  normalizePartRig,
   normalizeSynthInstrument,
-  partRigInsertsJson,
   projectTimelineNativeId,
 } from './project_internal';
 import type {
@@ -592,13 +593,21 @@ export class RealtimeEngine {
    * host-callback instrument) is refused as not implemented rather than
    * succeeding quietly. `'chain'` takes 1-8 `inserts`; no other mode does.
    */
+  setPartRig(request: PartRigRequest): void;
   setPartRig(
     destinationId: number,
     part: number,
     mode: PartRigMode | number,
     inserts?: PartRigInsert[],
+  ): void;
+  setPartRig(
+    requestOrDestinationId: PartRigRequest | number,
+    part?: number,
+    mode?: PartRigMode | number,
+    inserts?: PartRigInsert[],
   ): void {
-    this.native.setPartRig(destinationId, part, mode, partRigInsertsJson(inserts));
+    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
+    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
   }
 
   /**

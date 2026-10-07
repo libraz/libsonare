@@ -712,7 +712,7 @@ export interface PartRigKey {
 
 /** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
 export interface PartRigRequest extends PartRigKey {
-  mode: PartRigMode;
+  mode: PartRigMode | number;
   /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
   inserts?: PartRigInsert[];
 }

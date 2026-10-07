@@ -400,12 +400,28 @@ export interface PartRigInsert {
   params?: Record<string, unknown> | string;
 }
 
+/** Selects one part rig entry of a destination; `part` is 0-15 or `PART_RIG_ALL_PARTS`. */
+export interface PartRigKey {
+  destinationId: number;
+  part: number;
+}
+
+/** Request for {@link Project.setPartRig} and {@link RealtimeEngine.setPartRig}. */
+export interface PartRigRequest extends PartRigKey {
+  mode: PartRigMode | number;
+  /** 1-8 inserts; required for `'chain'` and refused for the other modes. */
+  inserts?: PartRigInsert[];
+}
+
 /** A part rig as stored on a project ({@link Project.getPartRig}). */
-export interface PartRig {
+export interface PartRigEntry {
   mode: PartRigMode;
   /** Present for `'chain'` only; `params` is the parsed parameter object. */
   inserts?: { processor: string; params: Record<string, unknown> }[];
 }
+
+/** @deprecated Use {@link PartRigEntry}, the name the Node binding shares. */
+export type PartRig = PartRigEntry;
 
 /** One per-note MPE dimension ({@link MPE_DIMENSIONS}). */
 export type MpeDimension = (typeof MPE_DIMENSIONS)[number];

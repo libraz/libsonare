@@ -152,3 +152,70 @@ describe('part rig on the realtime engine', () => {
     engine.destroy();
   });
 });
+
+describe('part rig request and positional forms', () => {
+  const louder = [{ processor: 'saturation.overdrive', params: { gainDb: 24 } }];
+
+  it('stores, reads and clears the same entry through either form', () => {
+    using byRequest = Project.create();
+    using byPosition = Project.create();
+    byRequest.setPartRig({ destinationId: 4, part: 2, mode: 'chain', inserts: chain });
+    byPosition.setPartRig(4, 2, 'chain', chain);
+    const stored = byRequest.getPartRig({ destinationId: 4, part: 2 });
+    expect(stored?.inserts?.[0].params).toEqual({ gainDb: 12 });
+    expect(byPosition.getPartRig(4, 2)).toEqual(stored);
+    expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toEqual(stored);
+    // The control: other inserts read back differently, so the equality above
+    // cannot hold because a form dropped the inserts.
+    byPosition.setPartRig(4, 3, 'chain', louder);
+    expect(byPosition.getPartRig(4, 3)).not.toEqual(stored);
+    byRequest.clearPartRig({ destinationId: 4, part: 2 });
+    byPosition.clearPartRig(4, 2);
+    expect(byRequest.getPartRig(4, 2)).toBeNull();
+    expect(byPosition.getPartRig({ destinationId: 4, part: 2 })).toBeNull();
+  });
+
+  it.each([
+    ['an unknown mode', { mode: 'loud' }],
+    ['a non-numeric part', { part: 'x' }],
+    ['a non-numeric destination', { destinationId: 'x' }],
+    ['a non-array inserts', { mode: 'chain', inserts: 'nope' }],
+    ['an insert without a processor', { mode: 'chain', inserts: [{ params: {} }] }],
+    ['an out-of-range part', { part: 16 }],
+  ])('refuses %s identically in both forms', (_, change) => {
+    using project = Project.create();
+    const r = { destinationId: 4, part: 0, mode: 'none', ...change } as Record<string, unknown>;
+    const capture = (call: () => unknown): string => {
+      try {
+        call();
+      } catch (error) {
+        return `${(error as Error).name}: ${(error as Error).message}`;
+      }
+      return 'did not throw';
+    };
+    const viaRequest = capture(() => project.setPartRig(r as never));
+    const positional = [r.destinationId, r.part, r.mode, r.inserts] as [never, never, never, never];
+    expect(viaRequest).not.toBe('did not throw');
+    expect(capture(() => project.setPartRig(...positional))).toBe(viaRequest);
+  });
+
+  it('refuses a request object followed by positional arguments', () => {
+    using project = Project.create();
+    expect(() =>
+      project.setPartRig({ destinationId: 4, part: 0, mode: 'none' } as never, 0 as never),
+    ).toThrow(new TypeError('setPartRig: a request object takes no further arguments'));
+    expect(() => project.getPartRig({ destinationId: 4, part: 0 } as never, 0 as never)).toThrow(
+      /getPartRig: a request object/,
+    );
+  });
+
+  it('answers the engine the same through either form', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    engine.setBuiltinInstrument({}, 3);
+    expect(codeNameOf(() => engine.setPartRig(3, 0, 'none'))).toBe('NotSupported');
+    engine.setSynthInstrument({}, 3);
+    expect(() => engine.setPartRig(3, 0, 'chain', chain)).not.toThrow();
+    expect(() => engine.setPartRig(3, 0, 'none', chain)).toThrow();
+    engine.destroy();
+  });
+});

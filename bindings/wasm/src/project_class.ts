@@ -1,17 +1,21 @@
 import type {
   BuiltinSynthBinding,
-  PartRig,
+  BuiltinSynthWaveform,
+  PartRigEntry,
   PartRigInsert,
+  PartRigKey,
   PartRigMode,
+  PartRigRequest,
   Sf2InstrumentConfig,
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types';
 import {
   assertProjectMidiEvents,
+  normalizeInstrumentBindings,
+  normalizePartRig,
   normalizeSynthInstrument,
   partRigFromNative,
-  partRigInsertsJson,
   projectAutomationPointValue,
   projectAutomationTargetKindValue,
   projectLoopModeValue,
@@ -190,6 +194,13 @@ function midi2I32(fnName: string, value: number, argName: string): number {
 function midi2Byte(fnName: string, value: number, argName: string): number {
   assertBoundedInteger(fnName, value, argName, 0, 0xff);
   return value;
+}
+
+/** A built-in synth binding, or a bare waveform name standing for `{ waveform }`. */
+type BuiltinSynthBindingInput = BuiltinSynthBinding | Extract<BuiltinSynthWaveform, string>;
+
+function builtinSynthBinding(binding: BuiltinSynthBindingInput): BuiltinSynthBinding {
+  return typeof binding === 'string' ? { waveform: binding } : binding;
 }
 
 /**
@@ -894,24 +905,41 @@ export class Project {
    * Refused: a malformed insert document (invalid format), an out-of-range part,
    * an unknown mode or processor, or inserts on a non-chain mode (invalid
    * parameter), and an insert chain in a build without mastering.
+   *
+   * The {@link PartRigRequest} object is the canonical form; the positional
+   * form is the same call.
    */
+  setPartRig(request: PartRigRequest): void;
   setPartRig(
     destinationId: number,
     part: number,
     mode: PartRigMode | number,
     inserts?: PartRigInsert[],
+  ): void;
+  setPartRig(
+    requestOrDestinationId: PartRigRequest | number,
+    part?: number,
+    mode?: PartRigMode | number,
+    inserts?: PartRigInsert[],
   ): void {
-    this.native.setPartRig(destinationId, part, mode, partRigInsertsJson(inserts));
+    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
+    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
   }
 
   /** The stored rig for `(destinationId, part)`, or null when none is stored. */
-  getPartRig(destinationId: number, part: number): PartRig | null {
-    return partRigFromNative(this.native.getPartRig(destinationId, part));
+  getPartRig(key: PartRigKey): PartRigEntry | null;
+  getPartRig(destinationId: number, part: number): PartRigEntry | null;
+  getPartRig(keyOrDestinationId: PartRigKey | number, part?: number): PartRigEntry | null {
+    const rig = normalizePartRig('getPartRig', keyOrDestinationId, part);
+    return partRigFromNative(this.native.getPartRig(rig.destinationId, rig.part));
   }
 
   /** Remove the stored rig for `(destinationId, part)` via an undoable edit (no-op when absent). */
-  clearPartRig(destinationId: number, part: number): void {
-    this.native.clearPartRig(destinationId, part);
+  clearPartRig(key: PartRigKey): void;
+  clearPartRig(destinationId: number, part: number): void;
+  clearPartRig(keyOrDestinationId: PartRigKey | number, part?: number): void {
+    const rig = normalizePartRig('clearPartRig', keyOrDestinationId, part);
+    this.native.clearPartRig(rig.destinationId, rig.part);
   }
 
   /** Set a track's mute flag via an undoable edit (a muted track is silent). */
@@ -1207,8 +1235,9 @@ export class Project {
   /**
    * Compile + render the project offline, routing MIDI tracks through the
    * built-in oscillator synth so a MIDI-only arrangement bounces to audible
-   * audio. Pass a {@link BuiltinSynthBinding} (or an array of them) to choose
-   * the patch and MIDI destination; omit it (or pass `{}`) for one
+   * audio. Pass a {@link BuiltinSynthBinding} or a bare waveform name (or an
+   * array of either; {@link bounceWithBuiltinInstruments} is the list form) to
+   * choose the patch and MIDI destination; omit it (or pass `{}`) for one
    * default-destination sine patch. Because the parameter defaults to `{}`,
    * omission and explicit `undefined` both create that one default binding.
    * Use an explicitly empty array `[]` (or runtime `null`) for zero bindings,
@@ -1227,10 +1256,39 @@ export class Project {
    * ```
    */
   bounceWithBuiltinInstrument(
-    instrument: BuiltinSynthBinding | ReadonlyArray<BuiltinSynthBinding> = {},
+    instrument: BuiltinSynthBindingInput | ReadonlyArray<BuiltinSynthBindingInput> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithBuiltinInstrument(instrument, options);
+    return this.native.bounceWithBuiltinInstrument(
+      normalizeInstrumentBindings(
+        'bounceWithBuiltinInstrument',
+        false,
+        instrument,
+        true,
+        builtinSynthBinding,
+      ),
+      options,
+    );
+  }
+
+  /**
+   * List form of {@link bounceWithBuiltinInstrument}: one binding per entry,
+   * and an empty array renders silence, identical to {@link bounce}.
+   */
+  bounceWithBuiltinInstruments(
+    instruments: ReadonlyArray<BuiltinSynthBindingInput> = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithBuiltinInstrument(
+      normalizeInstrumentBindings(
+        'bounceWithBuiltinInstruments',
+        true,
+        instruments,
+        true,
+        builtinSynthBinding,
+      ),
+      options,
+    );
   }
 
   /**
@@ -1257,10 +1315,36 @@ export class Project {
     instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    const normalized = Array.isArray(instrument)
-      ? instrument.map((entry) => normalizeSynthInstrument(entry))
-      : normalizeSynthInstrument(instrument);
-    return this.native.bounceWithSynthInstrument(normalized, options);
+    return this.native.bounceWithSynthInstrument(
+      normalizeInstrumentBindings(
+        'bounceWithSynthInstrument',
+        false,
+        instrument,
+        true,
+        normalizeSynthInstrument,
+      ),
+      options,
+    );
+  }
+
+  /**
+   * List form of {@link bounceWithSynthInstrument}: one binding per entry,
+   * and an empty array renders silence, identical to {@link bounce}.
+   */
+  bounceWithSynthInstruments(
+    instruments: ReadonlyArray<SynthPatch | string> = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSynthInstrument(
+      normalizeInstrumentBindings(
+        'bounceWithSynthInstruments',
+        true,
+        instruments,
+        true,
+        normalizeSynthInstrument,
+      ),
+      options,
+    );
   }
 
   /**
@@ -1313,7 +1397,24 @@ export class Project {
     instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
-    return this.native.bounceWithSf2Instrument(instrument, options);
+    return this.native.bounceWithSf2Instrument(
+      normalizeInstrumentBindings('bounceWithSf2Instrument', false, instrument, false, (b) => b),
+      options,
+    );
+  }
+
+  /**
+   * List form of {@link bounceWithSf2Instrument}: one binding per entry, and
+   * an empty array renders silence, identical to {@link bounce}.
+   */
+  bounceWithSf2Instruments(
+    instruments: ReadonlyArray<Sf2InstrumentConfig> = [],
+    options: ProjectBounceOptions = {},
+  ): Float32Array {
+    return this.native.bounceWithSf2Instrument(
+      normalizeInstrumentBindings('bounceWithSf2Instruments', true, instruments, false, (b) => b),
+      options,
+    );
   }
 
   /** Remove a clip (undoable). */

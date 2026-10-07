@@ -5,7 +5,9 @@ import type {
   ExternalSeparatedStemImportResult,
   MidiCcLearnOptions,
   PartRigEntry,
+  PartRigInsert,
   PartRigKey,
+  PartRigMode,
   PartRigRequest,
   ProjectAssistSidecar,
   ProjectAssistSidecarInput,
@@ -68,8 +70,9 @@ import {
   midi1Event,
 } from './validation.js';
 import {
+  normalizeInstrumentBindings,
+  normalizePartRig,
   normalizeSynthInstrument,
-  partRigInsertsJson,
   projectAutomationLaneValue,
   projectClipFadeValue,
   projectLoopModeValue,
@@ -189,6 +192,12 @@ function midi2I32(fnName: string, value: number, argName: string): number {
 function midi2Byte(fnName: string, value: number, argName: string): number {
   assertBoundedInteger(fnName, value, argName, 0, 0xff);
   return value;
+}
+
+function builtinInstrumentConfig(
+  binding: BuiltinInstrumentConfig | SynthWaveform,
+): BuiltinInstrumentConfig {
+  return typeof binding === 'string' ? { waveform: binding } : binding;
 }
 
 /**
@@ -993,19 +1002,33 @@ export class Project {
    * (the instrument's own rig), `'none'`, or `'chain'` with 1-8 `inserts`.
    * Entries are stored whether or not a track routes to the destination and take
    * effect when a bounce binds an instrument that carries part rigs.
+   *
+   * The {@link PartRigRequest} object is the canonical form; the positional
+   * form is the same call.
    */
-  setPartRig(request: PartRigRequest): void {
-    this.native.setPartRig(
-      request.destinationId,
-      request.part,
-      request.mode,
-      partRigInsertsJson(request.inserts),
-    );
+  setPartRig(request: PartRigRequest): void;
+  setPartRig(
+    destinationId: number,
+    part: number,
+    mode: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void;
+  setPartRig(
+    requestOrDestinationId: PartRigRequest | number,
+    part?: number,
+    mode?: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void {
+    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
+    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
   }
 
   /** Read one part rig entry, or `null` when none is set. */
-  getPartRig(key: PartRigKey): PartRigEntry | null {
-    const raw = this.native.getPartRig(key.destinationId, key.part);
+  getPartRig(key: PartRigKey): PartRigEntry | null;
+  getPartRig(destinationId: number, part: number): PartRigEntry | null;
+  getPartRig(keyOrDestinationId: PartRigKey | number, part?: number): PartRigEntry | null {
+    const rig = normalizePartRig('getPartRig', keyOrDestinationId, part);
+    const raw = this.native.getPartRig(rig.destinationId, rig.part);
     if (raw === null) {
       return null;
     }
@@ -1022,8 +1045,11 @@ export class Project {
   }
 
   /** Remove one part rig entry through an undoable edit. */
-  clearPartRig(key: PartRigKey): void {
-    this.native.clearPartRig(key.destinationId, key.part);
+  clearPartRig(key: PartRigKey): void;
+  clearPartRig(destinationId: number, part: number): void;
+  clearPartRig(keyOrDestinationId: PartRigKey | number, part?: number): void {
+    const rig = normalizePartRig('clearPartRig', keyOrDestinationId, part);
+    this.native.clearPartRig(rig.destinationId, rig.part);
   }
 
   /**
@@ -1512,31 +1538,51 @@ export class Project {
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithBuiltinInstruments(
-    instruments: BuiltinInstrumentConfig[] = [],
+    instruments: ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithBuiltinInstruments', options);
-    return this.native.bounceWithBuiltinInstruments(instruments, options);
+    return this.native.bounceWithBuiltinInstruments(
+      normalizeInstrumentBindings(
+        'bounceWithBuiltinInstruments',
+        true,
+        instruments,
+        true,
+        builtinInstrumentConfig,
+      ),
+      options,
+    );
   }
 
   /**
    * Convenience wrapper over {@link bounceWithBuiltinInstruments} for the
    * common single-instrument case. Pass a {@link BuiltinInstrumentConfig}
    * (e.g. `{ waveform: 'saw', destinationId: 0 }`) or a bare
-   * {@link SynthWaveform} name to bind one built-in synth patch. The
+   * {@link SynthWaveform} name to bind one built-in synth patch; an array of
+   * either is the list form, as on the WASM binding. The
    * `destinationId` field is a JS binding convenience, not part of the
    * oscillator patch itself.
    *
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithBuiltinInstrument(
-    instrument: BuiltinInstrumentConfig | SynthWaveform = {},
+    instrument:
+      | BuiltinInstrumentConfig
+      | SynthWaveform
+      | ReadonlyArray<BuiltinInstrumentConfig | SynthWaveform> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithBuiltinInstrument', options);
-    const config: BuiltinInstrumentConfig =
-      typeof instrument === 'string' ? { waveform: instrument } : instrument;
-    return this.native.bounceWithBuiltinInstruments([config], options);
+    return this.native.bounceWithBuiltinInstruments(
+      normalizeInstrumentBindings(
+        'bounceWithBuiltinInstrument',
+        false,
+        instrument,
+        true,
+        builtinInstrumentConfig,
+      ),
+      options,
+    );
   }
 
   /**
@@ -1559,12 +1605,18 @@ export class Project {
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithSynthInstruments(
-    instruments: (SynthPatch | string)[] = [],
+    instruments: ReadonlyArray<SynthPatch | string> = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithSynthInstruments', options);
     return this.native.bounceWithSynthInstruments(
-      instruments.map(normalizeSynthInstrument),
+      normalizeInstrumentBindings(
+        'bounceWithSynthInstruments',
+        true,
+        instruments,
+        true,
+        normalizeSynthInstrument,
+      ),
       options,
     );
   }
@@ -1572,15 +1624,25 @@ export class Project {
   /**
    * Convenience wrapper over {@link bounceWithSynthInstruments} for the common
    * single-instrument case. Pass a {@link SynthPatch} or a bare preset name
-   * (`'saw-lead'` / `'va:saw-lead'`). Set `useGmPrograms: true` on an object
-   * descriptor to follow incoming GM bank/program changes.
+   * (`'saw-lead'` / `'va:saw-lead'`), or an array of either as the list form.
+   * Set `useGmPrograms: true` on an object descriptor to follow incoming GM
+   * bank/program changes.
    */
   bounceWithSynthInstrument(
-    instrument: SynthPatch | string = {},
+    instrument: SynthPatch | string | ReadonlyArray<SynthPatch | string> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithSynthInstrument', options);
-    return this.native.bounceWithSynthInstruments([normalizeSynthInstrument(instrument)], options);
+    return this.native.bounceWithSynthInstruments(
+      normalizeInstrumentBindings(
+        'bounceWithSynthInstrument',
+        false,
+        instrument,
+        true,
+        normalizeSynthInstrument,
+      ),
+      options,
+    );
   }
 
   /**
@@ -1627,23 +1689,29 @@ export class Project {
    * Argument order is instrument-first to match the WASM and Python bindings.
    */
   bounceWithSf2Instruments(
-    instruments: Sf2InstrumentConfig[] = [],
+    instruments: ReadonlyArray<Sf2InstrumentConfig> = [],
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithSf2Instruments', options);
-    return this.native.bounceWithSf2Instruments(instruments, options);
+    return this.native.bounceWithSf2Instruments(
+      normalizeInstrumentBindings('bounceWithSf2Instruments', true, instruments, false, (b) => b),
+      options,
+    );
   }
 
   /**
    * Convenience wrapper over {@link bounceWithSf2Instruments} for the common
-   * single-instrument case.
+   * single-instrument case; an array is the list form, as on the WASM binding.
    */
   bounceWithSf2Instrument(
-    instrument: Sf2InstrumentConfig = {},
+    instrument: Sf2InstrumentConfig | ReadonlyArray<Sf2InstrumentConfig> = {},
     options: ProjectBounceOptions = {},
   ): Float32Array {
     assertBounceOptions('bounceWithSf2Instrument', options);
-    return this.native.bounceWithSf2Instruments([instrument], options);
+    return this.native.bounceWithSf2Instruments(
+      normalizeInstrumentBindings('bounceWithSf2Instrument', false, instrument, false, (b) => b),
+      options,
+    );
   }
 
   /** Release the underlying native project. Idempotent. */

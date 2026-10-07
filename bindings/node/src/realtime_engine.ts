@@ -36,6 +36,8 @@ import type {
   NoteTracking,
   PanLawInput,
   PanMode,
+  PartRigInsert,
+  PartRigMode,
   PartRigRequest,
   ProjectMidiCcBinding,
   ProjectTempoSegment,
@@ -50,10 +52,10 @@ import type {
 import { assertNonNegativeSafeInteger } from './validation.js';
 import {
   engineAutomationPointValue,
+  normalizePartRig,
   normalizeSynthInstrument,
   panLawValue,
   panModeValue,
-  partRigInsertsJson,
   sendTimingValue,
   sidechainSourceKindValue,
   trackMonitorModeValue,
@@ -1365,13 +1367,21 @@ export class RealtimeEngine {
    * instrument bound throws `InvalidParameter`; an instrument without part rigs
    * (builtin, host callback) throws `NotSupported`.
    */
-  setPartRig(request: PartRigRequest): void {
-    this.native.setPartRig(
-      request.destinationId,
-      request.part,
-      request.mode,
-      partRigInsertsJson(request.inserts),
-    );
+  setPartRig(request: PartRigRequest): void;
+  setPartRig(
+    destinationId: number,
+    part: number,
+    mode: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void;
+  setPartRig(
+    requestOrDestinationId: PartRigRequest | number,
+    part?: number,
+    mode?: PartRigMode | number,
+    inserts?: PartRigInsert[],
+  ): void {
+    const rig = normalizePartRig('setPartRig', requestOrDestinationId, part, mode, inserts);
+    this.native.setPartRig(rig.destinationId, rig.part, rig.mode as PartRigMode, rig.insertsJson);
   }
 
   /**
