@@ -34,6 +34,7 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint,
     _to_c_uint32,
+    _utf8_arg,
     _validate_samples,
 )
 from .types import GoniometerPoint
@@ -60,6 +61,19 @@ class MixerStereoResult(typing.NamedTuple):
     sample_rate: int
 
 
+_MIN_SAMPLE_RATE = 8000
+_MAX_SAMPLE_RATE = 384000
+
+
+def _check_sample_rate(fn_name: str, sample_rate: object) -> ctypes.c_int:
+    """Narrow ``sample_rate`` onto a C ``int`` and refuse one outside the supported range."""
+    rate = _to_c_int(sample_rate, "sample_rate")
+    if not _MIN_SAMPLE_RATE <= rate.value <= _MAX_SAMPLE_RATE:
+        span = f"[{_MIN_SAMPLE_RATE}, {_MAX_SAMPLE_RATE}]"
+        raise SonareValueError(f"{fn_name}: sample_rate out of supported range {span}")
+    return rate
+
+
 def mixing_scene_preset_names() -> list[str]:
     """Return built-in mixer scene preset identifiers."""
     lib = _get_lib()
@@ -75,7 +89,9 @@ def mixing_scene_preset_json(preset_name: str) -> str:
     if not hasattr(lib, "sonare_mixing_scene_preset_json"):
         raise RuntimeError("libsonare was built without mixing support")
     json_ptr = ctypes.c_char_p()
-    rc = lib.sonare_mixing_scene_preset_json(preset_name.encode("utf-8"), ctypes.byref(json_ptr))
+    rc = lib.sonare_mixing_scene_preset_json(
+        _utf8_arg(preset_name, "preset_name"), ctypes.byref(json_ptr)
+    )
     _check(rc)
     try:
         return ctypes.string_at(json_ptr).decode("utf-8") if json_ptr.value else ""
@@ -126,8 +142,8 @@ class Mixer:
         if not hasattr(lib, "sonare_mixer_from_scene_json"):
             raise RuntimeError("libsonare was built without mixing support")
         handle = lib.sonare_mixer_from_scene_json(
-            json.encode("utf-8"),
-            _to_c_int(sample_rate, "sample_rate"),
+            _utf8_arg(json, "json"),
+            _check_sample_rate("Mixer.from_scene_json", sample_rate),
             _to_c_int(block_size, "block_size"),
         )
         if not handle:
@@ -206,7 +222,7 @@ class Mixer:
         # this facade addresses a strip by index or id.
         handle = lib.sonare_mixer_add_strip_ex(
             self._handle,
-            strip_id.encode("utf-8"),
+            _utf8_arg(strip_id, "strip_id"),
             1 if enabled else 0,
             1 if lufs else 0,
             1 if true_peak else 0,
@@ -235,8 +251,8 @@ class Mixer:
         _check(
             lib.sonare_mixer_add_bus(
                 self._handle,
-                bus_id.encode("utf-8"),
-                role.encode("utf-8") if role is not None else None,
+                _utf8_arg(bus_id, "bus_id"),
+                _utf8_arg(role, "role") if role is not None else None,
             )
         )
 
@@ -246,7 +262,7 @@ class Mixer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_bus"):
             raise RuntimeError("libsonare was built without mixer bus support")
-        _check(lib.sonare_mixer_remove_bus(self._handle, bus_id.encode("utf-8")))
+        _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(bus_id, "bus_id")))
 
     def bus_count(self) -> int:
         """Return the number of buses in the mixer topology."""
@@ -269,7 +285,7 @@ class Mixer:
         member_list = list(members or [])
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
-                *[m.encode("utf-8") for m in member_list]
+                *[_utf8_arg(m, "m") for m in member_list]
             )
             member_ptr = ctypes.cast(member_array, ctypes.POINTER(ctypes.c_char_p))
         else:
@@ -277,7 +293,7 @@ class Mixer:
         _check(
             lib.sonare_mixer_add_vca_group(
                 self._handle,
-                group_id.encode("utf-8"),
+                _utf8_arg(group_id, "group_id"),
                 _to_c_float(gain_db, "gain_db"),
                 member_ptr,
                 ctypes.c_size_t(len(member_list)),
@@ -290,7 +306,7 @@ class Mixer:
         lib = _get_lib()
         if not hasattr(lib, "sonare_mixer_remove_vca_group"):
             raise RuntimeError("libsonare was built without mixer VCA support")
-        _check(lib.sonare_mixer_remove_vca_group(self._handle, group_id.encode("utf-8")))
+        _check(lib.sonare_mixer_remove_vca_group(self._handle, _utf8_arg(group_id, "group_id")))
 
     def set_vca_group_gain_db(self, group_id: str, gain_db: float) -> None:
         """Set an existing VCA group's gain in dB."""
@@ -301,7 +317,7 @@ class Mixer:
         _check(
             lib.sonare_mixer_set_vca_group_gain_db(
                 self._handle,
-                group_id.encode("utf-8"),
+                _utf8_arg(group_id, "group_id"),
                 _to_c_float(gain_db, "gain_db"),
             )
         )
@@ -315,7 +331,7 @@ class Mixer:
         member_list = list(members)
         if member_list:
             member_array = (ctypes.c_char_p * len(member_list))(
-                *[member.encode("utf-8") for member in member_list]
+                *[_utf8_arg(member, "member") for member in member_list]
             )
             member_ptr = ctypes.cast(member_array, ctypes.POINTER(ctypes.c_char_p))
         else:
@@ -323,7 +339,7 @@ class Mixer:
         _check(
             lib.sonare_mixer_set_vca_group_members(
                 self._handle,
-                group_id.encode("utf-8"),
+                _utf8_arg(group_id, "group_id"),
                 member_ptr,
                 ctypes.c_size_t(len(member_list)),
             )
@@ -351,7 +367,7 @@ class Mixer:
         if not hasattr(lib, "sonare_mixer_strip_at"):
             raise RuntimeError("libsonare was built without strip-handle support")
         if isinstance(strip, str):
-            handle = lib.sonare_mixer_strip_by_id(self._handle, strip.encode("utf-8"))
+            handle = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip, "strip"))
             if not handle:
                 raise KeyError(f"mixer strip id not found: {strip}")
         else:
@@ -368,7 +384,7 @@ class Mixer:
         """
         self._require()
         lib = _get_lib()
-        target = lib.sonare_mixer_strip_by_id(self._handle, strip_id.encode("utf-8"))
+        target = lib.sonare_mixer_strip_by_id(self._handle, _utf8_arg(strip_id, "strip_id"))
         if not target:
             raise KeyError(f"mixer strip id not found: {strip_id}")
         for index in range(self.strip_count()):
@@ -453,11 +469,11 @@ class Mixer:
         """
         handle = self._strip_handle(strip)
         pan = SonareSurroundPan(
-            azimuth=azimuth,
-            elevation=elevation,
-            divergence=divergence,
-            lfe=lfe,
-            distance=distance,
+            azimuth=_to_c_float(azimuth, "azimuth"),
+            elevation=_to_c_float(elevation, "elevation"),
+            divergence=_to_c_float(divergence, "divergence"),
+            lfe=_to_c_float(lfe, "lfe"),
+            distance=_to_c_float(distance, "distance"),
         )
         _check(_get_lib().sonare_strip_set_surround_pan(handle, ctypes.byref(pan)))
 
@@ -547,8 +563,8 @@ class Mixer:
         _check(
             _get_lib().sonare_strip_add_send(
                 handle,
-                send_id.encode("utf-8"),
-                destination_bus_id.encode("utf-8"),
+                _utf8_arg(send_id, "send_id"),
+                _utf8_arg(destination_bus_id, "destination_bus_id"),
                 _to_c_float(send_db, "send_db"),
                 ctypes.c_int(_send_timing_value(timing)),
                 ctypes.byref(index_out),
@@ -618,7 +634,9 @@ class Mixer:
             raise RuntimeError("libsonare was built without bus meter support")
         snapshot = SonareMixMeterSnapshot()
         _check(
-            lib.sonare_mixer_bus_meter(self._handle, bus_id.encode("utf-8"), ctypes.byref(snapshot))
+            lib.sonare_mixer_bus_meter(
+                self._handle, _utf8_arg(bus_id, "bus_id"), ctypes.byref(snapshot)
+            )
         )
         return _mix_meter_from_c(snapshot)
 
@@ -670,7 +688,7 @@ class Mixer:
         out = ctypes.c_uint32()
         _check(
             lib.sonare_mixer_bus_non_finite_discard_count(
-                self._handle, bus_id.encode("utf-8"), ctypes.byref(out)
+                self._handle, _utf8_arg(bus_id, "bus_id"), ctypes.byref(out)
             )
         )
         return int(out.value)
@@ -990,7 +1008,7 @@ def mix_stereo(
         strips: Sequence of ``(left, right)`` sample buffers. All buffers must
             have the same length, that length must be non-zero, and every
             sample must be finite.
-        sample_rate: Sample rate in Hz.
+        sample_rate: Sample rate in Hz, an integer in ``[8000, 384000]``.
         fader_db: Optional per-strip fader values in dB.
         pan: Optional per-strip pan values in ``[-1, 1]``.
         pan_mode: Either one mode for all strips or per-strip modes:
@@ -999,6 +1017,10 @@ def mix_stereo(
         width: Optional per-strip stereo width values.
         muted: Optional per-strip mute flags.
         input_trim_db: Optional per-strip input trim values in dB.
+
+    Each per-strip option may be shorter than ``strips``; the remaining strips
+    keep their defaults, as on Node and WASM. An option longer than ``strips``
+    raises :class:`SonareValueError` naming it.
 
     Note:
         The per-strip meters in the result expose integrating loudness fields
@@ -1018,28 +1040,27 @@ def mix_stereo(
         raise RuntimeError("libsonare was built without mixing support")
     if not strips:
         raise SonareValueError("mix_stereo: at least one strip is required")
+    c_sample_rate = _check_sample_rate("mix_stereo", sample_rate)
 
-    # Each per-strip option must have exactly one entry per strip; otherwise the
-    # per-index access below would raise a cryptic IndexError (or silently use
-    # the wrong strip's value). Validate up front with a clear message.
+    # A per-strip option may be shorter than the strip list (the remaining
+    # strips keep their defaults, as on Node and WASM) but never longer: the
+    # surplus entries would belong to no strip.
     n_strips = len(strips)
+    mode_list = (
+        pan_mode if isinstance(pan_mode, Sequence) and not isinstance(pan_mode, str) else None
+    )
     for name, opt in (
         ("input_trim_db", input_trim_db),
         ("fader_db", fader_db),
         ("pan", pan),
+        ("pan_mode", mode_list),
         ("width", width),
         ("muted", muted),
     ):
-        if opt is not None and len(opt) != n_strips:
+        if opt is not None and len(opt) > n_strips:
             raise SonareValueError(
-                f"mix_stereo: '{name}' must have one entry per strip ({n_strips})"
+                f"mix_stereo: '{name}' has more entries than strips ({n_strips})"
             )
-    if (
-        isinstance(pan_mode, Sequence)
-        and not isinstance(pan_mode, str)
-        and len(pan_mode) != n_strips
-    ):
-        raise SonareValueError(f"mix_stereo: 'pan_mode' must have one entry per strip ({n_strips})")
 
     left_arrays: list[ctypes.Array[ctypes.c_float]] = []
     right_arrays: list[ctypes.Array[ctypes.c_float]] = []
@@ -1073,28 +1094,26 @@ def mix_stereo(
         # indistinguishable from a real mix of silence.
         raise SonareValueError("mix_stereo: every strip is empty; there is no audio to mix")
 
-    mixer = lib.sonare_mixer_create(
-        _to_c_int(sample_rate, "sample_rate"), _to_c_int(length, "length")
-    )
+    mixer = lib.sonare_mixer_create(c_sample_rate, _to_c_int(length, "length"))
     if not mixer:
         raise RuntimeError("failed to create mixer")
 
     try:
         strip_handles: list[ctypes.c_void_p] = []
         for index in range(len(strips)):
-            handle = lib.sonare_mixer_add_strip(mixer, f"strip{index}".encode())
+            handle = lib.sonare_mixer_add_strip(mixer, _utf8_arg(f"strip{index}", "strip_id"))
             if not handle:
                 raise RuntimeError("failed to add mixer strip")
             strip_handles.append(ctypes.c_void_p(handle))
 
-            if input_trim_db is not None:
+            if input_trim_db is not None and index < len(input_trim_db):
                 _check(
                     lib.sonare_strip_set_input_trim_db(
                         strip_handles[-1],
                         _to_c_float(input_trim_db[index], f"input_trim_db[{index}]"),
                     )
                 )
-            if fader_db is not None:
+            if fader_db is not None and index < len(fader_db):
                 _check(
                     lib.sonare_strip_set_fader_db(
                         strip_handles[-1], _to_c_float(fader_db[index], f"fader_db[{index}]")
@@ -1106,25 +1125,26 @@ def mix_stereo(
             # together, so the missing half is the value the strip this loop
             # just created already carries -- centre (0.0) for an absent
             # position, and Balance for the default mode.
-            mode = (
-                pan_mode[index]
-                if isinstance(pan_mode, Sequence) and not isinstance(pan_mode, str)
-                else pan_mode
-            )
+            if mode_list is None:
+                mode = pan_mode
+            else:
+                mode = mode_list[index] if index < len(mode_list) else "balance"
             _check(
                 lib.sonare_strip_set_pan(
                     strip_handles[-1],
-                    _to_c_float(pan[index] if pan is not None else 0.0, f"pan[{index}]"),
+                    _to_c_float(
+                        pan[index] if pan is not None and index < len(pan) else 0.0, f"pan[{index}]"
+                    ),
                     ctypes.c_int(_pan_mode_value(mode)),
                 )
             )
-            if width is not None:
+            if width is not None and index < len(width):
                 _check(
                     lib.sonare_strip_set_width(
                         strip_handles[-1], _to_c_float(width[index], f"width[{index}]")
                     )
                 )
-            if muted is not None:
+            if muted is not None and index < len(muted):
                 _check(
                     lib.sonare_strip_set_muted(
                         strip_handles[-1], ctypes.c_int(1 if muted[index] else 0)

@@ -44,6 +44,7 @@ from ._runtime import (
     SonareValueError,
     _narrow_int,
     _planar_channel_arrays,
+    _utf8_arg,
     _validate_c_int_field,
     _warp_mode_value,
 )
@@ -102,16 +103,16 @@ def _capture_source_name(source: int) -> str:
 
 
 def _band_json_arg(band: Mapping[str, object] | str) -> bytes:
-    return (band if isinstance(band, str) else json.dumps(dict(band))).encode("utf-8")
+    return _utf8_arg(band if isinstance(band, str) else json.dumps(dict(band)), "band")
 
 
-def _fixed_bytes(value: str, capacity: int) -> bytes:
+def _fixed_bytes(value: str, capacity: int, name: str) -> bytes:
     # Truncate on a UTF-8 character boundary: slicing the encoded bytes at an
     # arbitrary offset can split a multi-byte codepoint and leave invalid UTF-8.
     # Decoding with errors="ignore" drops any partial trailing codepoint.
     if capacity <= 1:
         return b""
-    return value.encode("utf-8")[: capacity - 1].decode("utf-8", "ignore").encode("utf-8")
+    return _utf8_arg(value, name)[: capacity - 1].decode("utf-8", "ignore").encode("utf-8")
 
 
 def _c_string(value: bytes) -> str:
@@ -149,7 +150,7 @@ def _marker_to_c(marker: EngineMarker) -> SonareEngineMarker:
     raw.key_fifths = marker.key_fifths
     raw.key_minor = 1 if marker.key_minor else 0
     raw.ppq = float(marker.ppq)
-    raw.name = _fixed_bytes(marker.name, 64)
+    raw.name = _fixed_bytes(marker.name, 64, "name")
     return raw
 
 
@@ -277,7 +278,7 @@ def _clips_to_c(
 
 def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
     raw = SonareEngineGraphNode()
-    raw.id = _fixed_bytes(node.id, 64)
+    raw.id = _fixed_bytes(node.id, 64, "id")
     raw.type = int(EngineGraphNodeType(node.type))
     raw.gain_db = float(node.gain_db)
     # Narrowed rather than coerced: int(0.5) is the 0 this field reads as "take
@@ -289,11 +290,11 @@ def _graph_node_to_c(node: EngineGraphNode) -> SonareEngineGraphNode:
 
 def _graph_connection_to_c(connection: EngineGraphConnection) -> SonareEngineGraphConnection:
     raw = SonareEngineGraphConnection()
-    raw.source_node = _fixed_bytes(connection.source_node, 64)
+    raw.source_node = _fixed_bytes(connection.source_node, 64, "source_node")
     # Assigned unconverted so the struct's own narrowing sees each caller value;
     # int() would truncate a fraction past it.
     raw.source_port = connection.source_port
-    raw.dest_node = _fixed_bytes(connection.dest_node, 64)
+    raw.dest_node = _fixed_bytes(connection.dest_node, 64, "dest_node")
     raw.dest_port = connection.dest_port
     raw.mix = int(EngineGraphMix(connection.mix))
     return raw
@@ -305,7 +306,7 @@ def _graph_parameter_binding_to_c(
     raw = SonareEngineGraphParameterBinding()
     # Assigned unconverted so the struct's own narrowing sees the caller value.
     raw.param_id = binding.param_id
-    raw.node_id = _fixed_bytes(binding.node_id, 64)
+    raw.node_id = _fixed_bytes(binding.node_id, 64, "node_id")
     return raw
 
 

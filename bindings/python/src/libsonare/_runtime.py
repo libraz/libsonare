@@ -29,6 +29,7 @@ from ._narrowing import _narrow_double as _narrow_double
 from ._narrowing import _narrow_float as _narrow_float
 from ._narrowing import _narrow_int as _narrow_int
 from ._narrowing import _narrowing_error as _narrowing_error
+from ._narrowing import _utf8_arg as _utf8_arg
 from .types import *  # noqa: F403
 
 # Pan-law aliases are normalized case-insensitively and with underscores folded

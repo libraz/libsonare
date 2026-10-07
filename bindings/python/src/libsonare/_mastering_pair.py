@@ -26,6 +26,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
 )
 from .types import (
     LoudnessMatch,
@@ -67,7 +68,7 @@ def mastering_pair_process(
     # variant takes independent source/reference lengths (the pair primitives
     # consume each buffer at its own length).
     rc = lib.sonare_mastering_apply_pair_processor_ex(
-        processor_name.encode("utf-8"),
+        _utf8_arg(processor_name, "processor_name"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
         reference_array,
@@ -132,7 +133,7 @@ def mastering_pair_process_stereo(
     out = SonareMasteringStereoResult()
     try:
         rc = lib.sonare_mastering_apply_pair_processor_stereo_ex(
-            processor_name.encode("utf-8"),
+            _utf8_arg(processor_name, "processor_name"),
             source_left_array,
             source_right_array,
             _to_c_size_t(source_left_length, "source_length"),
@@ -178,7 +179,7 @@ def mastering_pair_analyze(
     json_ptr = ctypes.c_char_p()
     # Independent source/reference lengths (see mastering_pair_process).
     rc = lib.sonare_mastering_analyze_pair_ex(
-        analysis_name.encode("utf-8"),
+        _utf8_arg(analysis_name, "analysis_name"),
         source_array,
         _to_c_size_t(source_length, "source_length"),
         reference_array,
@@ -348,7 +349,7 @@ def mastering_stereo_analyze(
     param_array, param_count = _mastering_params(params)
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_analyze_stereo(
-        analysis_name.encode("utf-8"),
+        _utf8_arg(analysis_name, "analysis_name"),
         left_array,
         right_array,
         _to_c_size_t(left_length, "left_length"),
@@ -373,7 +374,7 @@ def _streaming_platforms(
         return None, 0, []
     platform_count = len(platforms)
     array_type = SonareStreamingPlatform * platform_count
-    platform_buffers = [str(platform.get("name", "")).encode("utf-8") for platform in platforms]
+    platform_buffers = [_utf8_arg(str(platform.get("name", "")), "name") for platform in platforms]
     platform_array = array_type(
         *[
             SonareStreamingPlatform(
@@ -670,7 +671,7 @@ def mastering_preset_params(preset: str) -> dict[str, float | bool]:
         raise RuntimeError("libsonare was built without mastering preset support")
     json_ptr = ctypes.c_char_p()
     rc = lib.sonare_mastering_preset_params_json(
-        preset.encode("utf-8"),
+        _utf8_arg(preset, "preset"),
         ctypes.byref(json_ptr),
     )
     _check(rc)

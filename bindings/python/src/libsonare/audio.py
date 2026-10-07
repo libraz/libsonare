@@ -18,6 +18,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
 )
 from .analyzer import (
     analyze_bpm as _analyze_bpm,
@@ -206,7 +207,7 @@ class Audio:
         lib = _get_lib()
         handle = ctypes.c_void_p()
         rc = lib.sonare_audio_from_file(
-            path.encode("utf-8"),
+            _utf8_arg(path, "path"),
             ctypes.byref(handle),
         )
         _check(rc)
@@ -240,7 +241,7 @@ class Audio:
         handle = ctypes.c_void_p()
         _check(
             load(
-                path.encode("utf-8"),
+                _utf8_arg(path, "path"),
                 _to_c_int(channel_index, "channel_index"),
                 ctypes.byref(handle),
             )
@@ -270,7 +271,7 @@ class Audio:
                 "rebuild or install a newer native library"
             )
         out_channels = ctypes.c_int()
-        rc = probe(path.encode("utf-8"), ctypes.byref(out_channels))
+        rc = probe(_utf8_arg(path, "path"), ctypes.byref(out_channels))
         _check(rc)
         channels = int(out_channels.value)
         if channels <= 0:

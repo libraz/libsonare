@@ -26,6 +26,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
 )
 from .types import (
     CapabilityCatalog,
@@ -103,7 +104,7 @@ def mastering(
 def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
     items = list((params or {}).items())
     array_type = SonareMasteringParam * len(items)
-    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    key_buffers = [_utf8_arg(str(key), "key") for key, _ in items]
     array = array_type(
         *[
             SonareMasteringParam(key=key_buffers[index], value=float(value))
@@ -170,7 +171,7 @@ def _resolve_name(
     lib = _get_lib()
     if not hasattr(lib, symbol):
         raise RuntimeError("libsonare was built without mastering assistant support")
-    index = getattr(lib, symbol)(value.encode("utf-8"))
+    index = getattr(lib, symbol)(_utf8_arg(value, "value"))
     if index < 0:
         raise SonareValueError(f"unknown {noun} {value!r}; expected one of: {', '.join(names())}")
     return int(index)
@@ -241,7 +242,7 @@ def mastering_insert_param_names(name: str) -> list[str]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_param_names"):
         raise RuntimeError("libsonare was built without mastering support")
-    raw = lib.sonare_mastering_insert_param_names(name.encode("utf-8"))
+    raw = lib.sonare_mastering_insert_param_names(_utf8_arg(name, "name"))
     return raw.decode("utf-8").splitlines() if raw else []
 
 
@@ -261,7 +262,7 @@ def mastering_insert_param_info(name: str) -> list[MasteringInsertParamInfo]:
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_param_info"):
         raise RuntimeError("libsonare was built without mastering support")
-    raw = lib.sonare_mastering_insert_param_info(name.encode("utf-8"))
+    raw = lib.sonare_mastering_insert_param_info(_utf8_arg(name, "name"))
     if not raw:
         return []
     parsed = json.loads(raw.decode("utf-8"))
@@ -303,11 +304,11 @@ def mastering_insert_timing(
         raise SonareValueError(
             f"mastering_insert_timing: {key} must be a boolean or a finite number"
         )
-    params_json = json.dumps(payload, allow_nan=False).encode("utf-8")
+    params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
     out_latency = ctypes.c_int(0)
     out_tail = ctypes.c_int(0)
     rc = lib.sonare_mastering_insert_timing(
-        name.encode("utf-8"),
+        _utf8_arg(name, "name"),
         params_json,
         _to_c_int(sample_rate, "sample_rate"),
         ctypes.byref(out_latency),
@@ -405,7 +406,7 @@ def mastering_process(
     param_array, param_count = _mastering_params(params)
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_apply_processor(
-        processor_name.encode("utf-8"),
+        _utf8_arg(processor_name, "processor_name"),
         c_array,
         _to_c_size_t(length, "length"),
         _to_c_int(sample_rate, "sample_rate"),
@@ -448,7 +449,7 @@ def mastering_process_stereo(
     param_array, param_count = _mastering_params(params)
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
-        processor_name.encode("utf-8"),
+        _utf8_arg(processor_name, "processor_name"),
         left_array,
         right_array,
         _to_c_size_t(left_length, "left_length"),
@@ -502,7 +503,7 @@ def _chain_params(config: dict[str, Any] | None) -> tuple[Any, int]:
     flat = _flatten_chain_config(config)
     items = list(flat.items())
     array_type = SonareMasteringParam * len(items)
-    key_buffers = [str(key).encode("utf-8") for key, _ in items]
+    key_buffers = [_utf8_arg(str(key), "key") for key, _ in items]
     array = array_type(
         *[
             SonareMasteringParam(key=key_buffers[index], value=float(value))
@@ -862,7 +863,7 @@ def master_audio(
     out = SonareMasteringChainResult()
     if on_progress is None and cancel is None:
         rc = lib.sonare_master_audio(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -879,7 +880,7 @@ def master_audio(
         )
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_master_audio_with_progress_ex(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -900,7 +901,7 @@ def master_audio(
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
         rc = lib.sonare_master_audio_with_progress(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(sample_rate, "sample_rate"),
@@ -961,7 +962,7 @@ def master_audio_stereo(
     out = SonareMasteringChainStereoResult()
     if on_progress is None and cancel is None:
         rc = lib.sonare_master_audio_stereo(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),
@@ -979,7 +980,7 @@ def master_audio_stereo(
         )
         cancel_cb = make_cancel_trampoline(state)
         rc = lib.sonare_master_audio_stereo_with_progress_ex(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),
@@ -1001,7 +1002,7 @@ def master_audio_stereo(
             raise RuntimeError("libsonare was built without mastering progress support")
         cb = _make_progress_trampoline(on_progress, CancellationState(None))
         rc = lib.sonare_master_audio_stereo_with_progress(
-            preset_name.encode("utf-8"),
+            _utf8_arg(preset_name, "preset_name"),
             left_array,
             right_array,
             _to_c_size_t(left_length, "left_length"),

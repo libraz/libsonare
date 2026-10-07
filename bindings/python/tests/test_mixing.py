@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from libsonare._runtime import _pan_law_value
+
 from ._helpers import LIB_AVAILABLE
 
 pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared library not found")
@@ -314,8 +316,10 @@ def test_set_pan_law_matches_shared_name_corpus(mixer) -> None:
     """Every canonical alias and conservative normalization maps cross-binding identically."""
     for case in _PAN_LAW_CORPUS["accepted"] + _PAN_LAW_CORPUS["normalization"]:
         mixer.set_pan_law(0, case["value"])
+        assert _pan_law_value(case["value"]) == case["ordinal"], case["value"]
     for ordinal in _PAN_LAW_CORPUS["numeric"]:
         mixer.set_pan_law(0, ordinal)
+        assert _pan_law_value(ordinal) == ordinal
     for value in _PAN_LAW_CORPUS["rejected"]:
         with pytest.raises(ValueError):
             mixer.set_pan_law(0, value)

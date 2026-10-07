@@ -27,6 +27,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_uint,
     _to_c_uint32,
+    _utf8_arg,
 )
 
 
@@ -222,7 +223,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_bus_strip_json(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
-                scene_json.encode("utf-8"),
+                _utf8_arg(scene_json, "scene_json"),
             )
         )
 
@@ -248,7 +249,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_int(band_index, "band_index"),
-                band_json.encode("utf-8"),
+                _utf8_arg(band_json, "band_json"),
             )
         )
 
@@ -257,7 +258,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_track_strip_json(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                scene_json.encode("utf-8"),
+                _utf8_arg(scene_json, "scene_json"),
             )
         )
 
@@ -279,7 +280,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_int(band_index, "band_index"),
-                band_json.encode("utf-8"),
+                _utf8_arg(band_json, "band_json"),
             )
         )
 
@@ -304,7 +305,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -399,7 +400,7 @@ class _EngineMixingMixin:
         _check(
             _get_lib().sonare_engine_set_master_strip_json(
                 self._require_handle(),
-                scene_json.encode("utf-8"),
+                _utf8_arg(scene_json, "scene_json"),
             )
         )
 
@@ -417,7 +418,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_master_strip_eq_band_json(
                 self._require_handle(),
                 _to_c_int(band_index, "band_index"),
-                band_json.encode("utf-8"),
+                _utf8_arg(band_json, "band_json"),
             )
         )
 
@@ -440,7 +441,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_set_master_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -458,7 +459,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -480,7 +481,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
                 ctypes.byref(out_applied),
             )
@@ -496,7 +497,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_apply_master_strip_insert_param_by_name_now(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
                 ctypes.byref(out_applied),
             )
@@ -513,7 +514,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
                 ctypes.byref(out_applied),
             )
@@ -535,7 +536,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -548,7 +549,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_restore_master_strip_insert_param_by_name(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -562,7 +563,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 _to_c_float(value, "value"),
             )
         )
@@ -707,7 +708,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )
         )
@@ -723,7 +724,7 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_resolve_master_insert_automation_id(
                 self._require_handle(),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )
         )
@@ -743,7 +744,7 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
                 _to_c_uint(insert_index, "insert_index"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )
         )

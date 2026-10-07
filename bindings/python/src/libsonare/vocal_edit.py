@@ -53,6 +53,7 @@ from ._runtime import (
     _get_lib,
     _narrow_int,
     _to_c_int,
+    _utf8_arg,
     _validate_samples,
 )
 
@@ -522,9 +523,7 @@ def _analysis_to_c(
     raw.f0_hz = f0.ctypes.data_as(ctypes.POINTER(ctypes.c_float))
     raw.voiced = voiced.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8))
     raw.frame_count = int(f0.size)
-    if "\x00" in analysis.algorithm_id:
-        raise SonareValueError("algorithm_id must not contain NUL")
-    name = analysis.algorithm_id.encode("utf-8")
+    name = _utf8_arg(analysis.algorithm_id, "algorithm_id")
     raw.algorithm_id = name
     raw.algorithm_version = _uint32(analysis.algorithm_version, "algorithm_version")
     raw.fmin_hz = _finite_float(analysis.fmin_hz, "fmin_hz")

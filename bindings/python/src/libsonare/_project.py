@@ -66,7 +66,7 @@ from ._project_model import (
     _validate_midi_event_word as _validate_midi_event_word,
 )
 from ._project_render import _compile_result_fields, _ProjectRenderMixin
-from ._runtime import SonareProjectCompileResult, SonareValueError, _check, _get_lib
+from ._runtime import SonareProjectCompileResult, SonareValueError, _check, _get_lib, _utf8_arg
 
 if TYPE_CHECKING:
     import numpy as np
@@ -266,7 +266,7 @@ class Project(
         """
         lib = _get_lib()
         _check_project_abi(lib)
-        data = json.encode("utf-8") if isinstance(json, str) else bytes(json)
+        data = _utf8_arg(json, "json") if isinstance(json, str) else bytes(json)
         handle = ctypes.c_void_p()
         diag = ctypes.c_char_p()
         rc = lib.sonare_project_deserialize(
@@ -290,7 +290,7 @@ class Project(
         """Deserialize project JSON and return warnings from successful loads."""
         lib = _get_lib()
         _check_project_abi(lib)
-        data = json.encode("utf-8") if isinstance(json, str) else bytes(json)
+        data = _utf8_arg(json, "json") if isinstance(json, str) else bytes(json)
         handle = ctypes.c_void_p()
         diag = ctypes.c_char_p()
         rc = lib.sonare_project_deserialize(

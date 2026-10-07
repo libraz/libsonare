@@ -143,3 +143,14 @@ def _narrow_double(value: object, name: str) -> float:
             if math.isfinite(number):
                 return number
     raise SonareValueError(f"{name} must be a finite number")
+
+
+def _utf8_arg(value: str, name: str) -> bytes:
+    """Encode ``value`` for a NUL-terminated ``char *``, refusing an embedded NUL.
+
+    The C side reads up to the first NUL, so a string containing one would arrive
+    silently shortened; every string argument crosses the boundary through here.
+    """
+    if "\x00" in value:
+        raise SonareValueError(f"{name} must not contain NUL")
+    return value.encode("utf-8")

@@ -16,6 +16,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _utf8_arg,
     _validate_samples,
 )
 from .types import SegmentMatrix
@@ -84,8 +85,8 @@ def cross_similarity(
         _to_c_int(y_rows, "y_rows"),
         _to_c_int(y_cols, "y_cols"),
         _to_c_int(k, "k"),
-        metric.encode(),
-        mode.encode(),
+        _utf8_arg(metric, "metric"),
+        _utf8_arg(mode, "mode"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -113,8 +114,8 @@ def recurrence_matrix(
         _to_c_int(k, "k"),
         _to_c_int(width, "width"),
         1 if sym else 0,
-        metric.encode(),
-        mode.encode(),
+        _utf8_arg(metric, "metric"),
+        _utf8_arg(mode, "mode"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -198,7 +199,7 @@ def agglomerative(
             _to_c_int(rows, "rows"),
             _to_c_int(cols, "cols"),
             _to_c_int(k, "k"),
-            linkage.encode(),
+            _utf8_arg(linkage, "linkage"),
             ctypes.byref(out),
         )
     )

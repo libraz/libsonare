@@ -39,6 +39,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
     _validate_samples,
 )
 
@@ -80,8 +81,8 @@ def voice_change(
 
 def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
     if isinstance(preset, str):
-        return preset.encode("utf-8")
-    return json.dumps(preset, separators=(",", ":")).encode("utf-8")
+        return _utf8_arg(preset, "preset")
+    return _utf8_arg(json.dumps(preset, separators=(",", ":")), "preset")
 
 
 class RealtimeVoiceChanger:
@@ -383,7 +384,7 @@ def realtime_voice_changer_preset_names() -> list[str]:
 def realtime_voice_changer_preset_json(name: str) -> str:
     lib = _get_lib()
     out = ctypes.c_char_p()
-    rc = lib.sonare_realtime_voice_changer_preset_json(name.encode("utf-8"), ctypes.byref(out))
+    rc = lib.sonare_realtime_voice_changer_preset_json(_utf8_arg(name, "name"), ctypes.byref(out))
     _check(rc)
     try:
         return ctypes.string_at(out).decode("utf-8")
@@ -397,7 +398,7 @@ def validate_realtime_voice_changer_preset_json(json_text: str) -> dict[str, obj
     normalized = ctypes.c_char_p()
     error = ctypes.c_char_p()
     rc = lib.sonare_realtime_voice_changer_validate_preset_json(
-        json_text.encode("utf-8"), ctypes.byref(normalized), ctypes.byref(error)
+        _utf8_arg(json_text, "json_text"), ctypes.byref(normalized), ctypes.byref(error)
     )
     if rc == SONARE_OK:
         try:

@@ -101,6 +101,13 @@ def test_bounce_target_lufs_zero_resolves_to_shared_default() -> None:
     assert abs(lufs - (-14.0)) < 0.25
 
 
+@pytest.mark.parametrize("target", [math.nan, math.inf, -math.inf])
+def test_bounce_non_finite_target_lufs_is_refused_by_name(target: float) -> None:
+    # A non-finite target must not be read as the -14 LUFS default.
+    with pytest.raises(ValueError, match="target_lufs"):
+        _bounce(normalize_lufs=True, target_lufs=target)
+
+
 def test_bounce_dither_types_apply_their_documented_behaviour() -> None:
     plain, _ = _bounce()
     none, _ = _bounce(dither=0, dither_bits=DITHER_BITS, dither_seed=1)

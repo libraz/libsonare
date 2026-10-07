@@ -62,6 +62,7 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
+    _utf8_arg,
     _warp_mode_value,
 )
 
@@ -99,7 +100,7 @@ def _part_rig_inserts_arg(
                 "params": params if isinstance(params, str) else json.dumps(params),
             }
         )
-    return json.dumps(entries).encode("utf-8")
+    return _utf8_arg(json.dumps(entries), "entries")
 
 
 @dataclass(frozen=True)
@@ -323,8 +324,8 @@ class _ProjectEditMixin:
             lib.sonare_project_set_audio_source_metadata(
                 self._require_handle(),
                 _to_c_uint32(source_id, "source_id"),
-                content_hash.encode("utf-8"),
-                external_stem_role.encode("utf-8"),
+                _utf8_arg(content_hash, "content_hash"),
+                _utf8_arg(external_stem_role, "external_stem_role"),
             )
         )
 
@@ -339,7 +340,7 @@ class _ProjectEditMixin:
         """
         desc = SonareProjectTrackDesc(
             kind=_track_kind_value(kind),
-            name=name.encode("utf-8") if name is not None else None,
+            name=_utf8_arg(name, "name") if name is not None else None,
         )
         out_id = ctypes.c_uint32()
         _check(
@@ -397,7 +398,7 @@ class _ProjectEditMixin:
             audio_frames=audio_frames,
             audio_channels=channels if audio is not None else 0,
             audio_sample_rate=audio_sample_rate if audio is not None else 0,
-            source_uri=source_uri.encode("utf-8") if source_uri is not None else None,
+            source_uri=_utf8_arg(source_uri, "source_uri") if source_uri is not None else None,
         )
         out_id = ctypes.c_uint32()
         _check(
@@ -438,11 +439,11 @@ class _ProjectEditMixin:
             arrays = [_as_float32_buffer(plane, arg_name="planar_samples") for plane in planes]
             if not arrays or any(array.size != arrays[0].size for array in arrays):
                 raise SonareValueError("all planar_samples entries must have equal length")
-            names.append(name.encode("utf-8"))
+            names.append(_utf8_arg(name, "name"))
             role = stem.get("role")
             if role is not None and not isinstance(role, str):
                 raise TypeError("stem role must be a string when supplied")
-            roles.append(None if role is None else role.encode("utf-8"))
+            roles.append(None if role is None else _utf8_arg(role, "role"))
             sample_arrays.append(arrays)
             c_planes = (ctypes.POINTER(ctypes.c_float) * int(cast(int, layout_value)))(
                 *(array.ctypes.data_as(ctypes.POINTER(ctypes.c_float)) for array in arrays)
@@ -639,7 +640,7 @@ class _ProjectEditMixin:
             )
             c_takes[i].source_offset_ppq = float(source_offset)
             if name:
-                encoded = str(name).encode("utf-8")
+                encoded = _utf8_arg(str(name), "name")
                 name_backing.append(encoded)
                 c_takes[i].name = encoded
         _check(
@@ -711,7 +712,7 @@ class _ProjectEditMixin:
         for i, (warp_sample, source_sample) in enumerate(anchors):
             c_anchors[i].warp_sample = float(warp_sample)
             c_anchors[i].source_sample = float(source_sample)
-        encoded_name = name.encode("utf-8") if name else None
+        encoded_name = _utf8_arg(name, "name") if name else None
         desc = SonareProjectWarpMapDesc(
             # Passed unconverted so the struct's own narrowing sees the caller's
             # value; int() would truncate a fraction past it.
@@ -1052,7 +1053,7 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_rename_track(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                name.encode("utf-8") if name is not None else None,
+                _utf8_arg(name, "name") if name is not None else None,
             )
         )
 
@@ -1067,8 +1068,10 @@ class _ProjectEditMixin:
             _get_lib().sonare_project_set_track_route(
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
-                channel_strip_ref.encode("utf-8") if channel_strip_ref is not None else None,
-                output_target.encode("utf-8") if output_target is not None else None,
+                _utf8_arg(channel_strip_ref, "channel_strip_ref")
+                if channel_strip_ref is not None
+                else None,
+                _utf8_arg(output_target, "output_target") if output_target is not None else None,
             )
         )
 

@@ -29,6 +29,7 @@ from ._runtime import (
     _to_c_float_array_owned,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
     _validate_samples,
 )
 from .types import (
@@ -268,11 +269,9 @@ class StreamingMasteringChain:
             raise SonareValueError("key must be a string")
         if not key:
             raise SonareValueError("key must not be empty")
-        if "\x00" in key:
-            raise SonareValueError("key must not contain NUL")
         if not hasattr(self._lib, "sonare_streaming_mastering_chain_set_parameter"):
             raise RuntimeError("libsonare was built without streaming parameter support")
-        key_bytes = key.encode("utf-8")
+        key_bytes = _utf8_arg(key, "key")
         rc = self._lib.sonare_streaming_mastering_chain_set_parameter(
             self._handle,
             key_bytes,
@@ -439,7 +438,7 @@ class StreamingEqualizer:
         self._ensure_open()
         payload = band if isinstance(band, str) else json.dumps(band, separators=(",", ":"))
         rc = self._lib.sonare_eq_set_band(
-            self._handle, _to_c_int(index, "index"), payload.encode("utf-8")
+            self._handle, _to_c_int(index, "index"), _utf8_arg(payload, "payload")
         )
         _check(rc)
 

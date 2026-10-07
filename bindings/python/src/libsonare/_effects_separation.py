@@ -28,6 +28,7 @@ from ._runtime import (
     _to_c_int_array,
     _to_c_size_t,
     _unsupported_effect_symbol,
+    _utf8_arg,
     _validate_c_int_field,
     _validate_effect_fft_options,
     _validate_hpss_kernel,
@@ -130,7 +131,7 @@ def decompose_with_init(
                 _to_c_int(n_components, "n_components"),
                 _to_c_int(n_iter, "n_iter"),
                 _to_c_float(beta, "beta"),
-                init.encode("utf-8") if init else None,
+                _utf8_arg(init, "init") if init else None,
                 ctypes.byref(out_w),
                 ctypes.byref(out_w_length),
                 ctypes.byref(out_h),
@@ -213,7 +214,7 @@ def decompose_stems(
         hop_length=hop_length,
         n_iter=n_iter,
         beta=float(beta),
-        init=init.encode("utf-8") if init else None,
+        init=_utf8_arg(init, "init") if init else None,
         mask_power=float(mask_power),
     )
     c_array, length = _to_c_float_array(samples)
@@ -326,7 +327,7 @@ def decompose_stems_linked(
         hop_length=hop_length,
         n_iter=n_iter,
         beta=float(beta),
-        init=init.encode("utf-8") if init else None,
+        init=_utf8_arg(init, "init") if init else None,
         mask_power=float(mask_power),
     )
     channel_count = len(arrays)
@@ -399,7 +400,7 @@ def nn_filter(
     c_array, length = _to_c_float_array(s)
     if length != n_features * n_frames:
         raise SonareValueError("s length must equal n_features * n_frames")
-    aggregate_bytes = aggregate.encode("utf-8") if aggregate else None
+    aggregate_bytes = _utf8_arg(aggregate, "aggregate") if aggregate else None
     with _out_float_array(lib) as (out, out_length):
         _check(
             lib.sonare_nn_filter(

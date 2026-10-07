@@ -111,6 +111,7 @@ from ._runtime import (
     _resolve_enum,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
     _validate_c_int_field,
 )
 
@@ -299,7 +300,9 @@ def _fade_curve_value(curve: str | int) -> int:
     if isinstance(curve, str):
         out = ctypes.c_uint32()
         _check(
-            _get_lib().sonare_project_fade_curve_from_name(curve.encode("utf-8"), ctypes.byref(out))
+            _get_lib().sonare_project_fade_curve_from_name(
+                _utf8_arg(curve, "curve"), ctypes.byref(out)
+            )
         )
         return int(out.value)
     return _resolve_enum(curve, _FADE_CURVE_NAMES, "fade curve")
@@ -596,14 +599,14 @@ def _marker_name_bytes(name: str | None) -> bytes:
     """
     if not name:
         return b""
-    return name.encode("utf-8")[:63].decode("utf-8", "ignore").encode("utf-8")
+    return _utf8_arg(name, "name")[:63].decode("utf-8", "ignore").encode("utf-8")
 
 
 def _synth_waveform_value(waveform: str | int) -> int:
     if isinstance(waveform, str):
         resolver = getattr(_get_lib(), "sonare_synth_builtin_waveform_from_name", None)
         if resolver is not None:
-            value = int(resolver(waveform.encode("utf-8")))
+            value = int(resolver(_utf8_arg(waveform, "waveform")))
             if value >= 0:
                 return value
             raise SonareValueError(f"unknown synth waveform: {waveform!r}")
@@ -824,7 +827,9 @@ class SynthPatch:
             setattr(c, name, value)
             c.present_fields |= bit
 
-        c.preset = _strip_va_prefix(self.preset).encode("utf-8")[: SONARE_SYNTH_PRESET_NAME_MAX - 1]
+        c.preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")[
+            : SONARE_SYNTH_PRESET_NAME_MAX - 1
+        ]
         c.engine_mode = _synth_enum_value(self.engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
         c.waveform = _synth_enum_value(self.waveform, _SYNTH_OSC_WAVEFORMS, "oscillator waveform")
         _set_int("unison", SONARE_SYNTH_FIELD_UNISON, self.unison)
@@ -1060,7 +1065,9 @@ def synth_preset_patch(name: str) -> SynthPatch:
     if not hasattr(lib, "sonare_synth_preset_patch"):
         raise RuntimeError("libsonare was built without the NativeSynth ABI")
     out = SonareSynthPatch()
-    _check(lib.sonare_synth_preset_patch(_strip_va_prefix(name).encode("utf-8"), ctypes.byref(out)))
+    _check(
+        lib.sonare_synth_preset_patch(_utf8_arg(_strip_va_prefix(name), "name"), ctypes.byref(out))
+    )
     return SynthPatch._from_c(out)
 
 

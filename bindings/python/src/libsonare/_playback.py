@@ -33,11 +33,12 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
 )
 
 
 def _playback_config_to_json(config: Mapping[str, Any] | str) -> bytes:
-    return (config if isinstance(config, str) else json.dumps(dict(config))).encode("utf-8")
+    return _utf8_arg(config if isinstance(config, str) else json.dumps(dict(config)), "config")
 
 
 def _require_playback(lib: ctypes.CDLL) -> None:

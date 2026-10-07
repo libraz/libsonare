@@ -446,8 +446,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         # value; int() would truncate a fraction onto a neighbouring parameter
         # id. rt_safe is the exception -- it is a documented bool, spelled 0/1.
         raw.id = info.id
-        raw.name = _fixed_bytes(info.name, 64)
-        raw.unit = _fixed_bytes(info.unit, 16)
+        raw.name = _fixed_bytes(info.name, 64, "name")
+        raw.unit = _fixed_bytes(info.unit, 16, "unit")
         raw.min_value = float(info.min_value)
         raw.max_value = float(info.max_value)
         raw.default_value = float(info.default_value)

@@ -24,6 +24,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _utf8_arg,
 )
 from .types import (
     AnalysisBeatObservations,
@@ -137,7 +138,7 @@ def detect_key(
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
-        genre_hint.encode("utf-8") if genre_hint else None,
+        _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
         ctypes.byref(out_key),
     )
     _check(rc)
@@ -180,7 +181,7 @@ def detect_key_candidates(
         mode_array,
         _to_c_size_t(mode_count, "mode_count"),
         ctypes.c_int32(_profile_value(profile)),
-        genre_hint.encode("utf-8") if genre_hint else None,
+        _utf8_arg(genre_hint, "genre_hint") if genre_hint else None,
         ctypes.byref(out_candidates),
         ctypes.byref(out_count),
     )

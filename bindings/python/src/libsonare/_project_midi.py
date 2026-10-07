@@ -50,6 +50,7 @@ from ._runtime import (
     _to_c_uint8,
     _to_c_uint16,
     _to_c_uint32,
+    _utf8_arg,
 )
 
 
@@ -319,7 +320,7 @@ class _ProjectMidiMixin:
             _get_lib().sonare_project_set_midi_fx(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                config_json.encode("utf-8"),
+                _utf8_arg(config_json, "config_json"),
             )
         )
 
@@ -346,7 +347,7 @@ class _ProjectMidiMixin:
         otherwise.
         """
         handle = self._require_handle()
-        config = config_json.encode("utf-8")
+        config = _utf8_arg(config_json, "config_json")
         if not with_source_index:
             _check(
                 _get_lib().sonare_project_bake_midi_fx(
@@ -376,7 +377,7 @@ class _ProjectMidiMixin:
             _get_lib().sonare_project_preview_midi_fx_count(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
-                config_json.encode("utf-8"),
+                _utf8_arg(config_json, "config_json"),
                 ctypes.byref(count),
             )
         )
@@ -739,7 +740,7 @@ class _ProjectMidiMixin:
     def gm_program_for_name(name: str | None) -> int:
         """Reverse GM instrument lookup; ``-1`` when unknown / ``None``."""
         return int(
-            _get_lib().sonare_midi_gm_program_for_name(name.encode("utf-8") if name else None)
+            _get_lib().sonare_midi_gm_program_for_name(_utf8_arg(name, "name") if name else None)
         )
 
     @staticmethod
@@ -771,7 +772,7 @@ class _ProjectMidiMixin:
     def gm_drum_note_for_name(name: str | None) -> int:
         """Reverse GM drum lookup; ``-1`` when unknown / ``None``."""
         return int(
-            _get_lib().sonare_midi_gm_drum_note_for_name(name.encode("utf-8") if name else None)
+            _get_lib().sonare_midi_gm_drum_note_for_name(_utf8_arg(name, "name") if name else None)
         )
 
     @staticmethod
@@ -797,7 +798,9 @@ class _ProjectMidiMixin:
     @staticmethod
     def midi_cc_index_for_name(name: str | None) -> int:
         """Reverse standard MIDI CC lookup; ``-1`` when unknown / ``None``."""
-        return int(_get_lib().sonare_midi_cc_index_for_name(name.encode("utf-8") if name else None))
+        return int(
+            _get_lib().sonare_midi_cc_index_for_name(_utf8_arg(name, "name") if name else None)
+        )
 
     @staticmethod
     def per_note_controller_name(index: int) -> str | None:

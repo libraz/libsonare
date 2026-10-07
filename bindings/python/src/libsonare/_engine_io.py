@@ -57,6 +57,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _check_realtime,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _narrow_int,
@@ -156,7 +157,7 @@ class _EngineIoMixin:
         status = self.capture_status()
         capacity = len(self._capture_arrays[0]) if self._capture_arrays else 0
         frames = max(0, min(status.captured_frames, capacity))
-        return [[float(array[i]) for i in range(frames)] for array in self._capture_arrays]
+        return [_float_array_result(array, frames) for array in self._capture_arrays]
 
     def set_graph(self, spec: EngineGraphSpec) -> None:
         nodes = (SonareEngineGraphNode * len(spec.nodes))(
@@ -176,8 +177,8 @@ class _EngineIoMixin:
         raw.connection_count = len(spec.connections)
         raw.parameter_bindings = parameter_bindings
         raw.parameter_binding_count = len(bindings)
-        raw.input_node = _fixed_bytes(spec.input_node, 64)
-        raw.output_node = _fixed_bytes(spec.output_node, 64)
+        raw.input_node = _fixed_bytes(spec.input_node, 64, "input_node")
+        raw.output_node = _fixed_bytes(spec.output_node, 64, "output_node")
         # Assigned unconverted so the struct's own narrowing sees the caller's
         # value; int() would truncate a fraction past it.
         raw.num_channels = spec.num_channels
@@ -533,7 +534,7 @@ class _EngineIoMixin:
                 ctypes.byref(count),
             )
         )
-        return [float(raw[i]) for i in range(min(count.value, SONARE_METER_MAX_INSERTS))]
+        return _float_array_result(raw, min(count.value, SONARE_METER_MAX_INSERTS))
 
     def insert_parameter_constructed_value(self, param_id: int) -> float:
         """Return an insert parameter's immutable construction value."""

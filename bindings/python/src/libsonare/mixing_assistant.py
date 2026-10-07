@@ -31,6 +31,7 @@ from ._runtime import (
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
+    _utf8_arg,
     _validate_c_int_field,
 )
 
@@ -155,8 +156,8 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
         left_arrays.append(left_array)
         right_arrays.append(right_array)
         lengths.append(left_length)
-        id_buffers.append(track_id.encode("utf-8"))
-        name_buffers.append(track.name.encode("utf-8") if track.name is not None else None)
+        id_buffers.append(_utf8_arg(track_id, "track_id"))
+        name_buffers.append(_utf8_arg(track.name, "name") if track.name is not None else None)
 
     float_ptr = ctypes.POINTER(ctypes.c_float)
     left_ptrs = (float_ptr * count)(*[ctypes.cast(arr, float_ptr) for arr in left_arrays])
@@ -430,4 +431,4 @@ def mix_source_class_names() -> list[str]:
 def mix_source_class_from_name(name: str) -> int:
     """Resolve a source-class identifier to its enum value, or ``-1`` if unknown."""
     lib = _get_lib()
-    return int(lib.sonare_mixing_assistant_source_class_from_name(name.encode("utf-8")))
+    return int(lib.sonare_mixing_assistant_source_class_from_name(_utf8_arg(name, "name")))

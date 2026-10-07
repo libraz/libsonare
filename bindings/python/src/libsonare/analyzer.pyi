@@ -1296,7 +1296,14 @@ def mix_stereo(
     width: Sequence[float] | None = None,
     muted: Sequence[bool] | None = None,
     input_trim_db: Sequence[float] | None = None,
-) -> MixResult: ...
+) -> MixResult:
+    """Render a small stereo mixer scene from per-strip left/right buffers.
+
+    ``sample_rate`` is an integer in ``[8000, 384000]``. A per-strip option may be
+    shorter than ``strips`` (the remaining strips keep their defaults); one longer
+    than ``strips`` raises ``SonareValueError`` naming it.
+    """
+
 def master_audio(
     samples: FloatSamples,
     sample_rate: int = 22050,

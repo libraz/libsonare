@@ -457,14 +457,12 @@ def test_mixing_presets_and_stereo_mix() -> None:
     assert math.isfinite(result.meters[0].peak_db_l)
     assert isinstance(result.meters[0].likely_mono_compatible, bool)
 
-    # A per-strip option whose length does not match the strip count raises a
-    # clear ValueError rather than an opaque IndexError deep in the loop.
-    with pytest.raises(ValueError, match="one entry per strip"):
-        libsonare.mix_stereo(
-            [([1.0, 1.0], [0.0, 0.0]), ([1.0, 1.0], [0.0, 0.0])],
-            sample_rate=48000,
-            fader_db=[-6.0206],  # only one entry for two strips
-        )
+    # A per-strip option longer than the strip list raises a ValueError naming
+    # it; a shorter one leaves the remaining strips at their defaults.
+    two_strips = [([1.0, 1.0], [0.0, 0.0]), ([1.0, 1.0], [0.0, 0.0])]
+    with pytest.raises(ValueError, match="'fader_db' has more entries than strips"):
+        libsonare.mix_stereo(two_strips, sample_rate=48000, fader_db=[-6.0206, 0.0, 0.0])
+    libsonare.mix_stereo(two_strips, sample_rate=48000, fader_db=[-6.0206])
 
 
 def test_mastering_chain_validates_offline_input() -> None:

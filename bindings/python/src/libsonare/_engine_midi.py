@@ -42,6 +42,7 @@ from ._runtime import (
     _to_c_uint8,
     _to_c_uint16,
     _to_c_uint32,
+    _utf8_arg,
 )
 
 
@@ -283,7 +284,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_resolve_instrument_automation_id(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                param_name.encode("utf-8"),
+                _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )
         )
@@ -377,7 +378,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_set_controller_profile(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                preset_name.encode("utf-8"),
+                _utf8_arg(preset_name, "preset_name"),
             )
         )
 
@@ -753,7 +754,7 @@ class _EngineMidiMixin:
             lib.sonare_engine_set_midi_fx(
                 self._require_handle(),
                 _to_c_uint32(destination_id, "destination_id"),
-                config_json.encode("utf-8"),
+                _utf8_arg(config_json, "config_json"),
             )
         )
 

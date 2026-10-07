@@ -40,6 +40,7 @@ from ._runtime import (
     _to_c_size_t,
     _to_c_uint8,
     _to_c_uint32,
+    _utf8_arg,
 )
 from .types import ProjectClip, ProjectMarker, ProjectSource, ProjectTrack
 
@@ -280,7 +281,9 @@ class _ProjectInspectionMixin:
                 )
                 backing.append(c_ext)
                 roman = c.get("roman_numeral")
-                roman_bytes = roman.encode("utf-8") if isinstance(roman, str) and roman else None
+                roman_bytes = (
+                    _utf8_arg(roman, "roman") if isinstance(roman, str) and roman else None
+                )
                 backing.append(roman_bytes)
                 c_chords[i].start_ppq = float(cast(float, c["start_ppq"]))
                 c_chords[i].end_ppq = float(cast(float, c["end_ppq"]))
@@ -366,7 +369,7 @@ class _ProjectInspectionMixin:
         _check(
             _get_lib().sonare_project_set_assist_sidecar(
                 self._require_handle(),
-                module_id.encode("utf-8"),
+                _utf8_arg(module_id, "module_id"),
                 _to_c_uint32(schema_version, "schema_version"),
                 _to_c_uint32(target_track_id, "target_track_id"),
                 float(region_start_ppq),
@@ -445,7 +448,7 @@ class _ProjectInspectionMixin:
                 self._require_handle(),
                 _to_c_uint32(marker_id, "marker_id"),
                 float(ppq),
-                name.encode("utf-8") if name is not None else None,
+                _utf8_arg(name, "name") if name is not None else None,
                 ctypes.byref(out_id),
             )
         )
@@ -471,7 +474,7 @@ class _ProjectInspectionMixin:
             _get_lib().sonare_project_set_marker_ex_name(
                 self._require_handle(),
                 ctypes.byref(raw),
-                (marker.name or "").encode("utf-8"),
+                _utf8_arg(marker.name or "", "name"),
                 ctypes.byref(out_id),
             )
         )
@@ -596,7 +599,7 @@ class _ProjectInspectionMixin:
         _check(
             _get_lib().sonare_project_set_mixer_scene_json(
                 self._require_handle(),
-                scene_json.encode("utf-8"),
+                _utf8_arg(scene_json, "scene_json"),
             )
         )
 

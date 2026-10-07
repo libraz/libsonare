@@ -29,6 +29,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_int_array,
     _to_c_size_t,
+    _utf8_arg,
     _validate_samples,
 )
 
@@ -74,7 +75,7 @@ def hz_to_note(hz: float) -> str:
 def note_to_hz(note: str) -> float:
     """Convert note name (e.g. 'A4') to frequency in Hz."""
     lib = _get_lib()
-    return float(lib.sonare_note_to_hz(note.encode("utf-8")))
+    return float(lib.sonare_note_to_hz(_utf8_arg(note, "note")))
 
 
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float:
