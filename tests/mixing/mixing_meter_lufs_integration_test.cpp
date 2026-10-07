@@ -1,7 +1,15 @@
 /// @file mixing_meter_lufs_integration_test.cpp
 /// @brief Mixing meter LUFS and integration tests.
 
+#include <catch2/catch_approx.hpp>
+#include <cstdint>
+
 #include "mixing_test_helpers.h"
+#include "rt/processor_base.h"
+
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
+#include <xmmintrin.h>
+#endif
 
 TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixing]") {
   constexpr double kSr = 48000.0;
@@ -467,46 +475,70 @@ TEST_CASE("ChannelStrip discards stale send automation even when send is not mix
 }
 
 // ============================================================================
-// P1 regression test: ScopedNoDenormals guard on BusProcessor::process
+// ScopedNoDenormals guard on BusProcessor::process
 // ============================================================================
 
-TEST_CASE("BusProcessor silent input through IIR insert produces exact-zero output",
-          "[mixing][bus][rt-safety]") {
-  // Regression guard for the P1 fix that wraps BusProcessor::process in
-  // rt::ScopedNoDenormals. An IIR insert (parametric low-shelf EQ here) fed a
-  // long block of silence must produce an exact-zero output rather than
-  // accumulating denormal floats — denormals would manifest as tiny non-zero
-  // tail samples on x86 without DAZ/FTZ, and 10-100x CPU spikes in audio
-  // callbacks. Mirrors the C-1 test for the voice changer (commit 4d34bbe).
-  constexpr int kSampleRate = 48000;
-  constexpr int kBlockSize = 4096;
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86) || \
+    defined(__aarch64__)
+namespace {
 
-  auto eq = std::make_unique<sonare::mastering::eq::ParametricEq>();
-  sonare::mastering::eq::EqBand band;
-  band.type = sonare::mastering::eq::EqBandType::LowShelf;
-  band.frequency_hz = 100.0f;
-  band.gain_db = 6.0f;
-  band.q = sonare::constants::kButterworthQ;
-  band.enabled = true;
-  eq->set_band(0, band);
+/// Reads the floating-point control register that holds the flush-to-zero state.
+std::uint64_t read_fp_control() {
+#if defined(__aarch64__)
+  std::uint64_t fpcr = 0;
+  __asm__ __volatile__("mrs %0, fpcr" : "=r"(fpcr));
+  return fpcr;
+#else
+  return _mm_getcsr();
+#endif
+}
+
+/// True when every denormal-suppression bit the platform offers is set.
+bool denormals_suppressed(std::uint64_t control) {
+#if defined(__aarch64__)
+  return (control & (std::uint64_t{1} << 24)) != 0;
+#else
+  constexpr std::uint64_t kFlushToZero = 0x8000;
+  constexpr std::uint64_t kDenormalsAreZero = 0x0040;
+  return (control & kFlushToZero) != 0 && (control & kDenormalsAreZero) != 0;
+#endif
+}
+
+/// Insert that records the floating-point control state seen inside process().
+class FpControlProbe final : public sonare::rt::ProcessorBase {
+ public:
+  explicit FpControlProbe(std::uint64_t* observed) : observed_(observed) {}
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override { *observed_ = read_fp_control(); }
+  void reset() override {}
+
+ private:
+  std::uint64_t* observed_;
+};
+
+}  // namespace
+
+TEST_CASE("BusProcessor::process runs with denormals suppressed and restores the caller's state",
+          "[mixing][bus][rt-safety]") {
+  constexpr int kBlockSize = 64;
+  std::uint64_t observed = 0;
 
   sonare::mixing::BusProcessor bus(sonare::mixing::BusRole::Subgroup);
-  bus.add_insert(std::move(eq));
-  bus.prepare(static_cast<double>(kSampleRate), kBlockSize);
+  bus.add_insert(std::make_unique<FpControlProbe>(&observed));
+  bus.prepare(48000.0, kBlockSize);
 
   std::array<float, kBlockSize> left{};
   std::array<float, kBlockSize> right{};
-  left.fill(0.0f);
-  right.fill(0.0f);
   float* channels[] = {left.data(), right.data()};
 
+  const std::uint64_t before = read_fp_control();
   bus.process(channels, 2, kBlockSize);
+  const std::uint64_t after = read_fp_control();
 
-  for (int i = 0; i < kBlockSize; ++i) {
-    REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
-    REQUIRE(right[static_cast<size_t>(i)] == 0.0f);
-  }
+  REQUIRE(denormals_suppressed(observed));
+  REQUIRE(after == before);
 }
+#endif
 
 TEST_CASE("ChannelStrip segmented pre and post meters integrate the same window", "[mixing]") {
   // Regression: in the segmented automation path of process_at(), the pre-fader
@@ -569,4 +601,58 @@ TEST_CASE("ChannelStrip segmented pre and post meters integrate the same window"
   // Peak is window-length insensitive here (the loud region dominates), so it
   // matches on both meters as a sanity check that the signals are identical.
   REQUIRE_THAT(post.peak_db[0], WithinAbs(pre.peak_db[0], 0.01f));
+}
+
+TEST_CASE("MeterProcessor resolves every requested true-peak oversample to its documented factor",
+          "[mixing][meter]") {
+  for (int requested = 0; requested <= 16; ++requested) {
+    CAPTURE(requested);
+    int expected = 4;
+    if (requested == 2) expected = 2;
+    if (requested >= 8) expected = 8;
+
+    sonare::mixing::MeterConfig config;
+    config.measure_true_peak = true;
+    config.true_peak_oversample = requested;
+    sonare::mixing::MeterProcessor meter(config);
+    meter.prepare(48000.0, 256);
+    REQUIRE(meter.true_peak_oversample_factor() == expected);
+  }
+}
+
+TEST_CASE("StereoWidthProcessor settles exactly on its target and then passes audio through",
+          "[mixing][width]") {
+  constexpr int kBlockSize = 512;
+  sonare::mixing::StereoWidthProcessor width(2.0f);
+  width.prepare(48000.0, kBlockSize);
+
+  std::vector<float> left(kBlockSize);
+  std::vector<float> right(kBlockSize);
+  auto fill = [&] {
+    for (int i = 0; i < kBlockSize; ++i) {
+      left[static_cast<size_t>(i)] = 0.3f * std::sin(0.05f * static_cast<float>(i));
+      right[static_cast<size_t>(i)] = 0.2f * std::cos(0.07f * static_cast<float>(i));
+    }
+  };
+  float* channels[] = {left.data(), right.data()};
+
+  for (int block = 0; block < 4; ++block) {
+    fill();
+    width.process(channels, 2, kBlockSize);
+  }
+  width.set_width(1.0f);
+  for (int block = 0; block < 200 && width.current_width() != 1.0f; ++block) {
+    fill();
+    width.process(channels, 2, kBlockSize);
+  }
+  REQUIRE(width.current_width() == 1.0f);
+
+  fill();
+  const std::vector<float> in_left = left;
+  const std::vector<float> in_right = right;
+  width.process(channels, 2, kBlockSize);
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE(left[i] == Catch::Approx(in_left[i]).margin(1e-6f));
+    REQUIRE(right[i] == Catch::Approx(in_right[i]).margin(1e-6f));
+  }
 }

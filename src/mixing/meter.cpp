@@ -187,13 +187,12 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   if (config_.measure_true_peak) {
     // History-preserving RT-safe path: upsample each meter channel through the
     // filter's internal cross-block history (sized in prepare()) into the
-    // preallocated oversampled scratch, then take max(|sample|). This keeps the
-    // measurement block-size- and phase-independent and catches inter-sample
-    // peaks that straddle block boundaries (the stateless path zero-padded the
-    // taps at every block edge and kept no history). Bounded to kTruePeak
-    // channels. The public snapshot keeps per-channel L/R compatibility, but
-    // max_true_peak_db must include surround channels so rear/LFE overs are not
-    // hidden on multichannel buses.
+    // preallocated oversampled scratch, then take max(|sample|). The history
+    // carries past samples across block edges but there is no look-ahead, so the
+    // measurement is slightly block-size dependent and always under-reads (about
+    // 0.1 dB; see sonare_c_mixing.h). Bounded to kTruePeak channels. The public snapshot keeps
+    // per-channel L/R compatibility, but max_true_peak_db must include surround channels so
+    // rear/LFE overs are not hidden on multichannel buses.
     const int tp_channels = std::min(num_channels, kTruePeakChannels);
     // Guard against a block larger than the prepared capacity (would otherwise
     // grow the scratch and allocate on the audio thread); clamp instead.

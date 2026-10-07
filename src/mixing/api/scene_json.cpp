@@ -314,8 +314,8 @@ Strip strip_from_value(const JsonValue& object) {
     strip.metering.true_peak_oversample =
         int_or(*metering, "truePeakOversample", strip.metering.true_peak_oversample);
     // A count, so it is rejected rather than clamped, like panMode / panLaw /
-    // channelDelaySamples above. Values inside the range are resolved by the
-    // meter to the nearest factor it implements.
+    // channelDelaySamples above. Inside the range the meter resolves 2 -> 2x,
+    // 8..16 -> 8x and any other value -> 4x.
     if (strip.metering.true_peak_oversample < 1 || strip.metering.true_peak_oversample > 16) {
       throw SonareException(ErrorCode::InvalidFormat,
                             "metering.truePeakOversample must be in [1, 16]");

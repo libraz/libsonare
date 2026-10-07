@@ -92,9 +92,8 @@ struct MeterConfig {
   bool measure_lufs = true;
   bool measure_true_peak = false;
   /// @brief Requested true-peak oversample factor. The realtime meter implements
-  /// 2x, 4x, and 8x; values are resolved to the nearest supported factor: 16x is
-  /// offline-only and clamps to 8x (use offline metering::true_peak for true 16x),
-  /// 2x is honored, and unsupported low factors (1, 3) are raised to the
+  /// 2x, 4x, and 8x: 2 selects 2x, 8..16 select 8x (16x is offline-only; use offline
+  /// metering::true_peak for true 16x), and every other value (0, 1, 3..7) selects the
   /// BS.1770-4 4x minimum.
   int true_peak_oversample = 4;
   float mono_compat_correlation_threshold = 0.0f;
@@ -116,6 +115,9 @@ class MeterProcessor : public rt::ProcessorBase {
   MeterSnapshot snapshot() const noexcept;
   void set_gain_reduction_db(float db) noexcept;
 
+  /// @brief Oversample factor (2, 4 or 8) the true-peak filter runs at once prepared.
+  int true_peak_oversample_factor() const noexcept { return true_peak_filter_.factor(); }
+
  private:
   double filter_sample(int channel, double x) noexcept;
   /// @brief Returns the K-weighting filters and the sliding loudness windows to
@@ -131,8 +133,8 @@ class MeterProcessor : public rt::ProcessorBase {
 
   // True-peak oversample scratch, preallocated in prepare() so the per-block
   // path never allocates. The filter keeps cross-block history internally
-  // (set up via TruePeakFilter::prepare()), so inter-sample peaks straddling
-  // block boundaries are measured consistently regardless of block size.
+  // (set up via TruePeakFilter::prepare()). It has no look-ahead, so the reading is
+  // slightly block-size dependent and always under-reads (see sonare_c_mixing.h).
   static constexpr int kTruePeakChannels = 8;
   std::array<std::vector<float>, kTruePeakChannels> true_peak_oversampled_{};
   std::array<float*, kTruePeakChannels> true_peak_in_ptrs_{};

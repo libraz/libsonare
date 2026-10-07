@@ -130,8 +130,9 @@ SonareStrip* sonare_mixer_add_strip(SonareMixer* mixer, const char* id);
 //
 // enable_metering, measure_lufs and measure_true_peak are booleans (0 / non-0).
 // true_peak_oversample is the requested factor; 0 selects the default (4), and
-// the realtime meter resolves the value to the nearest factor it implements
-// (2x, 4x, 8x). Returns NULL with sonare_last_error_message() set for a NULL
+// the realtime meter resolves the value to a factor it implements: 2 selects 2x,
+// 8..16 select 8x, and every other value (0, 1, 3..7) selects 4x, the BS.1770-4
+// minimum. Returns NULL with sonare_last_error_message() set for a NULL
 // handle or id, a duplicate id, or a factor outside [0, 16].
 //
 // A non-NULL strip is owned by the mixer, NOT the caller: it stays valid until
