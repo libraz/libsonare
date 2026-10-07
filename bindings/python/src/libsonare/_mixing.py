@@ -1117,7 +1117,7 @@ def mix_stereo(
             # just created already carries -- centre (0.0) for an absent
             # position, and Balance for the default mode.
             if mode_list is None:
-                mode = pan_mode
+                mode = typing.cast("str | int", pan_mode)
             else:
                 mode = mode_list[index] if index < len(mode_list) else "balance"
             _check(
