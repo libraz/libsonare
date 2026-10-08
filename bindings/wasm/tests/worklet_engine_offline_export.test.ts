@@ -277,6 +277,8 @@ describe('SonareEngine offline export', () => {
 class FakeClipPageWorker {
   listener: ((event: MessageEvent) => void) | null = null;
   pages: number[] = [];
+  /** Pages answered as unreadable. */
+  failPages = new Set<number>();
 
   addEventListener(type: string, listener: EventListener): void {
     if (type === 'message') {
@@ -313,7 +315,7 @@ class FakeClipPageWorker {
           type: 'sonare:clip-page',
           requestId: message.requestId,
           pageIndex: message.pageIndex,
-          ok: true,
+          ok: !this.failPages.has(message.pageIndex),
           frames,
           channelBuffers: buffers,
         },
@@ -324,6 +326,38 @@ class FakeClipPageWorker {
 
 describe('SonareEngine offline export of OPFS-streamed clips', () => {
   setupWorklet();
+
+  it('renders every page of a stream clip, and rejects a span with an unreadable page', async () => {
+    const pageFrames = 128;
+    const numSamples = 4 * pageFrames;
+    const worker = new FakeClipPageWorker();
+    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    const { engine } = await createFacade(mirror, { mode: 'sab' });
+    try {
+      engine.setTrackLanes([10]);
+      const { provider } = await engine.attachOpfsClipStream({
+        path: 'clips/clip.f32',
+        clipId: 702,
+        numChannels: 2,
+        numSamples,
+        pageFrames,
+        primePages: 1,
+        worker: worker as unknown as Worker,
+      });
+      engine.addClip(10, provider, 0, { id: 702 });
+
+      const [left] = await engine.renderOffline({ totalFrames: numSamples });
+      for (let page = 0; page < 4; page++) {
+        expect(rms(left.slice(page * pageFrames, (page + 1) * pageFrames))).toBeGreaterThan(0);
+      }
+
+      worker.failPages.add(2);
+      engine.transport.seekSeconds(0);
+      await expect(engine.renderOffline({ totalFrames: numSamples })).rejects.toThrow(/page 2/);
+    } finally {
+      engine.destroy();
+    }
+  });
 
   it('pages in the span before rendering and evicts what it supplied', async () => {
     const pageFrames = 128;

@@ -1,4 +1,5 @@
 import type { EngineAutomationPoint, RealtimeEngine } from '../index.js';
+import { commitStore } from './engine-commit.js';
 import { curveCode } from './engine-sync.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 
@@ -23,17 +24,12 @@ export function scheduleParam(
   curve: number | 'linear' | 'exponential' = 'linear',
 ): void {
   const paramId = ctx.resolveParamId(nodeId, param);
-  const lane = ctx.automationLanes.get(paramId) ?? [];
+  const lane = [...(ctx.automationLanes.get(paramId) ?? [])];
   lane.push({ ppq, value, curveToNext: curveCode(curve) });
   lane.sort((a, b) => a.ppq - b.ppq);
-  ctx.automationLanes.set(paramId, lane);
-  ctx.offlineEngine.setAutomationLane(paramId, lane);
-  // Mirror the lane to the live worklet engine so scheduled automation plays
-  // back in real time, not just in renderOffline(). Lanes can exceed the
-  // fixed-size SAB command record, so they ride an out-of-band 'syncAutomation'
-  // message whose port handler publishes the bounded snapshot consumed by
-  // process() (like syncClips/syncMarkers).
-  ctx.postSync({ type: 'syncAutomation', paramId, points: lane });
+  // Lanes can exceed the fixed-size SAB command record, so the live engine gets
+  // them through an out-of-band 'syncAutomation' message.
+  commitLane(ctx, paramId, lane);
 }
 
 export function addAutomationPoint(
@@ -64,11 +60,26 @@ export function setAutomationLane(
   points: ReadonlyArray<EngineAutomationPoint>,
 ): void {
   const sorted = points.map((point) => ({ ...point })).sort((a, b) => a.ppq - b.ppq);
-  if (sorted.length === 0) {
-    ctx.automationLanes.delete(paramId);
+  commitLane(ctx, paramId, sorted);
+}
+
+/** Stages `lane` (empty removes it), lets the offline engine validate it, then caches and posts it. */
+function commitLane(
+  ctx: EngineAutomationContext,
+  paramId: number,
+  lane: EngineAutomationPoint[],
+): void {
+  const staged = new Map(ctx.automationLanes);
+  if (lane.length === 0) {
+    staged.delete(paramId);
   } else {
-    ctx.automationLanes.set(paramId, sorted);
+    staged.set(paramId, lane);
   }
-  ctx.offlineEngine.setAutomationLane(paramId, sorted);
-  ctx.postSync({ type: 'syncAutomation', paramId, points: sorted });
+  commitStore(
+    ctx,
+    ctx.automationLanes,
+    staged,
+    (offline) => offline.setAutomationLane(paramId, lane),
+    () => ctx.postSync({ type: 'syncAutomation', paramId, points: lane }),
+  );
 }

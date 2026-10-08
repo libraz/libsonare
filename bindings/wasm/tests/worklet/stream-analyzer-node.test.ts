@@ -278,6 +278,17 @@ describe('SonareStreamAnalyzerNode', () => {
       captured: captured as { name: string; options: AudioWorkletNodeOptions },
     };
   }
+  it('refuses an analyzer sampleRate that differs from the AudioContext before creating a node', async () => {
+    const factory = vi.fn();
+    await expect(
+      SonareStreamAnalyzerNode.create({ sampleRate: 48000 } as BaseAudioContext, {
+        config: CONFIG,
+        chunkFrames: CHUNK,
+        nodeFactory: factory as never,
+      }),
+    ).rejects.toThrow(RangeError);
+    expect(factory).not.toHaveBeenCalled();
+  });
 
   function signal(length: number, seed = 1): Float32Array {
     const out = new Float32Array(length);

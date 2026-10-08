@@ -16,6 +16,7 @@ import {
   isScopeSnapshot,
   requireChannelCount,
   requireIntegerOption,
+  resolveContextSampleRate,
   resolveScopeBandCount,
 } from './guards.js';
 import type {
@@ -55,6 +56,7 @@ import {
   type SonareScopeRingBuffer,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
+  sonareEngineCommandRingHasRoom,
 } from './protocol.js';
 
 function isFiniteInteger(value: number | bigint | undefined): boolean {
@@ -278,6 +280,11 @@ export class SonareRealtimeEngineNode {
     options: SonareRealtimeEngineNodeOptions = {},
   ): Promise<SonareRealtimeEngineNode> {
     const blockSize = workletBlockSize(options.blockSize);
+    const sampleRate = resolveContextSampleRate(
+      options.sampleRate,
+      context,
+      'SonareRealtimeEngineNode.create',
+    );
     const processorName = options.processorName ?? 'sonare-realtime-engine-processor';
     const moduleUrl = options.moduleUrl;
     if (moduleUrl && context.audioWorklet?.addModule) {
@@ -398,7 +405,7 @@ export class SonareRealtimeEngineNode {
     const channelCount = requireChannelCount(options.channelCount, 2);
     const cueOutput = options.cueOutput === true;
     const processorOptions: SonareRealtimeEngineWorkletProcessorOptions = {
-      sampleRate: options.sampleRate ?? context.sampleRate,
+      sampleRate,
       blockSize,
       channelCount,
       meterIntervalFrames,
@@ -510,6 +517,13 @@ export class SonareRealtimeEngineNode {
       sampleTime: frame,
       argFloat: ppq,
     });
+  }
+
+  /** Whether the node could queue one more well-formed command now; queues nothing. */
+  hasCommandRoom(): boolean {
+    return (
+      !this.epoch.closed && (!this.commandRing || sonareEngineCommandRingHasRoom(this.commandRing))
+    );
   }
 
   sendCommand(command: SonareEngineCommandRecord): boolean {

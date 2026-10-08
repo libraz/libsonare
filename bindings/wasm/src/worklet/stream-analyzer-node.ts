@@ -1,6 +1,6 @@
 import type { AnalyzerStats, FrameBuffer } from '../index.js';
 import { StreamAnalyzer } from '../index.js';
-import { isStreamAnalyzerChunkMessage } from './guards.js';
+import { isStreamAnalyzerChunkMessage, resolveContextSampleRate } from './guards.js';
 import type {
   SonareStreamAnalyzerChunkMessage,
   SonareStreamAnalyzerNodeOptions,
@@ -74,7 +74,11 @@ export class SonareStreamAnalyzerNode {
     // Built before the node so an invalid configuration leaves nothing behind.
     const analyzer = new StreamAnalyzer({
       ...options.config,
-      sampleRate: options.config?.sampleRate ?? context.sampleRate,
+      sampleRate: resolveContextSampleRate(
+        options.config?.sampleRate,
+        context,
+        'SonareStreamAnalyzerNode.create',
+      ),
     });
     const processorOptions: SonareStreamAnalyzerWorkletProcessorOptions = { chunkFrames };
     const factory =

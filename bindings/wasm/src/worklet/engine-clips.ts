@@ -1,5 +1,6 @@
 import type { EngineClip, EngineMidiClipSchedule, RealtimeEngine } from '../index.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
+import { commitStore } from './engine-commit.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
@@ -15,8 +16,11 @@ export interface EngineClipContext {
   postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void;
   resolveTargetId(target: string | number): number;
   ensureTrackLane(target: string | number): number;
-  /** Commits a provider already primed through the worklet's OPFS pull bridge. */
-  commitWorkletClipPageProvider(clip: EngineClip): boolean;
+  /**
+   * The OPFS stream (primed through the worklet's pull bridge) whose provider
+   * `clip` schedules, or undefined; throws when the clip id is not the stream's.
+   */
+  workletClipStream(clip: EngineClip): { clipId: number; streamKey: number } | undefined;
   /** True while an OPFS stream owns the worklet provider slot of `clipId`. */
   hasClipStream(clipId: number): boolean;
 }
@@ -48,14 +52,16 @@ export function addClip(
     trackId: ctx.resolveTargetId(trackId),
   };
   ctx.ensureTrackLane(trackId);
-  ctx.clips.set(id, clip);
-  syncClipsDelta(ctx, [clip], []);
+  const staged = new Map(ctx.clips);
+  staged.set(id, clip);
+  commitClips(ctx, staged, [clip], []);
   return id;
 }
 
 export function removeClip(ctx: EngineClipContext, clipId: number): void {
-  ctx.clips.delete(clipId);
-  syncClipsDelta(ctx, [], [clipId]);
+  const staged = new Map(ctx.clips);
+  staged.delete(clipId);
+  commitClips(ctx, staged, [], [clipId]);
 }
 
 /** Replaces the whole clip store with one clip and syncs the worklet, dropping every previous id. */
@@ -64,12 +70,13 @@ export function replaceClips(
   clip: EngineClip,
   previousClipIds: readonly number[],
 ): void {
-  ctx.clips.clear();
+  const staged = new Map<number, EngineClip>();
   if (clip.id !== undefined) {
-    ctx.clips.set(clip.id, clip);
+    staged.set(clip.id, clip);
   }
-  syncClipsDelta(
+  commitClips(
     ctx,
+    staged,
     [clip],
     previousClipIds.filter((id) => id !== clip.id),
   );
@@ -79,17 +86,53 @@ export function setMidiClips(
   ctx: EngineClipContext,
   clips: readonly EngineMidiClipSchedule[],
 ): void {
-  ctx.midiClips.clear();
+  const staged = new Map<number, EngineMidiClipSchedule>();
   for (const clip of clips) {
     const id = clip.id ?? ctx.allocateClipId();
-    ctx.midiClips.set(id, { ...clip, id, events: clip.events.map((event) => ({ ...event })) });
+    staged.set(id, { ...clip, id, events: clip.events.map((event) => ({ ...event })) });
   }
-  syncMidiClips(ctx);
+  const scheduled = Array.from(staged.values());
+  commitStore(
+    ctx,
+    ctx.midiClips,
+    staged,
+    (offline) => offline.setMidiClips(scheduled),
+    () => ctx.postSync({ type: 'syncMidiClips', clips: scheduled }),
+  );
 }
 
-function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds: number[]): void {
-  const clips = Array.from(ctx.clips.values());
-  ctx.offlineEngine.setClips(clips);
+/**
+ * Lets the offline engine validate the staged clip set, then caches it and
+ * posts the delta. A page-provider upsert must name an attached OPFS stream,
+ * which is checked before anything changes.
+ */
+function commitClips(
+  ctx: EngineClipContext,
+  staged: Map<number, EngineClip>,
+  upserts: EngineClip[],
+  removeIds: number[],
+): void {
+  for (const clip of upserts) {
+    if (!clip.channels && clip.pageProvider !== undefined && !ctx.workletClipStream(clip)) {
+      throw new Error('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
+    }
+  }
+  const clips = Array.from(staged.values());
+  commitStore(
+    ctx,
+    ctx.clips,
+    staged,
+    (offline) => offline.setClips(clips),
+    () => postClipsDelta(ctx, clips, upserts, removeIds),
+  );
+}
+
+function postClipsDelta(
+  ctx: EngineClipContext,
+  clips: EngineClip[],
+  upserts: EngineClip[],
+  removeIds: number[],
+): void {
   const preparedById = new Map<number, EngineClip>();
   for (const clip of clips) {
     if (clip.id === undefined) {
@@ -115,11 +158,18 @@ function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
   for (const clip of upserts) {
     const prepared = clip.id === undefined ? clip : (preparedById.get(clip.id) ?? clip);
     const channels = prepared.channels;
-    if (!channels && prepared.pageProvider !== undefined) {
-      if (ctx.commitWorkletClipPageProvider(prepared)) {
-        continue;
-      }
-      throw new Error('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
+    const stream =
+      !channels && prepared.pageProvider !== undefined
+        ? ctx.workletClipStream(prepared)
+        : undefined;
+    if (stream) {
+      ctx.postSync({
+        type: 'syncClipPageCommit',
+        clipId: stream.clipId,
+        streamKey: stream.streamKey,
+        clip: { ...prepared, channels: undefined, pageProvider: undefined },
+      });
+      continue;
     }
     if (
       prepared.id === undefined ||
@@ -162,10 +212,4 @@ function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
     upserts: inlineUpserts,
     removeIds,
   });
-}
-
-function syncMidiClips(ctx: EngineClipContext): void {
-  const clips = Array.from(ctx.midiClips.values());
-  ctx.offlineEngine.setMidiClips(clips);
-  ctx.postSync({ type: 'syncMidiClips', clips });
 }

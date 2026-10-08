@@ -6,6 +6,7 @@ import type {
   RealtimeEngine,
   SidechainSourceKind,
 } from '../index.js';
+import { commitSync } from './engine-commit.js';
 import { normalizeTrackLanes } from './engine-offline.js';
 import { buildMixerLanes, resolveTargetId } from './engine-sync.js';
 import type {
@@ -517,13 +518,16 @@ function applyMixerRouting(
 ): { lanes: EngineTrackLane[]; buses: EngineBus[] } {
   const lanes = buildDraftMixerLanes(draft);
   const buses = ctx.buses.map((bus) => ({ ...bus }));
-  if (!busesAlreadyApplied) {
-    ctx.offlineEngine.setTrackBuses(buses);
-  }
-  if (lanes.length > 0) {
-    // Not settled: that would snap unrelated insert ramps on a scalar edit.
-    ctx.offlineEngine.setTrackLanes(lanes);
-  }
+  // The caller commits the draft to its caches once this has been accepted.
+  commitSync(ctx, (offline) => {
+    if (!busesAlreadyApplied) {
+      offline.setTrackBuses(buses);
+    }
+    if (lanes.length > 0) {
+      // Not settled: that would snap unrelated insert ramps on a scalar edit.
+      offline.setTrackLanes(lanes);
+    }
+  });
   return { lanes, buses };
 }
 
@@ -758,18 +762,23 @@ export function setLaneSidechain(
     const sourceIndex = ctx.ensureTrackLane(sourceTarget);
     sourceTrackId = ctx.trackLaneIds[sourceIndex];
   }
-  ctx.offlineEngine.setLaneSidechain(trackId, insertIndex, sourceTrackId);
-  if (sourceTrackId === 0) {
-    ctx.laneSidechains.delete(key);
-  } else {
-    ctx.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
-  }
-  ctx.postSync({
-    type: 'syncMixer',
-    sidechainDelta: true,
-    lanes: ctx.mixerLanes(),
-    laneSidechains: [{ trackId, insertIndex, sourceTrackId }],
-  });
+  commitSync(
+    ctx,
+    (offline) => offline.setLaneSidechain(trackId, insertIndex, sourceTrackId),
+    () => {
+      if (sourceTrackId === 0) {
+        ctx.laneSidechains.delete(key);
+      } else {
+        ctx.laneSidechains.set(key, { trackId, insertIndex, sourceTrackId });
+      }
+      ctx.postSync({
+        type: 'syncMixer',
+        sidechainDelta: true,
+        lanes: ctx.mixerLanes(),
+        laneSidechains: [{ trackId, insertIndex, sourceTrackId }],
+      });
+    },
+  );
 }
 
 /**
@@ -787,19 +796,24 @@ export function setBusSidechain(
   const sourceKind = sidechainSourceKindCode(kind);
   ctx.ensureBus(busId);
   ensureSidechainSource(ctx, sourceKind, sourceId);
-  ctx.offlineEngine.setBusSidechain(busId, insertIndex, sourceKind, sourceId);
-  const key = `${busId}:${insertIndex}`;
-  if (sourceId === 0) {
-    ctx.busSidechains.delete(key);
-  } else {
-    ctx.busSidechains.set(key, { busId, insertIndex, sourceKind, sourceId });
-  }
-  ctx.postSync({
-    type: 'syncMixer',
-    sidechainDelta: true,
-    lanes: ctx.mixerLanes(),
-    busSidechains: [{ busId, insertIndex, sourceKind, sourceId }],
-  });
+  commitSync(
+    ctx,
+    (offline) => offline.setBusSidechain(busId, insertIndex, sourceKind, sourceId),
+    () => {
+      const key = `${busId}:${insertIndex}`;
+      if (sourceId === 0) {
+        ctx.busSidechains.delete(key);
+      } else {
+        ctx.busSidechains.set(key, { busId, insertIndex, sourceKind, sourceId });
+      }
+      ctx.postSync({
+        type: 'syncMixer',
+        sidechainDelta: true,
+        lanes: ctx.mixerLanes(),
+        busSidechains: [{ busId, insertIndex, sourceKind, sourceId }],
+      });
+    },
+  );
 }
 
 /**
@@ -814,18 +828,23 @@ export function setMasterSidechain(
 ): void {
   const sourceKind = sidechainSourceKindCode(kind);
   ensureSidechainSource(ctx, sourceKind, sourceId);
-  ctx.offlineEngine.setMasterSidechain(insertIndex, sourceKind, sourceId);
-  if (sourceId === 0) {
-    ctx.masterSidechains.delete(insertIndex);
-  } else {
-    ctx.masterSidechains.set(insertIndex, { insertIndex, sourceKind, sourceId });
-  }
-  ctx.postSync({
-    type: 'syncMixer',
-    sidechainDelta: true,
-    lanes: ctx.mixerLanes(),
-    masterSidechains: [{ insertIndex, sourceKind, sourceId }],
-  });
+  commitSync(
+    ctx,
+    (offline) => offline.setMasterSidechain(insertIndex, sourceKind, sourceId),
+    () => {
+      if (sourceId === 0) {
+        ctx.masterSidechains.delete(insertIndex);
+      } else {
+        ctx.masterSidechains.set(insertIndex, { insertIndex, sourceKind, sourceId });
+      }
+      ctx.postSync({
+        type: 'syncMixer',
+        sidechainDelta: true,
+        lanes: ctx.mixerLanes(),
+        masterSidechains: [{ insertIndex, sourceKind, sourceId }],
+      });
+    },
+  );
 }
 
 function ensureSidechainSource(
@@ -862,34 +881,39 @@ export function setTrackBuses(ctx: EngineMixerContext, buses: EngineBus[]): void
   // Validate and apply before pruning retained scenes. Native rejects a bus
   // removal while a lane still routes to it; that failure must leave JS state
   // untouched so a later valid edit can still replay the existing inserts.
-  ctx.offlineEngine.setTrackBuses(buses);
-  const retainedBusIds = new Set(buses.map((bus) => bus.busId));
-  for (const bus of ctx.buses) {
-    if (!retainedBusIds.has(bus.busId)) {
-      ctx.clearInsertAutomationLanes({ kind: 'bus', busId: bus.busId }, true);
-    }
-  }
-  ctx.buses.splice(0, ctx.buses.length, ...buses.map((bus) => ({ ...bus })));
-  const activeBusIds = new Set(ctx.buses.map((bus) => bus.busId));
-  for (const busId of ctx.busStripJson.keys()) {
-    if (!activeBusIds.has(busId)) {
-      ctx.busStripJson.delete(busId);
-    }
-  }
-  for (const [key, binding] of ctx.busSidechains) {
-    if (
-      !activeBusIds.has(binding.busId) ||
-      (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId))
-    ) {
-      ctx.busSidechains.delete(key);
-    }
-  }
-  for (const [key, binding] of ctx.masterSidechains) {
-    if (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId)) {
-      ctx.masterSidechains.delete(key);
-    }
-  }
-  syncMixer(ctx, true);
+  commitSync(
+    ctx,
+    (offline) => offline.setTrackBuses(buses),
+    () => {
+      const retainedBusIds = new Set(buses.map((bus) => bus.busId));
+      for (const bus of ctx.buses) {
+        if (!retainedBusIds.has(bus.busId)) {
+          ctx.clearInsertAutomationLanes({ kind: 'bus', busId: bus.busId }, true);
+        }
+      }
+      ctx.buses.splice(0, ctx.buses.length, ...buses.map((bus) => ({ ...bus })));
+      const activeBusIds = new Set(ctx.buses.map((bus) => bus.busId));
+      for (const busId of ctx.busStripJson.keys()) {
+        if (!activeBusIds.has(busId)) {
+          ctx.busStripJson.delete(busId);
+        }
+      }
+      for (const [key, binding] of ctx.busSidechains) {
+        if (
+          !activeBusIds.has(binding.busId) ||
+          (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId))
+        ) {
+          ctx.busSidechains.delete(key);
+        }
+      }
+      for (const [key, binding] of ctx.masterSidechains) {
+        if (binding.sourceKind === 1 && !activeBusIds.has(binding.sourceId)) {
+          ctx.masterSidechains.delete(key);
+        }
+      }
+      syncMixer(ctx, true);
+    },
+  );
 }
 
 export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): boolean {

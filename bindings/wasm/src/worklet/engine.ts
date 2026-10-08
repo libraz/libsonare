@@ -46,6 +46,7 @@ import type { EngineCaptureContext } from './engine-capture-facade.js';
 import * as capture from './engine-capture-facade.js';
 import type { EngineClipContext } from './engine-clips.js';
 import * as clips from './engine-clips.js';
+import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type {
   EngineExportContext,
   OpfsExportSource,
@@ -66,6 +67,7 @@ import * as strips from './engine-strips.js';
 import { resolveParamId, resolveTargetId } from './engine-sync.js';
 import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
+import { resolveContextSampleRate } from './guards.js';
 import type {
   SonareEngineInstrumentSyncMessage,
   SonareEngineSyncCaptureMessage,
@@ -190,7 +192,8 @@ export class SonareEngine {
       sampleRate: this.sampleRate,
       realtimeNode: this.realtimeNode,
       offlineEngine: this.offlineEngine,
-      flushOfflineMirror: () => this.flushOfflineMirror(),
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      sendCommand: (command) => this.sendMirroredCommand(command),
       setTransportPlaying: (playing) => {
         this.transportPlaying = playing;
       },
@@ -205,7 +208,7 @@ export class SonareEngine {
     context: BaseAudioContext,
     options: SonareEngineOptions = {},
   ): Promise<SonareEngine> {
-    const sampleRate = options.sampleRate ?? context.sampleRate;
+    const sampleRate = resolveContextSampleRate(options.sampleRate, context, 'SonareEngine.create');
     const blockSize = options.offlineBlockSize ?? options.blockSize ?? 128;
     const channelCount = Math.max(
       1,
@@ -497,11 +500,11 @@ export class SonareEngine {
   /** Resets the master's integrated loudness accumulator in both engine mirrors. */
   resetMasterLoudnessMeter(renderFrame?: number): boolean {
     const frame = resolveRenderFrame('resetMasterLoudnessMeter', renderFrame);
-    this.offlineEngine.resetMasterLoudnessMeter(renderFrame);
-    return this.sendMirroredCommand({
-      type: SonareEngineCommandType.ResetMasterLoudnessMeter,
-      sampleTime: frame,
-    });
+    return commitCommand(
+      this.commitContext,
+      { type: SonareEngineCommandType.ResetMasterLoudnessMeter, sampleTime: frame },
+      (offline) => offline.resetMasterLoudnessMeter(renderFrame),
+    );
   }
 
   /**
@@ -516,11 +519,11 @@ export class SonareEngine {
    */
   resetProcessorState(renderFrame?: number): boolean {
     const frame = resolveRenderFrame('resetProcessorState', renderFrame);
-    this.offlineEngine.resetProcessorState(renderFrame);
-    return this.sendMirroredCommand({
-      type: SonareEngineCommandType.ResetProcessorState,
-      sampleTime: frame,
-    });
+    return commitCommand(
+      this.commitContext,
+      { type: SonareEngineCommandType.ResetProcessorState, sampleTime: frame },
+      (offline) => offline.resetProcessorState(renderFrame),
+    );
   }
 
   /**
@@ -965,8 +968,11 @@ export class SonareEngine {
     if (!Number.isFinite(frames) || frames < 0) {
       throw new Error('clip page prefetch frames must be a finite value >= 0.');
     }
-    this.offlineEngine.setClipPagePrefetchFrames(frames);
-    this.postSync({ type: 'syncClipPagePrefetchFrames', frames });
+    commitSync(
+      this.commitContext,
+      (offline) => offline.setClipPagePrefetchFrames(frames),
+      () => this.postSync({ type: 'syncClipPagePrefetchFrames', frames }),
+    );
   }
 
   /**
@@ -982,8 +988,11 @@ export class SonareEngine {
     if (this.epoch.closed) {
       throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
-    this.offlineEngine.setWarpVoiceCapacity(voices);
-    this.postSync({ type: 'syncWarpVoiceCapacity', voices });
+    commitSync(
+      this.commitContext,
+      (offline) => offline.setWarpVoiceCapacity(voices),
+      () => this.postSync({ type: 'syncWarpVoiceCapacity', voices }),
+    );
   }
 
   /** Reads the current time-stretch voice capacity (default 8). */
@@ -1175,13 +1184,19 @@ export class SonareEngine {
   }
 
   setMidiInputSource(destinationId = 0): void {
-    this.offlineEngine.setMidiInputSource(destinationId);
-    this.postSync({ type: 'syncMidiInputSource', destinationId });
+    commitSync(
+      this.commitContext,
+      (offline) => offline.setMidiInputSource(destinationId),
+      () => this.postSync({ type: 'syncMidiInputSource', destinationId }),
+    );
   }
 
   clearMidiInputSource(): void {
-    this.offlineEngine.clearMidiInputSource();
-    this.postSync({ type: 'syncClearMidiInputSource' });
+    commitSync(
+      this.commitContext,
+      (offline) => offline.clearMidiInputSource(),
+      () => this.postSync({ type: 'syncClearMidiInputSource' }),
+    );
   }
 
   pushMidiInputNoteOn(
@@ -1330,17 +1345,21 @@ export class SonareEngine {
     return capture.resetCapture(this.captureContext);
   }
 
-  setMetronome(opts: EngineMetronomeConfig): void {
-    this.offlineEngine.setMetronome(opts);
+  /**
+   * Configures the metronome on both engines.
+   *
+   * @returns Whether the live command was queued; on false neither engine changed.
+   */
+  setMetronome(opts: EngineMetronomeConfig): boolean {
     // The full config (beatGain/accentGain/clickSamples/clickSeconds) cannot fit
     // the fixed-size SAB command record, so it is delivered out-of-band; the
     // SetMetronome command then toggles enabled state on the audio thread.
-    this.postSync({ type: 'syncMetronome', config: opts });
-    this.sendMirroredCommand({
-      type: SonareEngineCommandType.SetMetronome,
-      sampleTime: -1,
-      argInt: opts.enabled ? 1 : 0,
-    });
+    return commitCommand(
+      this.commitContext,
+      { type: SonareEngineCommandType.SetMetronome, sampleTime: -1, argInt: opts.enabled ? 1 : 0 },
+      (offline) => offline.setMetronome(opts),
+      () => this.postSync({ type: 'syncMetronome', config: opts }),
+    );
   }
 
   addMarker(ppq: number, name = ''): number {
@@ -1566,29 +1585,25 @@ export class SonareEngine {
     return request;
   }
 
-  private commitWorkletClipPageProvider(clip: EngineClip): boolean {
+  /**
+   * The attached OPFS stream `clip` schedules, or undefined when its page
+   * provider is not one; throws when the clip id differs from the stream's.
+   */
+  private workletClipStream(clip: EngineClip): { clipId: number; streamKey: number } | undefined {
     const providerId =
       typeof clip.pageProvider === 'object' && clip.pageProvider !== null
         ? clip.pageProvider.id
         : clip.pageProvider;
     if (providerId === undefined) {
-      return false;
+      return undefined;
     }
     const stream = this.workletPageProviderClipIds.get(providerId);
-    if (stream === undefined) {
-      return false;
+    if (stream !== undefined && clip.id !== stream.clipId) {
+      throw new Error(
+        `OPFS stream clipId ${stream.clipId} must match addClip(..., { id: ${stream.clipId} }).`,
+      );
     }
-    const { clipId, streamKey } = stream;
-    if (clip.id !== clipId) {
-      throw new Error(`OPFS stream clipId ${clipId} must match addClip(..., { id: ${clipId} }).`);
-    }
-    this.postSync({
-      type: 'syncClipPageCommit',
-      clipId,
-      streamKey,
-      clip: { ...clip, channels: undefined, pageProvider: undefined },
-    });
-    return true;
+    return stream;
   }
 
   private mixerLanes(): EngineTrackLane[] {
@@ -1761,6 +1776,7 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
       sendCommand: (command) => this.sendMirroredCommand(command),
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
       offlineChannelCount: this.offlineChannelCount,
       postSync: (message) => this.postSync(message),
       getCaptureConfig: () => this.captureConfig,
@@ -1778,6 +1794,7 @@ export class SonareEngine {
     return {
       offlineEngine: this.offlineEngine,
       sendCommand: (command) => this.sendMirroredCommand(command),
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
       postSync: (message) => this.postSync(message),
       automationLanes: this.automationLanes,
       trackLaneIds: this.trackLaneIds,
@@ -1795,6 +1812,7 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       realtimeNode: this.realtimeNode,
       sendCommand: (command) => this.sendMirroredCommand(command),
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
       postSync: (message) => this.postSync(message),
       getTempoBpm: () => this.tempoBpm,
       setTempoBpm: (bpm) => {
@@ -1849,7 +1867,7 @@ export class SonareEngine {
       postSync: (message, transfer) => this.postSync(message, transfer),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
-      commitWorkletClipPageProvider: (clip) => this.commitWorkletClipPageProvider(clip),
+      workletClipStream: (clip) => this.workletClipStream(clip),
       hasClipStream: (clipId) =>
         [...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId),
     };
@@ -1868,6 +1886,7 @@ export class SonareEngine {
       },
       postSync: (message) => this.postSync(message),
       sendCommand: (command) => this.sendMirroredCommand(command),
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
       setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
     };
   }
@@ -1875,13 +1894,25 @@ export class SonareEngine {
   // Mirrors a smoothed parameter into the offline engine and pushes a
   // sample-accurate smoothed-param command to the realtime runtime.
   private sendSmoothedParam(paramId: number, value: number): boolean {
-    this.offlineEngine.setParameter(paramId, value);
-    return this.sendMirroredCommand({
-      type: SonareEngineCommandType.SetParamSmoothed,
-      targetId: paramId,
-      sampleTime: -1,
-      argFloat: value,
-    });
+    return commitCommand(
+      this.commitContext,
+      {
+        type: SonareEngineCommandType.SetParamSmoothed,
+        targetId: paramId,
+        sampleTime: -1,
+        argFloat: value,
+      },
+      (offline) => offline.setParameter(paramId, value),
+    );
+  }
+
+  // The transaction every control edit commits through (see engine-commit.ts).
+  private get commitContext(): EngineCommitContext {
+    return {
+      offlineEngine: this.offlineEngine,
+      hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
+      sendCommand: (command) => this.sendMirroredCommand(command),
+    };
   }
 
   private resolveParamId(nodeId: string, param: string | number): number {

@@ -1,4 +1,5 @@
 import type { EngineCaptureStatus, RealtimeEngine } from '../index.js';
+import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
 import { buildCaptureConfig, type CaptureOptions } from './engine-offline.js';
 import type { SonareEngineSyncCaptureMessage, SonareEngineSyncMessage } from './messages.js';
@@ -12,16 +13,9 @@ type CaptureConfig = Omit<SonareEngineSyncCaptureMessage, 'type'>;
  * they command and query, the channel count, the out-of-band sync poster, the
  * capture-config accessor, and the target-id resolver.
  */
-export interface EngineCaptureContext {
+export interface EngineCaptureContext extends EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
   readonly realtimeNode: SonareRealtimeEngineNode;
-  sendCommand(command: {
-    type: SonareEngineCommandType;
-    targetId?: number;
-    sampleTime?: number;
-    argFloat?: number;
-    argInt?: number;
-  }): boolean;
   readonly offlineChannelCount: number;
   postSync(message: SonareEngineSyncMessage): void;
   getCaptureConfig(): CaptureConfig | undefined;
@@ -29,13 +23,22 @@ export interface EngineCaptureContext {
 }
 
 export function configureCapture(ctx: EngineCaptureContext, options: CaptureOptions): void {
+  // Every field is validated here, so the buffer replacement below cannot be
+  // followed by a refusal that leaves the earlier recording discarded.
   const config = buildCaptureConfig(options, ctx.offlineChannelCount);
-  ctx.offlineEngine.setCaptureBuffer(config.channels, config.bufferFrames);
-  ctx.offlineEngine.setCaptureSource(config.source);
-  ctx.offlineEngine.setRecordOffsetSamples(config.recordOffsetSamples);
-  ctx.offlineEngine.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
-  ctx.setCaptureConfig(config);
-  ctx.postSync({ type: 'syncCapture', ...config });
+  commitSync(
+    ctx,
+    (offline) => {
+      offline.setCaptureBuffer(config.channels, config.bufferFrames);
+      offline.setCaptureSource(config.source);
+      offline.setRecordOffsetSamples(config.recordOffsetSamples);
+      offline.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
+    },
+    () => {
+      ctx.setCaptureConfig(config);
+      ctx.postSync({ type: 'syncCapture', ...config });
+    },
+  );
 }
 
 export function armRecord(
@@ -49,30 +52,31 @@ export function armRecord(
   if (enabled && !ctx.getCaptureConfig()) {
     throw new Error('Capture buffer is not configured');
   }
-  ctx.offlineEngine.armCapture(enabled);
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.ArmRecord,
-    targetId: 0,
-    sampleTime: -1,
-    argInt: enabled ? 1 : 0,
-  });
+  return commitCommand(
+    ctx,
+    {
+      type: SonareEngineCommandType.ArmRecord,
+      targetId: 0,
+      sampleTime: -1,
+      argInt: enabled ? 1 : 0,
+    },
+    (offline) => offline.armCapture(enabled),
+  );
 }
 
 export function punch(ctx: EngineCaptureContext, inPpq: number, outPpq: number): boolean {
   const inSample = ctx.offlineEngine.sampleAtPpq(inPpq);
   const outSample = ctx.offlineEngine.sampleAtPpq(outPpq);
-  ctx.offlineEngine.setCapturePunch(inSample, outSample, true);
   // Carry BOTH endpoints as already-converted SAMPLES so the realtime engine
   // agrees with the offline engine. The previous code sent the raw PPQ out
   // point and let the consumer multiply by sampleRate (treating PPQ as
   // seconds), which ignored tempo and produced a punch-out ~2x too large at
   // 120 BPM. argInt = in sample, argFloat = out sample (full-precision double).
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.Punch,
-    sampleTime: -1,
-    argInt: inSample,
-    argFloat: outSample,
-  });
+  return commitCommand(
+    ctx,
+    { type: SonareEngineCommandType.Punch, sampleTime: -1, argInt: inSample, argFloat: outSample },
+    (offline) => offline.setCapturePunch(inSample, outSample, true),
+  );
 }
 
 export function captureStatus(ctx: EngineCaptureContext): Promise<EngineCaptureStatus> {

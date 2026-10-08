@@ -6,6 +6,12 @@ import type {
   RealtimeEngine,
 } from '../index.js';
 import { resolveRenderFrame } from '../validation.js';
+import {
+  commitCommand,
+  commitStore,
+  commitSync,
+  type EngineCommitContext,
+} from './engine-commit.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
@@ -20,15 +26,8 @@ import {
  * query, the realtime node they command, the lane/bus declaration helpers, and
  * the declared track-lane id store used to resolve insert-automation ids.
  */
-export interface EngineParameterContext {
+export interface EngineParameterContext extends EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
-  sendCommand(command: {
-    type: SonareEngineCommandType;
-    targetId?: number;
-    sampleTime?: number;
-    argFloat?: number;
-    argInt?: number;
-  }): boolean;
   postSync(message: SonareEngineSyncMessage): void;
   readonly automationLanes: Map<number, EngineAutomationPoint[]>;
   readonly trackLaneIds: number[];
@@ -44,16 +43,11 @@ export function setParam(
   value: number,
 ): boolean {
   const paramId = ctx.resolveParamId(nodeId, param);
-  // Mirror the change into the offline engine so a subsequent offline render
-  // reflects the live value, then push a sample-accurate command to the
-  // realtime runtime (mirrors setTempo/setLoop above).
-  ctx.offlineEngine.setParameter(paramId, value);
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.SetParam,
-    targetId: paramId,
-    sampleTime: -1,
-    argFloat: value,
-  });
+  return commitCommand(
+    ctx,
+    { type: SonareEngineCommandType.SetParam, targetId: paramId, sampleTime: -1, argFloat: value },
+    (offline) => offline.setParameter(paramId, value),
+  );
 }
 
 export function setSoloMute(
@@ -63,13 +57,16 @@ export function setSoloMute(
   mute: boolean,
 ): boolean {
   const laneIndex = ctx.ensureTrackLane(target);
-  ctx.offlineEngine.setSoloMute(laneIndex, solo, mute);
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.SetSoloMute,
-    targetId: laneIndex,
-    sampleTime: -1,
-    argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
-  });
+  return commitCommand(
+    ctx,
+    {
+      type: SonareEngineCommandType.SetSoloMute,
+      targetId: laneIndex,
+      sampleTime: -1,
+      argInt: (mute ? 0x1 : 0) | (solo ? 0x2 : 0),
+    },
+    (offline) => offline.setSoloMute(laneIndex, solo, mute),
+  );
 }
 
 export function setTrackMonitorMode(
@@ -82,17 +79,17 @@ export function setTrackMonitorMode(
   // keeps booleans, fractions, and unknown spellings from reaching the queue.
   const modeOrdinal = trackMonitorModeCode(mode);
   const laneIndex = ctx.ensureTrackLane(target);
-  ctx.offlineEngine.setTrackMonitorMode(
-    laneIndex,
-    modeOrdinal as EngineTrackMonitorMode,
-    renderFrame,
+  return commitCommand(
+    ctx,
+    {
+      type: SonareEngineCommandType.SetTrackMonitorMode,
+      targetId: laneIndex,
+      sampleTime: resolveRenderFrame('setTrackMonitorMode', renderFrame),
+      argInt: modeOrdinal,
+    },
+    (offline) =>
+      offline.setTrackMonitorMode(laneIndex, modeOrdinal as EngineTrackMonitorMode, renderFrame),
   );
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.SetTrackMonitorMode,
-    targetId: laneIndex,
-    sampleTime: resolveRenderFrame('setTrackMonitorMode', renderFrame),
-    argInt: modeOrdinal,
-  });
 }
 
 /**
@@ -238,13 +235,20 @@ export function listParameters(ctx: EngineParameterContext): EngineParameterInfo
 
 /** Registers a parameter on both the offline mirror and live worklet engine. */
 export function addParameter(ctx: EngineParameterContext, info: EngineParameterInfo): void {
-  ctx.offlineEngine.addParameter(info);
-  ctx.postSync({ type: 'syncParameters', parameters: listParameters(ctx) });
+  commitSync(
+    ctx,
+    (offline) => offline.addParameter(info),
+    () => ctx.postSync({ type: 'syncParameters', parameters: listParameters(ctx) }),
+  );
 }
 
 /** Clears registered parameters and their automation lanes on both engines. */
 export function clearParameters(ctx: EngineParameterContext): void {
-  ctx.offlineEngine.clearParameters();
-  ctx.automationLanes.clear();
-  ctx.postSync({ type: 'syncParameters', parameters: [] });
+  commitStore(
+    ctx,
+    ctx.automationLanes,
+    new Map(),
+    (offline) => offline.clearParameters(),
+    () => ctx.postSync({ type: 'syncParameters', parameters: [] }),
+  );
 }

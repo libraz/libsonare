@@ -2,7 +2,7 @@ import { HrtfSet, PlaybackRenderer } from '../index.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
-import { isPlaybackMessage, requireIntegerOption } from './guards.js';
+import { isPlaybackMessage, requireIntegerOption, resolveContextSampleRate } from './guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
   SonarePlaybackErrorMessage,
@@ -287,7 +287,7 @@ export function createSonarePlaybackNode(
     config: JSON.stringify(config),
     hrtf: options.hrtf,
     maxBlockSize: options.maxBlockSize,
-    sampleRate: options.sampleRate ?? context.sampleRate,
+    sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createSonarePlaybackNode'),
   };
   return factory(context, options.processorName ?? 'sonare-playback-processor', {
     numberOfInputs: 1,

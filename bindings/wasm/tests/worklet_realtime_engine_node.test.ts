@@ -178,6 +178,170 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
+    /** A SonareEngine whose port only records what it posted. */
+    async function recordingEngine(options: Record<string, unknown> = {}) {
+      const posted: unknown[] = [];
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: (message: unknown) => posted.push(message) };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+        ...options,
+      });
+      const offline = (
+        engine as unknown as { offlineEngine: Record<string, (...a: never[]) => unknown> }
+      ).offlineEngine;
+      const postedTypes = () => posted.map((message) => (message as { type?: unknown }).type);
+      return { engine, offline, posted, postedTypes };
+    }
+
+    it('changes neither engine when the live command ring has no room', async () => {
+      const { engine, offline } = await recordingEngine({ mode: 'sab', commandRingCapacity: 1 });
+      try {
+        engine.setTrackLanes([3]);
+        engine.addParameter({ id: 7, name: 'p' });
+        engine.addMarker(0, 'a');
+        engine.configureCapture({ bufferFrames: 128 });
+        // Nothing drains the ring here, so one queued command fills it.
+        expect(engine.transport.play()).toBe(true);
+        const mutators = [
+          'setParameter',
+          'setSoloMute',
+          'setTrackMonitorMode',
+          'setLoop',
+          'seekMarker',
+          'seekPpq',
+          'seekSample',
+          'armCapture',
+          'setCapturePunch',
+          'setMetronome',
+          'resetProcessorState',
+          'resetMasterLoudnessMeter',
+        ];
+        const spies = mutators.map((name) => vi.spyOn(offline as never, name as never));
+        const before = (offline.getTransportState as () => unknown)();
+        expect(engine.setParam('', 7, 0.5)).toBe(false);
+        expect(engine.setSoloMute(3, true, true)).toBe(false);
+        expect(engine.setTrackMonitorMode(3, 'pfl')).toBe(false);
+        expect(engine.setLoop(0, 4)).toBe(false);
+        expect(engine.seekMarker(engine.markerByIndex(0).id)).toBe(false);
+        expect(engine.transport.seekPpq(8)).toBe(false);
+        expect(engine.transport.seekSeconds(1)).toBe(false);
+        expect(engine.armRecord(0, true)).toBe(false);
+        expect(engine.punch(0, 4)).toBe(false);
+        expect(engine.setMetronome({ enabled: true })).toBe(false);
+        expect(engine.resetProcessorState()).toBe(false);
+        expect(engine.resetMasterLoudnessMeter()).toBe(false);
+        for (const spy of spies) {
+          expect(spy).not.toHaveBeenCalled();
+        }
+        expect((offline.getTransportState as () => unknown)()).toEqual(before);
+        expect((offline.captureStatus as () => { armed: boolean })().armed).toBe(false);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('leaves caches, mirror and worklet untouched when the offline engine refuses an edit', async () => {
+      const { engine, offline, postedTypes } = await recordingEngine();
+      try {
+        engine.setTrackLanes([3]);
+        engine.setTempo(100);
+        engine.setAutomationLane(7, [{ ppq: 0, value: 0.25 }]);
+        const clipId = engine.addClip(3, [new Float32Array(64).fill(0.5)], 0);
+        engine.setMidiClips([{ id: 50, destinationId: 3, startPpq: 0, events: [] }]);
+        const state = engine as unknown as {
+          tempoBpm: number;
+          tempoSegments: unknown[];
+          automationLanes: Map<number, unknown>;
+          clips: Map<number, unknown>;
+          midiClips: Map<number, unknown>;
+        };
+        const snapshot = () => ({
+          bpm: state.tempoBpm,
+          segments: structuredClone(state.tempoSegments),
+          lanes: structuredClone([...state.automationLanes]),
+          clips: [...state.clips.keys()],
+          midiClips: [...state.midiClips.keys()],
+        });
+        const before = snapshot();
+        const postedBefore = postedTypes().length;
+
+        expect(() => engine.setTempo(Number.NaN)).toThrow();
+        expect(() => engine.setAutomationLane(7, [{ ppq: 0, value: Number.NaN }])).toThrow();
+        expect(() => engine.scheduleParam('', 7, 1, Number.NaN)).toThrow();
+        expect(() => engine.addClip(3, [new Float32Array(0)], 0)).toThrow();
+        expect(() =>
+          engine.setMidiClips([{ id: 51, destinationId: 3, startPpq: 0, gain: -1, events: [] }]),
+        ).toThrow();
+        expect(snapshot()).toEqual(before);
+        expect(postedTypes().length).toBe(postedBefore);
+
+        // Later valid edits carry none of the refused input.
+        engine.setTimeSignature(3, 4);
+        engine.removeClip(clipId);
+        expect(state.clips.size).toBe(0);
+        expect((offline.getTransportState as () => { bpm: number })().bpm).toBe(100);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('keeps the recording when a capture configuration is refused', async () => {
+      const { engine, offline, postedTypes } = await recordingEngine();
+      try {
+        engine.configureCapture({ bufferFrames: 256, channels: 1, source: 'input' });
+        const capture = offline as unknown as {
+          armCapture(armed: boolean): void;
+          play(): void;
+          process(inputs: Float32Array[]): Float32Array[];
+          captureStatus(): { capturedFrames: number; source: string };
+          capturedAudio(): Float32Array[];
+        };
+        capture.armCapture(true);
+        capture.play();
+        capture.process([new Float32Array(128).fill(0.5), new Float32Array(128).fill(0.5)]);
+        const frames = capture.captureStatus().capturedFrames;
+        expect(frames).toBeGreaterThan(0);
+        const audio = capture.capturedAudio();
+        const posted = postedTypes().length;
+        for (const bad of [
+          { bufferFrames: 512, inputMonitor: { enabled: true, gain: Number.NaN } },
+          { bufferFrames: 512, inputMonitor: { enabled: true, gain: 1e39 } },
+          { bufferFrames: 512, source: 'sideways' as never },
+        ]) {
+          expect(() => engine.configureCapture(bad)).toThrow(RangeError);
+        }
+        expect(capture.captureStatus().capturedFrames).toBe(frames);
+        expect(capture.captureStatus().source).toBe('input');
+        expect(capture.capturedAudio()).toEqual(audio);
+        expect(postedTypes().length).toBe(posted);
+        expect(() => engine.configureCapture({ bufferFrames: 512 })).not.toThrow();
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('refuses a sampleRate that differs from the AudioContext before creating a node', async () => {
+      const factory = vi.fn(() => ({ port: {}, disconnect: () => undefined }) as never);
+      await expect(
+        SonareRealtimeEngineNode.create(fakeContext(), { sampleRate: 44100, nodeFactory: factory }),
+      ).rejects.toThrow(RangeError);
+      await expect(
+        SonareEngine.create(fakeContext(), { sampleRate: 44100, nodeFactory: factory }),
+      ).rejects.toThrow(RangeError);
+      expect(factory).not.toHaveBeenCalled();
+      const port: Record<string, unknown> = { postMessage: () => undefined };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        sampleRate: 48000,
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      node.destroy();
+    });
+
     it('pages a long clip whether warp-off is omitted, 0 or "off"', async () => {
       const posted: unknown[] = [];
       const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<

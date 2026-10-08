@@ -4,6 +4,7 @@ import type {
   EngineTransportState,
   RealtimeEngine,
 } from '../index.js';
+import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareRealtimeEngineNode } from './engine-node.js';
 import { buildTempoSync } from './engine-sync.js';
 import type { SonareEngineSyncMessage } from './messages.js';
@@ -21,16 +22,9 @@ interface TimeSignature {
  * and getters/setters for the tempo-map and cached-transport state the engine
  * holds (so the helpers mutate it by reference).
  */
-export interface EngineTempoContext {
+export interface EngineTempoContext extends EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
   readonly realtimeNode: SonareRealtimeEngineNode;
-  sendCommand(command: {
-    type: SonareEngineCommandType;
-    targetId?: number;
-    sampleTime?: number;
-    argFloat?: number;
-    argInt?: number;
-  }): boolean;
   postSync(message: SonareEngineSyncMessage): void;
   getTempoBpm(): number;
   setTempoBpm(bpm: number): void;
@@ -57,10 +51,15 @@ export function postTempoSync(ctx: EngineTempoContext): void {
 }
 
 export function setTempo(ctx: EngineTempoContext, bpm: number): void {
-  ctx.setTempoBpm(bpm);
-  ctx.setTempoSegments([{ startPpq: 0, bpm }]);
-  ctx.offlineEngine.setTempo(bpm);
-  postTempoSync(ctx);
+  commitSync(
+    ctx,
+    (offline) => offline.setTempo(bpm),
+    () => {
+      ctx.setTempoBpm(bpm);
+      ctx.setTempoSegments([{ startPpq: 0, bpm }]);
+      postTempoSync(ctx);
+    },
+  );
 }
 
 export function setTempoSegments(
@@ -68,10 +67,15 @@ export function setTempoSegments(
   segments: readonly EngineTempoSegment[],
 ): void {
   const copied = segments.map((segment) => ({ ...segment }));
-  ctx.setTempoSegments(copied);
-  ctx.setTempoBpm(copied[0]?.bpm ?? ctx.getTempoBpm());
-  ctx.offlineEngine.setTempoSegments(copied);
-  postTempoSync(ctx);
+  commitSync(
+    ctx,
+    (offline) => offline.setTempoSegments(copied),
+    () => {
+      ctx.setTempoSegments(copied);
+      ctx.setTempoBpm(copied[0]?.bpm ?? ctx.getTempoBpm());
+      postTempoSync(ctx);
+    },
+  );
 }
 
 export function setTimeSignature(
@@ -79,10 +83,15 @@ export function setTimeSignature(
   numerator: number,
   denominator: number,
 ): void {
-  ctx.setTimeSignature({ numerator, denominator });
-  ctx.setTimeSignatureSegments([{ startPpq: 0, numerator, denominator }]);
-  ctx.offlineEngine.setTimeSignature(numerator, denominator);
-  postTempoSync(ctx);
+  commitSync(
+    ctx,
+    (offline) => offline.setTimeSignature(numerator, denominator),
+    () => {
+      ctx.setTimeSignature({ numerator, denominator });
+      ctx.setTimeSignatureSegments([{ startPpq: 0, numerator, denominator }]);
+      postTempoSync(ctx);
+    },
+  );
 }
 
 export function setTimeSignatureSegments(
@@ -90,13 +99,18 @@ export function setTimeSignatureSegments(
   segments: readonly EngineTimeSignatureSegment[],
 ): void {
   const copied = segments.map((segment) => ({ ...segment }));
-  ctx.setTimeSignatureSegments(copied);
-  const first = copied[0];
-  if (first) {
-    ctx.setTimeSignature({ numerator: first.numerator, denominator: first.denominator });
-  }
-  ctx.offlineEngine.setTimeSignatureSegments(copied);
-  postTempoSync(ctx);
+  commitSync(
+    ctx,
+    (offline) => offline.setTimeSignatureSegments(copied),
+    () => {
+      ctx.setTimeSignatureSegments(copied);
+      const first = copied[0];
+      if (first) {
+        ctx.setTimeSignature({ numerator: first.numerator, denominator: first.denominator });
+      }
+      postTempoSync(ctx);
+    },
+  );
 }
 
 export function setLoop(
@@ -105,7 +119,6 @@ export function setLoop(
   endPpq: number,
   enabled = true,
 ): boolean {
-  ctx.offlineEngine.setLoop(startPpq, endPpq, enabled);
   // Transport precision contract: the SAB command record carries exactly one
   // Float64 lane (argFloat) and one Int64 lane (argInt). startPpq travels in
   // argFloat with full double precision, matching the offline engine; endPpq
@@ -115,13 +128,17 @@ export function setLoop(
   // while loop STARTS and the offline path stay exact. This is intentional:
   // the record has no second free Float64 lane, and a micro-PPQ grid on the
   // loop end is well below audible/sample-accurate resolution at any tempo.
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.SetLoop,
-    targetId: enabled ? 1 : 0,
-    sampleTime: -1,
-    argFloat: startPpq,
-    argInt: Math.round(endPpq * 1_000_000),
-  });
+  return commitCommand(
+    ctx,
+    {
+      type: SonareEngineCommandType.SetLoop,
+      targetId: enabled ? 1 : 0,
+      sampleTime: -1,
+      argFloat: startPpq,
+      argInt: Math.round(endPpq * 1_000_000),
+    },
+    (offline) => offline.setLoop(startPpq, endPpq, enabled),
+  );
 }
 
 export function countInEndSample(

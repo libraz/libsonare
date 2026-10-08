@@ -1,28 +1,29 @@
 import type { EngineMarker, RealtimeEngine } from '../index.js';
+import { commitCommand, commitStore, type EngineCommitContext } from './engine-commit.js';
 import { resolveMarkerSet } from './engine-offline.js';
 import type { SonareEngineSyncMessage } from './messages.js';
-import { type SonareEngineCommandRecord, SonareEngineCommandType } from './protocol.js';
+import { SonareEngineCommandType } from './protocol.js';
 
 /**
  * Collaborator surface the marker helpers need from the owning
  * {@link SonareEngine}: the marker store and id counter, the offline engine they
  * mirror into, the sync poster, the realtime command sender, and the loop setter.
  */
-export interface EngineMarkerContext {
+export interface EngineMarkerContext extends EngineCommitContext {
   readonly offlineEngine: RealtimeEngine;
   readonly markers: Map<number, EngineMarker>;
   getNextMarkerId(): number;
   setNextMarkerId(value: number): void;
   postSync(message: SonareEngineSyncMessage): void;
-  sendCommand(command: SonareEngineCommandRecord): boolean;
   setLoop(startPpq: number, endPpq: number, enabled: boolean): boolean;
 }
 
 export function addMarker(ctx: EngineMarkerContext, ppq: number, name = ''): number {
   const id = ctx.getNextMarkerId();
+  const staged = new Map(ctx.markers);
+  staged.set(id, { id, ppq, name });
+  commitMarkers(ctx, staged);
   ctx.setNextMarkerId(id + 1);
-  ctx.markers.set(id, { id, ppq, name });
-  syncMarkers(ctx);
   return id;
 }
 
@@ -42,12 +43,8 @@ export function setMarkers(
   markers: ReadonlyArray<{ ppq: number; name?: string; id?: number }>,
 ): EngineMarker[] {
   const { resolved, nextMarkerId } = resolveMarkerSet(markers, ctx.getNextMarkerId());
+  commitMarkers(ctx, new Map(resolved.map((marker) => [marker.id, marker])));
   ctx.setNextMarkerId(nextMarkerId);
-  ctx.markers.clear();
-  for (const marker of resolved) {
-    ctx.markers.set(marker.id, marker);
-  }
-  syncMarkers(ctx);
   return resolved.map((marker) => ({ ...marker }));
 }
 
@@ -64,15 +61,13 @@ export function marker(ctx: EngineMarkerContext, markerId: number): EngineMarker
 }
 
 export function seekMarker(ctx: EngineMarkerContext, markerId: number): boolean {
-  ctx.offlineEngine.seekMarker(markerId);
-  // Forward to the live worklet engine. Its marker set is kept in sync via the
-  // 'syncMarkers' message (see syncMarkers), so a queued kSeekMarker resolves
-  // the marker id to its frame on the audio thread.
-  return ctx.sendCommand({
-    type: SonareEngineCommandType.SeekMarker,
-    targetId: markerId,
-    sampleTime: -1,
-  });
+  // The live marker set arrives through 'syncMarkers', so a queued kSeekMarker
+  // resolves the id to its frame on the audio thread.
+  return commitCommand(
+    ctx,
+    { type: SonareEngineCommandType.SeekMarker, targetId: markerId, sampleTime: -1 },
+    (offline) => offline.seekMarker(markerId),
+  );
 }
 
 export function setLoopFromMarkers(
@@ -80,14 +75,20 @@ export function setLoopFromMarkers(
   startMarkerId: number,
   endMarkerId: number,
 ): boolean {
-  ctx.offlineEngine.setLoopFromMarkers(startMarkerId, endMarkerId);
+  // Resolving both ids first refuses an unknown marker before either engine changes.
   const start = ctx.offlineEngine.marker(startMarkerId);
   const end = ctx.offlineEngine.marker(endMarkerId);
   return ctx.setLoop(start.ppq, end.ppq, true);
 }
 
-function syncMarkers(ctx: EngineMarkerContext): void {
-  const markers = Array.from(ctx.markers.values()).sort((a, b) => a.ppq - b.ppq);
-  ctx.offlineEngine.setMarkers(markers);
-  ctx.postSync({ type: 'syncMarkers', markers });
+/** Lets the offline engine validate the staged marker set, then caches and posts it. */
+function commitMarkers(ctx: EngineMarkerContext, staged: Map<number, EngineMarker>): void {
+  const markers = Array.from(staged.values()).sort((a, b) => a.ppq - b.ppq);
+  commitStore(
+    ctx,
+    ctx.markers,
+    staged,
+    (offline) => offline.setMarkers(markers),
+    () => ctx.postSync({ type: 'syncMarkers', markers }),
+  );
 }

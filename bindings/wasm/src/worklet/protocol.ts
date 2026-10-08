@@ -771,6 +771,17 @@ export function createSonareExternalMidiRingBuffer(capacity = 256): SonareExtern
   return { sharedBuffer, header: ring.header, records: ring.records, capacity: ring.capacity };
 }
 
+/** Whether one more external-MIDI record fits the ring now. */
+export function sonareExternalMidiRingHasRoom(ring: SharedExternalMidiRingWriter): boolean {
+  return (
+    sonareRingCursorDistance(
+      loadSonareRingCursor(ring.header, 1, ring.capacity),
+      loadSonareRingCursor(ring.header, 0, ring.capacity),
+      ring.capacity,
+    ) < ring.capacity
+  );
+}
+
 /** Write one lowered MIDI-1 event without allocations from the audio worklet. */
 export function pushSonareExternalMidiRingBuffer(
   ring: SharedExternalMidiRingWriter,
@@ -981,6 +992,11 @@ export function popSonareEngineCommandRingBuffer(
   );
   storeSonareRingCursor(ring.header, 1, readIndex, ring.capacity);
   return command;
+}
+
+/** Whether one more command fits the ring now. */
+export function sonareEngineCommandRingHasRoom(ring: SonareEngineCommandRingBuffer): boolean {
+  return pendingSonareEngineCommandCount(ring) < ring.capacity;
 }
 
 /** Commands published to the ring and not yet popped. */

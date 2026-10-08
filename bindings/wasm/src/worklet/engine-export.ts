@@ -8,6 +8,7 @@ import type {
 } from '../index.js';
 import type { OpfsClipPageProviderBinding } from '../opfs_clip_pages.js';
 import type { OwnerEpoch } from '../owner_epoch.js';
+import { commitSync } from './engine-commit.js';
 import { requireIntegerOption } from './guards.js';
 
 /** Request form of {@link SonareEngine.renderOffline}. */
@@ -59,8 +60,11 @@ function mirrorPosition(ctx: EngineExportContext): number {
 }
 
 function restorePosition(ctx: EngineExportContext, position: number): void {
-  ctx.offlineEngine.seekSample(position);
-  ctx.flushOfflineMirror();
+  commitSync(
+    ctx,
+    (offline) => offline.seekSample(position),
+    () => ctx.flushOfflineMirror(),
+  );
 }
 
 function resolveBlockSize(ctx: EngineExportContext, blockSize: number | undefined): number {

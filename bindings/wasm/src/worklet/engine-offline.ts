@@ -4,8 +4,10 @@ import type {
   EngineTrackLane,
   RealtimeEngine,
 } from '../index.js';
+import { commitCommand, type EngineCommitContext } from './engine-commit.js';
 import { requireChannelCount, requireInteger, requireIntegerOption } from './guards.js';
 import type { SonareEngineSyncCaptureMessage, SonareEngineTransportFacade } from './messages.js';
+import { SonareEngineCommandType } from './protocol.js';
 
 /** Capture configuration options accepted by the engine's `configureCapture`. */
 export interface CaptureOptions {
@@ -16,27 +18,43 @@ export interface CaptureOptions {
   inputMonitor?: { enabled: boolean; gain?: number };
 }
 
+const FLOAT32_MAX = 3.4028234663852886e38;
+
 /**
  * Normalizes capture options into the resolved config carried by the
- * `syncCapture` message, applying defaults and refusing a non-integer count.
+ * `syncCapture` message, applying defaults and refusing every value either
+ * engine would refuse, so both can apply it without failing halfway after the
+ * capture buffer was already replaced.
  *
  * @param options Raw capture options.
  * @param defaultChannels Channel count to use when `options.channels` is unset.
- * @throws RangeError if a frame count, channel count or offset is not an integer.
+ * @throws RangeError if a frame count, channel count or offset is not an
+ *   integer, the source is not 'output' or 'input', or the monitor gain is not
+ *   a finite 32-bit float.
  */
 export function buildCaptureConfig(
   options: CaptureOptions,
   defaultChannels: number,
 ): Omit<SonareEngineSyncCaptureMessage, 'type'> {
+  // The native reader also takes the ordinals 0 and 1; they resolve to the names here.
+  const rawSource: unknown = options.source ?? 'output';
+  const source = rawSource === 0 ? 'output' : rawSource === 1 ? 'input' : rawSource;
+  if (source !== 'output' && source !== 'input') {
+    throw new RangeError("capture source must be 'output' or 'input' (or ordinal 0 or 1)");
+  }
+  const gain = options.inputMonitor?.gain ?? 1;
+  if (typeof gain !== 'number' || !Number.isFinite(gain) || Math.abs(gain) > FLOAT32_MAX) {
+    throw new RangeError('inputMonitor.gain must be a finite number within the 32-bit float range');
+  }
   return {
     // bufferFrames has no default; NaN makes the guard refuse an absent value.
     bufferFrames: requireIntegerOption(options.bufferFrames, Number.NaN, 'bufferFrames', 1),
     channels: requireChannelCount(options.channels, defaultChannels),
-    source: options.source ?? 'output',
+    source,
     recordOffsetSamples: requireInteger(options.recordOffsetSamples, 0, 'recordOffsetSamples'),
     inputMonitor: {
       enabled: Boolean(options.inputMonitor?.enabled),
-      gain: options.inputMonitor?.gain ?? 1,
+      gain,
     },
   };
 }
@@ -46,16 +64,13 @@ export function buildCaptureConfig(
  * realtime node (sample-accurate command transport), the offline engine it
  * mirrors, and the tempo/loop setters plus playing-state bookkeeping.
  */
-export interface EngineTransportContext {
+export interface EngineTransportContext extends EngineCommitContext {
   readonly sampleRate: number;
   realtimeNode: {
     play(sampleTime?: number): boolean;
     stop(sampleTime?: number): boolean;
-    seekPpq(ppq: number, sampleTime?: number): boolean;
-    seekSample(timelineSample: number, sampleTime?: number): boolean;
   };
   offlineEngine: RealtimeEngine;
-  flushOfflineMirror(): void;
   setTransportPlaying(playing: boolean): void;
   flushPendingInstrumentSync(): void;
   setTempo(bpm: number): void;
@@ -81,18 +96,27 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
       }
       return ok;
     },
-    seekPpq: (ppq, sampleTime) => {
-      ctx.offlineEngine.seekPpq(ppq, sampleTime);
-      const ok = ctx.realtimeNode.seekPpq(ppq, sampleTime);
-      ctx.flushOfflineMirror();
-      return ok;
-    },
+    seekPpq: (ppq, sampleTime) =>
+      commitCommand(
+        ctx,
+        {
+          type: SonareEngineCommandType.TransportSeekPpq,
+          sampleTime: sampleTime ?? -1,
+          argFloat: ppq,
+        },
+        (offline) => offline.seekPpq(ppq, sampleTime),
+      ),
     seekSeconds: (seconds, sampleTime) => {
       const timelineSample = Math.max(0, Math.round(seconds * ctx.sampleRate));
-      ctx.offlineEngine.seekSample(timelineSample, sampleTime);
-      const ok = ctx.realtimeNode.seekSample(timelineSample, sampleTime);
-      ctx.flushOfflineMirror();
-      return ok;
+      return commitCommand(
+        ctx,
+        {
+          type: SonareEngineCommandType.TransportSeekSample,
+          sampleTime: sampleTime ?? -1,
+          argInt: timelineSample,
+        },
+        (offline) => offline.seekSample(timelineSample, sampleTime),
+      );
     },
     setTempo: (bpm) => ctx.setTempo(bpm),
     setTempoSegments: (segments) => ctx.setTempoSegments(segments),

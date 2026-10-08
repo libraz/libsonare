@@ -223,6 +223,14 @@ describe('SonarePlaybackWorkletProcessor', () => {
     expect(calls[1].name).toBe('custom');
     expect(calls[1].options.outputChannelCount).toEqual([2]);
     expect(calls[1].options.processorOptions.hrtf).toBe(hrtf);
+
+    // An explicit rate must be the context's: nothing resamples its quanta.
+    createSonarePlaybackNode(context, { nodeFactory, sampleRate: 44100 });
+    expect(calls).toHaveLength(3);
+    expect(() => createSonarePlaybackNode(context, { nodeFactory, sampleRate: 48000 })).toThrow(
+      RangeError,
+    );
+    expect(calls).toHaveLength(3);
   });
 
   it('registers a processor that routes port messages', () => {

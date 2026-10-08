@@ -45,6 +45,10 @@ export interface SonareRealtimeEngineWorkletProcessorOptions {
   wasmBinary?: ArrayBuffer | Uint8Array;
   initialSyncMessages?: SonareEngineSyncMessage[];
   initialCommands?: SonareEngineCommandRecord[];
+  /**
+   * Engine rate. Node creation defaults it to the AudioContext's and throws a
+   * RangeError for any other value, since nothing resamples the context's quanta.
+   */
   sampleRate?: number;
   blockSize?: number;
   /**
@@ -126,7 +130,10 @@ export interface SonareStreamAnalyzerWorkletProcessorOptions {
 
 export interface SonareStreamAnalyzerNodeOptions
   extends SonareStreamAnalyzerWorkletProcessorOptions {
-  /** Analyzer configuration, passed to `StreamAnalyzer` as given. `sampleRate` defaults to the context's. */
+  /**
+   * Analyzer configuration, passed to `StreamAnalyzer` as given. `sampleRate`
+   * defaults to the context's; any other value throws a RangeError.
+   */
   config?: StreamConfig;
   processorName?: string;
   moduleUrl?: string | URL;
@@ -171,7 +178,11 @@ export interface SonarePlaybackWorkletProcessorOptions {
   hrtf?: ArrayBuffer | Uint8Array;
   /** Largest render quantum the processor accepts. Default 128. */
   maxBlockSize?: number;
-  /** Defaults to the AudioWorkletGlobalScope `sampleRate`, then 48000. */
+  /**
+   * Defaults to the AudioWorkletGlobalScope `sampleRate`, then 48000.
+   * `createSonarePlaybackNode` defaults it to the AudioContext's and throws a
+   * RangeError for any other value.
+   */
   sampleRate?: number;
 }
 

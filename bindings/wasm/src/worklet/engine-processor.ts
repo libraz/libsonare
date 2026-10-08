@@ -1,6 +1,7 @@
 import type { EngineClip } from '../index.js';
 import { RealtimeEngine } from '../index.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import { buildCaptureConfig } from './engine-offline.js';
 import {
   requireChannelCount,
   requireIntegerOption,
@@ -58,6 +59,7 @@ import {
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
+  sonareExternalMidiRingHasRoom,
   sonareRingCursorSlot,
   storeSonareRingCursor,
   telemetryFromEngine,
@@ -517,12 +519,25 @@ export class SonareRealtimeEngineWorkletProcessor {
       case 'syncAutomation':
         this.engine.setAutomationLane(message.paramId, message.points);
         break;
-      case 'syncParameters':
-        this.engine.clearParameters();
+      case 'syncParameters': {
+        // An empty list is the facade's clearParameters, which also drops the
+        // lanes; any other list only adds the ids this engine lacks, so the
+        // automation lanes already published here survive a new parameter.
+        if (message.parameters.length === 0) {
+          this.engine.clearParameters();
+          break;
+        }
+        const registered = new Set<number>();
+        for (let index = 0; index < this.engine.parameterCount(); index++) {
+          registered.add(this.engine.parameterInfoByIndex(index).id);
+        }
         for (const info of message.parameters) {
-          this.engine.addParameter(info);
+          if (!registered.has(info.id)) {
+            this.engine.addParameter(info);
+          }
         }
         break;
+      }
       case 'syncTempo':
         if (message.tempoSegments) {
           this.engine.setTempoSegments(message.tempoSegments);
@@ -646,12 +661,15 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         break;
       }
-      case 'syncCapture':
-        this.engine.setCaptureBuffer(message.channels, message.bufferFrames);
-        this.engine.setCaptureSource(message.source);
-        this.engine.setRecordOffsetSamples(message.recordOffsetSamples);
-        this.engine.setInputMonitor(message.inputMonitor.enabled, message.inputMonitor.gain);
+      case 'syncCapture': {
+        // Validate every field before the buffer replacement discards the recording.
+        const config = buildCaptureConfig(message, message.channels);
+        this.engine.setCaptureBuffer(config.channels, config.bufferFrames);
+        this.engine.setCaptureSource(config.source);
+        this.engine.setRecordOffsetSamples(config.recordOffsetSamples);
+        this.engine.setInputMonitor(config.inputMonitor.enabled, config.inputMonitor.gain);
         break;
+      }
       case 'syncTrackStripEqBand':
         this.engine.setTrackStripEqBandJson(message.trackId, message.bandIndex, message.bandJson);
         break;
@@ -1405,6 +1423,11 @@ export class SonareRealtimeEngineWorkletProcessor {
     const ring = this.externalMidiRing;
     if (ring) {
       for (let count = 0; count < 256 && this.engine.popExternalMidiToScratch(); count++) {
+        // A full ring leaves the event in the scratch for the next quantum; only
+        // a record the ring refuses as malformed is consumed and counted.
+        if (!sonareExternalMidiRingHasRoom(ring)) {
+          break;
+        }
         pushSonareExternalMidiRingBuffer(
           ring,
           this.engine.externalMidiScratchDestinationId(),

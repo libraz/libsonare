@@ -438,6 +438,26 @@ export function isScopeSnapshot(value: unknown): value is SonareWorkletScopeSnap
 }
 
 /**
+ * The rate a worklet renderer runs at: always the AudioContext's, since the
+ * context drives it with its own quanta and nothing resamples between them. An
+ * explicit `requested` rate that differs is refused before any node exists.
+ *
+ * @throws RangeError when `requested` is given and differs from `context.sampleRate`.
+ */
+export function resolveContextSampleRate(
+  requested: number | undefined,
+  context: BaseAudioContext,
+  what: string,
+): number {
+  if (requested !== undefined && requested !== context.sampleRate) {
+    throw new RangeError(
+      `${what}: sampleRate ${String(requested)} differs from the AudioContext rate ${context.sampleRate}`,
+    );
+  }
+  return context.sampleRate;
+}
+
+/**
  * Resolves an integer option, refusing anything the field's own domain cannot
  * hold instead of rounding it into range.
  *

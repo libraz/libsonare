@@ -90,6 +90,53 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('keeps an external-MIDI event the full ring refused for a later quantum', () => {
+      const blockSize = 128;
+      const externalMidiRing = createSonareExternalMidiRingBuffer(1);
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize,
+        channelCount: 2,
+        externalMidiSharedBuffer: externalMidiRing.sharedBuffer,
+        externalMidiRingCapacity: externalMidiRing.capacity,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setMidiDestinationExternal: (destinationId: number, external: boolean) => void;
+              setMidiClips: (clips: unknown[]) => void;
+              play: (sampleTime?: number) => void;
+            };
+          }
+        ).engine;
+        engine.setMidiDestinationExternal(5, true);
+        engine.setMidiClips([
+          {
+            id: 1,
+            trackId: 5,
+            destinationId: 5,
+            lengthSamples: 8192,
+            events: [
+              { renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 },
+              { renderFrame: 64, word0: midi1Word(0x8, 0, 60, 0), wordCount: 1 },
+            ],
+          },
+        ]);
+        engine.play();
+        const received: number[] = [];
+        for (let quantum = 0; quantum < 3; quantum++) {
+          processor.process([[]], [[new Float32Array(blockSize), new Float32Array(blockSize)]]);
+          const read = readSonareExternalMidiRingBuffer(externalMidiRing);
+          expect(read.dropped).toBe(0);
+          received.push(...read.events.map((event) => event.byteWord));
+        }
+        expect(received).toEqual([0x00643c90, 0x00003c80]);
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('refuses a channelCount instead of rounding it into range', () => {
       const build = (channelCount: number): SonareRealtimeEngineWorkletProcessor =>
         new SonareRealtimeEngineWorkletProcessor({
@@ -563,6 +610,49 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           .engine;
         expect(engine.parameterCount()).toBe(1);
 
+        processor.receiveSync({ type: 'syncParameters', parameters: [] });
+        expect(engine.parameterCount()).toBe(0);
+      } finally {
+        processor.destroy();
+      }
+    });
+
+    it('keeps live automation lanes when another parameter is registered', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      const parameter = (id: number) => ({
+        id,
+        name: `p${id}`,
+        unit: '',
+        minValue: 0,
+        maxValue: 1,
+        defaultValue: 0,
+        rtSafe: true,
+        defaultCurve: 1,
+      });
+      try {
+        processor.receiveSync({ type: 'syncParameters', parameters: [parameter(7)] });
+        processor.receiveSync({
+          type: 'syncAutomation',
+          paramId: 7,
+          points: [{ ppq: 0, value: 0.25 }],
+        });
+        const engine = (
+          processor as unknown as {
+            engine: { parameterCount: () => number; automationLaneCount: () => number };
+          }
+        ).engine;
+        const lanes = engine.automationLaneCount();
+        expect(lanes).toBeGreaterThan(0);
+        processor.receiveSync({
+          type: 'syncParameters',
+          parameters: [parameter(7), parameter(8)],
+        });
+        expect(engine.parameterCount()).toBe(2);
+        expect(engine.automationLaneCount()).toBe(lanes);
         processor.receiveSync({ type: 'syncParameters', parameters: [] });
         expect(engine.parameterCount()).toBe(0);
       } finally {
