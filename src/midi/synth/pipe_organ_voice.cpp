@@ -214,8 +214,19 @@ float jet_table(float x, float asym) noexcept {
 
 void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample_rate, uint8_t note,
                                Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // Every sounding rank runs at the smallest multiple of the host rate whose bore and jet lines
+  // clear their floor; everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, double sr,
+                                         uint8_t note, Velocity16 velocity,
+                                         uint64_t seed) noexcept {
   const float srf = static_cast<float>(sr);
+  LoopBudget budget;
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   drive_index_ = 0;
@@ -392,6 +403,14 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
       const float tau_dc_v = phase_dc_v / std::max(omega_v, 1.0e-6f);
       pipe.jet_comp = (1.0f + tau_lp_v - tau_dc_v) * (srf / voiced_srf);
     }
+    // Both lines are read at one sample or more; the jet's delay is a ratio of the compensated
+    // period, all of it a duration.
+    if (ranks[r].sounding()) {
+      budget = worst_loop_budget(budget, loop_budget(pipe.bore.period, pipe.bore.comp, 1.0f, sr));
+      budget =
+          worst_loop_budget(budget, loop_budget(pipe.bore.period, pipe.jet_comp,
+                                                std::max(1.0f, 1.0f / pipe.jet_ratio), sr, 0.0f));
+    }
 
     // The bore and jet reads lose magnitude at the fundamental that grows as the period shrinks
     // towards the sample rate; the rank repays the share the voiced rate did not have.
@@ -535,6 +554,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   ctrl_coeff_ = ramp_coeff(kControlSmoothMs, sr);
   excitation_live_ = false;
   excite_.remember_base();
+  return budget;
 }
 
 void PipeOrganVoiceCore::set_excitation_base(const ExcitationAxes& base,
@@ -596,6 +616,11 @@ void PipeOrganVoiceCore::snap_excitation() noexcept {
 }
 
 float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float PipeOrganVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (slab_ == nullptr) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -713,6 +738,7 @@ void PipeOrganVoiceCore::release() noexcept {
 
 void PipeOrganVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   breath_.releasing = true;
   breath_.level = 0.0f;
   for (int r = 0; r < rank_count_; ++r) {

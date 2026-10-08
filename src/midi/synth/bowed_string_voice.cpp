@@ -96,11 +96,24 @@ SONARE_TUNABLE(kPolCoupleMax, 0.20f);
 // Direct radiation of the 2nd polarization added to the output.
 SONARE_TUNABLE(kPolRadiation, 0.25f);
 
+// The two feedback registers (neck_out_/bridge_out_) the loop carries outside its lines.
+constexpr float kRegisters = 2.0f;
+
 }  // namespace
 
 void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sample_rate,
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // The loop runs at the smallest multiple of the host rate whose lines all clear their floor;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params, double sr,
+                                           uint8_t note, Velocity16 velocity,
+                                           uint64_t seed) noexcept {
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   drive_index_ = 0;
@@ -160,7 +173,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
   // fundamental. Subtract them from the period before splitting.
   const float omega = kTwoPi / std::max(1.0f, base_period_);
   const float tau_lp = onepole_group_delay_samples(a, omega);
-  comp_ = 2.0f + tau_lp;
+  comp_ = kRegisters + tau_lp;
 
   // Each line spans the whole slab rather than this note's period. The line
   // length is what bounds a downward bend, and the clamp that enforces it
@@ -282,9 +295,22 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
       for (int i = 0; i < capacity_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;
     }
   }
+
+  // Each of the two lines must be read at one sample or more, which for the shorter one (beta of
+  // the compensated period) bounds the whole loop from below.
+  LoopBudget budget =
+      loop_budget(base_period_, comp_, 1.0f / std::min(beta_, 1.0f - beta_), sr, kRegisters);
+  if (pol_couple_ > 0.0f)
+    budget = worst_loop_budget(budget, loop_budget(pol_period_, pol_comp_, 1.0f));
+  return budget;
 }
 
 float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float BowedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (neck_ == nullptr || bridge_ == nullptr || capacity_ < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -449,6 +475,7 @@ void BowedStringVoiceCore::release() noexcept { releasing_ = true; }
 
 void BowedStringVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   bow_level_ = 0.0f;
   lp_state_ = 0.0f;
   neck_out_ = 0.0f;

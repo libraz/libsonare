@@ -38,6 +38,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
@@ -82,10 +83,9 @@ struct ReedPatchParams {
   /// Conical bore: false = a cylindrical bore closed at the reed (clarinet) with
   /// odd harmonics only; true = a conical bore (saxophone / oboe / bassoon)
   /// approximated as an open pipe with the full harmonic series.
-  /// Pitch ceiling: the loop is the feedback register plus a line read at no less than one
-  /// sample, so a cylinder (half-period loop) cannot sound above sample_rate / 4 and a cone
-  /// (full-period loop) not above sample_rate / 2 less the loss filter's lag; a higher note
-  /// sounds at the ceiling instead of its own pitch.
+  /// A bore too short for its line to be read at one sample or more (a cylinder's half-period
+  /// loop above sample_rate / 4) runs its loop at an integer multiple of the host rate, so every
+  /// note below Nyquist sounds its own pitch.
   bool conical = false;
   /// Bell reflection-filter openness in [0,1]: how brightly the bore reflects at
   /// the bell (1 = bright/edgy, 0 = dark/covered). The loop lowpass.
@@ -236,6 +236,8 @@ class ReedVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when no line is floored.
+  int oversample() const noexcept { return decimator_.factor(); }
 
   // --- live continuous control (reeds are a continuous-control instrument; the
   // host drives these from MIDI CCs while the note sounds). Each sets a smoothing
@@ -268,6 +270,12 @@ class ReedVoiceCore {
   }
 
  private:
+  // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
+  // factor) and returns the bore's budget at that rate.
+  LoopBudget configure(const ReedPatchParams& params, double sr, uint8_t note, Velocity16 velocity,
+                       uint64_t seed) noexcept;
+  // One sample of the loop at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
   // Re-solves bore_.comp from the pole lp_alpha_ now holds.
@@ -284,9 +292,11 @@ class ReedVoiceCore {
   WindBore bore_{nullptr, 0, 0, 0, 0.0f, 1.0f, 0.0f};
   // Feedback sign: -1 = cylinder (odd harmonics), +1 = cone (full harmonics).
   float sign_ = -1.0f;
-  // Sample rate at note-on: refresh_excitation_targets() needs it on a live
-  // CC74 write, which carries no sample-rate parameter of its own.
+  // Rate the loop runs at (host rate times the oversampling factor): refresh_excitation_targets()
+  // needs it on a live CC74 write, which carries no sample-rate parameter of its own.
   double sample_rate_ = 48000.0;
+  // Brings the oversampled loop back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
 
   // Bell reflection: one-pole loop lowpass y += alpha*(x - y), a loss gain, and
   // the sign (folded in render). Both are solved together as a

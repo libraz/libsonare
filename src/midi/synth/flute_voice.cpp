@@ -112,7 +112,16 @@ float jet_table(float x) noexcept {
 
 void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // The loop runs at the smallest multiple of the host rate whose bore and jet lines clear their
+  // floor; everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, uint8_t note,
+                                     Velocity16 velocity, uint64_t seed) noexcept {
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
@@ -179,6 +188,11 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
       std::clamp(1.0f - std::exp(-kTwoPi * kEvenPumpDcHz / static_cast<float>(sr)), 0.0f, 1.0f);
 
   retune_loop_comp();
+  // The jet line is read at one sample or more as well, and it is the shorter of the two: its
+  // delay is the jet ratio of the compensated period, all of it a duration.
+  const LoopBudget budget = worst_loop_budget(
+      loop_budget(bore_.period, bore_.comp, 1.0f, sr),
+      loop_budget(bore_.period, jet_comp_, std::max(1.0f, 1.0f / jet_ratio_), sr, 0.0f));
 
   // Both lines span the whole slab, because the line length is what bounds a
   // downward bend and the clamp enforcing it saturates silently -- a glide
@@ -235,9 +249,15 @@ void FluteVoiceCore::start(const FlutePatchParams& params, double sample_rate, u
   edge_hyst_state_ = 0.0f;
   edge_hyst_alpha_ = 1.0f - loss_pole_at_rate(0.999f, sr);
   vortex_ = std::clamp(params.vortex, 0.0f, 1.0f) * noise_gain;
+  return budget;
 }
 
 float FluteVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || jet_ == nullptr || capacity_ < 8) return 0.0f;
   float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -408,6 +428,7 @@ void FluteVoiceCore::release() noexcept { breath_.release(); }
 
 void FluteVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   bore_.out = 0.0f;

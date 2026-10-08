@@ -179,7 +179,16 @@ float reed_natural_hz(float resonance01, float srf) noexcept {
 
 void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uint8_t note,
                           Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // The loop runs at the smallest multiple of the host rate whose bore line clears its floor;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, uint8_t note,
+                                    Velocity16 velocity, uint64_t seed) noexcept {
   const float srf = static_cast<float>(sr);
   sample_rate_ = sr;
   noise_ = VoiceRandomSequence(seed);
@@ -308,7 +317,8 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   retune_loop_comp();
   // The Lagrange read's loss at the fundamental grows as the period shrinks towards the
   // sample rate; a voice voiced at kLossVoicedSr repays only the share that rate does not have.
-  interp_gain_ = loop_budget(bore_.period, bore_.comp, 1.0f, sr).interp_gain;
+  const LoopBudget budget = loop_budget(bore_.period, bore_.comp, 1.0f, sr);
+  interp_gain_ = budget.interp_gain;
   refresh_excitation_targets();
   snap_excitation();
 
@@ -402,9 +412,15 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
     const int round_trip = static_cast<int>(2.0f * frac * bore_.period);
     hole_delay_samples_ = std::clamp(round_trip, 1, bore_.prefill_span - 1);
   }
+  return budget;
 }
 
 float ReedVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || bore_.capacity < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -612,6 +628,7 @@ void ReedVoiceCore::release() noexcept { breath_.release(); }
 
 void ReedVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   bore_.out = 0.0f;

@@ -22,6 +22,7 @@
 /// span out of it. configure() zeroes the span it takes; nothing else allocates.
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 
@@ -295,14 +296,25 @@ struct LoopBudget {
   /// raised to the floor the read needs.
   float delay = 1.0f;
   /// Loop period the realised delay sounds (delay + comp): below the requested one exactly when
-  /// the floor engaged, which pins every higher note at that pitch.
+  /// the floor engaged, which pins every higher note at that pitch unless the voice oversamples.
   float achieved_period = 0.0f;
   bool floored = false;
   /// Per-traversal gain that pays for the Lagrange read's magnitude at the sounding fundamental,
   /// >= 1. Absolute (1/|H|) when no rate is given; with a rate it is the ratio against the same
   /// note read at kLossVoicedSr, so a voice calibrated at that rate keeps its sound there.
   float interp_gain = 1.0f;
+  /// Integer factor the loop has to run at, per host sample: 1 whenever the period clears the
+  /// floor. A floored loop runs at the larger of the smallest factor an estimate says clears the
+  /// floor and the one that lifts its internal rate to kLossVoicedSr, the rate the bank is voiced
+  /// at, so it sounds the pitch the voicing gives there (see settle_loop_oversample() for how a
+  /// voice confirms it against its real compensation).
+  int oversample = 1;
 };
+
+/// The largest oversampling factor a loop is asked to run at. A note needing more than this is far
+/// outside the band any supported rate carries and keeps sounding at its floor rather than costing
+/// the voice an unbounded multiple of its render.
+inline constexpr int kMaxLoopOversample = 8;
 
 /// The delay a loop reads from its line for a requested period: the period less @p comp_samples
 /// (what is carried outside the line), raised to @p min_delay. Cheap enough for the sample loop;
@@ -311,17 +323,33 @@ inline float loop_delay(float period_samples, float comp_samples, float min_dela
   return std::max(min_delay, period_samples - comp_samples);
 }
 
-/// The one place a requested loop period becomes a realised delay, its floor and the interpolation
-/// loss the loop has to repay. @p comp_samples is the delay carried outside the line (feedback
-/// register, loss-filter phase) and @p min_delay the smallest delay the read supports. A floored
-/// period is reported through achieved_period instead of being clamped silently.
+/// The one place a requested loop period becomes a realised delay, its floor, the oversampling
+/// that lifts the floor and the interpolation loss the loop has to repay. @p comp_samples is the
+/// delay carried outside the line (feedback register, loss-filter phase) and @p min_delay the
+/// smallest delay the read supports. @p register_samples is the part of @p comp_samples that is a
+/// count of samples (the feedback registers) rather than a duration: running the loop k times
+/// faster leaves it at that many internal samples while every other term stretches to k times as
+/// many. A floored period is reported through achieved_period and oversample instead of being
+/// clamped silently.
 inline LoopBudget loop_budget(float period_samples, float comp_samples, float min_delay,
-                              double sample_rate = 0.0) noexcept {
+                              double sample_rate = 0.0, float register_samples = 1.0f) noexcept {
   LoopBudget out;
   const float wanted = period_samples - comp_samples;
   out.floored = wanted < min_delay;
   out.delay = loop_delay(period_samples, comp_samples, min_delay);
   out.achieved_period = out.delay + comp_samples;
+  if (out.floored) {
+    // k * period - (register + k * (comp - register)) >= min_delay
+    const float room = period_samples - comp_samples + register_samples;
+    out.oversample =
+        room > 0.0f ? std::clamp(static_cast<int>(std::ceil((min_delay + register_samples) / room)),
+                                 2, kMaxLoopOversample)
+                    : kMaxLoopOversample;
+    if (sample_rate > 0.0) {
+      const int to_voiced = static_cast<int>(std::ceil(kLossVoicedSr / sample_rate - 1.0e-9));
+      out.oversample = std::min(kMaxLoopOversample, std::max(out.oversample, to_voiced));
+    }
+  }
   const double omega = constants::kTwoPiD / std::max(1.0f, out.achieved_period);
   // Past this the read has nothing left to repay and a boost would only amplify noise.
   constexpr double kMinMagnitude = 0.25;
@@ -338,6 +366,104 @@ inline LoopBudget loop_budget(float period_samples, float comp_samples, float mi
   }
   return out;
 }
+
+/// The budget of a voice with several delay lines in one loop: floored when any line is, and
+/// asking for the largest factor any of them does. The remaining fields are @p primary's.
+inline LoopBudget worst_loop_budget(LoopBudget primary, const LoopBudget& other) noexcept {
+  primary.floored = primary.floored || other.floored;
+  primary.oversample = std::max(primary.oversample, other.oversample);
+  return primary;
+}
+
+/// The oversampling factor a voice runs its loop at. @p build(factor) configures the voice for a
+/// loop running @p factor times per host sample (every coefficient, state and period built for
+/// that internal rate, the host rate times @p factor) and returns the LoopBudget it ended up with;
+/// it is called with 1 first, and the voice is left configured for the factor returned.
+///
+/// loop_budget()'s estimate only seeds the search: the compensation a loss pole adds is not
+/// exactly proportional to the factor, so each candidate is read back from the voice itself and
+/// raised by one until the period clears the floor or kMaxLoopOversample is reached.
+template <typename Build>
+inline int settle_loop_oversample(Build&& build) noexcept {
+  LoopBudget budget = build(1);
+  if (!budget.floored) return 1;
+  int factor = std::clamp(budget.oversample, 2, kMaxLoopOversample);
+  for (;;) {
+    budget = build(factor);
+    if (!budget.floored || factor >= kMaxLoopOversample) return factor;
+    ++factor;
+  }
+}
+
+/// Brings a loop run at an integer multiple of the host rate back to the host rate: the voice
+/// renders @p factor internal samples per host sample and this keeps the last @p factor of them
+/// through a linear-phase windowed-sinc lowpass at the host Nyquist before taking one.
+///
+/// A factor of 1 is not filtered at all (run() is the step itself), so a voice that never needed
+/// the oversampling renders bit for bit what it did without it. Otherwise the output is delayed by
+/// kHalfLengthPeriods host samples.
+class LoopDecimator {
+ public:
+  /// Host samples of filter on each side of the centre tap.
+  static constexpr int kHalfLengthPeriods = 8;
+  static constexpr int kMaxTaps = 2 * kHalfLengthPeriods * kMaxLoopOversample + 1;
+
+  /// Builds the filter for @p factor (clamped to 1..kMaxLoopOversample) and clears its history.
+  void configure(int factor) noexcept {
+    factor_ = std::clamp(factor, 1, kMaxLoopOversample);
+    taps_ = 1;
+    reset();
+    if (factor_ == 1) return;
+    taps_ = 2 * kHalfLengthPeriods * factor_ + 1;
+    const int centre = kHalfLengthPeriods * factor_;
+    double sum = 0.0;
+    std::array<double, kMaxTaps> raw{};
+    for (int j = 0; j < taps_; ++j) {
+      const double x = static_cast<double>(j - centre) / factor_;
+      const double sinc = x == 0.0 ? 1.0 : std::sin(constants::kPiD * x) / (constants::kPiD * x);
+      const double hann = 0.5 - 0.5 * std::cos(constants::kTwoPiD * j / (taps_ - 1));
+      raw[static_cast<size_t>(j)] = sinc * hann;
+      sum += raw[static_cast<size_t>(j)];
+    }
+    for (int j = 0; j < taps_; ++j) {
+      taps_table_[static_cast<size_t>(j)] = static_cast<float>(raw[static_cast<size_t>(j)] / sum);
+    }
+  }
+
+  void reset() noexcept {
+    history_.fill(0.0f);
+    head_ = 0;
+  }
+
+  int factor() const noexcept { return factor_; }
+
+  /// Calls @p step (one internal sample, returning its output) factor times and returns the
+  /// decimated host sample.
+  template <typename Step>
+  float run(Step&& step) noexcept {
+    if (factor_ == 1) return step();
+    for (int i = 0; i < factor_; ++i) {
+      history_[static_cast<size_t>(head_)] = step();
+      head_ = head_ + 1 == taps_ ? 0 : head_ + 1;
+    }
+    // Newest sample sits just behind head_.
+    double acc = 0.0;
+    int idx = head_;
+    for (int j = 0; j < taps_; ++j) {
+      idx = idx == 0 ? taps_ - 1 : idx - 1;
+      acc += static_cast<double>(taps_table_[static_cast<size_t>(j)]) *
+             static_cast<double>(history_[static_cast<size_t>(idx)]);
+    }
+    return static_cast<float>(acc);
+  }
+
+ private:
+  int factor_ = 1;
+  int taps_ = 1;
+  int head_ = 0;
+  std::array<float, kMaxTaps> taps_table_{};
+  std::array<float, kMaxTaps> history_{};
+};
 
 /// Raises @p gain by @p interp_gain without lifting the loop past what the sub-fundamental ring
 /// bound allows, so the boost never turns DC into a runaway.

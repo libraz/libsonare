@@ -168,6 +168,8 @@ class FluteVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when no line is floored.
+  int oversample() const noexcept { return decimator_.factor(); }
 
   // --- live continuous control (a flute is a continuous-control instrument; the
   // host drives these from MIDI CCs while the note sounds). Each sets a smoothing
@@ -198,6 +200,12 @@ class FluteVoiceCore {
   void snap_excitation() noexcept;
 
  private:
+  // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
+  // factor) and returns the loop's budget at that rate.
+  LoopBudget configure(const FlutePatchParams& params, double sr, uint8_t note, Velocity16 velocity,
+                       uint64_t seed) noexcept;
+  // One sample of the loop at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
   // Re-solves bore_.comp and jet_comp_ from the pole lp_alpha_ now holds.
@@ -217,15 +225,19 @@ class FluteVoiceCore {
   // convection spans (jet_delay = jet_ratio * (period - comp), the STK
   // jet-convection length).
   // The jet line is read at no less than one sample (the smallest delay the
-  // passive Lagrange stencil supports), so the ratio holds exactly except for
-  // periods under about 2.5 samples, where the jet register is pinned.
+  // passive Lagrange stencil supports); a period too short for that runs the
+  // loop at an integer multiple of the host rate, so the ratio holds at every
+  // note below Nyquist.
   float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
   /// The played fundamental (Hz) and the sample rate, held for the pole
   /// mapping and for retune_loop_comp(), which follows the smoothed pole on
   /// every live brightness move (a CC74-live axis), not only at note-on.
   float f0_ = 0.0f;
+  /// The rate the loop runs at (host rate times the oversampling factor).
   float srf_ = 48000.0f;
+  /// Brings the oversampled loop back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   /// The lp_alpha_ bore_.comp and jet_comp_ were last solved for.
   float comp_alpha_ = -1.0f;
 

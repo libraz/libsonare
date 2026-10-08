@@ -20,10 +20,10 @@
 /// Unconditionally stable: the bow table is bounded to [0,1] and the bridge loss
 /// gain is < 1.
 ///
-/// Pitch ceiling: each line reads at least one sample, so the loop cannot be shorter than two
-/// samples plus the delay carried outside it (the feedback register and the loss filter's phase).
-/// A note whose compensated period falls below that sounds at the ceiling instead of its own
-/// pitch; see loop_budget() in string_loop.h for the achieved period.
+/// Each line is read at one sample or more, so the shorter of the two (the bow position's share of
+/// the compensated period) bounds the loop from below. A note whose period is shorter than that
+/// runs its loop at an integer multiple of the host rate (loop_budget() in string_loop.h decides
+/// the factor), so every note below Nyquist sounds its own pitch at the position it started with.
 ///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism: the
 /// optional rosin texture comes from the counter-based (voice_index, note, age)
@@ -34,6 +34,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -184,6 +185,8 @@ class BowedStringVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when no line is floored.
+  int oversample() const noexcept { return decimator_.factor(); }
 
   // --- live continuous control (bowed strings are a continuous-control
   // instrument; the host drives these from MIDI CCs while the note sounds).
@@ -236,6 +239,14 @@ class BowedStringVoiceCore {
 
  private:
   bool killed_ = true;
+  // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
+  // factor) and returns the loop's budget at that rate.
+  LoopBudget configure(const BowedStringPatchParams& params, double sr, uint8_t note,
+                       Velocity16 velocity, uint64_t seed) noexcept;
+  // One sample of the loop at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  // Brings the oversampled loop back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   // Bow-table friction-curve slope from bow force (Smith / STK: slope in [1,5],
   // harder force -> lower slope -> wider sticking region).
   static constexpr float kBowSlopeMax_ = 5.0f;

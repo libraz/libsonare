@@ -16,6 +16,7 @@
 /// specimen whose noise the measurement cannot see fails rather than passes.
 
 #include <algorithm>
+#include <array>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -24,10 +25,15 @@
 #include <utility>
 #include <vector>
 
+#include "midi/control_value.h"
 #include "midi/midi_event.h"
+#include "midi/synth/bowed_string_voice.h"
+#include "midi/synth/flute_voice.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/pitch.h"
+#include "midi/synth/reed_voice.h"
 #include "midi/synth/string_loop.h"
 #include "midi/ump.h"
 #include "support/midi_render.h"
@@ -472,6 +478,76 @@ TEST_CASE("loop_budget reports its floor and repays the read only off the voiced
   CHECK(repay_interpolation(0.99f, 4.0f) <= 0.9999f);
 }
 
+TEST_CASE("loop_budget asks for an oversampling factor only when the period is floored",
+          "[midi][synth][wind]") {
+  using sonare::midi::synth::kMaxLoopOversample;
+  using sonare::midi::synth::settle_loop_oversample;
+
+  CHECK(loop_budget(100.0f, 2.0f, 1.0f).oversample == 1);
+  // Exactly at the floor still clears it.
+  CHECK(loop_budget(3.0f, 2.0f, 1.0f).oversample == 1);
+
+  // 1.9 samples against a register and a one-sample read: doubling clears it, and the register
+  // does not stretch with the factor.
+  const auto floored = loop_budget(1.9f, 1.0f, 1.0f);
+  CHECK(floored.floored);
+  CHECK(floored.oversample == 2);
+  // A floored loop also runs at the bank's voiced rate or above: 8 kHz needs 6, 44.1 kHz 2.
+  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 8000.0).oversample == 6);
+  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 44100.0).oversample == 2);
+  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 96000.0).oversample == 2);
+  CHECK(loop_budget(100.0f, 2.0f, 1.0f, 8000.0).oversample == 1);
+  // A period no factor can rescue is bounded rather than unbounded.
+  CHECK(loop_budget(0.1f, 1.0f, 1.0f).oversample == kMaxLoopOversample);
+
+  // The search confirms each candidate against the voice itself and keeps the smallest that
+  // clears: a compensation that grows faster than the estimate takes one more step.
+  const auto grown = [](int f) {
+    return loop_budget(1.9f * static_cast<float>(f), 1.0f + 1.2f * static_cast<float>(f), 1.0f);
+  };
+  int built_for = 0;
+  const int factor = settle_loop_oversample([&](int f) {
+    built_for = f;
+    return grown(f);
+  });
+  CHECK(factor == built_for);
+  CHECK(factor > floored.oversample);
+  CHECK_FALSE(grown(factor).floored);
+  CHECK(grown(factor - 1).floored);
+  CHECK(settle_loop_oversample([](int) { return loop_budget(50.0f, 2.0f, 1.0f); }) == 1);
+}
+
+TEST_CASE("the loop decimator is transparent at factor 1 and a host-Nyquist lowpass above it",
+          "[midi][synth][wind]") {
+  using sonare::midi::synth::LoopDecimator;
+
+  LoopDecimator unit;
+  unit.configure(1);
+  float next = 0.25f;
+  CHECK(unit.run([&] { return next; }) == 0.25f);
+
+  for (const int factor : {2, 3, 5, 8}) {
+    LoopDecimator dec;
+    dec.configure(factor);
+    // Internal sine at fraction `rel` of the HOST Nyquist, run long enough to fill the filter.
+    const auto gain_at = [&](double rel) {
+      dec.configure(factor);
+      const double w = kTwoPiD * 0.5 * rel / factor;
+      double n = 0.0, peak = 0.0;
+      for (int host = 0; host < 400; ++host) {
+        const float y = dec.run([&] { return static_cast<float>(std::sin(w * n++)); });
+        if (host > 300) peak = std::max(peak, static_cast<double>(std::fabs(y)));
+      }
+      return peak;
+    };
+    CAPTURE(factor);
+    CHECK(gain_at(0.05) == Catch::Approx(1.0).margin(0.01));
+    CHECK(gain_at(0.7) == Catch::Approx(1.0).margin(0.03));
+    // Everything the internal rate carries above the host Nyquist is gone before the decimation.
+    CHECK(gain_at(1.4) < 0.1);
+  }
+}
+
 TEST_CASE("a Karplus-Strong fundamental keeps its requested t60 across rates",
           "[midi][synth][ks][wind]") {
   NativeSynthPatch patch;
@@ -630,4 +706,195 @@ TEST_CASE("a resonator keeps the size of its centre response at every sample rat
     CHECK(resonator_gain_at_rate(static_cast<float>(r48), 1.0f, kLossVoicedSr) ==
           static_cast<float>(1.0f - static_cast<float>(r48)));
   }
+}
+
+namespace {
+
+using sonare::midi::Velocity16;
+
+/// The strongest tone of the last half of @p x within 6% of @p f0, found to 0.05%, as cents from
+/// @p f0. The Hann window is built once, so a scan of a few hundred bins stays cheap.
+double strongest_tone_cents(const std::vector<float>& x, double f0, double sr) {
+  const size_t from = x.size() / 2;
+  const size_t count = x.size() - from;
+  std::vector<double> hann(count);
+  for (size_t i = 0; i < count; ++i) {
+    hann[i] = 0.5 - 0.5 * std::cos(kTwoPiD * static_cast<double>(i) / static_cast<double>(count));
+  }
+  double best = -1.0, at = f0;
+  for (double rel = 0.94; rel <= 1.06; rel += 5.0e-4) {
+    const double w = kTwoPiD * f0 * rel / sr;
+    const double coeff = 2.0 * std::cos(w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 0; i < count; ++i) {
+      const double s0 = hann[i] * x[from + i] + coeff * s1 - s2;
+      s2 = s1;
+      s1 = s0;
+    }
+    const double power = s1 * s1 + s2 * s2 - coeff * s1 * s2;
+    if (power > best) {
+      best = power;
+      at = f0 * rel;
+    }
+  }
+  return 1200.0 * std::log2(at / f0);
+}
+
+bool finite_and_sounding(const std::vector<float>& x) {
+  double energy = 0.0;
+  for (const float v : x) {
+    if (!std::isfinite(v)) return false;
+    energy += static_cast<double>(v) * v;
+  }
+  return energy / static_cast<double>(x.size()) > 1.0e-8;
+}
+
+/// Highest note whose fundamental stays a semitone under the Nyquist of @p sr.
+int highest_in_band_note(double sr) {
+  int note = 60;
+  while (note < 126 && note_to_hz(static_cast<uint8_t>(note + 1)) <= 0.5 * sr / 1.0594631) ++note;
+  return note;
+}
+
+constexpr double kLowRates[] = {8000.0, 16000.0, 24000.0, 44100.0};
+constexpr double kReferenceRate = 48000.0;
+constexpr double kCoreSeconds = 1.6;
+/// A second, longer render of the 48 kHz reference: a note whose reference pitch moves by more
+/// than this between the two is in an unstable region and has no pitch to compare against.
+constexpr double kLongSeconds = 2.4;
+constexpr double kReferenceDriftCents = 3.0;
+/// Smallest rise of the sounding pitch from one semitone to the next (a semitone is 100).
+constexpr double kMinStepCents = 20.0;
+
+/// What a core rendered and the oversampling factor it settled on.
+struct Rendered {
+  std::vector<float> x;
+  int factor = 1;
+};
+
+/// Every note whose loop is floored at the tested rate (the voice settles on a factor above 1)
+/// sounds where the same voice sounds it at 48 kHz, which is where the bank is voiced, and a
+/// higher note sounds a higher pitch than the one below it. Both fail when the loop is pinned at
+/// its floor, which sounds several notes at one pitch.
+///
+/// The reference is the voice at 48 kHz and not the nominal pitch because the voicing itself
+/// tunes tens of cents off at the top of the compass at every rate. Notes whose 48 kHz pitch
+/// differs by more than kReferenceDriftCents between a 1.6 s and a 2.4 s render are skipped:
+/// there is no reference pitch to agree with.
+///
+/// @p tolerance_cents holds one bound per entry of kLowRates: the largest deviation measured
+/// from the 48 kHz pitch plus the estimator's resolution, 0.87 cents of scan step plus one
+/// Hann bin of the 0.8 s analysis window (2164 / f0 cents) at the lowest note covered. A floored
+/// loop runs at 48 kHz or above, so at 8, 16 and 24 kHz it is the 48 kHz render and the measured
+/// deviation is 0; only 44.1 kHz runs at 88.2 kHz and differs.
+/// @p render is (note, rate, seconds) -> Rendered; zero seconds only reports the factor.
+template <class Render>
+void require_floored_notes_hold_pitch(
+    const std::array<double, std::size(kLowRates)>& tolerance_cents, int highest_note,
+    Render render) {
+  int tested_in_total = 0;
+  for (size_t rate_index = 0; rate_index < std::size(kLowRates); ++rate_index) {
+    const double sr = kLowRates[rate_index];
+    double previous = -1.0;
+    for (int note = 36; note <= std::min(highest_note, highest_in_band_note(sr)); ++note) {
+      const uint8_t n = static_cast<uint8_t>(note);
+      if (render(n, sr, 0.0).factor == 1) continue;
+      const double f0 = note_to_hz(n);
+      const double reference =
+          strongest_tone_cents(render(n, kReferenceRate, kCoreSeconds).x, f0, kReferenceRate);
+      const double drift = std::abs(
+          strongest_tone_cents(render(n, kReferenceRate, kLongSeconds).x, f0, kReferenceRate) -
+          reference);
+      if (drift > kReferenceDriftCents) continue;
+      const Rendered r = render(n, sr, kCoreSeconds);
+      const double cents = strongest_tone_cents(r.x, f0, sr);
+      CAPTURE(sr, note, r.factor, f0, cents, reference);
+      REQUIRE(finite_and_sounding(r.x));
+      CHECK(std::abs(cents - reference) <= tolerance_cents[rate_index]);
+      const double sounding = f0 * std::exp2(cents / 1200.0);
+      CHECK(sounding > previous * std::exp2(kMinStepCents / 1200.0));
+      previous = sounding;
+      ++tested_in_total;
+    }
+  }
+  CHECK(tested_in_total > 0);
+}
+
+}  // namespace
+
+TEST_CASE("a cylindrical reed sounds each note whose loop is floored at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::ReedPatchParams params;
+  params.conical = false;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::reed_slab_capacity(sr)));
+    sonare::midi::synth::ReedVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::reed_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({2.0, 1.4, 1.3, 4.8}, 127, render);
+}
+
+TEST_CASE("a bowed string sounds each note whose lines are floored at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::BowedStringPatchParams params;
+  params.rosin = 0.0f;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(
+        static_cast<size_t>(sonare::midi::synth::bowed_string_slab_capacity(sr)));
+    sonare::midi::synth::BowedStringVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::bowed_string_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  // Above note 106 the 48 kHz reference is not a bowed pitch.
+  require_floored_notes_hold_pitch({3.5, 2.3, 1.8, 0.0}, 106, render);
+}
+
+TEST_CASE("a flute sounds each note whose bore or jet is floored at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::FlutePatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  params.vibrato_depth = 0.0f;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::flute_slab_capacity(sr)));
+    sonare::midi::synth::FluteVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::flute_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({1.5, 1.2, 1.1, 0.0}, 127, render);
+}
+
+TEST_CASE("a flue pipe sounds each note whose bore or jet is floored at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::PipeOrganPatchParams params;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::pipe_organ_slab_capacity(sr)));
+    sonare::midi::synth::PipeOrganVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({1.5, 1.2, 1.1, 0.0}, 127, render);
 }

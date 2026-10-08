@@ -34,6 +34,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
@@ -193,6 +194,8 @@ class PipeOrganVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when no line is floored.
+  int oversample() const noexcept { return decimator_.factor(); }
 
   // --- live continuous control. The jet is blown for as long as the key is
   // down, so both axes reach the sound mid-note. Each call sets a smoothing
@@ -228,6 +231,14 @@ class PipeOrganVoiceCore {
 
  private:
   bool killed_ = true;
+  /// Builds the whole voice for loops running at @p sr (the host rate times the oversampling
+  /// factor) and returns the worst budget of its sounding ranks at that rate.
+  LoopBudget configure(const PipeOrganPatchParams& params, double sr, uint8_t note,
+                       Velocity16 velocity, uint64_t seed) noexcept;
+  /// One sample of every rank at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  /// Brings the oversampled loops back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   /// Recomposes the two smoothing targets from their bases and the offsets, and
   /// arms the ramp if either moved.
   void refresh_excitation_targets() noexcept;
