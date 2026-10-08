@@ -101,11 +101,14 @@ class StreamingRetune {
   rt::ParamSmoother semitones_smoother_{0.0f, 12.0f, 48000.0};
   rt::ParamSmoother mix_smoother_{1.0f, 10.0f, 48000.0};
 
-  std::vector<float> window_;     ///< Precomputed Hann window (grain_size).
-  std::vector<float> ring_buf_;   ///< History ring buffer (ring_cap).
-  std::vector<float> synth_acc_;  ///< Circular OLA signal accumulator.
-  std::vector<float> norm_acc_;   ///< Circular OLA window-sum accumulator.
-  std::vector<float> dry_delay_;  ///< Dry path aligned to OLA output latency.
+  std::vector<float> window_;         ///< Precomputed Hann window (grain_size).
+  std::vector<float> ring_buf_;       ///< History ring buffer (ring_cap).
+  std::vector<float> synth_acc_;      ///< Circular OLA signal accumulator.
+  std::vector<float> norm_acc_;       ///< Circular OLA window-sum accumulator.
+  std::vector<float> dry_delay_;      ///< Dry path aligned to OLA output latency.
+  std::vector<double> search_ref_;    ///< Previous grain's last hop for realign_anchor().
+  std::vector<double> search_span_;   ///< Linearised reference + candidates for realign_anchor().
+  std::vector<double> search_score_;  ///< Per-jump match score for realign_anchor().
 
   std::uint64_t write_head_ = 0;  ///< Total samples written to ring.
   double anchor_delay_ = 0.0;     ///< Source delay of the current grain's end behind write_head_.

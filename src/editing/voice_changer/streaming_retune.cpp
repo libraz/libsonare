@@ -23,6 +23,8 @@ constexpr int kMaxGrainSize = 8192;
 // Source delay the coherent read may drift through before it is re-anchored: the
 // longest a transient can be re-read late, against how often a jump is audible.
 constexpr int kWrapRoomGrains = 2;
+// Jumps correlated side by side in the alignment search.
+constexpr int kSearchLanes = 8;
 
 StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
   config.semitones = std::isfinite(config.semitones)
@@ -69,6 +71,10 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
       std::ceil(static_cast<double>(grain_size_) * std::exp2(kMaxSemitones / kSemitonesPerOctave)));
   ring_cap_ = static_cast<std::size_t>(max_span + wrap_room_ + 2 * hop_a_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);
+  // The search spans one hop of reference plus at most hop + 1 jumps, padded to whole lane blocks.
+  search_ref_.assign(static_cast<std::size_t>(hop_a_), 0.0);
+  search_span_.assign(static_cast<std::size_t>(2 * hop_a_ + 1 + 2 * kSearchLanes), 0.0);
+  search_score_.assign(static_cast<std::size_t>(hop_a_ + 1 + kSearchLanes), 0.0);
 
   // Precompute periodic Hann window.
   window_.assign(static_cast<std::size_t>(grain_size_), 0.0f);
@@ -164,25 +170,49 @@ void StreamingRetune::realign_anchor(double previous_end, double source_span) no
   const std::int64_t ref_begin = static_cast<std::int64_t>(std::floor(previous_end)) - hop_a_;
   const std::int64_t jump_min = static_cast<std::int64_t>(std::ceil(anchor_delay_ - hi));
   const std::int64_t jump_max = static_cast<std::int64_t>(std::floor(anchor_delay_ - lo));
-  // Indices run negative while the ring is still filling after reset().
-  const auto ring_at = [&](std::int64_t index) noexcept {
-    const std::int64_t cap = static_cast<std::int64_t>(ring_cap_);
-    return ring_buf_[static_cast<std::size_t>(((index % cap) + cap) % cap)];
+  // Lay the reference and every candidate out contiguously (as double, so each product keeps
+  // its width); indices run negative while the ring is still filling after reset().
+  const std::int64_t cap = static_cast<std::int64_t>(ring_cap_);
+  const std::int64_t num_jumps = jump_max - jump_min + 1;
+  const std::int64_t span =
+      static_cast<std::int64_t>(hop_a_) + std::max<std::int64_t>(num_jumps, 0);
+  const auto linearize = [&](std::int64_t first, std::int64_t count, double* dst) noexcept {
+    std::size_t src = static_cast<std::size_t>(((first % cap) + cap) % cap);
+    for (std::int64_t k = 0; k < count; ++k) {
+      dst[k] = static_cast<double>(ring_buf_[src]);
+      if (++src == ring_cap_) src = 0;
+    }
   };
+  const double* ref = search_ref_.data();
+  const double* cands = search_span_.data();
+  if (num_jumps > 0) {
+    linearize(ref_begin, hop_a_, search_ref_.data());
+    linearize(ref_begin + jump_min, span, search_span_.data());
+  }
+  // Each lane of a block accumulates one jump in the same order as a scalar scan would.
+  for (std::int64_t base = 0; base < num_jumps; base += kSearchLanes) {
+    const double* cand = cands + base;
+    double dot[kSearchLanes] = {};
+    double energy[kSearchLanes] = {};
+    for (int m = 0; m < hop_a_; ++m) {
+      const double r = ref[m];
+      for (int l = 0; l < kSearchLanes; ++l) {
+        const double c = cand[m + l];
+        dot[l] += r * c;
+        energy[l] += c * c;
+      }
+    }
+    for (int l = 0; l < kSearchLanes; ++l) {
+      search_score_[static_cast<std::size_t>(base + l)] =
+          dot[l] / std::sqrt(energy[l] + static_cast<double>(kSpectrumEpsilon));
+    }
+  }
   double best_score = -1.0;
   std::int64_t best_jump = toward_history ? jump_min : jump_max;
   // Scan from the far end inward so a silent reference keeps the full room.
   const std::int64_t step = toward_history ? 1 : -1;
   for (std::int64_t jump = best_jump; jump >= jump_min && jump <= jump_max; jump += step) {
-    double dot = 0.0;
-    double energy = 0.0;
-    for (int m = 0; m < hop_a_; ++m) {
-      const double ref = ring_at(ref_begin + m);
-      const double cand = ring_at(ref_begin + m + jump);
-      dot += ref * cand;
-      energy += cand * cand;
-    }
-    const double score = dot / std::sqrt(energy + static_cast<double>(kSpectrumEpsilon));
+    const double score = search_score_[static_cast<std::size_t>(jump - jump_min)];
     if (score > best_score) {
       best_score = score;
       best_jump = jump;
