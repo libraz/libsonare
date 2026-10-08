@@ -142,11 +142,6 @@ SonareRealtimeEngine* make_keyed_rig() {
   return engine;
 }
 
-int refusal_of(SonareError error, int refusal) {
-  REQUIRE(error == SONARE_OK);
-  return refusal;
-}
-
 }  // namespace
 
 TEST_CASE("sonare_engine can_set_*_sidechain validate pointers", "[c_api][engine][feedback]") {
@@ -173,24 +168,24 @@ TEST_CASE("sonare_engine can_set_*_sidechain agree with the setters and cover th
 
   const auto lane = [&](uint32_t track, unsigned int insert, uint32_t source) {
     int refusal = -1;
-    const int got = refusal_of(
-        sonare_engine_can_set_lane_sidechain(engine, track, insert, source, &refusal), refusal);
-    seen.insert(got);
-    return got;
+    REQUIRE(sonare_engine_can_set_lane_sidechain(engine, track, insert, source, &refusal) ==
+            SONARE_OK);
+    seen.insert(refusal);
+    return refusal;
   };
   const auto bus = [&](uint32_t id, unsigned int insert, int kind, uint32_t source) {
     int refusal = -1;
-    const int got = refusal_of(
-        sonare_engine_can_set_bus_sidechain(engine, id, insert, kind, source, &refusal), refusal);
-    seen.insert(got);
-    return got;
+    REQUIRE(sonare_engine_can_set_bus_sidechain(engine, id, insert, kind, source, &refusal) ==
+            SONARE_OK);
+    seen.insert(refusal);
+    return refusal;
   };
   const auto master = [&](unsigned int insert, int kind, uint32_t source) {
     int refusal = -1;
-    const int got = refusal_of(
-        sonare_engine_can_set_master_sidechain(engine, insert, kind, source, &refusal), refusal);
-    seen.insert(got);
-    return got;
+    REQUIRE(sonare_engine_can_set_master_sidechain(engine, insert, kind, source, &refusal) ==
+            SONARE_OK);
+    seen.insert(refusal);
+    return refusal;
   };
   const auto ok = [](SonareError e) { return e == SONARE_OK; };
 

@@ -493,8 +493,8 @@ TEST_CASE("long part bulk runs do not lose a rhythm assignment after 64 bytes",
           "[midi][sf2][gslayer]") {
   // Starting at 40 10 00, the next part block begins at byte 128 and its USE
   // FOR RHYTHM PART row is byte 149. This is beyond apply_gs_part_sysex's old
-  // 64-write decode window.
-  std::vector<uint8_t> values(150, 0x00);
+  // 64-write decode window. The run covers part 1's rows through KEY RANGE HIGH.
+  std::vector<uint8_t> values(128 + 31, 0x00);
   const auto preserve_part_defaults = [&values](size_t base, uint8_t rx_channel) {
     values[base + 2] = rx_channel;
     for (size_t offset = base + 3; offset <= base + 18; ++offset) values[offset] = 0x01;
