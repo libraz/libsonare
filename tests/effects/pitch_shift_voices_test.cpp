@@ -347,3 +347,84 @@ TEST_CASE("PitchShifter anti-alias switched back in at the same pitch starts fro
     REQUIRE(right[i] == 0.0f);
   }
 }
+
+TEST_CASE("the unity shortcut applies the configured dry and wet gains", "[pitch-voices]") {
+  // One centred unity voice with no pre-delay or feedback: every sample is
+  // input * (dry + wet * voice1), whether or not the pass-through shortcut is taken.
+  const std::vector<float> input(512, 0.25f);
+  for (const float dry_wet : {0.25f, 0.5f, 0.75f}) {
+    for (const MixLaw law : {MixLaw::kCrossfade, MixLaw::kTwoRamps}) {
+      PitchShifterConfig config;
+      config.dry_wet = dry_wet;
+      config.mix_law = law;
+      const float expected_gain =
+          law == MixLaw::kTwoRamps
+              ? std::min(1.0f, 2.0f * (1.0f - dry_wet)) + std::min(1.0f, 2.0f * dry_wet)
+              : 1.0f;
+
+      const Stereo shortcut = run(config, input);
+      // A pan this small leaves the shortcut and takes the full voice path.
+      PitchShifterConfig full_path = config;
+      full_path.pan = 1.0e-4f;
+      const Stereo full = run(full_path, input);
+      CAPTURE(dry_wet, static_cast<int>(law), expected_gain);
+      REQUIRE(shortcut.left.back() == Approx(0.25f * expected_gain).margin(1e-6));
+      REQUIRE(shortcut.right.back() == Approx(0.25f * expected_gain).margin(1e-6));
+      REQUIRE(shortcut.left.back() == Approx(full.left.back()).margin(2e-4));
+
+      // The same through parameter 9 and an irregular partition.
+      PitchShifter shifter(PitchShifterConfig{});
+      shifter.prepare(kRate, 512);
+      REQUIRE(shifter.set_parameter(1, dry_wet));
+      REQUIRE(shifter.set_parameter(9, static_cast<float>(static_cast<int>(law))));
+      std::vector<float> left = input;
+      std::vector<float> right = input;
+      for (size_t off = 0; off < input.size();) {
+        const int n = static_cast<int>(std::min<size_t>(137, input.size() - off));
+        float* ch[2] = {left.data() + off, right.data() + off};
+        shifter.process(ch, 2, n);
+        off += static_cast<size_t>(n);
+      }
+      REQUIRE(left.back() == Approx(0.25f * expected_gain).margin(1e-6));
+      REQUIRE(right.back() == Approx(0.25f * expected_gain).margin(1e-6));
+    }
+  }
+}
+
+TEST_CASE("a muted voice does not narrow the anti-alias band of the sounding one",
+          "[pitch-voices]") {
+  // Two-ramp with level2 = 1 mutes voice 1; voice 2 stays at unity. An 8 kHz tone survives a
+  // band of a unity ratio but not the corner a +24 semitone voice would set.
+  const std::vector<float> input = tone(8000.0, 8192);
+  PitchShifterConfig base;
+  base.mix_law = MixLaw::kTwoRamps;
+  base.dry_wet = 1.0f;
+  base.level2 = 1.0f;
+  base.anti_alias = true;
+
+  PitchShifterConfig muted_up = base;
+  muted_up.semitones = 24.0f;
+  const Stereo reference = run(base, input);
+  const Stereo constructed = run(muted_up, input);
+
+  PitchShifter live(base);
+  live.prepare(kRate, 8192);
+  REQUIRE(live.set_parameter(0, 24.0f));
+  Stereo live_out{input, input};
+  float* channels[2] = {live_out.left.data(), live_out.right.data()};
+  live.process(channels, 2, 8192);
+
+  for (int i = 0; i < 8192; ++i) {
+    REQUIRE(at(constructed.left, i) == Approx(at(reference.left, i)).margin(1e-6));
+    REQUIRE(at(live_out.left, i) == Approx(at(reference.left, i)).margin(1e-6));
+  }
+  REQUIRE(amplitude_at(reference.left, 8000.0) > 0.5);
+
+  // A voice that sounds still pulls the band down: at level2 = 0.5 both voices sound.
+  PitchShifterConfig sounding = muted_up;
+  sounding.level2 = 0.5f;
+  PitchShifterConfig sounding_unity = base;
+  sounding_unity.level2 = 0.5f;
+  REQUIRE(amplitude_at(run(sounding, input).left, 8000.0) <
+          0.5 * amplitude_at(run(sounding_unity, input).left, 8000.0));
+}

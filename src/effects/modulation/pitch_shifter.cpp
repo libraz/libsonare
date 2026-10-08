@@ -63,6 +63,9 @@ std::array<float, 2> balance_gains(float pan) noexcept {
   return {std::min(1.0f, 1.0f - p), std::min(1.0f, 1.0f + p)};
 }
 
+/// Settling time of a dry/wet or mix-law change, in seconds.
+constexpr double kMixGlideSeconds = 0.005;
+
 float semitone_ratio(float semitones, float cents) noexcept {
   return std::exp2((semitones + cents / kCentsPerSemitone) / 12.0f);
 }
@@ -127,6 +130,7 @@ void PitchShifter::prepare(double sample_rate, int) {
 }
 
 void PitchShifter::reset() {
+  mix_primed_ = false;
   phase_ = 0.0f;
   phase2_ = 0.0f;
   feedback_state_ = {0.0f, 0.0f};
@@ -139,9 +143,12 @@ void PitchShifter::reset() {
   }
 }
 
+common::MixGains PitchShifter::law_gains(float wet) const noexcept {
+  return common::mix_gains(config_.mix_law, std::clamp(wet, 0.0f, 1.0f));
+}
+
 int PitchShifter::tail_samples() const noexcept {
-  const common::MixGains mix =
-      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  const common::MixGains mix = law_gains(config_.dry_wet);
   if (!(mix.wet > 0.0f)) return 0;
   // A grain reads back at most one grain plus the longer pre-delay; feedback writes the
   // shifted sum into the same line, so each pass costs that read again.
@@ -218,10 +225,16 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
     return;
   }
   rt::ScopedNoDenormals no_denormals;
-  const float dry_wet = std::clamp(config_.dry_wet, 0.0f, 1.0f);
-  const common::MixGains mix = common::mix_gains(config_.mix_law, dry_wet);
-  const float dry = mix.dry;
-  const float wet = mix.wet;
+  const common::MixGains mix_target = law_gains(config_.dry_wet);
+  const rt::GainPairGlide::Pair target{mix_target.dry, mix_target.wet};
+  if (!mix_primed_) {
+    mix_glide_.snap(target);
+    mix_primed_ = true;
+  } else if (target.first != mix_target_.first || target.second != mix_target_.second) {
+    const int ramp = std::max(1, static_cast<int>(std::lround(kMixGlideSeconds * sample_rate_)));
+    mix_glide_.retarget(target, ramp);
+  }
+  mix_target_ = target;
   const float ratio = semitone_ratio(config_.semitones, config_.cents);
   const float ratio2 = semitone_ratio(config_.semitones2, config_.cents2);
   const float grain = static_cast<float>(grain_);
@@ -237,14 +250,16 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   // Under the two-ramp law level2 balances the voices as dry_wet balances the
   // mix; otherwise the first voice stays whole and level2 is the second's gain.
   const common::MixGains voices = config_.mix_law == common::MixLaw::kTwoRamps
-                                      ? common::mix_gains(config_.mix_law, config_.level2)
+                                      ? law_gains(config_.level2)
                                       : common::MixGains{1.0f, config_.level2};
   const float level1 = voices.dry;
   const float level2 = voices.wet;
   const bool second = level2 > 0.0f;
   const bool anti_alias = config_.anti_alias;
   if (anti_alias) {
-    update_anti_alias(std::max(ratio, second ? ratio2 : 1.0f));
+    // A voice with no gain is not sounding, so its ratio does not set the band.
+    const bool first = level1 > 0.0f;
+    update_anti_alias(std::max(first ? ratio : 1.0f, second ? ratio2 : 1.0f));
   }
   // The anti-alias sections re-enter the path from rest, never from the history
   // they froze with while the flag was off or the ratio was at or below 1.
@@ -277,15 +292,18 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
     // offset and the "no shift" default would delay the signal by one window
     // while reporting zero latency. Pass the input through instead, and keep
     // filling the grain buffers so a later shift starts from real history
-    // rather than silence.
+    // rather than silence. The one voice still passes through the configured dry and wet gains.
     anti_alias_corner_hz_ = 0.0f;
     anti_alias_gate_.close();
     for (int i = 0; i < num_samples; ++i) {
+      const rt::GainPairGlide::Pair mix = mix_glide_.advance(target);
+      const float through = mix.first + mix.second * level1;
       for (int ch = 0; ch < active; ++ch) {
         if (channels[ch] == nullptr) continue;
         auto& buffer = buffers_[static_cast<size_t>(ch)];
         auto& write_pos = write_pos_[static_cast<size_t>(ch)];
         buffer[static_cast<size_t>(write_pos)] = channels[ch][i];
+        channels[ch][i] *= through;
         write_pos = (write_pos + 1) % static_cast<int>(buffer.size());
       }
     }
@@ -293,6 +311,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   }
   bool non_finite = false;
   for (int i = 0; i < num_samples; ++i) {
+    const rt::GainPairGlide::Pair mix = mix_glide_.advance(target);
     // A voice at unity ratio reads one fixed tap instead of a drifting grain.
     const Grain g =
         unity ? Grain{0.0f, 0.0f, 0.0f, 0.0f} : advance_grain(phase_, step, grain, half);
@@ -328,7 +347,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
         feedback_state_[c] = shifted;
         non_finite = non_finite || !std::isfinite(shifted);
       }
-      channels[ch][i] = dry * in + wet * shifted;
+      channels[ch][i] = mix.first * in + mix.second * shifted;
       write_pos_[c] = (write_pos_[c] + 1) % static_cast<int>(buffers_[c].size());
     }
   }

@@ -9,6 +9,7 @@
 #include "effects/common/mix_law.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/biquad_design.h"
+#include "rt/gain_pair_glide.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 
@@ -85,6 +86,9 @@ class PitchShifter : public rt::ProcessorBase {
   void update_grain() noexcept;
   void update_pre_delay_samples() noexcept;
 
+  /// Gains the configured mix law assigns to @p wet, clamped to [0, 1].
+  common::MixGains law_gains(float wet) const noexcept;
+
   /// Derives the anti-alias corner, in hertz, from the larger sounding ratio and
   /// rebuilds the low-pass sections when it moved. A ratio of 1 or less leaves
   /// the section out of the path.
@@ -106,6 +110,11 @@ class PitchShifter : public rt::ProcessorBase {
   /// [channel][section]: two Butterworth sections make one Linkwitz-Riley 4.
   std::array<std::array<rt::BiquadState, 2>, 2> anti_alias_;
   rt::StageGate anti_alias_gate_;
+  /// The dry/wet pair applied to the audio, in both the voice path and the unity shortcut;
+  /// a change of dry/wet or law only retargets it.
+  rt::GainPairGlide mix_glide_;
+  rt::GainPairGlide::Pair mix_target_{};
+  bool mix_primed_ = false;
 };
 
 }  // namespace sonare::effects::modulation

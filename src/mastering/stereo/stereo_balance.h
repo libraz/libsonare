@@ -5,6 +5,7 @@
 
 #include <vector>
 
+#include "rt/gain_pair_glide.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::stereo {
@@ -27,7 +28,9 @@ struct StereoBalanceConfig {
 /// between blocks does not step the gains; a balance that does not change
 /// renders exactly as a fixed gain pair. The glide moves the balance position
 /// and reads the law at every step, so a constant-power move keeps its power;
-/// a law change crossfades the two laws' gains over the same 5 ms.
+/// a law change starts from the gains being applied and decays the difference to
+/// the new law over the same 5 ms, so a change that interrupts a change never
+/// steps.
 class StereoBalance : public rt::ProcessorBase {
  public:
   explicit StereoBalance(StereoBalanceConfig config = {});
@@ -49,8 +52,8 @@ class StereoBalance : public rt::ProcessorBase {
  private:
   static void validate_config(const StereoBalanceConfig& config);
   static void gains(const StereoBalanceConfig& config, float& left, float& right);
-  /// Gains at the glide's current position and law blend.
-  void glide_gains(float& left, float& right) const;
+  /// The target law's gains at the glide's current position.
+  rt::GainPairGlide::Pair law_gains() const;
 
   StereoBalanceConfig config_{};
   bool prepared_ = false;
@@ -59,16 +62,13 @@ class StereoBalance : public rt::ProcessorBase {
   /// False until the first block after prepare()/reset(), which lands on its
   /// target instead of gliding to it from unity.
   bool primed_ = false;
-  float left_gain_ = 1.0f;
-  float right_gain_ = 1.0f;
-  /// Glide state: the balance position, and the law it is leaving and reaching.
+  /// The pair applied to the audio; law changes only retarget it.
+  rt::GainPairGlide gain_glide_;
+  /// Balance position glide, and the law being reached.
   float position_ = 0.0f;
   float target_position_ = 0.0f;
   float step_position_ = 0.0f;
-  StereoBalanceConfig from_law_{};
-  StereoBalanceConfig to_law_{};
-  float law_blend_ = 1.0f;
-  float step_law_blend_ = 0.0f;
+  StereoBalanceConfig target_law_{};
   int ramp_remaining_ = 0;
 };
 

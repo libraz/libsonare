@@ -48,13 +48,12 @@ void StereoBalance::process(float* const* channels, int num_channels, int num_sa
   }
 
   const bool law_changed =
-      config_.law != to_law_.law || config_.constant_power != to_law_.constant_power;
+      config_.law != target_law_.law || config_.constant_power != target_law_.constant_power;
   if (!primed_) {
     position_ = target_position_ = config_.balance;
-    from_law_ = to_law_ = config_;
-    law_blend_ = 1.0f;
+    target_law_ = config_;
     ramp_remaining_ = 0;
-    gains(config_, left_gain_, right_gain_);
+    gain_glide_.snap(law_gains());
     primed_ = true;
   } else if (config_.balance != target_position_ || law_changed) {
     // Retarget from wherever the glide is now, so a change mid-glide does not jump.
@@ -62,41 +61,38 @@ void StereoBalance::process(float* const* channels, int num_channels, int num_sa
     target_position_ = config_.balance;
     step_position_ = (target_position_ - position_) / ramp;
     if (law_changed) {
-      from_law_ = law_blend_ < 0.5f ? from_law_ : to_law_;
-      to_law_ = config_;
-      law_blend_ = 0.0f;
-      step_law_blend_ = 1.0f / ramp;
+      target_law_ = config_;
+      gain_glide_.retarget(law_gains(), ramp_samples_);
     }
     ramp_remaining_ = ramp_samples_;
   }
+  float left_gain = gain_glide_.applied().first;
+  float right_gain = gain_glide_.applied().second;
   for (int i = 0; i < num_samples; ++i) {
+    const bool gliding = ramp_remaining_ > 0 || gain_glide_.gliding();
     if (ramp_remaining_ > 0) {
       if (--ramp_remaining_ == 0) {
         position_ = target_position_;
-        law_blend_ = 1.0f;
       } else {
         position_ += step_position_;
-        law_blend_ = std::min(1.0f, law_blend_ + step_law_blend_);
       }
-      glide_gains(left_gain_, right_gain_);
     }
-    channels[0][i] *= left_gain_;
-    channels[1][i] *= right_gain_;
+    if (gliding) {
+      const rt::GainPairGlide::Pair applied = gain_glide_.advance(law_gains());
+      left_gain = applied.first;
+      right_gain = applied.second;
+    }
+    channels[0][i] *= left_gain;
+    channels[1][i] *= right_gain;
   }
 }
 
-void StereoBalance::glide_gains(float& left, float& right) const {
-  StereoBalanceConfig at = to_law_;
+rt::GainPairGlide::Pair StereoBalance::law_gains() const {
+  StereoBalanceConfig at = target_law_;
   at.balance = position_;
-  gains(at, left, right);
-  if (law_blend_ >= 1.0f) return;
-  StereoBalanceConfig leaving = from_law_;
-  leaving.balance = position_;
-  float from_left = 1.0f;
-  float from_right = 1.0f;
-  gains(leaving, from_left, from_right);
-  left = from_left + law_blend_ * (left - from_left);
-  right = from_right + law_blend_ * (right - from_right);
+  rt::GainPairGlide::Pair pair;
+  gains(at, pair.first, pair.second);
+  return pair;
 }
 
 void StereoBalance::reset() {

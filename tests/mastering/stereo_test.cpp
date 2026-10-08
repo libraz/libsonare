@@ -898,3 +898,51 @@ TEST_CASE("Constant-power balance keeps its power while it glides", "[mastering]
   REQUIRE_THAT(end_power, WithinAbs(settled_power, 1e-4));
   REQUIRE_THAT(mid_power, WithinAbs(settled_power, 1e-3));
 }
+
+TEST_CASE("A law change interrupted mid-glide continues from the gains in force",
+          "[mastering][stereo]") {
+  for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    for (const double fraction : {0.25, 0.5, 0.75}) {
+      StereoBalance balance({0.5f, true});
+      balance.prepare(rate, 4096);
+      const int ramp = static_cast<int>(std::lround(0.005 * rate));
+      std::vector<float> left(4096, 1.0f);
+      std::vector<float> right(4096, 1.0f);
+      process_stereo(balance, left, right);
+
+      // Law 0 -> 1, interrupted at `fraction` of the glide and sent back to law 0.
+      balance.set_parameter(1, 1.0f);
+      const int cut = static_cast<int>(fraction * ramp);
+      std::vector<float> l1(static_cast<size_t>(cut), 1.0f);
+      std::vector<float> r1(static_cast<size_t>(cut), 1.0f);
+      process_stereo(balance, l1, r1);
+      const float applied_left = l1.back();
+      const float applied_right = r1.back();
+
+      balance.set_parameter(1, 0.0f);
+      std::vector<float> l2(4096, 1.0f);
+      std::vector<float> r2(4096, 1.0f);
+      process_stereo(balance, l2, r2);
+
+      // The first sample after the retarget moves by one ramp increment of the
+      // outstanding difference, never by the distance to either law's endpoint.
+      const float step_bound = 1.0f / static_cast<float>(ramp);
+      CAPTURE(rate, fraction);
+      REQUIRE(std::abs(l2.front() - applied_left) <= step_bound);
+      REQUIRE(std::abs(r2.front() - applied_right) <= step_bound);
+      float max_step = 0.0f;
+      for (size_t i = 1; i < l2.size(); ++i) {
+        max_step = std::max(max_step, std::abs(l2[i] - l2[i - 1]));
+      }
+      REQUIRE(max_step <= step_bound);
+      // It settles on the law it was last sent to.
+      StereoBalance settled({0.5f, true});
+      settled.prepare(rate, 4096);
+      std::vector<float> ls(4096, 1.0f);
+      std::vector<float> rs(4096, 1.0f);
+      process_stereo(settled, ls, rs);
+      REQUIRE_THAT(l2.back(), WithinAbs(ls.back(), 1e-5));
+      REQUIRE_THAT(r2.back(), WithinAbs(rs.back(), 1e-5));
+    }
+  }
+}
