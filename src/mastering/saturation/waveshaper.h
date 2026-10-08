@@ -7,9 +7,9 @@
 
 #include "rt/adaa.h"
 #include "rt/aliasing_control.h"
-#include "rt/delay_line.h"
 #include "rt/nonlinearities.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -51,9 +51,10 @@ class Waveshaper : public rt::ProcessorBase {
   // Automatable parameters: 0=driveDb, 1=mix, 2=outputGainDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
-  /// @brief None and Adaa1 add no integer latency; Oversample4x adds the
-  ///   oversampler's streaming round-trip latency.
+  /// @brief Adaa1 adds half a sample (Q8 128); Oversample4x adds the
+  ///   oversampler's streaming round-trip latency. The dry path is aligned to it.
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
   static float db_to_linear(float db);
   static float shape(float sample, const WaveshaperConfig& config);
@@ -62,6 +63,7 @@ class Waveshaper : public rt::ProcessorBase {
   static void validate_config(const WaveshaperConfig& config);
   static float apply_curve(float driven, WaveshaperCurve curve);
   void ensure_state(int num_channels);
+  void declare_path_latencies();
   float shape_sample(float sample, int channel);
 
   WaveshaperConfig config_{};
@@ -69,11 +71,11 @@ class Waveshaper : public rt::ProcessorBase {
   int max_block_size_ = 0;
   static constexpr int kOversampleFactor = 4;
   sonare::rt::Oversampler oversampler_{kOversampleFactor};
-  // Oversample4x scratch and the dry-path delay that keeps the wet
-  // oversampled signal time-aligned with the dry mix; preallocated in
-  // prepare() so the audio-thread process() path never allocates.
+  // Oversample4x scratch, preallocated in prepare() so the audio-thread
+  // process() path never allocates.
   std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
-  std::vector<sonare::rt::DelayLine> dry_delays_;
+  // Path 0 is dry, path 1 is wet; the dry mix is delayed to the wet latency.
+  sonare::rt::ParallelPaths paths_;
   std::vector<float> up_scratch_;
   std::vector<float> down_scratch_;
   std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>> tanh_adaa_;

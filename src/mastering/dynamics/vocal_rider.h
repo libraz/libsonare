@@ -75,10 +75,10 @@ class VocalRider : public rt::RtConfigLifecycle<VocalRider, VocalRiderConfig> {
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
   std::vector<rt::EnvelopeFollower> followers_;
-  float linked_gain_state_db_ = 0.0f;
-  // Per-channel smoothed gain state for the unlinked path, persisted across
-  // blocks so toggling linked/unlinked does not introduce a discontinuity.
-  std::vector<float> unlinked_gain_state_db_;
+  // Per-channel smoothed gain state shared by both detection modes: linked
+  // detection feeds every channel the same ride target, so toggling the mode
+  // continues each channel's applied gain under the configured smoothing.
+  std::vector<float> gain_state_db_;
   float last_gain_db_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
   float minimum_gain_reduction_db_ = 0.0f;

@@ -209,6 +209,32 @@ TEST_CASE("ParallelComp output limiter releases gain instead of hard clipping",
   REQUIRE(samples[1] < 0.5f);
 }
 
+TEST_CASE("ParallelComp output limiter recovers from a past peak while still over the ceiling",
+          "[mastering][dynamics]") {
+  // Compression off (threshold far above the signal), fully wet, -12 dB ceiling.
+  // A 0.8 first sample then a steady 0.3: once the release has run, the gain is
+  // what 0.3 alone needs, so the output sits on the ceiling.
+  const float ceiling = std::pow(10.0f, -12.0f / 20.0f);
+  for (const bool linked : {true, false}) {
+    for (const float release_ms : {0.0f, 100.0f}) {
+      CAPTURE(linked, release_ms);
+      ParallelComp compressor({100.0f, 1.0f, 0.0f, release_ms, 0.0f, 1.0f, linked, true, -12.0f});
+      compressor.prepare(48000.0, 48000);
+      std::vector<float> left(48000, 0.3f);
+      std::vector<float> right(48000, 0.3f);
+      left[0] = 0.8f;
+      right[0] = 0.8f;
+      process_stereo(compressor, left, right);
+      REQUIRE_THAT(left[0], WithinAbs(ceiling, 1.0e-6f));
+      // The float release recursion stalls about 1e-4 short of its target; an
+      // unreleased past peak would leave the output near 0.094.
+      REQUIRE_THAT(left.back(), WithinAbs(ceiling, 1.0e-4f));
+      REQUIRE_THAT(right.back(), WithinAbs(ceiling, 1.0e-4f));
+      REQUIRE(peak_abs(left) <= ceiling + 1.0e-6f);
+    }
+  }
+}
+
 TEST_CASE("ParallelComp validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(ParallelComp({-18.0f, 0.5f, 10.0f, 100.0f, 0.0f, 0.5f}));
   REQUIRE_THROWS(ParallelComp({-18.0f, 2.0f, -1.0f, 100.0f, 0.0f, 0.5f}));
@@ -340,6 +366,34 @@ TEST_CASE("VocalRider links stereo detection and respects noise floor", "[master
   REQUIRE(rms_tail(noise, 4096) < before * 1.1f);
 }
 
+TEST_CASE("VocalRider continues each channel's gain across a detection-mode toggle",
+          "[mastering][dynamics]") {
+  // A steady 0.5 sits 12 dB over the -18 dB target, so the ride settles at the
+  // 9 dB cut in either mode; a toggle must not restart it from another state.
+  for (const bool start_linked : {true, false}) {
+    CAPTURE(start_linked);
+    VocalRiderConfig config{-18.0f, 9.0f, 9.0f, 0.0f, 50.0f, 0.0f, 100.0f, -60.0f, start_linked};
+    VocalRider rider(config);
+    rider.prepare(48000.0, 4800);
+    std::vector<float> left(4800, 0.5f);
+    std::vector<float> right(4800, 0.5f);
+    for (int block = 0; block < 20; ++block) {
+      std::fill(left.begin(), left.end(), 0.5f);
+      std::fill(right.begin(), right.end(), 0.5f);
+      process_stereo(rider, left, right);
+    }
+    const float before = left.back();
+    config.linked_detection = !start_linked;
+    rider.set_config(config);
+    std::fill(left.begin(), left.end(), 0.5f);
+    std::fill(right.begin(), right.end(), 0.5f);
+    process_stereo(rider, left, right);
+    // A restarted state would jump about 9 dB on the first sample.
+    REQUIRE(std::abs(20.0f * std::log10(left.front() / before)) < 0.01f);
+    REQUIRE(std::abs(20.0f * std::log10(right.front() / before)) < 0.01f);
+  }
+}
+
 TEST_CASE("VocalRider validates configuration", "[mastering][dynamics]") {
   REQUIRE_THROWS(VocalRider({-18.0f, -1.0f, 6.0f, 50.0f, 500.0f, 0.0f}));
   REQUIRE_THROWS(VocalRider({-18.0f, 6.0f, -1.0f, 50.0f, 500.0f, 0.0f}));
@@ -460,20 +514,40 @@ TEST_CASE("SidechainRouter honours or refuses a long lookahead, never clamps it"
   REQUIRE_THROWS_AS(oversized.prepare(48000.0, 64), sonare::SonareException);
 }
 
-TEST_CASE("SidechainRouter lookahead delays main while using current key",
+TEST_CASE("SidechainRouter lookahead applies the current key's gain to the delayed main",
           "[mastering][dynamics]") {
-  SidechainRouter router({-18.0f, 8.0f, 0.0f, 0.0f, 18.0f, false, 90.0f, false, false, 2.0f});
-  router.prepare(1000.0, 8);
+  // 2 ms at 1 kHz is two samples; a 1 ms attack makes the gain move over several.
+  constexpr int kLookahead = 2;
+  const SidechainRouterConfig config{-18.0f, 8.0f,  1.0f,  100.0f, 18.0f,
+                                     false,  90.0f, false, false,  2.0f};
+  SidechainRouterConfig no_lookahead = config;
+  no_lookahead.lookahead_ms = 0.0f;
 
-  std::vector<float> main{1.0f, 0.0f, 0.0f, 0.0f};
-  std::vector<float> key{1.0f, 0.0f, 0.0f, 0.0f};
+  std::vector<float> key(16, 0.0f);
+  std::fill(key.begin() + 4, key.end(), 1.0f);
   const float* key_channels[] = {key.data()};
+
+  // With a constant main the zero-lookahead router's output is the gain itself.
+  SidechainRouter gain_probe(no_lookahead);
+  gain_probe.prepare(1000.0, 16);
+  gain_probe.set_sidechain(key_channels, 1, static_cast<int>(key.size()));
+  std::vector<float> gain(16, 1.0f);
+  process(gain_probe, gain);
+
+  SidechainRouter router(config);
+  router.prepare(1000.0, 16);
+  REQUIRE(router.latency_samples() == kLookahead);
   router.set_sidechain(key_channels, 1, static_cast<int>(key.size()));
+  std::vector<float> main = key;
   process(router, main);
 
-  REQUIRE_THAT(main[0], WithinAbs(0.0f, 0.0001f));
-  REQUIRE_THAT(main[1], WithinAbs(0.0f, 0.0001f));
-  REQUIRE(main[2] < 0.2f);
+  for (size_t n = 0; n < main.size(); ++n) {
+    CAPTURE(n);
+    const float delayed_main = n >= kLookahead ? key[n - kLookahead] : 0.0f;
+    REQUIRE_THAT(main[n], WithinAbs(delayed_main * gain[n], 1.0e-6f));
+  }
+  // The step leaves the router already attenuated by two samples of attack.
+  REQUIRE(main[4 + kLookahead] < gain[4]);
 }
 
 TEST_CASE("DuckingProcessor wraps SidechainRouter with voiceover defaults",

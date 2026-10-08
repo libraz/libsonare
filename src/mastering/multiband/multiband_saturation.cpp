@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
@@ -22,8 +23,8 @@ namespace {
 
 std::unique_ptr<rt::ProcessorBase> make_processor(const SaturationBandConfig& band) {
   // Map the shared band config onto each algorithm's native parameters. drive_db
-  // and mix carry over where the algorithm supports them; output_gain_db is
-  // applied uniformly by the multiband loop so it works for every type.
+  // and mix carry over where the algorithm supports them; output_gain_db, and
+  // the tape's mix, are applied by the multiband loop.
   switch (band.type) {
     case SaturationType::Tape: {
       saturation::TapeConfig cfg;
@@ -58,6 +59,7 @@ MultibandSaturation::MultibandSaturation(MultibandSaturationConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
   rebuild_processors();
+  rebuild_band_compensation();
 }
 
 MultibandSaturation::~MultibandSaturation() = default;
@@ -80,11 +82,13 @@ void MultibandSaturation::prepare(double sample_rate, int max_block_size, int ma
   // scratch accepts at least this many channels, so the process path can reject
   // an oversized block rather than growing scratch on the audio thread.
   crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+  dry_scratch_.assign(static_cast<size_t>(max_working_channels_),
+                      std::vector<float>(static_cast<size_t>(max_block_size_), 0.0f));
   for (auto& processor : processors_) {
     processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
   }
-  // A stage only reports its latency once prepared, so the band alignment is
-  // derived after the sub-processors are.
+  // Derived after the sub-processors are prepared, since a stage's latency may
+  // depend on its prepared state.
   rebuild_band_compensation();
   reset();
 }
@@ -126,8 +130,29 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
   for (int band = 0; band < num_bands; ++band) {
     const auto& band_config = config_.bands[static_cast<size_t>(band)];
     if (band_config.enabled) {
-      processors_[static_cast<size_t>(band)]->process(
-          scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
+      auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
+      auto& blend = blend_paths_[static_cast<size_t>(band)];
+      const bool blended = blend.num_paths() != 0;
+      if (blended) {
+        for (int ch = 0; ch < num_channels; ++ch) {
+          std::copy_n(band_channels[static_cast<size_t>(ch)], num_samples,
+                      dry_scratch_[static_cast<size_t>(ch)].data());
+        }
+      }
+      processors_[static_cast<size_t>(band)]->process(band_channels.data(), num_channels,
+                                                      num_samples);
+      if (blended) {
+        const float mix = band_config.mix;
+        for (int ch = 0; ch < num_channels; ++ch) {
+          const auto lane = static_cast<size_t>(ch);
+          float* wet = band_channels[lane];
+          const float* dry = dry_scratch_[lane].data();
+          for (int i = 0; i < num_samples; ++i) {
+            wet[i] =
+                blend.align(0, lane, dry[i]) * (1.0f - mix) + blend.align(1, lane, wet[i]) * mix;
+          }
+        }
+      }
       const float output_gain = db_to_linear(band_config.output_gain_db);
       if (output_gain != 1.0f) {
         for (int ch = 0; ch < num_channels; ++ch) {
@@ -139,19 +164,11 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
       }
     }
     // Pad the shallower bands (including a bypassed one) up to the deepest band
-    // delay so the sum below reconstructs the crossover instead of combining
-    // bands from different points in time. Every channel of a band carries the
-    // same padding, so band 0's line answers for all of them.
-    auto& delays = band_delays_[static_cast<size_t>(band)];
-    if (delays.front().delay_samples() != 0) {
-      for (int ch = 0; ch < num_channels; ++ch) {
-        auto& band_samples = scratch_.bands[static_cast<size_t>(band)][static_cast<size_t>(ch)];
-        auto& delay = delays[static_cast<size_t>(ch)];
-        for (int i = 0; i < num_samples; ++i) {
-          band_samples[static_cast<size_t>(i)] =
-              delay.process(band_samples[static_cast<size_t>(i)]);
-        }
-      }
+    // delay so the sum below reconstructs the crossover.
+    for (int ch = 0; ch < num_channels; ++ch) {
+      band_paths_.align_block(
+          static_cast<size_t>(band), static_cast<size_t>(ch),
+          scratch_.band_channels[static_cast<size_t>(band)][static_cast<size_t>(ch)], num_samples);
     }
   }
 
@@ -165,11 +182,8 @@ void MultibandSaturation::reset() {
   for (auto& processor : processors_) {
     processor->reset();
   }
-  for (auto& band : band_delays_) {
-    for (auto& delay : band) {
-      delay.reset();
-    }
-  }
+  band_paths_.reset();
+  for (auto& blend : blend_paths_) blend.reset();
 }
 
 void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
@@ -192,10 +206,10 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
     for (auto& processor : processors_) {
       processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
     }
-    // The band types (and therefore their delays) may have changed with the new
-    // configuration, so the alignment is derived again from what is now held.
-    rebuild_band_compensation();
   }
+  // The band types (and therefore their delays) may have changed with the new
+  // configuration, so the alignment is derived again from what is now held.
+  rebuild_band_compensation();
 }
 
 bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value) {
@@ -224,8 +238,7 @@ bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value)
         case SaturationType::Exciter:
           return processor.set_parameter(2u, band_config.mix);
         case SaturationType::Tape:
-          // The tape model has no wet/dry mix parameter; only config_ is kept
-          // in sync so config() reflects the requested value.
+          // Blended by process(), which reads band_config.mix per block.
           return true;
       }
       return true;
@@ -274,27 +287,29 @@ void MultibandSaturation::rebuild_processors() {
   }
 }
 
-int MultibandSaturation::band_latency(size_t band) const noexcept {
+int MultibandSaturation::band_latency_q8(size_t band) const noexcept {
   // A disabled band is summed in unprocessed (process() skips its stage), so it
   // contributes nothing regardless of what the stage would report.
   if (!config_.bands[band].enabled) {
     return 0;
   }
-  return std::max(0, processors_[band]->latency_samples());
+  return processors_[band]->latency_samples_q8();
 }
 
 void MultibandSaturation::rebuild_band_compensation() {
-  band_latency_samples_ = 0;
+  std::vector<int> latencies(processors_.size());
+  for (size_t band = 0; band < processors_.size(); ++band) latencies[band] = band_latency_q8(band);
+  band_paths_.set_path_latencies_q8(std::move(latencies));
+  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
+  blend_paths_.resize(processors_.size());
   for (size_t band = 0; band < processors_.size(); ++band) {
-    band_latency_samples_ = std::max(band_latency_samples_, band_latency(band));
-  }
-  band_delays_.assign(processors_.size(),
-                      std::vector<rt::DelayLine>(static_cast<size_t>(max_working_channels_)));
-  for (size_t band = 0; band < processors_.size(); ++band) {
-    const size_t padding = static_cast<size_t>(band_latency_samples_ - band_latency(band));
-    for (auto& delay : band_delays_[band]) {
-      delay.prepare(padding);
+    auto& blend = blend_paths_[band];
+    if (config_.bands[band].type != SaturationType::Tape) {
+      blend = rt::ParallelPaths{};
+      continue;
     }
+    blend.set_path_latencies_q8({0, processors_[band]->latency_samples_q8()});
+    blend.ensure_channels(static_cast<size_t>(max_working_channels_));
   }
 }
 

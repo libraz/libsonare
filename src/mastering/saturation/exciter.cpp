@@ -27,7 +27,10 @@ float even_dc_coefficient_for_rate(double sample_rate) {
 
 }  // namespace
 
-Exciter::Exciter(ExciterConfig config) : config_(config) { validate_config(config_); }
+Exciter::Exciter(ExciterConfig config) : config_(config) {
+  validate_config(config_);
+  declare_path_latencies();
+}
 
 void Exciter::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0))
@@ -57,16 +60,7 @@ void Exciter::prepare(double sample_rate, int max_block_size) {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  dry_delays_.resize(dynamics::kRealtimePreparedChannels);
-  aligned_delays_.resize(dynamics::kRealtimePreparedChannels);
-  for (auto& delay : dry_delays_) {
-    delay.prepare(
-        static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-  }
-  for (auto& delay : aligned_delays_) {
-    delay.prepare(
-        static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-  }
+  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
   reset();
 }
 
@@ -145,12 +139,12 @@ void Exciter::process(float* const* channels, int num_channels, int num_samples)
                                                   harmonic_scratch_.data(),
                                                   harmonic_scratch_.size(), &oversampler_state);
 
+    const auto lane = static_cast<size_t>(ch);
     for (int i = 0; i < num_samples; ++i) {
-      const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
-      const float aligned = aligned_delays_[static_cast<size_t>(ch)].process(
-          aligned_scratch_[static_cast<size_t>(i)]);
-      channels[ch][i] = dry + aligned * 0.05f * config_.amount +
-                        harmonic_scratch_[static_cast<size_t>(i)] * config_.amount;
+      const float dry = paths_.align(0, lane, channels[ch][i]);
+      const float aligned = paths_.align(1, lane, aligned_scratch_[static_cast<size_t>(i)]);
+      const float harmonic = paths_.align(2, lane, harmonic_scratch_[static_cast<size_t>(i)]);
+      channels[ch][i] = dry + aligned * 0.05f * config_.amount + harmonic * config_.amount;
     }
     discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2, allpass.z1, allpass.z2,
                                              even_dc_[static_cast<size_t>(ch)]);
@@ -165,13 +159,13 @@ void Exciter::reset() {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.reset_streaming(&state);
   }
-  for (auto& delay : dry_delays_) delay.reset();
-  for (auto& delay : aligned_delays_) delay.reset();
+  paths_.reset();
 }
 
 void Exciter::set_config(const ExciterConfig& config) {
   validate_config(config);
   config_ = config;
+  declare_path_latencies();
   if (prepared_) {
     update_coeff();
   }
@@ -220,8 +214,7 @@ void Exciter::update_coeff() {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.reset_streaming(&state);
   }
-  for (auto& delay : dry_delays_) delay.reset();
-  for (auto& delay : aligned_delays_) delay.reset();
+  paths_.reset();
 }
 
 bool Exciter::set_parameter_impl(unsigned int param_id, float value) {
@@ -284,23 +277,18 @@ void Exciter::ensure_state(int num_channels) {
                                               static_cast<size_t>(max_block_size_));
     }
   }
-  if (dry_delays_.size() < static_cast<size_t>(num_channels)) {
-    const size_t old_size = dry_delays_.size();
-    dry_delays_.resize(static_cast<size_t>(num_channels));
-    aligned_delays_.resize(static_cast<size_t>(num_channels));
-    for (size_t i = old_size; i < dry_delays_.size(); ++i) {
-      dry_delays_[i].prepare(
-          static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-      aligned_delays_[i].prepare(
-          static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-    }
-  }
+  paths_.ensure_channels(static_cast<size_t>(num_channels));
 }
 
-int Exciter::latency_samples() const noexcept {
-  return config_.aliasing == sonare::rt::AliasingControl::Oversample4x
-             ? harmonic_oversampler_.streaming_round_trip_latency_samples()
-             : 0;
+void Exciter::declare_path_latencies() {
+  paths_.set_path_latencies_q8(
+      {0, 0,
+       sonare::rt::aliasing_latency_samples_q8(
+           config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples())});
 }
+
+int Exciter::latency_samples() const noexcept { return paths_.latency_samples(); }
+
+int Exciter::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }
 
 }  // namespace sonare::mastering::saturation

@@ -43,6 +43,30 @@ TEST_CASE("a finite limiter ratio follows the 1/ratio static curve above thresho
   }
 }
 
+TEST_CASE("limiter ratio 1 is unity gain on both the config and the parameter path",
+          "[limiter-ratio]") {
+  LimiterConfig config;
+  config.threshold_db = -12.0f;
+  config.ratio = 1.0f;
+  Limiter configured(config);
+  // 0 dB is 12 dB over the threshold; 1:1 leaves it there, a brick-wall does not.
+  REQUIRE(settled_db(configured) == Catch::Approx(0.0f).margin(0.001f));
+
+  LimiterConfig brick_wall;
+  brick_wall.threshold_db = -12.0f;
+  Limiter automated(brick_wall);
+  automated.prepare(kRate, kBlock);
+  REQUIRE(automated.set_parameter(2, 1.0f));
+  std::vector<float> left(kBlock, 0.5f);
+  std::vector<float> right(kBlock, 0.5f);
+  float* channels[2] = {left.data(), right.data()};
+  automated.process(channels, 2, kBlock);
+  REQUIRE(left.back() == Catch::Approx(0.5f).margin(1.0e-6f));
+
+  Limiter limiting(brick_wall);
+  REQUIRE(settled_db(limiting) == Catch::Approx(-12.0f).margin(0.001f));
+}
+
 TEST_CASE("ratio 0 is a brick-wall at the threshold", "[limiter-ratio]") {
   LimiterConfig config;
   config.threshold_db = -20.0f;

@@ -39,6 +39,31 @@ Audio make_audio(const std::vector<float>& samples) {
 
 }  // namespace
 
+TEST_CASE("E1 matches its defining integral on both approximation branches",
+          "[mastering][repair][denoise]") {
+  // With t = x e^s the integral of e^-t / t from x to infinity is the smooth
+  // integral of exp(-x e^s) over s >= 0, which Simpson's rule resolves in double.
+  const auto integral = [](double x) {
+    const double upper = std::log(60.0 / x);
+    constexpr int kSteps = 200000;
+    const double h = upper / kSteps;
+    double sum = 0.0;
+    for (int i = 0; i <= kSteps; ++i) {
+      const double weight = (i == 0 || i == kSteps) ? 1.0 : (i % 2 == 1 ? 4.0 : 2.0);
+      sum += weight * std::exp(-x * std::exp(h * i));
+    }
+    return sum * h / 3.0;
+  };
+  for (const double x : {0.01, 0.1, 0.5, 0.99, 1.0, 1.01, 1.5, 2.0, 3.0, 5.0, 10.0, 20.0}) {
+    CAPTURE(x);
+    const double reference = integral(x);
+    REQUIRE(std::abs(sonare::mastering::repair::detail::exponential_integral_e1(x) - reference) <=
+            1.0e-6 * reference);
+  }
+  REQUIRE(std::abs(sonare::mastering::repair::detail::exponential_integral_e1(2.0) -
+                   0.04890051070806112) < 1.0e-9);
+}
+
 TEST_CASE("TrimSilence removes leading and trailing quiet samples", "[mastering][repair]") {
   const auto result = trim_silence(make_audio({0.0f, 0.001f, 0.2f, -0.1f, 0.0f}), {0.01f, 0});
 
@@ -1257,8 +1282,9 @@ Audio oracle_dereverb(const Audio& audio, const DereverbClassicalConfig& config,
                                               static_cast<float>(config.hop_length))));
   const float delay_sec = static_cast<float>(delay_frames * config.hop_length) /
                           static_cast<float>(audio.sample_rate());
-  const double decay = std::exp(-2.0 * static_cast<double>(delay_sec) * 6.0 * std::log(10.0) /
-                                static_cast<double>(config.t60_sec));
+  // T60 is a 60 dB power decay.
+  const double decay =
+      std::pow(10.0, -6.0 * static_cast<double>(delay_sec) / static_cast<double>(config.t60_sec));
 
   for (int b = 0; b < bins; ++b) {
     for (int t = 0; t < frames; ++t) {
@@ -1927,4 +1953,28 @@ TEST_CASE("Repair helpers validate inputs", "[mastering][repair]") {
   REQUIRE_THROWS(denoise_classical(make_audio({0.0f}), bad_config));
   REQUIRE_THROWS(dereverb_classical(make_audio({0.0f}), {0.0f, 2.0f}));
   REQUIRE_THROWS(dereverb_classical(make_audio({0.0f}), {0.0f, 0.5f, 1000}));
+}
+
+TEST_CASE("Dehum subtraction stays bounded for a band wider than its rate", "[mastering][repair]") {
+  // Bandwidth 50 Hz / 0.01 = 5 kHz at 8 kHz: a step the canceller cannot take as given.
+  constexpr int kRate = 8000;
+  std::vector<float> samples(static_cast<size_t>(kRate));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    samples[i] = 0.01f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 440.0 *
+                                                     static_cast<double>(i) / kRate));
+  }
+  for (const bool adaptive : {false, true}) {
+    INFO("adaptive " << adaptive);
+    DehumConfig config;
+    config.q = 0.01f;
+    config.mode = DehumMode::Subtract;
+    config.adaptive = adaptive;
+    const auto result = dehum(Audio::from_vector(samples, kRate), config);
+    float peak = 0.0f;
+    for (size_t i = 0; i < result.size(); ++i) {
+      REQUIRE(std::isfinite(result[i]));
+      peak = std::max(peak, std::abs(result[i]));
+    }
+    REQUIRE(peak <= 0.05f);
+  }
 }

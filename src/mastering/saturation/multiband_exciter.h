@@ -4,6 +4,7 @@
 
 #include "mastering/multiband/crossover.h"
 #include "mastering/saturation/exciter.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -27,9 +28,12 @@ class MultibandExciter : public rt::ProcessorBase {
   void set_config(const MultibandExciterConfig& config);
   const MultibandExciterConfig& config() const { return config_; }
 
-  /// Reports the crossover delay (non-zero for FIR linear-phase mode) so the
-  /// host can compensate, matching the other multiband processors.
-  int latency_samples() const noexcept override { return crossover_.latency_samples(); }
+  /// The crossover delay (non-zero for FIR linear-phase mode) plus the deepest
+  /// band exciter's delay, to which every other band is aligned before the sum.
+  int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
+  int latency_samples_q8() const noexcept override {
+    return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
+  }
 
   // Automatable parameters (RT-safe, no allocation, no state reset).
   // Per-band block layout with kBandStride params per band: band b occupies
@@ -53,6 +57,8 @@ class MultibandExciter : public rt::ProcessorBase {
  private:
   static void validate_config(const MultibandExciterConfig& config);
   void rebuild_processors();
+  /// @brief Declares every band exciter's delay to band_paths_. Control thread.
+  void rebuild_band_compensation();
 
   MultibandExciterConfig config_{};
   double sample_rate_ = 48000.0;
@@ -62,6 +68,8 @@ class MultibandExciter : public rt::ProcessorBase {
   multiband::Crossover crossover_;
   multiband::CrossoverScratch scratch_;
   std::vector<Exciter> exciters_;
+  // One path per band.
+  sonare::rt::ParallelPaths band_paths_;
 };
 
 }  // namespace sonare::mastering::saturation

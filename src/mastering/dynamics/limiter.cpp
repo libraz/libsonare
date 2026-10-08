@@ -123,7 +123,7 @@ void Limiter::process(float* const* channels, int num_channels, int num_samples)
     float target_gain = 1.0f;
     if (peak > ceiling && peak > 0.0f) {
       target_gain =
-          ratio_exponent_ == 0.0f ? ceiling / peak : std::pow(ceiling / peak, ratio_exponent_);
+          ratio_exponent_ == 1.0f ? ceiling / peak : std::pow(ceiling / peak, ratio_exponent_);
     }
     // Smooth the linked target once, then apply the same gain to every channel
     // so the stereo image is preserved.
@@ -187,7 +187,7 @@ void Limiter::set_release_ms_in_place(float release_ms) noexcept {
 
 void Limiter::set_ratio_in_place(float ratio) noexcept {
   // 0 keeps the brick-wall path; the caller has refused anything else below 1.
-  ratio_exponent_ = ratio > 0.0f ? 1.0f - 1.0f / ratio : 0.0f;
+  ratio_exponent_ = ratio > 0.0f ? 1.0f - 1.0f / ratio : 1.0f;
 }
 
 void Limiter::set_post_gain_db_in_place(float post_gain_db) noexcept {

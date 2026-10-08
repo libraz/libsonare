@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <initializer_list>
 #include <limits>
 #include <random>
 #include <vector>
@@ -1083,4 +1084,138 @@ TEST_CASE("Saturation processors validate configurations", "[mastering][saturati
   MultibandExciterConfig config;
   config.bands.resize(1);
   REQUIRE_THROWS(MultibandExciter(config));
+}
+
+namespace {
+
+/// Two-tap average x[n] and x[n-1]: what an ADAA1 stage does to a signal in its
+/// linear region, and so what every path summed beside it must also undergo.
+std::vector<float> half_sample_average(const std::vector<float>& x) {
+  std::vector<float> y(x.size());
+  float previous = 0.0f;
+  for (size_t n = 0; n < x.size(); ++n) {
+    y[n] = 0.5f * (x[n] + previous);
+    previous = x[n];
+  }
+  return y;
+}
+
+}  // namespace
+
+TEST_CASE("Saturation stages report each aliasing mode's delay in Q8",
+          "[mastering][saturation][latency]") {
+  using sonare::rt::AliasingControl;
+  const int round_trip = sonare::rt::Oversampler(4).streaming_round_trip_latency_samples();
+
+  HardClipper hard({1.0f, AliasingControl::Adaa1});
+  SoftClipper soft({0.0f, 1.0f, 0.5f, AliasingControl::Adaa1});
+  Waveshaper shaper({0.0f, 0.5f, 0.0f, 0.0f, WaveshaperCurve::Arctan, AliasingControl::Adaa1});
+  for (sonare::rt::ProcessorBase* stage :
+       std::initializer_list<sonare::rt::ProcessorBase*>{&hard, &soft, &shaper}) {
+    REQUIRE(stage->latency_samples_q8() == 128);
+    REQUIRE(stage->latency_samples() == 0);
+    stage->prepare(48000.0, 256);
+    REQUIRE(stage->latency_samples_q8() == 128);
+  }
+
+  hard.set_config({1.0f, AliasingControl::Adaa2});
+  REQUIRE(hard.latency_samples_q8() == 256);
+  REQUIRE(hard.latency_samples() == 1);
+  soft.set_config({0.0f, 1.0f, 0.5f, AliasingControl::Oversample4x});
+  REQUIRE(soft.latency_samples_q8() == round_trip << 8);
+  REQUIRE(soft.latency_samples() == round_trip);
+  shaper.set_config({0.0f, 0.5f, 0.0f, 0.0f, WaveshaperCurve::Arctan, AliasingControl::None});
+  REQUIRE(shaper.latency_samples_q8() == 0);
+}
+
+TEST_CASE("An ADAA1 dry/wet blend delays its dry path by the same half sample",
+          "[mastering][saturation][latency]") {
+  using sonare::rt::AliasingControl;
+  // Small enough that tanh and arctan are linear to float precision, so the wet
+  // path is ADAA1's two-tap average and the aligned blend is that average too.
+  constexpr float kAmplitude = 1.0e-3f;
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    const std::vector<float> input = generate_sine_samples(5000.0f, rate, 2048, kAmplitude);
+    const std::vector<float> expected = half_sample_average(input);
+
+    SoftClipper soft({0.0f, 1.0f, 0.5f, AliasingControl::Adaa1});
+    soft.prepare(rate, 2048);
+    std::vector<float> soft_out = input;
+    process(soft, soft_out);
+
+    Waveshaper shaper({0.0f, 0.5f, 0.0f, 0.0f, WaveshaperCurve::Tanh, AliasingControl::Adaa1});
+    shaper.prepare(rate, 2048);
+    std::vector<float> shaper_out = input;
+    process(shaper, shaper_out);
+
+    // An unaligned dry path sits a quarter of x[n] - x[n-1] away (about 1.6e-4 here).
+    for (size_t n = 1; n < input.size(); ++n) {
+      CAPTURE(n);
+      REQUIRE_THAT(soft_out[n], WithinAbs(expected[n], kAmplitude * 1.0e-3f));
+      REQUIRE_THAT(shaper_out[n], WithinAbs(expected[n], kAmplitude * 1.0e-3f));
+    }
+  }
+}
+
+TEST_CASE("MultibandExciter aligns bands whose oversampling differs",
+          "[mastering][saturation][latency]") {
+  using sonare::rt::AliasingControl;
+  const int round_trip = sonare::rt::Oversampler(4).streaming_round_trip_latency_samples();
+  const auto make = [](AliasingControl low, AliasingControl high) {
+    MultibandExciterConfig config;
+    config.crossover = {{1000.0f},
+                        sonare::mastering::multiband::CrossoverSlope::LR4,
+                        sonare::mastering::multiband::CrossoverMode::LinkwitzRiley};
+    // amount 0: each band is a pure delay of its crossover output.
+    config.bands = {{3000.0f, 6.0f, 0.0f, 1.0f, 0.5f, low},
+                    {3000.0f, 6.0f, 0.0f, 1.0f, 0.5f, high}};
+    return MultibandExciter(config);
+  };
+  MultibandExciter mixed = make(AliasingControl::None, AliasingControl::Oversample4x);
+  MultibandExciter uniform = make(AliasingControl::Oversample4x, AliasingControl::Oversample4x);
+  REQUIRE(mixed.latency_samples() == round_trip);
+  REQUIRE(uniform.latency_samples() == round_trip);
+
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    mixed.prepare(rate, 4096);
+    uniform.prepare(rate, 4096);
+    REQUIRE(mixed.latency_samples() == round_trip);
+    std::vector<float> input = generate_sine_samples(1000.0f, rate, 4096, 0.5f);
+    std::vector<float> mixed_out = input;
+    std::vector<float> uniform_out = input;
+    process(mixed, mixed_out);
+    process(uniform, uniform_out);
+    // Unaligned, the two bands would sum a round trip apart and cancel at the cutoff.
+    REQUIRE(sonare::test::max_abs_difference(mixed_out, uniform_out) < 1.0e-6f);
+  }
+}
+
+TEST_CASE("BitCrusher disc clicks keep their rate per second at every sample rate",
+          "[mastering][saturation][.][slow]") {
+  // Silence in, only the disc source on: every non-zero output sample is a click.
+  constexpr int kSeconds = 300;
+  const float expected = kDiscClickRateHz[0] * kSeconds;
+  for (const int rate : {48000, 96000, 192000}) {
+    CAPTURE(rate);
+    BitCrusherConfig config;
+    config.bit_depth = 24;
+    config.disc_noise_level = 1.0f;
+    config.disc_type = BitCrusherDiscType::kLp;
+    BitCrusher crusher(config);
+    constexpr int kBlock = 8192;
+    crusher.prepare(rate, kBlock);
+    std::vector<float> block(kBlock);
+    long clicks = 0;
+    for (long done = 0; done < static_cast<long>(rate) * kSeconds; done += kBlock) {
+      std::fill(block.begin(), block.end(), 0.0f);
+      process(crusher, block);
+      clicks += std::count_if(block.begin(), block.end(), [](float v) { return v != 0.0f; });
+    }
+    CAPTURE(clicks, expected);
+    // About three standard deviations of a Poisson count of 1200; a threshold
+    // rounded to the coarse draw step sat 10% high at 48 kHz and 46% at 192 kHz.
+    REQUIRE(std::abs(static_cast<float>(clicks) - expected) < 0.08f * expected);
+  }
 }

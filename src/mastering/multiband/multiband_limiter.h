@@ -7,6 +7,7 @@
 
 #include "mastering/dynamics/limiter.h"
 #include "mastering/multiband/crossover.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
@@ -28,7 +29,10 @@ class MultibandLimiter : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  /// The crossover delay plus the longest band lookahead, to which every
+  /// band is aligned before the sum.
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
   void set_config(const MultibandLimiterConfig& config);
   const MultibandLimiterConfig& config() const { return config_; }
@@ -60,6 +64,8 @@ class MultibandLimiter : public rt::ProcessorBase {
  private:
   static void validate_config(const MultibandLimiterConfig& config);
   void rebuild_processors();
+  /// @brief Declares every band limiter's lookahead to band_paths_. Control thread.
+  void rebuild_band_compensation();
 
   MultibandLimiterConfig config_{};
   double sample_rate_ = 48000.0;
@@ -69,6 +75,8 @@ class MultibandLimiter : public rt::ProcessorBase {
   Crossover crossover_;
   CrossoverScratch scratch_;
   std::vector<dynamics::Limiter> limiters_;
+  // One path per band, so bands with different lookahead reach the sum aligned.
+  rt::ParallelPaths band_paths_;
   std::vector<float> last_gain_reductions_db_;
 };
 

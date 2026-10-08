@@ -561,6 +561,39 @@ TEST_CASE("PresenceEnhancer does not hard clip when processing is bypassed",
   REQUIRE(signal[1] < -1.9f);
 }
 
+TEST_CASE("PresenceEnhancer Adaa1 delays its dry path by the harmonic's half sample",
+          "[mastering][spectral][latency]") {
+  using sonare::rt::AliasingControl;
+  // Small enough that tanh is linear to float precision, so the Adaa1 harmonic
+  // is the None harmonic run through ADAA1's two-tap average. With the dry path
+  // delayed by the same half sample, the whole Adaa1 output is that average of
+  // the None output.
+  constexpr float kAmplitude = 1.0e-3f;
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    const std::vector<float> input = generate_sine_samples(3000.0f, rate, 2048, kAmplitude);
+    PresenceEnhancer plain({0.5f, 2.0f, 3200.0f, 1.2f, AliasingControl::None});
+    PresenceEnhancer adaa({0.5f, 2.0f, 3200.0f, 1.2f, AliasingControl::Adaa1});
+    REQUIRE(adaa.latency_samples_q8() == 128);
+    REQUIRE(adaa.latency_samples() == 0);
+    plain.prepare(rate, 2048);
+    adaa.prepare(rate, 2048);
+    REQUIRE(adaa.latency_samples_q8() == 128);
+    std::vector<float> plain_out = input;
+    std::vector<float> adaa_out = input;
+    process(plain, plain_out);
+    process(adaa, adaa_out);
+    float previous = 0.0f;
+    // An undelayed dry path sits half of x[n] - x[n-1] away (about 3.7e-4 here).
+    for (size_t n = 0; n < input.size(); ++n) {
+      CAPTURE(n);
+      const float expected = 0.5f * (plain_out[n] + previous);
+      previous = plain_out[n];
+      REQUIRE(std::abs(adaa_out[n] - expected) < kAmplitude * 1.0e-3f);
+    }
+  }
+}
+
 TEST_CASE("PresenceEnhancer drive 0 is no enhancement on every aliasing path",
           "[mastering][spectral]") {
   // Drive 0 constructs, renders finite and matches amount 0 exactly -- through

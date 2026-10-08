@@ -31,16 +31,14 @@ void SidechainRouter::prepare(double sample_rate, int max_block_size) {
   sample_rate_ = sample_rate;
   lookahead_samples_ = lookahead_samples;
   prepared_ = true;
-  // Preallocate per-channel main delay lines, the single shared gain delay line,
-  // and the per-source-channel HPF state up front so the audio-thread process()
-  // path never resizes (which would malloc). A block (or sidechain) requesting
-  // more than kRealtimePreparedChannels channels throws in ensure_capacity().
+  // Preallocate per-channel main delay lines and the per-source-channel HPF state up front so the
+  // audio-thread process() path never resizes (which would malloc). A block (or sidechain)
+  // requesting more than kRealtimePreparedChannels channels throws in ensure_capacity().
   const auto delay = static_cast<size_t>(std::max(lookahead_samples_, 0));
   lookahead_.assign(kRealtimePreparedChannels, {});
   for (auto& lookahead : lookahead_) {
     lookahead.prepare(delay);
   }
-  gain_lookahead_.prepare(delay);
   hpf_x1_.assign(kRealtimePreparedChannels, 0.0f);
   hpf_y1_.assign(kRealtimePreparedChannels, 0.0f);
   active_ = config_;
@@ -87,14 +85,14 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     }
     const float envelope = follower_.process(detector);
     const float reduction_db = gain_reduction_db(linear_to_db(envelope), cfg);
+    // Only the main signal is delayed: the gain is the key's current one, so it
+    // moves lookahead_samples_ ahead of the transient it answers.
     const float reduction_gain = db_to_linear(reduction_db);
-    const float delayed_gain =
-        lookahead_samples_ > 0 ? gain_lookahead_.process(reduction_gain) : reduction_gain;
     for (int ch = 0; ch < num_channels; ++ch) {
       const float main_sample = lookahead_samples_ > 0
                                     ? lookahead_[static_cast<size_t>(ch)].process(channels[ch][i])
                                     : channels[ch][i];
-      channels[ch][i] = main_sample * delayed_gain;
+      channels[ch][i] = main_sample * reduction_gain;
     }
     max_reduction = std::min(max_reduction, reduction_db);
   }
@@ -114,7 +112,6 @@ void SidechainRouter::reset() {
   for (auto& lookahead : lookahead_) {
     lookahead.reset();
   }
-  gain_lookahead_.reset();
   std::fill(hpf_x1_.begin(), hpf_x1_.end(), 0.0f);
   std::fill(hpf_y1_.begin(), hpf_y1_.end(), 0.0f);
   last_gain_reduction_db_ = 0.0f;

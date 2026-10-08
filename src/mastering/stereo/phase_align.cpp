@@ -143,26 +143,25 @@ float PhaseAlign::estimate_delay_samples(const float* reference, const float* ta
   // Lags outside the input have no overlap and cannot identify a delay.
   max_abs_delay = std::min(max_abs_delay, num_samples - 1);
 
+  // Every lag is normalized by the whole buffers' energies, so a lag whose
+  // overlap is a few samples cannot reach the score a full overlap reaches.
+  double ref_energy = 0.0;
+  double target_energy = 0.0;
+  for (int i = 0; i < num_samples; ++i) {
+    ref_energy += static_cast<double>(reference[i]) * reference[i];
+    target_energy += static_cast<double>(target[i]) * target[i];
+  }
+  const double norm = std::sqrt(ref_energy * target_energy);
   const auto score_lag = [&](int lag) {
+    if (!(norm > 0.0)) return -std::numeric_limits<double>::infinity();
     double cross = 0.0;
-    double ref_energy = 0.0;
-    double target_energy = 0.0;
-    int count = 0;
     const int ref_start = lag < 0 ? -lag : 0;
     const int target_start = lag > 0 ? lag : 0;
     const int count_limit = num_samples - std::abs(lag);
     for (int i = 0; i < count_limit; ++i) {
-      const float ref = reference[ref_start + i];
-      const float tar = target[target_start + i];
-      cross += static_cast<double>(ref) * tar;
-      ref_energy += static_cast<double>(ref) * ref;
-      target_energy += static_cast<double>(tar) * tar;
-      ++count;
+      cross += static_cast<double>(reference[ref_start + i]) * target[target_start + i];
     }
-    if (count == 0 || ref_energy <= 0.0 || target_energy <= 0.0) {
-      return -std::numeric_limits<double>::infinity();
-    }
-    return cross / std::sqrt(ref_energy * target_energy);
+    return cross / norm;
   };
 
   int best_lag = 0;

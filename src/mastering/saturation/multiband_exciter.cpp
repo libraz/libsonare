@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
@@ -15,6 +16,7 @@ MultibandExciter::MultibandExciter(MultibandExciterConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
   rebuild_processors();
+  rebuild_band_compensation();
 }
 
 void MultibandExciter::prepare(double sample_rate, int max_block_size) {
@@ -36,6 +38,7 @@ void MultibandExciter::prepare(double sample_rate, int max_block_size, int max_c
   crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
   crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
   for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
+  rebuild_band_compensation();
   reset();
 }
 
@@ -69,8 +72,12 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
-    exciters_[static_cast<size_t>(band)].process(
-        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
+    auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
+    exciters_[static_cast<size_t>(band)].process(band_channels.data(), num_channels, num_samples);
+    for (int ch = 0; ch < num_channels; ++ch) {
+      band_paths_.align_block(static_cast<size_t>(band), static_cast<size_t>(ch),
+                              band_channels[static_cast<size_t>(ch)], num_samples);
+    }
   }
 
   scratch_.sum_into(channels, num_channels, num_samples);
@@ -81,6 +88,7 @@ void MultibandExciter::process(float* const* channels, int num_channels, int num
 void MultibandExciter::reset() {
   crossover_.reset();
   for (auto& exciter : exciters_) exciter.reset();
+  band_paths_.reset();
 }
 
 void MultibandExciter::set_config(const MultibandExciterConfig& config) {
@@ -88,6 +96,7 @@ void MultibandExciter::set_config(const MultibandExciterConfig& config) {
   config_ = config;
   crossover_.set_config(config_.crossover);
   rebuild_processors();
+  rebuild_band_compensation();
   if (prepared_) prepare(sample_rate_, max_block_size_, max_working_channels_);
 }
 
@@ -126,6 +135,15 @@ void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "multiband exciter band count must match crossover");
   }
+}
+
+void MultibandExciter::rebuild_band_compensation() {
+  std::vector<int> latencies(exciters_.size());
+  for (size_t band = 0; band < exciters_.size(); ++band) {
+    latencies[band] = exciters_[band].latency_samples_q8();
+  }
+  band_paths_.set_path_latencies_q8(std::move(latencies));
+  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
 }
 
 void MultibandExciter::rebuild_processors() {

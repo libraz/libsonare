@@ -148,9 +148,9 @@ class Limiter : public rt::ProcessorBase {
   // update_coefficients() on snapshot adoption and by set_threshold_in_place()
   // for RT-safe per-block automation, so a ceiling change needs no publish.
   float threshold_db_ = -1.0f;
-  // Exponent of (ceiling / peak) giving the gain above threshold: 1 - 1/ratio.
-  // 0 selects the brick-wall path (ceiling / peak) exactly.
-  float ratio_exponent_ = 0.0f;
+  // Exponent of (ceiling / peak) giving the gain above threshold: 1 - 1/ratio,
+  // so ratio 1 is 0 (unity gain). The brick-wall (ratio 0) is exactly 1.
+  float ratio_exponent_ = 1.0f;
   float post_gain_ = 1.0f;
   float last_gain_reduction_db_ = 0.0f;
 };

@@ -2,10 +2,11 @@
 
 #include <vector>
 
+#include "rt/adaa.h"
 #include "rt/aliasing_control.h"
 #include "rt/biquad_design.h"
-#include "rt/delay_line.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -48,8 +49,10 @@ class Exciter : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
   /// @brief None adds no latency; Oversample4x adds the harmonic
-  ///   oversampler's streaming round-trip latency.
+  ///   oversampler's streaming round-trip latency, to which the dry and
+  ///   allpass paths are aligned.
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
   static void validate_config(const ExciterConfig& config);
 
@@ -58,6 +61,7 @@ class Exciter : public rt::ProcessorBase {
   void update_coeff();
   void update_coeff_preserving_state();
   void ensure_state(int num_channels);
+  void declare_path_latencies();
   using Biquad = rt::BiquadState;
 
   ExciterConfig config_{};
@@ -77,15 +81,14 @@ class Exciter : public rt::ProcessorBase {
   // Oversample4x support: the bandpass/allpass filters stay at the base rate
   // (they are linear and do not generate harmonics), but the squaring/tanh
   // harmonic-generation stage that would otherwise fold its high-order
-  // products below Nyquist runs on the oversampled band signal. dry_delays_
-  // and aligned_delays_ keep the untouched input and the allpass "aligned"
-  // contribution time-matched with the delayed harmonic content before the
-  // three are summed.
+  // products below Nyquist runs on the oversampled band signal. paths_ keeps
+  // the untouched input (path 0) and the allpass "aligned" contribution
+  // (path 1) time-matched with the harmonic content (path 2) before the three
+  // are summed.
   static constexpr int kHarmonicOversampleFactor = 4;
   sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor};
   std::vector<sonare::rt::Oversampler::StreamingState> harmonic_oversampler_states_;
-  std::vector<sonare::rt::DelayLine> dry_delays_;
-  std::vector<sonare::rt::DelayLine> aligned_delays_;
+  sonare::rt::ParallelPaths paths_;
   std::vector<float> band_scratch_;
   std::vector<float> aligned_scratch_;
   std::vector<float> oversampled_scratch_;

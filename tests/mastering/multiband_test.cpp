@@ -2,6 +2,7 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -809,6 +810,37 @@ TEST_CASE("MultibandLimiter neutral bands preserve tone amplitudes", "[mastering
   require_four_tone_amplitudes_near(signal, 0.015f);
 }
 
+TEST_CASE("MultibandLimiter aligns bands whose lookahead differs",
+          "[mastering][multiband][latency]") {
+  const auto make = [](float low_lookahead_ms, float high_lookahead_ms) {
+    MultibandLimiterConfig config;
+    config.crossover = {{1000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
+    // A 0 dB threshold on a -20 dBFS signal: every band is a pure lookahead delay.
+    config.bands = {{0.0f, low_lookahead_ms, 20.0f}, {0.0f, high_lookahead_ms, 20.0f}};
+    return MultibandLimiter(config);
+  };
+  for (const int rate : {44100, 48000}) {
+    CAPTURE(rate);
+    MultibandLimiter mixed = make(0.0f, 2.0f);
+    MultibandLimiter uniform = make(2.0f, 2.0f);
+    mixed.prepare(rate, 8192);
+    uniform.prepare(rate, 8192);
+    sonare::mastering::dynamics::Limiter probe({0.0f, 2.0f, 20.0f});
+    probe.prepare(rate, 8192);
+    const int lookahead = probe.latency_samples();
+    REQUIRE(lookahead > 0);
+    REQUIRE(uniform.latency_samples() == lookahead);
+    REQUIRE(mixed.latency_samples() == uniform.latency_samples());
+
+    auto mixed_out = sine(1000.0f, rate, 8192, 0.1f);
+    auto uniform_out = mixed_out;
+    process(mixed, mixed_out);
+    process(uniform, uniform_out);
+    // Unaligned, the bands would sum 2 ms apart and comb around the cutoff.
+    REQUIRE(sonare::test::max_abs_difference(mixed_out, uniform_out) < 1.0e-6f);
+  }
+}
+
 TEST_CASE("MultibandLimiter validates band count", "[mastering][multiband]") {
   MultibandLimiterConfig config;
   config.crossover = {{1000.0f, 4000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
@@ -948,6 +980,36 @@ TEST_CASE("MultibandSaturation counts a block its crossover or a band discarded"
   const uint32_t discards = saturation.non_finite_discard_count();
   REQUIRE(discards > 0u);
   REQUIRE(discards <= 2u);
+}
+
+TEST_CASE("MultibandSaturation applies a Tape band's mix to its audio", "[mastering][multiband]") {
+  const auto render = [](float mix, bool enabled, bool automate) {
+    MultibandSaturationConfig config;
+    config.bands.back() = {12.0f, automate ? 1.0f : mix, 0.0f, enabled, SaturationType::Tape};
+    MultibandSaturation saturation(config);
+    saturation.prepare(48000.0, 4096);
+    if (automate) {
+      REQUIRE(saturation.set_parameter(
+          static_cast<unsigned int>((config.bands.size() - 1) * MultibandSaturation::kBandStride +
+                                    1),
+          mix));
+      REQUIRE(saturation.config().bands.back().mix == mix);
+    }
+    auto signal = sine(8000.0f, 48000, 4096, 0.5f);
+    process(saturation, signal);
+    return signal;
+  };
+  const auto bypassed = render(1.0f, false, false);
+  const auto dry = render(0.0f, true, false);
+  const auto wet = render(1.0f, true, false);
+  // mix 0 is the band unprocessed; mix 1 is the tape.
+  REQUIRE(sonare::test::max_abs_difference(dry, bypassed) < 1.0e-6f);
+  REQUIRE(sonare::test::max_abs_difference(wet, bypassed) > 1.0e-2f);
+  REQUIRE(sonare::test::max_abs_difference(render(0.0f, true, true), dry) < 1.0e-6f);
+  const auto half = render(0.5f, true, false);
+  for (size_t n = 0; n < half.size(); ++n) {
+    REQUIRE(std::abs(half[n] - 0.5f * (dry[n] + wet[n])) < 1.0e-5f);
+  }
 }
 
 TEST_CASE("MultibandSaturation validates configuration", "[mastering][multiband]") {
@@ -1270,6 +1332,46 @@ TEMPLATE_TEST_CASE("Multiband setters adopt the crossover whatever the prepare s
       CHECK(moved.config().bands.size() == cutoffs.size() + 1);
       CHECK(moved.latency_samples() == fresh.latency_samples());
       CHECK(render_stereo_blocks(moved) == render_stereo_blocks(fresh));
+    }
+  }
+}
+
+TEST_CASE("MultibandImager decorrelation keeps its phase anchors in Hz at every rate",
+          "[mastering][multiband]") {
+  // Each first-order stage's -90 degree point, in Hz.
+  constexpr double kAnchorsHz[] = {3133.0, 17645.0, 5443.0, 15626.0};
+  const auto render = [](int rate, float decorrelation, double tone_hz) {
+    MultibandImagerConfig config;
+    config.crossover = {{1000.0f}, CrossoverSlope::LR2, CrossoverMode::LinkwitzRiley};
+    config.bands = {{2.0f, true, decorrelation, false}, {2.0f, true, decorrelation, false}};
+    MultibandImager imager(config);
+    imager.prepare(rate, rate);
+    // Pure side: the decorrelated path is the all-pass cascade of the plain one.
+    auto left = sine(static_cast<float>(tone_hz), rate, rate, 0.2f);
+    auto right = left;
+    for (auto& x : right) x = -x;
+    process_stereo(imager, left, right);
+    std::complex<double> sum{0.0, 0.0};
+    const size_t start = left.size() / 2;
+    for (size_t n = start; n < left.size(); ++n) {
+      const double phase = -kTwoPiD * tone_hz * static_cast<double>(n) / rate;
+      sum += static_cast<double>(left[n]) * std::complex<double>(std::cos(phase), std::sin(phase));
+    }
+    return sum;
+  };
+  for (const int rate : {44100, 48000, 96000}) {
+    for (const double tone_hz : {700.0, 2500.0, 6000.0, 12000.0}) {
+      double expected = 0.0;
+      for (const double anchor : kAnchorsHz) {
+        const double corner = std::min(anchor, 0.49 * rate);
+        expected -= 2.0 * std::atan(std::tan(0.5 * kTwoPiD * tone_hz / rate) /
+                                    std::tan(0.5 * kTwoPiD * corner / rate));
+      }
+      const std::complex<double> ratio = render(rate, 1.0f, tone_hz) / render(rate, 0.0f, tone_hz);
+      const double error = std::arg(ratio * std::polar(1.0, -expected));
+      INFO("rate " << rate << ", tone " << tone_hz << " Hz, phase error " << error << " rad");
+      REQUIRE(std::abs(error) < 0.02);
+      REQUIRE(std::abs(std::abs(ratio) - 1.0) < 0.01);
     }
   }
 }

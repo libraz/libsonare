@@ -34,12 +34,14 @@ using triode::plate_current_ma;
 Tube::Tube(TubeConfig config) : tube_config_(config) {
   validate_config(tube_config_);
   oversampler_.set_factor(tube_config_.oversample_factor);
+  declare_path_latencies();
 }
 
 void Tube::set_config(const TubeConfig& config) {
   validate_config(config);
   tube_config_ = config;
   oversampler_.set_factor(tube_config_.oversample_factor);
+  declare_path_latencies();
   if (prepared_) {
     // oversample_factor may have changed; resize the scratch on this
     // control-thread path (allocation here is acceptable, never on the audio
@@ -60,9 +62,13 @@ void Tube::allocate_scratch() {
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, base);
   }
-  for (auto& delay : dry_delays_) {
-    delay.prepare(static_cast<size_t>(latency_samples()));
-  }
+}
+
+void Tube::declare_path_latencies() {
+  const int wet = tube_config_.oversample_factor > 1
+                      ? oversampler_.streaming_round_trip_latency_samples() << 8
+                      : 0;
+  paths_.set_path_latencies_q8({0, wet});
 }
 
 void Tube::prepare(double sample_rate, int max_block_size) {
@@ -86,7 +92,7 @@ void Tube::prepare(double sample_rate, int max_block_size, int max_channels) {
   // the audio thread for any channel count up to max_working_channels_.
   miller_state_.assign(static_cast<size_t>(max_working_channels_), 0.0f);
   oversampler_states_.resize(static_cast<size_t>(max_working_channels_));
-  dry_delays_.resize(static_cast<size_t>(max_working_channels_));
+  paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
   allocate_scratch();
   prepared_ = true;
   reset();
@@ -133,8 +139,10 @@ void Tube::process(float* const* channels, int num_channels, int num_samples) {
     oversampler_.downsample_to_streaming(up_scratch_.data(), os_samples, down_scratch_.data(),
                                          down_scratch_.size(), &oversampler_state);
     for (int i = 0; i < num_samples; ++i) {
-      const float wet = apply_miller_filter(ch, down_scratch_[static_cast<size_t>(i)]);
-      const float dry = dry_delays_[static_cast<size_t>(ch)].process(input[i]);
+      const float wet =
+          paths_.align(1, static_cast<size_t>(ch),
+                       apply_miller_filter(ch, down_scratch_[static_cast<size_t>(i)]));
+      const float dry = paths_.align(0, static_cast<size_t>(ch), input[i]);
       channels[ch][i] = dry * (1.0f - tube_config_.mix) + wet * tube_config_.mix;
     }
     discarded |= sonare::discard_if_non_finite(miller_state_[static_cast<size_t>(ch)], 0.0f);
@@ -149,9 +157,7 @@ void Tube::reset() {
   for (auto& state : oversampler_states_) {
     oversampler_.reset_streaming(&state);
   }
-  for (auto& delay : dry_delays_) {
-    delay.reset();
-  }
+  paths_.reset();
 }
 
 float Tube::process_model(float sample, const TubeConfig& config) {
@@ -211,7 +217,7 @@ void Tube::ensure_state(int num_channels) {
   // path never resizes. A wider stream must be prepared before audio processing.
   if (miller_state_.size() < static_cast<size_t>(num_channels) ||
       oversampler_states_.size() < static_cast<size_t>(num_channels) ||
-      dry_delays_.size() < static_cast<size_t>(num_channels)) {
+      paths_.num_channels() < static_cast<size_t>(num_channels)) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tube state");
   }
 }

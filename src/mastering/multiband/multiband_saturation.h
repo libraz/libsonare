@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
-#include "rt/delay_line.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::multiband {
@@ -51,12 +51,11 @@ class MultibandSaturation : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   // The linear-phase FIR crossover delay (0 in the zero-latency IIR modes) plus
-  // the deepest per-band saturation delay. A saturation stage may have latency
-  // of its own (the tube's oversampling round trip), and every shallower band is
-  // padded to match it (see band_delays_), so the summed output is late by both
-  // terms together.
-  int latency_samples() const noexcept override {
-    return crossover_.latency_samples() + band_latency_samples_;
+  // the deepest per-band saturation delay, to which band_paths_ pads every
+  // shallower band before the sum.
+  int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
+  int latency_samples_q8() const noexcept override {
+    return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
   }
 
   void set_config(const MultibandSaturationConfig& config);
@@ -79,12 +78,11 @@ class MultibandSaturation : public rt::ProcessorBase {
  private:
   static void validate_config(const MultibandSaturationConfig& config);
   void rebuild_processors();
-  /// @brief Delay one band's stage contributes at the summing point, in samples.
-  ///        A disabled band bypasses its stage, so it contributes none.
-  int band_latency(size_t band) const noexcept;
-  /// @brief Recomputes the deepest band delay and sizes the per-band padding so
-  ///        every band arrives at the sum sample-aligned. Control thread only
-  ///        (allocates); process() only reads the resulting delay lines.
+  /// @brief Delay one band's stage contributes at the summing point, in Q8
+  ///        samples. A disabled band bypasses its stage, so it contributes none.
+  int band_latency_q8(size_t band) const noexcept;
+  /// @brief Declares every band's delay to band_paths_ so each arrives at the
+  ///        sum aligned to the deepest. Control thread only (allocates).
   void rebuild_band_compensation();
 
   MultibandSaturationConfig config_{};
@@ -97,11 +95,14 @@ class MultibandSaturation : public rt::ProcessorBase {
   // One real saturation processor per band (type chosen by config). Created in
   // rebuild_processors()/prepare(); never allocated on the audio thread.
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors_;
-  // Deepest per-band stage delay, and the per-band [band][channel] padding that
-  // brings the shallower bands up to it. Without this the crossover's allpass
+  // One path per band. Without the alignment the crossover's allpass
   // reconstruction is summed from bands that no longer share a time reference.
-  int band_latency_samples_ = 0;
-  std::vector<std::vector<rt::DelayLine>> band_delays_;
+  rt::ParallelPaths band_paths_;
+  // The tape model has no mix of its own, so a Tape band's dry/wet blend runs
+  // here: per band, path 0 is the band input and path 1 the tape output.
+  // Bands of other types leave theirs empty.
+  std::vector<rt::ParallelPaths> blend_paths_;
+  std::vector<std::vector<float>> dry_scratch_;
 };
 
 }  // namespace sonare::mastering::multiband

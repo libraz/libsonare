@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
@@ -33,6 +35,7 @@ void MultibandLimiter::prepare(double sample_rate, int max_block_size, int max_c
   for (auto& limiter : limiters_) {
     limiter.prepare(sample_rate_, max_block_size_);
   }
+  rebuild_band_compensation();
   reset();
 }
 
@@ -56,8 +59,12 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
-    limiters_[static_cast<size_t>(band)].process(
-        scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
+    auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
+    limiters_[static_cast<size_t>(band)].process(band_channels.data(), num_channels, num_samples);
+    for (int ch = 0; ch < num_channels; ++ch) {
+      band_paths_.align_block(static_cast<size_t>(band), static_cast<size_t>(ch),
+                              band_channels[static_cast<size_t>(ch)], num_samples);
+    }
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         limiters_[static_cast<size_t>(band)].last_gain_reduction_db();
   }
@@ -71,19 +78,22 @@ void MultibandLimiter::reset() {
     limiter.reset();
   }
   std::fill(last_gain_reductions_db_.begin(), last_gain_reductions_db_.end(), 0.0f);
+  band_paths_.reset();
 }
 
-int MultibandLimiter::latency_samples() const noexcept {
-  // All bands share the same lookahead configuration, so the per-band limiter
-  // latency is uniform; report band 0's latency. Guard against an empty band
-  // list (e.g. before prepare()).
-  // The linear-phase FIR crossover delays every band; add it to the per-band
-  // limiter lookahead so host plugin-delay-compensation stays correct.
-  const int crossover_latency = crossover_.latency_samples();
-  if (limiters_.empty()) {
-    return crossover_latency;
+int MultibandLimiter::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+
+int MultibandLimiter::latency_samples_q8() const noexcept {
+  return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
+}
+
+void MultibandLimiter::rebuild_band_compensation() {
+  std::vector<int> latencies(limiters_.size());
+  for (size_t band = 0; band < limiters_.size(); ++band) {
+    latencies[band] = limiters_[band].latency_samples_q8();
   }
-  return crossover_latency + limiters_[0].latency_samples();
+  band_paths_.set_path_latencies_q8(std::move(latencies));
+  band_paths_.ensure_channels(static_cast<size_t>(max_working_channels_));
 }
 
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
@@ -105,6 +115,7 @@ void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
       limiter.prepare(sample_rate_, max_block_size_);
     }
   }
+  rebuild_band_compensation();
 }
 
 bool MultibandLimiter::set_parameter_impl(unsigned int param_id, float value) {

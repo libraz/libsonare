@@ -108,11 +108,9 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   // A single shared (linked) envelope follower so every output channel receives
   // the same gain, preserving the stereo image (mirrors Compressor/Limiter).
   sonare::rt::EnvelopeFollower follower_;
-  // Per-channel main-signal delay lines; the gain is linked, so a single gain
-  // delay line is sufficient. Both are sized to kRealtimePreparedChannels in
-  // prepare() and never resized on the audio thread.
+  // Per-channel main-signal delay lines, sized to kRealtimePreparedChannels in
+  // prepare() and never resized on the audio thread. The gain is not delayed.
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
-  sonare::rt::LookaheadBuffer gain_lookahead_;
   // Per-source-channel one-pole HPF state for the sidechain detector. Each
   // source channel is filtered exactly once per sample (no shared index, no
   // double-filtering). Sized to kRealtimePreparedChannels in prepare().

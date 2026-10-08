@@ -36,6 +36,11 @@ common::NoiseTracker::Mode tracker_mode_for(DenoiseNoiseEstimator estimator);
 ///   one from the other.
 void frame_powers(const std::complex<float>* frame, int bins, float* power_f, double* power_d);
 
+/// @brief Exponential integral E1(x), the integral from x to infinity of e^-t / t.
+/// @details A&S 5.1.53 (series) for x <= 1 and 5.1.56 (rational) above; about
+///   1e-7 accurate over (0, inf). Returns 0 for x <= 0.
+double exponential_integral_e1(double x);
+
 /// @brief Causal 3x3 median over a gain mask, one frame in and one out.
 /// @details Holds the three raw-gain frames the median spans, which is O(bins).
 ///   A frame's median needs its successor, so the answer for frame t arrives

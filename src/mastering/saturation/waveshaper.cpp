@@ -19,7 +19,10 @@ using sonare::constants::kPi;
 
 }  // namespace
 
-Waveshaper::Waveshaper(WaveshaperConfig config) : config_(config) { validate_config(config_); }
+Waveshaper::Waveshaper(WaveshaperConfig config) : config_(config) {
+  validate_config(config_);
+  declare_path_latencies();
+}
 
 void Waveshaper::prepare(double sample_rate, int max_block_size) {
   if (!(sample_rate > 0.0))
@@ -44,10 +47,7 @@ void Waveshaper::prepare(double sample_rate, int max_block_size) {
   for (auto& state : oversampler_states_) {
     oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  dry_delays_.resize(dynamics::kRealtimePreparedChannels);
-  for (auto& delay : dry_delays_) {
-    delay.prepare(static_cast<size_t>(oversampler_.streaming_round_trip_latency_samples()));
-  }
+  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
   reset();
 }
 
@@ -71,7 +71,7 @@ void Waveshaper::process(float* const* channels, int num_channels, int num_sampl
   const float output_gain = db_to_linear(config_.output_gain_db);
   detail::process_oversampled(
       channels, num_channels, num_samples, kOversampleFactor, oversampler_, oversampler_states_,
-      dry_delays_, up_scratch_, down_scratch_, config_.mix, "Waveshaper",
+      paths_, up_scratch_, down_scratch_, config_.mix, "Waveshaper",
       [&](float x) {
         const float driven = x * drive + config_.bias;
         return apply_curve(driven, config_.curve);
@@ -83,7 +83,7 @@ void Waveshaper::reset() {
   for (auto& state : tanh_adaa_) state.reset();
   for (auto& state : arctan_adaa_) state.reset();
   for (auto& state : oversampler_states_) oversampler_.reset_streaming(&state);
-  for (auto& delay : dry_delays_) delay.reset();
+  paths_.reset();
 }
 
 void Waveshaper::set_config(const WaveshaperConfig& config) {
@@ -91,6 +91,7 @@ void Waveshaper::set_config(const WaveshaperConfig& config) {
   const bool reset_state = config_.curve != config.curve || config_.aliasing != config.aliasing ||
                            config_.bias != config.bias;
   config_ = config;
+  declare_path_latencies();
   if (reset_state) reset();
 }
 
@@ -183,21 +184,18 @@ void Waveshaper::ensure_state(int num_channels) {
       oversampler_.prepare_streaming(&oversampler_states_[i], static_cast<size_t>(max_block_size_));
     }
   }
-  if (dry_delays_.size() < static_cast<size_t>(num_channels)) {
-    const size_t old_size = dry_delays_.size();
-    dry_delays_.resize(static_cast<size_t>(num_channels));
-    for (size_t i = old_size; i < dry_delays_.size(); ++i) {
-      dry_delays_[i].prepare(
-          static_cast<size_t>(oversampler_.streaming_round_trip_latency_samples()));
-    }
-  }
+  paths_.ensure_channels(static_cast<size_t>(num_channels));
 }
 
-int Waveshaper::latency_samples() const noexcept {
-  return config_.aliasing == sonare::rt::AliasingControl::Oversample4x
-             ? oversampler_.streaming_round_trip_latency_samples()
-             : 0;
+void Waveshaper::declare_path_latencies() {
+  paths_.set_path_latencies_q8(
+      {0, sonare::rt::aliasing_latency_samples_q8(
+              config_.aliasing, oversampler_.streaming_round_trip_latency_samples())});
 }
+
+int Waveshaper::latency_samples() const noexcept { return paths_.latency_samples(); }
+
+int Waveshaper::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }
 
 float Waveshaper::shape_sample(float sample, int channel) {
   // ADAA1 (first-order antiderivative anti-aliasing) is only implemented for the
@@ -223,7 +221,9 @@ float Waveshaper::shape_sample(float sample, int channel) {
       break;
   }
   wet *= db_to_linear(config_.output_gain_db);
-  return sample * (1.0f - config_.mix) + wet * config_.mix;
+  const auto ch = static_cast<size_t>(channel);
+  return paths_.align(0, ch, sample) * (1.0f - config_.mix) +
+         paths_.align(1, ch, wet) * config_.mix;
 }
 
 }  // namespace sonare::mastering::saturation

@@ -40,8 +40,8 @@ void VocalRider::prepare(double sample_rate, int max_block_size) {
   if (followers_.size() < kRealtimePreparedChannels) {
     followers_.resize(kRealtimePreparedChannels);
   }
-  if (unlinked_gain_state_db_.size() < kRealtimePreparedChannels) {
-    unlinked_gain_state_db_.resize(kRealtimePreparedChannels, 0.0f);
+  if (gain_state_db_.size() < kRealtimePreparedChannels) {
+    gain_state_db_.resize(kRealtimePreparedChannels, 0.0f);
   }
   active_ = config_;
   update_coefficients(active_);
@@ -92,29 +92,26 @@ void VocalRider::process(float* const* channels, int num_channels, int num_sampl
         const float target_gain_db = cfg.target_db - level_db;
         ride_db = std::clamp(target_gain_db, -cfg.max_cut_db, cfg.max_boost_db);
       }
-      linked_gain_state_db_ = smoothing * linked_gain_state_db_ + (1.0f - smoothing) * ride_db;
-      const float gain_db = linked_gain_state_db_ + cfg.output_gain_db;
-      const float gain = db_to_linear(gain_db);
-      for (int ch = 0; ch < num_channels; ++ch) channels[ch][i] *= gain;
-      // min(0, x) is NaN-safe (a NaN compares false and leaves 0); infinities are excluded.
-      if (std::isfinite(linked_gain_state_db_)) {
-        block_min_gain_db = std::min(block_min_gain_db, linked_gain_state_db_);
-      }
-      if (std::abs(linked_gain_state_db_) > std::abs(largest_abs_gain)) {
-        largest_abs_gain = linked_gain_state_db_;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        float& gain_state = gain_state_db_[static_cast<size_t>(ch)];
+        gain_state = smoothing * gain_state + (1.0f - smoothing) * ride_db;
+        channels[ch][i] *= db_to_linear(gain_state + cfg.output_gain_db);
+        // min(0, x) is NaN-safe (a NaN compares false and leaves 0); infinities are excluded.
+        if (std::isfinite(gain_state)) block_min_gain_db = std::min(block_min_gain_db, gain_state);
+        if (std::abs(gain_state) > std::abs(largest_abs_gain)) largest_abs_gain = gain_state;
       }
     }
-    // One float per detector plus the shared gain state, once per block. Both
-    // are recursive, and the gain state is fed by the detectors, so a non-finite
-    // sample that reached either would otherwise outlive every later block.
+    // Two floats per channel, once per block. Both are recursive, and the gain
+    // state is fed by the detectors, so a non-finite sample that reached either
+    // would otherwise outlive every later block.
     for (int ch = 0; ch < num_channels; ++ch) {
       discarded |= followers_[static_cast<size_t>(ch)].discard_if_non_finite();
+      discarded |= discard_if_non_finite(gain_state_db_[static_cast<size_t>(ch)], 0.0f);
     }
-    discarded |= discard_if_non_finite(linked_gain_state_db_, 0.0f);
   } else {
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& follower = followers_[static_cast<size_t>(ch)];
-      float& gain_state = unlinked_gain_state_db_[static_cast<size_t>(ch)];
+      float& gain_state = gain_state_db_[static_cast<size_t>(ch)];
       for (int i = 0; i < num_samples; ++i) {
         const float level = follower.process(channels[ch][i]);
         const float level_db = linear_to_db(level);
@@ -148,8 +145,7 @@ void VocalRider::reset() {
   for (auto& follower : followers_) {
     follower.reset();
   }
-  linked_gain_state_db_ = 0.0f;
-  std::fill(unlinked_gain_state_db_.begin(), unlinked_gain_state_db_.end(), 0.0f);
+  std::fill(gain_state_db_.begin(), gain_state_db_.end(), 0.0f);
   last_gain_db_ = 0.0f;
   last_gain_reduction_db_ = 0.0f;
   minimum_gain_reduction_db_ = 0.0f;

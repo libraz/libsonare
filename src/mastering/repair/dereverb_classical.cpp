@@ -55,11 +55,12 @@ int late_delay_frames(const DereverbClassicalConfig& config, int sample_rate) {
                                                  static_cast<float>(config.hop_length))));
 }
 
-/// @brief Energy a tail is assumed to have lost across the late-reverb lag.
+/// @brief Power a tail is assumed to have kept across the late-reverb lag:
+///        10^(-6 delay / T60), so a lag of T60 is -60 dB.
 double late_decay(const DereverbClassicalConfig& config, int delay_frames, int sample_rate) {
   const float delay_sec =
       static_cast<float>(delay_frames * config.hop_length) / static_cast<float>(sample_rate);
-  return std::exp(-2.0 * static_cast<double>(delay_sec) * 6.0 * std::log(10.0) /
+  return std::exp(-6.0 * std::log(10.0) * static_cast<double>(delay_sec) /
                   static_cast<double>(config.t60_sec));
 }
 
@@ -430,14 +431,13 @@ DereverbReport dereverb_classical_linked(const Audio* const* channels, std::size
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
 
+  // Before padding, which would make short channels of different lengths agree.
+  common::validate_linked_channels(channels, channel_count);
   std::vector<Audio> analysis;
   std::vector<const Audio*> analysis_pointers;
   analysis.reserve(channel_count);
   analysis_pointers.reserve(channel_count);
   for (size_t c = 0; c < channel_count; ++c) {
-    if (channels[c] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "dereverb channel must not be null");
-    }
     analysis.push_back(padded_for_analysis(*channels[c], validated->n_fft));
   }
   for (const Audio& channel : analysis) analysis_pointers.push_back(&channel);

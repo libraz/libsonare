@@ -2,8 +2,8 @@
 
 #include <vector>
 
-#include "rt/delay_line.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -24,10 +24,10 @@ class Tube : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
-  int latency_samples() const noexcept override {
-    return tube_config_.oversample_factor > 1 ? oversampler_.streaming_round_trip_latency_samples()
-                                              : 0;
-  }
+  /// @brief The oversampling round trip when oversample_factor > 1; the dry
+  ///   mix is aligned to it.
+  int latency_samples() const noexcept override { return paths_.latency_samples(); }
+  int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
   void set_config(const TubeConfig& config);
   const TubeConfig& tube_config() const { return tube_config_; }
 
@@ -50,6 +50,7 @@ class Tube : public rt::ProcessorBase {
   static float process_model(float sample, const TubeConfig& config);
   void allocate_scratch();
   void ensure_state(int num_channels);
+  void declare_path_latencies();
   float apply_miller_filter(int channel, float sample);
 
   TubeConfig tube_config_{};
@@ -59,7 +60,8 @@ class Tube : public rt::ProcessorBase {
   int max_working_channels_ = 0;
   sonare::rt::Oversampler oversampler_{4};
   std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
-  std::vector<sonare::rt::DelayLine> dry_delays_;
+  // Path 0 is dry, path 1 is wet.
+  sonare::rt::ParallelPaths paths_;
   // Preallocated oversampling scratch (sized max_block_size_*oversample_factor
   // in prepare()) so the audio-thread process() path never allocates.
   std::vector<float> up_scratch_;

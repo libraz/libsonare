@@ -60,7 +60,11 @@ AirBand::Biquad make_high_shelf(double frequency_hz, double sample_rate, float g
 
 }  // namespace
 
-AirBand::AirBand(AirBandConfig config) : config_(config) { validate_config(config_); }
+AirBand::AirBand(AirBandConfig config) : config_(config) {
+  validate_config(config_);
+  paths_.set_path_latencies_q8(
+      {0, harmonic_oversampler_.streaming_round_trip_latency_samples() << 8});
+}
 
 void AirBand::prepare(double sample_rate, int max_block_size) {
   // Realtime callers use the two-argument ProcessorBase API and may switch
@@ -101,11 +105,7 @@ void AirBand::prepare(double sample_rate, int max_block_size, int max_channels) 
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  dry_delays_.resize(n);
-  for (auto& delay : dry_delays_) {
-    delay.prepare(
-        static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-  }
+  paths_.ensure_channels(n);
   rebuild_filters(static_cast<int>(n));
   reset();
 }
@@ -194,8 +194,9 @@ void AirBand::process(float* const* channels, int num_channels, int num_samples)
       // internal history), so the two being summed here both refer to the
       // same original input sample instead of the harmonic content lagging
       // the dry signal by the oversampler's group delay.
-      const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
-      channels[ch][i] = dry + harmonic_scratch_[i] * harmonic_gain;
+      const auto lane = static_cast<size_t>(ch);
+      const float dry = paths_.align(0, lane, channels[ch][i]);
+      channels[ch][i] = dry + paths_.align(1, lane, harmonic_scratch_[i]) * harmonic_gain;
     }
     envelope_[static_cast<size_t>(ch)] = envelope;
     band_rms_sq_[static_cast<size_t>(ch)] = band_rms_sq;
@@ -234,7 +235,7 @@ void AirBand::reset() {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.reset_streaming(&state);
   }
-  for (auto& delay : dry_delays_) delay.reset();
+  paths_.reset();
   for (auto& f : shelf_) f.reset();
   for (auto& f : detector_) f.reset();
   for (auto& f : harmonic_filter_) f.reset();
@@ -304,7 +305,7 @@ void AirBand::ensure_state(int num_channels) {
       harmonic_gain_.size() < target_size || shelf_control_samples_.size() < target_size ||
       shelf_.size() < target_size || detector_.size() < target_size ||
       harmonic_filter_.size() < target_size || harmonic_oversampler_states_.size() < target_size ||
-      dry_delays_.size() < target_size) {
+      paths_.num_channels() < target_size) {
     const size_t old_envelope_size = envelope_.size();
     const size_t old_shelf_gain_size = shelf_gain_db_.size();
     const size_t old_band_rms_size = band_rms_sq_.size();
@@ -315,7 +316,6 @@ void AirBand::ensure_state(int num_channels) {
     const size_t old_detector_size = detector_.size();
     const size_t old_harmonic_filter_size = harmonic_filter_.size();
     const size_t old_oversampler_state_size = harmonic_oversampler_states_.size();
-    const size_t old_dry_delay_size = dry_delays_.size();
     envelope_.resize(target_size, 0.0f);
     shelf_gain_db_.resize(target_size, 0.0f);
     band_rms_sq_.resize(target_size, 0.0f);
@@ -326,7 +326,6 @@ void AirBand::ensure_state(int num_channels) {
     detector_.resize(target_size);
     harmonic_filter_.resize(target_size);
     harmonic_oversampler_states_.resize(target_size);
-    dry_delays_.resize(target_size);
     for (size_t i = old_envelope_size; i < target_size; ++i) {
       envelope_[i] = 0.0f;
     }
@@ -352,10 +351,7 @@ void AirBand::ensure_state(int num_channels) {
       harmonic_oversampler_.prepare_streaming(&harmonic_oversampler_states_[i],
                                               static_cast<size_t>(max_block_size_));
     }
-    for (size_t i = old_dry_delay_size; i < target_size; ++i) {
-      dry_delays_[i].prepare(
-          static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-    }
+    paths_.ensure_channels(target_size);
   }
 }
 

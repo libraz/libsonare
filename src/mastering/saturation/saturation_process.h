@@ -7,8 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "rt/delay_line.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::saturation::detail {
@@ -26,14 +26,15 @@ inline void process_direct(float* const* channels, int num_channels, int num_sam
 
 /// @brief Oversampled path: upsample, `curve(x)` at the oversampled rate, downsample, then
 /// `wet_scale(wet)` and the dry/wet mix at the base rate.
-/// @details Uses only preallocated scratch; blocks wider than the prepared size are rejected.
+/// @details @p paths holds the dry path at index 0 and the wet path at index 1. Uses only
+///   preallocated scratch; blocks wider than the prepared size are rejected.
 template <typename Curve, typename WetScale>
 inline void process_oversampled(float* const* channels, int num_channels, int num_samples,
                                 int oversample_factor, sonare::rt::Oversampler& oversampler,
                                 std::vector<sonare::rt::Oversampler::StreamingState>& states,
-                                std::vector<sonare::rt::DelayLine>& dry_delays,
-                                std::vector<float>& up_scratch, std::vector<float>& down_scratch,
-                                float mix, const char* name, Curve&& curve, WetScale&& wet_scale) {
+                                sonare::rt::ParallelPaths& paths, std::vector<float>& up_scratch,
+                                std::vector<float>& down_scratch, float mix, const char* name,
+                                Curve&& curve, WetScale&& wet_scale) {
   const size_t os_samples =
       static_cast<size_t>(num_samples) * static_cast<size_t>(oversample_factor);
   if (os_samples > up_scratch.size() || static_cast<size_t>(num_samples) > down_scratch.size()) {
@@ -52,8 +53,9 @@ inline void process_oversampled(float* const* channels, int num_channels, int nu
     oversampler.downsample_to_streaming(up_scratch.data(), os_samples, down_scratch.data(),
                                         down_scratch.size(), &state);
     for (int i = 0; i < num_samples; ++i) {
-      const float dry = dry_delays[static_cast<size_t>(ch)].process(input[i]);
-      const float wet = wet_scale(down_scratch[static_cast<size_t>(i)]);
+      const float dry = paths.align(0, static_cast<size_t>(ch), input[i]);
+      const float wet =
+          paths.align(1, static_cast<size_t>(ch), wet_scale(down_scratch[static_cast<size_t>(i)]));
       channels[ch][i] = dry * (1.0f - mix) + wet * mix;
     }
   }

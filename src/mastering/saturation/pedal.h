@@ -23,6 +23,7 @@
 #include "rt/biquad_design.h"
 #include "rt/nonlinearities.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::saturation {
@@ -57,7 +58,7 @@ class OverdriveCore {
   static constexpr float kMaxGainDb = 41.0f;
   static constexpr float kMinToneHz = 500.0f;
   static constexpr float kMaxToneHz = 8000.0f;
-  static constexpr int kLatencySamplesQ8 = 128;
+  static constexpr int kLatencySamplesQ8 = rt::kAdaa1LatencySamplesQ8;
   static constexpr const char* kName = "Overdrive";
 
   void prepare(double oversampled_rate);
@@ -70,7 +71,8 @@ class OverdriveCore {
   rt::BiquadState clip_highpass_;
   rt::Adaa1<PedalSoftClipNonlinearity> clip_;
   float gain_ = 1.0f;
-  float previous_direct_ = 0.0f;
+  // Path 0 is the direct signal, path 1 the clip path.
+  rt::ParallelPaths paths_;
 };
 
 /// Distortion clipping core, run at the oversampled rate.

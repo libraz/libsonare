@@ -360,9 +360,10 @@ void BitCrusher::update_coefficients() noexcept {
   lpf_gain_[kHumLpf] = one_pole_gain(config_.hum_lpf_hz);
   radio_shape_pole_ = std::exp(-kTwoPiD * static_cast<double>(kRadioNoiseCornerHz) / rate);
   // A click's chance per sample is its rate over the sample rate, so the density
-  // per second holds at every rate.
+  // per second holds at every rate. Scaled to the full 32-bit draw, whose step is
+  // far below the chance, so the threshold keeps its fraction.
   disc_chance_ = static_cast<double>(kDiscClickRateHz[static_cast<size_t>(config_.disc_type)]) *
-                 65536.0 / rate;
+                 4294967296.0 / rate;
   hum_step_ = static_cast<double>(config_.hum_hz) / rate;
 }
 
@@ -396,7 +397,7 @@ void BitCrusher::render_noise(int count) noexcept {
     if (config_.disc_noise_level > 0.0f) {
       auto& g = sources_[kDisc];
       const uint32_t u = xorshift32(g.rng);
-      float v = static_cast<double>(u >> 16) < disc_chance_
+      float v = static_cast<double>(u) < disc_chance_
                     ? static_cast<float>(noise_word(xorshift32(g.rng)))
                     : 0.0f;
       if (lpf_gain_[kDiscLpf] > 0.0) v = lowpass_tick(lpf_gain_[kDiscLpf], v, lpf_state_[kDiscLpf]);

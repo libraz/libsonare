@@ -7,6 +7,8 @@
 #include <type_traits>
 #include <utility>
 
+#include "rt/aliasing_control.h"
+
 namespace sonare::rt {
 
 // Divided-difference denominator threshold for the ADAA recurrences. This is an
@@ -14,6 +16,11 @@ namespace sonare::rt {
 // samples are nearly equal, intentionally distinct from constants::kEpsilon
 // (1e-10) which is far too small to keep these ratios numerically stable.
 constexpr float kAdaaDivisorEpsilon = 1.0e-5f;
+
+// Group delay of each order in Q8 samples: the first divided difference is
+// centred half a sample back, the second a whole sample back.
+constexpr int kAdaa1LatencySamplesQ8 = 128;
+constexpr int kAdaa2LatencySamplesQ8 = 256;
 
 template <typename Nonlinearity>
 class Adaa1 {
@@ -48,12 +55,9 @@ class Adaa1 {
   Nonlinearity& nonlinearity() noexcept { return nonlinearity_; }
   const Nonlinearity& nonlinearity() const noexcept { return nonlinearity_; }
 
-  // ADAA1 introduces a half-sample group delay (the first divided difference is
-  // centered between x[n-1] and x[n]). 128 in Q8 is exactly 0.5 sample; the
-  // integer accessor is derived from it (128 >> 8 == 0) so the two views stay
-  // consistent instead of being independently hardcoded.
-  int latency_samples_q8() const noexcept { return 128; }
-  int latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+  static constexpr int kLatencySamplesQ8 = kAdaa1LatencySamplesQ8;
+  int latency_samples_q8() const noexcept { return kLatencySamplesQ8; }
+  int latency_samples() const noexcept { return kLatencySamplesQ8 >> 8; }
 
  private:
   Nonlinearity nonlinearity_{};
@@ -142,8 +146,9 @@ class Adaa2 {
     prev_f2_x2_ = prev_f2_x1_;
   }
 
-  int latency_samples() const noexcept { return 1; }
-  int latency_samples_q8() const noexcept { return 256; }
+  static constexpr int kLatencySamplesQ8 = kAdaa2LatencySamplesQ8;
+  int latency_samples() const noexcept { return kLatencySamplesQ8 >> 8; }
+  int latency_samples_q8() const noexcept { return kLatencySamplesQ8; }
 
  private:
   static double antiderivative_at(Nonlinearity& nonlinearity, double x) noexcept {
@@ -170,5 +175,23 @@ class Adaa2 {
   double prev_f2_x1_ = 0.0;
   double prev_f2_x2_ = 0.0;
 };
+
+/// @brief Q8 latency a nonlinear stage adds under @p mode at the host rate.
+/// @param oversampled_round_trip_samples The stage's oversampler streaming round
+///   trip in host samples, which only Oversample4x adds.
+constexpr int aliasing_latency_samples_q8(AliasingControl mode,
+                                          int oversampled_round_trip_samples) noexcept {
+  switch (mode) {
+    case AliasingControl::Adaa1:
+      return kAdaa1LatencySamplesQ8;
+    case AliasingControl::Adaa2:
+      return kAdaa2LatencySamplesQ8;
+    case AliasingControl::Oversample4x:
+      return oversampled_round_trip_samples << 8;
+    case AliasingControl::None:
+      break;
+  }
+  return 0;
+}
 
 }  // namespace sonare::rt

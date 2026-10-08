@@ -144,14 +144,17 @@ std::vector<MonoCompatBandResult> mono_compat_check_log_bands(const float* left,
   std::vector<double> sum_side(result.size(), 0.0);
   double total_side_spectral = 0.0;
 
-  const size_t frames = length <= n_fft ? 1 : 1 + (length - 1) / hop;
+  // Frames start half a frame before the buffer, so every sample, the first and
+  // last included, falls under two overlapping windows whose weights sum to one.
+  const size_t frames = (length - 1) / hop + 2;
   for (size_t frame = 0; frame < frames; ++frame) {
-    const size_t offset = frame * hop;
     for (size_t n = 0; n < n_fft; ++n) {
-      const size_t i = offset + n;
+      const size_t shifted = frame * hop + n;
+      const bool inside = shifted >= hop && shifted - hop < length;
+      const size_t i = shifted - hop;
       const float w = window[n];
-      frame_left[n] = i < length ? left[i] * w : 0.0f;
-      frame_right[n] = i < length ? right[i] * w : 0.0f;
+      frame_left[n] = inside ? left[i] * w : 0.0f;
+      frame_right[n] = inside ? right[i] * w : 0.0f;
     }
     fft.forward(frame_left.data(), spec_left.data());
     fft.forward(frame_right.data(), spec_right.data());

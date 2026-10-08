@@ -541,6 +541,13 @@ TEST_CASE("PhaseAlign delay estimation stays finite without usable neighboring l
     REQUIRE(PhaseAlign::estimate_delay_samples(samples, samples, 3,
                                                std::numeric_limits<int>::max()) == 0.0f);
   }
+  SECTION("identical signals have zero delay whatever the search bound") {
+    // A one-sample overlap at the edge lag is perfectly correlated with itself;
+    // it must not outscore the full overlap at lag 0.
+    const float samples[] = {0.125f, 0.25f, 0.375f};
+    REQUIRE(PhaseAlign::estimate_delay_samples(samples, samples, 3, 1) == 0.0f);
+    REQUIRE(PhaseAlign::estimate_delay_samples(samples, samples, 3, 2) == 0.0f);
+  }
   SECTION("an isolated impulse has no finite adjacent correlation") {
     std::vector<float> reference(16, 0.0f);
     std::vector<float> target(16, 0.0f);
@@ -626,6 +633,27 @@ TEST_CASE("MonoCompatCheck log bands have frequency-dependent side energy", "[ma
     }
   }
   REQUIRE(!all_equal);
+}
+
+TEST_CASE("MonoCompatCheck log bands see an anti-phase sample wherever it sits",
+          "[mastering][stereo]") {
+  // An anti-phase impulse is broadband side energy with correlation -1 in every
+  // band; the first and last samples count as much as any other.
+  constexpr size_t kLength = 4096;
+  for (const size_t position : {size_t{0}, size_t{1}, kLength / 2, kLength - 1}) {
+    CAPTURE(position);
+    std::vector<float> left(kLength, 0.0f);
+    std::vector<float> right(kLength, 0.0f);
+    left[position] = 1.0f;
+    right[position] = -1.0f;
+    const auto bands = mono_compat_check_log_bands(left.data(), right.data(), kLength, 48000.0);
+    REQUIRE(bands.size() == 30);
+    for (const auto& band : bands) {
+      CAPTURE(band.low_hz);
+      CHECK(band.side_rms > 0.0f);
+      CHECK_THAT(band.correlation, Catch::Matchers::WithinAbs(-1.0f, 1.0e-5f));
+    }
+  }
 }
 
 TEST_CASE("MonoCompatCheck validates buffers", "[mastering][stereo]") {

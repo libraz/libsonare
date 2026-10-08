@@ -4,9 +4,9 @@
 
 #include "mastering/saturation/waveshaper.h"
 #include "rt/adaa.h"
-#include "rt/delay_line.h"
 #include "rt/nonlinearities.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 
 namespace sonare::mastering::saturation {
 
@@ -36,13 +36,15 @@ class SoftClipper : public rt::ProcessorBase {
   // Automatable parameters: 0=driveDb, 1=mix
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
-  /// @brief None and Adaa1 add no integer latency; Oversample4x adds the
-  ///   oversampler's streaming round-trip latency.
+  /// @brief Adaa1 adds half a sample (Q8 128); Oversample4x adds the
+  ///   oversampler's streaming round-trip latency. The dry path is aligned to it.
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
  private:
   static void validate_config(const SoftClipperConfig& config);
   void ensure_state(int num_channels);
+  void declare_path_latencies();
   float process_sample(float sample, int channel);
 
   SoftClipperConfig config_{};
@@ -50,11 +52,11 @@ class SoftClipper : public rt::ProcessorBase {
   int max_block_size_ = 0;
   static constexpr int kOversampleFactor = 4;
   sonare::rt::Oversampler oversampler_{kOversampleFactor};
-  // Oversample4x scratch and the dry-path delay that keeps the wet
-  // oversampled signal time-aligned with the dry mix; preallocated in
-  // prepare() so the audio-thread process() path never allocates.
+  // Oversample4x scratch, preallocated in prepare() so the audio-thread
+  // process() path never allocates.
   std::vector<sonare::rt::Oversampler::StreamingState> oversampler_states_;
-  std::vector<sonare::rt::DelayLine> dry_delays_;
+  // Path 0 is dry, path 1 is wet; the dry mix is delayed to the wet latency.
+  sonare::rt::ParallelPaths paths_;
   std::vector<float> up_scratch_;
   std::vector<float> down_scratch_;
   std::vector<sonare::rt::Adaa1<sonare::rt::TanhNonlinearity>> tanh_adaa_;

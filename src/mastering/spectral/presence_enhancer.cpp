@@ -28,6 +28,7 @@ PresenceEnhancer::Biquad make_bandpass(double frequency_hz, double sample_rate, 
 
 PresenceEnhancer::PresenceEnhancer(PresenceEnhancerConfig config) : config_(config) {
   validate_config(config_);
+  declare_path_latencies();
 }
 
 void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
@@ -53,11 +54,7 @@ void PresenceEnhancer::prepare(double sample_rate, int max_block_size) {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.prepare_streaming(&state, static_cast<size_t>(max_block_size_));
   }
-  dry_delays_.resize(dynamics::kRealtimePreparedChannels);
-  for (auto& delay : dry_delays_) {
-    delay.prepare(
-        static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-  }
+  paths_.ensure_channels(dynamics::kRealtimePreparedChannels);
   reset();
 }
 
@@ -76,12 +73,13 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
       if (channels[ch] == nullptr)
         throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
       auto& bandpass = bandpass_[static_cast<size_t>(ch)];
+      const auto lane = static_cast<size_t>(ch);
       for (int i = 0; i < num_samples; ++i) {
         const float presence = bandpass.process(channels[ch][i]);
-        const float harmonic =
-            adaa ? harmonic_adaa_[static_cast<size_t>(ch)].process(presence * config_.drive)
-                 : std::tanh(presence * config_.drive);
-        channels[ch][i] += harmonic * amount;
+        const float harmonic = adaa ? harmonic_adaa_[lane].process(presence * config_.drive)
+                                    : std::tanh(presence * config_.drive);
+        channels[ch][i] =
+            paths_.align(0, lane, channels[ch][i]) + paths_.align(1, lane, harmonic) * amount;
       }
       // Two floats per channel, once per block.
       discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
@@ -123,9 +121,11 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
                                                   harmonic_scratch_.data(),
                                                   harmonic_scratch_.size(), &oversampler_state);
 
+    const auto lane = static_cast<size_t>(ch);
     for (int i = 0; i < num_samples; ++i) {
-      const float dry = dry_delays_[static_cast<size_t>(ch)].process(channels[ch][i]);
-      channels[ch][i] = dry + harmonic_scratch_[static_cast<size_t>(i)] * amount;
+      const float dry = paths_.align(0, lane, channels[ch][i]);
+      channels[ch][i] =
+          dry + paths_.align(1, lane, harmonic_scratch_[static_cast<size_t>(i)]) * amount;
     }
     auto& bandpass = bandpass_[static_cast<size_t>(ch)];
     discarded |= discard_group_if_non_finite(bandpass.z1, bandpass.z2);
@@ -136,6 +136,7 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
 void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
   validate_config(config);
   config_ = config;
+  declare_path_latencies();
   if (prepared_) {
     // Rebuild the preallocated per-channel filters in place so the next
     // process() never resizes on the audio thread; keep the channel count.
@@ -146,7 +147,7 @@ void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
     for (auto& state : harmonic_oversampler_states_) {
       harmonic_oversampler_.reset_streaming(&state);
     }
-    for (auto& delay : dry_delays_) delay.reset();
+    paths_.reset();
     for (auto& adaa : harmonic_adaa_) adaa.reset();
   } else {
     bandpass_.clear();
@@ -158,7 +159,7 @@ void PresenceEnhancer::reset() {
   for (auto& state : harmonic_oversampler_states_) {
     harmonic_oversampler_.reset_streaming(&state);
   }
-  for (auto& delay : dry_delays_) delay.reset();
+  paths_.reset();
   for (auto& adaa : harmonic_adaa_) adaa.reset();
 }
 
@@ -230,20 +231,17 @@ void PresenceEnhancer::ensure_state(int num_channels) {
   if (harmonic_adaa_.size() < target_size) {
     harmonic_adaa_.resize(target_size);
   }
-  if (dry_delays_.size() < target_size) {
-    const size_t old_size = dry_delays_.size();
-    dry_delays_.resize(target_size);
-    for (size_t i = old_size; i < target_size; ++i) {
-      dry_delays_[i].prepare(
-          static_cast<size_t>(harmonic_oversampler_.streaming_round_trip_latency_samples()));
-    }
-  }
+  paths_.ensure_channels(target_size);
 }
 
-int PresenceEnhancer::latency_samples() const noexcept {
-  return config_.aliasing == sonare::rt::AliasingControl::Oversample4x
-             ? harmonic_oversampler_.streaming_round_trip_latency_samples()
-             : 0;
+void PresenceEnhancer::declare_path_latencies() {
+  paths_.set_path_latencies_q8(
+      {0, sonare::rt::aliasing_latency_samples_q8(
+              config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples())});
 }
+
+int PresenceEnhancer::latency_samples() const noexcept { return paths_.latency_samples(); }
+
+int PresenceEnhancer::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }
 
 }  // namespace sonare::mastering::spectral

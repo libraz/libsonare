@@ -48,10 +48,12 @@ class HardClipper : public rt::ProcessorBase {
   // Automatable parameters: 0=ceiling
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
-  /// @brief Returns the processing latency in samples for the active mode.
-  /// @details None/Adaa1 add no integer latency here; Adaa2 adds one sample;
-  ///   Oversample4x adds the oversampler's streaming round-trip latency.
+  /// @brief Returns the processing latency for the active mode.
+  /// @details Adaa1 adds half a sample (Q8 128), Adaa2 one sample, Oversample4x
+  ///   the oversampler's streaming round-trip latency. The clipper is fully wet,
+  ///   so there is no parallel path to align.
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
 
   /// @brief Infinities this stage replaced with the ceiling.
   /// @details Monotonic since @ref prepare, which clears it; @ref reset does not.

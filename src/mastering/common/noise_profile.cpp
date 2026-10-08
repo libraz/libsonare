@@ -126,8 +126,7 @@ NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const dou
   return result;
 }
 
-LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t channel_count,
-                                     const StftConfig& config) {
+void validate_linked_channels(const Audio* const* channels, std::size_t channel_count) {
   if (channels == nullptr || channel_count == 0) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "linked analysis needs at least one channel");
@@ -146,6 +145,11 @@ LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t c
                             "linked analysis channels must share one sample rate");
     }
   }
+}
+
+LinkedSpectra LinkedSpectra::compute(const Audio* const* channels, std::size_t channel_count,
+                                     const StftConfig& config) {
+  validate_linked_channels(channels, channel_count);
 
   LinkedSpectra linked;
   linked.spectra_.reserve(channel_count);

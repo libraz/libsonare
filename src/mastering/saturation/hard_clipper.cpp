@@ -169,11 +169,11 @@ void HardClipper::ensure_state(int num_channels) {
   }
 }
 
-int HardClipper::latency_samples() const noexcept {
-  if (config_.aliasing == sonare::rt::AliasingControl::Oversample4x) {
-    return oversampler_.streaming_round_trip_latency_samples();
-  }
-  return config_.aliasing == sonare::rt::AliasingControl::Adaa2 ? 1 : 0;
+int HardClipper::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+
+int HardClipper::latency_samples_q8() const noexcept {
+  return sonare::rt::aliasing_latency_samples_q8(
+      config_.aliasing, oversampler_.streaming_round_trip_latency_samples());
 }
 
 float HardClipper::process_sample(float sample, int channel, std::uint32_t& substituted) {

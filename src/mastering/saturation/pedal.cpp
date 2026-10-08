@@ -108,6 +108,8 @@ namespace detail {
 
 void OverdriveCore::prepare(double oversampled_rate) {
   clip_highpass_.set(rt::first_order_highpass(corner_w0(kClipHighpassHz, oversampled_rate)));
+  paths_.set_path_latencies_q8({0, kLatencySamplesQ8});
+  paths_.ensure_channels(1);
 }
 
 void OverdriveCore::set_gain_db(float gain_db, double /*oversampled_rate*/) noexcept {
@@ -117,23 +119,19 @@ void OverdriveCore::set_gain_db(float gain_db, double /*oversampled_rate*/) noex
 void OverdriveCore::process(float* samples, size_t count) noexcept {
   for (size_t i = 0; i < count; ++i) {
     const float x = samples[i];
-    const float clipped = clip_.process(gain_ * clip_highpass_.process(x));
-    // ADAA averages adjacent samples; the direct path takes the same average to stay aligned.
-    const float direct = 0.5f * (x + previous_direct_);
-    previous_direct_ = x;
-    samples[i] = direct + clipped;
+    const float clipped = paths_.align(1, 0, clip_.process(gain_ * clip_highpass_.process(x)));
+    samples[i] = paths_.align(0, 0, x) + clipped;
   }
 }
 
 void OverdriveCore::reset() noexcept {
   clip_highpass_.reset();
   clip_.reset();
-  previous_direct_ = 0.0f;
+  paths_.reset();
 }
 
 bool OverdriveCore::state_finite() const noexcept {
-  return std::isfinite(clip_highpass_.z1) && std::isfinite(clip_highpass_.z2) &&
-         std::isfinite(previous_direct_);
+  return std::isfinite(clip_highpass_.z1) && std::isfinite(clip_highpass_.z2) && paths_.finite();
 }
 
 // --- distortion --------------------------------------------------------------

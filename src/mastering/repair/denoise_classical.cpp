@@ -101,10 +101,33 @@ void frame_powers(const std::complex<float>* frame, int bins, float* power_f, do
   }
 }
 
+double exponential_integral_e1(double x) {
+  if (x <= 0.0) return 0.0;
+  if (x <= 1.0) {
+    // A&S 5.1.53: E1(x) = -gamma - ln(x) + sum_{n=1..inf} (-1)^(n+1) x^n / (n * n!)
+    constexpr double kGamma = 0.5772156649015329;
+    double sum = -kGamma - std::log(x);
+    double term = 1.0;
+    for (int n = 1; n < 20; ++n) {
+      term *= -x / static_cast<double>(n);
+      sum -= term / static_cast<double>(n);
+    }
+    return sum;
+  }
+  // A&S 5.1.56: x e^x E1(x) = (x^4 + a1 x^3 + a2 x^2 + a3 x + a4) /
+  //                           (x^4 + b1 x^3 + b2 x^2 + b3 x + b4).
+  const double a1 = 8.5733287401, a2 = 18.0590169730, a3 = 8.6347608925, a4 = 0.2677737343;
+  const double b1 = 9.5733223454, b2 = 25.6329561486, b3 = 21.0996530827, b4 = 3.9584969228;
+  const double num = (((x + a1) * x + a2) * x + a3) * x + a4;
+  const double den = (((x + b1) * x + b2) * x + b3) * x + b4;
+  return std::exp(-x) / x * (num / den);
+}
+
 }  // namespace detail
 
 namespace {
 
+using detail::exponential_integral_e1;
 using detail::frame_powers;
 using detail::tracker_mode_for;
 using sonare::constants::kPiD;
@@ -153,30 +176,6 @@ bool is_known_noise_estimator(DenoiseNoiseEstimator estimator) {
       return true;
   }
   return false;
-}
-
-// Exponential integral E1(x) = integral from x to infinity of (e^-t / t) dt.
-// Approximated via Abramowitz & Stegun 5.1.53 (series) for x <= 1, and
-// 5.1.56 (rational asymptotic) for x > 1. Accuracy ~1e-7 over (0, inf).
-double exponential_integral_e1(double x) {
-  if (x <= 0.0) return 0.0;
-  if (x <= 1.0) {
-    // A&S 5.1.53: E1(x) = -gamma - ln(x) + sum_{n=1..inf} (-1)^(n+1) x^n / (n * n!)
-    constexpr double kGamma = 0.5772156649015329;
-    double sum = -kGamma - std::log(x);
-    double term = 1.0;
-    for (int n = 1; n < 20; ++n) {
-      term *= -x / static_cast<double>(n);
-      sum -= term / static_cast<double>(n);
-    }
-    return sum;
-  }
-  // A&S 5.1.56: rational approximation for x > 1.
-  const double a0 = 8.5733287401, a1 = 18.0590169730, a2 = 8.6347608925, a3 = 0.2677737343;
-  const double b0 = 9.5733223454, b1 = 25.6329561486, b2 = 21.0996530827, b3 = 3.9584969228;
-  const double num = x * x * x * x + a3 * x * x * x + a2 * x * x + a1 * x + a0;
-  const double den = x * x * x * x + b3 * x * x * x + b2 * x * x + b1 * x + b0;
-  return std::exp(-x) / x * (num / den);
 }
 
 float gain_logmmse(double ksi, double gamma_post) {

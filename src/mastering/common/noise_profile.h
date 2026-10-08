@@ -84,6 +84,13 @@ NoiseFloorDbfs noise_floor_dbfs_from_sums(const double* noise_psd_sum, const dou
                                           int bins, int frames, double signal_mean_square,
                                           int sample_rate);
 
+/// @brief Checks that a channel set can share one analysis grid.
+/// @details A caller that pads its channels before analysis checks them here
+///   first, since padding can make channels of different lengths agree.
+/// @throws SonareException(InvalidParameter) for no channels, a null channel,
+///         or a channel whose length or sample rate differs from the first.
+void validate_linked_channels(const Audio* const* channels, std::size_t channel_count);
+
 /// @brief STFTs of a channel set on one analysis grid.
 /// @details Holds each channel's spectrum plus the channel-summed power a linked
 ///   gain mask is built from. Single-channel use is not a special case: the sum

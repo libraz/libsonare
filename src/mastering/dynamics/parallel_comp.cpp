@@ -220,17 +220,18 @@ float ParallelComp::limit_output_sample(float sample, size_t channel_index, floa
   }
   float& gain = limiter_gains_[channel_index];
   const float magnitude = std::abs(sample);
-  if (magnitude > ceiling) {
-    gain = std::min(gain, ceiling / magnitude);
-  } else if (gain < 1.0f) {
-    if (config.release_ms <= 0.0f) {
-      gain = 1.0f;
-    } else {
-      const float coeff =
-          std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
-      gain = 1.0f - (1.0f - gain) * coeff;
-      if (gain > 1.0f) gain = 1.0f;
-    }
+  // Attack is instant; recovery toward the gain this sample needs follows the
+  // release whether or not the sample is still over the ceiling.
+  const float target = magnitude > ceiling ? ceiling / magnitude : 1.0f;
+  if (target <= gain) {
+    gain = target;
+  } else if (config.release_ms <= 0.0f) {
+    gain = target;
+  } else {
+    const float coeff =
+        std::exp(-1.0f / (0.001f * config.release_ms * static_cast<float>(sample_rate_)));
+    gain = target - (target - gain) * coeff;
+    if (gain > target) gain = target;
   }
   return sample * gain;
 }

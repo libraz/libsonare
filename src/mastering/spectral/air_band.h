@@ -3,8 +3,8 @@
 #include <vector>
 
 #include "rt/biquad_design.h"
-#include "rt/delay_line.h"
 #include "rt/oversampler.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::mastering::spectral {
@@ -23,13 +23,10 @@ class AirBand : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
-  // The dry shelf path is delayed by dry_delays_ (see below) to match the
-  // harmonic oversampling path's round-trip latency, so the two stay time-
-  // aligned when mixed in process(). The whole processor therefore reports
-  // that round trip as its I/O latency, mirroring Tube::dry_delays_.
-  int latency_samples() const noexcept override {
-    return harmonic_oversampler_.streaming_round_trip_latency_samples();
-  }
+  // The dry shelf path is aligned to the harmonic oversampling round trip by
+  // paths_, so the processor reports that round trip as its I/O latency.
+  int latency_samples() const noexcept override { return paths_.latency_samples(); }
+  int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
   void set_config(const AirBandConfig& config);
 
   // Automatable parameters (RT-safe: updates config in place; the shelf gain is
@@ -65,10 +62,8 @@ class AirBand : public rt::ProcessorBase {
   static constexpr int kShelfControlInterval = 8;
   sonare::rt::Oversampler harmonic_oversampler_{kHarmonicOversampleFactor};
   std::vector<sonare::rt::Oversampler::StreamingState> harmonic_oversampler_states_;
-  // Delays the dry shelf output by the harmonic oversampler's round-trip
-  // latency so it stays time-aligned with the harmonic content before the two
-  // are summed in process(). Matches Tube::dry_delays_.
-  std::vector<sonare::rt::DelayLine> dry_delays_;
+  // Path 0 is the dry shelf output, path 1 the oversampled harmonic content.
+  sonare::rt::ParallelPaths paths_;
   std::vector<float> band_scratch_;
   std::vector<float> oversampled_scratch_;
   std::vector<float> harmonic_scratch_;

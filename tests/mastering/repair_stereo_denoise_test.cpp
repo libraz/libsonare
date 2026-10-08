@@ -209,12 +209,12 @@ TEST_CASE("mono denoise and dereverb are unchanged", "[.][repair][stereo][denois
   // Two things move these: a refactor that shifts a multiply between float and
   // double, and any change to a default the gain mask derives from. The
   // suppression depth is one such default, so it moves the modes that read it.
-  CHECK(hash_samples(repair::denoise_classical(audio)) == 0x15db5a462dd378ccull);
+  CHECK(hash_samples(repair::denoise_classical(audio)) == 0x10dbde9f857e028aull);
   CHECK(hash_samples(repair::denoise_classical(audio, stsa)) == 0x2b708e00347f0b26ull);
   CHECK(hash_samples(repair::denoise_classical(audio, berouti)) == 0x1b736c89a790d94bull);
-  CHECK(hash_samples(repair::denoise_classical(audio, mcra)) == 0xdcbbe46d44350ed7ull);
-  CHECK(hash_samples(repair::dereverb_classical(audio)) == 0xaa8454d236697b37ull);
-  CHECK(hash_samples(repair::dereverb_classical(audio, wpe)) == 0x4d324a78b4a4a204ull);
+  CHECK(hash_samples(repair::denoise_classical(audio, mcra)) == 0xa742f186b67cb3b4ull);
+  CHECK(hash_samples(repair::dereverb_classical(audio)) == 0xd066d3888bff7a3cull);
+  CHECK(hash_samples(repair::dereverb_classical(audio, wpe)) == 0x0b66f066369c8808ull);
 }
 
 // ------------------------------------------------------------------ rejection
@@ -479,6 +479,24 @@ TEST_CASE("one linked channel reproduces the mono path bit for bit", "[repair][s
     repair::dereverb_classical_linked(channels, 1, &out, config);
     REQUIRE(out.size() == 1);
     CHECK(identical(out[0], repair::dereverb_classical(audio, config)));
+  }
+}
+
+TEST_CASE("linked dereverb refuses channels of different lengths however short they are",
+          "[repair][stereo][dereverb]") {
+  // The default 2048-point frame pads both sides of the first two pairs to one
+  // length; the refusal has to come from the lengths the caller passed.
+  const std::pair<size_t, size_t> pairs[] = {{128, 256}, {256, 128}, {1024, 2048}};
+  for (const auto& [left_size, right_size] : pairs) {
+    CAPTURE(left_size, right_size);
+    const Audio left = Audio::from_vector(std::vector<float>(left_size, 0.1f), kSampleRate);
+    const Audio right = Audio::from_vector(std::vector<float>(right_size, 0.1f), kSampleRate);
+    try {
+      (void)repair::dereverb_classical_stereo(left, right, {});
+      FAIL("mismatched channel lengths were accepted");
+    } catch (const SonareException& e) {
+      CHECK(e.code() == ErrorCode::InvalidParameter);
+    }
   }
 }
 
@@ -871,16 +889,16 @@ TEST_CASE("the dereverb report describes the mask that ran", "[repair][stereo][d
   CHECK(some.mean_reduction_db < all.mean_reduction_db);
 
   // threshold 1 admits only a cell whose lagged power, after the t60 decay, still
-  // exceeds its own -- a drop of more than 14 dB across the lag at the default
-  // geometry. That is a few percent of a steady signal, not none of it: the knob
-  // is relative to each bin's own power, so no finite setting closes it outright.
+  // exceeds its own -- a drop of more than 7 dB across the lag at the default
+  // geometry. That is a minority of a steady signal, not none of it: the knob is
+  // relative to each bin's own power, so no finite setting closes it outright.
   repair::DereverbClassicalConfig closed = config;
   closed.threshold = 1.0f;
   const repair::DereverbReport none =
       repair::dereverb_classical_stereo(audio, audio, closed).report;
   INFO("closed " << none.suppressed_fraction << " gated " << some.suppressed_fraction);
   CHECK(none.suppressed_fraction < some.suppressed_fraction);
-  CHECK(none.suppressed_fraction < 0.1f);
+  CHECK(none.suppressed_fraction < 0.2f);
   CHECK(none.mean_reduction_db < some.mean_reduction_db);
   CHECK(none.mean_reduction_db > 0.0f);
 

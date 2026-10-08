@@ -148,6 +148,9 @@ const std::vector<Exemption>& PeakShiftedConfigurations() {
       // A tube top band's gain breaks the flat band sum, so the sum peaks where
       // that filtered band does. Band alignment is the multiband case below.
       {"multiband.saturation", "band2.type", "2", "tube band breaks the flat band sum"},
+      // ADAA1 delays dry and harmonic by half a sample, so the response straddles
+      // lags 0 and 1 and the harmonic tips its peak onto the later one.
+      {"spectral.presenceEnhancer", "aliasing", "1", "ADAA1 half-sample delay"},
 #ifdef SONARE_WITH_FX
       // Fully-wet swept resonant band-passes, same resonator shape as eq.bandPass.
       {"effects.modulation.wah", "*", "*", "resonator group delay"},
