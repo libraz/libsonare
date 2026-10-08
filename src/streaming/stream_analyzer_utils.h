@@ -16,11 +16,6 @@ constexpr float kBpmMin = 60.0f;
 constexpr float kBpmMax = 200.0f;
 constexpr int kMinOnsetFrames = 100;
 
-// Minimum frequency for the streaming chroma filterbank (~C2). Skips very low
-// bass / sub-bass so low-frequency noise does not smear the chroma estimate.
-// Derived as one octave above C1 (kC1Hz * 2 ≈ 65.41 Hz = C2).
-constexpr float kStreamingChromaFminHz = sonare::constants::kC1Hz * 2.0f;
-
 /// @brief Floored modulo, always in [0, modulus) for a positive modulus.
 /// @details Native @c % truncates toward zero, so a negative left operand yields
 ///          a negative result. For a pitch class or a pattern position that is

@@ -490,8 +490,6 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
     ChromaFilterConfig chroma_config;
     chroma_config.n_chroma = 12;
     chroma_config.tuning = constants::kSemitonesPerOctave * std::log2(ref_hz / constants::kA4Hz);
-    /// Minimum frequency ~C2; see kStreamingChromaFminHz.
-    chroma_config.fmin = kStreamingChromaFminHz;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
     key_chroma_filterbank_ =

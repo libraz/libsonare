@@ -200,9 +200,6 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     /// Positive tuning means audio is sharp, so we subtract to correct
     chroma_config.tuning =
         constants::kSemitonesPerOctave * std::log2(config_.tuning_ref_hz / constants::kA4Hz);
-    /// Use C2 (~65 Hz) as minimum frequency to skip very low bass.
-    /// This helps avoid interference from sub-bass and low-frequency noise.
-    chroma_config.fmin = streaming_detail::kStreamingChromaFminHz;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
 
