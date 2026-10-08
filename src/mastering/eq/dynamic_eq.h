@@ -31,6 +31,17 @@ struct DynamicEqBand {
   // delay, not true look-ahead, and adds no latency to the audio path (see
   // band_detector_db() for the mechanism).
   float detector_delay_ms = 0.0f;
+
+  bool operator==(const DynamicEqBand& other) const {
+    return type == other.type && frequency_hz == other.frequency_hz &&
+           static_gain_db == other.static_gain_db && q == other.q &&
+           threshold_db == other.threshold_db && ratio == other.ratio &&
+           range_db == other.range_db && enabled == other.enabled &&
+           sidechain_q == other.sidechain_q && sidechain_freq_hz == other.sidechain_freq_hz &&
+           attack_ms == other.attack_ms && release_ms == other.release_ms &&
+           detector_delay_ms == other.detector_delay_ms;
+  }
+  bool operator!=(const DynamicEqBand& other) const { return !(*this == other); }
 };
 
 class DynamicEq : public rt::ProcessorBase {
@@ -82,6 +93,9 @@ class DynamicEq : public rt::ProcessorBase {
   float last_detector_db() const { return last_detector_db_; }
   float last_band_detector_db(size_t index) const;
   float last_applied_gain_db(size_t index) const;
+
+  /// @brief Throws where set_band() would refuse @p band, changing nothing.
+  static void validate_band(const DynamicEqBand& band);
 
  private:
   // Granularity (in samples) at which the per-band biquad coefficients are
@@ -162,14 +176,15 @@ class DynamicEq : public rt::ProcessorBase {
   };
 
   static void validate_index(size_t index);
-  static void validate_band(const DynamicEqBand& band);
-  static float detector_db(const float* const* channels, int num_channels, int num_samples);
+  // @p excluded_channel (-1 for none) contributes to neither sum nor count.
+  static float detector_db(const float* const* channels, int num_channels, int num_samples,
+                           int excluded_channel);
   // Updates band `index`'s persistent detector against the supplied sidechain
   // and returns the block's detector level in dB. Stateful: advances the
   // bandpass filters, envelope and detector-delay ring so the result is
   // continuous across blocks.
   float band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                         size_t index);
+                         int excluded_channel, size_t index);
   void ensure_detector(size_t index, int num_channels);
   // Applies the recursive-cell rule to the detector and gain state that survives
   // a block. O(bands x channels) and independent of block size, so the

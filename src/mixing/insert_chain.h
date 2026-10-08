@@ -116,7 +116,7 @@ inline void run_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& in
     // StereoPairOnly inserts get only the front L/R pair; surround planes pass through dry.
     const int insert_channels = (spo && num_channels > 2) ? 2 : num_channels;
     // Warming a bypassed insert uses the same surround detector context as the active path.
-    inserts[local]->set_detector_excluded_channel(detector_excluded_channel);
+    rt::forward_detector_exclusion(*inserts[local], detector_excluded_channel);
     if (inserts[local]->bypassed()) {
       // Run a bypassed stateful insert on a scratch copy so un-bypassing exposes no stale history.
       bool can_warm = bypass_scratch != nullptr && insert_channels >= 0 &&

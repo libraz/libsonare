@@ -60,10 +60,11 @@ int PhaseAlign::tail_samples() const noexcept {
 
 void PhaseAlign::set_config(const PhaseAlignConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) {
-    rebuild_delay();
-  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<PhaseAlignConfig>& diff) {
+    // The line is rebuilt, and its audio dropped, only for a new length; the
+    // fraction and side are read per sample.
+    if (prepared_ && diff.changed(&PhaseAlignConfig::delay_samples)) rebuild_delay();
+  });
 }
 
 bool PhaseAlign::set_parameter_impl(unsigned int param_id, float value) {

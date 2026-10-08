@@ -107,13 +107,14 @@ void HardClipper::reset() {
 
 void HardClipper::set_config(const HardClipperConfig& config) {
   validate_config(config);
-  const bool aliasing_changed = config_.aliasing != config.aliasing;
-  const bool reset_state = config_.ceiling != config.ceiling || aliasing_changed;
-  config_ = config;
-  if (reset_state) rebuild_adaa();
-  if (aliasing_changed) {
-    for (auto& state : oversampler_states_) oversampler_.reset_streaming(&state);
-  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<HardClipperConfig>& diff) {
+    // The antiderivative state is relative to the ceiling, and a different
+    // aliasing path starts from silence; every other field is read per sample.
+    if (diff.changed(&HardClipperConfig::ceiling, &HardClipperConfig::aliasing)) rebuild_adaa();
+    if (diff.changed(&HardClipperConfig::aliasing)) {
+      for (auto& state : oversampler_states_) oversampler_.reset_streaming(&state);
+    }
+  });
 }
 
 bool HardClipper::set_parameter_impl(unsigned int param_id, float value) {

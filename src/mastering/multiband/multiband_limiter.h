@@ -74,7 +74,7 @@ class MultibandLimiter : public rt::ProcessorBase {
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;
-  std::vector<dynamics::Limiter> limiters_;
+  std::vector<rt::ChildProcessor<dynamics::Limiter>> limiters_;
   // One path per band, so bands with different lookahead reach the sum aligned.
   rt::ParallelPaths band_paths_;
   std::vector<float> last_gain_reductions_db_;

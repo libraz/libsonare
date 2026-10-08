@@ -301,9 +301,15 @@ void StereoDelay::reset() {
 }
 
 void StereoDelay::set_config(const StereoDelayConfig& config) noexcept {
-  config_ = sanitize_config(config);
-  update_damping();
-  apply_interpolation();
+  // Times, feedback and mix are smoothed per sample; damping and interpolation
+  // are refreshed in place, so the delay lines keep their contents.
+  rt::apply_config_diff(config_, sanitize_config(config),
+                        [this](const rt::ConfigDiff<StereoDelayConfig>& diff) {
+                          if (diff.changed(&StereoDelayConfig::damping_hz)) update_damping();
+                          if (diff.changed(&StereoDelayConfig::interpolation)) {
+                            apply_interpolation();
+                          }
+                        });
 }
 
 bool StereoDelay::set_parameter_impl(unsigned int param_id, float value) {

@@ -1,6 +1,9 @@
 /// @file eq_dynamic_detail_test.cpp
 /// @brief Dynamic EQ and component detail tests.
 
+#include <memory>
+#include <utility>
+
 #include "eq_test_helpers.h"
 
 TEST_CASE("DynamicEq applies cut only above threshold", "[mastering][eq]") {
@@ -409,4 +412,50 @@ TEST_CASE("LinearPhaseEq band change does not silence the convolver history",
   // this near zero (this 256-sample block is shorter than the 257-tap kernel,
   // so a history reset would silence essentially the whole block).
   REQUIRE(next_rms > warm_rms * 0.5f);
+}
+
+TEST_CASE("DynamicEq detects the same way after a re-prepare", "[mastering][eq]") {
+  // A 200 Hz tone sits far outside a high-Q 1 kHz detector; a pass-through
+  // detector left by a re-prepare would read it at full level and cut.
+  DynamicEqBand band{EqBandType::Peak, 1000.0f, 0.0f, 2.0f, -40.0f, 4.0f, -9.0f, true};
+  band.sidechain_q = 20.0f;
+  const auto detect = [&](DynamicEq& eq, int rate) {
+    auto tone = sine(200.0f, rate, rate, 0.5f);
+    process(eq, tone);
+    return std::make_pair(eq.last_band_detector_db(0), eq.last_applied_gain_db(0));
+  };
+  DynamicEq eq;
+  eq.prepare(48000, 1024);
+  eq.set_band(0, band);
+  const auto first = detect(eq, 48000);
+  REQUIRE(first.first < -40.0f);
+  REQUIRE_THAT(first.second, WithinAbs(0.0f, 0.001f));
+  for (const int rate : {48000, 44100}) {
+    INFO("re-prepared at " << rate);
+    eq.prepare(rate, 1024);
+    const auto again = detect(eq, rate);
+    REQUIRE_THAT(again.first, WithinAbs(first.first, 1.0f));
+    REQUIRE_THAT(again.second, WithinAbs(0.0f, 0.001f));
+  }
+}
+
+TEST_CASE("Dynamic EQ detectors leave the excluded plane out", "[mastering][eq]") {
+  DynamicEqBand band{EqBandType::Peak, 60.0f, 0.0f, 1.0f, -40.0f, 4.0f, -12.0f, true};
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          auto eq = std::make_unique<DynamicEq>();
+          eq->prepare(48000.0, 256);
+          eq->set_band(0, band);
+          return eq;
+        }) == 0.0f);
+  EqBand dynamic{EqBandType::Peak, 60.0f, 0.0f, 1.0f, true};
+  dynamic.dyn.enabled = true;
+  dynamic.dyn.threshold_db = -40.0f;
+  dynamic.dyn.ratio = 4.0f;
+  dynamic.dyn.range_db = -12.0f;
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          auto eq = std::make_unique<EqualizerProcessor>(EqualizerProcessorConfig{6});
+          eq->prepare(48000.0, 256);
+          eq->set_band(0, dynamic);
+          return eq;
+        }) == 0.0f);
 }

@@ -73,8 +73,9 @@ void MultibandDynamicEq::process(float* const* channels, int num_channels, int n
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
     auto& processor = processors_[static_cast<size_t>(band)];
-    processor.process(scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels,
-                      num_samples);
+    processor.run(detector_excluded_channel(num_channels),
+                  scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels,
+                  num_samples);
     last_detector_db_[static_cast<size_t>(band)] = processor.last_detector_db();
     auto& gains = last_applied_gain_db_[static_cast<size_t>(band)];
     std::fill(gains.begin(), gains.end(), 0.0f);
@@ -101,25 +102,32 @@ void MultibandDynamicEq::reset() {
 
 void MultibandDynamicEq::set_config(const MultibandDynamicEqConfig& config) {
   validate_config(config);
-  // Only reconfigure/re-prepare the crossover when its parameters actually
-  // change; rebuilding it zeroes the crossover filter state and would click on
-  // band-parameter-only updates. Sub-processors are always rebuilt, prepared and
-  // reconfigured.
-  const bool crossover_changed = config.crossover != config_.crossover;
-  // Before the mirror: an unprepared crossover must still adopt the new split,
-  // and a rejected one leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  rebuild_processors();
-  if (prepared_) {
-    if (crossover_changed) {
-      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-    }
-    for (size_t band = 0; band < processors_.size(); ++band) {
-      processors_[band].prepare(sample_rate_, max_block_size_);
-      configure_processor(band);
-    }
-  }
+  if (prepared_) Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandDynamicEqConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandDynamicEqConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (processors_.size() == config_.bands.size()) {
+          // Only a crossover band whose sub-bands changed is reconfigured; the
+          // others keep their filter and detector history.
+          if (!prepared_) return;
+          for (size_t band = 0; band < processors_.size(); ++band) {
+            if (config_.bands[band] != diff.held().bands[band]) configure_processor(band);
+          }
+          return;
+        }
+        rebuild_processors();
+        if (prepared_) {
+          for (size_t band = 0; band < processors_.size(); ++band) {
+            processors_[band].prepare(sample_rate_, max_block_size_);
+            configure_processor(band);
+          }
+        }
+      });
 }
 
 bool MultibandDynamicEq::set_parameter_impl(unsigned int param_id, float value) {
@@ -181,6 +189,12 @@ void MultibandDynamicEq::validate_config(const MultibandDynamicEqConfig& config)
     if (band.size() > eq::DynamicEq::kMaxBands) {
       throw SonareException(ErrorCode::InvalidParameter, "too many dynamic EQ bands");
     }
+  }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  Crossover::validate_config(config.crossover);
+  for (const auto& bands : config.bands) {
+    for (const auto& band : bands) eq::DynamicEq::validate_band(band);
   }
 }
 

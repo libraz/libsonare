@@ -137,7 +137,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   static void validate_backend_capacity(const std::array<EqBand, kMaxBands>& bands,
                                         PhaseMode global_phase);
   static void validate_dynamic_params(const DynamicParams& dyn);
-  static float detector_db(const float* const* channels, int num_channels, int num_samples);
+  static float detector_db(const float* const* channels, int num_channels, int num_samples,
+                           int excluded_channel);
   // Per-band, per-channel detector filter and envelope state that persists across
   // process() blocks. Allocating fresh state per block (the previous behaviour)
   // re-rang the bandpass filter and reset the envelope at every block boundary,
@@ -165,8 +166,10 @@ class EqualizerProcessor : public rt::ProcessorBase {
   // Maximum per-band detector delay the detector ring is preallocated for. A
   // delay past this bound saturates so the audio-thread path never resizes.
   static constexpr float kMaxDetectorDelayMs = 20.0f;
+  // @p excluded_channel (-1 for none) contributes to neither sum nor count.
   float band_detector_db(size_t band_index, const float* const* channels, int num_channels,
-                         int num_samples, double sample_rate, const EqBand& band);
+                         int num_samples, int excluded_channel, double sample_rate,
+                         const EqBand& band);
   static float rms_db(const float* const* channels, int num_channels, int num_samples) noexcept;
   static float dynamic_gain_delta(const EqBand& band, float detector_db, float threshold_db);
   void update_dynamic_state(const float* const* channels, int num_channels, int num_samples);

@@ -58,15 +58,22 @@ void SoftKneeMax::process(float* const* channels, int num_channels, int num_samp
     }
   }
   non_finite_substitution_count_.add(substituted);
-  maximizer_.process(channels, num_channels, num_samples);
+  maximizer_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
 }
 
 void SoftKneeMax::reset() { maximizer_.reset(); }
 
 void SoftKneeMax::set_config(const SoftKneeMaxConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) prepare(sample_rate_, max_block_size_);
+  // The maximizer's own refusals, checked before anything is committed.
+  Maximizer::validate_config({0.0f, config.ceiling_db, 1.0f, config.release_ms});
+  // Drive and knee are read per block; the maximizer takes the rest and rebuilds
+  // only what its own changed fields need.
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<SoftKneeMaxConfig>& diff) {
+    if (diff.changed(&SoftKneeMaxConfig::ceiling_db, &SoftKneeMaxConfig::release_ms)) {
+      maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});
+    }
+  });
 }
 
 bool SoftKneeMax::set_parameter_impl(unsigned int param_id, float value) {

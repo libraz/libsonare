@@ -51,8 +51,10 @@ class Expander : public rt::RtConfigLifecycle<Expander, ExpanderConfig> {
   // Automatable parameters: 0=thresholdDb, 1=ratio, 2=attackMs, 3=releaseMs, 4=rangeDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
+  /// @brief Throws where set_config() would refuse @p config, changing nothing.
   static void validate_config(const ExpanderConfig& config);
+
+ private:
   static float gain_reduction_db(float input_db, const ExpanderConfig& config);
   void ensure_followers(int num_channels);
   /// @brief Recomputes scalar derived coefficients (envelope follower

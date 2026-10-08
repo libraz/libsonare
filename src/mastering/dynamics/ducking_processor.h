@@ -58,7 +58,7 @@ class DuckingProcessor : public rt::ProcessorBase {
   static SidechainRouterConfig to_router_config(const DuckingConfig& config);
 
   DuckingConfig config_{};
-  SidechainRouter router_;
+  rt::ChildProcessor<SidechainRouter> router_;
   double sample_rate_ = 48000.0;
 };
 

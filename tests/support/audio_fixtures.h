@@ -104,6 +104,91 @@ inline void process_stereo(rt::ProcessorBase& processor, std::vector<float>& lef
   processor.process(channels, 2, static_cast<int>(std::min(left.size(), right.size())));
 }
 
+/// @brief Largest sample difference between two copies of a processor fed the same
+///        stereo signal block by block, where @p touch is applied to the second
+///        copy halfway through.
+/// @details @p make returns a prepared processor; @p touch is what must leave its
+///          running state alone, so a correct processor returns exactly 0.
+template <typename Make, typename Touch>
+float divergence_after(Make&& make, Touch&& touch, int sample_rate = 48000, int block = 256,
+                       int blocks = 40) {
+  auto control = make();
+  auto touched = make();
+  float worst = 0.0f;
+  for (int b = 0; b < blocks; ++b) {
+    if (b == blocks / 2) touch(*touched);
+    std::vector<float> l1(static_cast<size_t>(block));
+    std::vector<float> r1(static_cast<size_t>(block));
+    for (int i = 0; i < block; ++i) {
+      const double t = static_cast<double>(b * block + i) / sample_rate;
+      l1[static_cast<size_t>(i)] =
+          static_cast<float>(0.4 * std::sin(constants::kTwoPiD * 110.0 * t) +
+                             0.3 * std::sin(constants::kTwoPiD * 2300.0 * t));
+      r1[static_cast<size_t>(i)] =
+          static_cast<float>(0.3 * std::sin(constants::kTwoPiD * 330.0 * t) +
+                             0.3 * std::sin(constants::kTwoPiD * 7100.0 * t));
+    }
+    std::vector<float> l2 = l1;
+    std::vector<float> r2 = r1;
+    process_stereo(*control, l1, r1);
+    process_stereo(*touched, l2, r2);
+    worst = std::max(worst, std::max(max_abs_difference(l1, l2), max_abs_difference(r1, r2)));
+  }
+  return worst;
+}
+
+/// @brief How far a processor's other planes move when its detector-excluded plane
+///        goes from silence to full scale, over a 6-plane block stream.
+/// @details Two copies built by @p make get plane 3 excluded; one hears a silent
+///          plane 3, the other a full-scale one. Returns the largest difference
+///          across the remaining planes' output and the reported gain reduction,
+///          which a processor honouring the exclusion keeps at exactly 0.
+template <typename Make>
+float excluded_plane_influence(Make&& make, int sample_rate = 48000, int block = 256,
+                               int blocks = 40) {
+  constexpr int kPlanes = 6;
+  constexpr int kExcluded = 3;
+  auto quiet = make();
+  auto loud = make();
+  quiet->set_detector_excluded_channel(kExcluded);
+  loud->set_detector_excluded_channel(kExcluded);
+  float worst = 0.0f;
+  for (int b = 0; b < blocks; ++b) {
+    std::vector<std::vector<float>> a(kPlanes, std::vector<float>(static_cast<size_t>(block)));
+    for (int ch = 0; ch < kPlanes; ++ch) {
+      for (int i = 0; i < block; ++i) {
+        const double t = static_cast<double>(b * block + i) / sample_rate;
+        a[static_cast<size_t>(ch)][static_cast<size_t>(i)] =
+            ch == kExcluded ? 0.0f
+                            : static_cast<float>(
+                                  0.05 * std::sin(constants::kTwoPiD * (220.0 + 110.0 * ch) * t));
+      }
+    }
+    auto c = a;
+    for (int i = 0; i < block; ++i) {
+      const double t = static_cast<double>(b * block + i) / sample_rate;
+      c[kExcluded][static_cast<size_t>(i)] =
+          static_cast<float>(0.95 * std::sin(constants::kTwoPiD * 60.0 * t));
+    }
+    float* pa[kPlanes];
+    float* pc[kPlanes];
+    for (int ch = 0; ch < kPlanes; ++ch) {
+      pa[ch] = a[static_cast<size_t>(ch)].data();
+      pc[ch] = c[static_cast<size_t>(ch)].data();
+    }
+    quiet->process(pa, kPlanes, block);
+    loud->process(pc, kPlanes, block);
+    for (int ch = 0; ch < kPlanes; ++ch) {
+      if (ch == kExcluded) continue;
+      worst = std::max(worst,
+                       max_abs_difference(a[static_cast<size_t>(ch)], c[static_cast<size_t>(ch)]));
+    }
+    worst =
+        std::max(worst, std::abs(quiet->last_gain_reduction_db() - loud->last_gain_reduction_db()));
+  }
+  return worst;
+}
+
 /// Default analysis sample rate shared by the spectral voice/effect tests.
 constexpr double kRate = 48000.0;
 

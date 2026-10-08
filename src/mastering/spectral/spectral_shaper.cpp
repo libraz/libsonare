@@ -111,12 +111,16 @@ void SpectralShaper::reset() {
 
 void SpectralShaper::set_config(const SpectralShaperConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) {
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<SpectralShaperConfig>& diff) {
+    if (!prepared_ ||
+        !diff.changed(&SpectralShaperConfig::attack_ms, &SpectralShaperConfig::release_ms)) {
+      return;
+    }
+    // Time constants only; each envelope keeps its level.
     for (auto& envelope : envelopes_) {
       envelope.prepare(sample_rate_, config_.attack_ms, config_.release_ms);
     }
-  }
+  });
 }
 
 bool SpectralShaper::set_parameter_impl(unsigned int param_id, float value) {

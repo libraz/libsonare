@@ -161,20 +161,20 @@ void MultibandImager::reset() {
 
 void MultibandImager::set_config(const MultibandImagerConfig& config) {
   validate_config(config);
-  // Only reconfigure/re-prepare the crossover when its parameters actually
-  // change; rebuilding it zeroes the crossover filter state and would click on
-  // band-parameter-only updates. The allpass decorrelation state is rebuilt and
-  // reset on every set_config (it was before this change too).
-  const bool crossover_changed = config.crossover != config_.crossover;
-  // Before the mirror: an unprepared crossover must still adopt the new split,
-  // and a rejected one leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  if (prepared_ && crossover_changed) {
-    // Re-prepare (which rebuilds crossover state and the allpass stages) only
-    // when the crossover layout changed, e.g. the band count.
-    prepare(sample_rate_, max_block_size_, max_working_channels_);
-  }
+  if (prepared_) Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<MultibandImagerConfig>& diff) {
+    // Band widths and amounts are read per sample. The crossover rebuilds (and
+    // zeroes) itself only for a changed split, and the decorrelation stages only
+    // when the band count they are sized by changes.
+    if (!diff.changed(&MultibandImagerConfig::crossover)) return;
+    crossover_.set_config(config_.crossover);
+    if (!prepared_) return;
+    if (allpass_.size() != config_.bands.size()) {
+      prepare(sample_rate_, max_block_size_, max_working_channels_);
+    } else {
+      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+    }
+  });
 }
 
 bool MultibandImager::set_parameter_impl(unsigned int param_id, float value) {
@@ -215,6 +215,9 @@ void MultibandImager::validate_config(const MultibandImagerConfig& config) {
       throw SonareException(ErrorCode::InvalidParameter, "imager width must be non-negative");
     }
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  Crossover::validate_config(config.crossover);
 }
 
 }  // namespace sonare::mastering::multiband

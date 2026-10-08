@@ -2,8 +2,11 @@
 /// @brief Specialized EQ processor tests.
 
 #include <limits>
+#include <memory>
 
 #include "eq_test_helpers.h"
+#include "mastering/api/insert_factory.h"
+#include "mastering/api/named_processor.h"
 #include "support/alloc_guard.h"
 
 TEST_CASE("ShelvingEq boosts low and high shelves independently", "[mastering][eq]") {
@@ -686,4 +689,72 @@ TEST_CASE("Pultec and API-style defaults automate at every accepted rate", "[mas
     process(api, audio);
     REQUIRE(std::all_of(audio.begin(), audio.end(), [](float x) { return std::isfinite(x); }));
   }
+}
+
+TEST_CASE("ApiStyleEq keeps bands set before prepare, on every path", "[mastering][eq]") {
+  // 500 Hz +12 dB at its own centre: the band gives back 10^(12/20) ~ 3.98.
+  for (const int rate : {48000, 96000}) {
+    INFO("rate " << rate);
+    ApiStyleEq eq;
+    eq.set_band(ApiStyleEq::Band::LowMid, 500.0f, 12.0f);
+    eq.prepare(rate, 128);
+    eq.prepare(rate, 128);
+    auto tone = sine(500.0f, rate, rate / 2);
+    const float before = rms_tail(tone, static_cast<size_t>(rate / 4));
+    process(eq, tone);
+    REQUIRE_THAT(rms_tail(tone, static_cast<size_t>(rate / 4)) / before, WithinAbs(3.98f, 0.1f));
+
+    const std::string json = R"({"lowMidFrequencyHz":500,"lowMidGainDb":12})";
+    auto insert = sonare::mastering::api::make_insert("eq.apiStyle", json);
+    REQUIRE(insert != nullptr);
+    insert->prepare(rate, 128);
+    auto inserted = sine(500.0f, rate, rate / 2);
+    process(*insert, inserted);
+    REQUIRE_THAT(rms_tail(inserted, static_cast<size_t>(rate / 4)) / before,
+                 WithinAbs(3.98f, 0.1f));
+
+    const auto source = sine(500.0f, rate, rate / 2);
+    const auto named = sonare::mastering::api::apply_named_processor(
+        "eq.apiStyle", source.data(), source.size(), rate,
+        {{"lowMidFrequencyHz", 500.0}, {"lowMidGainDb", 12.0}});
+    REQUIRE_THAT(rms_tail(named.samples, static_cast<size_t>(rate / 4)) / before,
+                 WithinAbs(3.98f, 0.1f));
+  }
+}
+
+TEST_CASE("EqualizerProcessor keeps filter history through same-value and retuning setters",
+          "[mastering][eq]") {
+  const EqBand band{EqBandType::Peak, 1000.0f, 6.0f, 1.0f, true};
+  const auto make = [&] {
+    auto eq = std::make_unique<EqualizerProcessor>();
+    eq->prepare(48000.0, 256);
+    eq->set_band(0, band);
+    return eq;
+  };
+  CHECK(sonare::test::divergence_after(
+            make, [](EqualizerProcessor& eq) { eq.set_gain_scale(eq.gain_scale()); }) == 0.0f);
+  CHECK(sonare::test::divergence_after(
+            make, [&](EqualizerProcessor& eq) { eq.set_band(0, band); }) == 0.0f);
+  // A retuned band takes new coefficients over the same history, as set_parameter does.
+  EqBand retuned = band;
+  retuned.gain_db = 3.0f;
+  const auto by_setter = [&](EqualizerProcessor& eq) { eq.set_band(0, retuned); };
+  const auto by_parameter = [](EqualizerProcessor& eq) { eq.set_parameter(1, 3.0f); };
+  auto a = make();
+  auto b = make();
+  float worst = 0.0f;
+  for (int block = 0; block < 40; ++block) {
+    if (block == 20) {
+      by_setter(*a);
+      by_parameter(*b);
+    }
+    auto la = sine(1000.0f, 48000, 256);
+    auto ra = la;
+    auto lb = la;
+    auto rb = la;
+    process_stereo(*a, la, ra);
+    process_stereo(*b, lb, rb);
+    worst = std::max(worst, max_abs_difference(la, lb));
+  }
+  CHECK(worst == 0.0f);
 }

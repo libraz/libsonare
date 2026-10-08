@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/processor_base.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::common {
@@ -13,7 +14,8 @@ JilesAtherton::JilesAtherton(JilesAthertonConfig config) : config_(config) {
 
 void JilesAtherton::set_config(const JilesAthertonConfig& config) {
   validate_config(config);
-  config_ = config;
+  // Every field is read per sample; nothing is rebuilt.
+  rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<JilesAthertonConfig>&) {});
 }
 
 void JilesAtherton::integrate_step(JilesAthertonState& state, float field, float d_field) const {

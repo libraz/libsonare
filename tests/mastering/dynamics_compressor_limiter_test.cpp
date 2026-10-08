@@ -1,7 +1,13 @@
 /// @file dynamics_compressor_limiter_test.cpp
 /// @brief Compressor and limiter dynamics tests.
 
+#include <memory>
+
 #include "dynamics_test_helpers.h"
+#include "mastering/maximizer/adaptive_release.h"
+#include "mastering/maximizer/maximizer.h"
+#include "mastering/maximizer/soft_knee_max.h"
+#include "mastering/maximizer/true_peak_limiter.h"
 
 TEST_CASE("Compressor reduces level above threshold", "[mastering][dynamics]") {
   Compressor compressor({-18.0f, 4.0f, 0.0f, 20.0f, 0.0f, 0.0f, false, DetectorMode::Rms});
@@ -365,4 +371,94 @@ TEST_CASE("Compressor stays finite when the detector excludes its only channel",
       }
     }
   }
+}
+
+namespace {
+
+// An identical config applied mid-stream, against a copy that never sees it.
+template <typename Processor, typename Config>
+float reapply_divergence(const Config& config) {
+  return sonare::test::divergence_after(
+      [&] {
+        auto processor = std::make_unique<Processor>(config);
+        processor->prepare(48000.0, 256);
+        return processor;
+      },
+      [&](Processor& processor) { processor.set_config(config); });
+}
+
+}  // namespace
+
+TEST_CASE("Re-applying a limiter or maximizer config keeps its running state",
+          "[mastering][dynamics]") {
+  CHECK(reapply_divergence<BrickwallLimiter>(BrickwallLimiterConfig{-6.0f, 1.0f, 50.0f}) == 0.0f);
+  CHECK(reapply_divergence<Limiter>(LimiterConfig{-6.0f, 1.0f, 50.0f}) == 0.0f);
+  using sonare::mastering::maximizer::AdaptiveRelease;
+  using sonare::mastering::maximizer::AdaptiveReleaseConfig;
+  using sonare::mastering::maximizer::Maximizer;
+  using sonare::mastering::maximizer::MaximizerConfig;
+  using sonare::mastering::maximizer::SoftKneeMax;
+  using sonare::mastering::maximizer::SoftKneeMaxConfig;
+  CHECK(reapply_divergence<Maximizer>(MaximizerConfig{6.0f, -3.0f, 1.0f, 50.0f}) == 0.0f);
+  CHECK(reapply_divergence<SoftKneeMax>(SoftKneeMaxConfig{6.0f, -3.0f, 6.0f, 50.0f}) == 0.0f);
+  CHECK(reapply_divergence<AdaptiveRelease>(AdaptiveReleaseConfig{-3.0f}) == 0.0f);
+  using sonare::mastering::maximizer::TruePeakLimiter;
+  using sonare::mastering::maximizer::TruePeakLimiterConfig;
+  CHECK(reapply_divergence<TruePeakLimiter>(TruePeakLimiterConfig{-3.0f}) == 0.0f);
+}
+
+TEST_CASE("A brickwall limiter's release change keeps the ceiling it was given",
+          "[mastering][dynamics]") {
+  // Ceiling moved after prepare, then release changed: the inner limiter must
+  // limit to the new ceiling, not clip down to it from the prepare-time one.
+  const auto render = [](BrickwallLimiter& limiter) {
+    std::vector<float> left;
+    for (int b = 0; b < 40; ++b) {
+      std::vector<float> l(256);
+      for (int i = 0; i < 256; ++i) {
+        l[static_cast<size_t>(i)] =
+            0.9f * static_cast<float>(
+                       std::sin(2.0 * sonare::constants::kPiD * 220.0 * (b * 256 + i) / 48000.0));
+      }
+      std::vector<float> r = l;
+      process_stereo(limiter, l, r);
+      if (b >= 30) left.insert(left.end(), l.begin(), l.end());
+    }
+    return left;
+  };
+  BrickwallLimiter moved({-1.0f, 1.0f, 50.0f});
+  moved.prepare(48000.0, 256);
+  moved.set_config({-12.0f, 1.0f, 50.0f});
+  moved.set_release_ms(0.0f);
+  BrickwallLimiter fresh({-12.0f, 1.0f, 0.0f});
+  fresh.prepare(48000.0, 256);
+  const auto moved_out = render(moved);
+  REQUIRE(moved.hard_clip_count() == 0);
+  REQUIRE(max_abs_difference(moved_out, render(fresh)) == 0.0f);
+}
+
+TEST_CASE("Limiter and maximizer wrappers leave the excluded plane out of detection",
+          "[mastering][dynamics]") {
+  using sonare::mastering::maximizer::AdaptiveRelease;
+  using sonare::mastering::maximizer::AdaptiveReleaseConfig;
+  using sonare::mastering::maximizer::Maximizer;
+  using sonare::mastering::maximizer::MaximizerConfig;
+  using sonare::mastering::maximizer::SoftKneeMax;
+  using sonare::mastering::maximizer::SoftKneeMaxConfig;
+  const auto prepared = [](auto processor) {
+    processor->prepare(48000.0, 256);
+    return processor;
+  };
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          return prepared(std::make_unique<BrickwallLimiter>(BrickwallLimiterConfig{-6.0f}));
+        }) == 0.0f);
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          return prepared(std::make_unique<Maximizer>(MaximizerConfig{0.0f, -6.0f}));
+        }) == 0.0f);
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          return prepared(std::make_unique<SoftKneeMax>(SoftKneeMaxConfig{0.0f, -6.0f, 0.5f}));
+        }) == 0.0f);
+  CHECK(sonare::test::excluded_plane_influence([&] {
+          return prepared(std::make_unique<AdaptiveRelease>(AdaptiveReleaseConfig{-6.0f}));
+        }) == 0.0f);
 }

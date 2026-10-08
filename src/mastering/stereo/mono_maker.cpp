@@ -69,8 +69,9 @@ void MonoMaker::reset() {
 
 void MonoMaker::set_config(const MonoMakerConfig& config) {
   validate_config(config);
-  config_ = config;
-  update_coefficient();
+  // The crossover coefficient is a scalar over running filter state.
+  rt::apply_config_diff(config_, config,
+                        [this](const rt::ConfigDiff<MonoMakerConfig>&) { update_coefficient(); });
 }
 
 bool MonoMaker::set_parameter_impl(unsigned int param_id, float value) {

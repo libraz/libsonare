@@ -91,8 +91,10 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
   // Automatable parameters: 0=ceilingDb, 1=releaseMs
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
+  /// @brief Throws where set_config() would refuse @p config, changing nothing.
   static void validate_config(const BrickwallLimiterConfig& config);
+
+ private:
   /// @brief Recomputes scalar derived coefficients (forwards ceiling and
   ///        release to the inner @ref Limiter via its RT-safe parameter
   ///        setters) from @p config. RT-safe: scalar math only, no
@@ -104,7 +106,7 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
   ///          @ref set_config branch that re-runs @ref prepare.
   void update_coefficients(const BrickwallLimiterConfig& config);
 
-  Limiter limiter_;
+  rt::ChildProcessor<Limiter> limiter_;
   bool prepared_ = false;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

@@ -213,7 +213,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   void discard_non_finite_state() noexcept;
 
   TruePeakLimiterConfig config_{};
-  dynamics::BrickwallLimiter limiter_;
+  rt::ChildProcessor<dynamics::BrickwallLimiter> limiter_;
   sonare::rt::Oversampler oversampler_{4};
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;
   std::vector<sonare::rt::LookaheadBuffer> oversampled_lookahead_;

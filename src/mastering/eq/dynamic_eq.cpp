@@ -35,6 +35,10 @@ void DynamicEq::prepare(double sample_rate, int max_block_size) {
   max_detector_delay_samples_ =
       static_cast<int>(std::round(sample_rate_ * kMaxDetectorDelayMs * 0.001));
   for (auto& detector : detectors_) {
+    // A fresh state, cached design key included: the filters below start as
+    // pass-through, so a key left from the last prepare would describe
+    // coefficients that no longer exist and keep them from being designed.
+    detector = DetectorState{};
     detector.channels.assign(kRealtimePreparedChannels, {});
     for (auto& channel : detector.channels) {
       channel.look_ring.assign(static_cast<size_t>(std::max(max_detector_delay_samples_, 0)), 0.0f);
@@ -60,11 +64,15 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
                                               : const_cast<const float* const*>(channels);
   const int detector_num_channels =
       sidechain_channels_ != nullptr ? sidechain_num_channels_ : num_channels;
-  last_detector_db_ = detector_db(detector_channels, detector_num_channels, num_samples);
+  // The host's excluded plane (an LFE) is left out of the main-input detector;
+  // an external key is the caller's own choice of channels and keeps them all.
+  const int excluded =
+      sidechain_channels_ != nullptr ? -1 : detector_excluded_channel(num_channels);
+  last_detector_db_ = detector_db(detector_channels, detector_num_channels, num_samples, excluded);
   for (size_t i = 0; i < kMaxBands; ++i) {
     last_band_detector_db_[i] =
         bands_[i].enabled
-            ? band_detector_db(detector_channels, detector_num_channels, num_samples, i)
+            ? band_detector_db(detector_channels, detector_num_channels, num_samples, excluded, i)
             : kFloorDb;
   }
   // Before the reading reaches a gain target, so a poisoned detector cannot hand
@@ -343,8 +351,9 @@ void DynamicEq::validate_band(const DynamicEqBand& band) {
   }
 }
 
-float DynamicEq::detector_db(const float* const* channels, int num_channels, int num_samples) {
-  return broadband_detector_db(channels, num_channels, num_samples);
+float DynamicEq::detector_db(const float* const* channels, int num_channels, int num_samples,
+                             int excluded_channel) {
+  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel);
 }
 
 void DynamicEq::ensure_detector(size_t index, int num_channels) {
@@ -435,7 +444,7 @@ void DynamicEq::ensure_detector(size_t index, int num_channels) {
 }
 
 float DynamicEq::band_detector_db(const float* const* channels, int num_channels, int num_samples,
-                                  size_t index) {
+                                  int excluded_channel, size_t index) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
   ensure_detector(index, num_channels);
   DetectorState& state = detectors_[index];
@@ -456,7 +465,10 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
   // time. True lookahead would require delaying the audio, which this processor
   // intentionally does not do.
   double sum = 0.0;
+  int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
+    if (ch == excluded_channel) continue;
+    ++counted;
     DetectorChannel& dc = state.channels[static_cast<size_t>(ch)];
     auto step = [&](float sample) {
       const double rectified = std::abs(dc.filter_b.process(dc.filter_a.process(sample)));
@@ -484,7 +496,7 @@ float DynamicEq::band_detector_db(const float* const* channels, int num_channels
       }
     }
   }
-  const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
+  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
   const double rms = std::sqrt(sum / std::max(count, 1.0));
   return linear_to_db(static_cast<float>(rms));
 }

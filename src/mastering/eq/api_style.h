@@ -62,7 +62,8 @@ class ApiStyleEq : public rt::ProcessorBase {
   static float proportional_q(float gain_db);
 
   ParametricEq eq_;
-  std::array<BandState, 4> bands_{};
+  // Each band starts at its console default frequency, flat and disabled.
+  std::array<BandState, 4> bands_{{{100.0f}, {500.0f}, {3000.0f}, {10000.0f}}};
 };
 
 }  // namespace sonare::mastering::eq

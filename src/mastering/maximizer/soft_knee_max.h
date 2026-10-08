@@ -51,7 +51,7 @@ class SoftKneeMax : public rt::ProcessorBase {
   static void validate_config(const SoftKneeMaxConfig& config);
 
   SoftKneeMaxConfig config_{};
-  Maximizer maximizer_;
+  rt::ChildProcessor<Maximizer> maximizer_;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   bool prepared_ = false;

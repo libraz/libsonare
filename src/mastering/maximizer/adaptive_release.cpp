@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 
 #include "mastering/common/parameter_domain.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
@@ -67,7 +69,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
   sonare::rt::ScopedNoDenormals guard;
   ensure_prepared(prepared_, "AdaptiveRelease");
   if (!validate_block_size(num_channels, num_samples)) {
-    limiter_.process(channels, num_channels, num_samples);
+    limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
     return;
   }
   validate_channel_buffers(channels, num_channels);
@@ -75,7 +77,7 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
     // A block the inner limiter was never prepared for must still be rejected:
     // handing it over whole raises the established error, whereas splitting it
     // into control chunks would let it through as a series of small ones.
-    limiter_.process(channels, num_channels, num_samples);
+    limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
     return;
   }
 
@@ -101,7 +103,8 @@ void AdaptiveRelease::process(float* const* channels, int num_channels, int num_
     for (int ch = 0; ch < num_channels; ++ch) {
       chunk_channels_[static_cast<std::size_t>(ch)] = channels[ch] + offset;
     }
-    limiter_.process(chunk_channels_.data(), num_channels, count);
+    limiter_.run(detector_excluded_channel(num_channels), chunk_channels_.data(), num_channels,
+                 count);
     last_gain_reduction_db_ = std::min(last_gain_reduction_db_, limiter_.last_gain_reduction_db());
     control_phase_ = (control_phase_ + count) % kControlIntervalSamples;
     offset += count;
@@ -122,13 +125,32 @@ void AdaptiveRelease::reset() {
 
 void AdaptiveRelease::set_config(const AdaptiveReleaseConfig& config) {
   validate_config(config);
-  config_ = config;
-  authored_min_release_ms_ = config.min_release_ms;
-  authored_max_release_ms_ = config.max_release_ms;
-  authored_crest_low_ = config.crest_low;
-  authored_crest_high_ = config.crest_high;
-  normalize_bound_pairs();
-  if (prepared_) prepare(sample_rate_, max_block_size_);
+  // The limiter's own refusals, checked before anything is committed.
+  TruePeakLimiter::validate_config(
+      {config.ceiling_db, config.lookahead_ms, current_release_ms_, 4});
+  if (prepared_) {
+    (void)dynamics::checked_lookahead_samples(sample_rate_, config.lookahead_ms,
+                                              std::numeric_limits<int>::max() / 4 - 1);
+  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<AdaptiveReleaseConfig>& diff) {
+    authored_min_release_ms_ = diff.next().min_release_ms;
+    authored_max_release_ms_ = diff.next().max_release_ms;
+    authored_crest_low_ = diff.next().crest_low;
+    authored_crest_high_ = diff.next().crest_high;
+    normalize_bound_pairs();
+    if (!prepared_) return;
+    // Envelopes, the adapted release and the limiter's history all carry over;
+    // only what a changed field derives is recomputed.
+    if (diff.changed(&AdaptiveReleaseConfig::crest_window_ms,
+                     &AdaptiveReleaseConfig::release_smoothing_ms)) {
+      update_envelope_coefficients();
+    }
+    current_release_ms_ = std::clamp(current_release_ms_, lowest_release_ms(),
+                                     std::max(config_.min_release_ms, config_.max_release_ms));
+    if (diff.changed(&AdaptiveReleaseConfig::ceiling_db, &AdaptiveReleaseConfig::lookahead_ms)) {
+      configure_limiter();
+    }
+  });
 }
 
 bool AdaptiveRelease::set_parameter_impl(unsigned int param_id, float value) {
@@ -216,7 +238,10 @@ void AdaptiveRelease::update_envelope_coefficients() noexcept {
 
 bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels, int offset,
                                         int count) noexcept {
-  const float inv_channels = 1.0f / static_cast<float>(num_channels);
+  // The excluded plane (an LFE) drives neither the crest measurement nor its count.
+  const int excluded = detector_excluded_channel(num_channels);
+  const int counted = num_channels - (excluded >= 0 ? 1 : 0);
+  const float inv_channels = counted > 0 ? 1.0f / static_cast<float>(counted) : 0.0f;
   // Map crest factor onto [0, 1] then onto [max_release, min_release]:
   // high crest (transient) -> short release, low crest (sustained) -> long release.
   const float crest_low = std::min(config_.crest_low, config_.crest_high);
@@ -232,6 +257,7 @@ bool AdaptiveRelease::advance_envelopes(float* const* channels, int num_channels
     float linked_peak = 0.0f;
     float mean_square = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
+      if (ch == excluded) continue;
       const float s = channels[ch][offset + i];
       linked_peak = std::max(linked_peak, std::abs(s));
       mean_square += s * s;

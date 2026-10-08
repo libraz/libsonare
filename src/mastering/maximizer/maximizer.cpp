@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/common/parameter_domain.h"
+#include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -35,15 +36,25 @@ void Maximizer::process(float* const* channels, int num_channels, int num_sample
       throw SonareException(ErrorCode::InvalidParameter, "channel buffer must not be null");
     for (int i = 0; i < num_samples; ++i) channels[ch][i] *= gain;
   }
-  limiter_.process(channels, num_channels, num_samples);
+  limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
 }
 
 void Maximizer::reset() { limiter_.reset(); }
 
 void Maximizer::set_config(const MaximizerConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) prepare(sample_rate_, max_block_size_);
+  // The limiter's own refusals, checked before anything is committed.
+  dynamics::BrickwallLimiter::validate_config(
+      {config.ceiling_db, config.lookahead_ms, config.release_ms});
+  if (prepared_) (void)dynamics::checked_lookahead_samples(sample_rate_, config.lookahead_ms);
+  // The input gain is read per block; the limiter takes the rest and rebuilds
+  // only what its own changed fields need.
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<MaximizerConfig>& diff) {
+    if (diff.changed(&MaximizerConfig::ceiling_db, &MaximizerConfig::lookahead_ms,
+                     &MaximizerConfig::release_ms)) {
+      limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+    }
+  });
 }
 
 bool Maximizer::set_parameter_impl(unsigned int param_id, float value) {

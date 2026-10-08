@@ -1586,17 +1586,23 @@ TEST_CASE("non-centred reassignment places an impulse at its sample with a short
   }
 }
 
-TEST_CASE("griffin_lim refuses a single frame whatever the iteration count",
+TEST_CASE("griffin_lim gives a single frame the same reconstruction at every iteration count",
           "[spectrum][griffin_lim]") {
   constexpr int kNFft = 16;
   const std::vector<float> magnitude(kNFft / 2 + 1, 1.0f);
-  for (const int n_iter : {0, 1, 4}) {
+  GriffinLimConfig none;
+  none.n_iter = 0;
+  const Audio reference =
+      griffin_lim(magnitude.data(), kNFft / 2 + 1, 1, kNFft, kNFft / 4, 22050, none);
+  for (const int n_iter : {1, 4}) {
     GriffinLimConfig config;
     config.n_iter = n_iter;
     INFO("n_iter " << n_iter);
-    REQUIRE_THROWS_AS(
-        griffin_lim(magnitude.data(), kNFft / 2 + 1, 1, kNFft, kNFft / 4, 22050, config),
-        SonareException);
+    Audio got;
+    REQUIRE_NOTHROW(
+        got = griffin_lim(magnitude.data(), kNFft / 2 + 1, 1, kNFft, kNFft / 4, 22050, config));
+    REQUIRE(got.size() == reference.size());
+    for (size_t i = 0; i < got.size(); ++i) REQUIRE(got[i] == reference[i]);
   }
   GriffinLimConfig two_frames;
   two_frames.n_iter = 1;

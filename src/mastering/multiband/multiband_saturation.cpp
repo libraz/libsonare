@@ -188,28 +188,36 @@ void MultibandSaturation::reset() {
 
 void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
   validate_config(config);
-  // Only reconfigure/re-prepare the crossover when its parameters actually
-  // change. crossover_.set_config() (and prepare()) rebuild and zero the
-  // crossover filter state, which would click if invoked on every set_config
-  // call that only touches band parameters. Sub-processors are always rebuilt
-  // and prepared; that path does not disturb crossover state.
-  const bool crossover_changed = config.crossover != config_.crossover;
-  // Before the mirror: an unprepared crossover must still adopt the new split,
-  // and a rejected one leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  rebuild_processors();
-  if (prepared_) {
-    if (crossover_changed) {
-      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-    }
-    for (auto& processor : processors_) {
-      processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
-    }
-  }
-  // The band types (and therefore their delays) may have changed with the new
-  // configuration, so the alignment is derived again from what is now held.
-  rebuild_band_compensation();
+  if (prepared_) multiband::Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandSaturationConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandSaturationConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (processors_.size() == config_.bands.size()) {
+          // Only a band whose own settings changed is rebuilt; the others keep
+          // their saturator, oversampler and filter history.
+          for (size_t band = 0; band < processors_.size(); ++band) {
+            if (config_.bands[band] == diff.held().bands[band]) continue;
+            processors_[band] = make_processor(config_.bands[band]);
+            if (prepared_) {
+              processors_[band]->prepare(sample_rate_, max_block_size_, max_working_channels_);
+            }
+          }
+        } else {
+          rebuild_processors();
+          if (prepared_) {
+            for (auto& processor : processors_) {
+              processor->prepare(sample_rate_, max_block_size_, max_working_channels_);
+            }
+          }
+        }
+        // A band's type sets its delay; unchanged latencies keep their lines.
+        rebuild_band_compensation();
+      });
 }
 
 bool MultibandSaturation::set_parameter_impl(unsigned int param_id, float value) {
@@ -277,6 +285,9 @@ void MultibandSaturation::validate_config(const MultibandSaturationConfig& confi
                             "saturation drive and output gain must produce finite linear gains");
     }
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  multiband::Crossover::validate_config(config.crossover);
 }
 
 void MultibandSaturation::rebuild_processors() {

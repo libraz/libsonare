@@ -4,6 +4,7 @@
 #include <cmath>
 #include <initializer_list>
 #include <limits>
+#include <memory>
 #include <random>
 #include <vector>
 
@@ -1218,4 +1219,36 @@ TEST_CASE("BitCrusher disc clicks keep their rate per second at every sample rat
     // rounded to the coarse draw step sat 10% high at 48 kHz and 46% at 192 kHz.
     REQUIRE(std::abs(static_cast<float>(clicks) - expected) < 0.08f * expected);
   }
+}
+
+namespace {
+
+// An identical config applied mid-stream, against a copy that never sees it.
+template <typename Processor, typename Config>
+float reapply_divergence(const Config& config) {
+  return sonare::test::divergence_after(
+      [&] {
+        auto processor = std::make_unique<Processor>(config);
+        processor->prepare(48000.0, 256);
+        return processor;
+      },
+      [&](Processor& processor) { processor.set_config(config); });
+}
+
+}  // namespace
+
+TEST_CASE("Re-applying a saturation config keeps its running state", "[mastering][saturation]") {
+  TapeConfig tape;
+  tape.oversample_factor = 4;
+  CHECK(reapply_divergence<Tape>(tape) == 0.0f);
+  CHECK(reapply_divergence<Tube>(TubeConfig{}) == 0.0f);
+  CHECK(reapply_divergence<Transformer>(TransformerConfig{}) == 0.0f);
+  CHECK(reapply_divergence<HardClipper>(HardClipperConfig{}) == 0.0f);
+  CHECK(reapply_divergence<SoftClipper>(SoftClipperConfig{}) == 0.0f);
+  CHECK(reapply_divergence<Waveshaper>(WaveshaperConfig{}) == 0.0f);
+  CHECK(reapply_divergence<BitCrusher>(BitCrusherConfig{}) == 0.0f);
+  ExciterConfig exciter;
+  exciter.aliasing = sonare::rt::AliasingControl::Oversample4x;
+  CHECK(reapply_divergence<Exciter>(exciter) == 0.0f);
+  CHECK(reapply_divergence<MultibandExciter>(MultibandExciterConfig{}) == 0.0f);
 }

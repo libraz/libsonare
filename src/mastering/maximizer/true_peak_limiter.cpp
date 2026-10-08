@@ -452,24 +452,21 @@ void TruePeakLimiter::set_config(const TruePeakLimiterConfig& config) {
         sample_rate_, config.lookahead_ms,
         std::numeric_limits<int>::max() / config.oversample_factor - 1);
   }
-  // Mirror BrickwallLimiter::set_config: only a structural change (lookahead
-  // length / oversample factor / gain-application mode, which select the delay
-  // lines and polyphase topology) requires a full re-prepare. prepare() ends in reset(), wiping all
-  // running state (filter histories, gain envelope) — audible mid-stream — so
-  // scalar changes (ceiling, release) are applied in
-  // place instead. The re-prepare branch is control-thread-only and MUST NOT
-  // race with process().
-  const bool structural = config.lookahead_ms != config_.lookahead_ms ||
-                          config.oversample_factor != config_.oversample_factor ||
-                          config.apply_gain_at_input_rate != config_.apply_gain_at_input_rate;
-  config_ = config;
-  if (!prepared_) return;
-  if (structural) {
-    prepare(sample_rate_, max_block_size_, max_working_channels_);
-    return;
-  }
-  update_time_constants();
-  limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<TruePeakLimiterConfig>& diff) {
+    if (!prepared_) return;
+    // Only a structural change (lookahead length, oversample factor, gain-application
+    // mode, which select the delay lines and polyphase topology) re-prepares; that
+    // wipes running state, so it is control-thread-only and MUST NOT race with
+    // process(). Ceiling and release are applied in place.
+    if (diff.changed(&TruePeakLimiterConfig::lookahead_ms,
+                     &TruePeakLimiterConfig::oversample_factor,
+                     &TruePeakLimiterConfig::apply_gain_at_input_rate)) {
+      prepare(sample_rate_, max_block_size_, max_working_channels_);
+      return;
+    }
+    update_time_constants();
+    limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});
+  });
 }
 
 void TruePeakLimiter::set_release_ms(float release_ms) {

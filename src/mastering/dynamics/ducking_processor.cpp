@@ -20,8 +20,7 @@ void DuckingProcessor::prepare(double sample_rate, int max_block_size) {
 
 void DuckingProcessor::process(float* const* channels, int num_channels, int num_samples) {
   sonare::rt::ScopedNoDenormals guard;
-  router_.set_detector_excluded_channel(detector_excluded_channel(num_channels));
-  router_.process(channels, num_channels, num_samples);
+  router_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
 }
 
 void DuckingProcessor::reset() { router_.reset(); }
@@ -36,10 +35,10 @@ void DuckingProcessor::set_key_input(const float* const* channels, int num_chann
 void DuckingProcessor::clear_key_input() { router_.clear_sidechain(); }
 
 void DuckingProcessor::set_config(const DuckingConfig& config) {
-  // Apply to the router first: if to_router_config / set_config rejects the
-  // values, config_ is left untouched rather than diverging from the router.
+  // The router validates and applies first, keeping its own state; a rejection
+  // leaves config_ untouched.
   router_.set_config(to_router_config(config));
-  config_ = config;
+  rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<DuckingConfig>&) {});
 }
 
 bool DuckingProcessor::set_parameter_impl(unsigned int param_id, float value) {

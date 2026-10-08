@@ -601,10 +601,6 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
                   int sample_rate, const GriffinLimConfig& config) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
-  // A centred single frame stands for a signal of length 0, which no re-analysis
-  // can return to, so it is refused whatever the iteration count.
-  SONARE_CHECK_MSG(n_frames >= 2, ErrorCode::InvalidParameter,
-                   "griffin_lim: magnitude needs at least two frames");
   SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
   // This is an overlap-add reconstruction, so it owes the same geometry the other
   // reconstructing paths check: past nFft/2 the windows stop summing to a constant
@@ -701,7 +697,11 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   std::vector<float> window_sum(static_cast<size_t>(full_length));
   std::vector<std::complex<float>> new_spectrum(total);
 
-  for (int iter = 0; iter < config.n_iter; ++iter) {
+  // A centred single frame reconstructs a signal of length 0, which no
+  // re-analysis can return to and no phase estimate can change, so every
+  // iteration count yields the same reconstruction as none.
+  const int iterations = n_frames > 1 ? config.n_iter : 0;
+  for (int iter = 0; iter < iterations; ++iter) {
     Audio reconstructed = griffin_lim_synthesize(
         spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, target_length,
         synthesis_window, window_product_vec, fft, frame_spectrum, frame, output, window_sum);

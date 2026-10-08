@@ -31,6 +31,40 @@ struct ParamDescriptor {
   unsigned int id = 0;
 };
 
+/// @brief The fields that differ between a processor's held config and the one
+///        being applied, for deciding which sub-stage a set_config() rebuilds.
+template <typename Config>
+class ConfigDiff {
+ public:
+  ConfigDiff(const Config& held, const Config& next) noexcept : held_(held), next_(next) {}
+
+  /// Whether any of @p fields differs between the held and the applied config.
+  template <typename... Fields>
+  bool changed(Fields Config::*... fields) const {
+    return ((held_.*fields != next_.*fields) || ...);
+  }
+
+  const Config& held() const noexcept { return held_; }
+  const Config& next() const noexcept { return next_; }
+
+ private:
+  const Config& held_;
+  const Config& next_;
+};
+
+/// @brief The one path a processor takes from a validated config to its DSP state.
+/// @details Commits @p next into @p held, then hands @p rebuild the diff against
+///   the config held before, so it rebuilds only the sub-stages whose own inputs
+///   changed and leaves every other filter, oversampler, detector and delay
+///   history alone. Every refusal belongs to validation before this call, so a
+///   refused config never reaches @p held; @p rebuild itself does not refuse.
+template <typename Config, typename Rebuild>
+void apply_config_diff(Config& held, const Config& next, Rebuild&& rebuild) {
+  const Config previous = held;
+  held = next;
+  rebuild(ConfigDiff<Config>(previous, held));
+}
+
 class ProcessorBase {
  public:
   ProcessorBase() = default;
@@ -349,6 +383,35 @@ class ProcessorBase {
   };
   std::vector<ParameterValue> constructed_parameter_values_;
   OverflowCounter non_finite_discards_;
+};
+
+/// @brief Hands an owner's detector exclusion for this block to a processor it runs.
+/// @details The one place an exclusion crosses from one processor to another, so
+///   every owner -- an insert chain, or a processor holding a @ref ChildProcessor --
+///   passes the host's setting on the same way.
+inline void forward_detector_exclusion(ProcessorBase& child, int excluded_channel) noexcept {
+  child.set_detector_excluded_channel(excluded_channel);
+}
+
+/// @brief A processor held by another processor.
+/// @details Its block runs only through @ref run, which takes the owner's detector
+///   exclusion for that block, so an owner cannot hold an inner limiter or detector
+///   that never received it. Everything else of @p Processor stays reachable.
+template <typename Processor>
+class ChildProcessor : public Processor {
+ public:
+  using Processor::Processor;
+  ChildProcessor() = default;
+
+  /// @brief Runs one block with @p excluded_channel as the child's exclusion.
+  /// @param excluded_channel The owner's `detector_excluded_channel(num_channels)`.
+  void run(int excluded_channel, float* const* channels, int num_channels, int num_samples) {
+    forward_detector_exclusion(*this, excluded_channel);
+    Processor::process(channels, num_channels, num_samples);
+  }
+
+ private:
+  using Processor::process;
 };
 
 }  // namespace sonare::rt

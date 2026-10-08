@@ -51,11 +51,12 @@ class Maximizer : public rt::ProcessorBase {
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
   bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override;
 
- private:
+  /// @brief Throws where set_config() would refuse @p config, changing nothing.
   static void validate_config(const MaximizerConfig& config);
 
+ private:
   MaximizerConfig config_{};
-  dynamics::BrickwallLimiter limiter_;
+  rt::ChildProcessor<dynamics::BrickwallLimiter> limiter_;
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;
   bool prepared_ = false;

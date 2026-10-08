@@ -95,8 +95,10 @@ class Limiter : public rt::ProcessorBase {
   // Automatable parameters: 0=thresholdDb, 1=releaseMs, 2=ratio, 3=postGainDb
   std::vector<rt::ParamDescriptor> parameter_descriptors() const override;
 
- private:
+  /// @brief Throws where set_config() would refuse @p config, changing nothing.
   static void validate_config(const LimiterConfig& config);
+
+ private:
   /// @brief Verifies the prepared lookahead state can cover @p num_channels.
   /// @details RT-safe: never resizes on the audio thread. The lookahead
   ///          buffers are preallocated to @c kRealtimePreparedChannels in

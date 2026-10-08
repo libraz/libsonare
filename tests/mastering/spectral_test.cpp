@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "mastering/spectral/air_band.h"
@@ -795,4 +796,29 @@ TEST_CASE("SpectralShaper single band edge change keeps the pair ordered",
     CHECK(max_abs_difference(render_shaper_after(start, {{3u, 200.0f}}),
                              render_shaper_after(ordered, {})) <= kTolerance);
   }
+}
+
+namespace {
+
+// An identical config applied mid-stream, against a copy that never sees it.
+template <typename Processor, typename Config>
+float reapply_divergence(const Config& config) {
+  return sonare::test::divergence_after(
+      [&] {
+        auto processor = std::make_unique<Processor>(config);
+        processor->prepare(48000.0, 256);
+        return processor;
+      },
+      [&](Processor& processor) { processor.set_config(config); });
+}
+
+}  // namespace
+
+TEST_CASE("Re-applying a spectral config keeps its running state", "[mastering][spectral]") {
+  CHECK(reapply_divergence<AirBand>(AirBandConfig{}) == 0.0f);
+  PresenceEnhancerConfig presence;
+  presence.aliasing = sonare::rt::AliasingControl::Oversample4x;
+  CHECK(reapply_divergence<PresenceEnhancer>(presence) == 0.0f);
+  CHECK(reapply_divergence<SpectralShaper>(SpectralShaperConfig{}) == 0.0f);
+  CHECK(reapply_divergence<LowEndFocus>(LowEndFocusConfig{}) == 0.0f);
 }

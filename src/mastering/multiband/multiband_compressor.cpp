@@ -12,19 +12,6 @@
 
 namespace sonare::mastering::multiband {
 
-namespace {
-
-// Two crossover configurations are equivalent iff they produce the same filter
-// topology AND coefficients. Any difference forces a crossover rebuild (which
-// resets the filter history); when they match we must NOT rebuild, or every
-// non-structural set_config() would re-zero the crossover IIR state and click.
-bool crossover_config_equal(const CrossoverConfig& a, const CrossoverConfig& b) {
-  return a.slope == b.slope && a.mode == b.mode && a.fir_kernel_size == b.fir_kernel_size &&
-         a.cutoffs_hz == b.cutoffs_hz;
-}
-
-}  // namespace
-
 MultibandCompressor::MultibandCompressor(MultibandCompressorConfig config)
     : config_(std::move(config)), crossover_(config_.crossover) {
   validate_config(config_);
@@ -81,7 +68,8 @@ void MultibandCompressor::process(float* const* channels, int num_channels, int 
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
-    compressors_[static_cast<size_t>(band)].process(
+    compressors_[static_cast<size_t>(band)].run(
+        detector_excluded_channel(num_channels),
         scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         compressors_[static_cast<size_t>(band)].last_gain_reduction_db();
@@ -111,25 +99,28 @@ void MultibandCompressor::reset() {
 
 void MultibandCompressor::set_config(const MultibandCompressorConfig& config) {
   validate_config(config);
-  // Only the crossover carries history that clicks when reset. Rebuild it (and
-  // re-prepare it, which re-zeros its IIR state) ONLY when its configuration
-  // actually changed; a non-structural set_config() must leave the crossover
-  // running so band-parameter tweaks don't re-zero the filters and click.
-  const bool crossover_changed = !crossover_config_equal(config_.crossover, config.crossover);
-  // Before the mirror: a rejected crossover leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  rebuild_processors();
-  if (prepared_) {
-    if (crossover_changed) {
-      crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
-      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-    }
-    for (auto& compressor : compressors_) {
-      compressor.prepare(sample_rate_, max_block_size_);
-    }
-    std::fill(last_gain_reductions_db_.begin(), last_gain_reductions_db_.end(), 0.0f);
-  }
+  if (prepared_) Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandCompressorConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandCompressorConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (compressors_.size() == config_.bands.size()) {
+          // Same band count: each compressor takes its own config as a snapshot,
+          // which keeps its envelope and detector history.
+          for (size_t band = 0; band < compressors_.size(); ++band) {
+            compressors_[band].set_config(config_.bands[band]);
+          }
+          return;
+        }
+        rebuild_processors();
+        if (prepared_) {
+          for (auto& compressor : compressors_) compressor.prepare(sample_rate_, max_block_size_);
+        }
+      });
 }
 
 bool MultibandCompressor::set_parameter_impl(unsigned int param_id, float value) {
@@ -162,6 +153,10 @@ void MultibandCompressor::validate_config(const MultibandCompressorConfig& confi
     throw SonareException(ErrorCode::InvalidParameter,
                           "multiband compressor band count must match crossover");
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  Crossover::validate_config(config.crossover);
+  for (const auto& band : config.bands) dynamics::Compressor::validate_config(band);
 }
 
 void MultibandCompressor::rebuild_processors() {

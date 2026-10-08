@@ -69,10 +69,12 @@ void SoftClipper::reset() {
 
 void SoftClipper::set_config(const SoftClipperConfig& config) {
   validate_config(config);
-  const bool reset_state = config_.ceiling != config.ceiling || config_.aliasing != config.aliasing;
-  config_ = config;
-  declare_path_latencies();
-  if (reset_state) reset();
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<SoftClipperConfig>& diff) {
+    declare_path_latencies();
+    // The antiderivative state is relative to the ceiling, and a different
+    // aliasing path starts from silence; every other field is read per sample.
+    if (diff.changed(&SoftClipperConfig::ceiling, &SoftClipperConfig::aliasing)) reset();
+  });
 }
 
 bool SoftClipper::set_parameter_impl(unsigned int param_id, float value) {

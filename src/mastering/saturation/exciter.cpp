@@ -164,11 +164,17 @@ void Exciter::reset() {
 
 void Exciter::set_config(const ExciterConfig& config) {
   validate_config(config);
-  config_ = config;
-  declare_path_latencies();
-  if (prepared_) {
-    update_coeff();
-  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<ExciterConfig>& diff) {
+    // Drive, amount and the even/odd mix are read per sample.
+    declare_path_latencies();
+    if (!prepared_) return;
+    if (diff.changed(&ExciterConfig::aliasing)) {
+      // A different harmonic path starts from silence.
+      update_coeff();
+    } else if (diff.changed(&ExciterConfig::frequency_hz, &ExciterConfig::q)) {
+      update_coeff_preserving_state();
+    }
+  });
 }
 
 void Exciter::validate_config(const ExciterConfig& config) {

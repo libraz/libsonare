@@ -82,7 +82,7 @@ class MultibandCompressor : public rt::ProcessorBase {
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;
-  std::vector<dynamics::Compressor> compressors_;
+  std::vector<rt::ChildProcessor<dynamics::Compressor>> compressors_;
   std::vector<float> last_gain_reductions_db_;
 };
 

@@ -75,7 +75,7 @@ class MultibandExpander : public rt::ProcessorBase {
   bool prepared_ = false;
   Crossover crossover_;
   CrossoverScratch scratch_;
-  std::vector<dynamics::Expander> expanders_;
+  std::vector<rt::ChildProcessor<dynamics::Expander>> expanders_;
   std::vector<float> last_gain_reductions_db_;
 };
 

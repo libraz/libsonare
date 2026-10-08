@@ -59,10 +59,13 @@ int HaasEnhancer::tail_samples() const noexcept {
 
 void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) {
-    rebuild_delay();
-  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<HaasEnhancerConfig>&) {
+    // The line is rebuilt, and its audio dropped, only for a new length.
+    if (prepared_ &&
+        static_cast<int>(std::round(sample_rate_ * config_.delay_ms * 0.001)) != delay_samples_) {
+      rebuild_delay();
+    }
+  });
 }
 
 bool HaasEnhancer::set_parameter_impl(unsigned int param_id, float value) {

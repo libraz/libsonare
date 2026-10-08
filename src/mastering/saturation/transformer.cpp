@@ -63,8 +63,11 @@ void Transformer::reset() {
 
 void Transformer::set_config(const TransformerConfig& config) {
   validate_config(config);
-  transformer_config_ = config;
-  hysteresis_.set_config(make_ja_config(config));
+  // The magnetics read their constants per sample; the hysteresis state carries over.
+  rt::apply_config_diff(transformer_config_, config,
+                        [this](const rt::ConfigDiff<TransformerConfig>&) {
+                          hysteresis_.set_config(make_ja_config(transformer_config_));
+                        });
 }
 
 bool Transformer::set_parameter_impl(unsigned int param_id, float value) {

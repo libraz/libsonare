@@ -90238,7 +90238,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.adaptiveRelease",
       "kind": "realtime",
-      "latencySamples": 107,
+      "latencySamples": 129,
       "params": [
         {
           "choices": null,
@@ -90621,7 +90621,7 @@
       "channelPolicy": "multichannel",
       "id": "maximizer.truePeakLimiter",
       "kind": "realtime",
-      "latencySamples": 107,
+      "latencySamples": 129,
       "params": [
         {
           "choices": null,

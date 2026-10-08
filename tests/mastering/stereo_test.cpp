@@ -5,6 +5,7 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "mastering/stereo/auto_pan.h"
@@ -757,4 +758,73 @@ TEST_CASE("MonoCompatCheck log bands hold up on a long buffer", "[mastering][ste
     CAPTURE(band.low_hz, band.high_hz);
     CHECK(band.side_rms < 0.05f);
   }
+}
+
+namespace {
+
+template <typename Processor, typename Config>
+std::unique_ptr<Processor> prepared(const Config& config) {
+  auto processor = std::make_unique<Processor>(config);
+  processor->prepare(48000.0, 256);
+  return processor;
+}
+
+// An identical config applied mid-stream, against a copy that never sees it.
+template <typename Processor, typename Config>
+float reapply_divergence(const Config& config) {
+  return sonare::test::divergence_after([&] { return prepared<Processor>(config); },
+                                        [&](Processor& p) { p.set_config(config); });
+}
+
+}  // namespace
+
+TEST_CASE("Re-applying a stereo config keeps its running state", "[mastering][stereo]") {
+  CHECK(reapply_divergence<HaasEnhancer>(HaasEnhancerConfig{}) == 0.0f);
+  CHECK(reapply_divergence<PhaseAlign>(PhaseAlignConfig{12, true, 0.3f}) == 0.0f);
+  CHECK(reapply_divergence<MonoMaker>(MonoMakerConfig{}) == 0.0f);
+  CHECK(reapply_divergence<Imager>(ImagerConfig{}) == 0.0f);
+  CHECK(reapply_divergence<AutoPan>(AutoPanConfig{}) == 0.0f);
+  CHECK(reapply_divergence<StereoBalance>(StereoBalanceConfig{}) == 0.0f);
+}
+
+TEST_CASE("A delay keeps its buffered audio when only the mix or fraction changes",
+          "[mastering][stereo]") {
+  // Changed mid-stream, a processor matches one built with the new value from
+  // the start: the delay line it carried over holds exactly what that one holds.
+  const auto tail_after = [](auto processor, auto touch) {
+    std::vector<float> out;
+    for (int b = 0; b < 40; ++b) {
+      if (b == 20) touch(*processor);
+      std::vector<float> left(256);
+      std::vector<float> right(256);
+      for (int i = 0; i < 256; ++i) {
+        const double t = (b * 256 + i) / 48000.0;
+        left[static_cast<size_t>(i)] = static_cast<float>(0.4 * std::sin(2.0 * kPi * 220.0 * t));
+        right[static_cast<size_t>(i)] = static_cast<float>(0.3 * std::sin(2.0 * kPi * 330.0 * t));
+      }
+      process_stereo(*processor, left, right);
+      if (b >= 20) {
+        out.insert(out.end(), left.begin(), left.end());
+        out.insert(out.end(), right.begin(), right.end());
+      }
+    }
+    return out;
+  };
+  const auto nothing = [](auto&) {};
+
+  HaasEnhancerConfig haas{12.0f, 1.0f, true};
+  HaasEnhancerConfig haas_mix = haas;
+  haas_mix.mix = 0.5f;
+  const auto haas_changed =
+      tail_after(prepared<HaasEnhancer>(haas), [&](HaasEnhancer& p) { p.set_config(haas_mix); });
+  REQUIRE(sonare::test::max_abs_difference(
+              haas_changed, tail_after(prepared<HaasEnhancer>(haas_mix), nothing)) == 0.0f);
+
+  PhaseAlignConfig align{12, true, 0.0f};
+  PhaseAlignConfig align_fraction = align;
+  align_fraction.fractional_delay_samples = 0.5f;
+  const auto align_changed =
+      tail_after(prepared<PhaseAlign>(align), [&](PhaseAlign& p) { p.set_config(align_fraction); });
+  REQUIRE(sonare::test::max_abs_difference(
+              align_changed, tail_after(prepared<PhaseAlign>(align_fraction), nothing)) == 0.0f);
 }

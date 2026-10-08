@@ -163,8 +163,11 @@ void Limiter::set_config(const LimiterConfig& config) {
   // buffer size is fixed at prepare() time.
   validate_config(config);
   if (prepared_) (void)checked_lookahead_samples(sample_rate_, config.lookahead_ms);
-  config_ = config;
-  config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
+  // Every field reaches the audio thread as scalars re-derived on adoption, so
+  // nothing with history is rebuilt.
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<LimiterConfig>&) {
+    config_publisher_->publish(std::make_shared<const LimiterConfig>(config_));
+  });
 }
 
 void Limiter::set_release_ms(float release_ms) {

@@ -88,11 +88,15 @@ void Waveshaper::reset() {
 
 void Waveshaper::set_config(const WaveshaperConfig& config) {
   validate_config(config);
-  const bool reset_state = config_.curve != config.curve || config_.aliasing != config.aliasing ||
-                           config_.bias != config.bias;
-  config_ = config;
-  declare_path_latencies();
-  if (reset_state) reset();
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<WaveshaperConfig>& diff) {
+    declare_path_latencies();
+    // The antiderivative state belongs to one curve and bias, and a different
+    // aliasing path starts from silence; every other field is read per sample.
+    if (diff.changed(&WaveshaperConfig::curve, &WaveshaperConfig::aliasing,
+                     &WaveshaperConfig::bias)) {
+      reset();
+    }
+  });
 }
 
 bool Waveshaper::set_parameter_impl(unsigned int param_id, float value) {

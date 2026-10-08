@@ -189,9 +189,11 @@ void BitCrusher::reset() {
 
 void BitCrusher::set_config(const BitCrusherConfig& config) {
   validate_config(config);
-  config_ = config;
-  update_hold_increment();
-  update_coefficients();
+  // Hold rate and filter gains are scalars over running state; nothing resets.
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<BitCrusherConfig>&) {
+    update_hold_increment();
+    update_coefficients();
+  });
 }
 
 bool BitCrusher::set_parameter_impl(unsigned int param_id, float value) {

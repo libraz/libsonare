@@ -139,14 +139,16 @@ void Tape::reset() {
 
 void Tape::set_config(const TapeConfig& config) {
   validate_config(config);
-  config_ = config;
-  hysteresis_.set_config(make_ja_config(config_));
-  oversampler_.set_factor(config_.oversample_factor);
-  if (prepared_) {
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<TapeConfig>& diff) {
+    hysteresis_.set_config(make_ja_config(config_));
+    const bool factor_changed = diff.changed(&TapeConfig::oversample_factor);
+    if (factor_changed) oversampler_.set_factor(config_.oversample_factor);
+    if (!prepared_) return;
+    // Coefficients only; the head-bump and gap filters keep their state.
     update_filters(sample_rate_);
-    // oversample_factor may have changed; resize the scratch on this
-    // control-thread path (allocation here is acceptable, never on the audio
-    // thread). Matches the sizing done in prepare().
+    if (!factor_changed) return;
+    // Control thread: the scratch and streaming state are resized for the new
+    // factor here, matching prepare(), and never on the audio thread.
     const size_t scratch = static_cast<size_t>(std::max(0, max_block_size_)) *
                            static_cast<size_t>(std::max(1, config_.oversample_factor));
     up_scratch_.assign(scratch, 0.0f);
@@ -154,7 +156,7 @@ void Tape::set_config(const TapeConfig& config) {
     for (auto& state : oversampler_states_) {
       oversampler_.prepare_streaming(&state, static_cast<size_t>(std::max(0, max_block_size_)));
     }
-  }
+  });
 }
 
 bool Tape::set_parameter_impl(unsigned int param_id, float value) {

@@ -39,15 +39,14 @@ Tube::Tube(TubeConfig config) : tube_config_(config) {
 
 void Tube::set_config(const TubeConfig& config) {
   validate_config(config);
-  tube_config_ = config;
-  oversampler_.set_factor(tube_config_.oversample_factor);
-  declare_path_latencies();
-  if (prepared_) {
-    // oversample_factor may have changed; resize the scratch on this
-    // control-thread path (allocation here is acceptable, never on the audio
-    // thread). Matches the sizing done in prepare().
-    allocate_scratch();
-  }
+  rt::apply_config_diff(tube_config_, config, [this](const rt::ConfigDiff<TubeConfig>& diff) {
+    // Only the oversampling factor sizes state; the model reads the rest per sample.
+    if (!diff.changed(&TubeConfig::oversample_factor)) return;
+    oversampler_.set_factor(tube_config_.oversample_factor);
+    declare_path_latencies();
+    // Control thread: the scratch is resized here, never on the audio thread.
+    if (prepared_) allocate_scratch();
+  });
 }
 
 void Tube::allocate_scratch() {

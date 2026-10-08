@@ -315,14 +315,20 @@ void Crossover::reset() {
 
 void Crossover::set_config(const CrossoverConfig& config) {
   validate_config(config, prepared_ ? sample_rate_ : 0.0);
-  config_ = config;
-  coeffs_dirty_ = true;
-  if (prepared_) {
-    // Keep the caller's explicit channel bound across a control-thread config
-    // rebuild; falling back to the two-argument overload would silently grow a
-    // bounded offline crossover back to the 64-channel realtime capacity.
-    prepare(sample_rate_, max_block_size_, prepared_channel_capacity_);
-  }
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<CrossoverConfig>& diff) {
+    // Every field shapes the split filters, so an identical config keeps them.
+    if (!diff.changed(&CrossoverConfig::cutoffs_hz, &CrossoverConfig::slope, &CrossoverConfig::mode,
+                      &CrossoverConfig::fir_kernel_size)) {
+      return;
+    }
+    coeffs_dirty_ = true;
+    if (prepared_) {
+      // Keep the caller's explicit channel bound across a control-thread config
+      // rebuild; falling back to the two-argument overload would silently grow a
+      // bounded offline crossover back to the 64-channel realtime capacity.
+      prepare(sample_rate_, max_block_size_, prepared_channel_capacity_);
+    }
+  });
 }
 
 void Crossover::validate_config(const CrossoverConfig& config, double sample_rate) {

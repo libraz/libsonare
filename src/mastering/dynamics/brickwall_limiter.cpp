@@ -75,10 +75,12 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
   // processor publishes is its member's. Read as a difference across the block,
   // never summed: the base counts blocks, and a member may run more than once.
   const std::uint32_t inner_discards_before = limiter_.non_finite_discard_count();
-  limiter_.set_detector_excluded_channel(detector_excluded_channel(num_channels));
-  limiter_.process(channels, num_channels, num_samples);
+  limiter_.run(detector_excluded_channel(num_channels), channels, num_channels, num_samples);
 
   const float ceiling = db_to_linear(cfg.ceiling_db);
+  // Every plane is held under the ceiling, but the excluded one (an LFE) is not
+  // part of the program the reported reduction describes.
+  const int excluded = detector_excluded_channel(num_channels);
   float min_sample_gain = 1.0f;
   hard_clip_count_ = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
@@ -94,7 +96,7 @@ void BrickwallLimiter::process(float* const* channels, int num_channels, int num
       if (abs_sample > ceiling && abs_sample > 0.0f) {
         const float gain = ceiling / abs_sample;
         channels[ch][i] *= gain;
-        min_sample_gain = std::min(min_sample_gain, gain);
+        if (ch != excluded) min_sample_gain = std::min(min_sample_gain, gain);
         ++hard_clip_count_;
       }
     }
@@ -119,19 +121,19 @@ void BrickwallLimiter::set_config(const BrickwallLimiterConfig& config) {
   // snapshot unchanged.
   validate_config(config);
   if (prepared_) (void)checked_lookahead_samples(sample_rate_, config.lookahead_ms);
-  const bool lookahead_changed = prepared_ && config.lookahead_ms != config_.lookahead_ms;
-  config_ = config;
-  if (lookahead_changed) {
-    // Lookahead change resizes the inner limiter's ring buffers — that is NOT
-    // RT-safe. Preserved as control-thread behaviour for callers that change
-    // lookahead_ms via set_config; this branch MUST NOT race with process().
-    // prepare() publishes the snapshot itself, so no extra publish here.
-    prepare(sample_rate_, max_block_size_);
-    return;
-  }
-  // RT-safe path: ceiling/release updates propagate through the publisher and
-  // are applied on the audio thread via adopt_snapshot_for_block().
-  publish_current_config();
+  rt::apply_config_diff(config_, config,
+                        [this](const rt::ConfigDiff<BrickwallLimiterConfig>& diff) {
+                          if (prepared_ && diff.changed(&BrickwallLimiterConfig::lookahead_ms)) {
+                            // A lookahead change resizes the inner limiter's ring buffers, which is
+                            // not RT-safe and MUST NOT race with process(). prepare() publishes the
+                            // snapshot itself.
+                            prepare(sample_rate_, max_block_size_);
+                            return;
+                          }
+                          // Ceiling and release reach the audio thread through the snapshot, whose
+                          // adoption sets both on the inner limiter together.
+                          publish_current_config();
+                        });
 }
 
 void BrickwallLimiter::set_release_ms(float release_ms) {
@@ -139,8 +141,11 @@ void BrickwallLimiter::set_release_ms(float release_ms) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "brickwall limiter release must be non-negative");
   }
-  config_.release_ms = release_ms;
-  limiter_.set_release_ms(release_ms);
+  // Through the outer snapshot, never the inner limiter's own: that one still
+  // holds the ceiling from the last prepare and would put it back.
+  BrickwallLimiterConfig next = config_;
+  next.release_ms = release_ms;
+  set_config(next);
 }
 
 void BrickwallLimiter::set_release_ms_in_place(float release_ms) noexcept {

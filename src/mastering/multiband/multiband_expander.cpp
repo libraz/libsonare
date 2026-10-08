@@ -55,7 +55,8 @@ void MultibandExpander::process(float* const* channels, int num_channels, int nu
   crossover_.split_into(channels, num_channels, num_samples, scratch_);
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
-    expanders_[static_cast<size_t>(band)].process(
+    expanders_[static_cast<size_t>(band)].run(
+        detector_excluded_channel(num_channels),
         scratch_.band_channels[static_cast<size_t>(band)].data(), num_channels, num_samples);
     last_gain_reductions_db_[static_cast<size_t>(band)] =
         expanders_[static_cast<size_t>(band)].last_gain_reduction_db();
@@ -74,23 +75,28 @@ void MultibandExpander::reset() {
 
 void MultibandExpander::set_config(const MultibandExpanderConfig& config) {
   validate_config(config);
-  // Only reconfigure/re-prepare the crossover when its parameters actually
-  // change; rebuilding it zeroes the crossover filter state and would click on
-  // band-parameter-only updates. Sub-processors are always rebuilt and prepared.
-  const bool crossover_changed = config.crossover != config_.crossover;
-  // Before the mirror: an unprepared crossover must still adopt the new split,
-  // and a rejected one leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  rebuild_processors();
-  if (prepared_) {
-    if (crossover_changed) {
-      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-    }
-    for (auto& expander : expanders_) {
-      expander.prepare(sample_rate_, max_block_size_);
-    }
-  }
+  if (prepared_) Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandExpanderConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandExpanderConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (expanders_.size() == config_.bands.size()) {
+          // Same band count: each expander takes its own config as a snapshot, which
+          // keeps its envelope and detector history.
+          for (size_t band = 0; band < expanders_.size(); ++band) {
+            expanders_[band].set_config(config_.bands[band]);
+          }
+          return;
+        }
+        rebuild_processors();
+        if (prepared_) {
+          for (auto& expander : expanders_) expander.prepare(sample_rate_, max_block_size_);
+        }
+      });
 }
 
 bool MultibandExpander::set_parameter_impl(unsigned int param_id, float value) {
@@ -127,6 +133,10 @@ void MultibandExpander::validate_config(const MultibandExpanderConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "multiband expander band count must match crossover");
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  Crossover::validate_config(config.crossover);
+  for (const auto& band : config.bands) dynamics::Expander::validate_config(band);
 }
 
 void MultibandExpander::rebuild_processors() {

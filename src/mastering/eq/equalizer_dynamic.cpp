@@ -14,13 +14,13 @@ namespace sonare::mastering::eq {
 using sonare::constants::kFloorDb;
 
 float EqualizerProcessor::detector_db(const float* const* channels, int num_channels,
-                                      int num_samples) {
-  return broadband_detector_db(channels, num_channels, num_samples);
+                                      int num_samples, int excluded_channel) {
+  return broadband_detector_db(channels, num_channels, num_samples, excluded_channel);
 }
 
 float EqualizerProcessor::band_detector_db(size_t band_index, const float* const* channels,
-                                           int num_channels, int num_samples, double sample_rate,
-                                           const EqBand& band) {
+                                           int num_channels, int num_samples, int excluded_channel,
+                                           double sample_rate, const EqBand& band) {
   if (num_samples <= 0 || num_channels <= 0) return kFloorDb;
 
   // Shared bandpass coefficients for this band's detector. Each channel keeps its
@@ -62,7 +62,10 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
   };
 
   double sum = 0.0;
+  int counted = 0;
   for (int ch = 0; ch < num_channels; ++ch) {
+    if (ch == excluded_channel) continue;
+    ++counted;
     DetectorState& s = states[static_cast<size_t>(ch)];
     // Re-window the persistent detector-delay ring when the delay changes. The
     // ring is preallocated; offline/unprepared paths that grew states above may
@@ -99,7 +102,7 @@ float EqualizerProcessor::band_detector_db(size_t band_index, const float* const
     }
     s.envelope = envelope;
   }
-  const double count = static_cast<double>(num_channels) * static_cast<double>(num_samples);
+  const double count = static_cast<double>(counted) * static_cast<double>(num_samples);
   return linear_to_db(static_cast<float>(std::sqrt(sum / std::max(count, 1.0))));
 }
 
@@ -135,15 +138,19 @@ float EqualizerProcessor::dynamic_gain_delta(const EqBand& band, float detector_
 
 void EqualizerProcessor::update_dynamic_state(const float* const* channels, int num_channels,
                                               int num_samples) {
-  last_detector_db_ = detector_db(channels, num_channels, num_samples);
+  // The host's excluded plane (an LFE) is left out of the main-input detector;
+  // an external key is the caller's own choice of channels and keeps them all.
+  const int excluded = detector_excluded_channel(num_channels);
+  last_detector_db_ = detector_db(channels, num_channels, num_samples, excluded);
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& band = bands_[i];
     if (band.enabled && band.dyn.enabled) {
       const bool use_external = band.dyn.external_sidechain && sidechain_channels_ != nullptr;
       const float* const* detector_channels = use_external ? sidechain_channels_ : channels;
       const int detector_num_channels = use_external ? sidechain_num_channels_ : num_channels;
-      last_band_detector_db_[i] = band_detector_db(i, detector_channels, detector_num_channels,
-                                                   num_samples, sample_rate_, band);
+      last_band_detector_db_[i] =
+          band_detector_db(i, detector_channels, detector_num_channels, num_samples,
+                           use_external ? -1 : excluded, sample_rate_, band);
       if (band.dyn.auto_threshold) {
         const float target = last_band_detector_db_[i] - 6.0f;
         if (auto_threshold_db_[i] <= kFloorDb + 1.0f) {

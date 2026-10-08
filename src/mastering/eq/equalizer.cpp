@@ -15,6 +15,17 @@
 
 namespace sonare::mastering::eq {
 
+namespace {
+
+// The fields that decide which backend slots a band's sections occupy.
+bool same_routing(const EqBand& a, const EqBand& b) noexcept {
+  return a.enabled == b.enabled && a.bypassed == b.bypassed && a.soloed == b.soloed &&
+         a.placement == b.placement && a.phase == b.phase && a.type == b.type &&
+         a.slope_db_oct == b.slope_db_oct && a.dyn.enabled == b.dyn.enabled;
+}
+
+}  // namespace
+
 using sonare::discard_group_if_non_finite;
 using sonare::discard_if_non_finite;
 using sonare::constants::kFloorDb;
@@ -405,6 +416,7 @@ void EqualizerProcessor::install_band(size_t index, const EqBand& band) {
   validate_band_index(index);
   validate_supported_band(band, phase_mode_);
   const EqBand old_band = bands_[index];
+  if (band == old_band) return;
   bands_[index] = band;
   try {
     validate_backend_capacity(bands_, phase_mode_);
@@ -413,8 +425,18 @@ void EqualizerProcessor::install_band(size_t index, const EqBand& band) {
     throw;
   }
   if (prepared_) {
+    // A band that keeps its backend slots only takes new coefficients; the
+    // filters keep their history. Re-routing it, or touching an FIR band,
+    // rebuilds the backends.
+    const bool keep_state = same_routing(old_band, band) &&
+                            !uses_fir_backend(old_band, phase_mode_) &&
+                            !uses_fir_backend(band, phase_mode_);
     try {
-      rebuild_iir();
+      if (keep_state) {
+        update_iir_bands_preserving_state();
+      } else {
+        rebuild_iir();
+      }
     } catch (...) {
       bands_[index] = old_band;
       rebuild_iir();
@@ -459,9 +481,15 @@ void EqualizerProcessor::set_gain_scale(float scale) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "EqualizerProcessor gain scale must be in 0..2");
   }
+  if (scale == gain_scale_) return;
   gain_scale_ = scale;
   if (prepared_) {
-    rebuild_iir();
+    // Gains only: the IIR sections keep their history. FIR kernels are rebuilt.
+    if (has_linear_bands_) {
+      rebuild_iir();
+    } else {
+      update_iir_bands_preserving_state();
+    }
   }
 }
 

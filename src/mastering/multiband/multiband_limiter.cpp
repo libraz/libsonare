@@ -60,7 +60,8 @@ void MultibandLimiter::process(float* const* channels, int num_channels, int num
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
     auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
-    limiters_[static_cast<size_t>(band)].process(band_channels.data(), num_channels, num_samples);
+    limiters_[static_cast<size_t>(band)].run(detector_excluded_channel(num_channels),
+                                             band_channels.data(), num_channels, num_samples);
     for (int ch = 0; ch < num_channels; ++ch) {
       band_paths_.align_block(static_cast<size_t>(band), static_cast<size_t>(ch),
                               band_channels[static_cast<size_t>(ch)], num_samples);
@@ -98,24 +99,35 @@ void MultibandLimiter::rebuild_band_compensation() {
 
 void MultibandLimiter::set_config(const MultibandLimiterConfig& config) {
   validate_config(config);
-  // Only reconfigure/re-prepare the crossover when its parameters actually
-  // change; rebuilding it zeroes the crossover filter state and would click on
-  // band-parameter-only updates. Sub-processors are always rebuilt and prepared.
-  const bool crossover_changed = config.crossover != config_.crossover;
-  // Before the mirror: an unprepared crossover must still adopt the new split,
-  // and a rejected one leaves config() untouched.
-  if (crossover_changed) crossover_.set_config(config.crossover);
-  config_ = config;
-  rebuild_processors();
-  if (prepared_) {
-    if (crossover_changed) {
-      crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
-    }
-    for (auto& limiter : limiters_) {
-      limiter.prepare(sample_rate_, max_block_size_);
-    }
-  }
-  rebuild_band_compensation();
+  if (prepared_) Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandLimiterConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandLimiterConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (limiters_.size() == config_.bands.size()) {
+          for (size_t band = 0; band < limiters_.size(); ++band) {
+            const auto& next = config_.bands[band];
+            if (next.lookahead_ms == diff.held().bands[band].lookahead_ms) {
+              // A snapshot keeps the band's lookahead buffer and gain state.
+              limiters_[band].set_config(next);
+              continue;
+            }
+            // Only a lookahead change resizes the band's buffers.
+            limiters_[band] = rt::ChildProcessor<dynamics::Limiter>(next);
+            if (prepared_) limiters_[band].prepare(sample_rate_, max_block_size_);
+          }
+        } else {
+          rebuild_processors();
+          if (prepared_) {
+            for (auto& limiter : limiters_) limiter.prepare(sample_rate_, max_block_size_);
+          }
+        }
+        rebuild_band_compensation();
+      });
 }
 
 bool MultibandLimiter::set_parameter_impl(unsigned int param_id, float value) {
@@ -142,6 +154,10 @@ void MultibandLimiter::validate_config(const MultibandLimiterConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "multiband limiter band count must match crossover");
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  Crossover::validate_config(config.crossover);
+  for (const auto& band : config.bands) dynamics::Limiter::validate_config(band);
 }
 
 void MultibandLimiter::rebuild_processors() {

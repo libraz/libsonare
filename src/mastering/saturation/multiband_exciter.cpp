@@ -93,11 +93,29 @@ void MultibandExciter::reset() {
 
 void MultibandExciter::set_config(const MultibandExciterConfig& config) {
   validate_config(config);
-  config_ = config;
-  crossover_.set_config(config_.crossover);
-  rebuild_processors();
-  rebuild_band_compensation();
-  if (prepared_) prepare(sample_rate_, max_block_size_, max_working_channels_);
+  if (prepared_) multiband::Crossover::validate_config(config.crossover, sample_rate_);
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<MultibandExciterConfig>& diff) {
+        // The crossover rebuilds (and zeroes) itself only for a changed split.
+        if (diff.changed(&MultibandExciterConfig::crossover)) {
+          crossover_.set_config(config_.crossover);
+          if (prepared_)
+            crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
+        }
+        if (exciters_.size() == config_.bands.size()) {
+          // Each exciter rebuilds only what its own changed fields feed.
+          for (size_t band = 0; band < exciters_.size(); ++band) {
+            exciters_[band].set_config(config_.bands[band]);
+          }
+        } else {
+          rebuild_processors();
+          if (prepared_) {
+            for (auto& exciter : exciters_) exciter.prepare(sample_rate_, max_block_size_);
+          }
+        }
+        // Unchanged latencies keep their compensation lines.
+        rebuild_band_compensation();
+      });
 }
 
 bool MultibandExciter::set_parameter_impl(unsigned int param_id, float value) {
@@ -135,6 +153,10 @@ void MultibandExciter::validate_config(const MultibandExciterConfig& config) {
     throw SonareException(ErrorCode::InvalidParameter,
                           "multiband exciter band count must match crossover");
   }
+  // The crossover and every band are checked here, so set_config() refuses
+  // before it commits anything.
+  multiband::Crossover::validate_config(config.crossover);
+  for (const auto& band : config.bands) Exciter::validate_config(band);
 }
 
 void MultibandExciter::rebuild_band_compensation() {

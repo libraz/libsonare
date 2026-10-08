@@ -108,7 +108,8 @@ void Imager::reset() {
 
 void Imager::set_config(const ImagerConfig& config) {
   validate_config(config);
-  config_ = config;
+  // Every field is read per sample; nothing is rebuilt.
+  rt::apply_config_diff(config_, config, [](const rt::ConfigDiff<ImagerConfig>&) {});
 }
 
 bool Imager::set_parameter_impl(unsigned int param_id, float value) {

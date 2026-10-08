@@ -30,6 +30,12 @@ struct SaturationBandConfig {
   // Appended after the original four fields so existing aggregate
   // initializations ({drive_db, mix, output_gain_db, enabled}) keep compiling.
   SaturationType type = SaturationType::SoftClip;
+
+  bool operator==(const SaturationBandConfig& other) const {
+    return drive_db == other.drive_db && mix == other.mix &&
+           output_gain_db == other.output_gain_db && enabled == other.enabled && type == other.type;
+  }
+  bool operator!=(const SaturationBandConfig& other) const { return !(*this == other); }
 };
 
 struct MultibandSaturationConfig {

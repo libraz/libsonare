@@ -23,11 +23,11 @@ constexpr std::array<float, 13> kGainSteps = {-12.0f, -10.0f, -8.0f, -6.0f, -4.0
 
 void ApiStyleEq::prepare(double sample_rate, int max_block_size) {
   eq_.prepare(sample_rate, max_block_size);
-  bands_[index(Band::Low)].frequency_hz = 100.0f;
-  bands_[index(Band::LowMid)].frequency_hz = 500.0f;
-  bands_[index(Band::HighMid)].frequency_hz = 3000.0f;
-  bands_[index(Band::High)].frequency_hz = 10000.0f;
-  clear();
+  // The bands set before keep their settings; only their coefficients follow
+  // the new rate.
+  for (const Band band : {Band::Low, Band::LowMid, Band::HighMid, Band::High}) {
+    rebuild_band(band);
+  }
 }
 
 void ApiStyleEq::process(float* const* channels, int num_channels, int num_samples) {

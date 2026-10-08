@@ -4,6 +4,7 @@
 #include <cmath>
 #include <complex>
 #include <limits>
+#include <memory>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -1374,4 +1375,105 @@ TEST_CASE("MultibandImager decorrelation keeps its phase anchors in Hz at every 
       REQUIRE(std::abs(std::abs(ratio) - 1.0) < 0.01);
     }
   }
+}
+
+namespace {
+
+// An identical config applied mid-stream, against a copy that never sees it.
+template <typename Processor>
+float reapply_divergence(const ConfigOf<Processor>& config) {
+  return sonare::test::divergence_after(
+      [&] {
+        auto processor = std::make_unique<Processor>(config);
+        processor->prepare(48000.0, 256, 2);
+        return processor;
+      },
+      [&](Processor& processor) { processor.set_config(config); });
+}
+
+}  // namespace
+
+TEMPLATE_TEST_CASE("Re-applying a multiband config keeps every band's running state",
+                   "[mastering][multiband]", MultibandCompressor, MultibandSaturation,
+                   MultibandLimiter, MultibandExpander, MultibandDynamicEq, MultibandImager) {
+  using Config = ConfigOf<TestType>;
+  // Each band given state a reset would lose: lookahead buffers, oversampler
+  // history, detector filters, decorrelation stages.
+  Config config{};
+  if constexpr (std::is_same_v<TestType, MultibandImager>) {
+    for (auto& band : config.bands) {
+      band.width = 1.5f;
+      band.decorrelation_amount = 0.5f;
+    }
+  } else if constexpr (std::is_same_v<TestType, MultibandLimiter>) {
+    for (auto& band : config.bands) band = {-12.0f, 1.0f, 50.0f};
+  } else if constexpr (std::is_same_v<TestType, MultibandSaturation>) {
+    for (auto& band : config.bands) band = {6.0f, 1.0f, 0.0f, true, SaturationType::Tube};
+  } else if constexpr (std::is_same_v<TestType, MultibandDynamicEq>) {
+    sonare::mastering::eq::DynamicEqBand band;
+    band.frequency_hz = 300.0f;
+    band.threshold_db = -40.0f;
+    band.enabled = true;
+    for (auto& bands : config.bands) bands = {band};
+  }
+  REQUIRE(reapply_divergence<TestType>(config) == 0.0f);
+}
+
+TEST_CASE("Changing one multiband band leaves the other bands' processors alone",
+          "[mastering][multiband]") {
+  // The low band's output is the same whether or not the high band's drive moves:
+  // a 110 Hz tone sits wholly below a 2 kHz split.
+  MultibandSaturationConfig config;
+  config.crossover = {{2000.0f}, CrossoverSlope::LR4, CrossoverMode::LinkwitzRiley};
+  config.bands = {{6.0f, 1.0f, 0.0f, true, SaturationType::Tube},
+                  {6.0f, 1.0f, 0.0f, true, SaturationType::Tube}};
+  MultibandSaturationConfig changed = config;
+  changed.bands[1].drive_db = 12.0f;
+  const auto make = [&] {
+    auto processor = std::make_unique<MultibandSaturation>(config);
+    processor->prepare(48000.0, 256, 2);
+    return processor;
+  };
+  // Silence above the split: only the untouched low band carries signal.
+  const auto render = [&](bool touch) {
+    auto processor = make();
+    std::vector<float> out;
+    for (int b = 0; b < 40; ++b) {
+      if (touch && b == 20) processor->set_config(changed);
+      std::vector<float> left(256);
+      for (int i = 0; i < 256; ++i) {
+        left[static_cast<size_t>(i)] =
+            0.3f * static_cast<float>(std::sin(kTwoPiD * 110.0 * (b * 256 + i) / 48000.0));
+      }
+      std::vector<float> right = left;
+      process_stereo(*processor, left, right);
+      if (b >= 20) out.insert(out.end(), left.begin(), left.end());
+    }
+    return out;
+  };
+  const auto control = render(false);
+  const auto touched = render(true);
+  // The high band rebuilt from silence and still sees only the split's leakage.
+  REQUIRE(sonare::test::max_abs_difference(control, touched) < 1.0e-3f);
+}
+
+TEMPLATE_TEST_CASE("A multiband dynamics processor leaves the excluded plane out of every band",
+                   "[mastering][multiband]", MultibandCompressor, MultibandLimiter,
+                   MultibandExpander, MultibandDynamicEq) {
+  using Config = ConfigOf<TestType>;
+  Config config{};
+  if constexpr (std::is_same_v<TestType, MultibandDynamicEq>) {
+    sonare::mastering::eq::DynamicEqBand band;
+    band.frequency_hz = 60.0f;
+    band.threshold_db = -40.0f;
+    band.ratio = 4.0f;
+    band.range_db = -12.0f;
+    band.enabled = true;
+    config.bands.front() = {band};
+  }
+  REQUIRE(sonare::test::excluded_plane_influence([&] {
+            auto processor = std::make_unique<TestType>(config);
+            processor->prepare(48000.0, 256, 6);
+            return processor;
+          }) == 0.0f);
 }

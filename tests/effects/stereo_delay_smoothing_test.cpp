@@ -1,9 +1,11 @@
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <memory>
 #include <vector>
 
 #include "effects/delay/stereo_delay.h"
+#include "support/audio_fixtures.h"
 #include "util/constants.h"
 
 // ping_pong must be smoothed per-sample with the same exponential coefficient as
@@ -135,4 +137,16 @@ TEST_CASE("StereoDelay ping_pong step produces no single-sample spike", "[fx]") 
   // proxy: it bounds the discontinuity rather than measuring the private
   // smoothed value directly.
   REQUIRE(stepped < baseline * 3.0f + 1e-3f);
+}
+
+TEST_CASE("StereoDelay keeps its delay lines when a config is re-applied", "[fx]") {
+  StereoDelayConfig config;
+  config.damping_hz = 4000.0f;
+  REQUIRE(sonare::test::divergence_after(
+              [&] {
+                auto delay = std::make_unique<StereoDelay>(config);
+                delay->prepare(48000.0, 256);
+                return delay;
+              },
+              [&](StereoDelay& delay) { delay.set_config(delay.config()); }) == 0.0f);
 }

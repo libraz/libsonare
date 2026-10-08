@@ -243,13 +243,14 @@ void AirBand::reset() {
 
 void AirBand::set_config(const AirBandConfig& config) {
   validate_config(config);
-  config_ = config;
-  if (prepared_) {
+  rt::apply_config_diff(config_, config, [this](const rt::ConfigDiff<AirBandConfig>& diff) {
+    if (!prepared_ || !diff.changed(&AirBandConfig::shelf_frequency_hz)) return;
+    // Coefficients only; the filters keep their state.
     const Biquad updated =
         make_highpass(config_.shelf_frequency_hz, sample_rate_, sonare::constants::kButterworthQD);
     for (auto& filter : detector_) filter.c = updated.c;
     for (auto& filter : harmonic_filter_) filter.c = updated.c;
-  }
+  });
 }
 
 bool AirBand::set_parameter_impl(unsigned int param_id, float value) {

@@ -135,23 +135,28 @@ void PresenceEnhancer::process(float* const* channels, int num_channels, int num
 
 void PresenceEnhancer::set_config(const PresenceEnhancerConfig& config) {
   validate_config(config);
-  config_ = config;
-  declare_path_latencies();
-  if (prepared_) {
-    // Rebuild the preallocated per-channel filters in place so the next
-    // process() never resizes on the audio thread; keep the channel count.
-    // Also reset the Oversample4x streaming state and dry-path delay so a
-    // config change (including toggling aliasing) never leaks stale history.
-    const Biquad fresh = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
-    for (auto& filter : bandpass_) filter = fresh;
-    for (auto& state : harmonic_oversampler_states_) {
-      harmonic_oversampler_.reset_streaming(&state);
-    }
-    paths_.reset();
-    for (auto& adaa : harmonic_adaa_) adaa.reset();
-  } else {
-    bandpass_.clear();
-  }
+  rt::apply_config_diff(
+      config_, config, [this](const rt::ConfigDiff<PresenceEnhancerConfig>& diff) {
+        declare_path_latencies();
+        if (!prepared_) {
+          bandpass_.clear();
+          return;
+        }
+        if (diff.changed(&PresenceEnhancerConfig::center_frequency_hz,
+                         &PresenceEnhancerConfig::q)) {
+          // Coefficients only; the preallocated per-channel filters keep their state.
+          const Biquad fresh = make_bandpass(config_.center_frequency_hz, sample_rate_, config_.q);
+          for (auto& filter : bandpass_) filter.c = fresh.c;
+        }
+        if (diff.changed(&PresenceEnhancerConfig::aliasing)) {
+          // A different harmonic path starts from silence.
+          for (auto& state : harmonic_oversampler_states_) {
+            harmonic_oversampler_.reset_streaming(&state);
+          }
+          paths_.reset();
+          for (auto& adaa : harmonic_adaa_) adaa.reset();
+        }
+      });
 }
 
 void PresenceEnhancer::reset() {
