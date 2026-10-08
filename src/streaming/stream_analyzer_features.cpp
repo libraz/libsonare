@@ -49,30 +49,81 @@ void StreamAnalyzer::compute_mel() {
   }
 }
 
-void StreamAnalyzer::compute_chroma() {
-  /// Apply chroma filterbank: chroma = filterbank @ power
-  int n_bins = this->n_bins();
+namespace {
 
+/// @brief chroma = filterbank @ power, L2-normalized (more robust than max).
+void apply_chroma_filterbank(const float* filterbank, const float* power, int n_bins,
+                             float* chroma) {
   for (int c = 0; c < 12; ++c) {
     float sum = 0.0f;
-    const float* filter_row = chroma_filterbank_.data() + c * n_bins;
+    const float* filter_row = filterbank + c * n_bins;
     for (int k = 0; k < n_bins; ++k) {
-      sum += filter_row[k] * power_[k];
+      sum += filter_row[k] * power[k];
     }
-    chroma_buffer_[c] = sum;
+    chroma[c] = sum;
   }
 
-  /// Normalize chroma using L2 norm (more robust than max)
   float l2_norm = 0.0f;
   for (int c = 0; c < 12; ++c) {
-    l2_norm += chroma_buffer_[c] * chroma_buffer_[c];
+    l2_norm += chroma[c] * chroma[c];
   }
   l2_norm = std::sqrt(l2_norm);
   if (l2_norm > kEpsilon) {
     for (int c = 0; c < 12; ++c) {
-      chroma_buffer_[c] /= l2_norm;
+      chroma[c] /= l2_norm;
     }
   }
+}
+
+}  // namespace
+
+void StreamAnalyzer::compute_chroma() {
+  apply_chroma_filterbank(chroma_filterbank_.data(), power_.data(), n_bins(),
+                          chroma_buffer_.data());
+}
+
+void StreamAnalyzer::feed_key_chroma(size_t end) {
+  if (!config_.compute_chroma) return;
+  for (; key_fed_pos_ < end; ++key_fed_pos_) {
+    key_ring_[key_ring_pos_] = overlap_buffer_[key_fed_pos_];
+    if (++key_ring_pos_ == key_ring_.size()) key_ring_pos_ = 0;
+    ++key_uncovered_;
+    if (--key_until_frame_ == 0) {
+      compute_key_chroma(key_window_length_);
+      key_until_frame_ = key_hop_length_;
+    }
+  }
+}
+
+void StreamAnalyzer::finish_key_chroma() {
+  if (!config_.compute_chroma || key_uncovered_ == 0) return;
+  /// Zero-pad the samples since the next frame's start, as the terminal frame does.
+  compute_key_chroma(key_window_length_ - key_until_frame_);
+  key_until_frame_ = key_hop_length_;
+}
+
+void StreamAnalyzer::compute_key_chroma(int n_samples) {
+  const size_t ring_size = key_ring_.size();
+  const size_t start = (key_ring_pos_ + ring_size - static_cast<size_t>(n_samples)) % ring_size;
+  for (int i = 0; i < key_window_length_; ++i) {
+    const float sample =
+        i < n_samples ? key_ring_[(start + static_cast<size_t>(i)) % ring_size] : 0.0f;
+    key_frame_buffer_[key_window_offset_ + i] = sample * key_window_[key_window_offset_ + i];
+  }
+  key_fft_->forward(key_frame_buffer_.data(), key_spectrum_.data());
+  const int key_bins = static_cast<int>(key_power_.size());
+  for (int k = 0; k < key_bins; ++k) {
+    const float re = key_spectrum_[k].real();
+    const float im = key_spectrum_[k].imag();
+    key_power_[k] = re * re + im * im;
+  }
+  apply_chroma_filterbank(key_chroma_filterbank_.data(), key_power_.data(), key_bins,
+                          key_chroma_.data());
+  for (int c = 0; c < 12; ++c) {
+    chroma_sum_[c] += key_chroma_[c];
+  }
+  ++chroma_frame_count_;
+  key_uncovered_ = 0;
 }
 
 float StreamAnalyzer::compute_onset() {

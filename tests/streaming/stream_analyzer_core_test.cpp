@@ -1901,7 +1901,8 @@ struct RateHop {
   int sample_rate;
   int hop_length;
 };
-constexpr std::array<RateHop, 3> kWindowRates = {{{22050, 128}, {32000, 186}, {44100, 256}}};
+constexpr std::array<RateHop, 5> kWindowRates = {
+    {{16000, 93}, {22050, 128}, {24000, 139}, {32000, 186}, {44100, 256}}};
 
 /// Seconds of frames whose RMS clears the -120 dBFS floor around one click in silence.
 float click_span_sec(const RateHop& rate) {
@@ -1922,8 +1923,10 @@ float click_span_sec(const RateHop& rate) {
   return static_cast<float>(above) * config.frame_duration();
 }
 
-/// C-G-Am-F at one chord per bar with a 10 ms click on every beat at @p bpm.
-std::vector<float> chord_progression_with_clicks(int sr, float seconds, float bpm) {
+/// C-G-Am-F at one chord per bar with a 10 ms click on every beat at @p bpm, every chord tone
+/// scaled by @p pitch_ratio.
+std::vector<float> chord_progression_with_clicks(int sr, float seconds, float bpm,
+                                                 float pitch_ratio = 1.0f) {
   const std::array<std::array<float, 3>, 4> chords = {{
       {261.63f, 329.63f, 392.0f},  // C
       {196.0f, 246.94f, 293.66f},  // G
@@ -1939,7 +1942,7 @@ std::vector<float> chord_progression_with_clicks(int sr, float seconds, float bp
   for (size_t i = 0; i < n; ++i) {
     const float t = static_cast<float>(i) / static_cast<float>(sr);
     const auto& chord = chords[static_cast<size_t>(t / bar_sec) % chords.size()];
-    for (float f : chord) audio[i] += 0.15f * std::sin(kTwoPi * f * t);
+    for (float f : chord) audio[i] += 0.15f * std::sin(kTwoPi * f * pitch_ratio * t);
     const float into_beat = std::fmod(t, beat_sec);
     if (into_beat < click_sec) {
       audio[i] +=
@@ -1984,12 +1987,12 @@ TEST_CASE("StreamAnalyzer key and tempo agree across input rates", "[streaming]"
     analyzer.process(audio.data(), audio.size());
     estimates[i] = analyzer.stats().estimate;
     INFO("sr " << config.sample_rate << " key " << estimates[i].key << " minor "
-               << estimates[i].key_minor << " bpm " << estimates[i].bpm);
+               << estimates[i].key_minor << " confidence " << estimates[i].key_confidence << " bpm "
+               << estimates[i].bpm);
     CHECK(estimates[i].key >= 0);
     CHECK(estimates[i].bpm > 0.0f);
   }
   const ProgressiveEstimate& reference = estimates.back();
-  const int reference_rate = kWindowRates.back().sample_rate;
   const float period_sec = 60.0f / reference.bpm;
   for (size_t i = 0; i + 1 < kWindowRates.size(); ++i) {
     // One autocorrelation lag at this rate, in BPM: 60 * (hop / sr) / period^2.
@@ -2002,11 +2005,43 @@ TEST_CASE("StreamAnalyzer key and tempo agree across input rates", "[streaming]"
                << reference.key << "/" << reference.key_minor << " bpm " << reference.bpm << " lag "
                << lag_bpm);
     CHECK(std::abs(estimates[i].bpm - reference.bpm) <= lag_bpm);
-    // Key only at rates an octave apart: at 32000 the key estimate reads E minor on this
-    // progression with the unconverted window too, so it is not a window-length property.
-    if (kWindowRates[i].sample_rate * 2 == reference_rate) {
-      CHECK(estimates[i].key == reference.key);
-      CHECK(estimates[i].key_minor == reference.key_minor);
+    CHECK(estimates[i].key == reference.key);
+    CHECK(estimates[i].key_minor == reference.key_minor);
+  }
+}
+
+TEST_CASE("StreamAnalyzer key holds under detuning and transposition", "[streaming]") {
+  constexpr float kSeconds = 8.0f;
+  constexpr float kBpm = 120.0f;
+  struct Input {
+    float cents;
+    int semitones;
+    int key;
+  };
+  // +20 cents with the tuning reference following it, and the same progression in D major.
+  constexpr std::array<Input, 2> inputs = {{{20.0f, 0, 0}, {0.0f, 2, 2}}};
+  for (int sample_rate : {44100, 32000}) {
+    for (const Input& input : inputs) {
+      const float cents =
+          input.cents + static_cast<float>(input.semitones) * constants::kCentsPerSemitone;
+      const float ratio = std::pow(2.0f, cents / constants::kCentsPerOctave);
+      StreamConfig config;
+      config.sample_rate = sample_rate;
+      config.compute_mel = false;
+      config.compute_onset = false;
+      config.compute_spectral = false;
+      config.max_pending_frames = 4096;
+      config.key_update_interval_sec = 0.5f;
+      config.tuning_ref_hz =
+          constants::kA4Hz * std::pow(2.0f, input.cents / constants::kCentsPerOctave);
+      StreamAnalyzer analyzer(config);
+      const auto audio = chord_progression_with_clicks(sample_rate, kSeconds, kBpm, ratio);
+      analyzer.process(audio.data(), audio.size());
+      const ProgressiveEstimate estimate = analyzer.stats().estimate;
+      INFO("sr " << sample_rate << " cents " << input.cents << " semitones " << input.semitones
+                 << " key " << estimate.key << " minor " << estimate.key_minor);
+      CHECK(estimate.key == input.key);
+      CHECK_FALSE(estimate.key_minor);
     }
   }
 }

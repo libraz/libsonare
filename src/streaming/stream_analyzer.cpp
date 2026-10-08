@@ -205,6 +205,28 @@ StreamAnalyzer::StreamAnalyzer(const StreamConfig& config) : config_(config) {
     chroma_config.fmin = streaming_detail::kStreamingChromaFminHz;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
+
+    StftConfig key_at_44100;
+    key_at_44100.n_fft = kKeyWindowAt44100;
+    key_at_44100.hop_length = kKeyHopAt44100;
+    const StftConfig key_stft =
+        stft_config_scaled_to_rate(key_at_44100, internal_sample_rate_, kInternalSampleRate);
+    key_window_length_ = key_stft.actual_win_length();
+    key_fft_length_ = key_stft.n_fft;
+    key_window_offset_ = (key_fft_length_ - key_window_length_) / 2;
+    key_hop_length_ = key_stft.hop_length;
+    key_until_frame_ = key_window_length_;
+    key_fft_ = std::make_unique<FFT>(key_fft_length_);
+    key_fft_->prepare(/*real_forward=*/true, /*real_inverse=*/false, /*complex_forward=*/false);
+    key_window_ = build_padded_window(config_.window, key_window_length_, key_fft_length_, true);
+    key_chroma_filterbank_ =
+        create_chroma_filterbank(internal_sample_rate_, key_fft_length_, chroma_config);
+    const int key_bins = key_fft_length_ / 2 + 1;
+    key_ring_.assign(static_cast<size_t>(key_window_length_), 0.0f);
+    key_frame_buffer_.assign(static_cast<size_t>(key_fft_length_), 0.0f);
+    key_spectrum_.resize(static_cast<size_t>(key_bins));
+    key_power_.resize(static_cast<size_t>(key_bins));
+    key_chroma_.resize(12);
   }
 
   /// Pre-compute frequencies for spectral features (use internal sample rate)

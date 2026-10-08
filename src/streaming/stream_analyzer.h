@@ -387,6 +387,27 @@ class StreamAnalyzer {
   std::vector<float> mel_log_;                 // [n_mels]
   std::vector<float> chroma_buffer_;           // [12] - L2 normalized
 
+  // Key chroma: a long-window STFT of its own, fed from the same input as the frames.
+  /// Key window and hop in samples at 44100 Hz (186 ms and 46 ms); converted to the analysis rate.
+  static constexpr int kKeyWindowAt44100 = 8192;
+  static constexpr int kKeyHopAt44100 = 2048;
+  int key_window_length_ = 0;
+  int key_fft_length_ = 0;
+  int key_window_offset_ = 0;
+  int key_hop_length_ = 0;
+  std::unique_ptr<FFT> key_fft_;
+  std::vector<float> key_window_;                  // Window centred in key_fft_length_ zeros
+  std::vector<float> key_chroma_filterbank_;       // [12 x key bins]
+  std::vector<float> key_ring_;                    // Last key_window_length_ input samples
+  size_t key_ring_pos_ = 0;                        // Next write index into key_ring_
+  int key_until_frame_ = 0;                        // Samples until the next key frame completes
+  int key_uncovered_ = 0;                          // Samples fed since the last key frame
+  size_t key_fed_pos_ = 0;                         // overlap_buffer_ index not yet fed to the key
+  std::vector<float> key_frame_buffer_;            // [key_fft_length_], zero outside the window
+  std::vector<std::complex<float>> key_spectrum_;  // [key bins]
+  std::vector<float> key_power_;                   // [key bins]
+  std::vector<float> key_chroma_;                  // [12] - L2 normalized
+
   // Progressive estimation accumulators.
   //
   // onset_accumulator_ holds the most-recent onset-strength frames consumed by
@@ -539,6 +560,9 @@ class StreamAnalyzer {
   void compute_stft(const float* frame_start);
   void compute_mel();
   void compute_chroma();
+  void feed_key_chroma(size_t end);
+  void finish_key_chroma();
+  void compute_key_chroma(int n_samples);
   float compute_onset();
   void compute_spectral_features(StreamFrame& frame);
   void update_progressive_estimate(float current_time);

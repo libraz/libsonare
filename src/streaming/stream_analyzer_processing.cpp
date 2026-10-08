@@ -132,6 +132,7 @@ void StreamAnalyzer::process_complete_frames() {
     /// Calculate sample offset for this frame (in original sample rate)
     size_t frame_sample_offset = cumulative_samples_;
 
+    feed_key_chroma(overlap_read_pos_ + static_cast<size_t>(window_length));
     emit_frame(overlap_buffer_.data() + overlap_read_pos_, frame_sample_offset, false);
 
     /// Slide read position by hop_length (deferred compaction below)
@@ -153,6 +154,7 @@ void StreamAnalyzer::process_complete_frames() {
   if (overlap_read_pos_ > 0) {
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(overlap_read_pos_));
+    key_fed_pos_ -= std::min(key_fed_pos_, overlap_read_pos_);
     overlap_read_pos_ = 0;
   }
 
@@ -170,6 +172,7 @@ void StreamAnalyzer::process_complete_frames() {
     const size_t drop = overlap_buffer_.size() - kMaxOverlapSamples;
     overlap_buffer_.erase(overlap_buffer_.begin(),
                           overlap_buffer_.begin() + static_cast<std::ptrdiff_t>(drop));
+    key_fed_pos_ -= std::min(key_fed_pos_, drop);
   }
 }
 
@@ -203,6 +206,10 @@ void StreamAnalyzer::finalize() {
     process_complete_frames();
   }
 
+  // The key tail is folded in before the terminal frame's progressive update reads it.
+  feed_key_chroma(overlap_buffer_.size());
+  finish_key_chroma();
+
   if (overlap_buffer_.empty()) {
     flush_pending_chord();
     finalized_ = true;
@@ -222,6 +229,7 @@ void StreamAnalyzer::finalize() {
   ++frame_count_;
   update_progressive_estimate(static_cast<float>(cumulative_samples_) / config_.sample_rate);
   overlap_buffer_.clear();
+  key_fed_pos_ = 0;
 
   // Emit the chord still held after every terminal frame has been analyzed.
   // The live path only appends when the chord changes, so the last held chord
@@ -354,12 +362,6 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
   if (config_.compute_chroma) {
     compute_chroma();
     frame.chroma = chroma_buffer_;
-
-    /// Accumulate for key estimation
-    for (int i = 0; i < 12; ++i) {
-      chroma_sum_[i] += chroma_buffer_[i];
-    }
-    ++chroma_frame_count_;
 
     /// Detect chord for this frame using smoothed chroma
     if (!chord_templates_.empty() && chroma_buffer_.size() == 12) {

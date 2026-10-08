@@ -414,6 +414,11 @@ void StreamAnalyzer::reset(size_t base_sample_offset) {
   onset_accumulator_size_ = 0;
   chroma_sum_.fill(0.0f);
   chroma_frame_count_ = 0;
+  std::fill(key_ring_.begin(), key_ring_.end(), 0.0f);
+  key_ring_pos_ = 0;
+  key_until_frame_ = key_window_length_;
+  key_uncovered_ = 0;
+  key_fed_pos_ = 0;
   last_key_update_time_ = 0.0f;
   last_bpm_update_time_ = 0.0f;
   current_estimate_ = ProgressiveEstimate();
@@ -489,6 +494,8 @@ void StreamAnalyzer::set_tuning_ref_hz(float ref_hz) {
     chroma_config.fmin = kStreamingChromaFminHz;
     chroma_filterbank_ =
         create_chroma_filterbank(internal_sample_rate_, fft_length_, chroma_config);
+    key_chroma_filterbank_ =
+        create_chroma_filterbank(internal_sample_rate_, key_fft_length_, chroma_config);
   }
 }
 
