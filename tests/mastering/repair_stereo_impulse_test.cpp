@@ -746,3 +746,64 @@ TEST_CASE("Linked declip reconstructs one region in both channels at unequal lev
   REQUIRE(rmse(linked_left, clean_left) * 1.3 < rmse(transfer.first, clean_left));
   REQUIRE(rmse(linked_right, clean_right) > 2.0 * rmse(transfer.second, clean_right));
 }
+
+// ------------------------------------------------------- pending clicks as context
+
+namespace {
+
+std::vector<float> clicks_at(std::initializer_list<std::pair<size_t, size_t>> runs) {
+  std::vector<float> x(4096, 0.0f);
+  for (const auto& run : runs) {
+    for (size_t i = run.first; i < run.first + run.second; ++i) x[i] = 0.9f;
+  }
+  return x;
+}
+
+float peak_of(const Audio& audio) {
+  float peak = 0.0f;
+  for (size_t i = 0; i < audio.size(); ++i) peak = std::max(peak, std::abs(audio.data()[i]));
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("Declick never reads a selected click as a clean anchor or model context",
+          "[repair][stereo][impulse]") {
+  for (const int order : {20, 0}) {
+    DeclickConfig config;
+    config.lpc_order = order;
+    for (const size_t length : {1, 4, 8}) {
+      for (const size_t overlap : {size_t{0}, size_t{1}}) {
+        CAPTURE(order, length, overlap);
+        // Opposite channels, touching (overlap 0) or overlapping by one sample.
+        const std::vector<float> a = clicks_at({{2048, length}});
+        const std::vector<float> b = clicks_at({{2048 + length - overlap, length}});
+        for (const bool swap : {false, true}) {
+          const Audio left = view(swap ? b : a);
+          const Audio right = view(swap ? a : b);
+          const DeclickStereoResult out = declick_stereo(left, right, config);
+          REQUIRE(peak_of(out.left) < 1e-6f);
+          REQUIRE(peak_of(out.right) < 1e-6f);
+          REQUIRE(out.left_report.repaired_runs == 1);
+          REQUIRE(out.right_report.repaired_runs == 1);
+        }
+        // The same pair as three linked channels.
+        const Audio c0 = view(a);
+        const Audio c1 = view(b);
+        const Audio c2 = view(clicks_at({}));
+        const Audio* channels[3] = {&c0, &c1, &c2};
+        std::vector<Audio> out;
+        declick_linked(channels, 3, &out, config);
+        for (const Audio& channel : out) REQUIRE(peak_of(channel) < 1e-6f);
+      }
+    }
+  }
+
+  DeclickConfig config;
+  for (const size_t separation : {size_t{1}, size_t{4}, size_t{16}, size_t{128}}) {
+    CAPTURE(separation);
+    const std::vector<float> x = clicks_at({{2048, 8}, {2056 + separation, 8}});
+    const Audio repaired = declick(view(x), config);
+    REQUIRE(peak_of(repaired) < 1e-6f);
+  }
+}

@@ -148,25 +148,23 @@ constexpr int kDeclickArIterations = 2;
 /// by the input.
 constexpr size_t kDeclickMaxArGapSamples = kDeclickMaxClickSamples;
 
-void interpolate_region(std::vector<float>& output, const std::vector<float>& samples, size_t start,
-                        size_t end, const DeclickConfig& config, bool use_ar) {
+/// Linear fill anchored to BOTH boundaries; the fallback for a gap past the AR cap, what stands
+/// when no AR model is available, and the clean stand-in a neighbouring region's solve reads.
+void fill_linear(std::vector<float>& output, const std::vector<float>& samples, size_t start,
+                 size_t end) {
   const size_t length = end - start;
   const float left = output[start - 1];
   const float right = samples[end];
-  // Linear interpolation anchored to BOTH boundaries; this is the fallback fill
-  // for a gap past the AR cap, and what stands when no AR model is available.
   for (size_t j = start; j < end; ++j) {
     const float t = static_cast<float>(j - start + 1) / static_cast<float>(length + 1);
     output[j] = left + (right - left) * t;
   }
+}
 
-  if (!use_ar) return;
-
-  // Two-sided AR interpolation: the gap is solved against both known edges at
-  // once, so it carries the click's spectral detail and lands on the right
-  // boundary by construction. The forward extrapolation this replaced had no
-  // term anchoring it there and needed a crossfade to the linear fill, which
-  // spent the far half of every gap on the fallback.
+/// Two-sided AR interpolation: the gap is solved against both known edges at once, so it carries
+/// the click's spectral detail and lands on the right boundary by construction.
+void refine_region_ar(std::vector<float>& output, size_t start, size_t end,
+                      const DeclickConfig& config) {
   ArInterpolateParams params;
   params.order = config.lpc_order;
   params.iterations = kDeclickArIterations;
@@ -177,12 +175,14 @@ void interpolate_region(std::vector<float>& output, const std::vector<float>& sa
 }
 
 /// Fills @p runs in ascending order, which is the order the fill was written
-/// for: each region's left anchor is the already-repaired sample before it.
+/// for: each region's left anchor is the already-repaired sample before it. Every region is
+/// filled linearly before any is solved, so a solve's context never reads a click that has not
+/// been repaired yet.
 void apply_runs(std::vector<float>& output, const std::vector<float>& samples,
                 const std::vector<ClickRun>& runs, const DeclickConfig& config, bool use_ar) {
-  for (const ClickRun& run : runs) {
-    interpolate_region(output, samples, run.start, run.end, config, use_ar);
-  }
+  for (const ClickRun& run : runs) fill_linear(output, samples, run.start, run.end);
+  if (!use_ar) return;
+  for (const ClickRun& run : runs) refine_region_ar(output, run.start, run.end, config);
 }
 
 ClickDetection to_detection(const ChannelAnalysis& analysis, size_t size, int sample_rate) {
@@ -195,11 +195,19 @@ ClickDetection to_detection(const ChannelAnalysis& analysis, size_t size, int sa
   return detection;
 }
 
-/// Merges two ascending, non-overlapping run lists into the ascending run set
-/// both channels are repaired over. Runs that merely touch stay separate; each
-/// then anchors on the other's repaired output, as adjacent runs already do.
+/// Merges two ascending, non-overlapping run lists into the ascending run set both channels are
+/// repaired over. Runs that overlap or touch become one region: a touching neighbour's boundary
+/// sample is itself a selected click and cannot anchor the other's fill.
 std::vector<ClickRun> union_runs(const std::vector<ClickRun>& a, const std::vector<ClickRun>& b) {
-  return union_sorted_runs(a, b);
+  std::vector<ClickRun> merged;
+  for (const ClickRun& run : union_sorted_runs(a, b)) {
+    if (!merged.empty() && run.start <= merged.back().end) {
+      merged.back().end = std::max(merged.back().end, run.end);
+    } else {
+      merged.push_back(run);
+    }
+  }
+  return merged;
 }
 
 size_t count_linked_runs(const std::vector<ClickRun>& applied, const std::vector<ClickRun>& own) {
