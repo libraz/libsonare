@@ -47,10 +47,12 @@ void TruePeakOutputGuard::prepare(int factor, int max_channels, int max_block_si
   work_.assign(
       static_cast<size_t>(std::max(0, max_channels)),
       std::vector<float>(static_cast<size_t>(latency_ + std::max(0, max_block_size)), 0.0f));
+  applied_ceiling_ = std::numeric_limits<float>::infinity();
 }
 
 void TruePeakOutputGuard::reset() noexcept {
   for (auto& channel : work_) std::fill(channel.begin(), channel.end(), 0.0f);
+  applied_ceiling_ = std::numeric_limits<float>::infinity();
 }
 
 float TruePeakOutputGuard::process(float* const* channels, int num_channels, int num_samples,
@@ -68,9 +70,27 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
   const size_t half = static_cast<size_t>(fir_->taps_per_phase / 2);
   const size_t lookbehind = static_cast<size_t>(fir_->taps_per_phase - 1) - half;
   const size_t reach = static_cast<size_t>(reach_);
-  const size_t first = pending - half;
   const size_t last = length - 1 - half;
   float min_gain = 1.0f;
+  // Queued samples were bounded to the ceiling in force when they arrived. After a drop they
+  // are evaluated again against the new one, from the first position whose stencil is still held;
+  // a sample ahead of that has lost its history and is bounded by its own magnitude.
+  const bool lowered = ceiling < applied_ceiling_;
+  const size_t first = lowered ? lookbehind : pending - half;
+  applied_ceiling_ = ceiling;
+  if (lowered) {
+    for (size_t s = 0; s < std::min(lookbehind, length); ++s) {
+      float linked = 0.0f;
+      for (int ch = 0; ch < num_channels; ++ch) {
+        if (ch == excluded_channel) continue;
+        linked = std::max(linked, std::abs(work_[static_cast<size_t>(ch)][s]));
+      }
+      if (!(linked > ceiling)) continue;
+      const float gain = ceiling / linked;
+      for (int ch = 0; ch < num_channels; ++ch) work_[static_cast<size_t>(ch)][s] *= gain;
+      min_gain = std::min(min_gain, gain);
+    }
+  }
   // Scales position k's stencil, channel-linked, when it reads over the ceiling.
   const auto correct = [&](size_t k) {
     float linked = 0.0f;
@@ -101,7 +121,9 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
     const size_t window = static_cast<size_t>(kRecheckReaches) * reach;
     for (int pass = 0; pass < kMaxRecheckPasses; ++pass) {
       bool corrected = false;
-      for (size_t j = k; j + window > k; --j) corrected |= correct(j);
+      for (size_t back = 0; back < window && k >= back + lookbehind; ++back) {
+        corrected |= correct(k - back);
+      }
       if (!corrected) break;
     }
   }

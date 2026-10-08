@@ -4,6 +4,7 @@
 /// @brief Ceiling limiter with true-peak style post guard.
 
 #include <cstdint>
+#include <limits>
 #include <vector>
 
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -85,6 +86,8 @@ class TruePeakOutputGuard {
   std::vector<std::vector<float>> work_;
   int reach_ = 0;
   int latency_ = 0;
+  /// Ceiling the queued samples were last bounded to; lowering it re-evaluates them.
+  float applied_ceiling_ = std::numeric_limits<float>::infinity();
 };
 
 /// @brief Default depth (dB) the loudness stages may drive their post-gain

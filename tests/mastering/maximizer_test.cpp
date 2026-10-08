@@ -1451,3 +1451,59 @@ TEST_CASE("AdaptiveRelease crossing endpoint automation keeps config round-tripp
     CHECK_NOTHROW(processor.set_config(crest_config));
   }
 }
+
+TEST_CASE("TruePeakLimiter bounds queued output to a lowered ceiling", "[mastering][maximizer]") {
+  constexpr double kRateHz = 48000.0;
+  constexpr float kNewCeilingDb = -6.0f;
+  const float new_ceiling = std::pow(10.0f, kNewCeilingDb / 20.0f);
+  for (const int factor : {1, 2, 4, 8, 16}) {
+    for (const bool input_rate_gain : {false, true}) {
+      for (const bool via_config : {false, true}) {
+        for (const int block : {64, 137}) {
+          for (const int channels : {1, 2}) {
+            CAPTURE(factor, input_rate_gain, via_config, block, channels);
+            TruePeakLimiterConfig config;
+            config.ceiling_db = -1.0f;
+            config.oversample_factor = factor;
+            config.apply_gain_at_input_rate = input_rate_gain;
+            TruePeakLimiter limiter(config);
+            limiter.prepare(kRateHz, block);
+
+            // A periodic signal under the old ceiling but over the new one.
+            const auto next = [&](int& n) {
+              return 0.8f *
+                     std::sin(static_cast<float>(sonare::constants::kTwoPiD * 997.0 * n / kRateHz));
+            };
+            int n = 0;
+            std::vector<std::vector<float>> buf(static_cast<size_t>(channels),
+                                                std::vector<float>(static_cast<size_t>(block)));
+            std::vector<float*> ptr(static_cast<size_t>(channels));
+            const auto run_block = [&] {
+              for (int i = 0; i < block; ++i, ++n) {
+                for (auto& ch : buf) ch[static_cast<size_t>(i)] = next(n);
+              }
+              for (int c = 0; c < channels; ++c) ptr[static_cast<size_t>(c)] = buf[c].data();
+              limiter.process(ptr.data(), channels, block);
+            };
+            for (int b = 0; b < 40; ++b) run_block();
+
+            if (via_config) {
+              config.ceiling_db = kNewCeilingDb;
+              limiter.set_config(config);
+            } else {
+              REQUIRE(limiter.set_parameter(0, kNewCeilingDb));
+            }
+            float worst = 0.0f;
+            for (int b = 0; b < 20; ++b) {
+              run_block();
+              for (const auto& ch : buf) {
+                for (const float s : ch) worst = std::max(worst, std::abs(s));
+              }
+            }
+            REQUIRE(worst <= new_ceiling * 1.00001f);
+          }
+        }
+      }
+    }
+  }
+}
