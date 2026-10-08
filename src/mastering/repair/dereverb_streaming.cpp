@@ -8,6 +8,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/repair/dereverb_internal.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/validated.h"
@@ -234,6 +235,9 @@ void StreamingDereverb::reset() {
 
 int StreamingDereverb::latency_samples() const noexcept { return n_fft_ - 1; }
 
-int StreamingDereverb::tail_samples() const noexcept { return latency_samples(); }
+int StreamingDereverb::tail_samples() const noexcept {
+  rt::TailBudget tail;
+  return tail.delay(n_fft_ - 1).samples();
+}
 
 }  // namespace sonare::mastering::repair

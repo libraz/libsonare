@@ -39,6 +39,10 @@ class StreamingDehum : public rt::ProcessorBase {
 
   /// @brief `frame_size` when adaptive, otherwise 0.
   int latency_samples() const noexcept override;
+  /// @brief The harmonic removers' ring after the input stops: each notch section, or each
+  ///        canceller's correction decaying at step / 2 per sample, in series. An adaptive pass
+  ///        is budgeted at the lowest fundamental its search can reach.
+  int tail_samples() const noexcept override;
 
   const DehumConfig& config() const noexcept { return config_; }
 

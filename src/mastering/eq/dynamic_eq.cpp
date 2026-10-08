@@ -71,7 +71,7 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   last_detector_db_ = detector_db(detector_channels, detector_num_channels, num_samples, excluded);
   for (size_t i = 0; i < kMaxBands; ++i) {
     last_band_detector_db_[i] =
-        bands_[i].enabled
+        admit_band(i)
             ? band_detector_db(detector_channels, detector_num_channels, num_samples, excluded, i)
             : kFloorDb;
   }
@@ -88,7 +88,7 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
       prepared_ ? static_cast<float>(1.0 - std::exp(-1.0 / smoothing_samples)) : 1.0f;
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& dynamic_band = bands_[i];
-    if (!dynamic_band.enabled) {
+    if (!band_gates_[i].active()) {
       eq_.clear_band(i);
       last_applied_gain_db_[i] = 0.0f;
       target_gain_db_[i] = 0.0f;
@@ -107,7 +107,7 @@ void DynamicEq::process(float* const* channels, int num_channels, int num_sample
   for (int offset = 0; offset < num_samples; offset += kCoeffUpdateInterval) {
     const int chunk = std::min(kCoeffUpdateInterval, num_samples - offset);
     for (size_t i = 0; i < kMaxBands; ++i) {
-      if (!bands_[i].enabled) {
+      if (!band_gates_[i].active()) {
         continue;
       }
       // Advance the smoothed gain by `chunk` per-sample one-pole steps toward the
@@ -169,6 +169,16 @@ void DynamicEq::apply_band_gain(size_t index, float gain_db) {
   last_applied_coeff_gain_db_[index] = gain_db;
   eq_.set_band_at_rate(
       index, {dynamic_band.type, dynamic_band.frequency_hz, gain_db, dynamic_band.q, true});
+}
+
+void DynamicEq::reset_band(size_t index) noexcept {
+  for (auto& channel : detectors_[index].channels) channel.reset();
+  eq_.clear_band(index);
+  last_band_detector_db_[index] = kFloorDb;
+  last_applied_gain_db_[index] = 0.0f;
+  last_applied_coeff_gain_db_[index] = std::numeric_limits<float>::quiet_NaN();
+  smoothed_gain_db_[index] = 0.0f;
+  target_gain_db_[index] = 0.0f;
 }
 
 void DynamicEq::reset() {
@@ -517,7 +527,7 @@ void DynamicEq::rebuild(int /*num_samples*/) {
   // detector-driven delta to avoid a jump on the first processed block.
   for (size_t i = 0; i < kMaxBands; ++i) {
     const auto& dynamic_band = bands_[i];
-    if (!dynamic_band.enabled) {
+    if (!admit_band(i)) {
       eq_.clear_band(i);
       last_applied_gain_db_[i] = 0.0f;
       last_applied_coeff_gain_db_[i] = std::numeric_limits<float>::quiet_NaN();

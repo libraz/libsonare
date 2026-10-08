@@ -28,11 +28,16 @@
 #include "effects/reverb/velvet_reverb.h"
 #include "mastering/dynamics/deesser.h"
 #include "mastering/eq/cut_filter.h"
+#include "mastering/eq/dynamic_eq.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/graphic_eq.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/pultec.h"
 #include "mastering/multiband/multiband_compressor.h"
+#include "mastering/repair/decrackle_streaming.h"
+#include "mastering/repair/dehum_streaming.h"
+#include "mastering/repair/denoise_streaming.h"
+#include "mastering/repair/dereverb_streaming.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/exciter.h"
 #include "mastering/saturation/hard_clipper.h"
@@ -685,5 +690,52 @@ TEST_CASE("IIR stages report the ring their sections leave", "[effects][tail]") 
     sonare::mastering::saturation::AmpSim amp(config);
     amp.prepare(kRate, 256);
     require_tail_contains_output(amp, 0.5f);
+  }
+}
+
+TEST_CASE("Dynamic EQ and the streaming repair stages report the ring they leave",
+          "[effects][tail]") {
+  namespace repair = sonare::mastering::repair;
+  constexpr double kRate = 48000.0;
+  SECTION("dynamic eq") {
+    sonare::mastering::eq::DynamicEqBand band;
+    band.frequency_hz = 60.0f;
+    band.static_gain_db = 9.0f;
+    band.q = 6.0f;
+    band.enabled = true;
+    sonare::mastering::eq::DynamicEq eq;
+    eq.prepare(kRate, 256);
+    eq.set_band(0, band);
+    require_tail_contains_output(eq, 0.5f);
+  }
+  SECTION("denoise") {
+    repair::DenoiseClassicalConfig config;
+    config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+    repair::StreamingDenoise denoise(config);
+    denoise.prepare(kRate, 256);
+    require_tail_contains_output(denoise, 0.5f);
+  }
+  SECTION("dereverb") {
+    repair::StreamingDereverb dereverb(repair::DereverbClassicalConfig{});
+    dereverb.prepare(kRate, 256);
+    require_tail_contains_output(dereverb, 0.5f);
+  }
+  SECTION("decrackle") {
+    repair::StreamingDecrackle decrackle(repair::DecrackleConfig{});
+    decrackle.prepare(kRate, 256);
+    require_tail_contains_output(decrackle, 0.5f);
+  }
+  SECTION("dehum, every mode") {
+    for (const auto mode : {repair::DehumMode::Notch, repair::DehumMode::Subtract}) {
+      for (const bool adaptive : {false, true}) {
+        repair::DehumConfig config;
+        config.mode = mode;
+        config.adaptive = adaptive;
+        repair::StreamingDehum dehum(config);
+        dehum.prepare(kRate, 256);
+        INFO("mode " << static_cast<int>(mode) << " adaptive " << adaptive);
+        require_tail_contains_output(dehum, 0.5f);
+      }
+    }
   }
 }

@@ -13,6 +13,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "mastering/repair/dehum_streaming.h"
 #include "rt/biquad_design.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -890,6 +891,26 @@ void StreamingDehum::process(float* const* channels, int num_channels, int num_s
     }
     ++state.blocks_done;
   }
+}
+
+int StreamingDehum::tail_samples() const noexcept {
+  const double rate = state_->sample_rate > 0 ? state_->sample_rate : 48000.0;
+  const double fundamental =
+      config_.adaptive
+          ? std::max(1.0, static_cast<double>(config_.fundamental_hz - config_.search_range_hz))
+          : static_cast<double>(config_.fundamental_hz);
+  rt::TailBudget tail;
+  for (int harmonic = 1; harmonic <= config_.harmonics; ++harmonic) {
+    const double frequency = fundamental * harmonic;
+    if (frequency >= rate * 0.5) break;
+    if (config_.mode == DehumMode::Subtract) {
+      const double step = std::min(kTwoPiD * (frequency / config_.q) / rate, 1.0);
+      tail.decay(1.0 - 0.5 * step);
+    } else {
+      tail.section(rt::rbj_notch(static_cast<float>(kTwoPiD * frequency / rate), config_.q));
+    }
+  }
+  return tail.samples();
 }
 
 int StreamingDehum::latency_samples() const noexcept {

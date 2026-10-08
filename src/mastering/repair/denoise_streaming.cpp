@@ -7,6 +7,7 @@
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -316,6 +317,9 @@ int StreamingDenoise::latency_samples() const noexcept {
   return n_fft_ - 1 + mask_latency_frames_ * hop_length_;
 }
 
-int StreamingDenoise::tail_samples() const noexcept { return latency_samples(); }
+int StreamingDenoise::tail_samples() const noexcept {
+  rt::TailBudget tail;
+  return tail.delay(n_fft_ - 1).samples();
+}
 
 }  // namespace sonare::mastering::repair

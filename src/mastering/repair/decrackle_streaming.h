@@ -13,6 +13,7 @@
 
 #include "mastering/repair/decrackle.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::repair {
 
@@ -38,6 +39,11 @@ class StreamingDecrackle : public rt::ProcessorBase {
 
   /// @brief One sample: a sample's verdict needs the sample after it.
   int latency_samples() const noexcept override { return 1; }
+  /// @brief One sample more: the median's window still holds the last input one step on.
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail;
+    return tail.delay(1.0).samples();
+  }
 
   const DecrackleConfig& config() const noexcept { return config_; }
 

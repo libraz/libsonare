@@ -10,6 +10,8 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -51,6 +53,10 @@ class DynamicEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  /// The band filters ring on; the detector only moves their gains.
+  int tail_samples() const noexcept override {
+    return rt::TailBudget::reported(eq_.tail_samples()).samples();
+  }
 
   // Number of automatable scalar parameters per band (the per-band stride used
   // by set_parameter). See set_parameter for the field order.
@@ -190,6 +196,13 @@ class DynamicEq : public rt::ProcessorBase {
   // a block. O(bands x channels) and independent of block size, so the
   // per-sample input scan the realtime contract avoids is not reintroduced.
   void discard_non_finite_detector_state() noexcept;
+  /// Returns band @p index's detector, gain glide and EQ slot to rest, so a band that comes
+  /// back reads neither the detector history nor the gain it froze with.
+  void reset_band(size_t index) noexcept;
+  /// Admits band @p index for this pass: true while it runs, resetting it on re-entry.
+  bool admit_band(size_t index) noexcept {
+    return band_gates_[index].admit(bands_[index].enabled, [this, index] { reset_band(index); });
+  }
   static float dynamic_gain_delta(const DynamicEqBand& band, float detector_db);
   void rebuild(int num_samples = 0);
   void apply_band_gain(size_t index, float gain_db);
@@ -210,6 +223,7 @@ class DynamicEq : public rt::ProcessorBase {
   // skip reference). Seeded to NaN so the first apply always programs the band.
   std::array<float, kMaxBands> last_applied_coeff_gain_db_{};
   std::array<DetectorState, kMaxBands> detectors_{};
+  std::array<rt::StageGate, kMaxBands> band_gates_{};
   std::vector<float*> sub_channels_;  // fixed to kRealtimePreparedChannels in prepare()
   float last_detector_db_ = sonare::constants::kFloorDb;
   const float* const* sidechain_channels_ = nullptr;

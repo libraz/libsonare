@@ -459,3 +459,50 @@ TEST_CASE("Dynamic EQ detectors leave the excluded plane out", "[mastering][eq]"
           return eq;
         }) == 0.0f);
 }
+
+TEST_CASE("DynamicEq band switched back on reads no stale detector or gain", "[mastering][eq]") {
+  DynamicEqBand band;
+  band.type = EqBandType::Peak;
+  band.frequency_hz = 1000.0f;
+  band.threshold_db = -40.0f;
+  band.ratio = 4.0f;
+  band.range_db = -12.0f;
+  band.release_ms = 2000.0f;
+  band.detector_delay_ms = 10.0f;
+  band.enabled = true;
+  const auto tone = [](float amplitude, size_t length) {
+    std::vector<float> out(length);
+    for (size_t i = 0; i < length; ++i) {
+      out[i] = amplitude *
+               static_cast<float>(std::sin(2.0 * kPiD * 1000.0 * static_cast<double>(i) / 48000.0));
+    }
+    return out;
+  };
+  const auto run = [](DynamicEq& eq, std::vector<float> samples) {
+    for (size_t offset = 0; offset < samples.size(); offset += 512) {
+      const int count = static_cast<int>(std::min<size_t>(512, samples.size() - offset));
+      float* channels[] = {samples.data() + offset};
+      eq.process(channels, 1, count);
+    }
+    return samples;
+  };
+
+  DynamicEq toggled;
+  toggled.prepare(48000.0, 512);
+  toggled.set_band(0, band);
+  run(toggled, tone(0.8f, 48000));  // drives the detector deep into reduction
+  DynamicEqBand off = band;
+  off.enabled = false;
+  toggled.set_band(0, off);
+  run(toggled, std::vector<float>(24000, 0.0f));
+  toggled.set_band(0, band);
+
+  DynamicEq fresh;
+  fresh.prepare(48000.0, 512);
+  fresh.set_band(0, band);
+
+  const std::vector<float> quiet = tone(0.01f, 4096);
+  const std::vector<float> after = run(toggled, quiet);
+  const std::vector<float> expected = run(fresh, quiet);
+  REQUIRE(max_abs_difference(after, expected) < 1.0e-6f);
+}

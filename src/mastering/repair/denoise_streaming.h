@@ -75,8 +75,8 @@ class StreamingDenoise : public rt::ProcessorBase {
   ///        it, `n_fft - 1` plus one hop whenever the mask stage lags a frame.
   int latency_samples() const noexcept override;
 
-  /// @brief What is still inside the pipeline when the input goes silent, which
-  ///        is the delay itself: nothing here decays past it.
+  /// @brief The last frame a sample falls in ends `n_fft - 1` samples after it; the mask is a
+  ///        gain on that frame, so nothing decays past the frame.
   int tail_samples() const noexcept override;
 
   /// @brief The configuration this processor was constructed with, as validated.

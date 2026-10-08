@@ -119306,7 +119306,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 0
+      "tailSamples": 1
     },
     {
       "category": "repair",
@@ -119501,7 +119501,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 0
+      "tailSamples": 146567
     },
     {
       "category": "repair",
@@ -119761,7 +119761,7 @@
       "realtimeInsertable": true,
       "slots": [],
       "stereoOnly": false,
-      "tailSamples": 1279
+      "tailSamples": 1023
     },
     {
       "category": "repair",

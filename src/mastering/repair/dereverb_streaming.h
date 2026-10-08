@@ -47,7 +47,8 @@ class StreamingDereverb : public rt::ProcessorBase {
   /// @brief `n_fft - 1`: the last frame covering a sample needs the samples after it.
   int latency_samples() const noexcept override;
 
-  /// @brief The delay itself: nothing here decays past it.
+  /// @brief The last frame a sample falls in ends `n_fft - 1` samples after it; the mask is a
+  ///        gain on that frame, so nothing decays past the frame.
   int tail_samples() const noexcept override;
 
   const DereverbClassicalConfig& config() const noexcept { return config_; }
