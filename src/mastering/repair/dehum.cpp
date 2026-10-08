@@ -1,5 +1,6 @@
 #include "mastering/repair/dehum.h"
 
+#include <Eigen/Dense>
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -317,25 +318,47 @@ PassTrace run_fixed_notch(std::vector<float>& samples, int sample_rate, const De
   return trace;
 }
 
-/// Seeds a canceller from a least-squares projection over the opening window.
-/// @details Starting the pair at zero costs the loop its own time constant --
-///   an eighth of a second at the default q on a 50 Hz series -- during which
-///   the harmonic passes through unattenuated. The window is the detector's, one
-///   second, over which a mains harmonic completes a whole number of cycles.
-void seed_canceller(HarmonicCanceller& canceller, const std::vector<float>& samples, size_t count,
-                    float frequency_hz, int sample_rate) {
-  if (count == 0) return;
-  double cosine_sum = 0.0;
-  double sine_sum = 0.0;
+/// Smallest ratio of the reference Gram matrix's eigenvalues for which the opening window
+/// separates the harmonics well enough to seed them.
+constexpr double kSeedMinConditionRatio = 0.05;
+
+/// Seeds every canceller from one joint least-squares fit of the harmonic references over the
+/// opening window.
+/// @details Starting the pairs at zero costs the loop its own time constant -- an eighth of a
+///   second at the default q on a 50 Hz series -- during which the harmonic passes through
+///   unattenuated. The references are orthogonal only over whole cycles of every harmonic, so a
+///   per-harmonic projection overcounts on a shorter or non-integer window; the fit is solved
+///   jointly, and a window that cannot tell the harmonics apart leaves every pair unseeded.
+void seed_cancellers(std::vector<HarmonicCanceller>& cancellers,
+                     const std::vector<double>& increments, const std::vector<float>& samples,
+                     size_t count) {
+  const size_t unknowns = 2 * cancellers.size();
+  if (count == 0 || unknowns == 0 || count < unknowns) return;
+  Eigen::MatrixXd gram = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(unknowns),
+                                               static_cast<Eigen::Index>(unknowns));
+  Eigen::VectorXd projection = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(unknowns));
+  Eigen::VectorXd row(static_cast<Eigen::Index>(unknowns));
   for (size_t i = 0; i < count; ++i) {
-    const double phase =
-        kTwoPiD * frequency_hz * static_cast<double>(i) / static_cast<double>(sample_rate);
-    cosine_sum += samples[i] * std::cos(phase);
-    sine_sum += samples[i] * std::sin(phase);
+    for (size_t k = 0; k < cancellers.size(); ++k) {
+      const double phase = increments[k] * static_cast<double>(i);
+      row(static_cast<Eigen::Index>(2 * k)) = std::cos(phase);
+      row(static_cast<Eigen::Index>(2 * k + 1)) = std::sin(phase);
+    }
+    gram.noalias() += row * row.transpose();
+    projection += row * static_cast<double>(samples[i]);
   }
-  const double scale = 2.0 / static_cast<double>(count);
-  canceller.cosine_gain = static_cast<float>(scale * cosine_sum);
-  canceller.sine_gain = static_cast<float>(scale * sine_sum);
+  const Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigen(gram);
+  const double largest = eigen.eigenvalues().maxCoeff();
+  if (!(largest > 0.0) || eigen.eigenvalues().minCoeff() < kSeedMinConditionRatio * largest) {
+    return;
+  }
+  const Eigen::VectorXd gains =
+      eigen.eigenvectors() * (eigen.eigenvalues().cwiseInverse().asDiagonal() *
+                              (eigen.eigenvectors().transpose() * projection));
+  for (size_t k = 0; k < cancellers.size(); ++k) {
+    cancellers[k].cosine_gain = static_cast<float>(gains(static_cast<Eigen::Index>(2 * k)));
+    cancellers[k].sine_gain = static_cast<float>(gains(static_cast<Eigen::Index>(2 * k + 1)));
+  }
 }
 
 PassTrace run_fixed_subtract(std::vector<float>& samples, int sample_rate,
@@ -353,12 +376,12 @@ PassTrace run_fixed_subtract(std::vector<float>& samples, int sample_rate,
     if (frequency >= rate * 0.5f) break;
     HarmonicCanceller canceller;
     canceller.set_selectivity(frequency, rate, config.q);
-    seed_canceller(canceller, samples, seed_window, frequency, sample_rate);
     cancellers.push_back(canceller);
     increments.push_back(kTwoPiD * frequency / static_cast<double>(sample_rate));
     phases.push_back(0.0);
     ++trace.notched_harmonics;
   }
+  seed_cancellers(cancellers, increments, samples, seed_window);
 
   // The references are the same phase origin the seed projected onto, so a
   // cancellation that was correct over the window stays correct past it.

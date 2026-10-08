@@ -2094,3 +2094,42 @@ TEST_CASE("Dehum subtraction stays bounded for a band wider than its rate", "[ma
     REQUIRE(peak <= 0.05f);
   }
 }
+
+TEST_CASE("Dehum Subtract seeds short clips from the actual reference geometry",
+          "[mastering][repair]") {
+  constexpr int kRate = 48000;
+  const auto tone = [&](size_t length, double hz) {
+    std::vector<float> x(length);
+    for (size_t i = 0; i < length; ++i) {
+      x[i] = 0.5f * static_cast<float>(
+                        std::cos(sonare::constants::kTwoPiD * hz * static_cast<double>(i) / kRate));
+    }
+    return x;
+  };
+  const auto energy = [](const Audio& a) {
+    double e = 0.0;
+    for (size_t i = 0; i < a.size(); ++i) e += static_cast<double>(a[i]) * a[i];
+    return e;
+  };
+  for (const int harmonics : {1, 4}) {
+    // 128 frames is a fraction of a cycle, 960 exactly one, 1500 and 700 are non-integer.
+    for (const size_t length : {size_t{128}, size_t{700}, size_t{960}, size_t{1500}}) {
+      CAPTURE(harmonics, length);
+      DehumConfig config;
+      config.harmonics = harmonics;
+      const std::vector<float> x = tone(length, 50.0);
+      const Audio input = Audio::from_vector(x, kRate);
+      const Audio mono = dehum(input, config);
+      const auto linked = dehum_stereo(input, input, config);
+      // Pure configured fundamental: the pass may remove energy but never add any.
+      REQUIRE(energy(mono) <= energy(input) * 1.001);
+      REQUIRE(energy(linked.left) <= energy(input) * 1.001);
+      REQUIRE(energy(linked.right) <= energy(input) * 1.001);
+      for (size_t i = 0; i < mono.size(); ++i) REQUIRE(std::abs(mono[i]) <= 0.5f * 1.001f);
+      if (length == 960) {
+        // A whole cycle makes the references orthogonal, so the seed removes the hum outright.
+        REQUIRE(energy(mono) < 1e-3 * energy(input));
+      }
+    }
+  }
+}
