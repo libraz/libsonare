@@ -6,8 +6,10 @@
 ///        bounce reads covers an envelope-time edit once it has been received
 ///        rather than assuming the slowest one in advance.
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
+#include <functional>
 #include <initializer_list>
 #include <limits>
 #include <vector>
@@ -457,4 +459,75 @@ TEST_CASE("a received GS envelope-time edit raises the Sf2Player fallback tail",
     send_sysex(player, dt1(kPart1Block, 0x36, 127));
     CHECK(tail_of(player) >= release_scaled);
   }
+}
+
+namespace {
+
+NativeSynthConfig gm_reset_config() {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  cfg.dc_block = false;
+  return cfg;
+}
+
+/// Stereo render of a note 60 played after @p history and one system reset, in 256-frame blocks
+/// after 100 ms of settling.
+std::vector<float> note_after(const std::vector<uint8_t>& reset, double rate,
+                              const std::function<void(NativeSynth&)>& history) {
+  NativeSynth synth(gm_reset_config());
+  synth.prepare(rate, kBlock);
+  history(synth);
+  send_sysex(synth, reset);
+  for (int i = 0; i < static_cast<int>(0.1 * rate) / kBlock; ++i) render_stereo(synth, kBlock);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  std::vector<float> out;
+  for (int i = 0; i < 8; ++i) {
+    const auto block = render_stereo(synth, kBlock);
+    out.insert(out.end(), block.left.begin(), block.left.end());
+    out.insert(out.end(), block.right.begin(), block.right.end());
+  }
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("a system reset returns the parts to their power-on program and volume",
+          "[midi][synth][native-gs]") {
+  for (const double rate : {48000.0, 96000.0}) {
+    for (const std::vector<uint8_t>* reset : {&kGsReset, &kGmSystemOn}) {
+      const auto fresh = note_after(*reset, rate, [](NativeSynth&) {});
+      REQUIRE(*std::max_element(fresh.begin(), fresh.end()) > 1.0e-3f);
+      const auto program = note_after(*reset, rate, [](NativeSynth& s) {
+        s.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 80)));
+      });
+      const auto silent_volume =
+          note_after(*reset, rate, [](NativeSynth& s) { send_cc(s, 0, 7, 0); });
+      CAPTURE(rate, reset == &kGsReset);
+      CHECK(program == fresh);
+      CHECK(silent_volume == fresh);
+    }
+  }
+}
+
+TEST_CASE("a system reset clears the voices sounding before it", "[midi][synth][native-gs]") {
+  // The control silences the same held note with All Sound Off instead of resetting; the note
+  // played afterwards then has the same voice history, so the two must agree exactly.
+  const auto hold_note = [](NativeSynth& s) {
+    s.on_event(0, event(sonare::midi::make_midi1_note_on(0, 3, 64, 100)));
+    render_stereo(s, 4096);
+  };
+  const auto after_reset = note_after(kGsReset, kRate, hold_note);
+  NativeSynth control(gm_reset_config());
+  control.prepare(kRate, kBlock);
+  hold_note(control);
+  for (uint8_t ch = 0; ch < 16; ++ch) send_cc(control, ch, 120, 0);
+  for (int i = 0; i < static_cast<int>(0.1 * kRate) / kBlock; ++i) render_stereo(control, kBlock);
+  control.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  std::vector<float> expected;
+  for (int i = 0; i < 8; ++i) {
+    const auto block = render_stereo(control, kBlock);
+    expected.insert(expected.end(), block.left.begin(), block.left.end());
+    expected.insert(expected.end(), block.right.begin(), block.right.end());
+  }
+  CHECK(after_reset == expected);
 }

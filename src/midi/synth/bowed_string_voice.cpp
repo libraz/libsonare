@@ -255,7 +255,7 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
       const float w = kTwoPi * freq / srf;
       m.a1 = 2.0f * r * std::cos(w);
       m.a2 = -r * r;
-      m.gain = 1.0f - r;  // unity-peak (cancels the high-Q resonant boost)
+      m.gain = resonator_gain_at_rate(r, w, sr);  // centre response held across rates
     }
   }
 
@@ -273,6 +273,10 @@ void BowedStringVoiceCore::start(const BowedStringPatchParams& params, double sa
     // kPolLpPole and kPolLoss are this loop's voiced (a, g).
     pol_lp_alpha_ = 1.0f - loss_pole_at_rate(kPolLpPole, sr);
     pol_loss_ = kPolLoss;
+    // The delay carried outside this line: the feedback register and its own loss pole's phase
+    // delay at its fundamental, so the loop sounds pol_period_.
+    pol_comp_ =
+        1.0f + onepole_group_delay_samples(loss_pole_at_rate(kPolLpPole, sr), kTwoPi / pol_period_);
     pol_drive_ = kPolDrive;
     if (pol_ != nullptr) {
       for (int i = 0; i < capacity_; ++i) pol_[static_cast<size_t>(i)] = 0.0f;
@@ -345,7 +349,7 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   }
 
   // Split the (compensated) period between the two lines and read/write them.
-  const float eff = std::max(2.0f, base_period_ / ratio - comp_);
+  const float eff = loop_delay(base_period_ / ratio, comp_, 2.0f);
   const float neck_delay =
       std::clamp((1.0f - beta_) * eff, 1.0f, static_cast<float>(capacity_ - 4));
   const float bridge_delay = std::clamp(beta_ * eff, 1.0f, static_cast<float>(capacity_ - 4));
@@ -365,9 +369,11 @@ float BowedStringVoiceCore::render(float pitch_ratio) noexcept {
   // shared bow injection (and coupled back through string_v above). Gated on.
   if (pol_couple_ > 0.0f) {
     pol_lp_state_ += pol_lp_alpha_ * (pol_out_ - pol_lp_state_);
-    const float pol_refl = -pol_loss_ * pol_lp_state_;
+    // One reflection over a full-period line: positive, so the loop resonates at the string's
+    // harmonic series rather than at the odd half-integer modes a single inversion would give.
+    const float pol_refl = pol_loss_ * pol_lp_state_;
     const float pol_delay =
-        std::clamp(pol_period_ / ratio - comp_, 1.0f, static_cast<float>(capacity_ - 4));
+        std::clamp(pol_period_ / ratio - pol_comp_, 1.0f, static_cast<float>(capacity_ - 4));
     pol_out_ = rt::lagrange3_fractional_delay(pol_, static_cast<size_t>(capacity_), pol_write_,
                                               static_cast<int>(pol_delay * 256.0f),
                                               pol_refl + pol_drive_ * v_inj);

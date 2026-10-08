@@ -85,7 +85,7 @@ class BodyResonator {
     x2_ = 0.0f;
   }
 
-  /// Configures the bank. @p note_hz tracks the played note (kWoodTube);
+  /// Configures the bank. @p note_hz tracks the voiced note (kWoodTube);
   /// @p mix in [0,1] blends the resonated path over the dry voice.
   /// @p corpus_scale uniformly scales the mode bank's centre frequencies
   /// (kViolin only; identity at 1.0, its default). @p corpus_tilt_hz is the

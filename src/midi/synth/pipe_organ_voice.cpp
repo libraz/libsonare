@@ -16,6 +16,7 @@ namespace {
 
 using sonare::constants::kPi;
 using sonare::constants::kTwoPi;
+using sonare::constants::kTwoPiD;
 
 // Mouth-pressure calibration (shared with the flute jet). The exposed band lands
 // the jet in its self-oscillating region — the knobs colour the tone, they do
@@ -242,7 +243,7 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
   rank_count_ = count;
   sounding_pipe_count_ = 0;
   for (int r = 0; r < count; ++r) {
-    if (std::clamp(ranks[r].level, 0.0f, 1.0f) > 0.0f) ++sounding_pipe_count_;
+    if (ranks[r].sounding()) ++sounding_pipe_count_;
   }
 
   // Chorus normalisation: decorrelated pipes add in power, so divide by
@@ -390,6 +391,27 @@ void PipeOrganVoiceCore::start(const PipeOrganPatchParams& params, double sample
           std::atan2(dc_r_v * std::sin(omega_v), 1.0f - dc_r_v * std::cos(omega_v));
       const float tau_dc_v = phase_dc_v / std::max(omega_v, 1.0e-6f);
       pipe.jet_comp = (1.0f + tau_lp_v - tau_dc_v) * (srf / voiced_srf);
+    }
+
+    // The bore and jet reads lose magnitude at the fundamental that grows as the period shrinks
+    // towards the sample rate; the rank repays the share the voiced rate did not have.
+    {
+      const float period_v = pipe.bore.period;
+      const double voiced_scale = kLossVoicedSr / sr;
+      const float jet_delay = std::max(1.0f, pipe.jet_ratio * (period_v - pipe.jet_comp));
+      const double jet_voiced_delay =
+          std::max(1.0, static_cast<double>(pipe.jet_ratio) *
+                            (static_cast<double>(period_v - pipe.jet_comp) * voiced_scale));
+      const double jet_gain =
+          sr == kLossVoicedSr
+              ? 1.0
+              : std::max(
+                    1.0,
+                    rt::lagrange3_magnitude(jet_voiced_delay, kTwoPiD / (period_v * voiced_scale)) /
+                        std::max(0.25, rt::lagrange3_magnitude(jet_delay, kTwoPiD / period_v)));
+      const float bore_gain = loop_budget(pipe.bore.period, pipe.bore.comp, 1.0f, sr).interp_gain;
+      pipe.loss_gain = std::min(loss_gain * bore_gain * static_cast<float>(jet_gain),
+                                std::max(loss_gain, 0.998f));
     }
 
     pipe.breath = mouth;
@@ -622,7 +644,8 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
     const float jet_dc = jet_out - pipe.dc_x1 + pipe.dc_r * pipe.dc_y1;
     pipe.dc_x1 = jet_out;
     pipe.dc_y1 = jet_dc;
-    float into = jet_dc + pipe.end_reflection * temp;
+    const float gate = breath_.gate();
+    float into = WindBore::injection(pipe.end_reflection * temp, jet_dc, gate);
 
     // Even-harmonic pump (open pipe): a half-wave rectified bore feedback carries
     // a 2f0 component; strip its DC and inject the octave the open flue voices.
@@ -636,7 +659,7 @@ float PipeOrganVoiceCore::render(float pitch_ratio) noexcept {
       pipe.even_state += pipe.even_hp_alpha * (rect - pipe.even_state);
       float pump = pipe.even_gain * pipe.wind * pipe.wind * (rect - pipe.even_state);
       pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
-      into += pump;
+      into = WindBore::injection(into, pump, gate);
     }
 
     pipe.bore.advance(into, ratio);

@@ -216,6 +216,9 @@ class FluteVoiceCore {
   // kLossVoicedSr, and jet_ratio_ the fraction of the bore LINE delay the jet
   // convection spans (jet_delay = jet_ratio * (period - comp), the STK
   // jet-convection length).
+  // The jet line is read at no less than one sample (the smallest delay the
+  // passive Lagrange stencil supports), so the ratio holds exactly except for
+  // periods under about 2.5 samples, where the jet register is pinned.
   float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
   /// The played fundamental (Hz) and the sample rate, held for the pole

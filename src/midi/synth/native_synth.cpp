@@ -300,6 +300,7 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   // per-channel path.
   channels_[kDrumChannelIndex].drums = true;
   mpe_.reset();
+  bus_fed_channels_ = 0;
   refresh_all_channel_mods();
   tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
@@ -360,6 +361,7 @@ void NativeSynth::reset() {
   // per-channel path.
   channels_[kDrumChannelIndex].drums = true;
   mpe_.reset();
+  bus_fed_channels_ = 0;
   skipped_events_ = 0;
   per_note_.assign(per_note_.size(), Sf2PerNoteVoice{});
   per_note_pitch_.clear();
@@ -414,6 +416,13 @@ void NativeSynth::refresh_all_channel_mods() noexcept {
   for (uint8_t ch = 0; ch < 16; ++ch) refresh_channel_mod(ch);
 }
 
+void NativeSynth::refresh_channel_mods_in_scope(uint8_t channel) noexcept {
+  const uint16_t scope = mpe_.channels_in_scope(channel);
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((scope & (uint16_t{1} << ch)) != 0) refresh_channel_mod(ch);
+  }
+}
+
 void NativeSynth::apply_mcm(uint8_t manager_channel, uint8_t member_count) noexcept {
   uint16_t moved = 0;
   if (!mpe_.apply_mcm(manager_channel, member_count, &moved)) return;
@@ -433,20 +442,31 @@ void NativeSynth::apply_mcm(uint8_t manager_channel, uint8_t member_count) noexc
 
 namespace {
 
-/// The deepest pitch any rank of @p patch sounds, relative to the key. A pipe
-/// organ voices one key at several pitches at once, so the 16' rank runs out of
-/// delay line an octave before the 8' rank does and it is the 16' that decides
-/// whether the voice can be carried. 1.0 for every other engine, which sounds
-/// the key and nothing below it.
+/// The deepest pitch any SOUNDING rank of @p patch plays, relative to the key. A pipe organ voices
+/// one key at several pitches at once, so its lowest audible rank runs out of delay line first
+/// and decides whether the voice can be carried; a muted rank decides nothing, and an
+/// upperwork-only registration reaches above 1. 1.0 for every other engine and for the implicit
+/// single rank, which sounds the key and nothing below it.
 float lowest_pitch_mult(const NativeSynthPatch& patch) noexcept {
   if (patch.mode != SynthEngineMode::kPipeOrgan || patch.pipe_organ.rank_count <= 0) return 1.0f;
-  float lowest = 1.0f;
+  float lowest = 0.0f;
   const int count = std::min(patch.pipe_organ.rank_count, kMaxPipeRanks);
   for (int r = 0; r < count; ++r) {
-    const float mult = patch.pipe_organ.ranks[static_cast<size_t>(r)].footage_mult;
-    if (mult > 0.01f && mult < lowest) lowest = mult;
+    const PipeOrganRank& rank = patch.pipe_organ.ranks[static_cast<size_t>(r)];
+    if (!rank.sounding()) continue;
+    // A footage the voice cannot use sounds at the key, which is how the voice reads it too.
+    const float mult = rank.footage_mult > 0.01f ? rank.footage_mult : 1.0f;
+    if (lowest == 0.0f || mult < lowest) lowest = mult;
   }
-  return lowest;
+  return lowest > 0.0f ? lowest : 1.0f;
+}
+
+/// The integer key an engine is started on for @p note under @p pitch: the note itself, or the
+/// floor of an absolute pitch, which is also what picks a drum piece or a sample zone.
+uint8_t voiced_key(uint8_t note, const ComposedPitch& pitch) noexcept {
+  if (!pitch.absolute) return note;
+  return static_cast<uint8_t>(std::clamp(
+      static_cast<int>(std::floor(static_cast<double>(note) + pitch.per_note_semitones)), 0, 127));
 }
 
 }  // namespace
@@ -463,6 +483,67 @@ NativeSynthVoice* NativeSynth::find_sounding(uint8_t ch, uint8_t note,
     }
   }
   return nullptr;
+}
+
+NativeSynth::LegatoResult NativeSynth::legato_continue(uint8_t ch, bool release, uint8_t note,
+                                                       uint8_t attribute_type,
+                                                       uint16_t attribute_data,
+                                                       uint32_t source_track_id,
+                                                       const NativeSynthPatch* patch) noexcept {
+  ChannelState& st = channels_[ch];
+  const bool legato = st.articulation == ArticulationMode::kMonoLegato;
+  NativeSynthVoice* voice = nullptr;
+  uint8_t to_note = note;
+  uint8_t to_type = attribute_type;
+  uint16_t to_data = attribute_data;
+  if (release) {
+    if (!legato) return {};
+    const ChannelState::HeldKey* back = st.newest_held_key(true, source_track_id);
+    if (back == nullptr) return {};
+    voice = find_sounding(ch, note, source_track_id);
+    if (voice == nullptr || voice->patch == nullptr) return {};
+    to_note = back->note;
+    to_type = back->attribute_type;
+    to_data = back->attribute_data;
+  } else {
+    if (st.articulation == ArticulationMode::kPoly) return {};
+    // The channel is monophonic across sources: the voice to continue from is whoever sounds
+    // the newest held key.
+    const ChannelState::HeldKey* held = st.newest_held_key();
+    if (held == nullptr) return {};
+    voice = find_sounding(ch, held->note, held->source_track_id);
+    if (voice == nullptr) return {};
+  }
+
+  // Reach is a question about the sounding pitch, not the binding key the pitch was composed from.
+  Sf2PerNoteVoice target;
+  bind_per_note(target, ch, to_note, to_type, to_data, to_note);
+  const ComposedPitch to_pitch = compose_per_note(target);
+  const size_t index = static_cast<size_t>(voice - pool_.data());
+  const bool carry =
+      legato && voice->patch != nullptr && voice->source_track_id == source_track_id &&
+      (release || voice->patch == patch) &&
+      accepts_legato(voice->patch->mode,
+                     voiced_key(voice->note, compose_per_note(per_note_[index])),
+                     voiced_key(to_note, to_pitch), lowest_pitch_mult(*voice->patch));
+  if (!carry) {
+    // Counted, because nothing in the sound says whether the phrase ended or was declined.
+    if (legato) ++legato_fallbacks_;
+    if (!release) {
+      // Monophonic either way: the previous note stops. Fast rather than the patch's own release,
+      // which on a sustaining patch runs past a second and would leave the note it replaced
+      // audible under the new one.
+      freeze_mpe_voice(*voice, ch);
+      voice->choke_fast(sample_rate_);
+    }
+    return {LegatoOutcome::kReplaced, nullptr};
+  }
+  const float cents_before = per_note_[index].cents;
+  carry_per_note(*voice, voice->note, to_note, to_type, to_data);
+  voice->retune(to_note, voiced_key(to_note, to_pitch), per_note_[index].cents - cents_before,
+                sample_rate_);
+  st.last_freq_hz = voice->voiced_freq_hz();
+  return {LegatoOutcome::kCarried, voice};
 }
 
 void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
@@ -488,12 +569,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   Sf2PerNoteVoice per_note;
   bind_per_note(per_note, ch, note, attribute_type, attribute_data, note);
   const ComposedPitch note_pitch = compose_per_note(per_note);
-  uint8_t drum_lookup_note = note;
-  if (note_pitch.absolute) {
-    drum_lookup_note = static_cast<uint8_t>(std::clamp(
-        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
-        127));
-  }
+  const uint8_t drum_lookup_note = voiced_key(note, note_pitch);
   const NativeSynthPatch* patch = &config_.patch;
   uint8_t drum_kit = 0;
   if (config_.use_gm_programs) {
@@ -529,35 +605,21 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // note-on under a held key moves that voice to the new key rather than
   // starting one, so the exciter, the delay line and both envelopes run on.
   ChannelState& live = channels_[ch];
-  if (live.articulation != ArticulationMode::kPoly && live.newest_key() >= 0) {
-    NativeSynthVoice* held =
-        find_sounding(ch, static_cast<uint8_t>(live.newest_key()), source_track_id);
-    if (held != nullptr) {
-      if (live.articulation == ArticulationMode::kMonoLegato && held->patch == patch &&
-          accepts_legato(held->patch->mode, held->note, note, lowest_pitch_mult(*held->patch))) {
-        const uint8_t from = held->note;
-        held->retune(note, sample_rate_);
-        carry_per_note(*held, from, note, attribute_type, attribute_data);
-        if (velocity_excitation_mask != kAxisNone) {
-          record_velocity_axes(*held, velocity_excitation, velocity_excitation_mask);
-          held->push_excitation(velocity_excitation, velocity_excitation_mask);
-        }
-        live.hold_key(note, attribute_type, attribute_data);
-        live.last_freq_hz = synth_note_to_hz(static_cast<float>(note));
-        return;
-      }
-      if (live.articulation == ArticulationMode::kMonoLegato) ++legato_fallbacks_;
-      // Monophonic either way: the previous note stops. Fast rather than the
-      // patch's own release, which on a sustaining patch runs past a second and
-      // would leave the note it replaced audible under the new one.
-      freeze_mpe_voice(*held, ch);
-      held->choke_fast(sample_rate_);
+  const LegatoResult legato =
+      legato_continue(ch, false, note, attribute_type, attribute_data, source_track_id, patch);
+  if (legato.outcome == LegatoOutcome::kCarried) {
+    if (velocity_excitation_mask != kAxisNone) {
+      record_velocity_axes(*legato.voice, velocity_excitation, velocity_excitation_mask);
+      legato.voice->push_excitation(velocity_excitation, velocity_excitation_mask);
     }
+    live.hold_key(note, attribute_type, attribute_data, source_track_id);
+    return;
   }
-  live.hold_key(note, attribute_type, attribute_data);
+  live.hold_key(note, attribute_type, attribute_data, source_track_id);
 
   NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
+  bus_fed_channels_ |= static_cast<uint16_t>(uint16_t{1} << ch);
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
   if (!ks_buffers_.empty()) {
@@ -615,9 +677,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   // struck note stays the voice's own, which is what a note-off matches.
   DrumVoiceMod voice_mod{};
   if (note_pitch.absolute) {
-    per_note.zone_key = static_cast<uint8_t>(std::clamp(
-        static_cast<int>(std::floor(static_cast<double>(note) + note_pitch.per_note_semitones)), 0,
-        127));
+    per_note.zone_key = voiced_key(note, note_pitch);
     voice_mod.play_note = per_note.zone_key;
   }
   per_note.cents = per_note_cents(per_note, note_pitch);
@@ -788,28 +848,14 @@ void NativeSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track_
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
-  st.release_key(note);
+  st.release_key(note, source_track_id);
   // Releasing a key under a slur returns the voice to the key still held rather
   // than ending the phrase. A note-off whose key is NOT the one sounding falls
   // straight past here and past the release loop below, which is what keeps a
   // slur alive when the old key is let go late.
-  if (st.articulation == ArticulationMode::kMonoLegato && st.newest_key() >= 0) {
-    NativeSynthVoice* sounding = find_sounding(ch, note, source_track_id);
-    if (sounding != nullptr && sounding->patch != nullptr) {
-      const ChannelState::HeldKey* back_key = st.newest_held_key();
-      const uint8_t back = back_key->note;
-      if (accepts_legato(sounding->patch->mode, sounding->note, back,
-                         lowest_pitch_mult(*sounding->patch))) {
-        sounding->retune(back, sample_rate_);
-        carry_per_note(*sounding, note, back, back_key->attribute_type, back_key->attribute_data);
-        st.last_freq_hz = synth_note_to_hz(static_cast<float>(back));
-        return;
-      }
-      // The key still held is out of the engine's reach, so the phrase ends on
-      // the release below and the held key stays silent. Counted, because
-      // nothing in the sound says which of the two happened.
-      ++legato_fallbacks_;
-    }
+  if (legato_continue(ch, true, note, 0, 0, source_track_id, nullptr).outcome ==
+      LegatoOutcome::kCarried) {
+    return;
   }
   for (NativeSynthVoice& v : pool_) {
     if (v.active && v.note == note && v.channel == ch && v.source_track_id == source_track_id &&
@@ -845,6 +891,13 @@ void NativeSynth::recharge_percussion(uint8_t ch) noexcept {
 }
 
 void NativeSynth::sustain_cc(uint8_t channel, Control32 value) noexcept {
+  const uint16_t scope = mpe_.channels_in_scope(channel);
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((scope & (uint16_t{1} << ch)) != 0) sustain_channel(ch, value);
+  }
+}
+
+void NativeSynth::sustain_channel(uint8_t channel, Control32 value) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   ChannelState& st = channels_[ch];
@@ -874,6 +927,13 @@ void NativeSynth::sustain_cc(uint8_t channel, Control32 value) noexcept {
 }
 
 void NativeSynth::sostenuto_pedal(uint8_t channel, bool down) noexcept {
+  const uint16_t scope = mpe_.channels_in_scope(channel);
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((scope & (uint16_t{1} << ch)) != 0) sostenuto_channel(ch, down);
+  }
+}
+
+void NativeSynth::sostenuto_channel(uint8_t channel, bool down) noexcept {
   if (!prepared_) return;
   const uint8_t ch = channel & 0x0Fu;
   // Edge-triggered: only a change of pedal position captures or releases.
@@ -950,13 +1010,14 @@ void NativeSynth::all_sound_off(uint8_t channel) noexcept {
   part_swell_coeff_[ch] = 1.0f;
   part_swell_lp_l_[ch] = 0.0f;
   part_swell_lp_r_[ch] = 0.0f;
-  if (pool_.active_count() == 0) {
+  bus_fed_channels_ &= static_cast<uint16_t>(~(uint16_t{1} << ch));
+  if (bus_fed_channels_ == 0) {
     // All Sound Off means silence NOW, and the instrument's bus resonators are
     // part of its output: the piano soundboard, the sympathetic bank and the
     // guitar halo ring for ~1.5 s and the swell one-pole holds a residual, so
     // killing the voices alone would leak an audible wash past the stop. They
     // are bus-level (all 16 channels feed one), so they are cleared only once
-    // nothing is sounding on any channel. The DC blocker goes with them for
+    // no other channel has fed them. The DC blocker goes with them for
     // the same reason.
     resonance_.reset();
     soundboard_.reset();
@@ -981,11 +1042,7 @@ void NativeSynth::channel_pressure(uint8_t channel, Control32 pressure) noexcept
   channels_[ch].pressure = pressure;
   // A manager's pressure is a bias on every member of its zone, so it reaches
   // further than the channel it arrived on (2.2.7).
-  if (mpe_.role(ch) == MpeChannelRole::kManager) {
-    refresh_all_channel_mods();
-  } else {
-    refresh_channel_mod(ch);
-  }
+  refresh_channel_mods_in_scope(ch);
 }
 
 void NativeSynth::poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept {
@@ -1031,13 +1088,12 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
   // which is where every reader of them takes their combined value -- leaving
   // them here would reset the channel and change nothing that is heard.
   mpe_.reset_controls(static_cast<uint16_t>(uint16_t{1} << ch));
-  sustain_cc(ch, Control32::from7(0));
-  sostenuto_pedal(ch, false);
+  sustain_channel(ch, Control32::from7(0));
+  sostenuto_channel(ch, false);
   st.una_corda = false;
   if (mpe_.role(ch) == MpeChannelRole::kManager) {
     // The manager's values were a bias on every member, so each member has to
     // resolve its own again without them.
-    const MpeZone zone = mpe_.zone_of(ch);
     const auto resolve_candidate = [&](uint8_t member, MpeDimension dimension, Control32 own,
                                        bool present) noexcept {
       ControllerAxisState candidate;
@@ -1070,8 +1126,9 @@ void NativeSynth::reset_controllers(uint8_t channel) noexcept {
         }
       }
     };
+    const uint16_t members = static_cast<uint16_t>(mpe_.channels_in_scope(ch) & ~(1u << ch));
     for (uint8_t member = 0; member < 16; ++member) {
-      if (mpe_.role(member) != MpeChannelRole::kMember || mpe_.zone_of(member) != zone) continue;
+      if ((members & (uint16_t{1} << member)) == 0) continue;
       ChannelState& member_state = channels_[member];
       Control32 pressure = Control32::from_raw(0);
       Control32 timbre = Control32::from_raw(0);
@@ -1354,6 +1411,10 @@ void NativeSynth::control_change(uint8_t channel, uint8_t controller, Control32 
       // (2.2.4.3). Outside a zone they keep the channel-mode meaning they have
       // always had here, which is why the all-notes-off stays below them.
       if (mpe_.ignores(ch, MpeIgnorable::kModeMessage)) break;
+      if (mpe_.role(ch) == MpeChannelRole::kUnassigned) {
+        st.articulation =
+            controller == 126 ? ArticulationMode::kMonoRetrigger : ArticulationMode::kPoly;
+      }
       mpe_.apply_midi_mode(ch, controller == 126 ? MpeMidiMode::kMono : MpeMidiMode::kPoly);
       all_notes_off(ch);
       break;
@@ -1420,11 +1481,7 @@ void NativeSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) 
       mpe_.track_bend(ch, ev.bend);
       // A manager's bend applies to every sounding note in its zone (2.2.6), so
       // like its pressure it reaches past the channel it arrived on.
-      if (mpe_.role(ch) == MpeChannelRole::kManager) {
-        refresh_all_channel_mods();
-      } else {
-        refresh_channel_mod(ch);
-      }
+      refresh_channel_mods_in_scope(ch);
       break;
     case ChannelVoiceKind::ChannelPressure:
       channel_pressure(ch, ev.value);
@@ -1502,15 +1559,23 @@ void NativeSynth::apply_part_sysex(const uint8_t* data, size_t size) noexcept {
     const bool gm = msg.kind != GsSysExKind::kGsReset;
     uint16_t rig_dirty = 0;
     for (uint8_t ch = 0; ch < 16; ++ch) {
+      // A reset silences the pre-reset voices and returns the part to its power-on state --
+      // program, bank variation, volume, pan, expression and the rest of the controllers -- in
+      // place. What the host configured (articulation) and what no reset touches (the tone map,
+      // carried by the bank LSB) are kept.
+      all_sound_off(ch);
       ChannelState& st = channels_[ch];
-      st.gs = {};
+      const ArticulationMode articulation = st.articulation;
+      const uint8_t bank_lsb = st.bank_lsb;
+      const bool was_drums = st.drums;
+      st = ChannelState{};
+      st.articulation = articulation;
+      st.bank_lsb = bank_lsb;
       st.rx_nrpn = !gm;
-      const bool drums = ch == kDrumChannelIndex;
-      if (st.drums != drums) {
-        st.drums = drums;
-        rig_dirty |= static_cast<uint16_t>(1u << ch);
-      }
+      st.drums = ch == kDrumChannelIndex;
+      if (was_drums != st.drums) rig_dirty |= static_cast<uint16_t>(1u << ch);
     }
+    refresh_all_channel_mods();
     for (uint8_t ch = 0; ch < 16; ++ch) {
       if ((rig_dirty & (uint16_t{1} << ch)) != 0) refresh_part_rig(ch);
     }

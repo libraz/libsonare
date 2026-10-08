@@ -5,6 +5,7 @@
 
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pitch.h"
+#include "midi/synth/string_loop.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -162,7 +163,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       Mode& m = modes_[static_cast<size_t>(n++)];
       m.a1 = 2.0f * r * std::cos(w);
       m.a2 = -r * r;
-      m.gain = kSympTopLevel * (1.0f - r);
+      m.gain = kSympTopLevel * resonator_gain_at_rate(r, w, sr);
     }
   }
   ungated_count_ = n;
@@ -190,7 +191,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
       m.a1 = 2.0f * r * std::cos(w);
       m.a2 = -r * r;
       // Unity-peak normalization ((1-r) cancels the resonant boost), then tilt the series down.
-      m.gain = (1.0f - r) * std::pow(kf, -tilt);
+      m.gain = resonator_gain_at_rate(r, w, sr) * std::pow(kf, -tilt);
       // Bridge admittance, per mode: heavier strings take up less of the bridge's motion.
       if (kSympBassTaperOct != 0.0f && f > 0.0f) {
         const float octaves_below =
@@ -231,7 +232,7 @@ void PianoResonanceBank::prepare_custom(double sample_rate, const float* freqs, 
     m.a2 = -r * r;
     // Unity-peak normalization (the (1-r) factor cancels the high-Q resonant
     // boost) so the bank is a weak coupling, not a runaway bandpass on the note.
-    m.gain = 1.0f - r;
+    m.gain = resonator_gain_at_rate(r, w, sr);
     m.y1 = 0.0f;
     m.y2 = 0.0f;
   }

@@ -20,6 +20,7 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -3390,4 +3391,175 @@ TEST_CASE("NativeSynth channel control on one axis keeps a per-note value on ano
   INFO("centroids dark=" << dark << " bright=" << bright << " per-note=" << per_note);
   REQUIRE(std::fabs(bright - dark) > 0.02 * dark);
   CHECK(std::fabs(per_note - bright) < 0.2 * std::fabs(bright - dark));
+}
+
+namespace {
+
+using sonare::midi::ArticulationMode;
+using sonare::midi::synth::BodyType;
+
+MidiEvent source_event(const sonare::midi::Ump& ump, uint32_t source) {
+  MidiEvent ev = event(ump);
+  ev.source_track_id = source;
+  return ev;
+}
+
+NativeSynthConfig legato_config() {
+  NativeSynthConfig cfg = resolution_config();
+  cfg.dc_block = false;
+  cfg.patch.amp_env.attack_ms = 1.0f;
+  cfg.patch.amp_env.sustain = 1.0f;
+  cfg.patch.amp_env.release_ms = 20.0f;
+  return cfg;
+}
+
+constexpr uint16_t absolute_pitch(uint8_t note) { return static_cast<uint16_t>(note * 512u); }
+
+}  // namespace
+
+TEST_CASE("a slur across two source tracks ends when both keys are released",
+          "[midi][synth][articulation]") {
+  for (const ArticulationMode mode :
+       {ArticulationMode::kMonoLegato, ArticulationMode::kMonoRetrigger}) {
+    NativeSynth synth(legato_config());
+    synth.prepare(kOutRate, 256);
+    REQUIRE(synth.set_articulation(0, mode));
+    synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 101));
+    render(synth, 2048);
+    synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 64, 100), 202));
+    render(synth, 4096);
+    // One channel is one monophonic line whichever source pressed the key.
+    CHECK(synth.active_voice_count() == 1);
+    synth.on_event(0, source_event(sonare::midi::make_midi1_note_off(0, 0, 64, 0), 202));
+    render(synth, 2048);
+    synth.on_event(0, source_event(sonare::midi::make_midi1_note_off(0, 0, 60, 0), 101));
+    render(synth, 24000);
+    CAPTURE(static_cast<int>(mode));
+    CHECK(synth.active_voice_count() == 0);
+    CHECK(peak(render(synth, 2048).left) == 0.0f);
+  }
+}
+
+TEST_CASE("a single source still slurs and returns to its own held key",
+          "[midi][synth][articulation]") {
+  NativeSynth synth(legato_config());
+  synth.prepare(kOutRate, 256);
+  synth.set_articulation(0, ArticulationMode::kMonoLegato);
+  synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 60, 100), 101));
+  render(synth, 2048);
+  synth.on_event(0, source_event(sonare::midi::make_midi1_note_on(0, 0, 67, 100), 101));
+  render(synth, 2048);
+  synth.on_event(0, source_event(sonare::midi::make_midi1_note_off(0, 0, 67, 0), 101));
+  const double returned = estimate_frequency(render(synth, 8192).left, kOutRate, 1024);
+  uint64_t fallbacks = 1;
+  REQUIRE(synth.legato_fallback_count(&fallbacks));
+  CHECK(fallbacks == 0);
+  CHECK(synth.active_voice_count() == 1);
+  CHECK(near_hz(returned, note_hz(60.0)));
+}
+
+TEST_CASE("legato reach is judged on the sounding pitch, not the binding key",
+          "[midi][synth][midi2][articulation]") {
+  const auto play = [](uint8_t low_key, uint8_t high_key) {
+    NativeSynthConfig cfg;
+    cfg.dc_block = false;
+    cfg.patch.mode = SynthEngineMode::kPipeOrgan;
+    cfg.patch.amp_env.sustain = 1.0f;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.set_articulation(0, ArticulationMode::kMonoLegato);
+    synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, low_key, kPerNoteVelocity, 3,
+                                                             absolute_pitch(60))));
+    render(synth, 4096);
+    synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, high_key, kPerNoteVelocity, 3,
+                                                             absolute_pitch(72))));
+    render(synth, 4096);
+    synth.on_event(0, event(sonare::midi::make_midi2_note_off(0, 0, high_key, 0)));
+    const float tail = peak(render(synth, 8192).left);
+    uint64_t fallbacks = 0;
+    REQUIRE(synth.legato_fallback_count(&fallbacks));
+    return std::make_tuple(fallbacks, synth.active_voice_count(), tail);
+  };
+  // Binding keys 0/24 and 60/84 name the same sounding pitches 60 -> 72 -> 60.
+  const auto low_binding = play(0, 24);
+  const auto high_binding = play(60, 84);
+  CHECK(std::get<0>(low_binding) == 0);
+  CHECK(std::get<1>(low_binding) == 1);
+  CHECK(std::get<2>(low_binding) > 0.0f);
+  CHECK(std::get<0>(high_binding) == std::get<0>(low_binding));
+  CHECK(std::get<1>(high_binding) == std::get<1>(low_binding));
+}
+
+TEST_CASE("a carried absolute-pitch voice tracks the filter and body of its sounding key",
+          "[midi][synth][midi2][articulation]") {
+  const auto tail_centroid = [](bool carried, NativeSynthConfig cfg) {
+    cfg.dc_block = false;
+    NativeSynth synth(cfg);
+    synth.prepare(kOutRate, 256);
+    synth.set_articulation(0, ArticulationMode::kMonoLegato);
+    if (carried) {
+      synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, kPerNoteVelocity, 3,
+                                                               absolute_pitch(60))));
+      render(synth, 4096);
+    }
+    synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 72, kPerNoteVelocity, 3,
+                                                             absolute_pitch(60))));
+    render(synth, 4096);
+    return sonare::test::spectral_centroid(render(synth, 16384).left, 0);
+  };
+
+  SECTION("filter key tracking") {
+    NativeSynthConfig cfg = legato_config();
+    cfg.patch.waveform = VaWaveform::kSaw;
+    cfg.patch.cutoff_hz = 1000.0f;
+    cfg.patch.key_track = 1.0f;
+    NativeSynthConfig doubled = cfg;
+    doubled.patch.cutoff_hz = 2000.0f;
+    const double fresh = tail_centroid(false, cfg);
+    const double slurred = tail_centroid(true, cfg);
+    const double octave_up = tail_centroid(false, doubled);
+    INFO("fresh " << fresh << " slurred " << slurred << " cutoff an octave up " << octave_up);
+    REQUIRE(std::fabs(octave_up - fresh) > 0.05 * fresh);
+    CHECK(std::fabs(slurred - fresh) < 0.2 * std::fabs(octave_up - fresh));
+  }
+  SECTION("wood-tube body") {
+    NativeSynthConfig cfg = legato_config();
+    cfg.patch.waveform = VaWaveform::kSaw;
+    cfg.patch.body = BodyType::kWoodTube;
+    cfg.patch.body_mix = 1.0f;
+    NativeSynthConfig dry = cfg;
+    dry.patch.body_mix = 0.0f;
+    const double fresh = tail_centroid(false, cfg);
+    const double slurred = tail_centroid(true, cfg);
+    const double without_body = tail_centroid(false, dry);
+    INFO("fresh " << fresh << " slurred " << slurred << " no body " << without_body);
+    REQUIRE(std::fabs(without_body - fresh) > 0.01 * fresh);
+    CHECK(std::fabs(slurred - fresh) < 0.2 * std::fabs(without_body - fresh));
+  }
+}
+
+TEST_CASE("a carried absolute-pitch voice keeps its pitch and its glide origin",
+          "[midi][synth][midi2][articulation]") {
+  NativeSynthConfig cfg = legato_config();
+  cfg.patch.glide_ms = 500.0f;
+  NativeSynth synth(cfg);
+  synth.prepare(kOutRate, 256);
+  synth.set_articulation(0, ArticulationMode::kMonoLegato);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 60, kPerNoteVelocity, 3,
+                                                           absolute_pitch(60))));
+  render(synth, 8192);
+  synth.on_event(0, event(sonare::midi::make_midi2_note_on(0, 0, 72, kPerNoteVelocity, 3,
+                                                           absolute_pitch(60))));
+  const std::vector<float> carry = render(synth, 4096).left;
+  CHECK(near_hz(estimate_frequency(carry, kOutRate, 256), note_hz(60.0)));
+
+  synth.on_event(0, event(sonare::midi::make_midi2_note_off(0, 0, 72, 0)));
+  synth.on_event(0, event(sonare::midi::make_midi2_note_off(0, 0, 60, 0)));
+  render(synth, 24000);
+  REQUIRE(synth.active_voice_count() == 0);
+  // The glide origin of the next note is where the phrase sounded, not its binding key.
+  synth.on_event(
+      0, event(sonare::midi::make_midi2_note_on(0, 0, 0, kPerNoteVelocity, 3, absolute_pitch(60))));
+  const std::vector<float> fresh = render(synth, 4096).left;
+  CHECK(near_hz(estimate_frequency(fresh, kOutRate, 256), note_hz(60.0)));
 }

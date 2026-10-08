@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -519,6 +520,7 @@ struct NativeSynthVoice : VoiceState {
   // Note-on inputs refresh_live() re-derives patch-dependent state from, so a
   // refreshed voice matches one started at the new value.
   float note_offset_semitones = 0.0f;  ///< voiced note - 60
+  uint8_t base_voiced_note = 60;       ///< voiced note base_freq_hz was computed for
   float part_cutoff_cents = 0.0f;
   float part_attack_scale = 1.0f;
   float part_decay_scale = 1.0f;
@@ -581,7 +583,9 @@ struct NativeSynthVoice : VoiceState {
   /// @p wind_pitch / @p wind_gain carry the shared organ wind modulation
   /// (tremulant / wind sag); 1.0 leaves the voice unmodulated.
   float render(const Sf2ChannelMod& mod, float wind_pitch = 1.0f, float wind_gain = 1.0f) noexcept;
-  /// Legato continuation: carry this sounding voice to @p new_note.
+  /// Legato continuation: carry this sounding voice to @p new_note, whose
+  /// tracking inputs (filter and body) are those of a fresh voice on
+  /// @p voiced_note.
   ///
   /// The exciter, the delay line and both envelopes are left exactly as they
   /// are; only the pitch moves, through retune_cents, with glide_cents taking
@@ -589,8 +593,19 @@ struct NativeSynthVoice : VoiceState {
   /// patch with no portamento lands on the new pitch immediately, which is what
   /// a slur with no glide is. `note` becomes the new key, because that is what
   /// the late note-off of the old key must NOT match (holding the old key here
-  /// is what would cut the slur).
-  void retune(uint8_t new_note, double sample_rate) noexcept;
+  /// is what would cut the slur). @p per_note_shift_cents is the change of the
+  /// per-note pitch correction applied beside retune_cents, which the glide
+  /// origin has to account for to stay on the sounding pitch.
+  void retune(uint8_t new_note, uint8_t voiced_note, float per_note_shift_cents,
+              double sample_rate) noexcept;
+  /// Frequency of the voiced key, which is what a note-tracked body follows.
+  float voiced_freq_hz() const noexcept {
+    return base_freq_hz * std::exp2(voiced_shift_cents() * (1.0f / 1200.0f));
+  }
+  /// Cents between the key base_freq_hz was computed for and the voiced key now.
+  float voiced_shift_cents() const noexcept {
+    return 100.0f * (note_offset_semitones + 60.0f - static_cast<float>(base_voiced_note));
+  }
   /// Re-derives the state start() latched from @p p for the parameters in
   /// @p mask (bit = NativeSynthParamId), from the same derivations and the
   /// note-on inputs saved above. Running state (phases, levels) is kept.
@@ -908,6 +923,8 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
       uint8_t note = 0;
       uint8_t attribute_type = 0;
       uint16_t attribute_data = 0;
+      /// The source track that pressed the key; a key and the voice it sounds have one owner.
+      uint32_t source_track_id = 0;
     };
     /// Ten fingers plus margin; a press past that is not recorded rather than
     /// displacing an older key, so the note still sounds and only the
@@ -915,18 +932,19 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
     std::array<HeldKey, 16> held_keys{};
     uint8_t held_count = 0;
 
-    /// Records @p note as held. A repeat moves it to the top, which is what a
-    /// re-press means for last-note priority.
-    void hold_key(uint8_t note, uint8_t attribute_type = 0, uint16_t attribute_data = 0) noexcept {
-      release_key(note);
+    /// Records @p note as held by @p source. A repeat moves it to the top, which
+    /// is what a re-press means for last-note priority.
+    void hold_key(uint8_t note, uint8_t attribute_type, uint16_t attribute_data,
+                  uint32_t source) noexcept {
+      release_key(note, source);
       if (held_count < held_keys.size()) {
-        held_keys[held_count++] = {note, attribute_type, attribute_data};
+        held_keys[held_count++] = {note, attribute_type, attribute_data, source};
       }
     }
-    /// Removes @p note from the stack; a key that is not there is a no-op.
-    void release_key(uint8_t note) noexcept {
+    /// Removes @p note held by @p source from the stack; a key that is not there is a no-op.
+    void release_key(uint8_t note, uint32_t source) noexcept {
       for (uint8_t i = 0; i < held_count; ++i) {
-        if (held_keys[i].note != note) continue;
+        if (held_keys[i].note != note || held_keys[i].source_track_id != source) continue;
         for (uint8_t j = static_cast<uint8_t>(i + 1); j < held_count; ++j) {
           held_keys[j - 1] = held_keys[j];
         }
@@ -934,14 +952,13 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
         return;
       }
     }
-    /// The most recently pressed held key and its Note On attribute, or null.
-    const HeldKey* newest_held_key() const noexcept {
-      return held_count > 0 ? &held_keys[held_count - 1] : nullptr;
-    }
-    /// The most recently pressed key still held, or -1 when none is.
-    int newest_key() const noexcept {
-      const HeldKey* key = newest_held_key();
-      return key != nullptr ? key->note : -1;
+    /// The most recently pressed held key and its Note On attribute, or null. With @p owned
+    /// the search is limited to keys @p source pressed.
+    const HeldKey* newest_held_key(bool owned = false, uint32_t source = 0) const noexcept {
+      for (uint8_t i = held_count; i > 0; --i) {
+        if (!owned || held_keys[i - 1].source_track_id == source) return &held_keys[i - 1];
+      }
+      return nullptr;
     }
   };
 
@@ -991,7 +1008,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void control_change(uint8_t channel, uint8_t controller, Control32 control) noexcept;
   void channel_pressure(uint8_t channel, Control32 pressure) noexcept;
   void poly_pressure(uint8_t channel, uint8_t note, Control32 pressure) noexcept;
+  /// Damper pedal as the zone model scopes it: a manager's pedal reaches its whole zone.
   void sustain_cc(uint8_t channel, Control32 value) noexcept;
+  /// The damper on exactly one channel.
+  void sustain_channel(uint8_t channel, Control32 value) noexcept;
   /// RPN 0/0's Data Entry MSB (whole semitones) and LSB (cents), which a MIDI 2.0 Registered
   /// Controller 0/0 delivers together.
   void bend_range_msb(uint8_t channel, uint8_t semitones) noexcept;
@@ -1014,7 +1034,28 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// Moves a legato-carried voice's per-note binding to the key it now sounds.
   void carry_per_note(const NativeSynthVoice& voice, uint8_t from_note, uint8_t to_note,
                       uint8_t attribute_type, uint16_t attribute_data) noexcept;
+  /// What the one legato rule decided.
+  enum class LegatoOutcome : uint8_t {
+    kNone,      ///< nothing held to continue from; the caller plays or releases normally
+    kCarried,   ///< the sounding voice now sounds the target key
+    kReplaced,  ///< the previous voice was stopped (note-on) or declined (release)
+  };
+  struct LegatoResult {
+    LegatoOutcome outcome = LegatoOutcome::kNone;
+    NativeSynthVoice* voice = nullptr;  ///< the carried voice, for kCarried
+  };
+  /// The single legato rule, for both directions. At note-on (@p release false) the target is
+  /// the incoming key and the voice is the one sounding the channel's newest held key; at a
+  /// release (@p release true, the released key already removed) the target is the newest key
+  /// the same source still holds and the voice is the one the released key sounded. Reach is
+  /// judged on the composed sounding keys, and the voice's owner follows the key it now sounds.
+  LegatoResult legato_continue(uint8_t ch, bool release, uint8_t note, uint8_t attribute_type,
+                               uint16_t attribute_data, uint32_t source_track_id,
+                               const NativeSynthPatch* patch) noexcept;
+  /// Sostenuto pedal with the same zone scope as sustain_cc().
   void sostenuto_pedal(uint8_t channel, bool down) noexcept;
+  /// The sostenuto on exactly one channel.
+  void sostenuto_channel(uint8_t channel, bool down) noexcept;
   void all_notes_off(uint8_t channel) noexcept;
   void all_sound_off(uint8_t channel) noexcept;
   /// Recharges the channel's drawbar-organ percussion if no key is still held.
@@ -1088,6 +1129,8 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   void reset_controllers(uint8_t channel) noexcept;
   void refresh_channel_mod(uint8_t channel) noexcept;
   void refresh_all_channel_mods() noexcept;
+  /// Refreshes every channel a zone-wide value arriving on @p channel reaches.
+  void refresh_channel_mods_in_scope(uint8_t channel) noexcept;
   /// Accepts an MPE Configuration Message and does what accepting one obliges:
   /// every channel that entered or left the zone loses its sounding notes and
   /// its controllers, so a sender that re-zones mid-performance cannot leave a
@@ -1124,6 +1167,10 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   /// Mix-bus polish state (per stereo leg): DC blocker + drive constants.
+  /// Channels that have started a note since the shared piano / guitar / swell buses were last
+  /// cleared; those buses carry what any of them excited, so a channel's All Sound Off clears
+  /// them only when no other channel is in the set.
+  uint16_t bus_fed_channels_ = 0;
   std::array<float, 2> dc_x1_{};
   std::array<float, 2> dc_y1_{};
   float dc_r_ = 0.999f;

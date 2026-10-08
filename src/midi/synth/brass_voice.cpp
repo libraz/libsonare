@@ -280,6 +280,10 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   comp_omega_ = omega;
   comp_lead_ = tau_hp;
   retune_loop_comp();
+  // The Lagrange read's loss at the fundamental grows as the period shrinks towards the sample
+  // rate; the bore repays the share the voiced rate did not have.
+  loss_gain_ =
+      repay_wind_loss(loss_gain_, loop_budget(bore_.period, bore_.comp, 1.0f, sr).interp_gain);
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
@@ -500,7 +504,9 @@ float BrassVoiceCore::render(float pitch_ratio) noexcept {
     // multiplying two negatives, which is why the two arguments differ.
     const float dp_phys = mouth - refl;
     const float flow = h * std::copysign(std::sqrt(std::fabs(dp_phys)), dp_phys);
-    inj = mouth + kLipFlowScale * flow;
+    // Released, the reflection passes through unchanged rather than being re-driven by the valve.
+    const float gate = breath_.gate();
+    inj = WindBore::injection(mouth + (1.0f - gate) * refl, kLipFlowScale * flow, gate);
   } else {
     // The symmetric path: the displacement modulates a reflection coefficient,
     // and its [-1,1] clamp is what bounds the loop here.

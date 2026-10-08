@@ -47,9 +47,16 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
 
   // Loop loss: brightness sets the pole, capped so the fundamental keeps its t60.
   const float omega = kTwoPi / base_period_;
-  const float g0 = string_loop_gain_for(base_period_, sr, t60);
+  const float g_requested = string_loop_gain_for(base_period_, sr, t60);
   const float requested_a =
       loss_pole_at_rate((1.0f - std::clamp(params.brightness, 0.0f, 1.0f)) * 0.7f, sr);
+  // The read's magnitude at the fundamental is spent from the same budget, sized against the
+  // loop delay the unboosted filter leaves (its pole moves only slightly with the boost).
+  const float a_unboosted = cap_loss_pole(requested_a, omega, g_requested);
+  const float interp_gain =
+      loop_budget(base_period_, 1.0f + onepole_group_delay_samples(a_unboosted, omega), 1.0f)
+          .interp_gain;
+  const float g0 = repay_interpolation(g_requested, interp_gain);
   const float a = cap_loss_pole(requested_a, omega, g0);
   loop_alpha_ = 1.0f - a;
   loop_gain_ = compensated_loop_gain(a, omega, g0);
@@ -62,7 +69,7 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
 
   const float release_g0 =
       string_loop_gain_for(base_period_, sr, std::max(0.01f, params.release_damp_s));
-  release_gain_ = compensated_loop_gain(a, omega, release_g0);
+  release_gain_ = compensated_loop_gain(a, omega, std::min(0.9999f, release_g0 * interp_gain));
 
   // Buzzing bridge: a stronger jawari sits the threshold lower into the
   // string's swing, so the returning wave grazes the curved surface on more of

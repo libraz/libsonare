@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "rt/fractional_delay.h"
 
@@ -46,7 +47,7 @@ struct WindBore {
     period = period_samples;
     comp = comp_samples;
     out = 0.0f;
-    const float eff = std::max(2.0f, period - comp);
+    const float eff = loop_budget(period, comp, 2.0f).delay;
     const int span = static_cast<int>(eff * span_factor) + 8;
     prefill_span = std::min(capacity, std::max(16, span));
     write = capacity > 0 ? static_cast<size_t>(prefill_span % capacity) : 0;
@@ -61,6 +62,14 @@ struct WindBore {
     for (int i = 0; i < prefill_span; ++i) {
       buffer[static_cast<size_t>(i)] = level * rng.bipolar_at(static_cast<uint64_t>(i));
     }
+  }
+
+  /// The injection a bore takes: the @p passive part (a reflection, contractive on its own) plus
+  /// the @p active part (a valve, a jet or a pump, whose gain can exceed 1) scaled by @p gate, the
+  /// breath's BreathContour::gate(). Every energy source reaches advance() through here, so with
+  /// the gate at zero the loop is passive and rings down by its loss alone.
+  static float injection(float passive, float active, float gate) noexcept {
+    return passive + gate * active;
   }
 
   /// Writes @p input into the line and reads back the delayed sample at the

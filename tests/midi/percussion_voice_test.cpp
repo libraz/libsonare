@@ -1378,3 +1378,33 @@ TEST_CASE("a soft strike stays nearer the linear plate than a hard one",
   };
   REQUIRE(lift(127) < 0.5 * lift(20));
 }
+
+TEST_CASE("a particle voice is not silent between collisions that are still to come",
+          "[midi][synth][percussion]") {
+  for (const double rate : {48000.0, 96000.0}) {
+    PercussionPatchParams params;
+    params.phisem_beans = 1.0f;
+    params.phisem_energy_ms = 2000.0f;
+    params.phisem_sound_ms = 3.0f;
+    PercussionVoiceCore core;
+    core.start(params, rate, 60, sonare::midi::Velocity16::from7(100), 0x50455243ULL);
+    const size_t total = static_cast<size_t>(40.0 * rate);
+    size_t first_silent = total;
+    float later_peak = 0.0f;
+    bool sounded = false;
+    for (size_t i = 0; i < total; ++i) {
+      const float s = core.render(1.0f);
+      sounded = sounded || std::fabs(s) > 1.0e-3f;
+      if (first_silent == total && core.silent()) first_silent = i;
+      // Once the voice may be reclaimed nothing above the floor may follow it.
+      if (first_silent != total && i > first_silent)
+        later_peak = std::max(later_peak, std::fabs(s));
+    }
+    CAPTURE(rate, first_silent);
+    REQUIRE(sounded);
+    REQUIRE(first_silent < total);  // reclaimed eventually
+    CHECK(later_peak < 1.0e-5f);
+    // The gap between grains is not the end: the voice outlives its first quiet stretch.
+    CHECK(first_silent > static_cast<size_t>(2.0 * rate));
+  }
+}

@@ -10,6 +10,42 @@
 
 namespace sonare::rt {
 
+/// @brief Magnitude of the 3rd-order Lagrange read at a delay of @p delay_samples, at @p omega
+///        radians per sample.
+///
+/// The same stencil lagrange3_fractional_delay() evaluates (centred for a delay of one sample
+/// or more, causal below), so the number is the gain a loop actually pays per traversal for
+/// its fractional part; an ideal delay would be 1 at every frequency.
+inline double lagrange3_magnitude(double delay_samples, double omega) noexcept {
+  const double delay = std::max(0.0, delay_samples);
+  const double base = std::floor(delay);
+  const double mu = delay - base;
+  double c[4];
+  double first_node;
+  if (base >= 1.0) {
+    c[0] = -mu * (mu - 1.0) * (mu - 2.0) / 6.0;
+    c[1] = (mu + 1.0) * (mu - 1.0) * (mu - 2.0) / 2.0;
+    c[2] = -(mu + 1.0) * mu * (mu - 2.0) / 2.0;
+    c[3] = (mu + 1.0) * mu * (mu - 1.0) / 6.0;
+    first_node = -1.0;
+  } else {
+    c[0] = -(mu - 1.0) * (mu - 2.0) * (mu - 3.0) / 6.0;
+    c[1] = mu * (mu - 2.0) * (mu - 3.0) / 2.0;
+    c[2] = -mu * (mu - 1.0) * (mu - 3.0) / 2.0;
+    c[3] = mu * (mu - 1.0) * (mu - 2.0) / 6.0;
+    first_node = 0.0;
+  }
+  // The taps sit at delays base + first_node + k; the common factor base only rotates the phase.
+  double re = 0.0;
+  double im = 0.0;
+  for (int k = 0; k < 4; ++k) {
+    const double phase = -omega * (first_node + static_cast<double>(k));
+    re += c[k] * std::cos(phase);
+    im += c[k] * std::sin(phase);
+  }
+  return std::sqrt(re * re + im * im);
+}
+
 /// @brief Writes @p input into a circular buffer and reads back a fractionally
 ///        delayed sample using a 3rd-order Lagrange FIR interpolator.
 ///

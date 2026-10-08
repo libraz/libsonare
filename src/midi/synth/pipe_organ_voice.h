@@ -91,6 +91,10 @@ struct PipeOrganRank {
   /// the air. It is outside the feedback loop, so it never affects pitch or
   /// stability.
   float radiation = 0.0f;
+
+  /// The one audibility predicate: a rank contributes output, wind demand and legato reach only
+  /// when its (clamped) level is positive. Aggregates over a registration iterate through this.
+  bool sounding() const noexcept { return level > 0.0f; }
 };
 
 /// Flue-pipe section of a NativeSynthPatch (used when mode == kPipeOrgan).

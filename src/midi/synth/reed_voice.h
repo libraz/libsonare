@@ -82,6 +82,10 @@ struct ReedPatchParams {
   /// Conical bore: false = a cylindrical bore closed at the reed (clarinet) with
   /// odd harmonics only; true = a conical bore (saxophone / oboe / bassoon)
   /// approximated as an open pipe with the full harmonic series.
+  /// Pitch ceiling: the loop is the feedback register plus a line read at no less than one
+  /// sample, so a cylinder (half-period loop) cannot sound above sample_rate / 4 and a cone
+  /// (full-period loop) not above sample_rate / 2 less the loss filter's lag; a higher note
+  /// sounds at the ceiling instead of its own pitch.
   bool conical = false;
   /// Bell reflection-filter openness in [0,1]: how brightly the bore reflects at
   /// the bell (1 = bright/edgy, 0 = dark/covered). The loop lowpass.
@@ -303,6 +307,8 @@ class ReedVoiceCore {
   // fixed at note-on). Kept only to anchor the frequency-referenced law in
   // refresh_excitation_targets() — never applied to render() directly.
   float loss_gain_ship_ = 0.95f;
+  /// Per-traversal gain paying for the bore read's magnitude relative to the voiced rate (1 at it).
+  float interp_gain_ = 1.0f;
   // In-loop DC blocker (the cone's positive-feedback comb has a DC mode that
   // does not radiate; the cylinder needs it too once driven).
   float dc_x1_ = 0.0f;

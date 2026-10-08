@@ -19,6 +19,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "midi/synth/articulation.h"
@@ -292,4 +293,45 @@ TEST_CASE("a panic clears the legato key stack, so the next release silences the
     REQUIRE(held_peak > 1.0e-3f);  // non-vacuity: the second note sounded
     REQUIRE(tail_peak < 1.0e-5f);
   }
+}
+
+namespace {
+
+/// Legato fallbacks counted by a hold / overlap / release phrase on a pipe organ whose
+/// registration is @p ranks, as (footage multiplier, level) pairs.
+uint64_t pipe_phrase_fallbacks(std::vector<std::pair<float, float>> ranks, uint8_t hold,
+                               uint8_t overlap) {
+  NativeSynthConfig cfg;
+  cfg.patch.mode = SynthEngineMode::kPipeOrgan;
+  cfg.patch.amp_env.sustain = 1.0f;
+  cfg.patch.pipe_organ.rank_count = static_cast<int>(ranks.size());
+  for (size_t i = 0; i < ranks.size(); ++i) {
+    cfg.patch.pipe_organ.ranks[i].footage_mult = ranks[i].first;
+    cfg.patch.pipe_organ.ranks[i].level = ranks[i].second;
+  }
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, kBlock);
+  synth.set_articulation(0, ArticulationMode::kMonoLegato);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, hold, kVelocity)));
+  render_left(synth, 4096);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, overlap, kVelocity)));
+  render_left(synth, 4096);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, overlap, 0)));
+  render_left(synth, 4096);
+  uint64_t fallbacks = 0;
+  REQUIRE(synth.legato_fallback_count(&fallbacks));
+  return fallbacks;
+}
+
+}  // namespace
+
+TEST_CASE("a muted pipe-organ rank does not narrow the legato reach",
+          "[midi][synth][articulation]") {
+  // Key 24 returns from 48 on an 8' rank; a 32' rank at level 0 sounds nothing and changes nothing.
+  CHECK(pipe_phrase_fallbacks({{1.0f, 1.0f}}, 24, 48) == 0);
+  CHECK(pipe_phrase_fallbacks({{1.0f, 1.0f}, {0.25f, 0.0f}}, 24, 48) == 0);
+  // The same 32' rank audible does need the lower capacity guard.
+  CHECK(pipe_phrase_fallbacks({{1.0f, 1.0f}, {0.25f, 1.0f}}, 24, 48) >= 1);
+  // An upperwork-only registration reaches below its key by less, so the return is accepted.
+  CHECK(pipe_phrase_fallbacks({{4.0f, 1.0f}}, 0, 24) == 0);
 }

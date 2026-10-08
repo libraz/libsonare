@@ -322,7 +322,8 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   const float jet_dc = jet_out - dc_x1_ + dc_r_ * dc_y1_;
   dc_x1_ = jet_out;
   dc_y1_ = jet_dc;
-  float into_bore = jet_dc + end_reflection_ * temp;
+  const float gate = breath_.gate();
+  float into_bore = WindBore::injection(end_reflection_ * temp, jet_dc, gate);
 
   // Even-harmonic pump: a half-wave rectified bore feedback carries a strong 2f0
   // component (the asymmetric jet drive of an offset flue), yet stays bounded by
@@ -338,7 +339,7 @@ float FluteVoiceCore::render(float pitch_ratio) noexcept {
   // reflection, high breath) — the pump is a colour, not an energy source.
   float pump = even_gain_ * (rect - even_state_);
   pump = pump < -1.5f ? -1.5f : (pump > 1.5f ? 1.5f : pump);
-  into_bore += pump;
+  into_bore = WindBore::injection(into_bore, pump, gate);
   bore_.advance(into_bore, ratio);
   ++drive_index_;
 

@@ -304,6 +304,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // engine but the subtractive one is started from the note number, so a term
   // carried in the frequency reaches one engine of thirteen.
   base_freq_hz = synth_note_to_hz(static_cast<float>(voiced_note & 0x7Fu));
+  base_voiced_note = static_cast<uint8_t>(voiced_note & 0x7Fu);
 
   const bool osc_less = p.mode != SynthEngineMode::kSubtractive;
   unison = osc_less ? 0 : std::clamp(p.unison, 1, kMaxUnisonOscs);
@@ -785,8 +786,13 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
          wind_gain * tremolo;
 }
 
-void NativeSynthVoice::retune(uint8_t new_note, double sample_rate) noexcept {
-  if (patch == nullptr || new_note == note) return;
+void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_note_shift_cents,
+                              double sample_rate) noexcept {
+  if (patch == nullptr) return;
+  const float voiced_offset = static_cast<float>(voiced_note & 0x7Fu) - 60.0f;
+  if (new_note == note && voiced_offset == note_offset_semitones && per_note_shift_cents == 0.0f) {
+    return;
+  }
   // Equal temperament, so the interval is exact arithmetic rather than a ratio
   // of two frequencies. Accumulated against the current note, which means a
   // chain of slurs needs no memory of where the phrase began.
@@ -797,20 +803,19 @@ void NativeSynthVoice::retune(uint8_t new_note, double sample_rate) noexcept {
   const float sounding = retune_cents + glide_cents;
   retune_cents = target;
   note = new_note;
-  note_offset_semitones = static_cast<float>(new_note & 0x7Fu) - 60.0f;
+  note_offset_semitones = voiced_offset;
   key_track_octaves = note_offset_semitones / 12.0f;
   static_cutoff_cents =
       static_cutoff_offset_cents(*patch, velocity01, note_offset_semitones, part_cutoff_cents);
-  const float retuned_freq_hz = base_freq_hz * std::exp2(target * (1.0f / 1200.0f));
-  if (patch->body_mix > 0.0f) body.retune(patch->body, sample_rate, retuned_freq_hz);
+  if (patch->body_mix > 0.0f) body.retune(patch->body, sample_rate, voiced_freq_hz());
   // The bore of every waveguide follows the pitch factor on its own; the brass
   // lip resonance is a filter tuned at note-on and has to be moved with it, or
   // it pulls the sounding pitch back toward the note that is over.
   if (patch->mode == SynthEngineMode::kBrass) {
-    brass.retune(std::exp2(target * (1.0f / 1200.0f)));
+    brass.retune(std::exp2(voiced_shift_cents() * (1.0f / 1200.0f)));
   }
   if (patch->glide_ms > 0.0f) {
-    glide_cents = sounding - target;
+    glide_cents = sounding - target - per_note_shift_cents;
     glide_coeff = glide_coefficient(patch->glide_ms, sample_rate);
   } else {
     // No portamento: the new pitch is reached on this sample. Left at zero
@@ -889,7 +894,7 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
       begin_law_fade(body_fade, sample_rate);
     } else if (want) {
       const bool bowed_corpus = p.mode == SynthEngineMode::kBowedString;
-      const float current_freq_hz = base_freq_hz * std::exp2(retune_cents * (1.0f / 1200.0f));
+      const float current_freq_hz = voiced_freq_hz();
       body.start(p.body, sample_rate, current_freq_hz, p.body_mix,
                  bowed_corpus ? p.bowed_string.corpus_scale : 1.0f,
                  bowed_corpus ? p.bowed_string.corpus_tilt_hz : 0.0f);

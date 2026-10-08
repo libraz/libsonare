@@ -20,6 +20,11 @@
 /// Unconditionally stable: the bow table is bounded to [0,1] and the bridge loss
 /// gain is < 1.
 ///
+/// Pitch ceiling: each line reads at least one sample, so the loop cannot be shorter than two
+/// samples plus the delay carried outside it (the feedback register and the loss filter's phase).
+/// A note whose compensated period falls below that sounds at the ceiling instead of its own
+/// pitch; see loop_budget() in string_loop.h for the achieved period.
+///
 /// RT contract: attach()/start()/render() are allocation-free. Determinism: the
 /// optional rosin texture comes from the counter-based (voice_index, note, age)
 /// stream, so identical events render bit-identically.
@@ -362,6 +367,7 @@ class BowedStringVoiceCore {
   float pol_lp_state_ = 0.0f;
   float pol_lp_alpha_ = 1.0f;
   float pol_loss_ = 0.95f;
+  float pol_comp_ = 1.0f;    // delay carried outside the line: register + loss-pole phase
   float pol_couple_ = 0.0f;  // 0 = off; horizontal -> vertical feed
   float pol_drive_ = 0.0f;   // bow injection into the 2nd polarization
 };

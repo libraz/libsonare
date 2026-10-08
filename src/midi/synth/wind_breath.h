@@ -44,6 +44,10 @@ struct BreathContour {
     level += coeff * (target - level);
   }
 
+  /// The share of an active injection a bore may take: exactly 1 while blowing, the breath level
+  /// once released, so a source that does not depend on the level on its own cannot outlast it.
+  float gate() const noexcept { return releasing ? level : 1.0f; }
+
   /// Note-off: the envelope starts ramping down at release_coeff.
   void release() noexcept { releasing = true; }
 

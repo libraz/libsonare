@@ -16,6 +16,7 @@
 /// specimen whose noise the measurement cannot see fails rather than passes.
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -402,5 +403,231 @@ TEST_CASE("a live brightness move keeps each wind voice on the pitch a fresh not
       INFO(report.str());
       CHECK(std::fabs(cents) < kMaxCents);
     }
+  }
+}
+
+namespace {
+
+using sonare::midi::synth::loop_budget;
+using sonare::midi::synth::repay_interpolation;
+
+/// Fundamental amplitude of @p x over [from_s, from_s + 0.25) at @p freq.
+double fundamental_in_window(const std::vector<float>& x, double freq, double sr, double from_s) {
+  const size_t from = static_cast<size_t>(from_s * sr);
+  const size_t count = static_cast<size_t>(0.25 * sr);
+  const double w = kTwoPiD * freq / sr;
+  double re = 0.0;
+  double im = 0.0;
+  for (size_t i = 0; i < count && from + i < x.size(); ++i) {
+    const double window = 0.5 - 0.5 * std::cos(kTwoPiD * static_cast<double>(i) / count);
+    re += window * x[from + i] * std::cos(w * static_cast<double>(i));
+    im += window * x[from + i] * std::sin(w * static_cast<double>(i));
+  }
+  return std::sqrt(re * re + im * im);
+}
+
+/// Fundamental T60 read from two windows of a string note, in seconds.
+double fundamental_t60(const NativeSynthPatch& patch, uint8_t note, double sr) {
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  cfg.dc_block = false;
+  NativeSynth synth(cfg);
+  synth.prepare(sr, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  const int total = static_cast<int>(1.6 * sr);
+  std::vector<float> left(static_cast<size_t>(total));
+  std::vector<float> right(static_cast<size_t>(total));
+  float* chans[2] = {left.data(), right.data()};
+  synth.process(chans, 2, total);
+  const double f0 = note_to_hz(note);
+  const double early = fundamental_in_window(left, f0, sr, 0.1);
+  const double late = fundamental_in_window(left, f0, sr, 1.2);
+  if (!(early > 0.0) || !(late > 0.0)) return 0.0;
+  const double db_per_s = 20.0 * std::log10(early / late) / 1.1;
+  return 60.0 / db_per_s;
+}
+
+}  // namespace
+
+TEST_CASE("loop_budget reports its floor and repays the read only off the voiced rate",
+          "[midi][synth][wind]") {
+  const auto roomy = loop_budget(100.0f, 2.0f, 1.0f);
+  CHECK_FALSE(roomy.floored);
+  CHECK(roomy.delay == 98.0f);
+  CHECK(roomy.achieved_period == 100.0f);
+
+  // A period shorter than the floor plus the carried delay sounds at the floor, and says so.
+  const auto pinned = loop_budget(3.0f, 2.5f, 1.0f);
+  CHECK(pinned.floored);
+  CHECK(pinned.delay == 1.0f);
+  CHECK(pinned.achieved_period == 3.5f);
+
+  // Relative to the voiced rate the repayment is exactly nothing there and positive below it.
+  CHECK(loop_budget(20.4f, 2.0f, 1.0f, kLossVoicedSr).interp_gain == 1.0f);
+  const float low_rate = loop_budget(3.4f, 1.5f, 1.0f, 8000.0).interp_gain;
+  CHECK(low_rate > 1.05f);
+  CHECK(loop_budget(3.4f, 1.5f, 1.0f).interp_gain >= low_rate);
+
+  // The boost never lifts a loop past what its sub-fundamental ring bound allows.
+  CHECK(repay_interpolation(0.99f, 4.0f) <= 0.9999f);
+}
+
+TEST_CASE("a Karplus-Strong fundamental keeps its requested t60 across rates",
+          "[midi][synth][ks][wind]") {
+  NativeSynthPatch patch;
+  patch.mode = SynthEngineMode::kKarplusStrong;
+  patch.ks.decay_s = 1.2f;
+  patch.ks.decay_stretch = 0.0f;
+  patch.ks.brightness = 1.0f;
+  // Periods of eight samples or fewer are left out: the read's loss there exceeds what the
+  // sub-fundamental ring bound lets the loop repay (note 84 at 8 kHz, notes 96 and up at 8 kHz).
+  for (const uint8_t note : {72, 84, 96}) {
+    for (const double sr : {8000.0, 24000.0, 48000.0, 96000.0}) {
+      if (sr / note_to_hz(note) <= 8.0) continue;
+      const double t60 = fundamental_t60(patch, note, sr);
+      CAPTURE(static_cast<int>(note), sr, t60);
+      CHECK(t60 > 1.2 * 0.9);
+      CHECK(t60 < 1.2 * 1.1);
+    }
+  }
+}
+
+TEST_CASE("a default conical reed keeps speaking at a low rate", "[midi][synth][wind]") {
+  NativeSynthPatch patch;
+  patch.mode = SynthEngineMode::kReed;
+  patch.reed.conical = true;
+  patch.reed.breath_noise = 0.0f;
+  patch.reed.chiff = 0.0f;
+  for (const uint8_t note : {97, 98, 99}) {
+    NativeSynthConfig cfg;
+    cfg.patch = patch;
+    cfg.dc_block = false;
+    NativeSynth synth(cfg);
+    synth.prepare(8000.0, 256);
+    synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+    const int total = 8 * 8000;
+    std::vector<float> left(static_cast<size_t>(total));
+    std::vector<float> right(static_cast<size_t>(total));
+    float* chans[2] = {left.data(), right.data()};
+    synth.process(chans, 2, total);
+    const double sounding = fundamental_in_window(left, note_to_hz(note), 8000.0, 7.0);
+    CAPTURE(static_cast<int>(note), sounding);
+    CHECK(sounding > 1.0e-3);
+  }
+}
+
+namespace {
+
+double window_rms(const std::vector<float>& x, double from_s, double to_s, double sr) {
+  const size_t from = static_cast<size_t>(from_s * sr);
+  const size_t to = std::min(x.size(), static_cast<size_t>(to_s * sr));
+  double acc = 0.0;
+  for (size_t i = from; i < to; ++i) acc += static_cast<double>(x[i]) * x[i];
+  return to > from ? std::sqrt(acc / static_cast<double>(to - from)) : 0.0;
+}
+
+/// Held RMS before the note-off and RMS three seconds after it, with an outer amplitude release
+/// long enough that the VCA cannot be what silences the voice.
+std::pair<double, double> held_and_released_rms(NativeSynthPatch patch, uint8_t note, double sr) {
+  patch.amp_env.sustain = 1.0f;
+  patch.amp_env.release_ms = 5000.0f;
+  NativeSynthConfig cfg;
+  cfg.patch = patch;
+  cfg.dc_block = false;
+  NativeSynth synth(cfg);
+  synth.prepare(sr, 256);
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, note, 100)));
+  const int off_at = static_cast<int>(1.0 * sr);
+  const int total = static_cast<int>(5.0 * sr);
+  std::vector<float> left(static_cast<size_t>(total));
+  std::vector<float> right(static_cast<size_t>(total));
+  int done = 0;
+  bool sent = false;
+  while (done < total) {
+    if (!sent && done >= off_at) {
+      synth.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, note, 0)));
+      sent = true;
+    }
+    const int block = std::min(256, total - done);
+    float* chans[2] = {left.data() + done, right.data() + done};
+    synth.process(chans, 2, block);
+    done += block;
+  }
+  return {window_rms(left, 0.5, 1.0, sr), window_rms(left, 4.0, 4.5, sr)};
+}
+
+}  // namespace
+
+TEST_CASE("a wind bore rings down after the breath is released, whatever feeds it",
+          "[midi][synth][wind]") {
+  struct Specimen {
+    const char* label;
+    NativeSynthPatch patch;
+    uint8_t note;
+  };
+  std::vector<Specimen> specimens;
+  {
+    NativeSynthPatch p;
+    p.mode = SynthEngineMode::kFlute;
+    p.flute.release_ms = 80.0f;
+    specimens.push_back({"flute", p, 72});
+  }
+  for (const uint8_t note : {48, 60, 72}) {
+    NativeSynthPatch p;
+    p.mode = SynthEngineMode::kPipeOrgan;
+    p.pipe_organ.release_damp_s = 1.0f;
+    specimens.push_back({"pipe organ", p, note});
+  }
+  {
+    NativeSynthPatch p;
+    p.mode = SynthEngineMode::kPipeOrgan;
+    specimens.push_back({"pipe organ", p, 60});
+  }
+  {
+    NativeSynthPatch p;
+    p.mode = SynthEngineMode::kBrass;
+    p.brass.lip_aperture = 0.9f;
+    p.brass.release_ms = 20.0f;
+    specimens.push_back({"brass lip valve", p, 60});
+  }
+  {
+    NativeSynthPatch p;
+    p.mode = SynthEngineMode::kReed;
+    p.reed.closing_pressure = 1.88816f;
+    p.reed.release_ms = 20.0f;
+    specimens.push_back({"beating reed", p, 60});
+  }
+  for (const Specimen& specimen : specimens) {
+    for (const double sr : {44100.0, 48000.0, 96000.0}) {
+      const auto [held, late] = held_and_released_rms(specimen.patch, specimen.note, sr);
+      CAPTURE(specimen.label, sr, held, late);
+      REQUIRE(held > 1.0e-3);
+      CHECK(late < held * 1.0e-3);
+    }
+  }
+}
+
+TEST_CASE("a resonator keeps the size of its centre response at every sample rate",
+          "[midi][synth][wind]") {
+  using sonare::midi::synth::resonator_gain_at_rate;
+  for (const double freq : {196.0, 2500.0}) {
+    auto centre = [&](double sr) {
+      const double r = std::exp(-6.907755279 / (sr * 0.8));
+      const double w = kTwoPiD * freq / sr;
+      const float gain = resonator_gain_at_rate(static_cast<float>(r), static_cast<float>(w), sr);
+      const double a1 = 2.0 * r * std::cos(w);
+      const double a2 = -r * r;
+      const double re = 1.0 - a1 * std::cos(w) - a2 * std::cos(2.0 * w);
+      const double im = a1 * std::sin(w) + a2 * std::sin(2.0 * w);
+      return static_cast<double>(gain) / std::sqrt(re * re + im * im);
+    };
+    const double voiced = centre(kLossVoicedSr);
+    for (const double sr : {24000.0, 44100.0, 96000.0}) {
+      CAPTURE(freq, sr);
+      CHECK(centre(sr) == Catch::Approx(voiced).epsilon(0.01));
+    }
+    const double r48 = std::exp(-6.907755279 / (kLossVoicedSr * 0.8));
+    CHECK(resonator_gain_at_rate(static_cast<float>(r48), 1.0f, kLossVoicedSr) ==
+          static_cast<float>(1.0f - static_cast<float>(r48)));
   }
 }

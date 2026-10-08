@@ -306,6 +306,11 @@ void ReedVoiceCore::start(const ReedPatchParams& params, double sample_rate, uin
   // does, so it enters comp with the same sign.
   comp_valve_ = valve_tau;
   retune_loop_comp();
+  // The Lagrange read's loss at the fundamental grows as the period shrinks towards the
+  // sample rate; a voice voiced at kLossVoicedSr repays only the share that rate does not have.
+  interp_gain_ = loop_budget(bore_.period, bore_.comp, 1.0f, sr).interp_gain;
+  refresh_excitation_targets();
+  snap_excitation();
 
   // The bore delay line spans the whole slab, because the line length is what
   // bounds a downward bend and the clamp enforcing it saturates silently -- a
@@ -499,7 +504,7 @@ float ReedVoiceCore::render(float pitch_ratio) noexcept {
       // exactly what makes the reed's swing toward it a forcing term.
       const float rest = std::clamp(1.0f - mouth / pc, 0.0f, 1.0f);
       const float steady = rest * std::sqrt(std::max(mouth, 0.0f));
-      inj = refl + flow_gain_ * (flow - steady);
+      inj = WindBore::injection(refl, flow_gain_ * (flow - steady), breath_.gate());
     }
   }
 
@@ -587,7 +592,7 @@ void ReedVoiceCore::refresh_excitation_targets() noexcept {
   // at note-on) is per traversal and needs no mapping.
   const float br = std::clamp(excite_.bright01_base + excite_.bright_mod01, 0.0f, 1.0f);
   lp_alpha_target_ = 1.0f - loss_pole_at_rate((1.0f - br) * kBellPoleSpan, sample_rate_);
-  loss_gain_target_ = loss_gain_ship_;
+  loss_gain_target_ = repay_wind_loss(loss_gain_ship_, interp_gain_);
 }
 
 void ReedVoiceCore::retune_loop_comp() noexcept {

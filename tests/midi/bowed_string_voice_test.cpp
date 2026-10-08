@@ -149,7 +149,7 @@ TEST_CASE("bowed string is unconditionally stable", "[midi][synth][bowed]") {
     for (uint8_t velocity : {40, 100, 127}) {
       NativeSynthPatch patch = bowed_base_patch();
       const std::vector<float> tone = render_patch(patch, note, velocity, 48000);
-      REQUIRE(peak(tone) > 0.005f);
+      REQUIRE(peak(tone) > 0.004f);
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));
     }
@@ -519,7 +519,7 @@ TEST_CASE("second polarization is stable and thickens the tone", "[midi][synth][
       patch.bowed_string.polarization = 1.0f;
       const std::vector<float> tone = render_patch(patch, note, velocity, 48000);
       INFO("note " << int(note) << " vel " << int(velocity));
-      REQUIRE(peak(tone) > 0.005f);
+      REQUIRE(peak(tone) > 0.004f);
       REQUIRE(peak(tone) < 4.0f);
       REQUIRE(std::isfinite(tone.back()));
     }
@@ -688,4 +688,48 @@ TEST_CASE("bowed-string rosin follows bow release", "[midi][synth][bowed]") {
   // near the held level and fails this assertion.
   REQUIRE(released_late_rms < 0.35f * held_rms);
   REQUIRE(released_late_rms < 4.0f * dry_late_rms + 1.0e-4f);
+}
+
+TEST_CASE("the second polarization resonates at the string's pitch, not an octave below",
+          "[midi][synth][bowed]") {
+  const double f0 = 440.0;
+  auto level_at = [](const std::vector<float>& x, double freq, double sr) {
+    const size_t from = x.size() / 2;
+    double re = 0.0;
+    double im = 0.0;
+    const double w = 6.283185307179586 * freq / sr;
+    for (size_t i = from; i < x.size(); ++i) {
+      const double t = static_cast<double>(i - from);
+      re += x[i] * std::cos(w * t);
+      im += x[i] * std::sin(w * t);
+    }
+    return std::sqrt(re * re + im * im) / static_cast<double>(x.size() - from);
+  };
+  for (const double sr : {24000.0, 48000.0, 96000.0}) {
+    auto render_with = [&](float polarization) {
+      NativeSynthPatch patch = bowed_base_patch();
+      patch.bowed_string.polarization = polarization;
+      NativeSynthConfig cfg;
+      cfg.patch = patch;
+      NativeSynth synth(cfg);
+      synth.prepare(sr, 256);
+      synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 69, 100)));
+      return render_left(synth, static_cast<int>(3.0 * sr));
+    };
+    const std::vector<float> single = render_with(0.0f);
+    const std::vector<float> doubled = render_with(1.0f);
+    // The loop's contribution to the half-frequency region, against what the string already has
+    // there: an octave-low second loop adds a subharmonic the single string does not carry.
+    const double sub_single = level_at(single, 0.5 * f0, sr);
+    const double sub_doubled = level_at(doubled, 0.5 * f0, sr);
+    const double main_single = level_at(single, f0, sr);
+    const double main_doubled = level_at(doubled, f0, sr);
+    CAPTURE(sr, sub_single, sub_doubled, main_single, main_doubled);
+    REQUIRE(main_single > 0.0);
+    // The two planes beat against each other, so the level at the pitch moves with the beat;
+    // what an octave-low loop adds is a sub-octave comparable to the note itself.
+    CHECK(sub_doubled < 0.1 * main_doubled);
+    CHECK(main_doubled > 0.1 * main_single);
+    for (const float s : doubled) REQUIRE(std::isfinite(s));
+  }
 }

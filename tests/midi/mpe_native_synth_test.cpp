@@ -23,6 +23,7 @@
 #include <utility>
 #include <vector>
 
+#include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
 #include "midi/mpe.h"
 #include "midi/synth/native_synth.h"
@@ -1106,4 +1107,202 @@ TEST_CASE("velocity excitation keeps MIDI 2.0 midpoint resolution", "[midi][synt
       render_velocity_note(sonare::midi::make_midi2_note_on(0, 2, kNote, midpoint));
   REQUIRE(wide != lower);
   REQUIRE(wide != upper);
+}
+
+namespace {
+
+/// A fast-releasing subtractive synth, so a note that is not held ends within the render.
+NativeSynth make_fast_release_synth() {
+  NativeSynthConfig cfg;
+  cfg.patch = NativeSynthPatch{};
+  cfg.patch.mode = SynthEngineMode::kSubtractive;
+  cfg.patch.amp_env.attack_ms = 1.0f;
+  cfg.patch.amp_env.decay_ms = 1.0f;
+  cfg.patch.amp_env.sustain = 1.0f;
+  cfg.patch.amp_env.release_ms = 20.0f;
+  cfg.dc_block = false;
+  return NativeSynth(cfg);
+}
+
+/// Voices still alive 0.5 s after a note-off on @p note_channel, with @p pedal_cc down on
+/// @p pedal_channel before the note-off (-1 for no pedal).
+int voices_after_pedalled_note_off(uint8_t pedal_cc, int pedal_channel, uint8_t note_channel,
+                                   bool zoned, bool pedal_up_again) {
+  NativeSynth synth = make_fast_release_synth();
+  synth.prepare(kRate, kBlock);
+  if (zoned) send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_note_on(0, note_channel, kNote, kVelocity));
+  render_left(synth, 4096);
+  if (pedal_channel >= 0) {
+    send(synth, sonare::midi::make_midi1_control_change(0, static_cast<uint8_t>(pedal_channel),
+                                                        pedal_cc, 127));
+  }
+  send(synth, sonare::midi::make_midi1_note_off(0, note_channel, kNote, 0));
+  render_left(synth, 24000);
+  if (pedal_up_again && pedal_channel >= 0) {
+    send(synth, sonare::midi::make_midi1_control_change(0, static_cast<uint8_t>(pedal_channel),
+                                                        pedal_cc, 0));
+    render_left(synth, 24000);
+  }
+  return synth.active_voice_count();
+}
+
+}  // namespace
+
+TEST_CASE("a manager channel's pedal holds the notes of its whole zone", "[midi][synth][mpe]") {
+  // CC64 only: sustain. CC66 is exercised with the key down at the pedal edge.
+  CHECK(voices_after_pedalled_note_off(64, 0, 2, true, false) == 1);
+  CHECK(voices_after_pedalled_note_off(64, 0, 2, true, true) == 0);
+  // The manager's own notes and the other zone's channels.
+  CHECK(voices_after_pedalled_note_off(64, 0, 0, true, false) == 1);
+  CHECK(voices_after_pedalled_note_off(64, 0, 12, true, false) == 0);
+  // The upper zone's manager reaches its members (channel 14), not the lower zone's.
+  {
+    NativeSynth synth = make_fast_release_synth();
+    synth.prepare(kRate, kBlock);
+    send_mcm(synth, 15, 7);
+    send(synth, sonare::midi::make_midi1_note_on(0, 14, kNote, kVelocity));
+    render_left(synth, 4096);
+    send(synth, sonare::midi::make_midi1_control_change(0, 15, 64, 127));
+    send(synth, sonare::midi::make_midi1_note_off(0, 14, kNote, 0));
+    render_left(synth, 24000);
+    CHECK(synth.active_voice_count() == 1);
+  }
+  // Without a zone, a pedal on channel 0 is channel 0's alone.
+  CHECK(voices_after_pedalled_note_off(64, 0, 2, false, false) == 0);
+  CHECK(voices_after_pedalled_note_off(64, 0, 0, false, false) == 1);
+  // A member's own pedal stays on the member.
+  CHECK(voices_after_pedalled_note_off(64, 2, 2, true, false) == 1);
+  CHECK(voices_after_pedalled_note_off(64, 3, 2, true, false) == 0);
+}
+
+TEST_CASE("a manager channel's sostenuto captures only the keys down at the pedal edge",
+          "[midi][synth][mpe]") {
+  NativeSynth synth = make_fast_release_synth();
+  synth.prepare(kRate, kBlock);
+  send_mcm(synth, 0, 7);
+  send(synth, sonare::midi::make_midi1_note_on(0, 2, kNote, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_control_change(0, 0, 66, 127));
+  // A key struck after the edge is not captured.
+  send(synth, sonare::midi::make_midi1_note_on(0, 3, kNote + 2, kVelocity));
+  render_left(synth, 4096);
+  send(synth, sonare::midi::make_midi1_note_off(0, 2, kNote, 0));
+  send(synth, sonare::midi::make_midi1_note_off(0, 3, kNote + 2, 0));
+  render_left(synth, 24000);
+  CHECK(synth.active_voice_count() == 1);
+  send(synth, sonare::midi::make_midi1_control_change(0, 0, 66, 0));
+  render_left(synth, 24000);
+  CHECK(synth.active_voice_count() == 0);
+}
+
+TEST_CASE("CC126 and CC127 outside a zone select the channel's articulation",
+          "[midi][synth][mpe]") {
+  using sonare::midi::ArticulationMode;
+  auto voices_after_overlap = [](NativeSynth& synth) {
+    send(synth, sonare::midi::make_midi1_note_on(0, 1, 60, kVelocity));
+    render_left(synth, 4096);
+    send(synth, sonare::midi::make_midi1_note_on(0, 1, 64, kVelocity));
+    render_left(synth, 24000);
+    return synth.active_voice_count();
+  };
+  ArticulationMode mode = ArticulationMode::kPoly;
+
+  NativeSynth mono = make_fast_release_synth();
+  mono.prepare(kRate, kBlock);
+  send(mono, sonare::midi::make_midi1_control_change(0, 1, 126, 1));
+  REQUIRE(mono.articulation(1, &mode));
+  CHECK(mode == ArticulationMode::kMonoRetrigger);
+  CHECK(voices_after_overlap(mono) == 1);
+  REQUIRE(mono.articulation(0, &mode));
+  CHECK(mode == ArticulationMode::kPoly);
+
+  NativeSynth direct = make_fast_release_synth();
+  direct.prepare(kRate, kBlock);
+  REQUIRE(direct.set_articulation(1, ArticulationMode::kMonoRetrigger));
+  CHECK(voices_after_overlap(direct) == 1);
+
+  // Back to polyphony: both overlapping notes sound.
+  send(mono, sonare::midi::make_midi1_control_change(0, 1, 127, 0));
+  REQUIRE(mono.articulation(1, &mode));
+  CHECK(mode == ArticulationMode::kPoly);
+  NativeSynth poly = make_fast_release_synth();
+  poly.prepare(kRate, kBlock);
+  send(poly, sonare::midi::make_midi1_control_change(0, 1, 126, 1));
+  send(poly, sonare::midi::make_midi1_control_change(0, 1, 127, 0));
+  CHECK(voices_after_overlap(poly) == 2);
+
+  // Inside a zone a member's mode message keeps its MPE meaning and leaves the articulation.
+  NativeSynth zoned = make_fast_release_synth();
+  zoned.prepare(kRate, kBlock);
+  send_mcm(zoned, 0, 7);
+  send(zoned, sonare::midi::make_midi1_control_change(0, 2, 126, 1));
+  REQUIRE(zoned.articulation(2, &mode));
+  CHECK(mode == ArticulationMode::kPoly);
+}
+
+TEST_CASE("All Sound Off on another channel leaves a shared piano body ringing",
+          "[midi][synth][mpe]") {
+  for (const double rate : {48000.0, 96000.0}) {
+    auto make = [&](int cc_channel) {
+      NativeSynthConfig cfg;
+      cfg.patch = NativeSynthPatch{};
+      cfg.patch.mode = SynthEngineMode::kPiano;
+      cfg.patch.amp_env.release_ms = 5.0f;
+      NativeSynth synth(cfg);
+      synth.prepare(rate, kBlock);
+      send(synth, sonare::midi::make_midi1_note_on(0, 0, kNote, kVelocity));
+      render_left(synth, static_cast<int>(rate * 0.3));
+      send(synth, sonare::midi::make_midi1_note_off(0, 0, kNote, 0));
+      for (int i = 0; i < 400 && synth.active_voice_count() > 0; ++i) render_left(synth, kBlock);
+      REQUIRE(synth.active_voice_count() == 0);
+      if (cc_channel >= 0) {
+        send(synth,
+             sonare::midi::make_midi1_control_change(0, static_cast<uint8_t>(cc_channel), 120, 0));
+      }
+      return render_left(synth, 4096);
+    };
+    const std::vector<float> control = make(-1);
+    const std::vector<float> other = make(1);
+    const std::vector<float> owner = make(0);
+    float control_peak = 0.0f;
+    float owner_peak = 0.0f;
+    for (const float s : control) control_peak = std::max(control_peak, std::fabs(s));
+    for (const float s : owner) owner_peak = std::max(owner_peak, std::fabs(s));
+    CAPTURE(rate, control_peak, owner_peak);
+    REQUIRE(control_peak > 1.0e-6f);
+    CHECK(other == control);
+    CHECK(owner_peak < control_peak * 0.01f);
+  }
+}
+
+TEST_CASE("a manager's pressure and reset reach exactly the members of its zone",
+          "[midi][synth][mpe]") {
+  ControllerProfile profile;
+  REQUIRE(profile.bind(
+      {ControllerInput::kChannelPressure, 0, ControllerAxis::kPitchCents, 0.0f, 1200.0f}));
+  // Cents of a note on @p channel after the lower manager sends pressure 127, optionally followed
+  // by that manager's Reset All Controllers.
+  auto cents_on = [&](uint8_t channel, bool reset) {
+    NativeSynth synth = make_synth();
+    synth.set_controller_profile(profile);
+    synth.prepare(kRate, kBlock);
+    send_mcm(synth, 0, 3);
+    send_mcm(synth, 15, 3);
+    send(synth, sonare::midi::make_midi1_channel_pressure(0, 0, 127));
+    send(synth, sonare::midi::make_midi1_note_on(0, channel, kNote, kVelocity));
+    if (reset) send(synth, sonare::midi::make_midi1_control_change(0, 0, 121, 0));
+    const std::vector<float> audio = render_left(synth, 24576);
+    const double hz = fft_fundamental(audio, 8192, kNoteHz * std::pow(2.0, 1.0));
+    return 1200.0 * std::log2(hz / kNoteHz);
+  };
+  const double lower_member = cents_on(2, false);
+  const double upper_member = cents_on(13, false);
+  const double unassigned = cents_on(6, false);
+  CAPTURE(lower_member, upper_member, unassigned);
+  CHECK(lower_member > 600.0);
+  CHECK(std::fabs(upper_member) < 50.0);
+  CHECK(std::fabs(unassigned) < 50.0);
+  // After the manager's reset its bias is gone from its own members only.
+  CHECK(std::fabs(cents_on(2, true)) < 50.0);
 }

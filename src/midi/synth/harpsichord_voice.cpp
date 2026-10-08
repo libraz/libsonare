@@ -245,14 +245,21 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
       choir.damped = true;
       return;
     }
-    const float g0 = string_loop_gain_for(choir_period, sr, t60);
-    const float g_ref = string_loop_gain_for(choir_period, sr, t60 * hf);
+    const float g_plain = string_loop_gain_for(choir_period, sr, t60);
+    const float g_ref_plain = string_loop_gain_for(choir_period, sr, t60 * hf);
+    // The read's magnitude at the fundamental is paid from the targets before the filter is
+    // solved, and the unboosted solve only supplies the pole that sets the delay left to the line.
+    const float repay = interpolation_repayment(
+        g_plain, choir_period,
+        solve_string_loop_filter(kTwoPi / choir_period, omega_ref, g_plain, g_ref_plain).a);
+    const float g0 = g_plain * repay;
+    const float g_ref = g_ref_plain * repay;
     const StringLoopFilter filter =
         solve_string_loop_filter(kTwoPi / choir_period, omega_ref, g0, g_ref);
     // The damper is broadband, so its per-traversal gain is compensated by the
     // same factor the fundamental's was; otherwise the pole's own attenuation
     // would be counted into the damping a second time.
-    const float compensation = g0 > 0.0f ? filter.g / g0 : 1.0f;
+    const float compensation = g_plain > 0.0f ? filter.g / g_plain : 1.0f;
     const float release_g =
         std::min(0.9999f, string_loop_gain_for(choir_period, sr, damper_t60) * compensation);
     choir.loop.configure_filter(span, span_capacity, choir_period, filter.a, filter.g, release_g);
@@ -296,10 +303,14 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
     // so neither the note's decay nor the bass stretch applies to it. Its top
     // goes first, like any string's.
     const float rear_t60 = params.rear_decay_s > 0.0f ? params.rear_decay_s : t60;
-    const float g0 = string_loop_gain_for(rear_period, sr, rear_t60);
-    const float g_ref = string_loop_gain_for(rear_period, sr, rear_t60 * hf);
-    const StringLoopFilter filter = solve_string_loop_filter(
-        kTwoPi / rear_period, std::max(omega_ref, kTwoPi * 2.0f / rear_period), g0, g_ref);
+    const float g_plain = string_loop_gain_for(rear_period, sr, rear_t60);
+    const float g_ref_plain = string_loop_gain_for(rear_period, sr, rear_t60 * hf);
+    const float omega_rear_ref = std::max(omega_ref, kTwoPi * 2.0f / rear_period);
+    const float repay = interpolation_repayment(
+        g_plain, rear_period,
+        solve_string_loop_filter(kTwoPi / rear_period, omega_rear_ref, g_plain, g_ref_plain).a);
+    const StringLoopFilter filter = solve_string_loop_filter(kTwoPi / rear_period, omega_rear_ref,
+                                                             g_plain * repay, g_ref_plain * repay);
     rear_.configure_filter(span_rear, full / 8, rear_period, filter.a, filter.g, filter.g);
     // How loudly the segment answers scales with how much of the string it is.
     // A bass segment is a twentieth of its string and a treble one nearly a

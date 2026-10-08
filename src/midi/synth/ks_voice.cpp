@@ -124,8 +124,11 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   auto voice_loop = [&](StringLoop& loop, float* span, float period, float t60_s, float hf_t60_s,
                         float mid_t60_s = 0.0f, float tone_a_offset = 0.0f) noexcept {
     float a = loss_pole_at_rate(std::min(0.97f, tone_a + tone_a_offset), sr);
-    float g = string_loop_gain_for(period, sr, t60_s);
-    float release_g = string_loop_gain_for(period, sr, damped_t60);
+    // The read's magnitude at the fundamental is paid from the target before any filter is
+    // solved; every other target of this loop grows with it so their ratios stay as asked.
+    const float repay = interpolation_repayment(string_loop_gain_for(period, sr, t60_s), period, a);
+    float g = string_loop_gain_for(period, sr, t60_s) * repay;
+    float release_g = std::min(0.9999f, string_loop_gain_for(period, sr, damped_t60) * repay);
     const float w0 = kTwoPi / period;
     // A hand mute is measured against the note and the open string against the
     // room: a palm damps a mode by how far it moves under it, so both where the
@@ -135,15 +138,15 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
     const float quote_t60 = mute > 0.0f ? t60_s / kKsMuteDecayRatio : hf_t60_s;
     if ((hf_t60_s > 0.0f || mute > 0.0f) && quote_w > w0 * 1.5f) {
       const float g0 = g;
-      const float g_ref = string_loop_gain_for(period, sr, quote_t60);
+      const float g_ref = string_loop_gain_for(period, sr, quote_t60) * repay;
       const float mid_w = kTwoPi * kKsMidQuoteHz / static_cast<float>(sr);
       bool has_pole2 = false;
       float a2 = 0.0f, g2 = 1.0f;
       if (mute <= 0.0f && mid_t60_s > 0.0f && mid_w > w0 * 1.5f && mid_w < quote_w) {
         // Stage A carries fundamental-to-mid; stage B supplies the residual loss at the quote
         // frequency.
-        const StringLoopFilter stage_a =
-            solve_string_loop_filter(w0, mid_w, g0, string_loop_gain_for(period, sr, mid_t60_s));
+        const StringLoopFilter stage_a = solve_string_loop_filter(
+            w0, mid_w, g0, string_loop_gain_for(period, sr, mid_t60_s) * repay);
         const float stage_a_at_ref = stage_a.g * onepole_magnitude(stage_a.a, quote_w);
         const float residual =
             stage_a_at_ref > 1.0e-8f ? std::min(1.0f, g_ref / stage_a_at_ref) : g_ref;

@@ -479,9 +479,10 @@ void NativeSynth::push_mpe_controller_axis(uint8_t channel, MpeDimension dimensi
     if (!voice.active || voice.channel != (channel & 0x0Fu)) continue;
     apply_mpe_voice_axes(voice, channel, dimension, manager, false, {}, false);
   }
-  const MpeZone zone = mpe_.zone_of(channel);
+  const uint16_t members =
+      static_cast<uint16_t>(mpe_.channels_in_scope(channel) & ~(1u << (channel & 0x0Fu)));
   for (uint8_t member = 0; member < 16; ++member) {
-    if (mpe_.role(member) != MpeChannelRole::kMember || mpe_.zone_of(member) != zone) continue;
+    if ((members & (uint16_t{1} << member)) == 0) continue;
     Control32 member_own = Control32::from_raw(0);
     const bool member_own_present = mpe_.own_control(member, dimension, &member_own);
     const Control32 combined =

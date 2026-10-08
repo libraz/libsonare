@@ -30,6 +30,8 @@ constexpr uint64_t kShimmerIndexBase = 1ull << 28;
 constexpr uint64_t kPhisemProbIndexBase = 1ull << 30;
 constexpr uint64_t kPhisemNoiseIndexBase = 1ull << 31;
 /// Random bead collisions per bean per unit shake energy per second.
+/// Sounding-energy gain one collision adds, in units of the shake energy.
+constexpr float kPhisemCollisionBump = 0.6f;
 SONARE_TUNABLE(kPhisemCollisionRate, 100.0f);
 /// Shake energy at zero velocity, as a fraction of its energy at full. The
 /// energy scales both how loud a collision is and how often one happens, so it
@@ -508,7 +510,8 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
     const float p = phisem_beans_ * phisem_shake_energy_ * phisem_rate_;
     if (noise_.unipolar_at(kPhisemProbIndexBase + phisem_prob_index_++) < p) collide = true;
     if (collide) {
-      phisem_sound_level_ = std::min(phisem_sound_level_ + phisem_shake_energy_ * 0.6f, 4.0f);
+      phisem_sound_level_ =
+          std::min(phisem_sound_level_ + phisem_shake_energy_ * kPhisemCollisionBump, 4.0f);
     }
     const float raw =
         noise_.bipolar_at(kPhisemNoiseIndexBase + phisem_noise_index_++) * phisem_sound_level_;
@@ -559,7 +562,12 @@ float PercussionVoiceCore::render(float pitch_ratio) noexcept {
 }
 
 bool PercussionVoiceCore::silent() const noexcept {
-  return burst_remaining_ == 0 && silence_env_ < kSilenceFloor;
+  // A particle layer is finished only when no further collision could radiate above the floor:
+  // the quiet gap between two grains says nothing about the next one while the shake energy
+  // that sets its size, and the scrape ridge or bead draw that triggers it, are still running.
+  const bool particles_pending =
+      phisem_beans_ > 0.0f && phisem_shake_energy_ * kPhisemCollisionBump >= kSilenceFloor;
+  return burst_remaining_ == 0 && !particles_pending && silence_env_ < kSilenceFloor;
 }
 
 float PercussionVoiceCore::ring_bound_s(const PercussionPatchParams& params) noexcept {

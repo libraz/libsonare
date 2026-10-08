@@ -115,6 +115,30 @@ inline float onepole_noise_rate_gain(float cutoff_hz, double sample_rate) noexce
   return std::sqrt(pole_variance(cutoff_hz, kLossVoicedSr) / pole_variance(cutoff_hz, sample_rate));
 }
 
+/// Input gain of a two-pole resonator `y = a1*y1 + a2*y2 + gain*x` (a1 = 2r cos w, a2 = -r^2) that
+/// keeps the response at its centre the same physical size at every sample rate.
+///
+/// The centre response is gain / d with d = (1-r) * sqrt(cos^2 w (1-r)^2 + sin^2 w (1+r)^2), and d
+/// is not proportional to (1-r): at a fixed centre in Hz and a fixed ring time it shrinks as the
+/// rate rises, so the customary `gain = 1 - r` lets the same mode answer harder at 96 kHz than at
+/// 48 kHz. This returns the gain the resonator voiced at kLossVoicedSr (`1 - r48`) would have,
+/// scaled by d / d48; exactly `1 - r` at the voiced rate. @p r and @p w are the radius and centre
+/// at @p sample_rate.
+inline float resonator_gain_at_rate(float r, float w, double sample_rate) noexcept {
+  if (!(sample_rate > 0.0) || sample_rate == kLossVoicedSr) return 1.0f - r;
+  const auto denominator = [](double radius, double omega) noexcept {
+    const double c = std::cos(omega) * (1.0 - radius);
+    const double s = std::sin(omega) * (1.0 + radius);
+    return (1.0 - radius) * std::sqrt(c * c + s * s);
+  };
+  const double scale = sample_rate / kLossVoicedSr;
+  const double r_voiced = std::pow(static_cast<double>(r), scale);
+  const double w_voiced = static_cast<double>(w) * scale;
+  const double d_voiced = denominator(r_voiced, w_voiced);
+  if (!(d_voiced > 1.0e-12)) return 1.0f - r;
+  return static_cast<float>((1.0 - r_voiced) * denominator(r, w) / d_voiced);
+}
+
 /// A solved one-pole loss filter: the feedback coefficient and the gain in
 /// front of it, in the form StringLoop::configure_filter() takes.
 struct StringLoopFilter {
@@ -263,6 +287,87 @@ inline StringLoopFilter solve_string_loop_filter(float omega0, float omega_ref, 
   // second decay.
   out.g = compensated_loop_gain(out.a, omega0, g0);
   return out;
+}
+
+/// What a delay-line loop of a requested period realises, and what the read costs.
+struct LoopBudget {
+  /// Delay actually read from the line: the requested period less the delay carried outside it,
+  /// raised to the floor the read needs.
+  float delay = 1.0f;
+  /// Loop period the realised delay sounds (delay + comp): below the requested one exactly when
+  /// the floor engaged, which pins every higher note at that pitch.
+  float achieved_period = 0.0f;
+  bool floored = false;
+  /// Per-traversal gain that pays for the Lagrange read's magnitude at the sounding fundamental,
+  /// >= 1. Absolute (1/|H|) when no rate is given; with a rate it is the ratio against the same
+  /// note read at kLossVoicedSr, so a voice calibrated at that rate keeps its sound there.
+  float interp_gain = 1.0f;
+};
+
+/// The delay a loop reads from its line for a requested period: the period less @p comp_samples
+/// (what is carried outside the line), raised to @p min_delay. Cheap enough for the sample loop;
+/// loop_budget() adds the reporting and the interpolation cost for setup time.
+inline float loop_delay(float period_samples, float comp_samples, float min_delay) noexcept {
+  return std::max(min_delay, period_samples - comp_samples);
+}
+
+/// The one place a requested loop period becomes a realised delay, its floor and the interpolation
+/// loss the loop has to repay. @p comp_samples is the delay carried outside the line (feedback
+/// register, loss-filter phase) and @p min_delay the smallest delay the read supports. A floored
+/// period is reported through achieved_period instead of being clamped silently.
+inline LoopBudget loop_budget(float period_samples, float comp_samples, float min_delay,
+                              double sample_rate = 0.0) noexcept {
+  LoopBudget out;
+  const float wanted = period_samples - comp_samples;
+  out.floored = wanted < min_delay;
+  out.delay = loop_delay(period_samples, comp_samples, min_delay);
+  out.achieved_period = out.delay + comp_samples;
+  const double omega = constants::kTwoPiD / std::max(1.0f, out.achieved_period);
+  // Past this the read has nothing left to repay and a boost would only amplify noise.
+  constexpr double kMinMagnitude = 0.25;
+  const double magnitude = std::max(kMinMagnitude, rt::lagrange3_magnitude(out.delay, omega));
+  if (!(sample_rate > 0.0)) {
+    out.interp_gain = static_cast<float>(std::max(1.0, 1.0 / magnitude));
+  } else if (sample_rate != kLossVoicedSr) {
+    const double voiced_period =
+        static_cast<double>(out.achieved_period) * kLossVoicedSr / sample_rate;
+    const double voiced_delay = std::max<double>(min_delay, voiced_period - comp_samples);
+    const double voiced_magnitude = std::max(
+        kMinMagnitude, rt::lagrange3_magnitude(voiced_delay, constants::kTwoPiD / voiced_period));
+    out.interp_gain = static_cast<float>(std::max(1.0, voiced_magnitude / magnitude));
+  }
+  return out;
+}
+
+/// Raises @p gain by @p interp_gain without lifting the loop past what the sub-fundamental ring
+/// bound allows, so the boost never turns DC into a runaway.
+inline float repay_interpolation(float gain, float interp_gain) noexcept {
+  const float ceiling = std::max(gain, sub_fundamental_gain_cap(gain));
+  return std::min(gain * interp_gain, ceiling);
+}
+
+/// The factor by which a loop's per-traversal target gains grow so the Lagrange read's magnitude at
+/// the fundamental is paid from the same budget. Taken BEFORE the loss filter is solved, so the
+/// solver's sub-fundamental ring bound is sized for the boosted target and DC never rings longer
+/// than that bound allows. @p pole_estimate is the loss pole the loop will carry, which sets the
+/// delay left to the line.
+inline float interpolation_repayment(float g_target, float period_samples,
+                                     float pole_estimate) noexcept {
+  const float comp =
+      1.0f + onepole_group_delay_samples(pole_estimate, constants::kTwoPi / period_samples);
+  const float repaid =
+      repay_interpolation(g_target, loop_budget(period_samples, comp, 1.0f).interp_gain);
+  return g_target > 0.0f ? repaid / g_target : 1.0f;
+}
+
+/// Highest flat loss gain a wind bore may reach once it repays the read: the in-loop highpass and
+/// the read's own roll-off keep the sub-fundamental response under it, so the figure applies to
+/// the fundamental, where the loop gain returns to the shipped one.
+inline constexpr float kWindInterpLossCeil = 1.3f;
+
+/// repay_interpolation() for a wind bore's flat loss gain, bounded by kWindInterpLossCeil.
+inline float repay_wind_loss(float loss_gain, float interp_gain) noexcept {
+  return std::min(loss_gain * interp_gain, std::max(loss_gain, kWindInterpLossCeil));
 }
 
 /// One string loop: a circular delay line read at a fractional offset and closed
