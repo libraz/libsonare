@@ -57,9 +57,11 @@ struct TruePeakLimiterConfig {
 ///   where an interpolated value exceeds the ceiling, scales every base sample
 ///   of that value's stencil, channel-linked, so it lands on the ceiling.
 ///   Positions are visited in stream order and each reads every earlier
-///   correction. The output is delayed by one stencil less one sample so no
-///   sample leaves before every interpolation reading it has been evaluated;
-///   the block size plays no part in the result.
+///   correction, and a correction rechecks the earlier positions its scaling
+///   can have raised. The output is delayed by one stencil reach, so no sample
+///   leaves before every interpolation reading it has been evaluated, plus the
+///   recheck window's reach, so a recheck only touches samples not yet emitted.
+///   The block size plays no part in the result.
 class TruePeakOutputGuard {
  public:
   void prepare(int factor, int max_channels, int max_block_size);
@@ -72,8 +74,16 @@ class TruePeakOutputGuard {
                 float ceiling);
 
  private:
+  // Recheck window, in stencil reaches. One reach leaves the positions a recheck
+  // itself raises outside the window: measured 12 of 2000 random bursts over the
+  // ceiling (+0.0017 dB worst); two reached none in 20000.
+  static constexpr int kRecheckReaches = 2;
+  // Bounds the rechecks after one correction; each pass only scales down.
+  static constexpr int kMaxRecheckPasses = 8;
+
   const rt::PolyphaseFir* fir_ = nullptr;
   std::vector<std::vector<float>> work_;
+  int reach_ = 0;
   int latency_ = 0;
 };
 

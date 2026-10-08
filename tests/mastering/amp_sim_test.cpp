@@ -4,6 +4,7 @@
 
 #include "mastering/saturation/amp_sim.h"
 
+#include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
@@ -2390,4 +2391,51 @@ TEST_CASE("the synthesized cabinet reaches the offline path too", "[mastering][s
   const auto with_ir = apply_named_processor("saturation.ampSim", input.data(), input.size(),
                                              static_cast<int>(kRate), generated);
   REQUIRE(flat.samples != with_ir.samples);
+}
+
+TEST_CASE("the power stage keeps its ADAA delay whether or not it is engaged",
+          "[mastering][saturation][amp]") {
+  using sonare::mastering::saturation::AmpTopology;
+  for (const AmpTopology topology : {AmpTopology::kVoiced, AmpTopology::kCircuit}) {
+    CAPTURE(static_cast<int>(topology));
+    // ADAA1's half sample, at the 4x rate inside the circuit head.
+    const int fraction_q8 = topology == AmpTopology::kCircuit ? 32 : 128;
+    AmpSimConfig off;
+    off.topology = topology;
+    off.cab = false;
+    off.drive = 0.0f;
+    off.power = 0.0f;
+    AmpSimConfig on = off;
+    on.power = 1.0e-4f;
+    AmpSim off_amp(off);
+    AmpSim on_amp(on);
+    off_amp.prepare(48000.0, 4096);
+    on_amp.prepare(48000.0, 4096);
+    REQUIRE(off_amp.latency_samples_q8() == on_amp.latency_samples_q8());
+    REQUIRE((off_amp.latency_samples_q8() & 0xff) == fraction_q8);
+    REQUIRE(off_amp.set_parameter(6, 0.5f));
+    REQUIRE(off_amp.latency_samples_q8() == on_amp.latency_samples_q8());
+    REQUIRE(off_amp.set_parameter(6, 0.0f));
+
+    // A quiet tone keeps the barely engaged stage linear, so engaging it may not
+    // shift the signal: a bypass without the half sample sits a quarter of the
+    // sample step away.
+    std::vector<float> off_out(4096);
+    for (size_t n = 0; n < off_out.size(); ++n) {
+      off_out[n] = 1.0e-4f * static_cast<float>(std::sin(kTwoPiD * 5000.0 * n / 48000.0));
+    }
+    std::vector<float> on_out = off_out;
+    float* off_channels[] = {off_out.data()};
+    float* on_channels[] = {on_out.data()};
+    off_amp.process(off_channels, 1, 4096);
+    on_amp.process(on_channels, 1, 4096);
+    float peak = 0.0f;
+    float difference = 0.0f;
+    for (size_t n = 2048; n < off_out.size(); ++n) {
+      peak = std::max(peak, std::abs(on_out[n]));
+      difference = std::max(difference, std::abs(on_out[n] - off_out[n]));
+    }
+    REQUIRE(peak > 0.0f);
+    REQUIRE(difference < 0.02f * peak);
+  }
 }

@@ -320,15 +320,20 @@ class AmpSim : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size, int max_channels) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
-  /// The head's oversampling latency, plus the Doppler stage's base delay when
+  /// The head's oversampling latency, the power stage's ADAA1 half sample (an
+  /// eighth in the 4x circuit head), plus the Doppler stage's base delay when
   /// that stage is on (its modulation swings around a fixed 2-sample centre, so
-  /// the centre is real latency the host should compensate). Neither term can
-  /// move at runtime: `topology` is not automatable and neither is `doppler`.
+  /// the centre is real latency the host should compensate). None of the terms
+  /// can move at runtime: `topology` and `doppler` are not automatable, and the
+  /// power stage keeps its half sample while `power` is 0.
   /// The cab IR adds nothing — it is a direct FIR, not a partitioned one.
-  int latency_samples() const noexcept override {
-    const int head = config_.topology == AmpTopology::kCircuit ? circuit_latency_samples_
-                                                               : tube_.latency_samples();
-    return head + (config_.doppler > 0.0f ? kDopplerBaseSamples : 0);
+  int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
+  int latency_samples_q8() const noexcept override {
+    const bool circuit = config_.topology == AmpTopology::kCircuit;
+    const int head_q8 = circuit ? circuit_latency_samples_ << 8 : tube_.latency_samples_q8();
+    const int power_q8 =
+        circuit ? rt::kAdaa1LatencySamplesQ8 / kCircuitOversample : rt::kAdaa1LatencySamplesQ8;
+    return head_q8 + power_q8 + (config_.doppler > 0.0f ? kDopplerBaseSamples << 8 : 0);
   }
 
   /// @brief Loads a cabinet impulse response, replacing the analytic cab chain.
@@ -504,6 +509,7 @@ class AmpSim : public rt::ProcessorBase {
     float xf_lp = 0.0f;               // transformer low-band extractor (one-pole lowpass)
     rt::BiquadState nfb_shape;        // NFB feedback-path mid-band filter
     float nfb_fb = 0.0f;              // one-sample-delayed power-stage output (NFB loop)
+    float power_prev = 0.0f;          // previous power-stage input (half-sample bypass)
     float cone_lp = 0.0f;             // cone-excursion proxy (one-pole lowpass)
     float cone_dc = 0.0f;             // tracked offset of the cone's rectified term
     std::vector<float> doppler_line;  // excursion-modulated delay (empty when off)

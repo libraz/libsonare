@@ -3,6 +3,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <cstddef>
+#include <random>
 #include <vector>
 
 #include "core/audio.h"
@@ -20,7 +21,7 @@ constexpr int kSampleRate = 24000;
 constexpr int kSignalSamples = 18000;
 // Reported latency of the default 4x polyphase configuration at this rate; the
 // tail the offline runners flush through the limiter.
-constexpr int kFlushSamples = 83;
+constexpr int kFlushSamples = 105;
 
 // Sustained low tone plus periodic transients, driven hard enough that the
 // limiter is working continuously and the decimation guard engages.
@@ -220,4 +221,46 @@ TEST_CASE("TruePeakLimiter keeps the true peak at the ceiling within tolerance",
   // 0.1 dB: the measured residue is about +0.02 dB at an 8x meter (finer than
   // the 4x the limiter itself runs at) and is flat in drive.
   CHECK(true_peak_db <= limiter_config().ceiling_db + 0.1f);
+}
+
+TEST_CASE("TruePeakOutputGuard holds the ceiling at its own factor on any burst",
+          "[mastering][maximizer][block_invariance]") {
+  using sonare::mastering::maximizer::TruePeakOutputGuard;
+  // Short full-scale bursts are where one stencil's correction most often lifts
+  // an earlier position that shares part of it.
+  constexpr float kCeiling = 0.5f;
+  std::mt19937 rng(1234u);
+  std::uniform_real_distribution<float> sample(-1.0f, 1.0f);
+  int exceeded = 0;
+  for (int trial = 0; trial < 2000; ++trial) {
+    TruePeakOutputGuard guard;
+    guard.prepare(4, 1, 256);
+    const int burst = 4 + trial % 28;
+    std::vector<float> reference(static_cast<size_t>(16 + burst + guard.latency_samples() + 16),
+                                 0.0f);
+    for (int i = 0; i < burst; ++i) reference[static_cast<size_t>(16 + i)] = sample(rng);
+    std::vector<float> blocked = reference;
+    float* whole[] = {reference.data()};
+    guard.process(whole, 1, static_cast<int>(reference.size()), -1, kCeiling);
+    if (sonare::metering::true_peak(reference.data(), reference.size(), 4) >
+        kCeiling * (1.0f + 1.0e-5f)) {
+      ++exceeded;
+    }
+    if (trial % 100 == 0) {
+      for (const int block : {1, 17}) {
+        CAPTURE(trial, block);
+        TruePeakOutputGuard partitioned;
+        partitioned.prepare(4, 1, block);
+        std::vector<float> pieces = blocked;
+        for (size_t start = 0; start < pieces.size(); start += static_cast<size_t>(block)) {
+          float* part[] = {pieces.data() + start};
+          partitioned.process(part, 1,
+                              static_cast<int>(std::min<size_t>(block, pieces.size() - start)), -1,
+                              kCeiling);
+        }
+        REQUIRE(pieces == reference);
+      }
+    }
+  }
+  CHECK(exceeded == 0);
 }

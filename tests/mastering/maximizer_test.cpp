@@ -332,13 +332,14 @@ TEST_CASE("TruePeakLimiter reports effective polyphase latency", "[mastering][ma
   limiter.prepare(48000.0, 64);
 
   // Lookahead (1 ms), the oversampler's interpolation and decimation group
-  // delays, and the output guard's stencil less one sample. The oversampler's
-  // prototype has the same length at every factor, so the total is too.
+  // delays, and the output guard's three stencil reaches (one to complete a
+  // position, two of recheck lookahead). The oversampler's prototype has the
+  // same length at every factor, so the total is too.
   const int lookahead = 48;
-  const int guard = rt::true_peak_fir_for(4).taps_per_phase - 1;
+  const int guard = 3 * (rt::true_peak_fir_for(4).taps_per_phase - 1);
   const int expected =
       lookahead + rt::Oversampler(4).streaming_round_trip_latency_samples() + guard;
-  REQUIRE(expected == 107);
+  REQUIRE(expected == 129);
   REQUIRE(limiter.latency_samples() == expected);
 
   limiter.set_config({-1.0f, 1.0f, 10.0f, 2});
@@ -392,10 +393,10 @@ TEST_CASE("TruePeakLimiter set_config applies scalar changes without wiping runn
   // lookahead is reflected in the reported latency.
   limiter.set_config({-3.0f, 2.0f, 50.0f, 4});
   REQUIRE(limiter.last_gain_reduction_db() == 0.0f);
-  // 2 ms lookahead plus the oversampling round trip and the guard's stencil.
+  // 2 ms lookahead plus the oversampling round trip and the guard's delay.
   REQUIRE(limiter.latency_samples() ==
           96 + rt::Oversampler(4).streaming_round_trip_latency_samples() +
-              (rt::true_peak_fir_for(4).taps_per_phase - 1));
+              3 * (rt::true_peak_fir_for(4).taps_per_phase - 1));
 
   // The updated -3 dB ceiling (0.708) is in effect on subsequent processing:
   // the 0.95 sine is limited near the NEW ceiling — clearly above the stale
@@ -541,6 +542,8 @@ TEST_CASE("TruePeakLimiter keeps polyphase detector state across blocks",
   split.prepare(48000.0, 32);
 
   auto split_signal = generate_sine_samples(6000.0f, 48000, 256, 0.95f);
+  // Flushed through the latency: a render cut mid-tone reads an edge overshoot.
+  split_signal.resize(split_signal.size() + static_cast<size_t>(split.latency_samples()), 0.0f);
   for (size_t offset = 0; offset < split_signal.size(); offset += 16) {
     float* channel[] = {split_signal.data() + offset};
     split.process(channel, 1, static_cast<int>(std::min<size_t>(16, split_signal.size() - offset)));

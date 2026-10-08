@@ -476,6 +476,7 @@ void AmpSim::ChannelChain::clear() noexcept {
   xf_lp = 0.0f;
   nfb_shape = {};
   nfb_fb = 0.0f;
+  power_prev = 0.0f;
   cone_lp = 0.0f;
   cone_dc = 0.0f;
   for (PreampStage& stage : stages) {
@@ -525,6 +526,7 @@ bool AmpSim::ChannelChain::discard_non_finite() noexcept {
   discarded |= discard_if_non_finite(sag_env, 0.0f);
   discarded |= discard_if_non_finite(xf_lp, 0.0f);
   discarded |= discard_if_non_finite(nfb_fb, 0.0f);
+  discarded |= discard_if_non_finite(power_prev, 0.0f);
   // The cone excursion steers the Doppler read position, so a non-finite value
   // here indexes the delay line as well as colouring the output.
   discarded |= discard_group_if_non_finite(cone_lp, cone_dc);
@@ -751,9 +753,14 @@ void AmpSim::process(float* const* channels, int num_channels, int num_samples) 
 }
 
 float AmpSim::run_power_stage(float s, ChannelChain& chain, size_t channel) noexcept {
-  // Off when power == 0 -> the ADAA state is untouched and the path is
-  // bit-identical to a preamp-only amp.
-  if (config_.power <= 0.0f) return s;
+  // Off when power == 0: the ADAA state is untouched, and the two-tap average
+  // ADAA1 applies in its linear region keeps the stage's half sample, so the
+  // latency does not move with `power`.
+  if (config_.power <= 0.0f) {
+    const float out = 0.5f * (s + chain.power_prev);
+    chain.power_prev = s;
+    return out;
+  }
   // Global negative feedback around the power stage: a one-sample-delayed copy
   // of the output, shaped by the mid-band filter, is subtracted from the input.
   // The mid is fed back hard (tightened); the extremes are not. beta stays < 1
@@ -768,6 +775,7 @@ float AmpSim::run_power_stage(float s, ChannelChain& chain, size_t channel) noex
   constexpr float kNfbBeta = 0.7f;
   const float shaped = process_chain(chain.nfb_fb, chain.nfb_shape, nfb_shape_c_);
   const float e = config_.nfb > 0.0f ? s - kNfbBeta * config_.nfb * shaped : s;
+  chain.power_prev = e;
   s = power_stage(e, config_.power, config_.crossover, power_drive_scale_, power_adaa_[channel]);
   chain.nfb_fb = s;
   return s;

@@ -39,7 +39,10 @@ constexpr float kSlowAttackMs = 1.0f;
 
 void TruePeakOutputGuard::prepare(int factor, int max_channels, int max_block_size) {
   fir_ = &sonare::rt::true_peak_fir_for(factor);
-  latency_ = std::max(0, fir_->taps_per_phase - 1);
+  reach_ = std::max(0, fir_->taps_per_phase - 1);
+  // One stencil's reach to complete a position, plus the recheck window's own
+  // lookahead so a recheck only ever touches samples not yet emitted.
+  latency_ = (1 + kRecheckReaches) * reach_;
   work_.assign(
       static_cast<size_t>(std::max(0, max_channels)),
       std::vector<float>(static_cast<size_t>(latency_ + std::max(0, max_block_size)), 0.0f));
@@ -63,10 +66,12 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
   // previous block evaluated every position whose stencil it could complete.
   const size_t half = static_cast<size_t>(fir_->taps_per_phase / 2);
   const size_t lookbehind = static_cast<size_t>(fir_->taps_per_phase - 1) - half;
+  const size_t reach = static_cast<size_t>(reach_);
   const size_t first = pending - half;
   const size_t last = length - 1 - half;
   float min_gain = 1.0f;
-  for (size_t k = first; k <= last; ++k) {
+  // Scales position k's stencil, channel-linked, when it reads over the ceiling.
+  const auto correct = [&](size_t k) {
     float linked = 0.0f;
     for (int ch = 0; ch < num_channels; ++ch) {
       if (ch == excluded_channel) continue;
@@ -77,13 +82,26 @@ float TruePeakOutputGuard::process(float* const* channels, int num_channels, int
                                                                                     phase, *fir_)));
       }
     }
-    if (linked > ceiling) {
-      const float gain = ceiling / linked;
-      for (int ch = 0; ch < num_channels; ++ch) {
-        float* data = work_[static_cast<size_t>(ch)].data();
-        for (size_t s = k - lookbehind; s <= k + half; ++s) data[s] *= gain;
-      }
-      min_gain = std::min(min_gain, gain);
+    if (!(linked > ceiling)) return false;
+    const float gain = ceiling / linked;
+    for (int ch = 0; ch < num_channels; ++ch) {
+      float* data = work_[static_cast<size_t>(ch)].data();
+      for (size_t s = k - lookbehind; s <= k + half; ++s) data[s] *= gain;
+    }
+    min_gain = std::min(min_gain, gain);
+    return true;
+  };
+  for (size_t k = first; k <= last; ++k) {
+    if (!correct(k)) continue;
+    // A scaled stencil can raise an earlier position that shares part of it, since
+    // the taps are signed, and that position's own correction can do the same
+    // again. Positions within the window still write only unemitted samples, so
+    // they are rechecked until none reads over.
+    const size_t window = static_cast<size_t>(kRecheckReaches) * reach;
+    for (int pass = 0; pass < kMaxRecheckPasses; ++pass) {
+      bool corrected = false;
+      for (size_t j = k; j + window > k; --j) corrected |= correct(j);
+      if (!corrected) break;
     }
   }
 
