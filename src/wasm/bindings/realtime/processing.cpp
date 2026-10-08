@@ -489,58 +489,37 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
 
-  // Offline pre-roll, as in the C-ABI oracle (sonare_engine_freeze_offline): the
-  // frozen clip captures the lane at its settled values rather than a fade-in
-  // the live lane never had.
-  engine_.prime_offline_parameters(num_channels, block_size);
-  std::vector<std::vector<float>> frozen(static_cast<size_t>(num_channels),
-                                         std::vector<float>(static_cast<size_t>(total_frames)));
-  std::vector<float*> render_pointers;
-  render_pointers.reserve(frozen.size());
-  for (auto& channel : frozen) {
-    render_pointers.push_back(channel.data());
-  }
-  engine_.render_offline(render_pointers.data(), num_channels, total_frames, block_size);
-
-  auto owned = std::make_shared<sonare::engine::ClipAudioStorage>();
-  owned->channels = std::move(frozen);
-  owned->channel_ptrs.reserve(owned->channels.size());
-  for (const auto& channel : owned->channels) {
-    owned->channel_ptrs.push_back(channel.data());
-  }
-  owned->refresh_content_signature();
-
-  sonare::engine::ClipSchedule schedule{};
-  schedule.id = uintProperty(options_val, "clipId", 1);
-  if (schedule.id == 0) schedule.id = 1;
-  schedule.buffer = {owned->channel_ptrs.data(), num_channels, total_frames};
-  schedule.storage = owned;
+  uint32_t clip_id = uintProperty(options_val, "clipId", 1);
+  if (clip_id == 0) clip_id = 1;
   // Read startPpq at full double precision to match setClips() and the
   // double-typed ClipSchedule.start_ppq field; a Float32 read would quantize a
   // frozen clip at a large PPQ position to a different sample than the same
   // clip placed via setClips.
-  schedule.start_ppq = hasProperty(options_val, "startPpq")
-                           ? numberFromVal(objectProperty(options_val, "startPpq"), "startPpq")
-                           : 0.0;
-  schedule.clip_offset_samples = 0;
-  schedule.length_samples = total_frames;
-  schedule.loop = false;
-  schedule.gain = floatProperty(options_val, "gain", 1.0f);
+  const double start_ppq = hasProperty(options_val, "startPpq")
+                               ? numberFromVal(objectProperty(options_val, "startPpq"), "startPpq")
+                               : 0.0;
+  const float gain = floatProperty(options_val, "gain", 1.0f);
   // Mirror the C-ABI oracle (sonare_c_engine.cpp): a non-finite or negative
   // startPpq yields an undefined clip position, and a non-finite/negative gain
   // fills NaN or phase-inverts the frozen clip. Reject up front instead of
   // letting WASM produce a corrupt freeze where C/Node/Python error.
-  if (!std::isfinite(schedule.start_ppq) ||
-      !sonare::transport::valid_public_ppq(schedule.start_ppq) || !std::isfinite(schedule.gain) ||
-      schedule.gain < 0.0f) {
+  if (!std::isfinite(start_ppq) || !sonare::transport::valid_public_ppq(start_ppq) ||
+      !std::isfinite(gain) || gain < 0.0f) {
     throw WasmRangeError("invalid freeze startPpq or gain");
   }
+
+  // Offline pre-roll, as in the C-ABI oracle (sonare_engine_freeze_offline): the
+  // frozen clip captures the lane at its settled values rather than a fade-in
+  // the live lane never had.
+  engine_.prime_offline_parameters(num_channels, block_size);
+  // The engine bakes the source layer, installs the clip and withdraws the MIDI clips.
+  const sonare::engine::ClipSchedule schedule =
+      engine_.freeze_offline(num_channels, total_frames, block_size, clip_id, start_ppq, gain);
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
-  new_storage.push_back(owned);
+  new_storage.push_back(schedule.storage);
   std::vector<uint32_t> new_clip_ids{schedule.id};
   // The frozen audio is engine-owned, so prebakedClipChannels() can hand it back.
   std::vector<uint8_t> new_clip_tempo_baked{1};
-  engine_.set_clips({schedule});
   clip_storage_ = std::move(new_storage);
   clip_ids_ = std::move(new_clip_ids);
   clip_tempo_baked_ = std::move(new_clip_tempo_baked);

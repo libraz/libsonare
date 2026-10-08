@@ -377,6 +377,15 @@ class _EngineIoMixin:
         )
 
     def freeze_offline(self, options: EngineFreezeOptions) -> EngineFreezeResult:
+        """Render the source layer over the span and install it as the only clip.
+
+        Bakes every audio clip and hosted MIDI instrument through the lane strips,
+        lane inserts and group buses. The master strip, monitor bus, engine graph,
+        capture and metronome stay live and process the frozen clip once on
+        playback. The frozen clip replaces the whole clip set and every MIDI clip
+        is withdrawn in the same call, so nothing plays twice; live MIDI input
+        still reaches the instruments.
+        """
         raw_options = SonareEngineFreezeOptions()
         # Assigned unconverted so the struct's own narrowing sees each caller
         # value; int() would truncate a fraction past it.

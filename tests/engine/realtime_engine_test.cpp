@@ -376,6 +376,102 @@ TEST_CASE("RealtimeEngine re-prepares an installed graph for a larger block and 
 }
 #endif
 
+namespace {
+
+// Renders 128 frames, freezes the same span from frame 0, then replays it from
+// frame 0; a stage the freeze both baked and kept live would apply twice.
+struct FreezeReplay {
+  std::array<float, 128> live{};
+  std::array<float, 128> replay{};
+};
+
+FreezeReplay freeze_and_replay(sonare::engine::RealtimeEngine& engine) {
+  FreezeReplay out;
+  const auto seek_to_start = [&] {
+    sonare::rt::Command seek{};
+    seek.type = sonare::rt::CommandType::kTransportSeekSample;
+    seek.sample_time = -1;
+    seek.arg.i = 0;
+    REQUIRE(engine.push_command(seek));
+  };
+  float* live_io[] = {out.live.data()};
+  engine.render_offline(live_io, 1, 128, 128);
+  seek_to_start();
+  engine.freeze_offline(1, 128, 128, 5, 0.0, 1.0f);
+  REQUIRE(engine.clip_count() == 1);
+  seek_to_start();
+  float* replay_io[] = {out.replay.data()};
+  engine.render_offline(replay_io, 1, 128, 128);
+  return out;
+}
+
+sonare::engine::ClipSchedule constant_quarter_clip(const float* const* channels) {
+  return sonare::engine::ClipSchedule{1, {channels, 1, 128}, 0.0, 0, 0, 128, false, 1.0f, 0, 0};
+}
+
+}  // namespace
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("RealtimeEngine freeze leaves a non-unity master live and applied once",
+          "[engine][realtime][freeze]") {
+  std::array<float, 128> source{};
+  source.fill(0.25f);
+  const float* channels[] = {source.data()};
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128, 16, 16, 1);
+  engine.set_clips({constant_quarter_clip(channels)});
+  sonare::mixing::ChannelStripConfig config;
+  config.fader_db = 6.0f;
+  sonare::mixing::ChannelStrip master(config);
+  REQUIRE(engine.bind_mixing_strip(&master));
+  engine.set_mixing_enabled(true);
+  engine.settle_parameters();
+
+  const FreezeReplay result = freeze_and_replay(engine);
+  REQUIRE(result.live[127] > 0.4f);
+  for (size_t i = 0; i < result.live.size(); ++i) {
+    REQUIRE(result.replay[i] == Catch::Approx(result.live[i]).margin(1.0e-5f));
+  }
+}
+#endif
+
+#if defined(SONARE_WITH_GRAPH)
+TEST_CASE("RealtimeEngine freeze leaves the engine graph live and applied once",
+          "[engine][realtime][freeze]") {
+  class Doubler final : public sonare::rt::ProcessorBase {
+   public:
+    void prepare(double, int) override {}
+    void process(float* const* channels, int num_channels, int num_samples) override {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        for (int i = 0; i < num_samples; ++i) channels[ch][i] *= 2.0f;
+      }
+    }
+    void reset() override {}
+  };
+  std::array<float, 128> source{};
+  source.fill(0.25f);
+  const float* channels[] = {source.data()};
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128, 16, 16, 1);
+  engine.set_clips({constant_quarter_clip(channels)});
+  auto graph = std::make_unique<sonare::graph::Graph>();
+  REQUIRE(graph->add_node("in", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->add_node("double", std::make_unique<Doubler>(), 1));
+  REQUIRE(graph->add_node("out", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->connect({"in", 0, "double", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->connect({"double", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->compile());
+  graph->prepare(48000.0, 128);
+  REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
+
+  const FreezeReplay result = freeze_and_replay(engine);
+  REQUIRE(result.live[127] == Catch::Approx(0.5f));
+  for (size_t i = 0; i < result.live.size(); ++i) {
+    REQUIRE(result.replay[i] == Catch::Approx(result.live[i]).margin(1.0e-6f));
+  }
+}
+#endif
+
 TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
           "[engine][realtime]") {
 #if defined(SONARE_WITH_MIXING)

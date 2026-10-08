@@ -188,12 +188,15 @@ export interface OfflineRenderWrapperSite {
 /** A `RealtimeEngineWasm::` member DEFINITION whose name ends in `Offline`. */
 const OFFLINE_WRAPPER_DEFINITION = /\bRealtimeEngineWasm::(\w*Offline)\s*\(/g;
 
-/** The core entry point that owns the prepared-channel precondition. */
-const CORE_OFFLINE_RENDER = 'engine_.render_offline(';
+/**
+ * The core entry points that own the prepared-channel precondition:
+ * render_offline itself, and freeze_offline, which renders through it.
+ */
+const CORE_OFFLINE_RENDERS = ['engine_.render_offline(', 'engine_.freeze_offline('];
 
 /**
  * Every offline-render entry point on the WASM engine facade, with whether its
- * body reaches {@link CORE_OFFLINE_RENDER}.
+ * body reaches one of {@link CORE_OFFLINE_RENDERS}.
  *
  * The prepared-channel precondition lives in `RealtimeEngine::render_offline`,
  * not in these wrappers: a hand-rolled `engine_.process()` loop silences every
@@ -220,7 +223,7 @@ export function offlineRenderWrapperSites(): OfflineRenderWrapperSite[] {
         file,
         name: match[1],
         line: text.slice(0, start).split('\n').length,
-        rendersThroughCore: body.includes(CORE_OFFLINE_RENDER),
+        rendersThroughCore: CORE_OFFLINE_RENDERS.some((call) => body.includes(call)),
       });
     }
   }

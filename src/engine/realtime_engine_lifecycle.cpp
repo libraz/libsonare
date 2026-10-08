@@ -458,6 +458,47 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   }
 }
 
+ClipSchedule RealtimeEngine::freeze_offline(int num_channels, int64_t total_frames, int block_size,
+                                            uint32_t clip_id, double start_ppq, float gain) {
+  if (num_channels <= 0 || total_frames <= 0) {
+    throw SonareException(ErrorCode::InvalidParameter, "freeze_offline: empty render shape");
+  }
+  auto owned = std::make_shared<ClipAudioStorage>();
+  owned->channels.assign(
+      static_cast<size_t>(std::max(num_channels, 0)),
+      std::vector<float>(static_cast<size_t>(std::max<int64_t>(total_frames, 0)), 0.0f));
+  std::vector<float*> render_ptrs;
+  render_ptrs.reserve(owned->channels.size());
+  for (auto& channel : owned->channels) render_ptrs.push_back(channel.data());
+  struct SourceLayerScope {
+    bool& flag;
+    explicit SourceLayerScope(bool& f) : flag(f) { flag = true; }
+    ~SourceLayerScope() { flag = false; }
+  } scope(source_layer_render_);
+  render_offline(render_ptrs.data(), num_channels, total_frames, block_size);
+
+  for (const auto& channel : owned->channels) owned->channel_ptrs.push_back(channel.data());
+  owned->refresh_content_signature();
+  ClipSchedule schedule{};
+  schedule.id = clip_id == 0 ? 1 : clip_id;
+  schedule.buffer = {owned->channel_ptrs.data(), num_channels, total_frames};
+  schedule.storage = owned;
+  schedule.start_ppq = start_ppq;
+  schedule.clip_offset_samples = 0;
+  schedule.length_samples = total_frames;
+  schedule.loop = false;
+  schedule.gain = gain;
+  schedule.fade_in_samples = 0;
+  schedule.fade_out_samples = 0;
+  // The frozen clip stands for every source it baked: install it and withdraw
+  // the MIDI clips together, so nothing plays both baked and live.
+  set_clips({schedule});
+#if defined(SONARE_WITH_ARRANGEMENT)
+  publish_midi_clips(prepare_midi_clips({}));
+#endif
+  return schedule;
+}
+
 void RealtimeEngine::finish_offline_render() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});

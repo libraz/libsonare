@@ -233,6 +233,45 @@ describe('SonareEngine offline export', () => {
       engine.destroy();
     }
   });
+
+  it('withdraws the MIDI a freeze baked, so a frozen MIDI lane plays once', async () => {
+    const mirror = new RawRealtimeEngine(SR, BLOCK);
+    // A near-instant release, so no tail of the earlier render rings into the replay.
+    mirror.setBuiltinInstrument({ gain: 0.5, sustain: 1, releaseMs: 0.01 }, 5);
+    const { engine, posted } = await createFacade(mirror);
+    try {
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 1 << 20,
+          events: [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 }],
+        },
+      ]);
+      const [live] = await engine.renderOffline({ totalFrames: 1024, blockSize: BLOCK });
+      expect(rms(live)).toBeGreaterThan(0);
+      posted.length = 0;
+
+      await engine.freezeOffline({ totalFrames: 1024, numChannels: 2, clipId: 42, startPpq: 0 });
+      // The worklet is told to drop the MIDI clips along with the old clip set.
+      const midiSync = posted.find((message) => message.type === 'syncMidiClips') as
+        | { clips: unknown[] }
+        | undefined;
+      expect(midiSync?.clips).toEqual([]);
+      const delta = posted.find((message) => message.type === 'syncClipsDelta') as
+        | { upserts: Array<{ id: number; channels: Float32Array[] }> }
+        | undefined;
+      const frozen = delta?.upserts[0].channels[0] ?? new Float32Array(1024);
+      expect(rms(frozen)).toBeGreaterThan(0);
+
+      // Replaying the timeline sounds the frozen note alone, not baked plus live.
+      const [replay] = await engine.renderOffline({ totalFrames: 1024, blockSize: BLOCK });
+      expect(maxAbsDiff(replay, frozen)).toBeLessThan(1e-5);
+    } finally {
+      engine.destroy();
+    }
+  });
 });
 
 class FakeClipPageWorker {

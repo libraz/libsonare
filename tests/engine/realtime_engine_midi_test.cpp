@@ -3429,3 +3429,34 @@ TEST_CASE("RealtimeEngine keeps a stopped live note's release and sustain soundi
   render_blocks(engine, 4 * kBlock, kBlock);
   CHECK(peak_of(render_blocks(engine, kBlock, kBlock)) > 0.03f);
 }
+
+TEST_CASE("RealtimeEngine freeze withdraws the MIDI it baked so it plays once",
+          "[engine][midi][freeze]") {
+  constexpr int kBlock = 128;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock, 16, 16, 1);
+  CountingInstrument instrument;
+  REQUIRE(engine.set_midi_instrument(0, &instrument));
+  engine.set_midi_clips(held_note_clip());
+  const auto seek_to_start = [&] {
+    push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, -1, 0);
+  };
+
+  std::array<float, kBlock> live{};
+  float* live_io[] = {live.data()};
+  engine.render_offline(live_io, 1, kBlock, kBlock);
+  REQUIRE(live[kBlock - 1] == Catch::Approx(0.5f));
+
+  seek_to_start();
+  engine.freeze_offline(1, kBlock, kBlock, 9, 0.0, 1.0f);
+  REQUIRE(engine.clip_count() == 1);
+  REQUIRE(engine.midi_clip_count() == 0);
+
+  seek_to_start();
+  std::array<float, kBlock> replay{};
+  float* replay_io[] = {replay.data()};
+  engine.render_offline(replay_io, 1, kBlock, kBlock);
+  for (int i = 0; i < kBlock; ++i) {
+    REQUIRE(replay[static_cast<size_t>(i)] == Catch::Approx(live[static_cast<size_t>(i)]));
+  }
+}

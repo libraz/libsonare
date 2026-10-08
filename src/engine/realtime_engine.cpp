@@ -681,6 +681,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     }
 #endif
 #endif
+    // A freeze bakes the source layer only; master, monitor, graph and capture stay live.
+    if (source_layer_render_) return;
 #if defined(SONARE_WITH_MIXING)
     // The input meter remains available even when no master strip is bound.
     capture_input_peak_db(sub_channels.data(), channels, num_frames, master_input_peak_db);

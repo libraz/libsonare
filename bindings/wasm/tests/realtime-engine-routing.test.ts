@@ -901,6 +901,38 @@ describe('Sonare WASM Module', () => {
       engine.destroy();
     });
 
+    it('plays a frozen MIDI lane once: freeze withdraws the MIDI it baked', () => {
+      const engine = new RealtimeEngine(48000, 128);
+      // A near-instant release, so no tail of the earlier render rings into the replay.
+      engine.setBuiltinInstrument({ gain: 0.5, sustain: 1, releaseMs: 0.01 }, 5);
+      engine.setMidiClips([
+        {
+          id: 1,
+          trackId: 5,
+          destinationId: 5,
+          lengthSamples: 8192,
+          events: [{ renderFrame: 0, word0: midi1Word(0x9, 0, 60, 100), wordCount: 1 }],
+        },
+      ]);
+      engine.seekSample(0);
+      const live = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      expect(rms(live[0])).toBeGreaterThan(0);
+      engine.seekSample(0);
+      engine.freezeOffline({ totalFrames: 128, blockSize: 128, numChannels: 2, clipId: 9 });
+      expect(engine.clipCount()).toBe(1);
+      const frozen = engine.prebakedClipChannels(9);
+      expect(frozen).not.toBeNull();
+      expect(rms(frozen?.[0] ?? new Float32Array(1))).toBeGreaterThan(0);
+      engine.seekSample(0);
+      // The replay is the frozen audio alone: the MIDI it baked no longer plays live.
+      const replay = engine.renderOffline([new Float32Array(128), new Float32Array(128)]);
+      for (let i = 0; i < 128; i += 1) {
+        expect(replay[0][i]).toBeCloseTo(frozen?.[0][i] ?? Number.NaN, 5);
+        expect(replay[1][i]).toBeCloseTo(frozen?.[1][i] ?? Number.NaN, 5);
+      }
+      engine.destroy();
+    });
+
     it('renders scheduled MIDI clips through built-in instruments', () => {
       const engine = new RealtimeEngine(48000, 128);
       engine.setBuiltinInstrument({ gain: 0.5 }, 5);

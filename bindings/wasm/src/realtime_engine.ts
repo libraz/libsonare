@@ -1929,8 +1929,14 @@ export class RealtimeEngine {
   }
 
   /**
-   * Freeze the current graph to audio. `numChannels` above the prepared channel
-   * count throws a `RangeError`.
+   * Render the source layer over the span and install it as the only clip.
+   * Bakes every audio clip and hosted MIDI instrument through the lane strips,
+   * lane inserts and group buses; the master strip, monitor bus, engine graph,
+   * capture and metronome stay live and process the frozen clip once on
+   * playback. The frozen clip replaces the whole clip set and every MIDI clip is
+   * withdrawn in the same call, so nothing plays twice; live MIDI input still
+   * reaches the instruments. `numChannels` above the prepared channel count
+   * throws a `RangeError`.
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     return this.native.freezeOffline(options);

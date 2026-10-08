@@ -363,37 +363,11 @@ SonareError sonare_engine_freeze_offline(SonareRealtimeEngine* engine,
   // lane at its settled values, so the frozen clip does not carry a fade-in that
   // the live lane never had.
   engine->engine.prime_offline_parameters(options->num_channels, options->block_size);
-  auto owned = std::make_shared<engine::ClipAudioStorage>();
-  owned->channels.assign(static_cast<size_t>(options->num_channels),
-                         std::vector<float>(static_cast<size_t>(options->total_frames), 0.0f));
-  std::vector<float*> render_ptrs;
-  render_ptrs.reserve(owned->channels.size());
-  for (auto& channel : owned->channels) {
-    render_ptrs.push_back(channel.data());
-  }
-  engine->engine.render_offline(render_ptrs.data(), options->num_channels, options->total_frames,
-                                options->block_size);
-
-  owned->channel_ptrs.clear();
-  owned->channel_ptrs.reserve(owned->channels.size());
-  for (const auto& channel : owned->channels) {
-    owned->channel_ptrs.push_back(channel.data());
-  }
-  owned->refresh_content_signature();
-  engine::ClipSchedule schedule{};
-  schedule.id = options->clip_id == 0 ? 1 : options->clip_id;
-  schedule.buffer = {owned->channel_ptrs.data(), options->num_channels, options->total_frames};
-  schedule.storage = owned;
-  schedule.start_ppq = options->start_ppq;
-  schedule.clip_offset_samples = 0;
-  schedule.length_samples = options->total_frames;
-  schedule.loop = false;
-  schedule.gain = options->gain;
-  schedule.fade_in_samples = 0;
-  schedule.fade_out_samples = 0;
-
-  engine->engine.set_clips({schedule});
-  out->clip_id = schedule.id;
+  out->clip_id =
+      engine->engine
+          .freeze_offline(options->num_channels, options->total_frames, options->block_size,
+                          options->clip_id, options->start_ppq, options->gain)
+          .id;
   out->frames = options->total_frames;
   out->num_channels = options->num_channels;
   return SONARE_OK;

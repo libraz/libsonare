@@ -325,6 +325,22 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// device will get and the notes otherwise hang outside the engine.
   void finish_offline_render() noexcept;
 
+  /// @brief Freezes the source layer: renders it offline and installs the result
+  ///        as the engine's only clip.
+  /// @details The render covers every audio clip and hosted MIDI instrument through
+  ///          the lane strips, lane inserts and group buses, and stops before the
+  ///          master strip, the monitor bus, the engine graph, capture and the
+  ///          metronome. Those stay live, so replaying the frozen clip runs them
+  ///          once. In one control-thread step the frozen clip then replaces the
+  ///          whole clip set and every MIDI clip is withdrawn, so no source sounds
+  ///          twice; live MIDI input still reaches the instruments. Renders from
+  ///          the current playhead like render_offline() and has its thread rules.
+  /// @return The installed clip (id @p clip_id, or 1 when it is 0); its storage
+  ///         owns the frozen audio.
+  /// @throws SonareException for the shapes render_offline() refuses.
+  ClipSchedule freeze_offline(int num_channels, int64_t total_frames, int block_size,
+                              uint32_t clip_id, double start_ppq, float gain);
+
   bool push_command(const rt::Command& command) noexcept;
   bool pop_telemetry(Telemetry& out) noexcept;
   bool pop_clip_page_request(ClipPageRequest& out) noexcept { return clip_page_requests_.pop(out); }
@@ -1520,6 +1536,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
   std::atomic<uint32_t> clip_page_request_overflow_count_{0};
   BoundarySplitter boundary_splitter_{};
+  // Set for the duration of freeze_offline(): process_subblock() stops after the
+  // source layer (track mixer) and leaves master, monitor, graph and capture out.
+  bool source_layer_render_ = false;
   // Packed in acceptance order, so same-time commands fire in the order they arrived.
   rt::BoundedStaging<rt::Command, kMaxPendingCommands> pending_{};
 #if defined(SONARE_WITH_GRAPH)

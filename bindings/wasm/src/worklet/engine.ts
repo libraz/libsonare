@@ -1412,10 +1412,11 @@ export class SonareEngine {
   }
 
   /**
-   * Freezes the timeline to audio with the options, defaults and result of
-   * {@link RealtimeEngine.freezeOffline}. As there, the frozen clip replaces
-   * the clip set: the facade, the mirror and the worklet all end up holding
-   * only that clip. `blockSize` defaults to the offline block size and must not
+   * Freezes the source layer with the options, defaults and result of
+   * {@link RealtimeEngine.freezeOffline}: master, monitor, graph, capture and
+   * metronome stay live. As there, the frozen clip replaces the clip set and the
+   * MIDI clips are withdrawn: the facade, the mirror and the worklet all end up
+   * holding only that clip. `blockSize` defaults to the offline block size and must not
    * exceed it (`RangeError`). Runs synchronously on the calling thread.
    */
   async freezeOffline(options: EngineFreezeOptions): Promise<EngineFreezeResult> {
@@ -1826,8 +1827,11 @@ export class SonareEngine {
       session: this.exportSession,
       epoch: this.epoch,
       flushOfflineMirror: () => this.flushOfflineMirror(),
-      commitFrozenClip: (clip, previousClipIds) =>
-        clips.replaceClips(this.clipContext, clip, previousClipIds),
+      // The frozen clip stands for the MIDI it baked, so the MIDI clips leave with the old set.
+      commitFrozenClip: (clip, previousClipIds) => {
+        clips.replaceClips(this.clipContext, clip, previousClipIds);
+        clips.setMidiClips(this.clipContext, []);
+      },
     };
   }
 

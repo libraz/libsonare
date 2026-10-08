@@ -843,10 +843,16 @@ SonareError sonare_engine_bounce_options_default(SonareEngineBounceOptions* opti
 /// @brief Free the heap-allocated buffer held by a bounce result.
 /// @param result Result whose @c interleaved buffer is deleted and nulled.
 void sonare_free_bounce_result(SonareEngineBounceResult* result);
-/// @brief Renders the whole span in one call and registers it as a clip.
-/// @details Runs the same offline pre-roll as sonare_engine_bounce_offline, so
-///   the frozen clip captures the lane at its settled values instead of carrying
-///   a fade-in the live lane never had.
+/// @brief Renders the source layer over the span and installs it as the only clip.
+/// @details Bakes every audio clip and hosted MIDI instrument through the lane
+///   strips, lane inserts and group buses. The master strip, the monitor bus, the
+///   engine graph, capture and the metronome are not baked; they stay live and
+///   process the frozen clip on playback, once. In the same call the frozen clip
+///   replaces the whole clip set and every MIDI clip is withdrawn, so no baked
+///   source plays twice; live MIDI input still reaches the instruments. Renders
+///   from the current playhead and runs the same offline pre-roll as
+///   sonare_engine_bounce_offline, so the frozen clip captures the lanes at their
+///   settled values instead of carrying a fade-in the live lanes never had.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER when @c block_size exceeds the
 ///   prepared block size or @c num_channels the prepared channel count;
 ///   @c SONARE_ERROR_INVALID_STATE when the engine was never prepared.
