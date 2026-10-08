@@ -79,6 +79,10 @@
 #include "util/json_budget.h"
 #include "util/resource_limits.h"
 
+#ifdef SONARE_WITH_VOICE_CHANGER
+#include "editing/voice_changer/voice_changer_insert.h"
+#endif
+
 #ifdef SONARE_HAVE_FX
 #include <algorithm>
 #include <cmath>
@@ -121,6 +125,7 @@ using detail::f;
 using detail::kCents;
 using detail::kCount;
 using detail::kDb;
+using detail::kDbfs;
 using detail::kDegrees;
 using detail::kDegreesCelsius;
 using detail::kHz;
@@ -130,6 +135,7 @@ using detail::kMs;
 using detail::kMsLog;
 using detail::kNone;
 using detail::kPercent;
+using detail::kRatio;
 using detail::kSamples;
 using detail::kSeconds;
 using detail::kSecondsLog;
@@ -1146,6 +1152,31 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
 }
 #endif  // SONARE_HAVE_FX
 
+#ifdef SONARE_WITH_VOICE_CHANGER
+using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
+
+// The config is three top-level gains and eight stage structs; every leaf field has a table row.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(RealtimeVoiceChangerConfig, 11);
+static_assert(
+    SONARE_FIELD_TABLE_SIZE(SONARE_FIELDS_VOICE_CHANGER) ==
+        3 + detail::field_count<sonare::editing::voice_changer::StreamingRetuneConfig>() +
+            detail::field_count<sonare::editing::voice_changer::StreamingFormantConfig>() +
+            detail::field_count<sonare::editing::voice_changer::CharacterEqConfig>() +
+            detail::field_count<sonare::editing::voice_changer::VoiceGateConfig>() +
+            detail::field_count<sonare::editing::voice_changer::VoiceCompressorConfig>() +
+            detail::field_count<sonare::editing::voice_changer::VoiceDeesserConfig>() +
+            detail::field_count<sonare::editing::voice_changer::ReverbConfig>() +
+            detail::field_count<sonare::editing::voice_changer::LimiterConfig>(),
+    "SONARE_FIELDS_VOICE_CHANGER does not account for every voice changer field");
+
+std::unique_ptr<Processor> build_voice(const std::string& name, const ParamMap& params) {
+  if (name != "voice.changer") return nullptr;
+  RealtimeVoiceChangerConfig config;
+  SONARE_FIELDS_VOICE_CHANGER(SONARE_READ_FIELD)
+  return make<sonare::editing::voice_changer::VoiceChangerInsert>(config);
+}
+#endif  // SONARE_WITH_VOICE_CHANGER
+
 }  // namespace
 
 namespace {
@@ -1163,6 +1194,9 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
 #ifdef SONARE_HAVE_FX
   if (name == "effects.gsEfx") return build_gs_efx(params);
   if (auto p = build_effects(name, params, json_root)) return p;
+#endif
+#ifdef SONARE_WITH_VOICE_CHANGER
+  if (auto p = build_voice(name, params)) return p;
 #endif
   return nullptr;
 }
@@ -1336,6 +1370,9 @@ std::vector<std::string> insert_factory_names() {
       "effects.modulation.ringModulator",
       "effects.modulation.pitchShifter",
       "effects.delay.stereo",
+#endif
+#ifdef SONARE_WITH_VOICE_CHANGER
+      "voice.changer",
 #endif
   };
 }
@@ -1641,7 +1678,20 @@ struct MeasuredBounds {
 MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
                               bool integer_valued) {
   const AcceptFn accepts = [&](double value) { return insert_accepts(name, key, value); };
-  const std::vector<double>& points = bound_probe_points();
+  // The default is accepted by construction, so an accepted interval that sits between two
+  // decades (a gate threshold in [-90, -12]) still has a probe point inside it.
+  std::vector<double> points = bound_probe_points();
+  size_t default_index = points.size();
+  const auto declared_default = empty_build(name).probed_defaults().find(key);
+  if (declared_default != empty_build(name).probed_defaults().end() &&
+      !declared_default->second.ambiguous && std::isfinite(declared_default->second.value) &&
+      std::fabs(declared_default->second.value) <= kBoundProbeLimit &&
+      std::find(points.begin(), points.end(), declared_default->second.value) == points.end()) {
+    const auto at = points.insert(
+        std::upper_bound(points.begin(), points.end(), declared_default->second.value),
+        declared_default->second.value);
+    default_index = static_cast<size_t>(at - points.begin());
+  }
   // Each side stops at the first probe point it accepts, so an unconstrained
   // parameter — the majority — costs exactly two builds: the window's two ends
   // both build and there is nothing to narrow. Walking inward is also what makes
@@ -1682,6 +1732,13 @@ MeasuredBounds measure_bounds(const std::string& name, const std::string& key,
                                                        points[highest_accepted], integer_valued),
                               true);
     bounds.max_exclusive = !accepts(bounds.max);
+  }
+  // Only the default builds, and bisecting from it finds no width: it is accepted because a
+  // sibling sits at its own default, which bounds nothing, so the key is reported unbounded
+  // as when no point builds at all.
+  if (lowest_accepted == default_index && highest_accepted == default_index && bounds.has_min &&
+      bounds.has_max && bounds.min >= bounds.max) {
+    return {};
   }
   return bounds;
 }

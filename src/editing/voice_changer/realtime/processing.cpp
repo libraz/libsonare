@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <limits>
 
 #include "editing/voice_changer/realtime.h"
 #include "rt/scoped_no_denormals.h"
@@ -249,6 +250,7 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
   // (the audio thread keeps owning the previously-adopted one).
   const RealtimeVoiceChangerConfig& config = adopt_snapshot_for_block();
   bool discarded = false;
+  float deepest_reduction_linear = 1.0f;
   for (int ch = 0; ch < num_channels; ++ch) {
     // Skip null channel pointers (caller's responsibility) rather than aborting
     // the whole block: a null right pointer must not leave the left output
@@ -278,6 +280,7 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     }
     channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
+    float lowest_dynamics_gain = std::numeric_limits<float>::infinity();
     for (int i = 0; i < num_samples; ++i) {
       float delayed_dry = channels[ch][i];
       if (!channel.dry_delay.empty()) {
@@ -288,9 +291,15 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const bool control_update =
           ControlCadence::is_due(block_start + static_cast<std::uint64_t>(i));
       const float wet = process_output_stage(channel, scratch_[i], control_update);
+      lowest_dynamics_gain = std::min(
+          lowest_dynamics_gain, channel.comp_gain * channel.deess_gain * channel.limiter_gain);
       const float wet_mix = channel.wet_mix.process();
       channels[ch][i] = delayed_dry * (1.0f - wet_mix) + wet * wet_mix;
     }
+    // Make-up is part of comp_gain, so it is divided out at the block-end value.
+    deepest_reduction_linear = std::min(
+        deepest_reduction_linear,
+        std::min(1.0f, lowest_dynamics_gain * db_to_gain(-channel.comp_makeup_db.current())));
     // Final inter-sample-peak limiter — applied after the aligned dry/wet mix.
     // It stays active at wet_mix == 0 so toggling the mix cannot introduce a
     // second latency discontinuity in addition to the deliberately aligned
@@ -305,6 +314,9 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
     discarded |= state_discarded || input_substituted;
   }
   if (discarded) non_finite_discard_count_.bump();
+  const float reduction_db =
+      std::isfinite(deepest_reduction_linear) ? amp_to_db(deepest_reduction_linear) : 0.0f;
+  last_gain_reduction_db_.store(std::min(0.0f, reduction_db), std::memory_order_relaxed);
 }
 
 bool RealtimeVoiceChanger::discard_non_finite_state(ChannelState& state) noexcept {

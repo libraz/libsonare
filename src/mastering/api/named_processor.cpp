@@ -640,18 +640,20 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
 }
 
 // Creative streaming effects (the 5 reverbs, modulation, stereo delay,
-// ducking) are heap-allocated rt::ProcessorBase inserts built by the insert
+// ducking) and the voice changer are heap-allocated rt::ProcessorBase inserts built by the insert
 // factory rather than configured offline helpers. They are reachable from the
 // one-shot named-processor path by building the insert and running it through
 // the shared latency-compensating runner. Returns true when @p name was an
 // effects insert (handled), false otherwise so the caller can fall through to
 // the offline try_configure_processor() dispatch.
-bool is_effects_name(const std::string& name) { return name.rfind("effects.", 0) == 0; }
+bool is_insert_only_name(const std::string& name) {
+  return name.rfind("effects.", 0) == 0 || name.rfind("voice.", 0) == 0;
+}
 
 bool try_run_effects_insert_mono(const std::string& name, const std::vector<Param>& params,
                                  std::vector<float>& samples, int sample_rate,
                                  int& latency_samples) {
-  if (!is_effects_name(name)) return false;
+  if (!is_insert_only_name(name)) return false;
   auto processor = make_insert_from_params(name, params);
   if (!processor) {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
@@ -664,7 +666,7 @@ bool try_run_effects_insert_mono(const std::string& name, const std::vector<Para
 bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Param>& params,
                                    std::vector<float>& left, std::vector<float>& right,
                                    int sample_rate, int& latency_samples) {
-  if (!is_effects_name(name)) return false;
+  if (!is_insert_only_name(name)) return false;
   auto processor = make_insert_from_params(name, params);
   if (!processor) {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering processor: " + name);
@@ -695,7 +697,7 @@ bool try_run_effects_insert_stereo(const std::string& name, const std::vector<Pa
 // a channel with nothing in it. Only the dispatch itself is exercised, so the
 // answer is the branch set and cannot be a separate list that drifts from it.
 bool mono_dispatch_handles(const std::string& name) {
-  if (is_effects_name(name)) {
+  if (is_insert_only_name(name)) {
     // Creative effects never reach the shared dispatch: the mono entry point
     // builds the realtime insert instead, so they are as mono-capable as the
     // insert factory is. Membership answers that without constructing anything.

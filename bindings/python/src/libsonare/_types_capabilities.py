@@ -187,6 +187,7 @@ MasteringProcessorCategory = Literal[
     "spectral",
     "stereo",
     "utility",
+    "voice",
 ]
 
 

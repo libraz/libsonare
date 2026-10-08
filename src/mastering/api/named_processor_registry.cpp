@@ -87,14 +87,14 @@ std::vector<std::string> processor_names() {
       "stereo.stereoBalance",
       "utility.gain",
   };
-  // Creative streaming effects are not configured offline: apply_named_processor
-  // dispatches every "effects." id by building the realtime insert and running
-  // it through the latency-compensating runner. The insert factory is therefore
-  // the only registry of which effects ship in this build configuration, and
-  // deriving the section from it keeps the two from diverging (and keeps the
-  // BUILD_FX / acoustic-simulation guards in exactly one place).
+  // Creative streaming effects and the voice changer are not configured offline:
+  // apply_named_processor dispatches every "effects." and "voice." id by building
+  // the realtime insert and running it through the latency-compensating runner. The insert factory
+  // is therefore the only registry of which effects ship in this build configuration, and deriving
+  // the section from it keeps the two from diverging (and keeps the BUILD_FX / acoustic-simulation
+  // guards in exactly one place).
   for (const std::string& name : insert_factory_names()) {
-    if (name.rfind("effects.", 0) == 0) names.push_back(name);
+    if (name.rfind("effects.", 0) == 0 || name.rfind("voice.", 0) == 0) names.push_back(name);
   }
   return names;
 }
@@ -157,6 +157,8 @@ ChannelPolicy channel_policy(const std::string& id) {
       // The vowel filter allocates a stereo pair of banks, like wah.
       "effects.filter.vowel",
       "effects.delay.stereo",
+      // The voice changer prepares one or two channels.
+      "voice.changer",
   };
   return kStereoPairOnly.count(id) != 0 ? ChannelPolicy::StereoPairOnly
                                         : ChannelPolicy::Multichannel;
@@ -239,6 +241,8 @@ const char* realtime_cost(const std::string& id) noexcept {
   }
   // Four direct-form HRIR FIRs per sample, plus the canceller's two in speakers mode.
   if (id == "stereo.binaural") return "moderate";
+  // Grain resampling per channel, a reverb tank and a 4x oversampled inter-sample-peak limiter.
+  if (id == "voice.changer") return "moderate";
   return "low";
 }
 
@@ -258,6 +262,7 @@ const char* catalog_category(const std::string& id) {
   if (id.rfind("spectral.", 0) == 0) return "spectral";
   if (id.rfind("final.", 0) == 0) return "final";
   if (id.rfind("utility.", 0) == 0) return "utility";
+  if (id.rfind("voice.", 0) == 0) return "voice";
   return "other";
 }
 

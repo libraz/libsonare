@@ -168,6 +168,24 @@ def test_mastering_processor_catalog_reports_kind_and_flags() -> None:
     assert click_run["id"] is None
     assert click_run["rtSafe"] is False
 
+    # The voice changer is a stereo-pair insert whose bounds are the ones construction refuses
+    # outside of; its latency-changing switches are construction-only.
+    voice = by_id["voice.changer"]
+    assert (voice["kind"], voice["category"], voice["channelPolicy"]) == (
+        "realtime",
+        "voice",
+        "stereoPairOnly",
+    )
+    assert voice["causal"] is True
+    assert voice["latencySamples"] > 0
+    voice_params = {p["name"]: p for p in voice["params"]}
+    semitones = voice_params["retuneSemitones"]
+    assert (semitones["min"], semitones["max"], semitones["unit"]) == (-24, 24, "semitones")
+    assert semitones["rtSafe"] is True
+    for name in ("retuneGrainSize", "limiterEnableIspLimiter", "reverbSeed"):
+        assert voice_params[name]["id"] is None
+        assert voice_params[name]["rtSafe"] is False
+
 
 def test_mastering_amp_preset_catalog_reports_index_name_and_params() -> None:
     """The amp-sim rig catalog lists built-in rigs in presetIndex order."""

@@ -154,6 +154,7 @@ export const SOLO_PROCESSORS = [
   'stereo.phaseAlign',
   'stereo.stereoBalance',
   'utility.gain',
+  'voice.changer',
 ] as const;
 
 export type SoloProcessor = (typeof SOLO_PROCESSORS)[number];

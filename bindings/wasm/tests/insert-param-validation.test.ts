@@ -121,6 +121,27 @@ describe('insert param validation (WASM)', () => {
       .get('repair.declick')
       ?.params.find((param) => param.name === 'maxClickSamples');
     expect(clickRun).toMatchObject({ min: 1, max: 512, unit: 'samples', id: null, rtSafe: false });
+
+    // The voice changer is a stereo-pair insert whose bounds are the ones construction refuses
+    // outside of; its latency-changing switches are construction-only.
+    const voice = byId.get('voice.changer');
+    expect(voice).toMatchObject({
+      kind: 'realtime',
+      category: 'voice',
+      channelPolicy: 'stereoPairOnly',
+      causal: true,
+    });
+    expect(voice?.latencySamples).toBeGreaterThan(0);
+    const voiceParam = (name: string) => voice?.params.find((param) => param.name === name);
+    expect(voiceParam('retuneSemitones')).toMatchObject({
+      min: -24,
+      max: 24,
+      unit: 'semitones',
+      rtSafe: true,
+    });
+    for (const name of ['retuneGrainSize', 'limiterEnableIspLimiter', 'reverbSeed']) {
+      expect(voiceParam(name)).toMatchObject({ id: null, rtSafe: false });
+    }
     // realtimeInsertable entries form the always-succeeds scene-insert set.
     const insertable = catalog.filter((entry) => entry.realtimeInsertable).map((entry) => entry.id);
     expect(insertable).toContain('dynamics.compressor');

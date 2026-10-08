@@ -1241,3 +1241,46 @@ inline double field_as_double(Enum value) {
   X("releaseMs", release_ms, kMsLog)                         \
   X("applyGainAtInputRate", apply_gain_at_input_rate, kNone) \
   X("maxLimiterGainReductionDb", max_limiter_gain_reduction_db, kDb)
+
+// --- Voice changer ---
+// Member paths run through the config's nested stage structs, so SONARE_ASSERT_TABLE_COVERS
+// cannot count them; insert_factory.cpp sums the stages' own arity instead. The display ranges
+// sit inside the accepted ones the insert measures from construction.
+
+#define SONARE_FIELDS_VOICE_CHANGER(X)                                                \
+  X("inputGainDb", input_gain_db, display_range(kDb, -12, 12))                        \
+  X("outputGainDb", output_gain_db, display_range(kDb, -24, 12))                      \
+  X("wetMix", wet_mix, display_range(kNone, 0, 1))                                    \
+  X("retuneSemitones", retune.semitones, display_range(kSemitones, -12, 12))          \
+  X("retuneMix", retune.mix, display_range(kNone, 0, 1))                              \
+  X("retuneGrainSize", retune.grain_size, display_range(kSamples, 0, 4096))           \
+  X("formantFactor", formant.factor, display_range(kRatio, 0.55, 1.65))               \
+  X("formantAmount", formant.amount, display_range(kNone, 0, 1))                      \
+  X("formantBody", formant.body, display_range(kNone, -1, 1))                         \
+  X("formantBrightness", formant.brightness, display_range(kNone, -1, 1))             \
+  X("formantNasal", formant.nasal, display_range(kNone, -1, 1))                       \
+  X("eqHighpassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                   \
+  X("eqBodyDb", eq.body_db, display_range(kDb, -12, 12))                              \
+  X("eqPresenceDb", eq.presence_db, display_range(kDb, -12, 12))                      \
+  X("eqAirDb", eq.air_db, display_range(kDb, -12, 12))                                \
+  X("gateThresholdDb", gate.threshold_db, display_range(kDb, -90, -12))               \
+  X("gateAttackMs", gate.attack_ms, display_range(kMsLog, 0.1, 100))                  \
+  X("gateReleaseMs", gate.release_ms, display_range(kMsLog, 5, 1000))                 \
+  X("gateRangeDb", gate.range_db, display_range(kDb, 0, 60))                          \
+  X("compressorThresholdDb", compressor.threshold_db, display_range(kDb, -60, 0))     \
+  X("compressorRatio", compressor.ratio, display_range(kRatio, 1, 20))                \
+  X("compressorAttackMs", compressor.attack_ms, display_range(kMsLog, 0.1, 100))      \
+  X("compressorReleaseMs", compressor.release_ms, display_range(kMsLog, 5, 1000))     \
+  X("compressorMakeupGainDb", compressor.makeup_gain_db, display_range(kDb, -12, 12)) \
+  X("deesserFrequencyHz", deesser.frequency_hz, display_range(kHzLog, 3000, 12000))   \
+  X("deesserThresholdDb", deesser.threshold_db, display_range(kDb, -60, -6))          \
+  X("deesserRatio", deesser.ratio, display_range(kRatio, 1, 20))                      \
+  X("deesserRangeDb", deesser.range_db, display_range(kDb, 0, 24))                    \
+  X("reverbMix", reverb.mix, display_range(kNone, 0, 0.45))                           \
+  X("reverbTimeMs", reverb.time_ms, display_range(kMsLog, 40, 1800))                  \
+  X("reverbDamping", reverb.damping, display_range(kNone, 0, 1))                      \
+  X("reverbSeed", reverb.seed, kNone)                                                 \
+  X("limiterCeilingDb", limiter.ceiling_db, display_range(kDbfs, -12, -1))            \
+  X("limiterReleaseMs", limiter.release_ms, display_range(kMsLog, 1, 500))            \
+  X("limiterEnableIspLimiter", limiter.enable_isp_limiter, kNone)                     \
+  X("limiterIspCeilingDbtp", limiter.isp_ceiling_dbtp, display_range(kDbfs, -12, 0))

@@ -215,6 +215,16 @@ class RealtimeVoiceChanger {
   std::uint32_t non_finite_discard_count() const noexcept {
     return non_finite_discard_count_.load();
   }
+  /// @brief Largest gain reduction, in dB (<= 0), the compressor, de-esser and
+  ///        sample-domain limiter applied together during the last block.
+  /// @details Any thread; 0 before the first block and after @ref reset. The
+  ///          compressor's make-up gain is divided out, so a chain that is not
+  ///          reducing reads 0 whatever the make-up. With two channels it is the
+  ///          deeper of the two. The gate and the inter-sample-peak limiter are
+  ///          not included.
+  float last_gain_reduction_db() const noexcept {
+    return last_gain_reduction_db_.load(std::memory_order_relaxed);
+  }
 
  private:
   struct ChannelState {
@@ -394,6 +404,9 @@ class RealtimeVoiceChanger {
   /// Written by the audio thread, polled by a host thread; see
   /// non_finite_discard_count().
   rt::OverflowCounter non_finite_discard_count_{};
+
+  /// Written by the audio thread once per block; see last_gain_reduction_db().
+  std::atomic<float> last_gain_reduction_db_{0.0f};
 
   /// Fast detector coefficient used by gate/comp to follow |x| with ~1 ms tau;
   /// user-controlled attack/release apply to the resulting *gain* transition,

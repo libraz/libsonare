@@ -827,6 +827,7 @@ if(BUILD_VOICE_CHANGER)
     editing/voice_changer/streaming_retune.cpp
     editing/voice_changer/streaming_reverb.cpp
     editing/voice_changer/voice_changer.cpp
+    editing/voice_changer/voice_changer_insert.cpp
   )
   target_include_directories(sonare_voice_changer PUBLIC ${SONARE_PUBLIC_INCLUDE_DIRS})
   target_include_directories(sonare_voice_changer SYSTEM PUBLIC ${SONARE_THIRD_PARTY_INCLUDE_DIRS})
@@ -836,6 +837,11 @@ if(BUILD_VOICE_CHANGER)
   target_link_libraries(sonare_voice_changer PUBLIC sonare_core sonare_rt sonare_pitch_editor)
   target_compile_options(sonare_voice_changer PRIVATE ${SONARE_WARNING_FLAGS})
   set_target_properties(sonare_voice_changer PROPERTIES POSITION_INDEPENDENT_CODE ON)
+  # The streaming insert factory registers voice.changer from this library.
+  if(TARGET sonare_mastering)
+    target_link_libraries(sonare_mastering PUBLIC sonare_voice_changer)
+    target_compile_definitions(sonare_mastering PRIVATE SONARE_WITH_VOICE_CHANGER=1)
+  endif()
 endif()
 
 if(BUILD_PLAYBACK)

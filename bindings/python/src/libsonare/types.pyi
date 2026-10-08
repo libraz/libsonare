@@ -54,6 +54,7 @@ MasteringProcessorCategory = Literal[
     "spectral",
     "stereo",
     "utility",
+    "voice",
 ]
 
 class CapabilitiesAbi(TypedDict):

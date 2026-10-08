@@ -81,6 +81,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
 
 void RealtimeVoiceChanger::reset() {
   for (auto& channel : channels_) reset_channel(channel);
+  last_gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 }
 
 void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) {
