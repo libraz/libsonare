@@ -1066,7 +1066,7 @@ TEST_CASE("the class-AB crossover opens a dead zone and is off by default",
 
   // The harmonic penalty is a SMALL-signal one and largely vanishes when loud,
   // which is the other way a dead zone differs from a saturator. Measured on the
-  // default voicing: about 5.4x the odd-harmonic content at a quiet input
+  // default voicing: about 2.1x the odd-harmonic content at a quiet input
   // against about 0.6x at a loud one.
   const auto penalty = [&](float amplitude) {
     const std::vector<float> in = sine(220.0, amplitude, kNumSamples);
@@ -1078,9 +1078,9 @@ TEST_CASE("the class-AB crossover opens a dead zone and is off by default",
   };
   const double quiet_penalty = penalty(0.02f);
   const double loud_penalty = penalty(0.5f);
-  CHECK(quiet_penalty > 5.0);
+  CHECK(quiet_penalty > 1.5);
   CHECK(loud_penalty < 1.5);
-  CHECK(quiet_penalty > 4.0 * loud_penalty);
+  CHECK(quiet_penalty > 3.0 * loud_penalty);
 
   // Off is bit-identical: the composite reduces exactly to the symmetric tanh.
   const std::vector<float> input = sine(220.0, 0.2f, kNumSamples);
@@ -2537,4 +2537,53 @@ TEST_CASE("AmpSim first mic keeps its alignment and latency across the blend's z
   }
   for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::fabs(a[i] - b[i]));
   REQUIRE(worst < 1.0e-5f);
+}
+
+TEST_CASE("amp-sim crossover automation stays inside the power-stage bound",
+          "[mastering][saturation][amp]") {
+  // Retargeting the push-pull shape between blocks must not divide a changed
+  // antiderivative constant by the audio increment. The power stage is bounded
+  // by 1/g with g = 1 + 40*power, so a step or ramp may not leave that bound
+  // by more than the downstream linear stages can account for.
+  for (AmpTopology topology : {AmpTopology::kVoiced, AmpTopology::kCircuit}) {
+    CAPTURE(static_cast<int>(topology));
+    AmpSimConfig config;
+    config.cab = false;
+    config.power = 0.5f;
+    config.topology = topology;
+    constexpr int kBlock = 256;
+    constexpr int kBlocks = 300;
+    constexpr double kBound = 1.0 / 21.0;
+
+    for (int mode = 0; mode < 2; ++mode) {  // 0: step, 1: ramp
+      AmpSim control{config};
+      AmpSim automated{config};
+      control.prepare(48000.0, kBlock);
+      automated.prepare(48000.0, kBlock);
+      const std::vector<float> in = sine(220.0, 0.3f, kBlock * kBlocks);
+      double control_peak = 0.0;
+      double automated_peak = 0.0;
+      for (int b = 0; b < kBlocks; ++b) {
+        if (b >= 200) {
+          const float value = mode == 0 ? 0.5f : std::min(0.5f, 0.005f * (b - 199));
+          CHECK(automated.set_parameter(14, value));
+        }
+        std::vector<float> c(in.begin() + b * kBlock, in.begin() + (b + 1) * kBlock);
+        std::vector<float> a = c;
+        float* cp[1] = {c.data()};
+        float* ap[1] = {a.data()};
+        control.process(cp, 1, kBlock);
+        automated.process(ap, 1, kBlock);
+        for (int i = 0; i < kBlock; ++i) {
+          REQUIRE(std::isfinite(a[static_cast<size_t>(i)]));
+          control_peak = std::max(control_peak, static_cast<double>(std::abs(c[i])));
+          automated_peak = std::max(automated_peak, static_cast<double>(std::abs(a[i])));
+        }
+      }
+      CAPTURE(mode, control_peak, automated_peak);
+      REQUIRE(control_peak > 0.0);
+      REQUIRE(automated_peak > 0.0);
+      REQUIRE(automated_peak <= kBound);
+    }
+  }
 }

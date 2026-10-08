@@ -117,3 +117,100 @@ TEST_CASE("Adaa1 leaves no floor behind a decaying tone", "[adaa][nonlinearities
   CAPTURE(ratio_db);
   REQUIRE(ratio_db < -75.0);
 }
+
+namespace {
+
+/// Composite Simpson quadrature of @p f over [a, b], in double.
+template <typename F>
+double simpson(F f, double a, double b, int panels = 64) {
+  const double h = (b - a) / (2.0 * panels);
+  double sum = f(a) + f(b);
+  for (int i = 1; i < 2 * panels; ++i) {
+    sum += f(a + h * i) * ((i % 2) ? 4.0 : 2.0);
+  }
+  return sum * h / 3.0;
+}
+
+}  // namespace
+
+TEST_CASE("Adaa1 hard clip never exceeds its ceiling", "[adaa][nonlinearities]") {
+  for (float ceiling : {0.5f, 0.7f, 1.0f}) {
+    for (float sign : {1.0f, -1.0f}) {
+      for (float level : {1.5f, 2.3f, 4.0f, 7.7f, 16.0f}) {
+        for (float step : {1.1e-5f, 2.0e-5f, 1.0e-4f, 1.0e-3f}) {
+          Adaa1<sonare::rt::HardClipNonlinearity> adaa(sonare::rt::HardClipNonlinearity{ceiling});
+          adaa.reset(sign * level);
+          for (int n = 1; n <= 8; ++n) {
+            const float y = adaa.process(sign * (level + step * static_cast<float>(n)));
+            CAPTURE(ceiling, level, step, y);
+            REQUIRE(std::abs(y) <= ceiling);
+          }
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("Adaa1 tanh and arctan stay within the curve bound at large drive",
+          "[adaa][nonlinearities]") {
+  const double kHalfPi = std::acos(0.0);
+  for (float level : {3.0f, 6.0f, 12.0f, 25.0f, 40.0f}) {
+    for (float step : {1.1e-5f, 3.0e-5f, 3.0e-4f}) {
+      Adaa1<TanhNonlinearity> tanh_adaa;
+      Adaa1<sonare::rt::ArctanNonlinearity> atan_adaa;
+      tanh_adaa.reset(level);
+      atan_adaa.reset(level);
+      for (int n = 1; n <= 8; ++n) {
+        const float x = level + step * static_cast<float>(n);
+        const float yt = tanh_adaa.process(x);
+        const float ya = atan_adaa.process(x);
+        CAPTURE(level, step, yt, ya);
+        REQUIRE(std::abs(yt) <= 1.0f + 4.0f * 1.2e-7f);
+        REQUIRE(std::abs(ya) <= static_cast<float>(kHalfPi) * (1.0f + 4.0f * 1.2e-7f));
+      }
+    }
+  }
+}
+
+TEST_CASE("Adaa1 push-pull interval average has the transfer's sign and value",
+          "[adaa][nonlinearities]") {
+  const float bias = 1.3f;
+  const float knee = 1.0f + 0.9f * bias * bias;
+  const PushPullNonlinearity shape{bias, knee};
+
+  // Positive interval of the odd transfer's positive branch, above the divisor guard.
+  const float x0 = 0.29975f;
+  const float x1 = 0.29975f + 4.0e-5f;
+  Adaa1<PushPullNonlinearity> adaa(shape);
+  adaa.reset(x0);
+  const double y = adaa.process(x1);
+  const double reference =
+      simpson([&](double x) { return static_cast<double>(shape.apply(static_cast<float>(x))); }, x0,
+              x1) /
+      (static_cast<double>(x1) - static_cast<double>(x0));
+  CAPTURE(y, reference);
+  REQUIRE(reference > 0.0);
+  REQUIRE(y > 0.0);
+  REQUIRE(std::abs(y - reference) <= 1.0e-5 * std::abs(reference) + 1.0e-7);
+}
+
+TEST_CASE("Adaa1 re-evaluates its previous primitive when the shape changes",
+          "[adaa][nonlinearities]") {
+  // A step in the shape on a nearly flat input must not turn the change of the
+  // antiderivative constant into an impulse of order 1/dx.
+  Adaa1<PushPullNonlinearity> adaa(PushPullNonlinearity{0.0f, 1.0f});
+  const float x = 0.6f;
+  adaa.reset(x);
+  for (int n = 0; n < 4; ++n) adaa.process(x + 3.0e-5f * static_cast<float>(n));
+
+  const PushPullNonlinearity retargeted{1.3f, 1.0f + 0.9f * 1.3f * 1.3f};
+  adaa.set_nonlinearity(retargeted);
+  float last = x + 3.0e-5f * 3.0f;
+  for (int n = 4; n < 12; ++n) {
+    last += 3.0e-5f;
+    const float y = adaa.process(last);
+    CAPTURE(n, y);
+    REQUIRE(std::abs(y) <= 1.0f);
+    REQUIRE(std::abs(y - retargeted.apply(last)) <= 1.0e-3f);
+  }
+}

@@ -279,11 +279,10 @@ float power_stage(float x, float power, float crossover, float drive_scale,
   // ones compress toward the rails).
   const float g = power_stage_gain(power, drive_scale);
   const float bias = crossover * kMaxCrossoverBias;
-  adaa.nonlinearity().bias = bias;
   // See kMaxCrossoverBias above: the knee's excess over 1 rides on bias
   // SQUARED, not on crossover directly, which is what keeps a colder bias from
   // ever reading as more gain at the origin.
-  adaa.nonlinearity().knee = 1.0f + kCrossoverKneeSharpness * bias * bias;
+  adaa.set_nonlinearity({bias, 1.0f + kCrossoverKneeSharpness * bias * bias});
   return adaa.process(g * x) / g;
 }
 }  // namespace

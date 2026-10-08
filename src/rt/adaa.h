@@ -23,50 +23,6 @@ constexpr float kAdaaDivisorEpsilon = 1.0e-5f;
 constexpr int kAdaa1LatencySamplesQ8 = 128;
 constexpr int kAdaa2LatencySamplesQ8 = 256;
 
-template <typename Nonlinearity>
-class Adaa1 {
- public:
-  explicit Adaa1(Nonlinearity nonlinearity = {}) : nonlinearity_(nonlinearity) {}
-
-  float process(float x) noexcept {
-    const float f1_x = nonlinearity_.antiderivative(x);
-    const float dx = x - prev_x_;
-    float y = 0.0f;
-    if (std::abs(dx) > kEpsilon_) {
-      y = (f1_x - prev_f1_) / dx;
-    } else {
-      y = nonlinearity_.apply(0.5f * (x + prev_x_));
-    }
-    prev_x_ = x;
-    prev_f1_ = f1_x;
-    return y;
-  }
-
-  void reset(float x = 0.0f) noexcept {
-    prev_x_ = x;
-    prev_f1_ = nonlinearity_.antiderivative(x);
-  }
-
-  /// @brief The wrapped nonlinearity, for shape parameters that move at runtime.
-  /// @details Mutating it does not resync @c prev_f1_, which was taken with the
-  ///   previous shape, so one divided difference straddles the change. That is
-  ///   the same one-sample transient any parameter change through this processor
-  ///   causes, and it is why callers should keep such a parameter smoothed or
-  ///   slow rather than stepping it per block.
-  Nonlinearity& nonlinearity() noexcept { return nonlinearity_; }
-  const Nonlinearity& nonlinearity() const noexcept { return nonlinearity_; }
-
-  static constexpr int kLatencySamplesQ8 = kAdaa1LatencySamplesQ8;
-  int latency_samples_q8() const noexcept { return kLatencySamplesQ8; }
-  int latency_samples() const noexcept { return kLatencySamplesQ8 >> 8; }
-
- private:
-  Nonlinearity nonlinearity_{};
-  float prev_x_ = 0.0f;
-  float prev_f1_ = nonlinearity_.antiderivative(0.0f);
-  static constexpr float kEpsilon_ = kAdaaDivisorEpsilon;
-};
-
 /// @brief Detects whether a nonlinearity provides a second antiderivative (F2).
 template <typename N, typename = void>
 struct has_second_antiderivative : std::false_type {};
@@ -89,6 +45,80 @@ struct has_double_second_antiderivative<
     N, std::void_t<decltype(std::declval<N&>().second_antiderivative_double(0.0))>>
     : std::true_type {};
 
+namespace detail {
+
+/// The one antiderivative evaluator the ADAA processors share: widened, from the shape's own
+/// double accessor when it has one, so a divided difference never subtracts float-rounded
+/// primitives.
+template <typename N>
+double antiderivative_at(N& nonlinearity, double x) noexcept {
+  if constexpr (has_double_antiderivative<N>::value) {
+    return nonlinearity.antiderivative_double(x);
+  } else {
+    return static_cast<double>(nonlinearity.antiderivative(static_cast<float>(x)));
+  }
+}
+
+template <typename N>
+double second_antiderivative_at(N& nonlinearity, double x) noexcept {
+  if constexpr (has_double_second_antiderivative<N>::value) {
+    return nonlinearity.second_antiderivative_double(x);
+  } else {
+    return static_cast<double>(nonlinearity.second_antiderivative(static_cast<float>(x)));
+  }
+}
+
+}  // namespace detail
+
+/// @brief First-order antiderivative antialiasing processor.
+/// @details The divided difference is formed in double from one consistent curve: the float
+///   primitives of a saturating shape carry an absolute rounding floor that, divided by a
+///   sample step as small as the guard, exceeds the transfer's own bound.
+template <typename Nonlinearity>
+class Adaa1 {
+ public:
+  explicit Adaa1(Nonlinearity nonlinearity = {}) : nonlinearity_(nonlinearity) { reset(); }
+
+  float process(float x) noexcept {
+    const double x_d = static_cast<double>(x);
+    const double f1_x = detail::antiderivative_at(nonlinearity_, x_d);
+    const double dx = x_d - static_cast<double>(prev_x_);
+    float y = 0.0f;
+    if (std::abs(dx) > kEpsilon_) {
+      y = static_cast<float>((f1_x - prev_f1_) / dx);
+    } else {
+      y = nonlinearity_.apply(0.5f * (x + prev_x_));
+    }
+    prev_x_ = x;
+    prev_f1_ = f1_x;
+    return y;
+  }
+
+  void reset(float x = 0.0f) noexcept {
+    prev_x_ = x;
+    prev_f1_ = detail::antiderivative_at(nonlinearity_, static_cast<double>(x));
+  }
+
+  /// @brief Replaces the wrapped nonlinearity for a shape parameter that moves at runtime.
+  /// @details The stored previous primitive is re-evaluated with the new shape, so the next
+  ///   divided difference spans one curve rather than two antiderivatives whose integration
+  ///   constants differ.
+  void set_nonlinearity(const Nonlinearity& nonlinearity) noexcept {
+    nonlinearity_ = nonlinearity;
+    prev_f1_ = detail::antiderivative_at(nonlinearity_, static_cast<double>(prev_x_));
+  }
+
+  static constexpr int kLatencySamplesQ8 = kAdaa1LatencySamplesQ8;
+  int latency_samples_q8() const noexcept { return kLatencySamplesQ8; }
+  int latency_samples() const noexcept { return kLatencySamplesQ8 >> 8; }
+
+ private:
+  Nonlinearity nonlinearity_{};
+  float prev_x_ = 0.0f;
+  double prev_f1_ = 0.0;
+  static constexpr float kEpsilon_ = kAdaaDivisorEpsilon;
+};
+
 /// @brief Second-order antiderivative antialiasing processor.
 /// @details Uses the second divided difference of the second antiderivative (F2)
 ///   of the nonlinearity, expressed in a numerically robust form to avoid the
@@ -108,8 +138,8 @@ class Adaa2 {
   float process(float x0) noexcept {
     // Shapes without *_double helpers are widened after evaluation.
     const double x0_d = static_cast<double>(x0);
-    const double f1_x0 = antiderivative_at(nonlinearity_, x0_d);
-    const double f2_x0 = second_antiderivative_at(nonlinearity_, x0_d);
+    const double f1_x0 = detail::antiderivative_at(nonlinearity_, x0_d);
+    const double f2_x0 = detail::second_antiderivative_at(nonlinearity_, x0_d);
     const double d02 = x0_d - prev_x2_;
     const double d01 = x0_d - prev_x1_;
     const double d12 = prev_x1_ - prev_x2_;
@@ -119,10 +149,11 @@ class Adaa2 {
       // Case 1: outer samples are distinct; standard second divided difference.
       const double d1_01 = (std::abs(d01) >= kEps)
                                ? (f2_x0 - prev_f2_x1_) / d01
-                               : antiderivative_at(nonlinearity_, 0.5 * (x0_d + prev_x1_));
-      const double d1_12 = (std::abs(d12) >= kEps)
-                               ? (prev_f2_x1_ - prev_f2_x2_) / d12
-                               : antiderivative_at(nonlinearity_, 0.5 * (prev_x1_ + prev_x2_));
+                               : detail::antiderivative_at(nonlinearity_, 0.5 * (x0_d + prev_x1_));
+      const double d1_12 =
+          (std::abs(d12) >= kEps)
+              ? (prev_f2_x1_ - prev_f2_x2_) / d12
+              : detail::antiderivative_at(nonlinearity_, 0.5 * (prev_x1_ + prev_x2_));
       y = 2.0 * (d1_01 - d1_12) / d02;
     } else if (std::abs(d01) >= kEps) {
       // Case 2b: x[n-2] ~= x[n], limit of the second divided difference.
@@ -143,7 +174,7 @@ class Adaa2 {
   void reset(float x = 0.0f) noexcept {
     prev_x1_ = x;
     prev_x2_ = x;
-    prev_f2_x1_ = second_antiderivative_at(nonlinearity_, static_cast<double>(x));
+    prev_f2_x1_ = detail::second_antiderivative_at(nonlinearity_, static_cast<double>(x));
     prev_f2_x2_ = prev_f2_x1_;
   }
 
@@ -152,22 +183,6 @@ class Adaa2 {
   int latency_samples_q8() const noexcept { return kLatencySamplesQ8; }
 
  private:
-  static double antiderivative_at(Nonlinearity& nonlinearity, double x) noexcept {
-    if constexpr (has_double_antiderivative<Nonlinearity>::value) {
-      return nonlinearity.antiderivative_double(x);
-    } else {
-      return static_cast<double>(nonlinearity.antiderivative(x));
-    }
-  }
-
-  static double second_antiderivative_at(Nonlinearity& nonlinearity, double x) noexcept {
-    if constexpr (has_double_second_antiderivative<Nonlinearity>::value) {
-      return nonlinearity.second_antiderivative_double(x);
-    } else {
-      return static_cast<double>(nonlinearity.second_antiderivative(x));
-    }
-  }
-
   static constexpr double kEps = kAdaaDivisorEpsilon;
 
   Nonlinearity nonlinearity_{};

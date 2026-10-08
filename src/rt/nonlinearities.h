@@ -37,6 +37,12 @@ struct TanhNonlinearity {
     }
     return ax + std::log1p(std::exp(-2.0f * ax)) - std::log(2.0f);
   }
+
+  /// @brief log(cosh x) in double, the primitive ADAA divides by a sample step.
+  double antiderivative_double(double x) const noexcept {
+    const double ax = std::abs(x);
+    return ax + std::log1p(std::exp(-2.0 * ax)) - std::log(2.0);
+  }
 };
 
 /// @brief Push-pull output pair: two one-sided devices driven in antiphase and
@@ -86,6 +92,14 @@ struct PushPullNonlinearity {
     return (half.antiderivative(knee * (x + bias)) + half.antiderivative(knee * (x - bias))) *
            (0.5f / knee);
   }
+
+  double antiderivative_double(double x) const noexcept {
+    const TanhNonlinearity half;
+    const double k = static_cast<double>(knee);
+    const double b = static_cast<double>(bias);
+    return (half.antiderivative_double(k * (x + b)) + half.antiderivative_double(k * (x - b))) *
+           (0.5 / k);
+  }
 };
 
 struct ArctanNonlinearity {
@@ -93,6 +107,10 @@ struct ArctanNonlinearity {
 
   float antiderivative(float x) const noexcept {
     return x * std::atan(x) - 0.5f * std::log1p(x * x);
+  }
+
+  double antiderivative_double(double x) const noexcept {
+    return x * std::atan(x) - 0.5 * std::log1p(x * x);
   }
 
   /// @details Same cancellation as log(cosh): the -atan(x) and +x terms are
