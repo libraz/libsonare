@@ -260,7 +260,7 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_sample_rate("melToStft", sample_rate);
   std::vector<float> data =
-      load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "melPower", "n_mels");
+      load_validated_matrix("melToStft", mel_power, n_mels, n_frames, "power", "n_mels");
   validate_positive("melToStft", n_fft, "n_fft");
   validate_mel_range("melToStft", fmin, fmax, sample_rate);
 
@@ -295,7 +295,7 @@ val js_mel_to_audio(val mel_power, const val& n_mels_val, const val& n_frames_va
   const float fmax = checkedFloatFromVal(fmax_val, "fmax");
   validate_sample_rate("melToAudio", sample_rate);
   std::vector<float> data =
-      load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "melPower", "n_mels");
+      load_validated_matrix("melToAudio", mel_power, n_mels, n_frames, "power", "n_mels");
   validate_positive("melToAudio", n_fft, "n_fft");
   validate_positive("melToAudio", hop_length, "hop_length");
   validate_positive("melToAudio", n_iter, "n_iter");
@@ -350,7 +350,7 @@ val js_mfcc_to_mel(val mfcc, const val& n_mfcc_val, const val& n_frames_val, con
   const int n_mels = checkedIntFromVal(n_mels_val, "nMels");
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   std::vector<float> data =
-      load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
+      load_validated_matrix("mfccToMel", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
   validate_positive("mfccToMel", n_mels, "n_mels");
 
   std::vector<float> mel = mfcc_to_mel(data.data(), n_mfcc, n_frames, n_mels, lifter);
@@ -379,7 +379,7 @@ val js_mfcc_to_audio(val mfcc, const val& n_mfcc_val, const val& n_frames_val,
   const float lifter = checkedFloatFromVal(lifter_val, "lifter");
   validate_sample_rate("mfccToAudio", sample_rate);
   std::vector<float> data =
-      load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "mfccCoefficients", "n_mfcc");
+      load_validated_matrix("mfccToAudio", mfcc, n_mfcc, n_frames, "coefficients", "n_mfcc");
   validate_positive("mfccToAudio", n_mels, "n_mels");
   validate_positive("mfccToAudio", n_fft, "n_fft");
   validate_positive("mfccToAudio", hop_length, "hop_length");

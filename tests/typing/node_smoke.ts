@@ -184,7 +184,7 @@ presets satisfies MasteringPreset[];
 acoustic.rt60Bands satisfies Float32Array;
 blindAcoustic.isBlind satisfies boolean;
 rir.rir satisfies Float32Array;
-rir.hasError satisfies boolean;
+rir.diagnostics satisfies RirResult['diagnostics'];
 roomEstimate.rt60Bands satisfies Float32Array;
 roomEstimate.confidence satisfies number;
 morphed.audio satisfies Float32Array;

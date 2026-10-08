@@ -58,7 +58,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
   it('melToStft', () => {
     const fromResult = melToStft({ result: mel });
     const explicit = melToStft({
-      mel: mel.power,
+      power: mel.power,
       nMels: mel.nMels,
       nFrames: mel.nFrames,
       sampleRate,
@@ -73,7 +73,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
   it('melToAudio, with an extra argument the result does not carry', () => {
     const fromResult = melToAudio({ result: mel, nIter: 2 });
     const explicit = melToAudio({
-      mel: mel.power,
+      power: mel.power,
       nMels: mel.nMels,
       nFrames: mel.nFrames,
       sampleRate,
@@ -98,7 +98,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
     const result = mfcc(samples, sampleRate, 1024, 256, 40, 13, 0, 8000, false, 22);
     const fromResult = mfccToMel({ result });
     const explicit = mfccToMel({
-      mfcc: result.coefficients,
+      coefficients: result.coefficients,
       nMfcc: 13,
       nFrames: result.nFrames,
       nMels: 40,
@@ -107,7 +107,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
     expect(fromResult).toEqual(explicit);
     // The lifter is part of the answer: dropping it changes the Mel matrix.
     const unlifted = mfccToMel({
-      mfcc: result.coefficients,
+      coefficients: result.coefficients,
       nMfcc: 13,
       nFrames: result.nFrames,
       nMels: 40,
@@ -117,7 +117,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
     const audio = mfccToAudio({ result, nIter: 2 });
     expect(audio).toEqual(
       mfccToAudio({
-        mfcc: result.coefficients,
+        coefficients: result.coefficients,
         nMfcc: 13,
         nFrames: result.nFrames,
         nMels: 40,
@@ -157,5 +157,25 @@ describe('a result request is refused when it contradicts the result', () => {
   it('names a hand-built result that lacks a parameter', () => {
     const { nFft: _nFft, ...incomplete } = mel;
     expect(() => melToStft({ result: incomplete as never })).toThrow(/result\.nFft is missing/);
+  });
+
+  it('no longer reads the request names that differed from the result', () => {
+    const { nMels, nFrames } = mel;
+    expect(() => melToStft({ mel: mel.power, nMels, nFrames } as never)).toThrow();
+    expect(() => melToAudio({ mel: mel.power, nMels, nFrames } as never)).toThrow();
+    expect(() =>
+      mfccToMel({
+        mfcc: coefficients.coefficients,
+        nMfcc: 13,
+        nFrames: coefficients.nFrames,
+      } as never),
+    ).toThrow();
+    expect(() =>
+      mfccToAudio({
+        mfcc: coefficients.coefficients,
+        nMfcc: 13,
+        nFrames: coefficients.nFrames,
+      } as never),
+    ).toThrow();
   });
 });

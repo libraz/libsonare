@@ -194,12 +194,8 @@ const char* SeverityName(sonare::Diagnostic::Severity severity) {
   return "info";
 }
 
-// Transcribes the synthesizer's whole diagnostic list onto the result object.
-// The synthesizer reports five distinct geometry errors plus the clamp / no-tail
-// warnings, so a lone hasError boolean cannot tell a caller which one fired, nor
-// that a maxSeconds clamp shortened the tail of an otherwise successful RIR.
-// `errorMessage` carries the first error as "code: message", matching the string
-// the C ABI leaves in sonare_last_error_message() and Python's RirResult.
+// Transcribes the synthesizer's diagnostic list (the clamp / no-tail warnings of a successful
+// call) onto the result object.
 Napi::Array DiagnosticsArray(Napi::Env env, const std::vector<sonare::Diagnostic>& diagnostics) {
   Napi::Array entries = Napi::Array::New(env, diagnostics.size());
   for (size_t index = 0; index < diagnostics.size(); ++index) {
@@ -211,19 +207,6 @@ Napi::Array DiagnosticsArray(Napi::Env env, const std::vector<sonare::Diagnostic
     entries.Set(static_cast<uint32_t>(index), entry);
   }
   return entries;
-}
-
-void SetRirDiagnostics(Napi::Env env, Napi::Object out,
-                       const std::vector<sonare::Diagnostic>& diagnostics) {
-  std::string error_message;
-  for (const sonare::Diagnostic& diagnostic : diagnostics) {
-    if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
-      error_message = diagnostic.code + ": " + diagnostic.message;
-      break;
-    }
-  }
-  out.Set("diagnostics", DiagnosticsArray(env, diagnostics));
-  out.Set("errorMessage", Napi::String::New(env, error_message));
 }
 
 }  // namespace
@@ -265,8 +248,7 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
   // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
   // so the same options object yields the same RIR on every surface. An
-  // implausible climate is reported through the diagnostics/hasError channel by
-  // the core, the way the geometry errors already are.
+  // implausible climate is an Error diagnostic, thrown below like the geometry errors.
   cfg.air.temperature_c = sonare::ZeroIsDefault(FloatProperty(opts, "airTemperatureC", 0.0f))
                               .or_default(cfg.air.temperature_c);
   cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
@@ -276,13 +258,16 @@ Napi::Value SonareWrap::SynthesizeRir(const Napi::CallbackInfo& info) {
   ValidateRirShapeAndTiming(cfg);
   const auto result =
       sonare::acoustic::synthesize_rir(RoomFromOptions(opts, 0.2f), placement, sample_rate, cfg);
+  if (sonare::has_error(result.diagnostics)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  sonare::acoustic::first_error_text(result.diagnostics));
+  }
   std::vector<float> rir = AudioToVector(result.rir);
 
   Napi::Object out = Napi::Object::New(env);
   out.Set("rir", VecToFloat32(env, rir));
   out.Set("sampleRate", Napi::Number::New(env, result.rir.sample_rate()));
-  out.Set("hasError", Napi::Boolean::New(env, sonare::has_error(result.diagnostics)));
-  SetRirDiagnostics(env, out, result.diagnostics);
+  out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
   return out;
   SONARE_NODE_CATCH(env)
 }
@@ -350,12 +335,12 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
   const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   Napi::Object out = Napi::Object::New(env);
   out.Set("volume", Napi::Number::New(env, est.volume));
-  out.Set("length", Napi::Number::New(env, est.dims.length));
-  out.Set("width", Napi::Number::New(env, est.dims.width));
-  out.Set("height", Napi::Number::New(env, est.dims.height));
+  out.Set("lengthM", Napi::Number::New(env, est.dims.length));
+  out.Set("widthM", Napi::Number::New(env, est.dims.width));
+  out.Set("heightM", Napi::Number::New(env, est.dims.height));
   out.Set("drrDb", Napi::Number::New(env, est.drr_db));
   out.Set("confidence", Napi::Number::New(env, est.confidence));
-  out.Set("absorptionBands", VecToFloat32(env, absorption_bands));
+  out.Set("bandAbsorption", VecToFloat32(env, absorption_bands));
   out.Set("rt60Bands", VecToFloat32(env, rt60_bands));
   return out;
   SONARE_NODE_CATCH(env)
@@ -371,11 +356,11 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   SONARE_NODE_TRY
   const Napi::Object estimate = info[0].As<Napi::Object>();
   constexpr float kUnmeasured = std::numeric_limits<float>::quiet_NaN();
-  std::vector<float> bands = FloatArrayProperty(estimate, "absorptionBands");
+  std::vector<float> bands = FloatArrayProperty(estimate, "bandAbsorption");
   SonareRoomEstimate c_estimate{};
-  c_estimate.length_m = FloatProperty(estimate, "length", kUnmeasured);
-  c_estimate.width_m = FloatProperty(estimate, "width", kUnmeasured);
-  c_estimate.height_m = FloatProperty(estimate, "height", kUnmeasured);
+  c_estimate.length_m = FloatProperty(estimate, "lengthM", kUnmeasured);
+  c_estimate.width_m = FloatProperty(estimate, "widthM", kUnmeasured);
+  c_estimate.height_m = FloatProperty(estimate, "heightM", kUnmeasured);
   c_estimate.absorption_bands = bands.empty() ? nullptr : bands.data();
   c_estimate.band_count = bands.size();
 
@@ -446,8 +431,7 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
 
   // Shaped like SynthesizeRir's result rather than a bare buffer: the same
   // synthesis runs underneath and its warnings describe a room the caller did
-  // not ask for. There is no hasError/errorMessage counterpart -- the morph
-  // throws on an unusable request, so every entry here is a warning.
+  // not ask for. An unusable request throws, so every entry here is a warning.
   Napi::Object out = Napi::Object::New(env);
   out.Set("audio", VecToFloat32(env, morphed));
   out.Set("sampleRate", Napi::Number::New(env, result.audio.sample_rate()));

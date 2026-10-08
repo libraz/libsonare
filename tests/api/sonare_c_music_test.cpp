@@ -341,7 +341,7 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
   options.detect_inversions = 0;
   options.chroma_method = 0;
 
-  SECTION("returns one Roman-numeral label per detected chord") {
+  SECTION("returns the timed chords with a numeral and a function each") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 2.0f);
 
     // Detection count for the same options, to cross-check the label count.
@@ -352,50 +352,74 @@ TEST_CASE("sonare_chord_functional_analysis", "[c_api]") {
     sonare_free_chord_analysis_result(&chords);
     REQUIRE(expected > 0);
 
-    SonareStringArray labels = {};
-    SonareError err =
-        sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
-                                         SONARE_PITCH_C, SONARE_MODE_MAJOR, &labels);
+    SonareChordAnalysisResult detected = {};
+    SonareStringArray roman = {};
+    SonareStringArray functions = {};
+    SonareError err = sonare_chord_functional_analysis(samples.data(), samples.size(), 22050,
+                                                       &options, SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                                       &detected, &roman, &functions);
 
     REQUIRE(err == SONARE_OK);
-    REQUIRE(labels.count == expected);
-    REQUIRE(labels.items != nullptr);
-    for (size_t i = 0; i < labels.count; ++i) {
-      REQUIRE(labels.items[i] != nullptr);
-      REQUIRE(std::string(labels.items[i]).size() > 0);
+    REQUIRE(detected.chord_count == expected);
+    REQUIRE(roman.count == expected);
+    REQUIRE(functions.count == expected);
+    // Detection followed by sonare_chord_functions gives the same labels.
+    SonareStringArray roman_again = {};
+    SonareStringArray functions_again = {};
+    REQUIRE(sonare_chord_functions(detected.chords, detected.chord_count, SONARE_PITCH_C,
+                                   SONARE_MODE_MAJOR, &roman_again, &functions_again) == SONARE_OK);
+    for (size_t i = 0; i < expected; ++i) {
+      REQUIRE(roman.items[i] != nullptr);
+      REQUIRE(std::string(roman.items[i]).size() > 0);
+      CHECK(std::string(roman.items[i]) == roman_again.items[i]);
+      CHECK(std::string(functions.items[i]) == functions_again.items[i]);
     }
+    sonare_free_string_array(&roman_again);
+    sonare_free_string_array(&functions_again);
 
-    sonare_free_string_array(&labels);
-    REQUIRE(labels.items == nullptr);
-    REQUIRE(labels.count == 0);
+    sonare_free_chord_analysis_result(&detected);
+    sonare_free_string_array(&roman);
+    sonare_free_string_array(&functions);
+    REQUIRE(detected.chords == nullptr);
+    REQUIRE(roman.items == nullptr);
+    REQUIRE(functions.count == 0);
   }
 
   SECTION("rejects invalid parameters") {
     auto samples = generate_chord({261.63f, 329.63f, 392.00f}, 22050, 1.0f);
-    SonareStringArray labels = {};
+    SonareChordAnalysisResult detected = {};
+    SonareStringArray roman = {};
+    SonareStringArray functions = {};
 
     REQUIRE(sonare_chord_functional_analysis(nullptr, samples.size(), 22050, &options,
-                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, nullptr,
-                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
-                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, nullptr, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, nullptr,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
                                              nullptr) == SONARE_ERROR_INVALID_PARAMETER);
 
     SonareChordDetectionOptions bad = options;
     bad.n_fft = 0;
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &bad,
-                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
 
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
                                              static_cast<SonarePitchClass>(99), SONARE_MODE_MAJOR,
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                             &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
-                                             SONARE_PITCH_C, static_cast<SonareMode>(99),
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                             SONARE_PITCH_C, static_cast<SonareMode>(99), &detected,
+                                             &roman, &functions) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("free is safe on a zero-initialized struct") {
@@ -564,8 +588,12 @@ TEST_CASE(
   }
 
   SECTION("sonare_chord_functional_analysis") {
-    SonareStringArray labels;
-    std::memset(&labels, 0xAA, sizeof(labels));
+    SonareChordAnalysisResult detected;
+    SonareStringArray roman;
+    SonareStringArray functions;
+    std::memset(&detected, 0xAA, sizeof(detected));
+    std::memset(&roman, 0xAA, sizeof(roman));
+    std::memset(&functions, 0xAA, sizeof(functions));
     SonareChordDetectionOptions options{};
     options.min_duration = -1.0f;  // invalid
     options.smoothing_window = 2.0f;
@@ -573,11 +601,14 @@ TEST_CASE(
     options.n_fft = 2048;
     options.hop_length = 512;
     REQUIRE(sonare_chord_functional_analysis(samples.data(), samples.size(), 22050, &options,
-                                             SONARE_PITCH_C, SONARE_MODE_MAJOR,
-                                             &labels) == SONARE_ERROR_INVALID_PARAMETER);
-    sonare_free_string_array(&labels);
-    REQUIRE(labels.items == nullptr);
-    REQUIRE(labels.count == 0);
+                                             SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                             &functions) == SONARE_ERROR_INVALID_PARAMETER);
+    sonare_free_chord_analysis_result(&detected);
+    sonare_free_string_array(&roman);
+    sonare_free_string_array(&functions);
+    REQUIRE(detected.chords == nullptr);
+    REQUIRE(roman.items == nullptr);
+    REQUIRE(functions.count == 0);
   }
 
   SECTION("sonare_analyze_sections") {

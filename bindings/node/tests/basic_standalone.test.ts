@@ -12,6 +12,7 @@ import {
   capabilities,
   capabilityCatalog,
   chordFunctionalAnalysis,
+  chordFunctions,
   cqt,
   dbToAmplitude,
   dbToPower,
@@ -325,14 +326,16 @@ describe('standalone functions', () => {
       }
     }
 
-    // Roman-numeral labels: one per detected chord, all non-empty strings.
+    // Timed entries: one per detected chord, each carrying a numeral and a function,
+    // and equal to detectChords followed by chordFunctions.
     const romans = chordFunctionalAnalysis(tone, 0, 0, SR, 0.3, 2.0, 0.5, false, 2048, 512, false);
     expect(Array.isArray(romans)).toBe(true);
     expect(romans.length).toBe(chords.chords.length);
-    for (const label of romans) {
-      expect(typeof label).toBe('string');
-      expect(label.length).toBeGreaterThan(0);
+    for (const entry of romans) {
+      expect(entry.roman.length).toBeGreaterThan(0);
+      expect(entry.function.length).toBeGreaterThan(0);
     }
+    expect(romans).toEqual(chordFunctions({ chords, key: { root: 0, mode: 0 } }));
   });
 
   it('detectChords options-object form matches the positional form', () => {

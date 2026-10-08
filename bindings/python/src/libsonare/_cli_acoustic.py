@@ -23,6 +23,7 @@ from ._cli_common import (
 )
 from ._cli_inventory import _cli_domain
 from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._errors import SonareError
 
 
 def _print_diagnostic_warnings(result: Any) -> None:
@@ -121,9 +122,9 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
             _strict_json_dumps(
                 {
                     "volume": est.volume,
-                    "length": est.length,
-                    "width": est.width,
-                    "height": est.height,
+                    "length": est.length_m,
+                    "width": est.width_m,
+                    "height": est.height_m,
                     "drr_db": est.drr_db,
                     "confidence": est.confidence,
                     "rt60_bands": [float(value) for value in est.rt60_bands],
@@ -134,7 +135,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
     else:
         print("  Room estimate:")
         print(f"    Volume:     {est.volume:.1f} m^3")
-        print(f"    Dimensions: {est.length:.2f} x {est.width:.2f} x {est.height:.2f} m")
+        print(f"    Dimensions: {est.length_m:.2f} x {est.width_m:.2f} x {est.height_m:.2f} m")
         print(f"    DRR:        {est.drr_db:.2f} dB")
         print(f"    Confidence: {est.confidence:.1%}")
     return 0
@@ -145,22 +146,22 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
 
     if not args.output:
         raise ValueError("synthesize-rir requires --output")
-    result = synthesize_rir(
-        args.length,
-        args.width,
-        args.height,
-        source=(args.source_x, args.source_y, args.source_z),
-        listener=(args.listener_x, args.listener_y, args.listener_z),
-        absorption=args.absorption,
-        sample_rate=args.sample_rate,
-        ism_order=args.ism_order,
-        seed=args.seed,
-        max_seconds=args.max_seconds,
-        prefer_eyring=not args.sabine,
-    )
-    if result.has_error:
-        detail = getattr(result, "error_message", "")
-        print(f"Error: {detail or 'invalid room geometry'}", file=sys.stderr)
+    try:
+        result = synthesize_rir(
+            args.length,
+            args.width,
+            args.height,
+            source=(args.source_x, args.source_y, args.source_z),
+            listener=(args.listener_x, args.listener_y, args.listener_z),
+            absorption=args.absorption,
+            sample_rate=args.sample_rate,
+            ism_order=args.ism_order,
+            seed=args.seed,
+            max_seconds=args.max_seconds,
+            prefer_eyring=not args.sabine,
+        )
+    except SonareError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
         return 1 if _legacy_exit_codes() else EXIT_INVALID_PARAMETER
     # Warnings survive a successful synthesis and describe a RIR the caller did
     # not ask for -- a tail cut against max_seconds, a cap raised to fit the

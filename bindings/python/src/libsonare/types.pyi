@@ -732,27 +732,21 @@ class RoomMorphResult:
 class RirResult:
     rir: list[float]
     sample_rate: int
-    has_error: bool
-    error_message: str
     diagnostics: list[RirDiagnostic]
     def __init__(
         self,
         rir: list[float],
         sample_rate: int,
-        has_error: bool,
-        error_message: str = "",
         diagnostics: list[RirDiagnostic] = ...,
     ) -> None: ...
     @property
     def sampleRate(self) -> int: ...
-    @property
-    def hasError(self) -> bool: ...
 
 class RoomEstimate:
     volume: float
-    length: float
-    width: float
-    height: float
+    length_m: float
+    width_m: float
+    height_m: float
     drr_db: float
     confidence: float
     absorption_bands: list[float]
@@ -760,9 +754,9 @@ class RoomEstimate:
     def __init__(
         self,
         volume: float,
-        length: float,
-        width: float,
-        height: float,
+        length_m: float,
+        width_m: float,
+        height_m: float,
         drr_db: float,
         confidence: float,
         absorption_bands: list[float],

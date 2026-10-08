@@ -184,7 +184,7 @@ python = [
 #     the NativeSynth directly, as above.
 node = [
   # Name tables behind the string forms of materialPreset / mode: the facades
-  # resolve a name against the core's list and accept the integer unchanged, so
+  # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
   "acoustic_mode_name",
@@ -325,7 +325,7 @@ node = [
 ]
 wasm = [
   # Name tables behind the string forms of materialPreset / mode: the facades
-  # resolve a name against the core's list and accept the integer unchanged, so
+  # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
   "acoustic_mode_name",
@@ -442,7 +442,7 @@ wasm = [
 ]
 python = [
   # Name tables behind the string forms of materialPreset / mode: the facades
-  # resolve a name against the core's list and accept the integer unchanged, so
+  # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
   "acoustic_mode_name",
@@ -812,7 +812,7 @@ params = []
 [input_naming]
 # The Python facade names the coefficient input `mfcc_coeffs` where C names it
 # `mfcc`. Same buffer, descriptive spelling — not drift. The WASM facade renames
-# it `mfccCoefficients` for the same reason, but takes a request object, so it
+# it `coefficients` for the same reason, but takes a request object, so it
 # declares no positional input name and never enters the comparison.
 keys = ["mfcc_to_mel", "mfcc_to_audio"]
 

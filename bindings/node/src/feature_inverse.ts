@@ -28,7 +28,7 @@ export interface VqtToAudioRequest extends CqtToAudioRequest {
   gamma?: number;
 }
 export interface MelToStftRequest {
-  mel: Float32Array;
+  power: Float32Array;
   nMels: number;
   nFrames: number;
   sampleRate?: number;
@@ -75,7 +75,7 @@ export interface GriffinLimRequest {
   momentum?: number;
 }
 export interface MfccToMelRequest {
-  mfcc: Float32Array;
+  coefficients: Float32Array;
   nMfcc: number;
   nFrames: number;
   nMels?: number;
@@ -197,7 +197,7 @@ function melRequestFromResult<T extends MelResultToAudioRequest>(
   requireResultFields(fnName, result, MEL_RESULT_FIELDS);
   requireAgreesWithResult(fnName, request, result, carriedKeys);
   return {
-    mel: result.power,
+    power: result.power,
     nMels: result.nMels,
     nFrames: result.nFrames,
     sampleRate: result.sampleRate,
@@ -223,7 +223,7 @@ function mfccRequestFromResult<T extends MfccResultToAudioRequest>(
   requireResultFields(fnName, result, MFCC_RESULT_FIELDS);
   requireAgreesWithResult(fnName, request, result, carriedKeys);
   return {
-    mfcc: result.coefficients,
+    coefficients: result.coefficients,
     nMfcc: result.nMfcc,
     nFrames: result.nFrames,
     nMels: result.nMels,
@@ -392,7 +392,7 @@ export function vqtToAudio(
  */
 export function melToStft(request: MelToStftRequest | MelResultToStftRequest): InverseStftResult;
 export function melToStft(
-  mel: Float32Array,
+  power: Float32Array,
   nMels?: number,
   nFrames?: number,
   sampleRate?: number,
@@ -402,7 +402,7 @@ export function melToStft(
   htk?: boolean,
 ): InverseStftResult;
 export function melToStft(
-  mel: Float32Array | MelToStftRequest | MelResultToStftRequest,
+  power: Float32Array | MelToStftRequest | MelResultToStftRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -412,11 +412,11 @@ export function melToStft(
   htk = false,
 ): InverseStftResult {
   const request =
-    mel instanceof Float32Array
-      ? { mel, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk }
-      : 'result' in mel
-        ? melRequestFromResult('melToStft', mel, MEL_TO_STFT_CARRIED)
-        : mel;
+    power instanceof Float32Array
+      ? { power, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk }
+      : 'result' in power
+        ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED)
+        : power;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -425,7 +425,7 @@ export function melToStft(
   // even-size rule the STFT entries carry would refuse sizes this one answers.
   const resolvedNFft = resolvePositiveIntegerOption('melToStft', 'nFft', request.nFft, 2048);
   return addon.melToStft(
-    request.mel,
+    request.power,
     request.nMels,
     request.nFrames,
     resolvedSampleRate,
@@ -442,7 +442,7 @@ export function melToStft(
  */
 export function melToAudio(request: MelToAudioRequest | MelResultToAudioRequest): Float32Array;
 export function melToAudio(
-  mel: Float32Array,
+  power: Float32Array,
   nMels?: number,
   nFrames?: number,
   sampleRate?: number,
@@ -454,7 +454,7 @@ export function melToAudio(
   htk?: boolean,
 ): Float32Array;
 export function melToAudio(
-  mel: Float32Array | MelToAudioRequest | MelResultToAudioRequest,
+  power: Float32Array | MelToAudioRequest | MelResultToAudioRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -466,11 +466,11 @@ export function melToAudio(
   htk = false,
 ): Float32Array {
   const request =
-    mel instanceof Float32Array
-      ? { mel, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
-      : 'result' in mel
-        ? melRequestFromResult('melToAudio', mel, MEL_TO_AUDIO_CARRIED)
-        : mel;
+    power instanceof Float32Array
+      ? { power, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
+      : 'result' in power
+        ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED)
+        : power;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -486,7 +486,7 @@ export function melToAudio(
   );
   const resolvedNIter = resolvePositiveIntegerOption('melToAudio', 'nIter', request.nIter, 32);
   return addon.melToAudio(
-    request.mel,
+    request.power,
     request.nMels,
     request.nFrames,
     resolvedSampleRate,
@@ -555,27 +555,27 @@ export function griffinLim(
  */
 export function mfccToMel(request: MfccToMelRequest | MfccResultToMelRequest): InverseMelResult;
 export function mfccToMel(
-  mfcc: Float32Array,
+  coefficients: Float32Array,
   nMfcc?: number,
   nFrames?: number,
   nMels?: number,
   lifter?: number,
 ): InverseMelResult;
 export function mfccToMel(
-  mfcc: Float32Array | MfccToMelRequest | MfccResultToMelRequest,
+  coefficients: Float32Array | MfccToMelRequest | MfccResultToMelRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
   lifter = 0,
 ): InverseMelResult {
   const request =
-    mfcc instanceof Float32Array
-      ? { mfcc, nMfcc, nFrames, nMels, lifter }
-      : 'result' in mfcc
-        ? mfccRequestFromResult('mfccToMel', mfcc, MFCC_TO_MEL_CARRIED)
-        : mfcc;
+    coefficients instanceof Float32Array
+      ? { coefficients, nMfcc, nFrames, nMels, lifter }
+      : 'result' in coefficients
+        ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
+        : coefficients;
   return addon.mfccToMel(
-    request.mfcc,
+    request.coefficients,
     request.nMfcc,
     request.nFrames,
     request.nMels ?? 128,
@@ -589,7 +589,7 @@ export function mfccToMel(
  */
 export function mfccToAudio(request: MfccToAudioRequest | MfccResultToAudioRequest): Float32Array;
 export function mfccToAudio(
-  mfcc: Float32Array,
+  coefficients: Float32Array,
   nMfcc?: number,
   nFrames?: number,
   nMels?: number,
@@ -603,7 +603,7 @@ export function mfccToAudio(
   lifter?: number,
 ): Float32Array;
 export function mfccToAudio(
-  mfcc: Float32Array | MfccToAudioRequest | MfccResultToAudioRequest,
+  coefficients: Float32Array | MfccToAudioRequest | MfccResultToAudioRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
@@ -617,11 +617,24 @@ export function mfccToAudio(
   lifter = 0,
 ): Float32Array {
   const request =
-    mfcc instanceof Float32Array
-      ? { mfcc, nMfcc, nFrames, nMels, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk, lifter }
-      : 'result' in mfcc
-        ? mfccRequestFromResult('mfccToAudio', mfcc, MFCC_TO_AUDIO_CARRIED)
-        : mfcc;
+    coefficients instanceof Float32Array
+      ? {
+          coefficients,
+          nMfcc,
+          nFrames,
+          nMels,
+          sampleRate,
+          nFft,
+          hopLength,
+          fmin,
+          fmax,
+          nIter,
+          htk,
+          lifter,
+        }
+      : 'result' in coefficients
+        ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
+        : coefficients;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   // No range bound here: the core only requires sample_rate > 0 for this
   // reconstruction, unlike the [8000, 384000] audio-analysis bound.
@@ -637,7 +650,7 @@ export function mfccToAudio(
   );
   const resolvedNIter = resolvePositiveIntegerOption('mfccToAudio', 'nIter', request.nIter, 32);
   return addon.mfccToAudio(
-    request.mfcc,
+    request.coefficients,
     request.nMfcc,
     request.nFrames,
     request.nMels ?? 128,

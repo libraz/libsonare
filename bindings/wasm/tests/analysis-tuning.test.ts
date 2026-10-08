@@ -70,8 +70,8 @@ describe('tuning on batch analysis', () => {
   it('re-centres analyze on C major and numbers its chords like chordFunctionalAnalysis', () => {
     const off = analyze(detuned, sampleRate);
     const on = analyze({ samples: detuned, sampleRate, tuning: estimate });
-    expect([off.key.root, off.key.mode]).not.toEqual([0, 0]);
-    expect([on.key.root, on.key.mode]).toEqual([0, 0]);
+    expect([off.key.root, off.key.mode]).not.toEqual([0, 'major']);
+    expect([on.key.root, on.key.mode]).toEqual([0, 'major']);
     const numerals = new Set(on.chords.filter((c) => c.name !== 'N.C.').map((c) => c.romanNumeral));
     for (const numeral of ['I', 'V', 'vi', 'IV']) {
       expect(numerals.has(numeral)).toBe(true);
@@ -85,7 +85,8 @@ describe('tuning on batch analysis', () => {
       tuning: estimate,
     });
     const detected = detectChords({ samples: detuned, sampleRate, tuning: estimate }).chords;
-    const labelByName = new Map(detected.map((c, i) => [c.name, labels[i]]));
+    expect(labels.map((c) => c.name)).toEqual(detected.map((c) => c.name));
+    const labelByName = new Map(labels.map((c) => [c.name, c.roman]));
     let compared = 0;
     for (const chord of on.chords) {
       if (chord.name === 'N.C.' || !labelByName.has(chord.name)) {

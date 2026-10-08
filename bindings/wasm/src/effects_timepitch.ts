@@ -5,6 +5,7 @@
 
 import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
 import { resolveEffectFftOptions } from './_fft_options.js';
+import { keyModeName } from './analysis_helpers.js';
 import { getSonareModule } from './module_state.js';
 import type {
   AutoTuneKey,
@@ -424,10 +425,13 @@ export function autoTune(request: AutoTuneRequest): AutoTuneResult {
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
-  return requireModule().autoTune(
+  const result = requireModule().autoTune(
     samples,
     sampleRate ?? 22050,
     key === 'detect' ? null : key,
     options,
-  ) as AutoTuneResult;
+  ) as Omit<AutoTuneResult, 'key'> & {
+    key: Omit<AutoTuneResult['key'], 'mode'> & { mode: number };
+  };
+  return { ...result, key: { ...result.key, mode: keyModeName(result.key.mode) } };
 }

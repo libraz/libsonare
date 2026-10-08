@@ -35,8 +35,8 @@ export const Mode = {
 
 export type Mode = (typeof Mode)[keyof typeof Mode];
 
-/** A scale named by the church-mode names (`Mode` in lowercase), as `scaleMaskForMode` takes it. */
-export type ScaleName =
+/** A key mode by name (`Mode` in lowercase): what {@link Key.mode} reports. */
+export type KeyMode =
   | 'major'
   | 'minor'
   | 'dorian'
@@ -44,6 +44,9 @@ export type ScaleName =
   | 'lydian'
   | 'mixolydian'
   | 'locrian';
+
+/** A scale named by the mode names `detectKey` reports, as `scaleMaskForMode` takes it. */
+export type ScaleName = KeyMode;
 
 export type TempogramMode = 'autocorrelation' | 'auto' | 'ac' | 'cosine' | 0 | 1;
 
@@ -136,7 +139,8 @@ export type SectionType = (typeof SectionType)[keyof typeof SectionType];
  */
 export interface Key {
   root: PitchClass;
-  mode: Mode;
+  /** Mode name (`'major'`, `'minor'`, `'dorian'`, ...), the form `scaleMaskForMode` and `chordFunctions` take. */
+  mode: KeyMode;
   /**
    * Share of the model's belief that this key is the answer, in `[0, 1)`.
    *
@@ -168,12 +172,7 @@ export interface KeyDetectionOptions extends ValidateOptions {
   useHpss?: boolean;
   loudnessWeighted?: boolean;
   highPassHz?: number;
-  modes?:
-    | Mode[]
-    | ('major' | 'minor' | 'dorian' | 'phrygian' | 'lydian' | 'mixolydian' | 'locrian')[]
-    | 'major-minor'
-    | 'all'
-    | 'modal';
+  modes?: Mode[] | KeyMode[] | 'major-minor' | 'all' | 'modal';
   profile?: KeyProfile | KeyProfileName;
   genreHint?: 'auto' | 'edm' | 'electronic' | 'dance' | 'pop' | 'classical' | 'jazz' | string;
 }
@@ -378,7 +377,8 @@ export interface ChordFunctionsInput {
 /** A key given as `detectKey` reports it. */
 export interface ChordFunctionsKey {
   root: PitchClass;
-  mode: Mode;
+  /** Mode name as `detectKey` reports it, or its `Mode` ordinal. */
+  mode: KeyMode | Mode;
 }
 
 /** A timed chord with its Roman numeral and harmonic function in a key. */

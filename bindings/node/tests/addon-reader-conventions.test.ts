@@ -468,7 +468,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'synthesizeRir',
     invoke: (o) => {
       const result = synthesizeRir(o);
-      return [result.sampleRate, result.hasError, Array.from(result.rir).slice(0, 32)];
+      return [result.sampleRate, Array.from(result.rir).slice(0, 32)];
     },
   },
   {
@@ -653,12 +653,12 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         ...o,
         estimate: {
           volume: 2500,
-          length: 0,
-          width: 0,
-          height: 0,
+          lengthM: 0,
+          widthM: 0,
+          heightM: 0,
           drrDb: 0,
           confidence: 0,
-          absorptionBands: new Float32Array(0),
+          bandAbsorption: new Float32Array(0),
           rt60Bands: new Float32Array([9, 9, 1, 2, 9, 9]),
         },
       }),

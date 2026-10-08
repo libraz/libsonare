@@ -17,6 +17,7 @@ import {
   analyzeMelody,
   ChordQuality,
   chordFunctionalAnalysis,
+  chordFunctions,
   detectChords,
   init,
   Mode,
@@ -201,6 +202,12 @@ describe('WASM wave3 analysis parity', () => {
     it('succeeds on valid input', () => {
       const labels = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR);
       expect(Array.isArray(labels)).toBe(true);
+      expect(labels).toEqual(
+        chordFunctions({
+          chords: detectChords(samples, SR),
+          key: { root: PitchClass.C, mode: 'major' },
+        }),
+      );
     });
 
     it('throws on an out-of-range key root (range-checked unconditionally)', () => {

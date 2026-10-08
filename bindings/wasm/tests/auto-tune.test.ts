@@ -138,7 +138,7 @@ describe('autoTune (WASM)', () => {
       key: { root: PitchClass.C, mode: Mode.Major },
     });
     expect(samples.length).toBe(input.length);
-    expect(key).toMatchObject({ root: PitchClass.C, mode: Mode.Major, confidence: 1 });
+    expect(key).toMatchObject({ root: PitchClass.C, mode: 'major', confidence: 1 });
     let worstBefore = 0;
     let worstAfter = 0;
     MELODY.forEach((target, note) => {
@@ -174,7 +174,7 @@ describe('autoTune (WASM)', () => {
       key: { root: PitchClass.D, mode: Mode.Dorian },
     });
     expect(byOrdinal.samples).toEqual(byName.samples);
-    expect(byOrdinal.key.mode).toBe(Mode.Dorian);
+    expect(byOrdinal.key.mode).toBe('dorian');
   });
 
   it('strength 0 leaves the audio unchanged', () => {

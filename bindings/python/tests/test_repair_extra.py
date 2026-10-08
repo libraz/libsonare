@@ -132,9 +132,9 @@ class TestMasteringRepairDereverbConfigForRoom:
     ) -> libsonare.RoomEstimate:
         return libsonare.RoomEstimate(
             volume=volume,
-            length=0.0,
-            width=0.0,
-            height=0.0,
+            length_m=0.0,
+            width_m=0.0,
+            height_m=0.0,
             drr_db=0.0,
             confidence=0.0,
             absorption_bands=[],

@@ -72,6 +72,7 @@ import type {
   ChromaResult,
   DetectKeyOptions,
   DynamicsResult,
+  FunctionalChord,
   HpssResult,
   KeyCandidate,
   KeyDetection,
@@ -362,7 +363,7 @@ export class Audio {
     keyRoot: number,
     keyMode = 0,
     options: ChordDetectionOptions = {},
-  ): string[] {
+  ): FunctionalChord[] {
     return chordFunctionalAnalysisFn(this.data(), keyRoot, keyMode, this.getSampleRate(), options);
   }
 

@@ -377,18 +377,65 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   });
 }
 
+namespace {
+
+// Copies labels into a heap-owned SonareStringArray; frees what it copied on failure.
+void fill_string_array(const std::vector<std::string>& labels, SonareStringArray* out) {
+  if (labels.empty()) return;
+  std::unique_ptr<char*[]> items(new char*[labels.size()]);
+  size_t filled = 0;
+  try {
+    for (; filled < labels.size(); ++filled) {
+      items[filled] = copy_string(labels[filled]);
+    }
+  } catch (...) {
+    for (size_t i = 0; i < filled; ++i) sonare_free_string(items[i]);
+    throw;
+  }
+  out->items = release_array(items);
+  out->count = labels.size();
+}
+
+// Roman numeral and harmonic function of each chord in a key, into two string arrays.
+void label_chords(const std::vector<Chord>& chords, PitchClass tonic, Mode mode,
+                  SonareStringArray* roman, SonareStringArray* functions) {
+  std::vector<std::string> numerals;
+  std::vector<std::string> names;
+  numerals.reserve(chords.size());
+  names.reserve(chords.size());
+  for (const Chord& chord : chords) {
+    numerals.push_back(ChordAnalyzer::chord_to_roman_numeral(chord, tonic, mode));
+    names.push_back(ChordAnalyzer::chord_function(chord, tonic, mode));
+  }
+  fill_string_array(numerals, roman);
+  try {
+    fill_string_array(names, functions);
+  } catch (...) {
+    sonare_free_string_array(roman);
+    throw;
+  }
+}
+
+}  // namespace
+
 SonareError sonare_chord_functional_analysis(const float* samples, size_t length, int sample_rate,
                                              const SonareChordDetectionOptions* options,
                                              SonarePitchClass key_root, SonareMode key_mode,
-                                             SonareStringArray* out) {
+                                             SonareChordAnalysisResult* chords,
+                                             SonareStringArray* roman,
+                                             SonareStringArray* functions) {
   SONARE_C_API_ENTRY;
-  if (!out) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!chords || !roman || !functions) return SONARE_ERROR_INVALID_PARAMETER;
 
-  // Zero the owned out-pointer BEFORE any validating early-return so a
-  // rejected input always leaves a NULL owned pointer; otherwise
-  // sonare_free_string_array(&r) would delete[] an uninitialised pointer.
-  out->items = nullptr;
-  out->count = 0;
+  // Zero the owned out-pointers BEFORE any validating early-return so a
+  // rejected input always leaves NULL owned pointers; otherwise the free
+  // functions would delete[] uninitialised pointers.
+  *chords = {};
+  chords->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
+  roman->items = nullptr;
+  roman->count = 0;
+  functions->items = nullptr;
+  functions->count = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
   if (!valid_chord_options_version(options->struct_version)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
@@ -440,49 +487,17 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
     config.auto_tuning = options->tuning_auto != 0;
 
     ChordAnalyzer analyzer(audio, config);
-    std::vector<std::string> labels =
-        analyzer.functional_analysis(from_c_pitch_class(key_root), from_c_mode(key_mode));
-
-    if (labels.empty()) {
-      return SONARE_OK;
-    }
-
-    std::unique_ptr<char*[]> items(new char*[labels.size()]);
-    size_t filled = 0;
+    fill_chord_result(analyzer.chords(), analyzer.tuning(), chords);
     try {
-      for (; filled < labels.size(); ++filled) {
-        items[filled] = copy_string(labels[filled]);
-      }
+      label_chords(analyzer.chords(), from_c_pitch_class(key_root), from_c_mode(key_mode), roman,
+                   functions);
     } catch (...) {
-      for (size_t i = 0; i < filled; ++i) sonare_free_string(items[i]);
+      sonare_free_chord_analysis_result(chords);
       throw;
     }
-    out->items = release_array(items);
-    out->count = labels.size();
     return SONARE_OK;
   });
 }
-
-namespace {
-
-// Copies labels into a heap-owned SonareStringArray; frees what it copied on failure.
-void fill_string_array(const std::vector<std::string>& labels, SonareStringArray* out) {
-  if (labels.empty()) return;
-  std::unique_ptr<char*[]> items(new char*[labels.size()]);
-  size_t filled = 0;
-  try {
-    for (; filled < labels.size(); ++filled) {
-      items[filled] = copy_string(labels[filled]);
-    }
-  } catch (...) {
-    for (size_t i = 0; i < filled; ++i) sonare_free_string(items[i]);
-    throw;
-  }
-  out->items = release_array(items);
-  out->count = labels.size();
-}
-
-}  // namespace
 
 SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
                                    SonarePitchClass key_root, SonareMode key_mode,
@@ -517,23 +532,7 @@ SonareError sonare_chord_functions(const SonareChord* chords, size_t count,
     chord.bass = chord.root;
     input.push_back(chord);
   }
-  const PitchClass tonic = from_c_pitch_class(key_root);
-  const Mode mode = from_c_mode(key_mode);
-  std::vector<std::string> numerals;
-  std::vector<std::string> names;
-  numerals.reserve(count);
-  names.reserve(count);
-  for (const Chord& chord : input) {
-    numerals.push_back(ChordAnalyzer::chord_to_roman_numeral(chord, tonic, mode));
-    names.push_back(ChordAnalyzer::chord_function(chord, tonic, mode));
-  }
-  fill_string_array(numerals, roman);
-  try {
-    fill_string_array(names, functions);
-  } catch (...) {
-    sonare_free_string_array(roman);
-    throw;
-  }
+  label_chords(input, from_c_pitch_class(key_root), from_c_mode(key_mode), roman, functions);
   return SONARE_OK;
 }
 

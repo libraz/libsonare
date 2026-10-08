@@ -684,17 +684,16 @@ def test_chords_json_reports_c_bass_not_root(monkeypatch, capsys) -> None:
 
 def test_synthesize_rir_invalid_geometry_maps_invalid_parameter(monkeypatch) -> None:
     """Invalid room geometry returns EXIT_INVALID_PARAMETER, not a bare 1."""
-    import types as _types
-
     import libsonare
     from libsonare import cli
     from libsonare.cli import EXIT_INVALID_PARAMETER
 
-    monkeypatch.setattr(
-        libsonare,
-        "synthesize_rir",
-        lambda *a, **k: _types.SimpleNamespace(has_error=True, rir=[], sample_rate=48000),
-    )
+    def refuse(*a, **k):
+        raise libsonare.SonareError(
+            libsonare.ErrorCode.INVALID_PARAMETER, "acoustic.source_outside_room: outside"
+        )
+
+    monkeypatch.setattr(libsonare, "synthesize_rir", refuse)
     args = argparse.Namespace(
         output="out.wav",
         length=7.0,
@@ -917,7 +916,7 @@ def test_voice_preset_validate_rejects_an_invalid_preset_file() -> None:
 def test_synthesize_rir_reports_every_warning_and_keeps_the_tail_headroom() -> None:
     """A max_seconds below the direct-sound arrival raises three warnings at once.
 
-    None of them sets ``has_error``, so discarding them made a truncated RIR
+    They are warnings on a successful call, so discarding them made a truncated RIR
     indistinguishable from a complete one under a green exit. All three have to
     reach the caller, which also means the C ABI cannot publish only the first.
     """

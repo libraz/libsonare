@@ -741,6 +741,7 @@ export type {
   KeyCandidate,
   KeyDetection,
   KeyDetectionOptions,
+  KeyMode,
   KeyProfileName,
   LoudnessMatchResult,
   LoudnessMatchStereoResult,

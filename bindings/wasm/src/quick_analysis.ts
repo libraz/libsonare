@@ -3,6 +3,8 @@ import {
   convertAnalysisResult,
   convertChordAnalysisResult,
   convertKeyCandidate,
+  keyModeName,
+  keyModeOrdinal,
   keyModeValues,
   keyProfileValue,
 } from './analysis_helpers.js';
@@ -57,27 +59,27 @@ type NamedSelectors<T> = Omit<T, 'materialPreset' | 'mode'> & {
 };
 
 /**
- * Replaces a `materialPreset` / `mode` given by name with its integer value,
- * leaving integers and absent fields untouched. The names are the core's, read
- * from the module so no second table exists here.
+ * Replaces a `materialPreset` / `mode` name with its integer value for the
+ * module; a number is refused. The names are the core's, read from the module
+ * so no second table exists here.
  */
 function resolveAcousticSelectors<T extends { materialPreset?: unknown; mode?: unknown }>(
   options: T,
 ): NamedSelectors<T> {
-  if (typeof options.materialPreset !== 'string' && typeof options.mode !== 'string') {
+  if (options.materialPreset === undefined && options.mode === undefined) {
     return options as NamedSelectors<T>;
   }
   const tables = requireModule().acousticSelectorNames();
   const resolve = (key: 'materialPreset' | 'mode') => {
     const value = options[key];
-    if (typeof value !== 'string') {
-      return value;
-    }
     const names = tables[key];
+    const valid = names.map((name) => `'${name}'`).join(', ');
+    if (typeof value !== 'string') {
+      throw new TypeError(`${key} must be one of ${valid} (a name, not a number)`);
+    }
     const index = names.indexOf(value);
     if (index < 0) {
-      const valid = names.map((name) => `'${name}'`).join(', ');
-      throw new RangeError(`${key} must be one of ${valid} or an integer, got '${value}'`);
+      throw new RangeError(`${key} must be one of ${valid}, got '${value}'`);
     }
     return index;
   };
@@ -157,8 +159,8 @@ export interface DetectAcousticRequest extends AcousticOptions, SamplesRequest {
 export interface EstimateRoomRequest extends RoomEstimateOptions, SamplesRequest {}
 
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
-export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'length' | 'width' | 'height'> & {
-  absorptionBands?: Float32Array | number[];
+export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
+  bandAbsorption?: Float32Array | number[];
 };
 
 /** Canonical request form for {@link roomGeometryFromEstimate}. */
@@ -254,7 +256,7 @@ export function detectKey(
   );
   return {
     root: result.root as PitchClass,
-    mode: result.mode as Mode,
+    mode: keyModeName(result.mode),
     confidence: result.confidence,
     name: result.name,
     shortName: result.shortName,
@@ -432,7 +434,11 @@ export function chordFunctions(
   request: ChordFunctionsRequest<ChordFunctionsInput>,
 ): FunctionalChord<ChordFunctionsInput>[] {
   const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
-  const labels = requireModule().chordFunctions(entries, request.key.root, request.key.mode);
+  const labels = requireModule().chordFunctions(
+    entries,
+    request.key.root,
+    keyModeOrdinal(request.key.mode),
+  );
   return entries.map((chord, i) => ({
     ...chord,
     roman: labels.roman[i],
@@ -445,23 +451,26 @@ export function chordFunctions(
  * progression, relative to the given key. Mirrors the C-ABI
  * `sonare_chord_functional_analysis` and the Node/Python `chordFunctionalAnalysis`.
  *
- * @returns One Roman-numeral label (e.g. "I", "IV", "V", "vi") per detected chord
+ * Runs {@link detectChords} followed by {@link chordFunctions} in the given key.
+ *
+ * @returns The timed chord entries with `roman` (e.g. "I", "IV", "V", "vi") and
+ *   `function` added
  */
-export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): string[];
+export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: PitchClass,
   keyMode?: Mode,
   sampleRate?: number,
   options?: ChordDetectionOptions,
-): string[];
+): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array | ChordFunctionalAnalysisRequest,
   keyRoot?: PitchClass,
   keyMode?: Mode,
   sampleRate = 22050,
   options: ChordDetectionOptions = {},
-): string[] {
+): FunctionalChord[] {
   const request =
     samples instanceof Float32Array
       ? { samples, keyRoot, keyMode, sampleRate, ...options }
@@ -472,7 +481,7 @@ export function chordFunctionalAnalysis(
     request.sampleRate ?? 22050,
     request,
   );
-  return requireModule().chordFunctionalAnalysis(
+  const analysed = requireModule().chordFunctionalAnalysis(
     request.samples,
     request.keyRoot as PitchClass,
     request.keyMode ?? Mode.Major,
@@ -491,6 +500,11 @@ export function chordFunctionalAnalysis(
     chordChromaMethodValue(request.chromaMethod ?? 'stft'),
     request.tuning ?? 0,
   );
+  return convertChordAnalysisResult(analysed).chords.map((chord, i) => ({
+    ...chord,
+    roman: analysed.roman[i],
+    function: analysed.functions[i] as ChordFunction,
+  }));
 }
 
 /**
@@ -749,8 +763,11 @@ export function detectAcoustic(
 }
 
 /**
- * Synthesize a room impulse response from shoebox geometry. `hasError` is true
- * when the source/listener falls outside the room (the RIR is then empty).
+ * Synthesize a room impulse response from shoebox geometry.
+ *
+ * @throws SonareError when the geometry, placement or timing is unusable (for
+ *   example a source outside the room); the message leads with the diagnostic
+ *   code, such as `acoustic.source_outside_room`.
  */
 export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
   const module = requireModule();
@@ -799,12 +816,13 @@ export function estimateRoom(
 /**
  * Turn a room estimate into the geometry {@link synthesizeRir} takes.
  *
- * The pair to {@link estimateRoom}: the estimate's `length`, `width` and `height`
- * become `lengthM`, `widthM` and `heightM`, and its `absorptionBands` become
- * `bandAbsorption`. The estimate carries no placement, so `source` and `listener`
- * are set only when given; an omitted one is left to `synthesizeRir`'s own
- * default, which may fall outside a small estimated room. Absorption bands that
- * did not converge are left out, so the scalar `absorption` applies.
+ * The pair to {@link estimateRoom}: the estimate's `lengthM`, `widthM`,
+ * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names, so this
+ * merges the placement in and drops what the estimate does not converge on. The
+ * estimate carries no placement, so `source` and `listener` are set only when
+ * given; an omitted one is left to `synthesizeRir`'s own default, which may fall
+ * outside a small estimated room. Absorption bands that did not converge are
+ * left out, so the scalar `absorption` applies.
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
@@ -835,14 +853,12 @@ export function roomGeometryFromEstimate(
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
-  const { absorptionBands, length, width, height } = request.estimate;
+  const { bandAbsorption, lengthM, widthM, heightM } = request.estimate;
   const geometry: RoomGeometryOptions = module.roomGeometryFromEstimate({
-    length,
-    width,
-    height,
-    ...(absorptionBands === undefined
-      ? {}
-      : { absorptionBands: Float32Array.from(absorptionBands) }),
+    lengthM,
+    widthM,
+    heightM,
+    ...(bandAbsorption === undefined ? {} : { bandAbsorption: Float32Array.from(bandAbsorption) }),
   });
   const { source, listener } = request;
   if (source !== undefined) {

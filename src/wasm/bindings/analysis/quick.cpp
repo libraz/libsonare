@@ -605,14 +605,22 @@ val js_chord_functional_analysis(val samples, const val& key_root_val, const val
                       use_beat_sync, use_hmm, hmm_beam_width, use_key_context, key_root, key_mode,
                       detect_inversions, chroma_method, tuning_val);
 
-  ChordAnalyzer analyzer(audio, config);
-  std::vector<std::string> labels =
-      analyzer.functional_analysis(static_cast<PitchClass>(key_root), static_cast<Mode>(key_mode));
-
-  val out = val::array();
-  for (size_t i = 0; i < labels.size(); ++i) {
-    out.call<void>("push", labels[i]);
+  const ChordAnalyzer analyzer(audio, config);
+  val roman = val::array();
+  val functions = val::array();
+  for (const Chord& chord : analyzer.chords()) {
+    roman.call<void>("push",
+                     ChordAnalyzer::chord_to_roman_numeral(chord, static_cast<PitchClass>(key_root),
+                                                           static_cast<Mode>(key_mode)));
+    functions.call<void>("push",
+                         ChordAnalyzer::chord_function(chord, static_cast<PitchClass>(key_root),
+                                                       static_cast<Mode>(key_mode)));
   }
+  val out = val::object();
+  out.set("chords", chordsToVal(analyzer.chords()));
+  out.set("tuning", analyzer.tuning());
+  out.set("roman", roman);
+  out.set("functions", functions);
   return out;
 }
 
@@ -1028,12 +1036,8 @@ const char* rirSeverityName(sonare::Diagnostic::Severity severity) {
   return "info";
 }
 
-// Transcribes the synthesizer's whole diagnostic list onto the result object.
-// The synthesizer reports five distinct geometry errors plus the clamp /
-// no-tail warnings, so a lone hasError boolean cannot tell a caller which one
-// fired, nor that a maxSeconds clamp shortened the tail of an otherwise
-// successful RIR. `errorMessage` carries the first error as "code: message",
-// matching the string the C ABI leaves in sonare_last_error_message().
+// Transcribes the synthesizer's diagnostic list (the clamp / no-tail warnings of a successful
+// call) onto the result object.
 val diagnosticsArray(const std::vector<sonare::Diagnostic>& diagnostics) {
   val entries = val::array();
   for (const sonare::Diagnostic& diagnostic : diagnostics) {
@@ -1044,18 +1048,6 @@ val diagnosticsArray(const std::vector<sonare::Diagnostic>& diagnostics) {
     entries.call<void>("push", entry);
   }
   return entries;
-}
-
-void setRirDiagnostics(val& out, const std::vector<sonare::Diagnostic>& diagnostics) {
-  std::string error_message;
-  for (const sonare::Diagnostic& diagnostic : diagnostics) {
-    if (diagnostic.severity == sonare::Diagnostic::Severity::Error) {
-      error_message = diagnostic.code + ": " + diagnostic.message;
-      break;
-    }
-  }
-  out.set("diagnostics", diagnosticsArray(diagnostics));
-  out.set("errorMessage", error_message);
 }
 
 val js_synthesize_rir(val opts) {
@@ -1086,7 +1078,7 @@ val js_synthesize_rir(val opts) {
   // airTemperatureC / airHumidityPercent == 0 keep the ISO reference climate
   // (20 degC, 50 % RH), matching the C ABI's "0 means the library default" rule
   // so the same options object yields the same RIR on every surface. An
-  // implausible climate is reported through diagnostics/hasError by the core.
+  // implausible climate is an Error diagnostic, thrown below like the geometry errors.
   config.air.temperature_c = sonare::ZeroIsDefault(floatProperty(opts, "airTemperatureC", 0.0f))
                                  .or_default(config.air.temperature_c);
   config.air.humidity_percent =
@@ -1097,6 +1089,10 @@ val js_synthesize_rir(val opts) {
   validateRirShapeAndTiming(placement, config);
   const auto result =
       sonare::acoustic::synthesize_rir(roomFromVal(opts, 0.2f), placement, sample_rate, config);
+  if (sonare::has_error(result.diagnostics)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  sonare::acoustic::first_error_text(result.diagnostics));
+  }
   std::vector<float> rir;
   if (!result.rir.empty()) {
     rir.assign(result.rir.data(), result.rir.data() + result.rir.size());
@@ -1104,8 +1100,7 @@ val js_synthesize_rir(val opts) {
   val out = val::object();
   out.set("rir", vectorToFloat32Array(rir));
   out.set("sampleRate", result.rir.sample_rate());
-  out.set("hasError", sonare::has_error(result.diagnostics));
-  setRirDiagnostics(out, result.diagnostics);
+  out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;
 }
 
@@ -1162,12 +1157,12 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   const std::vector<float> rt60_bands = pad_with_nan(est.rt60_bands);
   val out = val::object();
   out.set("volume", est.volume);
-  out.set("length", est.dims.length);
-  out.set("width", est.dims.width);
-  out.set("height", est.dims.height);
+  out.set("lengthM", est.dims.length);
+  out.set("widthM", est.dims.width);
+  out.set("heightM", est.dims.height);
   out.set("drrDb", est.drr_db);
   out.set("confidence", est.confidence);
-  out.set("absorptionBands", vectorToFloat32Array(absorption_bands));
+  out.set("bandAbsorption", vectorToFloat32Array(absorption_bands));
   out.set("rt60Bands", vectorToFloat32Array(rt60_bands));
   return out;
 }
@@ -1215,8 +1210,7 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 
   // Shaped like js_synthesize_rir's result rather than a bare buffer: the same
   // synthesis runs underneath and its warnings describe a room the caller did
-  // not ask for. There is no hasError/errorMessage counterpart -- the morph
-  // throws on an unusable request, so every entry here is a warning.
+  // not ask for. An unusable request throws, so every entry here is a warning.
   val out = val::object();
   out.set("audio", vectorToFloat32Array(morphed));
   out.set("sampleRate", result.audio.sample_rate());
@@ -1228,9 +1222,9 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
 // field names. Absorption bands that did not converge are left out.
 val js_room_geometry_from_estimate(val estimate) {
   const float nan = std::numeric_limits<float>::quiet_NaN();
-  const float length = floatOption(estimate, "length", nan);
-  const float width = floatOption(estimate, "width", nan);
-  const float height = floatOption(estimate, "height", nan);
+  const float length = floatOption(estimate, "lengthM", nan);
+  const float width = floatOption(estimate, "widthM", nan);
+  const float height = floatOption(estimate, "heightM", nan);
   if (!sonare::acoustic::estimated_dimensions_measured(length, width, height)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "room estimate has no measurable dimensions");
@@ -1239,8 +1233,8 @@ val js_room_geometry_from_estimate(val estimate) {
   out.set("lengthM", length);
   out.set("widthM", width);
   out.set("heightM", height);
-  if (hasProperty(estimate, "absorptionBands")) {
-    const std::vector<float> bands = float32ArrayToVector(estimate["absorptionBands"]);
+  if (hasProperty(estimate, "bandAbsorption")) {
+    const std::vector<float> bands = float32ArrayToVector(estimate["bandAbsorption"]);
     if (sonare::acoustic::estimated_absorption_measured(bands.data(), bands.size())) {
       out.set("bandAbsorption", vectorToFloat32Array(bands));
     }

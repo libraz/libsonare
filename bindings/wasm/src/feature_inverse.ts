@@ -21,7 +21,7 @@ function requireModule() {
 }
 
 export interface MfccToMelRequest extends GuardedOptions {
-  mfccCoefficients: Float32Array;
+  coefficients: Float32Array;
   nMfcc: number;
   nFrames: number;
   nMels?: number;
@@ -31,7 +31,7 @@ export interface MfccToMelRequest extends GuardedOptions {
 
 /** Canonical request form for reconstruction from a Mel power spectrogram. */
 export interface MelToStftRequest extends GuardedOptions {
-  melPower: Float32Array;
+  power: Float32Array;
   nMels: number;
   nFrames: number;
   sampleRate?: number;
@@ -187,7 +187,7 @@ function melRequestFromResult(
   requireResultFields(fnName, result, MEL_RESULT_FIELDS);
   requireAgreesWithResult(fnName, request, result, carriedKeys);
   return {
-    melPower: result.power,
+    power: result.power,
     nMels: result.nMels,
     nFrames: result.nFrames,
     sampleRate: result.sampleRate,
@@ -214,7 +214,7 @@ function mfccRequestFromResult(
   requireResultFields(fnName, result, MFCC_RESULT_FIELDS);
   requireAgreesWithResult(fnName, request, result, carriedKeys);
   return {
-    mfccCoefficients: result.coefficients,
+    coefficients: result.coefficients,
     nMfcc: result.nMfcc,
     nFrames: result.nFrames,
     nMels: result.nMels,
@@ -273,7 +273,7 @@ function validateMatrix(
  * Approximate inverse of a Mel filterbank: Mel power spectrogram -> STFT power
  * spectrogram. Mirrors `feature::mel_to_stft`.
  *
- * @param melPower - Mel power spectrogram [nMels x nFrames] row-major
+ * @param power - Mel power spectrogram [nMels x nFrames] row-major
  * @param nMels - Number of Mel bands
  * @param nFrames - Number of time frames
  * @param sampleRate - Sample rate in Hz
@@ -285,7 +285,7 @@ function validateMatrix(
  */
 export function melToStft(request: MelToStftRequest | MelResultToStftRequest): StftPowerResult;
 export function melToStft(
-  melPower: Float32Array,
+  power: Float32Array,
   nMels: number,
   nFrames: number,
   sampleRate?: number,
@@ -296,7 +296,7 @@ export function melToStft(
   options?: GuardedOptions,
 ): StftPowerResult;
 export function melToStft(
-  melPower: Float32Array | MelToStftRequest | MelResultToStftRequest,
+  power: Float32Array | MelToStftRequest | MelResultToStftRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -306,13 +306,11 @@ export function melToStft(
   htk = false,
   options: GuardedOptions = {},
 ): StftPowerResult {
-  if (!(melPower instanceof Float32Array)) {
+  if (!(power instanceof Float32Array)) {
     const request =
-      'result' in melPower
-        ? melRequestFromResult('melToStft', melPower, MEL_TO_STFT_CARRIED)
-        : melPower;
+      'result' in power ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED) : power;
     return melToStft(
-      request.melPower,
+      request.power,
       request.nMels,
       request.nFrames,
       request.sampleRate,
@@ -324,20 +322,20 @@ export function melToStft(
     );
   }
   assertSampleRate('melToStft', sampleRate);
-  validateMatrix('melToStft', melPower, nMels, nFrames, 'melPower', 'nMels', options);
+  validateMatrix('melToStft', power, nMels, nFrames, 'power', 'nMels', options);
   // Not on the shared FFT rule: this inverts a filterbank rather than running a
   // transform, so `nFft` only sizes the output to `nFft / 2 + 1` bins and an odd
   // size is accepted by the core and by the Node surface alike.
   validatePositiveIntegers('melToStft', { nFft });
   validateMelFrequencyRange('melToStft', fmin, fmax, sampleRate);
-  return requireModule().melToStft(melPower, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk);
+  return requireModule().melToStft(power, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk);
 }
 
 /**
  * Reconstruct audio from a Mel power spectrogram via Griffin-Lim. Mirrors
  * `feature::mel_to_audio`.
  *
- * @param melPower - Mel power spectrogram [nMels x nFrames] row-major
+ * @param power - Mel power spectrogram [nMels x nFrames] row-major
  * @param nMels - Number of Mel bands
  * @param nFrames - Number of time frames
  * @param sampleRate - Sample rate in Hz
@@ -351,7 +349,7 @@ export function melToStft(
  */
 export function melToAudio(request: MelToAudioRequest | MelResultToAudioRequest): Float32Array;
 export function melToAudio(
-  melPower: Float32Array,
+  power: Float32Array,
   nMels: number,
   nFrames: number,
   sampleRate?: number,
@@ -364,7 +362,7 @@ export function melToAudio(
   options?: GuardedOptions,
 ): Float32Array;
 export function melToAudio(
-  melPower: Float32Array | MelToAudioRequest | MelResultToAudioRequest,
+  power: Float32Array | MelToAudioRequest | MelResultToAudioRequest,
   nMels = 0,
   nFrames = 0,
   sampleRate = 22050,
@@ -376,13 +374,11 @@ export function melToAudio(
   htk = false,
   options: GuardedOptions = {},
 ): Float32Array {
-  if (!(melPower instanceof Float32Array)) {
+  if (!(power instanceof Float32Array)) {
     const request =
-      'result' in melPower
-        ? melRequestFromResult('melToAudio', melPower, MEL_TO_AUDIO_CARRIED)
-        : melPower;
+      'result' in power ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED) : power;
     return melToAudio(
-      request.melPower,
+      request.power,
       request.nMels,
       request.nFrames,
       request.sampleRate,
@@ -396,12 +392,12 @@ export function melToAudio(
     );
   }
   assertSampleRate('melToAudio', sampleRate);
-  validateMatrix('melToAudio', melPower, nMels, nFrames, 'melPower', 'nMels', options);
+  validateMatrix('melToAudio', power, nMels, nFrames, 'power', 'nMels', options);
   const fft = resolveFftOptions('melToAudio', nFft, hopLength);
   validatePositiveIntegers('melToAudio', { nIter });
   validateMelFrequencyRange('melToAudio', fmin, fmax, sampleRate);
   return requireModule().melToAudio(
-    melPower,
+    power,
     nMels,
     nFrames,
     sampleRate,
@@ -472,7 +468,7 @@ export function griffinLim(
  * Invert MFCC coefficients back to a Mel power spectrogram. Mirrors
  * `feature::mfcc_to_mel`.
  *
- * @param mfccCoefficients - MFCC matrix [nMfcc x nFrames] row-major
+ * @param coefficients - MFCC matrix [nMfcc x nFrames] row-major
  * @param nMfcc - Number of MFCC coefficients
  * @param nFrames - Number of time frames
  * @param nMels - Number of Mel bins to reconstruct (default: 128)
@@ -480,7 +476,7 @@ export function griffinLim(
  */
 export function mfccToMel(request: MfccToMelRequest | MfccResultToMelRequest): MelPowerResult;
 export function mfccToMel(
-  mfccCoefficients: Float32Array,
+  coefficients: Float32Array,
   nMfcc: number,
   nFrames: number,
   nMels?: number,
@@ -488,20 +484,20 @@ export function mfccToMel(
   options?: GuardedOptions,
 ): MelPowerResult;
 export function mfccToMel(
-  mfccCoefficients: Float32Array | MfccToMelRequest | MfccResultToMelRequest,
+  coefficients: Float32Array | MfccToMelRequest | MfccResultToMelRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
   lifter = 0,
   options: GuardedOptions = {},
 ): MelPowerResult {
-  if (!(mfccCoefficients instanceof Float32Array)) {
+  if (!(coefficients instanceof Float32Array)) {
     const request =
-      'result' in mfccCoefficients
-        ? mfccRequestFromResult('mfccToMel', mfccCoefficients, MFCC_TO_MEL_CARRIED)
-        : mfccCoefficients;
+      'result' in coefficients
+        ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
+        : coefficients;
     return mfccToMel(
-      request.mfccCoefficients,
+      request.coefficients,
       request.nMfcc,
       request.nFrames,
       request.nMels,
@@ -509,24 +505,16 @@ export function mfccToMel(
       request,
     );
   }
-  validateMatrix(
-    'mfccToMel',
-    mfccCoefficients,
-    nMfcc,
-    nFrames,
-    'mfccCoefficients',
-    'nMfcc',
-    options,
-  );
+  validateMatrix('mfccToMel', coefficients, nMfcc, nFrames, 'coefficients', 'nMfcc', options);
   validatePositiveIntegers('mfccToMel', { nMels });
-  return requireModule().mfccToMel(mfccCoefficients, nMfcc, nFrames, nMels, lifter);
+  return requireModule().mfccToMel(coefficients, nMfcc, nFrames, nMels, lifter);
 }
 
 /**
  * Reconstruct audio directly from MFCC coefficients via Griffin-Lim. Mirrors
  * `feature::mfcc_to_audio`.
  *
- * @param mfccCoefficients - MFCC matrix [nMfcc x nFrames] row-major
+ * @param coefficients - MFCC matrix [nMfcc x nFrames] row-major
  * @param nMfcc - Number of MFCC coefficients
  * @param nFrames - Number of time frames
  * @param nMels - Number of Mel bins (default: 128)
@@ -541,7 +529,7 @@ export function mfccToMel(
  */
 export function mfccToAudio(request: MfccToAudioRequest | MfccResultToAudioRequest): Float32Array;
 export function mfccToAudio(
-  mfccCoefficients: Float32Array,
+  coefficients: Float32Array,
   nMfcc: number,
   nFrames: number,
   nMels?: number,
@@ -556,7 +544,7 @@ export function mfccToAudio(
   options?: GuardedOptions,
 ): Float32Array;
 export function mfccToAudio(
-  mfccCoefficients: Float32Array | MfccToAudioRequest | MfccResultToAudioRequest,
+  coefficients: Float32Array | MfccToAudioRequest | MfccResultToAudioRequest,
   nMfcc = 0,
   nFrames = 0,
   nMels = 128,
@@ -570,13 +558,13 @@ export function mfccToAudio(
   lifter = 0,
   options: GuardedOptions = {},
 ): Float32Array {
-  if (!(mfccCoefficients instanceof Float32Array)) {
+  if (!(coefficients instanceof Float32Array)) {
     const request =
-      'result' in mfccCoefficients
-        ? mfccRequestFromResult('mfccToAudio', mfccCoefficients, MFCC_TO_AUDIO_CARRIED)
-        : mfccCoefficients;
+      'result' in coefficients
+        ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
+        : coefficients;
     return mfccToAudio(
-      request.mfccCoefficients,
+      request.coefficients,
       request.nMfcc,
       request.nFrames,
       request.nMels,
@@ -592,20 +580,12 @@ export function mfccToAudio(
     );
   }
   assertSampleRate('mfccToAudio', sampleRate);
-  validateMatrix(
-    'mfccToAudio',
-    mfccCoefficients,
-    nMfcc,
-    nFrames,
-    'mfccCoefficients',
-    'nMfcc',
-    options,
-  );
+  validateMatrix('mfccToAudio', coefficients, nMfcc, nFrames, 'coefficients', 'nMfcc', options);
   const fft = resolveFftOptions('mfccToAudio', nFft, hopLength);
   validatePositiveIntegers('mfccToAudio', { nMels, nIter });
   validateMelFrequencyRange('mfccToAudio', fmin, fmax, sampleRate);
   return requireModule().mfccToAudio(
-    mfccCoefficients,
+    coefficients,
     nMfcc,
     nFrames,
     nMels,

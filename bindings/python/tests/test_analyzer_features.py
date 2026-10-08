@@ -125,11 +125,12 @@ def test_analysis_primitives() -> None:
 
 
 def test_chord_functional_analysis() -> None:
-    """Functional analysis labels each detected chord with a Roman numeral."""
+    """Functional analysis returns the timed chords labelled like chord_functions."""
     from libsonare import (
         Mode,
         PitchClass,
         chord_functional_analysis,
+        chord_functions,
         detect_chords,
     )
 
@@ -154,7 +155,9 @@ def test_chord_functional_analysis() -> None:
     )
     assert isinstance(romans, list)
     assert len(romans) == len(chords.chords)
-    assert all(isinstance(label, str) and label for label in romans)
+    assert all(label.roman and label.function for label in romans)
+    # Detection followed by chord_functions gives the same entries.
+    assert romans == chord_functions(chords, (PitchClass.C, Mode.MAJOR))
 
     with pytest.raises(ValueError):
         chord_functional_analysis(

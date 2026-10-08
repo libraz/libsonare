@@ -452,23 +452,29 @@ inline int GsEfxRealizationProperty(const Napi::Object& obj, const char* key) {
       obj.Env(), std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
 }
 
-/// @brief Read an integer selector that is also accepted by name.
-/// @details undefined/null is @p fallback and a number reads as @ref IntProperty does. A string
-///   is looked up in @p names, whose positions are the selector values, and a name outside it
-///   is a RangeError listing the valid set; any other type is refused by name.
+/// @brief Read a selector given by name.
+/// @details undefined/null is @p fallback. A string is looked up in @p names, whose positions are
+///   the selector values, and a name outside it is a RangeError listing the valid set; any other
+///   type, an integer included, is a TypeError naming the valid set.
 template <std::size_t N>
 inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
                                  const std::array<const char*, N>& names, int fallback) {
   Napi::Value value = obj.Get(key);
-  if (!value.IsString()) return IntProperty(obj, key, fallback);
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  if (value.IsUndefined() || value.IsNull()) return fallback;
   std::string valid;
   for (std::size_t i = 0; i < N; ++i) {
-    if (name == names[i]) return static_cast<int>(i);
     valid += (i == 0 ? "'" : ", '") + std::string(names[i]) + "'";
   }
-  throw Napi::RangeError::New(obj.Env(), std::string(key) + " must be one of " + valid +
-                                             " or an integer, got '" + name + "'");
+  if (!value.IsString()) {
+    throw Napi::TypeError::New(
+        obj.Env(), std::string(key) + " must be one of " + valid + " (a name, not a number)");
+  }
+  const std::string name = value.As<Napi::String>().Utf8Value();
+  for (std::size_t i = 0; i < N; ++i) {
+    if (name == names[i]) return static_cast<int>(i);
+  }
+  throw Napi::RangeError::New(
+      obj.Env(), std::string(key) + " must be one of " + valid + ", got '" + name + "'");
 }
 
 /// @brief Read a float-array property off a record object (a Float32Array, or a

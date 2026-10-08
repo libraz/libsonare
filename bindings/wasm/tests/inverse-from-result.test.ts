@@ -63,7 +63,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
   it('melToStft', () => {
     const result = mel();
     const explicit = melToStft({
-      melPower: result.power,
+      power: result.power,
       nMels: result.nMels,
       nFrames: result.nFrames,
       sampleRate,
@@ -78,7 +78,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
   it('melToAudio, with an extra argument the result does not carry', () => {
     const result = mel();
     const explicit = melToAudio({
-      melPower: result.power,
+      power: result.power,
       nMels: result.nMels,
       nFrames: result.nFrames,
       sampleRate,
@@ -104,7 +104,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
     const fromResult = mfccToMel({ result });
     expect(fromResult).toEqual(
       mfccToMel({
-        mfccCoefficients: result.coefficients,
+        coefficients: result.coefficients,
         nMfcc: 13,
         nFrames: result.nFrames,
         nMels: 40,
@@ -114,7 +114,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
     // The lifter is part of the answer: dropping it changes the Mel matrix.
     expect(
       mfccToMel({
-        mfccCoefficients: result.coefficients,
+        coefficients: result.coefficients,
         nMfcc: 13,
         nFrames: result.nFrames,
         nMels: 40,
@@ -123,7 +123,7 @@ describe('inverse from a result equals the inverse with explicit arguments', () 
 
     expect(mfccToAudio({ result, nIter: 2 })).toEqual(
       mfccToAudio({
-        mfccCoefficients: result.coefficients,
+        coefficients: result.coefficients,
         nMfcc: 13,
         nFrames: result.nFrames,
         nMels: 40,
@@ -168,5 +168,25 @@ describe('a result request is refused when it contradicts the result', () => {
   it('names a hand-built result that lacks a parameter', () => {
     const { nFft: _nFft, ...incomplete } = mel;
     expect(() => melToStft({ result: incomplete as never })).toThrow(/result\.nFft is missing/);
+  });
+
+  it('no longer reads the request names that differed from the result', () => {
+    const { nMels, nFrames } = mel;
+    expect(() => melToStft({ melPower: mel.power, nMels, nFrames } as never)).toThrow();
+    expect(() => melToAudio({ melPower: mel.power, nMels, nFrames } as never)).toThrow();
+    expect(() =>
+      mfccToMel({
+        mfccCoefficients: coefficients.coefficients,
+        nMfcc: 13,
+        nFrames: coefficients.nFrames,
+      } as never),
+    ).toThrow();
+    expect(() =>
+      mfccToAudio({
+        mfccCoefficients: coefficients.coefficients,
+        nMfcc: 13,
+        nFrames: coefficients.nFrames,
+      } as never),
+    ).toThrow();
   });
 });

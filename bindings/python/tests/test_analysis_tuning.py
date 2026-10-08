@@ -70,7 +70,8 @@ def test_analyze_tuning_recentres_key_and_numerals(detuned: list[float]) -> None
         detuned, on.key.root, on.key.mode, _SR, tuning=estimate
     )
     detected = libsonare.detect_chords(detuned, _SR, tuning=estimate).chords
-    label_by_name = {c.name: label for c, label in zip(detected, labels, strict=True)}
+    assert [c.name for c in labels] == [c.name for c in detected]
+    label_by_name = {c.name: c.roman for c in labels}
     compared = 0
     for chord in on.chords:
         if chord.quality != "unknown" and chord.name in label_by_name:

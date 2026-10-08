@@ -81,17 +81,23 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
                                     SonareChordAnalysisResult* out);
 /// @brief Functional (Roman-numeral) harmony analysis of detected chords.
 /// @details Detects chords with @p options (same algorithm as
-///   sonare_detect_chords_ex), then labels each detected chord with a Roman
-///   numeral relative to the supplied key (e.g. "I", "IV", "V", "vi"). The
-///   returned array has one string per detected chord, in chord order.
+///   sonare_detect_chords_ex), then labels each detected chord relative to the supplied key
+///   exactly as sonare_chord_functions does: @p chords is the timed detection result, @p roman
+///   the numeral of each chord ("I", "V7", "vi", "N.C.") and @p functions its harmonic function
+///   ("tonic", "subdominant", "dominant", "chromatic", "none"). Both string arrays have one
+///   entry per chord, in chord order.
 /// @param key_root Tonic pitch class of the analysis key.
 /// @param key_mode Mode of the analysis key (major/minor/...).
-/// @param out Receives a heap-owned string array; free with
-///   sonare_free_string_array. Empty audio with no chords yields an empty array.
+/// @param chords Receives the detection result; free with sonare_free_chord_analysis_result.
+/// @param roman Receives a heap-owned string array; free with sonare_free_string_array.
+/// @param functions Receives a heap-owned string array; free with sonare_free_string_array.
+///   Empty audio with no chords yields empty arrays.
 SonareError sonare_chord_functional_analysis(const float* samples, size_t length, int sample_rate,
                                              const SonareChordDetectionOptions* options,
                                              SonarePitchClass key_root, SonareMode key_mode,
-                                             SonareStringArray* out);
+                                             SonareChordAnalysisResult* chords,
+                                             SonareStringArray* roman,
+                                             SonareStringArray* functions);
 /// @brief Roman numeral and harmonic function of chords that are already known.
 /// @details Labels each entry of @p chords relative to the key without analysing any audio:
 ///   @p roman receives the numeral ("I", "V7", "vi", "N.C." for an unknown chord) and

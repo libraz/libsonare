@@ -79,6 +79,21 @@ _CHORD_QUALITY_NAMES = {
 _CHORD_QUALITY_ORDINALS = {name: ordinal for ordinal, name in _CHORD_QUALITY_NAMES.items()}
 
 
+def _chords_from_c(out: SonareChordAnalysisResult) -> list[Chord]:
+    """Copies the chords of a C detection result into :class:`Chord` entries."""
+    return [
+        Chord(
+            root=PitchClass(out.chords[i].root),
+            quality=_CHORD_QUALITY_NAMES.get(int(out.chords[i].quality), "unknown"),
+            start=float(out.chords[i].start),
+            end=float(out.chords[i].end),
+            confidence=float(out.chords[i].confidence),
+            bass=PitchClass(out.chords[i].bass),
+        )
+        for i in range(out.chord_count)
+    ]
+
+
 @_guard_buffer("samples")
 def detect_chords(
     samples: Sequence[float] | list[float],
@@ -147,20 +162,7 @@ def detect_chords(
     )
     _check(rc)
     try:
-        return ChordAnalysisResult(
-            chords=[
-                Chord(
-                    root=PitchClass(out.chords[i].root),
-                    quality=_CHORD_QUALITY_NAMES.get(int(out.chords[i].quality), "unknown"),
-                    start=float(out.chords[i].start),
-                    end=float(out.chords[i].end),
-                    confidence=float(out.chords[i].confidence),
-                    bass=PitchClass(out.chords[i].bass),
-                )
-                for i in range(out.chord_count)
-            ],
-            tuning=float(out.tuning),
-        )
+        return ChordAnalysisResult(chords=_chords_from_c(out), tuning=float(out.tuning))
     finally:
         lib.sonare_free_chord_analysis_result(ctypes.byref(out))
 
@@ -184,12 +186,12 @@ def chord_functional_analysis(
     detect_inversions: bool = False,
     chroma_method: str = "stft",
     tuning: float | str = 0.0,
-) -> list[str]:
-    """Label detected chords with Roman numerals relative to a key.
+) -> list[FunctionalChord]:
+    """Detect chords and label them relative to a key.
 
     Detects chords with the same algorithm as :func:`detect_chords`, then
-    returns one Roman-numeral label (e.g. ``"I"``, ``"IV"``, ``"V"``, ``"vi"``)
-    per detected chord, in chord order. ``tuning`` is as for
+    returns the timed entries as :func:`chord_functions` does: every
+    :class:`Chord` field plus ``roman`` and ``function``. ``tuning`` is as for
     :func:`detect_chords`.
     """
     chroma_method_value = {"stft": 0, "nnls": 1}.get(chroma_method.lower())
@@ -197,7 +199,9 @@ def chord_functional_analysis(
         raise SonareValueError("chroma_method must be 'stft' or 'nnls'")
     lib = _get_lib()
     c_array, length = _to_c_float_array(samples)
-    out = SonareStringArray()
+    detected = SonareChordAnalysisResult()
+    roman = SonareStringArray()
+    functions = SonareStringArray()
     # The key ordinals go in unconverted: the struct's own narrowing refuses a
     # fraction, which int() truncated into a neighbouring pitch class or mode.
     tuning_value, tuning_auto = _tuning_arg("chord_functional_analysis", tuning)
@@ -227,13 +231,31 @@ def chord_functional_analysis(
         ctypes.byref(options),
         _to_c_int32(key_root, "key_root"),
         _to_c_int32(key_mode, "key_mode"),
-        ctypes.byref(out),
+        ctypes.byref(detected),
+        ctypes.byref(roman),
+        ctypes.byref(functions),
     )
     _check(rc)
     try:
-        return [out.items[i].decode("utf-8") for i in range(out.count)]
+        return [
+            FunctionalChord(
+                chord.root,
+                chord.quality,
+                chord.start,
+                chord.end,
+                chord.confidence,
+                chord.bass,
+                chord.canonical_name,
+                chord.roman_numeral,
+                roman.items[i].decode("utf-8"),
+                functions.items[i].decode("utf-8"),
+            )
+            for i, chord in enumerate(_chords_from_c(detected))
+        ]
     finally:
-        lib.sonare_free_string_array(ctypes.byref(out))
+        lib.sonare_free_chord_analysis_result(ctypes.byref(detected))
+        lib.sonare_free_string_array(ctypes.byref(roman))
+        lib.sonare_free_string_array(ctypes.byref(functions))
 
 
 def _key_pair(key: object) -> tuple[ctypes.c_int32, ctypes.c_int32]:

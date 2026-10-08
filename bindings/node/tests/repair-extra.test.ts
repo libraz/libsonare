@@ -167,12 +167,12 @@ describe('masteringRepairDereverbConfigForRoom (Node)', () => {
   function roomEstimate(volume: number, rt60Bands: number[] = MID_BANDS): RoomEstimateResult {
     return {
       volume,
-      length: 0,
-      width: 0,
-      height: 0,
+      lengthM: 0,
+      widthM: 0,
+      heightM: 0,
       drrDb: 0,
       confidence: 0,
-      absorptionBands: new Float32Array(0),
+      bandAbsorption: new Float32Array(0),
       rt60Bands: new Float32Array(rt60Bands),
     };
   }

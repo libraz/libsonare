@@ -309,9 +309,9 @@ def test_estimate_room_forwards_band_controls_and_uses_zero_default(
     calls: list[dict[str, object]] = []
     result = SimpleNamespace(
         volume=10.0,
-        length=3.0,
-        width=2.0,
-        height=1.7,
+        length_m=3.0,
+        width_m=2.0,
+        height_m=1.7,
         drr_db=0.0,
         confidence=0.5,
         rt60_bands=[],

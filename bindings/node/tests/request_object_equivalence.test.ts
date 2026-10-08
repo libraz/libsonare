@@ -427,10 +427,10 @@ const ROWS: Row[] = [
     params: 'estimate ...options?',
     values: {
       estimate: {
-        length: 6,
-        width: 4.5,
-        height: 3,
-        absorptionBands: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
+        lengthM: 6,
+        widthM: 4.5,
+        heightM: 3,
+        bandAbsorption: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
       },
       options: { source: { x: 1, y: 1, z: 1.2 }, listener: { x: 3, y: 2, z: 1.7 } },
     },
@@ -796,9 +796,9 @@ const ROWS: Row[] = [
   {
     name: 'melToStft',
     fn: sonare.melToStft,
-    params: 'mel nMels nFrames sampleRate? nFft? fmin? fmax? htk?',
+    params: 'power nMels nFrames sampleRate? nFft? fmin? fmax? htk?',
     values: {
-      mel: MEL.power,
+      power: MEL.power,
       nMels: MEL.nMels,
       nFrames: MEL.nFrames,
       sampleRate: ALT_SR,
@@ -812,9 +812,9 @@ const ROWS: Row[] = [
   {
     name: 'melToAudio',
     fn: sonare.melToAudio,
-    params: 'mel nMels nFrames sampleRate? nFft? hopLength? fmin? fmax? nIter? htk?',
+    params: 'power nMels nFrames sampleRate? nFft? hopLength? fmin? fmax? nIter? htk?',
     values: {
-      mel: MEL.power,
+      power: MEL.power,
       nMels: MEL.nMels,
       nFrames: MEL.nFrames,
       sampleRate: ALT_SR,
@@ -830,9 +830,9 @@ const ROWS: Row[] = [
   {
     name: 'mfccToMel',
     fn: sonare.mfccToMel,
-    params: 'mfcc nMfcc nFrames nMels? lifter?',
+    params: 'coefficients nMfcc nFrames nMels? lifter?',
     values: {
-      mfcc: MFCC.coefficients,
+      coefficients: MFCC.coefficients,
       nMfcc: MFCC.nMfcc,
       nFrames: MFCC.nFrames,
       nMels: 32,
@@ -844,9 +844,9 @@ const ROWS: Row[] = [
     name: 'mfccToAudio',
     fn: sonare.mfccToAudio,
     params:
-      'mfcc nMfcc nFrames nMels? sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? lifter?',
+      'coefficients nMfcc nFrames nMels? sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? lifter?',
     values: {
-      mfcc: MFCC.coefficients,
+      coefficients: MFCC.coefficients,
       nMfcc: MFCC.nMfcc,
       nFrames: MFCC.nFrames,
       nMels: 32,
@@ -1675,12 +1675,12 @@ const ROWS: Row[] = [
     values: {
       estimate: {
         volume: 2500,
-        length: 0,
-        width: 0,
-        height: 0,
+        lengthM: 0,
+        widthM: 0,
+        heightM: 0,
         drrDb: 0,
         confidence: 0,
-        absorptionBands: new Float32Array(0),
+        bandAbsorption: new Float32Array(0),
         rt60Bands: new Float32Array([0.9, 0.9, 1, 1.2, 0.9, 0.9]),
       },
       config: { nFft: 512, attenuation: 0.3 },

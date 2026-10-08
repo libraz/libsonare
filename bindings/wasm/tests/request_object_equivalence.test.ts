@@ -736,10 +736,10 @@ const ROWS: Row[] = [
   {
     name: 'melToStft',
     fn: sonare.melToStft,
-    params: 'melPower nMels nFrames sampleRate? nFft? fmin? fmax? htk? ...options?',
+    params: 'power nMels nFrames sampleRate? nFft? fmin? fmax? htk? ...options?',
     values: {
       options: { validate: false },
-      melPower: MEL.power,
+      power: MEL.power,
       nMels: MEL.nMels,
       nFrames: MEL.nFrames,
       sampleRate: ALT_SR,
@@ -754,11 +754,10 @@ const ROWS: Row[] = [
   {
     name: 'melToAudio',
     fn: sonare.melToAudio,
-    params:
-      'melPower nMels nFrames sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? ...options?',
+    params: 'power nMels nFrames sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? ...options?',
     values: {
       options: { validate: false },
-      melPower: MEL.power,
+      power: MEL.power,
       nMels: MEL.nMels,
       nFrames: MEL.nFrames,
       sampleRate: ALT_SR,
@@ -794,10 +793,10 @@ const ROWS: Row[] = [
   {
     name: 'mfccToMel',
     fn: sonare.mfccToMel,
-    params: 'mfccCoefficients nMfcc nFrames nMels? lifter? ...options?',
+    params: 'coefficients nMfcc nFrames nMels? lifter? ...options?',
     values: {
       options: { validate: false },
-      mfccCoefficients: MFCC.coefficients,
+      coefficients: MFCC.coefficients,
       nMfcc: MFCC.nMfcc,
       nFrames: MFCC.nFrames,
       nMels: 32,
@@ -810,10 +809,10 @@ const ROWS: Row[] = [
     name: 'mfccToAudio',
     fn: sonare.mfccToAudio,
     params:
-      'mfccCoefficients nMfcc nFrames nMels? sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? lifter? ...options?',
+      'coefficients nMfcc nFrames nMels? sampleRate? nFft? hopLength? fmin? fmax? nIter? htk? lifter? ...options?',
     values: {
       options: { validate: false },
-      mfccCoefficients: MFCC.coefficients,
+      coefficients: MFCC.coefficients,
       nMfcc: MFCC.nMfcc,
       nFrames: MFCC.nFrames,
       nMels: 32,
@@ -1979,10 +1978,10 @@ const ROWS: Row[] = [
     params: 'estimate ...options?',
     values: {
       estimate: {
-        length: 6,
-        width: 4.5,
-        height: 3,
-        absorptionBands: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
+        lengthM: 6,
+        widthM: 4.5,
+        heightM: 3,
+        bandAbsorption: new Float32Array([0.1, 0.12, 0.15, 0.2, 0.25, 0.3]),
       },
       options: { source: { x: 1, y: 1, z: 1.2 }, listener: { x: 3, y: 2, z: 1.7 } },
     },
@@ -2055,12 +2054,12 @@ const ROWS: Row[] = [
     values: {
       estimate: {
         volume: 2500,
-        length: 0,
-        width: 0,
-        height: 0,
+        lengthM: 0,
+        widthM: 0,
+        heightM: 0,
         drrDb: 0,
         confidence: 0,
-        absorptionBands: new Float32Array(0),
+        bandAbsorption: new Float32Array(0),
         rt60Bands: new Float32Array([0.9, 0.9, 1, 1.2, 0.9, 0.9]),
       },
       config: { nFft: 512, attenuation: 0.3 },

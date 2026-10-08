@@ -14,7 +14,7 @@ from __future__ import annotations
 import ctypes
 from collections.abc import Sequence
 
-from ._errors import SonareValueError, _not_supported
+from ._errors import ErrorCode, SonareError, SonareValueError, _not_supported
 from ._runtime import (
     SonareRirSynthConfig,
     SonareRirSynthResult,
@@ -78,28 +78,28 @@ def _read_diagnostics() -> list[RirDiagnostic]:
     return out
 
 
-def _named_selector(value: int | str, argument: str, prefix: str) -> int:
-    """Resolves a selector given by name, leaving an integer untouched.
+def _named_selector(value: str, argument: str, prefix: str) -> int:
+    """Resolves a selector given by name; anything but a string is a ``TypeError``.
 
     ``prefix`` names the C ABI's ``sonare_<prefix>_name`` getter, whose values
     are contiguous from 0, so a name's position is its selector value.
     """
-    if not isinstance(value, str):
-        return value
     name_of = getattr(_get_lib(), f"sonare_{prefix}_name")
     valid: list[str] = []
     while (name := name_of(len(valid))) is not None:
         valid.append(name.decode())
+    if not isinstance(value, str):
+        raise TypeError(f"{argument} must be one of {valid} (a name, not a number), got {value!r}")
     if value not in valid:
-        raise SonareValueError(f"{argument} must be one of {valid} or an integer, got {value!r}")
+        raise SonareValueError(f"{argument} must be one of {valid}, got {value!r}")
     return valid.index(value)
 
 
-def _material_preset(value: int | MaterialPresetName) -> int:
+def _material_preset(value: MaterialPresetName) -> int:
     return _named_selector(value, "material_preset", "material_preset")
 
 
-def _acoustic_mode(value: int | AcousticModeName) -> int:
+def _acoustic_mode(value: AcousticModeName) -> int:
     return _named_selector(value, "mode", "acoustic_mode")
 
 
@@ -160,7 +160,7 @@ def synthesize_rir(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int | MaterialPresetName = 0,
+    material_preset: MaterialPresetName = "none",
     sample_rate: int = 48000,
     ism_order: int = 3,
     prefer_eyring: bool = True,
@@ -192,10 +192,10 @@ def synthesize_rir(
             ``material_preset`` -- it applies to whichever material the
             absorption precedence selected.
         material_preset: Named wall-material preset, by name (``"none"``,
-            ``"concrete"``, ``"wood"``, ``"curtain"``, ``"carpet"``, ``"glass"``)
-            or by integer (0 none, 1 concrete, 2 wood, 3 curtain, 4 carpet,
-            5 glass). Any preset but ``"none"`` wins over ``absorption_bands``
-            and ``absorption``. An unknown name raises ``SonareValueError``.
+            ``"concrete"``, ``"wood"``, ``"curtain"``, ``"carpet"``, ``"glass"``).
+            Any preset but ``"none"`` wins over ``absorption_bands`` and
+            ``absorption``. An unknown name raises ``SonareValueError`` and a
+            number ``TypeError``.
         sample_rate: Output sample rate in Hz.
         ism_order: Image-source reflection order.
         prefer_eyring: Use the Eyring statistical late-tail model (default);
@@ -214,15 +214,16 @@ def synthesize_rir(
             distinguishable from unset here; use 0.01 for a freezing room.
         air_humidity_percent: Relative humidity in percent (0 = the ISO
             reference climate's 50 %). Both climate values are read only while
-            ``air_absorption_enabled`` is set, and an implausible pair sets
-            ``has_error`` with the ``acoustic.invalid_air_absorption``
-            diagnostic.
+            ``air_absorption_enabled`` is set, and an implausible pair raises
+            ``SonareError`` (``acoustic.invalid_air_absorption``).
 
     Returns:
-        A :class:`RirResult`; ``has_error`` is True when the geometry is invalid
-        (for example invalid room dimensions or a source/listener outside the
-        room), in which case ``rir`` is empty and ``error_message`` identifies
-        the first acoustic diagnostic.
+        A :class:`RirResult`; its ``diagnostics`` are warnings.
+
+    Raises:
+        SonareError: The geometry, placement or timing is unusable (for example
+            a source outside the room); the message leads with the diagnostic
+            code, such as ``acoustic.source_outside_room``.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_synthesize_rir"):
@@ -267,21 +268,19 @@ def synthesize_rir(
     )
     _check(rc)
     try:
-        detail = lib.sonare_last_error_message() if out.has_error else None
-        error_message = detail.decode("utf-8") if detail else ""
-        # Read the diagnostic channel unconditionally, exactly as the Node and
-        # WASM facades do. Non-fatal diagnostics are recorded on SUCCESS returns
-        # -- a max_seconds clamp that cut the tail, or a request degraded to
-        # early reflections only -- so gating this on has_error would leave a
-        # truncated RIR indistinguishable from a complete one. Read before any
-        # later C ABI call can overwrite the thread-local list.
-        diagnostics = _read_diagnostics()
+        if out.has_error:
+            detail = lib.sonare_last_error_message()
+            raise SonareError(
+                ErrorCode.INVALID_PARAMETER,
+                detail.decode("utf-8") if detail else "invalid room geometry",
+            )
+        # Non-fatal diagnostics are recorded on success too -- a max_seconds clamp
+        # that cut the tail, or a request degraded to early reflections only.
+        # Read before any later C ABI call can overwrite the thread-local list.
         return RirResult(
             rir=_float_array_result(out.rir, out.length),
             sample_rate=int(out.sample_rate),
-            has_error=bool(out.has_error),
-            error_message=error_message,
-            diagnostics=diagnostics,
+            diagnostics=_read_diagnostics(),
         )
     finally:
         lib.sonare_free_rir_synth_result(ctypes.byref(out))
@@ -297,7 +296,7 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
-    mode: int | AcousticModeName = 0,
+    mode: AcousticModeName = "auto",
     min_decay_db: float = 0.0,
     noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate:
@@ -314,9 +313,9 @@ def estimate_room(
             estimate, computed from the clamped prior. The reported volume
             scales with the cube of the prior, so the substitution is worth
             three orders of magnitude at the low end.
-        mode: Analyzer routing, by name or integer -- ``"auto"`` / 0 (impulse-like
-            inputs route to IR analysis), ``"blind"`` / 1, ``"impulse_response"`` / 2.
-            An unknown name raises ``SonareValueError``.
+        mode: Analyzer routing, by name -- ``"auto"`` (impulse-like inputs route
+            to IR analysis), ``"blind"`` or ``"impulse_response"``. An unknown
+            name raises ``SonareValueError`` and a number ``TypeError``.
         min_decay_db: Analyzer decay-fit span in dB (0 = library default).
         noise_floor_margin_db: Analyzer noise-floor margin in dB (0 = library
             default).
@@ -348,9 +347,9 @@ def estimate_room(
         count = out.band_count
         return RoomEstimate(
             volume=float(out.volume),
-            length=float(out.length_m),
-            width=float(out.width_m),
-            height=float(out.height_m),
+            length_m=float(out.length_m),
+            width_m=float(out.width_m),
+            height_m=float(out.height_m),
             drr_db=float(out.drr_db),
             confidence=float(out.confidence),
             absorption_bands=_optional_float_array_result(out.absorption_bands, count),
@@ -374,9 +373,10 @@ def room_geometry_from_estimate(
 ) -> RoomGeometry:
     """Turn a room estimate into the geometry :func:`synthesize_rir` takes.
 
-    The pair to :func:`estimate_room`: the estimate's ``length``, ``width`` and
-    ``height`` become ``length_m``, ``width_m`` and ``height_m``, and its
-    ``absorption_bands`` carry over as the wall absorption::
+    The pair to :func:`estimate_room`: the estimate's ``length_m``, ``width_m``,
+    ``height_m`` and ``absorption_bands`` are already :func:`synthesize_rir`'s
+    names, so this merges the placement in and drops what the estimate did not
+    converge on::
 
         geometry = libsonare.room_geometry_from_estimate(estimate, source=(1, 1, 1.2),
                                                          listener=(3, 2, 1.7))
@@ -397,9 +397,9 @@ def room_geometry_from_estimate(
     )
     c_estimate = SonareRoomEstimate(
         volume=estimate.volume,
-        length_m=estimate.length,
-        width_m=estimate.width,
-        height_m=estimate.height,
+        length_m=estimate.length_m,
+        width_m=estimate.width_m,
+        height_m=estimate.height_m,
         drr_db=estimate.drr_db,
         confidence=estimate.confidence,
         absorption_bands=bands_ptr,
@@ -437,7 +437,7 @@ def room_morph(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int | MaterialPresetName = 0,
+    material_preset: MaterialPresetName = "none",
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
     ism_order: int = 3,
@@ -465,7 +465,7 @@ def room_morph(
             missing bands read as 0. Independent of ``absorption_bands`` and
             ``material_preset`` -- it applies to whichever material the
             absorption precedence selected.
-        material_preset: Named target-wall material preset (0 = none; see
+        material_preset: Named target-wall material preset (``"none"``; see
             :func:`synthesize_rir`). A non-zero preset wins over the bands/scalar.
         prefer_eyring: Use the Eyring statistical late-tail model for the target
             room (default); False selects Sabine.

@@ -55,7 +55,7 @@ import {
  * the addon narrows them. Truncation lands a fractional value on that zero, so
  * the call runs at the default and reports success.
  *
- * `materialPreset` is deliberately absent: its zero is the named NONE preset, a
+ * `materialPreset` is deliberately absent: it is a name, and its `'none'` is a
  * mode of its own rather than a stand-in for an absent value. So is
  * {@link analyzeImpulseResponse}'s `nOctaveBands`, which is passed through as a
  * literal band count and analyses no bands at zero.
@@ -99,8 +99,8 @@ export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, Samples
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
-export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'length' | 'width' | 'height'> & {
-  absorptionBands?: Float32Array | number[];
+export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
+  bandAbsorption?: Float32Array | number[];
 };
 export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimateOptions {
   estimate: RoomGeometryEstimate;
@@ -434,8 +434,11 @@ export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
 }
 
 /**
- * Synthesize a room impulse response from shoebox geometry. `hasError` is true
- * when the source/listener falls outside the room (the RIR is then empty).
+ * Synthesize a room impulse response from shoebox geometry.
+ *
+ * @throws SonareError when the geometry, placement or timing is unusable (for
+ *   example a source outside the room); the message leads with the diagnostic
+ *   code, such as `acoustic.source_outside_room`.
  */
 export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
   assertRoomOptions('synthesizeRir', options);
@@ -468,12 +471,13 @@ export function estimateRoom(
 /**
  * Turn a room estimate into the geometry {@link synthesizeRir} takes.
  *
- * The pair to {@link estimateRoom}: the estimate's `length`, `width` and `height`
- * become `lengthM`, `widthM` and `heightM`, and its `absorptionBands` become
- * `bandAbsorption`. The estimate carries no placement, so `source` and `listener`
- * are set only when given; an omitted one is left to `synthesizeRir`'s own
- * default, which may fall outside a small estimated room. Absorption bands that
- * did not converge are left out, so the scalar `absorption` applies.
+ * The pair to {@link estimateRoom}: the estimate's `lengthM`, `widthM`,
+ * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names, so this
+ * merges the placement in and drops what the estimate does not converge on. The
+ * estimate carries no placement, so `source` and `listener` are set only when
+ * given; an omitted one is left to `synthesizeRir`'s own default, which may fall
+ * outside a small estimated room. Absorption bands that did not converge are
+ * left out, so the scalar `absorption` applies.
  *
  * @throws SonareError when the estimate has no measurable dimensions (NaN).
  */
@@ -1055,21 +1059,23 @@ export function detectChords(
 }
 
 /**
- * Functional (Roman-numeral) chord analysis from mono samples.
+ * Functional (Roman-numeral) chord analysis from mono samples: {@link detectChords}
+ * followed by {@link chordFunctions} in the given key, returning the timed
+ * entries with `roman` and `function` added.
  *
  * Accepts either an options object
  * (`chordFunctionalAnalysis(samples, keyRoot, keyMode, sampleRate, options)`,
  * matching the WASM binding) or the legacy positional argument list. The form
  * is selected by the type of the fifth argument.
  */
-export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): string[];
+export function chordFunctionalAnalysis(request: ChordFunctionalAnalysisRequest): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: number,
   keyMode?: number,
   sampleRate?: number,
   options?: ChordDetectionOptions,
-): string[];
+): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array,
   keyRoot: number,
@@ -1087,7 +1093,7 @@ export function chordFunctionalAnalysis(
   useKeyContext?: boolean,
   detectInversions?: boolean,
   chromaMethod?: ChordChromaMethod,
-): string[];
+): FunctionalChord[];
 export function chordFunctionalAnalysis(
   samples: Float32Array | ChordFunctionalAnalysisRequest,
   keyRoot = 0,
@@ -1105,7 +1111,7 @@ export function chordFunctionalAnalysis(
   useKeyContext = false,
   detectInversions = false,
   chromaMethod: ChordChromaMethod = 'stft',
-): string[] {
+): FunctionalChord[] {
   const p: ResolvedChordParams =
     samples instanceof Float32Array && typeof minDurationOrOptions === 'object'
       ? resolveChordOptions(minDurationOrOptions)
@@ -1142,7 +1148,11 @@ export function chordFunctionalAnalysis(
   const resolvedKeyRoot = samples instanceof Float32Array ? keyRoot : samples.keyRoot;
   const resolvedKeyMode = samples instanceof Float32Array ? keyMode : (samples.keyMode ?? 0);
   assertChordKey('chordFunctionalAnalysis', resolvedKeyRoot, resolvedKeyMode);
-  return addon.chordFunctionalAnalysis(
+  const analysed: {
+    chords: Chord[];
+    roman: string[];
+    functions: ChordFunction[];
+  } = addon.chordFunctionalAnalysis(
     samples instanceof Float32Array ? samples : samples.samples,
     resolvedKeyRoot,
     resolvedKeyMode,
@@ -1162,6 +1172,11 @@ export function chordFunctionalAnalysis(
     p.tuning === 'auto' ? 0 : p.tuning,
     p.tuning === 'auto',
   );
+  return analysed.chords.map((chord, i) => ({
+    ...chord,
+    roman: analysed.roman[i],
+    function: analysed.functions[i],
+  }));
 }
 
 /**

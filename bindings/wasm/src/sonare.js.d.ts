@@ -68,6 +68,7 @@ export interface WasmRealtimeVoiceChangerPodConfig {
   formantBody: number;
   formantBrightness: number;
   formantNasal: number;
+  formantMode: 'relative' | 'absolute';
   eqHighpassHz: number;
   eqBodyDb: number;
   eqPresenceDb: number;
@@ -353,8 +354,6 @@ export interface WasmRoomMorphResult {
 export interface WasmRirResult {
   rir: Float32Array;
   sampleRate: number;
-  hasError: boolean;
-  errorMessage: string;
   diagnostics: WasmRirDiagnostic[];
 }
 
@@ -371,12 +370,12 @@ export interface WasmRoomEstimateOptions {
 
 export interface WasmRoomEstimateResult {
   volume: number;
-  length: number;
-  width: number;
-  height: number;
+  lengthM: number;
+  widthM: number;
+  heightM: number;
   drrDb: number;
   confidence: number;
-  absorptionBands: Float32Array;
+  bandAbsorption: Float32Array;
   rt60Bands: Float32Array;
 }
 
@@ -1927,7 +1926,7 @@ export interface SonareModule {
     detectInversions: boolean,
     chromaMethod: number,
     tuning: number | 'auto',
-  ) => string[];
+  ) => WasmChordAnalysisResult & { roman: string[]; functions: string[] };
   chordFunctions: (
     chords: ArrayLike<{ root: number; quality: number }>,
     keyRoot: number,
@@ -2037,11 +2036,11 @@ export interface SonareModule {
     options: WasmRoomMorphOptions,
   ) => WasmRoomMorphResult;
   roomGeometryFromEstimate?: (estimate: {
-    length: number;
-    width: number;
-    height: number;
-    absorptionBands?: Float32Array | number[];
-  }) => WasmRoomGeometryOptions;
+    lengthM: number;
+    widthM: number;
+    heightM: number;
+    bandAbsorption?: Float32Array | number[];
+  }) => Omit<WasmRoomGeometryOptions, 'materialPreset'>;
   analyzeWithProgress: (
     samples: Float32Array,
     sampleRate: number,
@@ -3091,7 +3090,7 @@ export interface SonareModule {
 
   // Features - Inverse reconstruction
   melToStft: (
-    melPower: Float32Array,
+    power: Float32Array,
     nMels: number,
     nFrames: number,
     sampleRate: number,
@@ -3101,7 +3100,7 @@ export interface SonareModule {
     htk: boolean,
   ) => WasmStftPowerResult;
   melToAudio: (
-    melPower: Float32Array,
+    power: Float32Array,
     nMels: number,
     nFrames: number,
     sampleRate: number,

@@ -1454,7 +1454,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
       const positionalStft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax, true);
       const requestStft = melToStft({
-        melPower: mel.power,
+        power: mel.power,
         nMels,
         nFrames: mel.nFrames,
         sampleRate: SR,
@@ -1472,7 +1472,7 @@ describe('v1.2 feature additions (WASM)', () => {
         nMels,
       );
       const requestMel = mfccToMel({
-        mfccCoefficients: coefficients.coefficients,
+        coefficients: coefficients.coefficients,
         nMfcc,
         nFrames: coefficients.nFrames,
         nMels,
@@ -1503,7 +1503,7 @@ describe('v1.2 feature additions (WASM)', () => {
         true,
       );
       const requestAudio = melToAudio({
-        melPower: mel.power,
+        power: mel.power,
         nMels,
         nFrames: mel.nFrames,
         sampleRate: SR,
@@ -1530,7 +1530,7 @@ describe('v1.2 feature additions (WASM)', () => {
         true,
       );
       const requestMfccAudio = mfccToAudio({
-        mfccCoefficients: coefficients.coefficients,
+        coefficients: coefficients.coefficients,
         nMfcc,
         nFrames: coefficients.nFrames,
         nMels,

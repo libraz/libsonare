@@ -137,13 +137,13 @@ describe('WASM analyzer coverage parity', () => {
   describe('chordFunctionalAnalysis', () => {
     it('returns a Roman-numeral label array relative to the given key', () => {
       // A simple tonal signal; the exact labels depend on detection, but the
-      // surface must return a string[] (one label per detected chord).
+      // surface must return the timed entries (one per detected chord, with roman and function).
       const samples = makeSine(4, 261.63); // C4
       const labels = chordFunctionalAnalysis(samples, PitchClass.C, Mode.Major, SR);
       expect(Array.isArray(labels)).toBe(true);
-      for (const label of labels) {
-        expect(typeof label).toBe('string');
-        expect(label.length).toBeGreaterThan(0);
+      for (const entry of labels) {
+        expect(entry.roman.length).toBeGreaterThan(0);
+        expect(entry.function.length).toBeGreaterThan(0);
       }
     });
   });

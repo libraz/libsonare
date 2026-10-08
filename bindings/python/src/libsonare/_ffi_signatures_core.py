@@ -507,6 +507,8 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareChordDetectionOptions),
         ctypes.c_int32,
         ctypes.c_int32,
+        ctypes.POINTER(SonareChordAnalysisResult),
+        ctypes.POINTER(SonareStringArray),
         ctypes.POINTER(SonareStringArray),
     ]
 

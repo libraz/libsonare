@@ -250,6 +250,7 @@ SoloProcessor: TypeAlias = Literal[
     "stereo.phaseAlign",
     "stereo.stereoBalance",
     "utility.gain",
+    "voice.changer",
 ]
 # END GENERATED SoloProcessor
 PairProcessor: TypeAlias = Literal[
@@ -412,7 +413,7 @@ def synthesize_rir(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int | MaterialPresetName = 0,
+    material_preset: MaterialPresetName = "none",
     sample_rate: int = 48000,
     ism_order: int = 3,
     prefer_eyring: bool = True,
@@ -433,7 +434,7 @@ def estimate_room(
     reference_absorption: float = 0.15,
     prefer_eyring: bool = True,
     n_octave_bands: int = 0,
-    mode: int | AcousticModeName = 0,
+    mode: AcousticModeName = "auto",
     min_decay_db: float = 0.0,
     noise_floor_margin_db: float = 0.0,
 ) -> RoomEstimate: ...
@@ -455,7 +456,7 @@ def room_morph(
     absorption: float = 0.2,
     absorption_bands: Sequence[float] | None = None,
     scattering_bands: Sequence[float] | None = None,
-    material_preset: int | MaterialPresetName = 0,
+    material_preset: MaterialPresetName = "none",
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
     ism_order: int = 3,
@@ -536,7 +537,7 @@ def chord_functional_analysis(
     detect_inversions: bool = False,
     chroma_method: str = "stft",
     tuning: float | str = 0.0,
-) -> list[str]: ...
+) -> list[FunctionalChord]: ...
 def chord_functions(
     chords: ChordAnalysisResult | Sequence[Chord],
     key: Key | Mapping[str, object] | tuple[PitchClass, Mode],
@@ -993,6 +994,7 @@ class RealtimeVoiceChangerConfig:
     formant_body: float
     formant_brightness: float
     formant_nasal: float
+    formant_mode: Literal["relative", "absolute"]
     eq_highpass_hz: float
     eq_body_db: float
     eq_presence_db: float

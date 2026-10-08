@@ -906,6 +906,43 @@ std::string ChordSymbol(const SonareChord& chord) {
 
 }  // namespace
 
+namespace {
+
+Napi::Array StringArrayToJs(Napi::Env env, const SonareStringArray& labels) {
+  Napi::Array result = Napi::Array::New(env, labels.count);
+  for (size_t i = 0; i < labels.count; ++i) {
+    result.Set(static_cast<uint32_t>(i),
+               Napi::String::New(env, labels.items[i] != nullptr ? labels.items[i] : ""));
+  }
+  return result;
+}
+
+// The timed chord entries of a detection result, in the shape detectChords reports.
+Napi::Array ChordsToJs(Napi::Env env, const SonareChordAnalysisResult& analysis) {
+  Napi::Array chords = Napi::Array::New(env, analysis.chord_count);
+  for (size_t i = 0; i < analysis.chord_count; ++i) {
+    Napi::Object chord = Napi::Object::New(env);
+    std::string root = PitchClassNameLocal(analysis.chords[i].root);
+    std::string bass = PitchClassNameLocal(analysis.chords[i].bass);
+    std::string quality = ChordQualityName(analysis.chords[i].quality);
+    chord.Set("root", Napi::String::New(env, root));
+    chord.Set("bass", Napi::String::New(env, bass));
+    chord.Set("rootName", Napi::String::New(env, root));
+    chord.Set("bassName", Napi::String::New(env, bass));
+    chord.Set("quality", Napi::String::New(env, quality));
+    chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
+    chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
+    chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
+    chord.Set("duration",
+              Napi::Number::New(env, analysis.chords[i].end - analysis.chords[i].start));
+    chord.Set("confidence", Napi::Number::New(env, analysis.chords[i].confidence));
+    chords.Set(static_cast<uint32_t>(i), chord);
+  }
+  return chords;
+}
+
+}  // namespace
+
 Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
@@ -980,25 +1017,7 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  Napi::Array chords = Napi::Array::New(env, analysis.chord_count);
-  for (size_t i = 0; i < analysis.chord_count; ++i) {
-    Napi::Object chord = Napi::Object::New(env);
-    std::string root = PitchClassNameLocal(analysis.chords[i].root);
-    std::string bass = PitchClassNameLocal(analysis.chords[i].bass);
-    std::string quality = ChordQualityName(analysis.chords[i].quality);
-    chord.Set("root", Napi::String::New(env, root));
-    chord.Set("bass", Napi::String::New(env, bass));
-    chord.Set("rootName", Napi::String::New(env, root));
-    chord.Set("bassName", Napi::String::New(env, bass));
-    chord.Set("quality", Napi::String::New(env, quality));
-    chord.Set("name", Napi::String::New(env, ChordSymbol(analysis.chords[i])));
-    chord.Set("start", Napi::Number::New(env, analysis.chords[i].start));
-    chord.Set("end", Napi::Number::New(env, analysis.chords[i].end));
-    chord.Set("duration",
-              Napi::Number::New(env, analysis.chords[i].end - analysis.chords[i].start));
-    chord.Set("confidence", Napi::Number::New(env, analysis.chords[i].confidence));
-    chords.Set(static_cast<uint32_t>(i), chord);
-  }
+  Napi::Array chords = ChordsToJs(env, analysis);
 
   Napi::Object result = Napi::Object::New(env);
   result.Set("chords", chords);
@@ -1076,21 +1095,24 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   options.tuning = tuning;
   options.tuning_auto = tuning_auto ? 1 : 0;
 
-  SonareStringArray labels{};
-  SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options,
-                                                     static_cast<SonarePitchClass>(key_root),
-                                                     static_cast<SonareMode>(key_mode), &labels);
+  SonareChordAnalysisResult detected{};
+  SonareStringArray roman{};
+  SonareStringArray functions{};
+  SonareError err = sonare_chord_functional_analysis(
+      data, length, sample_rate, &options, static_cast<SonarePitchClass>(key_root),
+      static_cast<SonareMode>(key_mode), &detected, &roman, &functions);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
 
-  Napi::Array result = Napi::Array::New(env, labels.count);
-  for (size_t i = 0; i < labels.count; ++i) {
-    result.Set(static_cast<uint32_t>(i),
-               Napi::String::New(env, labels.items[i] != nullptr ? labels.items[i] : ""));
-  }
-  sonare_free_string_array(&labels);
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("chords", ChordsToJs(env, detected));
+  result.Set("roman", StringArrayToJs(env, roman));
+  result.Set("functions", StringArrayToJs(env, functions));
+  sonare_free_chord_analysis_result(&detected);
+  sonare_free_string_array(&roman);
+  sonare_free_string_array(&functions);
   return result;
   SONARE_NODE_CATCH(env)
 }
@@ -1117,15 +1139,6 @@ SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* w
     }
   }
   throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality: '" + name + "'");
-}
-
-Napi::Array StringArrayToJs(Napi::Env env, const SonareStringArray& labels) {
-  Napi::Array result = Napi::Array::New(env, labels.count);
-  for (size_t i = 0; i < labels.count; ++i) {
-    result.Set(static_cast<uint32_t>(i),
-               Napi::String::New(env, labels.items[i] != nullptr ? labels.items[i] : ""));
-  }
-  return result;
 }
 
 }  // namespace

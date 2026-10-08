@@ -6,6 +6,7 @@ import type {
   ChordQuality,
   KeyCandidate,
   KeyDetectionOptions,
+  KeyMode,
   KeyProfileName,
   PitchClass,
   SectionType,
@@ -36,11 +37,30 @@ function pitchClassName(value: number): string {
   return PITCH_CLASS_NAMES[value] ?? 'C';
 }
 
+const KEY_MODE_NAMES = [
+  'major',
+  'minor',
+  'dorian',
+  'phrygian',
+  'lydian',
+  'mixolydian',
+  'locrian',
+] as const satisfies readonly KeyMode[];
+
+/** Name of a key-mode ordinal as the module reports it. */
+export function keyModeName(ordinal: number): KeyMode {
+  const name = KEY_MODE_NAMES[ordinal];
+  if (name === undefined) {
+    throw new RangeError(`Invalid key mode: ${String(ordinal)}`);
+  }
+  return name;
+}
+
 export function convertKeyCandidate(wasm: WasmKeyCandidateResult): KeyCandidate {
   return {
     key: {
       root: wasm.key.root as PitchClass,
-      mode: wasm.key.mode as Mode,
+      mode: keyModeName(wasm.key.mode),
       confidence: wasm.key.confidence,
       name: wasm.key.name,
       shortName: wasm.key.shortName,
@@ -79,6 +99,11 @@ const KEY_PROFILE_VALUES: Readonly<Record<KeyProfileName, number>> = {
   'bellman-budge': KeyProfileValues.BellmanBudge,
   bellman: KeyProfileValues.BellmanBudge,
 };
+
+/** Ordinal of a key mode given by name or ordinal; anything else is refused. */
+export function keyModeOrdinal(mode: unknown): number {
+  return resolveEnumOrdinal(mode, KEY_MODE_VALUES, 'key mode');
+}
 
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {
   if (!modes) {
@@ -151,7 +176,7 @@ export function convertAnalysisResult(wasm: WasmAnalysisResult): AnalysisResult 
     })),
     key: {
       root: wasm.key.root as PitchClass,
-      mode: wasm.key.mode as Mode,
+      mode: keyModeName(wasm.key.mode),
       confidence: wasm.key.confidence,
       name: wasm.key.name,
       shortName: wasm.key.shortName,

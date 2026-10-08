@@ -81,9 +81,6 @@ class RirDiagnostic:
 class RirResult:
     """Room impulse response synthesized from shoebox geometry.
 
-    ``error_message`` contains the stable acoustic diagnostic code and detail
-    when geometry validation makes the result unusable.
-
     ``diagnostics`` carries every diagnostic the synthesizer reported, in its own
     order. Warnings appear on SUCCESSFUL calls too and are otherwise invisible: a
     ``max_seconds`` clamp that cut the reverb tail
@@ -94,23 +91,18 @@ class RirResult:
     reverberation time cannot be measured from the RIR
     (``acoustic.rir_tail_truncated``), or a request reduced from "early
     reflections + diffuse tail" to early reflections only
-    (``acoustic.no_late_tail``). None of them sets ``has_error``, so a truncated
-    RIR is indistinguishable from a complete one without reading this field.
+    (``acoustic.no_late_tail``). A refused synthesis raises ``SonareError``
+    instead, so every entry is a warning, and a truncated RIR is
+    indistinguishable from a complete one without reading this field.
     """
 
     rir: list[float]
     sample_rate: int
-    has_error: bool
-    error_message: str = ""
     diagnostics: list[RirDiagnostic] = field(default_factory=list)
 
     @property
     def sampleRate(self) -> int:  # noqa: N802
         return self.sample_rate
-
-    @property
-    def hasError(self) -> bool:  # noqa: N802
-        return self.has_error
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,8 +110,7 @@ class RoomMorphResult:
     """Morphed audio and what the target-room synthesis had to change to make it.
 
     Shaped like :class:`RirResult` because the same synthesis runs underneath.
-    There is no ``has_error`` / ``error_message`` counterpart: an unusable morph
-    raises, so every entry in ``diagnostics`` is a warning. Each says the morph
+    An unusable morph raises, so every entry in ``diagnostics`` is a warning. Each says the morph
     went through a room other than the one requested — an image-source order
     reduced to the safe maximum (``acoustic.ism_order_clamped``), a tail cut
     against ``max_seconds`` (``acoustic.rir_length_clamped``), a ``max_seconds``
@@ -147,16 +138,17 @@ class RoomMorphResult:
 class RoomEstimate:
     """Blind equivalent-room estimate (volume/dimensions/absorption/DRR).
 
-    ``volume``, ``length``, ``width`` and ``height`` are NaN, with
+    ``volume``, ``length_m``, ``width_m`` and ``height_m`` (the names
+    :func:`synthesize_rir` takes) are NaN, with
     ``confidence`` 0, when the recording has no measurable broadband decay
     (silence, or an RT60 the analyzer could not fit). NaN is the acoustic
     family's "not measurable", as in the RT60 bands.
     """
 
     volume: float
-    length: float
-    width: float
-    height: float
+    length_m: float
+    width_m: float
+    height_m: float
     drr_db: float
     confidence: float
     absorption_bands: list[float]

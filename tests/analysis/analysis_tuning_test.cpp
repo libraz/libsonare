@@ -238,10 +238,12 @@ TEST_CASE("C ABI maps tuning and analyzes with options and progress", "[c_api][a
     SonareChordAnalysisResult chords{};
     CHECK(sonare_detect_chords_ex(audio.data(), audio.size(), kSampleRate, &chord, &chords) ==
           SONARE_ERROR_INVALID_PARAMETER);
-    SonareStringArray labels{};
+    SonareChordAnalysisResult detected{};
+    SonareStringArray roman{};
+    SonareStringArray functions{};
     CHECK(sonare_chord_functional_analysis(audio.data(), audio.size(), kSampleRate, &chord,
-                                           SONARE_PITCH_C, SONARE_MODE_MAJOR,
-                                           &labels) == SONARE_ERROR_INVALID_PARAMETER);
+                                           SONARE_PITCH_C, SONARE_MODE_MAJOR, &detected, &roman,
+                                           &functions) == SONARE_ERROR_INVALID_PARAMETER);
   }
 
   SECTION("the progress variant matches the plain one under the same options") {

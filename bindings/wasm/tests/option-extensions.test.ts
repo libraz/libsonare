@@ -184,7 +184,7 @@ describe('feature entry points share one nFft rule', () => {
       onsetStrengthMulti: (f) => onsetStrengthMulti({ samples, sampleRate, nMels, ...f }),
       melToAudio: (f) =>
         melToAudio({
-          melPower: mel.power,
+          power: mel.power,
           nMels,
           nFrames: mel.nFrames,
           sampleRate,
@@ -202,7 +202,7 @@ describe('feature entry points share one nFft rule', () => {
         }),
       mfccToAudio: (f) =>
         mfccToAudio({
-          mfccCoefficients: cepstrum.coefficients,
+          coefficients: cepstrum.coefficients,
           nMfcc,
           nFrames: cepstrum.nFrames,
           nMels,
@@ -271,7 +271,7 @@ describe('feature entry points share one nFft rule', () => {
   // core, and on the Node surface, and the parity rule would refuse it.
   it('keeps melToStft off the parity rule, where an odd nFft is a distinct result', () => {
     const mel = melSpectrogram({ samples, sampleRate, nFft: 2048, hopLength: 512, nMels });
-    const shared = { melPower: mel.power, nMels, nFrames: mel.nFrames, sampleRate };
+    const shared = { power: mel.power, nMels, nFrames: mel.nFrames, sampleRate };
     const even = melToStft({ ...shared, nFft: 2048 });
     const odd = melToStft({ ...shared, nFft: 2049 });
     expect(odd.nBins).toBe(even.nBins);

@@ -269,7 +269,7 @@ describe('an analysis band count whose zero keeps the library default', () => {
   it('refuses a fractional nOctaveBands', () => {
     const ir = impulseResponse();
     const bands = (value: number | undefined) => {
-      const options: Record<string, unknown> = { mode: 2 };
+      const options: Record<string, unknown> = { mode: 'impulse_response' };
       if (value !== undefined) {
         options.nOctaveBands = value;
       }

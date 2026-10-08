@@ -65,6 +65,7 @@ import type {
   ChordDetectionOptions,
   ChromaResult,
   DetectKeyOptions,
+  FunctionalChord,
   HpssResult,
   KeyCandidate,
   KeyDetection,
@@ -414,7 +415,7 @@ export class Audio {
     keyRoot: PitchClass,
     keyMode: Mode,
     options: ChordDetectionOptions = {},
-  ): string[] {
+  ): FunctionalChord[] {
     return chordFunctionalAnalysis(this._samples, keyRoot, keyMode, this._sampleRate, options);
   }
 

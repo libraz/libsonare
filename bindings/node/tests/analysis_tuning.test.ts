@@ -79,7 +79,8 @@ describe('tuning on batch analysis', () => {
       tuning: estimate,
     });
     const detected = detectChords({ samples: detuned, sampleRate, tuning: estimate }).chords;
-    const labelByName = new Map(detected.map((c, i) => [c.name, labels[i]]));
+    expect(labels.map((c) => c.name)).toEqual(detected.map((c) => c.name));
+    const labelByName = new Map(labels.map((c) => [c.name, c.roman]));
     let compared = 0;
     for (const chord of on.chords) {
       if (chord.name === 'N.C.' || !labelByName.has(chord.name)) {
