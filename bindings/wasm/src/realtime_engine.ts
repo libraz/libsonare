@@ -315,6 +315,17 @@ export function engineCapabilities(): EngineCapabilities {
   };
 }
 
+/** The clip shape the embind layer reads: a page provider travels as its id. */
+function nativeClip(clip: EngineClip): WasmEngineClip {
+  return {
+    ...clip,
+    pageProvider:
+      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
+        ? clip.pageProvider.id
+        : clip.pageProvider,
+  } as WasmEngineClip;
+}
+
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
   private released = false;
@@ -1021,8 +1032,9 @@ export class RealtimeEngine {
   }
 
   /**
-   * Remove all registered parameters (and their automation lanes). Control-thread
-   * only; not realtime-safe. Mirrors the C-ABI `clearParameters`.
+   * Remove all registered parameters. Automation lanes stay in place, as they do
+   * on {@link addParameter}. Control-thread only; not realtime-safe. Mirrors the
+   * C-ABI `clearParameters`.
    */
   clearParameters(): void {
     this.native.clearParameters();
@@ -1259,15 +1271,26 @@ export class RealtimeEngine {
   }
 
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(
-      clips.map((clip) => ({
-        ...clip,
-        pageProvider:
-          typeof clip.pageProvider === 'object' && clip.pageProvider !== null
-            ? clip.pageProvider.id
-            : clip.pageProvider,
-      })),
-    );
+    this.native.setClips(clips.map(nativeClip));
+  }
+
+  /**
+   * Replaces every published clip carrying `clip.id` with `clip`, or adds it
+   * when none does. Every other clip stays as published, so its audio is not
+   * copied again. Validated as {@link setClips} validates each entry; a refused
+   * clip leaves the published set unchanged.
+   */
+  upsertClip(clip: EngineClip): void {
+    this.native.upsertClip(nativeClip(clip));
+  }
+
+  /**
+   * Removes the clip carrying `clipId`.
+   *
+   * @throws SonareError `InvalidParameter` when no clip has that id.
+   */
+  removeClip(clipId: number): void {
+    this.native.removeClip(clipId);
   }
 
   /**

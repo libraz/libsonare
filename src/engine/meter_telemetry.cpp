@@ -148,6 +148,12 @@ void MeterTelemetryTap::process_lightweight(float* const* channels, int num_chan
   stage(record, num_frames);
 }
 
+void MeterTelemetryTap::flush(int64_t render_frame) noexcept {
+  if (!meter_.has_value()) return;
+  meter_->flush_true_peak();
+  publish(meter_->snapshot(), render_frame, 0, nullptr);
+}
+
 size_t MeterTelemetryTap::read_goniometer(mixing::GoniometerPoint* out,
                                           size_t max_points) const noexcept {
   return goniometer_.read_latest(out, max_points);

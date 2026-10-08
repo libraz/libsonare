@@ -506,6 +506,8 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// processing state, keeping configuration, solo/mute, automation and meters.
   /// Not concurrent with process().
   void reset_processing() noexcept;
+  /// Ends the signal for every lane strip's and bus's meters (MeterProcessor::flush_true_peak).
+  void flush_meters() noexcept;
 
   bool render_clips(ClipPlayer& player, float* const* channels, int num_channels, int num_samples,
                     int64_t timeline_sample, MeterTelemetryTap* meter_tap = nullptr,
@@ -647,6 +649,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     const mixing::ChannelStrip* candidate = nullptr;
     size_t next_insert_count = 0;
     SidechainTable next_sidechains{};
+    PreparedPdc pdc{};
+    bool has_pdc = false;
+  };
+  // A lane strip binding whose failure points are all behind it.
+  struct StagedTrackStrip {
+    size_t lane_index = 0;
     PreparedPdc pdc{};
     bool has_pdc = false;
   };
@@ -848,7 +856,13 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
       const std::array<bool, kMaxTrackLanes>& reset, PreparedPdc* prepared,
       const std::array<int, kMaxBusLanes>* bus_sources = nullptr) const noexcept;
   void commit_pdc_updates(PreparedPdc& prepared) noexcept;
+  // Stages @p plan over the live banks, every lane keeping its own history.
+  bool prepare_identity_pdc(const PdcPlan& plan, PreparedPdc* prepared) const noexcept;
   bool apply_pdc(const PdcPlan& plan) noexcept;
+  // @p source without the bindings on one target's inserts at or past @p insert_count.
+  static SidechainTable without_inserts_from(const SidechainTable& source,
+                                             SidechainTargetKind target_kind, uint32_t target_id,
+                                             size_t insert_count) noexcept;
   // Removes binding @p index (swap with the last entry). Control thread.
   void remove_sidechain_binding(size_t index) noexcept;
   // Hands the control table to the audio thread as one snapshot. Every edit of
@@ -917,8 +931,10 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // Moves one bus's contents into another slot (set_buses keys buses by id).
   // Full in-flight DSP scalar and smoother state follows the bus identity;
   // dedicated EQ history follows it too and resets only when set_buses changes
-  // that bus's channel layout.
-  static void transfer_bus_state(BusState& from, BusState& to);
+  // that bus's channel layout. Staging copies everything but the owned FxBus and
+  // spec and may throw, leaving @p from intact; adopting moves all of it and cannot.
+  static void stage_bus_state(const BusState& from, BusState& to);
+  static void adopt_bus_state(BusState& from, BusState& to) noexcept;
   // Returns a slot to the state of a bus that was never configured.
   static void retire_bus_state(BusState& state);
   static void apply_bus_pan(BusState& state, const mixing::api::Bus& bus) noexcept;
@@ -953,9 +969,24 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// control-thread setters that call it can report that instead of letting an
   /// allocation failure escape and terminate the process.
   bool recompute_lane_pdc(const std::vector<TrackLaneConfig>& lanes) noexcept;
+  // CONTROL thread: stages binding @p strip to @p track_id's lane -- the lane
+  // slot, its sends, binding storage and PDC -- without touching live state.
+  bool stage_track_strip(uint32_t track_id, mixing::ChannelStrip& strip, StagedTrackStrip* out);
+  // CONTROL thread: publishes a staged binding. No-fail.
+  void commit_track_strip(uint32_t track_id, mixing::ChannelStrip* strip,
+                          StagedTrackStrip& staged) noexcept;
+  // The lane slot holding @p track_id, else the first free one; -1 when full.
+  int lane_slot_for(uint32_t track_id) const noexcept;
+  // A spec's soloed edit lands in the lane's solo, the one state the audible set reads;
+  // an unchanged flag leaves a live solo alone.
+  void apply_spec_solo(uint32_t track_id, bool soloed) noexcept;
   // Rebuilds lane send tables, every lane or only @p only_track_id's. A lane's
   // table is built in full before it replaces the live one.
   void configure_lane_sends(const std::vector<TrackLaneConfig>& lanes, uint32_t only_track_id = 0);
+  // A strip for a lane that has sends but no bound strip, prepared at the mixer's rate.
+  std::unique_ptr<mixing::ChannelStrip> make_seed_strip() const;
+  // Builds @p config's send table into @p strip. Throws on an unknown bus or a failed allocation.
+  void configure_strip_sends(const TrackLaneConfig& config, mixing::ChannelStrip& strip) const;
   void process_lane_strip(size_t lane_index, int num_channels, int num_samples,
                           int64_t timeline_sample) noexcept;
   void add_lane_monitor_pfl(size_t lane_index, int num_channels, int num_samples) noexcept;

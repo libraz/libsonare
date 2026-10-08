@@ -16,6 +16,42 @@ describe('RealtimeEngine native binding', () => {
     engine.destroy();
   });
 
+  it('refuses a fractional engine sample rate', () => {
+    expect(() => new RealtimeEngine(44100.5, 128)).toThrow(RangeError);
+    const engine = new RealtimeEngine(44100, 128);
+    expect(() => engine.prepare(48000.25, 128)).toThrow(/whole number of hertz/);
+    engine.destroy();
+  });
+
+  it('upserts and removes one clip while keeping the rest', () => {
+    const engine = new RealtimeEngine(48000, 4);
+    const plane = (value: number) => new Float32Array(4).fill(value);
+    engine.setClips([
+      { id: 1, channels: [plane(0.25)], startPpq: 0 },
+      { id: 2, channels: [plane(0.5)], startPpq: 0 },
+    ]);
+    const firstSample = () => {
+      engine.seekSample(0);
+      engine.play();
+      return engine.process([new Float32Array(4)])[0][0];
+    };
+    expect(firstSample()).toBeCloseTo(0.75);
+
+    engine.upsertClip({ id: 1, channels: [plane(0.25)], startPpq: 0, gain: 2 });
+    expect(engine.clipCount()).toBe(2);
+    expect(firstSample()).toBeCloseTo(1.0);
+
+    engine.removeClip(2);
+    expect(engine.clipCount()).toBe(1);
+    expect(firstSample()).toBeCloseTo(0.5);
+    expect(() => engine.removeClip(2)).toThrow();
+    expect(() =>
+      engine.upsertClip({ id: 1, channels: [plane(0.25)], startPpq: 0, gain: -1 }),
+    ).toThrow();
+    expect(firstSample()).toBeCloseTo(0.5);
+    engine.destroy();
+  });
+
   it('streams paged clip providers and drains page requests', () => {
     const engine = new RealtimeEngine(48000, 8);
     const provider = engine.createClipPageProvider(1, 8, 4);

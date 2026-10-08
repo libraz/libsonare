@@ -331,8 +331,8 @@ SonareError bounce_through_mixer(const arr::CompiledTimeline& timeline,
   MixerPtr mixer_owner(prebuilt_mixer);
   MixerRouting effective_routing = routing;
   bool shared_hosts_source_aware = true;
-  const bool shared_midi_destination =
-      has_shared_hosted_midi_destination(timeline, instruments, &shared_hosts_source_aware);
+  const bool shared_midi_destination = has_shared_hosted_midi_destination(
+      timeline, routing, instruments, &shared_hosts_source_aware);
   // A shared-destination render has a destination-scoped residual target
   // (SF2 effects / native bodies). Reserve the direct identity strip for it
   // even when every authored track is bound to a scene strip.

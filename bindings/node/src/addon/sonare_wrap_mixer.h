@@ -40,6 +40,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   Napi::Value Compile(const Napi::CallbackInfo& info);
   Napi::Value ProcessStereo(const Napi::CallbackInfo& info);
   Napi::Value DrainTailStereo(const Napi::CallbackInfo& info);
+  Napi::Value FlushMeters(const Napi::CallbackInfo& info);
   Napi::Value TailSamples(const Napi::CallbackInfo& info);
   Napi::Value LatencySamples(const Napi::CallbackInfo& info);
   Napi::Value StripCount(const Napi::CallbackInfo& info);

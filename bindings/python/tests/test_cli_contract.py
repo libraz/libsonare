@@ -1260,22 +1260,12 @@ def test_project_bounce_uses_the_project_own_sample_rate_by_default(tmp_path, st
         assert rendered.getframerate() == stored_rate
 
 
-@pytest.mark.parametrize(
-    ("stored_rate", "expected_header"),
-    [(44100.5, 44101), (44100.4, 44100), (22050.25, 22050)],
-)
-def test_project_bounce_renders_a_fractional_project_rate(
-    tmp_path, stored_rate, expected_header
-) -> None:
-    """A rate the WAV header cannot carry still renders, at the project's rate.
+@pytest.mark.parametrize("stored_rate", [44100.5, 44100.4, 22050.25])
+def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate) -> None:
+    """A project rate that is not a whole number of hertz is refused at load.
 
-    Without --sample-rate the CLI must leave the option at the C ABI's ``<= 0``
-    sentinel, which is the only path that reaches the render with the stored
-    rate's full precision. Pinning the rounded integer instead made the ABI's
-    own equality check reject the project outright. The header still reports
-    the nearest integer, rounded away from zero so it agrees with the native
-    CLI's ``std::lround`` on a ``.5`` tie rather than with Python's round-half-
-    to-even.
+    No stage rounds it any more: the load fails with ``invalid_sample_rate``
+    and no file is written.
     """
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
@@ -1287,13 +1277,32 @@ def test_project_bounce_renders_a_fractional_project_rate(
     result = _run_console(
         "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
     )
-    assert result.returncode == 0, result.stderr
-    assert json.loads(result.stdout)["sample_rate"] == expected_header
-    with wave.open(str(wav), "rb") as rendered:
-        assert rendered.getframerate() == expected_header
+    assert result.returncode == 3
+    assert (
+        "invalid_sample_rate: sample_rate must be a whole number of hertz within the "
+        "supported range" in result.stderr
+    )
+    assert not wav.exists()
 
-    # An explicit rate is still checked against the stored one, so the sentinel
-    # did not turn the mismatch check off.
+
+@pytest.mark.parametrize("stored_rate", [44100, 22050])
+def test_project_bounce_renders_an_integral_project_rate(tmp_path, stored_rate) -> None:
+    """An integral project rate bounces at that rate, and an explicit mismatch is refused."""
+    proj = tmp_path / "project.sonare"
+    wav = tmp_path / "bounce.wav"
+    proj.write_text(
+        json.dumps({"version": 1, "sample_rate": stored_rate, "tracks": [], "clips": []}),
+        encoding="utf-8",
+    )
+
+    result = _run_console(
+        "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["sample_rate"] == stored_rate
+    with wave.open(str(wav), "rb") as rendered:
+        assert rendered.getframerate() == stored_rate
+
     rejected = _run_console(
         "project",
         "bounce",
@@ -1304,7 +1313,7 @@ def test_project_bounce_renders_a_fractional_project_rate(
         "--frames",
         "64",
         "--sample-rate",
-        str(int(stored_rate)),
+        str(stored_rate + 1),
     )
     assert rejected.returncode == 3
     assert "does not match the project's sample rate" in rejected.stderr

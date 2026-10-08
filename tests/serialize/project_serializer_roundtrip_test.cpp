@@ -1206,7 +1206,8 @@ TEST_CASE("non-positive tempo bpm is rejected with a diagnostic", "[serialize]")
 TEST_CASE("invalid project sample rate is rejected with a diagnostic", "[serialize]") {
   for (const char* json :
        {"{\"version\": 1, \"sample_rate\": 0}", "{\"version\": 1, \"sample_rate\": -48000}",
-        "{\"version\": 1, \"sample_rate\": 500000}"}) {
+        "{\"version\": 1, \"sample_rate\": 500000}",
+        "{\"version\": 1, \"sample_rate\": 44100.5}"}) {
     auto result = project_from_json(json);
     CHECK_FALSE(result.ok());
     REQUIRE(result.has_error());

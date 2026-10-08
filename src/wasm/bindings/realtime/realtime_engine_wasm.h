@@ -331,6 +331,11 @@ class RealtimeEngineWasm {
 
   // ---- Clips & paged providers (realtime_engine_clips.cpp) -------------
   void setClips(emscripten::val clips);
+  /// Replaces every published clip carrying `clip.id` with `clip`, or adds it;
+  /// other clips keep their storage. Mirrors sonare_engine_upsert_clip.
+  void upsertClip(emscripten::val clip);
+  /// Removes the clips carrying the id; InvalidParameter when none does.
+  void removeClip(const emscripten::val& clip_id_val);
   emscripten::val prebakedClipChannels(const emscripten::val& clip_id_val) const;
   int clipCount() const;
   int createClipPageProvider(const emscripten::val& num_channels_val, int64_t num_samples,
@@ -494,6 +499,13 @@ class RealtimeEngineWasm {
   sonare::host::ExternalMidiRecord external_midi_record_scratch_{};
   sonare::host::ExternalMidi1Lowered external_midi_lowered_scratch_{};
   uint8_t external_midi_lowered_index_ = 0;
+  // One validated clip schedule and the storage its buffer points into.
+  struct BuiltClip {
+    sonare::engine::ClipSchedule schedule;
+    std::shared_ptr<const sonare::engine::ClipAudioStorage> storage;
+    bool tempo_baked = false;
+  };
+  BuiltClip buildClipSchedule(emscripten::val clip_val, uint32_t default_id);
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> clip_storage_;
   std::vector<uint32_t> clip_ids_;
   std::vector<uint8_t> clip_tempo_baked_;

@@ -475,10 +475,9 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
   // ---- Global validation --------------------------------------------------
   const double project_sr = project.sample_rate();
   validate_tempo(project, &result);
-  if (!std::isfinite(project_sr) || project_sr < kMinAudioSampleRate ||
-      project_sr > kMaxAudioSampleRate) {
+  if (!is_supported_sample_rate(project_sr)) {
     add_diag(&result, Diagnostic::Code::kInvalidSampleRate, Diagnostic::Severity::kError, 0,
-             "project sample rate must be finite and within " +
+             "project sample rate must be a whole number of hertz within " +
                  std::to_string(kMinAudioSampleRate) + ".." + std::to_string(kMaxAudioSampleRate) +
                  " Hz");
     return result;
@@ -960,7 +959,7 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
                      clip.id, "tempo-sync warp map has an unsupported source/target span");
             continue;
           }
-          const int project_sample_rate = static_cast<int>(std::lround(project_sr));
+          const int project_sample_rate = static_cast<int>(project_sr);
           bake_config.sample_rate = project_sample_rate;
           // Segments carry durations only; lead in to anchors[0].warp_sample as
           // map_warp_to_source does, from the source's pre-roll however short, or

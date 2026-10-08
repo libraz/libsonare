@@ -1045,5 +1045,52 @@ describe('Sonare WASM Module', () => {
       expect(events.some((event) => event.bytes[0] === 0xf8)).toBe(true);
       engine.destroy();
     });
+
+    it('prepares only at a whole number of hertz within the supported range', () => {
+      for (const rate of [44100.5, 7999, 384001, Number.NaN]) {
+        expect(() => new RealtimeEngine(rate, 128)).toThrow(RangeError);
+      }
+      new RealtimeEngine(8000, 128).destroy();
+      new RealtimeEngine(384000, 128).destroy();
+    });
+
+    it('upserts and removes one clip while every other clip keeps sounding', () => {
+      const render = (engine: RealtimeEngine) => {
+        engine.seekSample(0);
+        return engine.renderOffline({ channels: [new Float32Array(128)], blockSize: 128 })[0];
+      };
+      const engine = new RealtimeEngine(48000, 128);
+      try {
+        engine.setClips([{ id: 1, channels: [new Float32Array(128).fill(0.25)], startPpq: 0 }]);
+        engine.upsertClip({ id: 2, channels: [new Float32Array(128).fill(0.125)], startPpq: 0 });
+        expect(engine.clipCount()).toBe(2);
+        expect(render(engine)[0]).toBeCloseTo(0.375, 5);
+
+        // Same id: replaced, not added.
+        engine.upsertClip({ id: 2, channels: [new Float32Array(128).fill(0.5)], startPpq: 0 });
+        expect(engine.clipCount()).toBe(2);
+        expect(render(engine)[0]).toBeCloseTo(0.75, 5);
+
+        // A refused clip leaves the published set as it was.
+        expect(() =>
+          engine.upsertClip({ id: 3, channels: [new Float32Array(0)], startPpq: 0 }),
+        ).toThrow();
+        expect(engine.clipCount()).toBe(2);
+        expect(render(engine)[0]).toBeCloseTo(0.75, 5);
+
+        engine.removeClip(2);
+        expect(engine.clipCount()).toBe(1);
+        expect(render(engine)[0]).toBeCloseTo(0.25, 5);
+        let caught: unknown;
+        try {
+          engine.removeClip(2);
+        } catch (error) {
+          caught = error;
+        }
+        expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidParameter);
+      } finally {
+        engine.destroy();
+      }
+    });
   });
 });

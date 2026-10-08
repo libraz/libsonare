@@ -45,6 +45,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const auto state = transport_.snapshot();
     silence(io, num_channels, frames);
     silence(monitor_out, num_channels, frames);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    dispatch_midi_without_render(frames);
+#endif
     transport_.advance(frames);
     enqueue_error(TelemetryErrorCode::kMaxBlockExceeded, state.render_frame, state.sample_position,
                   static_cast<uint32_t>(frames));
@@ -54,6 +57,9 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     const auto state = transport_.snapshot();
     silence(io, num_channels, frames);
     silence(monitor_out, num_channels, frames);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    dispatch_midi_without_render(frames);
+#endif
     transport_.advance(frames);
     enqueue_error(TelemetryErrorCode::kMaxChannelsExceeded, state.render_frame,
                   state.sample_position, static_cast<uint32_t>(num_channels));
@@ -87,6 +93,8 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
 #endif
   automation_.acquire_lanes();
 #if defined(SONARE_WITH_ARRANGEMENT)
+  // Releases a full output refused earlier go out before anything new.
+  midi_dispatch_sink_.retry_refused_releases(state.render_frame);
   midi_sequencer_.acquire_midi_clips();
   midi_sequencer_.acquire_midi_fx(midi::DeviceFrame{state.render_frame});
   // Adopt routes after MIDI-FX cleanup (old route) and before any event dispatches this block.

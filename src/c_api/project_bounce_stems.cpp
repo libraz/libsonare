@@ -68,30 +68,40 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
 }
 
 bool has_shared_hosted_midi_destination(const arr::CompiledTimeline& timeline,
+                                        const MixerRouting& routing,
                                         const std::vector<HostedInstrument>& instruments,
                                         bool* all_hosts_source_aware) {
-  if (all_hosts_source_aware != nullptr) *all_hosts_source_aware = true;
-  std::map<uint32_t, std::set<uint32_t>> tracks_by_destination;
-  for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
-    tracks_by_destination[clip.destination_id].insert(clip.track_id);
-  }
-  bool shared = false;
-  for (const auto& [destination_id, tracks] : tracks_by_destination) {
-    if (tracks.size() < 2) continue;
-    shared = true;
-  }
-  // The source-stem pass renders the project once, so every bound destination
-  // participates even when only one destination is shared by several strips.
-  // An opaque callback cannot be silently dropped from that pass or rendered
-  // separately without recreating the very duplicated-pool bug this path fixes.
-  if (shared) {
-    for (const HostedInstrument& hosted : instruments) {
-      if (hosted.instrument == nullptr || !hosted.instrument->supports_source_track_rendering()) {
-        if (all_hosts_source_aware != nullptr) *all_hosts_source_aware = false;
-      }
+  bool source_aware = true;
+  for (const HostedInstrument& hosted : instruments) {
+    if (hosted.instrument == nullptr || !hosted.instrument->supports_source_track_rendering()) {
+      source_aware = false;
     }
   }
-  return shared;
+  if (all_hosts_source_aware != nullptr) *all_hosts_source_aware = source_aware;
+  // Where a track's audio is mixed: its strip's index, or -1 for the dry master path.
+  const auto strip_of = [&routing](uint32_t track_id) {
+    for (size_t i = 0; i < routing.strip_tracks.size(); ++i) {
+      if (routing.strip_tracks[i].count(track_id) != 0) return static_cast<int>(i);
+    }
+    return -1;
+  };
+  std::map<uint32_t, std::set<uint32_t>> tracks_by_destination;
+  std::map<uint32_t, std::set<int>> targets_by_destination;
+  for (const sonare::midi::MidiClipSchedule& clip : timeline.midi_clips) {
+    tracks_by_destination[clip.destination_id].insert(clip.track_id);
+    targets_by_destination[clip.destination_id].insert(strip_of(clip.track_id));
+  }
+  // Tracks split across mixing targets must be rendered apart. Tracks that mix
+  // into one target are split only where every host can render per source (so
+  // each keeps its own track controls); an opaque host renders them once. The
+  // source-stem pass renders the whole project, so the decision is project-wide.
+  bool divergent = false;
+  bool multi_track = false;
+  for (const auto& [destination_id, targets] : targets_by_destination) {
+    divergent = divergent || targets.size() >= 2;
+    multi_track = multi_track || tracks_by_destination[destination_id].size() >= 2;
+  }
+  return divergent || (multi_track && source_aware);
 }
 
 }  // namespace sonare_c_bounce_detail

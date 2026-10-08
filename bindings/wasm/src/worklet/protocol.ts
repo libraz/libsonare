@@ -18,13 +18,10 @@ export interface SonareWorkletMeterSnapshot {
   rmsDbR: number;
   correlation: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement, and the render
-   * quantum makes that visible here: the centered reconstruction stencil needs a
-   * few future samples a realtime path does not have, so each block's last
-   * samples read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-   * near-Nyquist tone, always under-reading). Use `meteringTruePeakDb` over the
-   * whole signal for an exact dBTP number.
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
+   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
+   * behind the block, so every value has its whole stencil and the reading does not depend on the
+   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */

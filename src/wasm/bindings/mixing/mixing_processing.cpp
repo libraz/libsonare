@@ -301,6 +301,17 @@ val MixerWasm::drainTailStereo(double num_samples) {
   return out;
 }
 
+// Folds every strip and bus meter's pending true-peak group delay into its
+// snapshot at the end of a signal; mirrors sonare_mixer_flush_meters.
+void MixerWasm::flushMeters() {
+  const SonareError err = sonare_mixer_flush_meters(mixer_);
+  if (err != SONARE_OK) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidState,
+        std::string("mixer meter flush failed: ") + sonare_error_message(err));
+  }
+}
+
 void registerMixerProcessing(class_<MixerWasm>& cls) {
   cls.function("processStereo", &MixerWasm::processStereo)
       .function("processStereoInto", &MixerWasm::processStereoInto)
@@ -315,7 +326,8 @@ void registerMixerProcessing(class_<MixerWasm>& cls) {
       .function("meterScratchValue", &MixerWasm::meterScratchValue)
       .function("tailSamples", &MixerWasm::tailSamples)
       .function("latencySamples", &MixerWasm::latencySamples)
-      .function("drainTailStereo", &MixerWasm::drainTailStereo);
+      .function("drainTailStereo", &MixerWasm::drainTailStereo)
+      .function("flushMeters", &MixerWasm::flushMeters);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

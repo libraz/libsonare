@@ -131,7 +131,9 @@ std::size_t ReplaceSource::retained_bytes() const noexcept {
 
 // Timeline commands ---------------------------------------------------------
 
-std::size_t SetSampleRate::retained_bytes() const noexcept { return sizeof(*this); }
+std::size_t SetSampleRate::retained_bytes() const noexcept {
+  return add(sizeof(*this), retained::dynamic_bytes(restored_warp_maps_));
+}
 std::size_t SetOverlapPolicy::retained_bytes() const noexcept { return sizeof(*this); }
 
 std::size_t SetScene::retained_bytes() const noexcept {

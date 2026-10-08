@@ -202,6 +202,16 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
         ctypes.POINTER(SonareEngineClip),
         ctypes.c_size_t,
     ]
+    lib.sonare_engine_upsert_clip.restype = ctypes.c_int32
+    lib.sonare_engine_upsert_clip.argtypes = [
+        ctypes.c_void_p,
+        ctypes.POINTER(SonareEngineClip),
+    ]
+    lib.sonare_engine_remove_clip.restype = ctypes.c_int32
+    lib.sonare_engine_remove_clip.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_uint32,
+    ]
     lib.sonare_engine_clip_count.restype = ctypes.c_int32
     lib.sonare_engine_clip_count.argtypes = [
         ctypes.c_void_p,

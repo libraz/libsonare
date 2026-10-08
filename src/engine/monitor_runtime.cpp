@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "mixing/solo_mute.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::engine {
@@ -185,6 +186,17 @@ void MonitorRuntime::settle() noexcept {
     state.mute_gain.reset(state.mute_gain.target());
     if (state.strip != nullptr) state.strip->settle();
   }
+}
+
+int MonitorRuntime::tail_samples() const noexcept {
+  rt::TailBudget budget;
+  const size_t count = size_.load(std::memory_order_acquire);
+  for (size_t i = 0; i < count; ++i) {
+    if (strips_[i].strip != nullptr) {
+      budget.then(rt::TailBudget::reported(strips_[i].strip->tail_samples()));
+    }
+  }
+  return budget.samples();
 }
 
 void MonitorRuntime::reset_processing() noexcept {

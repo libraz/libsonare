@@ -307,6 +307,10 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
                                                 out_left.data(), out_right.data(), length);
   if (err != SONARE_OK)
     throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
+  // The whole signal was one block: fold the meters' pending group delay in.
+  err = sonare_mixer_flush_meters(mixer);
+  if (err != SONARE_OK)
+    throw sonare::SonareException(sonare_node::CodeFromCError(err), ErrorMessageForCode(err));
 
   // Per-strip meter snapshots. NOTE: the LUFS fields (momentaryLufs /
   // shortTermLufs / integratedLufs) are integrators whose windows this one-shot
@@ -314,8 +318,8 @@ Napi::Value SonareWrap::MixStereo(const Napi::CallbackInfo& info) {
   // streaming Mixer for meaningful loudness. The true-peak fields are not
   // integrators -- each is a max-hold over the block just processed and is valid
   // immediately. The mixer above was created with a block size equal to the full
-  // input length, so this is the whole-signal case and the reading carries none
-  // of the per-block edge under-read the streaming path has.
+  // input length and its meters were flushed, so the reading matches the
+  // whole-signal true peak exactly.
   Napi::Array meters = Napi::Array::New(env, strips.size());
   for (size_t index = 0; index < strips.size(); ++index) {
     SonareMixMeterSnapshot snapshot{};

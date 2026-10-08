@@ -44,6 +44,8 @@ class MonitorRuntime {
   /// Snaps each strip's mute-gain smoother as settle() does, then returns the
   /// strip to its prepared processing state (ChannelStrip::reset_processing).
   void reset_processing() noexcept;
+  /// Tail of the registered strips, which run one after another on the program signal.
+  int tail_samples() const noexcept;
 
   size_t size() const noexcept { return size_.load(std::memory_order_acquire); }
   bool muted(size_t index) const noexcept;

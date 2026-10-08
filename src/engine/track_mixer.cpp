@@ -562,12 +562,17 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       if (kept[index]) continue;
       if (moved_out[index]) {
         (*staging)[index].eq.prepare(sample_rate_, max_block_size_);
-        transfer_bus_state(bus_states_[index], (*staging)[index]);
+        stage_bus_state(bus_states_[index], (*staging)[index]);
       }
-      // No semantic mutation occurs in this loop; it only stages moved state.
     }
   } catch (...) {
     return false;
+  }
+  // Every throwing step is behind us; live ownership moves only from here on.
+  for (size_t index = 0; index < bus_states_.size(); ++index) {
+    if (kept[index] || !moved_out[index]) continue;
+    (*staging)[index].bus = std::move(bus_states_[index].bus);
+    (*staging)[index].spec = std::move(bus_states_[index].spec);
   }
 
   // Alignment banks move with their bus id; edge histories survive only while routes are unchanged.
@@ -653,7 +658,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
     BusState& state = bus_states_[index];
     if (!kept[index]) {
       if (source[index] >= 0) {
-        transfer_bus_state((*staging)[static_cast<size_t>(source[index])], state);
+        adopt_bus_state((*staging)[static_cast<size_t>(source[index])], state);
       }
     }
     state.bus_id = bus_configs_[index].bus_id;
@@ -692,7 +697,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
   return true;
 }
 
-void TrackMixerRuntime::transfer_bus_state(BusState& from, BusState& to) {
+void TrackMixerRuntime::stage_bus_state(const BusState& from, BusState& to) {
   to.bus_id = from.bus_id;
   to.gain = from.gain;
   to.input_trim_gain = from.input_trim_gain;
@@ -706,6 +711,21 @@ void TrackMixerRuntime::transfer_bus_state(BusState& from, BusState& to) {
   // across with the rest of the retained bus state. set_buses() resets it after
   // this transfer only when the destination layout changes.
   to.eq = from.eq;
+  to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
+}
+
+void TrackMixerRuntime::adopt_bus_state(BusState& from, BusState& to) noexcept {
+  to.bus_id = from.bus_id;
+  to.gain = from.gain;
+  to.input_trim_gain = from.input_trim_gain;
+  to.width.copy_state_from(from.width);
+  to.polarity_left.store(from.polarity_left.load(std::memory_order_relaxed),
+                         std::memory_order_relaxed);
+  to.polarity_right.store(from.polarity_right.load(std::memory_order_relaxed),
+                          std::memory_order_relaxed);
+  to.panner.copy_state_from(from.panner);
+  to.eq = std::move(from.eq);
   to.eq_enabled.store(from.eq_enabled.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.eq_active.store(from.eq_active.load(std::memory_order_relaxed), std::memory_order_relaxed);
   to.bus = std::move(from.bus);
@@ -772,60 +792,138 @@ size_t TrackMixerRuntime::copy_lane_track_ids(uint32_t* out, size_t capacity) co
 
 bool TrackMixerRuntime::bind_track_strip(uint32_t track_id, mixing::ChannelStrip* strip) {
   if (track_id == 0) return false;
+  if (strip != nullptr) {
+    if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+    StagedTrackStrip staged;
+    if (!stage_track_strip(track_id, *strip, &staged)) return false;
+    commit_track_strip(track_id, strip, staged);
+    return true;
+  }
   acquire_lanes();
   // Control-side snapshot throughout: binding a strip is a control-thread
   // structural change, and current() is the audio thread's view.
   if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
     prepare_lanes_from_snapshot(*lanes);
   }
-  for (LaneState& lane : lane_states_) {
-    if (lane.track_id != track_id) continue;
-    const size_t lane_index = static_cast<size_t>(&lane - lane_states_.data());
-    clear_insert_automation_for_lane(lane_index);
-    lane.strip = strip;
-    record_track_strip_binding(track_id, strip);
-    if (strip && max_block_size_ > 0) {
-      strip->prepare(sample_rate_, max_block_size_);
+  const int lane_index = lane_slot_for(track_id);
+  if (lane_index < 0) return false;
+  clear_insert_automation_for_lane(static_cast<size_t>(lane_index));
+  lane_states_[static_cast<size_t>(lane_index)].track_id = track_id;
+  lane_states_[static_cast<size_t>(lane_index)].strip = nullptr;
+  record_track_strip_binding(track_id, nullptr);
+  // An unbound lane with sends seeds its own strip here.
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+    try {
+      configure_lane_sends(*lanes, track_id);
+    } catch (...) {
+      return false;
     }
-    if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-      try {
-        configure_lane_sends(*lanes, track_id);
-      } catch (...) {
-        return false;
-      }
-      if (!recompute_lane_pdc(*lanes)) return false;
-    }
-    return true;
+    if (!recompute_lane_pdc(*lanes)) return false;
   }
+  return true;
+}
+
+void TrackMixerRuntime::apply_spec_solo(uint32_t track_id, bool soloed) noexcept {
   for (LaneState& lane : lane_states_) {
-    if (lane.track_id != 0) continue;
-    const size_t lane_index = static_cast<size_t>(&lane - lane_states_.data());
-    clear_insert_automation_for_lane(lane_index);
-    lane.track_id = track_id;
-    lane.strip = strip;
-    record_track_strip_binding(track_id, strip);
-    if (strip && max_block_size_ > 0) {
-      strip->prepare(sample_rate_, max_block_size_);
-    }
-    if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-      try {
-        configure_lane_sends(*lanes, track_id);
-      } catch (...) {
-        return false;
-      }
-      if (!recompute_lane_pdc(*lanes)) return false;
-    }
-    return true;
+    if (lane.track_id == track_id) lane.solo = soloed;
   }
-  return false;
+}
+
+int TrackMixerRuntime::lane_slot_for(uint32_t track_id) const noexcept {
+  for (size_t i = 0; i < lane_states_.size(); ++i) {
+    if (lane_states_[i].track_id == track_id) return static_cast<int>(i);
+  }
+  for (size_t i = 0; i < lane_states_.size(); ++i) {
+    if (lane_states_[i].track_id == 0) return static_cast<int>(i);
+  }
+  return -1;
+}
+
+bool TrackMixerRuntime::stage_track_strip(uint32_t track_id, mixing::ChannelStrip& strip,
+                                          StagedTrackStrip* out) {
+  acquire_lanes();
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes != nullptr) prepare_lanes_from_snapshot(*lanes);
+  const int lane_index = lane_slot_for(track_id);
+  if (lane_index < 0) return false;
+  out->lane_index = static_cast<size_t>(lane_index);
+  try {
+    track_strip_bindings_.reserve(track_strip_bindings_.size() + 1);
+    if (lanes != nullptr) {
+      for (const TrackLaneConfig& config : *lanes) {
+        if (config.track_id == track_id) configure_strip_sends(config, strip);
+      }
+    }
+  } catch (...) {
+    return false;
+  }
+  out->has_pdc = false;
+  if (lanes != nullptr) {
+    std::array<mixing::ChannelStrip*, kMaxTrackLanes> candidate{};
+    for (size_t i = 0; i < kMaxTrackLanes; ++i) candidate[i] = lane_states_[i].strip;
+    candidate[out->lane_index] = &strip;
+    PdcPlan plan;
+    if (!plan_pdc(*lanes, current_bus_graph_view(), &plan, &candidate) ||
+        !prepare_identity_pdc(plan, &out->pdc)) {
+      return false;
+    }
+    out->has_pdc = true;
+  }
+  return true;
+}
+
+void TrackMixerRuntime::commit_track_strip(uint32_t track_id, mixing::ChannelStrip* strip,
+                                           StagedTrackStrip& staged) noexcept {
+  clear_insert_automation_for_lane(staged.lane_index);
+  LaneState& lane = lane_states_[staged.lane_index];
+  lane.track_id = track_id;
+  lane.strip = strip;
+  // Storage was reserved while staging.
+  record_track_strip_binding(track_id, strip);
+  if (staged.has_pdc) commit_pdc_updates(staged.pdc);
 }
 
 bool TrackMixerRuntime::release_track_strip(uint32_t track_id) {
   if (track_id == 0) return false;
   acquire_lanes();
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    prepare_lanes_from_snapshot(*lanes);
+  const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
+  if (lanes != nullptr) prepare_lanes_from_snapshot(*lanes);
+  // Stage first: an unbound lane with sends gets a fresh strip, and the PDC is
+  // planned without the released strip or its keys, before anything is destroyed.
+  const SidechainTable next_sidechains =
+      without_inserts_from(sidechains_, SidechainTargetKind::Lane, track_id, 0);
+  std::unique_ptr<mixing::ChannelStrip> seed;
+  try {
+    if (lanes != nullptr) {
+      for (const TrackLaneConfig& config : *lanes) {
+        if (config.track_id != track_id || config.sends.empty()) continue;
+        seed = make_seed_strip();
+        configure_strip_sends(config, *seed);
+        owned_strips_.reserve(owned_strips_.size() + 1);
+        track_strip_bindings_.reserve(track_strip_bindings_.size() + 1);
+      }
+    }
+  } catch (...) {
+    return false;
   }
+  PreparedPdc prepared;
+  bool has_pdc = false;
+  if (lanes != nullptr) {
+    std::array<mixing::ChannelStrip*, kMaxTrackLanes> candidate{};
+    for (size_t i = 0; i < kMaxTrackLanes; ++i) {
+      candidate[i] = lane_states_[i].track_id == track_id ? seed.get() : lane_states_[i].strip;
+    }
+    BusGraphView view = current_bus_graph_view();
+    build_routes(*view.buses, view.skip_binding, &view.routes, &next_sidechains);
+    PdcPlan plan;
+    if (!plan_pdc(*lanes, view, &plan, &candidate, nullptr, false, &next_sidechains) ||
+        !prepare_identity_pdc(plan, &prepared)) {
+      return false;
+    }
+    has_pdc = true;
+  }
+
+  // Commit; nothing below can fail.
   for (LaneState& lane : lane_states_) {
     if (lane.track_id != track_id) continue;
     clear_insert_automation_for_lane(static_cast<size_t>(&lane - lane_states_.data()));
@@ -840,15 +938,17 @@ bool TrackMixerRuntime::release_track_strip(uint32_t track_id) {
       std::remove_if(track_strip_bindings_.begin(), track_strip_bindings_.end(),
                      [track_id](const TrackStripBinding& b) { return b.track_id == track_id; }),
       track_strip_bindings_.end());
-  prune_lane_sidechains(track_id, 0);
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    try {
-      configure_lane_sends(*lanes, track_id);
-    } catch (...) {
-      return false;
+  sidechains_ = next_sidechains;
+  publish_sidechains();
+  if (seed != nullptr) {
+    mixing::ChannelStrip* raw = seed.get();
+    owned_strips_.push_back(OwnedStrip{track_id, std::move(seed), {}});
+    for (LaneState& lane : lane_states_) {
+      if (lane.track_id == track_id) lane.strip = raw;
     }
-    if (!recompute_lane_pdc(*lanes)) return false;
+    record_track_strip_binding(track_id, raw);
   }
+  if (has_pdc) commit_pdc_updates(prepared);
   return true;
 }
 
@@ -878,11 +978,22 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   for (OwnedStrip& owned : owned_strips_) {
     if (owned.track_id == track_id && owned.strip &&
         strip_inserts_equal(owned.spec.inserts, spec.inserts)) {
-      apply_strip_scalars(*owned.strip, spec, owned.spec);
-      owned.spec = spec;
-      if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-        if (!recompute_lane_pdc(*lanes)) return false;
+      mixing::api::Strip next_spec;
+      try {
+        next_spec = spec;
+      } catch (...) {
+        return false;
       }
+      apply_strip_scalars(*owned.strip, spec, owned.spec);
+      if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+        if (!recompute_lane_pdc(*lanes)) {
+          // Refused: the previous scalars return, and the live PDC still fits them.
+          apply_strip_scalars(*owned.strip, owned.spec, spec);
+          return false;
+        }
+      }
+      if (spec.soloed != owned.spec.soloed) apply_spec_solo(track_id, spec.soloed);
+      owned.spec = std::move(next_spec);
       prune_lane_sidechains(track_id, spec.inserts.size());
       return true;
     }
@@ -900,28 +1011,35 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
   }
   if (admit != nullptr && !admit(admit_context, track_id, *strip)) return false;
 
-  mixing::ChannelStrip* raw = strip.get();
+  OwnedStrip* existing = nullptr;
   for (OwnedStrip& owned : owned_strips_) {
-    if (owned.track_id == track_id) {
-      // Control-thread-only, not concurrent with process() (see RealtimeEngine's
-      // thread-safety contract). This std::move destroys the previously bound
-      // strip immediately -- there is no deferred reclaim -- before rebinding the
-      // raw pointer the audio thread reads, so a concurrent render would use
-      // freed memory.
-      owned.strip = std::move(strip);
-      owned.spec = spec;
-      const bool bound = bind_track_strip(track_id, raw);
-      if (bound) prune_lane_sidechains(track_id, spec.inserts.size());
-      return bound;
-    }
+    if (owned.track_id == track_id) existing = &owned;
   }
-  if (owned_strips_.size() >= kMaxTrackLanes) {
+  if (existing == nullptr && owned_strips_.size() >= kMaxTrackLanes) return false;
+  mixing::ChannelStrip* raw = strip.get();
+  mixing::api::Strip next_spec;
+  try {
+    next_spec = spec;
+    if (existing == nullptr) owned_strips_.reserve(owned_strips_.size() + 1);
+  } catch (...) {
     return false;
   }
-  owned_strips_.push_back(OwnedStrip{track_id, std::move(strip), spec});
-  const bool bound = bind_track_strip(track_id, raw);
-  if (bound) prune_lane_sidechains(track_id, spec.inserts.size());
-  return bound;
+  StagedTrackStrip staged;
+  if (!stage_track_strip(track_id, *raw, &staged)) return false;
+
+  // Control thread, not concurrent with process(): the previous strip is
+  // destroyed here, after the lane points away from it.
+  commit_track_strip(track_id, raw, staged);
+  const bool previous_soloed = existing != nullptr && existing->spec.soloed;
+  if (spec.soloed != previous_soloed) apply_spec_solo(track_id, spec.soloed);
+  if (existing != nullptr) {
+    existing->strip = std::move(strip);
+    existing->spec = std::move(next_spec);
+  } else {
+    owned_strips_.push_back(OwnedStrip{track_id, std::move(strip), std::move(next_spec)});
+  }
+  prune_lane_sidechains(track_id, spec.inserts.size());
+  return true;
 }
 
 bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& bus,
@@ -962,6 +1080,32 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     }
     if (admit != nullptr && !admit(admit_context, bus_id, *fx)) return false;
   }
+  mixing::api::Bus next_spec;
+  try {
+    next_spec = bus;
+  } catch (...) {
+    return false;
+  }
+  // A new chain's latency and its surviving keys are planned before anything is applied.
+  SidechainTable next_sidechains{};
+  PreparedPdc prepared;
+  bool has_pdc = false;
+  if (rebuild) {
+    next_sidechains =
+        without_inserts_from(sidechains_, SidechainTargetKind::Bus, bus_id, fx->num_inserts());
+    if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
+      BusGraphView view = current_bus_graph_view();
+      view.bus[bus_index] = fx.get();
+      view.latency_q8[bus_index] = fx->latency_samples_q8();
+      build_routes(*view.buses, view.skip_binding, &view.routes, &next_sidechains);
+      PdcPlan plan;
+      if (!plan_pdc(*lanes, view, &plan, nullptr, nullptr, false, &next_sidechains) ||
+          !prepare_identity_pdc(plan, &prepared)) {
+        return false;
+      }
+      has_pdc = true;
+    }
+  }
   state->input_trim_gain.set_target(db_to_linear(bus.input_trim_db));
   state->width.set_width(bus.width);
   state->polarity_left.store(bus.polarity_invert_left ? -1.0f : 1.0f, std::memory_order_relaxed);
@@ -969,7 +1113,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   apply_bus_pan(*state, bus);
   mixing::apply_eq(state->eq, state->eq_enabled, bus.eq, &state->spec.eq);
   refresh_bus_eq_active(*state);
-  state->spec = bus;
+  state->spec = std::move(next_spec);
   if (!rebuild) return true;
   for (InsertAutoSlot& slot : insert_auto_slots_) {
     if (slot.assigned && slot.is_bus && slot.bus_id == bus_id) {
@@ -979,22 +1123,11 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
   }
   state->bus = std::move(fx);
   // Keys stay on (bus, insert index); an index the new chain lacks is dropped.
-  const size_t insert_count = state->bus->num_inserts();
-  for (size_t i = sidechains_.count; i > 0; --i) {
-    const SidechainBinding& binding = sidechains_.bindings[i - 1];
-    if (binding.target_kind == static_cast<uint8_t>(SidechainTargetKind::Bus) &&
-        binding.target_id == bus_id && binding.insert_index >= insert_count) {
-      remove_sidechain_binding(i - 1);
-    }
-  }
+  sidechains_ = next_sidechains;
+  publish_sidechains();
   refresh_bus_graph();
-  // A bus insert chain's latency joins the mixer's end-to-end PDC, so
-  // installing one has to re-derive the alignment banks. Without this call
-  // FxBus::latency_samples_q8() has no reader in the engine at all and a
-  // latent bus insert silently offsets its whole parallel path.
-  if (const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get()) {
-    if (!recompute_lane_pdc(*lanes)) return false;
-  }
+  // The chain's latency joins the mixer's end-to-end PDC, staged above.
+  if (has_pdc) commit_pdc_updates(prepared);
   return true;
 }
 
@@ -1477,6 +1610,15 @@ void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::Ch
   track_strip_bindings_.push_back(TrackStripBinding{track_id, strip});
 }
 
+std::unique_ptr<mixing::ChannelStrip> TrackMixerRuntime::make_seed_strip() const {
+  auto strip = std::make_unique<mixing::ChannelStrip>(mixing::ChannelStripConfig{
+      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false});
+  if (max_block_size_ > 0) {
+    strip->prepare(sample_rate_, max_block_size_);
+  }
+  return strip;
+}
+
 mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_id) {
   if (mixing::ChannelStrip* strip = owned_strip_for(track_id)) {
     return strip;
@@ -1484,11 +1626,7 @@ mixing::ChannelStrip* TrackMixerRuntime::ensure_owned_strip_for(uint32_t track_i
   if (owned_strips_.size() >= kMaxTrackLanes) {
     return nullptr;
   }
-  auto strip = std::make_unique<mixing::ChannelStrip>(mixing::ChannelStripConfig{
-      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false});
-  if (max_block_size_ > 0) {
-    strip->prepare(sample_rate_, max_block_size_);
-  }
+  std::unique_ptr<mixing::ChannelStrip> strip = make_seed_strip();
   mixing::ChannelStrip* raw = strip.get();
   // Automation-seeded strip: no spec applied yet, so leave spec default (a later
   // set_track_strip will see a differing insert topology and rebuild).
@@ -1699,25 +1837,37 @@ void TrackMixerRuntime::configure_lane_sends(const std::vector<TrackLaneConfig>&
         record_track_strip_binding(config.track_id, strip);
       }
     }
-    if (!strip) continue;
+    if (strip) configure_strip_sends(config, *strip);
+  }
+}
 
-    if (config.sends.size() > mixing::ChannelStrip::kMaxSends) {
-      throw std::invalid_argument("track send count exceeds the strip send cap");
+void TrackMixerRuntime::configure_strip_sends(const TrackLaneConfig& config,
+                                              mixing::ChannelStrip& strip) const {
+  if (config.sends.size() > mixing::ChannelStrip::kMaxSends) {
+    throw std::invalid_argument("track send count exceeds the strip send cap");
+  }
+  std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> configs{};
+  for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
+    const TrackLaneConfig::Send& send = config.sends[send_index];
+    if (bus_state_for(send.bus_id) == nullptr) {
+      throw std::invalid_argument("track send references an unknown bus");
     }
-    std::array<mixing::SendConfig, mixing::ChannelStrip::kMaxSends> configs{};
-    for (size_t send_index = 0; send_index < config.sends.size(); ++send_index) {
-      const TrackLaneConfig::Send& send = config.sends[send_index];
-      if (bus_state_for(send.bus_id) == nullptr) {
-        throw std::invalid_argument("track send references an unknown bus");
-      }
-      configs[send_index] =
-          mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
-    }
-    mixing::ChannelStrip::PreparedSends prepared;
-    if (!strip->prepare_sends(configs.data(), config.sends.size(), prepared)) {
-      throw std::bad_alloc();
-    }
-    strip->commit_sends(prepared);
+    configs[send_index] =
+        mixing::SendConfig{send.enabled ? send.level_db : kFloorDb, send.timing, 5.0f};
+  }
+  mixing::ChannelStrip::PreparedSends prepared;
+  if (!strip.prepare_sends(configs.data(), config.sends.size(), prepared)) {
+    throw std::bad_alloc();
+  }
+  strip.commit_sends(prepared);
+}
+
+void TrackMixerRuntime::flush_meters() noexcept {
+  for (LaneState& lane : lane_states_) {
+    if (lane.strip != nullptr) lane.strip->flush_meters();
+  }
+  for (BusState& bus : bus_states_) {
+    if (bus.bus) bus.bus->flush_meters();
   }
 }
 

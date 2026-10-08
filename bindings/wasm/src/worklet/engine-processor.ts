@@ -421,7 +421,7 @@ export class SonareRealtimeEngineWorkletProcessor {
             nextClips.set(clip.id, clip);
           }
         }
-        this.engine.setClips(Array.from(nextClips.values()));
+        this.applyClipDelta(message.upserts, message.removeIds);
         for (const clipId of message.removeIds) {
           // A stream-owned provider stays, so re-adding its clip sounds again.
           if (this.pagedClipProviders.get(clipId)?.streamKey === undefined) {
@@ -478,9 +478,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);
         if (providerId !== undefined && clip) {
           const nextClip = { ...clip, pageProvider: providerId };
-          const nextClips = new Map(this.liveClips);
-          nextClips.set(message.clipId, nextClip);
-          this.engine.setClips(Array.from(nextClips.values()));
+          this.engine.upsertClip(nextClip);
           this.liveClips.set(message.clipId, nextClip);
           this.pendingPagedClips.delete(message.clipId);
         }
@@ -493,9 +491,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         // Only a clip still reading this provider goes; a same-id successor stays.
         if (this.liveClips.get(message.clipId)?.pageProvider === providerId) {
-          const nextClips = new Map(this.liveClips);
-          nextClips.delete(message.clipId);
-          this.engine.setClips(Array.from(nextClips.values()));
+          this.engine.removeClip(message.clipId);
           this.liveClips.delete(message.clipId);
         }
         this.removePagedClipProvider(message.clipId);
@@ -520,9 +516,8 @@ export class SonareRealtimeEngineWorkletProcessor {
         this.engine.setAutomationLane(message.paramId, message.points);
         break;
       case 'syncParameters': {
-        // An empty list is the facade's clearParameters, which also drops the
-        // lanes; any other list only adds the ids this engine lacks, so the
-        // automation lanes already published here survive a new parameter.
+        // An empty list is the facade's clearParameters; any other list only
+        // adds the ids this engine lacks. Neither touches an automation lane.
         if (message.parameters.length === 0) {
           this.engine.clearParameters();
           break;
@@ -1561,6 +1556,29 @@ export class SonareRealtimeEngineWorkletProcessor {
     } else {
       this.clipPageRequestMessage.requests = requests;
       transport.postMessage(this.clipPageRequestMessage);
+    }
+  }
+
+  /**
+   * Applies a clip delta one clip at a time, so clips it does not name keep
+   * their storage instead of being copied again. A refusal part-way restores
+   * the published set from the live mirror and rethrows.
+   */
+  private applyClipDelta(upserts: readonly EngineClip[], removeIds: readonly number[]): void {
+    try {
+      for (const clipId of removeIds) {
+        if (this.liveClips.has(clipId)) {
+          this.engine.removeClip(clipId);
+        }
+      }
+      for (const clip of upserts) {
+        if (clip.id !== undefined) {
+          this.engine.upsertClip(clip);
+        }
+      }
+    } catch (error) {
+      this.engine.setClips(Array.from(this.liveClips.values()));
+      throw error;
     }
   }
 

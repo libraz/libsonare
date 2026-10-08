@@ -197,6 +197,26 @@ describe('SonareRealtimeEngineNode', () => {
       return { engine, offline, posted, postedTypes };
     }
 
+    it('changes one clip on the offline mirror without resending the rest', async () => {
+      const { engine, offline } = await recordingEngine();
+      try {
+        engine.setTrackLanes([3]);
+        engine.addClip(3, [new Float32Array(64).fill(0.25)], 0, { id: 1 });
+        const setClips = vi.spyOn(offline as never, 'setClips' as never);
+        const upsertClip = vi.spyOn(offline as never, 'upsertClip' as never);
+        const removeClip = vi.spyOn(offline as never, 'removeClip' as never);
+        engine.addClip(3, [new Float32Array(64).fill(0.5)], 0, { id: 2 });
+        engine.removeClip(2);
+        engine.removeClip(99);
+        expect(setClips).not.toHaveBeenCalled();
+        expect(upsertClip).toHaveBeenCalledTimes(1);
+        expect(removeClip).toHaveBeenCalledTimes(1);
+        expect((offline.clipCount as () => number)()).toBe(1);
+      } finally {
+        engine.destroy();
+      }
+    });
+
     it('changes neither engine when the live command ring has no room', async () => {
       const { engine, offline } = await recordingEngine({ mode: 'sab', commandRingCapacity: 1 });
       try {

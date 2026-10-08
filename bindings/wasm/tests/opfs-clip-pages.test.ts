@@ -217,6 +217,32 @@ describe('createOpfsClipPageProvider', () => {
     }
   });
 
+  it('refuses an offline render that would read a page no one supplied', async () => {
+    const engine = new RealtimeEngine(48000, 8);
+    const worker = new FakeClipPageWorker();
+    const binding = createOpfsClipPageProvider(engine, {
+      path: 'clips/clip.f32',
+      numChannels: 1,
+      numSamples: 8,
+      pageFrames: 4,
+      worker: worker as unknown as Worker,
+    });
+    try {
+      expect(await binding.supplyPage(0)).toBe(true);
+      engine.setClips([{ id: 307, pageProvider: binding.provider, startPpq: 0 }]);
+      expect(() =>
+        engine.renderOffline({ channels: [new Float32Array(4)], blockSize: 4 }),
+      ).not.toThrow();
+      engine.seekSample(0);
+      expect(() => engine.renderOffline({ channels: [new Float32Array(8)], blockSize: 4 })).toThrow(
+        expect.objectContaining({ codeName: 'InvalidState' }),
+      );
+    } finally {
+      binding.close();
+      engine.destroy();
+    }
+  });
+
   it('rejects short non-final pages returned by the worker', async () => {
     const engine = new RealtimeEngine(48000, 8);
     const worker = new FakeClipPageWorker();

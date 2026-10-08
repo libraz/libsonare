@@ -499,6 +499,13 @@ TEST_CASE("C-ABI set_sample_rate names its accepted range when it refuses one",
   REQUIRE(sonare_project_set_sample_rate(project, 1'000'000.0) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(std::string(sonare_last_error_message()).find("384000") != std::string::npos);
 
+  // A fractional rate inside the range is refused by name, and the rate stays.
+  REQUIRE(sonare_project_set_sample_rate(project, 44100.5) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("whole number") != std::string::npos);
+  double rate = 0.0;
+  REQUIRE(sonare_project_get_sample_rate(project, &rate) == SONARE_OK);
+  REQUIRE(rate != 44100.5);
+
   // A rate inside the range still succeeds and leaves no error behind it.
   REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
   REQUIRE(std::string(sonare_last_error_message()).empty());

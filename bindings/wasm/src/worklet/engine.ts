@@ -463,7 +463,7 @@ export class SonareEngine {
     parameter.addParameter(this.parameterContext, info);
   }
 
-  /** Clears custom parameters and their automation lanes on both engines. */
+  /** Clears custom parameters on both engines; automation lanes stay in place. */
   clearParameters(): void {
     parameter.clearParameters(this.parameterContext);
   }

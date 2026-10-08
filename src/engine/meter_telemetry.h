@@ -88,6 +88,11 @@ class MeterTelemetryTap {
                            const float* input_peak_db = nullptr,
                            float gain_reduction_db = 0.0f) noexcept;
 
+  /// Ends the signal: the true-peak reading takes in its pending reconstruction
+  /// delay and one record carrying it is published at @p render_frame. Control
+  /// thread, outside a block; a later process() starts a new signal.
+  void flush(int64_t render_frame) noexcept;
+
   bool pop(MeterTelemetryRecord& out) noexcept { return telemetry_.pop(out); }
   mixing::MeterSnapshot snapshot() const noexcept {
     return meter_.has_value() ? meter_->snapshot() : mixing::MeterSnapshot{};

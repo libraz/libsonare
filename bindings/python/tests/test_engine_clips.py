@@ -54,6 +54,45 @@ def test_process_accepts_a_single_frame_plane_whatever_it_stores(value: float) -
     assert from_list == [[pytest.approx(value + 0.5)]]
 
 
+def test_engine_refuses_a_fractional_sample_rate() -> None:
+    """A rate that is not a whole number of hertz is refused, and the old rate stays."""
+    with pytest.raises(SonareError):
+        RealtimeEngine(sample_rate=44100.5, max_block_size=128)
+    with RealtimeEngine(sample_rate=44100.0, max_block_size=128) as engine:
+        with pytest.raises(SonareError):
+            engine.prepare(48000.25, 128)
+        assert engine.transport_state().sample_rate == 44100.0
+
+
+def test_upsert_clip_and_remove_clip_change_one_clip() -> None:
+    """One clip changes or leaves while the rest of the published set stays."""
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=4) as engine:
+        engine.set_clips(
+            [
+                EngineClip(id=1, channels=[[0.25] * 4], start_ppq=0.0),
+                EngineClip(id=2, channels=[[0.5] * 4], start_ppq=0.0),
+            ]
+        )
+
+        def first_sample() -> float:
+            engine.seek_sample(0)
+            engine.play()
+            return engine.process([[0.0] * 4])[0][0]
+
+        assert first_sample() == pytest.approx(0.75)
+        engine.upsert_clip(EngineClip(id=1, channels=[[0.25] * 4], start_ppq=0.0, gain=2.0))
+        assert engine.clip_count() == 2
+        assert first_sample() == pytest.approx(1.0)
+        engine.remove_clip(2)
+        assert engine.clip_count() == 1
+        assert first_sample() == pytest.approx(0.5)
+        with pytest.raises(SonareError):
+            engine.remove_clip(2)
+        with pytest.raises(SonareError):
+            engine.upsert_clip(EngineClip(id=1, channels=[[0.25] * 4], start_ppq=0.0, gain=-1.0))
+        assert first_sample() == pytest.approx(0.5)
+
+
 def test_set_clips_accepts_planar_channels_as_a_2d_ndarray() -> None:
     """A clip's channels take the same planar spellings the process path does."""
     nested = [[0.5, 0.25, 0.125, 0.0625]]

@@ -94,6 +94,131 @@ bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
   return true;
 }
 
+// Backing storage a SonareEngineClip read from JS points into.
+struct ClipStorage {
+  std::vector<std::vector<float>> samples;
+  std::vector<const float*> pointers;
+  std::vector<SonareEngineWarpAnchor> warp_anchors;
+};
+
+// Reads one JS clip object into @p out_clip, whose pointers land in @p out_storage.
+// Returns false with a pending JS exception on a malformed clip.
+bool ReadClip(Napi::Env env, const Napi::Value& entry,
+              const std::unordered_map<int, SonareClipPageProvider*>& providers,
+              ClipStorage* out_storage, SonareEngineClip* out_clip) {
+  if (!entry.IsObject()) {
+    Napi::TypeError::New(env, "clip must be an object").ThrowAsJavaScriptException();
+    return false;
+  }
+  Napi::Object obj = entry.As<Napi::Object>();
+  const bool has_page_provider = obj.Has("pageProvider") &&
+                                 !obj.Get("pageProvider").IsUndefined() &&
+                                 !obj.Get("pageProvider").IsNull();
+  Napi::Array channels = Napi::Array::New(env);
+  if (!has_page_provider) {
+    const Napi::Value channel_value = obj.Get("channels");
+    if (!channel_value.IsArray()) {
+      Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    channels = channel_value.As<Napi::Array>();
+  }
+  if (!has_page_provider && channels.Length() == 0) {
+    Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
+        .ThrowAsJavaScriptException();
+    return false;
+  }
+  auto& clip_storage = out_storage->samples;
+  auto& clip_ptrs = out_storage->pointers;
+  auto& clip_warp_anchors = out_storage->warp_anchors;
+  clip_storage.reserve(channels.Length());
+  clip_ptrs.reserve(channels.Length());
+  size_t num_samples = 0;
+  for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
+    Napi::Value value = channels.Get(ch);
+    if (!sonare_node::IsFloat32Array(value)) {
+      Napi::TypeError::New(env, "clip channel must be a Float32Array").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Float32Array channel = value.As<Napi::Float32Array>();
+    if (ch == 0) {
+      num_samples = channel.ElementLength();
+    } else if (channel.ElementLength() != num_samples) {
+      Napi::RangeError::New(env, "all clip channels must have the same length")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    clip_storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
+    clip_ptrs.push_back(clip_storage.back().data());
+  }
+
+  SonareEngineClip& clip = *out_clip;
+  clip = SonareEngineClip{};
+  if (!RequiredUint32Property(env, obj, "id", &clip.id)) return false;
+  clip.track_id = Uint32Property(obj, "trackId", 0);
+  if (env.IsExceptionPending()) return false;
+  if (has_page_provider) {
+    int provider_id = 0;
+    if (!RequiredIntProperty(env, obj, "pageProvider", &provider_id)) return false;
+    SonareClipPageProvider* provider = ProviderById(providers, provider_id);
+    if (!provider) {
+      Napi::TypeError::New(env, "pageProvider is not a live ClipPageProvider")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    clip.page_provider = provider;
+    clip.channels = nullptr;
+    clip.num_channels = 0;
+    clip.num_samples = 0;
+  } else {
+    clip.channels = clip_ptrs.data();
+    clip.num_channels = static_cast<int>(clip_ptrs.size());
+    clip.num_samples = static_cast<int64_t>(num_samples);
+  }
+  if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return false;
+  clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", 0);
+  clip.length_samples = Int64Property(obj, "lengthSamples", static_cast<int64_t>(num_samples));
+  clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
+  clip.gain = FloatProperty(obj, "gain", 1.0f);
+  clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
+  clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
+  // A wrong-typed optional field left one pending JS exception; stop before
+  // ParseWarpMode can throw a second one on top of it (a fatal abort).
+  if (env.IsExceptionPending()) return false;
+  clip.warp_mode =
+      obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
+  if (env.IsExceptionPending()) return false;
+  if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
+    const Napi::Value anchors_value = obj.Get("warpAnchors");
+    if (!anchors_value.IsArray()) {
+      Napi::TypeError::New(env, "warpAnchors must be an array").ThrowAsJavaScriptException();
+      return false;
+    }
+    Napi::Array anchors = anchors_value.As<Napi::Array>();
+    clip_warp_anchors.reserve(anchors.Length());
+    for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
+      Napi::Value anchor_value = anchors.Get(anchor_index);
+      if (!anchor_value.IsObject()) {
+        Napi::TypeError::New(env, "warp anchor must be an object").ThrowAsJavaScriptException();
+        return false;
+      }
+      Napi::Object anchor = anchor_value.As<Napi::Object>();
+      SonareEngineWarpAnchor out{};
+      if (!RequiredDoubleProperty(env, anchor, "warpSample", &out.warp_sample)) {
+        return false;
+      }
+      if (!RequiredDoubleProperty(env, anchor, "sourceSample", &out.source_sample)) {
+        return false;
+      }
+      clip_warp_anchors.push_back(out);
+    }
+    clip.warp_anchors = clip_warp_anchors.data();
+    clip.warp_anchor_count = clip_warp_anchors.size();
+  }
+  return true;
+}
+
 }  // namespace
 
 Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
@@ -104,134 +229,39 @@ Napi::Value RealtimeEngineWrap::SetClips(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   Napi::Array input = info[0].As<Napi::Array>();
-  std::vector<std::vector<std::vector<float>>> storage;
-  std::vector<std::vector<const float*>> ptr_storage;
-  std::vector<std::vector<SonareEngineWarpAnchor>> warp_storage;
-  std::vector<SonareEngineClip> clips;
-  storage.reserve(input.Length());
-  ptr_storage.reserve(input.Length());
-  warp_storage.reserve(input.Length());
-  clips.reserve(input.Length());
-
+  std::vector<ClipStorage> storage(input.Length());
+  std::vector<SonareEngineClip> clips(input.Length());
   for (uint32_t i = 0; i < input.Length(); ++i) {
-    Napi::Value entry = input.Get(i);
-    if (!entry.IsObject()) {
-      Napi::TypeError::New(env, "clip must be an object").ThrowAsJavaScriptException();
+    if (!ReadClip(env, input.Get(i), clip_page_providers_, &storage[i], &clips[i])) {
       return env.Undefined();
     }
-    Napi::Object obj = entry.As<Napi::Object>();
-    const bool has_page_provider = obj.Has("pageProvider") &&
-                                   !obj.Get("pageProvider").IsUndefined() &&
-                                   !obj.Get("pageProvider").IsNull();
-    Napi::Array channels = Napi::Array::New(env);
-    if (!has_page_provider) {
-      const Napi::Value channel_value = obj.Get("channels");
-      if (!channel_value.IsArray()) {
-        Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      channels = channel_value.As<Napi::Array>();
-    }
-    if (!has_page_provider && channels.Length() == 0) {
-      Napi::TypeError::New(env, "clip requires non-empty channels or a pageProvider")
-          .ThrowAsJavaScriptException();
-      return env.Undefined();
-    }
-    storage.emplace_back();
-    ptr_storage.emplace_back();
-    warp_storage.emplace_back();
-    auto& clip_storage = storage.back();
-    auto& clip_ptrs = ptr_storage.back();
-    auto& clip_warp_anchors = warp_storage.back();
-    clip_storage.reserve(channels.Length());
-    clip_ptrs.reserve(channels.Length());
-    size_t num_samples = 0;
-    for (uint32_t ch = 0; ch < channels.Length(); ++ch) {
-      Napi::Value value = channels.Get(ch);
-      if (!sonare_node::IsFloat32Array(value)) {
-        Napi::TypeError::New(env, "clip channel must be a Float32Array")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Float32Array channel = value.As<Napi::Float32Array>();
-      if (ch == 0) {
-        num_samples = channel.ElementLength();
-      } else if (channel.ElementLength() != num_samples) {
-        Napi::RangeError::New(env, "all clip channels must have the same length")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      clip_storage.emplace_back(channel.Data(), channel.Data() + channel.ElementLength());
-      clip_ptrs.push_back(clip_storage.back().data());
-    }
-
-    SonareEngineClip clip{};
-    if (!RequiredUint32Property(env, obj, "id", &clip.id)) return env.Undefined();
-    clip.track_id = Uint32Property(obj, "trackId", 0);
-    if (env.IsExceptionPending()) return env.Undefined();
-    if (has_page_provider) {
-      int provider_id = 0;
-      if (!RequiredIntProperty(env, obj, "pageProvider", &provider_id)) return env.Undefined();
-      SonareClipPageProvider* provider = ProviderById(clip_page_providers_, provider_id);
-      if (!provider) {
-        Napi::TypeError::New(env, "pageProvider is not a live ClipPageProvider")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      clip.page_provider = provider;
-      clip.channels = nullptr;
-      clip.num_channels = 0;
-      clip.num_samples = 0;
-    } else {
-      clip.channels = clip_ptrs.data();
-      clip.num_channels = static_cast<int>(clip_ptrs.size());
-      clip.num_samples = static_cast<int64_t>(num_samples);
-    }
-    if (!RequiredDoubleProperty(env, obj, "startPpq", &clip.start_ppq)) return env.Undefined();
-    clip.clip_offset_samples = Int64Property(obj, "clipOffsetSamples", 0);
-    clip.length_samples = Int64Property(obj, "lengthSamples", static_cast<int64_t>(num_samples));
-    clip.loop = BoolProperty(obj, "loop", false) ? 1 : 0;
-    clip.gain = FloatProperty(obj, "gain", 1.0f);
-    clip.fade_in_samples = Int64Property(obj, "fadeInSamples", 0);
-    clip.fade_out_samples = Int64Property(obj, "fadeOutSamples", 0);
-    // A wrong-typed optional field left one pending JS exception; stop before
-    // ParseWarpMode can throw a second one on top of it (a fatal abort).
-    if (env.IsExceptionPending()) return env.Undefined();
-    clip.warp_mode =
-        obj.Has("warpMode") ? ParseWarpMode(env, obj.Get("warpMode")) : SONARE_ENGINE_WARP_MODE_OFF;
-    if (env.IsExceptionPending()) return env.Undefined();
-    if (obj.Has("warpAnchors") && !obj.Get("warpAnchors").IsUndefined()) {
-      const Napi::Value anchors_value = obj.Get("warpAnchors");
-      if (!anchors_value.IsArray()) {
-        Napi::TypeError::New(env, "warpAnchors must be an array").ThrowAsJavaScriptException();
-        return env.Undefined();
-      }
-      Napi::Array anchors = anchors_value.As<Napi::Array>();
-      clip_warp_anchors.reserve(anchors.Length());
-      for (uint32_t anchor_index = 0; anchor_index < anchors.Length(); ++anchor_index) {
-        Napi::Value anchor_value = anchors.Get(anchor_index);
-        if (!anchor_value.IsObject()) {
-          Napi::TypeError::New(env, "warp anchor must be an object").ThrowAsJavaScriptException();
-          return env.Undefined();
-        }
-        Napi::Object anchor = anchor_value.As<Napi::Object>();
-        SonareEngineWarpAnchor out{};
-        if (!RequiredDoubleProperty(env, anchor, "warpSample", &out.warp_sample)) {
-          return env.Undefined();
-        }
-        if (!RequiredDoubleProperty(env, anchor, "sourceSample", &out.source_sample)) {
-          return env.Undefined();
-        }
-        clip_warp_anchors.push_back(out);
-      }
-      clip.warp_anchors = clip_warp_anchors.data();
-      clip.warp_anchor_count = clip_warp_anchors.size();
-    }
-    clips.push_back(clip);
   }
-
   ThrowIfError(env, sonare_engine_set_clips(engine_, clips.data(), clips.size()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::UpsertClip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() <= 0) {
+    Napi::TypeError::New(env, "expected a clip").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  ClipStorage storage;
+  SonareEngineClip clip{};
+  if (!ReadClip(env, info[0], clip_page_providers_, &storage, &clip)) return env.Undefined();
+  ThrowIfError(env, sonare_engine_upsert_clip(engine_, &clip));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::RemoveClip(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t clip_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "clipId", &clip_id)) return env.Undefined();
+  ThrowIfError(env, sonare_engine_remove_clip(engine_, clip_id));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

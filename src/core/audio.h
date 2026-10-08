@@ -151,6 +151,11 @@ class Audio {
 /// @{
 inline constexpr int kMinAudioSampleRate = 8000;
 inline constexpr int kMaxAudioSampleRate = 384000;
+/// True when @p hz is a whole number of hertz in [kMinAudioSampleRate, kMaxAudioSampleRate].
+constexpr bool is_supported_sample_rate(double hz) noexcept {
+  return hz >= kMinAudioSampleRate && hz <= kMaxAudioSampleRate &&
+         hz == static_cast<double>(static_cast<int>(hz));
+}
 inline constexpr std::size_t kMaxAudioBufferSize = resource::kMaxOfflineAudioSamples;
 
 /// @brief The O(1) half of the policy: the rules that describe a buffer's extent

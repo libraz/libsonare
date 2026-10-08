@@ -617,6 +617,43 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       }
     });
 
+    it('applies a clip delta one clip at a time', () => {
+      const processor = new SonareRealtimeEngineWorkletProcessor({
+        sampleRate: 48000,
+        blockSize: 128,
+        channelCount: 1,
+      });
+      try {
+        const engine = (
+          processor as unknown as {
+            engine: {
+              setClips: (clips: unknown[]) => void;
+              upsertClip: (clip: unknown) => void;
+              removeClip: (clipId: number) => void;
+              clipCount: () => number;
+            };
+          }
+        ).engine;
+        const clip = (id: number) => ({
+          id,
+          channels: [new Float32Array(64).fill(0.25)],
+          startPpq: 0,
+        });
+        processor.receiveSync({ type: 'syncClipsDelta', upserts: [clip(1)], removeIds: [] });
+        const setClips = vi.spyOn(engine, 'setClips');
+        const upsertClip = vi.spyOn(engine, 'upsertClip');
+        processor.receiveSync({ type: 'syncClipsDelta', upserts: [clip(2)], removeIds: [] });
+        expect(upsertClip).toHaveBeenCalledTimes(1);
+        expect(setClips).not.toHaveBeenCalled();
+        expect(engine.clipCount()).toBe(2);
+        processor.receiveSync({ type: 'syncClipsDelta', upserts: [], removeIds: [2, 5] });
+        expect(engine.clipCount()).toBe(1);
+        expect(setClips).not.toHaveBeenCalled();
+      } finally {
+        processor.destroy();
+      }
+    });
+
     it('keeps live automation lanes when another parameter is registered', () => {
       const processor = new SonareRealtimeEngineWorkletProcessor({
         sampleRate: 48000,
@@ -653,8 +690,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         });
         expect(engine.parameterCount()).toBe(2);
         expect(engine.automationLaneCount()).toBe(lanes);
+        // As on the C ABI, clearing the parameters leaves the lanes in place.
         processor.receiveSync({ type: 'syncParameters', parameters: [] });
         expect(engine.parameterCount()).toBe(0);
+        expect(engine.automationLaneCount()).toBe(lanes);
       } finally {
         processor.destroy();
       }

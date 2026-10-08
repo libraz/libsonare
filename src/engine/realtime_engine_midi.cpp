@@ -10,7 +10,7 @@
 
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
-#include "mixing/tail_utils.h"
+#include "rt/tail_budget.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 
@@ -444,6 +444,16 @@ void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexce
   }
 }
 
+void RealtimeEngine::dispatch_midi_without_render(int num_frames) noexcept {
+  const int64_t render_frame = transport_.render_frame();
+  midi_dispatch_sink_.retry_refused_releases(render_frame);
+  midi_sequencer_.acquire_midi_clips();
+  midi_sequencer_.process_block(
+      midi::SequencerClock{midi::DeviceFrame{render_frame},
+                           midi::TimelineFrame{transport_.sample_position()}, transport_.playing()},
+      num_frames);
+}
+
 int RealtimeEngine::dispatch_midi_span(int64_t render_frame, int64_t block_render_frame,
                                        int max_frames) noexcept {
   const midi::SequencerClock clock{midi::DeviceFrame{render_frame},
@@ -765,30 +775,30 @@ void RealtimeEngine::flush_pdc_delays() noexcept {
 namespace sonare::engine {
 
 int RealtimeEngine::tail_samples() const noexcept {
-  using mixing::combine_tail_samples;
-  using mixing::TailTopology;
-  int total = 0;
+  // Stages in signal order: instruments in parallel, then each serial stage after them.
+  rt::TailBudget total;
 #if defined(SONARE_WITH_ARRANGEMENT)
-  int instrument_tail = 0;
   instrument_rack_.for_each([&](uint32_t, midi::MidiInstrument* instrument) {
-    instrument_tail = std::max(instrument_tail, instrument->tail_samples());
+    total.alongside(rt::TailBudget::reported(instrument->tail_samples()));
   });
-  total = combine_tail_samples(total, instrument_tail, TailTopology::kSerial);
 #endif
 #if defined(SONARE_WITH_MIXING)
-  total = combine_tail_samples(total, track_mixer_runtime_.tail_samples(), TailTopology::kSerial);
+  total.then(rt::TailBudget::reported(track_mixer_runtime_.tail_samples()));
 #endif
 #if defined(SONARE_WITH_GRAPH)
-  total = combine_tail_samples(total, graph_runtime_.tail_samples(), TailTopology::kSerial);
+  total.then(rt::TailBudget::reported(graph_runtime_.tail_samples()));
 #endif
 #if defined(SONARE_WITH_MIXING)
   if (mixing_enabled_.load(std::memory_order_relaxed)) {
     const mixing::ChannelStrip* master = mixing_runtime_.strip();
-    total = combine_tail_samples(total, master != nullptr ? master->tail_samples() : 0,
-                                 TailTopology::kSerial);
+    total.then(rt::TailBudget::reported(master != nullptr ? master->tail_samples() : 0));
+  }
+  // Legacy monitor strips run on the program signal after the master.
+  if (monitoring_enabled_.load(std::memory_order_relaxed)) {
+    total.then(rt::TailBudget::reported(monitor_runtime_.tail_samples()));
   }
 #endif
-  return total;
+  return total.samples();
 }
 
 }  // namespace sonare::engine

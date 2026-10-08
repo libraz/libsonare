@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "arrangement/edit_command.h"
+#include "core/audio.h"
 
 namespace sonare::arrangement {
 
@@ -95,8 +96,17 @@ EditCommandPtr ReplaceSource::invert(const Project& before,
 // ===========================================================================
 
 bool SetSampleRate::apply(Project& project, MidiContentStore& /*store*/) {
-  if (!std::isfinite(sample_rate_) || !(sample_rate_ > 0.0)) {
-    return false;
+  if (!is_supported_sample_rate(sample_rate_)) return false;
+  if (restores_warp_maps_) {
+    project.warp_maps_mutable() = restored_warp_maps_;
+  } else if (project.sample_rate() > 0.0 && project.sample_rate() != sample_rate_) {
+    const double ratio = sample_rate_ / project.sample_rate();
+    for (WarpMapRef& map : project.warp_maps_mutable()) {
+      for (WarpAnchorRef& anchor : map.anchors) {
+        anchor.warp_sample *= ratio;
+        anchor.source_sample *= ratio;
+      }
+    }
   }
   project.set_sample_rate(sample_rate_);
   return true;
@@ -104,7 +114,7 @@ bool SetSampleRate::apply(Project& project, MidiContentStore& /*store*/) {
 
 EditCommandPtr SetSampleRate::invert(const Project& before,
                                      const MidiContentStore& /*store_before*/) const {
-  return std::make_unique<SetSampleRate>(before.sample_rate());
+  return std::make_unique<SetSampleRate>(before.sample_rate(), before.warp_maps());
 }
 
 bool SetOverlapPolicy::apply(Project& project, MidiContentStore& /*store*/) {

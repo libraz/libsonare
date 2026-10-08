@@ -138,6 +138,239 @@ std::shared_ptr<WasmClipPageProvider> liveProviderById(
 
 }  // namespace
 
+RealtimeEngineWasm::BuiltClip RealtimeEngineWasm::buildClipSchedule(val clip_val,
+                                                                    uint32_t default_id) {
+  const bool has_page_provider = hasProperty(clip_val, "pageProvider") &&
+                                 !objectProperty(clip_val, "pageProvider").isNull() &&
+                                 !objectProperty(clip_val, "pageProvider").isUndefined();
+  val channels_val = has_page_provider ? val::array() : clip_val["channels"];
+  const int channel_count =
+      has_page_provider ? 0 : static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
+  if (!has_page_provider && channel_count <= 0) {
+    throw WasmRangeError("clip channels must not be empty");
+  }
+  std::shared_ptr<sonare::engine::ClipAudioStorage> owned;
+  if (!has_page_provider) {
+    owned = std::make_shared<sonare::engine::ClipAudioStorage>();
+    owned->channels.reserve(static_cast<size_t>(channel_count));
+  }
+  int64_t num_samples = 0;
+  for (int ch = 0; ch < channel_count; ++ch) {
+    std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
+    if (ch == 0) {
+      num_samples = static_cast<int64_t>(channel.size());
+      if (num_samples <= 0) {
+        throw WasmRangeError("clip channels must not be empty");
+      }
+    } else if (static_cast<int64_t>(channel.size()) != num_samples) {
+      throw WasmRangeError("all clip channels must have the same length");
+    }
+    owned->channels.push_back(std::move(channel));
+  }
+
+  sonare::engine::ClipSchedule schedule{};
+  schedule.id = uintProperty(clip_val, "id", default_id);
+  schedule.track_id = hasProperty(clip_val, "trackId") ? uintProperty(clip_val, "trackId", 0) : 0;
+  if (has_page_provider) {
+    // Truncating rather than refusing resolves a fractional handle onto a
+    // real provider: 1.5 binds provider 1 and 2.9 binds provider 2.
+    const int provider_id =
+        checkedIntFromVal(objectProperty(clip_val, "pageProvider"), "pageProvider");
+    auto provider = liveProviderById(clip_page_providers_, provider_id);
+    if (!provider) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "pageProvider is not live");
+    }
+    schedule.page_provider = provider;
+    schedule.buffer = {};
+  } else {
+    schedule.buffer = {nullptr, channel_count, num_samples};
+  }
+  schedule.start_ppq = numberFromVal(objectProperty(clip_val, "startPpq"), "startPpq");
+  if (!std::isfinite(schedule.start_ppq) ||
+      !sonare::transport::valid_public_ppq(schedule.start_ppq)) {
+    throw WasmRangeError("clip startPpq is outside the public timeline range");
+  }
+  // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
+  // them at full 64-bit precision (like length_samples below) so large
+  // offsets above 2^31 samples do not silently truncate/sign-flip.
+  schedule.clip_offset_samples = int64Property(clip_val, "clipOffsetSamples", 0);
+  const int64_t source_samples = has_page_provider && schedule.page_provider
+                                     ? schedule.page_provider->num_samples()
+                                     : num_samples;
+  if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples) {
+    throw WasmRangeError("clip offset is outside the source");
+  }
+  const int64_t default_length = source_samples - schedule.clip_offset_samples;
+  const int64_t requested_length = int64Property(clip_val, "lengthSamples", 0);
+  // Match the C ABI / Node / Python convention: zero selects the full
+  // remaining source from clipOffsetSamples rather than an empty clip.
+  schedule.length_samples = requested_length == 0 ? default_length : requested_length;
+  if (schedule.length_samples <= 0) {
+    throw WasmRangeError("clip offset or length is outside the source");
+  }
+  schedule.loop = boolProperty(clip_val, "loop", false);
+  schedule.gain = floatProperty(clip_val, "gain", 1.0f);
+  if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
+    throw WasmRangeError("clip gain must be a finite non-negative number");
+  }
+  schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
+  schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
+  if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
+    throw WasmRangeError("clip fade lengths must be non-negative");
+  }
+  if (hasProperty(clip_val, "warpMode")) {
+    val mode_val = objectProperty(clip_val, "warpMode");
+    if (mode_val.typeOf().as<std::string>() == "string") {
+      const std::string mode = mode_val.as<std::string>();
+      if (mode == "off") {
+        schedule.warp_mode = sonare::engine::WarpMode::kOff;
+      } else if (mode == "repitch") {
+        schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
+      } else if (mode == "tempo-sync") {
+        schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+      } else if (mode == "time-stretch") {
+        schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
+      } else {
+        throw WasmRangeError("unknown warp mode");
+      }
+    } else {
+      const int mode = checkedIntFromVal(mode_val, "warpMode");
+      if (mode == 0) {
+        schedule.warp_mode = sonare::engine::WarpMode::kOff;
+      } else if (mode == 1) {
+        schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
+      } else if (mode == 2) {
+        schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
+      } else if (mode == 3) {
+        schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
+      } else {
+        throw WasmRangeError("unknown warp mode");
+      }
+    }
+  }
+  if (hasProperty(clip_val, "warpAnchors")) {
+    val anchors_val = objectProperty(clip_val, "warpAnchors");
+    const int anchor_count = static_cast<int>(wasmArrayLikeLength(anchors_val, "warpAnchors"));
+    if (anchor_count > 0) {
+      auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>();
+      anchors->reserve(static_cast<size_t>(anchor_count));
+      for (int anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
+        val anchor_val = anchors_val[anchor_index];
+        const sonare::engine::WarpAnchor anchor{
+            numberFromVal(objectProperty(anchor_val, "warpSample"), "warpSample"),
+            numberFromVal(objectProperty(anchor_val, "sourceSample"), "sourceSample")};
+        if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
+            anchor.warp_sample < 0.0 || anchor.source_sample < 0.0 ||
+            (!anchors->empty() && (!(anchor.warp_sample > anchors->back().warp_sample) ||
+                                   !(anchor.source_sample > anchors->back().source_sample)))) {
+          throw WasmRangeError("warp anchors must be finite and strictly increasing");
+        }
+        anchors->push_back(anchor);
+      }
+      schedule.warp_anchors = std::move(anchors);
+    }
+  }
+  const bool tempo_sync_baked = schedule.warp_mode == sonare::engine::WarpMode::kTempoSync;
+  if (tempo_sync_baked) {
+    if (has_page_provider) {
+      throw WasmRangeError("tempo-sync paged clips are not supported");
+    }
+    if (schedule.loop) {
+      throw WasmRangeError("tempo-sync direct clips do not support loop=true yet");
+    }
+    if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= num_samples) {
+      throw WasmRangeError("tempo-sync clip offset is outside the source");
+    }
+    const auto rounded_nonnegative_sample = [](double sample, size_t* out) noexcept {
+      return sonare::numeric::checked_round_cast(sample, out) && sample >= 0.0;
+    };
+    std::vector<sonare::engine::TempoSyncWarpSegment> segments;
+    const size_t base_offset =
+        static_cast<size_t>(std::max<int64_t>(0, schedule.clip_offset_samples));
+    size_t target_samples = 0;
+    if (schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
+      segments.reserve(schedule.warp_anchors->size() - 1);
+      for (size_t anchor_index = 1; anchor_index < schedule.warp_anchors->size(); ++anchor_index) {
+        const auto& prev = (*schedule.warp_anchors)[anchor_index - 1];
+        const auto& next = (*schedule.warp_anchors)[anchor_index];
+        size_t source_start = 0;
+        size_t source_end = 0;
+        size_t target_start = 0;
+        size_t target_end = 0;
+        if (!rounded_nonnegative_sample(prev.source_sample, &source_start) ||
+            !rounded_nonnegative_sample(next.source_sample, &source_end) ||
+            !rounded_nonnegative_sample(prev.warp_sample, &target_start) ||
+            !rounded_nonnegative_sample(next.warp_sample, &target_end)) {
+          throw WasmRangeError("tempo-sync warp anchor is out of sample range");
+        }
+        sonare::engine::TempoSyncWarpSegment segment;
+        if (!sonare::numeric::checked_add(base_offset, source_start, &segment.source_offset)) {
+          throw WasmRangeError("tempo-sync warp source offset is out of range");
+        }
+        segment.source_samples = source_end > source_start ? source_end - source_start : 0;
+        segment.target_samples = target_end > target_start ? target_end - target_start : 0;
+        if (segment.source_offset > static_cast<size_t>(num_samples) ||
+            segment.source_samples > static_cast<size_t>(num_samples) - segment.source_offset ||
+            segment.source_samples == 0 || segment.target_samples == 0) {
+          throw WasmRangeError("tempo-sync warp anchors must span positive samples");
+        }
+        if (!sonare::numeric::checked_add(target_samples, segment.target_samples,
+                                          &target_samples)) {
+          throw WasmRangeError("tempo-sync warp target length is out of range");
+        }
+        segments.push_back(segment);
+      }
+    } else {
+      sonare::engine::TempoSyncWarpSegment segment;
+      segment.source_offset = base_offset;
+      segment.source_samples = static_cast<size_t>(num_samples) - base_offset;
+      segment.target_samples = static_cast<size_t>(std::max<int64_t>(1, schedule.length_samples));
+      target_samples = segment.target_samples;
+      segments.push_back(segment);
+    }
+    if (segments.empty() || target_samples == 0)
+      throw WasmRangeError("tempo-sync clip has an empty source or target span");
+    sonare::engine::TempoSyncWarpBakeConfig bake_config;
+    bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
+    std::vector<const float*> source_channel_ptrs;
+    source_channel_ptrs.reserve(owned->channels.size());
+    for (const auto& channel : owned->channels) {
+      source_channel_ptrs.push_back(channel.data());
+    }
+    owned->channels = sonare::engine::bake_tempo_sync_warp_channels(
+        source_channel_ptrs, owned->channels[0].size(), segments, bake_config);
+    owned->channel_ptrs.clear();
+    owned->channel_ptrs.reserve(owned->channels.size());
+    for (const auto& channel : owned->channels) {
+      owned->channel_ptrs.push_back(channel.data());
+    }
+    owned->refresh_content_signature();
+    schedule.buffer = {owned->channel_ptrs.data(), channel_count,
+                       static_cast<int64_t>(target_samples)};
+    schedule.storage = owned;
+    schedule.clip_offset_samples = 0;
+    schedule.loop = false;
+    schedule.warp_mode = sonare::engine::WarpMode::kOff;
+    schedule.warp_anchors.reset();
+  } else if ((schedule.warp_mode == sonare::engine::WarpMode::kRepitch ||
+              schedule.warp_mode == sonare::engine::WarpMode::kTimeStretch) &&
+             schedule.loop && schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
+    throw WasmRangeError("warped clips do not support loop=true yet");
+  }
+  if (!has_page_provider && !tempo_sync_baked) {
+    owned->channel_ptrs.clear();
+    owned->channel_ptrs.reserve(owned->channels.size());
+    for (const auto& channel : owned->channels) {
+      owned->channel_ptrs.push_back(channel.data());
+    }
+    owned->refresh_content_signature();
+    schedule.buffer = {owned->channel_ptrs.data(), channel_count, num_samples};
+    schedule.storage = owned;
+  }
+  return {schedule, std::move(owned), tempo_sync_baked};
+}
+
 void RealtimeEngineWasm::setClips(val clips) {
   const int count = static_cast<int>(wasmArrayLikeLength(clips, "clips"));
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
@@ -150,245 +383,59 @@ void RealtimeEngineWasm::setClips(val clips) {
   new_clip_tempo_baked.reserve(static_cast<size_t>(count));
 
   for (int i = 0; i < count; ++i) {
-    val clip_val = clips[i];
-    const bool has_page_provider = hasProperty(clip_val, "pageProvider") &&
-                                   !objectProperty(clip_val, "pageProvider").isNull() &&
-                                   !objectProperty(clip_val, "pageProvider").isUndefined();
-    val channels_val = has_page_provider ? val::array() : clip_val["channels"];
-    const int channel_count =
-        has_page_provider ? 0 : static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
-    if (!has_page_provider && channel_count <= 0) {
-      throw WasmRangeError("clip channels must not be empty");
-    }
-    std::shared_ptr<sonare::engine::ClipAudioStorage> owned;
-    if (!has_page_provider) {
-      owned = std::make_shared<sonare::engine::ClipAudioStorage>();
-      owned->channels.reserve(static_cast<size_t>(channel_count));
-    }
-    int64_t num_samples = 0;
-    for (int ch = 0; ch < channel_count; ++ch) {
-      std::vector<float> channel = float32ArrayToVector(channels_val[ch]);
-      if (ch == 0) {
-        num_samples = static_cast<int64_t>(channel.size());
-        if (num_samples <= 0) {
-          throw WasmRangeError("clip channels must not be empty");
-        }
-      } else if (static_cast<int64_t>(channel.size()) != num_samples) {
-        throw WasmRangeError("all clip channels must have the same length");
-      }
-      owned->channels.push_back(std::move(channel));
-    }
-
-    sonare::engine::ClipSchedule schedule{};
-    schedule.id = uintProperty(clip_val, "id", static_cast<uint32_t>(i + 1));
-    schedule.track_id = hasProperty(clip_val, "trackId") ? uintProperty(clip_val, "trackId", 0) : 0;
-    if (has_page_provider) {
-      // Truncating rather than refusing resolves a fractional handle onto a
-      // real provider: 1.5 binds provider 1 and 2.9 binds provider 2.
-      const int provider_id =
-          checkedIntFromVal(objectProperty(clip_val, "pageProvider"), "pageProvider");
-      auto provider = liveProviderById(clip_page_providers_, provider_id);
-      if (!provider) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "pageProvider is not live");
-      }
-      schedule.page_provider = provider;
-      schedule.buffer = {};
-    } else {
-      schedule.buffer = {nullptr, channel_count, num_samples};
-    }
-    schedule.start_ppq = numberFromVal(objectProperty(clip_val, "startPpq"), "startPpq");
-    if (!std::isfinite(schedule.start_ppq) ||
-        !sonare::transport::valid_public_ppq(schedule.start_ppq)) {
-      throw WasmRangeError("clip startPpq is outside the public timeline range");
-    }
-    // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
-    // them at full 64-bit precision (like length_samples below) so large
-    // offsets above 2^31 samples do not silently truncate/sign-flip.
-    schedule.clip_offset_samples = int64Property(clip_val, "clipOffsetSamples", 0);
-    const int64_t source_samples = has_page_provider && schedule.page_provider
-                                       ? schedule.page_provider->num_samples()
-                                       : num_samples;
-    if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples) {
-      throw WasmRangeError("clip offset is outside the source");
-    }
-    const int64_t default_length = source_samples - schedule.clip_offset_samples;
-    const int64_t requested_length = int64Property(clip_val, "lengthSamples", 0);
-    // Match the C ABI / Node / Python convention: zero selects the full
-    // remaining source from clipOffsetSamples rather than an empty clip.
-    schedule.length_samples = requested_length == 0 ? default_length : requested_length;
-    if (schedule.length_samples <= 0) {
-      throw WasmRangeError("clip offset or length is outside the source");
-    }
-    schedule.loop = boolProperty(clip_val, "loop", false);
-    schedule.gain = floatProperty(clip_val, "gain", 1.0f);
-    if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
-      throw WasmRangeError("clip gain must be a finite non-negative number");
-    }
-    schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
-    schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
-    if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
-      throw WasmRangeError("clip fade lengths must be non-negative");
-    }
-    if (hasProperty(clip_val, "warpMode")) {
-      val mode_val = objectProperty(clip_val, "warpMode");
-      if (mode_val.typeOf().as<std::string>() == "string") {
-        const std::string mode = mode_val.as<std::string>();
-        if (mode == "off") {
-          schedule.warp_mode = sonare::engine::WarpMode::kOff;
-        } else if (mode == "repitch") {
-          schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
-        } else if (mode == "tempo-sync") {
-          schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
-        } else if (mode == "time-stretch") {
-          schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
-        } else {
-          throw WasmRangeError("unknown warp mode");
-        }
-      } else {
-        const int mode = checkedIntFromVal(mode_val, "warpMode");
-        if (mode == 0) {
-          schedule.warp_mode = sonare::engine::WarpMode::kOff;
-        } else if (mode == 1) {
-          schedule.warp_mode = sonare::engine::WarpMode::kRepitch;
-        } else if (mode == 2) {
-          schedule.warp_mode = sonare::engine::WarpMode::kTempoSync;
-        } else if (mode == 3) {
-          schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
-        } else {
-          throw WasmRangeError("unknown warp mode");
-        }
-      }
-    }
-    if (hasProperty(clip_val, "warpAnchors")) {
-      val anchors_val = objectProperty(clip_val, "warpAnchors");
-      const int anchor_count = static_cast<int>(wasmArrayLikeLength(anchors_val, "warpAnchors"));
-      if (anchor_count > 0) {
-        auto anchors = std::make_shared<std::vector<sonare::engine::WarpAnchor>>();
-        anchors->reserve(static_cast<size_t>(anchor_count));
-        for (int anchor_index = 0; anchor_index < anchor_count; ++anchor_index) {
-          val anchor_val = anchors_val[anchor_index];
-          const sonare::engine::WarpAnchor anchor{
-              numberFromVal(objectProperty(anchor_val, "warpSample"), "warpSample"),
-              numberFromVal(objectProperty(anchor_val, "sourceSample"), "sourceSample")};
-          if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
-              anchor.warp_sample < 0.0 || anchor.source_sample < 0.0 ||
-              (!anchors->empty() && (!(anchor.warp_sample > anchors->back().warp_sample) ||
-                                     !(anchor.source_sample > anchors->back().source_sample)))) {
-            throw WasmRangeError("warp anchors must be finite and strictly increasing");
-          }
-          anchors->push_back(anchor);
-        }
-        schedule.warp_anchors = std::move(anchors);
-      }
-    }
-    const bool tempo_sync_baked = schedule.warp_mode == sonare::engine::WarpMode::kTempoSync;
-    if (tempo_sync_baked) {
-      if (has_page_provider) {
-        throw WasmRangeError("tempo-sync paged clips are not supported");
-      }
-      if (schedule.loop) {
-        throw WasmRangeError("tempo-sync direct clips do not support loop=true yet");
-      }
-      if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= num_samples) {
-        throw WasmRangeError("tempo-sync clip offset is outside the source");
-      }
-      const auto rounded_nonnegative_sample = [](double sample, size_t* out) noexcept {
-        return sonare::numeric::checked_round_cast(sample, out) && sample >= 0.0;
-      };
-      std::vector<sonare::engine::TempoSyncWarpSegment> segments;
-      const size_t base_offset =
-          static_cast<size_t>(std::max<int64_t>(0, schedule.clip_offset_samples));
-      size_t target_samples = 0;
-      if (schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
-        segments.reserve(schedule.warp_anchors->size() - 1);
-        for (size_t anchor_index = 1; anchor_index < schedule.warp_anchors->size();
-             ++anchor_index) {
-          const auto& prev = (*schedule.warp_anchors)[anchor_index - 1];
-          const auto& next = (*schedule.warp_anchors)[anchor_index];
-          size_t source_start = 0;
-          size_t source_end = 0;
-          size_t target_start = 0;
-          size_t target_end = 0;
-          if (!rounded_nonnegative_sample(prev.source_sample, &source_start) ||
-              !rounded_nonnegative_sample(next.source_sample, &source_end) ||
-              !rounded_nonnegative_sample(prev.warp_sample, &target_start) ||
-              !rounded_nonnegative_sample(next.warp_sample, &target_end)) {
-            throw WasmRangeError("tempo-sync warp anchor is out of sample range");
-          }
-          sonare::engine::TempoSyncWarpSegment segment;
-          if (!sonare::numeric::checked_add(base_offset, source_start, &segment.source_offset)) {
-            throw WasmRangeError("tempo-sync warp source offset is out of range");
-          }
-          segment.source_samples = source_end > source_start ? source_end - source_start : 0;
-          segment.target_samples = target_end > target_start ? target_end - target_start : 0;
-          if (segment.source_offset > static_cast<size_t>(num_samples) ||
-              segment.source_samples > static_cast<size_t>(num_samples) - segment.source_offset ||
-              segment.source_samples == 0 || segment.target_samples == 0) {
-            throw WasmRangeError("tempo-sync warp anchors must span positive samples");
-          }
-          if (!sonare::numeric::checked_add(target_samples, segment.target_samples,
-                                            &target_samples)) {
-            throw WasmRangeError("tempo-sync warp target length is out of range");
-          }
-          segments.push_back(segment);
-        }
-      } else {
-        sonare::engine::TempoSyncWarpSegment segment;
-        segment.source_offset = base_offset;
-        segment.source_samples = static_cast<size_t>(num_samples) - base_offset;
-        segment.target_samples = static_cast<size_t>(std::max<int64_t>(1, schedule.length_samples));
-        target_samples = segment.target_samples;
-        segments.push_back(segment);
-      }
-      if (segments.empty() || target_samples == 0)
-        throw WasmRangeError("tempo-sync clip has an empty source or target span");
-      sonare::engine::TempoSyncWarpBakeConfig bake_config;
-      bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
-      std::vector<const float*> source_channel_ptrs;
-      source_channel_ptrs.reserve(owned->channels.size());
-      for (const auto& channel : owned->channels) {
-        source_channel_ptrs.push_back(channel.data());
-      }
-      owned->channels = sonare::engine::bake_tempo_sync_warp_channels(
-          source_channel_ptrs, owned->channels[0].size(), segments, bake_config);
-      owned->channel_ptrs.clear();
-      owned->channel_ptrs.reserve(owned->channels.size());
-      for (const auto& channel : owned->channels) {
-        owned->channel_ptrs.push_back(channel.data());
-      }
-      owned->refresh_content_signature();
-      schedule.buffer = {owned->channel_ptrs.data(), channel_count,
-                         static_cast<int64_t>(target_samples)};
-      schedule.storage = owned;
-      schedule.clip_offset_samples = 0;
-      schedule.loop = false;
-      schedule.warp_mode = sonare::engine::WarpMode::kOff;
-      schedule.warp_anchors.reset();
-    } else if ((schedule.warp_mode == sonare::engine::WarpMode::kRepitch ||
-                schedule.warp_mode == sonare::engine::WarpMode::kTimeStretch) &&
-               schedule.loop && schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
-      throw WasmRangeError("warped clips do not support loop=true yet");
-    }
-    if (!has_page_provider && !tempo_sync_baked) {
-      owned->channel_ptrs.clear();
-      owned->channel_ptrs.reserve(owned->channels.size());
-      for (const auto& channel : owned->channels) {
-        owned->channel_ptrs.push_back(channel.data());
-      }
-      owned->refresh_content_signature();
-      schedule.buffer = {owned->channel_ptrs.data(), channel_count, num_samples};
-      schedule.storage = owned;
-    }
-    schedules.push_back(schedule);
-    new_storage.push_back(std::move(owned));
-    new_clip_ids.push_back(schedule.id);
-    new_clip_tempo_baked.push_back(tempo_sync_baked ? 1u : 0u);
+    BuiltClip built = buildClipSchedule(clips[i], static_cast<uint32_t>(i + 1));
+    new_clip_ids.push_back(built.schedule.id);
+    new_clip_tempo_baked.push_back(built.tempo_baked ? 1u : 0u);
+    schedules.push_back(std::move(built.schedule));
+    new_storage.push_back(std::move(built.storage));
   }
   engine_.set_clips(std::move(schedules));
   clip_storage_ = std::move(new_storage);
   clip_ids_ = std::move(new_clip_ids);
   clip_tempo_baked_ = std::move(new_clip_tempo_baked);
+}
+
+void RealtimeEngineWasm::upsertClip(val clip) {
+  BuiltClip built = buildClipSchedule(clip, 1);
+  const uint32_t id = built.schedule.id;
+  engine_.upsert_clip(built.schedule);
+  // Keep the storage bookkeeping in step with the one published entry per id.
+  bool replaced = false;
+  for (size_t index = 0; index < clip_ids_.size();) {
+    if (clip_ids_[index] != id) {
+      ++index;
+      continue;
+    }
+    if (!replaced) {
+      clip_storage_[index] = std::move(built.storage);
+      clip_tempo_baked_[index] = built.tempo_baked ? 1u : 0u;
+      replaced = true;
+      ++index;
+    } else {
+      clip_ids_.erase(clip_ids_.begin() + static_cast<std::ptrdiff_t>(index));
+      clip_storage_.erase(clip_storage_.begin() + static_cast<std::ptrdiff_t>(index));
+      clip_tempo_baked_.erase(clip_tempo_baked_.begin() + static_cast<std::ptrdiff_t>(index));
+    }
+  }
+  if (!replaced) {
+    clip_ids_.push_back(id);
+    clip_storage_.push_back(std::move(built.storage));
+    clip_tempo_baked_.push_back(built.tempo_baked ? 1u : 0u);
+  }
+}
+
+void RealtimeEngineWasm::removeClip(const val& clip_id_val) {
+  const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
+  if (!engine_.remove_clip(clip_id)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "no clip has that id");
+  }
+  for (size_t index = clip_ids_.size(); index-- > 0;) {
+    if (clip_ids_[index] == clip_id) {
+      clip_ids_.erase(clip_ids_.begin() + static_cast<std::ptrdiff_t>(index));
+      clip_storage_.erase(clip_storage_.begin() + static_cast<std::ptrdiff_t>(index));
+      clip_tempo_baked_.erase(clip_tempo_baked_.begin() + static_cast<std::ptrdiff_t>(index));
+    }
+  }
 }
 
 val RealtimeEngineWasm::prebakedClipChannels(const val& clip_id_val) const {
@@ -515,6 +562,8 @@ double RealtimeEngineWasm::clipPagePrefetchFrames() const {
 
 void registerRealtimeEngineClips(class_<RealtimeEngineWasm>& cls) {
   cls.function("setClips", &RealtimeEngineWasm::setClips)
+      .function("upsertClip", &RealtimeEngineWasm::upsertClip)
+      .function("removeClip", &RealtimeEngineWasm::removeClip)
       .function("prebakedClipChannels", &RealtimeEngineWasm::prebakedClipChannels)
       .function("clipCount", &RealtimeEngineWasm::clipCount)
       .function("createClipPageProvider", &RealtimeEngineWasm::createClipPageProvider)

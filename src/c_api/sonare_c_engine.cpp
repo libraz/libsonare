@@ -140,8 +140,7 @@ SonareError sonare_engine_prepare(SonareRealtimeEngine* engine, double sample_ra
                                   int max_block_size, size_t command_capacity,
                                   size_t telemetry_capacity) {
   SONARE_C_API_ENTRY;
-  if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate || max_block_size <= 0 ||
+  if (!engine || !is_supported_sample_rate(sample_rate) || max_block_size <= 0 ||
       !capacities_in_range(command_capacity, telemetry_capacity)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -155,8 +154,8 @@ SonareError sonare_engine_prepare_with_channels(SonareRealtimeEngine* engine, do
                                                 int max_block_size, size_t command_capacity,
                                                 size_t telemetry_capacity, int max_channels) {
   SONARE_C_API_ENTRY;
-  if (!engine || !std::isfinite(sample_rate) || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate || max_block_size <= 0 || max_channels <= 0 ||
+  if (!engine || !is_supported_sample_rate(sample_rate) || max_block_size <= 0 ||
+      max_channels <= 0 ||
       static_cast<size_t>(max_channels) > engine::RealtimeEngine::kMaxAudioChannels ||
       !capacities_in_range(command_capacity, telemetry_capacity)) {
     return SONARE_ERROR_INVALID_PARAMETER;

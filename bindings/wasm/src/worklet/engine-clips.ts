@@ -54,14 +54,19 @@ export function addClip(
   ctx.ensureTrackLane(trackId);
   const staged = new Map(ctx.clips);
   staged.set(id, clip);
-  commitClips(ctx, staged, [clip], []);
+  // One clip changes, so neither engine copies the audio of the others again.
+  commitClips(ctx, staged, [clip], [], (offline) => offline.upsertClip(clip));
   return id;
 }
 
 export function removeClip(ctx: EngineClipContext, clipId: number): void {
   const staged = new Map(ctx.clips);
   staged.delete(clipId);
-  commitClips(ctx, staged, [], [clipId]);
+  commitClips(ctx, staged, [], [clipId], (offline) => {
+    if (ctx.clips.has(clipId)) {
+      offline.removeClip(clipId);
+    }
+  });
 }
 
 /** Replaces the whole clip store with one clip and syncs the worklet, dropping every previous id. */
@@ -74,11 +79,13 @@ export function replaceClips(
   if (clip.id !== undefined) {
     staged.set(clip.id, clip);
   }
+  const clips = Array.from(staged.values());
   commitClips(
     ctx,
     staged,
     [clip],
     previousClipIds.filter((id) => id !== clip.id),
+    (offline) => offline.setClips(clips),
   );
 }
 
@@ -102,39 +109,28 @@ export function setMidiClips(
 }
 
 /**
- * Lets the offline engine validate the staged clip set, then caches it and
- * posts the delta. A page-provider upsert must name an attached OPFS stream,
- * which is checked before anything changes.
+ * Lets the offline engine validate the edit through `applyOffline`, then caches
+ * the staged clip set and posts the delta. A page-provider upsert must name an
+ * attached OPFS stream, which is checked before anything changes.
  */
 function commitClips(
   ctx: EngineClipContext,
   staged: Map<number, EngineClip>,
   upserts: EngineClip[],
   removeIds: number[],
+  applyOffline: (offline: RealtimeEngine) => void,
 ): void {
   for (const clip of upserts) {
     if (!clip.channels && clip.pageProvider !== undefined && !ctx.workletClipStream(clip)) {
       throw new Error('A pageProvider on SonareEngine must be created by attachOpfsClipStream().');
     }
   }
-  const clips = Array.from(staged.values());
-  commitStore(
-    ctx,
-    ctx.clips,
-    staged,
-    (offline) => offline.setClips(clips),
-    () => postClipsDelta(ctx, clips, upserts, removeIds),
-  );
+  commitStore(ctx, ctx.clips, staged, applyOffline, () => postClipsDelta(ctx, upserts, removeIds));
 }
 
-function postClipsDelta(
-  ctx: EngineClipContext,
-  clips: EngineClip[],
-  upserts: EngineClip[],
-  removeIds: number[],
-): void {
+function postClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds: number[]): void {
   const preparedById = new Map<number, EngineClip>();
-  for (const clip of clips) {
+  for (const clip of upserts) {
     if (clip.id === undefined) {
       continue;
     }

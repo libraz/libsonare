@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "arrangement/edit_source.h"
+#include "core/audio.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -33,9 +34,6 @@ using json::Object;
 using json::Value;
 
 using namespace detail;
-
-constexpr double kMinProjectSampleRate = 8000.0;
-constexpr double kMaxProjectSampleRate = 384000.0;
 
 constexpr const char* kPartRigModeNames[] = {"bank", "none", "chain"};
 
@@ -386,10 +384,10 @@ DeserializeResult project_from_json(const std::string& json_text) {
     // conventional DAW render rate) so a document that omits "sample_rate"
     // round-trips to the same rate an in-memory project would have.
     const double sample_rate = num_or(root, "sample_rate", 48000.0);
-    if (!std::isfinite(sample_rate) || sample_rate < kMinProjectSampleRate ||
-        sample_rate > kMaxProjectSampleRate) {
-      result.diagnostics.push_back({DiagnosticSeverity::kError, "invalid_sample_rate",
-                                    "sample_rate must be finite and within the supported range"});
+    if (!is_supported_sample_rate(sample_rate)) {
+      result.diagnostics.push_back(
+          {DiagnosticSeverity::kError, "invalid_sample_rate",
+           "sample_rate must be a whole number of hertz within the supported range"});
       return result;
     }
     project.set_sample_rate(sample_rate);

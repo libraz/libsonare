@@ -237,6 +237,17 @@ export class Mixer {
   }
 
   /**
+   * Marks the end of the signal for every strip and bus meter. The true-peak
+   * reading runs one reconstruction-filter group delay behind the block; this
+   * reads that pending stretch against silence and folds it into the
+   * snapshots, so `truePeakDb` covers the whole signal. Call it after the last
+   * block of an offline render; a later process call starts a new signal.
+   */
+  flushMeters(): void {
+    this.native.flushMeters();
+  }
+
+  /**
    * Mix one block of per-strip stereo audio into the stereo master.
    *
    * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
@@ -651,9 +662,9 @@ export class Mixer {
  *
  * The true-peak fields are not integrators and need no streaming: each is a
  * max-hold over the block just processed and is valid from the first one,
- * flooring only on silence. This facade mixes the whole input as a single block,
- * which is the whole-signal case, so the block-edge under-read described on
- * {@link MixMeterSnapshot.truePeakDbL} does not apply to the reading here.
+ * flooring only on silence. This facade mixes the whole input as a single block
+ * and flushes the meters after it, so the reading matches `meteringTruePeakDb`
+ * over the same signal exactly.
  */
 export interface MixStereoRequest extends MixOptions {
   leftChannels: Float32Array[];

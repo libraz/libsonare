@@ -225,8 +225,9 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   // 0 selects the prepared rate for the source and the source rate for the target.
+  // prepare admits only whole-hertz rates, so the prepared rate converts exactly.
   const int source_sample_rate = options->source_sample_rate == 0
-                                     ? static_cast<int>(std::lround(engine->engine.sample_rate()))
+                                     ? static_cast<int>(engine->engine.sample_rate())
                                      : options->source_sample_rate;
   const int target_sample_rate =
       options->target_sample_rate == 0 ? source_sample_rate : options->target_sample_rate;
@@ -241,6 +242,18 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
   // the request was ignored (same policy as the analysis options' chroma_method).
   if (options->dither < 0 || options->dither > 3) {
     return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Every option-derived refusal precedes the render, which consumes engine state.
+  if (options->dither != 0) {
+#if defined(SONARE_WITH_MASTERING)
+    if (options->dither_bits != 0 &&
+        (options->dither_bits < mastering::final::kMinDitherTargetBits ||
+         options->dither_bits > mastering::final::kMaxDitherTargetBits)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+#else
+    return SONARE_ERROR_NOT_SUPPORTED;
+#endif
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
   // 6 = 5.1, 8 = 7.1). Counts like 3/4/5/7 have no layout and would silently
@@ -308,8 +321,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
     metering::normalize_interleaved_to_lufs(interleaved, channels[0].size(), options->num_channels,
                                             target_sample_rate, effective_target_lufs);
   }
-  if (options->dither != 0) {
 #if defined(SONARE_WITH_MASTERING)
+  if (options->dither != 0) {
     mastering::final::DitherConfig config{};
     config.type = dither_type_from_int(options->dither);
     config.target_bits = options->dither_bits > 0 ? options->dither_bits : 16;
@@ -318,10 +331,8 @@ SonareError sonare_engine_bounce_offline(SonareRealtimeEngine* engine,
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
         static_cast<size_t>(options->num_channels), config);
     interleaved.assign(dithered.data(), dithered.data() + dithered.size());
-#else
-    return SONARE_ERROR_NOT_SUPPORTED;
-#endif
   }
+#endif
   const auto loudness = metering::lufs_interleaved(interleaved.data(), channels[0].size(),
                                                    options->num_channels, target_sample_rate);
   out->sample_count = interleaved.size();

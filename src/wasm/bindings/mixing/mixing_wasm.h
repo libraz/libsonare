@@ -281,6 +281,7 @@ class MixerWasm {
   // Drains delayed/tail audio by processing a zero-input block of num_samples
   // frames. Returns { left, right, sampleRate } mirroring processStereo.
   val drainTailStereo(double num_samples);
+  void flushMeters();
 
   // Converts a C-ABI mix-meter snapshot to the JS meter object (same shape as
   // meterSnapshotToVal / Node's MixMeterToObject). Depends on no instance

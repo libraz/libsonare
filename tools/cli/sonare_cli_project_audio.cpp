@@ -341,7 +341,8 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
   // at all. An explicit --sample-rate is only accepted when it matches the
   // project's rate: the C ABI rejects a genuine mismatch with a generic
   // invalid-parameter error, so the check is duplicated here to name both rates.
-  int render_sample_rate = static_cast<int>(std::lround(project_sample_rate));
+  // A project rate is a whole number of hertz (loading refuses anything else).
+  int render_sample_rate = static_cast<int>(project_sample_rate);
   if (args.has("sample-rate")) {
     render_sample_rate = args.get_int("sample-rate", render_sample_rate);
     if (std::abs(static_cast<double>(render_sample_rate) - project_sample_rate) > 1e-6) {
@@ -353,11 +354,7 @@ int project_bounce_impl(const CliArgs& args, bool use_synth, bool binds_source_a
     options.sample_rate = render_sample_rate;
   }
   // Left at 0 when the caller did not ask for a rate, which is what the C ABI
-  // reads as "the project's own". Pinning the rounded rate unconditionally made
-  // a project whose rate is not an integer fail the ABI's own equality check
-  // against the full-precision value the int cannot carry. The header below
-  // still reports the nearest integer to the rate the engine rendered at, which
-  // is the closest a RIFF header can come to a fractional rate.
+  // reads as "the project's own".
 
   float* interleaved = nullptr;
   size_t total = 0;

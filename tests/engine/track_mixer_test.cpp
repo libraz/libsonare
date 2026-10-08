@@ -7,6 +7,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <memory>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -951,6 +952,51 @@ TEST_CASE("TrackMixerRuntime aligns strip latency across active lanes", "[engine
   REQUIRE(out_l[4] < 2.5f);
 }
 
+TEST_CASE("TrackMixerRuntime takes a scene solo into the one audible-set solo",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 256;
+  std::vector<float> loud(kBlock * 192, 1.0f);
+  std::vector<float> quiet(kBlock * 192, 0.25f);
+  const float* loud_channels[] = {loud.data()};
+  const float* quiet_channels[] = {quiet.data()};
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, loud_channels, 1, kBlock * 192),
+                    clip_for_track(2, 20, quiet_channels, 1, kBlock * 192)});
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, kBlock);
+  REQUIRE(mixer.set_track_lanes({{10}, {20}}));
+
+  int64_t position = 0;
+  const auto settled = [&] {
+    std::vector<float> out(kBlock, 0.0f);
+    float* io[] = {out.data()};
+    for (int block = 0; block < 32; ++block) {
+      std::fill(out.begin(), out.end(), 0.0f);
+      REQUIRE(mixer.render_clips(player, io, 1, kBlock, position));
+      position += kBlock;
+    }
+    return out.back();
+  };
+  REQUIRE(mixer.set_track_strip(10, sonare::mixing::api::Strip{}));
+  REQUIRE(mixer.set_track_strip(20, sonare::mixing::api::Strip{}));
+  const float both = settled();
+
+  sonare::mixing::api::Strip soloed;
+  soloed.soloed = true;
+  REQUIRE(mixer.set_track_strip(10, soloed));
+  const float solo_only = settled();
+  REQUIRE(solo_only < both);
+  REQUIRE(solo_only > 0.0f);
+
+  // A live unsolo wins, and a later scene edit that leaves soloed alone keeps it.
+  REQUIRE(mixer.set_lane_solo_mute(0, false, false));
+  REQUIRE(settled() == Catch::Approx(both));
+  soloed.fader_db = -0.5f;
+  REQUIRE(mixer.set_track_strip(10, soloed));
+  REQUIRE(settled() > solo_only);
+}
+
 TEST_CASE("TrackMixerRuntime mixes post-fader sends into buses", "[engine][track_mixer]") {
   std::array<float, 16> source{};
   source.fill(1.0f);
@@ -987,6 +1033,54 @@ TEST_CASE("TrackMixerRuntime mixes post-fader sends into buses", "[engine][track
   REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
   REQUIRE(out_l.back() > 1.41f);
   REQUIRE(out_l.back() < 1.42f);
+}
+
+TEST_CASE("TrackMixerRuntime disabled lane and bus sends add exactly nothing",
+          "[engine][track_mixer]") {
+  constexpr int kBlock = 128;
+  constexpr int kBlocks = 80;
+  std::vector<float> source(static_cast<size_t>(kBlock * kBlocks), 0.5f);
+  const float* channels[] = {source.data()};
+  sonare::engine::ClipPlayer player;
+  player.prepare(48000.0, kBlock);
+  player.set_clips({clip_for_track(1, 10, channels, 1, kBlock * kBlocks)});
+
+  // Lane 10 feeds bus 1, which feeds the master; bus 2 is only ever a send target.
+  const auto render = [&](bool lane_send, bool bus_send, bool enabled_first) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kBlock);
+    sonare::engine::TrackBusConfig bus1{1, 0.0f};
+    if (bus_send) bus1.sends.push_back({2, 0.0f, enabled_first});
+    sonare::engine::TrackBusConfig bus2{2, 0.0f};
+    REQUIRE(mixer.set_buses({bus1, bus2}));
+    sonare::engine::TrackLaneConfig lane{10};
+    lane.output_bus_id = 1;
+    if (lane_send) lane.sends.push_back({2, 0.0f, enabled_first});
+    REQUIRE(mixer.set_track_lanes({lane}));
+    // Every variant runs the same strip, so only the send can differ.
+    REQUIRE(mixer.set_track_strip(10, sonare::mixing::api::Strip{}));
+    std::vector<float> out(static_cast<size_t>(kBlock), 0.0f);
+    float* io[] = {out.data()};
+    for (int block = 0; block < kBlocks; ++block) {
+      if (block == 1 && enabled_first) {
+        if (bus_send) bus1.sends[0].enabled = false;
+        if (lane_send) lane.sends[0].enabled = false;
+        REQUIRE(mixer.set_buses({bus1, bus2}));
+        REQUIRE(mixer.set_track_lanes({lane}));
+      }
+      std::fill(out.begin(), out.end(), 0.0f);
+      REQUIRE(mixer.render_clips(player, io, 1, kBlock, static_cast<int64_t>(block) * kBlock));
+    }
+    return out;
+  };
+
+  const std::vector<float> reference = render(false, false, false);
+  REQUIRE(reference.back() > 0.1f);
+  for (const bool enabled_first : {false, true}) {
+    CAPTURE(enabled_first);
+    CHECK(render(true, false, enabled_first) == reference);
+    CHECK(render(false, true, enabled_first) == reference);
+  }
 }
 
 TEST_CASE("TrackMixerRuntime validates buses and routes sends through bus strip",
@@ -3839,6 +3933,122 @@ TEST_CASE("TrackMixerRuntime keeps the old bus graph when staged bus allocation 
   REQUIRE(mixer.pdc_storage_generation() == old_generation);
   REQUIRE_FALSE(mixer.set_bus_strip(3, sonare::mixing::api::Bus{}));
   REQUIRE(mixer.set_bus_strip(1, sonare::mixing::api::Bus{}));
+}
+
+TEST_CASE("TrackMixerRuntime keeps the previous chain when PDC refuses a strip update",
+          "[engine][track_mixer][pdc]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 64);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+  sonare::engine::TrackLaneConfig to_bus{10};
+  to_bus.output_bus_id = 1;
+  REQUIRE(mixer.set_track_lanes({to_bus, {20}}));
+
+  const auto with_insert = [](auto spec, const char* name, const char* params) {
+    spec.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, name, params});
+    return spec;
+  };
+  // A lookahead past the alignment cap is a chain the PDC cannot compensate.
+  constexpr const char* kTooLong = R"({"lookaheadMs":5000})";
+  constexpr const char* kShort = R"({"lookaheadMs":1})";
+  REQUIRE(mixer.set_track_strip(
+      10, with_insert(sonare::mixing::api::Strip{}, "dynamics.limiter", kShort)));
+  sonare::mixing::api::Bus bus;
+  bus.id = "1";
+  REQUIRE(mixer.set_bus_strip(1, with_insert(bus, "dynamics.limiter", kShort)));
+  const int latency_q8 = mixer.latency_samples_q8();
+  REQUIRE(latency_q8 > 0);
+
+  const auto names = [&] {
+    std::string track_name;
+    std::string bus_name;
+    REQUIRE(mixer.track_insert_processor_name(10, 0, &track_name));
+    REQUIRE(mixer.bus_insert_processor_name_by_id(1, 0, &bus_name));
+    return track_name + "|" + bus_name;
+  };
+  const std::string before = names();
+
+  REQUIRE_FALSE(mixer.set_track_strip(
+      10, with_insert(sonare::mixing::api::Strip{}, "dynamics.limiter", kTooLong)));
+  REQUIRE_FALSE(mixer.set_bus_strip(1, with_insert(bus, "dynamics.limiter", kTooLong)));
+  REQUIRE(mixer.latency_samples_q8() == latency_q8);
+  REQUIRE(names() == before);
+  REQUIRE(mixer.track_insert_processor(10, 0)->latency_samples() < 48000);
+  REQUIRE(mixer.bus_insert_processor(1, 0)->latency_samples() < 48000);
+}
+
+TEST_CASE("TrackMixerRuntime keeps a strip bound when its release cannot be staged",
+          "[engine][track_mixer][allocation]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 16);
+  REQUIRE(mixer.set_buses({{1, 0.0f}}));
+  sonare::engine::TrackLaneConfig lane{10};
+  lane.sends.push_back({1, 0.0f, true});
+  REQUIRE(mixer.set_track_lanes({lane, {20}}));
+  sonare::mixing::api::Strip spec;
+  spec.inserts.push_back(
+      {sonare::mixing::api::InsertSlot::PreFader, "dynamics.limiter", R"({"lookaheadMs":1})"});
+  REQUIRE(mixer.set_track_strip(10, spec));
+  const int latency_q8 = mixer.latency_samples_q8();
+
+  bool released = false;
+  for (size_t nth = 1; nth < 4096 && !released; ++nth) {
+    {
+      sonare::test::AllocationFailureAtGuard fail_nth(nth);
+      released = mixer.release_track_strip(10);
+    }
+    CAPTURE(nth);
+    if (released) break;
+    REQUIRE(mixer.bound_track_insert_count(10) == 1);
+    REQUIRE(mixer.latency_samples_q8() == latency_q8);
+  }
+  REQUIRE(released);
+  REQUIRE(mixer.bound_track_insert_count(10) == 0);
+}
+
+TEST_CASE("TrackMixerRuntime keeps every bus when a reorder fails partway through staging",
+          "[engine][track_mixer][allocation]") {
+  sonare::engine::TrackMixerRuntime mixer;
+  mixer.prepare(48000.0, 16);
+  const sonare::engine::TrackBusConfig bus1{1, 0.0f};
+  const sonare::engine::TrackBusConfig bus2{2, 0.0f};
+  REQUIRE(mixer.set_buses({bus1, bus2}));
+  const auto with_inserts = [](const char* id, size_t count) {
+    sonare::mixing::api::Bus bus;
+    bus.id = id;
+    for (size_t i = 0; i < count; ++i) {
+      bus.inserts.push_back({sonare::mixing::api::InsertSlot::PreFader, "dynamics.compressor",
+                             R"({"thresholdDb":-30,"ratio":8,"attackMs":0,"releaseMs":20})"});
+    }
+    return bus;
+  };
+  REQUIRE(mixer.set_bus_strip(1, with_inserts("1", 1)));
+  REQUIRE(mixer.set_bus_strip(2, with_inserts("2", 2)));
+
+  // Fail each allocation of the reorder in turn until one attempt goes through.
+  bool reordered = false;
+  for (size_t nth = 1; nth < 4096 && !reordered; ++nth) {
+    std::vector<sonare::engine::TrackBusConfig> candidate{bus2, bus1};
+    bool threw = false;
+    {
+      sonare::test::AllocationFailureAtGuard fail_nth(nth);
+      try {
+        reordered = mixer.set_buses(std::move(candidate));
+      } catch (const std::bad_alloc&) {
+        threw = true;
+      }
+    }
+    CAPTURE(nth, threw);
+    if (reordered) break;
+    REQUIRE(mixer.bus_configs().size() == 2);
+    REQUIRE(mixer.bus_configs()[0].bus_id == 1);
+    REQUIRE(mixer.bus_insert_count(1) == 1);
+    REQUIRE(mixer.bus_insert_count(2) == 2);
+  }
+  REQUIRE(reordered);
+  REQUIRE(mixer.bus_configs()[0].bus_id == 2);
+  REQUIRE(mixer.bus_insert_count(1) == 1);
+  REQUIRE(mixer.bus_insert_count(2) == 2);
 }
 
 TEST_CASE("TrackMixerRuntime keeps bus PDC history when staged topology allocation fails",

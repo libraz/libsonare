@@ -67,11 +67,10 @@ export interface EngineMeterTelemetry {
   rmsDbR: number;
   /**
    * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement: the centered
-   * reconstruction stencil needs a few future samples a realtime path does not
-   * have, so each block's last samples read marginally low (about 0.1 dB across
-   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
-   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * polyphase reconstruction at 4x. A streaming measurement that runs one
+   * reconstruction-filter group delay (a few samples) behind the block, so every
+   * value has its whole stencil and the reading does not depend on the block
+   * size. `meteringTruePeakDb` measures a whole signal at once.
    */
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
@@ -112,9 +111,9 @@ export interface EngineExternalMidiEvent {
    */
   destinationId: number;
   /**
-   * Render-frame coordinate of the event. Channel-voice events carry the
-   * timeline sample position; clock/transport bytes carry the device render
-   * frame.
+   * Absolute engine device render frame of the event, for every record
+   * (channel-voice, live input and clock/transport bytes alike). It is not an
+   * offset within a block: do not add a block or batch base to it.
    */
   renderFrame: number;
   /** MIDI 1.0 status + data bytes (1..3 entries). */
@@ -147,12 +146,10 @@ export interface EngineMeterTelemetryWide {
   rmsDb: number[];
   /**
    * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the
-   * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement: the
-   * centered reconstruction stencil needs a few future samples a realtime path
-   * does not have, so each block's last samples read marginally low (about
-   * 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
-   * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
-   * dBTP number.
+   * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement that
+   * runs one reconstruction-filter group delay (a few samples) behind the block,
+   * so the reading does not depend on the block size. `meteringTruePeakDb`
+   * measures a whole signal at once.
    */
   truePeakDb: number[];
   /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */

@@ -6,29 +6,9 @@
 
 #include "engine/track_mixer.h"
 #include "mixing/tail_planner.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::engine {
-
-namespace {
-
-TrackMixerRuntime::SidechainTable filtered_master_sidechains(
-    const TrackMixerRuntime::SidechainTable& source, size_t insert_count) noexcept {
-  TrackMixerRuntime::SidechainTable filtered = source;
-  for (size_t i = filtered.count; i > 0; --i) {
-    const TrackMixerRuntime::SidechainBinding& binding = filtered.bindings[i - 1];
-    if (binding.target_kind !=
-            static_cast<uint8_t>(TrackMixerRuntime::SidechainTargetKind::Master) ||
-        binding.insert_index < insert_count) {
-      continue;
-    }
-    filtered.bindings[i - 1] = filtered.bindings[filtered.count - 1];
-    filtered.bindings[filtered.count - 1] = TrackMixerRuntime::SidechainBinding{};
-    --filtered.count;
-  }
-  return filtered;
-}
-
-}  // namespace
 
 void TrackMixerRuntime::flush_pdc_delays() noexcept {
   for (mixing::AlignmentDelay& delay : lane_pdc_delays_) {
@@ -62,7 +42,8 @@ bool TrackMixerRuntime::prepare_master_strip_update(const mixing::ChannelStrip* 
       candidate == nullptr ? 0 : candidate->num_pre_inserts() + candidate->num_post_inserts();
   out->candidate = candidate;
   out->next_insert_count = std::min(next_insert_count, actual_insert_count);
-  out->next_sidechains = filtered_master_sidechains(sidechains_, out->next_insert_count);
+  out->next_sidechains =
+      without_inserts_from(sidechains_, SidechainTargetKind::Master, 0, out->next_insert_count);
 
   const std::vector<TrackLaneConfig>* lanes = lanes_.control_current().get();
   if (lanes == nullptr) return true;
@@ -630,17 +611,36 @@ void TrackMixerRuntime::commit_pdc_updates(PreparedPdc& prepared) noexcept {
   latency_samples_q8_ = prepared.plan.latency_q8;
 }
 
-bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
+bool TrackMixerRuntime::prepare_identity_pdc(const PdcPlan& plan,
+                                             PreparedPdc* prepared) const noexcept {
   std::array<int, kMaxTrackLanes> sources{};
   std::array<bool, kMaxTrackLanes> reset{};
-  for (size_t i = 0; i < kMaxTrackLanes; ++i) {
-    sources[i] = static_cast<int>(i);
-    reset[i] = false;
-  }
+  for (size_t i = 0; i < kMaxTrackLanes; ++i) sources[i] = static_cast<int>(i);
+  return prepare_pdc_updates(plan, sources, reset, prepared);
+}
+
+bool TrackMixerRuntime::apply_pdc(const PdcPlan& plan) noexcept {
   PreparedPdc prepared;
-  if (!prepare_pdc_updates(plan, sources, reset, &prepared)) return false;
+  if (!prepare_identity_pdc(plan, &prepared)) return false;
   commit_pdc_updates(prepared);
   return true;
+}
+
+TrackMixerRuntime::SidechainTable TrackMixerRuntime::without_inserts_from(
+    const SidechainTable& source, SidechainTargetKind target_kind, uint32_t target_id,
+    size_t insert_count) noexcept {
+  SidechainTable filtered = source;
+  for (size_t i = filtered.count; i > 0; --i) {
+    const SidechainBinding& binding = filtered.bindings[i - 1];
+    if (binding.target_kind != static_cast<uint8_t>(target_kind) ||
+        binding.target_id != target_id || binding.insert_index < insert_count) {
+      continue;
+    }
+    filtered.bindings[i - 1] = filtered.bindings[filtered.count - 1];
+    filtered.bindings[filtered.count - 1] = SidechainBinding{};
+    --filtered.count;
+  }
+  return filtered;
 }
 
 int TrackMixerRuntime::tail_samples() const noexcept {
@@ -729,10 +729,10 @@ int TrackMixerRuntime::tail_samples() const noexcept {
       }
     }
     // The master contributes 0 here; the engine adds the master strip itself.
-    return planner.arriving(master);
+    return rt::TailBudget::reported(planner.arriving(master)).samples();
   } catch (...) {
     // Out of memory planning the query: unbounded keeps it an upper bound.
-    return std::numeric_limits<int>::max();
+    return rt::TailBudget::kUnbounded;
   }
 }
 

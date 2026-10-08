@@ -221,16 +221,12 @@ SonareError sonare_project_set_sample_rate(SonareProject* project, double sample
   SONARE_C_API_ENTRY;
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!project) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate) {
-    // Name the range: the bare error code left every facade reporting a generic
-    // "invalid parameter" for a rate the caller had no way to know was out of
-    // bounds, which is the other half of documenting the range at all. The
-    // bounds are read from the same constants the check uses, so the message
-    // cannot drift from what is accepted.
-    const std::string message = "project sample rate must be in [" +
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    // Name the rule, read from the constants the predicate checks, so a facade can
+    // report why a rate it passed through was refused.
+    const std::string message = "project sample rate must be a whole number of hertz in [" +
                                 std::to_string(kMinSampleRate) + ", " +
-                                std::to_string(kMaxSampleRate) + "] Hz";
+                                std::to_string(kMaxSampleRate) + "]";
     set_last_error(SONARE_ERROR_INVALID_PARAMETER, message.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }

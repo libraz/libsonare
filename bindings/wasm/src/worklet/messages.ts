@@ -329,7 +329,7 @@ export type SonareWorkletMessage =
 export interface SonareWorkletExternalMidiEvent {
   /** Originating track lane, or 0xFFFFFFFF for transport/clock bytes. */
   destinationId: number;
-  /** Sample position within the producing block. */
+  /** Absolute engine device frame at which the event fires, never an offset within a block. */
   renderFrame: number;
   /** MIDI 1.0 status + data bytes (1..3 entries). */
   bytes: number[];

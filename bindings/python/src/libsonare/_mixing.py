@@ -950,6 +950,18 @@ class Mixer:
             sample_rate=int(self._sample_rate),
         )
 
+    def flush_meters(self) -> None:
+        """Mark the end of the signal for every strip and bus meter.
+
+        The true-peak reading runs one reconstruction-filter group delay behind
+        the block; this reads that pending stretch against silence and folds it
+        into the snapshots, so ``true_peak_db`` covers the whole signal. Call it
+        after the last block of an offline render. A later process call starts
+        a new signal.
+        """
+        self._require()
+        _check(_get_lib().sonare_mixer_flush_meters(self._handle))
+
     def to_scene_json(self) -> str:
         """Serialize the current scene (strips, buses, sends, connections)."""
         self._require()
@@ -1019,11 +1031,9 @@ def mix_stereo(
         floor sentinel; drive a strip over a streaming session when a meaningful
         loudness number is needed. ``true_peak_db`` is not an integrator — it is
         a max-hold over the block just processed, so it is valid immediately and
-        floors only on digital silence. This call sizes the mixer to the input
-        and mixes the whole signal in one block, so there are no internal block
-        edges for the under-read documented on :class:`MixMeterSnapshot` to
-        occur at, and the reported true peak matches
-        :func:`metering_true_peak_db` over the same signal.
+        floors only on digital silence. This call mixes the whole signal in one
+        block and flushes the meters after it, so the reported true peak
+        matches :func:`metering_true_peak_db` over the same signal exactly.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mixer_create"):
@@ -1159,6 +1169,8 @@ def mix_stereo(
             _to_c_size_t(length, "length"),
         )
         _check(rc)
+        # The whole signal was one block: fold the meters' pending group delay in.
+        _check(lib.sonare_mixer_flush_meters(mixer))
 
         meters: list[MixMeterSnapshot] = []
         for handle in strip_handles:

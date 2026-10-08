@@ -6,12 +6,7 @@ import type {
   RealtimeEngine,
 } from '../index.js';
 import { resolveRenderFrame } from '../validation.js';
-import {
-  commitCommand,
-  commitStore,
-  commitSync,
-  type EngineCommitContext,
-} from './engine-commit.js';
+import { commitCommand, commitSync, type EngineCommitContext } from './engine-commit.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
@@ -242,12 +237,10 @@ export function addParameter(ctx: EngineParameterContext, info: EngineParameterI
   );
 }
 
-/** Clears registered parameters and their automation lanes on both engines. */
+/** Clears registered parameters on both engines; automation lanes stay in place. */
 export function clearParameters(ctx: EngineParameterContext): void {
-  commitStore(
+  commitSync(
     ctx,
-    ctx.automationLanes,
-    new Map(),
     (offline) => offline.clearParameters(),
     () => ctx.postSync({ type: 'syncParameters', parameters: [] }),
   );

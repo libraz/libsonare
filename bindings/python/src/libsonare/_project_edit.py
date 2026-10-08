@@ -280,7 +280,8 @@ class _ProjectEditMixin:
     def set_sample_rate(self, sample_rate: float) -> None:
         """Set the project sample rate in Hz.
 
-        Must be in ``[8000, 384000]``; anything outside that range raises.
+        Must be a whole number of hertz within ``[8000, 384000]``; anything else
+        raises.
         The change is applied through the edit history, so it is undoable.
         """
         _check(

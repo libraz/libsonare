@@ -295,6 +295,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   /// @throws SonareException(InvalidParameter) when @p block_size exceeds
   ///         @c max_block_size(); the render would otherwise run at a smaller
   ///         block than the one requested.
+  /// @throws SonareException(InvalidState) when a streamed clip read a page its
+  ///         provider did not hold, after the render: that span is silence, not
+  ///         the clip. Supply the pages before rendering.
   /// @param finalize Whether this call ENDS the timeline. True — the default,
   ///        and what a one-shot bounce wants — releases every sounding note and
   ///        flushes the PDC delay lines through @c finish_offline_render. False
@@ -444,6 +447,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   const MetronomeConfig& metronome_config() const noexcept { return metronome_.config(); }
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
   void set_clips(std::vector<ClipSchedule> clips);
+  /// Replaces the clip with @p clip's id, or adds it, leaving every other clip as published.
+  void upsert_clip(ClipSchedule clip);
+  /// Removes the clip @p clip_id. False when no clip has that id.
+  bool remove_clip(uint32_t clip_id);
   size_t clip_count() const noexcept { return clip_player_.clip_count(); }
   /// @brief Whether @p words / @p count form a UMP the live path accepts.
   /// @details @p count must equal the word count the message type of
@@ -577,9 +584,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   //
   // render_frame coordinate: every record -- sequenced channel-voice events,
   // live-input injection, and clock/transport bytes -- carries the monotonic
-  // DEVICE render frame. Compiled clips are stamped in timeline samples and the
-  // sequencer converts each event once as it is dispatched, so the drained order
-  // stays monotonic across a loop wrap or seek (where the timeline jumps but the
+  // DEVICE render frame, absolute rather than an offset within a block. Compiled clips are stamped
+  // in timeline samples and the sequencer converts each event once as it is dispatched, so the
+  // drained order stays monotonic across a loop wrap or seek (where the timeline jumps but the
   // device clock keeps rising): note and transport records of a frame are queued
   // before the clock bytes that follow them. A host can schedule directly against
   // the device clock without reconciling coordinates.
@@ -1173,6 +1180,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // pending MIDI-FX output and live input -- and returns how many frames, at most
   // @p max_frames, render before the next MIDI event.
   int dispatch_midi_span(int64_t render_frame, int64_t block_render_frame, int max_frames) noexcept;
+  // AUDIO thread: a block refused for its size or channel count still moves the
+  // timeline, so its MIDI dispatches without audio and no release inside it is lost.
+  void dispatch_midi_without_render(int num_frames) noexcept;
   // AUDIO thread: adopt one coherent external-routing snapshot at the block
   // boundary. Changed destinations are released through the old route before
   // the fixed active table is committed.
@@ -1224,6 +1234,20 @@ class RealtimeEngine : private ClipPageRequestSink {
     // INSTEAD of the instrument rack, so the track drives an external device
     // rather than a built-in synth.
     ExternalMidiQueue* external = nullptr;
+    // AUDIO thread: releases a route refused, retried every block until accepted.
+    static constexpr uint8_t kExternalRoute = 0;
+    static constexpr uint8_t kOutputRoute = 1;
+    midi::ReleaseSet refused_releases{};
+    void retry_refused_releases(int64_t render_frame) noexcept {
+      refused_releases.retry(render_frame, [this](uint8_t route, uint32_t destination_id,
+                                                  const midi::MidiEvent& event) noexcept {
+        if (route == kExternalRoute) {
+          return external != nullptr && external->send(destination_id, event);
+        }
+        host::MidiOutputSink* sink = output.load(std::memory_order_acquire);
+        return sink == nullptr || sink->send(event);
+      });
+    }
     // CONTROL-owned requested set of destinations routed externally. Each slot
     // is 0 (empty) or ((1<<32) | destination_id); the high marker bit keeps
     // destination 0 representable. SeqlockCell publishes the complete table
@@ -1302,7 +1326,10 @@ class RealtimeEngine : private ClipPageRequestSink {
         // routed there INSTEAD of the rack and is not also mirrored to the
         // merged output sink, otherwise a host using both would emit the event
         // twice to the device path.
-        if (!sysex && external != nullptr) external->send(destination_id, device_event);
+        if (!sysex && external != nullptr && !external->send(destination_id, device_event) &&
+            midi::is_release_message(device_event.ump)) {
+          refused_releases.add(kExternalRoute, destination_id, device_event);
+        }
         return;
       }
       if (rack != nullptr) rack->on_event(destination_id, device_event);
@@ -1313,7 +1340,9 @@ class RealtimeEngine : private ClipPageRequestSink {
         device_event.sysex_payload_size = 0;
         device_event.prepared_sysex = nullptr;
       }
-      sink->send(device_event);
+      if (!sink->send(device_event) && midi::is_release_message(device_event.ump)) {
+        refused_releases.add(kOutputRoute, destination_id, device_event);
+      }
     }
   };
 
@@ -1545,6 +1574,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<Telemetry> telemetry_{};
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
   std::atomic<uint32_t> clip_page_request_overflow_count_{0};
+  // Reads that found no resident page and produced silence; render_offline refuses on any.
+  std::atomic<uint64_t> clip_page_read_misses_{0};
   BoundarySplitter boundary_splitter_{};
   // Set for the duration of freeze_offline(): process_subblock() stops after the
   // source layer (track mixer) and leaves master, monitor, graph and capture out.

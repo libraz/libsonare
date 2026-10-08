@@ -76,142 +76,158 @@ bool tempo_sync_segments_for_clip(const SonareEngineClip& clip, int64_t target_l
 
 }  // namespace
 
+namespace {
+
+// Validates one public clip and builds its schedule, copying or baking its audio.
+// Nothing reaches the engine here, so a refused clip leaves the published set alone.
+SonareError build_clip_schedule(const SonareRealtimeEngine& handle, const SonareEngineClip& clip,
+                                engine::ClipSchedule* out) {
+  const bool paged = clip.page_provider != nullptr;
+  if (paged && !clip.page_provider->provider) return SONARE_ERROR_INVALID_PARAMETER;
+  const int source_channels =
+      paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
+  const int64_t source_samples =
+      paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
+  if ((!paged && !clip.channels) || source_channels <= 0 || source_samples <= 0 ||
+      !std::isfinite(clip.start_ppq) || !transport::valid_public_ppq(clip.start_ppq) ||
+      clip.clip_offset_samples < 0 || clip.clip_offset_samples >= source_samples ||
+      !(std::isfinite(clip.gain) && clip.gain >= 0.0f) || clip.fade_in_samples < 0 ||
+      clip.fade_out_samples < 0 ||
+      (clip.warp_mode != SONARE_ENGINE_WARP_MODE_OFF &&
+       clip.warp_mode != SONARE_ENGINE_WARP_MODE_REPITCH &&
+       clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC &&
+       clip.warp_mode != SONARE_ENGINE_WARP_MODE_TIME_STRETCH) ||
+      (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
+      (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) ||
+      ((clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
+        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH) &&
+       clip.loop != 0 && clip.warp_anchor_count >= 2) ||
+      (clip.warp_anchor_count > 0 && !clip.warp_anchors)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Compute the default only after validating the offset so the subtraction
+  // cannot overflow (INT64_MIN was previously accepted into this expression).
+  // Only 0 asks for the source length; any other non-positive length falls
+  // through to the rejection below rather than being read as that request.
+  const int64_t effective_length =
+      clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
+  if (effective_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
+    const SonareEngineWarpAnchor& anchor = clip.warp_anchors[anchor_index];
+    if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
+        anchor.warp_sample < 0.0 || anchor.source_sample < 0.0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    if (anchor_index > 0) {
+      const SonareEngineWarpAnchor& prev = clip.warp_anchors[anchor_index - 1];
+      if (!(anchor.warp_sample > prev.warp_sample && anchor.source_sample > prev.source_sample)) {
+        return SONARE_ERROR_INVALID_PARAMETER;
+      }
+    }
+  }
+  auto owned = std::make_shared<engine::ClipAudioStorage>();
+  owned->channels.reserve(static_cast<size_t>(source_channels));
+  owned->channel_ptrs.reserve(static_cast<size_t>(source_channels));
+  if (paged) {
+    // Paged providers are retained by shared_ptr on the ClipSchedule; no audio
+    // is copied into ClipAudioStorage.
+  } else if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
+    std::vector<engine::TempoSyncWarpSegment> segments;
+    if (!tempo_sync_segments_for_clip(clip, effective_length, &segments)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    engine::TempoSyncWarpBakeConfig bake_config;
+    bake_config.sample_rate = static_cast<int>(handle.engine.sample_rate());
+    std::vector<const float*> source_channel_ptrs;
+    source_channel_ptrs.reserve(static_cast<size_t>(clip.num_channels));
+    for (int ch = 0; ch < clip.num_channels; ++ch) {
+      if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
+      source_channel_ptrs.push_back(clip.channels[ch]);
+    }
+    owned->channels = engine::bake_tempo_sync_warp_channels(
+        source_channel_ptrs, static_cast<size_t>(clip.num_samples), segments, bake_config);
+  } else {
+    for (int ch = 0; ch < clip.num_channels; ++ch) {
+      if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
+      owned->channels.emplace_back(clip.channels[ch], clip.channels[ch] + clip.num_samples);
+    }
+  }
+  owned->channel_ptrs.clear();
+  for (const auto& channel : owned->channels) {
+    owned->channel_ptrs.push_back(channel.data());
+  }
+  owned->refresh_content_signature();
+  engine::ClipSchedule schedule{};
+  schedule.id = clip.id;
+  schedule.track_id = clip.track_id;
+  schedule.buffer =
+      paged ? engine::ClipAudioBuffer{}
+            : engine::ClipAudioBuffer{
+                  owned->channel_ptrs.data(), source_channels,
+                  static_cast<int64_t>(owned->channels.empty() ? 0 : owned->channels[0].size())};
+  schedule.storage = owned;
+  if (paged) schedule.page_provider = clip.page_provider->provider;
+  schedule.start_ppq = clip.start_ppq;
+  schedule.clip_offset_samples =
+      clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? 0 : clip.clip_offset_samples;
+  schedule.length_samples = effective_length;
+  schedule.loop = clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? false : clip.loop != 0;
+  schedule.gain = clip.gain;
+  schedule.fade_in_samples = clip.fade_in_samples;
+  schedule.fade_out_samples = clip.fade_out_samples;
+  schedule.warp_mode =
+      clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH        ? engine::WarpMode::kRepitch
+      : clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH ? engine::WarpMode::kTimeStretch
+                                                               : engine::WarpMode::kOff;
+  if ((schedule.warp_mode == engine::WarpMode::kRepitch ||
+       schedule.warp_mode == engine::WarpMode::kTimeStretch) &&
+      clip.warp_anchor_count >= 2) {
+    auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();
+    anchors->reserve(clip.warp_anchor_count);
+    for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
+      anchors->push_back({clip.warp_anchors[anchor_index].warp_sample,
+                          clip.warp_anchors[anchor_index].source_sample});
+    }
+    schedule.warp_anchors = std::move(anchors);
+  }
+  *out = std::move(schedule);
+  return SONARE_OK;
+}
+
+}  // namespace
+
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (clip_count > 0 && !clips)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  std::vector<std::shared_ptr<engine::ClipAudioStorage>> clip_storage;
-  clip_storage.reserve(clip_count);
+  std::vector<engine::ClipSchedule> schedules(clip_count);
   for (size_t i = 0; i < clip_count; ++i) {
-    const SonareEngineClip& clip = clips[i];
-    const bool paged = clip.page_provider != nullptr;
-    if (paged && !clip.page_provider->provider) return SONARE_ERROR_INVALID_PARAMETER;
-    const int source_channels =
-        paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
-    const int64_t source_samples =
-        paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
-    if ((!paged && !clip.channels) || source_channels <= 0 || source_samples <= 0 ||
-        !std::isfinite(clip.start_ppq) || !transport::valid_public_ppq(clip.start_ppq) ||
-        clip.clip_offset_samples < 0 || clip.clip_offset_samples >= source_samples ||
-        !(std::isfinite(clip.gain) && clip.gain >= 0.0f) || clip.fade_in_samples < 0 ||
-        clip.fade_out_samples < 0 ||
-        (clip.warp_mode != SONARE_ENGINE_WARP_MODE_OFF &&
-         clip.warp_mode != SONARE_ENGINE_WARP_MODE_REPITCH &&
-         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TEMPO_SYNC &&
-         clip.warp_mode != SONARE_ENGINE_WARP_MODE_TIME_STRETCH) ||
-        (paged && clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) ||
-        (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC && clip.loop != 0) ||
-        ((clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH ||
-          clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH) &&
-         clip.loop != 0 && clip.warp_anchor_count >= 2) ||
-        (clip.warp_anchor_count > 0 && !clip.warp_anchors)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    // Compute the default only after validating the offset so the subtraction
-    // cannot overflow (INT64_MIN was previously accepted into this expression).
-    // Only 0 asks for the source length; any other non-positive length falls
-    // through to the rejection below rather than being read as that request.
-    const int64_t effective_length =
-        clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
-    if (effective_length <= 0) return SONARE_ERROR_INVALID_PARAMETER;
-    for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
-      const SonareEngineWarpAnchor& anchor = clip.warp_anchors[anchor_index];
-      if (!std::isfinite(anchor.warp_sample) || !std::isfinite(anchor.source_sample) ||
-          anchor.warp_sample < 0.0 || anchor.source_sample < 0.0) {
-        return SONARE_ERROR_INVALID_PARAMETER;
-      }
-      if (anchor_index > 0) {
-        const SonareEngineWarpAnchor& prev = clip.warp_anchors[anchor_index - 1];
-        if (!(anchor.warp_sample > prev.warp_sample && anchor.source_sample > prev.source_sample)) {
-          return SONARE_ERROR_INVALID_PARAMETER;
-        }
-      }
-    }
-    auto owned = std::make_shared<engine::ClipAudioStorage>();
-    owned->channels.reserve(static_cast<size_t>(source_channels));
-    owned->channel_ptrs.reserve(static_cast<size_t>(source_channels));
-    if (paged) {
-      // Paged providers are retained by shared_ptr on the ClipSchedule; no audio
-      // is copied into ClipAudioStorage.
-    } else if (clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC) {
-      std::vector<engine::TempoSyncWarpSegment> segments;
-      if (!tempo_sync_segments_for_clip(clip, effective_length, &segments)) {
-        return SONARE_ERROR_INVALID_PARAMETER;
-      }
-      engine::TempoSyncWarpBakeConfig bake_config;
-      bake_config.sample_rate = static_cast<int>(std::lround(engine->engine.sample_rate()));
-      std::vector<const float*> source_channel_ptrs;
-      source_channel_ptrs.reserve(static_cast<size_t>(clip.num_channels));
-      for (int ch = 0; ch < clip.num_channels; ++ch) {
-        if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
-        source_channel_ptrs.push_back(clip.channels[ch]);
-      }
-      owned->channels = engine::bake_tempo_sync_warp_channels(
-          source_channel_ptrs, static_cast<size_t>(clip.num_samples), segments, bake_config);
-    } else {
-      for (int ch = 0; ch < clip.num_channels; ++ch) {
-        if (!clip.channels[ch]) return SONARE_ERROR_INVALID_PARAMETER;
-        owned->channels.emplace_back(clip.channels[ch], clip.channels[ch] + clip.num_samples);
-      }
-    }
-    clip_storage.push_back(std::move(owned));
-  }
-
-  std::vector<engine::ClipSchedule> schedules;
-  schedules.reserve(clip_count);
-  for (size_t i = 0; i < clip_count; ++i) {
-    const SonareEngineClip& clip = clips[i];
-    const bool paged = clip.page_provider != nullptr;
-    const int source_channels =
-        paged ? clip.page_provider->provider->num_channels() : clip.num_channels;
-    const int64_t source_samples =
-        paged ? clip.page_provider->provider->num_samples() : clip.num_samples;
-    const int64_t effective_length =
-        clip.length_samples == 0 ? source_samples - clip.clip_offset_samples : clip.length_samples;
-    auto& owned = clip_storage[i];
-    owned->channel_ptrs.clear();
-    for (const auto& channel : owned->channels) {
-      owned->channel_ptrs.push_back(channel.data());
-    }
-    owned->refresh_content_signature();
-    engine::ClipSchedule schedule{};
-    schedule.id = clip.id;
-    schedule.track_id = clip.track_id;
-    schedule.buffer =
-        paged ? engine::ClipAudioBuffer{}
-              : engine::ClipAudioBuffer{
-                    owned->channel_ptrs.data(), source_channels,
-                    static_cast<int64_t>(owned->channels.empty() ? 0 : owned->channels[0].size())};
-    schedule.storage = owned;
-    if (paged) schedule.page_provider = clip.page_provider->provider;
-    schedule.start_ppq = clip.start_ppq;
-    schedule.clip_offset_samples =
-        clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? 0 : clip.clip_offset_samples;
-    schedule.length_samples = effective_length;
-    schedule.loop = clip.warp_mode == SONARE_ENGINE_WARP_MODE_TEMPO_SYNC ? false : clip.loop != 0;
-    schedule.gain = clip.gain;
-    schedule.fade_in_samples = clip.fade_in_samples;
-    schedule.fade_out_samples = clip.fade_out_samples;
-    schedule.warp_mode =
-        clip.warp_mode == SONARE_ENGINE_WARP_MODE_REPITCH        ? engine::WarpMode::kRepitch
-        : clip.warp_mode == SONARE_ENGINE_WARP_MODE_TIME_STRETCH ? engine::WarpMode::kTimeStretch
-                                                                 : engine::WarpMode::kOff;
-    if ((schedule.warp_mode == engine::WarpMode::kRepitch ||
-         schedule.warp_mode == engine::WarpMode::kTimeStretch) &&
-        clip.warp_anchor_count >= 2) {
-      auto anchors = std::make_shared<std::vector<engine::WarpAnchor>>();
-      anchors->reserve(clip.warp_anchor_count);
-      for (size_t anchor_index = 0; anchor_index < clip.warp_anchor_count; ++anchor_index) {
-        anchors->push_back({clip.warp_anchors[anchor_index].warp_sample,
-                            clip.warp_anchors[anchor_index].source_sample});
-      }
-      schedule.warp_anchors = std::move(anchors);
-    }
-    schedules.push_back(schedule);
+    const SonareError status = build_clip_schedule(*engine, clips[i], &schedules[i]);
+    if (status != SONARE_OK) return status;
   }
   engine->engine.set_clips(std::move(schedules));
   return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const SonareEngineClip* clip) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !clip) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  engine::ClipSchedule schedule{};
+  const SonareError status = build_clip_schedule(*engine, *clip, &schedule);
+  if (status != SONARE_OK) return status;
+  engine->engine.upsert_clip(std::move(schedule));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t clip_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  SONARE_C_TRY
+  return engine->engine.remove_clip(clip_id) ? SONARE_OK : SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_CATCH
 }
 

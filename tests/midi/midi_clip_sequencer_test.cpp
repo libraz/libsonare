@@ -3,6 +3,7 @@
 ///        PPQ->frame rendering, and the RT MidiSequencer dispatch +
 ///        hang-note safety + overflow + boundary collection.
 
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
@@ -1262,6 +1263,42 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
     REQUIRE(sink.events[i].event.render_frame == 100);
     REQUIRE(sink.events[i].event.ump.note_number() == kWritten[i]);
   }
+}
+
+TEST_CASE("MidiSequencer releases a note now when the MIDI FX pending list is full", "[midi]") {
+  MidiSequencer seq;
+  CapturingSink sink;
+  seq.prepare(48000.0);
+  seq.set_sink(&sink);
+
+  MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 1000;
+  quantize.strength = 1.0f;
+  fx.set_quantize(quantize);
+  REQUIRE(seq.set_midi_fx(9, fx));
+  seq.acquire_midi_fx(DeviceFrame{0});
+
+  // The note sounds at 1000; controllers then fill the pending list at 2000, so the
+  // note-off, shifted with its note-on to 2001, has no slot.
+  MidiClipSchedule clip;
+  clip.id = 1208;
+  clip.destination_id = 9;
+  clip.events.push_back({600, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  for (size_t i = 0; i < MidiSequencer::kMaxPendingFxEvents; ++i) {
+    clip.events.push_back({1600, sonare::midi::make_midi1_control_change(0, 0, 1, 0)});
+  }
+  clip.events.push_back({1601, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  seq.set_midi_clips({clip});
+  seq.acquire_midi_clips();
+  seq.process_block(SequencerClock::aligned(0), 3000);
+
+  const auto note_off =
+      std::find_if(sink.events.begin(), sink.events.end(),
+                   [](const CapturingSink::Captured& c) { return c.event.ump.is_note_off(); });
+  REQUIRE(note_off != sink.events.end());
+  REQUIRE(seq.active_note_count() == 0);
 }
 
 TEST_CASE("MidiSequencer ranks same-frame note-off before note-on across clips", "[midi]") {

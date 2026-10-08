@@ -1242,6 +1242,36 @@ TEST_CASE("SetSampleRate rejects invalid values atomically", "[arrangement]") {
 
   CHECK_FALSE(SetSampleRate(-1.0).apply(f.project, store));
   CHECK(project_equal(f.project, before));
+
+  // A fractional rate would round in one stage and truncate in another.
+  CHECK_FALSE(SetSampleRate(44100.5).apply(f.project, store));
+  CHECK(project_equal(f.project, before));
+}
+
+TEST_CASE("SetSampleRate rescales warp anchors and undo restores them bit-exactly",
+          "[arrangement]") {
+  Fixture f;
+  MidiContentStore store;
+  REQUIRE(SetSampleRate(44100.0).apply(f.project, store));
+  WarpMapRef map;
+  map.id = 77;
+  map.anchors = {{0.0, 0.0}, {12345.678, 11111.111}, {44100.0, 40000.25}};
+  REQUIRE(f.project.set_warp_map(map));
+  const Project before = f.project;
+
+  SetSampleRate to_48k(48000.0);
+  EditCommandPtr undo = to_48k.invert(f.project, store);
+  REQUIRE(to_48k.apply(f.project, store));
+  const WarpMapRef* scaled = f.project.find_warp_map(77);
+  REQUIRE(scaled != nullptr);
+  // The last anchor marks one second at the old rate, which is one second at the new one.
+  CHECK(scaled->anchors[2].warp_sample == Catch::Approx(48000.0));
+  CHECK(scaled->anchors[1].source_sample == Catch::Approx(11111.111 * 48000.0 / 44100.0));
+
+  REQUIRE(undo->apply(f.project, store));
+  CHECK(f.project.sample_rate() == 44100.0);
+  CHECK(f.project.find_warp_map(77)->anchors == map.anchors);
+  CHECK(project_equal(f.project, before));
 }
 
 TEST_CASE("Automation command round-trips", "[arrangement]") {

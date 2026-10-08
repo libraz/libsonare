@@ -73,12 +73,10 @@ typedef struct {
   float rms_db_l;
   float rms_db_r;
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
-     reconstruction at 4x. This is a STREAMING measurement and is very slightly
-     block-size dependent: the reconstruction's centered stencil needs a few
-     future samples a realtime path does not have, so each block's last samples
-     read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-     near-Nyquist tone, always under-reading). Use sonare_metering_true_peak_db
-     over the whole signal when an exact dBTP number is required. */
+     reconstruction at 4x. This is a STREAMING measurement that runs one
+     reconstruction-filter group delay (a few samples) behind the block, so every
+     value has its whole stencil and the reading does not depend on the block
+     size. sonare_metering_true_peak_db measures a whole signal at once. */
   float true_peak_db_l;
   float true_peak_db_r;
   float max_true_peak_db;
@@ -110,12 +108,10 @@ typedef struct {
   float peak_db[SONARE_METER_MAX_CHANNELS];
   float rms_db[SONARE_METER_MAX_CHANNELS];
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
-     reconstruction at 4x. This is a STREAMING measurement and is very slightly
-     block-size dependent: the reconstruction's centered stencil needs a few
-     future samples a realtime path does not have, so each block's last samples
-     read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-     near-Nyquist tone, always under-reading). Use sonare_metering_true_peak_db
-     over the whole signal when an exact dBTP number is required. */
+     reconstruction at 4x. This is a STREAMING measurement that runs one
+     reconstruction-filter group delay (a few samples) behind the block, so every
+     value has its whole stencil and the reading does not depend on the block
+     size. sonare_metering_true_peak_db measures a whole signal at once. */
   float true_peak_db[SONARE_METER_MAX_CHANNELS];
   float max_true_peak_db;
   float correlation;

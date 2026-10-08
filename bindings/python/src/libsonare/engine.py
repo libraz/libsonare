@@ -151,7 +151,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self._handle = handle
         self._capture_arrays: list[ctypes.Array[ctypes.c_float]] = []
         self._capture_ptrs: ctypes.Array[Any] | None = None
-        self._clip_page_providers: list[ClipPageProvider] = []
+        # Page providers the published clips read from, kept alive by clip id.
+        self._clip_page_providers: dict[int, list[ClipPageProvider]] = {}
         self.prepare(
             sample_rate, max_block_size, command_capacity, telemetry_capacity, max_channels
         )
@@ -222,7 +223,6 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         one-for-one: the engine reserves that many meter records per metered
         lane, so its memory cost is far larger than the number given here.
         """
-        self._sample_rate = float(sample_rate)
         lib = _get_lib()
         prepare_with_channels = getattr(lib, "sonare_engine_prepare_with_channels", None)
         supports_max_channels = prepare_with_channels is not None
@@ -243,6 +243,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 *(() if not supports_max_channels else (_to_c_int(max_channels, "max_channels"),)),
             )
         )
+        self._sample_rate = float(sample_rate)
 
     def play(self, render_frame: int | None = None) -> None:
         _check(
@@ -657,14 +658,40 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         return int(out.value)
 
     def set_clips(self, clips: Sequence[EngineClip]) -> None:
-        page_providers = [
-            provider
-            for provider in (getattr(clip, "page_provider", None) for clip in clips)
-            if isinstance(provider, ClipPageProvider)
-        ]
+        page_providers: dict[int, list[ClipPageProvider]] = {}
+        for clip in clips:
+            provider = getattr(clip, "page_provider", None)
+            if isinstance(provider, ClipPageProvider):
+                page_providers.setdefault(clip.id, []).append(provider)
         raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c(clips)
         _check(_get_lib().sonare_engine_set_clips(self._require_handle(), raw_clips, len(clips)))
         self._clip_page_providers = page_providers
+
+    def upsert_clip(self, clip: EngineClip) -> None:
+        """Replace the clip with ``clip.id``, or add it, keeping every other clip.
+
+        The clip is validated like a :meth:`set_clips` entry; a refused clip
+        raises and leaves the published set unchanged.
+        """
+        raw_clips, _channel_arrays, _channel_ptrs, _warp_arrays = _clips_to_c([clip])
+        _check(_get_lib().sonare_engine_upsert_clip(self._require_handle(), raw_clips))
+        provider = getattr(clip, "page_provider", None)
+        if isinstance(provider, ClipPageProvider):
+            self._clip_page_providers[clip.id] = [provider]
+        else:
+            self._clip_page_providers.pop(clip.id, None)
+
+    def remove_clip(self, clip_id: int) -> None:
+        """Remove the clip ``clip_id``, keeping every other clip.
+
+        Raises when no clip has that id.
+        """
+        _check(
+            _get_lib().sonare_engine_remove_clip(
+                self._require_handle(), _to_c_uint32(clip_id, "clip_id")
+            )
+        )
+        self._clip_page_providers.pop(clip_id, None)
 
     def clip_count(self) -> int:
         out = ctypes.c_size_t()

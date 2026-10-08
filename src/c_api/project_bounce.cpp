@@ -191,10 +191,7 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   const double project_sr = project->history.project().sample_rate();
   const double sample_rate =
       opts.sample_rate > 0 ? static_cast<double>(opts.sample_rate) : project_sr;
-  if (!finite_positive(sample_rate) || sample_rate < kMinSampleRate ||
-      sample_rate > kMaxSampleRate) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!sonare::is_supported_sample_rate(sample_rate)) return SONARE_ERROR_INVALID_PARAMETER;
   if (opts.sample_rate > 0 && std::abs(sample_rate - project_sr) > 1.0e-6) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
@@ -226,11 +223,11 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   // than the mixer has strips.
   const bool mixer_required =
       timeline_requires_mixer(*compiled.timeline, routing) ||
-      has_shared_hosted_midi_destination(*compiled.timeline, instruments,
+      has_shared_hosted_midi_destination(*compiled.timeline, routing, instruments,
                                          /*all_hosts_source_aware=*/nullptr);
   const bool mixer_route_direct =
       timeline_has_unbound_tracks(*compiled.timeline, routing) ||
-      has_shared_hosted_midi_destination(*compiled.timeline, instruments,
+      has_shared_hosted_midi_destination(*compiled.timeline, routing, instruments,
                                          /*all_hosts_source_aware=*/nullptr);
   MixerPtr reusable_mixer;
 #endif

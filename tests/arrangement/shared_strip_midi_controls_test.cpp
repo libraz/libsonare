@@ -184,4 +184,59 @@ TEST_CASE("an opaque callback instrument keeps its strip's controls, not its tra
   sonare_project_destroy(shared);
 }
 
+TEST_CASE("a callback destination shared by unrouted tracks bounces once",
+          "[arrangement][project]") {
+  // Two tracks on one destination feed the same dry path, so the destination
+  // renders once; one track holding both notes is the reference.
+  const auto make_project = [](bool split) {
+    SonareProject* project = nullptr;
+    REQUIRE(sonare_project_create(&project) == SONARE_OK);
+    REQUIRE(sonare_project_set_sample_rate(project, kSampleRate) == SONARE_OK);
+    const char* scene =
+        R"({"version":1,"buses":[{"id":"master","role":"master"}],"strips":[{"id":"unused"}]})";
+    REQUIRE(sonare_project_set_mixer_scene_json(project, scene) == SONARE_OK);
+    const SonareMidiEventPod both[] = {{0.0, 0x20903C7Fu, 0u}, {0.0, 0x2090407Fu, 0u}};
+    for (int t = 0; t < (split ? 2 : 1); ++t) {
+      uint32_t track = 0;
+      uint32_t clip = 0;
+      REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+      const SonareMidiEventPod* events = split ? &both[t] : both;
+      REQUIRE(sonare_project_set_midi_events(project, clip, events, split ? 1 : 2) == SONARE_OK);
+      REQUIRE(sonare_project_set_track_midi_destination(project, track, kDestination) == SONARE_OK);
+    }
+    return project;
+  };
+  const auto bounce = [](SonareProject* project, CallbackInstrumentState* state) {
+    SonareProjectBounceOptions options{};
+    options.total_frames = 4096;
+    options.block_size = kBlockSize;
+    options.num_channels = 2;
+    options.sample_rate = kSampleRate;
+    SonareInstrumentBinding binding{};
+    binding.destination_id = kDestination;
+    binding.callbacks.user_data = state;
+    binding.callbacks.prepare = &cb_prepare;
+    binding.callbacks.on_event = &cb_on_event;
+    binding.callbacks.render = &cb_render;
+    float* out = nullptr;
+    size_t out_len = 0;
+    REQUIRE(sonare_project_bounce_with_instruments(project, &options, &binding, 1, &out,
+                                                   &out_len) == SONARE_OK);
+    std::vector<float> samples(out, out + out_len);
+    sonare_free_floats(out);
+    sonare_project_destroy(project);
+    return samples;
+  };
+  CallbackInstrumentState split_state;
+  CallbackInstrumentState joined_state;
+  const std::vector<float> split = bounce(make_project(true), &split_state);
+  const std::vector<float> joined = bounce(make_project(false), &joined_state);
+  REQUIRE(split_state.note_on == 2);
+  REQUIRE(split.size() == joined.size());
+  REQUIRE(*std::max_element(joined.begin(), joined.end()) > 0.1f);
+  for (size_t i = 0; i < split.size(); ++i) {
+    REQUIRE(split[i] == Catch::Approx(joined[i]).margin(1.0e-6));
+  }
+}
+
 #endif  // SONARE_WITH_MIXING

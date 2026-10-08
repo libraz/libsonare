@@ -26,12 +26,9 @@ class MixMeterSnapshot:
 
     ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
-    streaming measurement: the centered reconstruction stencil needs a few
-    future samples a realtime path does not have, so each block's last samples
-    read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-    near-Nyquist tone, always in the under-reading direction). Use
-    :func:`metering_true_peak_db` over the whole signal when an exact dBTP
-    number is required.
+    streaming measurement that runs one reconstruction-filter group delay (a
+    few samples) behind the block, so the reading does not depend on the block
+    size. :func:`metering_true_peak_db` measures a whole signal at once.
     """
 
     peak_db_l: float
@@ -465,12 +462,9 @@ class MeterTelemetryRecord:
 
     ``true_peak_db_l``/``true_peak_db_r``/``max_true_peak_db`` are inter-sample
     peaks from the ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a
-    streaming measurement: the centered reconstruction stencil needs a few
-    future samples a realtime path does not have, so each block's last samples
-    read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-    near-Nyquist tone, always in the under-reading direction). Use
-    :func:`metering_true_peak_db` over the whole signal when an exact dBTP
-    number is required.
+    streaming measurement that runs one reconstruction-filter group delay (a
+    few samples) behind the block, so the reading does not depend on the block
+    size. :func:`metering_true_peak_db` measures a whole signal at once.
     """
 
     target_id: int
@@ -507,11 +501,9 @@ class MeterTelemetryRecordWide:
 
     ``true_peak_db``/``max_true_peak_db`` are inter-sample peaks from the
     ITU-R BS.1770-4 polyphase reconstruction at 4x. They are a streaming
-    measurement: the centered reconstruction stencil needs a few future samples
-    a realtime path does not have, so each block's last samples read marginally
-    low (about 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone,
-    always in the under-reading direction). Use :func:`metering_true_peak_db`
-    over the whole signal when an exact dBTP number is required.
+    measurement that runs one reconstruction-filter group delay (a few samples)
+    behind the block, so the reading does not depend on the block size.
+    :func:`metering_true_peak_db` measures a whole signal at once.
     """
 
     target_id: int
@@ -556,7 +548,8 @@ class ExternalMidiEvent:
     Each event is a single MIDI 1.0 byte message (``bytes`` is 1..3 bytes). A
     ``destination_id`` of ``0xFFFFFFFF`` (4294967295) tags a clock/transport byte
     forwarded for external tempo sync; any other value is the MIDI destination id
-    the event was routed to.
+    the event was routed to. ``render_frame`` is the absolute engine device render
+    frame for every record, not an offset within a block.
     """
 
     destination_id: int

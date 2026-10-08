@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <new>
 #include <utility>
 #include <vector>
 
@@ -18,6 +19,7 @@
 #endif
 #include "engine/parameter_base_table.h"
 #include "engine/telemetry.h"
+#include "support/alloc_guard.h"
 #include "transport/tempo_map.h"
 #include "util/exception.h"
 
@@ -269,6 +271,26 @@ TEST_CASE("RealtimeEngine offline entry points refuse a block above the prepared
   REQUIRE_NOTHROW(engine.prime_offline_parameters(2, 64));
 }
 
+TEST_CASE("a failed render_offline scratch allocation leaves transport and metronome alone",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 128, 16, 16, 2);
+  sonare::engine::MetronomeConfig metronome = engine.metronome_config();
+  metronome.enabled = true;
+  engine.set_metronome_config(metronome);
+
+  std::array<float, 128> left{};
+  std::array<float, 128> right{};
+  float* io[] = {left.data(), right.data()};
+  {
+    sonare::test::AllocationFailureAtGuard fail_first(1);
+    REQUIRE_THROWS_AS(engine.render_offline(io, 2, 128, 128), std::bad_alloc);
+  }
+  REQUIRE_FALSE(engine.transport().playing());
+  REQUIRE(engine.metronome_config().enabled);
+  REQUIRE(engine.transport().sample_position() == 0);
+}
+
 TEST_CASE("RealtimeEngine control flush prevents an offline mirror command ring from filling",
           "[engine][realtime]") {
   sonare::engine::RealtimeEngine engine;
@@ -301,6 +323,27 @@ TEST_CASE("RealtimeEngine rejects registering one strip in mixing and monitor ru
   sonare::mixing::ChannelStrip other;
   REQUIRE(monitor_first.add_monitor_strip(&other));
   REQUIRE_FALSE(monitor_first.bind_mixing_strip(&other));
+}
+
+TEST_CASE("RealtimeEngine tail covers legacy monitor strips in series while monitoring",
+          "[engine][realtime]") {
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  sonare::mixing::ChannelStrip first;
+  sonare::mixing::ChannelStrip second;
+  first.prepare(48000.0, 64);
+  second.prepare(48000.0, 64);
+  first.set_channel_delay_samples(4);
+  second.set_channel_delay_samples(6);
+  REQUIRE(engine.add_monitor_strip(&first));
+  REQUIRE(engine.add_monitor_strip(&second));
+  const int without = engine.tail_samples();
+
+  engine.set_monitoring_enabled(true);
+  REQUIRE(engine.tail_samples() >= without + first.tail_samples() + second.tail_samples());
+  REQUIRE(first.tail_samples() + second.tail_samples() >= 10);
+  engine.set_monitoring_enabled(false);
+  REQUIRE(engine.tail_samples() == without);
 }
 
 TEST_CASE("RealtimeEngine reports track and master strip latency", "[engine][realtime]") {
@@ -339,6 +382,37 @@ TEST_CASE("RealtimeEngine includes a swapped routing graph in reported PDC", "[e
   engine.prepare(48000.0, 64);
   REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
   REQUIRE(engine.graph_latency_samples_q8() == (12 << 8));
+}
+
+TEST_CASE("prime_offline_parameters resets a graph swapped in since the last block",
+          "[engine][realtime]") {
+  class ResetCounter final : public sonare::rt::ProcessorBase {
+   public:
+    explicit ResetCounter(int* resets) : resets_(resets) {}
+    void prepare(double, int) override {}
+    void process(float* const*, int, int) override {}
+    void reset() override { ++*resets_; }
+
+   private:
+    int* resets_;
+  };
+  int resets = 0;
+  auto graph = std::make_unique<sonare::graph::Graph>();
+  REQUIRE(graph->add_node("in", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->add_node("state", std::make_unique<ResetCounter>(&resets), 1));
+  REQUIRE(graph->add_node("out", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->connect({"in", 0, "state", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->connect({"state", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->compile());
+  graph->prepare(48000.0, 64);
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
+  const int before = resets;
+  engine.prime_offline_parameters(1, 64);
+  REQUIRE(resets > before);
+  REQUIRE(engine.transport().sample_position() == 0);
 }
 
 TEST_CASE("RealtimeEngine re-prepares an installed graph for a larger block and new rate",
@@ -3704,6 +3778,37 @@ TEST_CASE("RealtimeEngine reports a read miss on a page an earlier span only pre
     }
   }
   REQUIRE(underrun_count == 1);
+}
+
+TEST_CASE("render_offline refuses a span that read a page its provider did not hold",
+          "[engine][realtime][clip_pages]") {
+  class FirstPageProvider final : public sonare::engine::ClipPagedAudioProvider {
+   public:
+    int num_channels() const noexcept override { return 1; }
+    int64_t num_samples() const noexcept override { return 8; }
+    int64_t page_frames() const noexcept override { return 4; }
+    bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+      if (channel != 0 || !out || sample < 0 || sample >= 4) return false;
+      *out = 1.0f;
+      return true;
+    }
+    bool page_resident(int64_t page_index) const noexcept override { return page_index < 1; }
+  };
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 4, 16, 16);
+  sonare::engine::ClipSchedule clip{47, {}, 0.0, 0, 0, 8, false, 1.0f, 0, 0};
+  clip.page_provider = std::make_shared<FirstPageProvider>();
+  engine.set_clips({clip});
+
+  // The resident page renders.
+  std::array<float, 8> left{};
+  float* io[] = {left.data()};
+  REQUIRE_NOTHROW(engine.render_offline(io, 1, 4, 4, false));
+  REQUIRE(left[3] == 1.0f);
+  // The next page is not resident: the span would be silence, so it is refused.
+  float* rest[] = {left.data() + 4};
+  REQUIRE_THROWS_AS(engine.render_offline(rest, 1, 4, 4), sonare::SonareException);
 }
 
 TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queue",

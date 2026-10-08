@@ -940,3 +940,83 @@ TEST_CASE("sonare_engine_parameter_info describes the lane fader and master widt
   sonare_engine_destroy(engine);
 }
 #endif  // defined(SONARE_WITH_MIXING)
+
+TEST_CASE("sonare_engine_upsert_clip and remove_clip change one clip and keep the rest",
+          "[c_api][engine]") {
+  constexpr int kFrames = 64;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kFrames, 16, 16) == SONARE_OK);
+
+  std::array<float, kFrames> quarter{};
+  std::array<float, kFrames> half{};
+  std::array<float, kFrames> eighth{};
+  quarter.fill(0.25f);
+  half.fill(0.5f);
+  eighth.fill(0.125f);
+  const float* quarter_ch[] = {quarter.data()};
+  const float* half_ch[] = {half.data()};
+  const float* eighth_ch[] = {eighth.data()};
+  const auto make_clip = [](uint32_t id, const float* const* channels) {
+    SonareEngineClip clip{};
+    clip.id = id;
+    clip.channels = channels;
+    clip.num_channels = 1;
+    clip.num_samples = kFrames;
+    clip.gain = 1.0f;
+    return clip;
+  };
+  const SonareEngineClip initial[] = {make_clip(1, quarter_ch), make_clip(2, half_ch)};
+  REQUIRE(sonare_engine_set_clips(engine, initial, 2) == SONARE_OK);
+
+  const auto count = [&] {
+    size_t n = 0;
+    REQUIRE(sonare_engine_clip_count(engine, &n) == SONARE_OK);
+    return n;
+  };
+  const auto first_sample = [&] {
+    REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
+    std::array<float, kFrames> out{};
+    float* io[] = {out.data()};
+    REQUIRE(sonare_engine_render_offline(engine, io, 1, kFrames, kFrames) == SONARE_OK);
+    return out[0];
+  };
+  REQUIRE(first_sample() == Catch::Approx(0.75f));
+
+  SonareEngineClip louder = make_clip(1, quarter_ch);
+  louder.gain = 2.0f;
+  REQUIRE(sonare_engine_upsert_clip(engine, &louder) == SONARE_OK);
+  REQUIRE(count() == 2);
+  REQUIRE(first_sample() == Catch::Approx(1.0f));
+
+  const SonareEngineClip added = make_clip(3, eighth_ch);
+  REQUIRE(sonare_engine_upsert_clip(engine, &added) == SONARE_OK);
+  REQUIRE(count() == 3);
+  REQUIRE(sonare_engine_remove_clip(engine, 2) == SONARE_OK);
+  REQUIRE(count() == 2);
+  REQUIRE(first_sample() == Catch::Approx(0.625f));
+
+  // A refused change leaves the published set alone.
+  REQUIRE(sonare_engine_remove_clip(engine, 2) == SONARE_ERROR_INVALID_PARAMETER);
+  SonareEngineClip invalid = make_clip(1, quarter_ch);
+  invalid.gain = -1.0f;
+  REQUIRE(sonare_engine_upsert_clip(engine, &invalid) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_upsert_clip(engine, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(count() == 2);
+  REQUIRE(first_sample() == Catch::Approx(0.625f));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_prepare refuses a fractional sample rate", "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 44100.5, 128, 8, 8) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare_with_channels(engine, 44100.5, 128, 8, 8, 2) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_prepare(engine, 44100.0, 128, 8, 8) == SONARE_OK);
+  SonareTransportState state{};
+  REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+  REQUIRE(state.sample_rate == 44100.0);
+  sonare_engine_destroy(engine);
+}

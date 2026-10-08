@@ -50,6 +50,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value Metronome(const Napi::CallbackInfo& info);
   Napi::Value CountInEndSample(const Napi::CallbackInfo& info);
   Napi::Value SetClips(const Napi::CallbackInfo& info);
+  Napi::Value UpsertClip(const Napi::CallbackInfo& info);
+  Napi::Value RemoveClip(const Napi::CallbackInfo& info);
   Napi::Value ClipCount(const Napi::CallbackInfo& info);
   Napi::Value SetTrackLanes(const Napi::CallbackInfo& info);
   Napi::Value SetLaneSidechain(const Napi::CallbackInfo& info);

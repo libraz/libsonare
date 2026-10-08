@@ -75,6 +75,17 @@ export * from './clip_page_provider.js';
  * {@link RealtimeEngine.setTrackLanes} and {@link RealtimeEngine.setTrackBuses}
  * so a track lane's sends and a bus's sends normalize identically.
  */
+// The addon reads a page provider by its numeric handle.
+function toNativeClip(clip: EngineClip): unknown {
+  return {
+    ...clip,
+    pageProvider:
+      typeof clip.pageProvider === 'object' && clip.pageProvider !== null
+        ? clip.pageProvider.id
+        : clip.pageProvider,
+  };
+}
+
 function normalizeSends(sends: EngineTrackSend[]): EngineTrackSend[] {
   return sends.map((send) =>
     send.sendTiming === undefined
@@ -428,15 +439,27 @@ export class RealtimeEngine {
   }
 
   setClips(clips: EngineClip[]): void {
-    this.native.setClips(
-      clips.map((clip) => ({
-        ...clip,
-        pageProvider:
-          typeof clip.pageProvider === 'object' && clip.pageProvider !== null
-            ? clip.pageProvider.id
-            : clip.pageProvider,
-      })),
-    );
+    this.native.setClips(clips.map(toNativeClip));
+  }
+
+  /**
+   * Replaces the clip whose `id` matches `clip.id`, or adds it when no clip has
+   * that id. Every other clip stays as published. The clip is validated like a
+   * `setClips` entry; a refused clip leaves the published set unchanged.
+   *
+   * @example
+   * engine.upsertClip({ id: 3, channels: [samples], startPpq: 4, gain: 0.5 });
+   */
+  upsertClip(clip: EngineClip): void {
+    this.native.upsertClip(toNativeClip(clip));
+  }
+
+  /**
+   * Removes the clip `clipId`, leaving every other clip as published.
+   * Throws when no clip has that id.
+   */
+  removeClip(clipId: number): void {
+    this.native.removeClip(clipId);
   }
 
   clipCount(): number {

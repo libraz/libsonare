@@ -1,8 +1,12 @@
 /// @file sonare_c_engine_bounce_test.cpp
 /// @brief Engine C ABI offline render, bounce and freeze validation.
 
+#include <algorithm>
+#include <array>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+#include <cmath>
 #include <cstddef>
 #include <vector>
 
@@ -137,6 +141,102 @@ TEST_CASE("sonare_engine_bounce_offline rejects an out-of-range dither type", "[
   }
 
   sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_bounce_offline refuses dither bits before it renders",
+          "[c_api][engine][dither]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 8, 8) == SONARE_OK);
+
+  SonareEngineBounceOptions options{};
+  REQUIRE(sonare_engine_bounce_options_default(&options) == SONARE_OK);
+  options.total_frames = 256;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.dither = 2;
+  options.dither_seed = 1234;
+
+  for (int bad : {1, 33}) {
+    options.dither_bits = bad;
+    SonareEngineBounceResult result{};
+    REQUIRE(sonare_engine_bounce_offline(engine, &options, &result) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    SonareTransportState state{};
+    REQUIRE(sonare_engine_get_transport_state(engine, &state) == SONARE_OK);
+    REQUIRE(state.sample_position == 0);
+    REQUIRE(state.playing == 0);
+  }
+
+  // The retry with a valid width renders exactly what an untouched engine renders.
+  options.dither_bits = 16;
+  SonareEngineBounceResult retried{};
+  REQUIRE(sonare_engine_bounce_offline(engine, &options, &retried) == SONARE_OK);
+  const std::vector<float> after_refusals(retried.interleaved,
+                                          retried.interleaved + retried.sample_count);
+  sonare_free_bounce_result(&retried);
+  sonare_engine_destroy(engine);
+  REQUIRE(after_refusals == run_silent_dither_bounce(2, 2));
+}
+
+TEST_CASE("an offline render's last meter record holds the true peak of its final samples",
+          "[c_api][engine][meter]") {
+  constexpr int kFrames = 1024;
+  // A quarter-rate tone sampled 45 degrees off its crests: every sample reads
+  // 0.9/sqrt(2) while the waveform between them reaches 0.9, at the very end.
+  std::vector<float> clip(kFrames, 0.0f);
+  const float sample = 0.9f * 0.70710678f;
+  for (int i = 0; i < 8; ++i) {
+    clip[static_cast<size_t>(kFrames - 8 + i)] = (i / 2) % 2 == 0 ? sample : -sample;
+  }
+  const float* clip_channels[] = {clip.data()};
+
+  const auto render = [&](bool chunked) {
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare_with_channels(engine, 48000.0, 128, 16, 64, 1) == SONARE_OK);
+    SonareEngineClip source{};
+    source.id = 1;
+    source.channels = clip_channels;
+    source.num_channels = 1;
+    source.num_samples = kFrames;
+    source.gain = 1.0f;
+    REQUIRE(sonare_engine_set_clips(engine, &source, 1) == SONARE_OK);
+    std::vector<float> out(kFrames, 0.0f);
+    float* io[] = {out.data()};
+    REQUIRE(sonare_engine_render_offline_ex(engine, io, 1, kFrames, 128, chunked ? 0 : 1) ==
+            SONARE_OK);
+    const auto reported = [&] {
+      float max_true_peak = -1000.0f;
+      std::array<SonareMeterTelemetryRecordV2, 64> records{};
+      size_t count = 0;
+      do {
+        REQUIRE(sonare_engine_drain_meter_telemetry_v2(engine, records.data(), records.size(),
+                                                       &count) == SONARE_OK);
+        for (size_t i = 0; i < count; ++i) {
+          if (records[i].target_id == 0) {
+            max_true_peak = std::max(max_true_peak, records[i].max_true_peak_db);
+          }
+        }
+      } while (count > 0);
+      return max_true_peak;
+    };
+    const float before_finish = reported();
+    if (chunked) REQUIRE(sonare_engine_finish_offline_render(engine) == SONARE_OK);
+    const float after = std::max(before_finish, reported());
+    float measured = 0.0f;
+    REQUIRE(sonare_metering_true_peak_db(out.data(), out.size(), 48000, 4, &measured) == SONARE_OK);
+    sonare_engine_destroy(engine);
+    return std::array<float, 3>{before_finish, after, measured};
+  };
+
+  const auto one_shot = render(false);
+  CHECK(one_shot[1] == Catch::Approx(one_shot[2]).margin(0.05));
+  CHECK(one_shot[2] > 20.0f * std::log10(sample) + 1.0f);
+  // A chunk that does not end the render has not yet read its last samples whole.
+  const auto chunk = render(true);
+  CHECK(chunk[0] < chunk[2] - 0.5f);
+  CHECK(chunk[1] == Catch::Approx(chunk[2]).margin(0.05));
 }
 
 TEST_CASE("engine-owned offline results reject shapes above the allocation budget",

@@ -58,8 +58,8 @@ class GraphRuntime {
   /// Upper bound of the bound graph's tail (graph::Graph::tail_samples_upper_bound).
   /// Control-thread query over the last published binding.
   int tail_samples() const noexcept;
-  /// Resets the processing state of the graph the audio side holds
-  /// (graph::Graph::reset). Not concurrent with process().
+  /// Adopts any published graph, then resets the processing state of the graph
+  /// the audio side holds (graph::Graph::reset). Not concurrent with process().
   void reset_processing() noexcept;
 
  private:

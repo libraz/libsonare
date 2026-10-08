@@ -382,6 +382,18 @@ TEST_CASE("compile rejects project rates outside the supported audio domain",
   }
 }
 
+TEST_CASE("compile rejects a fractional project sample rate", "[arrangement][timeline-apply]") {
+  // Every stage after compile -- PCM resampling, the bounce mixer, the schedule --
+  // reads one whole-hertz rate; a project loaded with a fraction stops here.
+  arr::Project project;
+  project.set_sample_rate(44100.9);
+  const arr::CompileResult result = arr::compile(project, {}, {});
+  REQUIRE_FALSE(result.timeline.has_value());
+  REQUIRE(std::any_of(result.diagnostics.begin(), result.diagnostics.end(), [](const auto& diag) {
+    return diag.code == arr::Diagnostic::Code::kInvalidSampleRate;
+  }));
+}
+
 TEST_CASE("compile reports a bad tempo alongside an out-of-range project rate",
           "[arrangement][timeline-apply][rate-bounds]") {
   arr::Project project;

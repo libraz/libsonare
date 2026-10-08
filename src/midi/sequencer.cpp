@@ -1,6 +1,8 @@
 #include "midi/sequencer.h"
 
 #include <algorithm>
+#include <cassert>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <utility>
@@ -465,14 +467,42 @@ void MidiSequencer::dispatch_transformed(uint32_t destination_id, const MidiEven
   dispatch(destination_id, event);
 }
 
-void MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
+bool MidiSequencer::enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                                     uint32_t clip_id) noexcept {
   if (runtime_storage_ == nullptr || pending_fx_count_ >= kMaxPendingFxEvents) {
     midi_fx_pending_overflow_count_.fetch_add(1, std::memory_order_relaxed);
-    return;
+    return false;
   }
   runtime_storage_->pending_fx[pending_fx_count_++] =
       PendingFxEvent{destination_id, event, clip_id, from_clip};
+  return true;
+}
+
+bool is_release_message(const Ump& ump) noexcept {
+  if (ump.is_note_off()) return true;
+  if (ump.message_type() != UmpMessageType::kMidi1ChannelVoice) return false;
+  const uint8_t status = ump.status_nibble();
+  if (status == static_cast<uint8_t>(UmpStatus::kPitchBend)) {
+    return ump.data2_7bit() == 0x40 && ump.note_number() == 0;
+  }
+  if (status != static_cast<uint8_t>(UmpStatus::kControlChange)) return false;
+  const uint8_t controller = ump.note_number();
+  return ((controller == 64 || controller == 66) && ump.data2_7bit() < 64) || controller == 120 ||
+         controller == 121 || controller == 123;
+}
+
+void ReleaseSet::add(uint8_t route, uint32_t destination_id, const MidiEvent& event) noexcept {
+  for (size_t i = 0; i < size_; ++i) {
+    const Entry& entry = entries_[i];
+    if (entry.route == route && entry.destination_id == destination_id &&
+        std::equal(std::begin(event.ump.words), std::end(event.ump.words),
+                   std::begin(entry.event.ump.words))) {
+      return;
+    }
+  }
+  // The producers' own bounds keep the distinct keys within the capacity.
+  assert(size_ < kCapacity);
+  if (size_ < kCapacity) entries_[size_++] = Entry{route, destination_id, event};
 }
 
 void MidiSequencer::erase_pending(size_t index) noexcept {
@@ -602,7 +632,25 @@ void MidiSequencer::process_event(uint32_t destination_id, const MidiEvent& even
     // Generated future events rejoin the chronological merge through pending_fx, so an
     // arpeggiator step cannot leapfrog an earlier event from another clip.
     if (transformed.render_frame > event.render_frame) {
-      enqueue_pending(destination_id, transformed, from_clip, clip_id);
+      if (enqueue_pending(destination_id, transformed, from_clip, clip_id)) continue;
+      // With the pending list full, a note-off releases its note now rather than never,
+      // and a still-pending note-on it would have ended is withdrawn so it cannot hang.
+      if (!transformed.ump.is_note_off()) continue;
+      for (size_t p = 0; runtime_storage_ != nullptr && p < pending_fx_count_;) {
+        const PendingFxEvent& pending = runtime_storage_->pending_fx[p];
+        if (pending.destination_id == destination_id && pending.event.ump.is_note_on() &&
+            pending.event.ump.group == transformed.ump.group &&
+            pending.event.ump.channel() == transformed.ump.channel() &&
+            pending.event.ump.note_number() == transformed.ump.note_number()) {
+          clear_pending_note_tracking_for_event(pending);
+          erase_pending(p);
+        } else {
+          ++p;
+        }
+      }
+      MidiEvent release = transformed;
+      release.render_frame = event.render_frame;
+      dispatch_transformed(destination_id, release, from_clip, clip_id);
       continue;
     }
     dispatch_transformed(destination_id, transformed, from_clip, clip_id);

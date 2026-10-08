@@ -338,7 +338,8 @@ class MidiSequencer {
                        Visitor&& visitor) const noexcept;
   void dispatch_transformed(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                             uint32_t clip_id) noexcept;
-  void enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
+  // False when the pending list is full and the event was not kept.
+  bool enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                        uint32_t clip_id) noexcept;
   // Remove one pending FX event without changing the order of the remaining
   // fixed-capacity queue. The audio path uses this instead of swap-remove so
@@ -392,6 +393,48 @@ class MidiSequencer {
   std::unique_ptr<RuntimeStorage> runtime_storage_;
   size_t pending_fx_count_ = 0;
   std::atomic<uint32_t> midi_fx_pending_overflow_count_{0};
+};
+
+/// Whether @p ump ends sound or undoes held state: a note-off, or one of the
+/// channel-reset messages a stop or panic sends (damper up, Reset All
+/// Controllers, All Sound Off, All Notes Off, pitch bend at centre).
+bool is_release_message(const Ump& ump) noexcept;
+
+/// Release messages a destination refused (a full output queue), held until it
+/// accepts them, so congestion delays a release instead of losing it. One entry
+/// per (route, destination, message): a repeated refusal keeps one entry, and
+/// the producers bound the distinct keys -- one note-off per sounding note and
+/// four reset messages per retained channel -- which the capacity covers.
+class ReleaseSet {
+ public:
+  static constexpr size_t kCapacity =
+      MidiSequencer::kMaxActiveNotes + 4 * MidiSequencer::kMaxRetainedChannelStates;
+
+  /// Records @p event for @p destination_id on @p route; a duplicate is ignored.
+  void add(uint8_t route, uint32_t destination_id, const MidiEvent& event) noexcept;
+  /// Offers every held entry, oldest first, restamped at @p render_frame, to
+  /// @p deliver(route, destination_id, event), and keeps the ones it refuses.
+  template <typename Deliver>
+  void retry(int64_t render_frame, Deliver&& deliver) noexcept {
+    size_t kept = 0;
+    for (size_t i = 0; i < size_; ++i) {
+      Entry entry = entries_[i];
+      entry.event.render_frame = render_frame;
+      if (!deliver(entry.route, entry.destination_id, entry.event)) entries_[kept++] = entry;
+    }
+    size_ = kept;
+  }
+  size_t size() const noexcept { return size_; }
+  void clear() noexcept { size_ = 0; }
+
+ private:
+  struct Entry {
+    uint8_t route = 0;
+    uint32_t destination_id = 0;
+    MidiEvent event{};
+  };
+  std::array<Entry, kCapacity> entries_{};
+  size_t size_ = 0;
 };
 
 }  // namespace sonare::midi

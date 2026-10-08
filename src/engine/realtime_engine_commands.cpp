@@ -871,6 +871,7 @@ void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept 
   }
   // A look-ahead probe reports a page before the audio thread reaches it, so it
   // is a fetch request, not a dropout. Only a failed read produced silence.
+  if (request.read_miss) clip_page_read_misses_.fetch_add(1, std::memory_order_relaxed);
   if (request.read_miss && !clip_page_underrun_reported_this_block_) {
     clip_page_underrun_reported_this_block_ = true;
     enqueue_error(TelemetryErrorCode::kClipPageUnderrun, transport_.render_frame(),

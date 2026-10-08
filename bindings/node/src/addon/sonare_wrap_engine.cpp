@@ -11,6 +11,7 @@
 #include <type_traits>
 #include <vector>
 
+#include "core/audio.h"
 #include "engine/common.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_sample_bank.h"
@@ -120,8 +121,8 @@ bool ReadEngineSampleRate(Napi::Env env, const Napi::Value& value, double* out) 
     return false;
   }
   const double sample_rate = value.As<Napi::Number>().DoubleValue();
-  if (!std::isfinite(sample_rate) || sample_rate < 8000.0 || sample_rate > 384000.0) {
-    Napi::RangeError::New(env, "sampleRate must be finite and within 8000..384000 Hz")
+  if (!sonare::is_supported_sample_rate(sample_rate)) {
+    Napi::RangeError::New(env, "sampleRate must be a whole number of hertz within 8000..384000")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -207,6 +208,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::Metronome>("metronome"),
           InstanceMethod<&RealtimeEngineWrap::CountInEndSample>("countInEndSample"),
           InstanceMethod<&RealtimeEngineWrap::SetClips>("setClips"),
+          InstanceMethod<&RealtimeEngineWrap::UpsertClip>("upsertClip"),
+          InstanceMethod<&RealtimeEngineWrap::RemoveClip>("removeClip"),
           InstanceMethod<&RealtimeEngineWrap::ClipCount>("clipCount"),
           InstanceMethod<&RealtimeEngineWrap::SetTrackLanes>("setTrackLanes"),
           InstanceMethod<&RealtimeEngineWrap::SetLaneSidechain>("setLaneSidechain"),

@@ -96,6 +96,8 @@ void sonare_engine_destroy(SonareRealtimeEngine* engine);
 ///          value returns SONARE_ERROR_INVALID_PARAMETER and leaves the engine
 ///          untouched. Both are rounded up to a power of two internally, and 0
 ///          selects the internal minimum rather than disabling the queue.
+///          @p sample_rate must be a whole number of hertz in [8000, 384000];
+///          a fractional rate returns SONARE_ERROR_INVALID_PARAMETER.
 /// @return SONARE_ERROR_INVALID_PARAMETER also when a bound instrument cannot
 ///         prepare a SysEx in the scheduled MIDI clips; the engine is then
 ///         prepared, but its MIDI clip schedule has been cleared.
@@ -220,8 +222,10 @@ SonareError sonare_engine_add_parameter(SonareRealtimeEngine* engine,
                                         const SonareParameterInfo* info);
 /// @brief Removes all registered parameters and releases their backing strings.
 /// @details Control-thread only. Use before re-registering a parameter id to
-///   change its metadata (add() rejects duplicate ids). Not realtime-safe; do
-///   not call concurrently with @ref sonare_engine_process.
+///   change its metadata (add() rejects duplicate ids). Automation lanes are
+///   left in place, as they are by @ref sonare_engine_add_parameter: neither call
+///   removes a lane. Not realtime-safe; do not call concurrently with
+///   @ref sonare_engine_process.
 SonareError sonare_engine_clear_parameters(SonareRealtimeEngine* engine);
 SonareError sonare_engine_parameter_count(SonareRealtimeEngine* engine, size_t* out_count);
 SonareError sonare_engine_parameter_info_by_index(SonareRealtimeEngine* engine, size_t index,
@@ -285,6 +289,15 @@ SonareError sonare_engine_count_in_end_sample(SonareRealtimeEngine* engine, int6
                                               int bars, int64_t* out_sample);
 SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEngineClip* clips,
                                     size_t clip_count);
+/// @brief Replaces the clip whose id is @p clip->id, or adds it when no clip has
+///   that id, leaving every other clip as it was published.
+/// @details Validates @p clip exactly as @ref sonare_engine_set_clips validates
+///   each entry and copies its audio the same way; a refused clip leaves the
+///   published set unchanged. Control-thread only.
+SonareError sonare_engine_upsert_clip(SonareRealtimeEngine* engine, const SonareEngineClip* clip);
+/// @brief Removes the clip @p clip_id, leaving every other clip as it was published.
+/// @return @ref SONARE_ERROR_INVALID_PARAMETER when no clip has that id.
+SonareError sonare_engine_remove_clip(SonareRealtimeEngine* engine, uint32_t clip_id);
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Replaces the configured track-lane order and membership.
 /// @details A successful call may reorder existing track ids, remove track ids,
@@ -811,8 +824,10 @@ SonareError sonare_engine_render_offline(SonareRealtimeEngine* engine, float* co
 SonareError sonare_engine_render_offline_ex(SonareRealtimeEngine* engine, float* const* out,
                                             int num_channels, int64_t total_frames, int block_size,
                                             int finalize);
-/// @brief Ends an offline render: releases every note the sequencer still holds
-///        and flushes the PDC / alignment delay lines.
+/// @brief Ends an offline render: releases every note the sequencer still holds,
+///        flushes the PDC / alignment delay lines, and ends the signal for the
+///        track, bus and master meters, publishing one master meter record whose
+///        true peak includes the render's last samples.
 /// @details Required after a chunked render (sonare_engine_render_offline_ex
 ///   with @c finalize 0); the finalizing forms run it themselves, so a one-shot
 ///   bounce never calls it. Idempotent.

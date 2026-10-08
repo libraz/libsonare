@@ -17,9 +17,14 @@ const float kMaxFiniteGainDb = [] {
   return db;
 }();
 
+// The floor is the dB image of silence (linear_to_db(0)), so a gain at or below it is exactly zero.
 float summed_db_to_linear(float db) noexcept {
+  if (db <= constants::kFloorDb) return 0.0f;
   return db_to_linear(std::min(db, kMaxFiniteGainDb));
 }
+
+// A glide toward silence lands on zero once it is below the floor's own gain.
+const float kFloorGain = db_to_linear(constants::kFloorDb);
 
 }  // namespace
 
@@ -48,8 +53,9 @@ void GainProcessor::process(float* const* channels, int num_channels, int num_sa
   } else {
     smoother_.reset(target);
   }
+  const bool to_silence = target == 0.0f;
   for (int i = 0; i < num_samples; ++i) {
-    const float gain = smoother_.process();
+    const float gain = to_silence ? smoother_.process_snapping(kFloorGain) : smoother_.process();
     for (int ch = 0; ch < num_channels; ++ch) {
       if (channels[ch] != nullptr) {
         channels[ch][i] *= gain;

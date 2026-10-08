@@ -23,11 +23,10 @@ import { assertSampleRate } from './validation.js';
  * One master-output meter reading. All dB fields are finite and floored at
  * -120; `truePeakDb*` is an inter-sample peak from the ITU-R BS.1770-4
  * polyphase reconstruction at 4x, not a sample peak. That reconstruction is a
- * streaming measurement: its centered stencil needs a few future samples a
- * realtime path does not have, so each block's last samples read marginally low
- * (about 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
- * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
- * dBTP number.
+ * streaming measurement that runs one reconstruction-filter group delay (a few
+ * samples) behind the block, so every value has its whole stencil and the
+ * reading does not depend on the block size. Use `meteringTruePeakDb` over the
+ * whole signal for an exact dBTP number.
  */
 export interface MixerMeterSnapshot {
   peakDbL: number;
@@ -784,6 +783,17 @@ export class Mixer {
       );
     }
     return this.mixer.drainTailStereo(numSamples);
+  }
+
+  /**
+   * Marks the end of the signal for every strip and bus meter. The true-peak
+   * reading runs one reconstruction-filter group delay behind the block; this
+   * reads that pending stretch against silence and folds it into the
+   * snapshots, so `truePeakDb` covers the whole signal. Call it after the last
+   * block of an offline render; a later process call starts a new signal.
+   */
+  flushMeters(): void {
+    this.mixer.flushMeters();
   }
 
   /** Release the underlying WASM object. Idempotent, as the Node facade is. */

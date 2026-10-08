@@ -249,13 +249,11 @@ void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const va
 #endif
 }
 
-// Mirrors the C ABI sonare_engine_clear_parameters.
+// Mirrors the C ABI sonare_engine_clear_parameters: automation lanes stay in place.
 void RealtimeEngineWasm::clearParameters() {
   parameters_.clear();
   parameter_strings_.clear();
-  automation_lanes_.clear();
   publishParameterMetadata();
-  engine_.automation().set_lanes(automation_lanes_);
 }
 
 val RealtimeEngineWasm::parameterToVal(const sonare::automation::ParameterInfo& info) {

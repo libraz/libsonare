@@ -217,15 +217,10 @@ def _project_bounce(
             sample_rate = requested_sample_rate
             bounce_sample_rate = requested_sample_rate
         else:
-            # floor(x + 0.5) rather than round(): Python rounds a .5 tie to even
-            # and the native CLI's std::lround rounds it away from zero, so a
-            # project at exactly 44100.5 Hz tagged its WAV 44100 here and 44101
-            # there. Sample rates are positive, so the two agree everywhere else.
-            sample_rate = int(math.floor(project_sample_rate + 0.5))
-            # 0 is the C ABI's "render at the project's own rate" sentinel, and
-            # it is the only way the full-precision rate reaches the render.
-            # Pinning the rounded value here made a project whose rate is not an
-            # integer fail the ABI's own equality check against that rate.
+            # A project rate is a whole number of hertz (loading refuses anything
+            # else), so the WAV header carries it exactly.
+            sample_rate = int(project_sample_rate)
+            # 0 is the C ABI's "render at the project's own rate" sentinel.
             bounce_sample_rate = 0
         kwargs = {
             "total_frames": args.frames,

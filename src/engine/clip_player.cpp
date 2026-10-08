@@ -166,6 +166,28 @@ void ClipPlayer::set_clips(std::vector<ClipSchedule> clips,
   }
 }
 
+void ClipPlayer::upsert_clip(ClipSchedule clip, const transport::TempoMap* tempo_map_override) {
+  std::vector<ClipSchedule> clips;
+  if (const auto& current = clips_.control_current()) clips = *current;
+  clips.erase(std::remove_if(clips.begin(), clips.end(),
+                             [&clip](const ClipSchedule& c) { return c.id == clip.id; }),
+              clips.end());
+  clips.push_back(std::move(clip));
+  set_clips(std::move(clips), tempo_map_override);
+}
+
+bool ClipPlayer::remove_clip(uint32_t clip_id, const transport::TempoMap* tempo_map_override) {
+  const auto& current = clips_.control_current();
+  if (!current) return false;
+  std::vector<ClipSchedule> clips = *current;
+  const auto removed = std::remove_if(clips.begin(), clips.end(),
+                                      [clip_id](const ClipSchedule& c) { return c.id == clip_id; });
+  if (removed == clips.end()) return false;
+  clips.erase(removed, clips.end());
+  set_clips(std::move(clips), tempo_map_override);
+  return true;
+}
+
 void ClipPlayer::process_at(float* const* channels, int num_channels, int num_samples,
                             int64_t timeline_sample) noexcept {
   process_filtered_at(0, nullptr, 0, TrackFilterMode::kAll, channels, num_channels, num_samples,

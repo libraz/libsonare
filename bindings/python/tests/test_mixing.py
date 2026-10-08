@@ -870,3 +870,17 @@ def test_mix_stereo_true_peak_is_valid_on_a_one_shot_mix() -> None:
     assert mix_stereo([(silence, silence)], sample_rate=sr).meters[0].true_peak_db_l == (
         pytest.approx(-120.0)
     )
+
+
+def test_one_shot_true_peak_covers_a_peak_in_the_last_samples() -> None:
+    import libsonare
+
+    left = [0.0] * 4092 + [0.9, -0.9, 0.9, -0.9]
+    result = libsonare.mix_stereo([(left, list(left))], sample_rate=48000)
+    expected = libsonare.metering_true_peak_db(left, 48000)
+    assert result.meters[0].true_peak_db_l == pytest.approx(expected, abs=1e-4)
+    assert result.meters[0].true_peak_db_l > -1.0
+
+
+def test_mixer_flush_meters_is_callable(mixer) -> None:
+    mixer.flush_meters()

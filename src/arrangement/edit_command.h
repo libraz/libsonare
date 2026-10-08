@@ -727,7 +727,13 @@ class ReplaceSource final : public EditCommand {
 /// not admit non-compileable project state.
 class SetSampleRate final : public EditCommand {
  public:
+  /// Warp anchors are held in project-rate samples, so they are rescaled to the new rate.
   explicit SetSampleRate(double sample_rate) : sample_rate_(sample_rate) {}
+  /// Undo form: puts @p restored_warp_maps back verbatim rather than rescaling.
+  SetSampleRate(double sample_rate, std::vector<WarpMapRef> restored_warp_maps)
+      : sample_rate_(sample_rate),
+        restored_warp_maps_(std::move(restored_warp_maps)),
+        restores_warp_maps_(true) {}
 
   bool apply(Project& project, MidiContentStore& store) override;
   EditCommandPtr invert(const Project& before, const MidiContentStore& store_before) const override;
@@ -737,6 +743,8 @@ class SetSampleRate final : public EditCommand {
 
  private:
   double sample_rate_;
+  std::vector<WarpMapRef> restored_warp_maps_;
+  bool restores_warp_maps_ = false;
 };
 
 /// Sets the project's clip-overlap policy.

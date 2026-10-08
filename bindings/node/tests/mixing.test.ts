@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   Mixer,
   masteringInsertParamNames,
+  meteringTruePeakDb,
   mixingScenePresetJson,
   mixingScenePresetNames,
   mixStereo,
@@ -135,5 +136,23 @@ describe('insert param validation', () => {
     ]);
     const annotated = scene({ $schema: 'x', 'x-note': 1 }, { 'x-color': 'red' });
     expect(Mixer.fromSceneJson(annotated, 48000, 512).sceneWarnings()).toEqual([]);
+  });
+
+  it('reports the one-shot true peak of a signal whose peak is in its last samples', () => {
+    const left = new Float32Array(4096);
+    left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
+    const right = new Float32Array(left);
+    const result = mixStereo([left], [right], 48000, {});
+    expect(result.meters[0].truePeakDbL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbL).toBeGreaterThan(-1);
+  });
+
+  it("flushes a streaming mixer's meters on request", () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 256);
+    try {
+      expect(() => mixer.flushMeters()).not.toThrow();
+    } finally {
+      mixer.destroy();
+    }
   });
 });

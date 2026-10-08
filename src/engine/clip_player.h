@@ -249,6 +249,11 @@ class ClipPlayer final : public rt::ProcessorBase {
   void end_page_miss_block() noexcept { external_page_miss_block_ = false; }
   void set_clips(std::vector<ClipSchedule> clips,
                  const transport::TempoMap* tempo_map_override = nullptr);
+  /// CONTROL thread: replaces every schedule carrying @p clip's id with @p clip,
+  /// or adds it when none does; the rest of the published set is kept as is.
+  void upsert_clip(ClipSchedule clip, const transport::TempoMap* tempo_map_override = nullptr);
+  /// CONTROL thread: removes every schedule carrying @p clip_id. False when none did.
+  bool remove_clip(uint32_t clip_id, const transport::TempoMap* tempo_map_override = nullptr);
 
   /// Adopt the latest published clip set on the audio thread. Call once at
   /// block start before process_at / collect_boundaries. RT-safe, no alloc.

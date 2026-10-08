@@ -4,7 +4,6 @@
 
 #ifdef __EMSCRIPTEN__
 
-#include <cmath>
 #include <string>
 
 #include "realtime_engine_wasm.h"
@@ -15,10 +14,9 @@
 #endif
 
 void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
-  if (!std::isfinite(sample_rate) || sample_rate < sonare::kMinAudioSampleRate ||
-      sample_rate > sonare::kMaxAudioSampleRate || max_block_size <= 0) {
+  if (!sonare::is_supported_sample_rate(sample_rate) || max_block_size <= 0) {
     throw WasmRangeError(
-        "prepare: sample_rate must be finite and within 8000..384000; "
+        "prepare: sample_rate must be a whole number of hertz within 8000..384000; "
         "max_block_size must be positive");
   }
 }

@@ -210,6 +210,37 @@ TEST_CASE("sonare_engine rejects registered non realtime-safe automation targets
   sonare_engine_destroy(engine);
 }
 
+TEST_CASE("sonare_engine parameter registration leaves automation lanes in place",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 128, 16, 16) == SONARE_OK);
+
+  const auto add = [&](uint32_t id) {
+    SonareParameterInfo parameter{};
+    parameter.id = id;
+    parameter.min_value = 0.0f;
+    parameter.max_value = 1.0f;
+    parameter.rt_safe = 1;
+    REQUIRE(sonare_engine_add_parameter(engine, &parameter) == SONARE_OK);
+  };
+  const auto lanes = [&] {
+    size_t count = 0;
+    REQUIRE(sonare_engine_automation_lane_count(engine, &count) == SONARE_OK);
+    return count;
+  };
+  add(100);
+  const SonareAutomationPoint points[] = {{0.0, 0.25f, 0}, {4.0, 0.75f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, 100, points, 2) == SONARE_OK);
+  REQUIRE(lanes() == 1);
+  add(200);
+  REQUIRE(lanes() == 1);
+  REQUIRE(sonare_engine_clear_parameters(engine) == SONARE_OK);
+  REQUIRE(lanes() == 1);
+
+  sonare_engine_destroy(engine);
+}
+
 TEST_CASE("sonare_engine tempo and time-signature segments validate their input",
           "[c_api][engine]") {
   SonareRealtimeEngine* engine = nullptr;

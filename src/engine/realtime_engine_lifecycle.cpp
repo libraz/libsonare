@@ -419,10 +419,14 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
                           "render_offline: block size exceeds the prepared block size");
   }
   const int frames_per_block = std::max(1, block_size);
+  // Reuse the member scratch: size it once here, before any state changes, so a
+  // failed allocation leaves the transport and metronome as they were.
+  render_block_channels_.assign(static_cast<size_t>(num_channels), nullptr);
   // Clips and sequenced MIDI only render (and the playhead only advances)
   // while the transport is rolling, so roll it for the duration of the render
   // and restore the prior state afterwards.
   const bool was_playing = transport_.playing();
+  const uint64_t read_misses_before = clip_page_read_misses_.load(std::memory_order_relaxed);
   const MetronomeConfig metronome_config = metronome_.config();
   if (metronome_config.enabled) {
     MetronomeConfig disabled = metronome_config;
@@ -432,9 +436,6 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   if (!was_playing) {
     transport_.play();
   }
-  // Reuse the member scratch: size it once here (offline path), then the
-  // per-block loop only rewrites pointers and never reallocates.
-  render_block_channels_.assign(static_cast<size_t>(num_channels), nullptr);
   for (int64_t frame = 0; frame < total_frames; frame += frames_per_block) {
     const int frames = static_cast<int>(std::min<int64_t>(frames_per_block, total_frames - frame));
     for (int ch = 0; ch < num_channels; ++ch) {
@@ -455,6 +456,11 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
   // lines.
   if (finalize) {
     finish_offline_render();
+  }
+  if (clip_page_read_misses_.load(std::memory_order_relaxed) != read_misses_before) {
+    throw SonareException(ErrorCode::InvalidState,
+                          "render_offline: a streamed clip page was not resident, so part of "
+                          "the render is silence");
   }
 }
 
@@ -510,6 +516,11 @@ void RealtimeEngine::finish_offline_render() noexcept {
   // the reset is idempotent.
   track_mixer_runtime_.flush_pdc_delays();
   track_mixer_runtime_.flush_clip_pdc_delays();
+  // The true-peak readings run a reconstruction delay behind the audio; end the
+  // signal so the last samples' inter-sample peaks reach the reported meters.
+  track_mixer_runtime_.flush_meters();
+  if (mixing::ChannelStrip* master = mixing_runtime_.strip()) master->flush_meters();
+  meter_tap_.flush(transport_.render_frame());
 #endif
 }
 
@@ -640,6 +651,23 @@ void RealtimeEngine::set_clips(std::vector<ClipSchedule> clips) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   maybe_unlock_applied_timeline_rate();
 #endif
+}
+
+void RealtimeEngine::upsert_clip(ClipSchedule clip) {
+  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
+  clip_player_.upsert_clip(std::move(clip), map ? map : &tempo_map_);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  maybe_unlock_applied_timeline_rate();
+#endif
+}
+
+bool RealtimeEngine::remove_clip(uint32_t clip_id) {
+  const transport::TempoMap* map = tempo_map_snapshot_.control_current().get();
+  if (!clip_player_.remove_clip(clip_id, map ? map : &tempo_map_)) return false;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  maybe_unlock_applied_timeline_rate();
+#endif
+  return true;
 }
 
 void RealtimeEngine::set_capture_segment(CaptureSegment segment) noexcept {

@@ -5,6 +5,8 @@
 #include <unordered_set>
 #include <utility>
 
+#include "rt/tail_budget.h"
+
 namespace sonare::engine {
 
 bool GraphRuntime::bind(graph::Graph* graph, const char* input_node_id, const char* output_node_id,
@@ -187,10 +189,13 @@ int GraphRuntime::latency_samples_q8() const noexcept {
 
 int GraphRuntime::tail_samples() const noexcept {
   const Binding* binding = binding_.control_current().get();
-  return binding && binding->graph ? binding->graph->tail_samples_upper_bound() : 0;
+  if (binding == nullptr || binding->graph == nullptr) return 0;
+  return rt::TailBudget::reported(binding->graph->tail_samples_upper_bound()).samples();
 }
 
 void GraphRuntime::reset_processing() noexcept {
+  // Adopt a graph published since the last block first, so it is the one reset.
+  binding_.acquire();
   const Binding* binding = binding_.current();
   if (binding && binding->graph) binding->graph->reset();
 }

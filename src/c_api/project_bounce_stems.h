@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "c_api/project_bounce_internal.h"
+#include "c_api/project_bounce_mixer.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_MIXING)
 #include "engine/track_mixer.h"
@@ -203,7 +204,11 @@ bool render_midi_source_stems(const arr::CompiledTimeline& timeline,
                               const std::vector<HostedInstrument>& instruments, double sample_rate,
                               int block_size, int64_t render_frames, MidiSourceStemSink* sink);
 
+// True when the bounce renders MIDI destinations split by source track: some
+// destination's tracks feed more than one mixing target (a channel strip, or the
+// dry master path), or several tracks share one and every host renders per source.
 bool has_shared_hosted_midi_destination(const arr::CompiledTimeline& timeline,
+                                        const MixerRouting& routing,
                                         const std::vector<HostedInstrument>& instruments,
                                         bool* all_hosts_source_aware);
 

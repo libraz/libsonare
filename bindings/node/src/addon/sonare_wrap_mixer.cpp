@@ -18,6 +18,7 @@ Napi::Object MixerWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&MixerWrap::Compile>("compile"),
           InstanceMethod<&MixerWrap::ProcessStereo>("processStereo"),
           InstanceMethod<&MixerWrap::DrainTailStereo>("drainTailStereo"),
+          InstanceMethod<&MixerWrap::FlushMeters>("flushMeters"),
           InstanceMethod<&MixerWrap::TailSamples>("tailSamples"),
           InstanceMethod<&MixerWrap::LatencySamples>("latencySamples"),
           InstanceMethod<&MixerWrap::StripCount>("stripCount"),
@@ -238,6 +239,22 @@ Napi::Value MixerWrap::LatencySamples(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return Napi::Number::New(env, latency);
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value MixerWrap::FlushMeters(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (mixer_ == nullptr) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
+    return env.Undefined();
+  }
+  SonareError err = sonare_mixer_flush_meters(mixer_);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowSonareError(env, err, "mixer meter flush failed: ");
+  }
+  return env.Undefined();
   SONARE_NODE_CATCH(env)
 }
 

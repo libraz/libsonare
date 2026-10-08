@@ -5,7 +5,13 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson, mixStereo } from '../dist/index.js';
+import {
+  init,
+  Mixer,
+  meteringTruePeakDb,
+  mixingScenePresetJson,
+  mixStereo,
+} from '../dist/index.js';
 import { assertStripIndex } from './_helpers';
 
 const SR = 48000;
@@ -629,5 +635,23 @@ describe('Mixer runtime controls (WASM)', () => {
       ).toThrow();
       expect(() => mixStereo([leftOnly()], [silence()], SR, { panMode: 99 })).toThrow();
     });
+  });
+
+  it('reports the one-shot true peak of a signal whose peak is in its last samples', () => {
+    const left = new Float32Array(4096);
+    left.set([0.9, -0.9, 0.9, -0.9], left.length - 4);
+    const right = new Float32Array(left);
+    const result = mixStereo([left], [right], 48000, {});
+    expect(result.meters[0].truePeakDbL).toBeCloseTo(meteringTruePeakDb(left, 48000), 4);
+    expect(result.meters[0].truePeakDbL).toBeGreaterThan(-1);
+  });
+
+  it("flushes a streaming mixer's meters on request", () => {
+    const mixer = Mixer.fromSceneJson(mixingScenePresetJson('vocalReverbSend'), 48000, 256);
+    try {
+      expect(() => mixer.flushMeters()).not.toThrow();
+    } finally {
+      mixer.delete();
+    }
   });
 });

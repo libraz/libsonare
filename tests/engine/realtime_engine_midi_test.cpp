@@ -1704,6 +1704,80 @@ TEST_CASE("RealtimeEngine routes external destinations to the output queue, bypa
   }
 }
 
+TEST_CASE("RealtimeEngine retries an external note-off a full output queue refused",
+          "[engine][midi]") {
+  constexpr uint32_t kDestination = 5;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  engine.set_midi_destination_external(kDestination, true);
+
+  // Controllers at frame 1 fill the external queue before the note-off at 2 arrives.
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.start_sample = 0;
+  clip.length_samples = 4096;
+  clip.destination_id = kDestination;
+  clip.events.push_back({0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)});
+  for (int i = 0; i < 1100; ++i) {
+    clip.events.push_back({1, sonare::midi::make_midi1_control_change(0, 0, 1, i & 0x7F)});
+  }
+  clip.events.push_back({2, sonare::midi::make_midi1_note_off(0, 0, 60, 0)});
+  engine.set_midi_clips({clip});
+  push_play(engine);
+
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  engine.process(channels, 2, 64);
+
+  std::vector<sonare::host::ExternalMidiRecord> drained(2048);
+  size_t first = engine.drain_external_midi(drained.data(), drained.size());
+  const auto count_note_offs = [&](size_t n) {
+    return std::count_if(
+        drained.begin(), drained.begin() + static_cast<std::ptrdiff_t>(n),
+        [](const sonare::host::ExternalMidiRecord& r) { return r.event.ump.is_note_off(); });
+  };
+  REQUIRE(count_note_offs(first) == 0);
+
+  engine.process(channels, 2, 64);
+  const size_t second = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(count_note_offs(second) == 1);
+  // Delivered once: a later block does not repeat it.
+  engine.process(channels, 2, 64);
+  const size_t third = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(count_note_offs(third) == 0);
+}
+
+TEST_CASE("a block refused for its channel count still dispatches its note-off", "[engine][midi]") {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64, 16, 16, 2);
+  CountingInstrument inst;
+  engine.set_midi_instrument(&inst);
+
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.start_sample = 0;
+  // The clip outlasts the test, so only the in-span note-off can release the note.
+  clip.length_samples = 4096;
+  clip.destination_id = 0;
+  clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 {96, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  engine.set_midi_clips({clip});
+  push_play(engine);
+
+  std::vector<float> a(64, 0.0f), b(64, 0.0f), c(64, 0.0f);
+  float* two[] = {a.data(), b.data()};
+  float* three[] = {a.data(), b.data(), c.data()};
+  engine.process(two, 2, 64);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 1);
+  engine.process(three, 3, 64);
+  engine.process(two, 2, 64);
+
+  REQUIRE(inst.note_off_count_ == 1);
+  REQUIRE(engine.midi_sequencer().active_note_count() == 0);
+  engine.set_midi_instrument(nullptr);
+}
+
 TEST_CASE("RealtimeEngine releases an internal note through the old route on an external flip",
           "[engine][midi]") {
   constexpr uint32_t kDestination = 5;
