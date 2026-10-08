@@ -64,14 +64,19 @@ float midi_to_hz(float midi) {
 }
 
 std::string hz_to_note(float hz) {
-  if (!(hz > 0.0f) || !std::isfinite(hz)) return "?";
+  if (!(hz > 0.0f) || !std::isfinite(hz)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "hz_to_note: hz must be finite and positive, got " + std::to_string(hz));
+  }
 
-  float midi = hz_to_midi(hz);
-  if (!std::isfinite(midi)) return "?";
+  const float midi = hz_to_midi(hz);
   const double rounded_midi = std::round(static_cast<double>(midi));
-  if (rounded_midi < static_cast<double>(std::numeric_limits<int>::min()) ||
+  if (!std::isfinite(rounded_midi) ||
+      rounded_midi < static_cast<double>(std::numeric_limits<int>::min()) ||
       rounded_midi > static_cast<double>(std::numeric_limits<int>::max())) {
-    return "?";
+    throw SonareException(
+        ErrorCode::InvalidParameter,
+        "hz_to_note: hz has no representable note name, got " + std::to_string(hz));
   }
   const int midi_int = static_cast<int>(rounded_midi);
 
@@ -85,7 +90,11 @@ std::string hz_to_note(float hz) {
 }
 
 float note_to_hz(const std::string& note) {
-  if (note.empty()) return 0.0f;
+  const auto invalid = [&note]() {
+    return SonareException(ErrorCode::InvalidParameter,
+                           "note_to_hz: cannot parse note name \"" + note + "\"");
+  };
+  if (note.empty()) throw invalid();
 
   /// Note offsets from C
   static const int note_offsets[] = {
@@ -99,7 +108,7 @@ float note_to_hz(const std::string& note) {
   };
 
   char base = static_cast<char>(std::toupper(static_cast<unsigned char>(note[0])));
-  if (base < 'A' || base > 'G') return 0.0f;
+  if (base < 'A' || base > 'G') throw invalid();
 
   int offset = note_offsets[(base - 'C' + 7) % 7];
 
@@ -116,23 +125,22 @@ float note_to_hz(const std::string& note) {
 
   int octave = 4;  // default
   if (idx < note.size()) {
+    long long parsed_octave = 0;
     try {
       size_t pos = 0;
-      const long long parsed_octave = std::stoll(note.substr(idx), &pos);
+      parsed_octave = std::stoll(note.substr(idx), &pos);
       // Validate entire remaining string was consumed
-      if (pos != note.size() - idx) {
-        return 0.0f;  // Invalid note format
-      }
-      // Keep the historical int-sized octave contract, but perform the range
-      // check before narrowing so an extreme textual octave cannot overflow.
-      if (parsed_octave < std::numeric_limits<int>::min() ||
-          parsed_octave > std::numeric_limits<int>::max()) {
-        return 0.0f;
-      }
-      octave = static_cast<int>(parsed_octave);
-    } catch (const std::exception&) {
-      return 0.0f;  // Invalid note format
+      if (pos != note.size() - idx) throw invalid();
+    } catch (const std::logic_error&) {
+      throw invalid();  // std::invalid_argument / std::out_of_range from stoll
     }
+    // Keep the historical int-sized octave contract, but perform the range
+    // check before narrowing so an extreme textual octave cannot overflow.
+    if (parsed_octave < std::numeric_limits<int>::min() ||
+        parsed_octave > std::numeric_limits<int>::max()) {
+      throw invalid();
+    }
+    octave = static_cast<int>(parsed_octave);
   }
 
   // Widen before adding the octave offset.  The previous int expression could
@@ -141,11 +149,12 @@ float note_to_hz(const std::string& note) {
       static_cast<std::int64_t>(constants::kSemitonesPerOctave);
   const std::int64_t midi = (static_cast<std::int64_t>(octave) + 1) * semitones_per_octave + offset;
   if (midi < std::numeric_limits<int>::min() || midi > std::numeric_limits<int>::max()) {
-    return 0.0f;
+    throw invalid();
   }
 
   const float hz = midi_to_hz(static_cast<float>(midi));
-  return std::isfinite(hz) ? hz : 0.0f;
+  if (!std::isfinite(hz)) throw invalid();
+  return hz;
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {

@@ -199,7 +199,7 @@
             "contains": "past the representable MIDI range, and non-finite alike"
           }
         ],
-        "reason": "Answers \"?\" for every frequency with no note, non-finite included, so a saturated value produces the same answer as any other unnameable one. The refusal a checked reader would add is a different contract, not a stricter one."
+        "reason": "The core refuses every frequency with no note, non-finite included, with a coded InvalidParameter, so a saturated value is refused there exactly as any other unnameable one. A checked reader ahead of it would only duplicate that refusal under a different message."
       },
       {
         "js": "vqt",

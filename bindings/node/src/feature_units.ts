@@ -49,15 +49,21 @@ export function midiToHz(midi: number): number {
 /**
  * Nearest note name for `hz` (`"A4"`, `"C#5"`).
  *
- * Every frequency with no note answers `"?"` rather than throwing: zero,
- * negative, past the representable MIDI range, and non-finite alike. A default
- * {@link pitchPyin} track fills unvoiced frames with NaN, so mapping one through
- * this yields `"?"` at those frames.
+ * @throws {@link SonareError} with `InvalidParameter` for a frequency with no
+ * note: zero, negative, past the representable MIDI range, and non-finite alike.
+ * A default {@link pitchPyin} track fills unvoiced frames with NaN, so drop
+ * those frames before mapping the track through this.
  */
 export function hzToNote(hz: number): string {
   return addon.hzToNote(hz);
 }
 
+/**
+ * Frequency in Hz of a note name (`"A4"`, `"C#5"`, `"Db3"`; the octave defaults to 4).
+ *
+ * @throws {@link SonareError} with `InvalidParameter` for a name that does not
+ * parse or whose octave is out of range.
+ */
 export function noteToHz(note: string): number {
   return addon.noteToHz(note);
 }

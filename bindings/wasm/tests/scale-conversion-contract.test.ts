@@ -14,7 +14,7 @@
  * checked "it threw" would pass against a version that threw for some other
  * reason entirely.
  *
- * The five scale conversions are the carrying half, and they are here for the
+ * The scale conversions are the carrying half, and they are here for the
  * opposite reason. They are documented as total on every surface, and a NaN is
  * how an unvoiced frame of a pitch track is spelled, so mapping a whole
  * `pitchPyin` track through one is the intended use. Routing them through the
@@ -25,10 +25,12 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   hzToMel,
   hzToMidi,
   hzToNote,
   init,
+  isSonareError,
   melToHz,
   midiToHz,
   timeToFrames,
@@ -121,7 +123,6 @@ describe('the scale conversions stay total', () => {
     expect(melToHz(1e39)).toBe(Number.POSITIVE_INFINITY);
     expect(hzToMidi(1e39)).toBe(Number.POSITIVE_INFINITY);
     expect(midiToHz(1e39)).toBe(Number.POSITIVE_INFINITY);
-    expect(hzToNote(1e39)).toBe('?');
   });
 
   it('propagates the NaN a pitch track spells an unvoiced frame with', () => {
@@ -130,7 +131,6 @@ describe('the scale conversions stay total', () => {
     // use, so NaN has to survive rather than throw.
     expect(hzToMidi(Number.NaN)).toBeNaN();
     expect(hzToMel(Number.NaN)).toBeNaN();
-    expect(hzToNote(Number.NaN)).toBe('?');
   });
 
   it('still converts two legitimate frequencies to two different results', () => {
@@ -139,5 +139,20 @@ describe('the scale conversions stay total', () => {
     expect(hzToNote(440)).toBe('A4');
     expect(midiToHz(69)).toBeCloseTo(440, 3);
     expect(hzToMel(1000)).not.toBe(hzToMel(2000));
+  });
+});
+
+describe('the note-name conversions refuse by code', () => {
+  it('refuses a frequency with no note name by code rather than answering "?"', () => {
+    for (const hz of [0, -440, 1e39, Number.NaN, Number.POSITIVE_INFINITY]) {
+      let thrown: unknown;
+      try {
+        hzToNote(hz);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(isSonareError(thrown), String(hz)).toBe(true);
+      expect((thrown as { code: number }).code, String(hz)).toBe(ErrorCode.InvalidParameter);
+    }
   });
 });

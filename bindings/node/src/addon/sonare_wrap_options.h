@@ -139,18 +139,16 @@ inline uint64_t node_narrow_uint64(Napi::Env env, const Napi::Value& value, cons
   return number;
 }
 
-/// @brief The C ABI's own float conversion, saturation included, for the total
-///        functions whose core answers a non-finite input rather than failing on
-///        it.
+/// @brief The C ABI's own float conversion, saturation included, for the
+///        functions whose core decides what a non-finite input means.
 /// @details The permissive end of this family, and the only member that refuses
 ///   nothing. Reserved for the entry points where the C ABI is the oracle and
-///   passes the value straight through: `hz_to_note` answers a non-finite with
-///   "?", the same answer it gives a non-positive frequency, and the librosa
-///   mirrors propagate a NaN the way the reference does. `pyin`'s default fills
-///   unvoiced frames with NaN, so its own output is a legitimate argument here.
-///   Refusing either would leave the C ABI and WASM permissive and put this
-///   surface alone out of step with the oracle. Expects a value already known to
-///   be a number.
+///   passes the value straight through: `hz_to_note` refuses a non-finite in the
+///   core with a coded error, and the librosa mirrors propagate a NaN the way the
+///   reference does. `pyin`'s default fills unvoiced frames with NaN, so its own
+///   output is a legitimate argument here. Refusing either ahead of the core
+///   would put this surface out of step with the oracle. Expects a value already
+///   known to be a number.
 inline float node_float_as_c_abi(const Napi::Value& value) {
   return value.As<Napi::Number>().FloatValue();
 }

@@ -13,16 +13,23 @@ describe('WASM exception scope', () => {
     await init();
   });
 
-  it('degrades an unparseable note name instead of throwing', () => {
+  it('reports an unparseable note name as a coded error instead of throwing raw', () => {
     // src/core/convert.cpp catches std::invalid_argument from the octave parse
-    // and answers 0. It lives in sonare_core_objects, a sibling static library,
-    // and is exposed straight to embind, so it is the shortest path from a JS
-    // caller to a catch outside the module's own target. It also ships in the
-    // analysis-only bundle, which had no covered unit at all.
+    // and rethrows it as a SonareException. It lives in sonare_core_objects, a
+    // sibling static library, and is exposed straight to embind, so it is the
+    // shortest path from a JS caller to a catch outside the module's own target.
+    // It also ships in the analysis-only bundle, which had no covered unit at all.
     expect(noteToHz('A4')).toBeCloseTo(440.0, 4);
-    expect(noteToHz('Cx')).toBe(0);
-    expect(noteToHz('')).toBe(0);
-    expect(noteToHz('H9999999999999999999999')).toBe(0);
+    for (const name of ['Cx', '', 'H9999999999999999999999']) {
+      let thrown: unknown;
+      try {
+        noteToHz(name);
+      } catch (error) {
+        thrown = error;
+      }
+      expect(isSonareError(thrown), name).toBe(true);
+      expect((thrown as { code: number }).code, name).toBe(ErrorCode.InvalidParameter);
+    }
   });
 
   it('reports malformed MIDI FX JSON as an error code, not a raw exception', () => {

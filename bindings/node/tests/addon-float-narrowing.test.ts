@@ -1351,15 +1351,15 @@ describe('the tables cover the whole required-read population', () => {
 /**
  * The five unit conversions, which keep the C ABI's own conversion.
  *
- * These are total functions: `src/core/convert.cpp:67` answers a non-finite `hz`
- * with `"?"` — the same answer it gives a non-positive frequency or one past the
- * representable MIDI range — and the librosa mirrors propagate a NaN the way the
- * reference does. The C ABI (`features_spectral_pitch.cpp`) and the WASM facade
- * both pass the value straight through, so a refusal here would put this surface
- * alone out of step with the oracle rather than closing a divergence.
+ * Four are total functions, and the librosa mirrors propagate a NaN the way the
+ * reference does. The fifth, `hzToNote`, receives the value unchanged and the
+ * core refuses a frequency with no note by code (`src/core/convert.cpp`). The C
+ * ABI (`features_spectral_pitch.cpp`) and the WASM facade both pass the value
+ * straight through, so a refusal ahead of the core would put this surface alone
+ * out of step with the oracle rather than closing a divergence.
  *
- * `1e39` is asserted alongside the non-finite spellings and must NOT throw: it
- * saturates to an infinity exactly as the C conversion does.
+ * `1e39` is asserted alongside the non-finite spellings and must NOT throw in the
+ * total four: it saturates to an infinity exactly as the C conversion does.
  */
 interface CAbiFloatArgument {
   name: string;
@@ -1422,9 +1422,9 @@ const C_ABI_FLOAT_ARGUMENTS: CAbiFloatArgument[] = [
     site: 'features/conversion.cpp HzToNote hz',
     control: [440, 880],
     call: (v) => native.hzToNote(v),
-    // The core's documented answer for every frequency with no note, non-finite
-    // among them; `tests/core/convert_test.cpp` pins it on the C++ side.
-    propagates: SATURATES.map(([input]) => [input, '?']),
+    // The core refuses every frequency with no note, so there is no value to
+    // propagate; the refusal is asserted in its own case below.
+    propagates: [],
   },
 ];
 
@@ -1453,8 +1453,8 @@ describe('a unit conversion keeps the C ABI conversion rather than refusing', ()
  * would break it. The NaN count is asserted first: without one present the rest
  * of this case would pass against a track that never exercised it.
  */
-describe('the default pyin track still maps through hzToNote', () => {
-  it('produces NaN frames and converts them without throwing', () => {
+describe('the default pyin track maps through hzToNote once its unvoiced frames are dropped', () => {
+  it('produces NaN frames, refuses them by code, and names the voiced ones', () => {
     const voicedThenSilent = new Float32Array(Math.round(SAMPLE_RATE * 0.25));
     for (let i = 0; i < voicedThenSilent.length / 2; i++) {
       voicedThenSilent[i] = 0.4 * Math.sin((2 * Math.PI * 220 * i) / SAMPLE_RATE);
@@ -1462,10 +1462,12 @@ describe('the default pyin track still maps through hzToNote', () => {
     const { f0 } = native.pitchPyin(voicedThenSilent, SAMPLE_RATE, 2048, 512, 65, 2093, 0.1, false);
     const track = Array.from(f0 as Float32Array);
     expect(track.some(Number.isNaN)).toBe(true);
-    expect(track.some((hz) => Number.isFinite(hz) && hz > 0)).toBe(true);
+    const voiced = track.filter((hz) => Number.isFinite(hz) && hz > 0);
+    expect(voiced.length).toBeGreaterThan(0);
 
-    const notes = track.map((hz) => native.hzToNote(hz));
-    expect(notes).toHaveLength(track.length);
-    expect(notes.filter((note) => note === '?').length).toBe(track.filter(Number.isNaN).length);
+    expect(() => native.hzToNote(Number.NaN)).toThrow(expect.objectContaining({ code: 4 }));
+    for (const hz of voiced) {
+      expect(native.hzToNote(hz)).not.toBe('');
+    }
   });
 });

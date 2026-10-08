@@ -3284,7 +3284,9 @@ export interface SonareModule {
   melToHz: (mel: number) => number;
   hzToMidi: (hz: number) => number;
   midiToHz: (midi: number) => number;
+  /** Throws a `SonareError` (`InvalidParameter`) for a frequency that is not finite and positive. */
   hzToNote: (hz: number) => string;
+  /** Throws a `SonareError` (`InvalidParameter`) for a name that does not parse or an octave out of range. */
   noteToHz: (note: string) => number;
   framesToTime: (frames: number, sr: number, hopLength: number) => number;
   timeToFrames: (time: number, sr: number, hopLength: number) => number;

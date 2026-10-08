@@ -45,13 +45,16 @@ float midi_to_hz(float midi);
 
 /// @brief Converts Hz to note name.
 /// @param hz Frequency in Hz
-/// @return Note name (e.g., "A4", "C#5"), or "?" for non-positive,
-///         non-finite, or unrepresentable frequencies.
+/// @return Note name (e.g., "A4", "C#5").
+/// @throws SonareException (InvalidParameter) when @p hz is not finite and
+///         positive, or has no representable note name.
 std::string hz_to_note(float hz);
 
 /// @brief Converts note name to Hz.
 /// @param note Note name (e.g., "A4", "C#5", "Db4")
-/// @return Frequency in Hz, or 0 for malformed or unrepresentable octaves.
+/// @return Frequency in Hz.
+/// @throws SonareException (InvalidParameter) for a name that does not parse
+///         or whose octave is outside the representable range.
 float note_to_hz(const std::string& note);
 
 /// @brief Converts frame index to time in seconds.

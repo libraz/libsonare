@@ -427,7 +427,7 @@ TEST_CASE("VQT gamma refuses an infinity and keeps NaN meaningful", "[conformanc
 // ---------------------------------------------------------------------------
 
 TEST_CASE("The scale conversions stay total", "[conformance][wasm]") {
-  // The passthrough roster's other half. These five are documented as total on
+  // The passthrough roster's other half. These four are documented as total on
   // every surface, so a saturated value propagates rather than throwing, and a
   // NaN survives because an unvoiced frame of a pitch track is spelled that way.
   // Asserted so that "routing every float through the checked reader" cannot be
@@ -437,8 +437,6 @@ TEST_CASE("The scale conversions stay total", "[conformance][wasm]") {
   REQUIRE(std::isinf(hz_to_midi(kSaturated)));
   REQUIRE(std::isinf(midi_to_hz(kSaturated)));
   REQUIRE(std::isnan(hz_to_midi(kNaN)));
-  REQUIRE(hz_to_note(kSaturated) == "?");
-  REQUIRE(hz_to_note(kNaN) == "?");
 
   REQUIRE(hz_to_midi(440.0f) == Catch::Approx(69.0f));
   REQUIRE(hz_to_midi(880.0f) == Catch::Approx(81.0f));

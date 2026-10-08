@@ -668,6 +668,26 @@ def test_note_to_hz() -> None:
     assert abs(note_to_hz("A4") - 440.0) < 1.0
 
 
+@pytest.mark.parametrize("name", ["H4", "C#x", "", "A4junk", "C2147483647"])
+def test_note_to_hz_refuses_an_unparsable_name(name: str) -> None:
+    """note_to_hz raises the coded InvalidParameter error instead of answering 0."""
+    from libsonare import ErrorCode, SonareValueError, note_to_hz
+
+    with pytest.raises(SonareValueError) as caught:
+        note_to_hz(name)
+    assert caught.value.code == int(ErrorCode.INVALID_PARAMETER)
+
+
+@pytest.mark.parametrize("hz", [0.0, -440.0, float("nan"), float("inf")])
+def test_hz_to_note_refuses_a_frequency_with_no_note(hz: float) -> None:
+    """hz_to_note raises the coded InvalidParameter error instead of answering '?'."""
+    from libsonare import ErrorCode, SonareValueError, hz_to_note
+
+    with pytest.raises(SonareValueError) as caught:
+        hz_to_note(hz)
+    assert caught.value.code == int(ErrorCode.INVALID_PARAMETER)
+
+
 def test_frames_to_time() -> None:
     """frames_to_time converts frame index to seconds."""
     from libsonare import frames_to_time

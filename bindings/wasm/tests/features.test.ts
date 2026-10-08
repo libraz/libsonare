@@ -813,6 +813,18 @@ describe('Feature API precision (reference compatibility)', () => {
       expect(withinRel(noteToHz('A4'), 440.0, 1e-4)).toBe(true);
     });
 
+    it('noteToHz refuses an unknown name with InvalidParameter', () => {
+      expect(() => noteToHz('H4')).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidParameter }),
+      );
+    });
+
+    it('hzToNote refuses a non-positive frequency with InvalidParameter', () => {
+      expect(() => hzToNote(0)).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidParameter }),
+      );
+    });
+
     it('framesToTime should compute correct time', () => {
       const t = framesToTime(1, 22050, 512);
       expect(withinAbs(t, 512 / 22050, 1e-6)).toBe(true);

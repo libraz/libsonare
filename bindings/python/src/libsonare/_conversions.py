@@ -65,17 +65,39 @@ def midi_to_hz(midi: float) -> float:
     return float(lib.sonare_midi_to_hz(_to_c_float(midi, "midi")))
 
 
+def _refused_argument(fallback_message: str) -> SonareValueError:
+    """Build the error for a call the core refused, from the library's last error."""
+    lib = _get_lib()
+    code = int(lib.sonare_last_error_code())
+    raw = lib.sonare_last_error_message()
+    detail = raw.decode("utf-8", errors="replace") if raw else fallback_message
+    return SonareValueError(detail, code or int(ErrorCode.INVALID_PARAMETER))
+
+
 def hz_to_note(hz: float) -> str:
-    """Convert frequency in Hz to note name (e.g. 'A4')."""
+    """Convert frequency in Hz to note name (e.g. 'A4').
+
+    Raises:
+        SonareValueError: If ``hz`` is not finite and positive.
+    """
     lib = _get_lib()
     result = lib.sonare_hz_to_note(_to_c_float(hz, "hz"))
-    return result.decode("utf-8") if result else ""
+    if not result:
+        raise _refused_argument(f"hz has no note name: {hz!r}")
+    return result.decode("utf-8")
 
 
 def note_to_hz(note: str) -> float:
-    """Convert note name (e.g. 'A4') to frequency in Hz."""
+    """Convert note name (e.g. 'A4') to frequency in Hz.
+
+    Raises:
+        SonareValueError: If ``note`` does not parse or its octave is out of range.
+    """
     lib = _get_lib()
-    return float(lib.sonare_note_to_hz(_utf8_arg(note, "note")))
+    hz = float(lib.sonare_note_to_hz(_utf8_arg(note, "note")))
+    if math.isnan(hz):
+        raise _refused_argument(f"cannot parse note name: {note!r}")
+    return hz
 
 
 def frames_to_time(frames: int, sr: int = 22050, hop_length: int = 512) -> float:

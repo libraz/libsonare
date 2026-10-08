@@ -186,11 +186,28 @@ TEST_CASE("sonare_hz_to_note honours its documented borrow contract", "[c_api]")
   REQUIRE(c4 == a4);                  // same storage, not a fresh allocation
   REQUIRE(std::string(c4) != first);  // and the earlier value is gone
   REQUIRE(std::string(a4) == std::string(c4));
+}
 
-  // A rejected input still yields a readable string rather than a null.
-  REQUIRE(std::string(sonare_hz_to_note(0.0f)) == "?");
-  REQUIRE(std::string(sonare_hz_to_note(-1.0f)) == "?");
-  REQUIRE(std::string(sonare_hz_to_note(std::numeric_limits<float>::quiet_NaN())) == "?");
+TEST_CASE("sonare_hz_to_note / sonare_note_to_hz report a refused argument", "[c_api]") {
+  const float nan = std::numeric_limits<float>::quiet_NaN();
+
+  for (float bad : {0.0f, -1.0f, nan, std::numeric_limits<float>::infinity()}) {
+    REQUIRE(sonare_hz_to_note(bad) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  for (const char* bad : {"H4", "C#x", "", "A4junk", "C2147483647"}) {
+    INFO("name: \"" << bad << "\"");
+    REQUIRE(std::isnan(sonare_note_to_hz(bad)));
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  REQUIRE(std::isnan(sonare_note_to_hz(nullptr)));
+  REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+
+  // A valid call clears the failure it follows.
+  REQUIRE(sonare_note_to_hz("A4") == Catch::Approx(440.0f).margin(0.01f));
+  REQUIRE(sonare_last_error_code() == SONARE_OK);
+  REQUIRE(std::string(sonare_hz_to_note(440.0f)) == "A4");
 }
 
 TEST_CASE("frame/time conversions return a sentinel instead of throwing on invalid rate or hop",

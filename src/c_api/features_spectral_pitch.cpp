@@ -646,8 +646,12 @@ const char* sonare_hz_to_note(float hz) {
 }
 
 float sonare_note_to_hz(const char* note) {
-  if (!note) return 0.0f;
+  SONARE_C_TRY
+  if (!note) {
+    throw SonareException(ErrorCode::InvalidParameter, "sonare_note_to_hz: note must not be NULL");
+  }
   return note_to_hz(std::string(note));
+  SONARE_C_CATCH_RETURN(std::numeric_limits<float>::quiet_NaN())
 }
 
 float sonare_frames_to_time(int frames, int sr, int hop_length) {

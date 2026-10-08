@@ -157,18 +157,48 @@ TEST_CASE("hz_to_note with sub-zero octave frequencies", "[convert]") {
   }
 }
 
-TEST_CASE("hz_to_note handles non-finite frequencies without narrowing UB", "[convert][edge]") {
-  REQUIRE(hz_to_note(std::numeric_limits<float>::quiet_NaN()) == "?");
-  REQUIRE(hz_to_note(std::numeric_limits<float>::infinity()) == "?");
-  REQUIRE(hz_to_note(-std::numeric_limits<float>::infinity()) == "?");
+namespace {
+template <typename F>
+void require_invalid_parameter(F&& call) {
+  try {
+    call();
+    FAIL("expected SonareException(InvalidParameter)");
+  } catch (const SonareException& e) {
+    REQUIRE(e.code() == ErrorCode::InvalidParameter);
+  }
+}
+}  // namespace
+
+TEST_CASE("hz_to_note refuses a frequency that is not finite and positive", "[convert][edge]") {
+  require_invalid_parameter([] { hz_to_note(std::numeric_limits<float>::quiet_NaN()); });
+  require_invalid_parameter([] { hz_to_note(std::numeric_limits<float>::infinity()); });
+  require_invalid_parameter([] { hz_to_note(-std::numeric_limits<float>::infinity()); });
+  require_invalid_parameter([] { hz_to_note(0.0f); });
+  require_invalid_parameter([] { hz_to_note(-440.0f); });
 }
 
-TEST_CASE("note_to_hz rejects octaves outside its representable MIDI range", "[convert][edge]") {
-  REQUIRE_NOTHROW(note_to_hz("C2147483647"));
-  REQUIRE_NOTHROW(note_to_hz("C-2147483648"));
-  REQUIRE(note_to_hz("C2147483647") == 0.0f);
-  REQUIRE(note_to_hz("C-2147483648") == 0.0f);
-  REQUIRE(note_to_hz("C2147483648") == 0.0f);
+TEST_CASE("note_to_hz refuses a name it cannot parse", "[convert][edge]") {
+  for (const char* bad : {"H4", "C#x", "", "A4junk", "4", "Cx", "C4 "}) {
+    INFO("name: \"" << bad << "\"");
+    require_invalid_parameter([&] { note_to_hz(bad); });
+  }
+}
+
+TEST_CASE("note_to_hz refuses octaves outside its representable MIDI range", "[convert][edge]") {
+  require_invalid_parameter([] { note_to_hz("C2147483647"); });
+  require_invalid_parameter([] { note_to_hz("C-2147483648"); });
+  require_invalid_parameter([] { note_to_hz("C2147483648"); });
+  require_invalid_parameter([] { note_to_hz("H9999999999999999999999"); });
+}
+
+TEST_CASE("note_to_hz keeps its parsing rules for valid names", "[convert]") {
+  REQUIRE_THAT(note_to_hz("A4"), WithinAbs(440.0f, 0.01f));
+  REQUIRE_THAT(note_to_hz("a4"), WithinAbs(440.0f, 0.01f));
+  REQUIRE_THAT(note_to_hz("A"), WithinAbs(440.0f, 0.01f));  // octave defaults to 4
+  REQUIRE_THAT(note_to_hz("C4"), WithinAbs(261.63f, 0.1f));
+  REQUIRE_THAT(note_to_hz("Bb3"), WithinAbs(233.08f, 0.1f));
+  REQUIRE_THAT(note_to_hz("A#3"), WithinAbs(233.08f, 0.1f));
+  REQUIRE_THAT(note_to_hz("C-1"), WithinAbs(8.1758f, 0.001f));
 }
 
 TEST_CASE("hz_to_bin handles non-finite input and saturates extreme bins", "[convert][edge]") {
@@ -185,10 +215,8 @@ TEST_CASE("hz_to_bin handles non-finite input and saturates extreme bins", "[con
 
 TEST_CASE("note_to_hz with non-ASCII input", "[convert]") {
   SECTION("non-ASCII bytes should not cause UB") {
-    // Should not crash (UB from negative char in toupper)
-    REQUIRE_NOTHROW(note_to_hz("\xC0"));
-    // Invalid note should return 0
-    REQUIRE(note_to_hz("\xC0") == 0.0f);
+    // Should not crash (UB from negative char in toupper); the name is refused.
+    require_invalid_parameter([] { note_to_hz("\xC0"); });
   }
 }
 

@@ -7,6 +7,7 @@ import {
   chromaCqt,
   cqt,
   cqtToAudio,
+  ErrorCode,
   framesToTime,
   griffinLim,
   harmonic,
@@ -779,6 +780,24 @@ describe('unit conversions', () => {
   it('noteToHz("A4") returns ~440', () => {
     expect(noteToHz('A4')).toBeCloseTo(440, 1);
   });
+
+  it.each(['H4', 'C#x', '', 'A4junk', 'C2147483647'])(
+    'noteToHz(%j) is refused with InvalidParameter',
+    (name) => {
+      expect(() => noteToHz(name)).toThrow(
+        expect.objectContaining({ name: 'SonareError', code: ErrorCode.InvalidParameter }),
+      );
+    },
+  );
+
+  it.each([0, -440, Number.NaN, Number.POSITIVE_INFINITY])(
+    'hzToNote(%d) is refused with InvalidParameter',
+    (hz) => {
+      expect(() => hzToNote(hz)).toThrow(
+        expect.objectContaining({ name: 'SonareError', code: ErrorCode.InvalidParameter }),
+      );
+    },
+  );
 
   it('framesToTime computes correct time', () => {
     expect(framesToTime(1, SR, 512)).toBeCloseTo(512 / SR, 5);
