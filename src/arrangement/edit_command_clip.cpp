@@ -256,7 +256,15 @@ bool TrimClip::apply(Project& project, MidiContentStore& /*store*/) {
   const bool audio_clip = source != nullptr && source_kind(*source) == SourceKind::kAudio;
   const bool preserve_loop_source_offsets = audio_clip && next.loop_mode == LoopMode::kLoop;
   double new_offset = next.source_offset_ppq;
-  if (!preserve_loop_source_offsets) {
+  if (audio_clip && !preserve_loop_source_offsets) {
+    // Materialized audio offsets are physical: the seconds shift below decides
+    // legality, and the PPQ mirrors (stale after a move across a tempo change)
+    // follow without vetoing it.
+    new_offset = std::max(0.0, new_offset + delta);
+    for (ClipTake& take : next.takes) {
+      take.source_offset_ppq = std::max(0.0, take.source_offset_ppq + delta);
+    }
+  } else if (!preserve_loop_source_offsets) {
     new_offset += delta;
     if (new_offset < 0.0) {
       return false;

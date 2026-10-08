@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::engine {
 
@@ -63,8 +64,9 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
   if (!config_.enabled || !tempo_map_ || num_frames <= 0) return;
 
   const int64_t lookback = std::max(0, lookback_samples);
-  const int64_t window_start_sample = block_start_sample - lookback;
-  const int64_t block_end_sample = block_start_sample + num_frames;
+  const int64_t window_start_sample = numeric::saturating_sub(block_start_sample, lookback);
+  const int64_t block_end_sample =
+      numeric::saturating_add(block_start_sample, static_cast<int64_t>(num_frames));
   const double start_ppq = tempo_map_->sample_to_ppq(window_start_sample);
   const double end_ppq = tempo_map_->sample_to_ppq(block_end_sample);
   const double lo = std::min(start_ppq, end_ppq);
@@ -100,20 +102,12 @@ void Metronome::collect_events(int64_t block_start_sample, int num_frames, Metro
         break;
       }
     }
-    // If the next beat would cross into a new (shorter-beat) signature segment,
-    // re-snap to that segment's bar grid so beats remain grid-aligned.
+    // A signature segment starting before the next beat of this grid restarts
+    // the beat grid there: its first beat is the segment start itself.
     const double next_ppq = ppq + beat_len;
-    const double next_bar_start = tempo_map_->bar_start_ppq(next_ppq);
-    const transport::TimeSignature next_sig = tempo_map_->time_signature_at_ppq(next_ppq);
-    if (next_sig.denominator != sig.denominator || next_sig.numerator != sig.numerator) {
-      // Snap to the first beat at or after the boundary on the new grid.
-      const double next_beat_len = 4.0 / static_cast<double>(std::max(next_sig.denominator, 1));
-      const double beats_from_bar =
-          std::ceil((next_ppq - next_bar_start) / next_beat_len - kPpqEpsilon);
-      ppq = next_bar_start + beats_from_bar * next_beat_len;
-    } else {
-      ppq = next_ppq;
-    }
+    const double next_segment_start = tempo_map_->time_signature_start_ppq(next_ppq);
+    ppq = next_segment_start != tempo_map_->time_signature_start_ppq(ppq) ? next_segment_start
+                                                                          : next_ppq;
   }
 }
 

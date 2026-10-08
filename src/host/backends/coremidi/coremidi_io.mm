@@ -176,7 +176,8 @@ struct CoreMidiInput::Impl {
   // push_event() contract). Always available, live source connected or not.
   // drain()/drain_block() merge this with `buffer` by render_frame.
   FixedMidiInputSource<kInputCapacity> injected;
-  const MidiHostTimeMapper* time_mapper = nullptr;
+  // Written on the control thread, read by the OS callback and injection threads.
+  std::atomic<const MidiHostTimeMapper*> time_mapper{nullptr};
   mach_timebase_info_data_t timebase{};
   // CONTROL thread only: never touched from a producer thread. Completed
   // payloads reach it through live_sysex.stage / injected_sysex.stage,
@@ -207,9 +208,10 @@ struct CoreMidiInput::Impl {
                    const MIDIEventPacket* packet, FallbackTime fallback = {}) noexcept {
     uint64_t host_time_ns = 0;
     int64_t render_frame = 0;
-    if (packet != nullptr && packet->timeStamp != 0 && time_mapper != nullptr &&
+    const MidiHostTimeMapper* mapper = time_mapper.load(std::memory_order_acquire);
+    if (packet != nullptr && packet->timeStamp != 0 && mapper != nullptr &&
         host_ticks_to_ns(packet->timeStamp, timebase, &host_time_ns) &&
-        time_mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
+        mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
       return target.push_event_at_render_frame(ump, render_frame);
     }
     if (fallback.absolute) return target.push_event_at_render_frame(ump, fallback.value);
@@ -507,7 +509,7 @@ bool CoreMidiInput::open(size_t source_index) {
 }
 
 void CoreMidiInput::set_time_mapper(const MidiHostTimeMapper* mapper) noexcept {
-  impl_->time_mapper = mapper;
+  impl_->time_mapper.store(mapper, std::memory_order_release);
 }
 
 const midi::SysExStore* CoreMidiInput::sysex_store() const noexcept {
@@ -525,8 +527,8 @@ bool CoreMidiInput::push_event_at_host_time(const midi::Ump& ump, uint64_t host_
   // the `injected` member and push_event()).
   FallbackTime fallback;
   int64_t render_frame = 0;
-  if (impl_->time_mapper != nullptr &&
-      impl_->time_mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
+  const MidiHostTimeMapper* mapper = impl_->time_mapper.load(std::memory_order_acquire);
+  if (mapper != nullptr && mapper->host_time_to_render_frame(host_time_ns, &render_frame)) {
     fallback = {render_frame, true};
   }
   // Reassemble here for the same reason push_event() does: a multi-packet

@@ -1164,6 +1164,31 @@ TEST_CASE("compiler bakes tempo-sync warp maps with segment rates", "[arrangemen
   REQUIRE(energy > 0.0);
 }
 
+TEST_CASE("compiler bakes a tempo-sync lead-in shorter than one hop from the source",
+          "[arrangement]") {
+  Fixture f = make_fixture();
+  arr::EditClip* clip = f.project.find_clip_mutable(f.clip_id);
+  REQUIRE(clip != nullptr);
+  clip->warp_ref_id = 77;
+  clip->warp_mode = arr::WarpMode::kTempoSync;
+  // A 128-sample pre-roll, well under the 512-sample hop, leads into the first anchor.
+  REQUIRE(f.project.set_warp_map({77, "tempo sync", {{4800.0, 128.0}, {48000.0, 45600.0}}}));
+
+  arr::CompileResult r = arr::compile(f.project, f.midi, f.audio);
+  REQUIRE_FALSE(r.has_errors());
+  REQUIRE(r.timeline.has_value());
+  const auto& sched = r.timeline->audio_clips.front();
+  REQUIRE(sched.storage != nullptr);
+  REQUIRE(sched.storage->channels[0].size() == 48000);
+  double lead_in_energy = 0.0;
+  for (size_t i = 0; i < 4800; ++i) {
+    const float sample = sched.storage->channels[0][i];
+    REQUIRE(std::isfinite(sample));
+    lead_in_energy += static_cast<double>(sample) * static_cast<double>(sample);
+  }
+  REQUIRE(lead_in_energy > 0.0);
+}
+
 // Tempo-sync segments carry durations only, so the bake must still place
 // anchors[0].source_sample at anchors[0].warp_sample; a dropped lead-in shows as a
 // buffer that many samples short of the clip's span.

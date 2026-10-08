@@ -309,6 +309,17 @@ class ClipPlayer final : public rt::ProcessorBase {
     float partner_gain = 0.0f;  // partner read gain (0 => single read)
   };
   static LoopRead resolve_loop_read(const ClipSchedule& clip, int64_t timeline_sample) noexcept;
+  /// How a clip-local read position resolves to the source; one definition for
+  /// the resampling reads and the stretcher's.
+  struct ReadGeometry {
+    bool warp_active = false;
+    int64_t source_len = 0;  // clip-local span the source covers; <= 0 reads nothing
+    int64_t loop_len = 0;    // loop body length when the clip loops
+    double warp_ref = 0.0;
+  };
+  static ReadGeometry read_geometry(const ClipSchedule& clip) noexcept;
+  static double resolve_local(const ClipSchedule& clip, const ReadGeometry& geometry,
+                              double local) noexcept;
   static int source_channel_count(const ClipSchedule& clip) noexcept;
   static int64_t source_sample_count(const ClipSchedule& clip) noexcept;
   void notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t sample,
@@ -324,6 +335,9 @@ class ClipPlayer final : public rt::ProcessorBase {
   struct StretchContext {
     ClipPlayer* player;
     const ClipSchedule* clip;
+    // Source span of the loop body a looping clip repeats; length 0 when it does not loop.
+    double loop_source_start = 0.0;
+    double loop_source_length = 0.0;
   };
   static float stretch_read_thunk(void* context, int channel, int64_t sample) noexcept;
   static double stretch_map_thunk(void* context, int64_t clip_local_output) noexcept;
@@ -349,6 +363,8 @@ class ClipPlayer final : public rt::ProcessorBase {
     uint32_t clip_id = 0;
     uint32_t channel = 0;
     int64_t page_index = -1;
+    // A read that came back silent, not only a prefetch request.
+    bool read_miss = false;
   };
 
   /// Builds a pool at the current warp_voice_capacity_ sized for @p max_block

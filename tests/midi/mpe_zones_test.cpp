@@ -167,6 +167,27 @@ TEST_CASE("the newest MCM takes the overlapping channels", "[midi][mpe]") {
   REQUIRE(state.zone_of(kMpeUpperManagerChannel) == MpeZone::kLower);
 }
 
+TEST_CASE("a channel moving between zones is named for silencing", "[midi][mpe]") {
+  MpeState state;
+  uint16_t moved = 0;
+  REQUIRE(state.apply_mcm(0, 7, &moved));                        // channels 0..7
+  REQUIRE(state.apply_mcm(kMpeUpperManagerChannel, 7, &moved));  // channels 8..15
+  REQUIRE(moved == 0xFF00u);
+
+  // The upper zone growing to ten members takes 5..7 from the lower zone, which
+  // shrinks to four. Every channel stays under MPE control, but 5..7 changed zone.
+  REQUIRE(state.apply_mcm(kMpeUpperManagerChannel, 10, &moved));
+  REQUIRE(state.member_count(MpeZone::kLower) == 4);
+  REQUIRE(state.zone_of(5) == MpeZone::kUpper);
+  REQUIRE(moved == 0b0000000011100000u);
+
+  // Deactivating a zone names every channel it held; reactivating names them again.
+  REQUIRE(state.apply_mcm(0, 0, &moved));
+  REQUIRE(moved == 0b0000000000011111u);
+  REQUIRE(state.apply_mcm(0, 4, &moved));
+  REQUIRE(moved == 0b0000000000011111u);
+}
+
 TEST_CASE("pitch bend sensitivity on one member reaches every member", "[midi][mpe]") {
   MpeState state = lower_zone(4);
   REQUIRE(state.apply_bend_sensitivity(2, 12.0f));

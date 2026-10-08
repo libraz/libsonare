@@ -49,8 +49,9 @@ bool RealtimeEngine::pop_telemetry(Telemetry& out) noexcept {
     // intentional and acceptable.
     out.render_frame = transport_.render_frame();
     out.timeline_sample = transport_.sample_position();
-    out.audible_timeline_sample = audible_timeline_sample(out.timeline_sample);
-    out.graph_latency_samples_q8 = graph_latency_samples_q8_;
+    out.graph_latency_samples_q8 = graph_latency_samples_q8_.load(std::memory_order_relaxed);
+    out.audible_timeline_sample =
+        audible_timeline_sample(out.timeline_sample, out.graph_latency_samples_q8);
     out.value = delta;
     return true;
   }
@@ -280,6 +281,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       if (parameter_target_reserved(command.target_id)) {
         if (route_engine_parameter(command.target_id, command.arg.f)) {
           record_parameter_base(command.target_id, command.arg.f);
+          reseed_smoothed_param(command.target_id, command.arg.f);
         } else {
           enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
                         transport_.sample_position(), command.target_id);
@@ -294,6 +296,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // actually succeeded.
       if (automation_.set_parameter(command.target_id, command.arg.f)) {
         record_parameter_base(command.target_id, command.arg.f);
+        reseed_smoothed_param(command.target_id, command.arg.f);
       }
       break;
     case rt::CommandType::kSetParamSmoothed:
@@ -339,7 +342,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // reach the instrument even though sub-block dispatch/render is gated off
       // while stopped, so the instrument falls silent on the next render.
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(command.sample_time);
+      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
       // Flush PDC delay tails: their buffered audio belongs to the pre-stop
       // position and must not ring out across the discontinuity.
       flush_pdc_delays();
@@ -355,7 +358,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // the jump must be released at the seek frame rather than left to a
       // note-off that the new position will never reach.
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(command.sample_time);
+      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
       flush_pdc_delays();
 #endif
 #if defined(SONARE_WITH_MIXING)
@@ -366,7 +369,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       transport_.seek_ppq(command.arg.d);
       transport_.fold_into_loop();
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(command.sample_time);
+      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
       flush_pdc_delays();
 #endif
 #if defined(SONARE_WITH_MIXING)
@@ -381,7 +384,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
         transport_.fold_into_loop();
         // Successful marker seek is a playhead jump: same hang-note release.
 #if defined(SONARE_WITH_ARRANGEMENT)
-        midi_sequencer_.all_notes_off(command.sample_time);
+        midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
         flush_pdc_delays();
 #endif
 #if defined(SONARE_WITH_MIXING)
@@ -400,7 +403,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const midi::Ump ump = command.type == rt::CommandType::kMidiNoteOnImmediate
                                 ? midi::make_midi1_note_on(group, channel, note, velocity)
                                 : midi::make_midi1_note_off(group, channel, note, velocity);
-      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+      midi_sequencer_.inject_event(command.target_id, midi::DeviceFrame{command.sample_time}, ump);
 #endif
       break;
     }
@@ -418,7 +421,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const uint8_t group = static_cast<uint8_t>((packed >> 24) & 0x0Fu);
       const midi::Ump ump = midi::make_midi1_control_change(group, channel, controller, value7);
       observe_live_cc_for_automation(ump);
-      midi_sequencer_.inject_event(command.target_id, command.sample_time, ump);
+      midi_sequencer_.inject_event(command.target_id, midi::DeviceFrame{command.sample_time}, ump);
 #endif
       break;
     }
@@ -470,7 +473,7 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       // MIDI panic: release every sounding note tracked by the sequencer at this
       // command's render frame. RT-safe, no allocation.
 #if defined(SONARE_WITH_ARRANGEMENT)
-      midi_sequencer_.all_notes_off(command.sample_time);
+      midi_sequencer_.all_notes_off(midi::DeviceFrame{command.sample_time});
 #endif
       break;
     case rt::CommandType::kSetSoloMute: {
@@ -553,6 +556,11 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
       const unsigned int insert_index = (packed >> 8) & 0xFFu;
       const unsigned int param_id = packed & 0xFFu;
       // Legacy command: it carries no insert id, so it records no manual base.
+      if (!master_insert_target_resolves(insert_index, param_id)) {
+        enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
+                      transport_.sample_position(), command.target_id);
+        break;
+      }
       (void)route_master_insert_param_smoothed(insert_index, param_id, command.arg.f);
 #else
       enqueue_error(TelemetryErrorCode::kUnknownTarget, transport_.render_frame(),
@@ -591,8 +599,8 @@ void RealtimeEngine::apply_command(const rt::Command& command) noexcept {
           // handler, the same shape the offline clip path dispatches. The local
           // buffer stays in scope for the synchronous dispatch below.
           const midi::Ump ump = midi::make_sysex_handle(0, /*handle=*/0);
-          midi_sequencer_.inject_event(command.target_id, command.sample_time, ump, payload.data(),
-                                       payload_size, slot.prepared.get());
+          midi_sequencer_.inject_event(command.target_id, midi::DeviceFrame{command.sample_time},
+                                       ump, payload.data(), payload_size, slot.prepared.get());
         }
       }
       release_midi_sysex_slot(command);
@@ -751,6 +759,15 @@ bool RealtimeEngine::start_smoothed_param(uint32_t target_id, float value) noexc
   return true;
 }
 
+void RealtimeEngine::reseed_smoothed_param(uint32_t target_id, float value) noexcept {
+  // An immediate set ends any ramp on the target and is where the next one starts.
+  for (SmoothedParam& slot : smoothed_params_) {
+    if (!slot.assigned || slot.target_id != target_id) continue;
+    slot.smoother.reset(value);
+    slot.active = false;
+  }
+}
+
 bool RealtimeEngine::any_smoothed_param_active() const noexcept {
   for (const SmoothedParam& slot : smoothed_params_) {
     if (slot.active) return true;
@@ -830,7 +847,7 @@ void RealtimeEngine::enqueue_telemetry(Telemetry telemetry) noexcept {
     overflow.render_frame = telemetry.render_frame;
     overflow.timeline_sample = telemetry.timeline_sample;
     overflow.audible_timeline_sample = telemetry.audible_timeline_sample;
-    overflow.graph_latency_samples_q8 = graph_latency_samples_q8_;
+    overflow.graph_latency_samples_q8 = telemetry.graph_latency_samples_q8;
     overflow.value = telemetry_overflow_count_;
     if (telemetry_.push(overflow)) {
       telemetry_overflow_count_ = 0;
@@ -843,8 +860,9 @@ void RealtimeEngine::enqueue_telemetry(Telemetry telemetry) noexcept {
 
 void RealtimeEngine::enqueue_error(TelemetryErrorCode code, int64_t render_frame,
                                    int64_t timeline_sample, uint32_t value) noexcept {
+  const int latency_q8 = graph_latency_samples_q8_.load(std::memory_order_relaxed);
   enqueue_telemetry({TelemetryType::kError, code, render_frame, timeline_sample,
-                     audible_timeline_sample(timeline_sample), graph_latency_samples_q8_, value});
+                     audible_timeline_sample(timeline_sample, latency_q8), latency_q8, value});
 }
 
 void RealtimeEngine::on_clip_page_miss(const ClipPageRequest& request) noexcept {

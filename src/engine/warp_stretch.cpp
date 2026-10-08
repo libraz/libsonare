@@ -113,10 +113,18 @@ void WarpStretchVoice::synthesize_frame(int offset, WarpSourceReader reader,
     start += best_offset(start, reader, context);
   }
 
+  // The stream's first frame has no predecessor to complete its rising half, so
+  // the falling half of a virtual one, aligned to the same source, makes the
+  // start a unity-gain reconstruction rather than a fade-in.
+  const bool first_frame = !have_previous_;
   for (int ch = 0; ch < channels_; ++ch) {
     float* dst = overlap_[static_cast<size_t>(ch)].data() + offset;
     for (int i = 0; i < kFrameSize; ++i) {
-      dst[i] += window_[static_cast<size_t>(i)] * reader(context, ch, start + i);
+      const float sample = reader(context, ch, start + i);
+      dst[i] += window_[static_cast<size_t>(i)] * sample;
+      if (first_frame && i < kSynthesisHop) {
+        dst[i] += window_[static_cast<size_t>(i + kSynthesisHop)] * sample;
+      }
     }
   }
   // The next frame must continue this segment, so the template is this

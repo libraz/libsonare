@@ -132,3 +132,34 @@ TEST_CASE("MonitorRuntime PFL and AFL taps are taken at different stages",
   REQUIRE(mon_l[kBlock - 1] > 0.49f);
   REQUIRE(mon_l[kBlock - 1] < 0.51f);
 }
+
+TEST_CASE("MonitorRuntime keeps retained mutes silent from the first block after re-prepare",
+          "[engine][monitor_runtime]") {
+  constexpr int kBlock = 32;
+  sonare::mixing::ChannelStrip muted({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::mixing::ChannelStrip implied({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  sonare::mixing::ChannelStrip soloed({0.0f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+  for (auto* strip : {&muted, &implied, &soloed}) strip->prepare(48000.0, kBlock);
+
+  sonare::engine::MonitorRuntime runtime;
+  runtime.prepare(48000.0, kBlock, 5.0f);
+  REQUIRE(runtime.add_strip(&muted));
+  REQUIRE(runtime.add_strip(&implied));
+  REQUIRE(runtime.add_strip(&soloed));
+  runtime.set_mute(0, true);
+  runtime.set_solo(2, true);
+  REQUIRE(runtime.implied_mute(1));
+  runtime.settle();
+
+  runtime.prepare(48000.0, kBlock, 5.0f);
+  for (size_t index : {size_t{0}, size_t{1}}) {
+    std::array<float, kBlock> left{};
+    std::array<float, kBlock> right{};
+    left.fill(1.0f);
+    right.fill(1.0f);
+    float* channels[] = {left.data(), right.data()};
+    runtime.process_strip(index, channels, 2, kBlock, 0);
+    REQUIRE(left[0] == 0.0f);
+    REQUIRE(left[kBlock - 1] == 0.0f);
+  }
+}

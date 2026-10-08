@@ -119,7 +119,7 @@ bool SampleVoiceCore::start(const SamplePatchParams& p, double sample_rate, uint
   return true;
 }
 
-float SampleVoiceCore::render(float pitch_ratio, bool key_down) noexcept {
+float SampleVoiceCore::render(float pitch_ratio, bool held) noexcept {
   if (finished_) return 0.0f;
 
   float out = 0.0f;
@@ -127,7 +127,7 @@ float SampleVoiceCore::render(float pitch_ratio, bool key_down) noexcept {
   for (int i = 0; i < layer_count_; ++i) {
     Layer& layer = layers_[i];
     if (layer.finished || !layer.reader.valid()) continue;
-    const bool looping = layer.reader.looping(key_down);
+    const bool looping = layer.reader.looping(held);
     if (!layer.reader.wrap(looping)) {
       layer.finished = true;
       continue;

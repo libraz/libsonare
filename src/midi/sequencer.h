@@ -10,8 +10,9 @@
 ///  - CONTROL thread: set_midi_clips(std::vector<MidiClipSchedule>) publishes a
 ///    new clip set through an rt::RtPublisher. May allocate; not RT-safe.
 ///  - AUDIO thread: acquire_midi_clips() once at block start adopts the latest
-///    published set, then process_block() scans the block's render-frame range
-///    and dispatches events to the sink. The audio path performs ZERO heap
+///    published set, then dispatch_due() / frames_until_next_event() step through
+///    the block event by event (process_block() runs that loop for a caller that
+///    renders nothing in between). The audio path performs ZERO heap
 ///    allocation, takes NO lock, does NO I/O and NO parsing. The active-note
 ///    table is a fixed-capacity std::array; capacity overflow is surfaced via an
 ///    atomic telemetry counter, never by growing.
@@ -21,6 +22,14 @@
 /// On loop wrap, seek, stop, clip end, and destination swap the sequencer emits
 /// note-off for every currently-sounding note before (or instead of) advancing,
 /// so no note is left hanging. After all_notes_off() the active-note count is 0.
+///
+/// Clock basis
+/// -----------
+/// Compiled clips are stamped on the TIMELINE (which wraps on a loop and jumps on
+/// a seek); everything the sink receives is on the monotonic DEVICE clock. A clip
+/// event is converted exactly once, as it leaves the clip scan, so MIDI-FX state,
+/// pending FX output and every dispatch are device-framed. The two frame types do
+/// not convert implicitly, so a comparison across bases does not compile.
 
 #include <array>
 #include <atomic>
@@ -37,6 +46,39 @@
 #include "util/constants.h"
 
 namespace sonare::midi {
+
+/// A frame on the transport timeline, the basis compiled clip events are stamped in.
+struct TimelineFrame {
+  int64_t value = 0;
+};
+
+/// A frame on the engine's monotonic device render clock, the basis every
+/// dispatched event, live input and pending MIDI-FX output is stamped in.
+struct DeviceFrame {
+  int64_t value = 0;
+};
+
+/// Pairs one device frame with the timeline frame playing at it. While the
+/// transport rolls the two advance together; while stopped the timeline holds.
+struct SequencerClock {
+  DeviceFrame device;
+  TimelineFrame timeline;
+  bool rolling = true;
+
+  /// A rolling clock whose device and timeline frames coincide (offline and
+  /// standalone use).
+  static SequencerClock aligned(int64_t frame) noexcept {
+    return {DeviceFrame{frame}, TimelineFrame{frame}, true};
+  }
+  /// The same clock @p frames later.
+  SequencerClock advanced(int64_t frames) const noexcept;
+};
+
+/// The device frame at which @p frame plays under @p clock.
+DeviceFrame timeline_to_device(TimelineFrame frame, const SequencerClock& clock) noexcept;
+/// The timeline frame playing at device frame @p frame under @p clock (the held
+/// position while stopped).
+TimelineFrame device_to_timeline(DeviceFrame frame, const SequencerClock& clock) noexcept;
 
 /// Destination abstraction the sequencer dispatches events to. Implementations
 /// must be RT-safe (no allocation / lock / I/O). A test sink or a null
@@ -94,14 +136,13 @@ class MidiSequencer {
   /// the sink, so scheduled clips stay unmodified and the insert can be changed
   /// independently of clip content. Returns false when the fixed destination
   /// insert table is full. Not RT-safe.
-  bool set_midi_fx(uint32_t destination_id, const MidiFxChain& chain,
-                   int64_t render_frame = 0) noexcept;
+  bool set_midi_fx(uint32_t destination_id, const MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
 
   /// AUDIO thread: adopt pending FX configuration at a block boundary. Any
   /// replaced/removed destination is flushed to the sink before the new chain
   /// becomes active, so generated notes and pending events cannot hang.
-  void acquire_midi_fx(int64_t render_frame) noexcept;
+  void acquire_midi_fx(DeviceFrame render_frame) noexcept;
 
   /// AUDIO thread: adopt the latest published clip set. Call once at block
   /// start before process_block. RT-safe, no alloc.
@@ -128,30 +169,48 @@ class MidiSequencer {
     return clips_.control_current();
   }
 
-  /// AUDIO thread: dispatch every event whose render frame falls in
-  /// [block_start_frame, block_start_frame + num_frames). RT-safe, no alloc.
-  void process_block(int64_t block_start_frame, int num_frames) noexcept;
+  /// AUDIO thread: dispatch every event due at the clock's device frame -- clip
+  /// events at its timeline frame (when rolling), clip and loop-iteration ends
+  /// falling there, and pending MIDI-FX output -- then remember the clock as the
+  /// basis live injections are quantized against. RT-safe, no alloc.
+  void dispatch_due(const SequencerClock& clock) noexcept;
+
+  /// AUDIO thread: frames from the clock's device frame to the next event the
+  /// sequencer holds (a clip event, a clip or iteration end, or pending MIDI-FX
+  /// output), capped at @p max_frames. Events at the clock frame itself must have
+  /// been dispatched first; the result is at least 1 for a positive cap. A host
+  /// renders exactly this many frames before the next dispatch_due, so every
+  /// event takes effect at its own frame whatever the host block size.
+  int frames_until_next_event(const SequencerClock& clock, int max_frames) const noexcept;
+
+  /// AUDIO thread: dispatch every event of the @p num_frames frames starting at
+  /// @p clock, each at its own frame (dispatch_due over the span). An event at
+  /// the span's exclusive end, a clip-end release included, belongs to the next
+  /// call. RT-safe, no alloc.
+  void process_block(const SequencerClock& clock, int num_frames) noexcept;
 
   /// AUDIO thread: emit note-off for every sounding note (hang-note safety on
-  /// loop/seek/stop/clip-end/destination-swap), then clear the table. The
-  /// note-offs are dispatched at `render_frame`. After this active_note_count()
-  /// is 0. RT-safe, no alloc.
-  void all_notes_off(int64_t render_frame) noexcept;
+  /// loop/seek/stop/clip-end/destination-swap), then clear the table and drop
+  /// pending clip-originated MIDI-FX output. Pending output of live input keeps
+  /// its device frame. After this active_note_count() is 0. RT-safe, no alloc.
+  void all_notes_off(DeviceFrame render_frame) noexcept;
 
   /// AUDIO thread (or CONTROL thread between blocks): emit note-off for every
   /// note currently sounding on `destination_id` and remove those entries,
   /// leaving notes on other destinations untouched. Used when a single
   /// instrument is swapped/cleared on its destination so its held notes are
   /// released rather than left hanging. RT-safe, no alloc.
-  void all_notes_off_for_destination(uint32_t destination_id, int64_t render_frame) noexcept;
+  void all_notes_off_for_destination(uint32_t destination_id, DeviceFrame render_frame) noexcept;
 
   /// AUDIO thread: dispatch a single host-injected (live) UMP event to a
   /// destination, sample-accurately at `render_frame`, maintaining the same
   /// active-note bookkeeping the clip scan uses (so a live note-on can later be
   /// released by all_notes_off and a live note-off clears its entry). This is
   /// the routing path for queueable scalar MIDI commands (e.g. an immediate CC)
-  /// that synthesize a UMP outside the compiled clip set. RT-safe, no alloc.
-  void inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump) noexcept;
+  /// that synthesize a UMP outside the compiled clip set. A quantizing MIDI-FX
+  /// chain snaps it on the timeline grid of the last dispatch_due clock.
+  /// RT-safe, no alloc.
+  void inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump) noexcept;
 
   /// AUDIO thread: dispatch a single host-injected (live) SysEx event to a
   /// destination at `render_frame`. `sysex_payload`/`sysex_payload_size` view
@@ -161,7 +220,7 @@ class MidiSequencer {
   /// immutable control-thread operation retained by the caller. Routed through
   /// the same process_event path as clip SysEx, so it bypasses MIDI FX and is
   /// dispatched synchronously. RT-safe, no alloc.
-  void inject_event(uint32_t destination_id, int64_t render_frame, const Ump& ump,
+  void inject_event(uint32_t destination_id, DeviceFrame render_frame, const Ump& ump,
                     const uint8_t* sysex_payload, size_t sysex_payload_size,
                     const PreparedMidiSysEx* prepared_sysex = nullptr) noexcept;
 
@@ -181,55 +240,6 @@ class MidiSequencer {
   uint32_t midi_fx_pending_overflow_count() const noexcept {
     return midi_fx_pending_overflow_count_.load(std::memory_order_relaxed);
   }
-
-  /// Collect the render-frame offsets of MIDI events in this block as sub-block
-  /// boundary candidates (offsets relative to block_start_frame). Mirrors
-  /// engine::ClipPlayer::collect_boundaries. RT-safe, no alloc.
-  ///
-  /// An unprepared set holds kCapacity offsets inline; prepare() reserves a
-  /// larger table on CONTROL so the audio collector never grows it.
-  class BoundaryOffsets {
-   public:
-    static constexpr size_t kCapacity = 64;
-
-    /// CONTROL thread: reserve room for @p capacity offsets (at least
-    /// kCapacity). A failed allocation keeps the previous storage.
-    void prepare(size_t capacity);
-    size_t capacity() const noexcept { return capacity_; }
-    size_t size() const noexcept { return size_; }
-    bool overflowed() const noexcept { return overflowed_; }
-    /// Offsets ascend; @p index must be below size().
-    int operator[](size_t index) const noexcept { return offsets()[index]; }
-
-   private:
-    friend class MidiSequencer;
-
-    int* offsets() noexcept {
-      return capacity_ > kCapacity ? prepared_offsets_.data() : inline_offsets_.data();
-    }
-    const int* offsets() const noexcept {
-      return capacity_ > kCapacity ? prepared_offsets_.data() : inline_offsets_.data();
-    }
-    uint8_t* seen() noexcept {
-      return capacity_ > kCapacity ? prepared_seen_.data() : inline_seen_.data();
-    }
-    // AUDIO thread: empty the set, resetting only the marks the last block set.
-    void clear() noexcept;
-    // AUDIO thread: insert @p offset in order unless already present.
-    void push(int offset) noexcept;
-
-    std::array<int, kCapacity> inline_offsets_{};
-    // Per-offset deduplication marks; an offset at or past capacity_ is found
-    // by a scan instead.
-    std::array<uint8_t, kCapacity> inline_seen_{};
-    std::vector<int> prepared_offsets_;
-    std::vector<uint8_t> prepared_seen_;
-    size_t capacity_ = kCapacity;
-    size_t size_ = 0;
-    bool overflowed_ = false;
-  };
-  void collect_boundaries(int64_t block_start_frame, int num_frames,
-                          BoundaryOffsets* out) const noexcept;
 
  private:
   struct ActiveNote {
@@ -310,15 +320,22 @@ class MidiSequencer {
   // playback discontinuity so a note released under a held sustain pedal does not
   // keep ringing and stale pitch-bend / CC state does not carry across.
   void emit_controller_reset(uint32_t destination_id, uint8_t group, uint8_t channel,
-                             int64_t render_frame) noexcept;
+                             DeviceFrame render_frame) noexcept;
   // Emit emit_controller_reset() once per retained (destination, group, channel),
   // optionally limited to one destination. Non-mutating; RT-safe, no alloc.
   void emit_active_controller_resets(bool single_destination, uint32_t destination_id,
-                                     int64_t render_frame) noexcept;
+                                     DeviceFrame render_frame) noexcept;
   DestinationFx* find_midi_fx(uint32_t destination_id) noexcept;
   const DestinationFx* find_midi_fx(uint32_t destination_id) const noexcept;
-  void process_event(uint32_t destination_id, const MidiEvent& event, int64_t block_end_frame,
-                     bool from_clip, uint32_t clip_id) noexcept;
+  // Runs one device-framed event through the destination's MIDI-FX chain; output
+  // later than the event waits in pending_fx.
+  void process_event(uint32_t destination_id, const MidiEvent& event, bool from_clip,
+                     uint32_t clip_id) noexcept;
+  // Visits every clip event and clip/iteration end on the clip timeline in
+  // [from, last], in clip order, with its timeline frame.
+  template <typename Visitor>
+  void visit_scheduled(const std::vector<MidiClipSchedule>& clips, int64_t from, int64_t last,
+                       Visitor&& visitor) const noexcept;
   void dispatch_transformed(uint32_t destination_id, const MidiEvent& event, bool from_clip,
                             uint32_t clip_id) noexcept;
   void enqueue_pending(uint32_t destination_id, const MidiEvent& event, bool from_clip,
@@ -337,7 +354,7 @@ class MidiSequencer {
   void retire_channel_mode_reset(uint32_t destination_id, uint8_t group, uint8_t channel) noexcept;
   void clear_pending_for_destination(uint32_t destination_id) noexcept;
   void clear_pending_for_clip(uint32_t clip_id) noexcept;
-  void release_notes_for_clip(uint32_t clip_id, int64_t render_frame,
+  void release_notes_for_clip(uint32_t clip_id, DeviceFrame render_frame,
                               bool clear_pending = true) noexcept;
   // Release note-offs for every sounding note (and drop pending FX events) whose
   // (clip id, destination, source track) is no longer present in `clips`
@@ -345,7 +362,7 @@ class MidiSequencer {
   // live mute / clip delete that recompiles and republishes without a clip does
   // not hang its notes.
   void release_notes_for_absent_clips(const std::vector<MidiClipSchedule>* clips,
-                                      int64_t render_frame) noexcept;
+                                      const SequencerClock& clock) noexcept;
 
   double sample_rate_ = constants::kDefaultDawSampleRate;
   MidiEventSink* sink_ = nullptr;
@@ -368,6 +385,9 @@ class MidiSequencer {
   std::atomic<uint32_t> dispatched_event_count_{0};
   mutable rt::RtPublisher<MidiFxSnapshot> midi_fx_snapshots_;
   const MidiFxSnapshot* last_midi_fx_snapshot_ = nullptr;
+  // Audio-thread-only: the clock of the last dispatch_due, whose device frame of
+  // timeline zero anchors a quantize grid for live injections.
+  SequencerClock clock_{};
   uint64_t next_midi_fx_generation_ = 1;  // control-thread only
   std::unique_ptr<RuntimeStorage> runtime_storage_;
   size_t pending_fx_count_ = 0;

@@ -428,6 +428,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     in_channels_ = channels;
     in_count_ = chans;
     in_samples_ = render_samples;
+    in_start_ = position_;
     // Present exactly the AU's negotiated channel count; back any channel the host
     // did not supply with pre-sized scratch (num_samples is bounded by prepare()'s
     // max_block_size, so the scratch rows fit).
@@ -468,17 +469,22 @@ class AuEffectProcessor final : public rt::ProcessorBase {
 
  private:
   static OSStatus input_trampoline(void* ref, AudioUnitRenderActionFlags* /*flags*/,
-                                   const AudioTimeStamp* /*ts*/, UInt32 /*bus*/, UInt32 frames,
+                                   const AudioTimeStamp* ts, UInt32 /*bus*/, UInt32 frames,
                                    AudioBufferList* data) noexcept {
     auto* self = static_cast<AuEffectProcessor*>(ref);
     if (self->in_channels_ == nullptr || data == nullptr) return noErr;
+    // An AU may pull its input in pieces, each timestamped where it starts; the
+    // piece supplied is the requested interval's overlap with the current block.
+    int64_t offset = 0;
+    if (ts != nullptr && (ts->mFlags & kAudioTimeStampSampleTimeValid) != 0) {
+      offset = static_cast<int64_t>(std::llround(ts->mSampleTime)) - self->in_start_;
+    }
     // The caller's planes are only valid for the num_samples passed to this
     // process() call, which the AU may render in a smaller block than the
     // prepared maximum. Clamp to in_samples_ (the current call's frame count),
     // not max_block_ (the prepared upper bound), or a variable-block-size host
     // reads past the end of the caller's buffer.
-    const size_t requested =
-        std::min(static_cast<size_t>(frames), static_cast<size_t>(std::max(self->in_samples_, 0)));
+    const int64_t valid = std::max(self->in_samples_, 0);
     const int buffers = static_cast<int>(data->mNumberBuffers);
     for (int c = 0; c < buffers; ++c) {
       auto* dst = static_cast<float*>(data->mBuffers[c].mData);
@@ -494,11 +500,16 @@ class AuEffectProcessor final : public rt::ProcessorBase {
       // The tail is zeroed for the same reason finalize_au_output() zeroes the
       // output side past render_samples, and the two must not drift apart.
       const size_t fillable = std::min(static_cast<size_t>(frames), capacity_frames);
-      const size_t copied = src != nullptr ? std::min(requested, capacity_frames) : 0;
-      if (copied > 0) std::memcpy(dst, src, copied * sizeof(float));
-      if (fillable > copied) {
-        std::memset(dst + copied, 0, (fillable - copied) * sizeof(float));
+      const int64_t first = std::clamp<int64_t>(-offset, 0, static_cast<int64_t>(fillable));
+      const int64_t last = src != nullptr ? std::clamp<int64_t>(valid - offset, first,
+                                                                static_cast<int64_t>(fillable))
+                                          : first;
+      std::memset(dst, 0, static_cast<size_t>(first) * sizeof(float));
+      if (last > first) {
+        std::memcpy(dst + first, src + offset + first,
+                    static_cast<size_t>(last - first) * sizeof(float));
       }
+      std::memset(dst + last, 0, (fillable - static_cast<size_t>(last)) * sizeof(float));
     }
     return noErr;
   }
@@ -516,6 +527,8 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   float* const* in_channels_ = nullptr;
   int in_count_ = 0;
   int in_samples_ = 0;
+  // Sample time of in_channels_[c][0], the render timestamp of this process().
+  int64_t in_start_ = 0;
 };
 
 struct AuCallSpyState {
@@ -537,6 +550,9 @@ struct AuCallSpyState {
   AURenderCallbackStruct captured_input_cb{};
   bool has_input_cb = false;
   UInt32 probe_input_frames = 0;
+  // When non-zero, spy_render instead pulls the input twice, this many frames
+  // each, the second pull timestamped where the first one ended.
+  UInt32 probe_split_pull_frames = 0;
   std::array<float, 1024> probe_dst_left{};
   std::array<float, 1024> probe_dst_right{};
 
@@ -618,6 +634,24 @@ OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTim
     g_au_call_spy->captured_input_cb.inputProc(g_au_call_spy->captured_input_cb.inputProcRefCon,
                                                flags, ts, bus, g_au_call_spy->probe_input_frames,
                                                list);
+  }
+  const UInt32 split = g_au_call_spy->probe_split_pull_frames;
+  if (split > 0 && g_au_call_spy->has_input_cb && ts != nullptr) {
+    for (UInt32 part = 0; part < 2; ++part) {
+      AudioTimeStamp part_ts = *ts;
+      part_ts.mSampleTime += static_cast<Float64>(part * split);
+      BufferListStorage storage;
+      AudioBufferList* list = storage.list();
+      list->mNumberBuffers = 2;
+      list->mBuffers[0].mNumberChannels = 1;
+      list->mBuffers[0].mDataByteSize = static_cast<UInt32>(split * sizeof(float));
+      list->mBuffers[0].mData = g_au_call_spy->probe_dst_left.data() + part * split;
+      list->mBuffers[1].mNumberChannels = 1;
+      list->mBuffers[1].mDataByteSize = static_cast<UInt32>(split * sizeof(float));
+      list->mBuffers[1].mData = g_au_call_spy->probe_dst_right.data() + part * split;
+      g_au_call_spy->captured_input_cb.inputProc(g_au_call_spy->captured_input_cb.inputProcRefCon,
+                                                 flags, &part_ts, bus, split, list);
+    }
   }
   return noErr;
 }
@@ -820,6 +854,39 @@ detail::AuUndersizedBlockProbeResult detail::run_au_effect_undersized_block_prob
     result.input_beyond_request_untouched =
         region_all(state.probe_dst_left, requested, state.probe_dst_left.size(), kSentinel) &&
         region_all(state.probe_dst_right, requested, state.probe_dst_right.size(), kSentinel);
+  }
+  g_au_call_spy = nullptr;
+  return result;
+}
+
+detail::AuSplitPullProbeResult detail::run_au_effect_split_pull_probe() {
+  AuCallSpyState state;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+  constexpr int kBlock = 64;
+  detail::AuSplitPullProbeResult result;
+  {
+    AuEffectProcessor effect(fake_unit, &kSpyAuRuntimeApi);
+    effect.prepare(48000.0, kBlock);
+    state.probe_split_pull_frames = static_cast<UInt32>(kBlock / 2);
+    std::vector<float> left(static_cast<size_t>(kBlock));
+    std::vector<float> right(static_cast<size_t>(kBlock));
+    // Render at a non-zero sample time, so a pull matched against frame 0 shows.
+    std::array<float*, 2> channels{left.data(), right.data()};
+    effect.process(channels.data(), 2, kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      left[static_cast<size_t>(i)] = static_cast<float>(i);
+      right[static_cast<size_t>(i)] = -static_cast<float>(i);
+    }
+    effect.process(channels.data(), 2, kBlock);
+    result.ran = true;
+    result.split_matches_block = true;
+    for (int i = 0; i < kBlock; ++i) {
+      if (state.probe_dst_left[static_cast<size_t>(i)] != static_cast<float>(i) ||
+          state.probe_dst_right[static_cast<size_t>(i)] != -static_cast<float>(i)) {
+        result.split_matches_block = false;
+      }
+    }
   }
   g_au_call_spy = nullptr;
   return result;

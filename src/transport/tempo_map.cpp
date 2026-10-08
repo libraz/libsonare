@@ -6,6 +6,7 @@
 #include <memory>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::transport {
 namespace {
@@ -66,9 +67,10 @@ double segment_samples_at_ppq(const TempoSegment& segment, double sample_rate, d
   }
   // Linear BPM vs ppq: bpm(p) = bpm0 + slope * (p - start_ppq).
   const double slope = (end_bpm - bpm0) / (segment.end_ppq - segment.start_ppq);
-  const double bpm_p = std::max(bpm0 + slope * dp, kMinBpm);
-  // s(p) = (sr*60/slope) * ln(bpm(p)/bpm0).
-  return (sample_rate * 60.0 / slope) * std::log(bpm_p / bpm0);
+  // s(p) = (sr*60/slope) * ln(bpm(p)/bpm0); log1p keeps a sub-ulp tempo change.
+  const double log_ratio =
+      bpm0 + slope * dp > kMinBpm ? std::log1p(slope * dp / bpm0) : std::log(kMinBpm / bpm0);
+  return (sample_rate * 60.0 / slope) * log_ratio;
 }
 
 // Inverse of segment_samples_at_ppq: ppq reached after `s` samples from start.
@@ -79,9 +81,8 @@ double segment_ppq_at_samples(const TempoSegment& segment, double sample_rate, d
     return segment.start_ppq + s / samples_per_ppq(sample_rate, bpm0);
   }
   const double slope = (end_bpm - bpm0) / (segment.end_ppq - segment.start_ppq);
-  // bpm(p) = bpm0 * exp(s * slope / (sr*60)); p = start_ppq + (bpm(p) - bpm0)/slope.
-  const double bpm_p = bpm0 * std::exp(s * slope / (sample_rate * 60.0));
-  return segment.start_ppq + (bpm_p - bpm0) / slope;
+  // bpm(p) - bpm0 = bpm0 * expm1(s * slope / (sr*60)); p = start_ppq + that / slope.
+  return segment.start_ppq + bpm0 * std::expm1(s * slope / (sample_rate * 60.0)) / slope;
 }
 
 double bar_length_ppq(TimeSignature sig) noexcept {
@@ -255,6 +256,12 @@ TimeSignature TempoMap::time_signature_at_ppq(double ppq) const noexcept {
   return (*time_signatures)[time_signature_index_for_ppq(*time_signatures, ppq)].time_sig;
 }
 
+double TempoMap::time_signature_start_ppq(double ppq) const noexcept {
+  const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
+  if (!time_signatures || time_signatures->empty()) return 0.0;
+  return (*time_signatures)[time_signature_index_for_ppq(*time_signatures, ppq)].start_ppq;
+}
+
 BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
   const std::vector<TimeSignatureSegment>* time_signatures = time_signatures_.load();
   if (!time_signatures || time_signatures->empty()) return BarBeat{};
@@ -280,11 +287,13 @@ BarBeat TempoMap::ppq_to_bar_beat(double ppq) const noexcept {
     // partial bar's number, producing duplicate/wrong bar numbers across the
     // boundary. ceil reduces to floor when the span is an exact bar multiple.
     const double bars = std::max(0.0, next_start - sigs[i].start_ppq) / len;
-    bar_count += saturating_to_int64(std::ceil(bars - kBarEpsilon));
+    bar_count =
+        numeric::saturating_add(bar_count, saturating_to_int64(std::ceil(bars - kBarEpsilon)));
   }
   const double current_len = bar_length_ppq(sig);
-  bar_count +=
-      saturating_to_int64(std::floor(std::max(0.0, ppq - sigs[sig_index].start_ppq) / current_len));
+  bar_count = numeric::saturating_add(
+      bar_count, saturating_to_int64(
+                     std::floor(std::max(0.0, ppq - sigs[sig_index].start_ppq) / current_len)));
   return {bar_count, beat_index + 1, (offset / beat_len) - static_cast<double>(beat_index)};
 }
 

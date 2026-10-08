@@ -7,6 +7,8 @@
 #include <complex>
 #include <vector>
 
+#include "util/exception.h"
+
 using Catch::Matchers::WithinAbs;
 
 namespace {
@@ -182,4 +184,71 @@ TEST_CASE("tempo sync warp keeps mono and multichannel tails coherent under phas
   }
   /// Pre-fix this reached ~30% of peak; identical channels now track the mono path.
   REQUIRE(tail_divergence < 0.01f * peak);
+}
+
+TEST_CASE("tempo sync stereo warp stretches anti-phase channels like in-phase ones",
+          "[engine][tempo_sync]") {
+  constexpr int kSampleRate = 48000;
+  constexpr size_t kSourceSamples = 12000;
+  constexpr size_t kTargetSamples = 16000;
+  std::vector<float> mono(kSourceSamples);
+  std::vector<float> inverted(kSourceSamples);
+  for (size_t i = 0; i < kSourceSamples; ++i) {
+    const double t = static_cast<double>(i) / static_cast<double>(kSampleRate);
+    mono[i] = static_cast<float>(0.5 * std::sin(2.0 * kPi * 440.0 * t) +
+                                 0.2 * std::sin(2.0 * kPi * 1210.0 * t));
+    inverted[i] = -mono[i];
+  }
+  const std::vector<sonare::engine::TempoSyncWarpSegment> segments{
+      {0, kSourceSamples, kTargetSamples},
+  };
+  sonare::engine::TempoSyncWarpBakeConfig config;
+  config.sample_rate = kSampleRate;
+  config.n_fft = 1024;
+  config.hop_length = 256;
+  config.join_crossfade_samples = 0;
+
+  const auto mono_warp =
+      sonare::engine::bake_tempo_sync_warp_channel(mono.data(), kSourceSamples, segments, config);
+  const auto in_phase = sonare::engine::bake_tempo_sync_warp_channels(
+      {mono.data(), mono.data()}, kSourceSamples, segments, config);
+  const auto anti_phase = sonare::engine::bake_tempo_sync_warp_channels(
+      {mono.data(), inverted.data()}, kSourceSamples, segments, config);
+  REQUIRE(anti_phase.size() == 2);
+  REQUIRE(anti_phase[0].size() == kTargetSamples);
+
+  float peak = 0.0f;
+  float in_phase_divergence = 0.0f;
+  float anti_phase_divergence = 0.0f;
+  float mirror_error = 0.0f;
+  for (size_t i = 0; i < kTargetSamples; ++i) {
+    peak = std::max(peak, std::abs(mono_warp[i]));
+    in_phase_divergence = std::max(in_phase_divergence, std::abs(mono_warp[i] - in_phase[0][i]));
+    anti_phase_divergence =
+        std::max(anti_phase_divergence, std::abs(mono_warp[i] - anti_phase[0][i]));
+    mirror_error = std::max(mirror_error, std::abs(anti_phase[0][i] + anti_phase[1][i]));
+  }
+  REQUIRE(peak > 0.1f);
+  REQUIRE(anti_phase_divergence <= in_phase_divergence + 1.0e-6f * peak);
+  REQUIRE(mirror_error <= 1.0e-2f * peak);
+}
+
+TEST_CASE("tempo sync stereo warp rejects analysis geometry past the buffer bound",
+          "[engine][tempo_sync]") {
+  // 131073 analysis frames x 16385 bins exceeds int and the offline buffer bound, while the
+  // compressed output's own frame count stays within it.
+  constexpr size_t kSourceSamples = 131072;
+  constexpr size_t kTargetSamples = 4096;
+  const std::vector<float> left(kSourceSamples, 0.1f);
+  const std::vector<float> right(kSourceSamples, -0.1f);
+  const std::vector<sonare::engine::TempoSyncWarpSegment> segments{
+      {0, kSourceSamples, kTargetSamples},
+  };
+  sonare::engine::TempoSyncWarpBakeConfig config;
+  config.sample_rate = 48000;
+  config.n_fft = 32768;
+  config.hop_length = 1;
+  REQUIRE_THROWS_AS(sonare::engine::bake_tempo_sync_warp_channels({left.data(), right.data()},
+                                                                  kSourceSamples, segments, config),
+                    sonare::SonareException);
 }

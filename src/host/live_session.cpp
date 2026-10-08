@@ -36,17 +36,17 @@ LiveOpenResult LiveSession::open(engine::RealtimeEngine* engine, const Config& c
     return LiveOpenResult::kInvalidArgument;
   }
 
+  // The audio device owns the mapper, so it is declared first: on every return
+  // below the MIDI input is destroyed -- and disconnected -- before the mapper.
+  auto audio = std::make_unique<backends::CoreAudioDevice>();
   std::unique_ptr<backends::CoreMidiInput> midi;
   if (config.use_midi_input) {
     midi = std::make_unique<backends::CoreMidiInput>();
+    // Attached before the source connects, so no callback runs without it: it is
+    // what turns a CoreMIDI host timestamp into a render frame.
+    midi->set_time_mapper(&audio->midi_time_mapper());
     if (!midi->open(config.midi_input_index)) return LiveOpenResult::kMidiInputUnavailable;
   }
-
-  auto audio = std::make_unique<backends::CoreAudioDevice>();
-  // The mapper has to be attached before the device streams: it is what turns a
-  // CoreMIDI host timestamp into a render frame, and an event that arrives
-  // before it is attached has no frame to land on.
-  if (midi) midi->set_time_mapper(&audio->midi_time_mapper());
 
   engine_ = engine;
   destination_id_ = config.destination_id;

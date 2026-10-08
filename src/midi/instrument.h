@@ -19,15 +19,14 @@
 ///
 ///     offset = event.render_frame - state.render_frame
 ///
-/// is the intra-block offset. A sub-block's events are delivered after its
-/// set_transport(), yet placement still belongs in process(). One trap: an
-/// instrument-accumulated counter is not a substitute, because the engine
-/// renders an instrument only while the transport rolls or a note is sounding,
-/// so such a counter drifts the first time playback stops.
+/// is the intra-block offset. The engine splits its render at every event, so
+/// a sub-block's events all carry its first frame and arrive after its
+/// set_transport(); an instrument applying them at the start of the next
+/// process() call places them exactly. The engine renders a bound instrument
+/// every block, rolling or stopped, so a release or pedal tail is never frozen.
 /// TransportState::sample_position is the timeline coordinate and must not place
-/// events. One case escapes the [0, num_samples) guarantee: events queued while
-/// the transport is stopped and nothing is sounding arrive with a negative
-/// offset, so clamp to 0 rather than indexing out of the block.
+/// events. A host feeding events directly may still stamp one before the block,
+/// so clamp a negative offset to 0 rather than indexing out of the block.
 
 #include <cstddef>
 #include <cstdint>

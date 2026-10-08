@@ -402,7 +402,10 @@ const GsEfxRowView& PartFxStage::row_view() const noexcept {
 }
 
 std::vector<GsEfxStage> PartFxStage::efx_stages(const GsEfx& efx) const {
-  return rows_ != nullptr ? gs_efx_insert_chain(efx, *rows_) : gs_efx_insert_chain(efx);
+  std::vector<GsEfxStage> stages =
+      rows_ != nullptr ? gs_efx_insert_chain(efx, *rows_) : gs_efx_insert_chain(efx);
+  gs_efx_fit_to_rate(stages, sample_rate_);
+  return stages;
 }
 
 Sf2EfxUnitRt PartFxStage::build_unit(const GsEfx& efx) const {

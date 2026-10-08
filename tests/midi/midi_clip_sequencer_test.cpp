@@ -24,6 +24,7 @@
 
 namespace {
 
+using sonare::midi::DeviceFrame;
 using sonare::midi::MidiClip;
 using sonare::midi::MidiClipEvent;
 using sonare::midi::MidiClipSchedule;
@@ -33,6 +34,7 @@ using sonare::midi::MidiFxChain;
 using sonare::midi::MidiSequencer;
 using sonare::midi::MidiSysExPayloadBank;
 using sonare::midi::PreparedMidiSysEx;
+using sonare::midi::SequencerClock;
 using sonare::midi::Ump;
 
 struct TestPreparedMidiSysEx final : PreparedMidiSysEx {
@@ -79,6 +81,21 @@ void init_tempo_map(sonare::transport::TempoMap* map, double bpm = 120.0,
   seg.bpm = bpm;
   seg.start_sample = 0.0;
   map->set_segments({seg});
+}
+
+// Offsets in [0, num_frames) from @p start at which the sequencer holds an
+// event, found by walking frames_until_next_event from the frame before.
+std::vector<int> event_offsets(const MidiSequencer& seq, int64_t start, int num_frames) {
+  std::vector<int> offsets;
+  int64_t frame = start - 1;
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  const int64_t end = start > kMax - num_frames ? kMax : start + num_frames;
+  while (frame < end) {
+    frame +=
+        seq.frames_until_next_event(SequencerClock::aligned(frame), static_cast<int>(end - frame));
+    if (frame < end) offsets.push_back(static_cast<int>(frame - start));
+  }
+  return offsets;
 }
 
 }  // namespace
@@ -212,7 +229,7 @@ TEST_CASE("MidiSequencer bypasses MIDI FX timing for SysEx", "[midi][sysex]") {
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   const std::vector<uint8_t> payload{0xF0, 0x7D, 0x66, 0xF7};
   MidiClipSchedule clip;
@@ -228,7 +245,7 @@ TEST_CASE("MidiSequencer bypasses MIDI FX timing for SysEx", "[midi][sysex]") {
   clip.events = {sysex, note};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.ump.message_type() == sonare::midi::UmpMessageType::kData64);
@@ -264,8 +281,7 @@ TEST_CASE("MidiFxChain keeps SysEx opaque and synchronous", "[midi][sysex]") {
   REQUIRE(output.events[0].prepared_sysex == &prepared);
 }
 
-TEST_CASE("MidiSequencer collects more than the default boundary capacity after prepare",
-          "[midi]") {
+TEST_CASE("MidiSequencer reports every event frame of a dense block", "[midi]") {
   MidiSequencer seq;
   CapturingSink sink;
   seq.prepare(48000.0);
@@ -278,61 +294,12 @@ TEST_CASE("MidiSequencer collects more than the default boundary capacity after 
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  REQUIRE(boundaries.capacity() == MidiSequencer::BoundaryOffsets::kCapacity);
-  boundaries.prepare(128);
-  REQUIRE(boundaries.capacity() == 128);
-  seq.collect_boundaries(0, 80, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
-  REQUIRE(boundaries.size() == 80);
-  REQUIRE(boundaries[0] == 0);
-  REQUIRE(boundaries[79] == 79);
-
-  // The prepared mark table is reset for every collection, so reusing the
-  // same control-side scratch cannot hide offsets seen in the previous block.
-  seq.collect_boundaries(0, 80, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
-  REQUIRE(boundaries.size() == 80);
-
-  // A shifted block maps every event onto an offset the previous block marked.
-  seq.collect_boundaries(40, 40, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
-  REQUIRE(boundaries.size() == 40);
-  for (size_t i = 0; i < boundaries.size(); ++i) REQUIRE(boundaries[i] == static_cast<int>(i));
-}
-
-TEST_CASE("MidiSequencer boundary marks survive an overflowed collection", "[midi]") {
-  MidiSequencer seq;
-  CapturingSink sink;
-  seq.prepare(48000.0);
-  seq.set_sink(&sink);
-  constexpr int kCapacity = static_cast<int>(MidiSequencer::BoundaryOffsets::kCapacity);
-  // The first clip fills the inline set with offsets past its mark table; the
-  // second clip's offsets are markable but arrive once the set is full.
-  MidiClipSchedule late;
-  late.id = 1;
-  for (int frame = kCapacity; frame < 2 * kCapacity; ++frame) {
-    late.events.push_back({frame, sonare::midi::make_midi1_control_change(0, 0, 1, 1)});
-  }
-  MidiClipSchedule early;
-  early.id = 2;
-  for (int frame = 0; frame < 16; ++frame) {
-    early.events.push_back({frame, sonare::midi::make_midi1_control_change(0, 0, 2, 1)});
-  }
-  seq.set_midi_clips({late, early});
-  seq.acquire_midi_clips();
-
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(0, 2 * kCapacity, &boundaries);
-  REQUIRE(boundaries.overflowed());
-  REQUIRE(boundaries.size() == MidiSequencer::BoundaryOffsets::kCapacity);
-  REQUIRE(boundaries[0] == kCapacity);
-
-  // An offset refused for capacity must not stay marked as a duplicate.
-  seq.collect_boundaries(0, 16, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
-  REQUIRE(boundaries.size() == 16);
-  for (size_t i = 0; i < boundaries.size(); ++i) REQUIRE(boundaries[i] == static_cast<int>(i));
+  const std::vector<int> offsets = event_offsets(seq, 0, 80);
+  REQUIRE(offsets.size() == 80);
+  for (size_t i = 0; i < offsets.size(); ++i) REQUIRE(offsets[i] == static_cast<int>(i));
+  const std::vector<int> shifted = event_offsets(seq, 40, 40);
+  REQUIRE(shifted.size() == 40);
+  for (size_t i = 0; i < shifted.size(); ++i) REQUIRE(shifted[i] == static_cast<int>(i));
 }
 
 TEST_CASE("MidiClip sort_stable orders by ppq, note-off before note-on, stable tiebreak",
@@ -638,14 +605,14 @@ TEST_CASE("MidiSequencer releases notes from clips dropped by a republished set"
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
   REQUIRE(seq.active_note_count() == 1);
   const size_t dispatched_before = sink.events.size();
 
   // Republish WITHOUT the clip (mute / delete) and render the next block.
   seq.set_midi_clips({});
   seq.acquire_midi_clips();
-  seq.process_block(256, 256);
+  seq.process_block(SequencerClock::aligned(256), 256);
 
   // The hung note was released: a note-off for note 60 on destination 5.
   REQUIRE(seq.active_note_count() == 0);
@@ -677,13 +644,13 @@ TEST_CASE("MidiSequencer keeps notes sounding when a republished set still conta
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
   REQUIRE(seq.active_note_count() == 1);
 
   // Republish the same clip (id unchanged) and render on.
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(256, 256);
+  seq.process_block(SequencerClock::aligned(256), 256);
   REQUIRE(seq.active_note_count() == 1);  // still sounding, not released
 }
 
@@ -705,7 +672,7 @@ TEST_CASE(
   arp.gate_frames = 40;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(5, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule original;
   original.id = 43;
@@ -713,7 +680,7 @@ TEST_CASE(
   original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
-  seq.process_block(0, 32);
+  seq.process_block(SequencerClock::aligned(0), 32);
 
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events[0].destination == 5);
@@ -730,7 +697,7 @@ TEST_CASE(
   seq.set_midi_clips({replacement});
   seq.acquire_midi_clips();
   sink.events.clear();
-  seq.process_block(32, 32);
+  seq.process_block(SequencerClock::aligned(32), 32);
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE(sink.events.size() == 1);
@@ -756,7 +723,7 @@ TEST_CASE("MidiSequencer refresh releases a clip whose source track changed", "[
   arp.gate_frames = 40;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(5, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule original;
   original.id = 44;
@@ -765,7 +732,7 @@ TEST_CASE("MidiSequencer refresh releases a clip whose source track changed", "[
   original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
-  seq.process_block(0, 32);
+  seq.process_block(SequencerClock::aligned(0), 32);
 
   REQUIRE(seq.active_note_count() == 1);
   MidiClipSchedule replacement = original;
@@ -774,7 +741,7 @@ TEST_CASE("MidiSequencer refresh releases a clip whose source track changed", "[
   seq.set_midi_clips({replacement});
   seq.acquire_midi_clips();
   sink.events.clear();
-  seq.process_block(32, 32);
+  seq.process_block(SequencerClock::aligned(32), 32);
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE(sink.events.size() == 1);
@@ -807,7 +774,7 @@ TEST_CASE("MidiSequencer note-off fallback keeps a different source track active
   track_b.events = {{5, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({track_a, track_b});
   seq.acquire_midi_clips();
-  seq.process_block(0, 32);
+  seq.process_block(SequencerClock::aligned(0), 32);
 
   // The duplicate A note-off must not consume B's same-pitch note.
   REQUIRE(seq.active_note_count() == 1);
@@ -815,7 +782,7 @@ TEST_CASE("MidiSequencer note-off fallback keeps a different source track active
   sink.events.clear();
   seq.set_midi_clips({track_a});
   seq.acquire_midi_clips();
-  seq.process_block(32, 32);
+  seq.process_block(SequencerClock::aligned(32), 32);
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE(sink.events.size() == 1);
@@ -828,9 +795,10 @@ TEST_CASE("MidiSequencer note-off fallback keeps a different source track active
 TEST_CASE("MidiSequencer retains sustain state for global and destination stop resets", "[midi]") {
   constexpr uint32_t kDestination = 11;
   const auto seed_sustain_state = [&](MidiSequencer& seq) {
-    seq.inject_event(kDestination, 0, sonare::midi::make_midi1_control_change(0, 0, 64, 127));
-    seq.inject_event(kDestination, 1, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-    seq.inject_event(kDestination, 2, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+    seq.inject_event(kDestination, DeviceFrame{0},
+                     sonare::midi::make_midi1_control_change(0, 0, 64, 127));
+    seq.inject_event(kDestination, DeviceFrame{1}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(kDestination, DeviceFrame{2}, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
   };
   const auto require_reset = [&](const CapturingSink& sink, int64_t render_frame) {
     REQUIRE(sink.events.size() == 4);
@@ -853,7 +821,7 @@ TEST_CASE("MidiSequencer retains sustain state for global and destination stop r
     REQUIRE(seq.active_note_count() == 0);
     sink.events.clear();
 
-    seq.all_notes_off(/*render_frame=*/3);
+    seq.all_notes_off(DeviceFrame{/*render_frame=*/3});
     require_reset(sink, 3);
   }
 
@@ -866,7 +834,7 @@ TEST_CASE("MidiSequencer retains sustain state for global and destination stop r
     REQUIRE(seq.active_note_count() == 0);
     sink.events.clear();
 
-    seq.all_notes_off_for_destination(kDestination, /*render_frame=*/4);
+    seq.all_notes_off_for_destination(kDestination, /*render_frame=*/DeviceFrame{4});
     require_reset(sink, 4);
   }
 }
@@ -879,14 +847,14 @@ TEST_CASE("MidiSequencer does not stop-track non-channel note-shaped packets", "
 
   const Ump nonchannel_note_on =
       raw_ump(0x3, static_cast<uint8_t>(sonare::midi::UmpStatus::kNoteOn));
-  seq.inject_event(/*destination=*/5, /*render_frame=*/0, nonchannel_note_on);
+  seq.inject_event(/*destination=*/5, /*render_frame=*/DeviceFrame{0}, nonchannel_note_on);
 
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events.front().event.ump == nonchannel_note_on);
   REQUIRE(seq.active_note_count() == 0);
 
   sink.events.clear();
-  seq.all_notes_off(/*render_frame=*/1);
+  seq.all_notes_off(DeviceFrame{/*render_frame=*/1});
   REQUIRE(sink.events.empty());
   REQUIRE(seq.active_note_count() == 0);
 }
@@ -901,12 +869,12 @@ TEST_CASE("MidiSequencer resets all retained channel triples at ledger capacity"
 
   for (uint8_t group = 0; group < 16; ++group) {
     for (uint8_t channel = 0; channel < 16; ++channel) {
-      seq.inject_event(kDestination, 0,
+      seq.inject_event(kDestination, DeviceFrame{0},
                        sonare::midi::make_midi1_control_change(group, channel, 64, 127));
     }
   }
   sink.events.clear();
-  seq.all_notes_off_for_destination(kDestination, /*render_frame=*/256);
+  seq.all_notes_off_for_destination(kDestination, /*render_frame=*/DeviceFrame{256});
 
   REQUIRE(sink.events.size() == kChannelTriples * 4);
   std::array<std::array<std::array<int, 4>, 16>, 16> reset_counts{};
@@ -957,17 +925,19 @@ TEST_CASE("MidiSequencer drops new stateful events when the ledger is full but f
 
   for (uint8_t group = 0; group < 16; ++group) {
     for (uint8_t channel = 0; channel < 16; ++channel) {
-      seq.inject_event(kFullDestination, 0,
+      seq.inject_event(kFullDestination, DeviceFrame{0},
                        sonare::midi::make_midi1_control_change(group, channel, 1, 127));
     }
   }
   sink.events.clear();
 
-  seq.inject_event(kOverflowDestination, 1, sonare::midi::make_midi1_control_change(0, 0, 64, 127));
+  seq.inject_event(kOverflowDestination, DeviceFrame{1},
+                   sonare::midi::make_midi1_control_change(0, 0, 64, 127));
   REQUIRE(sink.events.empty());
   REQUIRE(seq.retained_channel_overflow_count() == 1);
 
-  seq.inject_event(kOverflowDestination, 2, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  seq.inject_event(kOverflowDestination, DeviceFrame{2},
+                   sonare::midi::make_midi1_note_off(0, 0, 60, 0));
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events[0].destination == kOverflowDestination);
   REQUIRE(sink.events[0].event.render_frame == 2);
@@ -993,7 +963,7 @@ TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]
   seq.acquire_midi_clips();
 
   // Block 0: [0,256) captures the first two events.
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].destination == 7);
   REQUIRE(sink.events[0].event.render_frame == 100);
@@ -1002,12 +972,12 @@ TEST_CASE("MidiSequencer dispatches in-block events in order and frame", "[midi]
   REQUIRE(sink.events[1].event.ump.is_note_off());
 
   // Block 1: [256,512) captures the third event only.
-  seq.process_block(256, 256);
+  seq.process_block(SequencerClock::aligned(256), 256);
   REQUIRE(sink.events.size() == 3);
   REQUIRE(sink.events[2].event.render_frame == 300);
 
   // Block 2: [512,768) captures the fourth.
-  seq.process_block(512, 256);
+  seq.process_block(SequencerClock::aligned(512), 256);
   REQUIRE(sink.events.size() == 4);
   REQUIRE(sink.events[3].event.render_frame == 600);
   REQUIRE(seq.dispatched_event_count() == 4);
@@ -1027,7 +997,7 @@ TEST_CASE("MidiSequencer preserves source track through MIDI FX and a synthetic 
   transpose.semitones = 12;
   fx.set_transpose(transpose);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 99;
@@ -1038,7 +1008,7 @@ TEST_CASE("MidiSequencer preserves source track through MIDI FX and a synthetic 
   clip.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.ump.is_note_on());
@@ -1072,7 +1042,7 @@ TEST_CASE("MidiSequencer dispatches pre-resolved SysEx payload views", "[midi]")
   payload[2] = 0x55;
   seq.acquire_midi_clips();
 
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events.front().destination == 7);
   REQUIRE(sink.events.front().event.render_frame == 120);
@@ -1141,7 +1111,7 @@ TEST_CASE("MidiSequencer owns an arbitrary-size scheduled SysEx payload", "[midi
   seq.set_midi_clips({clip});
   payload[37] ^= 0xFFu;
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
 
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events.front().event.sysex_payload_size == expected.size());
@@ -1190,7 +1160,7 @@ TEST_CASE("MidiSequencer preserves payloads borrowed by later schedules", "[midi
   seq.set_midi_clips(std::move(schedules));
   REQUIRE_FALSE(weak_prepared.expired());
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
 
   REQUIRE(sink.events.size() == 2);
   for (const auto& captured : sink.events) {
@@ -1220,7 +1190,7 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   chord.intervals[1] = 7;
   fx.set_chord(chord);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule processed;
   processed.id = 1;
@@ -1232,7 +1202,7 @@ TEST_CASE("MidiSequencer applies live MIDI FX per destination before dispatch", 
   bypassed.destination_id = 8;
   seq.set_midi_clips({processed, bypassed});
   seq.acquire_midi_clips();
-  seq.process_block(0, 64);
+  seq.process_block(SequencerClock::aligned(0), 64);
 
   REQUIRE(sink.events.size() == 6);
   REQUIRE(sink.events[0].destination == 7);
@@ -1267,7 +1237,7 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   // A same-timestamp RPN gesture must retain its written order after all four
   // controllers are delayed into the pending-FX queue. The selector bytes
@@ -1283,7 +1253,7 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 4);
   constexpr std::array<uint8_t, 4> kWritten{101, 100, 6, 38};
@@ -1318,7 +1288,7 @@ TEST_CASE("MidiSequencer ranks same-frame note-off before note-on across clips",
   // sequencer merges events from all clips.
   seq.set_midi_clips({incoming, old});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 3);
   REQUIRE(sink.events[0].event.render_frame == 0);
@@ -1343,7 +1313,7 @@ TEST_CASE("MidiSequencer globally ranks a scheduled note-off before a pending no
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   // The note-on is moved from 60 to 100 and therefore waits in the FX queue.
   // The other clip's note-off is already scheduled at 100. Both clips share a
@@ -1362,7 +1332,7 @@ TEST_CASE("MidiSequencer globally ranks a scheduled note-off before a pending no
 
   seq.set_midi_clips({pending_on, scheduled_off});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 100);
@@ -1385,7 +1355,7 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 1208;
@@ -1402,7 +1372,7 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 100);
@@ -1412,7 +1382,7 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   REQUIRE(seq.active_note_count() == 0);
 
   // A skipped CC must not be carried into the following block.
-  seq.process_block(128, 128);
+  seq.process_block(SequencerClock::aligned(128), 128);
   REQUIRE(sink.events.size() == 2);
 }
 
@@ -1429,7 +1399,7 @@ TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end relea
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule ending;
   ending.id = 1204;
@@ -1450,7 +1420,7 @@ TEST_CASE("MidiSequencer ranks a pending note-on after a one-shot clip-end relea
 
   seq.set_midi_clips({incoming, ending});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 3);
   REQUIRE(sink.events[0].event.render_frame == 0);
@@ -1475,7 +1445,7 @@ TEST_CASE("MidiSequencer humanize advances ordinals like offline MIDI FX", "[mid
   humanize.timing_frames = 20;
   config.set_humanize(humanize);
   REQUIRE(seq.set_midi_fx(7, config));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 1;
@@ -1488,7 +1458,7 @@ TEST_CASE("MidiSequencer humanize advances ordinals like offline MIDI FX", "[mid
   }
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 1024);
+  seq.process_block(SequencerClock::aligned(0), 1024);
 
   MidiFxChain offline;
   offline.set_humanize(humanize);
@@ -1523,7 +1493,7 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   arp.gate_frames = 10;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 1;
@@ -1533,7 +1503,7 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  seq.process_block(0, 32);
+  seq.process_block(SequencerClock::aligned(0), 32);
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 0);
   REQUIRE(sink.events[0].event.ump.is_note_on());
@@ -1541,7 +1511,7 @@ TEST_CASE("MidiSequencer live MIDI FX keeps future arpeggiator events pending", 
   REQUIRE(sink.events[1].event.ump.is_note_off());
   REQUIRE(seq.active_note_count() == 0);
 
-  seq.process_block(32, 32);
+  seq.process_block(SequencerClock::aligned(32), 32);
   REQUIRE(sink.events.size() == 4);
   REQUIRE(sink.events[2].event.render_frame == 40);
   REQUIRE(sink.events[2].event.ump.is_note_on());
@@ -1567,7 +1537,7 @@ TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", 
   arp.gate_frames = 10;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 121;
@@ -1576,17 +1546,19 @@ TEST_CASE("MidiSequencer clamps overdue pending MIDI FX events to block start", 
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  seq.process_block(0, 32);
+  seq.process_block(SequencerClock::aligned(0), 32);
   REQUIRE(sink.events.size() == 2);
 
   sink.events.clear();
-  seq.process_block(64, 32);
+  seq.process_block(SequencerClock::aligned(64), 32);
+  // Overdue events keep their chronological order, so the late note cannot hang.
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 64);
-  REQUIRE(sink.events[0].event.ump.is_note_off());
+  REQUIRE(sink.events[0].event.ump.is_note_on());
+  REQUIRE(sink.events[0].event.ump.note_number() == 72);
   REQUIRE(sink.events[1].event.render_frame == 64);
-  REQUIRE(sink.events[1].event.ump.is_note_on());
-  REQUIRE(sink.events[1].event.ump.note_number() == 72);
+  REQUIRE(sink.events[1].event.ump.is_note_off());
+  REQUIRE(seq.active_note_count() == 0);
 }
 
 TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[midi]") {
@@ -1605,7 +1577,7 @@ TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[m
   arp.gate_frames = 5;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 101;
@@ -1618,13 +1590,13 @@ TEST_CASE("MidiSequencer keeps arpeggiator pending events across loop wrap", "[m
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  seq.process_block(0, 20);
+  seq.process_block(SequencerClock::aligned(0), 20);
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.render_frame == 0);
   REQUIRE(sink.events[1].event.render_frame == 5);
 
   sink.events.clear();
-  seq.process_block(20, 20);
+  seq.process_block(SequencerClock::aligned(20), 20);
 
   bool saw_carried_arp_note = false;
   for (const auto& cap : sink.events) {
@@ -1649,7 +1621,7 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
   up.semitones = 12;
   transpose_up.set_transpose(up);
   REQUIRE(seq.set_midi_fx(7, transpose_up));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 111;
@@ -1658,7 +1630,7 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
                  {100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 64);
+  seq.process_block(SequencerClock::aligned(0), 64);
 
   REQUIRE(seq.active_note_count() == 1);
   REQUIRE(sink.events.size() == 1);
@@ -1666,8 +1638,8 @@ TEST_CASE("MidiSequencer MIDI FX hot-swap releases transformed active notes", "[
 
   MidiFxChain bypass;
   sink.events.clear();
-  REQUIRE(seq.set_midi_fx(7, bypass, 64));
-  seq.acquire_midi_fx(64);
+  REQUIRE(seq.set_midi_fx(7, bypass));
+  seq.acquire_midi_fx(DeviceFrame{64});
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE_FALSE(sink.events.empty());
@@ -1688,9 +1660,9 @@ TEST_CASE("MidiSequencer MIDI FX clear releases generated notes at the audio bou
     seq.prepare(48000.0);
     seq.set_sink(&sink);
     REQUIRE(seq.set_midi_fx(7, fx));
-    seq.acquire_midi_fx(0);
+    seq.acquire_midi_fx(DeviceFrame{0});
 
-    seq.inject_event(7, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(7, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
     REQUIRE(seq.active_note_count() == generated_notes.size());
     sink.events.clear();
 
@@ -1699,7 +1671,7 @@ TEST_CASE("MidiSequencer MIDI FX clear releases generated notes at the audio bou
     seq.clear_midi_fx(7);
     REQUIRE(seq.active_note_count() == generated_notes.size());
     REQUIRE(sink.events.empty());
-    seq.acquire_midi_fx(64);
+    seq.acquire_midi_fx(DeviceFrame{64});
     REQUIRE(seq.active_note_count() == 0);
 
     for (uint8_t note : generated_notes) {
@@ -1716,9 +1688,9 @@ TEST_CASE("MidiSequencer MIDI FX clear releases generated notes at the audio bou
     // Pending arpeggiator/chord output was discarded with the old chain. The
     // source note-off now passes through unchanged and cannot resurrect state.
     sink.events.clear();
-    seq.process_block(64, 64);
+    seq.process_block(SequencerClock::aligned(64), 64);
     REQUIRE(sink.events.empty());
-    seq.inject_event(7, 128, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+    seq.inject_event(7, DeviceFrame{128}, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
     REQUIRE(seq.active_note_count() == 0);
     REQUIRE(sink.events.size() == 1);
     REQUIRE(sink.events[0].event.ump.note_number() == 60);
@@ -1773,7 +1745,7 @@ TEST_CASE("MidiSequencer clears MIDI FX timing state on stop", "[midi]") {
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   // The first note stores a +40-frame quantize shift (60 -> 100) in the live
   // MIDI FX chain. all_notes_off() must retire that pairing state as well as
@@ -1784,21 +1756,21 @@ TEST_CASE("MidiSequencer clears MIDI FX timing state on stop", "[midi]") {
   clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
   REQUIRE(sink.events.size() == 1);
   REQUIRE(sink.events[0].event.ump.is_note_on());
   REQUIRE(sink.events[0].event.render_frame == 100);
   REQUIRE(seq.active_note_count() == 1);
 
-  seq.all_notes_off(128);
+  seq.all_notes_off(DeviceFrame{128});
   REQUIRE(seq.active_note_count() == 0);
   sink.events.clear();
 
   // A new stream starts at the origin. Its short gate must retain its own
   // zero shift and close at frame 20, rather than inheriting the old shaped
   // onset at 100 and being forced to frame 101.
-  seq.inject_event(7, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-  seq.inject_event(7, 20, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
+  seq.inject_event(7, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  seq.inject_event(7, DeviceFrame{20}, sonare::midi::make_midi1_note_off(0, 0, 60, 0));
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.ump.is_note_on());
@@ -1821,7 +1793,7 @@ TEST_CASE("MidiSequencer keeps unchanged destination MIDI FX timing across updat
   quantize_a.strength = 1.0f;
   destination_a.set_quantize(quantize_a);
   REQUIRE(seq.set_midi_fx(7, destination_a));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 502;
@@ -1834,7 +1806,7 @@ TEST_CASE("MidiSequencer keeps unchanged destination MIDI FX timing across updat
   // Leave the transformed note-on pending at frame 100 while the source
   // note-off remains in the next block. This preserves the A-chain timing
   // ledger across the unrelated B update below.
-  seq.process_block(0, 70);
+  seq.process_block(SequencerClock::aligned(0), 70);
   REQUIRE(sink.events.empty());
 
   MidiFxChain destination_b;
@@ -1844,9 +1816,9 @@ TEST_CASE("MidiSequencer keeps unchanged destination MIDI FX timing across updat
   quantize_b.strength = 1.0f;
   destination_b.set_quantize(quantize_b);
   REQUIRE(seq.set_midi_fx(8, destination_b));
-  seq.acquire_midi_fx(70);
+  seq.acquire_midi_fx(DeviceFrame{70});
 
-  seq.process_block(70, 100);
+  seq.process_block(SequencerClock::aligned(70), 100);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].destination == 7);
@@ -1873,7 +1845,7 @@ TEST_CASE("MidiSequencer releases an active clip note after its published end is
   original.events = {{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({original});
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
   REQUIRE(seq.active_note_count() == 1);
 
   // The clip keeps the same identity, but its new exclusive end (128) is
@@ -1883,7 +1855,7 @@ TEST_CASE("MidiSequencer releases an active clip note after its published end is
   seq.set_midi_clips({shortened});
   seq.acquire_midi_clips();
   sink.events.clear();
-  seq.process_block(256, 64);
+  seq.process_block(SequencerClock::aligned(256), 64);
 
   REQUIRE(seq.active_note_count() == 0);
   REQUIRE(sink.events.size() == 1);
@@ -1907,7 +1879,7 @@ TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[m
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule removed;
   removed.id = 504;
@@ -1921,7 +1893,7 @@ TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[m
   retained.events = {{70, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({removed, retained});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
   REQUIRE(seq.active_note_count() == 2);
 
   // Remove only track 10 and publish a replacement clip on that same track.
@@ -1937,7 +1909,7 @@ TEST_CASE("MidiSequencer clears only a removed clip's MIDI FX timing state", "[m
   seq.set_midi_clips({replacement, retained});
   seq.acquire_midi_clips();
   sink.events.clear();
-  seq.process_block(128, 128);
+  seq.process_block(SequencerClock::aligned(128), 128);
 
   bool saw_removed_off = false;
   bool saw_replacement_off = false;
@@ -1971,7 +1943,7 @@ TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode res
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 507;
@@ -1980,10 +1952,10 @@ TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode res
   clip.events = {{60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
   REQUIRE(seq.active_note_count() == 1);
 
-  seq.inject_event(7, 128, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  seq.inject_event(7, DeviceFrame{128}, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
   REQUIRE(seq.active_note_count() == 0);
 
   // Keep the clip identity so only the channel-mode reset can retire the old
@@ -1996,7 +1968,7 @@ TEST_CASE("MidiSequencer clears matching MIDI FX timing after a channel-mode res
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
   sink.events.clear();
-  seq.process_block(128, 128);
+  seq.process_block(SequencerClock::aligned(128), 128);
 
   bool saw_restarted_off = false;
   for (const auto& captured : sink.events) {
@@ -2023,13 +1995,13 @@ TEST_CASE("MidiSequencer channel-mode resets retire the active-note ledger", "[m
     for (size_t i = 0; i < MidiSequencer::kMaxActiveNotes; ++i) {
       const uint8_t channel = static_cast<uint8_t>((i / 128u) & 0x0Fu);
       const uint8_t note = static_cast<uint8_t>(i % 128u);
-      seq.inject_event(kDestination, static_cast<int64_t>(i),
+      seq.inject_event(kDestination, DeviceFrame{static_cast<int64_t>(i)},
                        sonare::midi::make_midi1_note_on(0, channel, note, 100));
     }
     REQUIRE(seq.active_note_count() == MidiSequencer::kMaxActiveNotes);
     REQUIRE(seq.active_note_overflow_count() == 0);
 
-    seq.inject_event(kDestination, 1000,
+    seq.inject_event(kDestination, DeviceFrame{1000},
                      sonare::midi::make_midi1_control_change(0, 0, controller, 0));
     // The reset is channel-scoped: the 128 notes on channel 1 remain tracked
     // while all 128 notes on channel 0 are retired.
@@ -2037,7 +2009,8 @@ TEST_CASE("MidiSequencer channel-mode resets retire the active-note ledger", "[m
     REQUIRE(seq.active_note_overflow_count() == 0);
 
     const size_t dispatched_after_reset = sink.events.size();
-    seq.inject_event(kDestination, 1001, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(kDestination, DeviceFrame{1001},
+                     sonare::midi::make_midi1_note_on(0, 0, 60, 100));
     REQUIRE(seq.active_note_count() == 129);
     REQUIRE(seq.active_note_overflow_count() == 0);
     REQUIRE(sink.events.size() > dispatched_after_reset);
@@ -2069,13 +2042,13 @@ TEST_CASE("MidiSequencer channel-mode reset cancels only matching pending MIDI F
     configure_arpeggiator(destination_b);
     REQUIRE(seq.set_midi_fx(9, destination_a));
     REQUIRE(seq.set_midi_fx(10, destination_b));
-    seq.acquire_midi_fx(0);
+    seq.acquire_midi_fx(DeviceFrame{0});
 
-    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-    seq.inject_event(10, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(10, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
     sink.events.clear();
-    seq.inject_event(9, 20, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
-    seq.process_block(20, 64);
+    seq.inject_event(9, DeviceFrame{20}, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+    seq.process_block(SequencerClock::aligned(20), 64);
 
     size_t surviving_destination_b = 0;
     for (const auto& captured : sink.events) {
@@ -2097,15 +2070,15 @@ TEST_CASE("MidiSequencer channel-mode reset cancels only matching pending MIDI F
     MidiFxChain destination;
     configure_arpeggiator(destination);
     REQUIRE(seq.set_midi_fx(9, destination));
-    seq.acquire_midi_fx(0);
+    seq.acquire_midi_fx(DeviceFrame{0});
 
-    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 1, 60, 100));
-    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(1, 0, 60, 100));
-    seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(1, 1, 60, 100));
+    seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+    seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 1, 60, 100));
+    seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(1, 0, 60, 100));
+    seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(1, 1, 60, 100));
     sink.events.clear();
-    seq.inject_event(9, 20, sonare::midi::make_midi1_control_change(0, 0, 123, 0));
-    seq.process_block(20, 64);
+    seq.inject_event(9, DeviceFrame{20}, sonare::midi::make_midi1_control_change(0, 0, 123, 0));
+    seq.process_block(SequencerClock::aligned(20), 64);
 
     size_t surviving_other_lanes = 0;
     for (const auto& captured : sink.events) {
@@ -2146,15 +2119,15 @@ TEST_CASE("MidiSequencer removes queued notes before dispatching a queued channe
   quantize.strength = 1.0f;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(9, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   // The second arpeggiator gate is pending in the future. The controller reset
   // is also pending (60 -> 100), so its cleanup must remove the selected slot
   // safely before it erases the remaining future note slots.
-  seq.inject_event(9, 0, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-  seq.inject_event(9, 60, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
+  seq.inject_event(9, DeviceFrame{60}, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
   sink.events.clear();
-  seq.process_block(61, 300);
+  seq.process_block(SequencerClock::aligned(61), 300);
 
   bool saw_queued_reset = false;
   for (const auto& captured : sink.events) {
@@ -2187,12 +2160,12 @@ TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
   REQUIRE(seq.active_note_count() == 3);
 
   const uint32_t before = seq.dispatched_event_count();
   sink.events.clear();
-  seq.all_notes_off(/*render_frame=*/128);
+  seq.all_notes_off(DeviceFrame{/*render_frame=*/128});
   REQUIRE(seq.active_note_count() == 0);
   // 3 note-offs plus the 4-message controller-reset sequence (damper / reset-all
   // / all-notes-off / pitch-bend) on each of the 3 distinct channels.
@@ -2208,7 +2181,7 @@ TEST_CASE("MidiSequencer all_notes_off releases sounding notes (hang-note safety
 
   // A second all_notes_off is a no-op (nothing sounding).
   sink.events.clear();
-  seq.all_notes_off(256);
+  seq.all_notes_off(DeviceFrame{256});
   REQUIRE(sink.events.empty());
   REQUIRE(seq.active_note_count() == 0);
 }
@@ -2235,15 +2208,13 @@ TEST_CASE("MidiSequencer one-shot clip end releases only that clip's sounding no
   seq.set_midi_clips({ending, open});
   seq.acquire_midi_clips();
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(0, 96, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
+  const std::vector<int> boundaries = event_offsets(seq, 0, 96);
   REQUIRE(boundaries.size() == 3);
   REQUIRE(boundaries[0] == 10);
   REQUIRE(boundaries[1] == 20);
   REQUIRE(boundaries[2] == 50);
 
-  seq.process_block(0, 96);
+  seq.process_block(SequencerClock::aligned(0), 96);
 
   REQUIRE(sink.events.size() == 3);
   REQUIRE(sink.events[0].event.render_frame == 10);
@@ -2258,7 +2229,7 @@ TEST_CASE("MidiSequencer one-shot clip end releases only that clip's sounding no
   REQUIRE(seq.active_note_count() == 1);
 
   sink.events.clear();
-  seq.all_notes_off(96);
+  seq.all_notes_off(DeviceFrame{96});
   size_t note_offs = 0;
   for (const auto& cap : sink.events) {
     if (cap.event.ump.is_note_off()) {
@@ -2290,9 +2261,7 @@ TEST_CASE("MidiSequencer loops MIDI clip schedules on the RT path", "[midi]") {
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(0, 128, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
+  const std::vector<int> boundaries = event_offsets(seq, 0, 128);
   REQUIRE(boundaries.size() == 10);
   REQUIRE(boundaries[0] == 0);
   REQUIRE(boundaries[1] == 20);
@@ -2305,7 +2274,7 @@ TEST_CASE("MidiSequencer loops MIDI clip schedules on the RT path", "[midi]") {
   REQUIRE(boundaries[8] == 110);
   REQUIRE(boundaries[9] == 120);
 
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 12);
   REQUIRE(sink.events[0].event.render_frame == 0);
@@ -2346,7 +2315,7 @@ TEST_CASE("MidiSequencer treats MIDI 1.0 note-on velocity zero as note-off", "[m
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(seq.active_note_count() == 0);
@@ -2372,12 +2341,12 @@ TEST_CASE("MidiSequencer surfaces active-note overflow without growing", "[midi]
   }
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, static_cast<int>(total) + 1);
+  seq.process_block(SequencerClock::aligned(0), static_cast<int>(total) + 1);
 
   REQUIRE(seq.active_note_count() == MidiSequencer::kMaxActiveNotes);
   REQUIRE(seq.active_note_overflow_count() == 10);
   // all_notes_off must still cleanly release the tracked notes.
-  seq.all_notes_off(static_cast<int64_t>(total));
+  seq.all_notes_off(DeviceFrame{static_cast<int64_t>(total)});
   REQUIRE(seq.active_note_count() == 0);
 }
 
@@ -2400,14 +2369,14 @@ TEST_CASE("MidiSequencer note-off is keyed by destination", "[midi]") {
               {30, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({a, b});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
 
   // Destination 20's note-off released only destination 20's note; destination
   // 10's identically-pitched note is still sounding.
   REQUIRE(seq.active_note_count() == 1);
 
   sink.events.clear();
-  seq.all_notes_off(128);
+  seq.all_notes_off(DeviceFrame{128});
   // 1 note-off (dest 10) plus one 4-message controller reset for each
   // destination that received a channel event. Destination 20's note-off
   // already removed its active note, but its channel state remains retained
@@ -2453,7 +2422,7 @@ TEST_CASE("MidiSequencer suppresses dispatch of untracked note-on on overflow", 
   }
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, static_cast<int>(total) + 1);
+  seq.process_block(SequencerClock::aligned(0), static_cast<int>(total) + 1);
 
   REQUIRE(seq.active_note_count() == MidiSequencer::kMaxActiveNotes);
   REQUIRE(seq.active_note_overflow_count() == 5);
@@ -2461,7 +2430,7 @@ TEST_CASE("MidiSequencer suppresses dispatch of untracked note-on on overflow", 
   REQUIRE(sink.events.size() == MidiSequencer::kMaxActiveNotes);
 }
 
-TEST_CASE("MidiSequencer collect_boundaries returns in-block event offsets", "[midi]") {
+TEST_CASE("MidiSequencer reports the frames of a block's events", "[midi]") {
   MidiSequencer seq;
   sonare::midi::NullMidiEventSink sink;
   seq.prepare(48000.0);
@@ -2479,9 +2448,7 @@ TEST_CASE("MidiSequencer collect_boundaries returns in-block event offsets", "[m
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  MidiSequencer::BoundaryOffsets out;
-  seq.collect_boundaries(0, 256, &out);
-  REQUIRE_FALSE(out.overflowed());
+  const std::vector<int> out = event_offsets(seq, 0, 256);
   REQUIRE(out.size() == 3);
   REQUIRE(out[0] == 0);
   REQUIRE(out[1] == 64);
@@ -2522,7 +2489,7 @@ TEST_CASE("MidiSequencer takes a clip event's UMP group from its own word0", "[m
   };
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
 
   REQUIRE(sink.events.size() == 2);
   // The delivered events agree with the wire form they were authored in.
@@ -2553,7 +2520,7 @@ TEST_CASE("MidiSequencer keeps a clip event's group when it already agrees with 
   const Ump before_off = clip.events[1].ump;
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.ump == before_on);
@@ -2593,7 +2560,7 @@ TEST_CASE("MidiSequencer gives a groupless clip event group 0, not the packed ni
   clip.events = {{32, stream}, {96, utility}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 256);
+  seq.process_block(SequencerClock::aligned(0), 256);
 
   REQUIRE(sink.events.size() == 2);
   REQUIRE(sink.events[0].event.ump.group == 0);
@@ -2614,7 +2581,7 @@ TEST_CASE("MidiSequencer clip removal preserves another clip's gate on the same 
   quantize.grid_frames = 100;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule removed;
   removed.id = 901;
@@ -2628,12 +2595,12 @@ TEST_CASE("MidiSequencer clip removal preserves another clip's gate on the same 
                       {190, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({removed, surviving});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
+  seq.process_block(SequencerClock::aligned(0), 128);
   REQUIRE(seq.active_note_count() == 2);
   sink.events.clear();
   seq.set_midi_clips({surviving});
   seq.acquire_midi_clips();
-  seq.process_block(128, 128);
+  seq.process_block(SequencerClock::aligned(128), 128);
   REQUIRE(sink.events.size() == 2);
   CHECK(sink.events[0].event.render_frame == 128);
   CHECK(sink.events[1].event.render_frame == 220);
@@ -2652,7 +2619,7 @@ TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note
   quantize.grid_frames = 100;
   fx.set_quantize(quantize);
   REQUIRE(seq.set_midi_fx(7, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
   MidiClipSchedule clip;
   clip.id = 903;
   clip.track_id = 10;
@@ -2663,8 +2630,8 @@ TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note
                  {195, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(0, 128);
-  seq.process_block(128, 64);
+  seq.process_block(SequencerClock::aligned(0), 128);
+  seq.process_block(SequencerClock::aligned(128), 64);
   REQUIRE(seq.active_note_count() == 1);
   sink.events.clear();
 
@@ -2672,7 +2639,7 @@ TEST_CASE("MidiSequencer pending clip trim preserves an earlier overlapping note
   clip.length_samples = 199;
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
-  seq.process_block(192, 64);
+  seq.process_block(SequencerClock::aligned(192), 64);
   REQUIRE(sink.events.size() == 1);
   CHECK(sink.events[0].event.ump.is_note_off());
   CHECK(sink.events[0].event.render_frame == 196);
@@ -2701,13 +2668,11 @@ TEST_CASE("MidiSequencer saturates a clip ending past INT64_MAX like the clip en
   REQUIRE(sonare::midi::find_midi_clip_envelope_winner(clips, 3, kMax - 1).active != nullptr);
   REQUIRE(sonare::midi::find_midi_clip_envelope_winner(clips, 3, kMax).active == nullptr);
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(kMax - 200, 512, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
+  const std::vector<int> boundaries = event_offsets(seq, kMax - 200, 512);
   REQUIRE(boundaries.size() == 1);
   REQUIRE(boundaries[0] == 110);
 
-  seq.process_block(kMax - 200, 512);
+  seq.process_block(SequencerClock::aligned(kMax - 200), 512);
   REQUIRE(sink.events.size() == 2);
   CHECK(sink.events[0].event.render_frame == kMax - 90);
   CHECK(sink.events[0].event.ump.is_note_on());
@@ -2735,14 +2700,12 @@ TEST_CASE("MidiSequencer loops a clip whose iterations run past INT64_MAX", "[mi
   seq.set_midi_clips({clip});
   seq.acquire_midi_clips();
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(kMax - 100, 512, &boundaries);
-  REQUIRE_FALSE(boundaries.overflowed());
+  const std::vector<int> boundaries = event_offsets(seq, kMax - 100, 512);
   const std::vector<int> expected_offsets{5, 20, 30, 35, 50, 60, 65, 80, 90, 95};
   REQUIRE(boundaries.size() == expected_offsets.size());
   for (size_t i = 0; i < expected_offsets.size(); ++i) CHECK(boundaries[i] == expected_offsets[i]);
 
-  seq.process_block(kMax - 100, 512);
+  seq.process_block(SequencerClock::aligned(kMax - 100), 512);
   const std::vector<int64_t> expected_frames{kMax - 95, kMax - 80, kMax - 65, kMax - 50,
                                              kMax - 35, kMax - 20, kMax - 5};
   REQUIRE(sink.events.size() == expected_frames.size());
@@ -2807,7 +2770,7 @@ TEST_CASE("MidiSequencer dispatches a late block of long clips in merged order",
     if (has_odd_clip_event && odd_is_on) expected.emplace_back(frame, 5u);
   }
 
-  seq.process_block(block_start, block_frames);
+  seq.process_block(SequencerClock::aligned(block_start), block_frames);
   REQUIRE(sink.events.size() == expected.size());
   for (size_t i = 0; i < expected.size(); ++i) {
     CHECK(sink.events[i].event.render_frame == expected[i].first);

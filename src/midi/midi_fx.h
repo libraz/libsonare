@@ -210,10 +210,13 @@ class MidiFxChain {
   /// logical batch. Control-thread callers use this to drain large clips through
   /// fixed-capacity buffers without changing deterministic humanize seeds. When
   /// the chunk belongs to a scheduled clip, `from_clip`/`clip_id` are carried
-  /// into note timing state so same-track clips remain independent. Direct and
-  /// offline callers may use the defaults.
+  /// into note timing state so same-track clips remain independent.
+  /// `grid_origin_frame` is the render frame at which the quantize grid's line 0
+  /// lies (timeline zero, for device-framed input). Direct and offline callers
+  /// may use the defaults.
   void process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
-                     MidiFxBuffer* out, bool from_clip = false, uint32_t clip_id = 0) noexcept;
+                     MidiFxBuffer* out, bool from_clip = false, uint32_t clip_id = 0,
+                     int64_t grid_origin_frame = 0) noexcept;
 
   /// Telemetry: number of output events dropped because the buffer was full.
   uint32_t overflow_count() const noexcept { return overflow_count_.load(); }

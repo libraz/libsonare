@@ -53,11 +53,11 @@ bool TrackMixerRuntime::begin_block(int num_channels, int num_samples) noexcept 
     // so stateful strip/bus tails advance over zero input.
     source_mix_lane_active_[lane_index] = true;
   }
-  for (int ch = 0; ch < render_channels; ++ch) {
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  for (int ch = 0; ch < master_channels; ++ch) {
     float* direct = direct_channel(ch);
     std::fill(direct, direct + num_samples, 0.0f);
   }
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
@@ -92,13 +92,14 @@ bool TrackMixerRuntime::render_clips_into_lanes(ClipPlayer& player, float* const
     // would freeze a reverb tail or a compressor release mid-decay.
     source_mix_lane_active_[lane_index] = true;
   }
-  // Lane-less clips are staged in the direct bank; finish_block() adds them before lane output.
-  for (int ch = 0; ch < render_channels; ++ch) {
+  // Lane-less clips are staged in the direct bank at the master's width; finish_block()
+  // adds them before lane output.
+  for (int ch = 0; ch < num_channels; ++ch) {
     lane_channel_ptrs_[static_cast<size_t>(ch)] =
         direct_output != nullptr ? direct_output[static_cast<size_t>(ch)] : direct_channel(ch);
   }
   player.process_excluding_tracks_at(active_track_ids_.data(), lanes->size(),
-                                     lane_channel_ptrs_.data(), render_channels, num_samples,
+                                     lane_channel_ptrs_.data(), num_channels, num_samples,
                                      timeline_sample);
   return true;
 }
@@ -154,11 +155,11 @@ bool TrackMixerRuntime::mix_source(uint32_t track_id, float* const* source, floa
     clear_lane(lane_index, render_channels, num_samples);
     source_mix_lane_active_[lane_index] = false;
   }
-  for (int ch = 0; ch < render_channels; ++ch) {
+  const int master_channels = std::min(num_channels, kMaxBusChannels);
+  for (int ch = 0; ch < master_channels; ++ch) {
     float* direct = direct_channel(ch);
     std::fill(direct, direct + num_samples, 0.0f);
   }
-  const int master_channels = std::min(num_channels, kMaxBusChannels);
   for (size_t bus_index = 0; bus_index < bus_configs_.size(); ++bus_index) {
     clear_bus(bus_index, bus_render_channels(bus_index, master_channels), num_samples);
   }
@@ -207,12 +208,13 @@ bool TrackMixerRuntime::mix_source_into_lane(uint32_t track_id, float* const* so
     return true;
   }
 
-  // Destination 0 and currently-unconfigured destinations stay on the main bus.
-  // Stage them so they share the lane-stage timebase before the master delay.
-  for (int ch = 0; ch < render_channels; ++ch) {
+  // Destination 0 and currently-unconfigured destinations stay on the main bus at
+  // its full width. Stage them so they share the lane-stage timebase before the
+  // master delay.
+  for (int ch = 0; ch < num_channels; ++ch) {
     lane_channel_ptrs_[static_cast<size_t>(ch)] = direct_channel(ch);
   }
-  add_source_to_mix(source, lane_channel_ptrs_.data(), render_channels, num_samples);
+  add_source_to_mix(source, lane_channel_ptrs_.data(), num_channels, num_samples);
   return true;
 }
 
@@ -314,7 +316,7 @@ void TrackMixerRuntime::add_source_to_mix(float* const* source, float* const* ch
 
 void TrackMixerRuntime::add_direct_to_mix(float* const* channels, int num_channels,
                                           int num_samples) noexcept {
-  const int direct_channels = std::min(num_channels, kMaxLaneChannels);
+  const int direct_channels = std::min(num_channels, kMaxBusChannels);
   for (int ch = 0; ch < direct_channels; ++ch) {
     lane_channel_ptrs_[static_cast<size_t>(ch)] = direct_channel(ch);
   }
@@ -813,9 +815,10 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
       lane_channel(lane_index, 0)[i] *= left_gain;
       if (dest_left) dest_left[i] += lane_channel(lane_index, 0)[i];
       if (afl_left) afl_left[i] += lane_channel(lane_index, 0)[i];
-      if (num_channels >= 2 && dest_right) {
+      // The right plane is processed and tapped whether or not the main right exists.
+      if (num_channels >= 2) {
         lane_channel(lane_index, 1)[i] *= right_gain;
-        dest_right[i] += lane_channel(lane_index, 1)[i];
+        if (dest_right) dest_right[i] += lane_channel(lane_index, 1)[i];
         if (afl_right) afl_right[i] += lane_channel(lane_index, 1)[i];
       }
     }

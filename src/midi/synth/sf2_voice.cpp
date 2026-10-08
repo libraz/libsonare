@@ -266,7 +266,8 @@ float Sf2Voice::render(const Sf2ChannelMod& mod) noexcept {
     gain_right = gains.right;
   }
 
-  const bool looping = reader.looping(key_down);
+  // A mode 3 loop runs until the release begins, so a pedal-held note keeps looping.
+  const bool looping = reader.looping(!releasing);
   if (!reader.wrap(looping)) {
     active = false;
     env.kill();

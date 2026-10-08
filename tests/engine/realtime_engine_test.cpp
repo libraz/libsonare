@@ -336,6 +336,44 @@ TEST_CASE("RealtimeEngine includes a swapped routing graph in reported PDC", "[e
   REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
   REQUIRE(engine.graph_latency_samples_q8() == (12 << 8));
 }
+
+TEST_CASE("RealtimeEngine re-prepares an installed graph for a larger block and new rate",
+          "[engine][realtime]") {
+  class PrepareRecorder final : public sonare::rt::ProcessorBase {
+   public:
+    explicit PrepareRecorder(double* rate) : rate_(rate) {}
+    void prepare(double sample_rate, int) override { *rate_ = sample_rate; }
+    void process(float* const* channels, int num_channels, int num_samples) override {
+      for (int ch = 0; ch < num_channels; ++ch) {
+        for (int i = 0; i < num_samples; ++i) channels[ch][i] *= 2.0f;
+      }
+    }
+    void reset() override {}
+
+   private:
+    double* rate_;
+  };
+  double prepared_rate = 0.0;
+  auto graph = std::make_unique<sonare::graph::Graph>();
+  REQUIRE(graph->add_node("in", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->add_node("gain", std::make_unique<PrepareRecorder>(&prepared_rate), 1));
+  REQUIRE(graph->add_node("out", std::make_unique<GraphLatencyProcessor>(0), 1));
+  REQUIRE(graph->connect({"in", 0, "gain", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->connect({"gain", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph->compile());
+  graph->prepare(48000.0, 8);
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 8);
+  REQUIRE(engine.swap_graph(std::move(graph), "in", "out", 1));
+  engine.prepare(44100.0, 64);
+  CHECK(prepared_rate == 44100.0);
+  std::array<float, 64> left{};
+  left.fill(0.25f);
+  float* io[] = {left.data()};
+  engine.process(io, 1, 64);
+  for (float sample : left) REQUIRE(sample == 0.5f);
+}
 #endif
 
 TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
@@ -624,6 +662,46 @@ TEST_CASE("RealtimeEngine defers commands scheduled at block end to the next blo
   engine.process(io, 1, kFrames);
   REQUIRE(engine.transport().snapshot().playing);
   REQUIRE(engine.transport().sample_position() == kFrames);
+}
+
+TEST_CASE("RealtimeEngine saturates the playhead at the largest accepted seek position",
+          "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  constexpr int64_t kMax = std::numeric_limits<int64_t>::max();
+  for (const int64_t seek_to : {kMax, kMax - 1}) {
+    for (const bool loop_enabled : {false, true}) {
+      sonare::engine::RealtimeEngine engine;
+      engine.prepare(48000.0, kFrames);
+      sonare::engine::MetronomeConfig metronome;
+      metronome.enabled = true;
+      engine.set_metronome_config(metronome);
+      std::array<float, kFrames * 4> capture_buffer{};
+      float* capture_channels[] = {capture_buffer.data()};
+      engine.set_capture_segment({capture_channels, 1, kFrames * 4});
+      engine.set_capture_armed(true);
+      engine.set_capture_punch(0, kMax, true);
+      engine.set_record_offset_samples(std::numeric_limits<int64_t>::lowest());
+      engine.set_loop(0.0, 4.0, loop_enabled);
+
+      sonare::rt::Command seek{};
+      seek.type = sonare::rt::CommandType::kTransportSeekSample;
+      seek.arg.i = seek_to;
+      REQUIRE(engine.push_command(seek));
+      sonare::rt::Command play{};
+      play.type = sonare::rt::CommandType::kTransportPlay;
+      REQUIRE(engine.push_command(play));
+
+      std::array<float, kFrames> left{};
+      float* io[] = {left.data()};
+      for (int block = 0; block < 3; ++block) {
+        engine.process(io, 1, kFrames);
+        // A position past the loop folds back into it; otherwise it saturates.
+        const int64_t position = engine.transport().sample_position();
+        REQUIRE(position >= 0);
+        if (!loop_enabled) REQUIRE(position == kMax);
+      }
+    }
+  }
 }
 
 TEST_CASE("RealtimeEngine silences oversized blocks and emits telemetry", "[engine][realtime]") {
@@ -1707,6 +1785,32 @@ TEST_CASE("First master insert touch ramps from the retained manual base",
   REQUIRE(output.back() < std::pow(10.0f, -6.0f / 20.0f));
 }
 
+TEST_CASE("Master insert edits without a master strip are unknown targets and hold no slot",
+          "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  // More distinct targets than the master slot bank holds.
+  for (uint32_t i = 0; i < 20; ++i) {
+    sonare::rt::Command command{};
+    command.type = sonare::rt::CommandType::kSetMasterInsertParam;
+    command.target_id = i;
+    command.sample_time = -1;
+    command.arg.f = 0.5f;
+    REQUIRE(engine.push_command(command));
+  }
+  engine.process(io, 1, kFrames);
+  uint32_t unknown = 0;
+  sonare::engine::Telemetry record{};
+  while (engine.pop_telemetry(record)) {
+    if (record.error == sonare::engine::TelemetryErrorCode::kUnknownTarget) ++unknown;
+  }
+  REQUIRE(unknown == 20);
+  REQUIRE(engine.insert_automation_overflow_count() == 0);
+}
+
 TEST_CASE("Rejected master insert restore preserves its automation slot",
           "[engine][realtime][mixing]") {
   sonare::engine::RealtimeEngine engine;
@@ -2018,6 +2122,48 @@ TEST_CASE(
   REQUIRE(processor.values[static_cast<size_t>(processor.count - 1)] == -40.0f);
 }
 
+TEST_CASE("RealtimeEngine immediate set ends an in-flight ramp on the same target",
+          "[engine][realtime]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  engine.set_param_smoothing_ms(20.0f);
+  CaptureProcessor processor;
+  engine.automation().bind_target(7, &processor);
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  const auto push_param = [&](sonare::rt::CommandType type, float value) {
+    sonare::rt::Command command{};
+    command.type = type;
+    command.target_id = 7;
+    command.sample_time = -1;
+    command.arg.f = value;
+    REQUIRE(engine.push_command(command));
+  };
+
+  push_param(sonare::rt::CommandType::kSetParamSmoothed, 0.0f);
+  engine.process(io, 1, kFrames);
+  engine.settle_parameters();
+  // A 20 ms ramp toward 1 is part-way when the immediate 0 lands.
+  push_param(sonare::rt::CommandType::kSetParamSmoothed, 1.0f);
+  engine.process(io, 1, kFrames);
+  push_param(sonare::rt::CommandType::kSetParam, 0.0f);
+  for (int block = 0; block < 4; ++block) {
+    const int before = processor.count;
+    engine.process(io, 1, kFrames);
+    for (int i = before; i < processor.count; ++i) {
+      REQUIRE(processor.values[static_cast<size_t>(i)] == 0.0f);
+    }
+  }
+  // The next ramp starts from the immediate value, not from the abandoned ramp.
+  push_param(sonare::rt::CommandType::kSetParamSmoothed, 1.0f);
+  const int before = processor.count;
+  engine.process(io, 1, kFrames);
+  REQUIRE(processor.count > before);
+  REQUIRE(processor.values[static_cast<size_t>(before)] > 0.0f);
+  REQUIRE(processor.values[static_cast<size_t>(before)] < 0.5f);
+}
+
 TEST_CASE("RealtimeEngine re-prepare at a new sample rate stays consistent",
           "[engine][realtime][reinit]") {
   static constexpr int kFrames = 128;
@@ -2200,6 +2346,44 @@ TEST_CASE("RealtimeEngine track lanes are opt-in for clip routing", "[engine][re
 
   REQUIRE(tagged_l == legacy_l);
   REQUIRE(tagged_r == legacy_r);
+}
+
+TEST_CASE("RealtimeEngine keeps every plane of a lane-less clip when unrelated lanes exist",
+          "[engine][realtime]") {
+  constexpr int kBlock = 64;
+  constexpr int kChannels = 6;
+  std::array<std::array<float, kBlock>, kChannels> planes{};
+  for (int ch = 2; ch < kChannels; ++ch) planes[static_cast<size_t>(ch)].fill(0.1f * ch);
+  const float* clip_channels[kChannels];
+  for (int ch = 0; ch < kChannels; ++ch) clip_channels[ch] = planes[static_cast<size_t>(ch)].data();
+
+  const auto render = [&](bool with_lane) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kBlock, 16, 16, kChannels);
+    sonare::engine::ClipSchedule clip{
+        1, {clip_channels, kChannels, kBlock}, 0.0, 0, 0, kBlock, false, 1.0f, 0, 0};
+    clip.track_id = 99;
+    engine.set_clips({clip});
+    if (with_lane) REQUIRE(engine.set_track_lanes({{10}}));
+    sonare::rt::Command play{};
+    play.type = sonare::rt::CommandType::kTransportPlay;
+    play.sample_time = -1;
+    REQUIRE(engine.push_command(play));
+    std::array<std::array<float, kBlock>, kChannels> out{};
+    float* io[kChannels];
+    for (int ch = 0; ch < kChannels; ++ch) io[ch] = out[static_cast<size_t>(ch)].data();
+    engine.process(io, kChannels, kBlock);
+    return out;
+  };
+  const auto without_lane = render(false);
+  const auto with_lane = render(true);
+  REQUIRE(without_lane[5][kBlock - 1] > 0.4f);
+  for (int ch = 0; ch < kChannels; ++ch) {
+    for (int i = 0; i < kBlock; ++i) {
+      REQUIRE(with_lane[static_cast<size_t>(ch)][static_cast<size_t>(i)] ==
+              without_lane[static_cast<size_t>(ch)][static_cast<size_t>(i)]);
+    }
+  }
 }
 
 TEST_CASE("RealtimeEngine track lanes route clip audio through lane state", "[engine][realtime]") {
@@ -3371,6 +3555,56 @@ TEST_CASE("RealtimeEngine look-ahead prefetch requests pages without reporting a
   // The audio the block did read is intact, confirming nothing was silenced.
   REQUIRE(left[0] == 1.0f);
   REQUIRE(left[3] == 1.0f);
+}
+
+TEST_CASE("RealtimeEngine reports a read miss on a page an earlier span only prefetched",
+          "[engine][realtime][clip_pages]") {
+  class FirstPageProvider final : public sonare::engine::ClipPagedAudioProvider {
+   public:
+    int num_channels() const noexcept override { return 1; }
+    int64_t num_samples() const noexcept override { return 8; }
+    int64_t page_frames() const noexcept override { return 4; }
+    bool sample_at(int channel, int64_t sample, float* out) const noexcept override {
+      if (channel != 0 || !out || sample < 0 || sample >= 4) return false;
+      *out = 1.0f;
+      return true;
+    }
+    bool page_resident(int64_t page_index) const noexcept override { return page_index < 1; }
+  };
+
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, 8, 16, 16);
+  engine.set_clip_page_prefetch_frames(4);
+  sonare::engine::ClipSchedule clip{46, {}, 0.0, 0, 0, 8, false, 1.0f, 0, 0};
+  clip.page_provider = std::make_shared<FirstPageProvider>();
+  engine.set_clips({clip});
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+  // A command at frame 4 splits the block: the first half prefetches page 1,
+  // the second half then reads it and gets silence.
+  sonare::rt::Command split{};
+  split.type = sonare::rt::CommandType::kSetParam;
+  split.target_id = 12345;
+  split.sample_time = 4;
+  REQUIRE(engine.push_command(split));
+
+  std::array<float, 8> left{};
+  float* io[] = {left.data()};
+  engine.process(io, 1, 8);
+  REQUIRE(left[3] == 1.0f);
+  REQUIRE(left[4] == 0.0f);
+
+  int underrun_count = 0;
+  sonare::engine::Telemetry telemetry{};
+  while (engine.pop_telemetry(telemetry)) {
+    if (telemetry.type == sonare::engine::TelemetryType::kError &&
+        telemetry.error == sonare::engine::TelemetryErrorCode::kClipPageUnderrun) {
+      ++underrun_count;
+    }
+  }
+  REQUIRE(underrun_count == 1);
 }
 
 TEST_CASE("RealtimeEngine counts paged clip requests dropped by its bounded queue",

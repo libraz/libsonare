@@ -10,6 +10,7 @@
 #include "mixing/tail_utils.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mixing {
 
@@ -87,7 +88,8 @@ template <typename Lane, typename Staging>
 void stage_events(Lane& lane, int64_t block_start, int range_start, int num_samples,
                   Staging& dest) {
   lane.consume_block(
-      block_start + range_start, num_samples, [&](const AutomationBlockEvent& event) {
+      numeric::saturating_add(block_start, static_cast<int64_t>(range_start)), num_samples,
+      [&](const AutomationBlockEvent& event) {
         AutomationBlockEvent shifted = event;
         shifted.offset += range_start;
         // Simultaneous points of one target resolve to the last.
@@ -292,8 +294,9 @@ void ChannelStrip::process_at(float* const* channels, int num_channels, int num_
   // Automation denser than the staging holds is consumed and applied in shorter
   // chunks, so no accepted breakpoint is dropped or moved.
   const auto stage_chunk = [&](int chunk_start) {
-    const int chunk =
-        automation_chunk_samples(block_start + chunk_start, num_samples - chunk_start, lanes_size);
+    const int chunk = automation_chunk_samples(
+        numeric::saturating_add(block_start, static_cast<int64_t>(chunk_start)),
+        num_samples - chunk_start, lanes_size);
     stage_automation(block_start, chunk_start, chunk, lanes_size, fader_events, pan_events,
                      width_events, insert_events);
     return chunk_start + chunk;
@@ -1114,8 +1117,9 @@ void ChannelStrip::apply_send_from_temp(size_t index, float* const* dest, int ro
   // Same chunking as process_at(): a dense lane is staged in ranges it fits.
   const auto stage_chunk = [&](int chunk_start) {
     int chunk = n - chunk_start;
-    while (chunk > 1 && lane->count_block_offsets(block_start + chunk_start, chunk) >
-                            kMaxAutomationEventsPerBlock) {
+    while (chunk > 1 && lane->count_block_offsets(
+                            numeric::saturating_add(block_start, static_cast<int64_t>(chunk_start)),
+                            chunk) > kMaxAutomationEventsPerBlock) {
       chunk = (chunk + 1) / 2;
     }
     send_events.clear();

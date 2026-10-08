@@ -6,6 +6,7 @@
 
 #include "midi/control_value.h"
 #include "midi/midi_clip.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi {
 namespace {
@@ -343,7 +344,8 @@ void MidiFxChain::process(const MidiEvent* in, size_t count, MidiFxBuffer* out) 
 }
 
 void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_ordinal_base,
-                                MidiFxBuffer* out, bool from_clip, uint32_t clip_id) noexcept {
+                                MidiFxBuffer* out, bool from_clip, uint32_t clip_id,
+                                int64_t grid_origin_frame) noexcept {
   if (in == nullptr || out == nullptr) return;
   out->clear();
 
@@ -437,7 +439,9 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
       } else if (quantize_.enabled && quantize_.grid_frames > 0) {
         const int64_t grid = quantize_.grid_frames;
         const int64_t f = shaped.render_frame;
-        const int64_t snapped = nearest_quantized_frame(f, grid, quantize_);
+        const int64_t snapped = numeric::saturating_add(
+            nearest_quantized_frame(numeric::saturating_sub(f, grid_origin_frame), grid, quantize_),
+            grid_origin_frame);
         const float strength = clamp01(quantize_.strength);
         const int64_t delta = snapped - f;
         shaped.render_frame = f + static_cast<int64_t>(std::llround(static_cast<double>(delta) *

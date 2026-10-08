@@ -84,6 +84,15 @@ struct AuUndersizedBlockProbeResult {
 
 AuUndersizedBlockProbeResult run_au_effect_undersized_block_probe();
 
+/// Result from an AU that pulls one block's input in two timestamped halves.
+struct AuSplitPullProbeResult {
+  bool ran = false;
+  // The two pulls together reproduce the block, each half from its own offset.
+  bool split_matches_block = false;
+};
+
+AuSplitPullProbeResult run_au_effect_split_pull_probe();
+
 /// Result from probing the MusicDevice adapter's dropped-event counter. No SDK
 /// object or installed plugin is required.
 struct AuInstrumentDroppedEventProbeResult {

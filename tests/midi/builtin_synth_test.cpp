@@ -499,6 +499,38 @@ TEST_CASE("BuiltinSynth lets a manager's bend reach a note on a member", "[midi]
   REQUIRE(std::fabs(cents - 50.0) < 5.0);
 }
 
+TEST_CASE("BuiltinSynth keeps a manager's bend through a member's controller reset",
+          "[midi][synth][mpe]") {
+  BuiltinSynth synth = mpe_synth();
+  mpe_send_mcm(synth, 0, 7);
+  mpe_send(synth, sonare::midi::make_midi1_pitch_bend(0, 0, 8192 + 2048));
+  mpe_send(synth, sonare::midi::make_midi1_pitch_bend(0, 2, 8192 + 2048));
+  mpe_send(synth, sonare::midi::make_midi1_note_on(0, 2, 60, kMpeVelocity));
+  // The member's own bend goes; the manager's quarter of its 2-semitone range stays.
+  mpe_send(synth, sonare::midi::make_midi1_control_change(0, 2, 121, 0));
+  std::vector<float> buffer(16384, 0.0f);
+  float* channels[1] = {buffer.data()};
+  synth.process(channels, 1, static_cast<int>(buffer.size()));
+  constexpr double kC4Hz = 261.6255653;
+  const double hz =
+      sonare::test::fft_fundamental(buffer, 4096, kC4Hz * std::pow(2.0, 50.0 / 1200.0));
+  const double cents = 1200.0 * std::log2(hz / kC4Hz);
+  CAPTURE(cents);
+  REQUIRE(std::fabs(cents - 50.0) < 5.0);
+}
+
+TEST_CASE("BuiltinSynth silences a note whose channel moves to the other zone",
+          "[midi][synth][mpe]") {
+  BuiltinSynth synth = mpe_synth();
+  mpe_send_mcm(synth, 0, 7);
+  mpe_send_mcm(synth, 15, 7);
+  mpe_send(synth, sonare::midi::make_midi1_note_on(0, 6, 60, kMpeVelocity));
+  REQUIRE(render_peak(&synth, 1024) > 0.01f);
+  // The upper zone grows over channels 5..7, so the held note on channel 6 must stop.
+  mpe_send_mcm(synth, 15, 10);
+  REQUIRE(render_peak(&synth, 1024) < 1.0e-4f);
+}
+
 TEST_CASE("BuiltinSynth folds a manager's pressure into a member's", "[midi][synth][mpe]") {
   // Pressure is a gain here, so the fold is a level: the manager's value alone
   // has to reach a note on a member channel, and the two have to add.

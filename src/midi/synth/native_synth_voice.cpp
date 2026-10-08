@@ -700,7 +700,9 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       return 0.0f;
     }
   } else if (patch->mode == SynthEngineMode::kSample) {
-    sample = sampler.render(common, key_down);
+    // A mode 3 loop runs until the release begins (a one-shot releases on its key).
+    const bool held = !releasing && (key_down || !patch->one_shot);
+    sample = sampler.render(common, held);
     // A one-shot region that ran out ends the voice; the amp envelope would
     // otherwise hold the slot open on silence for its whole release.
     if (sampler.finished()) {

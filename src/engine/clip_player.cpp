@@ -398,12 +398,8 @@ double ClipPlayer::source_position(const ClipSchedule& clip, int64_t timeline_sa
   return resolve_loop_read(clip, timeline_sample).pos;
 }
 
-ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
-                                                   int64_t timeline_sample) noexcept {
-  LoopRead read;
-  if (clip.warp_mode == WarpMode::kTempoSync) return read;
-  const int64_t position = timeline_sample - clip.start_sample;
-  if (position < 0 || position >= clip.length_samples) return read;
+ClipPlayer::ReadGeometry ClipPlayer::read_geometry(const ClipSchedule& clip) noexcept {
+  ReadGeometry geometry;
   // The warp anchors map a clip-timeline position (measured from clip start) to an
   // absolute source position, so under active warp the map alone resolves the read
   // — clip_offset_samples must NOT be added on top. For a comp part that starts
@@ -413,7 +409,7 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
   // there (the non-warp source-start mechanism) double-counts the onset offset and
   // a non-first comp part reads too far into the source. A whole clip leaves both
   // offsets at 0, so the warped and non-warped paths agree.
-  const bool warp_active =
+  geometry.warp_active =
       (clip.warp_mode == WarpMode::kRepitch || clip.warp_mode == WarpMode::kTimeStretch) &&
       clip.warp_anchors && clip.warp_anchors->size() >= 2;
   // Under active warp the source read is driven entirely by the warp map, so
@@ -423,25 +419,42 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
   // source-domain length and the loop period a timeline-domain one, so under warp
   // only the clip length bounds the period; the outer read guard (source_pos vs
   // source_sample_count) still bounds the actual reads.
-  const int64_t source_len =
-      warp_active ? (clip.preserve_loop_period ? clip.loop_length_samples : clip.length_samples)
-                  : (clip.preserve_loop_period
-                         ? source_sample_count(clip) - clip.clip_offset_samples
-                         : std::min<int64_t>(clip.length_samples,
-                                             source_sample_count(clip) - clip.clip_offset_samples));
-  if (source_len <= 0) return read;
-  const double warp_ref =
-      static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
-  const auto resolve = [&clip, warp_active, warp_ref](double pos) noexcept {
-    if (warp_active) {
-      return map_warp_to_source(*clip.warp_anchors, pos + warp_ref);
-    }
-    return static_cast<double>(clip.clip_offset_samples) + pos;
+  geometry.source_len =
+      geometry.warp_active
+          ? (clip.preserve_loop_period ? clip.loop_length_samples : clip.length_samples)
+          : (clip.preserve_loop_period
+                 ? source_sample_count(clip) - clip.clip_offset_samples
+                 : std::min<int64_t>(clip.length_samples,
+                                     source_sample_count(clip) - clip.clip_offset_samples));
+  if (geometry.source_len > 0) {
+    geometry.loop_len = clip.loop_length_samples > 0
+                            ? std::min<int64_t>(clip.loop_length_samples, geometry.source_len)
+                            : geometry.source_len;
+  }
+  geometry.warp_ref = static_cast<double>(std::max<int64_t>(0, clip.warp_reference_offset_samples));
+  return geometry;
+}
+
+double ClipPlayer::resolve_local(const ClipSchedule& clip, const ReadGeometry& geometry,
+                                 double local) noexcept {
+  if (geometry.warp_active)
+    return map_warp_to_source(*clip.warp_anchors, local + geometry.warp_ref);
+  return static_cast<double>(clip.clip_offset_samples) + local;
+}
+
+ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
+                                                   int64_t timeline_sample) noexcept {
+  LoopRead read;
+  if (clip.warp_mode == WarpMode::kTempoSync) return read;
+  const int64_t position = timeline_sample - clip.start_sample;
+  if (position < 0 || position >= clip.length_samples) return read;
+  const ReadGeometry geometry = read_geometry(clip);
+  if (geometry.source_len <= 0) return read;
+  const auto resolve = [&clip, &geometry](double pos) noexcept {
+    return resolve_local(clip, geometry, pos);
   };
   if (clip.loop) {
-    const int64_t loop_len = clip.loop_length_samples > 0
-                                 ? std::min<int64_t>(clip.loop_length_samples, source_len)
-                                 : source_len;
+    const int64_t loop_len = geometry.loop_len;
     const int64_t phase_remainder = clip.loop_phase_samples % loop_len;
     const int64_t phase = phase_remainder < 0 ? phase_remainder + loop_len : phase_remainder;
     const int64_t base = position % loop_len;
@@ -454,7 +467,7 @@ ClipPlayer::LoopRead ClipPlayer::resolve_loop_read(const ClipSchedule& clip,
     // clamped to the available pre-roll (clip_offset_samples) and to half the
     // loop. Disabled under warp; when no pre-roll is available it falls back to
     // the hard integer-modulo wrap (the common DAW hard-loop contract).
-    if (clip.loop_crossfade_samples > 0 && !warp_active) {
+    if (clip.loop_crossfade_samples > 0 && !geometry.warp_active) {
       const int64_t xfade =
           std::min({clip.loop_crossfade_samples, clip.clip_offset_samples, loop_len / 2});
       if (xfade > 0 && local >= loop_len - xfade) {
@@ -503,7 +516,15 @@ void ClipPlayer::begin_page_miss_block() noexcept {
 
 float ClipPlayer::stretch_read_thunk(void* context, int channel, int64_t sample) noexcept {
   auto* ctx = static_cast<StretchContext*>(context);
-  return ctx->player->sample_channel(*ctx->clip, channel, static_cast<double>(sample));
+  // Frames read past the frame start the mapper resolved: a looping clip wraps
+  // them inside its loop body, and nothing reads outside the source.
+  double pos = static_cast<double>(sample);
+  if (ctx->loop_source_length > 0.0) {
+    pos = ctx->loop_source_start + std::fmod(pos - ctx->loop_source_start, ctx->loop_source_length);
+    if (pos < ctx->loop_source_start) pos += ctx->loop_source_length;
+  }
+  if (pos < 0.0 || pos > static_cast<double>(source_sample_count(*ctx->clip) - 1)) return 0.0f;
+  return ctx->player->sample_channel(*ctx->clip, channel, pos);
 }
 
 double ClipPlayer::stretch_map_thunk(void* context, int64_t clip_local_output) noexcept {
@@ -556,6 +577,15 @@ bool ClipPlayer::render_stretched(const ClipSchedule& clip, float* const* channe
   if (!voice) return false;
 
   StretchContext context{this, &clip};
+  if (clip.loop) {
+    const ReadGeometry geometry = read_geometry(clip);
+    if (geometry.loop_len > 0) {
+      context.loop_source_start = resolve_local(clip, geometry, 0.0);
+      context.loop_source_length =
+          resolve_local(clip, geometry, static_cast<double>(geometry.loop_len)) -
+          context.loop_source_start;
+    }
+  }
   float* scratch[WarpStretchVoice::kMaxChannels] = {nullptr, nullptr};
   for (int ch = 0; ch < source_channels; ++ch) {
     scratch[ch] = stretch_scratch_[static_cast<size_t>(ch)].data();
@@ -602,14 +632,18 @@ void ClipPlayer::notify_page_miss(const ClipSchedule& clip, int src_ch, int64_t 
   const int64_t page_index = sample >= 0 ? sample / frames : sample;
   const uint32_t channel = static_cast<uint32_t>(std::max(src_ch, 0));
   for (size_t i = 0; i < page_miss_cache_size_; ++i) {
-    const PageMissCacheEntry& entry = page_miss_cache_[i];
+    PageMissCacheEntry& entry = page_miss_cache_[i];
     if (entry.clip_id == clip.id && entry.channel == channel && entry.page_index == page_index) {
+      // A prefetch already requested the page; a later silent read is still a dropout.
+      if (entry.read_miss || !read_miss) return;
+      entry.read_miss = true;
+      page_request_sink_->on_clip_page_miss({clip.id, channel, sample, read_miss});
       return;
     }
   }
   if (!page_miss_cache_overflowed_) {
     if (page_miss_cache_size_ < page_miss_cache_.size()) {
-      page_miss_cache_[page_miss_cache_size_++] = {clip.id, channel, page_index};
+      page_miss_cache_[page_miss_cache_size_++] = {clip.id, channel, page_index, read_miss};
     } else {
       page_miss_cache_overflowed_ = true;
     }

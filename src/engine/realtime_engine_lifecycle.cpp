@@ -90,7 +90,7 @@ void RealtimeEngine::reset_to_unprepared() noexcept {
   monitor_bus_storage_.clear();
   monitor_bus_channels_.fill(nullptr);
 #endif
-  graph_latency_samples_q8_ = 0;
+  graph_latency_samples_q8_.store(0, std::memory_order_relaxed);
 
   // The command and telemetry queues keep whatever capacity they had. Telemetry
   // in particular must stay pushable: reporting kNotPrepared to the host is how
@@ -117,6 +117,12 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   transport_.prepare(sample_rate, active_tempo_map_);
   clip_player_.prepare(sample_rate, max_block_size_);
   clip_player_.set_tempo_map(active_tempo_map_);
+#if defined(SONARE_WITH_GRAPH)
+  // An installed graph renders at the engine's rate and block size from here on.
+  if (graph::Graph* graph = graph_runtime_.active_graph()) {
+    graph->prepare(sample_rate_, max_block_size_);
+  }
+#endif
   clip_player_.set_page_request_sink(this);
   // Half a second of clip-page look-ahead by default: enough for a streaming
   // host to fetch and supply the next pages before the audio thread reads them
@@ -126,7 +132,6 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   boundary_splitter_.prepare(static_cast<size_t>(max_block_size_) + 1u);
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.prepare(sample_rate);
-  midi_boundary_offsets_.prepare(static_cast<size_t>(max_block_size_) + 1u);
   midi_clock_.prepare(active_tempo_map_);
   // Pre-size the host-instrument render scratch (channel-planar) so the audio
   // path never allocates when an instrument is registered. Re-prepare an
@@ -455,7 +460,7 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
 
 void RealtimeEngine::finish_offline_render() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  midi_sequencer_.all_notes_off(transport_.render_frame());
+  midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});
   flush_pdc_delays();
 #endif
 #if defined(SONARE_WITH_MIXING)
@@ -538,7 +543,7 @@ bool RealtimeEngine::marker_by_id(uint32_t id, transport::Marker* out) const noe
 }
 
 void RealtimeEngine::set_graph_latency_samples_q8(int latency_q8) noexcept {
-  graph_latency_samples_q8_ = std::max(latency_q8, 0);
+  graph_latency_samples_q8_.store(std::max(latency_q8, 0), std::memory_order_relaxed);
 }
 
 void RealtimeEngine::update_reported_graph_latency() noexcept {
@@ -559,7 +564,8 @@ void RealtimeEngine::update_reported_graph_latency() noexcept {
 }
 
 int64_t RealtimeEngine::audible_timeline_sample(int64_t timeline_sample) const noexcept {
-  return timeline_sample - (graph_latency_samples_q8_ >> 8);
+  return audible_timeline_sample(timeline_sample,
+                                 graph_latency_samples_q8_.load(std::memory_order_relaxed));
 }
 
 bool RealtimeEngine::seek_marker(uint32_t marker_id) noexcept {

@@ -4,10 +4,12 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "util/numeric_validation.h"
+
 namespace sonare::engine {
 
 inline int64_t block_end_frame(int64_t block_start, int num_frames) noexcept {
-  return block_start + static_cast<int64_t>(std::max(num_frames, 0));
+  return numeric::saturating_add(block_start, static_cast<int64_t>(std::max(num_frames, 0)));
 }
 
 inline bool command_belongs_to_block(int64_t sample_time, int64_t block_start,

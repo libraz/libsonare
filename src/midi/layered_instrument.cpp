@@ -282,6 +282,15 @@ void LayeredInstrument::on_event(uint32_t destination_id, const MidiEvent& event
 void LayeredInstrument::add_layer_output(float* const* target, int num_channels, int legs,
                                          const float* left, const float* right, const Layer& layer,
                                          int num_samples) noexcept {
+  // A mono target averages the panned pair, so mirrored pans give the same level
+  // and a centred layer keeps its own.
+  if (num_channels == 1) {
+    if (target[0] == nullptr) return;
+    for (int i = 0; i < num_samples; ++i) {
+      target[0][i] += 0.5f * (left[i] * layer.gain_left + right[i] * layer.gain_right);
+    }
+    return;
+  }
   if (target[0] != nullptr) {
     for (int i = 0; i < num_samples; ++i) target[0][i] += left[i] * layer.gain_left;
   }
@@ -304,7 +313,8 @@ void LayeredInstrument::process(float* const* channels, int num_channels, int nu
   if (channels == nullptr || num_channels <= 0 || num_samples <= 0) return;
   if (num_samples > max_block_size_) return;
 
-  const int legs = std::min(num_channels, 2);
+  // Layers always render their stereo pair; a mono output folds it after the pan.
+  constexpr int legs = 2;
   float* scratch_left = scratch_.data();
   float* scratch_right = scratch_.data() + max_block_size_;
   float* scratch_chans[2] = {scratch_left, scratch_right};
@@ -339,7 +349,7 @@ bool LayeredInstrument::process_source_tracks(const MidiInstrumentSourceOutput* 
     if (!layer.instrument->supports_source_track_rendering()) return false;
   }
 
-  const int legs = std::min(num_channels, 2);
+  constexpr int legs = 2;
   const size_t block = static_cast<size_t>(max_block_size_);
   const auto scratch_channel = [&](size_t slot, int leg) noexcept -> float* {
     return source_scratch_.data() + (slot * 2u + static_cast<size_t>(leg)) * block;
@@ -358,7 +368,7 @@ bool LayeredInstrument::process_source_tracks(const MidiInstrumentSourceOutput* 
   for (Layer& layer : layers_) {
     for (size_t s = 0; s < output_count; ++s) {
       std::fill_n(scratch_channel(s, 0), num_samples, 0.0f);
-      if (legs > 1) std::fill_n(scratch_channel(s, 1), num_samples, 0.0f);
+      std::fill_n(scratch_channel(s, 1), num_samples, 0.0f);
     }
     if (!layer.instrument->process_source_tracks(layer_outputs.data(), output_count, legs,
                                                  num_samples)) {

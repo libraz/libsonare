@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "util/numeric_validation.h"
+
 namespace sonare::engine {
 namespace {
 
@@ -43,7 +45,7 @@ void BoundaryList::clear() noexcept {
 bool BoundaryList::add_offset(int offset, BoundarySource source,
                               const BoundaryBuildContext& context) noexcept {
   const int clamped = clamp_offset(offset, context.num_frames);
-  return add_point({clamped, context.block_render_frame + clamped,
+  return add_point({clamped, numeric::saturating_add(context.block_render_frame, int64_t{clamped}),
                     timeline_at_offset(clamped, context), boundary_source_mask(source)});
 }
 
@@ -95,9 +97,9 @@ int64_t BoundaryList::timeline_at_offset(int offset, const BoundaryBuildContext&
     // loop_end). loop_len_samples <= 0 keeps the original single-wrap mapping.
     const int64_t within =
         context.loop_len_samples > 0 ? past_wrap % context.loop_len_samples : past_wrap;
-    return context.loop_start_timeline_sample + within;
+    return numeric::saturating_add(context.loop_start_timeline_sample, within);
   }
-  return context.block_timeline_sample + offset;
+  return numeric::saturating_add(context.block_timeline_sample, static_cast<int64_t>(offset));
 }
 
 bool BoundaryList::append(BoundaryPoint point) noexcept {

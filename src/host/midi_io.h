@@ -39,6 +39,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/ump.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::host {
 
@@ -55,21 +56,18 @@ namespace detail {
 
 /// Adds a non-negative frame offset without wrapping the signed timeline.
 inline int64_t saturating_add_nonnegative(int64_t base, int64_t offset) noexcept {
-  if (offset <= 0) return base;
-  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
-  if (base > kMaxFrame - offset) return kMaxFrame;
-  return base + offset;
+  return offset <= 0 ? base : numeric::saturating_add(base, offset);
 }
 
 /// Computes an exclusive block end and reports when the mathematical end is
 /// beyond the representable render-frame timeline.
 inline int64_t block_end_frame(int64_t block_start_frame, int num_frames,
                                bool* overflowed) noexcept {
-  const int64_t delta = static_cast<int64_t>(num_frames);
-  constexpr int64_t kMaxFrame = std::numeric_limits<int64_t>::max();
-  const bool end_overflowed = delta > 0 && block_start_frame > kMaxFrame - delta;
+  int64_t end = 0;
+  const bool end_overflowed =
+      !numeric::checked_add(block_start_frame, static_cast<int64_t>(num_frames), &end);
   if (overflowed != nullptr) *overflowed = end_overflowed;
-  return end_overflowed ? kMaxFrame : block_start_frame + delta;
+  return end_overflowed ? numeric::saturating_add(block_start_frame, int64_t{num_frames}) : end;
 }
 
 }  // namespace detail
@@ -560,9 +558,10 @@ class FixedMidiOutputSink final : public MidiOutputSink {
 
 /// Reserved destination id for transport / clock bytes that are not bound to a
 /// single track lane. Events tagged with this destination carry a System (UMP
-/// message type 0x1) payload — a MIDI 1.0 System Real-Time / Common byte (clock
-/// 0xF8, start 0xFA, continue 0xFB, stop 0xFC, song-position 0xF2) — meant for
-/// every open external port rather than one track's instrument.
+/// message type 0x1) payload holding one single-byte System Real-Time status --
+/// clock 0xF8, start 0xFA, continue 0xFB or stop 0xFC -- meant for every open
+/// external port rather than one track's instrument. No multi-byte System Common
+/// message (song position included) is carried on it.
 inline constexpr uint32_t kTransportDestination = 0xFFFFFFFFu;
 
 /// A destination-tagged MIDI output event: which lane (Track.midi_destination_id)
@@ -604,7 +603,7 @@ struct ExternalMidi1Lowered {
 inline ExternalMidi1Lowered lower_external_midi_record(const ExternalMidiRecord& rec) noexcept {
   ExternalMidi1Lowered out{};
   if (rec.destination_id == kTransportDestination) {
-    // System real-time / common byte (clock 0xF8 / start / continue / stop).
+    // Single-byte System Real-Time status (clock 0xF8 / start / continue / stop).
     out.messages[0].bytes[0] = static_cast<uint8_t>((rec.event.ump.words[0] >> 16) & 0xFFu);
     out.messages[0].byte_count = 1;
     out.count = 1;

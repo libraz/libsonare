@@ -382,6 +382,42 @@ TEST_CASE("TrackMixerRuntime lane PFL/AFL taps preserve main and sum staged sour
   REQUIRE(reordered.second[0] == Catch::Approx(1.0f));
 }
 
+TEST_CASE("TrackMixerRuntime AFL cue right plane does not depend on the main right output",
+          "[engine][track_mixer][monitor]") {
+  constexpr int kFrames = 8;
+  std::array<float, kFrames> source_left{};
+  std::array<float, kFrames> source_right{};
+  source_left.fill(1.0f);
+  source_right.fill(0.5f);
+  float* source[] = {source_left.data(), source_right.data()};
+
+  const auto render = [&](bool main_right_connected) {
+    sonare::engine::TrackMixerRuntime mixer;
+    mixer.prepare(48000.0, kFrames);
+    REQUIRE(mixer.set_track_lanes({{10}}));
+    REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kFaderDb, -6.0f));
+    REQUIRE(mixer.set_lane_parameter(0, sonare::engine::TrackMixerRuntime::kPan, 0.5f));
+    mixer.set_lane_monitor_mode(0, sonare::engine::TrackMonitorMode::kAfl);
+    mixer.settle_smoothers();
+    std::array<float, kFrames> cue_left{};
+    std::array<float, kFrames> cue_right{};
+    float* cue[] = {cue_left.data(), cue_right.data()};
+    mixer.set_monitor_bus(cue, 2);
+    std::array<float, kFrames> main_left{};
+    std::array<float, kFrames> main_right{};
+    float* main[] = {main_left.data(), main_right_connected ? main_right.data() : nullptr};
+    REQUIRE(mixer.begin_source_mix(2, kFrames));
+    bool routed = false;
+    REQUIRE(mixer.mix_source_into_lane(10, source, main, 2, kFrames, routed));
+    mixer.finish_source_mix(main, 2, kFrames);
+    return cue_right;
+  };
+  const auto connected = render(true);
+  const auto unconnected = render(false);
+  REQUIRE(connected[0] > 0.0f);
+  for (int i = 0; i < kFrames; ++i) REQUIRE(unconnected[i] == connected[i]);
+}
+
 TEST_CASE("TrackMixerRuntime stages multiple sources before processing a lane once",
           "[engine][track_mixer]") {
   constexpr int kFrames = 16;

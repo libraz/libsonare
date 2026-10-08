@@ -11,9 +11,11 @@ void MonitorRuntime::prepare(double sample_rate, int max_block_size, float smoot
   sample_rate_ = sample_rate > 0.0 ? sample_rate : constants::kDefaultDawSampleRate;
   max_block_size_ = std::max(max_block_size, 1);
   smoothing_ms_ = std::max(smoothing_ms, 0.0f);
+  // Retained mute and solo flags are audible from the first block after a prepare.
   for (StripState& state : strips_) {
     state.mute_gain.prepare(sample_rate_, smoothing_ms_);
-    state.mute_gain.reset(1.0f);
+    update_target(state);
+    state.mute_gain.reset(state.mute_gain.target());
   }
 }
 

@@ -440,7 +440,7 @@ bool CcMap::value_to_unit(uint8_t cc_number, uint8_t channel, float norm,
   return false;
 }
 
-void CcMap::reset_live_decode() noexcept {
+void CcMap::reset_live_decode() const noexcept {
   for (auto& state : live_->channels) {
     state = LiveChannelState{};
   }

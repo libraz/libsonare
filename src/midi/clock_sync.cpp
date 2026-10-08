@@ -1,8 +1,10 @@
 #include "midi/clock_sync.h"
 
 #include <cmath>
+#include <limits>
 
 #include "midi/tick_conversion.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::midi {
 namespace {
@@ -191,20 +193,47 @@ int64_t ClockGenerator::first_tick_at_or_after(int64_t frame) const noexcept {
   if (tempo_map_ == nullptr) {
     return 0;
   }
-  const double ppq = tempo_map_->sample_to_ppq(frame);
-  const double ticks = clock_ppq_to_ticks(ppq);
-  int64_t tick = static_cast<int64_t>(std::ceil(ticks));
-  if (tick < 0) {
-    tick = 0;
+  constexpr int64_t kMaxTick = std::numeric_limits<int64_t>::max();
+  // frame_of_tick never decreases, so the answer is bracketed by doubling steps
+  // from the estimate and then bisected: bounded work whatever the tempo.
+  const auto reaches = [&](int64_t tick) noexcept { return frame_of_tick(tick) >= frame; };
+  const double estimate = std::ceil(clock_ppq_to_ticks(tempo_map_->sample_to_ppq(frame)));
+  constexpr double kMaxTickDouble = static_cast<double>(kMaxTick);
+  int64_t hi = !(estimate > 0.0)            ? 0
+               : estimate >= kMaxTickDouble ? kMaxTick
+                                            : static_cast<int64_t>(estimate);
+  int64_t lo = -1;  // a tick before `frame`, or -1 when none is known
+  if (reaches(hi)) {
+    for (int64_t step = 1; hi > 0; step = numeric::saturating_add(step, step)) {
+      const int64_t candidate = std::max<int64_t>(0, numeric::saturating_sub(hi, step));
+      if (!reaches(candidate)) {
+        lo = candidate;
+        break;
+      }
+      hi = candidate;
+    }
+    if (lo < 0) return hi;
+  } else {
+    lo = hi;
+    for (int64_t step = 1;; step = numeric::saturating_add(step, step)) {
+      if (lo == kMaxTick) return kMaxTick;
+      const int64_t candidate = numeric::saturating_add(lo, step);
+      if (reaches(candidate)) {
+        hi = candidate;
+        break;
+      }
+      lo = candidate;
+    }
   }
-  // Guard against ceil rounding placing the tick before `frame`.
-  while (tick > 0 && frame_of_tick(tick - 1) >= frame) {
-    --tick;
+  while (hi - lo > 1) {
+    const int64_t mid = lo + (hi - lo) / 2;
+    if (reaches(mid)) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
   }
-  while (frame_of_tick(tick) < frame) {
-    ++tick;
-  }
-  return tick;
+  return hi;
 }
 
 size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_frames,
@@ -232,7 +261,8 @@ size_t ClockGenerator::generate_clock_block(int64_t block_start_frame, int num_f
   if (tempo_map_ == nullptr || num_frames <= 0) {
     return 0;
   }
-  const int64_t block_end_frame = block_start_frame + num_frames;
+  const int64_t block_end_frame =
+      numeric::saturating_add(block_start_frame, static_cast<int64_t>(num_frames));
   size_t ticks_emitted = 0;
   for (int64_t tick = first_tick_at_or_after(block_start_frame);
        frame_of_tick(tick) < block_end_frame; ++tick) {
@@ -258,29 +288,22 @@ void ClockParser::reset() noexcept {
   clock_ticks_ = 0;
   running_ = true;
   mtc_pieces_.fill(0);
-  mtc_seen_.fill(false);
+  mtc_next_piece_ = -1;
   mtc_complete_ = false;
   mtc_time_ = MtcTime{};
 }
 
-void ClockParser::assemble_mtc() noexcept {
-  for (bool seen : mtc_seen_) {
-    if (!seen) {
-      return;
-    }
-  }
+bool ClockParser::assemble_mtc() noexcept {
   MtcTime t;
   t.frames = static_cast<uint8_t>((mtc_pieces_[0] & 0x0Fu) | ((mtc_pieces_[1] & 0x01u) << 4u));
   t.seconds = static_cast<uint8_t>((mtc_pieces_[2] & 0x0Fu) | ((mtc_pieces_[3] & 0x03u) << 4u));
   t.minutes = static_cast<uint8_t>((mtc_pieces_[4] & 0x0Fu) | ((mtc_pieces_[5] & 0x03u) << 4u));
   t.hours = static_cast<uint8_t>((mtc_pieces_[6] & 0x0Fu) | ((mtc_pieces_[7] & 0x01u) << 4u));
   t.rate = static_cast<MtcFrameRate>((mtc_pieces_[7] >> 1u) & 0x03u);
-  if (!valid_mtc_time(t)) {
-    mtc_complete_ = false;
-    return;
-  }
+  if (!valid_mtc_time(t)) return false;
   mtc_time_ = t;
   mtc_complete_ = true;
+  return true;
 }
 
 bool ClockParser::parse_byte(uint8_t byte) noexcept {
@@ -356,18 +379,20 @@ bool ClockParser::parse_byte(uint8_t byte) noexcept {
     case Pending::kMtcData: {
       const int piece = (byte >> 4u) & 0x07u;
       const uint8_t nibble = static_cast<uint8_t>(byte & 0x0Fu);
-      if (piece == 0) {
-        mtc_seen_.fill(false);
-        mtc_complete_ = false;
+      pending_ = Pending::kNone;
+      // A cycle starts at piece 0 and accepts only the next piece in order.
+      if (piece == 0) mtc_next_piece_ = 0;
+      if (piece != mtc_next_piece_) {
+        mtc_next_piece_ = -1;
+        return false;
       }
       mtc_pieces_[static_cast<size_t>(piece)] = nibble;
-      mtc_seen_[static_cast<size_t>(piece)] = true;
-      pending_ = Pending::kNone;
-      if (piece == 7) {
-        assemble_mtc();
-        return mtc_complete_;
+      if (piece < 7) {
+        ++mtc_next_piece_;
+        return false;
       }
-      return false;
+      mtc_next_piece_ = -1;
+      return assemble_mtc();
     }
     case Pending::kNone:
     default:

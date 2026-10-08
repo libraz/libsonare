@@ -1125,10 +1125,20 @@ bool RealtimeEngine::insert_parameter_constructed_value(uint32_t target_id,
   return constructed_insert_parameter_base(target_id, out_value);
 }
 
+bool RealtimeEngine::master_insert_target_resolves(unsigned int insert_index,
+                                                   unsigned int param_id) const noexcept {
+  if (owned_master_strip_ == nullptr) return false;
+  const rt::ProcessorBase* processor = owned_master_strip_->insert_processor(insert_index);
+  return processor != nullptr && processor->parameter_is_realtime_safe(param_id);
+}
+
 bool RealtimeEngine::route_master_insert_param_smoothed(unsigned int insert_index,
                                                         unsigned int param_id, float value,
                                                         uint32_t base_id) noexcept {
-  if (!std::isfinite(value)) return false;
+  // A missing strip or insert is refused before a slot is claimed or a base recorded.
+  if (!std::isfinite(value) || !master_insert_target_resolves(insert_index, param_id)) {
+    return false;
+  }
   MasterInsertAutoSlot* free_slot = nullptr;
   MasterInsertAutoSlot* settled_match = nullptr;
   for (MasterInsertAutoSlot& slot : master_insert_auto_slots_) {

@@ -66,6 +66,25 @@ TEST_CASE("MeterProcessor streaming LUFS obeys the energy doubling law", "[mixin
   REQUIRE_THAT(snap_a.momentary_lufs, WithinAbs(offline.momentary_lufs, 0.7f));
 }
 
+TEST_CASE("MeterProcessor windows forget loud history exactly", "[mixing]") {
+  constexpr double kSr = 16000.0;
+  constexpr int kBlock = 1024;
+  sonare::mixing::MeterProcessor seasoned;
+  seasoned.prepare(kSr, kBlock);
+  drive_meter_sine(seasoned, 0.3f, kSr, 120.0, kBlock);
+  const auto silent = drive_meter_sine(seasoned, 0.0f, kSr, 30.0, kBlock);
+  REQUIRE(silent.momentary_lufs == sonare::constants::kFloorDb);
+  REQUIRE(silent.short_term_lufs == sonare::constants::kFloorDb);
+
+  // A quiet tone afterwards reads as it does on a meter with no history.
+  sonare::mixing::MeterProcessor fresh;
+  fresh.prepare(kSr, kBlock);
+  const auto quiet_fresh = drive_meter_sine(fresh, 0.0003f, kSr, 5.0, kBlock);
+  const auto quiet_seasoned = drive_meter_sine(seasoned, 0.0003f, kSr, 5.0, kBlock);
+  REQUIRE_THAT(quiet_seasoned.momentary_lufs, WithinAbs(quiet_fresh.momentary_lufs, 0.01f));
+  REQUIRE_THAT(quiet_seasoned.short_term_lufs, WithinAbs(quiet_fresh.short_term_lufs, 0.01f));
+}
+
 TEST_CASE("MeterProcessor streaming LUFS includes BS.1770 surround channels", "[mixing]") {
   constexpr double kSr = 48000.0;
   constexpr int kBlock = 512;

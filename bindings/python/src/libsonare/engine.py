@@ -706,11 +706,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None:
-        """Set the default ramp time (ms) for engine-level smoothed parameters.
+        """Set the ramp time (ms) of the engine-level smoother.
 
-        Applies to every smoothed parameter change -- fader/pan glides,
-        insert-parameter automation, and MIDI-CC mappings. The default is 20 ms;
-        pass ``0`` for instant (un-ramped) changes.
+        Governs only ``set_parameter_smoothed`` on parameters bound through the
+        automation engine. Reserved engine targets -- track and bus faders, pan
+        and width, and insert and instrument parameters -- keep their own fixed
+        smoothing whatever this is set to, and MIDI-CC mappings apply their values
+        directly. The default is 20 ms; ``0`` makes the governed changes instant.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_param_smoothing_ms"):

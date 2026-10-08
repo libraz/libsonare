@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <cstdlib>
 #include <initializer_list>
 #include <iterator>
 #include <string_view>
@@ -16,6 +17,7 @@
 #include "midi/synth/gs_efx_convert.h"
 #include "midi/synth/pitch.h"
 #include "midi/sysex_framing.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 
 namespace sonare::midi::synth {
@@ -820,6 +822,27 @@ void merge_key(std::string& params, const std::string& addition) {
   params.pop_back();  // the closing brace
   params += "," + addition + "}";
 }
+
+}  // namespace
+
+void gs_efx_fit_to_rate(std::vector<GsEfxStage>& chain, double sample_rate) {
+  if (!(sample_rate > 0.0)) return;
+  const float ceiling = rt::max_design_frequency_hz(sample_rate);
+  static constexpr std::string_view kSuffix = ".frequencyHz\":";
+  for (GsEfxStage& stage : chain) {
+    if (stage.name != "eq.parametric") continue;
+    std::string& params = stage.params_json;
+    for (std::size_t at = params.find(kSuffix); at != std::string::npos;
+         at = params.find(kSuffix, at + kSuffix.size())) {
+      const std::size_t value_start = at + kSuffix.size();
+      const std::size_t value_end = params.find_first_of(",}", value_start);
+      if (std::strtod(params.c_str() + value_start, nullptr) <= ceiling) continue;
+      params.replace(value_start, value_end - value_start, std::to_string(ceiling));
+    }
+  }
+}
+
+namespace {
 
 /// Selects the modern method of each stage whose insert offers one: cubic
 /// Lagrange delay reads, the pitch shifter's pre-write anti-aliasing, the

@@ -44,9 +44,10 @@ class SampleReader {
   void set_position(double pos) noexcept { pos_ = pos; }
   void advance(double increment) noexcept { pos_ += increment; }
 
-  /// True while the region's loop is the one being read.
-  bool looping(bool key_down) const noexcept {
-    return region_.loop_mode == 1 || (region_.loop_mode == 3 && key_down);
+  /// True while the region's loop is the one being read: always for mode 1, and
+  /// for mode 3 while the note is @p held (key down or pedal-sustained).
+  bool looping(bool held) const noexcept {
+    return region_.loop_mode == 1 || (region_.loop_mode == 3 && held);
   }
 
   /// Wraps a looping read back into its loop, and reports whether the region

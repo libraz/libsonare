@@ -43,6 +43,8 @@ class Graph {
   const Node* node(const std::string& id) const;
 
   bool compiled() const noexcept { return compiled_; }
+  /// The largest block prepare() sized the graph for; 0 before prepare().
+  int max_block_size() const noexcept { return max_block_size_; }
   size_t node_count() const noexcept { return nodes_.size(); }
   size_t connection_count() const noexcept { return connections_.size(); }
   const Connection& connection(size_t connection_index) const;

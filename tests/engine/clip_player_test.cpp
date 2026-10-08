@@ -1170,6 +1170,66 @@ TEST_CASE("ClipPlayer time-stretch warp under an identity map reproduces the sou
   REQUIRE(std::sqrt(error / reference) < 0.05);
 }
 
+namespace {
+
+sonare::engine::ClipSchedule identity_stretched_clip(const float* const* channels,
+                                                     int64_t source_samples,
+                                                     int64_t output_samples) {
+  sonare::engine::ClipSchedule clip = stretched_clip(9, channels, source_samples, output_samples);
+  clip.warp_anchors = std::make_shared<const std::vector<sonare::engine::WarpAnchor>>(
+      std::vector<sonare::engine::WarpAnchor>{
+          {0.0, 0.0}, {static_cast<double>(output_samples), static_cast<double>(output_samples)}});
+  return clip;
+}
+
+std::vector<float> render_clip(const sonare::engine::ClipSchedule& clip, int samples) {
+  sonare::engine::ClipPlayer player;
+  player.prepare(kStretchSampleRate, samples);
+  player.set_clips({clip});
+  std::vector<float> out(static_cast<size_t>(samples), 0.0f);
+  float* out_ptrs[] = {out.data()};
+  player.process_at(out_ptrs, 1, samples, 0);
+  return out;
+}
+
+}  // namespace
+
+TEST_CASE("ClipPlayer time-stretch keeps a transient at the very start of playback",
+          "[engine][clip_player]") {
+  constexpr int kSamples = 4096;
+  std::vector<float> source(kSamples, 0.0f);
+  source[0] = 1.0f;
+  const float* channels[] = {source.data()};
+  const std::vector<float> out =
+      render_clip(identity_stretched_clip(channels, kSamples, kSamples), kSamples);
+  REQUIRE_THAT(out[0], Catch::Matchers::WithinAbs(1.0f, 1.0e-4));
+}
+
+TEST_CASE("ClipPlayer time-stretch reads stay inside the loop body and the source",
+          "[engine][clip_player]") {
+  constexpr int kSource = 2048;
+  constexpr int kOutput = 4096;
+  SECTION("a silent loop body stays silent whatever follows it in the source") {
+    std::vector<float> source(kSource, 1.0f);
+    std::fill(source.begin(), source.begin() + 256, 0.0f);
+    const float* channels[] = {source.data()};
+    sonare::engine::ClipSchedule clip = identity_stretched_clip(channels, kSource, kOutput);
+    clip.loop = true;
+    clip.loop_length_samples = 256;
+    const std::vector<float> out = render_clip(clip, kOutput);
+    for (float value : out) REQUIRE(std::abs(value) < 1.0e-6f);
+  }
+  SECTION("a warp reaching past the source end reads silence, not its last sample") {
+    const std::vector<float> source(kSource, 1.0f);
+    const float* channels[] = {source.data()};
+    const std::vector<float> out =
+        render_clip(identity_stretched_clip(channels, kSource, kOutput), kOutput);
+    for (int i = kSource + 1024; i < kOutput; ++i) {
+      REQUIRE(std::abs(out[static_cast<size_t>(i)]) < 1.0e-6f);
+    }
+  }
+}
+
 TEST_CASE("ClipPlayer time-stretch warp is audibly equivalent to the offline warp bake",
           "[engine][clip_player]") {
   // The offline path bakes a warped clip with an FFT phase vocoder

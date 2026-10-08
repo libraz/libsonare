@@ -1012,6 +1012,34 @@ TEST_CASE("A centred layer keeps its own level", "[midi][layered]") {
   CHECK(legs.right == Catch::Approx(0.4f).margin(1e-5));
 }
 
+TEST_CASE("A mono render hears a layer at the same level whichever side it is panned",
+          "[midi][layered]") {
+  const auto mono_level = [](float pan, bool source_render) {
+    LayeredInstrument inst;
+    InstrumentLayerSpec spec;
+    spec.pan = pan;
+    REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(0.4f), spec));
+    inst.prepare(kRate, 128);
+    std::vector<float> mono(64, 0.0f);
+    float* target[] = {mono.data()};
+    if (source_render) {
+      const MidiInstrumentSourceOutput outputs[] = {{0, target}};
+      if (!inst.process_source_tracks(outputs, 1, 1, 64)) return -1.0f;
+    } else {
+      inst.process(target, 1, 64);
+    }
+    return mono[0];
+  };
+  for (const bool source_render : {false, true}) {
+    const float centre = mono_level(0.0f, source_render);
+    if (centre < 0.0f) continue;  // the probe does not render source tracks
+    INFO("source render " << source_render);
+    CHECK(centre == Catch::Approx(0.4f).margin(1e-5));
+    CHECK(mono_level(-1.0f, source_render) == Catch::Approx(mono_level(1.0f, source_render)));
+    CHECK(mono_level(1.0f, source_render) > 0.1f);
+  }
+}
+
 TEST_CASE("Layers sum", "[midi][layered]") {
   LayeredInstrument inst;
   REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(0.2f), InstrumentLayerSpec{}));

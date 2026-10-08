@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "util/numeric_validation.h"
+
 namespace sonare::engine {
 
 void CaptureSink::prepare(CaptureSegment segment) noexcept {
@@ -41,10 +43,9 @@ void CaptureSink::process(const float* const* input, int num_channels, int num_f
 
   const int channels = std::min(num_channels, control.segment.num_channels);
   for (int i = 0; i < num_frames; ++i) {
-    const int64_t sample = timeline_sample + i;
-    if (control.punch_enabled &&
-        (sample < control.punch_start_sample || sample >= control.punch_end_sample)) {
-      continue;
+    if (control.punch_enabled) {
+      const int64_t sample = numeric::saturating_add(timeline_sample, static_cast<int64_t>(i));
+      if (sample < control.punch_start_sample || sample >= control.punch_end_sample) continue;
     }
     const int64_t captured = captured_frames_.load(std::memory_order_relaxed);
     if (captured >= control.segment.capacity_frames) {
@@ -87,7 +88,8 @@ void collect_capture_boundaries(int64_t block_start_sample, int num_frames, int6
   if (!out) return;
   out->clear();
   if (num_frames <= 0) return;
-  const int64_t block_end = block_start_sample + num_frames;
+  const int64_t block_end =
+      numeric::saturating_add(block_start_sample, static_cast<int64_t>(num_frames));
   if (punch_start > block_start_sample && punch_start <= block_end) {
     out->add(static_cast<int>(punch_start - block_start_sample));
   }

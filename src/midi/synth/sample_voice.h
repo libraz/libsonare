@@ -63,7 +63,7 @@ class SampleVoiceCore {
 
   /// Advances one sample. @p pitch_ratio is the voice's accumulated pitch
   /// modulation (1.0 = the note as resolved at start).
-  float render(float pitch_ratio, bool key_down) noexcept;
+  float render(float pitch_ratio, bool held) noexcept;
 
  private:
   /// One zone being read. Two of them straddle a velocity crossfade, each with

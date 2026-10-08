@@ -1155,6 +1155,28 @@ TEST_CASE("ClockGenerator stops scanning when its fixed block budget overflows",
   REQUIRE(gen.overflow_count() == 1);
 }
 
+TEST_CASE("ClockGenerator finds the first tick in bounded work at any tempo", "[midi][rt]") {
+  // At 1e17 BPM the tick estimate from a non-zero frame lands hundreds of
+  // billions of ticks past the first one rounding to that frame.
+  TempoMap extreme;
+  configure_tempo_map(&extreme, 1.0e17);
+  ClockGenerator fast;
+  fast.prepare(&extreme);
+  ClockByteOutput out;
+  const size_t emitted = fast.generate_clock_block(1, 1, &out);
+  REQUIRE(emitted == ClockByteOutput::kCapacity);
+  REQUIRE(out.overflowed);
+
+  // An ordinary tempo keeps its tick positions from any block start.
+  TempoMap map;
+  configure_tempo_map(&map, 120.0);
+  ClockGenerator gen;
+  gen.prepare(&map);
+  for (const int64_t start : {int64_t{1}, int64_t{999}, int64_t{1000}, int64_t{123456}}) {
+    REQUIRE(gen.first_tick_at_or_after(start) == (start + 999) / 1000);
+  }
+}
+
 TEST_CASE("SPP generate and parse round-trip", "[midi]") {
   // 4 quarter notes == 16 sixteenth notes == SPP beat value 16.
   const uint16_t beats = sonare::midi::ppq_to_spp_beats(4.0);
@@ -1574,8 +1596,51 @@ TEST_CASE("MTC quarter-frame piece zero starts a fresh assembly", "[midi]") {
   uint8_t piece0[2] = {0, 0};
   REQUIRE(sonare::midi::encode_mtc_quarter_frame(second, 0, piece0, sizeof(piece0)) == 2);
   parser.parse_byte(piece0[0]);
-  parser.parse_byte(piece0[1]);
-  REQUIRE_FALSE(parser.has_mtc());
+  REQUIRE_FALSE(parser.parse_byte(piece0[1]));
+  // A cycle in progress leaves the last complete time standing until it completes.
+  REQUIRE(parser.has_mtc());
+  REQUIRE(parser.mtc_time() == first);
+  bool completed = false;
+  for (int piece = 1; piece < 8; ++piece) {
+    uint8_t bytes[2] = {0, 0};
+    REQUIRE(sonare::midi::encode_mtc_quarter_frame(second, piece, bytes, sizeof(bytes)) == 2);
+    parser.parse_byte(bytes[0]);
+    completed = parser.parse_byte(bytes[1]);
+  }
+  REQUIRE(completed);
+  REQUIRE(parser.mtc_time() == second);
+}
+
+TEST_CASE("MTC quarter-frame cycle missing piece zero publishes nothing", "[midi]") {
+  MtcTime first;
+  first.seconds = 0;
+  first.frames = 24;
+  first.rate = sonare::midi::MtcFrameRate::kFps25;
+  MtcTime next = first;
+  next.seconds = 1;
+  next.frames = 1;
+
+  ClockParser parser;
+  parser.reset();
+  const auto feed = [&](const MtcTime& time, int from_piece) {
+    bool completed = false;
+    for (int piece = from_piece; piece < 8; ++piece) {
+      uint8_t bytes[2] = {0, 0};
+      REQUIRE(sonare::midi::encode_mtc_quarter_frame(time, piece, bytes, sizeof(bytes)) == 2);
+      parser.parse_byte(bytes[0]);
+      completed = parser.parse_byte(bytes[1]) || completed;
+    }
+    return completed;
+  };
+  REQUIRE(feed(first, 0));
+  REQUIRE(parser.mtc_time() == first);
+  // Pieces 1-7 alone must not borrow the previous cycle's piece 0.
+  REQUIRE_FALSE(feed(next, 1));
+  REQUIRE(parser.has_mtc());
+  REQUIRE(parser.mtc_time() == first);
+  // The next complete cycle recovers.
+  REQUIRE(feed(next, 0));
+  REQUIRE(parser.mtc_time() == next);
 }
 
 TEST_CASE("ClockGenerator block generation performs no allocation", "[midi][rt]") {
@@ -1769,6 +1834,46 @@ TEST_CASE("MidiCapture quantize preserves note length", "[midi]") {
   REQUIRE(events[0].ppq == 0.5);
   REQUIRE(events[1].ppq > 0.59);
   REQUIRE(events[1].ppq < 0.61);
+}
+
+TEST_CASE("MidiCapture keeps note length when a groove pulls a note-on before zero", "[midi]") {
+  // The groove moves the note-on's grid line to -0.125 PPQ, which clamps to 0;
+  // the note-off must take the same 0.025 PPQ shift the note-on really got.
+  for (const bool split_drain : {false, true}) {
+    TempoMap map;
+    configure_tempo_map(&map, 120.0);
+    MidiCapture capture;
+    capture.prepare(&map, 64);
+    sonare::midi::CaptureConfig cfg;
+    cfg.quantize.enabled = true;
+    cfg.quantize.grid_ppq = 0.25;
+    cfg.quantize.strength = 1.0;
+    cfg.quantize.groove_steps = 3;
+    cfg.quantize.groove_offsets[0] = -0.5;
+    cfg.quantize.groove_offsets[1] = 1.0;
+    cfg.quantize.groove_offsets[2] = -1.0;
+
+    MidiClip clip;
+    MidiEvent off;
+    off.render_frame = 2400;  // 0.1 PPQ
+    off.ump = make_midi1_note_off(0, 0, 60, 0);
+    REQUIRE(capture.push(note_on_event(600, 0, 0, 60)));  // 0.025 PPQ
+    if (split_drain) {
+      capture.drain(cfg, &clip);
+      REQUIRE(capture.push(off));
+      capture.drain(cfg, &clip);
+    } else {
+      REQUIRE(capture.push(off));
+      capture.drain(cfg, &clip);
+    }
+    const auto& events = clip.events();
+    REQUIRE(events.size() == 2);
+    REQUIRE(events[0].ump.is_note_on());
+    REQUIRE(events[0].ppq == 0.0);
+    REQUIRE(events[1].ump.is_note_off());
+    REQUIRE(events[1].ppq > 0.074);
+    REQUIRE(events[1].ppq < 0.076);
+  }
 }
 
 TEST_CASE("MidiCapture keeps note shift state across split drains", "[midi]") {

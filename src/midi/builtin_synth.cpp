@@ -315,15 +315,12 @@ void BuiltinSynth::reset_all_controllers(uint8_t channel) noexcept {
   // RP-015: expression returns to full, volume and pan are left alone.
   channel_controls_[ch].expression = Control32::from7(127);
   refresh_channel_controls(ch);
-  // Per-note pitch survives: Reset All Controllers does not reach it (M2-104-UM B.2).
   for (auto& v : voices_) {
-    if (v.active && (v.channel & 0x0Fu) == ch) {
-      v.phase_inc = v.base_phase_inc * v.per_note_ratio;
-      v.poly_pressure = 0.0f;
-    }
+    if (v.active && (v.channel & 0x0Fu) == ch) v.poly_pressure = 0.0f;
   }
-  // A manager's reset takes its contribution out of every member of its zone.
-  if (mpe_.role(ch) == MpeChannelRole::kManager) refresh_channel_expression(ch);
+  // Per-note pitch survives (M2-104-UM B.2); a member keeps its manager's contribution, and a
+  // manager's reset takes its own out of every member of its zone.
+  refresh_channel_expression(ch);
 }
 
 void BuiltinSynth::on_event(uint32_t /*destination_id*/, const MidiEvent& event) noexcept {

@@ -88,11 +88,17 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   automation_.acquire_lanes();
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.acquire_midi_clips();
-  midi_sequencer_.acquire_midi_fx(state.render_frame);
+  midi_sequencer_.acquire_midi_fx(midi::DeviceFrame{state.render_frame});
   // Adopt routes after MIDI-FX cleanup (old route) and before any event dispatches this block.
   adopt_midi_destination_routes(state.render_frame);
   midi_cc_maps_.acquire();
   host::MidiInputSource* midi_input_source = midi_input_source_.load(std::memory_order_acquire);
+  const uint64_t source_generation = midi_input_source_generation_.load(std::memory_order_relaxed);
+  if (source_generation != adopted_midi_input_source_generation_) {
+    // A new input stream never completes a controller gesture the old one began.
+    adopted_midi_input_source_generation_ = source_generation;
+    if (const midi::CcMap* cc_map = midi_cc_maps_.current()) cc_map->reset_live_decode();
+  }
   live_midi_input_destination_id_ = midi_input_destination_id_.load(std::memory_order_relaxed);
   live_midi_input_count_ = midi_input_source != nullptr
                                ? midi_input_source->drain_block(live_midi_input_events_.data(),
@@ -110,194 +116,136 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
   }
 #endif
   drain_commands(state.render_frame, frames);
-#if defined(SONARE_WITH_ARRANGEMENT)
-  // Same hang-note release as a wrap inside the block.
-  if (wrapped_at_block_start) {
-    publish_instrument_transport();
-    midi_sequencer_.all_notes_off(state.render_frame);
-  }
-#endif
   const uint32_t unknown_target_count_before = automation_.unknown_target_count();
   const uint32_t non_rt_rejection_count_before = automation_.non_realtime_safe_rejection_count();
 
+  // Device-framed edges are known up front: queued commands, live input and the
+  // control-period cadence. Edges derived from the timeline (loop wrap, clip and
+  // punch edges, automation breakpoints, MIDI events) are found span by span from
+  // the transport state in effect, so an in-block Play, seek or wrap moves them.
   BoundaryBuildContext boundary_context{};
   boundary_context.block_render_frame = state.render_frame;
   boundary_context.block_timeline_sample = state.sample_position;
   boundary_context.num_frames = frames;
-
-  transport::BoundaryList loop_boundaries;
-  if (transport_.collect_loop_boundaries(frames, &loop_boundaries) && loop_boundaries.size() > 0) {
-    boundary_context.loop_wrap = true;
-    boundary_context.loop_wrap_offset = loop_boundaries[0].offset;
-    boundary_context.loop_start_timeline_sample = tempo_map.ppq_to_sample(state.loop_start_ppq);
-    // Carry the loop length so timeline_at_offset can fold offsets past the
-    // first wrap; with a short loop and a large block the playhead can wrap
-    // more than once within this block.
-    const int64_t loop_end_sample = tempo_map.ppq_to_sample(state.loop_end_ppq);
-    boundary_context.loop_len_samples =
-        loop_end_sample - boundary_context.loop_start_timeline_sample;
-  }
-
   boundary_splitter_.begin(boundary_context);
-  if (boundary_context.loop_wrap) {
-    // Register EVERY wrap that falls inside this block, not just the first.
-    // Each wrap must become a sub-block boundary so the over-wrapped tail of
-    // the block renders from the looped position rather than running past
-    // loop_end.
-    for (size_t i = 0; i < loop_boundaries.size(); ++i) {
-      boundary_splitter_.add_loop(loop_boundaries[i].offset);
-    }
-  }
   for (const rt::Command& command : pending_) {
     const auto sample_time = command.sample_time;
     if (command_belongs_to_block(sample_time, state.render_frame, frames)) {
       boundary_splitter_.add_command(static_cast<int>(sample_time - state.render_frame));
     }
   }
-
-  automation::AutomationBoundaryList automation_boundaries;
-  if (boundary_context.loop_wrap) {
-    // One linear interval per wrap plus the tail; the upper bound is exclusive
-    // so a breakpoint at loop_end applies at the wrap.
-    const int64_t loop_start_sample = boundary_context.loop_start_timeline_sample;
-    const int64_t loop_end_sample = tempo_map.ppq_to_sample(state.loop_end_ppq);
-    int interval_offset = 0;
-    int64_t interval_start_sample = state.sample_position;
-    for (size_t loop_index = 0; loop_index <= loop_boundaries.size(); ++loop_index) {
-      const bool ends_at_wrap = loop_index < loop_boundaries.size();
-      const int interval_end_offset = ends_at_wrap ? loop_boundaries[loop_index].offset : frames;
-      const int interval_frames = interval_end_offset - interval_offset;
-      const int64_t interval_end_sample =
-          ends_at_wrap ? loop_end_sample
-                       : interval_start_sample + static_cast<int64_t>(interval_frames);
-
-      if (interval_frames > 0) {
-        const double interval_start_ppq = tempo_map.sample_to_ppq(interval_start_sample);
-        const double interval_end_ppq = tempo_map.sample_to_ppq(interval_end_sample);
-        automation_.collect_boundaries(interval_start_ppq, interval_end_ppq,
-                                       &automation_boundaries);
-        for (size_t i = 0; i < automation_boundaries.size; ++i) {
-          const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
-          if (timeline_sample < interval_start_sample || timeline_sample >= interval_end_sample) {
-            continue;
-          }
-          const int64_t relative_sample = timeline_sample - interval_start_sample;
-          if (relative_sample < 0 || relative_sample >= interval_frames) continue;
-          boundary_splitter_.add_automation(interval_offset + static_cast<int>(relative_sample));
-        }
-      }
-
-      if (!ends_at_wrap) break;
-      interval_offset = interval_end_offset;
-      interval_start_sample = loop_start_sample;
-    }
-  } else {
-    const double block_end_ppq = tempo_map.sample_to_ppq(state.sample_position + frames);
-    automation_.collect_boundaries(state.ppq_position, block_end_ppq, &automation_boundaries);
-    for (size_t i = 0; i < automation_boundaries.size; ++i) {
-      const int64_t timeline_sample = tempo_map.ppq_to_sample(automation_boundaries.ppq[i]);
-      boundary_splitter_.add_automation(static_cast<int>(timeline_sample - state.sample_position));
+#if defined(SONARE_WITH_ARRANGEMENT)
+  live_midi_input_cursor_ = 0;
+  for (size_t i = 0; i < live_midi_input_count_; ++i) {
+    const int64_t event_frame = live_midi_input_events_[i].render_frame;
+    if (command_belongs_to_block(event_frame, state.render_frame, frames)) {
+      boundary_splitter_.add_midi(static_cast<int>(event_frame - state.render_frame));
     }
   }
-  // Insert control-period boundaries so automation lanes and engine-level
-  // parameter smoothers are re-evaluated at a bounded cadence within the block.
-  // Boundary storage covers every offset of the prepared block (prepare_impl), so
-  // the nominal cadence cannot evict MIDI/SysEx boundaries.
+#endif
+  // Control-period edges re-evaluate automation lanes and engine-level smoothers
+  // at a bounded cadence. Boundary storage covers every offset of the prepared
+  // block (prepare_impl), so the cadence cannot evict command or MIDI edges.
   if (automation_.lane_count() > 0 || any_smoothed_param_active()) {
     for (int offset = kControlPeriod; offset < frames; offset += kControlPeriod) {
       boundary_splitter_.add_automation(offset);
     }
   }
 
-  // Clip edges must split sub-blocks at the exact sample where a clip starts or
-  // ends, so automation/fades evaluated per sub-block do not lag up to a full
-  // block at clip boundaries. collect_boundaries returns offsets relative to
-  // the block's timeline sample position, matching add_clip's convention.
-  ClipBoundaryList clip_boundaries;
-  clip_player_.collect_boundaries(state.sample_position, frames, &clip_boundaries);
-  for (size_t i = 0; i < clip_boundaries.size; ++i) {
-    boundary_splitter_.add_clip(clip_boundaries.offsets[i]);
-  }
-
-#if defined(SONARE_WITH_ARRANGEMENT)
-  // MIDI event edges split sub-blocks at the exact sample a UMP event fires, so
-  // the sequencer dispatches each event at its sample-accurate boundary rather
-  // than at block granularity. Uses a distinct BoundarySource::kMidi (added via
-  // add_midi) so dense-MIDI overflow stays distinguishable in telemetry.
-  midi_sequencer_.collect_boundaries(state.sample_position, frames, &midi_boundary_offsets_);
-  for (size_t i = 0; i < midi_boundary_offsets_.size(); ++i) {
-    boundary_splitter_.add_midi(midi_boundary_offsets_[i]);
-  }
-  for (size_t i = 0; i < live_midi_input_count_; ++i) {
-    const int64_t event_frame = live_midi_input_events_[i].render_frame;
-    if (event_frame >= state.render_frame && event_frame < state.render_frame + frames) {
-      boundary_splitter_.add_midi(static_cast<int>(event_frame - state.render_frame));
+  // The first frame on the timeline that changes what the next span renders,
+  // capped at @p max_frames: loop end, clip and punch edges, automation breakpoints.
+  const auto timeline_span = [&](int max_frames) noexcept {
+    if (!transport_.playing()) return max_frames;
+    const auto now = transport_.snapshot();
+    const int64_t position = now.sample_position;
+    int span = max_frames;
+    const auto cap = [&](int64_t frame) noexcept {
+      const int64_t distance = numeric::saturating_sub(frame, position);
+      if (distance > 0 && distance < span) span = static_cast<int>(distance);
+    };
+    if (now.looping && now.loop_end_ppq > now.loop_start_ppq) {
+      cap(tempo_map.ppq_to_sample(now.loop_end_ppq));
     }
-  }
-#endif
-
-  // Punch in/out transitions must split sub-blocks at the exact sample so the
-  // capture sink starts/stops on a sub-block boundary rather than at block
-  // granularity. Register each punch edge that falls inside this block.
-  const CaptureSink::PunchState punch = capture_sink_.punch_state_rt();
-  if (punch.armed && punch.punch_enabled) {
-    const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
-    CaptureBoundaryList capture_boundaries;
-    collect_capture_boundaries(state.sample_position, frames,
-                               numeric::saturating_add(punch.punch_start_sample, record_offset),
-                               numeric::saturating_add(punch.punch_end_sample, record_offset),
-                               &capture_boundaries);
-    for (size_t i = 0; i < capture_boundaries.size; ++i) {
-      boundary_splitter_.add_marker(capture_boundaries.offsets[i]);
+    ClipBoundaryList clip_boundaries;
+    clip_player_.collect_boundaries(position, span, &clip_boundaries);
+    for (size_t i = 0; i < clip_boundaries.size; ++i) {
+      cap(numeric::saturating_add(position, static_cast<int64_t>(clip_boundaries.offsets[i])));
     }
-  }
+    const CaptureSink::PunchState punch = capture_sink_.punch_state_rt();
+    if (punch.armed && punch.punch_enabled) {
+      const int64_t record_offset = record_offset_samples_.load(std::memory_order_acquire);
+      cap(numeric::saturating_add(punch.punch_start_sample, record_offset));
+      cap(numeric::saturating_add(punch.punch_end_sample, record_offset));
+    }
+    if (automation_.lane_count() > 0) {
+      automation::AutomationBoundaryList automation_boundaries;
+      automation_.collect_boundaries(
+          now.ppq_position,
+          tempo_map.sample_to_ppq(numeric::saturating_add(position, static_cast<int64_t>(span))),
+          &automation_boundaries);
+      for (size_t i = 0; i < automation_boundaries.size; ++i) {
+        cap(tempo_map.ppq_to_sample(automation_boundaries.ppq[i]));
+      }
+    }
+    return span;
+  };
 
   const uint32_t capture_overflow_before = capture_sink_.overflow_count();
   const BoundaryList& boundaries = boundary_splitter_.finish();
-  int previous_offset = 0;
   clip_player_.begin_page_miss_block();
-  for (size_t i = 0; i < boundaries.size(); ++i) {
-    const int offset = boundaries[i].offset;
-    if (offset > previous_offset) {
-      process_subblock(io, monitor_out, num_channels, previous_offset, offset - previous_offset,
-                       fold_monitor_to_main);
-      transport_.advance(offset - previous_offset);
-      previous_offset = offset;
+  size_t next_boundary = 0;
+  bool wrapped = wrapped_at_block_start;
+  int offset = 0;
+  while (offset < frames) {
+    while (next_boundary < boundaries.size() && boundaries[next_boundary].offset <= offset) {
+      ++next_boundary;
     }
-    // Dispatch commands due at this boundary's render frame. A boundary at the
-    // exclusive block end belongs to the next process() call, so leave those
-    // commands pending.
-    if (offset < frames) {
+    const int64_t render_frame = transport_.render_frame();
 #if defined(SONARE_WITH_ARRANGEMENT)
-      // Live command events of the next sub-block must see its transport first.
+    // Hang-note safety: notes of the iteration a wrap left are released before
+    // this frame's commands, so a note-on queued for the wrap frame belongs to
+    // the new iteration and is not released with them.
+    if (wrapped) {
       publish_instrument_transport();
-#endif
-      apply_due_commands(boundaries[i].render_frame);
+      midi_sequencer_.all_notes_off(midi::DeviceFrame{render_frame});
     }
+    // Commands of this span must see its transport first.
+    publish_instrument_transport();
+#endif
+    apply_due_commands(render_frame);
+    int span = next_boundary < boundaries.size() ? boundaries[next_boundary].offset - offset
+                                                 : frames - offset;
+    span = timeline_span(span);
+    // Automation is evaluated at the span start with the transport the commands left.
+    automation_.apply(transport_.snapshot(), 0, span);
 #if defined(SONARE_WITH_ARRANGEMENT)
-    // Hang-note safety: when the playhead wraps at a loop boundary, release
-    // every note still sounding from the pre-wrap region so it does not hang
-    // into the looped-back region. The note-offs fire at the wrap's render
-    // frame. RT-safe (no alloc).
-    if ((boundaries[i].sources & boundary_source_mask(BoundarySource::kLoop)) != 0) {
-      midi_sequencer_.all_notes_off(boundaries[i].render_frame);
-    }
+    publish_instrument_transport();
+    span = dispatch_midi_span(render_frame, state.render_frame, span);
 #endif
-    const int next_offset = (i + 1 < boundaries.size()) ? boundaries[i + 1].offset : frames;
-    const int sub_block_len = next_offset - offset;
-    // Evaluate automation at this sub-block's start using the advanced
-    // transport snapshot, so breakpoints that fell mid-block (and were added as
-    // boundary points above) are honored at their exact sub-block boundary.
-    automation_.apply(transport_.snapshot(), 0, sub_block_len);
-    // Advance engine-level smoothing ramps by this sub-block's length and push
-    // the interpolated values to their bound parameters at the same cadence.
-    tick_smoothed_params(sub_block_len);
+    // Advance engine-level smoothing ramps by this span and push the
+    // interpolated values to their bound parameters at the same cadence.
+    tick_smoothed_params(span);
+    const bool rolling = transport_.playing();
+    const int64_t position = transport_.sample_position();
+#if defined(SONARE_WITH_ARRANGEMENT)
+    // Clock bytes follow this span's dispatches, so the external queue stays in time order.
+    if (rolling) emit_midi_clock_block(position, render_frame, span);
+#endif
+    process_subblock(io, monitor_out, num_channels, offset, span, fold_monitor_to_main);
+    transport_.advance(span);
+    // advance() folds a playhead reaching loop_end, which is the wrap.
+    wrapped =
+        rolling && transport_.sample_position() != numeric::saturating_add(position, int64_t{span});
+    offset += span;
   }
-  if (frames > previous_offset) {
-    process_subblock(io, monitor_out, num_channels, previous_offset, frames - previous_offset,
-                     fold_monitor_to_main);
-    transport_.advance(frames - previous_offset);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (wrapped) {
+    publish_instrument_transport();
+    midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});
   }
+#else
+  (void)wrapped;
+#endif
   clip_player_.end_page_miss_block();
 #if defined(SONARE_WITH_MIXING)
   meter_tap_.end_block();
@@ -367,9 +315,11 @@ void RealtimeEngine::process_impl(float* const* io, float* const* monitor_out, i
     enqueue_error(TelemetryErrorCode::kCaptureOverflow, state.render_frame, state.sample_position,
                   capture_overflow_delta);
   }
+  const int latency_q8 = graph_latency_samples_q8_.load(std::memory_order_relaxed);
   enqueue_telemetry({TelemetryType::kProcessBlock, TelemetryErrorCode::kNone, state.render_frame,
-                     end_state.sample_position, audible_timeline_sample(end_state.sample_position),
-                     graph_latency_samples_q8_, static_cast<uint32_t>(frames)});
+                     end_state.sample_position,
+                     audible_timeline_sample(end_state.sample_position, latency_q8), latency_q8,
+                     static_cast<uint32_t>(frames)});
 }
 
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -571,38 +521,6 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     }
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
-    // Republish after this boundary's commands, which may have moved the transport.
-    publish_instrument_transport();
-    // While stopped, scanning the same window every block would also
-    // re-dispatch the same note-ons (saturating the active-note table and
-    // re-triggering the instrument) and capture a sustained note with no choke.
-    // A stopped transport therefore dispatches nothing and renders no instrument
-    // audio; kTransportStop already released sounding notes via all_notes_off.
-    // Dispatch the MIDI events whose render frame falls in this sub-block. The
-    // sequencer scans [block_start, block_start + num_frames); using the
-    // sub-block's timeline sample position keeps dispatch sample-accurate and
-    // aligned with the kMidi boundaries inserted above. No allocation.
-    //
-    // When an instrument is registered it IS the sequencer's sink, so this call
-    // feeds the block's events to the instrument at their sample-accurate DEVICE
-    // render frames, from which the intra-block offset is event.render_frame
-    // minus the TransportState::render_frame pushed by set_transport above. The
-    // instrument buffers them; rendering happens immediately below so the events
-    // and the audio they drive stay in the same sub-block.
-    if (transport_rolling) {
-      emit_midi_clock_block(transport_.sample_position(), transport_.render_frame(), num_frames);
-      // The sequencer stamps events in TIMELINE samples; translate them to the
-      // monotonic DEVICE render frame as they leave the dispatch sink so a loop
-      // wrap (timeline jumps backward, device keeps rising) cannot invert their
-      // order and so every event an instrument sees shares one basis with the
-      // live-input / command / all-notes-off paths. Restored to 0 afterwards
-      // because those paths are device-framed already.
-      midi_dispatch_sink_.timeline_to_device_offset =
-          transport_.render_frame() - transport_.sample_position();
-      midi_sequencer_.process_block(transport_.sample_position(), num_frames);
-      midi_dispatch_sink_.timeline_to_device_offset = 0;
-    }
-    dispatch_live_midi_input(transport_.render_frame(), num_frames);
     // Host-instrument audio injection: sum the instrument's render into the
     // SAME source layer as the clip player, AFTER clip playback + MIDI dispatch
     // and BEFORE the metronome / mixing-strip / monitor / graph stages. This is
@@ -611,8 +529,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // audio, and PDC/latency matches clips. Opt-in: nullptr leaves the chain and
     // the output bit-identical to the no-instrument path. RT-safe: the scratch
     // is sized in prepare(); the audio thread only zero-fills and sums it.
-    if (!instrument_rack_.empty() &&
-        (transport_rolling || midi_sequencer_.active_note_count() > 0)) {
+    // Instruments render whenever bound, rolling or not: a release, a held pedal or
+    // a reverb tail outlives the last note-off and the transport alike.
+    if (!instrument_rack_.empty()) {
       // A tempo-synced delay / arpeggiator / LFO follows the transport snapshot
       // published above instead of free-running. Each instrument renders into the
       // shared scratch (zero, process) and is summed into the sub-block, so

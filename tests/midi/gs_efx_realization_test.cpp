@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/api/insert_factory.h"
 #include "midi/midi_event.h"
 #include "midi/synth/gs_address_table.h"
 #include "midi/synth/gs_efx_bindings.h"
@@ -755,6 +756,39 @@ TEST_CASE("all PartFxStage SysEx paths walk uniform EFX blocks in wire order",
       REQUIRE(fx.apply_control_sysex(alias.data(), alias.size()));
     }
     REQUIRE(fx.efx()[0].type == 0x0150);
+  }
+}
+
+TEST_CASE("the modern Stereo-EQ realises at host rates below its corners", "[gs-efx-realization]") {
+  // Its default high corner (10960.9 Hz) lies past Nyquist at 8 and 16 kHz.
+  constexpr uint16_t kStereoEq = 0x0100;
+  for (const double rate : {8000.0, 16000.0, 22050.0, 48000.0}) {
+    INFO("rate " << rate);
+    s::Sf2PlayerConfig cfg;
+    cfg.insert_factory = [](std::string_view name, std::string_view json) {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+    cfg.realize_efx_inline = true;
+    s::Sf2Player player(cfg);
+    player.prepare(rate, kBlock);
+    player.on_control_sysex(kPartOn, sizeof(kPartOn));
+
+    const auto message = type_write(kStereoEq);
+    std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
+    REQUIRE(player.prepare_sysex(message.data(), message.size(), token));
+    REQUIRE(token != nullptr);
+
+    send(player, message);
+    REQUIRE(player.gs_efx().type == kStereoEq);
+    std::vector<float> l(kBlock, 0.25f);
+    std::vector<float> r(kBlock, 0.25f);
+    float* io[] = {l.data(), r.data()};
+    player.process(io, 2, kBlock);
+    REQUIRE(player.gs_efx().type == kStereoEq);
+    for (int i = 0; i < kBlock; ++i) {
+      REQUIRE(std::isfinite(l[static_cast<size_t>(i)]));
+      REQUIRE(std::isfinite(r[static_cast<size_t>(i)]));
+    }
   }
 }
 

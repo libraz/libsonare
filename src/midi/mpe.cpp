@@ -80,15 +80,11 @@ uint16_t MpeState::zone_mask(MpeZone zone, uint8_t member_count) noexcept {
   return zone == MpeZone::kLower ? span : static_cast<uint16_t>(span << (15 - member_count));
 }
 
-uint16_t MpeState::occupied_mask() const noexcept {
-  return static_cast<uint16_t>(zone_mask(MpeZone::kLower, zones_[0].member_count) |
-                               zone_mask(MpeZone::kUpper, zones_[1].member_count));
-}
-
-uint16_t MpeState::manager_mask() const noexcept {
-  return static_cast<uint16_t>(
-      (zones_[0].active ? uint16_t{1} << kMpeLowerManagerChannel : uint16_t{0}) |
-      (zones_[1].active ? uint16_t{1} << kMpeUpperManagerChannel : uint16_t{0}));
+uint8_t MpeState::assignment(uint8_t channel) const noexcept {
+  const MpeChannelRole channel_role = role(channel);
+  if (channel_role == MpeChannelRole::kUnassigned) return 0;
+  return static_cast<uint8_t>(static_cast<uint8_t>(channel_role) << 1 |
+                              static_cast<uint8_t>(zone_of(channel)));
 }
 
 uint8_t MpeState::manager_of(uint8_t channel) const noexcept {
@@ -107,8 +103,8 @@ bool MpeState::apply_mcm(uint8_t manager_channel, uint8_t member_count,
   const size_t index = static_cast<size_t>(zone);
   const size_t other = 1u - index;
 
-  const uint16_t before_mask = occupied_mask();
-  const uint16_t before_managers = manager_mask();
+  uint8_t before[16];
+  for (uint8_t ch = 0; ch < 16; ++ch) before[ch] = assignment(ch);
 
   zones_[index] = Zone{};
   zones_[index].active = member_count > 0;
@@ -125,17 +121,16 @@ bool MpeState::apply_mcm(uint8_t manager_channel, uint8_t member_count,
     if (kept == 0) zones_[other] = Zone{};
   }
 
-  const uint16_t after_mask = occupied_mask();
-  const uint16_t after_managers = manager_mask();
-
-  // 2.2.3 asks for the channels entering or leaving MPE control. A channel that
-  // only changed role is reported as well: its bend sensitivity moves by a
-  // factor of 24, so a note left sounding on it would hang at a range nothing
-  // sent it. Reporting more than the section names is safe; reporting less
-  // leaves exactly the hanging note the section exists to prevent.
+  // 2.2.3 asks for the channels entering or leaving a zone, which includes one moving from
+  // one zone to the other. A channel that only changed role is reported as well: its bend
+  // sensitivity moves by a factor of 24, so a note left sounding on it would hang at a range
+  // nothing sent it.
   if (out_reconfigured != nullptr) {
-    *out_reconfigured =
-        static_cast<uint16_t>((before_mask ^ after_mask) | (before_managers ^ after_managers));
+    uint16_t moved = 0;
+    for (uint8_t ch = 0; ch < 16; ++ch) {
+      if (assignment(ch) != before[ch]) moved = static_cast<uint16_t>(moved | (1u << ch));
+    }
+    *out_reconfigured = moved;
   }
   return true;
 }

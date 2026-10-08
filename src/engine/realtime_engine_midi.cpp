@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "engine/realtime_engine.h"
+#include "engine/realtime_engine_internal.h"
 #include "mixing/tail_utils.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
@@ -301,7 +302,7 @@ void RealtimeEngine::deliver_live_ump(uint32_t destination_id, int64_t render_fr
     return;
   }
   observe_live_cc_for_automation(ump);
-  midi_sequencer_.inject_event(destination_id, render_frame, ump);
+  midi_sequencer_.inject_event(destination_id, midi::DeviceFrame{render_frame}, ump);
 }
 
 void RealtimeEngine::release_midi_ump_slot(const rt::Command& command) noexcept {
@@ -331,7 +332,7 @@ void RealtimeEngine::release_midi_sysex_slot(const rt::Command& command) noexcep
 }
 
 bool RealtimeEngine::set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept {
-  return midi_sequencer_.set_midi_fx(destination_id, chain, transport_.render_frame());
+  return midi_sequencer_.set_midi_fx(destination_id, chain);
 }
 
 void RealtimeEngine::clear_midi_fx(uint32_t destination_id) noexcept {
@@ -352,14 +353,14 @@ void RealtimeEngine::emit_midi_clock_block(int64_t timeline_start_sample,
   if (sync_sink == nullptr || num_frames <= 0) return;
   struct SinkContext {
     MidiSyncSink* sink;
-    int64_t timeline_start;
-    int64_t render_start;
-  } context{sync_sink, timeline_start_sample, render_start_frame};
+    midi::SequencerClock clock;
+  } context{sync_sink,
+            {midi::DeviceFrame{render_start_frame}, midi::TimelineFrame{timeline_start_sample}}};
   const auto emit = [](void* opaque, int64_t timeline_tick_frame) noexcept {
     auto* state = static_cast<SinkContext*>(opaque);
-    const int64_t render_frame =
-        state->render_start + (timeline_tick_frame - state->timeline_start);
-    state->sink->on_midi_sync_byte(render_frame, midi::kStatusClock);
+    state->sink->on_midi_sync_byte(
+        midi::timeline_to_device(midi::TimelineFrame{timeline_tick_frame}, state->clock).value,
+        midi::kStatusClock);
   };
   bool overflowed = false;
   midi_clock_.generate_clock_block(timeline_start_sample, num_frames, &context, emit, &overflowed);
@@ -386,12 +387,14 @@ void RealtimeEngine::adopt_midi_destination_routes(int64_t render_frame) noexcep
   // Flush with the old table still installed so the final messages leave through the old route.
   for (const uint64_t active : sink.active_external_destinations) {
     if (active != 0 && !contains(requested.slots, active)) {
-      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(active), render_frame);
+      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(active),
+                                                    midi::DeviceFrame{render_frame});
     }
   }
   for (const uint64_t next : requested.slots) {
     if (next != 0 && !contains(sink.active_external_destinations, next)) {
-      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(next), render_frame);
+      midi_sequencer_.all_notes_off_for_destination(static_cast<uint32_t>(next),
+                                                    midi::DeviceFrame{render_frame});
     }
   }
 
@@ -429,7 +432,7 @@ void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexce
   // addressed on that channel. The cc_number-only lookup_param / value_to_unit
   // pair cannot do either, which is why no live path calls it any more.
   //
-  // AUDIO thread: called from apply_command and from dispatch_live_midi_input,
+  // AUDIO thread: called from apply_command and from dispatch_midi_span,
   // both inside process(). The per UMP group and channel accumulator it mutates is owned by
   // that single thread.
   const midi::CcMap* cc_map = midi_cc_maps_.current();
@@ -441,15 +444,26 @@ void RealtimeEngine::observe_live_cc_for_automation(const midi::Ump& ump) noexce
   }
 }
 
-void RealtimeEngine::dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept {
-  if (num_frames <= 0) return;
-  const int64_t render_end_frame = render_start_frame + num_frames;
-  for (size_t i = 0; i < live_midi_input_count_; ++i) {
-    const midi::MidiEvent& event = live_midi_input_events_[i];
-    if (event.render_frame < render_start_frame) continue;
-    if (event.render_frame >= render_end_frame) break;
+int RealtimeEngine::dispatch_midi_span(int64_t render_frame, int64_t block_render_frame,
+                                       int max_frames) noexcept {
+  const midi::SequencerClock clock{midi::DeviceFrame{render_frame},
+                                   midi::TimelineFrame{transport_.sample_position()},
+                                   transport_.playing()};
+  midi_sequencer_.dispatch_due(clock);
+  // Live input due by this frame follows the sequenced events of the same frame.
+  int span = max_frames;
+  while (live_midi_input_cursor_ < live_midi_input_count_) {
+    const midi::MidiEvent& event = live_midi_input_events_[live_midi_input_cursor_];
+    if (event.render_frame > render_frame) {
+      span = static_cast<int>(std::min<int64_t>(span, event.render_frame - render_frame));
+      break;
+    }
+    ++live_midi_input_cursor_;
+    if (event.render_frame < block_render_frame) continue;
     deliver_live_ump(live_midi_input_destination_id_, event.render_frame, event.ump);
   }
+  // Asked last, so MIDI-FX output the live input just produced splits the span too.
+  return midi_sequencer_.frames_until_next_event(clock, span);
 }
 
 void RealtimeEngine::set_midi_instrument(midi::MidiInstrument* instrument) {
@@ -581,7 +595,8 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
 
   // From here every step commits; release notes through the outgoing instrument first.
   if (previous != nullptr) {
-    midi_sequencer_.all_notes_off_for_destination(destination_id, transport_.render_frame());
+    midi_sequencer_.all_notes_off_for_destination(destination_id,
+                                                  midi::DeviceFrame{transport_.render_frame()});
   }
   if (!instrument_rack_.set(destination_id, instrument)) {
     return report(MidiInstrumentBindStatus::kRackFull);

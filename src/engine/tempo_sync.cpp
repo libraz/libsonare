@@ -53,17 +53,29 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   const int pad = n_fft / 2;
   const float rate =
       static_cast<float>(static_cast<double>(source_samples) / static_cast<double>(target_samples));
-  const size_t padded_length = source_samples + static_cast<size_t>(n_fft);
-  const int input_frames =
-      std::max(2, 1 + static_cast<int>((padded_length - static_cast<size_t>(n_fft)) /
-                                       static_cast<size_t>(hop)));
-  const TimeStretchMap map(rate);
-  const size_t output_frame_count = static_cast<size_t>(map.output_frame_count(input_frames));
-  size_t spectrum_elements = 0;
-  SONARE_CHECK(numeric::checked_size_product(static_cast<size_t>(n_bins), output_frame_count,
-                                             kMaxAudioBufferSize, &spectrum_elements),
+  const size_t bin_count = static_cast<size_t>(n_bins);
+  const size_t hop_size = static_cast<size_t>(hop);
+  // Every array size and frame*bin index below is bounded here, in size_t, before allocation.
+  const size_t input_frame_count = std::max<size_t>(2, 1 + source_samples / hop_size);
+  size_t analysis_elements = 0;
+  SONARE_CHECK(input_frame_count <= static_cast<size_t>(INT_MAX) &&
+                   numeric::checked_size_product(bin_count, input_frame_count, kMaxAudioBufferSize,
+                                                 &analysis_elements),
                ErrorCode::InvalidParameter);
-  const int output_frames = std::max(1, static_cast<int>(output_frame_count));
+  const int input_frames = static_cast<int>(input_frame_count);
+  const TimeStretchMap map(rate);
+  const size_t output_frame_count =
+      std::max<size_t>(1, static_cast<size_t>(map.output_frame_count(input_frames)));
+  size_t spectrum_elements = 0;
+  size_t ola_hops = 0;
+  SONARE_CHECK(output_frame_count <= static_cast<size_t>(INT_MAX) &&
+                   numeric::checked_size_product(bin_count, output_frame_count, kMaxAudioBufferSize,
+                                                 &spectrum_elements) &&
+                   numeric::checked_size_product(hop_size, output_frame_count, kMaxAudioBufferSize,
+                                                 &ola_hops),
+               ErrorCode::InvalidParameter);
+  const int output_frames = static_cast<int>(output_frame_count);
+  const size_t ola_length = ola_hops + static_cast<size_t>(n_fft);
 
   PhaseVocoderSynthesizer synth(n_fft, hop, config.sample_rate, WindowType::Hann, n_fft,
                                 config.phase_lock);
@@ -79,13 +91,12 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
   }
 
   std::vector<std::vector<std::complex<float>>> spectra(
-      static_cast<size_t>(channels),
-      std::vector<std::complex<float>>(static_cast<size_t>(input_frames * n_bins)));
+      static_cast<size_t>(channels), std::vector<std::complex<float>>(analysis_elements));
   std::vector<float> frame(static_cast<size_t>(n_fft), 0.0f);
   std::vector<std::complex<float>> bins(static_cast<size_t>(n_bins));
   for (int ch = 0; ch < channels; ++ch) {
     for (int frame_index = 0; frame_index < input_frames; ++frame_index) {
-      const size_t start = static_cast<size_t>(frame_index) * static_cast<size_t>(hop);
+      const size_t start = static_cast<size_t>(frame_index) * hop_size;
       for (int i = 0; i < n_fft; ++i) {
         const int64_t raw_index =
             static_cast<int64_t>(start) + static_cast<int64_t>(i) - static_cast<int64_t>(pad);
@@ -98,14 +109,13 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
       fft.forward(frame.data(), bins.data());
       std::copy(bins.begin(), bins.end(),
                 spectra[static_cast<size_t>(ch)].begin() +
-                    static_cast<std::ptrdiff_t>(frame_index * n_bins));
+                    static_cast<std::ptrdiff_t>(static_cast<size_t>(frame_index) * bin_count));
     }
   }
 
-  std::vector<std::vector<float>> ola(
-      static_cast<size_t>(channels),
-      std::vector<float>(static_cast<size_t>(output_frames * hop + n_fft), 0.0f));
-  std::vector<float> window_sum(static_cast<size_t>(output_frames * hop + n_fft), 0.0f);
+  std::vector<std::vector<float>> ola(static_cast<size_t>(channels),
+                                      std::vector<float>(ola_length, 0.0f));
+  std::vector<float> window_sum(ola_length, 0.0f);
   std::vector<std::complex<float>> synth_bins(static_cast<size_t>(n_bins));
   std::vector<std::complex<float>> ref0(static_cast<size_t>(n_bins));
   std::vector<std::complex<float>> ref1(static_cast<size_t>(n_bins));
@@ -115,8 +125,24 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
                                                 std::vector<float>(static_cast<size_t>(n_bins)));
 
   auto spectrum_at = [&](int ch, int frame_index, int bin) -> const std::complex<float>& {
-    return spectra[static_cast<size_t>(ch)][static_cast<size_t>(frame_index * n_bins + bin)];
+    return spectra[static_cast<size_t>(ch)]
+                  [static_cast<size_t>(frame_index) * bin_count + static_cast<size_t>(bin)];
   };
+
+  // Each channel enters the shared reference polarity-aligned to channel 0 per bin, by its
+  // correlation over the segment, so anti-phase channels reinforce instead of cancelling.
+  std::vector<std::vector<float>> polarity(static_cast<size_t>(channels),
+                                           std::vector<float>(bin_count, 1.0f));
+  for (int ch = 1; ch < channels; ++ch) {
+    for (int k = 0; k < n_bins; ++k) {
+      double correlation = 0.0;
+      for (int t = 0; t < input_frames; ++t) {
+        correlation +=
+            static_cast<double>(std::real(spectrum_at(ch, t, k) * std::conj(spectrum_at(0, t, k))));
+      }
+      if (correlation < 0.0) polarity[static_cast<size_t>(ch)][static_cast<size_t>(k)] = -1.0f;
+    }
+  }
 
   for (int t_out = 0; t_out < output_frames; ++t_out) {
     int t_in = 0;
@@ -129,8 +155,9 @@ std::vector<std::vector<float>> stretch_segment_channels(const std::vector<const
       for (int ch = 0; ch < channels; ++ch) {
         const auto frame0 = spectrum_at(ch, t_in, k);
         const auto frame1 = spectrum_at(ch, t_in + 1, k);
-        ref0[static_cast<size_t>(k)] += frame0;
-        ref1[static_cast<size_t>(k)] += frame1;
+        const float sign = polarity[static_cast<size_t>(ch)][static_cast<size_t>(k)];
+        ref0[static_cast<size_t>(k)] += sign * frame0;
+        ref1[static_cast<size_t>(k)] += sign * frame1;
         channel_mag[static_cast<size_t>(ch)][static_cast<size_t>(k)] =
             std::abs(frame0) * (1.0f - frac) + std::abs(frame1) * frac;
         const float phase0 = std::arg(frame0);

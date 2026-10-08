@@ -375,6 +375,12 @@ TEST_CASE("AU effect input callback never reads past the current block's host pl
   REQUIRE(result.input_beyond_request_untouched);
 }
 
+TEST_CASE("AU effect input supplies each timestamped pull from its own offset", "[host][au]") {
+  const auto result = sonare::host::backends::detail::run_au_effect_split_pull_probe();
+  REQUIRE(result.ran);
+  REQUIRE(result.split_matches_block);
+}
+
 TEST_CASE("AU parameter metadata translation carries unit and non-realtime flags", "[host][au]") {
   // parameter_descriptor() needs an installed AU, so the translation itself is
   // probed directly. An untranslated unit renders a 20-20000 Hz cutoff and a

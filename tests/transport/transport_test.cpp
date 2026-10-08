@@ -122,6 +122,44 @@ TEST_CASE("TempoMap linear tempo ramp round-trips and reduces to constant", "[tr
   }
 }
 
+TEST_CASE("TempoMap keeps a barely-ramped segment monotonic and invertible", "[transport][tempo]") {
+  // A BPM change just above the constant-tempo cutoff spread over a long span:
+  // the per-ppq tempo change is far below one ulp of the tempo itself.
+  for (double end_bpm : {120.0 + 1.1e-9, 120.0 - 1.1e-9}) {
+    sonare::transport::TempoMap map;
+    map.prepare(48000.0);
+    sonare::transport::TempoSegment ramp{};
+    ramp.start_ppq = 0.0;
+    ramp.bpm = 120.0;
+    ramp.end_bpm = end_bpm;
+    sonare::transport::TempoSegment tail{};
+    tail.start_ppq = 1.0e6;
+    tail.bpm = end_bpm;
+    map.set_segments({ramp, tail});
+
+    const double samples_per_ppq = 24000.0;
+    for (int64_t sample : {int64_t{1}, int64_t{24000}, int64_t{1000000}, int64_t{1000000000}}) {
+      const double ppq = map.sample_to_ppq(sample);
+      // Agrees with the constant-tempo result in the small-slope limit.
+      REQUIRE_THAT(ppq, WithinAbs(static_cast<double>(sample) / samples_per_ppq, 1.0e-6));
+      // Strictly monotonic one sample later, and round-trips to the same sample.
+      REQUIRE(map.sample_to_ppq(sample + 1) > ppq);
+      REQUIRE(map.ppq_to_sample(ppq) == sample);
+    }
+  }
+}
+
+TEST_CASE("TempoMap bar total saturates when several segments each saturate", "[transport]") {
+  sonare::transport::TempoMap map;
+  map.prepare(48000.0);
+  const int max_den = std::numeric_limits<int>::max();
+  map.set_time_signatures({{0.0, {1, max_den}}, {1.0e11, {1, max_den}}});
+
+  const auto position = map.ppq_to_bar_beat(1.0e12);
+  REQUIRE(position.bar == std::numeric_limits<int64_t>::max());
+  REQUIRE(position.beat >= 1);
+}
+
 TEST_CASE("TempoMap reports bar and beat positions", "[transport]") {
   sonare::transport::TempoMap map;
   map.prepare(48000.0);

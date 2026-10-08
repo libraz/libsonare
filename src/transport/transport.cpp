@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::transport {
 namespace {
@@ -105,7 +106,8 @@ void Transport::advance(int num_frames) noexcept {
   const int frames = std::max(num_frames, 0);
   render_frame_.fetch_add(frames, std::memory_order_acq_rel);
   if (!playing() || frames == 0) return;
-  const int64_t position = sample_position_.load(std::memory_order_acquire) + frames;
+  const int64_t position = numeric::saturating_add(sample_position_.load(std::memory_order_acquire),
+                                                   static_cast<int64_t>(frames));
   sample_position_.store(loop_folded(position), std::memory_order_release);
 }
 
@@ -124,9 +126,10 @@ int64_t Transport::loop_folded(int64_t position) const noexcept {
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
   const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
-  const int64_t loop_len = loop_end - loop_start;
+  const int64_t loop_len = numeric::saturating_sub(loop_end, loop_start);
   if (loop_len <= 0 || position < loop_end) return position;
-  return loop_start + ((position - loop_start) % loop_len);
+  return numeric::saturating_add(loop_start,
+                                 numeric::saturating_sub(position, loop_start) % loop_len);
 }
 
 void Transport::seek_sample(int64_t sample) noexcept {
@@ -183,7 +186,7 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   const TempoMap& map = map_or_fallback(tempo_map_.load(std::memory_order_acquire));
   const int64_t loop_start = map.ppq_to_sample(loop.start_ppq);
   const int64_t loop_end = map.ppq_to_sample(loop.end_ppq);
-  const int64_t loop_len = loop_end - loop_start;
+  const int64_t loop_len = numeric::saturating_sub(loop_end, loop_start);
   if (loop_len <= 0) return false;
 
   // Report every loop wrap that falls inside this block, not just the first.
@@ -191,14 +194,14 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
   // and reporting only the first wrap would leave the over-wrapped tail of the
   // block rendering from the wrong position (or as silence). We walk the
   // wrap points by repeatedly subtracting loop_len from the running position.
-  int64_t next_wrap_offset = loop_end - current_sample;
+  int64_t next_wrap_offset = numeric::saturating_sub(loop_end, current_sample);
   bool added = false;
   // Use offset 0 when the playhead is already at or beyond loop_end at block
   // start, matching advance()'s `>= loop_end` wrap. If it starts beyond loop_end,
   // carry the overshoot forward so the following wrap lands one loop length
   // after the wrapped position rather than being skipped.
   if (current_sample >= loop_end) {
-    const int64_t overshoot = (current_sample - loop_end) % loop_len;
+    const int64_t overshoot = numeric::saturating_sub(current_sample, loop_end) % loop_len;
     if (!out->add({0, current_render, loop_end})) {
       if (out->overflowed()) {
         loop_overflow_count_.fetch_add(1, std::memory_order_relaxed);
@@ -213,7 +216,7 @@ bool Transport::collect_loop_boundaries(int num_frames, BoundaryList* out) const
     const int offset = static_cast<int>(next_wrap_offset);
     if (!out->add({offset, current_render + offset, loop_end})) break;
     added = true;
-    next_wrap_offset += loop_len;
+    next_wrap_offset = numeric::saturating_add(next_wrap_offset, loop_len);
   }
   // Surface a dropped-wrap as a diagnostic counter instead of silently
   // truncating. With a loop shorter than the block / kCapacity wraps the tail

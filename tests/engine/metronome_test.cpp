@@ -5,6 +5,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <iterator>
+#include <vector>
 
 TEST_CASE("Metronome collects beat clicks at sample-accurate offsets", "[engine][metronome]") {
   sonare::transport::TempoMap tempo;
@@ -178,4 +179,27 @@ TEST_CASE("Metronome count-in ends at requested bar boundary", "[engine][metrono
 
   REQUIRE(metro.count_in_end_sample(0, 2) == 192000);
   REQUIRE(metro.count_in_end_sample(24000, 1) == 96000);
+}
+
+TEST_CASE("Metronome emits the first beat of a signature segment starting mid-beat",
+          "[engine][metronome]") {
+  sonare::transport::TempoMap tempo;
+  tempo.prepare(48000.0);
+  tempo.set_time_signatures({{0.0, {4, 4}}, {0.5, {6, 8}}});
+  sonare::engine::Metronome metro;
+  metro.prepare(48000.0, &tempo);
+  metro.set_config({true, 0.25f, 0.75f, 16});
+
+  const auto beats_in = [&](int64_t start, int frames) {
+    sonare::engine::MetronomeEventList events;
+    metro.collect_events(start, frames, &events);
+    std::vector<int64_t> samples;
+    for (size_t i = 0; i < events.size; ++i) samples.push_back(events.events[i].timeline_sample);
+    return samples;
+  };
+  const std::vector<int64_t> whole = beats_in(0, 36000);
+  REQUIRE(whole == std::vector<int64_t>{0, 12000, 24000});
+  std::vector<int64_t> split = beats_in(0, 12000);
+  for (int64_t sample : beats_in(12000, 24000)) split.push_back(sample);
+  REQUIRE(split == whole);
 }

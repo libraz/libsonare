@@ -237,7 +237,8 @@ size_t MidiCapture::drain(const CaptureConfig& config, MidiClip* clip) {
     double rel_ppq = captured.rel_ppq;
     if (config.quantize.enabled) {
       if (captured.event.ump.is_note_on()) {
-        const double quantized = quantize_ppq(rel_ppq, config.quantize);
+        // The shift its note-off repeats is the one the note-on really got, clamp included.
+        const double quantized = std::max(0.0, quantize_ppq(rel_ppq, config.quantize));
         push_note_shift(captured.event, quantized - rel_ppq);
         rel_ppq = quantized;
       } else if (captured.event.ump.is_note_off()) {

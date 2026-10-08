@@ -1014,7 +1014,8 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
   lane_gain_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
   lane_gate_scratch_.assign(kMaxTrackLanes * static_cast<size_t>(max_block_size_), 1.0f);
   send_source_scratch_.assign(2u * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
-  direct_scratch_.assign(kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
+  // Lane-less sources keep the master's width; only lanes are stereo.
+  direct_scratch_.assign(kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
   // Edge scratch, pre-fader tap and downmix fold for the bus stage.
   bus_edge_scratch_.assign(3u * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);
   bus_key_scratch_.assign(kMaxBusLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_),
@@ -1064,7 +1065,7 @@ void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
     delay.set_prepared_channels(kMaxLaneChannels);
     delay.prepare(sample_rate_, max_block_size_);
   }
-  direct_pdc_delay_.set_prepared_channels(kMaxLaneChannels);
+  direct_pdc_delay_.set_prepared_channels(kMaxBusChannels);
   direct_pdc_delay_.prepare(sample_rate_, max_block_size_);
   for (mixing::AlignmentDelay& delay : lane_in_pdc_delays_) {
     delay.set_prepared_channels(kMaxLaneChannels);

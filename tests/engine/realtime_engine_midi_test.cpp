@@ -1,7 +1,7 @@
 /// @file realtime_engine_midi_test.cpp
-/// @brief Engine-level MIDI integration: hang-note safety across seek / stop and
-///        the stopped-transport gate (a stopped playhead dispatches nothing and
-///        renders no instrument audio).
+/// @brief Engine-level MIDI integration: hang-note safety across seek / stop,
+///        the stopped-transport gate (a stopped playhead dispatches no clip
+///        events) and sample-accurate placement of every event.
 
 #include <sonare/sonare_c.h>
 
@@ -20,6 +20,7 @@
 #include "engine/realtime_engine.h"
 #include "host/midi_io.h"
 #include "mastering/api/insert_factory.h"
+#include "midi/builtin_synth.h"
 #include "midi/clock_sync.h"
 #include "midi/instrument.h"
 #include "midi/midi_clip.h"
@@ -573,6 +574,50 @@ TEST_CASE("every live CC entry point resolves through the same kind-aware decode
     engine.process(io, 2, 64);
     REQUIRE(engine.automation().unknown_target_count() == 2);
   }
+}
+
+TEST_CASE("RealtimeEngine does not join controller gestures across input sources",
+          "[engine][midi]") {
+  constexpr uint32_t kUnboundParam = 7777;
+  std::vector<float> left(64, 0.0f);
+  std::vector<float> right(64, 0.0f);
+  float* io[] = {left.data(), right.data()};
+  sonare::midi::CcBinding wide;
+  wide.kind = sonare::midi::CcBindingKind::kControlChange14;
+  wide.cc_number = 1;
+  wide.cc_lsb_number = 33;
+  wide.channel = 0;
+  wide.param_id = kUnboundParam;
+  wide.min_value = 0.0f;
+  wide.max_value = 1.0f;
+
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 64);
+  REQUIRE(engine.bind_midi_cc(wide));
+  sonare::host::FixedMidiInputSource<8> source_a;
+  sonare::host::FixedMidiInputSource<8> source_b;
+  engine.set_midi_input_source(&source_a, 0);
+  REQUIRE(source_a.push_event(sonare::midi::make_midi1_control_change(0, 0, 1, 64), 0));
+  engine.process(io, 2, 64);
+  REQUIRE(engine.automation().unknown_target_count() == 1);
+
+  // B's lone LSB must not complete the MSB A left pending.
+  engine.set_midi_input_source(&source_b, 0);
+  REQUIRE(source_b.push_event(sonare::midi::make_midi1_control_change(0, 0, 33, 127), 0));
+  engine.process(io, 2, 64);
+  REQUIRE(engine.automation().unknown_target_count() == 1);
+
+  // Within one source, a binding added mid-gesture keeps the pending MSB.
+  REQUIRE(source_b.push_event(sonare::midi::make_midi1_control_change(0, 0, 1, 64), 0));
+  engine.process(io, 2, 64);
+  REQUIRE(engine.automation().unknown_target_count() == 2);
+  sonare::midi::CcBinding other = wide;
+  other.cc_number = 2;
+  other.cc_lsb_number = 34;
+  REQUIRE(engine.bind_midi_cc(other));
+  REQUIRE(source_b.push_event(sonare::midi::make_midi1_control_change(0, 0, 33, 127), 0));
+  engine.process(io, 2, 64);
+  REQUIRE(engine.automation().unknown_target_count() == 3);
 }
 
 TEST_CASE("RealtimeEngine drains live MIDI input into instruments while stopped",
@@ -3029,4 +3074,358 @@ TEST_CASE("sonare_engine_set_part_rig refuses what it cannot apply", "[engine][m
   REQUIRE(sonare_engine_set_part_rig(engine, 99, 0, SONARE_PART_RIG_NONE, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
   sonare_engine_destroy(engine);
+}
+
+namespace {
+
+// Records every event with the transport frame pushed before it, so a test can
+// see both when an event is stamped and which sub-block it was delivered to.
+class EventLogInstrument final : public MidiInstrument {
+ public:
+  struct Entry {
+    int64_t event_frame = 0;
+    int64_t callback_frame = 0;
+    sonare::midi::Ump ump{};
+  };
+  void prepare(double, int) override {}
+  void process(float* const*, int, int) override {}
+  void reset() override { log.clear(); }
+  void set_transport(const sonare::transport::TransportState& state) noexcept override {
+    callback_frame_ = state.render_frame;
+  }
+  void on_event(uint32_t, const MidiEvent& event) noexcept override {
+    if (log.size() < log.capacity())
+      log.push_back({event.render_frame, callback_frame_, event.ump});
+  }
+  std::vector<Entry> notes(bool on) const {
+    std::vector<Entry> out;
+    for (const Entry& entry : log) {
+      if (on ? entry.ump.is_note_on() : entry.ump.is_note_off()) out.push_back(entry);
+    }
+    return out;
+  }
+
+  std::vector<Entry> log = [] {
+    std::vector<Entry> reserved;
+    reserved.reserve(1024);
+    return reserved;
+  }();
+
+ private:
+  int64_t callback_frame_ = 0;
+};
+
+void push_live_note(RealtimeEngine& engine, uint32_t destination_id, bool on, uint8_t note,
+                    int64_t render_frame) {
+  sonare::rt::Command c{};
+  c.type = on ? sonare::rt::CommandType::kMidiNoteOnImmediate
+              : sonare::rt::CommandType::kMidiNoteOffImmediate;
+  c.target_id = destination_id;
+  c.sample_time = render_frame;
+  c.arg.i = static_cast<int64_t>(uint64_t{100} | (uint64_t{note} << 8));
+  REQUIRE(engine.push_command(c));
+}
+
+void push_transport(RealtimeEngine& engine, sonare::rt::CommandType type, int64_t render_frame,
+                    int64_t seek_sample = 0) {
+  sonare::rt::Command c{};
+  c.type = type;
+  c.sample_time = render_frame;
+  c.arg.i = seek_sample;
+  REQUIRE(engine.push_command(c));
+}
+
+// Renders @p total frames in blocks of @p block and returns the left channel.
+std::vector<float> render_blocks(RealtimeEngine& engine, int total, int block) {
+  std::vector<float> out;
+  for (int done = 0; done < total; done += block) {
+    std::vector<float> left(static_cast<size_t>(block), 0.0f);
+    std::vector<float> right(static_cast<size_t>(block), 0.0f);
+    float* io[] = {left.data(), right.data()};
+    engine.process(io, 2, block);
+    out.insert(out.end(), left.begin(), left.end());
+  }
+  return out;
+}
+
+sonare::midi::BuiltinSynthConfig sustained_synth_config() {
+  sonare::midi::BuiltinSynthConfig config;
+  config.attack_ms = 0.1f;
+  config.decay_ms = 0.1f;
+  config.sustain = 1.0f;
+  config.release_ms = 20.0f;
+  return config;
+}
+
+std::vector<float> arpeggiated_render(int block) {
+  RealtimeEngine engine;
+  engine.prepare(48000.0, 128);
+  sonare::midi::BuiltinSynth synth(sustained_synth_config());
+  REQUIRE(engine.set_midi_instrument(0, &synth));
+  sonare::midi::MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 40;
+  arp.gate_frames = 30;
+  fx.set_arpeggiator(arp);
+  REQUIRE(engine.set_midi_fx(0, fx));
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 MidiEvent{100, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  engine.set_midi_clips({clip});
+  push_play(engine);
+  return render_blocks(engine, 128, block);
+}
+
+}  // namespace
+
+TEST_CASE("RealtimeEngine renders MIDI-FX output identically for any host block size",
+          "[engine][midi]") {
+  const std::vector<float> whole = arpeggiated_render(128);
+  const std::vector<float> split = arpeggiated_render(16);
+  REQUIRE(whole.size() == split.size());
+  float peak = 0.0f;
+  float difference = 0.0f;
+  for (size_t i = 0; i < whole.size(); ++i) {
+    peak = std::max(peak, std::abs(whole[i]));
+    difference = std::max(difference, std::abs(whole[i] - split[i]));
+  }
+  REQUIRE(peak > 0.01f);
+  REQUIRE(difference <= 1.0e-6f * peak);
+}
+
+TEST_CASE("RealtimeEngine renders a clip's last span before its clip-end release",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  sonare::midi::BuiltinSynth synth(sustained_synth_config());
+  REQUIRE(engine.set_midi_instrument(0, &synth));
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.length_samples = kBlock;
+  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  engine.set_midi_clips({clip});
+  push_play(engine);
+
+  // The note spans the whole block: its sustain plays over [0, 64) at full level.
+  const std::vector<float> first = render_blocks(engine, kBlock, kBlock);
+  float late_peak = 0.0f;
+  for (int i = kBlock / 2; i < kBlock; ++i) late_peak = std::max(late_peak, std::abs(first[i]));
+  REQUIRE(late_peak > 0.03f);
+}
+
+TEST_CASE("RealtimeEngine fires a live MIDI-FX event at its device frame while stopped",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  sonare::midi::MidiFxChain fx;
+  sonare::midi::ArpeggiatorConfig arp;
+  arp.enabled = true;
+  arp.steps = 2;
+  arp.intervals[0] = 0;
+  arp.intervals[1] = 12;
+  arp.step_frames = 100;
+  arp.gate_frames = 10;
+  fx.set_arpeggiator(arp);
+  REQUIRE(engine.set_midi_fx(0, fx));
+
+  // A seek in between moves the timeline but not the device clock.
+  push_live_note(engine, 0, true, 60, 10);
+  push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, 50, 9000);
+  render_blocks(engine, 4 * kBlock, kBlock);
+
+  const auto on = log.notes(true);
+  REQUIRE(on.size() == 2);
+  CHECK(on[0].event_frame == 10);
+  CHECK(on[1].event_frame == 110);
+  CHECK(on[1].callback_frame == 110);
+  CHECK(on[1].ump.note_number() == 72);
+}
+
+TEST_CASE("RealtimeEngine applies a queued Play's loop wraps from the first block",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  // 16-sample loop at 24000 samples per quarter note.
+  engine.set_loop(0.0, 16.0 / 24000.0, true);
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.events = {MidiEvent{4, sonare::midi::make_midi1_note_on(0, 0, 60, 100)}};
+  engine.set_midi_clips({clip});
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, kBlock, kBlock);
+
+  const auto on = log.notes(true);
+  REQUIRE(on.size() == 4);
+  for (size_t i = 0; i < on.size(); ++i) {
+    CHECK(on[i].event_frame == static_cast<int64_t>(4 + 16 * i));
+    CHECK(on[i].callback_frame == on[i].event_frame);
+  }
+}
+
+TEST_CASE("RealtimeEngine places MIDI after a loop wrap at its own device frame",
+          "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  engine.set_loop(0.0, 128.0 / 24000.0, true);
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.events = {MidiEvent{8, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 MidiEvent{16, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  engine.set_midi_clips({clip});
+  push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, 0, 96);
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, kBlock, kBlock);
+
+  // Wrap at 32; the note plays timeline [8, 16), i.e. device [40, 48).
+  const auto on = log.notes(true);
+  REQUIRE(on.size() == 1);
+  CHECK(on[0].event_frame == 40);
+  CHECK(on[0].callback_frame == 40);
+  bool released = false;
+  for (const auto& entry : log.notes(false)) {
+    if (entry.ump.note_number() == 60 && entry.event_frame == 48) {
+      released = entry.callback_frame == 48;
+    }
+  }
+  CHECK(released);
+}
+
+TEST_CASE("RealtimeEngine keeps a live note-on queued for the loop-wrap frame", "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  engine.set_loop(0.0, 96.0 / 24000.0, true);
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, kBlock, kBlock);
+  // The second block starts at timeline 64 and wraps at device frame 96; the note
+  // is queued for exactly that frame.
+  push_live_note(engine, 0, true, 72, 96);
+  render_blocks(engine, kBlock, kBlock);
+
+  bool on_at_wrap = false;
+  bool killed = false;
+  for (const auto& entry : log.log) {
+    if (entry.ump.is_note_on() && entry.ump.note_number() == 72) on_at_wrap = true;
+    if (on_at_wrap && entry.ump.is_note_off() && entry.ump.note_number() == 72) {
+      killed = true;
+    }
+  }
+  CHECK(on_at_wrap);
+  CHECK_FALSE(killed);
+  CHECK(engine.midi_sequencer().active_note_count() == 1);
+}
+
+TEST_CASE("RealtimeEngine drains external clock and notes in time order", "[engine][midi]") {
+  constexpr int kBlock = 2048;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  engine.set_tempo(120.0);
+  engine.set_external_midi_clock_enabled(true);
+  REQUIRE(engine.set_midi_destination_external(3, true));
+  sonare::midi::MidiClipSchedule clip;
+  clip.id = 1;
+  clip.destination_id = 3;
+  clip.events = {MidiEvent{0, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
+                 MidiEvent{1500, sonare::midi::make_midi1_note_off(0, 0, 60, 0)}};
+  engine.set_midi_clips({clip});
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 0);
+  render_blocks(engine, kBlock, kBlock);
+
+  std::array<sonare::host::ExternalMidiRecord, 64> drained{};
+  const size_t n = engine.drain_external_midi(drained.data(), drained.size());
+  REQUIRE(n >= 5);  // Start, note-on, clocks at 0/1000/2000, note-off.
+  size_t notes = 0;
+  for (size_t i = 0; i < n; ++i) {
+    if (drained[i].destination_id == 3) ++notes;
+    if (i > 0) CHECK(drained[i].event.render_frame >= drained[i - 1].event.render_frame);
+  }
+  CHECK(notes == 2);
+}
+
+TEST_CASE("RealtimeEngine quantizes live input on the timeline grid", "[engine][midi]") {
+  constexpr int kBlock = 64;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  EventLogInstrument log;
+  REQUIRE(engine.set_midi_instrument(0, &log));
+  sonare::midi::MidiFxChain fx;
+  sonare::midi::QuantizeConfig quantize;
+  quantize.enabled = true;
+  quantize.grid_frames = 100;
+  fx.set_quantize(quantize);
+  REQUIRE(engine.set_midi_fx(0, fx));
+
+  // One stopped block moves the device clock to 64; the timeline then starts at 30.
+  render_blocks(engine, kBlock, kBlock);
+  push_transport(engine, sonare::rt::CommandType::kTransportSeekSample, 64, 30);
+  push_transport(engine, sonare::rt::CommandType::kTransportPlay, 64);
+  // Device 120 is timeline 86, whose nearest grid line, timeline 100, is device 134.
+  push_live_note(engine, 0, true, 60, 120);
+  render_blocks(engine, 2 * kBlock, kBlock);
+
+  const auto on = log.notes(true);
+  REQUIRE(on.size() == 1);
+  CHECK(on[0].event_frame == 134);
+  CHECK(on[0].callback_frame == 134);
+}
+
+TEST_CASE("RealtimeEngine keeps a stopped live note's release and sustain sounding",
+          "[engine][midi]") {
+  constexpr int kBlock = 256;
+  RealtimeEngine engine;
+  engine.prepare(48000.0, kBlock);
+  sonare::midi::BuiltinSynthConfig config = sustained_synth_config();
+  config.release_ms = 50.0f;
+  sonare::midi::BuiltinSynth synth(config);
+  REQUIRE(engine.set_midi_instrument(0, &synth));
+  const auto peak_of = [](const std::vector<float>& audio) {
+    float peak = 0.0f;
+    for (float value : audio) peak = std::max(peak, std::abs(value));
+    return peak;
+  };
+
+  push_live_note(engine, 0, true, 60, 0);
+  const float held = peak_of(render_blocks(engine, kBlock, kBlock));
+  REQUIRE(held > 0.03f);
+  push_live_note(engine, 0, false, 60, kBlock);
+  // The release decays over the following blocks instead of stopping dead.
+  const float release_start = peak_of(render_blocks(engine, kBlock, kBlock));
+  const float release_later = peak_of(render_blocks(engine, kBlock, kBlock));
+  CHECK(release_start > 0.01f);
+  CHECK(release_later > 0.0f);
+  CHECK(release_later < release_start);
+  render_blocks(engine, 40 * kBlock, kBlock);
+  CHECK(peak_of(render_blocks(engine, kBlock, kBlock)) < 1.0e-4f);
+
+  // With the damper down, the released note sustains until the pedal lifts.
+  sonare::rt::Command pedal{};
+  pedal.type = sonare::rt::CommandType::kMidiCcImmediate;
+  pedal.sample_time = -1;
+  pedal.arg.i = static_cast<int64_t>(uint64_t{127} | (uint64_t{64} << 8));
+  REQUIRE(engine.push_command(pedal));
+  push_live_note(engine, 0, true, 64, -1);
+  render_blocks(engine, kBlock, kBlock);
+  push_live_note(engine, 0, false, 64, -1);
+  render_blocks(engine, 4 * kBlock, kBlock);
+  CHECK(peak_of(render_blocks(engine, kBlock, kBlock)) > 0.03f);
 }

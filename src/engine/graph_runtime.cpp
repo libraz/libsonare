@@ -131,19 +131,27 @@ void GraphRuntime::process(float* const* io, int num_channels, int offset,
     return;
   }
   const int channels = std::min(num_channels, binding->num_channels);
-  binding->graph->clear_inputs(num_frames);
-  for (int ch = 0; ch < channels; ++ch) {
-    if (!io[ch]) continue;
-    float* dest = binding->input->input_port(ch);
-    std::copy(io[ch] + offset, io[ch] + offset + num_frames, dest);
-  }
+  // Ports hold the prepared capacity only, so a larger request runs in chunks of it.
+  const int capacity = std::min({binding->graph->max_block_size(), binding->input->max_block_size(),
+                                 binding->output->max_block_size()});
+  if (capacity <= 0) return;
+  for (int done = 0; done < num_frames; done += capacity) {
+    const int chunk = std::min(capacity, num_frames - done);
+    const int start = offset + done;
+    binding->graph->clear_inputs(chunk);
+    for (int ch = 0; ch < channels; ++ch) {
+      if (!io[ch]) continue;
+      float* dest = binding->input->input_port(ch);
+      std::copy(io[ch] + start, io[ch] + start + chunk, dest);
+    }
 
-  binding->graph->process_block(num_frames);
+    binding->graph->process_block(chunk);
 
-  for (int ch = 0; ch < channels; ++ch) {
-    if (!io[ch]) continue;
-    const float* source = binding->output->output_port(ch);
-    std::copy(source, source + num_frames, io[ch] + offset);
+    for (int ch = 0; ch < channels; ++ch) {
+      if (!io[ch]) continue;
+      const float* source = binding->output->output_port(ch);
+      std::copy(source, source + chunk, io[ch] + start);
+    }
   }
 }
 

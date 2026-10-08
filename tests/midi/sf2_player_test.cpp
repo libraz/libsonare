@@ -372,6 +372,41 @@ TEST_CASE("Sf2Player plays a looped sample at the root-key frequency", "[midi][s
   REQUIRE(rms(out.left, 36000) > 0.1f);
 }
 
+TEST_CASE("Sf2Player keeps a mode 3 loop running while a pedal holds the released key",
+          "[midi][sf2]") {
+  Sf2Builder b;
+  std::vector<float> sine(128);
+  for (size_t i = 0; i < sine.size(); ++i) {
+    sine[i] =
+        0.9f * static_cast<float>(std::sin(2.0 * 3.14159265358979 * static_cast<double>(i) / 32.0));
+  }
+  const int sine_id = b.add_sample("sine-mode3", sine, 32000, 60, 32, 96);
+  Sf2Builder::ZoneSpec zone;
+  zone.gens.push_back({54 /*sampleModes*/, 3});
+  zone.target = sine_id;
+  const int inst = b.add_instrument("mode3", {zone});
+  Sf2Builder::ZoneSpec preset_zone;
+  preset_zone.target = inst;
+  b.add_preset("Mode3", 0, 0, {preset_zone});
+  const auto bytes = b.build();
+  auto sf2 = std::make_shared<Sf2File>();
+  std::string error;
+  REQUIRE(sf2->parse(bytes.data(), bytes.size(), &error));
+
+  for (const uint8_t pedal : {uint8_t{64}, uint8_t{66}}) {
+    Sf2Player player = make_player(sf2);
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+    player.on_event(0, event(sonare::midi::make_midi1_control_change(0, 0, pedal, 127)));
+    render(player, 480);
+    player.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+    // Held by the pedal, the note keeps reading its loop long past the sample end.
+    const StereoRender held = render(player, 24000);
+    INFO("pedal CC" << static_cast<int>(pedal));
+    REQUIRE(rms(held.left, 18000) > 0.1f);
+    REQUIRE(player.active_voice_count() == 1);
+  }
+}
+
 TEST_CASE("Sf2Player falls back when a covered preset has no matching zone", "[midi][sf2]") {
   Sf2Player player = make_player(make_fixture());
   player.on_event(0, event(sonare::midi::make_midi1_program_change(0, 0, 3)));

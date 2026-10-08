@@ -105,9 +105,9 @@ class MpeState {
   /// false and changes nothing otherwise: "All other values are invalid and
   /// should be ignored".
   ///
-  /// Writes into @p out_reconfigured the bitmask of channels that entered or
-  /// left a zone, which the caller owes a stop of every sounding note and a
-  /// controller reset on (2.2.3). A caller that ignores it leaves the hanging
+  /// Writes into @p out_reconfigured the bitmask of channels whose zone or role
+  /// changed (entering, leaving or moving between zones), which the caller owes a stop of every
+  /// sounding note and a controller reset on (2.2.3). A caller that ignores it leaves the hanging
   /// notes the section exists to prevent.
   bool apply_mcm(uint8_t manager_channel, uint8_t member_count,
                  uint16_t* out_reconfigured) noexcept;
@@ -230,9 +230,8 @@ class MpeState {
   /// Bitmask of the channels @p zone occupies, manager included, or 0 when it
   /// is inactive.
   static uint16_t zone_mask(MpeZone zone, uint8_t member_count) noexcept;
-  /// Every channel under MPE control, and the active zones' managers alone.
-  uint16_t occupied_mask() const noexcept;
-  uint16_t manager_mask() const noexcept;
+  /// Role and zone of @p channel as one comparable code; 0 for an unassigned channel.
+  uint8_t assignment(uint8_t channel) const noexcept;
   /// Manager channel of the zone @p channel belongs to. Ask role() first.
   uint8_t manager_of(uint8_t channel) const noexcept;
   /// Member value plus manager bias of @p dimension, in the 0..127 float domain or the 7-bit

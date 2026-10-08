@@ -118,6 +118,26 @@ TEST_CASE("GraphRuntime processes a prepared graph sub-block without string rout
   REQUIRE(right[5] == -12.0f);
 }
 
+TEST_CASE("GraphRuntime renders a request larger than the graph's prepared block",
+          "[engine][graph_runtime]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.add_node("gain", std::make_unique<GainProcessor>(2.0f), 1));
+  REQUIRE(graph.add_node("out", std::make_unique<GainProcessor>(1.0f), 1));
+  REQUIRE(graph.connect({"in", 0, "gain", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"gain", 0, "out", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 8);
+
+  sonare::engine::GraphRuntime runtime;
+  REQUIRE(runtime.bind(&graph, "in", "out", 1));
+  std::array<float, 64> left{};
+  for (size_t i = 0; i < left.size(); ++i) left[i] = static_cast<float>(i);
+  float* io[] = {left.data()};
+  runtime.process(io, 1, 0, 64);
+  for (size_t i = 0; i < left.size(); ++i) REQUIRE(left[i] == 2.0f * static_cast<float>(i));
+}
+
 TEST_CASE("GraphRuntime bypasses processor nodes as dry pass-through", "[engine][graph_runtime]") {
   sonare::graph::Graph graph;
   REQUIRE(graph.add_node("in", std::make_unique<GainProcessor>(1.0f), 1));

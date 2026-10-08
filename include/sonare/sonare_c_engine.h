@@ -968,11 +968,13 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 ///   as @ref sonare_engine_set_parameter.
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
-/// @brief Sets the default ramp time (ms) for engine-level smoothed parameters.
-/// @details Applies to every smoothed parameter change -- fader/pan glides,
-///          insert-parameter automation, and MIDI-CC mappings. The default is
-///          20 ms; pass 0 for instant (un-ramped) changes. @p smoothing_ms must
-///          be finite and >= 0.
+/// @brief Sets the ramp time (ms) of the engine-level smoother.
+/// @details Governs only @ref sonare_engine_set_parameter_smoothed on parameters
+///          bound through the automation engine. Reserved engine targets -- track
+///          and bus faders, pan and width, and insert and instrument parameters --
+///          keep their own fixed smoothing whatever this is set to, and MIDI-CC
+///          mappings apply their values directly. The default is 20 ms; 0 makes
+///          the governed changes instant. @p smoothing_ms must be finite and >= 0.
 SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, float smoothing_ms);
 /// @brief Queues a lane's solo/mute state.
 /// @details @p lane_index is a lane position in the order of the last

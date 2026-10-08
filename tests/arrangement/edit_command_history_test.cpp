@@ -1855,6 +1855,36 @@ TEST_CASE("Audio edits preserve physical source positions across tempo changes",
   }
 }
 
+TEST_CASE("Trimming moved audio decides legality on its physical offset",
+          "[arrangement][audio_workflow]") {
+  Project project;
+  project.set_sample_rate(48000);
+  project.set_tempo_segments({{0, 120, 0}, {2, 60, 0}});
+  Track track;
+  track.kind = Track::Kind::kAudio;
+  const auto track_id = project.add_track(track);
+  const auto source_id = project.add_audio_source({});
+  EditClip clip;
+  clip.track_id = track_id;
+  clip.source_id = source_id;
+  clip.start_ppq = 2;
+  clip.length_ppq = 2;
+  clip.source_offset_ppq = 0.5;
+  const auto clip_id = project.add_clip(clip);
+  MidiContentStore midi;
+  // At 60 BPM the 0.5 PPQ offset is 0.5 s; moved to 1 PPQ it keeps that 0.5 s.
+  REQUIRE(MoveClip(clip_id, 1).apply(project, midi));
+  const EditClip* moved = project.find_clip(clip_id);
+  REQUIRE(moved != nullptr);
+  REQUIRE(moved->source_offset_seconds.has_value());
+  CHECK(*moved->source_offset_seconds == Catch::Approx(0.5));
+  // Trimming the start back to 0 (0.5 s earlier at 120 BPM) reaches offset 0 exactly.
+  REQUIRE(TrimClip(clip_id, 0, 3).apply(project, midi));
+  const EditClip* trimmed = project.find_clip(clip_id);
+  REQUIRE(trimmed != nullptr);
+  CHECK(*trimmed->source_offset_seconds == Catch::Approx(0.0).margin(1.0e-12));
+}
+
 TEST_CASE("Trimming looped audio preserves the loop body and phase",
           "[arrangement][audio_workflow]") {
   const double trim_start = GENERATE(2.0, 2.5);

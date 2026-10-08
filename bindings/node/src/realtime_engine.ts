@@ -1244,9 +1244,12 @@ export class RealtimeEngine {
   }
 
   /**
-   * Set the default ramp time (ms) for engine-level smoothed parameters —
-   * fader/pan glides, insert-parameter automation, and MIDI-CC mappings. The
-   * default is 20 ms; pass `0` for instant (un-ramped) changes.
+   * Set the ramp time (ms) of the engine-level smoother. It governs only
+   * `setParameterSmoothed` on parameters bound through the automation engine.
+   * Reserved engine targets — track and bus faders, pan and width, and insert and
+   * instrument parameters — keep their own fixed smoothing whatever this is set
+   * to, and MIDI-CC mappings apply their values directly. The default is 20 ms;
+   * `0` makes the governed changes instant.
    */
   setParamSmoothingMs(smoothingMs: number): void {
     this.native.setParamSmoothingMs(smoothingMs);

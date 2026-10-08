@@ -638,6 +638,13 @@ std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx);
 /// Row stage and key indices still name entries of the generated name tables.
 std::vector<GsEfxStage> gs_efx_insert_chain(const GsEfx& efx, const GsEfxRowView& rows);
 
+/// Lowers every eq.parametric band frequency in @p chain that @p sample_rate cannot
+/// carry to that rate's design ceiling, the rule a prepared EQ applies itself. The
+/// archive's corners are measured at the module's own rate; at a host rate whose
+/// Nyquist lies below one (8 or 16 kHz) the band is designed at the ceiling instead
+/// of being refused by the stage's first prepare.
+void gs_efx_fit_to_rate(std::vector<GsEfxStage>& chain, double sample_rate);
+
 /// The type number @p rows spells @p type as. The binding files spell Rotary
 /// Multi one way (020C/0300) and the defaults table the other, so a type no row
 /// names has one more spelling to try before it binds nothing.

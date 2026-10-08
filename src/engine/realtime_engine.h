@@ -449,6 +449,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   void set_midi_clips(std::vector<midi::MidiClipSchedule> clips);
 
   /// Clip set whose SysEx payloads are owned and prepared but not yet published.
+  /// Each SysEx is prepared for the instrument bound to its destination at
+  /// staging time, and the set stays valid only while those bindings do: a
+  /// set_midi_instrument() on any of its destinations leaves a staged set holding
+  /// operations the new instrument ignores. Re-stage after such a swap, then
+  /// publish. (Clips already published and queued live SysEx are re-prepared by
+  /// the swap itself; a staged set is not.)
   class PreparedMidiClips {
    public:
     PreparedMidiClips() = default;
@@ -463,13 +469,18 @@ class RealtimeEngine : private ClipPageRequestSink {
   };
   /// Owns and prepares every SysEx payload without publishing. Throws SonareException on failure.
   PreparedMidiClips prepare_midi_clips(std::vector<midi::MidiClipSchedule> clips);
-  /// Publishes a staged clip set to the sequencer; cannot fail on validation grounds.
+  /// Publishes a staged clip set to the sequencer; cannot fail on validation
+  /// grounds. Publication does not re-check the set against the current
+  /// bindings, so it presumes the instruments it was staged for are still bound.
   void publish_midi_clips(PreparedMidiClips&& prepared);
   size_t midi_clip_count() const noexcept { return midi_sequencer_.clip_count(); }
   bool set_midi_fx(uint32_t destination_id, const midi::MidiFxChain& chain) noexcept;
   void clear_midi_fx(uint32_t destination_id) noexcept;
   void set_midi_input_source(host::MidiInputSource* source, uint32_t destination_id = 0) noexcept {
     midi_input_destination_id_.store(destination_id, std::memory_order_relaxed);
+    // Bumped before the source is published, so the audio thread that adopts the
+    // source also sees a new generation and drops the old stream's partial gestures.
+    midi_input_source_generation_.fetch_add(1, std::memory_order_relaxed);
     midi_input_source_.store(source, std::memory_order_release);
   }
   // Control-thread: enqueue a live MIDI SysEx message for `destination_id`. The
@@ -549,12 +560,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   //
   // render_frame coordinate: every record -- sequenced channel-voice events,
   // live-input injection, and clock/transport bytes -- carries the monotonic
-  // DEVICE render frame. Sequenced events are stamped in timeline samples
-  // internally and translated to the device frame as they enter the queue (the
-  // dispatch sink's per-sub-block offset), so the drained order stays monotonic
-  // across a loop wrap or seek (where the timeline jumps but the device clock
-  // keeps rising). A host can schedule directly against the device clock without
-  // reconciling coordinates.
+  // DEVICE render frame. Compiled clips are stamped in timeline samples and the
+  // sequencer converts each event once as it is dispatched, so the drained order
+  // stays monotonic across a loop wrap or seek (where the timeline jumps but the
+  // device clock keeps rising): note and transport records of a frame are queued
+  // before the clock bytes that follow them. A host can schedule directly against
+  // the device clock without reconciling coordinates.
   size_t drain_external_midi(host::ExternalMidiRecord* out, size_t capacity) noexcept;
   // Control-thread: enable/disable forwarding MIDI clock (0xF8) and transport
   // (start/continue/stop) bytes to the external output queue so external gear
@@ -906,13 +917,19 @@ class RealtimeEngine : private ClipPageRequestSink {
     return param_smoothing_ms_.load(std::memory_order_relaxed);
   }
   void set_graph_latency_samples_q8(int latency_q8) noexcept;
-  int graph_latency_samples_q8() const noexcept { return graph_latency_samples_q8_; }
+  int graph_latency_samples_q8() const noexcept {
+    return graph_latency_samples_q8_.load(std::memory_order_relaxed);
+  }
   /// Upper bound of the audible tail after the last input, in samples: the
   /// longest instrument tail plus the longest route through the track mixer,
   /// the graph and the master strip. INT_MAX means unbounded. Control-thread
   /// only, not concurrent with process().
   int tail_samples() const noexcept;
   int64_t audible_timeline_sample(int64_t timeline_sample) const noexcept;
+  /// The audible position of @p timeline_sample under one read of the latency.
+  static int64_t audible_timeline_sample(int64_t timeline_sample, int latency_q8) noexcept {
+    return timeline_sample - (latency_q8 >> 8);
+  }
 #if defined(SONARE_WITH_GRAPH)
   // Control-thread graph hot-swap. Allocates a new binding internally, so this
   // is intentionally NOT noexcept (a throwing allocation propagates).
@@ -953,6 +970,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   // non-RT-safe). The caller records a base value exactly when this
   // returns true, so it must track "took effect", not "got a slot".
   bool start_smoothed_param(uint32_t target_id, float value) noexcept;
+  // Stops any ramp on @p target_id and makes @p value its starting point.
+  void reseed_smoothed_param(uint32_t target_id, float value) noexcept;
   void tick_smoothed_params(int num_steps) noexcept;
   bool any_smoothed_param_active() const noexcept;
   // Audio-thread base-value table: records the target value of every
@@ -1043,6 +1062,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   // @p base_id is the reserved id whose manual base seeds a fresh slot; 0 for none.
   bool route_master_insert_param_smoothed(unsigned int insert_index, unsigned int param_id,
                                           float value, uint32_t base_id = 0) noexcept;
+  // Whether a master strip holds an insert at @p insert_index taking @p param_id live.
+  bool master_insert_target_resolves(unsigned int insert_index,
+                                     unsigned int param_id) const noexcept;
   void advance_master_insert_automations(int num_steps) noexcept;
   void settle_master_insert_automations() noexcept;
   void clear_master_insert_automations() noexcept;
@@ -1116,7 +1138,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;
-  void dispatch_live_midi_input(int64_t render_start_frame, int num_frames) noexcept;
+  // AUDIO thread: dispatches the MIDI due at @p render_frame -- sequenced events,
+  // pending MIDI-FX output and live input -- and returns how many frames, at most
+  // @p max_frames, render before the next MIDI event.
+  int dispatch_midi_span(int64_t render_frame, int64_t block_render_frame, int max_frames) noexcept;
   // AUDIO thread: adopt one coherent external-routing snapshot at the block
   // boundary. Changed destinations are released through the old route before
   // the fixed active table is committed.
@@ -1182,16 +1207,6 @@ class RealtimeEngine : private ClipPageRequestSink {
     // requested table prevents a control-thread slot write from exposing a
     // half-updated routing set to one MIDI event.
     std::array<uint64_t, kMaxExternalDestinations> active_external_destinations{};
-    // AUDIO thread only: added to a sequenced event's render_frame to convert it
-    // from the TIMELINE sample position (which wraps backward on a loop / jumps
-    // on a seek) to the monotonic DEVICE render frame. Every consumer downstream
-    // of this sink -- instrument rack, merged output sink and external queue --
-    // is device-framed, so applying it here is what makes a single clock domain
-    // reach all of them. process() sets this to (render_frame - sample_position)
-    // around the sequencer's process_block and restores 0 for the already
-    // device-framed all-notes-off / live-input / command paths.
-    int64_t timeline_to_device_offset = 0;
-
     static constexpr uint64_t encode(uint32_t destination_id) noexcept {
       return (uint64_t{1} << 32) | destination_id;
     }
@@ -1249,12 +1264,8 @@ class RealtimeEngine : private ClipPageRequestSink {
       const bool sysex = midi::is_sysex_event(event);
       const bool view_only = sysex && event.ump.sysex_handle == 0 &&
                              (event.sysex_payload != nullptr || event.sysex_payload_size != 0);
-      // Translate once, for every route: an instrument, a merged output sink and
-      // an external device all receive DEVICE render frames, so none of them has
-      // to know which engine path stamped the event. The offset is 0 on the paths
-      // that are device-framed already, making this a no-op copy for them.
+      // The sequencer hands every route DEVICE render frames already.
       midi::MidiEvent device_event = event;
-      device_event.render_frame += timeline_to_device_offset;
       if (is_external(destination_id)) {
         // An external destination drives its own device queue only -- it is
         // routed there INSTEAD of the rack and is not also mirrored to the
@@ -1297,12 +1308,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   midi::ClockGenerator midi_clock_{};
   std::atomic<MidiSyncSink*> midi_sync_sink_{nullptr};
   std::atomic<host::MidiInputSource*> midi_input_source_{nullptr};
+  std::atomic<uint64_t> midi_input_source_generation_{0};
+  // AUDIO thread: the source generation whose controller decode state is live.
+  uint64_t adopted_midi_input_source_generation_ = 0;
   std::atomic<uint32_t> midi_input_destination_id_{0};
   uint32_t live_midi_input_destination_id_ = 0;
   mutable rt::RtPublisher<midi::CcMap> midi_cc_maps_{};
   static constexpr size_t kMaxLiveMidiInputEvents = 256;
   std::array<midi::MidiEvent, kMaxLiveMidiInputEvents> live_midi_input_events_{};
   size_t live_midi_input_count_ = 0;
+  // Next live input event dispatch_midi_span has not delivered this block.
+  size_t live_midi_input_cursor_ = 0;
   // Bounded SysEx payload store for live (queued) SysEx commands. The control
   // thread (push_midi_sysex) prepares a token and copies bytes into a bounded
   // slot, then enqueues a kMidiSysExImmediate command carrying the slot index +
@@ -1504,11 +1520,6 @@ class RealtimeEngine : private ClipPageRequestSink {
   rt::SpscQueue<ClipPageRequest> clip_page_requests_{};
   std::atomic<uint32_t> clip_page_request_overflow_count_{0};
   BoundarySplitter boundary_splitter_{};
-#if defined(SONARE_WITH_ARRANGEMENT)
-  // CONTROL-prepared scratch for MIDI event boundaries. collect_boundaries() is
-  // called on AUDIO and must never grow a default-capacity container there.
-  midi::MidiSequencer::BoundaryOffsets midi_boundary_offsets_{};
-#endif
   // Packed in acceptance order, so same-time commands fire in the order they arrived.
   rt::BoundedStaging<rt::Command, kMaxPendingCommands> pending_{};
 #if defined(SONARE_WITH_GRAPH)
@@ -1592,7 +1603,8 @@ class RealtimeEngine : private ClipPageRequestSink {
   double applied_timeline_sample_rate_ = 0.0;
   uint32_t telemetry_overflow_count_ = 0;
   bool clip_page_underrun_reported_this_block_ = false;
-  int graph_latency_samples_q8_ = 0;
+  // Written by the control thread, read by the audio thread once per record.
+  std::atomic<int> graph_latency_samples_q8_{0};
   int max_block_size_ = 0;
 
   // Command-queue overflow accounting. push_command (control thread) is the

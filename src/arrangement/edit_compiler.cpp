@@ -964,14 +964,15 @@ CompileResult compile(const Project& project, const MidiContentStore& midi,
           const int project_sample_rate = static_cast<int>(std::lround(project_sr));
           bake_config.sample_rate = project_sample_rate;
           // Segments carry durations only; lead in to anchors[0].warp_sample as
-          // map_warp_to_source does, from the source's pre-roll or with silence.
+          // map_warp_to_source does, from the source's pre-roll however short, or
+          // with silence where the source has none.
           const size_t leading_pad_samples =
               rounded_nonnegative_sample(rt_warp_map->anchors[0].warp_sample);
           const size_t leading_source_samples =
               rounded_nonnegative_sample(rt_warp_map->anchors[0].source_sample);
           size_t silence_pad_samples = 0;
           if (leading_pad_samples > 0) {
-            if (leading_source_samples >= static_cast<size_t>(bake_config.hop_length)) {
+            if (leading_source_samples > 0) {
               engine::TempoSyncWarpSegment lead_in;
               lead_in.source_offset = 0;
               lead_in.source_samples = leading_source_samples;

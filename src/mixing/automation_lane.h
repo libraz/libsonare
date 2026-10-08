@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "util/automation_curve.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::mixing {
 
@@ -158,7 +159,8 @@ class AutomationLane {
       return 0;
     }
 
-    const int64_t block_end = block_start + static_cast<int64_t>(num_samples);
+    const int64_t block_end =
+        numeric::saturating_add(block_start, static_cast<int64_t>(num_samples));
     size_t consumed = 0;
 
     // One-shot after a seek/discard: publish the value valid at block start at offset zero.
@@ -198,7 +200,8 @@ class AutomationLane {
           end.sample_pos <= start.sample_pos) {
         return;
       }
-      const int64_t first_sample = std::max({emit_start, block_start, start.sample_pos + 1});
+      const int64_t first_sample = std::max(
+          {emit_start, block_start, numeric::saturating_add<int64_t>(start.sample_pos, 1)});
       const int64_t last_sample = std::min({emit_end, block_end - 1, end.sample_pos - 1});
       if (first_sample > last_sample) {
         return;
@@ -231,8 +234,10 @@ class AutomationLane {
         if (state.has_active_event && state.active_event.sample_pos < block_start) {
           const bool baseline_was_pending = baseline_pending;
           emit_baseline(&event);
-          emit_curve_events(state.active_event, event,
-                            baseline_was_pending ? block_start + 1 : block_start, block_end - 1);
+          emit_curve_events(
+              state.active_event, event,
+              baseline_was_pending ? numeric::saturating_add<int64_t>(block_start, 1) : block_start,
+              block_end - 1);
         }
         return consumed;
       }
@@ -241,9 +246,10 @@ class AutomationLane {
           event.sample_pos > block_start) {
         const bool baseline_was_pending = baseline_pending;
         emit_baseline(&event);
-        emit_curve_events(state.active_event, event,
-                          baseline_was_pending ? block_start + 1 : block_start,
-                          event.sample_pos - 1);
+        emit_curve_events(
+            state.active_event, event,
+            baseline_was_pending ? numeric::saturating_add<int64_t>(block_start, 1) : block_start,
+            event.sample_pos - 1);
       }
 
       const size_t next_tail = increment(tail);
@@ -268,7 +274,8 @@ class AutomationLane {
       const size_t latest_head = head_.load(std::memory_order_acquire);
       if (next_tail != latest_head) {
         const AutomationEvent& next_event = buffer_[next_tail];
-        emit_curve_events(event, next_event, event.sample_pos + 1, block_end - 1);
+        emit_curve_events(event, next_event, numeric::saturating_add<int64_t>(event.sample_pos, 1),
+                          block_end - 1);
       }
     }
   }

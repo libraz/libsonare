@@ -103,7 +103,12 @@ class LiveSession final {
   /// CONTROL thread: resolves both devices, wires them to @p engine and starts
   /// streaming. The engine is prepared for the format the device negotiated,
   /// which is not necessarily the one requested. On any result other than kOk
-  /// nothing is left open and @p engine is untouched.
+  /// no device is left open, but @p engine is not restored. Once the device has
+  /// negotiated a format the engine is prepared for it -- resetting its transport
+  /// and dropping queued commands -- even when a later step fails, and
+  /// kEngineRefusedFormat means that prepare itself threw. kAudioStartFailed
+  /// also leaves the engine's MIDI input source unbound rather than returned to
+  /// the source it had before.
   LiveOpenResult open(engine::RealtimeEngine* engine, const Config& config);
 
   /// CONTROL thread: stops streaming, unbinds the engine's MIDI input and

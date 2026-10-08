@@ -168,11 +168,43 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
   });
 
   it('refuses a fractional or non-finite warp-mode ordinal', () => {
-    // The control: two legal ordinals render differently.
-    expect(render({ lengthSamples: 128, warpMode: 0 })).not.toBeCloseTo(
-      render({ lengthSamples: 128, warpMode: 3 }),
-      6,
-    );
+    // The control: two legal ordinals render differently. A pitch-preserving
+    // stretch keeps each 1024-sample frame's waveform, so the rate only shows over
+    // several frames: the anchors read a 2048-sample source at twice the rate, and
+    // the warping mode runs out of material halfway while the unwarped clip plays
+    // it whole.
+    const long = new Float32Array(2048);
+    for (let i = 0; i < long.length; i++) {
+      long[i] = Math.sin(i * 0.3);
+    }
+    const renderLong = (warpMode: number): number => {
+      const engine = new RealtimeEngine(48000, 2048);
+      try {
+        engine.setClips([
+          {
+            id: 1,
+            channels: [long],
+            startPpq: 0,
+            lengthSamples: 2048,
+            warpMode,
+            warpAnchors: [
+              { warpSample: 0, sourceSample: 0 },
+              { warpSample: 2048, sourceSample: 4096 },
+            ],
+          },
+        ]);
+        engine.play();
+        const out = engine.process([new Float32Array(2048)]);
+        let sum = 0;
+        for (const value of out[0]) {
+          sum += value * value;
+        }
+        return Math.sqrt(sum / out[0].length);
+      } finally {
+        engine.destroy();
+      }
+    };
+    expect(renderLong(0)).not.toBeCloseTo(renderLong(3), 2);
     for (const value of [...SATURATING, ...NON_FINITE, 1.5]) {
       expectRangeRefusal(() => render({ lengthSamples: 128, warpMode: value }));
     }

@@ -20,11 +20,13 @@
 
 namespace {
 
+using sonare::midi::DeviceFrame;
 using sonare::midi::MidiClipSchedule;
 using sonare::midi::MidiEvent;
 using sonare::midi::MidiEventSink;
 using sonare::midi::MidiFxChain;
 using sonare::midi::MidiSequencer;
+using sonare::midi::SequencerClock;
 using sonare::test::AllocationGuard;
 
 // A fixed-size counter sink: on_event only bumps a counter, so it performs no
@@ -61,17 +63,15 @@ TEST_CASE("MidiSequencer audio path performs no heap allocation after prepare", 
   constexpr int kBlock = 128;
   // Warm-up: adopt the published clip set and run one block before counting.
   seq.acquire_midi_clips();
-  seq.process_block(0, kBlock);
+  seq.process_block(SequencerClock::aligned(0), kBlock);
 
   AllocationGuard guard;
-  // The full audio-path surface: acquire, process, boundaries, all-notes-off.
+  // The full audio-path surface: acquire, process, next-event query, all-notes-off.
   seq.acquire_midi_clips();
-  seq.process_block(kBlock, kBlock);
+  seq.process_block(SequencerClock::aligned(kBlock), kBlock);
+  REQUIRE(seq.frames_until_next_event(SequencerClock::aligned(2 * kBlock), kBlock) > 0);
 
-  MidiSequencer::BoundaryOffsets boundaries;
-  seq.collect_boundaries(kBlock, kBlock, &boundaries);
-
-  seq.all_notes_off(static_cast<int64_t>(2 * kBlock));
+  seq.all_notes_off(DeviceFrame{2 * kBlock});
 
   REQUIRE(guard.count() == 0);
   REQUIRE(seq.active_note_count() == 0);
@@ -101,7 +101,7 @@ TEST_CASE("MidiSequencer live MIDI FX path performs no heap allocation after pre
   arp.gate_frames = 24;
   fx.set_arpeggiator(arp);
   REQUIRE(seq.set_midi_fx(5, fx));
-  seq.acquire_midi_fx(0);
+  seq.acquire_midi_fx(DeviceFrame{0});
 
   MidiClipSchedule clip;
   clip.id = 1;
@@ -112,9 +112,9 @@ TEST_CASE("MidiSequencer live MIDI FX path performs no heap allocation after pre
   seq.acquire_midi_clips();
 
   AllocationGuard guard;
-  seq.process_block(0, 64);
-  seq.process_block(64, 64);
-  seq.all_notes_off(128);
+  seq.process_block(SequencerClock::aligned(0), 64);
+  seq.process_block(SequencerClock::aligned(64), 64);
+  seq.all_notes_off(DeviceFrame{128});
 
   REQUIRE(guard.count() == 0);
   REQUIRE(seq.active_note_count() == 0);
@@ -135,7 +135,8 @@ TEST_CASE("MidiSequencer live SysEx inject path performs no heap allocation afte
 
   AllocationGuard guard;
   for (int i = 0; i < 8; ++i) {
-    seq.inject_event(5, static_cast<int64_t>(i) * 64, marker, payload.data(), payload.size());
+    seq.inject_event(5, DeviceFrame{static_cast<int64_t>(i) * 64}, marker, payload.data(),
+                     payload.size());
   }
 
   REQUIRE(guard.count() == 0);

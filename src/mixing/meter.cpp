@@ -275,15 +275,18 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       }
 
       // Slide both running sums over the single ring; subtract the value leaving each window.
+      // The sums add the float the ring keeps, so what leaves is exactly what entered.
+      const float stored = static_cast<float>(combined);
+      const double entering = stored;
       const double leaving_short = energy_ring_[ring_pos_];
-      short_term_sum_ += combined - leaving_short;
+      short_term_sum_ += entering - leaving_short;
 
       size_t out_pos = ring_pos_ + short_term_len_ - momentary_len_;
       if (out_pos >= short_term_len_) out_pos -= short_term_len_;
       const double leaving_mom = energy_ring_[out_pos];
-      momentary_sum_ += combined - leaving_mom;
+      momentary_sum_ += entering - leaving_mom;
 
-      energy_ring_[ring_pos_] = static_cast<float>(combined);
+      energy_ring_[ring_pos_] = stored;
       ring_pos_ = (ring_pos_ + 1 == short_term_len_) ? 0 : ring_pos_ + 1;
       if (filled_ < short_term_len_) ++filled_;
 

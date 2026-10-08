@@ -147,6 +147,9 @@ struct CoreAudioDevice::Impl {
   int reported_output_latency = 0;
   int reported_input_latency = 0;
   int64_t frame_counter = 0;
+  // Frames handed to the callback since start: the render frame a callback that
+  // renders every frame it is given starts at, whatever gaps the HAL clock shows.
+  int64_t delivered_frames = 0;
   // HAL sample times need not start at zero. Latch the per-start origin so all
   // engine and MIDI-facing frame coordinates remain transport-relative.
   int64_t device_sample_origin = -1;
@@ -220,9 +223,11 @@ struct CoreAudioDevice::Impl {
     if (ts != nullptr && (ts->mFlags & kAudioTimeStampHostTimeValid)) {
       host_ticks_to_ns(ts->mHostTime, timebase, &view.time.host_time_ns);
     }
+    // The anchor lives on the callback's render clock, not the HAL sample clock:
+    // after a skipped cycle or an oversized callback the two part, and MIDI must
+    // land on the frame the callback actually renders.
     if (view.time.host_time_ns != 0) {
-      midi_time_mapper.publish_anchor(view.time.host_time_ns, view.time.sample_time,
-                                      config.sample_rate);
+      midi_time_mapper.publish_anchor(view.time.host_time_ns, delivered_frames, config.sample_rate);
     }
     view.time.stream_time_seconds =
         config.sample_rate > 0.0 ? static_cast<double>(view.time.sample_time) / config.sample_rate
@@ -262,6 +267,7 @@ struct CoreAudioDevice::Impl {
       }
     }
     frame_counter = frame_plan.next_sample_time;
+    delivered_frames += frame_plan.render_frames;
     return noErr;
   }
 };
@@ -477,6 +483,7 @@ bool CoreAudioDevice::open_device(uint32_t device_id, const AudioStreamConfig& c
 bool CoreAudioDevice::start() {
   if (impl_->unit == nullptr || impl_->running.load()) return false;
   impl_->frame_counter = 0;
+  impl_->delivered_frames = 0;
   impl_->device_sample_origin = -1;
   impl_->expected_next_sample_time = -1;  // no baseline until the first callback
   impl_->midi_time_mapper.reset();

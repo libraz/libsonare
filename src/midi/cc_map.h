@@ -198,8 +198,9 @@ class CcMap {
   /// Resets the per-group/channel live-decode accumulator state (14-bit MSB
   /// pending, RPN/NRPN selectors, Data Entry MSB). Does not touch bindings. Call
   /// when the live input stream is (re)started so stale partial state cannot leak
-  /// across.
-  void reset_live_decode() noexcept;
+  /// across. Like observe_live_cc, it mutates only the live-decode state and is
+  /// called from the audio thread.
+  void reset_live_decode() const noexcept;
 
   // -- CONTROL thread: CC <-> automation conversion ------------------------
 

@@ -143,7 +143,7 @@ class ClockGenerator {
   void prepare(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
 
   /// AUDIO thread: append the clock (0xF8) bytes whose tick falls in
-  /// [block_start_frame, block_start_frame + num_frames) to `out` (cleared
+  /// the num_frames frames starting at block_start_frame to `out` (cleared
   /// first). RT-safe, no allocation. Returns the number of ticks emitted.
   /// Overflow drops surplus ticks and bumps overflow_count().
   size_t generate_clock_block(int64_t block_start_frame, int num_frames,
@@ -196,7 +196,10 @@ class ClockParser {
   bool has_spp() const noexcept { return has_spp_; }
   uint16_t spp_beats() const noexcept { return spp_beats_; }
 
-  /// True once all 8 MTC quarter-frame pieces have been assembled.
+  /// True once all 8 MTC quarter-frame pieces of one cycle have arrived in
+  /// order. mtc_time() keeps the last such time until the next complete cycle;
+  /// a dropped or out-of-order piece abandons the cycle rather than mixing in
+  /// pieces of an earlier one.
   bool has_mtc() const noexcept { return mtc_complete_; }
   const MtcTime& mtc_time() const noexcept { return mtc_time_; }
 
@@ -213,11 +216,13 @@ class ClockParser {
 
   // MTC quarter-frame assembly: 8 nibbles into a scratch MtcTime.
   std::array<uint8_t, 8> mtc_pieces_{};
-  std::array<bool, 8> mtc_seen_{};
+  // Piece the current cycle expects next; -1 while waiting for a piece 0.
+  int mtc_next_piece_ = -1;
   bool mtc_complete_ = false;
   MtcTime mtc_time_{};
 
-  void assemble_mtc() noexcept;
+  // Publishes the cycle's time if it is valid; returns whether it did.
+  bool assemble_mtc() noexcept;
 };
 
 }  // namespace sonare::midi

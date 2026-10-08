@@ -258,3 +258,37 @@ TEST_CASE("RealtimeEngine concurrent control mutation soak",
           "[engine][realtime][concurrency][.stress]") {
   run_concurrent_mutation(20000);
 }
+
+TEST_CASE("RealtimeEngine stamps each block record with one read of a changing latency",
+          "[engine][realtime][concurrency]") {
+  constexpr int kFrames = 64;
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(48000.0, kFrames);
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(engine.push_command(play));
+
+  std::atomic<bool> done{false};
+  std::thread control([&] {
+    for (int i = 0; !done.load(std::memory_order_relaxed); ++i) {
+      engine.set_graph_latency_samples_q8((i % 2 == 0) ? 0 : (1000 << 8));
+    }
+  });
+  std::array<float, kFrames> left{};
+  float* io[] = {left.data()};
+  bool consistent = true;
+  for (int block = 0; block < 2000; ++block) {
+    engine.process(io, 1, kFrames);
+    sonare::engine::Telemetry record{};
+    while (engine.pop_telemetry(record)) {
+      if (record.type != sonare::engine::TelemetryType::kProcessBlock) continue;
+      consistent =
+          consistent && record.audible_timeline_sample ==
+                            record.timeline_sample - (record.graph_latency_samples_q8 >> 8);
+    }
+  }
+  done.store(true, std::memory_order_relaxed);
+  control.join();
+  REQUIRE(consistent);
+}
