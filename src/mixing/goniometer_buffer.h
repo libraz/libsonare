@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <type_traits>
 
 namespace sonare::mixing {
 
@@ -73,11 +74,12 @@ class GoniometerBuffer {
   }
   static GoniometerPoint unpack(uint64_t word) noexcept {
     GoniometerPoint point;
-    std::memcpy(&point, &word, sizeof(point));
+    std::memcpy(static_cast<void*>(&point), &word, sizeof(point));
     return point;
   }
 
   static_assert(sizeof(GoniometerPoint) == sizeof(uint64_t), "a point packs into one word");
+  static_assert(std::is_trivially_copyable_v<GoniometerPoint>, "a point is copied as raw bytes");
   std::array<std::atomic<uint64_t>, Capacity> points_{};
   std::atomic<size_t> write_index_{0};
 };
