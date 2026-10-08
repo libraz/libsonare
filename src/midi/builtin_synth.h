@@ -125,7 +125,10 @@ class BuiltinSynth final : public MidiInstrument {
   void note_on(uint8_t channel, uint8_t note, Velocity16 velocity, uint8_t attribute_type,
                uint16_t attribute_data, uint32_t source_track_id) noexcept;
   void note_off(uint8_t channel, uint8_t note, uint32_t source_track_id) noexcept;
+  /// Damper pedal as the zone model scopes it: a manager's pedal reaches its whole zone.
   void sustain_pedal(uint8_t channel, bool down) noexcept;
+  /// The damper on exactly one channel.
+  void sustain_channel(uint8_t channel, bool down) noexcept;
   // Per-channel expression. Pitch bend is a 14-bit value (center 8192) mapped
   // through a fixed +/-2 semitone range, or through the zone's own range when
   // the channel is in one; channel pressure applies to every voice on the

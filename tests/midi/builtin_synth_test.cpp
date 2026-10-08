@@ -1057,3 +1057,31 @@ TEST_CASE("BuiltinSynth ignores data entry once an NRPN replaces the selected RP
   CAPTURE(cents);
   REQUIRE(std::fabs(cents - 50.0) < 5.0);
 }
+
+TEST_CASE("BuiltinSynth manager-channel CC64 holds the notes of its whole zone",
+          "[midi][synth][mpe]") {
+  auto tail_peak = [](uint8_t note_channel, bool zoned, bool pedal_up_again) {
+    BuiltinSynthConfig cfg;
+    cfg.sustain = 1.0f;
+    cfg.attack_ms = 1.0f;
+    cfg.decay_ms = 1.0f;
+    cfg.release_ms = 5.0f;
+    BuiltinSynth synth(cfg);
+    synth.prepare(kMpeRate, 256);
+    if (zoned) mpe_send_mcm(synth, 0, 7);
+    mpe_send(synth, sonare::midi::make_midi1_note_on(0, note_channel, 60, kMpeVelocity));
+    render_peak(&synth, 2048);
+    mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 64, 127));
+    mpe_send(synth, sonare::midi::make_midi1_note_off(0, note_channel, 60, 0));
+    render_peak(&synth, 8192);
+    if (pedal_up_again) {
+      mpe_send(synth, sonare::midi::make_midi1_control_change(0, 0, 64, 0));
+      render_peak(&synth, 8192);
+    }
+    return render_peak(&synth, 512);
+  };
+  REQUIRE(tail_peak(2, true, false) > 0.0f);    // member held by the manager's pedal
+  REQUIRE(tail_peak(2, true, true) == 0.0f);    // released with it
+  REQUIRE(tail_peak(12, true, false) == 0.0f);  // outside the zone
+  REQUIRE(tail_peak(2, false, false) == 0.0f);  // no zone: the pedal is channel 0's alone
+}

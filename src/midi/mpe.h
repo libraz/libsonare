@@ -154,6 +154,11 @@ class MpeState {
   uint8_t member_count(MpeZone zone) const noexcept;
   float bend_sensitivity(uint8_t channel) const noexcept;
 
+  /// Bitmask of the channels a zone-wide command (damper, sostenuto) arriving on @p channel acts
+  /// on: a manager's whole zone, manager included (2.3.1), otherwise the channel alone. Member
+  /// and unassigned channels stay independent, as does every channel outside the zone.
+  uint16_t channels_in_scope(uint8_t channel) const noexcept;
+
   /// Whether the receiver must ignore @p what arriving on @p channel.
   bool ignores(uint8_t channel, MpeIgnorable what) const noexcept;
 

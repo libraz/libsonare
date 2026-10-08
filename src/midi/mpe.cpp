@@ -202,6 +202,13 @@ MpeChannelRole MpeState::role(uint8_t channel) const noexcept {
   return MpeChannelRole::kUnassigned;
 }
 
+uint16_t MpeState::channels_in_scope(uint8_t channel) const noexcept {
+  const uint8_t ch = channel & 0x0Fu;
+  if (role(ch) != MpeChannelRole::kManager) return static_cast<uint16_t>(uint16_t{1} << ch);
+  const size_t index = static_cast<size_t>(zone_of(ch));
+  return zone_mask(static_cast<MpeZone>(index), zones_[index].member_count);
+}
+
 MpeZone MpeState::zone_of(uint8_t channel) const noexcept {
   const uint8_t ch = channel & 0x0Fu;
   if (zones_[1].active &&

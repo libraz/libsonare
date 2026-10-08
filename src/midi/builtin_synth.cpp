@@ -194,6 +194,13 @@ void BuiltinSynth::note_off(uint8_t channel, uint8_t note, uint32_t source_track
 }
 
 void BuiltinSynth::sustain_pedal(uint8_t channel, bool down) noexcept {
+  const uint16_t scope = mpe_.channels_in_scope(channel);
+  for (uint8_t ch = 0; ch < 16; ++ch) {
+    if ((scope & (uint16_t{1} << ch)) != 0) sustain_channel(ch, down);
+  }
+}
+
+void BuiltinSynth::sustain_channel(uint8_t channel, bool down) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   if (sustain_down_[ch] == down) return;
@@ -224,12 +231,11 @@ void BuiltinSynth::refresh_channel_expression(uint8_t channel) noexcept {
       v.phase_inc = v.base_phase_inc * ratio * v.per_note_ratio;
     }
   }
-  if (!zoned || mpe_.role(ch) != MpeChannelRole::kManager) return;
   // A manager's bend and pressure reach every note in its zone (2.2.6, 2.2.7),
   // so they are not done arriving on the channel they were addressed to.
-  const MpeZone zone = mpe_.zone_of(ch);
+  const uint16_t scope = mpe_.channels_in_scope(ch);
   for (uint8_t member = 0; member < 16; ++member) {
-    if (mpe_.role(member) != MpeChannelRole::kMember || mpe_.zone_of(member) != zone) continue;
+    if (member == ch || (scope & (uint16_t{1} << member)) == 0) continue;
     refresh_channel_expression(member);
   }
 }
@@ -303,7 +309,7 @@ void BuiltinSynth::reset_all_controllers(uint8_t channel) noexcept {
   if (!prepared_) return;
   const uint8_t ch = static_cast<uint8_t>(channel & 0x0Fu);
   // Lift the damper and release any keys it was holding.
-  sustain_pedal(ch, false);
+  sustain_channel(ch, false);
   // Recenter pitch bend and restore the unbent pitch of every active voice.
   channel_bend_semitones_[ch] = 0.0f;
   channel_pressure_[ch] = 0.0f;
