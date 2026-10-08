@@ -1,11 +1,14 @@
 #include <sonare/sonare_c.h>
 
 #include <cstring>
+#include <functional>
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
 #include "core/audio.h"
+#include "mastering/assistant/repair_session.h"
 #include "mastering/common/noise_profile.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
@@ -786,6 +789,62 @@ SonareError sonare_mastering_repair_dereverb_apply_room_estimate(
                                                     estimate->volume);
   config->t60_sec = cpp.t60_sec;
   config->late_delay_ms = cpp.late_delay_ms;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t channel_count,
+                                            size_t length, int sample_rate,
+                                            const char* request_json, char** json_out) {
+  SONARE_C_API_ENTRY;
+  if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *json_out = nullptr;
+  if (!channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t c = 0; c < channel_count; ++c) {
+    const SonareError err = validate_audio_params(channels[c], length, sample_rate);
+    if (err != SONARE_OK) return err;
+  }
+
+  SONARE_C_TRY
+  *json_out = copy_string(sonare::mastering::assistant::repair_analyze_json(
+      channels, channel_count, length, sample_rate, request_json ? request_json : ""));
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mastering_repair_apply(const float* const* channels, size_t channel_count,
+                                          size_t length, int sample_rate, const char* stages_json,
+                                          SonareMasteringProgressCallback callback, void* user_data,
+                                          float* const* out_channels, char** reports_json_out,
+                                          SonareCancelCallback cancel_cb, void* cancel_user_data) {
+  SONARE_C_API_ENTRY;
+  if (!reports_json_out) return SONARE_ERROR_INVALID_PARAMETER;
+  *reports_json_out = nullptr;
+  if (!channels || !out_channels || channel_count == 0) return SONARE_ERROR_INVALID_PARAMETER;
+  for (size_t c = 0; c < channel_count; ++c) {
+    if (!out_channels[c]) return SONARE_ERROR_INVALID_PARAMETER;
+    const SonareError err = validate_audio_params(channels[c], length, sample_rate);
+    if (err != SONARE_OK) return err;
+  }
+
+  SONARE_C_TRY
+  sonare::mastering::assistant::RepairProgressCallback progress;
+  if (callback) {
+    progress = [callback, user_data](float done, const char* stage) {
+      callback(done, stage, user_data);
+    };
+  }
+  sonare::mastering::assistant::RepairCancelCallback cancel;
+  if (cancel_cb) {
+    cancel = [cancel_cb, cancel_user_data] { return cancel_cb(cancel_user_data) != 0; };
+  }
+  std::string reports;
+  if (!sonare::mastering::assistant::repair_apply_json(channels, channel_count, length, sample_rate,
+                                                       stages_json ? stages_json : "", out_channels,
+                                                       &reports, progress, cancel)) {
+    return SONARE_ERROR_CANCELLED;
+  }
+  *reports_json_out = copy_string(reports);
   return SONARE_OK;
   SONARE_C_CATCH
 }

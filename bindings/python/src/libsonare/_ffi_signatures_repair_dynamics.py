@@ -103,6 +103,34 @@ def configure_repair_dynamics_signatures(lib: ctypes.CDLL) -> None:
     # allocate nothing: the output planes are the caller's, written in place, so
     # the result is a plain report out-param rather than one of the *StereoResult
     # structs the pair entries fill with heap buffers.
+    # One analysis and one application over any channel count: planar channels in,
+    # JSON in and out, and the application writes caller-owned output planes.
+    if hasattr(lib, "sonare_mastering_repair_analyze"):
+        lib.sonare_mastering_repair_analyze.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_analyze.argtypes = [
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_char_p),
+        ]
+    if hasattr(lib, "sonare_mastering_repair_apply"):
+        lib.sonare_mastering_repair_apply.restype = ctypes.c_int32
+        lib.sonare_mastering_repair_apply.argtypes = [
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.c_size_t,
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_char_p,
+            SonareMasteringProgressCallback,
+            ctypes.c_void_p,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+            ctypes.POINTER(ctypes.c_char_p),
+            SonareCancelCallback,
+            ctypes.c_void_p,
+        ]
+
     for _name, _linked_cfg, _linked_report in (
         (
             "sonare_mastering_repair_denoise_classical_linked",

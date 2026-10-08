@@ -83,8 +83,8 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
  * {@link masteringRepairDenoiseClassical}. A stereo floor is comparable only
  * against another stereo floor, never against a mono one.
  *
- * Needs at least `nFft` samples and REJECTS a shorter input, which is the
- * opposite of {@link masteringRepairDereverbClassicalStereo} — that one pads.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back
+ * to the input length, as {@link masteringRepairDereverbClassicalStereo} does.
  *
  * Which options are live depends on `mode`: `overSubtraction` and
  * `spectralFloor` are read only by `spectralSubtraction`, and
@@ -143,8 +143,8 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
  * The attenuation figures on the report are fractions and do not move. Compare a
  * floor only against another measured over the same number of channels.
  *
- * Needs at least `nFft` samples and REJECTS a shorter input, which is the
- * opposite of {@link masteringRepairDereverbClassicalLinked} — that one pads.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back
+ * to the input length, as {@link masteringRepairDereverbClassicalLinked} does.
  *
  * Every channel must be the same length: the library takes one length for the
  * set, so a disagreement is refused here rather than silently truncated.
@@ -260,8 +260,8 @@ export interface MasteringRepairDetectNoiseFloorRequest
  * mask, which is why the attenuation figures are not here: nothing was
  * attenuated.
  *
- * Needs at least `nFft` samples and REJECTS a shorter buffer, unlike
- * {@link masteringRepairDetectReverb}, which pads one. The levels are absolute
+ * A buffer shorter than `nFft` is padded for analysis, as
+ * {@link masteringRepairDetectReverb} pads one. The levels are absolute
  * dBFS, so they are comparable only against another measurement of the same
  * channel count.
  *

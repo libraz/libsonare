@@ -8,6 +8,10 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/common/noise_profile.h"
+#include "mastering/common/prepare_args.h"
+#include "mastering/dynamics/channel_limits.h"
+#include "mastering/repair/dehum_streaming.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -159,13 +163,15 @@ struct PllTracker {
   }
 };
 
+// @p index_offset places sample i of @p samples at stream index i + index_offset, so a frame held
+// on its own projects with the phase it has in the whole signal.
 double projected_energy(const std::vector<float>& samples, size_t begin, size_t end,
-                        float frequency_hz, int sample_rate) {
+                        float frequency_hz, int sample_rate, size_t index_offset = 0) {
   double sin_sum = 0.0;
   double cos_sum = 0.0;
   for (size_t i = begin; i < end; ++i) {
-    const double phase =
-        kTwoPiD * frequency_hz * static_cast<double>(i) / static_cast<double>(sample_rate);
+    const double phase = kTwoPiD * frequency_hz * static_cast<double>(i + index_offset) /
+                         static_cast<double>(sample_rate);
     sin_sum += samples[i] * std::sin(phase);
     cos_sum += samples[i] * std::cos(phase);
   }
@@ -189,7 +195,7 @@ struct FundamentalSearch {
 FundamentalSearch search_fundamental(
     const std::vector<float>& samples, size_t begin, size_t end, int sample_rate,
     const DehumConfig& config, float previous_hz,
-    const std::vector<const std::vector<float>*>* channels = nullptr) {
+    const std::vector<const std::vector<float>*>* channels = nullptr, size_t index_offset = 0) {
   // Anchor the search on the configured fundamental, the same window the PLL
   // clamps its applied frequency to. Centring on the previous estimate alone
   // lets the target walk one search range per frame, so material without a
@@ -210,11 +216,13 @@ FundamentalSearch search_fundamental(
     const float hz = search.window_low + (search.window_high - search.window_low) *
                                              static_cast<float>(step) /
                                              static_cast<float>(kFundamentalSearchSteps);
-    double energy = projected_energy(samples, begin, end, hz, sample_rate);
+    double energy = projected_energy(samples, begin, end, hz, sample_rate, index_offset);
     if (channels != nullptr) {
       // The primary vector is also the first entry in the stereo list.
       for (const std::vector<float>* channel : *channels) {
-        if (channel != &samples) energy += projected_energy(*channel, begin, end, hz, sample_rate);
+        if (channel != &samples) {
+          energy += projected_energy(*channel, begin, end, hz, sample_rate, index_offset);
+        }
       }
     }
     search.energy[static_cast<size_t>(step)] = energy;
@@ -230,9 +238,10 @@ FundamentalSearch search_fundamental(
 
 float estimate_fundamental(const std::vector<float>& samples, size_t begin, size_t end,
                            int sample_rate, const DehumConfig& config, float previous_hz,
-                           const std::vector<const std::vector<float>*>* channels = nullptr) {
-  const FundamentalSearch search =
-      search_fundamental(samples, begin, end, sample_rate, config, previous_hz, channels);
+                           const std::vector<const std::vector<float>*>* channels = nullptr,
+                           size_t index_offset = 0) {
+  const FundamentalSearch search = search_fundamental(samples, begin, end, sample_rate, config,
+                                                      previous_hz, channels, index_offset);
   if (search.candidates == 0) return search.best_hz;
   // Smooth from the anchored estimate rather than the raw previous value, so a
   // frame cannot hand the next one a target the PLL is unable to follow.
@@ -392,64 +401,69 @@ size_t strongest_tracking_channel(const std::vector<const std::vector<float>*>& 
   return strongest;
 }
 
-/// Runs the tracking cascade over every channel from one shared frequency.
-/// @p tracking drives the search and the PLL; for a single channel it is that
-/// channel's own unfiltered samples, which is what makes the mono result
-/// identical whichever entrypoint produced it. When @p search_channels is set,
-/// it points to immutable original channels used for the summed stereo search.
-PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
-                       const std::vector<float>& tracking, int sample_rate,
-                       const DehumConfig& config,
-                       const std::vector<const std::vector<float>*>* search_channels = nullptr) {
-  const size_t channel_count = channels.size();
-  const size_t harmonic_count = static_cast<size_t>(config.harmonics);
-  const bool subtracting = config.mode == DehumMode::Subtract;
-  float fundamental = config.fundamental_hz;
-  float target_fundamental = fundamental;
-  PllTracker tracker;
-  tracker.frequency_hz = fundamental;
-  tracker.anchor_hz = fundamental;
-  std::vector<std::vector<Notch>> cascades;
-  // Unlike the fixed path the cancellers start at zero: their phase origin is
-  // the tracker's own oscillator, which does not exist before the pass runs, so
-  // there is nothing for a projection to be referred to. Each converges over
-  // the same time constant the notch it replaces rings for.
-  std::vector<std::vector<HarmonicCanceller>> cancellers;
-  if (subtracting) {
-    cancellers.assign(channel_count, std::vector<HarmonicCanceller>(harmonic_count));
-    for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
-      HarmonicCanceller seed;
-      seed.set_selectivity(fundamental * static_cast<float>(harmonic),
-                           static_cast<float>(sample_rate), config.q);
-      for (auto& channel : cancellers) channel[static_cast<size_t>(harmonic - 1)] = seed;
+/// One adaptive pass's state from frame to frame, so the offline pass and the insert run the
+/// same loop. @p tracking drives the search and the PLL; for a single channel it is that
+/// channel's own unfiltered samples, which is what makes the mono result identical whichever
+/// entrypoint produced it. When @p search_channels is set, it points to immutable original
+/// channels used for the summed stereo search.
+class AdaptivePass {
+ public:
+  AdaptivePass(size_t channel_count, int sample_rate, const DehumConfig& config)
+      : config_(config),
+        sample_rate_(sample_rate),
+        subtracting_(config.mode == DehumMode::Subtract),
+        fundamental_(config.fundamental_hz),
+        target_fundamental_(config.fundamental_hz) {
+    const size_t harmonic_count = static_cast<size_t>(config.harmonics);
+    tracker_.frequency_hz = fundamental_;
+    tracker_.anchor_hz = fundamental_;
+    // Unlike the fixed path the cancellers start at zero: their phase origin is
+    // the tracker's own oscillator, which does not exist before the pass runs, so
+    // there is nothing for a projection to be referred to. Each converges over
+    // the same time constant the notch it replaces rings for.
+    if (subtracting_) {
+      cancellers_.assign(channel_count, std::vector<HarmonicCanceller>(harmonic_count));
+      for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+        HarmonicCanceller seed;
+        seed.set_selectivity(fundamental_ * static_cast<float>(harmonic),
+                             static_cast<float>(sample_rate), config.q);
+        for (auto& channel : cancellers_) channel[static_cast<size_t>(harmonic - 1)] = seed;
+      }
+    } else {
+      cascades_.assign(channel_count, std::vector<Notch>(harmonic_count));
+      for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
+        const Notch seed = make_notch(fundamental_ * static_cast<float>(harmonic),
+                                      static_cast<float>(sample_rate), config.q);
+        for (auto& cascade : cascades_) cascade[static_cast<size_t>(harmonic - 1)] = seed;
+      }
     }
-  } else {
-    cascades.assign(channel_count, std::vector<Notch>(harmonic_count));
-    for (int harmonic = 1; harmonic <= config.harmonics; ++harmonic) {
-      const Notch seed = make_notch(fundamental * static_cast<float>(harmonic),
-                                    static_cast<float>(sample_rate), config.q);
-      for (auto& cascade : cascades) cascade[static_cast<size_t>(harmonic - 1)] = seed;
-    }
+    trace_.applied_fundamental_hz = config.fundamental_hz;
   }
 
-  // The PLL fundamental drifts slowly (pll_bandwidth is small), so recomputing
-  // the RBJ notch coefficients (sin/cos/division per harmonic) or the
-  // cancellers' step on every sample is wasteful. Refresh them only when the
-  // tracked fundamental has moved by more than a small relative amount since the
-  // last refresh; the filter state carries across untouched, so the adaptive
-  // tracking behavior is preserved.
-  constexpr float kCoeffRefreshRatio = 1e-3f;
-  float last_coeff_fundamental = 0.0f;
-  PassTrace trace;
-  trace.applied_fundamental_hz = config.fundamental_hz;
-  for (size_t begin = 0; begin < tracking.size(); begin += static_cast<size_t>(config.frame_size)) {
-    const size_t end = std::min(tracking.size(), begin + static_cast<size_t>(config.frame_size));
+  /// Filters [begin, end) of every channel on the fundamental estimated from the same span of
+  /// @p tracking, whose sample i sits at stream index i + @p index_offset.
+  void run_frame(const std::vector<std::vector<float>*>& channels,
+                 const std::vector<float>& tracking, size_t begin, size_t end,
+                 const std::vector<const std::vector<float>*>* search_channels,
+                 size_t index_offset) {
+    const DehumConfig& config = config_;
+    const int sample_rate = sample_rate_;
+    const bool subtracting = subtracting_;
+    const size_t channel_count = channels.size();
+    float& fundamental = fundamental_;
+    float& target_fundamental = target_fundamental_;
+    PllTracker& tracker = tracker_;
+    auto& cascades = cascades_;
+    auto& cancellers = cancellers_;
+    float& last_coeff_fundamental = last_coeff_fundamental_;
+    PassTrace& trace = trace_;
     if (search_channels == nullptr) {
-      target_fundamental =
-          estimate_fundamental(tracking, begin, end, sample_rate, config, target_fundamental);
+      target_fundamental = estimate_fundamental(tracking, begin, end, sample_rate, config,
+                                                target_fundamental, nullptr, index_offset);
     } else {
-      target_fundamental = estimate_fundamental(*search_channels->front(), begin, end, sample_rate,
-                                                config, target_fundamental, search_channels);
+      target_fundamental =
+          estimate_fundamental(*search_channels->front(), begin, end, sample_rate, config,
+                               target_fundamental, search_channels, index_offset);
     }
     for (size_t i = begin; i < end; ++i) {
       fundamental = tracker.process(tracking[i], target_fundamental, sample_rate, config);
@@ -501,7 +515,40 @@ PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
       trace.notched_harmonics = applied;
     }
   }
-  return trace;
+
+  const PassTrace& trace() const { return trace_; }
+
+ private:
+  // The PLL fundamental drifts slowly (pll_bandwidth is small), so recomputing
+  // the RBJ notch coefficients (sin/cos/division per harmonic) or the
+  // cancellers' step on every sample is wasteful. Refresh them only when the
+  // tracked fundamental has moved by more than a small relative amount since the
+  // last refresh; the filter state carries across untouched, so the adaptive
+  // tracking behavior is preserved.
+  static constexpr float kCoeffRefreshRatio = 1e-3f;
+
+  DehumConfig config_;
+  int sample_rate_ = 0;
+  bool subtracting_ = false;
+  float fundamental_ = 0.0f;
+  float target_fundamental_ = 0.0f;
+  PllTracker tracker_;
+  std::vector<std::vector<Notch>> cascades_;
+  std::vector<std::vector<HarmonicCanceller>> cancellers_;
+  float last_coeff_fundamental_ = 0.0f;
+  PassTrace trace_;
+};
+
+PassTrace run_adaptive(const std::vector<std::vector<float>*>& channels,
+                       const std::vector<float>& tracking, int sample_rate,
+                       const DehumConfig& config,
+                       const std::vector<const std::vector<float>*>* search_channels = nullptr) {
+  AdaptivePass pass(channels.size(), sample_rate, config);
+  for (size_t begin = 0; begin < tracking.size(); begin += static_cast<size_t>(config.frame_size)) {
+    const size_t end = std::min(tracking.size(), begin + static_cast<size_t>(config.frame_size));
+    pass.run_frame(channels, tracking, begin, end, search_channels, 0);
+  }
+  return pass.trace();
 }
 
 void fill_report(DehumReport* report, const PassTrace& trace, const float* samples, size_t size,
@@ -631,35 +678,222 @@ Audio dehum(const Audio& audio, const DehumConfig& config, DehumReport* report) 
 
 DehumStereoResult dehum_stereo(const Audio& left, const Audio& right, const DehumConfig& config) {
   require_stereo_pair(left, right);
-  const auto validated = Validated<DehumConfig>::make(config);
-  const int sample_rate = left.sample_rate();
-  const size_t size = left.size();
-
-  std::vector<float> left_samples(left.data(), left.data() + size);
-  std::vector<float> right_samples(right.data(), right.data() + size);
-  PassTrace left_trace;
-  PassTrace right_trace;
-  if (config.adaptive) {
-    const std::vector<float> original_left = left_samples;
-    const std::vector<float> original_right = right_samples;
-    const std::vector<const std::vector<float>*> search_channels = {&original_left,
-                                                                    &original_right};
-    const size_t reference = strongest_tracking_channel(search_channels, sample_rate, config);
-    const std::vector<float> tracking = *search_channels[reference];
-    const std::vector<std::vector<float>*> channels = {&left_samples, &right_samples};
-    left_trace = run_adaptive(channels, tracking, sample_rate, validated.get(), &search_channels);
-    right_trace = left_trace;
-  } else {
-    left_trace = run_fixed(left_samples, sample_rate, validated.get());
-    right_trace = run_fixed(right_samples, sample_rate, validated.get());
-  }
+  const Audio* channels[2] = {&left, &right};
+  std::vector<Audio> out;
+  const std::vector<DehumReport> reports = dehum_linked(channels, 2, &out, config);
 
   DehumStereoResult result;
-  fill_report(&result.left_report, left_trace, left.data(), size, sample_rate, validated.get());
-  fill_report(&result.right_report, right_trace, right.data(), size, sample_rate, validated.get());
-  result.left = Audio::from_vector(std::move(left_samples), sample_rate);
-  result.right = Audio::from_vector(std::move(right_samples), sample_rate);
+  result.left_report = reports[0];
+  result.right_report = reports[1];
+  result.left = std::move(out[0]);
+  result.right = std::move(out[1]);
   return result;
+}
+
+std::vector<DehumReport> dehum_linked(const Audio* const* channels, size_t channel_count,
+                                      std::vector<Audio>* out, const DehumConfig& config) {
+  const auto validated = Validated<DehumConfig>::make(config);
+  if (out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "dehum output must not be null");
+  }
+  if (channels == nullptr || channel_count == 0 || channels[0] == nullptr || channels[0]->empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  }
+  common::validate_linked_channels(channels, channel_count);
+  out->clear();
+  // One channel tracks on its own samples, which is the mono entry's search.
+  if (channel_count == 1) {
+    std::vector<DehumReport> reports(1);
+    out->push_back(dehum(*channels[0], validated.get(), &reports[0]));
+    return reports;
+  }
+
+  const int sample_rate = channels[0]->sample_rate();
+  const size_t size = channels[0]->size();
+  std::vector<std::vector<float>> samples;
+  samples.reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    samples.emplace_back(channels[c]->data(), channels[c]->data() + size);
+  }
+  std::vector<PassTrace> traces(channel_count);
+  if (config.adaptive) {
+    const std::vector<std::vector<float>> originals = samples;
+    std::vector<const std::vector<float>*> search_channels;
+    std::vector<std::vector<float>*> targets;
+    for (size_t c = 0; c < channel_count; ++c) {
+      search_channels.push_back(&originals[c]);
+      targets.push_back(&samples[c]);
+    }
+    const size_t reference = strongest_tracking_channel(search_channels, sample_rate, config);
+    const std::vector<float> tracking = *search_channels[reference];
+    const PassTrace shared =
+        run_adaptive(targets, tracking, sample_rate, validated.get(), &search_channels);
+    for (PassTrace& trace : traces) trace = shared;
+  } else {
+    for (size_t c = 0; c < channel_count; ++c) {
+      traces[c] = run_fixed(samples[c], sample_rate, validated.get());
+    }
+  }
+
+  std::vector<DehumReport> reports(channel_count);
+  out->reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    fill_report(&reports[c], traces[c], channels[c]->data(), size, sample_rate, validated.get());
+    out->push_back(Audio::from_vector(std::move(samples[c]), sample_rate));
+  }
+  return reports;
+}
+
+// ------------------------------------------------------------------ streaming
+
+struct StreamingDehum::State {
+  int sample_rate = 0;
+  int max_channels = 0;
+  int max_block_size = 0;
+  // Fixed notch: one cascade per channel.
+  std::vector<std::vector<Notch>> notches;
+  // Fixed subtract: one canceller set per channel on references shared by every channel.
+  std::vector<std::vector<HarmonicCanceller>> cancellers;
+  std::vector<double> increments;
+  std::vector<double> phases;
+  // Adaptive: one pass per channel, the block being filled and the block being emitted.
+  std::vector<std::unique_ptr<AdaptivePass>> passes;
+  std::vector<std::vector<float>> filling;
+  std::vector<std::vector<float>> emitting;
+  std::vector<std::vector<float>*> target;
+  int fill = 0;
+  size_t blocks_done = 0;
+};
+
+StreamingDehum::StreamingDehum(const DehumConfig& config)
+    : config_(Validated<DehumConfig>::make(config).get()), state_(std::make_unique<State>()) {}
+
+StreamingDehum::~StreamingDehum() = default;
+
+void StreamingDehum::prepare(double sample_rate, int max_block_size) {
+  prepare(sample_rate, max_block_size, static_cast<int>(dynamics::kRealtimePreparedChannels));
+}
+
+void StreamingDehum::prepare(double sample_rate, int max_block_size, int max_channels) {
+  validate_prepare_args(sample_rate, max_block_size, max_channels, "StreamingDehum");
+  state_->sample_rate = static_cast<int>(std::lround(sample_rate));
+  state_->max_channels = max_channels;
+  state_->max_block_size = max_block_size;
+  reset();
+}
+
+void StreamingDehum::reset() {
+  State& state = *state_;
+  const auto channels = static_cast<size_t>(state.max_channels);
+  const float rate = static_cast<float>(state.sample_rate);
+  state.notches.assign(channels, {});
+  state.cancellers.assign(channels, {});
+  state.increments.clear();
+  state.phases.clear();
+  state.passes.clear();
+  state.filling.assign(channels, {});
+  state.emitting.assign(channels, {});
+  state.target.assign(1, nullptr);
+  state.fill = 0;
+  state.blocks_done = 0;
+  if (state.sample_rate <= 0) return;
+  if (config_.adaptive) {
+    const auto frame = static_cast<size_t>(config_.frame_size);
+    for (size_t c = 0; c < channels; ++c) {
+      state.passes.push_back(std::make_unique<AdaptivePass>(1, state.sample_rate, config_));
+      state.filling[c].assign(frame, 0.0f);
+      state.emitting[c].assign(frame, 0.0f);
+    }
+    return;
+  }
+  for (int harmonic = 1; harmonic <= config_.harmonics; ++harmonic) {
+    const float frequency = config_.fundamental_hz * static_cast<float>(harmonic);
+    if (frequency >= rate * 0.5f) break;
+    for (size_t c = 0; c < channels; ++c) {
+      if (config_.mode == DehumMode::Subtract) {
+        HarmonicCanceller canceller;
+        canceller.set_selectivity(frequency, rate, config_.q);
+        state.cancellers[c].push_back(canceller);
+      } else {
+        state.notches[c].push_back(make_notch(frequency, rate, config_.q));
+      }
+    }
+    if (config_.mode == DehumMode::Subtract) {
+      state.increments.push_back(kTwoPiD * frequency / static_cast<double>(state.sample_rate));
+      state.phases.push_back(0.0);
+    }
+  }
+}
+
+void StreamingDehum::process(float* const* channels, int num_channels, int num_samples) {
+  State& state = *state_;
+  ensure_prepared(state.sample_rate > 0, "StreamingDehum");
+  if (!validate_process_buffers(channels, num_channels, num_samples)) return;
+  if (num_channels > state.max_channels) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_channels exceeds prepared StreamingDehum capacity");
+  }
+  if (num_samples > state.max_block_size) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "num_samples exceeds prepared StreamingDehum block size");
+  }
+
+  if (!config_.adaptive && config_.mode == DehumMode::Notch) {
+    for (int c = 0; c < num_channels; ++c) {
+      auto& cascade = state.notches[static_cast<size_t>(c)];
+      for (int i = 0; i < num_samples; ++i) {
+        float sample = channels[c][i];
+        for (Notch& notch : cascade) sample = notch.process(sample);
+        channels[c][i] = sample;
+      }
+    }
+    return;
+  }
+
+  if (!config_.adaptive) {
+    // The references advance once per sample whichever channels the block carries.
+    for (int i = 0; i < num_samples; ++i) {
+      for (int c = 0; c < num_channels; ++c) {
+        auto& set = state.cancellers[static_cast<size_t>(c)];
+        float residual = channels[c][i];
+        for (size_t k = 0; k < set.size(); ++k) {
+          residual = set[k].process(residual, static_cast<float>(std::cos(state.phases[k])),
+                                    static_cast<float>(std::sin(state.phases[k])));
+        }
+        channels[c][i] = residual;
+      }
+      for (size_t k = 0; k < state.phases.size(); ++k) {
+        state.phases[k] += state.increments[k];
+        if (state.phases[k] > kTwoPiD) state.phases[k] -= kTwoPiD;
+      }
+    }
+    return;
+  }
+
+  // Adaptive: each block is estimated before it is filtered, so it is emitted one block late.
+  const auto frame = static_cast<size_t>(config_.frame_size);
+  for (int i = 0; i < num_samples; ++i) {
+    const auto slot = static_cast<size_t>(state.fill);
+    for (int c = 0; c < num_channels; ++c) {
+      const auto channel = static_cast<size_t>(c);
+      const float incoming = channels[c][i];
+      channels[c][i] = state.emitting[channel][slot];
+      state.filling[channel][slot] = incoming;
+    }
+    if (++state.fill < config_.frame_size) continue;
+    state.fill = 0;
+    for (size_t c = 0; c < static_cast<size_t>(num_channels); ++c) {
+      std::copy(state.filling[c].begin(), state.filling[c].end(), state.emitting[c].begin());
+      state.target[0] = &state.emitting[c];
+      state.passes[c]->run_frame(state.target, state.filling[c], 0, frame, nullptr,
+                                 state.blocks_done * frame);
+    }
+    ++state.blocks_done;
+  }
+}
+
+int StreamingDehum::latency_samples() const noexcept {
+  return config_.adaptive ? config_.frame_size : 0;
 }
 
 }  // namespace sonare::mastering::repair

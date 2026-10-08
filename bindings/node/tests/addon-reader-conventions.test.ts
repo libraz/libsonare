@@ -670,7 +670,6 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) => masteringRepairDetectClicks({ ...o, samples: sine(2048), sampleRate: SR }),
   },
   {
-    // Needs at least nFft samples, so this cannot be trimmed below the default.
     jsName: 'masteringRepairDetectNoiseFloor',
     invoke: (o) => masteringRepairDetectNoiseFloor({ ...o, samples: sine(2048), sampleRate: SR }),
   },
@@ -868,6 +867,19 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         engine.setClips([
           { ...o, id: 1, startPpq: 0, channels: [new Float32Array(64).fill(0.25)] },
         ]);
+        return engine.clipCount();
+      }),
+  },
+  {
+    jsName: 'upsertClip',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.upsertClip({
+          ...o,
+          id: 1,
+          startPpq: 0,
+          channels: [new Float32Array(64).fill(0.25)],
+        });
         return engine.clipCount();
       }),
   },

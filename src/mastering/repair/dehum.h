@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "core/audio.h"
 
@@ -119,5 +120,15 @@ struct DehumStereoResult {
 ///   state, so neither channel's transient rings through the other.
 DehumStereoResult dehum_stereo(const Audio& left, const Audio& right,
                                const DehumConfig& config = {});
+
+/// @brief Dehums any number of channels on one shared tracked fundamental.
+/// @details The N-channel form of @ref dehum_stereo: with @c adaptive set, the channel with the
+///   strongest hum-band projection drives one PLL for the set and each channel keeps its own
+///   filter state; without it every channel runs on its own. One channel reproduces @ref dehum
+///   and two reproduce @ref dehum_stereo bit for bit.
+/// @param out Receives one dehummed channel per input channel, in input order.
+/// @return One report per channel, in input order.
+std::vector<DehumReport> dehum_linked(const Audio* const* channels, size_t channel_count,
+                                      std::vector<Audio>* out, const DehumConfig& config);
 
 }  // namespace sonare::mastering::repair

@@ -377,6 +377,12 @@ from .analyzer import (
     mastering_processor_names as mastering_processor_names,
 )
 from .analyzer import (
+    mastering_repair_analyze as mastering_repair_analyze,
+)
+from .analyzer import (
+    mastering_repair_apply as mastering_repair_apply,
+)
+from .analyzer import (
     mastering_repair_declick as mastering_repair_declick,
 )
 from .analyzer import (
@@ -1059,6 +1065,9 @@ from .types import MasteringPresetKind as MasteringPresetKind
 from .types import MasteringProcessorCatalogEntry as MasteringProcessorCatalogEntry
 from .types import MasteringProcessorCategory as MasteringProcessorCategory
 from .types import MasteringProcessorKind as MasteringProcessorKind
+from .types import (
+    MasteringRepairAnalysis as MasteringRepairAnalysis,
+)
 from .types import MasteringReport as MasteringReport
 from .types import (
     MasteringResult as MasteringResult,
@@ -1162,6 +1171,12 @@ from .types import (
 )
 from .types import (
     QuantizeConfig as QuantizeConfig,
+)
+from .types import (
+    RepairApplyResult as RepairApplyResult,
+)
+from .types import (
+    RepairStageReports as RepairStageReports,
 )
 from .types import (
     ReverbDetection as ReverbDetection,

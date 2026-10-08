@@ -148,13 +148,13 @@ describe('masteringRepairDenoiseClassicalStereo (WASM)', () => {
     expect(spectralWithKnobs.left).not.toEqual(spectral.left);
   });
 
-  it('rejects an input shorter than nFft, unlike the dereverb pair', () => {
+  it('pads an input shorter than nFft, as the dereverb pair does', () => {
     const { left, right } = buildNoisyChannels();
     const shortLeft = left.slice(0, 512);
     const shortRight = right.slice(0, 512);
-    expect(() =>
-      masteringRepairDenoiseClassicalStereo(shortLeft, shortRight, SR, { nFft: 1024 }),
-    ).toThrow();
+    const result = masteringRepairDenoiseClassicalStereo(shortLeft, shortRight, SR, { nFft: 1024 });
+    expect(result.left.length).toBe(512);
+    expect(result.right.length).toBe(512);
   });
 
   it('accepts the positional call form identically to the request form', () => {

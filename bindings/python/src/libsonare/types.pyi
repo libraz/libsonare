@@ -1507,6 +1507,40 @@ class DenoiseLinkedResult:
         report: DenoiseReport,
     ) -> None: ...
 
+class RepairStageReports:
+    stage: str
+    scope: str
+    reports: list[
+        DeclipReport
+        | DeclickReport
+        | DecrackleReport
+        | DehumReport
+        | DenoiseReport
+        | DereverbReport
+    ]
+    def __init__(
+        self,
+        stage: str,
+        scope: str,
+        reports: list[
+            DeclipReport
+            | DeclickReport
+            | DecrackleReport
+            | DehumReport
+            | DenoiseReport
+            | DereverbReport
+        ],
+    ) -> None: ...
+
+class RepairApplyResult:
+    channels: list[NDArray[np.float32]]
+    reports: list[RepairStageReports]
+    def __init__(
+        self,
+        channels: list[NDArray[np.float32]],
+        reports: list[RepairStageReports],
+    ) -> None: ...
+
 class ReverbDetection:
     late_decay_ratio_db: float
     late_predictability: float
@@ -1721,6 +1755,14 @@ class MasteringAudioProfile(TypedDict):
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
     defects: MasteringAudioProfileDefects
+
+class MasteringRepairAnalysis(TypedDict):
+    defects: MasteringAudioProfileDefects
+    channels: list[MasteringAudioProfileDefects]
+    declipThresholdSafe: bool
+    integratedLufs: float
+    recommended: list[dict[str, Any]]
+    explanation: list[str]
 
 class MasteringChainConfigDocument(TypedDict):
     version: int

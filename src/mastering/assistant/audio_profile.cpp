@@ -81,22 +81,26 @@ float power_to_db(double power) {
   return power_to_db_scalar(power);
 }
 
-// Mean per-bin power over the band; @p power_scale maps it to the reference geometry.
-float band_rms_db(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft, int sr,
-                  double power_scale, float min_hz, float max_hz) {
+// The band's share of the signal's mean square in dBFS, the noise fields' convention (a full-scale
+// sine reads -3.01 dBFS). By Parseval a frame's two-sided bin power is n_fft * Σw² times the mean
+// square of the signal under the window, so the level needs no reference geometry.
+float band_level_dbfs(const std::vector<float>& magnitude, int n_bins, int n_frames, int n_fft,
+                      int sr, double window_energy, float min_hz, float max_hz) {
+  if (n_frames <= 0 || !(window_energy > 0.0)) return kMinDb;
   double power_sum = 0.0;
-  int count = 0;
   for (int bin = 0; bin < n_bins; ++bin) {
     const float hz = static_cast<float>(bin) * static_cast<float>(sr) / static_cast<float>(n_fft);
     if (hz < min_hz || hz >= max_hz) continue;
+    // A one-sided bin stands for its mirror too, except DC and Nyquist.
+    const double weight = (bin == 0 || 2 * bin == n_fft) ? 1.0 : 2.0;
     for (int frame = 0; frame < n_frames; ++frame) {
       const float mag = magnitude[static_cast<size_t>(bin) * n_frames + frame];
-      power_sum += static_cast<double>(mag) * mag;
-      ++count;
+      power_sum += weight * static_cast<double>(mag) * mag;
     }
   }
-  if (count == 0) return kMinDb;
-  return power_to_db(power_sum / count * power_scale);
+  const double mean_square =
+      power_sum / (static_cast<double>(n_frames) * static_cast<double>(n_fft) * window_energy);
+  return std::max(kMinDb, power_to_db(mean_square));
 }
 
 float attack_density(const std::vector<float>& onset, float duration_sec) {
@@ -376,28 +380,42 @@ DefectProfile aggregate_defects(const std::vector<ChannelDefects>& per_channel) 
   return defects;
 }
 
-DefectProfile measure_defects_interleaved(const float* samples, std::size_t frames, int channels,
-                                          int sample_rate) {
-  if (channels == 1) {
-    return measure_defects(Audio::from_buffer(samples, frames, sample_rate));
-  }
+}  // namespace
 
+ChannelSetDefects measure_defects_planar(const float* const* channels, std::size_t channel_count,
+                                         std::size_t length, int sample_rate) {
+  ChannelSetDefects result;
   std::vector<ChannelDefects> per_channel;
-  per_channel.reserve(static_cast<size_t>(channels));
-  for (int channel = 0; channel < channels; ++channel) {
-    std::vector<float> plane(frames);
-    for (size_t frame = 0; frame < frames; ++frame) {
-      plane[frame] = samples[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
-    }
-    const Audio channel_audio = Audio::from_vector(std::move(plane), sample_rate);
+  per_channel.reserve(channel_count);
+  for (size_t channel = 0; channel < channel_count; ++channel) {
+    const Audio channel_audio = Audio::from_buffer(channels[channel], length, sample_rate);
     ChannelDefects measured;
     measured.profile = measure_defects(channel_audio, &measured.noise_band_dbfs);
     for (float sample : channel_audio) {
       measured.peak_abs = std::max(measured.peak_abs, std::abs(sample));
     }
+    result.channels.push_back(measured.profile);
     per_channel.push_back(std::move(measured));
   }
-  return aggregate_defects(per_channel);
+  // One channel is its own aggregate; the reductions would only round-trip its levels.
+  result.aggregate = channel_count == 1 ? result.channels.front() : aggregate_defects(per_channel);
+  return result;
+}
+
+namespace {
+
+DefectProfile measure_defects_interleaved(const float* samples, std::size_t frames, int channels,
+                                          int sample_rate) {
+  std::vector<std::vector<float>> planes(static_cast<size_t>(channels), std::vector<float>(frames));
+  std::vector<const float*> pointers;
+  for (int channel = 0; channel < channels; ++channel) {
+    std::vector<float>& plane = planes[static_cast<size_t>(channel)];
+    for (size_t frame = 0; frame < frames; ++frame) {
+      plane[frame] = samples[frame * static_cast<size_t>(channels) + static_cast<size_t>(channel)];
+    }
+    pointers.push_back(plane.data());
+  }
+  return measure_defects_planar(pointers.data(), pointers.size(), frames, sample_rate).aggregate;
 }
 
 // Everything outside the loudness and defect blocks: spectral shape, dynamics
@@ -434,10 +452,13 @@ void fill_profile_body(const Audio& audio, const AudioProfileConfig& config, Aud
     mag[i] = std::abs(spectrum[i]);
   }
 
-  const double power_scale = reference_power_scale(spec, config.n_fft);
+  double window_energy = 0.0;
+  for (float w : create_window(spec.window(), spec.win_length(), true)) {
+    window_energy += static_cast<double>(w) * w;
+  }
   const auto band_db = [&](float min_hz, float max_hz) {
-    return band_rms_db(mag, n_bins, n_frames, spec.n_fft(), audio.sample_rate(), power_scale,
-                       min_hz, max_hz);
+    return band_level_dbfs(mag, n_bins, n_frames, spec.n_fft(), audio.sample_rate(), window_energy,
+                           min_hz, max_hz);
   };
   profile.spectral.sub_rms_db = band_db(20, 60);
   profile.spectral.low_rms_db = band_db(60, 250);
@@ -619,6 +640,44 @@ AudioProfile analyze_audio_profile_interleaved(const float* samples, std::size_t
   return profile;
 }
 
+sonare::util::json::Object defects_to_json(const DefectProfile& defects) {
+  namespace json = sonare::util::json;
+  // Emitted whatever `measured` says, so the object's shape does not depend on
+  // the config: a consumer reads one flag rather than having to tell an absent
+  // block from a core too old to write one.
+  json::Object out;
+  out.emplace("measured", json::Value(defects.measured));
+  out.emplace("clickCount", json::Value(static_cast<double>(defects.click_count)));
+  out.emplace("clickRejected", json::Value(static_cast<double>(defects.click_rejected)));
+  out.emplace("clickLongestRunSamples",
+              json::Value(static_cast<double>(defects.click_longest_run_samples)));
+  out.emplace("clickPerSecond", json::Value(defects.click_per_second));
+  out.emplace("crackleSampleCount", json::Value(static_cast<double>(defects.crackle_sample_count)));
+  out.emplace("crackleSampleFraction", json::Value(defects.crackle_sample_fraction));
+  out.emplace("cracklePerSecond", json::Value(defects.crackle_per_second));
+  out.emplace("clipSampleCount", json::Value(static_cast<double>(defects.clip_sample_count)));
+  out.emplace("clipRunCount", json::Value(static_cast<double>(defects.clip_run_count)));
+  out.emplace("clipLongestRunSamples",
+              json::Value(static_cast<double>(defects.clip_longest_run_samples)));
+  out.emplace("clipSampleFraction", json::Value(defects.clip_sample_fraction));
+  out.emplace("clipFlatRunCount", json::Value(static_cast<double>(defects.clip_flat_run_count)));
+  out.emplace("clipFlatSampleCount",
+              json::Value(static_cast<double>(defects.clip_flat_sample_count)));
+  out.emplace("clipLongestFlatRunSamples",
+              json::Value(static_cast<double>(defects.clip_longest_flat_run_samples)));
+  out.emplace("clipFlatLevel", json::Value(defects.clip_flat_level));
+  out.emplace("noiseFloorDbfs", json::Value(defects.noise_floor_dbfs));
+  out.emplace("noiseBandPeakDbfs", json::Value(defects.noise_band_peak_dbfs));
+  out.emplace("noiseBandPeakIndex", json::Value(defects.noise_band_peak_index));
+  out.emplace("humFundamentalHz", json::Value(defects.hum_fundamental_hz));
+  out.emplace("humFundamentalProminence", json::Value(defects.hum_fundamental_prominence));
+  out.emplace("humHarmonics", json::Value(defects.hum_harmonics));
+  out.emplace("humFundamentalDbfs", json::Value(defects.hum_fundamental_dbfs));
+  out.emplace("humPeakHarmonicDbfs", json::Value(defects.hum_peak_harmonic_dbfs));
+  out.emplace("lateDecayRatioDb", json::Value(defects.late_decay_ratio_db));
+  return out;
+}
+
 std::string audio_profile_to_json(const AudioProfile& profile) {
   namespace json = sonare::util::json;
 
@@ -645,44 +704,7 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   dynamics.emplace("attackDensity", json::Value(profile.dynamics.attack_density));
   dynamics.emplace("sustainRatio", json::Value(profile.dynamics.sustain_ratio));
 
-  // Emitted whatever `measured` says, so the object's shape does not depend on
-  // the config: a consumer reads one flag rather than having to tell an absent
-  // block from a core too old to write one.
-  json::Object defects;
-  defects.emplace("measured", json::Value(profile.defects.measured));
-  defects.emplace("clickCount", json::Value(static_cast<double>(profile.defects.click_count)));
-  defects.emplace("clickRejected",
-                  json::Value(static_cast<double>(profile.defects.click_rejected)));
-  defects.emplace("clickLongestRunSamples",
-                  json::Value(static_cast<double>(profile.defects.click_longest_run_samples)));
-  defects.emplace("clickPerSecond", json::Value(profile.defects.click_per_second));
-  defects.emplace("crackleSampleCount",
-                  json::Value(static_cast<double>(profile.defects.crackle_sample_count)));
-  defects.emplace("crackleSampleFraction", json::Value(profile.defects.crackle_sample_fraction));
-  defects.emplace("cracklePerSecond", json::Value(profile.defects.crackle_per_second));
-  defects.emplace("clipSampleCount",
-                  json::Value(static_cast<double>(profile.defects.clip_sample_count)));
-  defects.emplace("clipRunCount", json::Value(static_cast<double>(profile.defects.clip_run_count)));
-  defects.emplace("clipLongestRunSamples",
-                  json::Value(static_cast<double>(profile.defects.clip_longest_run_samples)));
-  defects.emplace("clipSampleFraction", json::Value(profile.defects.clip_sample_fraction));
-  defects.emplace("clipFlatRunCount",
-                  json::Value(static_cast<double>(profile.defects.clip_flat_run_count)));
-  defects.emplace("clipFlatSampleCount",
-                  json::Value(static_cast<double>(profile.defects.clip_flat_sample_count)));
-  defects.emplace("clipLongestFlatRunSamples",
-                  json::Value(static_cast<double>(profile.defects.clip_longest_flat_run_samples)));
-  defects.emplace("clipFlatLevel", json::Value(profile.defects.clip_flat_level));
-  defects.emplace("noiseFloorDbfs", json::Value(profile.defects.noise_floor_dbfs));
-  defects.emplace("noiseBandPeakDbfs", json::Value(profile.defects.noise_band_peak_dbfs));
-  defects.emplace("noiseBandPeakIndex", json::Value(profile.defects.noise_band_peak_index));
-  defects.emplace("humFundamentalHz", json::Value(profile.defects.hum_fundamental_hz));
-  defects.emplace("humFundamentalProminence",
-                  json::Value(profile.defects.hum_fundamental_prominence));
-  defects.emplace("humHarmonics", json::Value(profile.defects.hum_harmonics));
-  defects.emplace("humFundamentalDbfs", json::Value(profile.defects.hum_fundamental_dbfs));
-  defects.emplace("humPeakHarmonicDbfs", json::Value(profile.defects.hum_peak_harmonic_dbfs));
-  defects.emplace("lateDecayRatioDb", json::Value(profile.defects.late_decay_ratio_db));
+  json::Object defects = defects_to_json(profile.defects);
 
   json::Object root;
   root.emplace("durationSec", json::Value(profile.duration_sec));

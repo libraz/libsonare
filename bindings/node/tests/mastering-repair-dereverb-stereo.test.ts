@@ -176,7 +176,7 @@ describe('masteringRepairDereverbClassicalStereo', () => {
     expect(gated.report.meanReductionDb).toBeLessThan(open.report.meanReductionDb);
   });
 
-  it('pads an input shorter than nFft, where the denoise pair rejects one', () => {
+  it('pads an input shorter than nFft, as the denoise pair does', () => {
     const short = 512;
     const left = reverberant(bursts(31, short));
     const right = reverberant(bursts(32, short));
@@ -186,9 +186,9 @@ describe('masteringRepairDereverbClassicalStereo', () => {
     expect(result.right).toHaveLength(short);
     expect(result.left.every(Number.isFinite)).toBe(true);
 
-    // The sibling entry point refuses the very same input, which is the
-    // assertion that catches the two being wired to each other's core call.
-    expect(() => masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR })).toThrow();
+    const denoised = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
+    expect(denoised.left).toHaveLength(short);
+    expect(denoised.right).toHaveLength(short);
   });
 
   it('refuses bad arguments with a catchable error', () => {

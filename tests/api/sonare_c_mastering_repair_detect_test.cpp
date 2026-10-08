@@ -392,13 +392,13 @@ TEST_CASE("sonare_mastering_repair_detect_noise_floor", "[c_api][mastering]") {
     for (float level : from_loud.band_floor_dbfs) REQUIRE(std::isfinite(level));
   }
 
-  SECTION("needs n_fft samples and refuses the one below it") {
+  SECTION("pads a buffer shorter than n_fft") {
     SonareDenoiseClassicalConfig config = default_denoise_config();
     const size_t n_fft = static_cast<size_t>(config.n_fft);
     SonareNoiseDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_noise_floor(loud.data(), n_fft - 1, kSr, &config,
-                                                       &detection) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+                                                       &detection) == SONARE_OK);
+    REQUIRE(std::isfinite(detection.floor_dbfs));
     REQUIRE(sonare_mastering_repair_detect_noise_floor(loud.data(), n_fft, kSr, &config,
                                                        &detection) == SONARE_OK);
   }
@@ -507,16 +507,16 @@ TEST_CASE("sonare_mastering_repair_detect_reverb", "[c_api][mastering]") {
   auto samples = generate_sine(440.0f, kSr, 0.5f);
   for (auto& sample : samples) sample *= 0.5f;
 
-  SECTION("pads a buffer shorter than n_fft, which the noise-floor detector refuses") {
+  SECTION("pads a buffer shorter than n_fft, as the noise-floor detector does") {
     SonareDereverbClassicalConfig dereverb = default_dereverb_config();
     const size_t short_length = static_cast<size_t>(dereverb.n_fft) / 2;
     SonareReverbDetection detection{};
     REQUIRE(sonare_mastering_repair_detect_reverb(samples.data(), short_length, kSr, &dereverb,
                                                   &detection) == SONARE_OK);
     SonareDenoiseClassicalConfig denoise = default_denoise_config();
-    SonareNoiseDetection refused{};
+    SonareNoiseDetection padded{};
     REQUIRE(sonare_mastering_repair_detect_noise_floor(samples.data(), short_length, kSr, &denoise,
-                                                       &refused) == SONARE_ERROR_INVALID_PARAMETER);
+                                                       &padded) == SONARE_OK);
   }
 
   SECTION("measures predictability only when the WPE stage is enabled") {

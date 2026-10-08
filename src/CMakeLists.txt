@@ -443,6 +443,7 @@ if(BUILD_MASTERING)
     mastering/api/named_processor_registry.cpp
     mastering/api/presets.cpp
     mastering/assistant/audio_profile.cpp
+    mastering/assistant/repair_session.cpp
     mastering/assistant/suggester.cpp
     mastering/common/hysteresis_ja.cpp
     mastering/common/loudness_measure.cpp
@@ -486,10 +487,12 @@ if(BUILD_MASTERING)
     mastering/repair/declick.cpp
     mastering/repair/declip.cpp
     mastering/repair/decrackle.cpp
+    mastering/repair/decrackle_streaming.cpp
     mastering/repair/dehum.cpp
     mastering/repair/denoise_classical.cpp
     mastering/repair/denoise_streaming.cpp
     mastering/repair/dereverb_classical.cpp
+    mastering/repair/dereverb_streaming.cpp
     mastering/repair/trim_silence.cpp
     mastering/saturation/amp_physics.cpp
     mastering/saturation/amp_presets.cpp
@@ -1602,12 +1605,6 @@ if(BUILD_WASM)
       TARGET_DIRECTORY sonare_arrangement
       PROPERTIES COMPILE_OPTIONS -fexceptions)
   endif()
-  if(TARGET sonare_automation)
-    set_source_files_properties(
-      automation/automation_engine.cpp
-      TARGET_DIRECTORY sonare_automation
-      PROPERTIES COMPILE_OPTIONS -fexceptions)
-  endif()
   if(TARGET sonare_core_objects)
     set_source_files_properties(
       c_api/core_analysis.cpp
@@ -1658,6 +1655,7 @@ if(BUILD_WASM)
       mastering/api/insert_factory.cpp
       mastering/api/named_processor_registry.cpp
       mastering/assistant/audio_profile.cpp
+      mastering/assistant/repair_session.cpp
       mastering/eq/equalizer.cpp
       mastering/eq/graphic_eq.cpp
       TARGET_DIRECTORY sonare_mastering

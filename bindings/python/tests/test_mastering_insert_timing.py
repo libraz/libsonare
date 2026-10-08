@@ -134,3 +134,33 @@ def test_insert_timing_accepts_boolean_values() -> None:
         "dynamics.parallelComp", {"linkedDetection": True}, 48000
     )
     assert math.isfinite(timing["latencySamples"])
+
+
+def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
+    """The repair inserts answer the timing and descriptor queries every insert answers."""
+    import libsonare
+
+    def latency(name: str, params: dict[str, float | bool]) -> int:
+        return int(libsonare.mastering_insert_timing(name, params, 48000)["latencySamples"])
+
+    assert latency("repair.decrackle", {}) == 1
+    assert latency("repair.dehum", {}) == 0
+    assert latency("repair.dehum", {"adaptive": True, "frameSize": 1024}) == 1024
+    assert latency("repair.dereverbClassical", {"nFft": 512}) == 511
+    # n_fft - 1 plus the hop the gain smoothing lags by.
+    assert latency("repair.denoiseClassical", {}) == 1279
+
+    mode = {p["name"]: p for p in libsonare.mastering_insert_param_info("repair.decrackle")}["mode"]
+    assert [choice["name"] for choice in mode["choices"] or []] == ["median"]
+    with pytest.raises(libsonare.SonareError) as excinfo:
+        libsonare.mastering_insert_timing("repair.dereverbClassical", {"wpeEnabled": True}, 48000)
+    assert excinfo.value.code == libsonare.ErrorCode.INVALID_PARAMETER
+    # The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
+    with pytest.raises(libsonare.SonareError):
+        libsonare.mastering_insert_timing("repair.denoiseClassical", {"noiseEstimator": 0}, 48000)
+    params = {
+        p["name"]: p for p in libsonare.mastering_insert_param_info("repair.denoiseClassical")
+    }
+    assert "quantile" not in [
+        choice["name"] for choice in params["noiseEstimator"]["choices"] or []
+    ]

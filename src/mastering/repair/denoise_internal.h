@@ -60,6 +60,9 @@ class MedianGainSmoother {
   /// @return Null when nothing was ever pushed.
   const double* flush();
 
+  /// @brief Returns to the post-construction state without allocating.
+  void reset() noexcept;
+
   /// @brief Zeroes the held frames when a non-finite value has reached one.
   /// @details The frame count is deliberately left alone. It decides whether a
   ///   push answers or waits for a successor, so returning it would cost the
@@ -100,6 +103,9 @@ class GainStage {
   /// @brief Answers for the last pushed frame, which has no successor.
   /// @return Null when nothing is pending, which is every non-smoothing pass.
   const double* flush();
+
+  /// @brief Returns the recursion and the smoother to frame zero without allocating.
+  void reset() noexcept;
 
   /// @brief Returns the decision-directed recursion and the smoother's frames to
   ///        their post-reset values when a non-finite value has reached one.

@@ -845,6 +845,29 @@ TEST_CASE("Assistant AudioProfile dynamics and band levels do not depend on the 
   }
 }
 
+TEST_CASE("Assistant AudioProfile band levels are dBFS on the noise fields' mean-square scale",
+          "[mastering][assistant]") {
+  // 10*log10(1/2): a full-scale sine's mean square.
+  const float full_scale_sine_dbfs = 10.0f * std::log10(0.5f);
+  for (int sr : {44100, 48000}) {
+    for (float amplitude : {1.0f, 0.25f}) {
+      std::vector<float> samples(static_cast<size_t>(sr));
+      for (size_t i = 0; i < samples.size(); ++i) {
+        samples[i] = amplitude *
+                     static_cast<float>(std::sin(sonare::constants::kTwoPiD * 1000.0 *
+                                                 static_cast<double>(i) / static_cast<double>(sr)));
+      }
+      const auto profile = assistant::analyze_audio_profile(samples.data(), samples.size(), sr);
+      const float expected = full_scale_sine_dbfs + sonare::linear_to_db(amplitude);
+      CAPTURE(sr, amplitude, profile.spectral.mid_rms_db);
+      CHECK(std::abs(profile.spectral.mid_rms_db - expected) < 0.1f);
+      // The neighbours hold only window leakage.
+      CHECK(profile.spectral.low_mid_rms_db < expected - 40.0f);
+      CHECK(profile.spectral.high_mid_rms_db < expected - 40.0f);
+    }
+  }
+}
+
 namespace {
 
 using sonare::mixing::assistant::test::make_demo_tracks;

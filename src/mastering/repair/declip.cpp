@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/common/noise_profile.h"
 #include "mastering/repair/run_union.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -223,28 +224,55 @@ Audio declip(const Audio& audio, const DeclipConfig& config, DeclipReport* repor
 DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
                                  const DeclipConfig& config) {
   require_stereo_pair(left, right);
-  const auto validated = Validated<DeclipConfig>::make(config);
-  const int sample_rate = left.sample_rate();
-  validate_offline_audio_input(left.data(), left.size(), sample_rate);
-  validate_offline_audio_input(right.data(), right.size(), sample_rate);
-
-  std::vector<float> left_samples(left.data(), left.data() + left.size());
-  std::vector<float> right_samples(right.data(), right.data() + right.size());
-  const std::vector<ClipRun> left_runs = scan_clipped_runs(left_samples, validated->clip_threshold);
-  const std::vector<ClipRun> right_runs =
-      scan_clipped_runs(right_samples, validated->clip_threshold);
-  const ClipDetection left_detected = to_detection(left_samples, left_runs);
-  const ClipDetection right_detected = to_detection(right_samples, right_runs);
-  const std::vector<ClipRun> applied = union_runs(left_runs, right_runs);
+  const Audio* channels[2] = {&left, &right};
+  std::vector<Audio> out;
+  const std::vector<DeclipReport> reports = declip_linked(channels, 2, &out, config);
 
   DeclipStereoResult result;
-  result.left_report = repair_channel(left_samples, applied, validated.get());
-  result.right_report = repair_channel(right_samples, applied, validated.get());
-  result.left_report.detected = left_detected;
-  result.right_report.detected = right_detected;
-  result.left = Audio::from_vector(std::move(left_samples), sample_rate);
-  result.right = Audio::from_vector(std::move(right_samples), sample_rate);
+  result.left_report = reports[0];
+  result.right_report = reports[1];
+  result.left = std::move(out[0]);
+  result.right = std::move(out[1]);
   return result;
+}
+
+std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t channel_count,
+                                        std::vector<Audio>* out, const DeclipConfig& config) {
+  const auto validated = Validated<DeclipConfig>::make(config);
+  if (out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "declip output must not be null");
+  }
+  if (channels == nullptr || channel_count == 0 || channels[0] == nullptr || channels[0]->empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  }
+  common::validate_linked_channels(channels, channel_count);
+  const int sample_rate = channels[0]->sample_rate();
+  for (size_t c = 0; c < channel_count; ++c) {
+    validate_offline_audio_input(channels[c]->data(), channels[c]->size(), sample_rate);
+  }
+
+  std::vector<std::vector<float>> samples;
+  std::vector<ClipDetection> detected;
+  samples.reserve(channel_count);
+  detected.reserve(channel_count);
+  std::vector<ClipRun> applied;
+  for (size_t c = 0; c < channel_count; ++c) {
+    samples.emplace_back(channels[c]->data(), channels[c]->data() + channels[c]->size());
+    const std::vector<ClipRun> runs = scan_clipped_runs(samples[c], validated->clip_threshold);
+    detected.push_back(to_detection(samples[c], runs));
+    applied = c == 0 ? runs : union_runs(applied, runs);
+  }
+
+  std::vector<DeclipReport> reports;
+  reports.reserve(channel_count);
+  out->clear();
+  out->reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    reports.push_back(repair_channel(samples[c], applied, validated.get()));
+    reports.back().detected = detected[c];
+    out->push_back(Audio::from_vector(std::move(samples[c]), sample_rate));
+  }
+  return reports;
 }
 
 }  // namespace sonare::mastering::repair

@@ -718,6 +718,91 @@ TEST_CASE("Declip routes over-cap runs to the interpolation fallback", "[masteri
   }
 }
 
+namespace {
+
+// Two tones plus a little noise, long enough that a defect at kLpcOrderDefectAt has a full capped
+// context on both sides and the AR solve runs at the largest order unreduced.
+constexpr size_t kLpcOrderFixtureFrames = 8200;
+constexpr size_t kLpcOrderDefectAt = 4100;
+
+std::vector<float> lpc_order_fixture() {
+  std::mt19937 rng(7);
+  std::normal_distribution<float> noise(0.0f, 0.002f);
+  std::vector<float> samples(kLpcOrderFixtureFrames);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / 48000.0;
+    samples[i] = static_cast<float>(0.15 * std::sin(sonare::constants::kTwoPiD * 440.0 * t) +
+                                    0.05 * std::sin(sonare::constants::kTwoPiD * 1210.0 * t)) +
+                 noise(rng);
+  }
+  return samples;
+}
+
+}  // namespace
+
+TEST_CASE("Declick runs at its largest lpc_order and refuses one more", "[mastering][repair]") {
+  STATIC_REQUIRE(kDeclickMaxLpcOrder == 2048);
+  const std::vector<float> clean = lpc_order_fixture();
+  std::vector<float> damaged = clean;
+  damaged[kLpcOrderDefectAt] = 1.0f;
+  const Audio input = Audio::from_buffer(damaged.data(), damaged.size(), 48000);
+
+  DeclickConfig config;
+  config.lpc_order = kDeclickMaxLpcOrder;
+  DeclickReport report;
+  const Audio repaired = declick(input, config, &report);
+
+  REQUIRE(repaired.size() == damaged.size());
+  for (size_t i = 0; i < repaired.size(); ++i) REQUIRE(std::isfinite(repaired[i]));
+  CHECK(report.lpc_model_used);
+  CHECK(report.repaired_runs == 1);
+  CHECK(std::abs(repaired[kLpcOrderDefectAt] - clean[kLpcOrderDefectAt]) < 0.02f);
+
+  config.lpc_order = kDeclickMaxLpcOrder + 1;
+  REQUIRE_THROWS_AS(declick(input, config), SonareException);
+  REQUIRE_THROWS_AS(detect_clicks(damaged.data(), damaged.size(), 48000, config), SonareException);
+}
+
+TEST_CASE("Declip runs at its largest lpc_order and refuses one more", "[mastering][repair]") {
+  STATIC_REQUIRE(kDeclipMaxLpcOrder == 2048);
+  std::vector<float> clean = lpc_order_fixture();
+  // A short burst riding over full scale, so exactly one run is clipped.
+  for (size_t i = 0; i < clean.size(); ++i) {
+    const double offset = (static_cast<double>(i) - static_cast<double>(kLpcOrderDefectAt)) / 6.0;
+    clean[i] += static_cast<float>(1.1 * std::exp(-offset * offset));
+  }
+  std::vector<float> damaged = clean;
+  for (float& sample : damaged) sample = std::clamp(sample, -0.98f, 0.98f);
+  const Audio input = Audio::from_buffer(damaged.data(), damaged.size(), 48000);
+
+  DeclipConfig config;
+  config.lpc_order = kDeclipMaxLpcOrder;
+  DeclipReport report;
+  const Audio repaired = declip(input, config, &report);
+
+  REQUIRE(repaired.size() == damaged.size());
+  for (size_t i = 0; i < repaired.size(); ++i) REQUIRE(std::isfinite(repaired[i]));
+  CHECK(report.lpc_reconstructed_runs == 1);
+  CHECK(report.interpolated_runs == 0);
+  double clipped_error = 0.0;
+  double repaired_error = 0.0;
+  for (size_t i = 0; i < clean.size(); ++i) {
+    clipped_error += std::abs(damaged[i] - clean[i]);
+    repaired_error += std::abs(repaired[i] - clean[i]);
+  }
+  CHECK(repaired_error < clipped_error);
+  float peak = 0.0f;
+  for (size_t i = kLpcOrderDefectAt - 20; i < kLpcOrderDefectAt + 20; ++i) {
+    peak = std::max(peak, repaired[i]);
+  }
+  CHECK(peak > 0.98f);
+
+  config.lpc_order = kDeclipMaxLpcOrder + 1;
+  REQUIRE_THROWS_AS(declip(input, config), SonareException);
+  REQUIRE_THROWS_AS(detect_clipping(damaged.data(), damaged.size(), 48000, config),
+                    SonareException);
+}
+
 TEST_CASE("Declip and Declick repair a three-minute recording with many short defects",
           "[.][slow][mastering][repair]") {
   constexpr int kSampleRate = 48000;
@@ -1019,8 +1104,39 @@ TEST_CASE("DenoiseClassical keeps the floor under an intermittently occupied ban
   REQUIRE(gain_db(DenoiseNoiseEstimator::Spp) > 8.0);
 }
 
-TEST_CASE("DenoiseClassical rejects inputs shorter than n_fft", "[mastering][repair]") {
-  REQUIRE_THROWS_AS(denoise_classical(make_audio({0.03f, 0.05f})), SonareException);
+TEST_CASE("DenoiseClassical zero-pads inputs shorter than n_fft", "[mastering][repair]") {
+  const DenoiseClassicalConfig config;
+  const size_t n_fft = static_cast<size_t>(config.n_fft);
+  std::mt19937 rng(11);
+  std::normal_distribution<float> noise(0.0f, 0.05f);
+  std::vector<float> samples(n_fft * 3 / 4);
+  for (float& sample : samples) sample = noise(rng);
+  std::vector<float> padded = samples;
+  padded.resize(n_fft, 0.0f);
+
+  // The short input takes the padded input's path and is trimmed back to its own length.
+  DenoiseReport short_report;
+  DenoiseReport padded_report;
+  const Audio result = denoise_classical(make_audio(samples), config, &short_report);
+  const Audio reference = denoise_classical(make_audio(padded), config, &padded_report);
+  REQUIRE(result.size() == samples.size());
+  for (size_t i = 0; i < samples.size(); ++i) {
+    REQUIRE(std::isfinite(result[i]));
+    REQUIRE(result[i] == reference[i]);
+  }
+  CHECK(short_report.mean_reduction_db == padded_report.mean_reduction_db);
+
+  const NoiseDetection short_floor =
+      detect_noise_floor(samples.data(), samples.size(), 48000, config);
+  const NoiseDetection padded_floor =
+      detect_noise_floor(padded.data(), padded.size(), 48000, config);
+  CHECK(short_floor.floor_dbfs == padded_floor.floor_dbfs);
+
+  const Audio left = make_audio(samples);
+  const Audio right = make_audio(samples);
+  const DenoiseStereoResult stereo = denoise_classical_stereo(left, right, config);
+  REQUIRE(stereo.left.size() == samples.size());
+  REQUIRE(stereo.right.size() == samples.size());
 }
 
 TEST_CASE("DenoiseClassical rejects an estimator outside the enumeration", "[mastering][repair]") {

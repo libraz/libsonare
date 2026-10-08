@@ -290,6 +290,8 @@ if(BUILD_MASTERING)
     mastering/named_processor_stereo_repair_test.cpp
     mastering/repair_stereo_impulse_test.cpp
     mastering/repair_stereo_hum_test.cpp
+    mastering/repair_session_test.cpp
+    mastering/repair_insert_test.cpp
     mastering/dereverb_room_test.cpp
     mastering/saturation_test.cpp
     mastering/pedal_test.cpp

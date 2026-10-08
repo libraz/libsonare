@@ -224,8 +224,8 @@ def mastering_repair_detect_noise_floor(
         floor = libsonare.mastering_repair_detect_noise_floor(samples, 44100)
         print(floor.floor_dbfs, floor.band_floor_dbfs[0])
 
-    Needs at least ``n_fft`` samples and REFUSES a shorter buffer, unlike
-    :func:`mastering_repair_detect_reverb`, which pads one.
+    A buffer shorter than ``n_fft`` is padded for analysis, as
+    :func:`mastering_repair_detect_reverb` pads one.
 
     ``band_floor_dbfs`` has 32 entries on a geometric grid from 20 Hz to Nyquist,
     low to high -- the same axis the mastering report's band energy deltas use.
@@ -255,8 +255,8 @@ def mastering_repair_detect_noise_floor(
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
             positive, or if the buffer is empty or carries a non-finite sample.
-        SonareError: If the C call rejects the request, which includes a buffer
-            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
+        SonareError: If the C call rejects the request, which includes a
+            ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -391,8 +391,9 @@ def mastering_repair_denoise_classical_stereo(
     :func:`mastering_repair_denoise_classical`; compare a stereo floor only
     against another stereo floor.
 
-    Needs at least ``n_fft`` samples and rejects a shorter input, unlike
-    :func:`mastering_repair_dereverb_classical_stereo`, which pads one.
+    An input shorter than ``n_fft`` is padded for analysis and the output
+    trimmed back to the input length, as
+    :func:`mastering_repair_dereverb_classical_stereo` does.
 
     Which config fields are live depends on ``mode``: ``over_subtraction``
     and ``spectral_floor`` are read only by ``"spectralSubtraction"``, and
@@ -425,8 +426,8 @@ def mastering_repair_denoise_classical_stereo(
         SonareValueError: If ``mode`` / ``noise_estimator`` cannot be resolved,
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
             positive, or if the two channels differ in length.
-        SonareError: If the C call rejects the request, which includes an input
-            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
+        SonareError: If the C call rejects the request, which includes a
+            ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.
@@ -522,8 +523,9 @@ def mastering_repair_denoise_classical_linked(
         )
         assert len(result.channels) == 3
 
-    Needs at least ``n_fft`` samples and rejects a shorter input, unlike
-    :func:`mastering_repair_dereverb_classical_linked`, which pads one.
+    An input shorter than ``n_fft`` is padded for analysis and the output
+    trimmed back to the input length, as
+    :func:`mastering_repair_dereverb_classical_linked` does.
 
     ``report.detected`` is the one part that moves with the channel count. Its
     levels are absolute dBFS referred to the summed mean square of every
@@ -565,8 +567,8 @@ def mastering_repair_denoise_classical_linked(
             if ``n_fft`` is not a power of two, if ``hop_length`` is not
             positive, if ``channels`` is empty, if the channels disagree in
             length, or if any channel is empty or carries a non-finite sample.
-        SonareError: If the C call rejects the request, which includes an input
-            shorter than ``n_fft`` or a ``hop_length`` above ``n_fft // 2``.
+        SonareError: If the C call rejects the request, which includes a
+            ``hop_length`` above ``n_fft // 2``.
     """
     # The core requires a power of two here (denoise_classical.cpp), narrower
     # than the shared even-size rule; check it eagerly so the message names it.

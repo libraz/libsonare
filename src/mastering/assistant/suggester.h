@@ -64,6 +64,13 @@ AssistantResult suggest_chain_interleaved(const float* samples, std::size_t fram
                                           int sample_rate, const AssistantConfig& config = {});
 AssistantResult suggest_chain(const Audio& audio, const AssistantConfig& config = {});
 AssistantResult suggest_chain(const AudioProfile& profile, const AssistantConfig& config = {});
+/// @brief Enables in @p out the repair stages @p profile's defects support, with the settings
+///        the measurement derives, and explains each choice in @p explanation.
+/// @details Reads @c profile.defects and @c profile.loudness.integrated_lufs; of @p config only
+///          @c prefer_streaming_safe. Never enables dereverb: its statistic does not separate a
+///          sustaining dry signal from a reverberant one.
+void select_repair_stages(const AudioProfile& profile, const AssistantConfig& config,
+                          api::MasteringChainConfig& out, std::vector<std::string>& explanation);
 std::string assistant_result_to_json(const AssistantResult& result);
 
 /// @brief Every dotted field path @ref assistant_result_to_json emits, with the

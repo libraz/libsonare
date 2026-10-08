@@ -954,12 +954,10 @@ export interface WasmMixMeterSnapshot {
   integratedLufs: number;
   gainReductionDb: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement: the centered
-   * reconstruction stencil needs a few future samples a realtime path does not
-   * have, so each block's last samples read marginally low (about 0.1 dB across
-   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
-   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
+   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
+   * behind the block, so every value has its whole stencil and the reading does not depend on the
+   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
@@ -1185,12 +1183,10 @@ export interface WasmEngineMeterTelemetry {
   rmsDbL: number;
   rmsDbR: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement: the centered
-   * reconstruction stencil needs a few future samples a realtime path does not
-   * have, so each block's last samples read marginally low (about 0.1 dB across
-   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
-   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
+   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
+   * behind the block, so every value has its whole stencil and the reading does not depend on the
+   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
@@ -1224,13 +1220,11 @@ export interface WasmEngineMeterTelemetryWide {
   peakDb: number[];
   rmsDb: number[];
   /**
-   * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the
-   * ITU-R BS.1770-4 polyphase reconstruction at 4x. A streaming measurement: the
-   * centered reconstruction stencil needs a few future samples a realtime path
-   * does not have, so each block's last samples read marginally low (about
-   * 0.1 dB across 64..8192-sample blocks on a near-Nyquist tone, always
-   * under-reading). Use `meteringTruePeakDb` over the whole signal for an exact
-   * dBTP number.
+   * Per-plane inter-sample (true) peak in dB (length `channelCount`), from the ITU-R BS.1770-4
+   * polyphase reconstruction at 4x. A streaming measurement that runs one reconstruction-filter
+   * group delay (a few samples) behind the block, so every value has its whole stencil and the
+   * reading does not depend on the block size. Use `meteringTruePeakDb` over the whole signal for
+   * an exact dBTP number.
    */
   truePeakDb: number[];
   /** Maximum inter-sample peak across channels in dB. See {@link truePeakDb}. */
@@ -1396,7 +1390,7 @@ export interface WasmExternalMidiEvent {
    * every external port.
    */
   destinationId: number;
-  /** Sample position within the producing block at which the event fires. */
+  /** Absolute engine device frame at which the event fires, never an offset within a block. */
   renderFrame: number;
   /** MIDI 1.0 status + data bytes (1..3 entries). */
   bytes: number[];
@@ -1454,6 +1448,8 @@ export interface WasmRealtimeEngine {
   graphNodeCount: () => number;
   graphConnectionCount: () => number;
   setClips: (clips: WasmEngineClip[]) => void;
+  upsertClip: (clip: WasmEngineClip) => void;
+  removeClip: (clipId: number) => void;
   prebakedClipChannels: (clipId: number) => Float32Array[] | null;
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
@@ -2747,6 +2743,18 @@ export interface SonareModule {
     sampleRate: number,
     options: object,
   ) => WasmDenoiseLinkedResult;
+  masteringRepairAnalyze: (
+    channels: Float32Array[],
+    sampleRate: number,
+    requestJson: string,
+  ) => string;
+  masteringRepairApply: (
+    channels: Float32Array[],
+    sampleRate: number,
+    stagesJson: string,
+    progressCallback: ProgressCallback | null,
+    cancelCallback: (() => boolean) | null,
+  ) => { channels: Float32Array[]; reportsJson: string };
   masteringRepairDeclip: (
     samples: Float32Array,
     sampleRate: number,
@@ -3840,12 +3848,10 @@ export interface WasmMixerMeterSnapshot {
   rmsDbR: number;
   correlation: number;
   /**
-   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4
-   * polyphase reconstruction at 4x. A streaming measurement: the centered
-   * reconstruction stencil needs a few future samples a realtime path does not
-   * have, so each block's last samples read marginally low (about 0.1 dB across
-   * 64..8192-sample blocks on a near-Nyquist tone, always under-reading). Use
-   * `meteringTruePeakDb` over the whole signal for an exact dBTP number.
+   * Left-channel inter-sample (true) peak in dB, from the ITU-R BS.1770-4 polyphase reconstruction
+   * at 4x. A streaming measurement that runs one reconstruction-filter group delay (a few samples)
+   * behind the block, so every value has its whole stencil and the reading does not depend on the
+   * block size. Use `meteringTruePeakDb` over the whole signal for an exact dBTP number.
    */
   truePeakDbL: number;
   /** Right-channel inter-sample (true) peak in dB. See {@link truePeakDbL}. */
@@ -3955,6 +3961,7 @@ export interface WasmMixer {
     right: Float32Array;
     sampleRate: number;
   };
+  flushMeters: () => void;
   delete: () => void;
 }
 

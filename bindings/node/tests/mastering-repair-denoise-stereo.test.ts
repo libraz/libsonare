@@ -189,26 +189,16 @@ describe('masteringRepairDenoiseClassicalStereo', () => {
     );
   });
 
-  it('rejects an input shorter than nFft, where the dereverb pair pads one', () => {
+  it('pads an input shorter than nFft, as the dereverb pair does', () => {
     const short = 512;
     const left = add(tone(700, 0.3, short), noise(99, 0.02, short));
     const right = add(tone(1900, 0.3, short), noise(98, 0.02, short));
 
-    expect(() => masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR })).toThrow();
+    const denoised = masteringRepairDenoiseClassicalStereo({ left, right, sampleRate: SR });
+    expect(denoised.left).toHaveLength(short);
+    expect(denoised.right).toHaveLength(short);
+    expect(denoised.left.every(Number.isFinite)).toBe(true);
 
-    // The rejection is about nFft, not about a short buffer: the same input
-    // goes through once the window fits inside it.
-    const fitted = masteringRepairDenoiseClassicalStereo({
-      left,
-      right,
-      sampleRate: SR,
-      nFft: 256,
-      hopLength: 64,
-    });
-    expect(fitted.left).toHaveLength(short);
-
-    // The sibling entry point takes the very same rejected input, which is the
-    // assertion that catches the two being wired to each other's core call.
     const padded = masteringRepairDereverbClassicalStereo({ left, right, sampleRate: SR });
     expect(padded.left).toHaveLength(short);
   });

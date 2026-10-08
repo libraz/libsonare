@@ -751,6 +751,8 @@ python = [
   "mastering_ab_match_loudness_stereo", # Python derives both stereo lengths and folds optional out_match into with_match, as in the mono API
   "align_take_to_reference", # Python derives both C lengths from array length and folds the SonareTakeAlignConfig fields into keyword args
   "downmix", # Python derives frames and channel_count from the channel arrays
+  "mastering_repair_analyze", # Python folds the C request JSON into the prefer_streaming_safe keyword
+  "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
 ]
 
 # ---------------------------------------------------------------------------

@@ -7,9 +7,10 @@ and nothing to release. That makes the interesting assertions behavioural rather
 than structural, and three of them separate a measurement from the repair it
 describes:
 
-* ``detect_noise_floor`` REFUSES a buffer shorter than ``n_fft`` while
-  ``detect_reverb`` PADS one. The two are checked against the SAME buffer at the
-  same ``n_fft``, so the pair pins the divergence rather than two buffer lengths.
+* ``detect_noise_floor`` and ``detect_reverb`` both PAD a buffer shorter than
+  ``n_fft``, as their repairs do; the noise-floor case is checked against the
+  same buffer padded by hand, so the padding is the repair's and not a refusal
+  turned into a zeroed struct.
 * ``detect_crackle`` measures by the median criterion whatever ``mode`` says, and
   ``detect_hum`` always runs the estimation path whatever ``adaptive`` says. Both
   are checked by passing the other setting and getting the same answer.
@@ -148,30 +149,16 @@ class TestDetectNoiseFloor:
         # wrong struct field would not track them.
         assert loud.floor_dbfs - quiet.floor_dbfs > 20.0
 
-    def test_refuses_a_buffer_shorter_than_n_fft(self) -> None:
-        """One half of the sharpest divergence in this family.
-
-        The other half is
-        :meth:`TestDetectReverb.test_pads_a_buffer_shorter_than_n_fft`, which
-        measures the SAME buffer at the SAME ``n_fft`` and accepts it.
-        """
+    def test_pads_a_buffer_shorter_than_n_fft(self) -> None:
+        """A short buffer measures as the same buffer zero-padded to ``n_fft``."""
         short = _tone(length=1000)
+        padded = np.concatenate([short, np.zeros(24, dtype=np.float32)])
 
-        with pytest.raises(libsonare.SonareError):
-            libsonare.mastering_repair_detect_noise_floor(short, SR, n_fft=1024)
+        detected = libsonare.mastering_repair_detect_noise_floor(short, SR, n_fft=1024)
+        reference = libsonare.mastering_repair_detect_noise_floor(padded, SR, n_fft=1024)
 
-    def test_the_refusal_is_about_n_fft_and_not_about_the_length(self) -> None:
-        """The control for the refusal above: the same buffer, a smaller window.
-
-        Without this the refusal would be equally consistent with "short buffers
-        are refused", which is not the rule.
-        """
-        short = _tone(length=1000)
-
-        detected = libsonare.mastering_repair_detect_noise_floor(
-            short, SR, n_fft=256, hop_length=64
-        )
         assert np.isfinite(detected.floor_dbfs)
+        assert detected.floor_dbfs == reference.floor_dbfs
 
     def test_refuses_a_non_power_of_two_window_by_name(self) -> None:
         with pytest.raises(ValueError, match="n_fft"):
@@ -362,20 +349,16 @@ class TestDetectReverb:
         assert np.isfinite(detected.late_decay_ratio_db)
 
     def test_pads_a_buffer_shorter_than_n_fft(self) -> None:
-        """The other half of the divergence pinned in ``TestDetectNoiseFloor``.
+        """A short buffer is measured, as the noise-floor detector measures it.
 
-        Same buffer, same ``n_fft``: the denoise detector refuses it and this one
-        measures it. The result is checked for a non-zero statistic so the
-        acceptance is a measurement rather than the zeroed struct a refused call
-        would leave.
+        The result is checked for a non-zero statistic so the acceptance is a
+        measurement rather than the zeroed struct a refused call would leave.
         """
         short = _tone(length=1000)
 
         detected = libsonare.mastering_repair_detect_reverb(short, SR, n_fft=1024)
 
         assert detected.late_decay_ratio_db != 0.0
-        with pytest.raises(libsonare.SonareError):
-            libsonare.mastering_repair_detect_noise_floor(short, SR, n_fft=1024)
 
     def test_late_predictability_is_zero_unless_the_wpe_stage_runs(self) -> None:
         tone = _tone()

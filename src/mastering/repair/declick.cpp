@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/common/noise_profile.h"
 #include "mastering/repair/run_union.h"
 #include "util/exception.h"
 #include "util/lpc.h"
@@ -146,10 +147,6 @@ constexpr int kDeclickArIterations = 2;
 /// takes the linear fill and per-run compute stays bounded by the cap rather than
 /// by the input.
 constexpr size_t kDeclickMaxArGapSamples = kDeclickMaxClickSamples;
-
-/// @brief Longest one-sided context window handed to the AR solver.
-/// @details Bounds the context even when @c DeclickConfig::lpc_order is large.
-constexpr size_t kDeclickMaxArContextRadius = 8 * kDeclickMaxArGapSamples;
 
 void interpolate_region(std::vector<float>& output, const std::vector<float>& samples, size_t start,
                         size_t end, const DeclickConfig& config, bool use_ar) {
@@ -296,32 +293,57 @@ Audio declick(const Audio& audio, const DeclickConfig& config, DeclickReport* re
 DeclickStereoResult declick_stereo(const Audio& left, const Audio& right,
                                    const DeclickConfig& config) {
   require_stereo_pair(left, right);
-  const auto validated = Validated<DeclickConfig>::make(config);
-  const int sample_rate = left.sample_rate();
-
-  const std::vector<float> left_samples(left.data(), left.data() + left.size());
-  const std::vector<float> right_samples(right.data(), right.data() + right.size());
-  const std::optional<LpcResult> left_model = fit_lpc(left_samples, validated.get());
-  const std::optional<LpcResult> right_model = fit_lpc(right_samples, validated.get());
-  const ChannelAnalysis left_analysis =
-      analyze_channel(left_samples, validated.get(), left_model ? &*left_model : nullptr);
-  const ChannelAnalysis right_analysis =
-      analyze_channel(right_samples, validated.get(), right_model ? &*right_model : nullptr);
-  const std::vector<ClickRun> applied = union_runs(left_analysis.selected, right_analysis.selected);
-
-  std::vector<float> left_output = left_samples;
-  std::vector<float> right_output = right_samples;
-  apply_runs(left_output, left_samples, applied, validated.get(), left_model.has_value());
-  apply_runs(right_output, right_samples, applied, validated.get(), right_model.has_value());
+  const Audio* channels[2] = {&left, &right};
+  std::vector<Audio> out;
+  const std::vector<DeclickReport> reports = declick_linked(channels, 2, &out, config);
 
   DeclickStereoResult result;
-  result.left_report =
-      to_report(left_analysis, applied, left_samples.size(), sample_rate, left_model.has_value());
-  result.right_report = to_report(right_analysis, applied, right_samples.size(), sample_rate,
-                                  right_model.has_value());
-  result.left = Audio::from_vector(std::move(left_output), sample_rate);
-  result.right = Audio::from_vector(std::move(right_output), sample_rate);
+  result.left_report = reports[0];
+  result.right_report = reports[1];
+  result.left = std::move(out[0]);
+  result.right = std::move(out[1]);
   return result;
+}
+
+std::vector<DeclickReport> declick_linked(const Audio* const* channels, size_t channel_count,
+                                          std::vector<Audio>* out, const DeclickConfig& config) {
+  const auto validated = Validated<DeclickConfig>::make(config);
+  if (out == nullptr) {
+    throw SonareException(ErrorCode::InvalidParameter, "declick output must not be null");
+  }
+  if (channels == nullptr || channel_count == 0 || channels[0] == nullptr || channels[0]->empty()) {
+    throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
+  }
+  common::validate_linked_channels(channels, channel_count);
+  const int sample_rate = channels[0]->sample_rate();
+
+  std::vector<std::vector<float>> samples;
+  std::vector<std::optional<LpcResult>> models;
+  std::vector<ChannelAnalysis> analyses;
+  samples.reserve(channel_count);
+  models.reserve(channel_count);
+  analyses.reserve(channel_count);
+  std::vector<ClickRun> applied;
+  for (size_t c = 0; c < channel_count; ++c) {
+    samples.emplace_back(channels[c]->data(), channels[c]->data() + channels[c]->size());
+    models.push_back(fit_lpc(samples[c], validated.get()));
+    analyses.push_back(
+        analyze_channel(samples[c], validated.get(), models[c] ? &*models[c] : nullptr));
+    applied = c == 0 ? analyses[c].selected : union_runs(applied, analyses[c].selected);
+  }
+
+  std::vector<DeclickReport> reports;
+  reports.reserve(channel_count);
+  out->clear();
+  out->reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    std::vector<float> output = samples[c];
+    apply_runs(output, samples[c], applied, validated.get(), models[c].has_value());
+    reports.push_back(
+        to_report(analyses[c], applied, samples[c].size(), sample_rate, models[c].has_value()));
+    out->push_back(Audio::from_vector(std::move(output), sample_rate));
+  }
+  return reports;
 }
 
 }  // namespace sonare::mastering::repair

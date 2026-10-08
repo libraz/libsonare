@@ -21,7 +21,11 @@ class MasteringAudioProfileLoudness(TypedDict):
 
 
 class MasteringAudioProfileSpectral(TypedDict):
-    """Spectral block of :class:`MasteringAudioProfile`."""
+    """Spectral block of :class:`MasteringAudioProfile`.
+
+    The ``*RmsDb`` band levels are dBFS on the mean-square convention: a
+    full-scale sine reads -3.01 dBFS in its band.
+    """
 
     subRmsDb: float
     lowRmsDb: float
@@ -88,6 +92,22 @@ class MasteringAudioProfile(TypedDict):
     spectral: MasteringAudioProfileSpectral
     dynamics: MasteringAudioProfileDynamics
     defects: MasteringAudioProfileDefects
+
+
+class MasteringRepairAnalysis(TypedDict):
+    """Result of :func:`mastering_repair_analyze`.
+
+    ``recommended`` lists the stages the measurement supports, in application
+    order, each a ``{"stage": ..., <setting>: ...}`` dict carrying every setting,
+    ready for :func:`mastering_repair_apply`. Dereverb is never recommended.
+    """
+
+    defects: MasteringAudioProfileDefects
+    channels: list[MasteringAudioProfileDefects]
+    declipThresholdSafe: bool
+    integratedLufs: float
+    recommended: list[dict[str, Any]]
+    explanation: list[str]
 
 
 class MasteringChainConfigDocument(TypedDict):

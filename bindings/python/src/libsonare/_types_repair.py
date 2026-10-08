@@ -391,3 +391,32 @@ class DereverbLinkedResult:
 
     channels: list[NDArray[np.float32]]
     report: DereverbReport
+
+
+@dataclass(frozen=True, slots=True)
+class RepairStageReports:
+    """One stage a repair application ran and what it reported.
+
+    ``scope`` is ``"channel"`` with one report per channel, in input order, or
+    ``"linked"`` with exactly one report for the whole set: denoise and dereverb
+    apply one mask to every channel.
+    """
+
+    stage: str
+    scope: str
+    reports: list[
+        DeclipReport
+        | DeclickReport
+        | DecrackleReport
+        | DehumReport
+        | DenoiseReport
+        | DereverbReport
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class RepairApplyResult:
+    """Repaired channels, in input order, and one entry per applied stage, in application order."""
+
+    channels: list[NDArray[np.float32]]
+    reports: list[RepairStageReports]

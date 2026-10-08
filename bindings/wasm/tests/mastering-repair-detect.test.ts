@@ -5,10 +5,9 @@
  *
  * These measure without repairing and allocate nothing, so there is no ownership question
  * here and no output buffer to compare. What there IS to get wrong is which config field
- * reaches the answer and which does not, and the family does not answer a short or an empty
- * buffer the same way at every entry: the noise-floor detector refuses a buffer shorter than
- * `nFft` while the reverb detector pads one. Both sides of that pair are covered against the
- * SAME buffer, so neither result is a property of the fixture.
+ * reaches the answer and which does not. A buffer shorter than `nFft` is padded by both the
+ * noise-floor and the reverb detector, and the noise-floor case is checked against the same
+ * buffer padded by hand.
  *
  * Every "the knob is inert" assertion is paired with a control showing the detection was
  * non-empty, so equality reads as the field being unread rather than as nothing having been
@@ -261,19 +260,16 @@ describe('repair detection (WASM)', () => {
       expect(loud.floorDbfs).toBeGreaterThan(quiet.floorDbfs + 20);
     });
 
-    it('refuses a buffer shorter than nFft, which the reverb detector accepts', () => {
-      // The sharpest divergence in the family, so both sides are measured
-      // against the SAME buffer: 512 samples under the default nFft of 1024.
+    it('pads a buffer shorter than nFft, as the reverb detector does', () => {
+      // 512 samples under the default nFft of 1024 measure as the same buffer zero-padded.
       const short = sine(440, 512, 0.5, 0, TRIM_SR);
+      const padded = new Float32Array(1024);
+      padded.set(short);
 
-      expect(() => masteringRepairDetectNoiseFloor(short, TRIM_SR)).toThrow(/n_fft|nFft/);
+      expect(masteringRepairDetectNoiseFloor(short, TRIM_SR).floorDbfs).toBe(
+        masteringRepairDetectNoiseFloor(padded, TRIM_SR).floorDbfs,
+      );
       expect(() => masteringRepairDetectReverb(short, TRIM_SR)).not.toThrow();
-
-      // The control for the refusal: the same buffer passes once nFft is small
-      // enough to fit inside it, so the throw is about the length rather than
-      // about this buffer.
-      const fitted = masteringRepairDetectNoiseFloor(short, TRIM_SR, { nFft: 256, hopLength: 64 });
-      expect(Number.isFinite(fitted.floorDbfs)).toBe(true);
     });
 
     it('rejects a non-power-of-two nFft and a non-positive hopLength by name', () => {

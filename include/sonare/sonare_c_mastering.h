@@ -1281,7 +1281,9 @@ SonareError sonare_mastering_repair_declick_stereo(const float* left, const floa
 
 /// @brief Offline STFT-domain classical denoiser
 ///        (LogMMSE / MMSE-STSA / SpectralSubtraction).
-/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats.
+/// @details Output buffer is heap-allocated; release with @ref sonare_free_floats. An
+///   input shorter than @c config->n_fft is padded for analysis and the output
+///   trimmed back to @p length.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_denoise_classical(const float* samples, size_t length,
                                                       int sample_rate,
@@ -1311,9 +1313,8 @@ typedef struct {
 /// @brief Measures the noise floor without denoising.
 /// @details Runs the STFT and the configured noise estimator -- the two stages the
 ///   repair runs -- and stops before the gain mask, which is why the attenuation
-///   figures live on @ref SonareDenoiseReport rather than here. Needs at least
-///   @c config.n_fft samples and refuses a shorter buffer, unlike
-///   @ref sonare_mastering_repair_detect_reverb, which pads one.
+///   figures live on @ref SonareDenoiseReport rather than here. A buffer shorter
+///   than @c config.n_fft is padded for analysis, as the repair pads it.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_noise_floor(const float* samples, size_t length,
                                                        int sample_rate,
@@ -1373,8 +1374,8 @@ typedef struct {
 ///   channel: a pair would be two copies of one measurement and would read as
 ///   though the two could differ.
 ///
-///   Needs at least @c config->n_fft samples and rejects a shorter input, unlike
-///   @ref sonare_mastering_repair_dereverb_classical_stereo, which pads one.
+///   An input shorter than @c config->n_fft is padded for analysis and the output
+///   trimmed back to @p length, as the dereverb pair does.
 ///
 ///   Which config fields are live depends on @c mode: @c over_subtraction and
 ///   @c spectral_floor are read only by SONARE_DENOISE_MODE_SPECTRAL_SUBTRACTION,
@@ -1393,8 +1394,8 @@ SonareError sonare_mastering_repair_denoise_classical_stereo(
 ///   moves however many channels there are. A @p channel_count of 1 reproduces
 ///   @ref sonare_mastering_repair_denoise_classical bit for bit.
 ///
-///   Needs at least @c config->n_fft samples and rejects a shorter input, unlike
-///   @ref sonare_mastering_repair_dereverb_classical_linked, which pads one.
+///   An input shorter than @c config->n_fft is padded for analysis and the output
+///   trimmed back to @p length, as the dereverb entry does.
 ///
 ///   @ref SonareNoiseDetection carries absolute levels, and they are the SET's:
 ///   the floor is referred to the summed mean square of every channel, so the
@@ -1976,6 +1977,66 @@ SonareError sonare_mastering_repair_trim_silence_stereo(const float* left, const
                                                         size_t length, int sample_rate,
                                                         const SonareTrimSilenceConfig* config,
                                                         SonareTrimSilenceStereoResult* out);
+
+// ============================================================================
+// Mastering: one repair analysis and one repair application, any channel count
+// ----------------------------------------------------------------------------
+// The per-stage entries above stay the low-level layer. These two take planar
+// channels and speak JSON: a stage's settings are its catalog parameters
+// (`repair.declip`, `repair.declick`, `repair.decrackle`, `repair.dehum`,
+// `repair.denoiseClassical`, `repair.dereverbClassical`), enums by choice name
+// or wire value.
+// ============================================================================
+
+/// @brief Measures every channel's repair defects and recommends stages.
+/// @details Runs the audio profile's six detectors on each channel and
+///   aggregates them as @ref sonare_mastering_audio_profile_stereo does, then
+///   applies the assistant's repair-stage selection. The result is
+///   `{ defects, channels, declipThresholdSafe, integratedLufs, recommended,
+///   explanation }`: the aggregate and per-channel defect blocks in the profile's
+///   shape; whether a declip at the flat level leaves louder audio alone (when
+///   false, declip is withheld from `recommended`); the programme loudness the
+///   noise rule compares against; the recommended stages in application order as
+///   `{ stage, ...settings }` objects carrying every setting, ready to pass to
+///   @ref sonare_mastering_repair_apply; and why each stage was or was not
+///   chosen. Dereverb is never recommended: its statistic does not separate a
+///   sustaining dry signal from a reverberant one.
+/// @param channels @p channel_count non-null planes of @p length samples.
+/// @param request_json NULL for defaults, or a JSON object. Key:
+///   `preferStreamingSafe` (boolean, default true) makes a recommended denoise
+///   track its noise frame by frame.
+/// @param json_out Receives the analysis; release with @ref sonare_free_string.
+///   Set to NULL before any validation.
+SonareError sonare_mastering_repair_analyze(const float* const* channels, size_t channel_count,
+                                            size_t length, int sample_rate,
+                                            const char* request_json, char** json_out);
+
+/// @brief Applies a repair stage list to every channel.
+/// @details @p stages_json is an array of `{ stage, ...settings }` objects with
+///   `stage` one of `declip`, `declick`, `decrackle`, `dehum`, `denoise`,
+///   `dereverb`. The stages run in that fixed order whatever order the array
+///   gives; a stage named twice, an unknown stage and an unknown setting are
+///   refused with @c SONARE_ERROR_INVALID_PARAMETER. Declip, declick and dehum
+///   decide over the whole channel set and report per channel, decrackle runs
+///   each channel alone, and denoise and dereverb apply one linked mask. The
+///   reports are `[{ stage, scope, reports }]` in application order, `scope`
+///   being `"channel"` with one report per channel or `"linked"` with exactly
+///   one for the set, each report in the per-stage entry's field names.
+///
+///   @p callback is called after each stage with the fraction done and
+///   `repair.<stage>`; when @p cancel_cb then returns nonzero the call returns
+///   @c SONARE_ERROR_CANCELLED. The input is copied before the first callback.
+/// @param out_channels @p channel_count caller-owned planes of @p length
+///   samples, written only on success, so they may alias @p channels.
+/// @param reports_json_out Receives the reports; release with
+///   @ref sonare_free_string. Set to NULL before any validation.
+/// @param user_data Passed back to @p callback unchanged, as @p cancel_user_data
+///   is to @p cancel_cb. Either callback may be NULL; neither is retained.
+SonareError sonare_mastering_repair_apply(const float* const* channels, size_t channel_count,
+                                          size_t length, int sample_rate, const char* stages_json,
+                                          SonareMasteringProgressCallback callback, void* user_data,
+                                          float* const* out_channels, char** reports_json_out,
+                                          SonareCancelCallback cancel_cb, void* cancel_user_data);
 
 // ============================================================================
 // Mastering: offline dynamics processors (compressor, gate, transient_shaper)

@@ -210,26 +210,17 @@ class TestMasteringRepairDenoiseClassicalStereo:
         assert run("spectralSubtraction", enabled=True) == run("spectralSubtraction", enabled=False)
         assert run("logMmse", enabled=True) != run("logMmse", enabled=False)
 
-    def test_rejects_input_shorter_than_n_fft(self) -> None:
-        """Denoise REJECTS a short input; dereverb pads one.
-
-        Opposite behaviour behind a same-looking call, so this is the assertion
-        that catches the stereo wrapper being wired to the wrong core function:
-        ``dereverb_classical_stereo`` would return a result here.
-        """
+    def test_pads_an_input_shorter_than_n_fft(self) -> None:
+        """Denoise pads a short input, as dereverb does, and keeps its length."""
         left = _noisy(440.0, seed=31)[:256]
         right = _noisy(660.0, seed=32)[:256]
 
-        with pytest.raises(libsonare.SonareError):
-            libsonare.mastering_repair_denoise_classical_stereo(left, right, SR, n_fft=1024)
-
-        # Exactly n_fft samples is the boundary and is accepted, so the refusal
-        # above is about the length rule and not about a short buffer in
-        # general.
-        at_boundary = libsonare.mastering_repair_denoise_classical_stereo(
-            _noisy(440.0, seed=31)[:1024], _noisy(660.0, seed=32)[:1024], SR, n_fft=1024
-        )
-        assert at_boundary.length == 1024
+        result = libsonare.mastering_repair_denoise_classical_stereo(left, right, SR, n_fft=1024)
+        assert result.length == 256
+        assert len(result.left) == 256
+        assert len(result.right) == 256
+        assert np.isfinite(result.left).all()
+        assert np.isfinite(result.right).all()
 
     def test_explicit_kwargs(self) -> None:
         left, right = _pair()

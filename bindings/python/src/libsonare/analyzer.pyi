@@ -53,6 +53,7 @@ from .types import (
     MasteringInsertParamInfo,
     MasteringInsertTiming,
     MasteringProcessorCatalogEntry,
+    MasteringRepairAnalysis,
     MasteringResult,
     MasteringStereoResult,
     MaterialPresetName,
@@ -73,6 +74,7 @@ from .types import (
     PitchClass,
     PitchResult,
     ReassignedSpectrogramResult,
+    RepairApplyResult,
     ReverbDetection,
     RhythmResult,
     RirResult,
@@ -1366,6 +1368,7 @@ class Mixer:
     def tail_samples(self) -> int: ...
     def latency_samples(self) -> int: ...
     def drain_tail_stereo(self, num_samples: int) -> MixerStereoResult: ...
+    def flush_meters(self) -> None: ...
     def to_scene_json(self) -> str: ...
     def close(self) -> None: ...
     def __enter__(self) -> Mixer: ...
@@ -2103,6 +2106,20 @@ def mastering_repair_denoise_classical_linked(
     speech_presence_gain: bool = True,
     gain_smoothing: bool = True,
 ) -> DenoiseLinkedResult: ...
+def mastering_repair_analyze(
+    channels: PlanarChannels,
+    sample_rate: int = 22050,
+    *,
+    prefer_streaming_safe: bool = True,
+) -> MasteringRepairAnalysis: ...
+def mastering_repair_apply(
+    channels: PlanarChannels,
+    sample_rate: int = 22050,
+    *,
+    stages: Sequence[Mapping[str, Any]],
+    on_progress: Callable[[float, str], None] | None = None,
+    cancel: Callable[[], bool] | None = None,
+) -> RepairApplyResult: ...
 def mastering_repair_declip(
     samples: FloatSamples,
     sample_rate: int = 22050,

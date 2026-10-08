@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "core/audio.h"
 
@@ -22,9 +23,14 @@ inline constexpr float kDeclickMaxNeighborRatio = 100.0f;
 /// @details Above this the residual criterion selects nothing and only the threshold mask remains.
 inline constexpr float kDeclickMaxResidualRatio = 1000.0f;
 
-/// @brief Largest accepted @c DeclickConfig::lpc_order; the corpus runs use 20 and declip's default
-/// is 36.
-inline constexpr int kDeclickMaxLpcOrder = 36;
+/// @brief Longest one-sided context window handed to the AR click fill.
+/// @details Bounds the context even when @c DeclickConfig::lpc_order is large.
+inline constexpr size_t kDeclickMaxArContextRadius = 8 * kDeclickMaxClickSamples;
+
+/// @brief Largest accepted @c DeclickConfig::lpc_order.
+/// @details The AR fill lowers the order to a quarter of its context, which spans at most two
+/// capped radii plus the gap, so this is the largest order it runs as requested at every gap.
+inline constexpr int kDeclickMaxLpcOrder = static_cast<int>(2 * kDeclickMaxArContextRadius / 4);
 
 struct DeclickConfig {
   float threshold = 0.8f;
@@ -98,5 +104,13 @@ struct DeclickStereoResult {
 ///   channels agree a click is there.
 DeclickStereoResult declick_stereo(const Audio& left, const Audio& right,
                                    const DeclickConfig& config = {});
+
+/// @brief Declicks any number of channels, repairing the union of every channel's selected runs.
+/// @details The N-channel form of @ref declick_stereo with the same guarantee over the whole set.
+///   One channel reproduces @ref declick and two reproduce @ref declick_stereo bit for bit.
+/// @param out Receives one declicked channel per input channel, in input order.
+/// @return One report per channel, in input order.
+std::vector<DeclickReport> declick_linked(const Audio* const* channels, size_t channel_count,
+                                          std::vector<Audio>* out, const DeclickConfig& config);
 
 }  // namespace sonare::mastering::repair

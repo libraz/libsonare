@@ -43,9 +43,10 @@ constexpr unsigned int kMaxProbedParams = 4096u;
 // covered processor silently loses its override. Removing a name from this list
 // once its set_parameter() lands will tighten coverage automatically.
 bool IsZeroParamAllowed(const std::string& name) {
-  // Every factory insert now exposes at least one automatable parameter
-  // (effects.reverb.convolution gained a dry/wet mix), so no name is exempt.
-  static const std::array<const char*, 0> kZeroParam = {};
+  // The repair inserts take every setting at construction; a dehum, denoise or dereverb
+  // setting can move the latency they report.
+  static const std::array<const char*, 4> kZeroParam = {
+      "repair.decrackle", "repair.dehum", "repair.denoiseClassical", "repair.dereverbClassical"};
   return std::any_of(kZeroParam.begin(), kZeroParam.end(),
                      [&name](const char* entry) { return name == entry; });
 }
@@ -94,6 +95,20 @@ void ProcessBlock(ProcessorBase& processor, std::vector<std::vector<float>>& cha
     ptrs[static_cast<size_t>(ch)] = channels[static_cast<size_t>(ch)].data();
   }
   processor.process(ptrs.data(), kNumChannels, kBlockSize);
+}
+
+// Drives enough copies of @p stimulus through @p processor to clear its reported latency,
+// returning every output block, so a delayed insert's response reaches the comparison.
+std::vector<std::vector<std::vector<float>>> ProcessPastLatency(
+    ProcessorBase& processor, const std::vector<std::vector<float>>& stimulus) {
+  const int blocks = 1 + (std::max(processor.latency_samples(), 0) + kBlockSize - 1) / kBlockSize;
+  std::vector<std::vector<std::vector<float>>> outputs;
+  for (int b = 0; b < blocks; ++b) {
+    auto block = stimulus;
+    ProcessBlock(processor, block);
+    outputs.push_back(std::move(block));
+  }
+  return outputs;
 }
 
 float MaxAbsDiff(const std::vector<std::vector<float>>& a,
@@ -261,8 +276,7 @@ TEST_CASE("All factory inserts expose set_parameter contract",
 
       auto baseline = MakePrepared(name, activation);
       REQUIRE(baseline != nullptr);
-      auto reference = stimulus;
-      ProcessBlock(*baseline, reference);
+      const auto reference = ProcessPastLatency(*baseline, stimulus);
 
       bool observed_change = false;
       // Bidirectional dB-scale magnitudes. Negative values are essential for
@@ -277,9 +291,12 @@ TEST_CASE("All factory inserts expose set_parameter contract",
           // A fresh instance per id keeps stateful processors (reverbs, filters,
           // envelope followers) from carrying detection state between probes.
           REQUIRE(perturbed->set_parameter(id, value));
-          auto output = stimulus;
-          ProcessBlock(*perturbed, output);
-          if (MaxAbsDiff(reference, output) > kDiffTolerance) {
+          const auto output = ProcessPastLatency(*perturbed, stimulus);
+          float worst = 0.0f;
+          for (size_t b = 0; b < reference.size() && b < output.size(); ++b) {
+            worst = std::max(worst, MaxAbsDiff(reference[b], output[b]));
+          }
+          if (worst > kDiffTolerance) {
             observed_change = true;
             break;
           }

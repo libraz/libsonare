@@ -90,8 +90,8 @@ export function masteringRepairDereverbClassical(
  * Every field of that report is a ratio or a fraction, so unlike the denoise pair nothing in
  * it shifts with the channel count: a stereo figure here is comparable against a mono one.
  *
- * An input shorter than `nFft` is PADDED for analysis rather than rejected, the opposite of
- * {@link masteringRepairDenoiseClassicalStereo}.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
+ * length, as {@link masteringRepairDenoiseClassicalStereo} does.
  *
  * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
  * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
@@ -160,8 +160,8 @@ export function masteringRepairDereverbClassicalStereo(
  * {@link masteringRepairDenoiseClassicalLinked}, whose `detected` levels are absolute and move by
  * `10*log10(N)`.
  *
- * An input shorter than `nFft` is PADDED for analysis rather than rejected — again the opposite
- * of that entry, which refuses one.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
+ * length, as that entry does.
  *
  * Two report fields are gated on the WPE stage, which is off unless `wpeEnabled` is set:
  * `detected.latePredictability` and `wpePredictorNorm` are then both exactly 0, which is the
@@ -275,8 +275,8 @@ export interface MasteringRepairDetectReverbRequest extends DereverbClassicalOpt
  * NOT an ISO 3382 reverberation time — use `estimateRoom` for a graded RT60. This reports what
  * {@link masteringRepairDereverbClassical} itself measures while deciding how much to subtract.
  *
- * A buffer shorter than `nFft` is PADDED for analysis, as the repair pads it, which is the
- * opposite of {@link masteringRepairDetectNoiseFloor}.
+ * A buffer shorter than `nFft` is padded for analysis, as the repair pads it and as
+ * {@link masteringRepairDetectNoiseFloor} does.
  *
  * `latePredictability` comes from the WPE stage, which runs only under `wpeEnabled` — clear by
  * default — and then only its covariance and solve; the prediction is never subtracted. A

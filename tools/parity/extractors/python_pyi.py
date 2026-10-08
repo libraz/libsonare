@@ -227,6 +227,7 @@ _SCANNED: tuple[str, ...] = (
     "_effects_repair_impulsive.py",
     "_effects_repair_noise.py",
     "_effects_repair_dereverb.py",
+    "_effects_repair_session.py",
     "_effects_repair_trim.py",
     "mixing_assistant.pyi",
     "mixing_assistant.py",

@@ -11,6 +11,7 @@
 #include "mastering/common/noise_profile.h"
 #include "mastering/common/noise_tracker.h"
 #include "mastering/common/stft_stream.h"
+#include "mastering/repair/analysis_padding.h"
 #include "mastering/repair/denoise_internal.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -29,6 +30,12 @@ MedianGainSmoother::MedianGainSmoother(int bins)
       raw_(3, std::vector<double>(static_cast<size_t>(std::max(bins, 0)), 1.0)),
       out_(static_cast<size_t>(std::max(bins, 0)), 1.0) {
   window_.reserve(9);
+}
+
+void MedianGainSmoother::reset() noexcept {
+  pushed_ = 0;
+  for (auto& frame : raw_) std::fill(frame.begin(), frame.end(), 1.0);
+  std::fill(out_.begin(), out_.end(), 1.0);
 }
 
 double* MedianGainSmoother::slot(int frame) { return raw_[static_cast<size_t>(frame % 3)].data(); }
@@ -537,6 +544,13 @@ GainStage::GainStage(int bins, const DenoiseClassicalConfig& config)
 
 int GainStage::latency() const { return smoother_ ? 1 : 0; }
 
+void GainStage::reset() noexcept {
+  std::fill(prev_clean_power_.begin(), prev_clean_power_.end(), 0.0);
+  std::fill(raw_.begin(), raw_.end(), 1.0);
+  std::fill(out_.begin(), out_.end(), 1.0);
+  if (smoother_ != nullptr) smoother_->reset();
+}
+
 const double* GainStage::push(const double* power_frame, const double* noise_frame) {
   compute_raw(power_frame, noise_frame, raw_.data());
   if (smoother_ == nullptr) return finish(raw_.data());
@@ -671,12 +685,9 @@ NoiseDetection detect_noise_floor(const float* samples, std::size_t size, int sa
   if (sample_rate <= 0) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
-  if (size < static_cast<size_t>(validated->n_fft)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise input must contain at least n_fft samples");
-  }
 
-  const Audio audio = Audio::from_buffer(samples, size, sample_rate);
+  const Audio audio =
+      padded_for_analysis(Audio::from_buffer(samples, size, sample_rate), validated->n_fft);
   const Audio* channels[1] = {&audio};
   LinkedFrameReader reader(channels, 1, analysis_config(validated.get()));
   const int bins = reader.n_bins();
@@ -696,8 +707,9 @@ NoiseDetection detect_noise_floor(const float* samples, std::size_t size, int sa
       power_sum[static_cast<size_t>(b)] += static_cast<double>(power_f[b]);
     }
   }
-  return to_detection(common::noise_floor_dbfs_from_sums(
-      noise_sum.data(), power_sum.data(), bins, frames, mean_square(samples, size), sample_rate));
+  return to_detection(
+      common::noise_floor_dbfs_from_sums(noise_sum.data(), power_sum.data(), bins, frames,
+                                         mean_square(audio.data(), audio.size()), sample_rate));
 }
 
 Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config) {
@@ -710,19 +722,16 @@ Audio denoise_classical(const Audio& audio, const DenoiseClassicalConfig& config
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   const auto validated = Validated<DenoiseClassicalConfig>::make(config);
 
-  if (static_cast<int>(audio.size()) < validated->n_fft) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise input must contain at least n_fft samples");
-  }
-
+  // A short block takes the same STFT path, trimmed back to the caller's length.
+  const Audio analysis = padded_for_analysis(audio, validated->n_fft);
   const StftConfig stft_config = analysis_config(validated.get());
-  const Audio* channels[1] = {&audio};
+  const Audio* channels[1] = {&analysis};
   LinkedFrameReader reader(channels, 1, stft_config);
   if (reader.n_bins() == 0 || reader.n_frames() == 0) return audio;
 
   std::vector<Audio> out;
   denoise_channels(reader, audio.sample_rate(), audio.size(), stft_config, validated.get(),
-                   mean_square(audio.data(), audio.size()), &out, report);
+                   mean_square(analysis.data(), analysis.size()), &out, report);
   return std::move(out[0]);
 }
 
@@ -737,11 +746,6 @@ DenoiseReport denoise_classical_linked(const Audio* const* channels, std::size_t
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
   const size_t length = channels[0]->size();
-  if (static_cast<int>(length) < validated->n_fft) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "denoise input must contain at least n_fft samples");
-  }
-
   for (size_t c = 1; c < channel_count; ++c) {
     if (channels[c] == nullptr) {
       throw SonareException(ErrorCode::InvalidParameter,
@@ -757,8 +761,17 @@ DenoiseReport denoise_classical_linked(const Audio* const* channels, std::size_t
     }
   }
 
+  // After the length check, which padding would otherwise satisfy for short channels.
+  std::vector<Audio> analysis;
+  std::vector<const Audio*> analysis_pointers;
+  analysis.reserve(channel_count);
+  for (size_t c = 0; c < channel_count; ++c) {
+    analysis.push_back(padded_for_analysis(*channels[c], validated->n_fft));
+  }
+  for (const Audio& channel : analysis) analysis_pointers.push_back(&channel);
+
   const StftConfig stft_config = analysis_config(validated.get());
-  LinkedFrameReader reader(channels, channel_count, stft_config);
+  LinkedFrameReader reader(analysis_pointers.data(), channel_count, stft_config);
 
   DenoiseReport report;
   if (reader.n_bins() == 0 || reader.n_frames() == 0) {
@@ -768,8 +781,8 @@ DenoiseReport denoise_classical_linked(const Audio* const* channels, std::size_t
   }
 
   double summed_mean_square = 0.0;
-  for (size_t c = 0; c < channel_count; ++c) {
-    summed_mean_square += mean_square(channels[c]->data(), channels[c]->size());
+  for (const Audio& channel : analysis) {
+    summed_mean_square += mean_square(channel.data(), channel.size());
   }
   denoise_channels(reader, channels[0]->sample_rate(), length, stft_config, validated.get(),
                    summed_mean_square, out, &report);

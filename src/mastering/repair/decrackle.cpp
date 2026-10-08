@@ -147,10 +147,8 @@ std::vector<float> wavelet_shrink_once(const std::vector<float>& samples,
 /// itself and its two neighbours by more than threshold. The detector and the
 /// median repair both call it, so they cannot disagree about what crackle is.
 bool is_crackle(const std::vector<float>& samples, size_t index, float threshold, float* median) {
-  std::array<float, 3> window = {samples[index - 1], samples[index], samples[index + 1]};
-  std::sort(window.begin(), window.end());
-  *median = window[1];
-  return std::abs(samples[index] - *median) > threshold;
+  return detail::crackle_median(samples[index - 1], samples[index], samples[index + 1], threshold,
+                                median);
 }
 
 size_t count_crackle(const std::vector<float>& samples, float threshold) {
@@ -195,6 +193,17 @@ std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_r
 }
 
 }  // namespace
+
+namespace detail {
+
+bool crackle_median(float before, float current, float after, float threshold, float* median) {
+  std::array<float, 3> window = {before, current, after};
+  std::sort(window.begin(), window.end());
+  *median = window[1];
+  return std::abs(current - *median) > threshold;
+}
+
+}  // namespace detail
 
 namespace detail {
 

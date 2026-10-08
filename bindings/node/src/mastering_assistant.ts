@@ -24,6 +24,39 @@ export interface MasteringAssistantSuggestRequest {
   params?: MasteringAssistantParams;
 }
 
+/** The repair-defect block of {@link MasteringAudioProfile}, and of each channel of a repair analysis. */
+export interface MasteringAudioProfileDefects {
+  measured: boolean;
+  clickCount: number;
+  clickRejected: number;
+  clickLongestRunSamples: number;
+  clickPerSecond: number;
+  crackleSampleCount: number;
+  crackleSampleFraction: number;
+  cracklePerSecond: number;
+  clipSampleCount: number;
+  clipRunCount: number;
+  clipLongestRunSamples: number;
+  clipSampleFraction: number;
+  clipFlatRunCount: number;
+  clipFlatSampleCount: number;
+  clipLongestFlatRunSamples: number;
+  /**
+   * Level the flat runs (at least -40 dBFS) sit at: the largest run level once the two
+   * highest runs are set aside.
+   */
+  clipFlatLevel: number;
+  noiseFloorDbfs: number;
+  noiseBandPeakDbfs: number;
+  noiseBandPeakIndex: number;
+  humFundamentalHz: number;
+  humFundamentalProminence: number;
+  humHarmonics: number;
+  humFundamentalDbfs: number;
+  humPeakHarmonicDbfs: number;
+  lateDecayRatioDb: number;
+}
+
 /**
  * The shape {@link masteringAudioProfile}'s JSON parses to.
  *
@@ -42,6 +75,7 @@ export interface MasteringAudioProfile {
     truePeakDb: number;
     crestFactorDb: number;
   };
+  /** Band levels (`*RmsDb`) are dBFS, mean square: a full-scale sine reads -3.01 dBFS in its band. */
   spectral: {
     subRmsDb: number;
     lowRmsDb: number;
@@ -66,37 +100,7 @@ export interface MasteringAudioProfile {
    * either `detectDefects` was not asked for or the input was too short — and
    * every other field is then at its default rather than a reading.
    */
-  defects: {
-    measured: boolean;
-    clickCount: number;
-    clickRejected: number;
-    clickLongestRunSamples: number;
-    clickPerSecond: number;
-    crackleSampleCount: number;
-    crackleSampleFraction: number;
-    cracklePerSecond: number;
-    clipSampleCount: number;
-    clipRunCount: number;
-    clipLongestRunSamples: number;
-    clipSampleFraction: number;
-    clipFlatRunCount: number;
-    clipFlatSampleCount: number;
-    clipLongestFlatRunSamples: number;
-    /**
-     * Level the flat runs (at least -40 dBFS) sit at: the largest run level once the two
-     * highest runs are set aside.
-     */
-    clipFlatLevel: number;
-    noiseFloorDbfs: number;
-    noiseBandPeakDbfs: number;
-    noiseBandPeakIndex: number;
-    humFundamentalHz: number;
-    humFundamentalProminence: number;
-    humHarmonics: number;
-    humFundamentalDbfs: number;
-    humPeakHarmonicDbfs: number;
-    lateDecayRatioDb: number;
-  };
+  defects: MasteringAudioProfileDefects;
 }
 
 /**

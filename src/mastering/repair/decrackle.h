@@ -94,6 +94,11 @@ DecrackleStereoResult decrackle_stereo(const Audio& left, const Audio& right,
 
 namespace detail {
 
+/// @brief This module's definition of the defect on one sample and its two neighbours.
+/// @return Whether @p current deviates from the median of the three by more than @p threshold;
+///   @p median receives that median either way.
+bool crackle_median(float before, float current, float after, float threshold, float* median);
+
 /// How many cyclic shifts the wavelet mode averages over. The Haar pair grid is
 /// anchored to fixed sample indices, so blocking and pseudo-Gibbs artefacts land
 /// on those boundaries; averaging over this many phases spreads them out.

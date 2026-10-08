@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   capabilityCatalog,
+  ErrorCode,
   masteringAmpPresetCatalog,
   masteringInsertParamInfo,
   masteringInsertTiming,
@@ -117,5 +118,39 @@ describe('mastering amp-sim preset catalog', () => {
     first[0].params.drive = -1;
     const second = masteringAmpPresetCatalog();
     expect(second[0].params.drive).toBe(originalDrive);
+  });
+});
+
+describe('the causal repair stages reach the generic insert path', () => {
+  it('reports each repair insert latency from its configuration', () => {
+    expect(masteringInsertTiming('repair.decrackle', {}, 48000).latencySamples).toBe(1);
+    expect(masteringInsertTiming('repair.dehum', {}, 48000).latencySamples).toBe(0);
+    expect(
+      masteringInsertTiming('repair.dehum', { adaptive: true, frameSize: 1024 }, 48000)
+        .latencySamples,
+    ).toBe(1024);
+    expect(
+      masteringInsertTiming('repair.dereverbClassical', { nFft: 512 }, 48000).latencySamples,
+    ).toBe(511);
+    // n_fft - 1 plus the hop the gain smoothing lags by.
+    expect(masteringInsertTiming('repair.denoiseClassical', {}, 48000).latencySamples).toBe(1279);
+  });
+
+  it('publishes only the causal choices and refuses an offline-only setting', () => {
+    const mode = masteringInsertParamInfo('repair.decrackle').find(
+      (param) => param.name === 'mode',
+    );
+    expect(mode?.choices?.map((choice) => choice.name)).toEqual(['median']);
+    expect(() =>
+      masteringInsertTiming('repair.dereverbClassical', { wpeEnabled: true }, 48000),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    // The quantile estimator (0) ranks a whole signal; the insert defaults to spp.
+    expect(() =>
+      masteringInsertTiming('repair.denoiseClassical', { noiseEstimator: 0 }, 48000),
+    ).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
+    const estimator = masteringInsertParamInfo('repair.denoiseClassical').find(
+      (param) => param.name === 'noiseEstimator',
+    );
+    expect(estimator?.choices?.map((choice) => choice.name)).not.toContain('quantile');
   });
 });

@@ -50,6 +50,10 @@
 #include "mastering/multiband/multiband_imager.h"
 #include "mastering/multiband/multiband_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/repair/decrackle_streaming.h"
+#include "mastering/repair/dehum_streaming.h"
+#include "mastering/repair/denoise_streaming.h"
+#include "mastering/repair/dereverb_streaming.h"
 #include "mastering/saturation/amp_presets.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/saturation/bitcrusher.h"
@@ -1182,6 +1186,32 @@ std::unique_ptr<Processor> build_voice(const std::string& name, const ParamMap& 
 
 namespace {
 
+// The denoise insert's settings. Its estimator defaults to Spp, the recursive one that tracks no
+// minimum: the offline default, Quantile, ranks a whole signal and the insert refuses it by name.
+repair::DenoiseClassicalConfig streaming_denoise_config(const ParamMap& params) {
+  repair::DenoiseClassicalConfig config;
+  config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+  SONARE_FIELDS_DENOISE_CLASSICAL(SONARE_READ_FIELD)
+  detail::note_pair_order(params, "hopLength", detail::Relation::Le, "nFft");
+  return config;
+}
+
+// The repair stages with a causal setting. Each refuses an offline-only setting by name rather
+// than substituting a streaming one, so a measured descriptor lists only what the insert takes.
+std::unique_ptr<Processor> build_repair(const std::string& name, const ParamMap& params) {
+  if (name == "repair.decrackle") {
+    return make<repair::StreamingDecrackle>(detail::decrackle_config(params));
+  }
+  if (name == "repair.denoiseClassical") {
+    return make<repair::StreamingDenoise>(streaming_denoise_config(params));
+  }
+  if (name == "repair.dehum") return make<repair::StreamingDehum>(detail::dehum_config(params));
+  if (name == "repair.dereverbClassical") {
+    return make<repair::StreamingDereverb>(detail::dereverb_classical_config(params));
+  }
+  return nullptr;
+}
+
 std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
                                         const Value* json_root = nullptr) {
   if (auto p = build_dynamics(name, params)) return p;
@@ -1192,6 +1222,7 @@ std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap&
   if (auto p = build_utility(name, params)) return p;
   if (auto p = build_maximizer(name, params)) return p;
   if (auto p = build_multiband(name, params)) return p;
+  if (auto p = build_repair(name, params)) return p;
 #ifdef SONARE_HAVE_FX
   if (name == "effects.gsEfx") return build_gs_efx(params);
   if (auto p = build_effects(name, params, json_root)) return p;
@@ -1347,6 +1378,10 @@ std::vector<std::string> insert_factory_names() {
       "multiband.imager",
       "multiband.saturation",
       "multiband.dynamicEq",
+      "repair.decrackle",
+      "repair.denoiseClassical",
+      "repair.dehum",
+      "repair.dereverbClassical",
 #ifdef SONARE_HAVE_FX
       "effects.gsEfx",
       // "effects.reverb.plate" is an alias for "effects.reverb.dattorro" (same
@@ -1431,21 +1466,40 @@ bool read_repair_config(const std::string& name, const ParamMap& params) {
   return true;
 }
 
+// Set while the offline descriptor of a repair stage is measured. A stage with an insert form
+// is otherwise measured as that insert, which refuses the offline-only settings.
+thread_local bool measuring_offline_repair = false;
+
+class OfflineRepairMeasurement {
+ public:
+  OfflineRepairMeasurement() : previous_(measuring_offline_repair) {
+    measuring_offline_repair = true;
+  }
+  ~OfflineRepairMeasurement() { measuring_offline_repair = previous_; }
+  OfflineRepairMeasurement(const OfflineRepairMeasurement&) = delete;
+  OfflineRepairMeasurement& operator=(const OfflineRepairMeasurement&) = delete;
+
+ private:
+  bool previous_;
+};
+
 // Whether @p name, an insert or a repair stage, constructs from @p params. Throws what
 // construction throws.
 bool constructs(const std::string& name, const ParamMap& params) {
-  return read_repair_config(name, params) || build_insert(name, params) != nullptr;
+  if (measuring_offline_repair) return read_repair_config(name, params);
+  return build_insert(name, params) != nullptr || read_repair_config(name, params);
 }
 
 // What an insert's empty build declares, memoized because every probe of the
 // catalog's measurement asks for it.
 const ParamMap& empty_build(const std::string& name) {
   static thread_local std::unordered_map<std::string, ParamMap> memo;
-  const auto cached = memo.find(name);
+  const std::string key = measuring_offline_repair ? name + "#offline" : name;
+  const auto cached = memo.find(key);
   if (cached != memo.end()) return cached->second;
   ParamMap params;
   (void)constructs(name, params);
-  return memo.emplace(name, std::move(params)).first->second;
+  return memo.emplace(key, std::move(params)).first->second;
 }
 
 using SlotList = std::vector<std::pair<std::string, detail::SlotDeclaration>>;
@@ -1598,9 +1652,9 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
                             double sample_rate) {
   try {
     const ParamMap probe = probe_map(name, key, value);
-    if (read_repair_config(name, probe)) return true;
+    if (measuring_offline_repair) return read_repair_config(name, probe);
     auto processor = build_insert(name, probe);
-    if (processor == nullptr) return false;
+    if (processor == nullptr) return read_repair_config(name, probe);
     processor->prepare(sample_rate, kInsertProbeBlockSize);
     return true;
   } catch (...) {
@@ -2053,6 +2107,7 @@ std::string repair_param_info_json(const std::string& name) {
   static thread_local std::unordered_map<std::string, std::string> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
+  const OfflineRepairMeasurement offline;
   ParamMap params;
   if (!read_repair_config(name, params)) return "[]";
   std::string out = "[";

@@ -12,8 +12,7 @@
  *    witness, since N=2 cannot tell 10*log10(2) from 10*log10(3);
  *  - the dereverb report is ratios and fractions throughout, so it does not
  *    move with the channel count at all;
- *  - the two answer a short input oppositely: denoise refuses one, dereverb
- *    pads it.
+ *  - both pad a short input for analysis and hand back planes of its length.
  *
  * The core scans no channel for a non-finite sample and guards only
  * `channels[0]` itself, so the wrapper's per-channel validation is the whole
@@ -407,27 +406,23 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
   });
 });
 
-describe('the two linked entries answer a short input oppositely', () => {
+describe('the two linked entries answer a short input alike', () => {
   beforeAll(async () => {
     await init();
   });
 
-  it('denoise refuses a buffer shorter than nFft; dereverb pads one and succeeds', () => {
+  it('denoise and dereverb both pad a buffer shorter than nFft and succeed', () => {
     const short = [noisyTone(440, 1).slice(0, 512), noisyTone(660, 7).slice(0, 512)];
     const options = { nFft: 1024, hopLength: 256 };
 
-    expect(() => masteringRepairDenoiseClassicalLinked(short, SR, options)).toThrow();
-
-    const padded = masteringRepairDereverbClassicalLinked(short, SR, options);
-    expect(padded.channels).toHaveLength(2);
-    // Padded for ANALYSIS only: the outputs come back at the input length.
-    expect(padded.channels[0]?.length).toBe(512);
-    expect(padded.channels[1]?.length).toBe(512);
-
-    // The control for the refusal above: the same denoise call over a buffer
-    // that does reach nFft succeeds, so the throw is about the length.
-    expect(() =>
-      masteringRepairDenoiseClassicalLinked([noisyTone(440, 1), noisyTone(660, 7)], SR, options),
-    ).not.toThrow();
+    for (const result of [
+      masteringRepairDenoiseClassicalLinked(short, SR, options),
+      masteringRepairDereverbClassicalLinked(short, SR, options),
+    ]) {
+      expect(result.channels).toHaveLength(2);
+      // Padded for ANALYSIS only: the outputs come back at the input length.
+      expect(result.channels[0]?.length).toBe(512);
+      expect(result.channels[1]?.length).toBe(512);
+    }
   });
 });

@@ -296,8 +296,8 @@ export interface DenoiseReport {
  * power and applied unchanged to both channels, so the pass cannot move an interchannel level
  * or phase difference, and a pair would be two copies of one measurement.
  *
- * Needs at least `nFft` samples and REJECTS a shorter input, the opposite of
- * {@link MasteringRepairDereverbClassicalStereoResult}'s entry point, which pads one.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
+ * length, as {@link MasteringRepairDereverbClassicalStereoResult}'s entry point does.
  */
 export interface MasteringRepairDenoiseClassicalStereoResult {
   left: Float32Array;
@@ -371,8 +371,8 @@ export interface DereverbReport {
  *
  * Every field of that report is a ratio or a fraction, so unlike {@link NoiseDetection}
  * nothing here shifts with the channel count and a stereo figure is comparable against a mono
- * one. An input shorter than `nFft` is PADDED for analysis rather than rejected, which is the
- * opposite of {@link MasteringRepairDenoiseClassicalStereoResult}'s entry point.
+ * one. An input shorter than `nFft` is padded for analysis, as
+ * {@link MasteringRepairDenoiseClassicalStereoResult}'s entry point does.
  */
 export interface MasteringRepairDereverbClassicalStereoResult {
   left: Float32Array;
@@ -390,8 +390,7 @@ export interface MasteringRepairDereverbClassicalStereoResult {
  *
  * Every field of the report is a ratio or a fraction, so unlike
  * {@link MasteringRepairDenoiseClassicalLinkedResult} nothing here shifts with the channel count.
- * An input shorter than `nFft` is PADDED for analysis rather than rejected, again the opposite of
- * that entry.
+ * An input shorter than `nFft` is padded for analysis, as that entry does.
  */
 export interface MasteringRepairDereverbClassicalLinkedResult {
   /** One output per input channel, in input order. */

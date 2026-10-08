@@ -9,6 +9,8 @@
 #include "core/spectrum.h"
 #include "mastering/common/noise_profile.h"
 #include "mastering/common/stft_stream.h"
+#include "mastering/repair/analysis_padding.h"
+#include "mastering/repair/dereverb_internal.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/validated.h"
@@ -39,14 +41,6 @@ StftConfig analysis_config(const DereverbClassicalConfig& config) {
   stft_config.window = WindowType::Hann;
   stft_config.center = true;
   return stft_config;
-}
-
-/// @brief Pads a buffer up to one analysis frame, as the repair path does.
-Audio padded_for_analysis(const Audio& audio, int n_fft) {
-  if (static_cast<int>(audio.size()) >= n_fft) return audio;
-  std::vector<float> samples(audio.data(), audio.data() + audio.size());
-  samples.resize(static_cast<size_t>(n_fft), 0.0f);
-  return Audio::from_vector(std::move(samples), audio.sample_rate());
 }
 
 int late_delay_frames(const DereverbClassicalConfig& config, int sample_rate) {
@@ -196,29 +190,20 @@ std::vector<double> subtraction_gains(const float* power, int bins, int frames, 
                                       double decay, const DereverbClassicalConfig& config,
                                       size_t* suppressed_out) {
   std::vector<double> gains(static_cast<size_t>(bins * frames), 1.0);
-  const double threshold = static_cast<double>(config.threshold);
-  const double attenuation = static_cast<double>(config.attenuation);
-  const double over_subtraction = static_cast<double>(config.over_subtraction);
-  const double spectral_floor = static_cast<double>(config.spectral_floor);
   size_t suppressed = 0;
 
   for (int b = 0; b < bins; ++b) {
     for (int t = 0; t < frames; ++t) {
       const size_t idx = static_cast<size_t>(b * frames + t);
-      const double current_power = std::max(static_cast<double>(power[idx]), kPowerFloor);
       const int late_frame = t - delay_frames;
       const double late_psd =
           late_frame >= 0
               ? static_cast<double>(power[static_cast<size_t>(b * frames + late_frame)]) * decay
               : 0.0;
-      if (!(late_psd > threshold * current_power)) continue;
-      ++suppressed;
-      const double clean_power =
-          std::max(current_power - over_subtraction * late_psd, spectral_floor * current_power);
-      const double full = std::sqrt(clean_power / current_power);
-      // Written so attenuation == 1 leaves `full` bit for bit rather than
-      // round-tripping it through 1 - (1 - full).
-      gains[idx] = full + (1.0 - attenuation) * (1.0 - full);
+      bool cell_suppressed = false;
+      gains[idx] = detail::dereverb_subtraction_gain(static_cast<double>(power[idx]), late_psd,
+                                                     config, &cell_suppressed);
+      if (cell_suppressed) ++suppressed;
     }
   }
   if (suppressed_out != nullptr) *suppressed_out = suppressed;
@@ -255,6 +240,33 @@ float mean_reduction_db(const std::vector<double>& gains) {
 }
 
 }  // namespace
+
+namespace detail {
+
+int dereverb_late_delay_frames(const DereverbClassicalConfig& config, int sample_rate) {
+  return late_delay_frames(config, sample_rate);
+}
+
+double dereverb_late_decay(const DereverbClassicalConfig& config, int delay_frames,
+                           int sample_rate) {
+  return late_decay(config, delay_frames, sample_rate);
+}
+
+double dereverb_subtraction_gain(double current_power, double late_psd,
+                                 const DereverbClassicalConfig& config, bool* suppressed) {
+  const double current = std::max(current_power, kPowerFloor);
+  *suppressed = late_psd > static_cast<double>(config.threshold) * current;
+  if (!*suppressed) return 1.0;
+  const double clean_power =
+      std::max(current - static_cast<double>(config.over_subtraction) * late_psd,
+               static_cast<double>(config.spectral_floor) * current);
+  const double full = std::sqrt(clean_power / current);
+  // Written so attenuation == 1 leaves `full` bit for bit rather than
+  // round-tripping it through 1 - (1 - full).
+  return full + (1.0 - static_cast<double>(config.attenuation)) * (1.0 - full);
+}
+
+}  // namespace detail
 
 void validate_config(const DereverbClassicalConfig& config) {
   if (!std::isfinite(config.threshold) || config.threshold < 0.0f || config.threshold > 1.0f) {

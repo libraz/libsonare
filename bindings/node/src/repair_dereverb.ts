@@ -80,8 +80,8 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
  * pair nothing in it shifts with the channel count: a stereo figure here is
  * comparable against a mono one.
  *
- * An input shorter than `nFft` is PADDED for analysis rather than rejected,
- * the opposite of {@link masteringRepairDenoiseClassicalStereo}.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back
+ * to the input length, as {@link masteringRepairDenoiseClassicalStereo} does.
  *
  * Two report fields are gated on the WPE stage, which is off unless
  * `wpeEnabled` is set: `detected.latePredictability` and
@@ -142,8 +142,8 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
  * channel count: a figure measured over six channels is comparable against a
  * mono one.
  *
- * An input shorter than `nFft` is PADDED for analysis rather than rejected, the
- * opposite of {@link masteringRepairDenoiseClassicalLinked}.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back
+ * to the input length, as {@link masteringRepairDenoiseClassicalLinked} does.
  *
  * Every channel must be the same length: the library takes one length for the
  * set, so a disagreement is refused here rather than silently truncated.

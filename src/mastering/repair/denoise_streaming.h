@@ -4,22 +4,18 @@
 /// @brief Block-based front end for the classical denoiser.
 ///
 /// The offline denoiser sees the whole signal; this one sees one host block at
-/// a time and reaches the same gain math through detail::GainStage. What it
-/// cannot inherit is the offline analysis geometry: framing stays on a fixed
-/// uncentred grid relative to host samples, with only the internal logical
-/// prefix described below, and the noise estimator must be recursive, which is
-/// why Quantile is refused rather than substituted.
+/// a time and runs the same frames through the same tracker and
+/// detail::GainStage, so for a recursive estimator its output is the offline
+/// output delayed by @ref StreamingDenoise::latency_samples. Frames sit on the
+/// offline centred grid: the first starts half a window before sample zero,
+/// over zeros, and every frame seeds the tracker as offline. Quantile ranks the
+/// frames of a whole signal, so it is refused rather than substituted.
 ///
-/// The grid starts with a hop-aligned logical zero prefix, so sample zero is not
-/// placed on the window's zero edge. Prefix frames advance overlap-add with a
-/// unity mask but seed neither the tracker nor the gain stage; the prefix
-/// consumes no host samples and adds no latency.
-///
-/// Because the prefix does not seed, a minimum-tracking estimator (Mcra, Imcra)
-/// opened mid-programme seeds at programme level and over-suppresses for the
-/// half second its minimum window spans. Through intermittent programmes they
-/// also over-report the floor, and on a gated tone leave the result below the
-/// untreated input. Prefer Spp, which tracks no minimum.
+/// A minimum-tracking estimator (Mcra, Imcra) opened mid-programme seeds at
+/// programme level and over-suppresses for the half second its minimum window
+/// spans. Through intermittent programmes they also over-report the floor, and
+/// on a gated tone leave the result below the untreated input. Prefer Spp,
+/// which tracks no minimum.
 
 #include <complex>
 #include <cstddef>
@@ -45,9 +41,8 @@ namespace sonare::mastering::repair {
 ///
 ///   process() is in-place and reports the block it was handed delayed by
 ///   @ref latency_samples; until the pipeline has filled that delay is written
-///   as zeros. Everything is sized in prepare(), and process() allocates
-///   nothing. reset() rebuilds the gain stage, so it allocates and belongs on
-///   the control thread beside prepare().
+///   as zeros. Everything is sized in prepare(); process() and reset()
+///   allocate nothing.
 class StreamingDenoise : public rt::ProcessorBase {
  public:
   /// @brief Binds the processor to @p config.
@@ -73,7 +68,7 @@ class StreamingDenoise : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
 
   /// @brief Returns every ring, the noise tracker and the gain stage to their
-  ///        post-construction state. Allocates; control thread only.
+  ///        post-construction state without allocating.
   void reset() override;
 
   /// @brief Samples between an input sample and the output sample answering for
@@ -127,8 +122,8 @@ class StreamingDenoise : public rt::ProcessorBase {
 
   // Analysis input: one n_fft ring per channel, written sample by sample. A
   // frame is taken the moment the ring holds exactly the n_fft samples it spans.
-  // reset() places the write cursor at logical_zero_prefix_, so the first frame
-  // contains that many internal zeros before host sample zero.
+  // reset() places the write cursor at logical_zero_prefix_ (half a window), so
+  // the first frame holds the offline centring's zeros before host sample zero.
   std::vector<float> input_ring_;
   int input_write_ = 0;
   int samples_to_next_frame_ = 0;
@@ -145,8 +140,6 @@ class StreamingDenoise : public rt::ProcessorBase {
   std::vector<double> channel_power_d_;
   std::vector<float> tracker_input_;
   std::vector<double> noise_frame_;
-  std::vector<double> unity_gains_;
-  int prefix_frames_remaining_ = 0;
 
   // Overlap-add: one n_fft ring per channel plus the window sum they share,
   // since the mask is one real number per cell and every channel carries it.

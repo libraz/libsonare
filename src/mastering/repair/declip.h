@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <vector>
 
 #include "core/audio.h"
 
@@ -47,8 +48,10 @@ inline constexpr float kDeclipFlatRunLevelWindowDb = 1.0f;
 /// not treated as repairable clipping.
 inline constexpr float kDeclipFlatRunAbsoluteFloor = 0.01f;
 
-/// @brief Largest accepted @c DeclipConfig::lpc_order: the order declip ships with.
-inline constexpr int kDeclipMaxLpcOrder = 36;
+/// @brief Largest accepted @c DeclipConfig::lpc_order.
+/// @details The solver lowers the order to a quarter of its context, which spans at most two
+/// capped radii plus the gap, so this is the largest order it runs as requested at every gap.
+inline constexpr int kDeclipMaxLpcOrder = static_cast<int>(2 * kDeclipMaxLpcContextRadius / 4);
 
 /// @brief Most outer reconstruction rounds a declip pass accepts.
 /// @details Each round re-estimates the AR model over the whole input; the estimate has
@@ -142,5 +145,14 @@ struct DeclipStereoResult {
 ///   samples with an estimate.
 DeclipStereoResult declip_stereo(const Audio& left, const Audio& right,
                                  const DeclipConfig& config = {});
+
+/// @brief Declips any number of channels over the union of every channel's clipped runs.
+/// @details The N-channel form of @ref declip_stereo with the same rule over the whole set: a
+///   channel reconstructs every union run it has at least one clipped sample in. One channel
+///   reproduces @ref declip and two reproduce @ref declip_stereo bit for bit.
+/// @param out Receives one declipped channel per input channel, in input order.
+/// @return One report per channel, in input order, each with its own channel's detection.
+std::vector<DeclipReport> declip_linked(const Audio* const* channels, size_t channel_count,
+                                        std::vector<Audio>* out, const DeclipConfig& config);
 
 }  // namespace sonare::mastering::repair

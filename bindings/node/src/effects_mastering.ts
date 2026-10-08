@@ -14,5 +14,6 @@ export * from './mastering_streaming.js';
 export * from './repair_dereverb.js';
 export * from './repair_impulsive.js';
 export * from './repair_noise.js';
+export * from './repair_session.js';
 export * from './repair_trim.js';
 export * from './voice_changer.js';

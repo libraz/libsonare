@@ -179,7 +179,7 @@ describe('masteringRepairDereverbClassicalStereo (WASM)', () => {
     expect(tight.report.suppressedFraction).toBeLessThan(open.report.suppressedFraction);
   });
 
-  it('pads an input shorter than nFft instead of rejecting it, unlike the denoise pair', () => {
+  it('pads an input shorter than nFft instead of rejecting it, as the denoise pair does', () => {
     const { left, right } = buildWetChannels();
     const shortLeft = left.slice(0, 512);
     const shortRight = right.slice(0, 512);

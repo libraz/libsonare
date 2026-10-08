@@ -46,6 +46,8 @@ bool hum_is_mains(const DefectProfile& defects) {
   return distance <= kMainsToleranceHz && defects.hum_fundamental_prominence > kHumProminence;
 }
 
+}  // namespace
+
 /// Turns on the repair stages the measurement supports, and only those.
 /// @details Three stages are selected on a count the detector either found or
 ///   did not; two more are selected against a threshold measured on real
@@ -113,6 +115,8 @@ void select_repair_stages(const AudioProfile& profile, const AssistantConfig& co
     }
   }
 }
+
+namespace {
 
 void resolve_platform_loudness(const AssistantConfig& config, float* target_lufs,
                                float* ceiling_db) {

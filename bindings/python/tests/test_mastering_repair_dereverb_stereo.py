@@ -243,12 +243,9 @@ class TestMasteringRepairDereverbClassicalStereo:
         assert none.suppressed_fraction == pytest.approx(full.suppressed_fraction, rel=1e-5)
 
     def test_pads_an_input_shorter_than_n_fft(self) -> None:
-        """Dereverb PADS a short input; the denoise pair rejects one.
+        """Dereverb pads a short input, as the denoise pair does.
 
-        Opposite behaviour behind a same-looking call, so this is the assertion
-        that catches the stereo wrapper being wired to the wrong core function:
-        ``denoise_classical_stereo`` would raise here. The output keeps the
-        caller's length, not the padded analysis length.
+        The output keeps the caller's length, not the padded analysis length.
         """
         left, right = _wet_pair()
         short_left = left[:256]

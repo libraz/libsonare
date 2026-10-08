@@ -10,6 +10,7 @@
 #include "core/audio.h"
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/json.h"
 
 namespace sonare::mastering::assistant {
 
@@ -20,6 +21,10 @@ struct LoudnessProfile {
   float crest_factor_db = 0.0f;
 };
 
+/// @brief Spectral shape of the analysed signal.
+/// @details The `*_rms_db` band levels are dBFS on the mean-square convention the noise fields
+///          use: a band's share of the signal's mean square, so a full-scale sine reads
+///          -3.01 dBFS in its band. They do not move with the input rate. The floor is -120.
 struct SpectralProfile {
   float sub_rms_db = 0.0f;       ///< 20-60 Hz
   float low_rms_db = 0.0f;       ///< 60-250 Hz
@@ -239,6 +244,22 @@ std::vector<float> rising_peak_heights(const std::vector<float>& series, int loo
 /// @details Below ten seconds there are too few events to tell an outlier from the body,
 ///          so nothing is set aside.
 float summary_reference(std::vector<float> events, float duration_sec, float series_max);
+
+/// @brief Each channel's repair defects and their aggregate.
+struct ChannelSetDefects {
+  std::vector<DefectProfile> channels;  ///< One per input channel, in input order.
+  DefectProfile aggregate;  ///< The reductions @ref analyze_audio_profile_interleaved documents.
+};
+
+/// @brief Measures the repair defects of each planar channel and aggregates them.
+/// @details The detectors and reductions the interleaved profile runs under
+///          @ref AudioProfileConfig::detect_defects; one channel is its own aggregate.
+/// @param channels @p channel_count planes of @p length samples each.
+ChannelSetDefects measure_defects_planar(const float* const* channels, std::size_t channel_count,
+                                         std::size_t length, int sample_rate);
+
+/// @brief The `defects` block of @ref audio_profile_to_json.
+sonare::util::json::Object defects_to_json(const DefectProfile& defects);
 
 std::string audio_profile_to_json(const AudioProfile& profile);
 

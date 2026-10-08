@@ -15,9 +15,8 @@ default-config smoke test reaches:
   not for dereverb. ``NoiseDetection`` carries absolute levels referred to
   the channel-summed power, so N identical channels read ``10*log10(N)``
   above one of them, while every dereverb report field is a ratio.
-* The two entries are the same call shape with opposite behaviour on a short
-  buffer -- denoise refuses one, dereverb pads it -- so a wrapper written by
-  copying one onto the other passes everything except that.
+* Both entries pad a short buffer for analysis and hand back planes of the
+  caller's length.
 * Routing. A silent channel contributes exactly zero to the summed power, so
   the same signal in slot 0 and in slot 1 produces the same mask; only the
   slot the output lands in separates the two runs.
@@ -244,22 +243,21 @@ class TestPlaneRouting:
 
 
 class TestShortInputSplit:
-    def test_denoise_refuses_a_short_buffer_and_dereverb_pads_one(
+    def test_denoise_and_dereverb_both_pad_a_short_buffer(
         self, signal: NDArray[np.float32]
     ) -> None:
-        """The pair most likely to be written by copying one onto the other.
-
-        Identical call shape, opposite behaviour below ``n_fft``.
-        """
+        """Below ``n_fft`` both entries pad for analysis and keep the caller's length."""
         short = signal[:512]
         channels = [short, short]
 
-        with pytest.raises(libsonare.SonareError):
-            libsonare.mastering_repair_denoise_classical_linked(channels, SR, n_fft=1024)
-
-        padded = libsonare.mastering_repair_dereverb_classical_linked(channels, SR, n_fft=1024)
-        assert len(padded.channels) == 2
-        assert all(plane.shape[0] == short.shape[0] for plane in padded.channels)
+        for call in (
+            libsonare.mastering_repair_denoise_classical_linked,
+            libsonare.mastering_repair_dereverb_classical_linked,
+        ):
+            padded = call(channels, SR, n_fft=1024)
+            assert len(padded.channels) == 2
+            assert all(plane.shape[0] == short.shape[0] for plane in padded.channels)
+            assert all(np.isfinite(plane).all() for plane in padded.channels)
 
 
 class TestRejections:

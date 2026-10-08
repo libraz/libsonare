@@ -317,7 +317,7 @@ float next_noise(uint32_t& state) {
 constexpr int kImpulseOffset = 1;
 
 std::vector<std::vector<float>> run_insert(sonare::rt::ProcessorBase& insert, bool dirty_first,
-                                           int impulse_frames) {
+                                           int impulse_frames, int impulse_width = 1) {
   constexpr int kNoiseBlocks = 64;
   std::array<std::array<float, kBlock>, kChannels> buffer{};
   float* io[] = {buffer[0].data(), buffer[1].data()};
@@ -335,7 +335,7 @@ std::vector<std::vector<float>> run_insert(sonare::rt::ProcessorBase& insert, bo
   for (int start = 0; start < impulse_frames; start += kBlock) {
     for (auto& plane : buffer) {
       plane.fill(0.0f);
-      if (start == 0) plane[kImpulseOffset] = 1.0f;
+      for (int k = 0; start == 0 && k < impulse_width; ++k) plane[kImpulseOffset + k] = 1.0f;
     }
     insert.process(io, kChannels, kBlock);
     for (int ch = 0; ch < kChannels; ++ch) {
@@ -445,6 +445,8 @@ TEST_CASE("processor reset: every factory insert resets to its prepared state",
   const std::vector<std::string> kNeedsExternalIr = {
       "effects.reverb.convolution",  // convolves with a caller-loaded impulse response
   };
+  // Inserts that replace an isolated sample by design take a two-sample pulse.
+  const std::vector<std::string> kRemovesIsolatedSample = {"repair.decrackle"};
   for (const std::string& name : sonare::mastering::api::insert_factory_names()) {
     INFO(name);
     if (std::find(kNeedsExternalIr.begin(), kNeedsExternalIr.end(), name) !=
@@ -459,8 +461,12 @@ TEST_CASE("processor reset: every factory insert resets to its prepared state",
     b->prepare(kSampleRate, kBlock);
     const int lookahead = std::max(a->latency_samples(), 0);
     const int frames = ((lookahead + kBlock) / kBlock + 1) * kBlock;
-    const auto clean = run_insert(*a, false, frames);
-    const auto reset = run_insert(*b, true, frames);
+    const int width = std::find(kRemovesIsolatedSample.begin(), kRemovesIsolatedSample.end(),
+                                name) != kRemovesIsolatedSample.end()
+                          ? 2
+                          : 1;
+    const auto clean = run_insert(*a, false, frames, width);
+    const auto reset = run_insert(*b, true, frames, width);
     float peak = 0.0f;
     float max_diff = 0.0f;
     for (size_t ch = 0; ch < clean.size(); ++ch) {

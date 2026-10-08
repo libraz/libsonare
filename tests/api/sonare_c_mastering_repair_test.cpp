@@ -385,16 +385,16 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_stereo", "[c_api][mastering
     sonare_free_floats(berouti.right);
   }
 
-  SECTION("an input shorter than n_fft is refused") {
-    // The opposite of the dereverb pair, which pads one. These two calls differ
-    // only in the core function they reach, so this is what separates them.
+  SECTION("an input shorter than n_fft is padded rather than refused") {
+    // As the dereverb pair pads one.
     std::vector<float> tiny(512, 0.25f);
     SonareDenoiseStereoResult out{};
     REQUIRE(sonare_mastering_repair_denoise_classical_stereo(tiny.data(), tiny.data(), tiny.size(),
-                                                             sr, nullptr, &out) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    CHECK(out.left == nullptr);
-    CHECK(out.length == 0);
+                                                             sr, nullptr, &out) == SONARE_OK);
+    REQUIRE(out.length == tiny.size());
+    for (size_t i = 0; i < out.length; ++i) REQUIRE(std::isfinite(out.left[i]));
+    sonare_free_floats(out.left);
+    sonare_free_floats(out.right);
   }
 
   SECTION("clears the result before refusing") {
@@ -574,23 +574,20 @@ TEST_CASE("sonare_mastering_repair_denoise_classical_linked", "[c_api][mastering
     }
   }
 
-  SECTION("refuses an input shorter than n_fft and leaves the caller's planes alone") {
-    // The opposite of the dereverb entry, which pads one.
+  SECTION("pads an input shorter than n_fft and fills every caller plane") {
+    // As the dereverb entry pads one.
     const std::vector<float> tiny(512, 0.25f);
     constexpr float kSentinel = 7.5f;
     std::vector<float> plane(tiny.size(), kSentinel);
     const float* in[1] = {tiny.data()};
     float* outs[1] = {plane.data()};
     SonareDenoiseReport report{};
-    report.mean_reduction_db = 99.0f;
-    REQUIRE(sonare_mastering_repair_denoise_classical_linked(
-                in, 1, tiny.size(), sr, nullptr, outs, &report) == SONARE_ERROR_INVALID_PARAMETER);
-    // Nothing is allocated here, so a refusal has no result to clear -- the
-    // planes are the caller's and must come back as they were handed over.
+    REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, tiny.size(), sr, nullptr, outs,
+                                                             &report) == SONARE_OK);
     for (float sample : plane) {
-      REQUIRE(sample == kSentinel);
+      REQUIRE(std::isfinite(sample));
+      REQUIRE(sample != kSentinel);
     }
-    CHECK(report.mean_reduction_db == 0.0f);
   }
 
   SECTION("refuses a null channel anywhere in the set, not just the first") {
@@ -1448,8 +1445,6 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_stereo", "[c_api][masterin
   }
 
   SECTION("an input shorter than n_fft is padded rather than refused") {
-    // The opposite of the denoise pair, which rejects one. These two calls differ
-    // only in the core function they reach, so this is what separates them.
     std::vector<float> tiny(512, 0.25f);
     SonareDereverbStereoResult out{};
     REQUIRE(sonare_mastering_repair_dereverb_classical_stereo(tiny.data(), tiny.data(), tiny.size(),
@@ -1651,10 +1646,7 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     REQUIRE(off.wpe_predictor_norm == 0.0f);
   }
 
-  SECTION("pads an input shorter than n_fft, which the denoise entry refuses") {
-    // Identical call shape, opposite behaviour: the two entries are the pair most
-    // likely to be written by copying one onto the other, and this is the only
-    // thing that separates them.
+  SECTION("pads an input shorter than n_fft, as the denoise entry does") {
     const std::vector<float> tiny(512, 0.25f);
     std::vector<float> plane(tiny.size(), 0.0f);
     const float* in[1] = {tiny.data()};
@@ -1675,10 +1667,9 @@ TEST_CASE("sonare_mastering_repair_dereverb_classical_linked", "[c_api][masterin
     denoise.noise_estimation_quantile = 0.1f;
     denoise.speech_presence_gain = 1;
     denoise.gain_smoothing = 1;
-    SonareDenoiseReport refused{};
+    SonareDenoiseReport padded{};
     REQUIRE(sonare_mastering_repair_denoise_classical_linked(in, 1, tiny.size(), sr, &denoise, outs,
-                                                             &refused) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+                                                             &padded) == SONARE_OK);
   }
 
   SECTION("a refusal leaves the caller's planes alone") {
@@ -2342,4 +2333,91 @@ TEST_CASE("sonare_mastering_dynamics_transient_shaper", "[c_api][mastering]") {
     sonare_free_floats(out);
   }
 }
+TEST_CASE("sonare_mastering_repair_analyze and sonare_mastering_repair_apply",
+          "[c_api][mastering]") {
+  const int sr = 22050;
+  auto left = generate_sine(440.0f, sr, 0.25f);
+  auto right = generate_sine(660.0f, sr, 0.25f);
+  for (auto& s : left) s *= 0.3f;
+  for (auto& s : right) s *= 0.3f;
+  for (size_t i = 1000; i < left.size(); i += 1500) left[i] = 0.95f;
+  const float* channels[2] = {left.data(), right.data()};
+  const size_t length = left.size();
+
+  SECTION("analysis clears its output first and refuses a missing channel") {
+    char* json = reinterpret_cast<char*>(static_cast<std::uintptr_t>(0x1));
+    const float* missing[2] = {left.data(), nullptr};
+    REQUIRE(sonare_mastering_repair_analyze(missing, 2, length, sr, nullptr, &json) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(json == nullptr);
+    REQUIRE(sonare_mastering_repair_analyze(channels, 2, length, sr, nullptr, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_mastering_repair_analyze(channels, 2, length, sr, R"({"preferStreamingSafe":1})",
+                                            &json) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(json == nullptr);
+  }
+
+  SECTION("analysis recommends declick for the clicked channel") {
+    char* json = nullptr;
+    REQUIRE(sonare_mastering_repair_analyze(channels, 2, length, sr, nullptr, &json) == SONARE_OK);
+    REQUIRE(json != nullptr);
+    const std::string text(json);
+    sonare_free_string(json);
+    CHECK(text.find(R"("stage":"declick")") != std::string::npos);
+    CHECK(text.find(R"("declipThresholdSafe")") != std::string::npos);
+  }
+
+  SECTION("apply writes the planes in place and returns the reports") {
+    std::vector<float> a = left;
+    std::vector<float> b = right;
+    float* planes[2] = {a.data(), b.data()};
+    const float* inputs[2] = {a.data(), b.data()};
+    char* reports = nullptr;
+    REQUIRE(sonare_mastering_repair_apply(inputs, 2, length, sr, R"([{"stage":"declick"}])",
+                                          nullptr, nullptr, planes, &reports, nullptr,
+                                          nullptr) == SONARE_OK);
+    REQUIRE(reports != nullptr);
+    CHECK(std::string(reports).find(R"("scope":"channel")") != std::string::npos);
+    sonare_free_string(reports);
+    CHECK(std::abs(a[1000]) < 0.5f);
+  }
+
+  SECTION("apply refuses a repeated stage and leaves the planes alone") {
+    constexpr float kSentinel = 7.5f;
+    std::vector<float> a(length, kSentinel);
+    std::vector<float> b(length, kSentinel);
+    float* planes[2] = {a.data(), b.data()};
+    char* reports = reinterpret_cast<char*>(static_cast<std::uintptr_t>(0x1));
+    REQUIRE(sonare_mastering_repair_apply(
+                channels, 2, length, sr, R"([{"stage":"dehum"},{"stage":"dehum"}])", nullptr,
+                nullptr, planes, &reports, nullptr, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(reports == nullptr);
+    CHECK(std::all_of(a.begin(), a.end(), [](float s) { return s == kSentinel; }));
+    float* missing[2] = {a.data(), nullptr};
+    REQUIRE(sonare_mastering_repair_apply(channels, 2, length, sr, "[]", nullptr, nullptr, missing,
+                                          &reports, nullptr,
+                                          nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+
+  SECTION("apply reports progress and returns CANCELLED when asked to stop") {
+    struct Seen {
+      std::vector<std::string> stages;
+    } seen;
+    std::vector<float> a(length, 7.5f);
+    std::vector<float> b(length, 7.5f);
+    float* planes[2] = {a.data(), b.data()};
+    char* reports = nullptr;
+    const auto progress = [](float, const char* stage, void* user_data) {
+      static_cast<Seen*>(user_data)->stages.emplace_back(stage);
+    };
+    const auto stop = [](void*) { return 1; };
+    REQUIRE(sonare_mastering_repair_apply(
+                channels, 2, length, sr, R"([{"stage":"decrackle"},{"stage":"declick"}])", progress,
+                &seen, planes, &reports, stop, nullptr) == SONARE_ERROR_CANCELLED);
+    CHECK(reports == nullptr);
+    CHECK(seen.stages == std::vector<std::string>{"repair.declick"});
+    CHECK(a[0] == 7.5f);
+  }
+}
+
 #endif

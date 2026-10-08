@@ -334,29 +334,18 @@ describe('masteringRepairDereverbClassicalLinked', () => {
 });
 
 describe('the two linked entries on an input shorter than nFft', () => {
-  it('splits: denoise refuses one, dereverb pads one', () => {
-    // Identical call shape, opposite behaviour. Wiring either entry to the
-    // other's core call is what this separates.
+  it('both pad one and keep the caller length', () => {
     const short = 512;
     const channels = [
       add(tone(700, 0.3, short), noise(99, 0.02, short)),
       add(tone(1900, 0.3, short), noise(98, 0.02, short)),
     ];
 
-    expect(() => masteringRepairDenoiseClassicalLinked({ channels, sampleRate: SR })).toThrow(
-      /n_fft/,
-    );
-
-    // The rejection is about nFft rather than about a short buffer: the same
-    // input goes through once the window fits inside it.
-    const fitted = masteringRepairDenoiseClassicalLinked({
-      channels,
-      sampleRate: SR,
-      nFft: 256,
-      hopLength: 64,
-    });
-    expect(fitted.channels[0]).toHaveLength(short);
-    expect(peak(fitted.channels[0])).toBeGreaterThan(0.01);
+    const denoised = masteringRepairDenoiseClassicalLinked({ channels, sampleRate: SR });
+    expect(denoised.channels).toHaveLength(2);
+    expect(denoised.channels[0]).toHaveLength(short);
+    expect(denoised.channels[1]).toHaveLength(short);
+    expect(peak(denoised.channels[0])).toBeGreaterThan(0.01);
 
     const padded = masteringRepairDereverbClassicalLinked({ channels, sampleRate: SR });
     expect(padded.channels).toHaveLength(2);

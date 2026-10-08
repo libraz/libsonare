@@ -136,8 +136,8 @@ def mastering_repair_detect_reverb(
         detected = libsonare.mastering_repair_detect_reverb(samples, 44100)
         print(detected.late_decay_ratio_db)
 
-    A buffer shorter than ``n_fft`` is PADDED for analysis and accepted, unlike
-    :func:`mastering_repair_detect_noise_floor`, which refuses one.
+    A buffer shorter than ``n_fft`` is padded for analysis and accepted, as
+    :func:`mastering_repair_detect_noise_floor` accepts one.
 
     ``late_decay_ratio_db`` less negative means the material sustains across the
     module's own late lag, which a late tail does and a dry offset does not, so a
@@ -256,9 +256,9 @@ def mastering_repair_dereverb_classical_stereo(
     exactly zero unless ``wpe_enabled`` is set, which it is not by default --
     that is the measurement, not an unset field.
 
-    An input shorter than ``n_fft`` is padded for analysis rather than
-    rejected, which is the opposite of
-    :func:`mastering_repair_denoise_classical_stereo`.
+    An input shorter than ``n_fft`` is padded for analysis and the output
+    trimmed back to the input length, as
+    :func:`mastering_repair_denoise_classical_stereo` does.
 
     Args:
         left: Left channel input buffer (any sequence convertible to float32).
@@ -393,9 +393,9 @@ def mastering_repair_dereverb_classical_linked(
         )
         assert len(result.channels) == 3
 
-    An input shorter than ``n_fft`` is padded for analysis rather than
-    rejected, which is the opposite of
-    :func:`mastering_repair_denoise_classical_linked`.
+    An input shorter than ``n_fft`` is padded for analysis and the output
+    trimmed back to the input length, as
+    :func:`mastering_repair_denoise_classical_linked` does.
 
     Every field of the report is a ratio or a fraction, so unlike the denoise
     entry nothing here shifts with the channel count and a figure measured

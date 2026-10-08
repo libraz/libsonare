@@ -198,6 +198,16 @@ const std::vector<Exemption>& FlatPeakConfigurations() {
   return kRows;
 }
 
+/// Configurations that remove an isolated sample by design, so a single impulse leaves nothing to
+/// measure. They are driven with a two-sample pulse instead, whose response is flat-topped across
+/// the pair and is bracketed the way a flat peak is.
+const std::vector<Exemption>& PulseConfigurations() {
+  static const std::vector<Exemption> kRows = {
+      {"repair.decrackle", "*", "*", "the median replaces an isolated sample"},
+  };
+  return kRows;
+}
+
 bool Contains(const std::vector<std::string>& names, const std::string& name) {
   return std::find(names.begin(), names.end(), name) != names.end();
 }
@@ -269,11 +279,12 @@ const std::vector<Configuration>& SweptConfigurations() {
 }
 
 /// Two correlated impulse channels, silent apart from one sample each.
-std::vector<std::vector<float>> MakeImpulse(int num_samples) {
+std::vector<std::vector<float>> MakeImpulse(int num_samples, int width) {
   std::vector<std::vector<float>> channels(static_cast<size_t>(kNumChannels),
                                            std::vector<float>(num_samples, 0.0f));
   for (auto& channel : channels) {
-    channel[kImpulseIndex] = kImpulseAmplitude;
+    for (int k = 0; k < width; ++k)
+      channel[static_cast<size_t>(kImpulseIndex + k)] = kImpulseAmplitude;
   }
   return channels;
 }
@@ -282,9 +293,9 @@ std::vector<std::vector<float>> MakeImpulse(int num_samples) {
 /// response arrives and where it peaks. Both are the earliest qualifying index
 /// over all channels, so a processor that delays one side only (a Haas-style
 /// insert) reports the undelayed side rather than its widening delay.
-Response Measure(ProcessorBase& processor, int num_blocks = kNumBlocks) {
+Response Measure(ProcessorBase& processor, int num_blocks = kNumBlocks, int width = 1) {
   const int num_samples = kBlockSize * num_blocks;
-  auto channels = MakeImpulse(num_samples);
+  auto channels = MakeImpulse(num_samples, width);
   std::array<float*, kNumChannels> pointers{};
   for (int block = 0; block < num_blocks; ++block) {
     for (int ch = 0; ch < kNumChannels; ++ch) {
@@ -355,7 +366,8 @@ void CheckAlignment(const Configuration& config) {
 
   // Room for the declared delay and a response as long again after it.
   const int num_blocks = std::max(kNumBlocks, (kImpulseIndex + 2 * declared) / kBlockSize + 2);
-  const Response response = Measure(*processor, num_blocks);
+  const bool pulse = Matches(PulseConfigurations(), config);
+  const Response response = Measure(*processor, num_blocks, pulse ? 2 : 1);
   CAPTURE(response.peak, response.onset_lag, response.peak_lag, response.plateau_end_lag);
   if (!(response.peak > kMeasurableFloor)) {
     FAIL_CHECK("no measurable impulse response for " << config.name);
@@ -365,7 +377,7 @@ void CheckAlignment(const Configuration& config) {
   // undeclared lookahead or oversampling round trip shows up here), and the
   // declared delay may not run past the response it is supposed to describe.
   CHECK(response.onset_lag <= declared);
-  if (Matches(FlatPeakConfigurations(), config)) {
+  if (pulse || Matches(FlatPeakConfigurations(), config)) {
     CHECK(response.peak_lag <= declared);
     CHECK(declared <= response.plateau_end_lag);
     return;
@@ -400,6 +412,7 @@ TEST_CASE("Every factory insert declares the latency its impulse response shows"
   RequireExemptionsExist(PeakShiftedConfigurations());
   RequireExemptionsExist(UnmeasurableConfigurations());
   RequireExemptionsExist(FlatPeakConfigurations());
+  RequireExemptionsExist(PulseConfigurations());
 
   for (const Configuration& config : defaults) CheckAlignment(config);
 }
@@ -411,6 +424,7 @@ TEST_CASE("Every published choice declares the latency its impulse response show
   RequireExemptionsExist(PeakShiftedConfigurations(), configs);
   RequireExemptionsExist(UnmeasurableConfigurations(), configs);
   RequireExemptionsExist(FlatPeakConfigurations(), configs);
+  RequireExemptionsExist(PulseConfigurations(), configs);
 
   for (const Configuration& config : configs) CheckAlignment(config);
 }

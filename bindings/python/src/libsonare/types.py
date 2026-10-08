@@ -449,6 +449,9 @@ from ._types_mastering_results import (
     MasteringChainConfigDocument as MasteringChainConfigDocument,
 )
 from ._types_mastering_results import (
+    MasteringRepairAnalysis as MasteringRepairAnalysis,
+)
+from ._types_mastering_results import (
     MasteringStreamingPreviewPlatform as MasteringStreamingPreviewPlatform,
 )
 from ._types_mastering_results import (
@@ -537,6 +540,12 @@ from ._types_repair import (
 )
 from ._types_repair import (
     NoiseDetection as NoiseDetection,
+)
+from ._types_repair import (
+    RepairApplyResult as RepairApplyResult,
+)
+from ._types_repair import (
+    RepairStageReports as RepairStageReports,
 )
 from ._types_repair import (
     ReverbDetection as ReverbDetection,

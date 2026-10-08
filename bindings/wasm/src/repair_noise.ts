@@ -93,8 +93,8 @@ export function masteringRepairDenoiseClassical(
  * {@link masteringRepairDenoiseClassical}. A stereo floor is comparable only against another
  * stereo floor, never against a mono one.
  *
- * Needs at least `nFft` samples and REJECTS a shorter input, which is the opposite of
- * {@link masteringRepairDereverbClassicalStereo} — that one pads.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
+ * length, as {@link masteringRepairDereverbClassicalStereo} does.
  *
  * Which options are live depends on `mode`: `overSubtraction` and `spectralFloor` are read
  * only by `spectralSubtraction`, and `speechPresenceGain` and `gainSmoothing` only by the
@@ -158,8 +158,8 @@ export function masteringRepairDenoiseClassicalStereo(
  * one measured over the same number of channels. Every other field of the report is a fraction
  * and does not move with the channel count.
  *
- * Needs at least `nFft` samples and REJECTS a shorter input, which is the opposite of
- * {@link masteringRepairDereverbClassicalLinked} — that one pads.
+ * An input shorter than `nFft` is padded for analysis and the output trimmed back to the input
+ * length, as {@link masteringRepairDereverbClassicalLinked} does.
  *
  * @example
  * ```ts
@@ -311,8 +311,8 @@ export interface MasteringRepairDetectHumRequest extends DehumOptions {
  * {@link masteringRepairDenoiseClassical} runs — and stops before the gain mask, which is why
  * no attenuation figure appears here.
  *
- * Needs at least `nFft` samples and THROWS for a shorter buffer, the opposite of
- * {@link masteringRepairDetectReverb}, which pads one.
+ * A buffer shorter than `nFft` is padded for analysis, as {@link masteringRepairDetectReverb}
+ * pads one.
  *
  * `floorDbfs` is an absolute level, so it is comparable only against another figure measured
  * over the same channel count.

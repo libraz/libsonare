@@ -243,6 +243,8 @@ const char* realtime_cost(const std::string& id) noexcept {
   if (id == "stereo.binaural") return "moderate";
   // Grain resampling per channel, a reverb tank and a 4x oversampled inter-sample-peak limiter.
   if (id == "voice.changer") return "moderate";
+  // An FFT frame and a spectral mask per hop, the linear-phase EQ's class of work.
+  if (id == "repair.denoiseClassical" || id == "repair.dereverbClassical") return "moderate";
   return "low";
 }
 

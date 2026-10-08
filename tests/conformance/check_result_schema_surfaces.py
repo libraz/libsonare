@@ -123,6 +123,14 @@ FAMILIES = {
             "python-stub": REPO_ROOT / "bindings/python/src/libsonare/types.pyi",
         },
     },
+    "repair_analysis_schema_paths": {
+        "source": REPO_ROOT / "src/mastering/assistant/repair_session.cpp",
+        "root": "MasteringRepairAnalysis",
+        "surfaces": {
+            "node": NODE / "repair_session.ts",
+            "wasm": WASM / "repair_session.ts",
+        },
+    },
     "assistant_result_schema_paths": {
         "source": REPO_ROOT / "src/mastering/assistant/suggester.cpp",
         "root": "MasteringAssistantResult",

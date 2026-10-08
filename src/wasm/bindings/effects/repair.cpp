@@ -5,6 +5,7 @@
 
 #include <algorithm>
 
+#include "mastering/assistant/repair_session.h"
 #include "mastering/common/noise_profile.h"
 #include "wasm/bindings/common/common.h"
 
@@ -346,8 +347,8 @@ val js_mastering_repair_denoise_classical_stereo(val left_samples, val right_sam
 // set. One channel reproduces the mono entry bit for bit, two reproduce the
 // stereo entry plane for plane. `report.detected` is the SET's and absolute, so
 // N identical channels read 10*log10(N) above one; every other field is a
-// fraction and does not move. Rejects an input shorter than nFft, the opposite
-// of the dereverb linked entry, which pads. Calls the core directly rather than
+// fraction and does not move. Pads an input shorter than nFft for analysis, as
+// the dereverb linked entry does. Calls the core directly rather than
 // the C ABI, matching every other wrapper in this file -- so the per-channel
 // validation the C ABI would have done is loadValidatedChannelSet's here.
 val js_mastering_repair_denoise_classical_linked(val channels, const val& sample_rate_val,
@@ -365,6 +366,59 @@ val js_mastering_repair_denoise_classical_linked(val channels, const val& sample
   val out = val::object();
   out.set("channels", channelSetToVal(processed));
   out.set("report", denoiseReportToVal(report));
+  return out;
+}
+
+// One repair analysis over any channel count. Returns the analysis JSON the facade parses.
+std::string js_mastering_repair_analyze(val channels, const val& sample_rate_val,
+                                        const std::string& request_json) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const std::vector<Audio> loaded =
+      loadValidatedChannelSet(channels, sample_rate, "masteringRepairAnalyze");
+  std::vector<const float*> planes;
+  for (const Audio& channel : loaded) planes.push_back(channel.data());
+  return mastering::assistant::repair_analyze_json(
+      planes.data(), planes.size(), loaded.front().size(), sample_rate, request_json);
+}
+
+// One repair application over any channel count, the stages in the chain's fixed order.
+val js_mastering_repair_apply(val channels, const val& sample_rate_val,
+                              const std::string& stages_json, val progress_callback,
+                              val cancel_callback) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const std::vector<Audio> loaded =
+      loadValidatedChannelSet(channels, sample_rate, "masteringRepairApply");
+  const std::size_t length = loaded.front().size();
+  std::vector<const float*> planes;
+  std::vector<std::vector<float>> outputs(loaded.size(), std::vector<float>(length));
+  std::vector<float*> out_planes;
+  for (std::size_t c = 0; c < loaded.size(); ++c) {
+    planes.push_back(loaded[c].data());
+    out_planes.push_back(outputs[c].data());
+  }
+  mastering::assistant::RepairProgressCallback progress;
+  if (!progress_callback.isNull() && !progress_callback.isUndefined()) {
+    progress = [progress_callback](float done, const char* stage) {
+      progress_callback(done, std::string(stage != nullptr ? stage : ""));
+    };
+  }
+  mastering::assistant::RepairCancelCallback cancel;
+  if (!cancel_callback.isNull() && !cancel_callback.isUndefined()) {
+    cancel = [cancel_callback] { return cancelCallbackRequested(cancel_callback); };
+  }
+  std::string reports;
+  if (!mastering::assistant::repair_apply_json(planes.data(), planes.size(), length, sample_rate,
+                                               stages_json, out_planes.data(), &reports, progress,
+                                               cancel)) {
+    throw SonareException(ErrorCode::Cancelled, "repair cancelled");
+  }
+  val produced = val::array();
+  for (std::size_t c = 0; c < outputs.size(); ++c) {
+    produced.set(c, vectorToFloat32Array(outputs[c].data(), outputs[c].size()));
+  }
+  val out = val::object();
+  out.set("channels", produced);
+  out.set("reportsJson", reports);
   return out;
 }
 
@@ -649,7 +703,7 @@ val js_mastering_repair_dereverb_classical_stereo(val left_samples, val right_sa
 // mono entry bit for bit, two reproduce the stereo entry plane for plane. Every
 // field of the report is a ratio or a fraction, so unlike the denoise linked
 // entry nothing here moves with the channel count. An input shorter than nFft
-// is padded rather than rejected, again the opposite of that entry. Calls the
+// is padded for analysis, as that entry pads it. Calls the
 // core directly rather than the C ABI, matching every other wrapper in this
 // file -- so the per-channel validation the C ABI would have done is
 // loadValidatedChannelSet's here.
@@ -776,8 +830,7 @@ val js_mastering_repair_detect_clicks(val samples, const val& sample_rate, val o
       mastering::repair::detect_clicks(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
 
-// Refuses a buffer shorter than nFft, as the repair does; the dereverb detector
-// below pads one instead.
+// Pads a buffer shorter than nFft, as the repair does.
 val js_mastering_repair_detect_noise_floor(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DenoiseClassicalConfig cfg =
@@ -830,8 +883,7 @@ val js_mastering_repair_detect_hum(val samples, const val& sample_rate, val opti
       mastering::repair::detect_hum(audio.data(), audio.size(), audio.sample_rate(), cfg));
 }
 
-// Pads a buffer shorter than nFft, as the repair does -- the opposite of the
-// noise-floor detector above.
+// Pads a buffer shorter than nFft, as the repair does.
 val js_mastering_repair_detect_reverb(val samples, const val& sample_rate, val options) {
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   const mastering::repair::DereverbClassicalConfig cfg =
@@ -870,6 +922,8 @@ void registerRepairBindings() {
   function("masteringRepairDenoiseClassical", &js_mastering_repair_denoise_classical);
   function("masteringRepairDenoiseClassicalStereo", &js_mastering_repair_denoise_classical_stereo);
   function("masteringRepairDenoiseClassicalLinked", &js_mastering_repair_denoise_classical_linked);
+  function("masteringRepairAnalyze", &js_mastering_repair_analyze);
+  function("masteringRepairApply", &js_mastering_repair_apply);
   function("masteringRepairDeclip", &js_mastering_repair_declip);
   function("masteringRepairDeclipStereo", &js_mastering_repair_declip_stereo);
   function("masteringRepairDecrackle", &js_mastering_repair_decrackle);

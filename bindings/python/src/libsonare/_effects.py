@@ -43,6 +43,7 @@ from ._effects_repair_noise import (
 from ._effects_repair_noise import (
     _coerce_denoise_mode as _coerce_denoise_mode,
 )
+from ._effects_repair_session import *  # noqa: F403
 from ._effects_repair_trim import *  # noqa: F403
 from ._effects_repair_trim import (
     _TRIM_SILENCE_MODE_NAMES as _TRIM_SILENCE_MODE_NAMES,

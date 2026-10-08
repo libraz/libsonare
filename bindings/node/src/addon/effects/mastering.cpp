@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "effects/repair_common.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
@@ -968,6 +969,75 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   }
   Napi::Object out = CStereoChainResultToObject(env, result);
   sonare_free_mastering_chain_stereo_result(&result);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairAnalyze(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsString()) {
+    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, requestJson)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  repair_detail::LinkedPlanes planes;
+  if (!repair_detail::ReadLinkedPlanes(env, info[0], "masteringRepairAnalyze", &planes)) {
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  const std::string request = node_narrow_string(env, info[2], "requestJson");
+  char* json = nullptr;
+  const SonareError err = sonare_mastering_repair_analyze(
+      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, request.c_str(), &json);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::String out = Napi::String::New(env, json);
+  sonare_free_string(json);
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::MasteringRepairApply(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 5 || !info[0].IsArray() || !info[1].IsNumber() || !info[2].IsString() ||
+      !info[3].IsFunction() || !info[4].IsFunction()) {
+    Napi::TypeError::New(env,
+                         "Expected (Float32Array[] channels, sampleRate, stagesJson, onProgress, "
+                         "cancel)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  repair_detail::LinkedPlanes planes;
+  if (!repair_detail::ReadLinkedPlanes(env, info[0], "masteringRepairApply", &planes)) {
+    return env.Undefined();
+  }
+  const int sr = node_narrow_int(env, info[1], "sampleRate");
+  const std::string stages = node_narrow_string(env, info[2], "stagesJson");
+  // The input planes are lent across the callbacks: the core copies them before the first one.
+  ProgressContext progress{env, info[3].As<Napi::Function>(),
+                           std::optional<Napi::Function>(info[4].As<Napi::Function>())};
+  char* reports = nullptr;
+  const SonareError err = sonare_mastering_repair_apply(
+      planes.in_ptrs.data(), planes.in_ptrs.size(), planes.length, sr, stages.c_str(),
+      ReportProgress, &progress, planes.out_ptrs.data(), &reports, CancellationRequested,
+      &progress);
+  // A callback's pending exception wins over the error code it caused.
+  if (env.IsExceptionPending()) {
+    sonare_free_string(reports);
+    return env.Undefined();
+  }
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("channels", repair_detail::EmitLinkedChannels(env, planes));
+  out.Set("reportsJson", Napi::String::New(env, reports));
+  sonare_free_string(reports);
   return out;
   SONARE_NODE_CATCH(env)
 }

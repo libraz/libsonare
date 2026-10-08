@@ -5,11 +5,11 @@
  * with the same fixture without the defect, because a detector that always
  * answers zero and one that found nothing read the same from one call.
  *
- * The two contrasts these entries exist to keep straight are pinned here rather
- * than described: `detectNoiseFloor` REFUSES a buffer shorter than `nFft` while
- * `detectReverb` pads the same buffer, and a silent channel contributes no edge
- * to `detectTrimRangeStereo`'s union -- a naive min/max over the two channel
- * ranges passes every other assertion in this file and fails that one.
+ * Two contracts are pinned here rather than described: `detectNoiseFloor` and
+ * `detectReverb` both pad a buffer shorter than `nFft`, and a silent channel
+ * contributes no edge to `detectTrimRangeStereo`'s union -- a naive min/max
+ * over the two channel ranges passes every other assertion in this file and
+ * fails that one.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -140,21 +140,18 @@ describe('masteringRepairDetectNoiseFloor', () => {
     expect(loud.floorDbfs - quiet.floorDbfs).toBeCloseTo(20, 0);
   });
 
-  it('refuses a buffer shorter than nFft, where detectReverb pads the same one', () => {
+  it('pads a buffer shorter than nFft, as detectReverb pads the same one', () => {
     const short = tone(512, 440);
-    expect(() =>
-      masteringRepairDetectNoiseFloor({ samples: short, sampleRate: SR, nFft: 1024 }),
-    ).toThrow(/at least n_fft/);
-    // The same buffer, the same nFft, through the entry that pads instead.
-    const padded = masteringRepairDetectReverb({ samples: short, sampleRate: SR, nFft: 1024 });
-    expect(Number.isFinite(padded.lateDecayRatioDb)).toBe(true);
-    // And the refusal is the length rather than the buffer: an nFft it does
-    // reach is accepted.
+    const padded = new Float32Array(1024);
+    padded.set(short);
+    // A short buffer measures as the same buffer zero-padded to nFft.
     expect(
-      Number.isFinite(
-        masteringRepairDetectNoiseFloor({ samples: short, sampleRate: SR, nFft: 512 }).floorDbfs,
-      ),
-    ).toBe(true);
+      masteringRepairDetectNoiseFloor({ samples: short, sampleRate: SR, nFft: 1024 }).floorDbfs,
+    ).toBe(
+      masteringRepairDetectNoiseFloor({ samples: padded, sampleRate: SR, nFft: 1024 }).floorDbfs,
+    );
+    const reverb = masteringRepairDetectReverb({ samples: short, sampleRate: SR, nFft: 1024 });
+    expect(Number.isFinite(reverb.lateDecayRatioDb)).toBe(true);
   });
 });
 

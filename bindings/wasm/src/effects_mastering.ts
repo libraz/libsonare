@@ -52,6 +52,7 @@ export type {
   MasteringAssistantParamsRequest,
   MasteringAssistantStereoParamsRequest,
   MasteringAudioProfile,
+  MasteringAudioProfileDefects,
   MasteringChannelPolicy,
   MasteringInsertParamChoice,
   MasteringInsertParamInfo,
@@ -183,6 +184,16 @@ export {
   masteringRepairDetectNoiseFloor,
   masteringRepairNoiseBandBins,
 } from './repair_noise.js';
+export type {
+  MasteringRepairAnalysis,
+  MasteringRepairAnalyzeRequest,
+  MasteringRepairApplyRequest,
+  MasteringRepairApplyResult,
+  MasteringRepairStage,
+  MasteringRepairStageName,
+  MasteringRepairStageReports,
+} from './repair_session.js';
+export { masteringRepairAnalyze, masteringRepairApply } from './repair_session.js';
 export type {
   MasteringRepairDetectTrimRangeRequest,
   MasteringRepairDetectTrimRangeStereoRequest,
