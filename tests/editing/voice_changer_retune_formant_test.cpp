@@ -32,6 +32,40 @@ TEST_CASE("StreamingRetune shifts block pitch up an octave", "[voice_changer]") 
   REQUIRE_THAT(dominant, WithinRel(2.0f * f0, 0.08f));
 }
 
+TEST_CASE("StreamingRetune moves a tone by exactly 2^(semitones/12) at both common rates",
+          "[voice_changer]") {
+  // One spectral line is read with a sub-bin estimator the stage shares nothing with. The
+  // bound is two bins of the analysis FFT; a grain overlap-add whose grains are not phase
+  // coherent lands the line on f0 + k * (sample_rate / hop) instead, tens of hertz away.
+  constexpr int kAnalysis = 65536;
+  constexpr int kBlock = 512;
+  for (const int sample_rate : {44100, 48000}) {
+    for (const float f0 : {220.0f, 440.0f}) {
+      for (const float semitones : {-12.0f, -5.0f, 4.0f, 7.0f, 12.0f}) {
+        CAPTURE(sample_rate, f0, semitones);
+        StreamingRetune retune({semitones, 1.0f});
+        retune.prepare(sample_rate, kBlock);
+        // Skip the latency plus the first grains, where the ring is still part zeros.
+        const int skip = 4 * retune.latency_samples();
+        const int total = skip + kAnalysis;
+        const auto input = sine(f0, sample_rate, total);
+        std::vector<float> output(static_cast<size_t>(total), 0.0f);
+        for (int pos = 0; pos < total; pos += kBlock) {
+          const int n = std::min(kBlock, total - pos);
+          retune.process_block(input.data() + pos, output.data() + pos, n);
+        }
+        const std::vector<float> steady(output.begin() + skip, output.end());
+        const double expected =
+            static_cast<double>(f0) * std::exp2(static_cast<double>(semitones) / 12.0);
+        const double measured = peak_frequency(steady, sample_rate, 50.0, 2000.0);
+        const double bin_hz = static_cast<double>(sample_rate) / kAnalysis;
+        CAPTURE(expected, measured, bin_hz);
+        REQUIRE_THAT(measured, WithinAbs(expected, 2.0 * bin_hz));
+      }
+    }
+  }
+}
+
 TEST_CASE("StreamingRetune derives grain size from sample rate unless configured",
           "[voice_changer]") {
   StreamingRetune low_rate;

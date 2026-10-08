@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 
 #include "util/constants.h"
 #include "util/exception.h"
@@ -19,6 +20,9 @@ namespace {
 constexpr double kDefaultGrainSeconds = 2048.0 / 44100.0;
 constexpr float kMaxSemitones = 24.0f;  // Clamp shift range to +/- 2 octaves.
 constexpr int kMaxGrainSize = 8192;
+// Source delay the coherent read may drift through before it is re-anchored: the
+// longest a transient can be re-read late, against how often a jump is audible.
+constexpr int kWrapRoomGrains = 2;
 
 StreamingRetuneConfig sanitize_config(StreamingRetuneConfig config) noexcept {
   config.semitones = std::isfinite(config.semitones)
@@ -58,7 +62,12 @@ void StreamingRetune::prepare(double sample_rate, int max_block_size) {
 
   grain_size_ = resolve_grain_size(requested_grain_size_, sample_rate_);
   hop_a_ = grain_size_ / 4;
-  ring_cap_ = static_cast<std::size_t>(4 * grain_size_);
+  wrap_room_ = kWrapRoomGrains * grain_size_;
+  // The ring holds the widest grain source span, the whole wrap room behind it, and the
+  // hop of source the alignment search reads ahead of the previous grain's anchor.
+  const int max_span = static_cast<int>(
+      std::ceil(static_cast<double>(grain_size_) * std::exp2(kMaxSemitones / kSemitonesPerOctave)));
+  ring_cap_ = static_cast<std::size_t>(max_span + wrap_room_ + 2 * hop_a_);
   accum_cap_ = static_cast<std::size_t>(2 * grain_size_);
 
   // Precompute periodic Hann window.
@@ -87,6 +96,7 @@ void StreamingRetune::reset() {
   std::fill(norm_acc_.begin(), norm_acc_.end(), 0.0f);
   write_head_ = 0;
   input_phase_ = 0;
+  anchor_delay_ = 0.0;
   drain_pos_ = 0;
   // Place the first grain one hop ahead of the drain tap. A slot is written by
   // every grain that overlaps it, and the last of those is only emitted one hop
@@ -139,6 +149,49 @@ float StreamingRetune::read_ring_linear(double position) const noexcept {
   return ring_buf_[i0] * (1.0f - frac) + ring_buf_[i1] * frac;
 }
 
+void StreamingRetune::realign_anchor(double previous_end, double source_span) noexcept {
+  // The room ends where the history written since reset() ends, so the first grains after a
+  // reset re-read the stream's start rather than the silence before it.
+  const double room = std::clamp(static_cast<double>(write_head_) - source_span, 0.0,
+                                 static_cast<double>(wrap_room_));
+  // Candidates fill one hop at the end of the room opposite to the drift, so the next jump is
+  // as far off as it can be; the best match to the previous grain's last hop keeps the phase.
+  const bool toward_history = anchor_delay_ < 0.0;
+  const double lo = toward_history ? std::max(0.0, room - static_cast<double>(hop_a_)) : 0.0;
+  const double hi = toward_history ? room : std::min(static_cast<double>(hop_a_), room);
+  // Integer jumps keep the anchor's fraction, so the reference and every candidate are read
+  // at whole ring indices.
+  const std::int64_t ref_begin = static_cast<std::int64_t>(std::floor(previous_end)) - hop_a_;
+  const std::int64_t jump_min = static_cast<std::int64_t>(std::ceil(anchor_delay_ - hi));
+  const std::int64_t jump_max = static_cast<std::int64_t>(std::floor(anchor_delay_ - lo));
+  // Indices run negative while the ring is still filling after reset().
+  const auto ring_at = [&](std::int64_t index) noexcept {
+    const std::int64_t cap = static_cast<std::int64_t>(ring_cap_);
+    return ring_buf_[static_cast<std::size_t>(((index % cap) + cap) % cap)];
+  };
+  double best_score = -1.0;
+  std::int64_t best_jump = toward_history ? jump_min : jump_max;
+  // Scan from the far end inward so a silent reference keeps the full room.
+  const std::int64_t step = toward_history ? 1 : -1;
+  for (std::int64_t jump = best_jump; jump >= jump_min && jump <= jump_max; jump += step) {
+    double dot = 0.0;
+    double energy = 0.0;
+    for (int m = 0; m < hop_a_; ++m) {
+      const double ref = ring_at(ref_begin + m);
+      const double cand = ring_at(ref_begin + m + jump);
+      dot += ref * cand;
+      energy += cand * cand;
+    }
+    const double score = dot / std::sqrt(energy + static_cast<double>(kSpectrumEpsilon));
+    if (score > best_score) {
+      best_score = score;
+      best_jump = jump;
+    }
+  }
+  // Only a room narrower than one sample leaves no integer jump; it then collapses to its end.
+  anchor_delay_ = std::clamp(anchor_delay_ - static_cast<double>(best_jump), lo, hi);
+}
+
 void StreamingRetune::emit_grain() noexcept {
   // The semitone smoother still advances at every sample, but the expensive
   // exponential is only needed when a new grain captures its ratio. Keeping
@@ -147,15 +200,21 @@ void StreamingRetune::emit_grain() noexcept {
   update_ratio();
   // Grain-resampling pitch shift: a grain of grain_size output samples is
   // sourced from grain_size * pitch_ratio input samples via linear
-  // interpolation. The source window ends at the current write head (most
-  // recent complete grain). Grains are overlap-added at hop_a on both the
-  // analysis and synthesis sides; the per-grain resampling is what shifts
-  // pitch. For pitch_ratio > 1 (positive semitones) the read advances faster
-  // than one sample per output sample, packing more signal cycles into the
-  // fixed grain length and raising the pitch.
+  // interpolation. Grains are overlap-added at hop_a on both the analysis and
+  // synthesis sides; the per-grain resampling is what shifts pitch. For
+  // pitch_ratio > 1 (positive semitones) the read advances faster than one
+  // sample per output sample, packing more signal cycles into the fixed grain
+  // length and raising the pitch.
   const double source_span = static_cast<double>(grain_size_) * pitch_ratio_;
-  // Start so the resampled grain ends at the latest sample written.
-  const double start = static_cast<double>(write_head_) - source_span;
+  const double previous_end =
+      static_cast<double>(write_head_) - static_cast<double>(hop_a_) - anchor_delay_;
+  // Coherent with the previous grain: its source end moved by hop * ratio while the head moved
+  // by one hop. Snapping to the head instead re-locks the overlap-add to the input period.
+  anchor_delay_ += static_cast<double>(hop_a_) * (1.0 - pitch_ratio_);
+  if (anchor_delay_ < 0.0 || anchor_delay_ > static_cast<double>(wrap_room_)) {
+    realign_anchor(previous_end, source_span);
+  }
+  const double start = static_cast<double>(write_head_) - anchor_delay_ - source_span;
 
   for (int n = 0; n < grain_size_; ++n) {
     const double read_pos = start + static_cast<double>(n) * pitch_ratio_;

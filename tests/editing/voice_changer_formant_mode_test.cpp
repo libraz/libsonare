@@ -428,8 +428,8 @@ std::vector<float> run_chain(RealtimeVoiceChanger& chain, const std::vector<floa
 }
 
 // Power-weighted mean frequency of a segment over the vowel's band, from a Welch-averaged
-// spectrum. The grain retune overlaps unaligned grains, which puts a different gain on every
-// harmonic, so a peak of the envelope is not stable there while the centroid, an average over
+// spectrum. The retune moves the harmonics under the envelope, so a single envelope peak
+// sampled at the harmonics is not stable across shifts while the centroid, an average over
 // many harmonics, follows the envelope.
 double band_centroid(const std::vector<float>& segment, int sample_rate) {
   constexpr int kSize = 4096;
@@ -536,25 +536,27 @@ TEST_CASE("The realtime chain in absolute mode places the formants at input time
 TEST_CASE("The realtime chain in absolute mode leaves the pitch to the retune",
           "[voice_changer][formant_mode][realtime]") {
   constexpr int sample_rate = 48000;
-  const std::vector<float> input = sine(220.0f, sample_rate, sample_rate);
-  // The grain retune does not hold a pure tone's strongest line within a few percent of the
-  // asked ratio, so the reference is the retune alone: the warp ahead of it must not move it.
+  constexpr float f0 = 220.0f;
+  constexpr int kSegment = 16384;
+  const std::vector<float> input = sine(f0, sample_rate, sample_rate);
+  // In both modes the strongest line sits at the asked ratio to within the estimator's one
+  // whole bin: the warp ahead of the retune must not move it, and the retune must land it.
+  const double bin_hz = static_cast<double>(sample_rate) / kSegment;
   for (const float semitones : {4.0f, -5.0f}) {
-    CAPTURE(semitones);
-    double peak_hz[2] = {};
-    int index = 0;
+    const double expected = f0 * std::exp2(static_cast<double>(semitones) / 12.0);
     for (const FormantMode mode : {FormantMode::Relative, FormantMode::Absolute}) {
+      CAPTURE(semitones, mode == FormantMode::Absolute);
       RealtimeVoiceChanger chain(bare_chain_config(semitones, 1.0f, mode));
       chain.prepare(sample_rate, 128, 1);
       const std::vector<float> output = run_chain(chain, input);
       const size_t start = static_cast<size_t>(sample_rate) / 3 + chain.latency_samples();
-      const std::vector<float> segment(output.begin() + static_cast<std::ptrdiff_t>(start),
-                                       output.begin() + static_cast<std::ptrdiff_t>(start) + 16384);
-      peak_hz[index++] = spectral_peak_hz(segment, sample_rate);
+      const std::vector<float> segment(
+          output.begin() + static_cast<std::ptrdiff_t>(start),
+          output.begin() + static_cast<std::ptrdiff_t>(start) + kSegment);
+      const double peak_hz = spectral_peak_hz(segment, sample_rate);
+      CAPTURE(expected, peak_hz, bin_hz);
+      REQUIRE_THAT(peak_hz, WithinAbs(expected, bin_hz));
     }
-    CAPTURE(peak_hz[0], peak_hz[1]);
-    REQUIRE_THAT(peak_hz[1], WithinRel(peak_hz[0], 0.02));
-    REQUIRE((peak_hz[1] > 220.0) == (semitones > 0.0f));
   }
 }
 

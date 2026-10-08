@@ -138,6 +138,46 @@ namespace {
   return static_cast<float>(sample_rate) / static_cast<float>(best_lag);
 }
 
+// Frequency (Hz) of the strongest spectral line in [fmin, fmax]: Hann-windowed
+// FFT over the whole segment, peak bin refined by parabolic interpolation of the
+// log magnitude. Resolution is a fraction of one bin (sample_rate / size), which
+// is what makes it independent of any time-domain period estimate.
+[[maybe_unused]] double peak_frequency(const std::vector<float>& samples, int sample_rate,
+                                       double fmin, double fmax) {
+  int n_fft = 1;
+  while (n_fft < static_cast<int>(samples.size())) n_fft *= 2;
+  std::vector<float> frame(static_cast<size_t>(n_fft), 0.0f);
+  const int n = static_cast<int>(samples.size());
+  for (int i = 0; i < n; ++i) {
+    const float w = 0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * static_cast<float>(i) /
+                                           static_cast<float>(n));
+    frame[static_cast<size_t>(i)] = samples[static_cast<size_t>(i)] * w;
+  }
+  sonare::FFT fft(n_fft);
+  std::vector<std::complex<float>> spec(static_cast<size_t>(fft.n_bins()));
+  fft.forward(frame.data(), spec.data());
+
+  const double bin_hz = static_cast<double>(sample_rate) / n_fft;
+  const int lo = std::max(1, static_cast<int>(fmin / bin_hz));
+  const int hi = std::min(fft.n_bins() - 2, static_cast<int>(fmax / bin_hz));
+  int best = lo;
+  for (int b = lo; b <= hi; ++b) {
+    if (std::abs(spec[static_cast<size_t>(b)]) > std::abs(spec[static_cast<size_t>(best)])) {
+      best = b;
+    }
+  }
+  const auto log_mag = [&](int b) {
+    return std::log(static_cast<double>(std::abs(spec[static_cast<size_t>(b)])) +
+                    sonare::constants::kEpsilon);
+  };
+  const double a = log_mag(best - 1);
+  const double m = log_mag(best);
+  const double c = log_mag(best + 1);
+  const double denom = a - 2.0 * m + c;
+  const double delta = denom != 0.0 ? 0.5 * (a - c) / denom : 0.0;
+  return (static_cast<double>(best) + delta) * bin_hz;
+}
+
 [[maybe_unused]] float block_rms(const std::vector<float>& samples, std::size_t start,
                                  std::size_t end) {
   if (end <= start) return 0.0f;

@@ -23,10 +23,21 @@ struct StreamingRetuneConfig {
 /// @details Uses fixed-size Hann-windowed grains, overlap-added at the analysis
 ///          hop. Each grain is resampled from a history ring buffer with a
 ///          fractional read increment equal to the pitch ratio, so positive
-///          semitones read source faster and raise pitch. Because the window is
-///          applied once, the overlap-added sum is normalized by the sum of the
-///          contributing window values, which makes the output a weighted
-///          average of the overlapping grains and keeps the level unchanged.
+///          semitones read source faster and raise pitch. Overlapping grains
+///          read one continuous resampling of the source: the read anchor
+///          drifts behind the write head by hop * (1 - ratio) per grain, and
+///          when it leaves a room of two grains it is re-aligned by a
+///          cross-correlation search over one hop of source, so the jump lands
+///          on a whole number of source periods. The wet path therefore trails
+///          the input by @ref latency_samples() plus up to two grains that vary
+///          with the shift; at unity ratio the extra delay is zero, and the room
+///          only reaches as far back as the history written since reset(), so
+///          the first grains after a reset re-read the stream's start rather
+///          than waiting on silence. Because the
+///          window is applied once, the overlap-added sum is normalized by the
+///          sum of the contributing window values, which makes the output a
+///          weighted average of the overlapping grains and keeps the level
+///          unchanged.
 ///          All state (ring buffer, write head, OLA accumulators,
 ///          drain/synthesis positions) persists across process_block calls.
 ///          Allocation happens only in prepare().
@@ -59,6 +70,7 @@ class StreamingRetune {
  private:
   void update_ratio() noexcept;
   void emit_grain() noexcept;
+  void realign_anchor(double previous_end, double source_span) noexcept;
   float read_ring_linear(double position) const noexcept;
 
   StreamingRetuneConfig config_{};
@@ -78,7 +90,8 @@ class StreamingRetune {
 
   int grain_size_ = 0;         ///< Grain length in samples.
   int hop_a_ = 0;              ///< Analysis/synthesis hop (grain_size / 4).
-  std::size_t ring_cap_ = 0;   ///< History ring capacity (4 * grain_size).
+  int wrap_room_ = 0;          ///< Source delay the anchor may drift through (2 * grain_size).
+  std::size_t ring_cap_ = 0;   ///< History ring capacity (widest span + room + search).
   std::size_t accum_cap_ = 0;  ///< OLA accumulator capacity (2 * grain_size).
 
   double pitch_ratio_ = 1.0;
@@ -95,6 +108,7 @@ class StreamingRetune {
   std::vector<float> dry_delay_;  ///< Dry path aligned to OLA output latency.
 
   std::uint64_t write_head_ = 0;  ///< Total samples written to ring.
+  double anchor_delay_ = 0.0;     ///< Source delay of the current grain's end behind write_head_.
   int input_phase_ = 0;           ///< Counts samples until next grain emit.
   std::size_t drain_pos_ = 0;     ///< Front of OLA accumulator (output tap).
   std::size_t synth_pos_ = 0;     ///< Current grain write position in OLA.
