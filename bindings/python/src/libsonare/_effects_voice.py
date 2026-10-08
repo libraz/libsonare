@@ -47,6 +47,8 @@ from ._runtime import (
 
 _VOICE_CHANGE_STRUCT_VERSION = 1
 _FORMANT_MODES = {"relative": 0, "absolute": 1}
+_FORMANT_MODE_NAMES = {value: name for name, value in _FORMANT_MODES.items()}
+_REALTIME_CONFIG_STRUCT_VERSION = 1
 
 
 def voice_change(
@@ -113,6 +115,20 @@ def voice_change(
         return _float_array_result(out, out_length.value)
 
 
+def _check_voice_config(rc: int) -> None:
+    """Like :func:`_check`, but a refused configuration is an argument refusal.
+
+    The core refuses an out-of-reach absolute formant warp and a live formant-mode change
+    with INVALID_PARAMETER and a message naming the cause.
+    """
+    try:
+        _check(rc)
+    except SonareError as exc:
+        if exc.code == int(ErrorCode.INVALID_PARAMETER):
+            raise SonareValueError(str(exc).split("] ", 1)[-1]) from exc
+        raise
+
+
 def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
     if isinstance(preset, str):
         return _utf8_arg(preset, "preset")
@@ -143,7 +159,7 @@ class RealtimeVoiceChanger:
             _to_c_int(channels, "channels"),
             ctypes.byref(self._handle),
         )
-        _check(rc)
+        _check_voice_config(rc)
 
     def close(self) -> None:
         if self._handle:
@@ -168,7 +184,7 @@ class RealtimeVoiceChanger:
         rc = self._lib.sonare_realtime_voice_changer_set_config_json(
             self._handle, _voice_config_to_json(preset)
         )
-        _check(rc)
+        _check_voice_config(rc)
 
     def latency_samples(self) -> int:
         out = ctypes.c_int()
@@ -248,7 +264,7 @@ class RealtimeVoiceChanger:
             )
         pod = config.to_pod()
         rc = self._lib.sonare_realtime_voice_changer_set_config(self._handle, ctypes.byref(pod))
-        _check(rc)
+        _check_voice_config(rc)
 
     def process_mono(self, samples: Sequence[float] | list[float] | np.ndarray) -> np.ndarray:
         """Process a mono buffer block-by-block and return the result as ndarray.
@@ -506,7 +522,7 @@ def _neutral_default(name: str) -> Callable[[], Any]:
 
 @dataclasses.dataclass
 class RealtimeVoiceChangerConfig:
-    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (36 fields).
+    """Flat mirror of :class:`SonareRealtimeVoiceChangerConfig` (37 fields).
 
     Field order matches the C POD struct in ``sonare_c.h``. The default value of
     every field is seeded from the built-in ``neutral-monitor`` preset (fetched
@@ -515,6 +531,14 @@ class RealtimeVoiceChangerConfig:
     Values are normalised on the C side after
     :func:`RealtimeVoiceChanger.set_config_pod`, so out-of-range entries are
     clamped rather than rejected.
+
+    ``formant_mode`` is ``"relative"`` (default) or ``"absolute"`` and is fixed
+    when the changer is created: :func:`RealtimeVoiceChanger.set_config_pod`
+    with a different mode raises. In absolute mode ``formant_factor`` is the
+    formant shift relative to the input, ``formant_amount`` is ignored, one
+    analysis frame of latency is added, and a configuration whose warp
+    ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] raises
+    a ``SonareValueError`` naming the reachable ``formant_factor`` range.
     """
 
     input_gain_db: float = dataclasses.field(default_factory=_neutral_default("input_gain_db"))
@@ -534,6 +558,7 @@ class RealtimeVoiceChangerConfig:
         default_factory=_neutral_default("formant_brightness")
     )
     formant_nasal: float = dataclasses.field(default_factory=_neutral_default("formant_nasal"))
+    formant_mode: str = "relative"
     eq_highpass_hz: float = dataclasses.field(default_factory=_neutral_default("eq_highpass_hz"))
     eq_body_db: float = dataclasses.field(default_factory=_neutral_default("eq_body_db"))
     eq_presence_db: float = dataclasses.field(default_factory=_neutral_default("eq_presence_db"))
@@ -590,13 +615,28 @@ class RealtimeVoiceChangerConfig:
     @classmethod
     def from_pod(cls, pod: SonareRealtimeVoiceChangerConfig) -> RealtimeVoiceChangerConfig:
         """Copy field-for-field out of a ctypes struct."""
-        return cls(**{name: getattr(pod, name) for name, *_ in pod._fields_})
+        values = {
+            name: getattr(pod, name)
+            for name, *_ in pod._fields_
+            if name not in ("struct_version", "formant_mode")
+        }
+        mode = _FORMANT_MODE_NAMES.get(int(pod.formant_mode))
+        if mode is None:
+            raise SonareValueError(f"unknown formant_mode ordinal: {pod.formant_mode}")
+        return cls(formant_mode=mode, **values)
 
     def to_pod(self) -> SonareRealtimeVoiceChangerConfig:
         """Copy field-for-field into a freshly allocated ctypes struct."""
+        if not isinstance(self.formant_mode, str) or self.formant_mode not in _FORMANT_MODES:
+            raise SonareValueError(
+                f"formant_mode must be 'relative' or 'absolute', got {self.formant_mode!r}"
+            )
         out = SonareRealtimeVoiceChangerConfig()
+        out.struct_version = _REALTIME_CONFIG_STRUCT_VERSION
+        out.formant_mode = _FORMANT_MODES[self.formant_mode]
         for name, *_ in out._fields_:
-            setattr(out, name, getattr(self, name))
+            if name not in ("struct_version", "formant_mode"):
+                setattr(out, name, getattr(self, name))
         return out
 
 

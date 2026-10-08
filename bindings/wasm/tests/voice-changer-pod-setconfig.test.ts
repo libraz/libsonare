@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   init,
   RealtimeVoiceChanger,
+  type RealtimeVoiceChangerPodConfig,
   realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
 } from '../src/index';
@@ -11,7 +12,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     await init();
   });
 
-  it('round-trips all 36 fields of a flat preset POD', () => {
+  it('round-trips all 37 fields of a flat preset POD', () => {
     const pod = realtimeVoiceChangerPresetConfig('bright-idol');
     expect(pod).not.toBeNull();
     if (!pod) {
@@ -76,6 +77,7 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
           body: f32(pod.formantBody),
           brightness: f32(pod.formantBrightness),
           nasal: f32(pod.formantNasal),
+          mode: pod.formantMode,
         },
         eq: {
           highpassHz: f32(pod.eqHighpassHz),
@@ -151,5 +153,57 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     const vc = new RealtimeVoiceChanger(pod);
     expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
     vc.delete();
+  });
+
+  it('carries the formant mode, fixed once the changer is prepared', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    expect(pod?.formantMode).toBe('relative');
+    if (!pod) {
+      return;
+    }
+    const relative = new RealtimeVoiceChanger(pod);
+    const absolute = new RealtimeVoiceChanger({
+      ...pod,
+      formantMode: 'absolute',
+      formantFactor: 1.1,
+    });
+    try {
+      relative.prepare(48000, 128, 1);
+      absolute.prepare(48000, 128, 1);
+      // One analysis frame (1024 samples at 48 kHz) more than the relative chain.
+      expect(absolute.latencySamples()).toBe(relative.latencySamples() + 1024);
+      absolute.setConfig({ ...pod, formantMode: 'absolute', formantFactor: 1.2 });
+      expect(() => absolute.setConfig({ ...pod, formantMode: 'relative' })).toThrow();
+      expect(() => relative.setConfig({ ...pod, formantMode: 'absolute' })).toThrow();
+    } finally {
+      relative.delete();
+      absolute.delete();
+    }
+  });
+
+  it('refuses an unreachable absolute warp and names the formant factor range', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    if (!pod) {
+      return;
+    }
+    expect(
+      () => new RealtimeVoiceChanger({ ...pod, formantMode: 'absolute', retuneSemitones: -9 }),
+    ).toThrow(/\[0\.55, 0\.9811\]/);
+  });
+
+  it('refuses a POD without formantMode, as it refuses any partial POD', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    if (!pod) {
+      return;
+    }
+    const { formantMode: _omitted, ...partial } = pod;
+    const changer = new RealtimeVoiceChanger(pod);
+    try {
+      expect(() =>
+        changer.setPodConfig(partial as unknown as RealtimeVoiceChangerPodConfig),
+      ).toThrow(/formantMode/);
+    } finally {
+      changer.delete();
+    }
   });
 });

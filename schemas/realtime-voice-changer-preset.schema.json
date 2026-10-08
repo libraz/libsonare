@@ -64,7 +64,13 @@
             "amount": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
             "body": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
             "brightness": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
-            "nasal": { "type": "number", "minimum": -1.0, "maximum": 1.0 }
+            "nasal": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+            "mode": {
+              "type": "string",
+              "enum": ["relative", "absolute"],
+              "default": "relative",
+              "description": "absolute warps the formants to factor times the input's ahead of the retune (amount is ignored, one analysis frame of latency is added); fixed when the changer is prepared."
+            }
           }
         },
         "eq": {

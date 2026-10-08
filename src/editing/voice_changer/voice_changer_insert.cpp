@@ -71,6 +71,11 @@ const RealtimeVoiceChangerConfig& validated(const RealtimeVoiceChangerConfig& co
   SONARE_VOICE_CHANGER_INSERT_PARAMS(SONARE_CHECK_PARAM)
 #undef SONARE_CHECK_PARAM
   if (config.retune.grain_size != accepted.retune.grain_size) refuse("retuneGrainSize");
+  if (config.formant_mode != accepted.formant_mode) refuse("formantMode");
+  std::string reach;
+  if (!formant_warp_is_reachable(accepted, &reach)) {
+    throw SonareException(ErrorCode::InvalidParameter, "voice.changer: " + reach);
+  }
   return config;
 }
 

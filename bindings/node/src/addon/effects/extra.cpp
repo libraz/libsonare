@@ -130,6 +130,9 @@ Napi::Value SonareWrap::RealtimeVoiceChangerPresetConfig(const Napi::CallbackInf
   out.Set("formantBody", Napi::Number::New(env, config.formant_body));
   out.Set("formantBrightness", Napi::Number::New(env, config.formant_brightness));
   out.Set("formantNasal", Napi::Number::New(env, config.formant_nasal));
+  out.Set("formantMode",
+          Napi::String::New(
+              env, config.formant_mode == SONARE_FORMANT_MODE_ABSOLUTE ? "absolute" : "relative"));
   out.Set("eqHighpassHz", Napi::Number::New(env, config.eq_highpass_hz));
   out.Set("eqBodyDb", Napi::Number::New(env, config.eq_body_db));
   out.Set("eqPresenceDb", Napi::Number::New(env, config.eq_presence_db));

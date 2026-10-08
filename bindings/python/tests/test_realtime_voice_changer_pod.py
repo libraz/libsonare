@@ -25,12 +25,15 @@ pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, reason="libsonare shared libr
 
 
 def test_pod_struct_size_matches_c_abi() -> None:
-    """sonare_c.h pins sizeof == 36 * sizeof(float) (ABI v2)."""
-    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 36 * ctypes.sizeof(ctypes.c_float)
+    """sonare_c.h pins sizeof == 38 * sizeof(float) (ABI v3)."""
+    assert ctypes.sizeof(SonareRealtimeVoiceChangerConfig) == 38 * ctypes.sizeof(ctypes.c_float)
 
 
 def test_pod_dataclass_has_one_field_per_pod_field() -> None:
-    pod_field_names = {name for name, _ in SonareRealtimeVoiceChangerConfig._fields_}
+    # struct_version is the layout tag, not a setting.
+    pod_field_names = {
+        name for name, _ in SonareRealtimeVoiceChangerConfig._fields_ if name != "struct_version"
+    }
     dc_field_names = {f.name for f in dataclasses.fields(libsonare.RealtimeVoiceChangerConfig)}
     assert pod_field_names == dc_field_names
 
@@ -213,3 +216,50 @@ def test_to_pod_and_from_pod_are_inverses() -> None:
     cfg = libsonare.realtime_voice_changer_preset_pod("dark-villain")
     cycled = libsonare.RealtimeVoiceChangerConfig.from_pod(cfg.to_pod())
     assert dataclasses.astuple(cycled) == dataclasses.astuple(cfg)
+
+
+def _flat(config: libsonare.RealtimeVoiceChangerConfig) -> dict[str, object]:
+    """The camelCase flat document the JSON entry points accept for a POD."""
+    out: dict[str, object] = {}
+    for f in dataclasses.fields(config):
+        camel = "".join(
+            part if i == 0 else part.capitalize() for i, part in enumerate(f.name.split("_"))
+        )
+        value = getattr(config, f.name)
+        out[camel] = bool(value) if camel == "limiterEnableIspLimiter" else value
+    return out
+
+
+def test_formant_mode_is_a_string_field_defaulting_to_relative() -> None:
+    cfg = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    assert cfg.formant_mode == "relative"
+    pod = dataclasses.replace(cfg, formant_mode="absolute").to_pod()
+    assert pod.struct_version == 1
+    assert pod.formant_mode == 1
+    assert libsonare.RealtimeVoiceChangerConfig.from_pod(pod).formant_mode == "absolute"
+    with pytest.raises(ValueError, match="formant_mode"):
+        dataclasses.replace(cfg, formant_mode="sideways").to_pod()
+
+
+def test_formant_mode_is_fixed_when_the_changer_is_created() -> None:
+    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    absolute = dataclasses.replace(base, formant_mode="absolute", formant_factor=1.1)
+    with (
+        libsonare.RealtimeVoiceChanger(48000, _flat(base)) as relative,
+        libsonare.RealtimeVoiceChanger(48000, _flat(absolute)) as warped,
+    ):
+        # One analysis frame (1024 samples at 48 kHz) more than the relative chain.
+        assert warped.latency_samples() == relative.latency_samples() + 1024
+        assert warped.config_pod().formant_mode == "absolute"
+        warped.set_config_pod(dataclasses.replace(absolute, formant_factor=1.2))
+        with pytest.raises(ValueError, match="formant mode"):
+            warped.set_config_pod(base)
+        with pytest.raises(ValueError, match="formant mode"):
+            relative.set_config_pod(absolute)
+
+
+def test_unreachable_absolute_warp_is_refused_with_the_reachable_range() -> None:
+    base = libsonare.realtime_voice_changer_preset_config("neutral-monitor")
+    unreachable = dataclasses.replace(base, formant_mode="absolute", retune_semitones=-9.0)
+    with pytest.raises(ValueError, match=r"\[0\.55, 0\.9811\]"):
+        libsonare.RealtimeVoiceChanger(48000, _flat(unreachable))

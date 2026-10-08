@@ -278,6 +278,9 @@ void RealtimeVoiceChanger::process_block(float* const* channels, int num_channel
       const bool control_update = channel.control_cadence.advance();
       scratch_[i] = process_input_stage(channel, clean, control_update);
     }
+    if (prepared_formant_mode_ == FormantMode::Absolute) {
+      channel.warp.process(scratch_.data(), scratch_.data(), num_samples);
+    }
     channel.retune.process_block(scratch_.data(), scratch_.data(), num_samples);
     channel.formant.process_block(scratch_.data(), scratch_.data(), num_samples);
     float lowest_dynamics_gain = std::numeric_limits<float>::infinity();
@@ -367,7 +370,7 @@ int RealtimeVoiceChanger::latency_samples() const noexcept {
   // Both retune and whole-chain dry paths are aligned to the OLA latency, so
   // hosts see one fixed delay regardless of either mix control. Biquad/formant
   // group delays are intentionally omitted (<= 8 samples combined).
-  int latency = channels_[0].retune.latency_samples();
+  int latency = channels_[0].retune.latency_samples() + channels_[0].warp.latency_samples();
   if (latency_isp_enabled_.load(std::memory_order_relaxed)) {
     latency += channels_[0].isp_limiter.latency_samples();
   }

@@ -4,6 +4,7 @@
 #include <catch2/matchers/catch_matchers_string.hpp>
 
 #include "effects/pitch_shift.h"
+#include "support/alloc_guard.h"
 #include "voice_changer_test_helpers.h"
 
 namespace {
@@ -181,6 +182,36 @@ TEST_CASE("Absolute formant mode places the envelope peaks at input times the fa
   }
 }
 
+namespace {
+
+// The two lowest formants of the streaming warp's output against its input, read past the
+// stage's own delay.
+std::array<double, 2> stream_peak_ratios(int sample_rate, double f0, float factor) {
+  const int samples = sample_rate * 3 / 2;
+  const std::vector<float> input = three_formant_vowel(f0, sample_rate, samples);
+  sonare::FormantWarpStream stream;
+  stream.prepare(sonare::formant_warp_frame_size(sample_rate),
+                 sonare::formant_warp_lpc_order(sample_rate));
+  stream.set_factor(factor);
+  std::vector<float> output(input.size(), 0.0f);
+  stream.process(input.data(), output.data(), samples);
+
+  const size_t segment_len = static_cast<size_t>(sample_rate) / 2;
+  const size_t start = static_cast<size_t>(sample_rate) / 3;
+  const size_t latency = static_cast<size_t>(stream.latency_samples());
+  const std::vector<float> in_seg(input.begin() + static_cast<std::ptrdiff_t>(start),
+                                  input.begin() + static_cast<std::ptrdiff_t>(start + segment_len));
+  const std::vector<float> out_seg(
+      output.begin() + static_cast<std::ptrdiff_t>(start + latency),
+      output.begin() + static_cast<std::ptrdiff_t>(start + latency + segment_len));
+  const int lifter = static_cast<int>(0.6 * sample_rate / f0);
+  const auto in_peaks = envelope_peaks(in_seg, sample_rate, f0, lifter);
+  const auto out_peaks = envelope_peaks(out_seg, sample_rate, f0, lifter);
+  return {out_peaks[0] / in_peaks[0], out_peaks[1] / in_peaks[1]};
+}
+
+}  // namespace
+
 TEST_CASE("Relative formant mode still moves the formants with the pitch",
           "[voice_changer][formant_mode]") {
   // Relative factor 1 applies no warp, so the envelope rides the resampling ratio.
@@ -188,6 +219,30 @@ TEST_CASE("Relative formant mode still moves the formants with the pitch",
   const double ratio = std::exp2(4.0 / 12.0);
   for (size_t k = 0; k < 2; ++k) {
     REQUIRE_THAT(m.output_peaks[k] / m.input_peaks[k], WithinRel(ratio, 0.05));
+  }
+}
+
+TEST_CASE("The streaming warp moves the envelope peaks by the factor at both common rates",
+          "[voice_changer][formant_mode]") {
+  // Same estimator and tolerance as the one-shot cases above, since the one-shot warp is this
+  // stage run over a whole buffer.
+  constexpr double kPeakTolerance = 0.05;
+  for (const float factor : {0.8f, 0.9f, 1.2f, 1.25f}) {
+    std::array<std::array<double, 2>, 2> by_rate{};
+    int index = 0;
+    for (const int sample_rate : {44100, 48000}) {
+      CAPTURE(sample_rate, factor);
+      const auto ratios = stream_peak_ratios(sample_rate, 125.0, factor);
+      for (size_t k = 0; k < 2; ++k) {
+        CAPTURE(k, ratios[k]);
+        REQUIRE_THAT(ratios[k], WithinRel(static_cast<double>(factor), kPeakTolerance));
+      }
+      by_rate[static_cast<size_t>(index++)] = ratios;
+    }
+    // The two rates land the same peaks to within the estimator's resolution.
+    for (size_t k = 0; k < 2; ++k) {
+      REQUIRE_THAT(by_rate[0][k], WithinRel(by_rate[1][k], kPeakTolerance));
+    }
   }
 }
 
@@ -340,4 +395,312 @@ TEST_CASE("sonare_voice_change_ex selects the formant mode",
   config.struct_version = 2;
   REQUIRE(run(&config, &none) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(run(nullptr, &none) == SONARE_ERROR_INVALID_PARAMETER);
+}
+
+namespace {
+
+// Everything but the pitch and formant stages set to transparent.
+RealtimeVoiceChangerConfig bare_chain_config(float semitones, float factor, FormantMode mode) {
+  RealtimeVoiceChangerConfig cfg;
+  cfg.wet_mix = 1.0f;
+  cfg.retune = {semitones, 1.0f, 0};
+  cfg.formant = {factor, 1.0f, 0.0f, 0.0f, 0.0f};
+  cfg.formant_mode = mode;
+  cfg.eq = {20.0f, 0.0f, 0.0f, 0.0f};
+  cfg.gate = {-90.0f, 1.0f, 50.0f, 0.0f};
+  cfg.compressor.ratio = 1.0f;
+  cfg.compressor.makeup_gain_db = 0.0f;
+  cfg.deesser = {7000.0f, -6.0f, 1.0f, 0.0f};
+  cfg.reverb.mix = 0.0f;
+  cfg.limiter.ceiling_db = -1.0f;
+  cfg.limiter.enable_isp_limiter = false;
+  return cfg;
+}
+
+std::vector<float> run_chain(RealtimeVoiceChanger& chain, const std::vector<float>& input,
+                             int block = 128) {
+  std::vector<float> output(input.size());
+  for (size_t pos = 0; pos < input.size(); pos += static_cast<size_t>(block)) {
+    const int n = static_cast<int>(std::min(static_cast<size_t>(block), input.size() - pos));
+    chain.process_block(input.data() + pos, output.data() + pos, n);
+  }
+  return output;
+}
+
+// Power-weighted mean frequency of a segment over the vowel's band, from a Welch-averaged
+// spectrum. The grain retune overlaps unaligned grains, which puts a different gain on every
+// harmonic, so a peak of the envelope is not stable there while the centroid, an average over
+// many harmonics, follows the envelope.
+double band_centroid(const std::vector<float>& segment, int sample_rate) {
+  constexpr int kSize = 4096;
+  constexpr double kLowHz = 100.0;
+  constexpr double kHighHz = 4500.0;
+  sonare::FFT fft(kSize);
+  std::vector<float> frame(kSize);
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  std::vector<double> power(static_cast<size_t>(fft.n_bins()), 0.0);
+  for (size_t pos = 0; pos + kSize <= segment.size(); pos += kSize / 2) {
+    for (int i = 0; i < kSize; ++i) {
+      const float w = 0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * static_cast<float>(i) /
+                                             static_cast<float>(kSize));
+      frame[static_cast<size_t>(i)] = segment[pos + static_cast<size_t>(i)] * w;
+    }
+    fft.forward(frame.data(), spectrum.data());
+    for (size_t k = 0; k < power.size(); ++k) power[k] += std::norm(spectrum[k]);
+  }
+  double weighted = 0.0;
+  double total = 0.0;
+  for (size_t k = 0; k < power.size(); ++k) {
+    const double hz = static_cast<double>(k) * sample_rate / kSize;
+    if (hz < kLowHz || hz > kHighHz) continue;
+    weighted += hz * power[k];
+    total += power[k];
+  }
+  return weighted / total;
+}
+
+// Frequency of the strongest spectral line of a segment, between 100 and 600 Hz.
+double spectral_peak_hz(const std::vector<float>& segment, int sample_rate) {
+  const int size = static_cast<int>(segment.size());
+  sonare::FFT fft(size);
+  std::vector<float> frame(segment.size());
+  for (int i = 0; i < size; ++i) {
+    const float w = 0.5f - 0.5f * std::cos(sonare::constants::kTwoPi * static_cast<float>(i) /
+                                           static_cast<float>(size));
+    frame[static_cast<size_t>(i)] = segment[static_cast<size_t>(i)] * w;
+  }
+  std::vector<std::complex<float>> spectrum(static_cast<size_t>(fft.n_bins()));
+  fft.forward(frame.data(), spectrum.data());
+  size_t best = 0;
+  float best_power = 0.0f;
+  for (size_t k = 0; k < spectrum.size(); ++k) {
+    const double hz = static_cast<double>(k) * sample_rate / size;
+    if (hz < 100.0 || hz > 600.0) continue;
+    if (std::norm(spectrum[k]) > best_power) {
+      best_power = std::norm(spectrum[k]);
+      best = k;
+    }
+  }
+  return static_cast<double>(best) * sample_rate / size;
+}
+
+// Centroid of the chain's output over that of its input, read past the chain's latency.
+double chain_centroid_ratio(int sample_rate, float semitones, float factor, FormantMode mode) {
+  const int samples = sample_rate * 3 / 2;
+  const std::vector<float> input = three_formant_vowel(125.0, sample_rate, samples);
+  RealtimeVoiceChanger chain(bare_chain_config(semitones, factor, mode));
+  chain.prepare(sample_rate, 128, 1);
+  const std::vector<float> output = run_chain(chain, input);
+
+  const size_t segment_len = static_cast<size_t>(sample_rate) / 2;
+  const size_t start = static_cast<size_t>(sample_rate) / 3;
+  const size_t latency = static_cast<size_t>(chain.latency_samples());
+  const std::vector<float> in_seg(input.begin() + static_cast<std::ptrdiff_t>(start),
+                                  input.begin() + static_cast<std::ptrdiff_t>(start + segment_len));
+  const std::vector<float> out_seg(
+      output.begin() + static_cast<std::ptrdiff_t>(start + latency),
+      output.begin() + static_cast<std::ptrdiff_t>(start + latency + segment_len));
+  return band_centroid(out_seg, sample_rate) / band_centroid(in_seg, sample_rate);
+}
+
+}  // namespace
+
+TEST_CASE("The realtime chain in absolute mode places the formants at input times the factor",
+          "[voice_changer][formant_mode][realtime]") {
+  struct Case {
+    float semitones;
+    float factor;
+  };
+  const Case cases[] = {{4.0f, 1.0f},  {-5.0f, 1.0f}, {4.0f, 1.2f},
+                        {0.0f, 1.25f}, {0.0f, 0.8f},  {-5.0f, 0.9f}};
+  // The envelope centroid follows the factor to within 3.5% in every case measured, at both
+  // rates; the pitch moves the harmonics under the envelope and the band edge clips its tails.
+  constexpr double kCentroidTolerance = 0.05;
+  for (const Case& c : cases) {
+    std::array<double, 2> by_rate{};
+    int index = 0;
+    for (const int sample_rate : {44100, 48000}) {
+      CAPTURE(sample_rate, c.semitones, c.factor);
+      const double ratio =
+          chain_centroid_ratio(sample_rate, c.semitones, c.factor, FormantMode::Absolute);
+      CHECK_THAT(ratio, WithinRel(static_cast<double>(c.factor), kCentroidTolerance));
+      by_rate[static_cast<size_t>(index++)] = ratio;
+    }
+    CHECK_THAT(by_rate[0], WithinRel(by_rate[1], 0.02));
+  }
+
+  // The same shift without the warp drags the formants up with the pitch.
+  CHECK(chain_centroid_ratio(48000, 4.0f, 1.0f, FormantMode::Relative) > 1.1);
+}
+
+TEST_CASE("The realtime chain in absolute mode leaves the pitch to the retune",
+          "[voice_changer][formant_mode][realtime]") {
+  constexpr int sample_rate = 48000;
+  const std::vector<float> input = sine(220.0f, sample_rate, sample_rate);
+  // The grain retune does not hold a pure tone's strongest line within a few percent of the
+  // asked ratio, so the reference is the retune alone: the warp ahead of it must not move it.
+  for (const float semitones : {4.0f, -5.0f}) {
+    CAPTURE(semitones);
+    double peak_hz[2] = {};
+    int index = 0;
+    for (const FormantMode mode : {FormantMode::Relative, FormantMode::Absolute}) {
+      RealtimeVoiceChanger chain(bare_chain_config(semitones, 1.0f, mode));
+      chain.prepare(sample_rate, 128, 1);
+      const std::vector<float> output = run_chain(chain, input);
+      const size_t start = static_cast<size_t>(sample_rate) / 3 + chain.latency_samples();
+      const std::vector<float> segment(output.begin() + static_cast<std::ptrdiff_t>(start),
+                                       output.begin() + static_cast<std::ptrdiff_t>(start) + 16384);
+      peak_hz[index++] = spectral_peak_hz(segment, sample_rate);
+    }
+    CAPTURE(peak_hz[0], peak_hz[1]);
+    REQUIRE_THAT(peak_hz[1], WithinRel(peak_hz[0], 0.02));
+    REQUIRE((peak_hz[1] > 220.0) == (semitones > 0.0f));
+  }
+}
+
+TEST_CASE("The realtime chain in absolute mode is the one-shot warp, delayed",
+          "[voice_changer][formant_mode][realtime]") {
+  constexpr int sample_rate = 48000;
+  const std::vector<float> input = three_formant_vowel(125.0, sample_rate, sample_rate);
+  // At no pitch shift the grain stage is a unity-ratio overlap-add, so the chain differs from
+  // the one-shot only by that stage and the (inaudible) input high-pass.
+  RealtimeVoiceChanger chain(bare_chain_config(0.0f, 1.2f, FormantMode::Absolute));
+  chain.prepare(sample_rate, 128, 1);
+  const std::vector<float> realtime = run_chain(chain, input);
+
+  VoiceChangerConfig config;
+  config.formant_factor = 1.2f;
+  config.formant_mode = FormantMode::Absolute;
+  const sonare::Audio oneshot =
+      VoiceChanger(config).process(sonare::Audio::from_vector(input, sample_rate));
+
+  const size_t latency = static_cast<size_t>(chain.latency_samples());
+  double error = 0.0;
+  double energy = 0.0;
+  for (size_t i = 2 * latency; i + latency < input.size(); ++i) {
+    const double d = static_cast<double>(realtime[i + latency]) - oneshot.data()[i];
+    error += d * d;
+    energy += static_cast<double>(oneshot.data()[i]) * oneshot.data()[i];
+  }
+  CAPTURE(error / energy);
+  // The input high-pass at 20 Hz and the grain overlap-add are the only differences.
+  REQUIRE(std::sqrt(error / energy) < 0.05);
+}
+
+TEST_CASE("Absolute formant mode adds one warp frame to the latency and keeps the dry path aligned",
+          "[voice_changer][formant_mode][realtime]") {
+  constexpr int sample_rate = 48000;
+  RealtimeVoiceChanger relative(bare_chain_config(0.0f, 1.2f, FormantMode::Relative));
+  RealtimeVoiceChanger absolute(bare_chain_config(0.0f, 1.2f, FormantMode::Absolute));
+  relative.prepare(sample_rate, 128, 1);
+  absolute.prepare(sample_rate, 128, 1);
+  REQUIRE(absolute.latency_samples() ==
+          relative.latency_samples() + sonare::formant_warp_frame_size(sample_rate));
+
+  // Fully dry output is the input delayed by exactly the reported latency.
+  RealtimeVoiceChangerConfig dry = bare_chain_config(3.0f, 1.2f, FormantMode::Absolute);
+  dry.wet_mix = 0.0f;
+  RealtimeVoiceChanger chain(dry);
+  chain.prepare(sample_rate, 128, 1);
+  const std::vector<float> input = sine(220.0f, sample_rate, 8000);
+  const std::vector<float> output = run_chain(chain, input);
+  const size_t latency = static_cast<size_t>(chain.latency_samples());
+  for (size_t i = latency; i < input.size(); ++i) REQUIRE(output[i] == input[i - latency]);
+}
+
+TEST_CASE("The formant mode is fixed at prepare and a live change is refused",
+          "[voice_changer][formant_mode][realtime]") {
+  RealtimeVoiceChanger chain(bare_chain_config(0.0f, 1.2f, FormantMode::Relative));
+  // Unprepared, nothing depends on the mode yet.
+  REQUIRE_NOTHROW(chain.set_config(bare_chain_config(0.0f, 1.2f, FormantMode::Absolute)));
+  chain.prepare(48000, 128, 1);
+  REQUIRE(chain.latency_samples() > 0);
+
+  RealtimeVoiceChangerConfig other = bare_chain_config(0.0f, 1.2f, FormantMode::Relative);
+  try {
+    chain.set_config(other);
+    FAIL("expected a refusal");
+  } catch (const sonare::SonareException& e) {
+    REQUIRE(e.code() == sonare::ErrorCode::InvalidParameter);
+  }
+  REQUIRE(chain.config().formant_mode == FormantMode::Absolute);
+  // The same mode, with other settings, is a plain update.
+  RealtimeVoiceChangerConfig same = bare_chain_config(2.0f, 1.1f, FormantMode::Absolute);
+  REQUIRE_NOTHROW(chain.set_config(same));
+}
+
+TEST_CASE("Validation refuses an unreachable absolute warp and names the formant factor range",
+          "[voice_changer][formant_mode][realtime]") {
+  RealtimeVoiceChangerConfig normalized;
+  std::string error;
+
+  RealtimeVoiceChangerConfig config = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  // 2^(-9/12) = 0.5946, so the warp range reaches [0.327, 0.9811], which the factor's own
+  // range [0.55, 1.65] narrows to [0.55, 0.9811].
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("-9 semitones"));
+
+  config.formant.factor = 0.8f;
+  REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
+
+  // Nothing is reachable this far down.
+  config.retune.semitones = -24.0f;
+  REQUIRE_FALSE(validate_realtime_voice_changer_config(config, &normalized, &error));
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("no formant factor is reachable"));
+
+  // Relative mode never refuses on reach.
+  config.formant_mode = FormantMode::Relative;
+  REQUIRE(validate_realtime_voice_changer_config(config, &normalized, &error));
+
+  // The running chain clamps instead of refusing.
+  RealtimeVoiceChanger chain(bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute));
+  chain.prepare(48000, 128, 1);
+  std::vector<float> noise(4096, 0.1f);
+  REQUIRE_NOTHROW(run_chain(chain, noise));
+}
+
+TEST_CASE("The formant mode round-trips through the JSON documents",
+          "[voice_changer][formant_mode][realtime]") {
+  RealtimeVoiceChangerConfig config = bare_chain_config(2.0f, 1.1f, FormantMode::Absolute);
+  const std::string text = realtime_voice_changer_config_to_json(config);
+  REQUIRE_THAT(text, Catch::Matchers::ContainsSubstring("\"mode\":\"absolute\""));
+  RealtimeVoiceChangerConfig parsed;
+  std::string error;
+  REQUIRE(realtime_voice_changer_config_from_input(text, &parsed, &error));
+  REQUIRE(parsed.formant_mode == FormantMode::Absolute);
+  REQUIRE(realtime_voice_changer_config_to_json(parsed) == text);
+
+  // A document without the key is relative, and a bad value is refused.
+  REQUIRE(realtime_voice_changer_config_to_json(RealtimeVoiceChangerConfig{}).find("relative") !=
+          std::string::npos);
+  std::string bad = text;
+  bad.replace(bad.find("absolute"), 8, "sideways");
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(bad, &parsed, &error));
+
+  // An unreachable document is refused with the range.
+  RealtimeVoiceChangerConfig unreachable = bare_chain_config(-9.0f, 1.0f, FormantMode::Absolute);
+  REQUIRE_FALSE(realtime_voice_changer_config_from_input(
+      realtime_voice_changer_config_to_json(unreachable), &parsed, &error));
+  REQUIRE_THAT(error, Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+}
+
+TEST_CASE("The realtime chain in absolute mode allocates nothing while processing",
+          "[voice_changer][formant_mode][realtime]") {
+  constexpr int sample_rate = 48000;
+  RealtimeVoiceChanger chain(bare_chain_config(3.0f, 1.2f, FormantMode::Absolute));
+  chain.prepare(sample_rate, 128, 2);
+  std::vector<float> left = three_formant_vowel(125.0, sample_rate, 128 * 80);
+  std::vector<float> right = left;
+  size_t count = 0;
+  {
+    sonare::test::AllocationGuard guard;
+    for (size_t pos = 0; pos < left.size(); pos += 128) {
+      float* planes[2] = {left.data() + pos, right.data() + pos};
+      chain.process_block(planes, 2, 128);
+      if (pos == 128 * 20) chain.set_config(bare_chain_config(-2.0f, 0.9f, FormantMode::Absolute));
+    }
+    count = guard.count();
+  }
+  CHECK(count == 0);
 }

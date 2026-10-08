@@ -48,4 +48,39 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     expect(JSON.parse(vc.configJson()).dsp.retune.semitones).toBeCloseTo(-9, 4);
     vc.destroy();
   });
+
+  it('carries the formant mode, fixed when the changer is created', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    expect(pod.formantMode).toBe('relative');
+    const relative = new RealtimeVoiceChanger({ sampleRate: 48000, preset: pod });
+    const absolute = new RealtimeVoiceChanger({
+      sampleRate: 48000,
+      preset: { ...pod, formantMode: 'absolute', formantFactor: 1.1 },
+    });
+    // One analysis frame (1024 samples at 48 kHz) more than the relative chain.
+    expect(absolute.latencySamples()).toBe(relative.latencySamples() + 1024);
+    expect(JSON.parse(absolute.configJson()).dsp.formant.mode).toBe('absolute');
+
+    // A live update keeps the mode; one that changes it is refused.
+    absolute.setConfig({ ...pod, formantMode: 'absolute', formantFactor: 1.2 });
+    expect(() => absolute.setConfig({ ...pod, formantMode: 'relative' })).toThrow(RangeError);
+    expect(() => relative.setConfig({ ...pod, formantMode: 'absolute' })).toThrow(RangeError);
+    relative.destroy();
+    absolute.destroy();
+  });
+
+  it('refuses an unreachable absolute warp and names the formant factor range', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const unreachable = { ...pod, formantMode: 'absolute' as const, retuneSemitones: -9 };
+    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, preset: unreachable })).toThrow(
+      /\[0\.55, 0\.9811\]/,
+    );
+    expect(
+      () =>
+        new RealtimeVoiceChanger({
+          sampleRate: 48000,
+          preset: { ...pod, formantMode: 'sideways' as never },
+        }),
+    ).toThrow();
+  });
 });

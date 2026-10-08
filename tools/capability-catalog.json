@@ -125488,6 +125488,34 @@
           "unit": "dBFS"
         },
         {
+          "choices": [
+            {
+              "name": "relative",
+              "value": 0
+            },
+            {
+              "name": "absolute",
+              "value": 1
+            }
+          ],
+          "default": 0,
+          "dependsOn": [],
+          "id": null,
+          "max": null,
+          "maxExclusive": false,
+          "maxRelativeTo": null,
+          "min": null,
+          "minExclusive": false,
+          "name": "formantMode",
+          "rtSafe": false,
+          "scale": "linear",
+          "slot": null,
+          "type": "enum",
+          "uiMax": null,
+          "uiMin": null,
+          "unit": null
+        },
+        {
           "choices": null,
           "default": true,
           "dependsOn": [],

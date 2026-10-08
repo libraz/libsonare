@@ -43,6 +43,7 @@ function workletPod(semitones = 0): RealtimeVoiceChangerPodConfig {
     formantBody: 0,
     formantBrightness: 0,
     formantNasal: 0,
+    formantMode: 'relative',
     eqHighpassHz: 80,
     eqBodyDb: 0,
     eqPresenceDb: 0,

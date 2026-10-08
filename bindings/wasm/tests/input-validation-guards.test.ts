@@ -294,6 +294,7 @@ describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zer
       formantBody: 0,
       formantBrightness: 0,
       formantNasal: 0,
+      formantMode: 'relative',
       eqHighpassHz: 80,
       eqBodyDb: 0,
       eqPresenceDb: 0,

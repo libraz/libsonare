@@ -1155,11 +1155,12 @@ std::unique_ptr<Processor> build_gs_efx(const ParamMap& params) {
 #ifdef SONARE_WITH_VOICE_CHANGER
 using sonare::editing::voice_changer::RealtimeVoiceChangerConfig;
 
-// The config is three top-level gains and eight stage structs; every leaf field has a table row.
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(RealtimeVoiceChangerConfig, 11);
+// The config is three top-level gains, the formant mode and eight stage structs; every leaf field
+// has a table row.
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(RealtimeVoiceChangerConfig, 12);
 static_assert(
     SONARE_FIELD_TABLE_SIZE(SONARE_FIELDS_VOICE_CHANGER) ==
-        3 + detail::field_count<sonare::editing::voice_changer::StreamingRetuneConfig>() +
+        4 + detail::field_count<sonare::editing::voice_changer::StreamingRetuneConfig>() +
             detail::field_count<sonare::editing::voice_changer::StreamingFormantConfig>() +
             detail::field_count<sonare::editing::voice_changer::CharacterEqConfig>() +
             detail::field_count<sonare::editing::voice_changer::VoiceGateConfig>() +

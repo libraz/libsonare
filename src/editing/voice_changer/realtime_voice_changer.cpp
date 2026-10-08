@@ -49,6 +49,7 @@ void RealtimeVoiceChanger::prepare(double sample_rate, int max_block_size, int n
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   num_channels_ = num_channels;
+  prepared_formant_mode_ = config_.formant_mode;
   channels_.resize(static_cast<std::size_t>(num_channels_));
   scratch_.assign(static_cast<std::size_t>(std::max(1, max_block_size_)), 0.0f);
   // Allocation phase: this is the only place buffers may be (re)sized.
@@ -94,7 +95,12 @@ void RealtimeVoiceChanger::set_config(const RealtimeVoiceChangerConfig& config) 
   // config_version_ never allocates, locks, or throws, so this whole function
   // is realtime-safe to call from the audio thread itself (see the class doc
   // comment on set_config for why WASM needs that).
-  config_ = normalize_realtime_voice_changer_config(config);
+  const RealtimeVoiceChangerConfig normalized = normalize_realtime_voice_changer_config(config);
+  if (!channels_.empty() && normalized.formant_mode != prepared_formant_mode_) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "formant mode is fixed at prepare(); it cannot change on a live chain");
+  }
+  config_ = normalized;
   // Record the request before the effective-value mirror below lands on the
   // same field; prepare() seeds the retune stages from this, not from config_.
   requested_retune_grain_size_ = config_.retune.grain_size;
@@ -144,7 +150,13 @@ void RealtimeVoiceChanger::allocate_channel(ChannelState& state) {
   retune_config.grain_size = requested_retune_grain_size_;
   state.retune.set_config(retune_config);
   state.retune.prepare(sample_rate_, max_block_size_);
-  state.dry_delay.assign(static_cast<std::size_t>(state.retune.latency_samples()), 0.0f);
+  int aligned_latency = state.retune.latency_samples();
+  if (prepared_formant_mode_ == FormantMode::Absolute) {
+    const int rate = static_cast<int>(std::lround(sample_rate_));
+    state.warp.prepare(formant_warp_frame_size(rate), formant_warp_lpc_order(rate));
+    aligned_latency += state.warp.latency_samples();
+  }
+  state.dry_delay.assign(static_cast<std::size_t>(aligned_latency), 0.0f);
   state.dry_delay_pos = 0;
   state.formant.prepare(sample_rate_, max_block_size_);
   state.reverb.prepare(sample_rate_, max_block_size_);
@@ -181,7 +193,18 @@ void RealtimeVoiceChanger::apply_channel_config(ChannelState& state, int channel
                                                 const RealtimeVoiceChangerConfig& config) {
   // Sub-component coefficient updates (no buffer resizing).
   state.retune.set_config(config.retune);
-  state.formant.set_config(config.formant);
+  if (prepared_formant_mode_ == FormantMode::Absolute) {
+    // The warp carries the factor, so the colour stage stays neutral; amount does not apply.
+    StreamingFormantConfig colour = config.formant;
+    colour.factor = 1.0f;
+    colour.amount = 1.0f;
+    state.formant.set_config(colour);
+    const double pitch_ratio = std::exp2(static_cast<double>(config.retune.semitones) / 12.0);
+    state.warp.set_factor(
+        static_cast<float>(static_cast<double>(config.formant.factor) / pitch_ratio));
+  } else {
+    state.formant.set_config(config.formant);
+  }
   state.reverb.set_config(config.reverb, channel_index);
   state.input_gain.set_target(db_to_gain(config.input_gain_db));
   state.output_gain.set_target(db_to_gain(config.output_gain_db));
@@ -274,6 +297,7 @@ const RealtimeVoiceChangerConfig& RealtimeVoiceChanger::adopt_snapshot_for_block
 
 void RealtimeVoiceChanger::reset_channel(ChannelState& state) {
   state.retune.reset();
+  state.warp.reset();
   state.formant.reset();
   state.hpf.reset();
   state.body.reset();

@@ -33,6 +33,9 @@
 #include "effects/modulation/rotary.h"
 #include "effects/modulation/wah.h"
 #include "effects/reverb/dattorro_reverb.h"
+#ifdef SONARE_WITH_VOICE_CHANGER
+#include "editing/voice_changer/voice_changer.h"
+#endif
 #include "mastering/dynamics/compressor.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/eq_band.h"
@@ -396,6 +399,18 @@ constexpr const char* enum_choice_name(sonare::effects::modulation::PreFilterMod
   }
   return nullptr;
 }
+
+#ifdef SONARE_WITH_VOICE_CHANGER
+constexpr const char* enum_choice_name(sonare::editing::voice_changer::FormantMode value) {
+  switch (value) {
+    case sonare::editing::voice_changer::FormantMode::Relative:
+      return "relative";
+    case sonare::editing::voice_changer::FormantMode::Absolute:
+      return "absolute";
+  }
+  return nullptr;
+}
+#endif
 
 constexpr const char* enum_choice_name(sonare::mastering::multiband::CrossoverSlope value) {
   switch (value) {
@@ -1259,6 +1274,7 @@ inline double field_as_double(Enum value) {
   X("formantBody", formant.body, display_range(kNone, -1, 1))                         \
   X("formantBrightness", formant.brightness, display_range(kNone, -1, 1))             \
   X("formantNasal", formant.nasal, display_range(kNone, -1, 1))                       \
+  X("formantMode", formant_mode, kNone)                                               \
   X("eqHighpassHz", eq.highpass_hz, display_range(kHzLog, 20, 300))                   \
   X("eqBodyDb", eq.body_db, display_range(kDb, -12, 12))                              \
   X("eqPresenceDb", eq.presence_db, display_range(kDb, -12, 12))                      \

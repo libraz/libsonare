@@ -7497,223 +7497,235 @@
     "align": 4,
     "fields": [
       {
-        "kind": "float",
-        "name": "input_gain_db",
+        "kind": "signed",
+        "name": "struct_version",
         "offset": 0,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "output_gain_db",
+        "name": "input_gain_db",
         "offset": 4,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "wet_mix",
+        "name": "output_gain_db",
         "offset": 8,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "retune_semitones",
+        "name": "wet_mix",
         "offset": 12,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "retune_mix",
+        "name": "retune_semitones",
         "offset": 16,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "retune_mix",
+        "offset": 20,
         "size": 4
       },
       {
         "kind": "signed",
         "name": "retune_grain_size",
-        "offset": 20,
-        "size": 4
-      },
-      {
-        "kind": "float",
-        "name": "formant_factor",
         "offset": 24,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "formant_amount",
+        "name": "formant_factor",
         "offset": 28,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "formant_body",
+        "name": "formant_amount",
         "offset": 32,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "formant_brightness",
+        "name": "formant_body",
         "offset": 36,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "formant_nasal",
+        "name": "formant_brightness",
         "offset": 40,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "eq_highpass_hz",
+        "name": "formant_nasal",
         "offset": 44,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "eq_body_db",
+        "kind": "signed",
+        "name": "formant_mode",
         "offset": 48,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "eq_presence_db",
+        "name": "eq_highpass_hz",
         "offset": 52,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "eq_air_db",
+        "name": "eq_body_db",
         "offset": 56,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "gate_threshold_db",
+        "name": "eq_presence_db",
         "offset": 60,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "gate_attack_ms",
+        "name": "eq_air_db",
         "offset": 64,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "gate_release_ms",
+        "name": "gate_threshold_db",
         "offset": 68,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "gate_range_db",
+        "name": "gate_attack_ms",
         "offset": 72,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compressor_threshold_db",
+        "name": "gate_release_ms",
         "offset": 76,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compressor_ratio",
+        "name": "gate_range_db",
         "offset": 80,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compressor_attack_ms",
+        "name": "compressor_threshold_db",
         "offset": 84,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compressor_release_ms",
+        "name": "compressor_ratio",
         "offset": 88,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "compressor_makeup_gain_db",
+        "name": "compressor_attack_ms",
         "offset": 92,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "deesser_frequency_hz",
+        "name": "compressor_release_ms",
         "offset": 96,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "deesser_threshold_db",
+        "name": "compressor_makeup_gain_db",
         "offset": 100,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "deesser_ratio",
+        "name": "deesser_frequency_hz",
         "offset": 104,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "deesser_range_db",
+        "name": "deesser_threshold_db",
         "offset": 108,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reverb_mix",
+        "name": "deesser_ratio",
         "offset": 112,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reverb_time_ms",
+        "name": "deesser_range_db",
         "offset": 116,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "reverb_damping",
+        "name": "reverb_mix",
         "offset": 120,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "reverb_seed",
+        "kind": "float",
+        "name": "reverb_time_ms",
         "offset": 124,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "limiter_ceiling_db",
+        "name": "reverb_damping",
         "offset": 128,
         "size": 4
       },
       {
-        "kind": "float",
-        "name": "limiter_release_ms",
+        "kind": "signed",
+        "name": "reverb_seed",
         "offset": 132,
         "size": 4
       },
       {
-        "kind": "signed",
-        "name": "limiter_enable_isp_limiter",
+        "kind": "float",
+        "name": "limiter_ceiling_db",
         "offset": 136,
         "size": 4
       },
       {
         "kind": "float",
-        "name": "limiter_isp_ceiling_dbtp",
+        "name": "limiter_release_ms",
         "offset": 140,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "limiter_enable_isp_limiter",
+        "offset": 144,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "limiter_isp_ceiling_dbtp",
+        "offset": 148,
         "size": 4
       }
     ],
-    "size": 144
+    "size": 152
   },
   "SonareReassignedSpectrogramResult": {
     "align": 8,

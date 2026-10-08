@@ -402,6 +402,7 @@ val js_realtime_voice_changer_preset_config(const val& preset_val) {
 #define X(cpp_path, pod_field) out.set(#pod_field, cfg.cpp_path);
   SONARE_WASM_VC_FIELDS(X)
 #undef X
+  out.set("formantMode", std::string(editing::voice_changer::formant_mode_name(cfg.formant_mode)));
   return out;
 }
 #undef SONARE_WASM_VC_FIELDS

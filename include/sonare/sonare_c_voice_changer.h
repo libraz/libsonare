@@ -46,6 +46,9 @@ extern "C" {
 ///          before being applied, so out-of-range entries are clamped rather than
 ///          rejected (matching the JSON entry point).
 typedef struct {
+  /// @brief Layout version; 0 and 1 both select this layout, anything else is refused.
+  int32_t struct_version;
+
   float input_gain_db;
   float output_gain_db;
   float wet_mix;
@@ -59,6 +62,15 @@ typedef struct {
   float formant_body;
   float formant_brightness;
   float formant_nasal;
+  /// @brief A @ref SonareFormantMode. Relative (0, the default) leaves @ref formant_factor to the
+  ///        colour stage after the retune; absolute (1) warps the formants to
+  ///        @ref formant_factor times the input's ahead of the retune, adds one analysis frame of
+  ///        latency and ignores @ref formant_amount. Fixed when the handle is created: a
+  ///        set_config carrying a different mode is SONARE_ERROR_INVALID_PARAMETER. Absolute
+  ///        mode needs formant_factor / 2^(retune_semitones / 12) within [0.55, 1.65]; the call
+  ///        is refused otherwise, with the reachable formant-factor range in
+  ///        sonare_last_error_message().
+  int32_t formant_mode;
 
   float eq_highpass_hz;
   float eq_body_db;
@@ -107,18 +119,18 @@ typedef struct {
 // FFI boundary (Rust FFI, raw C ABI consumers) read this size at compile
 // time and detect ABI drift before a single byte is exchanged.
 //
-// Layout: 33 float fields + 3 int fields, every member is 4 bytes and
+// Layout: 34 float fields + 4 int fields, every member is 4 bytes and
 // 4-byte aligned -> no struct padding on any target we ship. Exact equality
 // (not >=) so silent padding insertion fails the check too.
 #ifdef __cplusplus
-static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 36u * sizeof(float),
+static_assert(sizeof(SonareRealtimeVoiceChangerConfig) == 38u * sizeof(float),
               "SonareRealtimeVoiceChangerConfig unexpected size");
 #endif
 
 /// @brief Compile-time mirror of the runtime ABI version returned by
 ///        @ref sonare_voice_changer_abi_version. Bindings can `static_assert` /
 ///        `assertEqual` the runtime value against this at attach time.
-#define SONARE_VOICE_CHANGER_ABI_VERSION 2u
+#define SONARE_VOICE_CHANGER_ABI_VERSION 3u
 
 /// @brief Returns the runtime ABI version of the
 ///        @ref SonareRealtimeVoiceChangerConfig POD layout.

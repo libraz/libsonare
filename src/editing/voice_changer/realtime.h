@@ -16,6 +16,8 @@
 #include "editing/voice_changer/streaming_formant.h"
 #include "editing/voice_changer/streaming_retune.h"
 #include "editing/voice_changer/streaming_reverb.h"
+#include "editing/voice_changer/voice_changer.h"
+#include "effects/formant_warp.h"
 #include "rt/biquad_design.h"
 #include "rt/overflow_counter.h"
 #include "rt/param_smoother.h"
@@ -42,7 +44,8 @@ inline constexpr int kVoiceChangerPresetSchemaVersion = 1;
 ///          while POD bindings (Rust FFI, raw C ABI consumers) do not.
 // v2: added limiter_enable_isp_limiter (int) and limiter_isp_ceiling_dbtp
 //     (float) to SonareRealtimeVoiceChangerConfig.
-inline constexpr std::uint32_t kVoiceChangerAbiVersion = 2u;
+// v3: added struct_version (first) and formant_mode to SonareRealtimeVoiceChangerConfig.
+inline constexpr std::uint32_t kVoiceChangerAbiVersion = 3u;
 
 enum class VoiceCharacterPreset {
   NeutralMonitor,
@@ -119,6 +122,16 @@ struct RealtimeVoiceChangerConfig {
   float wet_mix = 1.0f;
   StreamingRetuneConfig retune;
   StreamingFormantConfig formant;
+  /// @brief How @ref StreamingFormantConfig::factor acts. Fixed when the chain is prepared.
+  /// @details Relative (the default) leaves the factor to the formant colour stage, after the
+  ///          retune. Absolute puts a formant warp ahead of the retune that lands the formants at
+  ///          factor times the input's, whatever the retune does; the colour stage then runs at
+  ///          its neutral factor and keeps body, brightness and nasal. The warp adds one analysis
+  ///          frame of latency, and @ref StreamingFormantConfig::amount is ignored in this mode.
+  ///          The warp it needs, factor / 2^(semitones / 12), must lie in [kFormantFactorMin,
+  ///          kFormantFactorMax]: @ref validate_realtime_voice_changer_config refuses a
+  ///          configuration outside that, and the running chain clamps it.
+  FormantMode formant_mode = FormantMode::Relative;
   CharacterEqConfig eq;
   VoiceGateConfig gate;
   VoiceCompressorConfig compressor;
@@ -144,6 +157,8 @@ class RealtimeVoiceChanger {
   ///          live processor safely, use @ref set_config instead.
   void reset();
   /// @brief Publishes a new configuration to the realtime processing chain.
+  /// @throws SonareException InvalidParameter when the chain is prepared and @p config changes
+  ///         @ref RealtimeVoiceChangerConfig::formant_mode, which is fixed at prepare().
   /// @details Safe to call concurrently with @ref process_block on the same
   ///          instance: the configuration is normalized and stored into a
   ///          lock-free single-writer/single-reader cell (see @c
@@ -185,7 +200,8 @@ class RealtimeVoiceChanger {
   void process_block(float* const* channels, int num_channels, int num_samples) noexcept;
   /// @brief Reports the prepared chain's processing latency in samples.
   /// @details Dry and wet paths are both aligned to the retune OLA's fixed
-  ///          one-grain delay, so this value never changes when @c wet_mix or
+  ///          one-grain delay plus, in absolute formant mode, the formant warp's
+  ///          one-frame delay, so this value never changes when @c wet_mix or
   ///          @c retune.mix changes. When @ref LimiterConfig::enable_isp_limiter
   ///          is @c true, the final ISP limiter runs after the aligned mix and
   ///          adds @c IspLimiter::latency_samples: a 6-sample FIR group delay
@@ -230,6 +246,8 @@ class RealtimeVoiceChanger {
   struct ChannelState {
     StreamingRetune retune;
     StreamingFormant formant;
+    /// Formant warp ahead of the retune; prepared only in absolute formant mode.
+    FormantWarpStream warp;
     rt::BiquadState hpf;
     rt::BiquadState body;
     rt::BiquadState presence;
@@ -401,6 +419,9 @@ class RealtimeVoiceChanger {
   /// mirrored atomically instead of reading the mutable config_ directly.
   std::atomic<bool> latency_isp_enabled_{false};
 
+  /// Formant mode the chain was prepared with; the warp stage exists only in absolute mode.
+  FormantMode prepared_formant_mode_ = FormantMode::Relative;
+
   /// Written by the audio thread, polled by a host thread; see
   /// non_finite_discard_count().
   rt::OverflowCounter non_finite_discard_count_{};
@@ -424,6 +445,12 @@ RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset pr
 VoiceCharacterPreset realtime_voice_changer_preset_from_id(std::string_view id);
 const char* realtime_voice_changer_preset_id(VoiceCharacterPreset preset) noexcept;
 std::vector<std::string> realtime_voice_changer_preset_names();
+
+/// @brief Checks that @p config's formant warp is within reach.
+/// @details Only absolute mode can fail: the warp is formant factor / 2^(semitones / 12) and the
+///          warp is defined over [kFormantFactorMin, kFormantFactorMax]. On failure @p error names
+///          the formant factors reachable at the configuration's semitones.
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error);
 
 RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
     const RealtimeVoiceChangerConfig& config);

@@ -2,6 +2,7 @@
 #include <array>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 #include "editing/voice_changer/realtime.h"
@@ -35,6 +36,13 @@ int object_int(const sonare::util::json::Value& object, const char* key, int fal
   const double clamped = std::clamp(n, static_cast<double>(std::numeric_limits<int>::min()),
                                     static_cast<double>(std::numeric_limits<int>::max()));
   return static_cast<int>(clamped);
+}
+
+FormantMode object_formant_mode(const sonare::util::json::Value& object, const char* key,
+                                FormantMode fallback) {
+  const auto* value = object.find(key);
+  if (!value || !value->is_string()) return fallback;
+  return parse_formant_mode(value->as_string());
 }
 
 bool object_bool(const sonare::util::json::Value& object, const char* key, bool fallback) {
@@ -89,8 +97,10 @@ void dump_dsp_section(std::string& out, const RealtimeVoiceChangerConfig& c) {
   dump_field(out, "amount", c.formant.amount);
   dump_field(out, "body", c.formant.body);
   dump_field(out, "brightness", c.formant.brightness);
-  dump_field(out, "nasal", c.formant.nasal, true);
-  out += "},\"eq\":{";
+  dump_field(out, "nasal", c.formant.nasal);
+  out += "\"mode\":\"";
+  out += formant_mode_name(c.formant_mode);
+  out += "\"},\"eq\":{";
   dump_field(out, "highpassHz", c.eq.highpass_hz);
   dump_field(out, "bodyDb", c.eq.body_db);
   dump_field(out, "presenceDb", c.eq.presence_db);
@@ -230,8 +240,8 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   if (!require_number(retune, "grainSize", 0.0, 8192.0, "dsp.retune", error, true)) return false;
 
   const auto& formant = *dsp.find("formant");
-  if (!has_allowed_keys(formant, {"factor", "amount", "body", "brightness", "nasal"}, "dsp.formant",
-                        error)) {
+  if (!has_allowed_keys(formant, {"factor", "amount", "body", "brightness", "nasal", "mode"},
+                        "dsp.formant", error)) {
     return false;
   }
   for (const char* key : {"factor", "amount", "body", "brightness", "nasal"}) {
@@ -242,6 +252,13 @@ bool validate_dsp_section(const sonare::util::json::Value& dsp, std::string* err
   if (!require_number(formant, "body", -1.0, 1.0, "dsp.formant", error)) return false;
   if (!require_number(formant, "brightness", -1.0, 1.0, "dsp.formant", error)) return false;
   if (!require_number(formant, "nasal", -1.0, 1.0, "dsp.formant", error)) return false;
+  if (const auto* mode = formant.find("mode")) {
+    if (!mode->is_string() ||
+        (mode->as_string() != "relative" && mode->as_string() != "absolute")) {
+      if (error) *error = "field must be 'relative' or 'absolute': dsp.formant.mode";
+      return false;
+    }
+  }
 
   const auto& eq = *dsp.find("eq");
   if (!has_allowed_keys(eq, {"highpassHz", "bodyDb", "presenceDb", "airDb"}, "dsp.eq", error)) {
@@ -493,6 +510,7 @@ RealtimeVoiceChangerConfig normalize_realtime_voice_changer_config(
   c.formant.body = std::clamp(c.formant.body, -1.0f, 1.0f);
   c.formant.brightness = std::clamp(c.formant.brightness, -1.0f, 1.0f);
   c.formant.nasal = std::clamp(c.formant.nasal, -1.0f, 1.0f);
+  if (c.formant_mode != FormantMode::Absolute) c.formant_mode = FormantMode::Relative;
   c.eq.highpass_hz = std::clamp(c.eq.highpass_hz, 20.0f, 300.0f);
   c.eq.body_db = std::clamp(c.eq.body_db, -12.0f, 12.0f);
   c.eq.presence_db = std::clamp(c.eq.presence_db, -12.0f, 12.0f);
@@ -532,8 +550,48 @@ bool validate_realtime_voice_changer_config(const RealtimeVoiceChangerConfig& co
     if (normalized) *normalized = {};
     return false;
   }
-  if (normalized) *normalized = normalize_realtime_voice_changer_config(config);
+  if (config.formant_mode != FormantMode::Relative &&
+      config.formant_mode != FormantMode::Absolute) {
+    if (error) *error = "formant mode must be 'relative' or 'absolute'";
+    if (normalized) *normalized = {};
+    return false;
+  }
+  const RealtimeVoiceChangerConfig accepted = normalize_realtime_voice_changer_config(config);
+  if (!formant_warp_is_reachable(accepted, &local_error)) {
+    if (error) *error = local_error;
+    if (normalized) *normalized = {};
+    return false;
+  }
+  if (normalized) *normalized = accepted;
   return true;
+}
+
+bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::string* error) {
+  if (config.formant_mode != FormantMode::Absolute) return true;
+  double lo = 0.0;
+  double hi = 0.0;
+  reachable_formant_factor_range(config.retune.semitones, &lo, &hi);
+  const double factor = static_cast<double>(config.formant.factor);
+  if (factor >= lo && factor <= hi) return true;
+  // The factor itself lives in the warp's own range, so that is the most that can be named.
+  const double named_lo = std::max(lo, static_cast<double>(kFormantFactorMin));
+  const double named_hi = std::min(hi, static_cast<double>(kFormantFactorMax));
+  if (error) {
+    char text[200];
+    if (named_lo > named_hi) {
+      std::snprintf(text, sizeof(text),
+                    "absolute formant mode: no formant factor is reachable at a pitch shift of "
+                    "%.4g semitones",
+                    static_cast<double>(config.retune.semitones));
+    } else {
+      std::snprintf(text, sizeof(text),
+                    "absolute formant mode: formant factor must be in [%.4g, %.4g] at a pitch "
+                    "shift of %.4g semitones, got %.4g",
+                    named_lo, named_hi, static_cast<double>(config.retune.semitones), factor);
+    }
+    *error = text;
+  }
+  return false;
 }
 
 RealtimeVoiceChangerConfig realtime_voice_changer_preset(VoiceCharacterPreset preset) {
@@ -671,6 +729,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
     c.formant.body = object_number(object, "formantBody", c.formant.body);
     c.formant.brightness = object_number(object, "formantBrightness", c.formant.brightness);
     c.formant.nasal = object_number(object, "formantNasal", c.formant.nasal);
+    c.formant_mode = object_formant_mode(object, "formantMode", c.formant_mode);
     c.eq.highpass_hz = object_number(object, "eqHighpassHz", c.eq.highpass_hz);
     c.eq.body_db = object_number(object, "eqBodyDb", c.eq.body_db);
     c.eq.presence_db = object_number(object, "eqPresenceDb", c.eq.presence_db);
@@ -714,6 +773,7 @@ RealtimeVoiceChangerConfig realtime_voice_changer_config_from_json(std::string_v
     c.formant.body = object_number(*v, "body", c.formant.body);
     c.formant.brightness = object_number(*v, "brightness", c.formant.brightness);
     c.formant.nasal = object_number(*v, "nasal", c.formant.nasal);
+    c.formant_mode = object_formant_mode(*v, "mode", c.formant_mode);
   }
   if (const auto* v = object.find("eq")) {
     c.eq.highpass_hz = object_number(*v, "highpassHz", c.eq.highpass_hz);
@@ -969,6 +1029,14 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
             break;
           }
         }
+        // formantMode is optional: documents written before the mode existed omit it.
+        if (key == "formantMode") {
+          if (!_value.is_string()) {
+            if (error) *error = "flat voice changer POD has an invalid field: $.formantMode";
+            return false;
+          }
+          allowed = true;
+        }
         if (!allowed) {
           if (error) *error = "unknown field: $." + key;
           return false;
@@ -995,6 +1063,10 @@ bool realtime_voice_changer_config_from_input(std::string_view text,
     std::string normalized_json;
     if (!validate_realtime_voice_changer_preset_json(input, &normalized_json, error)) return false;
     *config = realtime_voice_changer_config_from_json(normalized_json);
+    if (!formant_warp_is_reachable(*config, error)) {
+      *config = {};
+      return false;
+    }
     return true;
   } catch (const std::exception& ex) {
     if (error) *error = ex.what();

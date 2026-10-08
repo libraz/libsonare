@@ -19,7 +19,7 @@ describe.each([
     expect(sonare.code).toBe(entry.ErrorCode.AbiMismatch);
     expect(sonare.codeName).toBe('AbiMismatch');
     expect(sonare.message).toContain('0x01010101');
-    expect(sonare.message).toContain('0x04020207');
+    expect(sonare.message).toContain('0x04030207');
     expect(sonare.message).toMatch(/wasmBinary.*locateFile.*moduleFactory/);
     expect(entry.isInitialized()).toBe(false);
 

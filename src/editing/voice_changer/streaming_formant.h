@@ -13,7 +13,8 @@ namespace sonare::editing::voice_changer {
 struct StreamingFormantConfig {
   float factor = 1.0f;
   /// Strength of the formant-frequency displacement: 0 keeps factor at 1,
-  /// 1 applies @ref factor fully. Does not disable the tonal controls below.
+  /// 1 applies @ref factor fully. Does not disable the tonal controls below. Ignored when the
+  /// chain's formant mode is absolute.
   float amount = 1.0f;
   float body = 0.0f;
   float brightness = 0.0f;

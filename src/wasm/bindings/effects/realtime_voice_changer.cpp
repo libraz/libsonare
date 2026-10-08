@@ -69,6 +69,13 @@ editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFro
 #undef X
   parsed.limiter.enable_isp_limiter =
       requireProperty<bool>(pod, "limiterEnableIspLimiter", kSubject);
+  parsed.formant_mode = editing::voice_changer::parse_formant_mode(
+      requireTypedProperty(pod, "formantMode", kSubject, "string", "a string").as<std::string>());
+  std::string reach_error;
+  if (!editing::voice_changer::formant_warp_is_reachable(
+          editing::voice_changer::normalize_realtime_voice_changer_config(parsed), &reach_error)) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, reach_error);
+  }
   return parsed;
 }
 

@@ -9,12 +9,31 @@ import type {
 import type { ValidateOptions } from './validation.js';
 import { assertSamples } from './validation.js';
 
+/**
+ * The core refuses an unreachable absolute formant warp and a live formant-mode change with a
+ * coded library failure; at this facade they are argument refusals, so they are a RangeError
+ * like every other out-of-domain argument.
+ */
+function formantConfigRefusal(error: unknown): unknown {
+  if (
+    (error as { code?: unknown }).code === ErrorCode.InvalidParameter &&
+    /formant (mode|factor)/.test((error as Error).message)
+  ) {
+    return new RangeError((error as Error).message);
+  }
+  return error;
+}
+
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
 
   constructor(options: RealtimeVoiceChangerOptions) {
-    this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+    try {
+      this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
+    } catch (error) {
+      throw formantConfigRefusal(error);
+    }
     try {
       this.native.prepare(options.sampleRate, options.maxBlockSize ?? 128, options.channels ?? 1);
     } catch (error) {
@@ -32,8 +51,12 @@ export class RealtimeVoiceChanger {
 
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerConfig): void {
     // The shared native parser recognizes the flat POD produced by
-    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 36-field mapping.
-    this.native.setConfig(config);
+    // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 37-field mapping.
+    try {
+      this.native.setConfig(config);
+    } catch (error) {
+      throw formantConfigRefusal(error);
+    }
   }
 
   configJson(): string {

@@ -234,7 +234,24 @@ editing::voice_changer::RealtimeVoiceChangerConfig vc_config_from_pod(
   // bool <-> int fields are handled explicitly (outside the float-oriented
   // X-macro) so the POD's non-zero==true convention is preserved.
   c.limiter.enable_isp_limiter = pod.limiter_enable_isp_limiter != 0;
+  c.formant_mode = pod.formant_mode == SONARE_FORMANT_MODE_ABSOLUTE
+                       ? editing::voice_changer::FormantMode::Absolute
+                       : editing::voice_changer::FormantMode::Relative;
   return c;
+}
+
+// The POD's own fields that no core validation sees: its layout version and the mode selector.
+bool vc_pod_is_valid(const SonareRealtimeVoiceChangerConfig& pod, std::string* error) {
+  if (pod.struct_version < 0 || pod.struct_version > 1) {
+    *error = "unsupported SonareRealtimeVoiceChangerConfig struct_version";
+    return false;
+  }
+  if (pod.formant_mode != SONARE_FORMANT_MODE_RELATIVE &&
+      pod.formant_mode != SONARE_FORMANT_MODE_ABSOLUTE) {
+    *error = "formant_mode must be SONARE_FORMANT_MODE_RELATIVE or SONARE_FORMANT_MODE_ABSOLUTE";
+    return false;
+  }
+  return true;
 }
 
 void vc_config_to_pod(const editing::voice_changer::RealtimeVoiceChangerConfig& c,
@@ -243,6 +260,10 @@ void vc_config_to_pod(const editing::voice_changer::RealtimeVoiceChangerConfig& 
   SONARE_VC_FIELDS(X)
 #undef X
   pod->limiter_enable_isp_limiter = c.limiter.enable_isp_limiter ? 1 : 0;
+  pod->struct_version = 1;
+  pod->formant_mode = c.formant_mode == editing::voice_changer::FormantMode::Absolute
+                          ? SONARE_FORMANT_MODE_ABSOLUTE
+                          : SONARE_FORMANT_MODE_RELATIVE;
 }
 
 /// Single source of truth for the C ↔ C++ preset enum bridge. Adding a new
@@ -339,8 +360,10 @@ SonareError sonare_realtime_voice_changer_create(const SonareRealtimeVoiceChange
     // sanitization still happens inside set_config().
     editing::voice_changer::RealtimeVoiceChangerConfig normalized;
     std::string error;
-    if (!editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
+    if (!vc_pod_is_valid(*config, &error) ||
+        !editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
                                                                         &normalized, &error)) {
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     cfg = normalized;
@@ -371,8 +394,10 @@ SonareError sonare_realtime_voice_changer_set_config(
   SONARE_C_TRY
   editing::voice_changer::RealtimeVoiceChangerConfig normalized;
   std::string error;
-  if (!editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
+  if (!vc_pod_is_valid(*config, &error) ||
+      !editing::voice_changer::validate_realtime_voice_changer_config(vc_config_from_pod(*config),
                                                                       &normalized, &error)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   handle->changer.set_config(normalized);
@@ -415,6 +440,7 @@ SonareError sonare_realtime_voice_changer_create_json(const char* preset_or_conf
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(config_text, &config,
                                                                         &error)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   auto handle = std::make_unique<SonareRealtimeVoiceChanger>();
@@ -464,6 +490,7 @@ SonareError sonare_realtime_voice_changer_set_config_json(SonareRealtimeVoiceCha
   std::string error;
   if (!editing::voice_changer::realtime_voice_changer_config_from_input(preset_or_config_json,
                                                                         &config, &error)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER, error.c_str());
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   handle->changer.set_config(config);

@@ -1630,6 +1630,19 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'SonareWrap.voiceChange',
+    missingRequired: [],
+    // The optional formant mode is the positional read; a wrong type must not
+    // fall back to 'relative' and render the mode the caller did not ask for.
+    rejectsArgument: [
+      {
+        argument: 'formantMode',
+        call: () => addon.voiceChange(samples(2048), 22050, 4, 1, 7),
+        message: /formantMode/,
+      },
+    ],
+  },
+  {
     name: 'SonareWrap.noteTargetsFromSmf',
     missingRequired: [],
     // The track index is read before the bytes are parsed, so every rejection

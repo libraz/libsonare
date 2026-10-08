@@ -16,14 +16,18 @@ namespace sonare::editing::voice_changer {
 ///          configuration with any out-of-domain or non-finite field (InvalidParameter naming
 ///          the key), so the published parameter bounds are real. Realtime automation clamps.
 ///
-///          The retune grain size, the reverb seed and the inter-sample-peak limiter switch are
-///          construction-time only: the grain size and the switch change the reported latency, and
-///          a delay compensated by a host must not move while it runs. Every other numeric field
+///          The retune grain size, the reverb seed, the formant mode and the inter-sample-peak
+///          limiter switch are construction-time only: the grain size, the formant mode and the
+///          switch change the reported latency, and a delay compensated by a host must not move
+///          while it runs. In absolute formant mode (@c formantMode, @c relative or @c absolute)
+///          @c formantAmount is ignored; construction refuses a @c formantFactor the warp cannot
+///          reach at the configured @c retuneSemitones, and automation clamps the warp to its
+///          range. Every other numeric field
 ///          is an automatable parameter (see @ref parameter_descriptors).
 ///
-///          Latency is one retune grain plus, when the limiter switch is on, the limiter's
-///          look-ahead. The tail is the reverb's decay time. Gain reduction covers the compressor,
-///          de-esser and sample limiter.
+///          Latency is one retune grain plus, in absolute formant mode, one warp frame plus, when
+///          the limiter switch is on, the limiter's look-ahead. The tail is the reverb's decay
+///          time. Gain reduction covers the compressor, de-esser and sample limiter.
 class VoiceChangerInsert : public rt::ProcessorBase {
  public:
   /// @throws SonareException (InvalidParameter) when a field of @p config is non-finite or

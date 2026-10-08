@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "editing/voice_changer/realtime.h"
+#include "effects/formant_warp.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "rt/processor_base.h"
@@ -204,10 +205,10 @@ TEST_CASE("voice.changer refuses out-of-domain fields at construction", "[voice_
 TEST_CASE("voice.changer publishes real bounds and says what is construction-only",
           "[voice_changer][insert][catalog]") {
   const json::Array params = catalog_params();
-  REQUIRE(params.size() == 36);
+  REQUIRE(params.size() == 37);
 
-  const std::vector<std::string> construction_only = {"retuneGrainSize", "reverbSeed",
-                                                      "limiterEnableIspLimiter"};
+  const std::vector<std::string> construction_only = {"retuneGrainSize", "formantMode",
+                                                      "reverbSeed", "limiterEnableIspLimiter"};
   VoiceChangerInsert probe;
   size_t automatable = 0;
   for (const json::Value& param : params) {
@@ -220,6 +221,10 @@ TEST_CASE("voice.changer publishes real bounds and says what is construction-onl
     if (!only) ++automatable;
     const std::string type = param.find("type")->as_string();
     if (type == "boolean") continue;
+    if (type == "enum") {
+      CHECK(name == "formantMode");
+      continue;
+    }
     CHECK_FALSE(param.find("unit")->is_null());
     if (name == "reverbSeed") continue;
     // The bounds are measured from the refusal above, so every one is finite.
@@ -535,4 +540,66 @@ TEST_CASE("voice.changer reports the reverb decay as its tail", "[voice_changer]
                << 20.0 * std::log10(std::max(residue, 1.0e-12) / peak) << " dB");
   CHECK(kept > 1.0e-3 * peak);
   CHECK(20.0 * std::log10(std::max(residue, 1.0e-12) / peak) < -45.0);
+}
+
+TEST_CASE("voice.changer takes its formant mode at construction only", "[voice_changer][insert]") {
+  RealtimeVoiceChangerConfig relative;
+  RealtimeVoiceChangerConfig absolute;
+  absolute.formant_mode = sonare::editing::voice_changer::FormantMode::Absolute;
+  absolute.formant.factor = 1.1f;
+  VoiceChangerInsert plain(relative);
+  VoiceChangerInsert warped(absolute);
+  plain.prepare(kRate, kBlock);
+  warped.prepare(kRate, kBlock);
+  CHECK(warped.latency_samples() ==
+        plain.latency_samples() + sonare::formant_warp_frame_size(static_cast<int>(kRate)));
+
+  // The mode is not a realtime parameter.
+  for (const auto& descriptor : warped.parameter_descriptors()) {
+    CHECK(descriptor.key != "formantMode");
+  }
+  CHECK_FALSE(
+      warped.set_parameter(static_cast<unsigned int>(warped.parameter_descriptors().size()), 0.0f));
+
+  // The catalog publishes it as a named construction-time choice, and the factory reads it.
+  bool found = false;
+  for (const json::Value& param : catalog_params()) {
+    if (param.find("name")->as_string() != "formantMode") continue;
+    found = true;
+    CHECK(param.find("type")->as_string() == "enum");
+    CHECK(param.find("rtSafe")->as_bool() == false);
+  }
+  CHECK(found);
+  const auto built = make_insert("voice.changer", R"({"formantMode":1})");
+  REQUIRE(built != nullptr);
+  built->prepare(kRate, kBlock);
+  CHECK(built->latency_samples() == warped.latency_samples());
+}
+
+TEST_CASE("voice.changer refuses an unreachable absolute warp and clamps it under automation",
+          "[voice_changer][insert]") {
+  RealtimeVoiceChangerConfig config;
+  config.formant_mode = sonare::editing::voice_changer::FormantMode::Absolute;
+  config.retune.semitones = -9.0f;
+  config.formant.factor = 1.0f;
+  try {
+    VoiceChangerInsert insert(config);
+    FAIL("expected a refusal");
+  } catch (const SonareException& e) {
+    CHECK(e.code() == ErrorCode::InvalidParameter);
+    CHECK(std::string(e.what()).find("[0.55, 0.9811]") != std::string::npos);
+  }
+
+  // Automation takes the same insert past the edge and the audio stays finite.
+  config.retune.semitones = 0.0f;
+  VoiceChangerInsert insert(config);
+  insert.prepare(kRate, kBlock, 1);
+  const unsigned int semitones_id = descriptor_id(insert, "retuneSemitones");
+  std::vector<float> signal = tone(kBlock * 30, 0.3f, 0);
+  for (int pos = 0; pos < static_cast<int>(signal.size()); pos += kBlock) {
+    if (pos == kBlock * 4) REQUIRE(insert.set_parameter(semitones_id, -20.0f));
+    float* plane = signal.data() + pos;
+    insert.process(&plane, 1, kBlock);
+  }
+  for (const float v : signal) REQUIRE(std::isfinite(v));
 }

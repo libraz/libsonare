@@ -1,6 +1,8 @@
 /// @file voice_changer_preset_capi_test.cpp
 /// @brief Voice changer preset, JSON, and C API tests.
 
+#include <catch2/matchers/catch_matchers_string.hpp>
+
 #include "voice_changer_test_helpers.h"
 
 TEST_CASE("Factory presets JSON matches in-code definitions", "[voice_changer][preset-golden]") {
@@ -956,4 +958,71 @@ TEST_CASE("sonare_streaming_retune shifts pitch in place", "[voice_changer][capi
   REQUIRE(energy > 1.0);
 
   sonare_streaming_retune_destroy(retune);
+}
+
+TEST_CASE("The POD config carries the formant mode, fixed at creation",
+          "[voice_changer][c-api][formant_mode]") {
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  CHECK(config.struct_version == 1);
+  CHECK(config.formant_mode == SONARE_FORMANT_MODE_RELATIVE);
+
+  SonareRealtimeVoiceChanger* relative = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &relative) == SONARE_OK);
+  int relative_latency = 0;
+  REQUIRE(sonare_realtime_voice_changer_latency_samples(relative, &relative_latency) == SONARE_OK);
+
+  config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
+  config.formant_factor = 1.1f;
+  SonareRealtimeVoiceChanger* absolute = nullptr;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &absolute) == SONARE_OK);
+  int absolute_latency = 0;
+  REQUIRE(sonare_realtime_voice_changer_latency_samples(absolute, &absolute_latency) == SONARE_OK);
+  CHECK(absolute_latency == relative_latency + 1024);
+  SonareRealtimeVoiceChangerConfig read{};
+  REQUIRE(sonare_realtime_voice_changer_get_config(absolute, &read) == SONARE_OK);
+  CHECK(read.formant_mode == SONARE_FORMANT_MODE_ABSOLUTE);
+
+  // A live update keeps the mode; one that changes it is refused.
+  config.formant_factor = 1.2f;
+  CHECK(sonare_realtime_voice_changer_set_config(absolute, &config) == SONARE_OK);
+  config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
+  CHECK(sonare_realtime_voice_changer_set_config(absolute, &config) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::ContainsSubstring("formant mode"));
+
+  // JSON updates are held to the same rule.
+  CHECK(sonare_realtime_voice_changer_set_config_json(absolute, "bright-idol") ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_realtime_voice_changer_destroy(relative);
+  sonare_realtime_voice_changer_destroy(absolute);
+}
+
+TEST_CASE("The POD config refuses an unreachable warp, a bad mode and a bad layout version",
+          "[voice_changer][c-api][formant_mode]") {
+  SonareRealtimeVoiceChangerConfig config{};
+  REQUIRE(sonare_realtime_voice_changer_config_default(&config) == SONARE_OK);
+  config.formant_mode = SONARE_FORMANT_MODE_ABSOLUTE;
+  config.retune_semitones = -9.0f;
+  config.formant_factor = 1.0f;
+  SonareRealtimeVoiceChanger* handle = nullptr;
+  CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(handle == nullptr);
+  CHECK_THAT(std::string(sonare_last_error_message()),
+             Catch::Matchers::ContainsSubstring("[0.55, 0.9811]"));
+
+  config.retune_semitones = 0.0f;
+  config.formant_mode = 7;
+  CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  config.formant_mode = SONARE_FORMANT_MODE_RELATIVE;
+  config.struct_version = 2;
+  CHECK(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  config.struct_version = 0;
+  REQUIRE(sonare_realtime_voice_changer_create(&config, 48000, 128, 1, &handle) == SONARE_OK);
+  sonare_realtime_voice_changer_destroy(handle);
 }

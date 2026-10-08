@@ -17,11 +17,12 @@ SONARE_VC_PRESET_DARK_VILLAIN = 5
 class SonareRealtimeVoiceChangerConfig(CStruct):
     """Flat POD mirror of editing::voice_changer::RealtimeVoiceChangerConfig.
 
-    Layout matches sonare_c.h exactly: 33 float fields + 3 int fields, no
-    padding. ``sizeof`` must equal ``36 * sizeof(c_float)`` (ABI version 2).
+    Layout matches sonare_c.h exactly: 34 float fields + 4 int fields, no
+    padding. ``sizeof`` must equal ``38 * sizeof(c_float)`` (ABI version 3).
     """
 
     _fields_ = [
+        ("struct_version", ctypes.c_int32),
         ("input_gain_db", ctypes.c_float),
         ("output_gain_db", ctypes.c_float),
         ("wet_mix", ctypes.c_float),
@@ -33,6 +34,7 @@ class SonareRealtimeVoiceChangerConfig(CStruct):
         ("formant_body", ctypes.c_float),
         ("formant_brightness", ctypes.c_float),
         ("formant_nasal", ctypes.c_float),
+        ("formant_mode", ctypes.c_int32),
         ("eq_highpass_hz", ctypes.c_float),
         ("eq_body_db", ctypes.c_float),
         ("eq_presence_db", ctypes.c_float),
