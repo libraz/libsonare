@@ -111,9 +111,10 @@ class StereoDelay : public rt::ProcessorBase {
   std::array<modulation::ModDelayLine, 2> delays_;
   /// Taps 3 and 4, each its own read of the mono input.
   std::array<modulation::ModDelayLine, 2> tap_delays_;
-  std::array<float, 2> tap_samples_{{0.0f, 0.0f}};
+  /// Glided read positions and mix values, held in double so a glide settles on its target.
+  std::array<double, 2> tap_samples_{{0.0, 0.0}};
   double mod_phase_ = 0.0;
-  std::array<float, 2> delay_samples_{{0.0f, 0.0f}};
+  std::array<double, 2> delay_samples_{{0.0, 0.0}};
   std::array<float, 2> feedback_state_{{0.0f, 0.0f}};
   /// Set by process() when a delay tap came back non-finite, cleared by
   /// discard_non_finite(). The poison is resident in the line rather than in a
@@ -125,9 +126,9 @@ class StereoDelay : public rt::ProcessorBase {
   /// so the bypass is a branch rather than a value.
   float damping_gain_ = 0.0f;
   std::array<float, 2> damping_state_{{0.0f, 0.0f}};
-  float smoothed_feedback_ = 0.0f;
-  float smoothed_dry_wet_ = 0.5f;
-  float smoothed_ping_pong_ = 0.0f;
+  double smoothed_feedback_ = 0.0;
+  double smoothed_dry_wet_ = 0.5;
+  double smoothed_ping_pong_ = 0.0;
   rt::StageGate damping_gate_;
 };
 

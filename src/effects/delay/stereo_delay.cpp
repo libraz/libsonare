@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "effects/common/control_ranges.h"
+#include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -118,15 +119,12 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   const std::array<float, 2> target_tap_samples{
       config_delay_samples(config_.tap3_ms, sample_rate_),
       config_delay_samples(config_.tap4_ms, sample_rate_)};
-  const float smoothing_coeff = std::clamp(
-      1.0f / std::max(1.0f, static_cast<float>(sample_rate_) * kDelaySmoothingTimeSeconds), 0.0f,
-      1.0f);
+  const double smoothing_coeff =
+      1.0 / std::max(1.0, sample_rate_ * static_cast<double>(kDelaySmoothingTimeSeconds));
   // The slew of a delay time follows the glide when one is set, and the smoothing time otherwise.
-  const float delay_coeff =
+  const double delay_coeff =
       config_.glide_ms > 0.0f
-          ? std::clamp(
-                1.0f / std::max(1.0f, static_cast<float>(sample_rate_) * 0.001f * config_.glide_ms),
-                0.0f, 1.0f)
+          ? 1.0 / std::max(1.0, sample_rate_ * 0.001 * static_cast<double>(config_.glide_ms))
           : smoothing_coeff;
   const bool tap_on[2] = {config_.tap3_ms > 0.0f, config_.tap4_ms > 0.0f};
   const float tap_level[2] = {db_to_linear(config_.tap3_level_db),
@@ -152,17 +150,20 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   const bool damped =
       damping_gate_.admit(damping_gain_ > 0.0f, [this] { damping_state_ = feedback_state_; });
   for (int i = 0; i < num_samples; ++i) {
-    delay_samples_[0] += (target_delay_samples[0] - delay_samples_[0]) * delay_coeff;
-    delay_samples_[1] += (target_delay_samples[1] - delay_samples_[1]) * delay_coeff;
-    tap_samples_[0] += (target_tap_samples[0] - tap_samples_[0]) * delay_coeff;
-    tap_samples_[1] += (target_tap_samples[1] - tap_samples_[1]) * delay_coeff;
-    smoothed_feedback_ += (target_feedback - smoothed_feedback_) * smoothing_coeff;
-    smoothed_dry_wet_ += (target_wet - smoothed_dry_wet_) * smoothing_coeff;
-    smoothed_ping_pong_ += (target_ping_pong - smoothed_ping_pong_) * smoothing_coeff;
+    for (int side = 0; side < 2; ++side) {
+      delay_samples_[side] =
+          rt::glide_toward(delay_samples_[side], target_delay_samples[side], delay_coeff);
+      tap_samples_[side] =
+          rt::glide_toward(tap_samples_[side], target_tap_samples[side], delay_coeff);
+    }
+    smoothed_feedback_ = rt::glide_toward(smoothed_feedback_, target_feedback, smoothing_coeff);
+    smoothed_dry_wet_ = rt::glide_toward(smoothed_dry_wet_, target_wet, smoothing_coeff);
+    smoothed_ping_pong_ = rt::glide_toward(smoothed_ping_pong_, target_ping_pong, smoothing_coeff);
+    const float feedback = static_cast<float>(smoothed_feedback_);
     // Modulated times may pass the allocated line; ModDelayLine clamps the read to [0, 4 s].
-    float read_l = delay_samples_[0];
-    float read_r = delay_samples_[1];
-    float read_tap[2] = {tap_samples_[0], tap_samples_[1]};
+    float read_l = static_cast<float>(delay_samples_[0]);
+    float read_r = static_cast<float>(delay_samples_[1]);
+    float read_tap[2] = {static_cast<float>(tap_samples_[0]), static_cast<float>(tap_samples_[1])};
     if (modulated) {
       const double phase_r = mod_phase_ - phase_offset;
       const float mod_l = depth_samples * static_cast<float>(std::sin(kTwoPiD * mod_phase_));
@@ -174,23 +175,24 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
     }
     mod_phase_ += phase_step;
     mod_phase_ -= std::floor(mod_phase_);
-    const float wet = smoothed_dry_wet_;
+    const float wet = static_cast<float>(smoothed_dry_wet_);
     const common::MixGains mix = common::mix_gains(mix_law, wet);
     const float dry = mix.dry;
     const float wet_gain = mix.wet;
     // Ping-pong sends the mono input into the left line alone; cross keeps the inputs where they
     // are. Both cross the feedback completely.
-    const float ping_pong =
-        cross_mode != StereoDelayCrossMode::kNormal ? 1.0f : smoothed_ping_pong_;
+    const float ping_pong = cross_mode != StereoDelayCrossMode::kNormal
+                                ? 1.0f
+                                : static_cast<float>(smoothed_ping_pong_);
     const float in_l = left[i];
     const float in_r = right[i];
     const float mid = stereo ? 0.5f * (in_l + in_r) : in_l;
     const float src_l = cross_mode == StereoDelayCrossMode::kPingPong ? mid : in_l;
     const float src_r = cross_mode == StereoDelayCrossMode::kPingPong ? 0.0f : in_r;
-    const float feed_l = src_l + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[0] +
-                                                       ping_pong * feedback_state_[1]);
-    const float feed_r = src_r + smoothed_feedback_ * ((1.0f - ping_pong) * feedback_state_[1] +
-                                                       ping_pong * feedback_state_[0]);
+    const float feed_l = src_l + feedback * ((1.0f - ping_pong) * feedback_state_[0] +
+                                             ping_pong * feedback_state_[1]);
+    const float feed_r = src_r + feedback * ((1.0f - ping_pong) * feedback_state_[1] +
+                                             ping_pong * feedback_state_[0]);
     float delayed_l = delays_[0].process(feed_l, read_l);
     float delayed_r = delays_[1].process(feed_r, read_r);
     if (damped) {
@@ -249,10 +251,12 @@ void StereoDelay::discard_non_finite() noexcept {
   }
   // A smoother rests at its target, not at zero: zero would mute the mix and
   // drop the feedback for a smoothing time nobody asked for.
-  discarded |= discard_if_non_finite(smoothed_feedback_, clamp_feedback(config_.feedback));
-  discarded |= discard_if_non_finite(smoothed_dry_wet_, std::clamp(config_.dry_wet, 0.0f, 1.0f));
-  discarded |=
-      discard_if_non_finite(smoothed_ping_pong_, std::clamp(config_.ping_pong, 0.0f, 1.0f));
+  discarded |= discard_if_non_finite(smoothed_feedback_,
+                                     static_cast<double>(clamp_feedback(config_.feedback)));
+  discarded |= discard_if_non_finite(smoothed_dry_wet_,
+                                     static_cast<double>(std::clamp(config_.dry_wet, 0.0f, 1.0f)));
+  discarded |= discard_if_non_finite(
+      smoothed_ping_pong_, static_cast<double>(std::clamp(config_.ping_pong, 0.0f, 1.0f)));
   if (discarded) note_non_finite_discard();
 }
 

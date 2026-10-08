@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/common/parameter_domain.h"
+#include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 
@@ -121,8 +122,7 @@ void VowelFilter::reset() {
 
 void VowelFilter::update_glide_coefficient() {
   const double tau_s = static_cast<double>(config_.accel_ms) * 1.0e-3;
-  glide_ =
-      tau_s > 0.0 ? static_cast<float>(1.0 - std::exp(-kSubBlock / (tau_s * sample_rate_))) : 1.0f;
+  glide_ = tau_s > 0.0 ? -std::expm1(-kSubBlock / (tau_s * sample_rate_)) : 1.0;
 }
 
 std::array<VowelFilter::Triple, kVowelBandCount> VowelFilter::target_for(
@@ -149,18 +149,19 @@ void VowelFilter::update_bank() {
   for (int b = 0; b < kVowelBandCount; ++b) {
     const auto i = static_cast<size_t>(b);
     if (snap_) {
-      current_[i] = target[i];
+      current_[i] = {target[i].log_hz, target[i].log_q, target[i].weight};
     } else {
       // Frequency and q glide in the log domain; the signed weight, which has no
       // log, glides linearly.
-      current_[i].log_hz += glide_ * (target[i].log_hz - current_[i].log_hz);
-      current_[i].log_q += glide_ * (target[i].log_q - current_[i].log_q);
-      current_[i].weight += glide_ * (target[i].weight - current_[i].weight);
+      current_[i].log_hz = rt::glide_toward(current_[i].log_hz, target[i].log_hz, glide_);
+      current_[i].log_q = rt::glide_toward(current_[i].log_q, target[i].log_q, glide_);
+      current_[i].weight = rt::glide_toward(current_[i].weight, target[i].weight, glide_);
     }
-    weight_sum += current_[i].weight;
-    band_gain_[i] = constant * lift * current_[i].weight;
-    const float hz = std::exp(current_[i].log_hz);
-    const float q = amp * std::exp(current_[i].log_q);
+    const float weight = static_cast<float>(current_[i].weight);
+    weight_sum += weight;
+    band_gain_[i] = constant * lift * weight;
+    const float hz = std::exp(static_cast<float>(current_[i].log_hz));
+    const float q = amp * std::exp(static_cast<float>(current_[i].log_q));
     for (auto& plane : bands_) plane[i].set(hz, q);
   }
   direct_gain_ = constant * weight_sum;

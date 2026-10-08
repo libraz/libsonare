@@ -27,7 +27,7 @@ void StereoWidthProcessor::process(float* const* channels, int num_channels, int
   }
   smoother_.set_target(width_target_.load(std::memory_order_relaxed));
   for (int i = 0; i < num_samples; ++i) {
-    const float w = smoother_.process_settling();
+    const float w = smoother_.process();
     // Standard M/S width law: the mid (mono/center) component is left untouched so
     // raising the width never attenuates a centered or mono source, and only the side
     // component is scaled by w. A purely panned or mono signal therefore keeps its

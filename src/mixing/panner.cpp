@@ -53,8 +53,7 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     // difference is intentional: a mono strip conveys the pan law's energy
     // directly rather than re-balancing a stereo image it does not have.
     for (int i = 0; i < num_samples; ++i) {
-      const PanGains g =
-          pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::Raw);
+      const PanGains g = pan_cache_.get(pan_smoother_.process(), law, PanNormalization::Raw);
       channels[0][i] *= std::sqrt(g.left * g.left + g.right * g.right);
     }
     return;
@@ -66,8 +65,7 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
 
   if (mode == PanMode::StereoPan) {
     for (int i = 0; i < num_samples; ++i) {
-      const PanGains g =
-          pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::Raw);
+      const PanGains g = pan_cache_.get(pan_smoother_.process(), law, PanNormalization::Raw);
       const float mono = 0.5f * (channels[0][i] + channels[1][i]);
       channels[0][i] = mono * g.left;
       channels[1][i] = mono * g.right;
@@ -81,11 +79,11 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     // The main pan smoother keeps advancing once per sample so a switch back to
     // Balance or StereoPan continues from the same position.
     for (int i = 0; i < num_samples; ++i) {
-      (void)pan_smoother_.process_settling();
+      (void)pan_smoother_.process();
       const PanGains a =
-          dual_left_cache_.get(dual_left_smoother_.process_settling(), law, PanNormalization::Raw);
-      const PanGains b = dual_right_cache_.get(dual_right_smoother_.process_settling(), law,
-                                               PanNormalization::Raw);
+          dual_left_cache_.get(dual_left_smoother_.process(), law, PanNormalization::Raw);
+      const PanGains b =
+          dual_right_cache_.get(dual_right_smoother_.process(), law, PanNormalization::Raw);
       const float in_l = channels[0][i];
       const float in_r = channels[1][i];
       channels[0][i] = in_l * a.left + in_r * b.left;
@@ -100,8 +98,7 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
   // raw pan gain would instead attenuate a centered signal by ~3 dB under the
   // constant-power default law (both gains = cos(pi/4) = 0.707).
   for (int i = 0; i < num_samples; ++i) {
-    const PanGains g =
-        pan_cache_.get(pan_smoother_.process_settling(), law, PanNormalization::NearUnity);
+    const PanGains g = pan_cache_.get(pan_smoother_.process(), law, PanNormalization::NearUnity);
     channels[0][i] *= g.left;
     channels[1][i] *= g.right;
   }

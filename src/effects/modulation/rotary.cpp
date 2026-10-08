@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -17,9 +18,9 @@ constexpr float kMaxDepthMs = 20.0f;
 
 /// The fraction of the remaining gap a first-order glide closes per sample.
 /// A non-positive time constant is no glide at all: the rotor arrives at once.
-float glide_coeff(float tau_s, double sample_rate) noexcept {
-  if (!(tau_s > 0.0f)) return 1.0f;
-  return static_cast<float>(1.0 - std::exp(-1.0 / (static_cast<double>(tau_s) * sample_rate)));
+double glide_coeff(float tau_s, double sample_rate) noexcept {
+  if (!(tau_s > 0.0f)) return 1.0;
+  return -std::expm1(-1.0 / (static_cast<double>(tau_s) * sample_rate));
 }
 
 }  // namespace
@@ -90,15 +91,16 @@ void Rotary::prepare(double sample_rate, int) {
   reset();
 }
 
-float Rotary::advance_rotor(float& rate, float target, float undershoot) const noexcept {
+float Rotary::advance_rotor(double& rate, float target, float undershoot) const noexcept {
+  double aim = target;
+  double coeff = decel_coeff_;
   if (target > rate) {
     // Speeding up aims short by the measured offset, and not at all where the target is nearer.
-    const float aim = std::max(rate, target - undershoot);
-    rate += (aim - rate) * accel_coeff_;
-  } else {
-    rate += (target - rate) * decel_coeff_;
+    aim = std::max(rate, static_cast<double>(target) - static_cast<double>(undershoot));
+    coeff = accel_coeff_;
   }
-  return rate;
+  rate = rt::glide_toward(rate, aim, coeff);
+  return static_cast<float>(rate);
 }
 
 void Rotary::process(float* const* channels, int num_channels, int num_samples) {
@@ -286,8 +288,8 @@ void Rotary::reset() {
   drum_lfo_[0].reset(0.0);
   drum_lfo_[1].reset(offset);
   for (int ch = 0; ch < 2; ++ch) {
-    horn_lfo_[ch].set_rate_hz(horn_rate_);
-    drum_lfo_[ch].set_rate_hz(drum_rate_);
+    horn_lfo_[ch].set_rate_hz(static_cast<float>(horn_rate_));
+    drum_lfo_[ch].set_rate_hz(static_cast<float>(drum_rate_));
     horn_delay_[ch].reset();
     drum_delay_[ch].reset();
   }

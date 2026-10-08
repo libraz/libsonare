@@ -51,39 +51,30 @@ void ParamSmoother::set_target(float value) {
 }
 
 float ParamSmoother::process() {
-  const float target = target_.load(std::memory_order_acquire);
-  current_ += coefficient_ * (target - current_);
-  return current_;
-}
-
-float ParamSmoother::process_settling() {
-  const float target = target_.load(std::memory_order_acquire);
-  const float next = current_ + coefficient_ * (target - current_);
-  current_ = next == current_ ? target : next;
-  return current_;
+  current_ = glide_toward(current_, target_.load(std::memory_order_acquire), coefficient_);
+  return static_cast<float>(current_);
 }
 
 float ParamSmoother::advance(int n) {
-  if (n <= 0) return current_;
+  if (n <= 0) return static_cast<float>(current_);
   // Closed form of n iterations of current += coeff * (target - current):
   //   current = target + (current - target) * (1 - coeff)^n.
-  const float target = target_.load(std::memory_order_acquire);
-  const float decay = std::pow(1.0f - coefficient_, static_cast<float>(n));
+  const double target = target_.load(std::memory_order_acquire);
+  const double decay = std::pow(1.0 - coefficient_, static_cast<double>(n));
   current_ = target + (current_ - target) * decay;
-  return current_;
+  return static_cast<float>(current_);
 }
 
 void ParamSmoother::update_coefficient() {
   const float clamped_ms = std::max(time_ms_, 0.0f);
-  coefficient_ = time_to_attack_release_rate_f(sample_rate_, clamped_ms);
+  coefficient_ = time_to_attack_release_rate(sample_rate_, clamped_ms);
 }
 
 float ParamSmoother::process_snapping(float epsilon) {
-  const float target = target_.load(std::memory_order_acquire);
-  const float next = current_ + coefficient_ * (target - current_);
-  // A step that rounds to nothing (an upward glide stalls a few ulps short of 1) also lands.
-  current_ = (std::abs(target - next) <= epsilon || next == current_) ? target : next;
-  return current_;
+  const double target = target_.load(std::memory_order_acquire);
+  const double next = glide_toward(current_, target, coefficient_);
+  current_ = std::abs(target - next) <= static_cast<double>(epsilon) ? target : next;
+  return static_cast<float>(current_);
 }
 
 }  // namespace sonare::rt

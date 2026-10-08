@@ -187,6 +187,41 @@ TEST_CASE("a speed-up settles short of the fast rate by the undershoot", "[rotar
   CHECK(rotary.horn_rate_hz() == Catch::Approx(6.75f).margin(0.01));
 }
 
+TEST_CASE("a speed glide settles on its target at every sample rate", "[rotary-speed]") {
+  constexpr float kTauS = 0.5f;
+  constexpr float kUndershootHz = 0.25f;
+  for (const double rate : {44100.0, 48000.0, 96000.0, 192000.0}) {
+    CAPTURE(rate);
+    RotaryConfig config = switched(0.0f);
+    config.accel_tau_s = kTauS;
+    config.decel_tau_s = kTauS;
+    Rotary rotary(config);
+    rotary.prepare(rate, 4096);
+
+    // Mid-glide the rotor follows the exponential the time constant names.
+    REQUIRE(rotary.set_parameter(9, 1.0f));
+    run_silence(rotary, rate, kTauS);
+    const double samples = std::floor(rate * kTauS);
+    const double expected = 7.0 - 6.0 * std::exp(-samples / (static_cast<double>(kTauS) * rate));
+    CHECK(rotary.horn_rate_hz() == Catch::Approx(expected).margin(1e-4));
+
+    // Long after it, both directions sit on the target itself, not a rate-dependent offset short.
+    run_silence(rotary, rate, 20.0 * kTauS);
+    CHECK(rotary.horn_rate_hz() == 7.0f);
+    CHECK(rotary.drum_rate_hz() == 5.0f);
+    REQUIRE(rotary.set_parameter(9, 0.0f));
+    run_silence(rotary, rate, 21.0 * kTauS);
+    CHECK(rotary.horn_rate_hz() == 1.0f);
+    CHECK(rotary.drum_rate_hz() == 0.5f);
+
+    // The undershoot stays an intentional, exact offset.
+    REQUIRE(rotary.set_parameter(17, kUndershootHz));
+    REQUIRE(rotary.set_parameter(9, 1.0f));
+    run_silence(rotary, rate, 21.0 * kTauS);
+    CHECK(rotary.horn_rate_hz() == 7.0f - kUndershootHz);
+  }
+}
+
 TEST_CASE("the level keys scale each rotor's contribution", "[rotary-speed]") {
   const double horn_ref = leveled_rms(kHornToneHz, -120.0f, -120.0f);
   CHECK(horn_ref < 1e-3);

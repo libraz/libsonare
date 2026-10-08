@@ -73,17 +73,24 @@ class VowelFilter : public rt::ProcessorBase {
     float weight = 0.0f;
   };
 
+  /// A band's live position, held in double so a glide settles on its target.
+  struct Glide {
+    double log_hz = 0.0;
+    double log_q = 0.0;
+    double weight = 0.0;
+  };
+
   std::array<Triple, kVowelBandCount> target_for(float vowel) const noexcept;
   void update_bank();
   void update_glide_coefficient();
 
   VowelFilterConfig config_{};
   double sample_rate_ = 48000.0;
-  float glide_ = 1.0f;       ///< one-pole coefficient per sub-block.
+  double glide_ = 1.0;       ///< one-pole coefficient per sub-block.
   float drive_gain_ = 1.0f;  ///< linear pre-gain, from config_.drive.
   bool snap_ = true;         ///< next bank update lands on the target with no glide.
   int countdown_ = 0;        ///< samples until the next bank update.
-  std::array<Triple, kVowelBandCount> current_{};
+  std::array<Glide, kVowelBandCount> current_{};
   std::array<float, kVowelBandCount> band_gain_{};
   float direct_gain_ = 0.0f;
   std::array<std::array<modulation::SvfBandpass, kVowelBandCount>, kPlanes> bands_;

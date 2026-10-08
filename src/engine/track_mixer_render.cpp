@@ -800,7 +800,7 @@ void TrackMixerRuntime::apply_lane_to_mix(size_t lane_index, float* const* chann
     // stage and the lane's sends on exactly the same per-sample gain.
     const float* lane_fader_gate = lane_gain(lane_index);
     for (int i = 0; i < num_samples; ++i) {
-      const float pan = lane.pan.process_settling();
+      const float pan = lane.pan.process();
       float left_gain = lane_fader_gate[i];
       float right_gain = left_gain;
       // A centered lane is left at unity (no pan processing) so an unpanned lane
@@ -871,7 +871,7 @@ void TrackMixerRuntime::apply_lane_to_mix_surround(size_t lane_index, float* con
   for (int i = 0; i < num_samples; ++i) {
     // Keep the stereo pan smoother advancing so a later stereo render resumes
     // from the right phase; surround placement comes from the panner, not pan.
-    (void)lane.pan.process_settling();
+    (void)lane.pan.process();
     const float fg = lane_fader_gate[i];
     float left = lane_channel(lane_index, 0)[i] * fg;
     lane_channel(lane_index, 0)[i] = left;

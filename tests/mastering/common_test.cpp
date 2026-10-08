@@ -123,6 +123,23 @@ TEST_CASE("ParamSmoother approaches target monotonically", "[mastering]") {
   REQUIRE(second < 1.0f);
 }
 
+TEST_CASE("ParamSmoother settles exactly on its target at every sample rate", "[mastering]") {
+  for (const double rate : {44100.0, 48000.0, 96000.0}) {
+    CAPTURE(rate);
+    for (const float time_ms : {20.0f, 500.0f}) {
+      CAPTURE(time_ms);
+      ParamSmoother smoother(0.0f, time_ms, rate);
+      const int settle = static_cast<int>(40.0 * time_ms * 0.001 * rate);
+      smoother.set_target(1.0f);
+      for (int i = 0; i < settle; ++i) smoother.process();
+      CHECK(smoother.current() == 1.0f);
+      smoother.set_target(0.3f);
+      for (int i = 0; i < settle; ++i) smoother.process();
+      CHECK(smoother.current() == 0.3f);
+    }
+  }
+}
+
 TEST_CASE("EnvelopeFollower follows attack and release", "[mastering]") {
   EnvelopeFollower follower;
   follower.prepare(1000.0, 0.0f, 100.0f);

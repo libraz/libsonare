@@ -1,6 +1,8 @@
+#include <algorithm>
 #include <array>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <cstddef>
 #include <memory>
 #include <vector>
 
@@ -149,4 +151,33 @@ TEST_CASE("StereoDelay keeps its delay lines when a config is re-applied", "[fx]
                 return delay;
               },
               [&](StereoDelay& delay) { delay.set_config(delay.config()); }) == 0.0f);
+}
+
+TEST_CASE("StereoDelay delay-time glide settles on the exact sample count at 192 kHz", "[fx]") {
+  constexpr double kRate = 192000.0;
+  constexpr int kBlock = 4096;
+  StereoDelayConfig config;
+  config.delay_time_l_ms = 500.0f;
+  config.delay_time_r_ms = 500.0f;
+  config.feedback = 0.0f;
+  config.dry_wet = 1.0f;
+  StereoDelay delay(config);
+  delay.prepare(kRate, kBlock);
+  // 1000 ms at 192 kHz is the whole number of samples the line has to read.
+  REQUIRE(delay.set_parameter(0, 1000.0f));
+  REQUIRE(delay.set_parameter(1, 1000.0f));
+  const int settle = static_cast<int>(kRate);  // 100 time constants of the 10 ms slew.
+  const int span = static_cast<int>(kRate) + 8;
+  std::vector<float> left(static_cast<std::size_t>(settle + span), 0.0f);
+  left[static_cast<std::size_t>(settle)] = 1.0f;
+  std::vector<float> right = left;
+  for (int start = 0; start < static_cast<int>(left.size()); start += kBlock) {
+    const int count = std::min(kBlock, static_cast<int>(left.size()) - start);
+    float* channels[] = {left.data() + start, right.data() + start};
+    delay.process(channels, 2, count);
+  }
+  const auto at = [&](int offset) { return left[static_cast<std::size_t>(settle + offset)]; };
+  CHECK(at(192000) > 0.5f);
+  CHECK(at(191999) == 0.0f);
+  CHECK(at(192001) == 0.0f);
 }

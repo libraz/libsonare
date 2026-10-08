@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 
+#include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
@@ -429,7 +430,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
       const float progress = static_cast<float>(gate_elapsed_) / static_cast<float>(gate_ramp);
       float target = gate_open_ ? 1.0f : 0.0f;
       if (config_.gate_type == DattorroGateType::kReverse && gate_open_) target = progress;
-      gate_gain_ += gate_smoothing * (target - gate_gain_);
+      gate_gain_ = rt::glide_toward_f(gate_gain_, target, gate_smoothing);
       float gain_l = gate_gain_;
       float gain_r = gate_gain_;
       if (config_.gate_type == DattorroGateType::kSweep1 ||

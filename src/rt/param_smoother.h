@@ -7,6 +7,21 @@
 
 namespace sonare::rt {
 
+/// One step of a first-order glide from @p current toward @p target, held in double. A step
+/// that rounds to nothing finishes on the target, so a settled glide equals its target at
+/// every sample rate instead of stalling a rate-dependent distance short of it.
+inline double glide_toward(double current, double target, double coeff) noexcept {
+  const double next = current + coeff * (target - current);
+  return next == current ? target : next;
+}
+
+/// The same step for state kept in float. It settles exactly too, but finishes from up to half
+/// a float ulp over the coefficient away, so a long glide belongs on the double form.
+inline float glide_toward_f(float current, float target, float coeff) noexcept {
+  const float next = current + coeff * (target - current);
+  return next == current ? target : next;
+}
+
 class ParamSmoother {
  public:
   ParamSmoother() = default;
@@ -17,11 +32,8 @@ class ParamSmoother {
   void prepare(double sample_rate, float time_ms);
   void reset(float value);
   void set_target(float value);
+  /// One sample of the glide (see glide_toward): a settled value equals the one set.
   float process();
-  /// Like process(), but a glide whose step has rounded to zero a few ulps short of
-  /// the target is finished at the target, so a settled value equals the one set.
-  /// For position smoothers (pan, azimuth) whose exact value selects a code path.
-  float process_settling();
   /// Like process(), but finishes at the target once within @p epsilon of it,
   /// so a glide to 0 or 1 lands on the exact value instead of approaching it.
   float process_snapping(float epsilon);
@@ -30,7 +42,7 @@ class ParamSmoother {
   /// resulting current value. For @p n <= 0 the state is left unchanged.
   float advance(int n);
 
-  float current() const { return current_; }
+  float current() const { return static_cast<float>(current_); }
   float target() const { return target_.load(std::memory_order_acquire); }
 
  private:
@@ -38,8 +50,8 @@ class ParamSmoother {
 
   double sample_rate_ = 48000.0;
   float time_ms_ = 20.0f;
-  float coefficient_ = 0.0f;
-  float current_ = 0.0f;
+  double coefficient_ = 0.0;
+  double current_ = 0.0;
   std::atomic<float> target_{0.0f};
 };
 

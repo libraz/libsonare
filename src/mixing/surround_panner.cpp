@@ -190,9 +190,9 @@ void SurroundPanGlide::settle() noexcept {
 }
 
 const SurroundPanGains& SurroundPanGlide::next() noexcept {
-  const float azimuth = azimuth_.process_settling();
-  const float divergence = divergence_.process_settling();
-  const float lfe = lfe_.process_settling();
+  const float azimuth = azimuth_.process();
+  const float divergence = divergence_.process();
+  const float lfe = lfe_.process();
   if (!evaluated_valid_ || evaluated_[0] != azimuth || evaluated_[1] != divergence ||
       evaluated_[2] != lfe) {
     evaluate(azimuth, divergence, lfe);

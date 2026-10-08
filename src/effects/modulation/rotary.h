@@ -141,8 +141,8 @@ class Rotary : public rt::ProcessorBase {
   /// The rate each rotor is turning at now, which is what drives its LFO. It
   /// equals the configured target except while a glide is in flight or where
   /// the rotor has settled short of a target it was speeding up toward.
-  float horn_rate_hz() const noexcept { return horn_rate_; }
-  float drum_rate_hz() const noexcept { return drum_rate_; }
+  float horn_rate_hz() const noexcept { return static_cast<float>(horn_rate_); }
+  float drum_rate_hz() const noexcept { return static_cast<float>(drum_rate_); }
 
  private:
   /// Returns the crossover filter to rest once a non-finite value has reached
@@ -153,7 +153,7 @@ class Rotary : public rt::ProcessorBase {
   float drum_target_hz() const noexcept;
 
   /// Moves one rotor a sample closer to `target` and returns its new rate.
-  float advance_rotor(float& rate, float target, float undershoot) const noexcept;
+  float advance_rotor(double& rate, float target, float undershoot) const noexcept;
 
   void process_geometric(float* const* channels, int active, int num_samples) noexcept;
   void reset_geometric() noexcept;
@@ -166,10 +166,10 @@ class Rotary : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   bool prepared_ = false;
   float lp_coeff_ = 0.0f;
-  float accel_coeff_ = 1.0f;  ///< per-sample gap fraction closed while speeding up.
-  float decel_coeff_ = 1.0f;  ///< ... and while slowing down.
-  float horn_rate_ = 0.0f;    ///< live rotor rates, gliding toward the config's.
-  float drum_rate_ = 0.0f;
+  double accel_coeff_ = 1.0;  ///< per-sample gap fraction closed while speeding up.
+  double decel_coeff_ = 1.0;  ///< ... and while slowing down.
+  double horn_rate_ = 0.0;    ///< live rotor rates, gliding toward the config's.
+  double drum_rate_ = 0.0;
   std::array<float, 2> lp_state_{{0.0f, 0.0f}};  ///< crossover lowpass memory.
   std::array<Lfo, 2> horn_lfo_;                  ///< [L, R] anti-phase.
   std::array<Lfo, 2> drum_lfo_;
