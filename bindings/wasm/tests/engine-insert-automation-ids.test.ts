@@ -189,19 +189,25 @@ describe('insert automation ids (WASM)', () => {
 
       setAll('utility.gain');
       const gainIds = resolveAll('levelDb');
-      for (const id of gainIds) expect(id).toBeGreaterThan(0);
+      for (const id of gainIds) {
+        expect(id).toBeGreaterThan(0);
+      }
       setAll('utility.gain');
       expect(resolveAll('levelDb')).toEqual(gainIds);
 
       setAll('dynamics.compressor');
-      for (const id of gainIds) expect(alive(engine, id)).toBe(false);
+      for (const id of gainIds) {
+        expect(alive(engine, id)).toBe(false);
+      }
       const compressorIds = resolveAll('thresholdDb');
       compressorIds.forEach((id, index) => {
         expect(alive(engine, id)).toBe(true);
         expect(id).not.toBe(gainIds[index]);
       });
       setAll('utility.gain');
-      for (const id of gainIds) expect(alive(engine, id)).toBe(false);
+      for (const id of gainIds) {
+        expect(alive(engine, id)).toBe(false);
+      }
     } finally {
       engine.destroy();
     }
@@ -271,7 +277,9 @@ describe('insert automation ids (WASM)', () => {
           ];
           for (const [mirror, worklet] of pairs) {
             expect(worklet).toBe(mirror);
-            if (mirror > 0) resolved += 1;
+            if (mirror > 0) {
+              resolved += 1;
+            }
           }
         }
       }
