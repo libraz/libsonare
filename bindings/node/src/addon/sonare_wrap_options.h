@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <string>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace sonare_node {
@@ -244,6 +245,38 @@ inline void node_refuse_fraction(Napi::Env env, const Napi::Value& value, const 
 /// @brief The subject an out-of-range positional argument is named by.
 inline std::string node_arg_label(size_t index) { return "argument " + std::to_string(index); }
 
+/// @brief The wording every embedded-NUL refusal reports.
+inline std::string node_nul_message(const std::string& name) {
+  return name + " must not contain NUL";
+}
+
+/// @brief Whether @p text carries a NUL, which the C string a name, key or path
+///        is handed to would end at.
+inline bool node_has_embedded_nul(const std::string& text) {
+  return text.find('\0') != std::string::npos;
+}
+
+/// @brief Reads a JS string as UTF-8, refusing a non-string and an embedded NUL.
+/// @details Every string the addon takes from JS reads through here, directly or
+///   through @ref StringProperty / @ref RequiredStringValue, because the C ABI
+///   takes NUL-terminated strings: a name, key, path or JSON text with a NUL in
+///   it would be cut at the NUL and succeed as its prefix, a value nothing
+///   downstream can tell from one the caller chose. A string that never reaches
+///   a C string takes the same route so that one route is the only one.
+/// @throws Napi::TypeError for a non-string, Napi::RangeError for a NUL, both
+///   naming @p name.
+inline std::string node_narrow_string(Napi::Env env, const Napi::Value& value,
+                                      const std::string& name) {
+  if (!value.IsString()) {
+    throw Napi::TypeError::New(env, name + " must be a string");
+  }
+  std::string text = value.As<Napi::String>().Utf8Value();
+  if (node_has_embedded_nul(text)) {
+    throw Napi::RangeError::New(env, node_nul_message(name));
+  }
+  return text;
+}
+
 // Object-key readers are the *Property family: undefined/null falls back to the
 // default, and any other value of the wrong type is refused by name. They report
 // by throwing, which SONARE_NODE_CATCH turns back into a JS error.
@@ -404,7 +437,7 @@ inline float AutoFiniteFloatProperty(const Napi::Object& obj, const char* key, f
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (value.IsString()) {
-    if (value.As<Napi::String>().Utf8Value() == "auto") {
+    if (node_narrow_string(obj.Env(), value, key) == "auto") {
       *is_auto = true;
       return fallback;
     }
@@ -433,12 +466,12 @@ inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback
 }
 
 /// @brief Read a UTF-8 string property: undefined/null returns the fallback, any
-///        other non-string is refused by name.
+///        other non-string, and a string carrying a NUL, is refused by name.
 inline std::string StringProperty(const Napi::Object& obj, const char* key, const char* fallback) {
   Napi::Value value = obj.Get(key);
   if (value.IsUndefined() || value.IsNull()) return std::string(fallback);
   node_require_property_type(obj.Env(), value.IsString(), key, "a string");
-  return value.As<Napi::String>().Utf8Value();
+  return node_narrow_string(obj.Env(), value, key);
 }
 
 /// @brief Read the GS insertion-effect realisation ("modern" or "classic") as
@@ -469,7 +502,7 @@ inline int NamedSelectorProperty(const Napi::Object& obj, const char* key,
     throw Napi::TypeError::New(
         obj.Env(), std::string(key) + " must be one of " + valid + " (a name, not a number)");
   }
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(obj.Env(), value, key);
   for (std::size_t i = 0; i < N; ++i) {
     if (name == names[i]) return static_cast<int>(i);
   }
@@ -602,7 +635,8 @@ inline bool RequiredBoolValue(Napi::Env env, const Napi::Value& value, const std
   return !env.IsExceptionPending();
 }
 
-/// @brief Read a required UTF-8 string value.
+/// @brief Read a required UTF-8 string value, refusing a non-string
+///        (TypeError) and an embedded NUL (RangeError) by @p label.
 inline bool RequiredStringValue(Napi::Env env, const Napi::Value& value, const std::string& label,
                                 std::string* out) {
   if (env.IsExceptionPending()) return false;
@@ -610,7 +644,12 @@ inline bool RequiredStringValue(Napi::Env env, const Napi::Value& value, const s
     Napi::TypeError::New(env, label + " must be a string").ThrowAsJavaScriptException();
     return false;
   }
-  *out = value.As<Napi::String>().Utf8Value();
+  std::string text = value.As<Napi::String>().Utf8Value();
+  if (node_has_embedded_nul(text)) {
+    Napi::RangeError::New(env, node_nul_message(label)).ThrowAsJavaScriptException();
+    return false;
+  }
+  *out = std::move(text);
   return !env.IsExceptionPending();
 }
 
@@ -838,7 +877,8 @@ inline bool ReadBuiltinWaveform(Napi::Env env, const Napi::Value& value, int* ou
     return true;
   }
   if (value.IsString()) {
-    const std::string name = value.As<Napi::String>().Utf8Value();
+    std::string name;
+    if (!RequiredStringValue(env, value, "waveform", &name)) return false;
     const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
     if (mapped < 0) {
       Napi::RangeError::New(env, "Unknown synth waveform: '" + name + kExpected)

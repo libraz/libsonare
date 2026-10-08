@@ -15,7 +15,7 @@ namespace {
 
 SonareEngineCaptureSource ParseCaptureSource(Napi::Env env, const Napi::Value& value) {
   if (value.IsString()) {
-    const std::string source = value.As<Napi::String>().Utf8Value();
+    const std::string source = sonare_node::node_narrow_string(env, value, "source");
     if (source == "output") return SONARE_ENGINE_CAPTURE_SOURCE_OUTPUT;
     if (source == "input") return SONARE_ENGINE_CAPTURE_SOURCE_INPUT;
   } else if (value.IsNumber()) {
@@ -31,7 +31,7 @@ SonareEngineCaptureSource ParseCaptureSource(Napi::Env env, const Napi::Value& v
 int ParseWarpMode(Napi::Env env, const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) return SONARE_ENGINE_WARP_MODE_OFF;
   if (value.IsString()) {
-    const std::string mode = value.As<Napi::String>().Utf8Value();
+    const std::string mode = sonare_node::node_narrow_string(env, value, "warpMode");
     if (mode == "off") return SONARE_ENGINE_WARP_MODE_OFF;
     if (mode == "repitch") return SONARE_ENGINE_WARP_MODE_REPITCH;
     if (mode == "tempo-sync") return SONARE_ENGINE_WARP_MODE_TEMPO_SYNC;

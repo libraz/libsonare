@@ -671,7 +671,7 @@ Napi::Value SonareWrap::FromFile(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  std::string path = info[0].As<Napi::String>().Utf8Value();
+  std::string path = node_narrow_string(env, info[0], "path");
 
   SonareAudio* audio_raw = nullptr;
   SonareError err = sonare_audio_from_file(path.c_str(), &audio_raw);
@@ -701,7 +701,7 @@ Napi::Value SonareWrap::FromFileChannel(const Napi::CallbackInfo& info) {
   int channel_index = 0;
   if (!RequiredIntArg(env, info, 1, "channelIndex", &channel_index)) return env.Undefined();
 
-  std::string path = info[0].As<Napi::String>().Utf8Value();
+  std::string path = node_narrow_string(env, info[0], "path");
 
   SonareAudio* audio_raw = nullptr;
   SonareError err = sonare_audio_from_file_channel(path.c_str(), channel_index, &audio_raw);
@@ -728,7 +728,7 @@ Napi::Value SonareWrap::FileChannelCount(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
 
-  const std::string path = info[0].As<Napi::String>().Utf8Value();
+  const std::string path = node_narrow_string(env, info[0], "path");
   int channels = 0;
   const SonareError err = sonare_audio_file_channel_count(path.c_str(), &channels);
   if (err != SONARE_OK) {

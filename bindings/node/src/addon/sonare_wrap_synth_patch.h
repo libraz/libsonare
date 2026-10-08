@@ -81,7 +81,7 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
 inline bool SynthEnumValue(Napi::Env env, const Napi::Value& value, const char* const* names,
                            int count, const char* what, int* out) {
   if (value.IsString()) {
-    const std::string name = value.As<Napi::String>().Utf8Value();
+    const std::string name = node_narrow_string(env, value, what);
     const int mapped = SynthEnumFromName(name, names, count);
     if (mapped < 0) {
       Napi::RangeError::New(env, std::string("Unknown ") + what + " name: '" + name + "'")
@@ -159,7 +159,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
     std::strncpy(patch->preset, bare.c_str(), SONARE_SYNTH_PRESET_NAME_MAX - 1);
   };
   if (desc.IsString()) {
-    set_preset(desc.As<Napi::String>().Utf8Value());
+    set_preset(node_narrow_string(env, desc, "preset"));
     return true;
   }
   if (!desc.IsObject()) {
@@ -176,7 +176,7 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
       Napi::TypeError::New(env, "synth patch preset must be a string").ThrowAsJavaScriptException();
       return false;
     } else {
-      set_preset(preset.As<Napi::String>().Utf8Value());
+      set_preset(node_narrow_string(env, preset, "preset"));
     }
   }
   if (!SynthEnumProperty(env, obj, "engineMode", kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,

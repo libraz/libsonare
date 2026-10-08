@@ -1132,7 +1132,7 @@ SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* w
   if (!value.IsString()) {
     throw Napi::TypeError::New(env, std::string(what) + " must be a chord quality name or number");
   }
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, value, what);
   for (int quality = 0; quality < SONARE_CHORD_QUALITY_COUNT; ++quality) {
     if (name == ChordQualityName(static_cast<SonareChordQuality>(quality))) {
       return static_cast<SonareChordQuality>(quality);

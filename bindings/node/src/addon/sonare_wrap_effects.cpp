@@ -327,7 +327,7 @@ Napi::Value SonareWrap::PitchCorrectTimevarying(const Napi::CallbackInfo& info) 
             .ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      std::string mode = mode_value.As<Napi::String>().Utf8Value();
+      std::string mode = node_narrow_string(env, mode_value, "mode");
       if (mode == "scale") {
         config.target_mode = SONARE_PITCH_TARGET_SCALE;
       } else if (mode != "midi") {
@@ -572,7 +572,7 @@ Napi::Value SonareWrap::VoiceChangeRealtime(const Napi::CallbackInfo& info) {
 
   auto samples = info[0].As<Napi::Float32Array>();
   const int sample_rate = node_narrow_int(env, info[1], "sampleRate");
-  const std::string preset = info[2].As<Napi::String>().Utf8Value();
+  const std::string preset = node_narrow_string(env, info[2], "preset");
   const int channels = node_narrow_int(env, info[3], "channels");
   float* output = nullptr;
   size_t output_length = 0;

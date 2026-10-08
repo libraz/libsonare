@@ -111,7 +111,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
           .ThrowAsJavaScriptException();
       return false;
     }
-    out->ids.push_back(id_value.As<Napi::String>().Utf8Value());
+    out->ids.push_back(node_narrow_string(env, id_value, "trackIds"));
 
     if (has_right_array) {
       Napi::Value right_value = right_input.Get(index);
@@ -134,7 +134,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     if (has_name_array) {
       Napi::Value name_value = name_input.Get(index);
       if (name_value.IsString()) {
-        out->names[index] = name_value.As<Napi::String>().Utf8Value();
+        out->names[index] = node_narrow_string(env, name_value, "trackNames");
         out->has_name[index] = true;
         out->any_name = true;
       } else if (!name_value.IsUndefined() && !name_value.IsNull()) {
@@ -238,7 +238,7 @@ Napi::Value SonareWrap::MixingAssistantSourceClassFromName(const Napi::CallbackI
     Napi::TypeError::New(env, "Expected (name: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, info[0], "name");
   // An unknown name resolves to -1 rather than an error; the caller decides
   // whether that is a failure.
   return Napi::Number::New(env, sonare_mixing_assistant_source_class_from_name(name.c_str()));

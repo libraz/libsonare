@@ -127,7 +127,7 @@ Napi::Value SonareWrap::MasteringInsertParamNames(const Napi::CallbackInfo& info
   // sonare_mastering_insert_param_names(name) returns a thread-local '\n'-joined
   // const char* (NOT to be freed); split it into a JS string[] like the *_names
   // getters. An unknown name yields an empty string -> empty array.
-  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, info[0], "name");
   const char* joined = sonare_mastering_insert_param_names(name.c_str());
   Napi::Array out = Napi::Array::New(env);
   if (joined == nullptr || joined[0] == '\0') {
@@ -160,7 +160,7 @@ Napi::Value SonareWrap::MasteringInsertParamInfo(const Napi::CallbackInfo& info)
   // sonare_mastering_insert_param_info(name) returns a thread-local JSON array
   // string (NOT to be freed); "[]" for an unknown name. The TS facade parses it
   // into the typed MasteringInsertParamInfo[]. A sample rate selects the _at_rate form.
-  const std::string name = info[0].As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, info[0], "name");
   if (info[1].IsUndefined() || info[1].IsNull()) {
     const char* json = sonare_mastering_insert_param_info(name.c_str());
     return Napi::String::New(env, json != nullptr ? json : "[]");
@@ -184,8 +184,8 @@ Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  const std::string name = info[0].As<Napi::String>().Utf8Value();
-  const std::string params = info[1].As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, info[0], "name");
+  const std::string params = node_narrow_string(env, info[1], "params");
   const int sample_rate = node_narrow_int(env, info[2], "sampleRate");
   int latency_samples = 0;
   int tail_samples = 0;

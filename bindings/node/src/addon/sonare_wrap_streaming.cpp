@@ -32,7 +32,7 @@ void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
   for (uint32_t index = 0; index < names.Length(); ++index) {
     Napi::Value key_value = names.Get(index);
     if (!key_value.IsString()) continue;
-    std::string key = key_value.As<Napi::String>().Utf8Value();
+    std::string key = node_narrow_string(key_value.Env(), key_value, "chain config key");
     std::string full_key = prefix.empty() ? key : prefix + "." + key;
 
     // Top-level streaming-only options are read separately by the constructor
@@ -374,7 +374,6 @@ Napi::Value StreamingMasteringChainWrap::SetParameter(const Napi::CallbackInfo& 
       !RequiredDoubleArg(env, info, 1, "value", &value)) {
     return env.Undefined();
   }
-  if (RejectEmbeddedNul(env, key, "key")) return env.Undefined();
   chain_->set_parameter(key, value);
   return env.Undefined();
   SONARE_NODE_CATCH(env)

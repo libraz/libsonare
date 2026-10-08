@@ -25,7 +25,7 @@ inline SonareMode node_mode_from_value(const Napi::Value& value) {
   if (!value.IsString()) {
     throw Napi::TypeError::New(value.Env(), "key modes must be strings or numbers");
   }
-  std::string key = value.As<Napi::String>().Utf8Value();
+  std::string key = node_narrow_string(value.Env(), value, "mode");
   std::transform(key.begin(), key.end(), key.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (key == "major" || key == "maj") return SONARE_MODE_MAJOR;
@@ -45,7 +45,7 @@ inline std::vector<SonareMode> node_modes_option(const Napi::Object& object) {
     return {};
   }
   if (value.IsString()) {
-    std::string key = value.As<Napi::String>().Utf8Value();
+    std::string key = node_narrow_string(value.Env(), value, "modes");
     std::transform(key.begin(), key.end(), key.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (key == "major-minor" || key == "majmin" || key == "diatonic") {
@@ -85,7 +85,7 @@ inline SonareKeyProfileType node_profile_from_value(const Napi::Value& value) {
   if (!value.IsString()) {
     throw Napi::TypeError::New(value.Env(), "key profile must be a string or number");
   }
-  std::string key = value.As<Napi::String>().Utf8Value();
+  std::string key = node_narrow_string(value.Env(), value, "profile");
   std::transform(key.begin(), key.end(), key.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (key == "ks" || key == "krumhansl" || key == "krumhansl-schmuckler") {

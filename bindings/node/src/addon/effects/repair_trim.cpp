@@ -25,14 +25,15 @@ sonare::mastering::repair::TrimSilenceMode parse_trim_silence_mode(
   Napi::Value value = options.Get("mode");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (!value.IsString()) throw std::runtime_error("trim silence mode must be a string");
-  std::string s = value.As<Napi::String>().Utf8Value();
+  std::string s = node_narrow_string(value.Env(), value, "mode");
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "peak") return sonare::mastering::repair::TrimSilenceMode::Peak;
   if (s == "lufsgated" || s == "lufs_gated" || s == "lufs") {
     return sonare::mastering::repair::TrimSilenceMode::LufsGated;
   }
-  throw std::runtime_error("unknown trim silence mode: " + value.As<Napi::String>().Utf8Value());
+  throw std::runtime_error("unknown trim silence mode: " +
+                           node_narrow_string(value.Env(), value, "mode"));
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.

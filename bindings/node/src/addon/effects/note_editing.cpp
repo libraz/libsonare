@@ -234,7 +234,7 @@ bool ReadUnmatchedTargetPolicy(Napi::Env env, const Napi::Object& opts, int32_t*
     Napi::TypeError::New(env, "unmatchedPolicy must be a string").ThrowAsJavaScriptException();
     return false;
   }
-  const std::string policy = value.As<Napi::String>().Utf8Value();
+  const std::string policy = node_narrow_string(env, value, "unmatchedPolicy");
   if (policy == "leave") {
     *out = SONARE_NOTE_TARGET_UNMATCHED_LEAVE;
   } else if (policy == "mute") {

@@ -588,10 +588,10 @@ describe('the abort-guard table accounts for every rejecting entry point', () =>
     // non-integer half: every integer read moved onto the shared narrowing
     // family, either onto a bail-out reader or as a bare info[i] read routed
     // through node_narrow_int, which is a call rather than an inline accessor.
-    // 62 reads match. The floor sits well under that on purpose: routing an
+    // 13 reads match. The floor sits under that on purpose: routing an
     // argument onto a reader shrinks this population without touching the
     // violation subset it guards, so such a move must not redden it.
-    expect(inlineTypedArgumentReads().length).toBeGreaterThan(40);
+    expect(inlineTypedArgumentReads().length).toBeGreaterThan(8);
     // The floor alone would not notice the implicit-conversion form being
     // dropped again, and the addon no longer holds one to measure it on, so
     // the scanner is driven with each form and must report both unchecked.

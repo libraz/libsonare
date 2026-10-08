@@ -23,11 +23,11 @@ namespace {
 
 std::string JsonTextFromJs(const Napi::Value& value) {
   if (value.IsUndefined() || value.IsNull()) return "neutral-monitor";
-  if (value.IsString()) return value.As<Napi::String>().Utf8Value();
+  if (value.IsString()) return node_narrow_string(value.Env(), value, "config");
   Napi::Env env = value.Env();
   Napi::Object json = env.Global().Get("JSON").As<Napi::Object>();
   Napi::Function stringify = json.Get("stringify").As<Napi::Function>();
-  return stringify.Call(json, {value}).As<Napi::String>().Utf8Value();
+  return node_narrow_string(env, stringify.Call(json, {value}), "config");
 }
 
 sonare::editing::voice_changer::RealtimeVoiceChangerConfig ConfigFromJs(const Napi::Value& value) {
@@ -397,7 +397,7 @@ Napi::Value RealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& info) {
   }
   SONARE_NODE_TRY
   const auto preset = sonare::editing::voice_changer::realtime_voice_changer_preset_from_id(
-      info[0].As<Napi::String>().Utf8Value());
+      node_narrow_string(env, info[0], "presetId"));
   return Napi::String::New(
       env, sonare::editing::voice_changer::realtime_voice_changer_preset_json(preset));
   SONARE_NODE_CATCH(env)
@@ -413,7 +413,7 @@ Napi::Value ValidateRealtimeVoiceChangerPresetJson(const Napi::CallbackInfo& inf
   std::string normalized;
   std::string error;
   const bool ok = sonare::editing::voice_changer::validate_realtime_voice_changer_preset_json(
-      info[0].As<Napi::String>().Utf8Value(), &normalized, &error);
+      node_narrow_string(env, info[0], "presetJson"), &normalized, &error);
   Napi::Object out = Napi::Object::New(env);
   out.Set("ok", ok);
   if (ok) {

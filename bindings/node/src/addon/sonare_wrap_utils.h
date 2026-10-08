@@ -49,10 +49,6 @@ void ThrowLastSonareError(Napi::Env env, const std::string& prefix,
 /// @brief Throw @p e classified through the shared std::exception classifier.
 void ThrowStdException(Napi::Env env, const std::exception& e);
 
-/// @brief Throw a RangeError and return true when @p value holds an embedded NUL
-///        that a C-string hand-off would silently truncate.
-bool RejectEmbeddedNul(Napi::Env env, const std::string& value, const char* field);
-
 /// @brief Add the public SonareError shape to an existing JavaScript Error.
 /// Used by AsyncWorker completion handlers before rejecting their Promise.
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err);

@@ -1331,7 +1331,7 @@ Napi::Value RealtimeEngineWrap::SetControllerProfile(const Napi::CallbackInfo& i
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string preset = info[1].As<Napi::String>().Utf8Value();
+  const std::string preset = sonare_node::node_narrow_string(env, info[1], "preset");
   ThrowIfError(env, sonare_engine_set_controller_profile(engine_, destination_id, preset.c_str()));
   return env.Undefined();
   SONARE_NODE_CATCH(env)

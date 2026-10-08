@@ -26,7 +26,7 @@ bool ClipFadeFromObject(Napi::Env env, const Napi::Object& obj, SonareProjectCli
   fade.length_ppq = DoubleProperty(obj, "lengthPpq", 0.0);
   const Napi::Value curve = obj.Get("curve");
   if (curve.IsString()) {
-    const std::string name = curve.As<Napi::String>().Utf8Value();
+    const std::string name = sonare_node::node_narrow_string(env, curve, "curve");
     const SonareError err = sonare_project_fade_curve_from_name(name.c_str(), &fade.curve);
     if (err != SONARE_OK) {
       sonare_node::ThrowSonareError(env, err, "Invalid project fade curve: ");
@@ -142,7 +142,7 @@ bool ParseAutomationPoints(Napi::Env env, const Napi::Value& value,
 bool ParseAutomationTargetKind(Napi::Env env, const Napi::Value& value, uint32_t* out) {
   if (out == nullptr) return false;
   if (value.IsString()) {
-    const std::string name = value.As<Napi::String>().Utf8Value();
+    const std::string name = sonare_node::node_narrow_string(env, value, "targetKind");
     if (name == "opaque") {
       *out = SONARE_AUTOMATION_TARGET_OPAQUE;
       return true;
@@ -244,7 +244,7 @@ Napi::Value ProjectWrap::AddTrack(const Napi::CallbackInfo& info) {
     desc.kind = IntProperty(obj, "kind", SONARE_TRACK_AUDIO);
     Napi::Value name_value = obj.Get("name");
     if (!name_value.IsUndefined() && !name_value.IsNull()) {
-      name = name_value.As<Napi::String>().Utf8Value();
+      name = sonare_node::node_narrow_string(env, name_value, "name");
       has_name = true;
     }
   } else {
@@ -758,8 +758,9 @@ Napi::Value ProjectWrap::SetAudioSourceMetadata(const Napi::CallbackInfo& info) 
   }
   uint32_t source_id = 0;
   if (!OptionalUint32Arg(env, info, 0, "sourceId", 0, &source_id)) return env.Undefined();
-  const std::string content_hash = info[1].As<Napi::String>().Utf8Value();
-  const std::string external_stem_role = info[2].As<Napi::String>().Utf8Value();
+  const std::string content_hash = sonare_node::node_narrow_string(env, info[1], "contentHash");
+  const std::string external_stem_role =
+      sonare_node::node_narrow_string(env, info[2], "externalStemRole");
   ThrowIfError(env, sonare_project_set_audio_source_metadata(
                         project_, source_id, content_hash.c_str(), external_stem_role.c_str()));
   return env.Undefined();

@@ -73,8 +73,8 @@ Napi::Value MixerWrap::AddSend(const Napi::CallbackInfo& info) {
   if (strip == nullptr) {
     return env.Undefined();
   }
-  const std::string send_id = info[1].As<Napi::String>().Utf8Value();
-  const std::string destination_bus_id = info[2].As<Napi::String>().Utf8Value();
+  const std::string send_id = node_narrow_string(env, info[1], "sendId");
+  const std::string destination_bus_id = node_narrow_string(env, info[2], "destinationBusId");
   float send_db{};
   if (!OptionalFiniteFloatArg(env, info, 3, "sendDb", 0.0f, &send_db)) return env.Undefined();
   int timing{};
@@ -164,7 +164,7 @@ Napi::Value MixerWrap::BusMeter(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SonareMixMeterSnapshot snapshot{};
-  const std::string bus_id = info[0].As<Napi::String>().Utf8Value();
+  const std::string bus_id = node_narrow_string(env, info[0], "busId");
   const SonareError err = sonare_mixer_bus_meter(mixer_, bus_id.c_str(), &snapshot);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to read bus meter: ");
@@ -181,7 +181,7 @@ Napi::Value MixerWrap::BusNonFiniteDiscardCount(const Napi::CallbackInfo& info) 
     Napi::TypeError::New(env, "Expected (busId: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string bus_id = info[0].As<Napi::String>().Utf8Value();
+  const std::string bus_id = node_narrow_string(env, info[0], "busId");
   uint32_t count = 0;
   // The entry carries SONARE_C_RT_API_ENTRY, so it records no message of its
   // own and the thread-local one would belong to an unrelated earlier call.
@@ -284,7 +284,7 @@ Napi::Value MixerWrap::StripById(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   SonareStrip* strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
   if (strip == nullptr) {
     return env.Null();

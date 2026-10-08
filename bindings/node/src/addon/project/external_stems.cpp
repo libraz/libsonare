@@ -67,7 +67,7 @@ Napi::Value ProjectWrap::ImportExternalStems(const Napi::CallbackInfo& info) {
           .ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    names.push_back(name.As<Napi::String>().Utf8Value());
+    names.push_back(sonare_node::node_narrow_string(env, name, "names"));
     const Napi::Value role = stem.Get("role");
     if (!role.IsUndefined() && !role.IsNull()) roles.push_back(StringProperty(stem, "role", ""));
     buffers.emplace_back();

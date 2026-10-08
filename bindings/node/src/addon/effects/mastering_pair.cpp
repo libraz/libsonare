@@ -164,7 +164,7 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
                                       "'" + key + "' must be one of the delivery-target names: " +
                                           sonare::mastering::assistant::platform_names_joined());
       }
-      platform = platform_value.As<Napi::String>().Utf8Value();
+      platform = node_narrow_string(platform_value.Env(), platform_value, "platform");
       has_platform = true;
     }
     params = ParamsFromObject(object, kNameKeys);
@@ -235,7 +235,7 @@ Napi::Value SonareWrap::MasteringPairProcess(const Napi::CallbackInfo& info) {
   // source and reference may have independent lengths; the match primitives
   // consume each buffer at its own length.
   auto result = sonare::mastering::api::apply_named_pair_processor(
-      info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
+      node_narrow_string(env, info[0], "processorName"), source.Data(), reference.Data(),
       source.ElementLength(), reference.ElementLength(), sr, params);
   Napi::Object out = Napi::Object::New(env);
   out.Set("samples", VecToFloat32(env, result.samples));
@@ -303,8 +303,7 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  const std::string processor_name = info[0].As<Napi::String>().Utf8Value();
-  if (RejectEmbeddedNul(env, processor_name, "processorName")) return env.Undefined();
+  const std::string processor_name = node_narrow_string(env, info[0], "processorName");
   Napi::Float32Array source_left;
   Napi::Float32Array source_right;
   Napi::Float32Array reference_left;
@@ -338,9 +337,6 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
     }
     params = ParamsFromObject(info[6].As<Napi::Object>());
     if (env.IsExceptionPending()) return env.Undefined();
-  }
-  for (const auto& param : params) {
-    if (RejectEmbeddedNul(env, param.key, "parameter key")) return env.Undefined();
   }
   const auto c_params = CParamsFromNode(params);
   SonareMasteringStereoResult result{};
@@ -427,7 +423,7 @@ Napi::Value SonareWrap::MasteringPairAnalyze(const Napi::CallbackInfo& info) {
     params = ParamsFromObject(info[4].As<Napi::Object>());
   // source and reference may have independent lengths.
   auto json = sonare::mastering::api::analyze_named_pair(
-      info[0].As<Napi::String>().Utf8Value(), source.Data(), reference.Data(),
+      node_narrow_string(env, info[0], "processorName"), source.Data(), reference.Data(),
       source.ElementLength(), reference.ElementLength(), sr, params);
   return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
@@ -455,9 +451,9 @@ Napi::Value SonareWrap::MasteringStereoAnalyze(const Napi::CallbackInfo& info) {
   std::vector<sonare::mastering::api::Param> params;
   if (info.Length() >= 5 && info[4].IsObject())
     params = ParamsFromObject(info[4].As<Napi::Object>());
-  auto json = sonare::mastering::api::analyze_named_stereo(info[0].As<Napi::String>().Utf8Value(),
-                                                           left.Data(), right.Data(),
-                                                           left.ElementLength(), sr, params);
+  auto json = sonare::mastering::api::analyze_named_stereo(
+      node_narrow_string(env, info[0], "processorName"), left.Data(), right.Data(),
+      left.ElementLength(), sr, params);
   return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
@@ -510,7 +506,7 @@ Napi::Value SonareWrap::MasteringPresetParams(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  const std::string preset = info[0].As<Napi::String>().Utf8Value();
+  const std::string preset = node_narrow_string(env, info[0], "preset");
   char* json_out = nullptr;
   const SonareError err = sonare_mastering_preset_params_json(preset.c_str(), &json_out);
   if (err != SONARE_OK) {

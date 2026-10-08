@@ -76,7 +76,7 @@ MixerWrap::MixerWrap(const Napi::CallbackInfo& info) : Napi::ObjectWrap<MixerWra
         .ThrowAsJavaScriptException();
     return;
   }
-  std::string json = info[0].As<Napi::String>().Utf8Value();
+  std::string json = node_narrow_string(env, info[0], "sceneJson");
   if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate_)) return;
   if (sample_rate_ < sonare::kMinAudioSampleRate || sample_rate_ > sonare::kMaxAudioSampleRate) {
     Napi::RangeError::New(env, "Mixer: sampleRate out of supported range [" +

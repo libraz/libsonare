@@ -21,7 +21,7 @@ SonareStrip* MixerWrap::ResolveStrip(const Napi::CallbackInfo& info, const Napi:
       Napi::RangeError::New(env, "mixer strip index out of range").ThrowAsJavaScriptException();
     }
   } else if (ref.IsString()) {
-    const std::string id = ref.As<Napi::String>().Utf8Value();
+    const std::string id = node_narrow_string(env, ref, "strip");
     strip = sonare_mixer_strip_by_id(mixer_, id.c_str());
     if (strip == nullptr) {
       sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,

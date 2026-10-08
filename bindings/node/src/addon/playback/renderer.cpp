@@ -37,7 +37,7 @@ PlaybackRendererWrap::PlaybackRendererWrap(const Napi::CallbackInfo& info)
         .ThrowAsJavaScriptException();
     return;
   }
-  const std::string config_json = info[0].As<Napi::String>().Utf8Value();
+  const std::string config_json = sonare_node::node_narrow_string(env, info[0], "configJson");
   const SonareHrtfSet* hrtf = nullptr;
   if (!HrtfSetWrap::ReadHandle(env, info[1], &hrtf)) return;
   int sample_rate = 48000;
@@ -170,7 +170,7 @@ Napi::Value PlaybackRendererWrap::SetConfig(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  const std::string config_json = info[0].As<Napi::String>().Utf8Value();
+  const std::string config_json = sonare_node::node_narrow_string(env, info[0], "configJson");
   sonare_node::ThrowIfError(
       env, sonare_playback_renderer_set_config_json(renderer_, config_json.c_str()));
   return env.Undefined();

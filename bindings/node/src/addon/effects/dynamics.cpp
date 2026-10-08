@@ -36,14 +36,14 @@ sonare::mastering::dynamics::DetectorMode parse_compressor_detector(
     }
   }
   if (value.IsString()) {
-    std::string s = value.As<Napi::String>().Utf8Value();
+    std::string s = node_narrow_string(env, value, "mode");
     std::transform(s.begin(), s.end(), s.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (s == "peak") return sonare::mastering::dynamics::DetectorMode::Peak;
     if (s == "rms") return sonare::mastering::dynamics::DetectorMode::Rms;
     if (s == "log_rms" || s == "logrms") return sonare::mastering::dynamics::DetectorMode::LogRms;
     throw std::runtime_error("unknown compressor detector mode: " +
-                             value.As<Napi::String>().Utf8Value());
+                             node_narrow_string(env, value, "mode"));
   }
   // Throw rather than ThrowAsJavaScriptException()+return: the latter only
   // schedules a pending JS exception and lets C++ control fall through, so the

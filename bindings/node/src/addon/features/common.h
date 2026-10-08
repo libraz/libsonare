@@ -45,7 +45,7 @@ inline int TempogramModeFromValue(const Napi::Value& value) {
     if (mode == SONARE_TEMPOGRAM_AUTOCORRELATION || mode == SONARE_TEMPOGRAM_COSINE) return mode;
   }
   if (value.IsString()) {
-    const std::string mode = value.As<Napi::String>().Utf8Value();
+    const std::string mode = sonare_node::node_narrow_string(value.Env(), value, "mode");
     if (mode == "autocorrelation" || mode == "auto" || mode == "ac") {
       return SONARE_TEMPOGRAM_AUTOCORRELATION;
     }

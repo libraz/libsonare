@@ -241,7 +241,7 @@ Napi::Value SonareWrap::MasteringProcess(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  auto name = info[0].As<Napi::String>().Utf8Value();
+  auto name = node_narrow_string(env, info[0], "name");
   auto typed = info[1].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
@@ -277,7 +277,7 @@ Napi::Value SonareWrap::MasteringProcessStereo(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  auto name = info[0].As<Napi::String>().Utf8Value();
+  auto name = node_narrow_string(env, info[0], "name");
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
@@ -464,7 +464,7 @@ Napi::Value SonareWrap::MasterAudio(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   auto typed = info[1].As<Napi::Float32Array>();
   // Re-apply the C-ABI input validation this direct core call would otherwise bypass.
   sonare::validate_offline_audio_input(typed.Data(), typed.ElementLength(),
@@ -675,7 +675,7 @@ Napi::Value SonareWrap::MasterAudioAsync(const Napi::CallbackInfo& info) {
             .Value());
     return deferred.Promise();
   }
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   auto typed = info[1].As<Napi::Float32Array>();
   std::vector<float> samples(typed.Data(), typed.Data() + typed.ElementLength());
   int sample_rate = node_narrow_int(env, info[2], "sampleRate");
@@ -705,7 +705,7 @@ Napi::Value SonareWrap::MasterAudioStereoAsync(const Napi::CallbackInfo& info) {
             .Value());
     return deferred.Promise();
   }
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   auto left_typed = info[1].As<Napi::Float32Array>();
   auto right_typed = info[2].As<Napi::Float32Array>();
   if (left_typed.ElementLength() != right_typed.ElementLength()) {
@@ -740,7 +740,7 @@ Napi::Value SonareWrap::MasterAudioStereo(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {
@@ -886,7 +886,7 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   // Pointer lent across the callbacks for the same reason as the chain variants:
   // the preset path runs the same MasteringChain, which copies first.
   auto typed = info[1].As<Napi::Float32Array>();
@@ -932,7 +932,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
     return env.Undefined();
   }
   SONARE_NODE_TRY
-  std::string preset_name = info[0].As<Napi::String>().Utf8Value();
+  std::string preset_name = node_narrow_string(env, info[0], "presetName");
   auto left = info[1].As<Napi::Float32Array>();
   auto right = info[2].As<Napi::Float32Array>();
   if (left.ElementLength() != right.ElementLength()) {

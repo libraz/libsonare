@@ -61,7 +61,7 @@ bool ReadStringEnum(Napi::Env env, const Napi::Value& value, const char* field,
         .ThrowAsJavaScriptException();
     return false;
   }
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, value, field);
   for (size_t i = 0; i < count; ++i) {
     if (name == names[i]) {
       *out = static_cast<uint32_t>(i);
@@ -278,7 +278,7 @@ bool ReadTransition(Napi::Env env, const Napi::Value& value, SonareVocalTransiti
   }
   const Napi::Value curve = object.Get("curve");
   if (curve.IsUndefined() || curve.IsNull() || !curve.IsString() ||
-      curve.As<Napi::String>().Utf8Value() != "smoothstep") {
+      node_narrow_string(env, curve, "transition.curve") != "smoothstep") {
     Napi::RangeError::New(env, "transition.curve must be smoothstep").ThrowAsJavaScriptException();
     return false;
   }
@@ -303,7 +303,7 @@ bool ReadOperations(Napi::Env env, const Napi::Value& value, std::vector<ParsedO
     }
     ParsedOperation item;
     sonare_vocal_operation_init(&item.operation);
-    const std::string kind = kind_value.As<Napi::String>().Utf8Value();
+    const std::string kind = node_narrow_string(env, kind_value, "operation.kind");
     if (kind == "setEdit") {
       item.operation.kind = SONARE_VOCAL_SET_EDIT;
       if (!ReadNoteId(env, object.Get("noteId"), "operation.noteId", &item.operation.note_id) ||
@@ -834,11 +834,6 @@ bool ReadCreateOptions(Napi::Env env, const Napi::Value& value, SonareVocalCreat
     *algorithm_storage = StringProperty(analysis, "algorithmId", "host");
     if (algorithm_storage->empty()) {
       Napi::RangeError::New(env, "analysis.algorithmId must not be empty")
-          .ThrowAsJavaScriptException();
-      return false;
-    }
-    if (algorithm_storage->find('\0') != std::string::npos) {
-      Napi::RangeError::New(env, "analysis.algorithmId must not contain NUL")
           .ThrowAsJavaScriptException();
       return false;
     }

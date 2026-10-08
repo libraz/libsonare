@@ -51,7 +51,7 @@ int PanModeValue(const Napi::Value& value) {
   if (!value.IsString()) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
   }
-  std::string mode = value.As<Napi::String>().Utf8Value();
+  std::string mode = node_narrow_string(value.Env(), value, "panMode");
   for (char& ch : mode) {
     if (ch == '_') ch = '-';
     ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
@@ -141,7 +141,7 @@ Napi::Value SonareWrap::MixingScenePresetJson(const Napi::CallbackInfo& info) {
   }
   char* json = nullptr;
   SonareError err =
-      sonare_mixing_scene_preset_json(info[0].As<Napi::String>().Utf8Value().c_str(), &json);
+      sonare_mixing_scene_preset_json(node_narrow_string(env, info[0], "preset").c_str(), &json);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

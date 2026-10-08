@@ -257,7 +257,7 @@ Napi::Value ProjectWrap::FromJson(const Napi::CallbackInfo& info) {
             " (0 = arrangement support not compiled in).");
     return env.Undefined();
   }
-  std::string json = info[0].As<Napi::String>().Utf8Value();
+  std::string json = sonare_node::node_narrow_string(env, info[0], "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
   SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);
@@ -291,7 +291,7 @@ Napi::Value ProjectWrap::FromJsonWithDiagnostics(const Napi::CallbackInfo& info)
             " (0 = arrangement support not compiled in).");
     return env.Undefined();
   }
-  std::string json = info[0].As<Napi::String>().Utf8Value();
+  std::string json = sonare_node::node_narrow_string(env, info[0], "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
   const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);

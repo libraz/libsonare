@@ -45,7 +45,7 @@ bool ReadSampleLoopMode(Napi::Env env, const Napi::Value& value, int* out) {
     Napi::TypeError::New(env, "loopMode must be a number or string").ThrowAsJavaScriptException();
     return false;
   }
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  const std::string name = sonare_node::node_narrow_string(env, value, "loopMode");
   if (env.IsExceptionPending()) return false;
   for (const SampleDescLoopMode& entry : kSampleDescLoopModes) {
     if (name == entry.name) {

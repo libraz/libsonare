@@ -27,14 +27,15 @@ sonare::mastering::repair::DecrackleMode parse_decrackle_mode(
   Napi::Value value = options.Get("mode");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (!value.IsString()) throw std::runtime_error("decrackle mode must be a string");
-  std::string s = value.As<Napi::String>().Utf8Value();
+  std::string s = node_narrow_string(value.Env(), value, "mode");
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "median") return sonare::mastering::repair::DecrackleMode::Median;
   if (s == "waveletshrinkage" || s == "wavelet_shrinkage" || s == "wavelet") {
     return sonare::mastering::repair::DecrackleMode::WaveletShrinkage;
   }
-  throw std::runtime_error("unknown decrackle mode: " + value.As<Napi::String>().Utf8Value());
+  throw std::runtime_error("unknown decrackle mode: " +
+                           node_narrow_string(value.Env(), value, "mode"));
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.

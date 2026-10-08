@@ -532,7 +532,7 @@ Napi::Value SynthPresetPatch(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  std::string name = info[0].As<Napi::String>().Utf8Value();
+  std::string name = sonare_node::node_narrow_string(env, info[0], "preset");
   if (name.rfind("va:", 0) == 0) name = name.substr(3);
   SonareSynthPatch patch{};
   const SonareError err = sonare_synth_preset_patch(name.c_str(), &patch);

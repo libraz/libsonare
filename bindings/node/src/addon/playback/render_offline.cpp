@@ -37,7 +37,7 @@ Napi::Value RenderPlayback(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   const size_t frames = input.ElementLength() / static_cast<size_t>(in_channels);
-  const std::string config_json = info[3].As<Napi::String>().Utf8Value();
+  const std::string config_json = node_narrow_string(env, info[3], "configJson");
 
   float* out = nullptr;
   size_t out_frames = 0;

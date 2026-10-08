@@ -21,7 +21,7 @@ Napi::Value MixerWrap::AddStrip(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   // Refuse a wrong-typed bag by name, the way the *Property readers below refuse
   // a wrong-typed field. Accepting it and reading nothing out of it would put
   // the caller on the full default metering with nothing to say otherwise.
@@ -62,9 +62,9 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (id: string, role?: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   const bool has_role = info.Length() >= 2 && info[1].IsString();
-  const std::string role = has_role ? info[1].As<Napi::String>().Utf8Value() : std::string();
+  const std::string role = has_role ? node_narrow_string(env, info[1], "role") : std::string();
   SonareError err = sonare_mixer_add_bus(mixer_, id.c_str(), has_role ? role.c_str() : nullptr);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to add bus: ");
@@ -85,7 +85,7 @@ Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to remove bus: ");
@@ -125,7 +125,7 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   const float gain_db = node_narrow_finite_float(env, info[1], "gainDb");
 
   std::vector<std::string> member_storage;
@@ -140,7 +140,7 @@ Napi::Value MixerWrap::AddVcaGroup(const Napi::CallbackInfo& info) {
         Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();
         return env.Undefined();
       }
-      member_storage.push_back(value.As<Napi::String>().Utf8Value());
+      member_storage.push_back(node_narrow_string(env, value, "members"));
     }
     for (const auto& member : member_storage) {
       member_ptrs.push_back(member.c_str());
@@ -169,7 +169,7 @@ Napi::Value MixerWrap::RemoveVcaGroup(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (id: string)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err, "failed to remove VCA group: ");
@@ -190,7 +190,7 @@ Napi::Value MixerWrap::SetVcaGroupGainDb(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Expected (id: string, gainDb: number)").ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   const float gain_db = node_narrow_finite_float(env, info[1], "gainDb");
   SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
   if (err != SONARE_OK) {
@@ -213,7 +213,7 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  const std::string id = info[0].As<Napi::String>().Utf8Value();
+  const std::string id = node_narrow_string(env, info[0], "id");
   const Napi::Array members = info[1].As<Napi::Array>();
   std::vector<std::string> member_storage;
   std::vector<const char*> member_ptrs;
@@ -225,7 +225,7 @@ Napi::Value MixerWrap::SetVcaGroupMembers(const Napi::CallbackInfo& info) {
       Napi::TypeError::New(env, "VCA group members must be strings").ThrowAsJavaScriptException();
       return env.Undefined();
     }
-    member_storage.push_back(value.As<Napi::String>().Utf8Value());
+    member_storage.push_back(node_narrow_string(env, value, "members"));
   }
   for (const auto& member : member_storage) member_ptrs.push_back(member.c_str());
   const SonareError err = sonare_mixer_set_vca_group_members(

@@ -125,13 +125,6 @@ void ThrowStdException(Napi::Env env, const std::exception& e) {
                           e.what());
 }
 
-bool RejectEmbeddedNul(Napi::Env env, const std::string& value, const char* field) {
-  if (value.find('\0') == std::string::npos) return false;
-  Napi::RangeError::New(env, std::string(field) + " must not contain NUL")
-      .ThrowAsJavaScriptException();
-  return true;
-}
-
 void DecorateSonareError(Napi::Env env, Napi::Object error, SonareError err) {
   SetSonareErrorProperties(env, error, err);
 }
@@ -288,7 +281,7 @@ SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what)
   if (!value.IsString()) {
     throw Napi::TypeError::New(env, std::string(what) + " must be a pitch class name or number");
   }
-  const std::string name = value.As<Napi::String>().Utf8Value();
+  const std::string name = node_narrow_string(env, value, what);
   for (int pc = SONARE_PITCH_C; pc <= SONARE_PITCH_B; ++pc) {
     if (name == PitchClassNameLocal(static_cast<SonarePitchClass>(pc))) {
       return static_cast<SonarePitchClass>(pc);
@@ -399,7 +392,7 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
   for (uint32_t index = 0; index < names.Length(); ++index) {
     Napi::Value key_value = names.Get(index);
     Napi::Value value = object.Get(key_value);
-    const std::string key = key_value.As<Napi::String>().Utf8Value();
+    const std::string key = node_narrow_string(env, key_value, "parameter key");
     if (std::find(skip_keys.begin(), skip_keys.end(), key) != skip_keys.end()) continue;
     if (value.IsNumber()) {
       params.push_back({key, value.As<Napi::Number>().DoubleValue()});

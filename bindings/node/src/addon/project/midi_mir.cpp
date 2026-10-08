@@ -492,7 +492,7 @@ Napi::Value ProjectWrap::SetAssistSidecar(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
-  std::string module_id = module_value.As<Napi::String>().Utf8Value();
+  std::string module_id = sonare_node::node_narrow_string(env, module_value, "moduleId");
   const uint32_t schema_version = Uint32Property(obj, "schemaVersion", 0);
   const uint32_t target_track_id = Uint32Property(obj, "targetTrackId", 0);
   Napi::Value start_value = obj.Get("regionStartPpq");

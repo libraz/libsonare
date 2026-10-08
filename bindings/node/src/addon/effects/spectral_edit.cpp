@@ -55,13 +55,13 @@ int read_window_type(Napi::Env env, const Napi::Value& value) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "spectralEdit: window must be a window name or a window ordinal");
   }
-  std::string name = value.As<Napi::String>().Utf8Value();
+  std::string name = node_narrow_string(env, value, "window");
   std::transform(name.begin(), name.end(), name.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   const int mapped = parse_window_type(name);
   if (mapped < 0) {
     throw std::runtime_error("spectralEdit: unknown window type: " +
-                             value.As<Napi::String>().Utf8Value());
+                             node_narrow_string(env, value, "window"));
   }
   return mapped;
 }
@@ -141,13 +141,13 @@ Napi::Value SonareWrap::SpectralEdit(const Napi::CallbackInfo& info) {
       if (!mode_val.IsString()) {
         throw std::runtime_error("spectralEdit: op.mode must be a string");
       }
-      std::string mode_str = mode_val.As<Napi::String>().Utf8Value();
+      std::string mode_str = node_narrow_string(env, mode_val, "op.mode");
       std::transform(mode_str.begin(), mode_str.end(), mode_str.begin(),
                      [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
       int mode_int = parse_spectral_edit_mode(mode_str);
       if (mode_int < 0) {
         throw std::runtime_error("spectralEdit: unknown mode: " +
-                                 mode_val.As<Napi::String>().Utf8Value());
+                                 node_narrow_string(env, mode_val, "op.mode"));
       }
       ops[i].mode = mode_int;
     }

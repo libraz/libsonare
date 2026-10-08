@@ -26,7 +26,7 @@ sonare::mastering::repair::DenoiseMode parse_denoise_mode(
   Napi::Value value = options.Get("mode");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (!value.IsString()) throw std::runtime_error("denoise mode must be a string");
-  std::string s = value.As<Napi::String>().Utf8Value();
+  std::string s = node_narrow_string(value.Env(), value, "mode");
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "logmmse" || s == "log_mmse" || s == "lsa") {
@@ -38,7 +38,8 @@ sonare::mastering::repair::DenoiseMode parse_denoise_mode(
   if (s == "spectralsubtraction" || s == "spectral_subtraction" || s == "ss") {
     return sonare::mastering::repair::DenoiseMode::SpectralSubtraction;
   }
-  throw std::runtime_error("unknown denoise mode: " + value.As<Napi::String>().Utf8Value());
+  throw std::runtime_error("unknown denoise mode: " +
+                           node_narrow_string(value.Env(), value, "mode"));
 }
 
 sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
@@ -46,7 +47,7 @@ sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
   Napi::Value value = options.Get("noiseEstimator");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (!value.IsString()) throw std::runtime_error("denoise noise estimator must be a string");
-  std::string s = value.As<Napi::String>().Utf8Value();
+  std::string s = node_narrow_string(value.Env(), value, "noiseEstimator");
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "quantile") return sonare::mastering::repair::DenoiseNoiseEstimator::Quantile;
@@ -54,19 +55,19 @@ sonare::mastering::repair::DenoiseNoiseEstimator parse_denoise_noise_estimator(
   if (s == "imcra") return sonare::mastering::repair::DenoiseNoiseEstimator::Imcra;
   if (s == "spp") return sonare::mastering::repair::DenoiseNoiseEstimator::Spp;
   throw std::runtime_error("unknown denoise noise estimator: " +
-                           value.As<Napi::String>().Utf8Value());
+                           node_narrow_string(value.Env(), value, "noiseEstimator"));
 }
 
 int parse_dehum_mode(const Napi::Object& options, int fallback) {
   Napi::Value value = options.Get("mode");
   if (value.IsUndefined() || value.IsNull()) return fallback;
   if (!value.IsString()) throw std::runtime_error("dehum mode must be a string");
-  std::string s = value.As<Napi::String>().Utf8Value();
+  std::string s = node_narrow_string(value.Env(), value, "mode");
   std::transform(s.begin(), s.end(), s.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "subtract") return SONARE_DEHUM_MODE_SUBTRACT;
   if (s == "notch") return SONARE_DEHUM_MODE_NOTCH;
-  throw std::runtime_error("unknown dehum mode: " + value.As<Napi::String>().Utf8Value());
+  throw std::runtime_error("unknown dehum mode: " + node_narrow_string(value.Env(), value, "mode"));
 }
 
 // The library default (sonare_c_mastering.h), the base an options bag is read over.

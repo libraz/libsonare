@@ -93,7 +93,7 @@ Napi::Value SonareWrap::NoteToHz(const Napi::CallbackInfo& info) {
   }
 
   SONARE_NODE_TRY
-  std::string note = info[0].As<Napi::String>().Utf8Value();
+  std::string note = node_narrow_string(env, info[0], "note");
   return Napi::Number::New(env, static_cast<double>(sonare::note_to_hz(note)));
   SONARE_NODE_CATCH(env)
 }
