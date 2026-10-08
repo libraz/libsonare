@@ -272,11 +272,15 @@ describe('percussive-event separation kernel', () => {
 
     for (const { passed, wrapsTo } of WRAPPING) {
       it(`refuses a ${direction} kernel of ${passed} by naming the option`, () => {
-        const error = expectParameterRefusal(
-          capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
+        // An options field past the 32-bit range is an argument refusal, as the
+        // WASM options reader raises it.
+        const caught = capture(() =>
+          extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed }),
         );
+        expect(caught).toBeInstanceOf(RangeError);
+        const error = caught as RangeError;
         expect(error.message).toContain(
-          `extractPercussiveEvents: ${key} must be an integer within the signed 32-bit range`,
+          `extractPercussiveEvents: ${key} must be a finite number within the 32-bit integer range`,
         );
         expect(error.message).not.toContain('exceeds the maximum');
       });

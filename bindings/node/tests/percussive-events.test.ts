@@ -921,15 +921,27 @@ describe('renderPercussiveEvents', () => {
       });
 
     const byDefault = renderWith({});
-    // Each field has to land in its own slot; see the extraction case above for
-    // why all three comparisons are needed.
-    const shortHarmonic = renderWith({ hpssKernelHarmonic: 3 });
-    const shortPercussive = renderWith({ hpssKernelPercussive: 3 });
-    expect(firstMismatch(shortHarmonic, byDefault)).not.toBe(-1);
-    expect(firstMismatch(shortPercussive, byDefault)).not.toBe(-1);
+    // A hit in silence has no harmonic estimate under it, so its percussive mask
+    // is exactly 1 whatever the percussive kernel; the kernels are told apart on
+    // the hit under a sustained note, where both medians are non-zero. Each field
+    // has to land in its own slot; see the extraction case above for why all
+    // three comparisons are needed.
+    const target = eventAt(layeredEvents, LAYERED_HIT_START);
+    const renderLayered = (options: Record<string, number>): Float32Array =>
+      renderPercussiveEvents({
+        samples: layered.mixed,
+        sampleRate: SR,
+        events: [{ ...target, edit: { muted: true } }],
+        ...options,
+      });
+    const layeredDefault = renderLayered({});
+    const shortHarmonic = renderLayered({ hpssKernelHarmonic: 3 });
+    const shortPercussive = renderLayered({ hpssKernelPercussive: 3 });
+    expect(firstMismatch(shortHarmonic, layeredDefault)).not.toBe(-1);
+    expect(firstMismatch(shortPercussive, layeredDefault)).not.toBe(-1);
     expect(firstMismatch(shortHarmonic, shortPercussive)).not.toBe(-1);
-    for (const rendered of [byDefault, shortHarmonic, shortPercussive]) {
-      expectEdited(rendered, two, 0.55);
+    for (const options of [{}, { hpssKernelHarmonic: 3 }, { hpssKernelPercussive: 3 }]) {
+      expectEdited(renderWith(options), two, 0.55);
     }
 
     for (const framing of VALID_FRAMINGS) {

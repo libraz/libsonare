@@ -1,12 +1,14 @@
 /**
- * One input, all three surfaces, one error code.
+ * One input, all three surfaces, one refusal.
  *
- * `validation.ts` justifies raising a branded `SonareError` where its neighbours
- * raise `RangeError` by asserting that "the WASM and Python surfaces answer the
- * same input with the same code". That sentence is the whole reason the class
- * differs, and until this file it was true only by inspection — which decays
- * silently, because nothing about editing the WASM validator tells you a Node
- * docblock depends on it. This drives all three and compares the codes.
+ * `validation.ts` justifies raising a branded `SonareError` for a positional
+ * argument where its neighbours raise `RangeError` by asserting that "the WASM
+ * and Python surfaces answer the same input with the same code". An options
+ * field is the other family: its reader refuses the value as an argument, a
+ * `RangeError` on both JS surfaces and `SonareValueError` on Python. Both claims
+ * were true only by inspection — which decays silently, because nothing about
+ * editing the WASM validator tells you a Node docblock depends on it. This
+ * drives all three and compares what each one raised.
  *
  * The input has to be chosen, not picked. A value past the signed 32-bit range
  * is only interesting if it narrows into a value the downstream guards ACCEPT:
@@ -59,14 +61,20 @@ const hits = (() => {
   return out;
 })();
 
-/** The code a surface answered with, or a marker that says it did not refuse. */
-type Answer = number | 'no refusal';
+/**
+ * The code a surface answered with, `'RangeError'` for an argument refusal that
+ * carries none, or a marker that says it did not refuse.
+ */
+type Answer = number | 'RangeError' | 'no refusal';
 
 const codeOf = (run: () => unknown): Answer => {
   try {
     run();
     return 'no refusal';
   } catch (error) {
+    if (error instanceof RangeError) {
+      return 'RangeError';
+    }
     const code = (error as { code?: unknown }).code;
     return typeof code === 'number' ? code : Number.NaN;
   }
@@ -84,7 +92,7 @@ function pythonCode(call: string): Answer {
     `    ${call}`,
     '    print("no refusal")',
     'except Exception as error:',
-    '    print(getattr(error, "code", "no code"))',
+    '    print(type(error).__name__ + ":" + str(getattr(error, "code", "no code")))',
   ].join('\n');
   const stdout = execFileSync('rye', ['run', 'python', '-c', script], {
     cwd: PYTHON_PACKAGE,
@@ -93,10 +101,14 @@ function pythonCode(call: string): Answer {
   if (stdout === 'no refusal') {
     return 'no refusal';
   }
-  const parsed = Number(stdout);
+  const [className, code] = stdout.split(':');
+  const parsed = Number(code);
   expect(Number.isInteger(parsed), `python reported ${stdout} instead of a numeric code`).toBe(
     true,
   );
+  // Every refusal compared here is an argument refusal on Python: SonareValueError,
+  // which is a ValueError carrying the InvalidParameter code.
+  expect(className, `python raised ${stdout}`).toBe('SonareValueError');
   return parsed;
 }
 
@@ -104,7 +116,7 @@ beforeAll(async () => {
   await wasmInit();
 });
 
-describe('a kernel past the signed range reports one code on every surface', () => {
+describe('a kernel past the signed range is refused alike on every surface', () => {
   // Each entry drives the SAME value through the three facades. The wrapped
   // value is carried alongside so the control below can prove it is accepted.
   const cases = [
@@ -116,6 +128,8 @@ describe('a kernel past the signed range reports one code on every surface', () 
       wasm: (kernel: number) => wasmHpss({ samples: tone, sampleRate, kernelHarmonic: kernel }),
       python: (kernel: number) =>
         `libsonare.hpss([0.0] * 4096, ${sampleRate}, kernel_harmonic=${kernel})`,
+      // A positional kernel: both JS facades pre-empt the native refusal with its code.
+      expected: { node: ErrorCode.InvalidParameter, wasm: ErrorCode.InvalidParameter },
     },
     {
       name: 'extractPercussiveEvents hpssKernelPercussive',
@@ -127,11 +141,13 @@ describe('a kernel past the signed range reports one code on every surface', () 
         wasmExtractPercussiveEvents({ samples: hits, sampleRate, hpssKernelPercussive: kernel }),
       python: (kernel: number) =>
         `libsonare.extract_percussive_events([0.0] * ${sampleRate}, ${sampleRate}, hpss_kernel_percussive=${kernel})`,
+      // An options field: the option reader refuses it as an argument, a RangeError.
+      expected: { node: 'RangeError' as const, wasm: 'RangeError' as const },
     },
   ];
 
   for (const entry of cases) {
-    it(`${entry.name}: ${entry.passed} is InvalidParameter on Node, WASM and Python`, () => {
+    it(`${entry.name}: ${entry.passed} is refused alike on Node, WASM and Python`, () => {
       const answers = {
         node: codeOf(() => entry.node(entry.passed)),
         wasm: codeOf(() => entry.wasm(entry.passed)),
@@ -139,11 +155,7 @@ describe('a kernel past the signed range reports one code on every surface', () 
       };
       // Compared as one object so a disagreement names which surface differs,
       // rather than failing on whichever assertion happened to run first.
-      expect(answers).toEqual({
-        node: ErrorCode.InvalidParameter,
-        wasm: ErrorCode.InvalidParameter,
-        python: ErrorCode.InvalidParameter,
-      });
+      expect(answers).toEqual({ ...entry.expected, python: ErrorCode.InvalidParameter });
     });
 
     it(`${entry.name}: ${entry.passed} would have been accepted as ${entry.wrapsTo}`, () => {

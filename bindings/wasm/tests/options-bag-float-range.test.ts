@@ -59,6 +59,14 @@ const WRONG_TYPES: readonly unknown[] = ['0.8', true, [0.8], {}];
 const PCEN_BINS = 8;
 const PCEN_FRAMES = 16;
 const matrix = new Float32Array(PCEN_BINS * PCEN_FRAMES).map((_, i) => 0.1 + (i % 5) * 0.05);
+/**
+ * Every cell at or above 1, so pcen's smoother never drops below 1 and
+ * (M + eps)^-gain stays finite for any gain a float can hold. Over `matrix` a
+ * gain of 3.0e38 drives that term past the float range, which pcen documents as
+ * its own refusal ("overflows the float range for this input"), not the
+ * reader's.
+ */
+const unitFloorMatrix = new Float32Array(PCEN_BINS * PCEN_FRAMES).map((_, i) => 1 + (i % 5) * 0.05);
 
 const capture = (run: () => unknown): unknown => {
   try {
@@ -87,9 +95,9 @@ function estimate(volume?: unknown): RoomEstimateResult {
 
 const configForRoom = (volume?: unknown) => masteringRepairDereverbConfigForRoom(estimate(volume));
 
-const pcenWith = (gain?: unknown) =>
+const pcenWith = (gain?: unknown, spectrogram: Float32Array = matrix) =>
   pcen(
-    matrix,
+    spectrogram,
     PCEN_BINS,
     PCEN_FRAMES,
     (gain === undefined ? {} : { gain }) as Record<string, number>,
@@ -167,8 +175,21 @@ describe('floatProperty refuses a finite value wider than a float', () => {
   });
 
   it('still accepts 3.0e38, which a float can hold', () => {
-    expect(() => pcenWith(INSIDE_FLOAT_MAX)).not.toThrow();
-    expect(Array.from(pcenWith(INSIDE_FLOAT_MAX))).not.toEqual(Array.from(pcenWith()));
+    // On an input whose smoother stays at or above 1 the exponent cannot overflow, so the
+    // reader's acceptance is all that is under test.
+    expect(() => pcenWith(INSIDE_FLOAT_MAX, unitFloorMatrix)).not.toThrow();
+    expect(Array.from(pcenWith(INSIDE_FLOAT_MAX, unitFloorMatrix))).not.toEqual(
+      Array.from(pcenWith(undefined, unitFloorMatrix)),
+    );
+  });
+
+  it('passes 3.0e38 through to pcen, whose own overflow refusal names the cause', () => {
+    // Over a quiet spectrogram (M + eps)^-3.0e38 is past the float range: pcen refuses it as
+    // documented, with its own message rather than the reader's range refusal.
+    const caught = capture(() => pcenWith(INSIDE_FLOAT_MAX));
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as Error).message).toContain('overflows the float range');
+    expect((caught as Error).message).not.toContain(RANGE_MESSAGE);
   });
 
   it('refuses NaN and an infinity rather than substituting, which is the family split', () => {

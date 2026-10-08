@@ -22,6 +22,7 @@ from ._runtime import (
     _to_c_int,
     _to_c_size_t,
     _unsupported_effect_symbol,
+    _utf8_arg,
 )
 from .types import (
     ClickDetection,
@@ -145,7 +146,7 @@ def mastering_repair_analyze(
             _to_c_size_t(len(arrays), "channel_count"),
             _to_c_size_t(frame_count, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            request.encode("utf-8"),
+            _utf8_arg(request, "request"),
             ctypes.byref(json_ptr),
         )
     )
@@ -228,7 +229,7 @@ def mastering_repair_apply(
             _to_c_size_t(len(arrays), "channel_count"),
             _to_c_size_t(frame_count, "length"),
             _to_c_int(sample_rate, "sample_rate"),
-            stages_json.encode("utf-8"),
+            _utf8_arg(stages_json, "stages"),
             progress_cb,
             None,
             ctypes.cast(out_ptrs, ctypes.POINTER(ctypes.POINTER(ctypes.c_float))),

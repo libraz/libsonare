@@ -912,15 +912,31 @@ describe('renderPercussiveEvents', () => {
 
     // The separation the events are lifted with, which a render must be given
     // what the extraction was called with.
-    for (const options of [
-      { nFft: 1024, hopLength: 256 },
-      { hpssKernelHarmonic: 3 },
-      { hpssKernelPercussive: 3 },
-    ]) {
-      const changed = renderPercussiveEvents({ ...base, ...options });
-      expect(changed).toHaveLength(three.length);
-      expect(changed).not.toEqual(defaults);
+    const finer = renderPercussiveEvents({ ...base, nFft: 1024, hopLength: 256 });
+    expect(finer).toHaveLength(three.length);
+    expect(finer).not.toEqual(defaults);
+    // A hit in silence has no harmonic estimate under it, so its percussive mask is
+    // exactly 1 whatever the percussive kernel; the kernels are told apart on the
+    // hit under a sustained note, where both medians are non-zero.
+    const fixture = layeredFixture();
+    const layeredEvent = eventAt(
+      extractPercussiveEvents({ samples: fixture.mixed, sampleRate }),
+      fixture.hitStart,
+    );
+    const layeredBase = {
+      samples: fixture.mixed,
+      sampleRate,
+      events: [{ ...layeredEvent, edit: { muted: true } }],
+    };
+    const layeredDefaults = renderPercussiveEvents(layeredBase);
+    const kernelRenders = [{ hpssKernelHarmonic: 3 }, { hpssKernelPercussive: 3 }].map((options) =>
+      renderPercussiveEvents({ ...layeredBase, ...options }),
+    );
+    for (const changed of kernelRenders) {
+      expect(changed).toHaveLength(fixture.mixed.length);
+      expect(changed).not.toEqual(layeredDefaults);
     }
+    expect(kernelRenders[0]).not.toEqual(kernelRenders[1]);
     // And the zero-is-default rule on the same four fields.
     expect(
       renderPercussiveEvents({
