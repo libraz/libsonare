@@ -971,4 +971,40 @@ TEST_CASE("a live system-effect edit reaches the audio without allocating",
   REQUIRE(rms(after.left, 0, 4800) > rms(before.left, 2400, 4800) * 1.5);
 }
 
+TEST_CASE("a live public reset restores an already active system effect and master EQ",
+          "[midi][synth][gs]") {
+  // The edit is rendered before the reset, so it has reached the effect bus and
+  // the EQ rather than sitting pending; the reset must undo it there, not only in
+  // the mirror.
+  const auto live_player = [] {
+    Sf2PlayerConfig cfg;
+    cfg.gain = 1.0f;
+    Sf2Player player(cfg);
+    player.set_soundfont(make_fixture());
+    player.prepare(kOutRate, 256);
+    return player;
+  };
+  const auto note_run = [](Sf2Player& player) {
+    player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+    return render(player, kToneSamples);
+  };
+
+  Sf2Player fresh = live_player();
+  const StereoRender expected = note_run(fresh);
+
+  const std::vector<uint8_t> reverb_off = dt1(0x40, 0x01, 0x33, {0x00});
+  const std::vector<uint8_t> eq_lifted = dt1(0x40, 0x02, 0x00, {0x01, 0x4C, 0x01, 0x4C});
+  for (const std::vector<uint8_t>* edit : {&reverb_off, &eq_lifted}) {
+    Sf2Player player = live_player();
+    player.on_control_sysex(edit->data(), edit->size());
+    const StereoRender edited = note_run(player);
+    REQUIRE(edited.left != expected.left);
+
+    player.reset();
+    const StereoRender after = note_run(player);
+    CHECK(after.left == expected.left);
+    CHECK(after.right == expected.right);
+  }
+}
+
 #endif  // SONARE_MIDI_WITH_FX

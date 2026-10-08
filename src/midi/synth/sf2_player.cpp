@@ -478,8 +478,14 @@ void Sf2Player::reset() {
   for (SourceResidualSplitter& s : body_residual_splitters_) s.reset();
   clear_control_owned_gs_state();
   reset_all_state(/*reverb_send_default=*/40, /*chorus_send_default=*/0);
-  // A raised tail covered voices the reset has just silenced.
-  if (prepared_) recompute_tail();
+#if defined(SONARE_MIDI_WITH_FX)
+  if (effects_ != nullptr) effects_->reset();
+#endif
+  eq_.reset();
+  // Push the cleared system-effect and master-EQ mirrors to the live consumers
+  // through the same path an ordinary edit takes; it also recomputes the tail,
+  // which a raised value covered voices the reset has just silenced.
+  if (prepared_) apply_gs_system_state(sys_fx_, master_eq_, eq_part_bypassed_);
   // Republish a fresh realised-EFX snapshot: rebuilding the inserts gives them
   // clean DSP state (the discontinuity's equivalent of resetting them), and the
   // old snapshot is retired/freed by the control thread, never the audio thread.
@@ -490,10 +496,6 @@ void Sf2Player::reset() {
     part_fx_.settle_quiescent(*this);
     part_fx_.clear_dirty();
   }
-#if defined(SONARE_MIDI_WITH_FX)
-  if (effects_ != nullptr) effects_->reset();
-#endif
-  eq_.reset();
 }
 
 void Sf2Player::reset_all_state(uint8_t reverb_send_default, uint8_t chorus_send_default) noexcept {
