@@ -7,6 +7,7 @@ import type {
   RealtimeEngine,
 } from '../index.js';
 import type { OpfsClipPageProviderBinding } from '../opfs_clip_pages.js';
+import type { OwnerEpoch } from '../owner_epoch.js';
 import { requireIntegerOption } from './guards.js';
 
 /** Request form of {@link SonareEngine.renderOffline}. */
@@ -45,6 +46,8 @@ export interface EngineExportContext {
   readonly opfsSources: ReadonlyMap<number, OpfsExportSource>;
   /** `chunkOrigin` is the transport position the mirror returns to once a chunked render ends. */
   readonly session: { chunkOrigin: number | undefined };
+  /** Owning engine's epoch; a render that resumes after destroy stops. */
+  readonly epoch: OwnerEpoch;
   flushOfflineMirror(): void;
   /** Replaces the facade clip store and the worklet's clips with the frozen clip. */
   commitFrozenClip(clip: EngineClip, previousClipIds: number[]): void;
@@ -122,6 +125,7 @@ async function prefetchOpfsSpan(
   if (ctx.opfsSources.size === 0 || frames <= 0) {
     return release;
   }
+  const token = ctx.epoch.current();
   try {
     for (const clip of ctx.clips.values()) {
       const providerId =
@@ -138,7 +142,9 @@ async function prefetchOpfsSpan(
         if (source.residentPages.has(page)) {
           continue;
         }
-        if (!(await source.binding.supplyPage(page))) {
+        const ok = await source.binding.supplyPage(page);
+        ctx.epoch.assertCurrent(token);
+        if (!ok) {
           throw new Error(
             `Failed to page in OPFS clip ${clip.id ?? '?'} page ${page} for offline render.`,
           );

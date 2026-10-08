@@ -192,7 +192,7 @@ uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std:
 
 uint32_t ProjectWasm::setMarkerEx(val marker) {
   SonareProjectMarker desc{};
-  desc.id = static_cast<uint32_t>(intProperty(marker, "id", 0));
+  desc.id = uintProperty(marker, "id", 0);
   desc.kind = static_cast<uint8_t>(intProperty(marker, "kind", 0));
   desc.key_fifths = static_cast<int8_t>(intProperty(marker, "keyFifths", 0));
   desc.key_minor = static_cast<uint8_t>(boolProperty(marker, "keyMinor", false) ? 1 : 0);

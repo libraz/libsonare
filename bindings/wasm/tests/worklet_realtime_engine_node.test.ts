@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { vi } from 'vitest';
 import { ENGINE_SYNC_MESSAGE_TYPES } from '../src/worklet/guards';
 import {
@@ -6,6 +7,7 @@ import {
   it,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
+  pushSonareExternalMidiRingBuffer,
   SonareEngine,
   SonareEngineCommandType,
   SonareEngineTelemetryError,
@@ -52,6 +54,203 @@ describe('SonareRealtimeEngineNode', () => {
       });
       return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
     }
+
+    it('rejects a pending ready wait on destroy and ignores a late ready message', async () => {
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: () => undefined };
+      let handler: ((event: MessageEvent<unknown>) => void) | null | undefined;
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => {
+          queueMicrotask(() => {
+            handler = port.onmessage;
+          });
+          return { port, disconnect: () => undefined } as unknown as AudioWorkletNode;
+        },
+      });
+      await Promise.resolve();
+      node.destroy();
+      await expect(node.ready).rejects.toMatchObject({ code: 7, codeName: 'InvalidState' });
+      // A handler the host kept from before destroy cannot revive the node.
+      handler?.({ data: { type: 'ready', runtimeTarget: 'embind' } } as MessageEvent<unknown>);
+      await expect(node.ready).rejects.toMatchObject({ codeName: 'InvalidState' });
+      expect(node.sendCommand({ type: SonareEngineCommandType.TransportPlay })).toBe(false);
+    });
+
+    it('keeps a node that became ready resolved when it is destroyed', async () => {
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: () => undefined };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      await node.ready;
+      node.destroy();
+      await expect(node.ready).resolves.toBeUndefined();
+    });
+
+    it('leaves queued external MIDI to a manual pollMidiOut while only meters are subscribed', async () => {
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: () => undefined };
+      const node = await SonareRealtimeEngineNode.create(fakeContext(), {
+        mode: 'sab',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      try {
+        const ring = node.externalMidiRing;
+        if (!ring) {
+          throw new Error('expected an external-MIDI ring');
+        }
+        expect(pushSonareExternalMidiRingBuffer(ring, 3, 64, 0x00003c80, 3)).toBe(true);
+        const unsubscribeMeter = node.onMeter(() => undefined);
+        const unsubscribeTelemetry = node.onTelemetry(() => undefined);
+        const unsubscribeScope = node.onScope(() => undefined);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(node.pollMidiOut()).toEqual([
+          { destinationId: 3, renderFrame: 64, bytes: [0x80, 0x3c, 0] },
+        ]);
+        expect(node.pollMidiOut()).toEqual([]);
+
+        // A MIDI subscriber drains through the shared poll; after it leaves, the
+        // remaining subscriptions stop consuming again.
+        const delivered: number[] = [];
+        const unsubscribeMidi = node.onMidiOut((events) => {
+          delivered.push(...events.map((event) => event.renderFrame));
+        });
+        expect(pushSonareExternalMidiRingBuffer(ring, 3, 128, 0x00003c80, 3)).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(delivered).toEqual([128]);
+        unsubscribeMidi();
+        expect(pushSonareExternalMidiRingBuffer(ring, 3, 192, 0x00003c80, 3)).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        expect(node.pollMidiOut().map((event) => event.renderFrame)).toEqual([192]);
+        unsubscribeMeter();
+        unsubscribeTelemetry();
+        unsubscribeScope();
+      } finally {
+        node.destroy();
+      }
+    });
+
+    it('delivers the SoundFont and patch content of a call made during playback, not later edits', async () => {
+      const posted: unknown[] = [];
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: (message: unknown) => posted.push(message) };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      try {
+        engine.setTrackLanes([3]);
+        engine.transport.play();
+        const sf2 = new Uint8Array(
+          readFileSync(new URL('../../../tests/fixtures/sf2/minimal_gs.sf2', import.meta.url)),
+        );
+        const original = sf2.slice();
+        engine.loadSoundFont(sf2);
+        sf2.fill(0);
+        const config = { gain: 0.5 };
+        engine.setBuiltinInstrument(3, config);
+        config.gain = 0.25;
+        expect(
+          posted.some((message) => (message as { type?: unknown }).type === 'syncLoadSoundFont'),
+        ).toBe(false);
+
+        engine.transport.stop();
+        const load = posted.find(
+          (message) => (message as { type?: unknown }).type === 'syncLoadSoundFont',
+        ) as { data: Uint8Array } | undefined;
+        expect(load?.data).toEqual(original);
+        const builtin = posted.find(
+          (message) => (message as { type?: unknown }).type === 'syncBuiltinInstrument',
+        ) as { config: { gain: number } } | undefined;
+        expect(builtin?.config.gain).toBe(0.5);
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('pages a long clip whether warp-off is omitted, 0 or "off"', async () => {
+      const posted: unknown[] = [];
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: (message: unknown) => posted.push(message) };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      try {
+        engine.setTrackLanes([3]);
+        const spellings = [{}, { warpMode: 0 as const }, { warpMode: 'off' as const }];
+        for (const [index, spelling] of spellings.entries()) {
+          posted.length = 0;
+          const id = 900 + index;
+          engine.addClip(3, [new Float32Array(20_000)], 0, { id, ...spelling });
+          const types = posted
+            .filter((message) => (message as { clipId?: unknown }).clipId === id)
+            .map((message) => (message as { type: string }).type);
+          expect(types[0]).toBe('syncClipPageProvider');
+          expect(types.at(-1)).toBe('syncClipPageCommit');
+        }
+      } finally {
+        engine.destroy();
+      }
+    });
+
+    it('refuses a sample-bank synth patch before the offline engine or the pending sync changes', async () => {
+      const posted: unknown[] = [];
+      const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
+        string,
+        unknown
+      > = { postMessage: (message: unknown) => posted.push(message) };
+      const engine = await SonareEngine.create(fakeContext(), {
+        mode: 'postMessage',
+        nodeFactory: () => readyWorkletNode(port),
+      });
+      try {
+        engine.setTrackLanes([3]);
+        const offline = (engine as unknown as { offlineEngine: { setSynthInstrument: unknown } })
+          .offlineEngine;
+        const offlineSet = vi.spyOn(
+          offline as { setSynthInstrument: () => void },
+          'setSynthInstrument',
+        );
+        for (const playing of [false, true]) {
+          if (playing) {
+            engine.transport.play();
+          }
+          posted.length = 0;
+          expect(() =>
+            engine.setSynthInstrument(3, { kind: 'sample', sampleBank: {} } as never),
+          ).toThrow(expect.objectContaining({ codeName: 'NotSupported' }));
+          expect(offlineSet).not.toHaveBeenCalled();
+          expect(
+            posted.filter(
+              (message) => (message as { type?: unknown }).type === 'syncSynthInstrument',
+            ),
+          ).toEqual([]);
+        }
+        engine.transport.stop();
+        expect(
+          posted.filter(
+            (message) => (message as { type?: unknown }).type === 'syncSynthInstrument',
+          ),
+        ).toEqual([]);
+        engine.setSynthInstrument(3, 'saw-lead');
+        expect(offlineSet).toHaveBeenCalledTimes(1);
+      } finally {
+        engine.destroy();
+      }
+    });
 
     it('creates a SAB-backed AudioWorkletNode facade and queues transport commands', async () => {
       let capturedOptions: AudioWorkletNodeOptions | undefined;

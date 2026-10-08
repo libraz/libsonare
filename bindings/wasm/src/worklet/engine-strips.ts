@@ -1,4 +1,5 @@
 import { panLawCode, panModeCode } from '../codes.js';
+import { ErrorCode, SonareError } from '../errors.js';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
 import type { SurroundPan } from '../public_types.js';
 import type { InsertParamOverrideMap } from './engine-mixer-facade.js';
@@ -550,6 +551,15 @@ export function setSynthInstrument(
   patch: Record<string, unknown> | string,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
+  // A SampleBank handle cannot cross to the worklet, so refuse it before the
+  // offline engine changes rather than let the live delivery fail later.
+  if (typeof patch === 'object' && patch !== null && patch.sampleBank != null) {
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'setSynthInstrument: a patch with sampleBank cannot be delivered to the AudioWorklet engine',
+    );
+  }
   ctx.offlineEngine.setSynthInstrument(patch, destinationId);
   ctx.postInstrumentSync({ type: 'syncSynthInstrument', destinationId, patch });
 }

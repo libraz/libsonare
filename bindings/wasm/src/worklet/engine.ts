@@ -36,6 +36,7 @@ import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
 } from '../opfs_clip_pages.js';
+import { OwnerEpoch } from '../owner_epoch.js';
 import type { SurroundPan } from '../public_types.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
 import type { EngineAutomationContext } from './engine-automation.js';
@@ -153,14 +154,18 @@ export class SonareEngine {
   // the bounded read window. A Map both coalesces repeated page misses and
   // places a hard cap on work queued while OPFS I/O is stalled.
   private readonly workletClipPageRequests = new Map<number, ClipPageStreamerRequest>();
-  private readonly workletPageProviderClipIds = new Map<number, number>();
+  private readonly workletPageProviderClipIds = new Map<
+    number,
+    { clipId: number; streamKey: number }
+  >();
+  private nextClipStreamKey = 1;
   private readonly opfsExportSources = new Map<number, OpfsExportSource>();
   private readonly exportSession: { chunkOrigin: number | undefined } = { chunkOrigin: undefined };
   private workletClipStreamer: ClipPageStreamer | undefined;
   private workletClipPump: Promise<void> | undefined;
   private workletClipPagePollTimer: ReturnType<typeof setInterval> | undefined;
   private unsubscribeWorkletClipRequests: (() => void) | undefined;
-  private destroyed = false;
+  private readonly epoch = new OwnerEpoch('SonareEngine');
 
   private constructor(
     context: BaseAudioContext,
@@ -233,14 +238,14 @@ export class SonareEngine {
   }
 
   async suspend(): Promise<void> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
     await this.context.suspend?.();
   }
 
   async resume(): Promise<void> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
     await this.context.resume?.();
@@ -852,11 +857,11 @@ export class SonareEngine {
   async attachOpfsClipStream(
     options: OpfsClipStreamOptions,
   ): Promise<{ binding: OpfsClipPageProviderBinding; provider: ClipPageProvider }> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     const { clipId, primePages = 1, ...providerOptions } = options;
-    if ([...this.workletPageProviderClipIds.values()].includes(clipId)) {
+    if ([...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId)) {
       throw new Error(`An OPFS stream is already attached for clip ${clipId}.`);
     }
     const streamer = this.ensureWorkletClipStreamer();
@@ -869,27 +874,41 @@ export class SonareEngine {
       numSamples: providerOptions.numSamples,
       pageFrames: providerOptions.pageFrames,
     });
+    const token = this.epoch.current();
+    // Distinguishes this provider from a later one attached under the same clip
+    // id, so a stale page, clear or destroy cannot reach its successor.
+    const streamKey = this.nextClipStreamKey++;
+    this.postSync({
+      type: 'syncClipPageProvider',
+      clipId,
+      streamKey,
+      numChannels: providerOptions.numChannels,
+      numSamples: providerOptions.numSamples,
+      pageFrames: providerOptions.pageFrames,
+    });
     let binding: OpfsClipPageProviderBinding;
     binding = createOpfsClipPageProvider(this.offlineEngine, {
       ...providerOptions,
       onPageSupplied: (pageIndex, channels) => {
         this.opfsExportSources.get(binding.provider.id)?.residentPages.add(pageIndex);
         this.postSync(
-          { type: 'syncClipPage', clipId, pageIndex, channels },
+          { type: 'syncClipPage', clipId, streamKey, pageIndex, channels },
           transferableAudioBuffers(channels),
         );
       },
       onPageCleared: (pageIndex) => {
         this.opfsExportSources.get(binding.provider.id)?.residentPages.delete(pageIndex);
-        this.postSync({ type: 'syncClipPageClear', clipId, pageIndex });
+        this.postSync({ type: 'syncClipPageClear', clipId, streamKey, pageIndex });
       },
       onClose: () => {
         this.workletPageProviderClipIds.delete(binding.provider.id);
         this.opfsExportSources.delete(binding.provider.id);
-        this.postSync({ type: 'syncClipPageDestroy', clipId });
+        this.postSync({ type: 'syncClipPageDestroy', clipId, streamKey });
       },
     });
-    this.workletPageProviderClipIds.set(binding.provider.id, clipId);
+    // Destroy during priming closes the binding before the engines go away.
+    const releaseOnDestroy = this.epoch.onClose(() => binding.close());
+    this.workletPageProviderClipIds.set(binding.provider.id, { clipId, streamKey });
     this.opfsExportSources.set(binding.provider.id, {
       binding,
       pageFrames: providerOptions.pageFrames,
@@ -900,7 +919,9 @@ export class SonareEngine {
     const primed: number[] = [];
     try {
       for (let page = 0; page < primePages && page <= lastPage; ++page) {
-        if (await binding.supplyPage(page)) {
+        const ok = await binding.supplyPage(page);
+        this.epoch.assertCurrent(token);
+        if (ok) {
           primed.push(page);
         }
       }
@@ -917,6 +938,8 @@ export class SonareEngine {
     } catch (error) {
       binding.close();
       throw error;
+    } finally {
+      releaseOnDestroy();
     }
     return { binding, provider: binding.provider };
   }
@@ -935,7 +958,7 @@ export class SonareEngine {
    * Safe to call during playback.
    */
   setClipPagePrefetchFrames(frames: number): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     if (!Number.isFinite(frames) || frames < 0) {
@@ -955,7 +978,7 @@ export class SonareEngine {
    * stretching through a voice at that moment.
    */
   setWarpVoiceCapacity(voices: number): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'SonareEngine is destroyed.');
     }
     this.offlineEngine.setWarpVoiceCapacity(voices);
@@ -1400,9 +1423,12 @@ export class SonareEngine {
   }
 
   /**
-   * Subscribe to external-MIDI batches (already lowered to MIDI 1.0 bytes) for
-   * delivery to Web MIDI output ports. Fires once per render block that
-   * produced events. Returns an unsubscribe function.
+   * Subscribe to batches of external-MIDI events (already lowered to MIDI 1.0
+   * bytes) for delivery to Web MIDI output ports. Each event carries its
+   * absolute `renderFrame`; a batch is not a render block. With postMessage
+   * transport a batch holds one block's events; with the SAB ring it holds what
+   * accumulated since the previous poll, which may span many blocks. Returns an
+   * unsubscribe function.
    */
   onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
     return this.realtimeNode.onMidiOut(callback);
@@ -1438,7 +1464,7 @@ export class SonareEngine {
   }
 
   destroy(): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
     this.unsubscribeWorkletClipRequests?.();
@@ -1450,7 +1476,9 @@ export class SonareEngine {
       this.workletClipPagePollTimer = undefined;
     }
     this.workletClipPageRequests.clear();
-    this.destroyed = true;
+    // Reclaims bindings still priming in attachOpfsClipStream while the
+    // engines their providers live on still exist.
+    this.epoch.close();
     this.transport.stop();
     this.realtimeNode.pollTelemetry();
     this.realtimeNode.destroy();
@@ -1476,7 +1504,7 @@ export class SonareEngine {
       return;
     }
     const poll = () => {
-      if (!this.destroyed) {
+      if (!this.epoch.closed) {
         this.realtimeNode.pollClipPageRequests();
       }
     };
@@ -1543,16 +1571,18 @@ export class SonareEngine {
     if (providerId === undefined) {
       return false;
     }
-    const clipId = this.workletPageProviderClipIds.get(providerId);
-    if (clipId === undefined) {
+    const stream = this.workletPageProviderClipIds.get(providerId);
+    if (stream === undefined) {
       return false;
     }
+    const { clipId, streamKey } = stream;
     if (clip.id !== clipId) {
       throw new Error(`OPFS stream clipId ${clipId} must match addClip(..., { id: ${clipId} }).`);
     }
     this.postSync({
       type: 'syncClipPageCommit',
       clipId,
+      streamKey,
       clip: { ...clip, channels: undefined, pageProvider: undefined },
     });
     return true;
@@ -1604,18 +1634,20 @@ export class SonareEngine {
   }
 
   private postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
     if (this.transportPlaying) {
-      this.pendingInstrumentSync.push(message);
+      // Snapshot now, as posting would: the caller may reuse or detach its
+      // buffers once the call returns.
+      this.pendingInstrumentSync.push(structuredClone(message));
       return;
     }
     this.postSync(message);
   }
 
   private flushPendingInstrumentSync(): void {
-    if (this.destroyed || this.pendingInstrumentSync.length === 0) {
+    if (this.epoch.closed || this.pendingInstrumentSync.length === 0) {
       return;
     }
     const pending = this.pendingInstrumentSync.splice(0);
@@ -1628,7 +1660,7 @@ export class SonareEngine {
   // Sync messages use a string `type` so the worklet's message handler routes
   // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
   private postSync(message: SonareEngineSyncMessage, transfer?: Transferable[]): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
     if (transfer && transfer.length > 0) {
@@ -1792,6 +1824,7 @@ export class SonareEngine {
       clips: this.clips,
       opfsSources: this.opfsExportSources,
       session: this.exportSession,
+      epoch: this.epoch,
       flushOfflineMirror: () => this.flushOfflineMirror(),
       commitFrozenClip: (clip, previousClipIds) =>
         clips.replaceClips(this.clipContext, clip, previousClipIds),
@@ -1811,6 +1844,8 @@ export class SonareEngine {
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
       commitWorkletClipPageProvider: (clip) => this.commitWorkletClipPageProvider(clip),
+      hasClipStream: (clipId) =>
+        [...this.workletPageProviderClipIds.values()].some((entry) => entry.clipId === clipId),
     };
   }
 

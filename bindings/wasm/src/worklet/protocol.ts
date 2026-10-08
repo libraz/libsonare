@@ -133,10 +133,11 @@ export const SONARE_ENGINE_TELEMETRY_RECORD_BYTES = 48;
 // the producer increments `dropped` when the fixed queue is full.
 export const SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS = 5;
 export const SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S = 2;
-// External MIDI records: destination ID, render-frame offset, packed MIDI-1
-// bytes (little-endian), and byte count. SPSC worklet -> main-thread ring.
+// External MIDI records: destination ID, render frame (low 32 bits), packed
+// MIDI-1 bytes (little-endian), byte count, render frame (high bits). SPSC
+// worklet -> main-thread ring.
 export const SONARE_EXTERNAL_MIDI_RING_HEADER_INTS = 5;
-export const SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S = 4;
+export const SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S = 5;
 
 export enum SonareEngineCommandType {
   SetParam = 0,
@@ -384,6 +385,61 @@ export function toDb(value: number): number {
   return value > 0 ? Math.max(20 * Math.log10(value), SONARE_FLOOR_DB) : SONARE_FLOOR_DB;
 }
 
+const RING_CURSOR_RANGE = 0x1_0000_0000;
+
+/**
+ * SAB ring cursors are free-running record counts kept in an Int32Array header
+ * slot and read back as uint32. They wrap at the largest multiple of the
+ * capacity that fits in 32 bits, so slot order stays continuous across the wrap
+ * for any capacity. Every cursor load, store and distance goes through here.
+ */
+function ringCursorSpan(capacity: number): number {
+  return capacity * Math.floor(RING_CURSOR_RANGE / capacity);
+}
+
+/** Loads the cursor held in header `slot` of a ring with `capacity` records. */
+export function loadSonareRingCursor(header: Int32Array, slot: number, capacity: number): number {
+  return (Atomics.load(header, slot) >>> 0) % ringCursorSpan(capacity);
+}
+
+/** Publishes `cursor` advanced by `count` records into header `slot`. */
+export function storeSonareRingCursor(
+  header: Int32Array,
+  slot: number,
+  cursor: number,
+  capacity: number,
+  count = 1,
+): void {
+  Atomics.store(header, slot, ((cursor + count) % ringCursorSpan(capacity)) | 0);
+}
+
+/** Number of records from cursor `from` up to cursor `to`. */
+export function sonareRingCursorDistance(from: number, to: number, capacity: number): number {
+  const span = ringCursorSpan(capacity);
+  return (((to - from) % span) + span) % span;
+}
+
+/** Record index of `cursor` within the ring. */
+export function sonareRingCursorSlot(cursor: number, capacity: number): number {
+  return cursor % capacity;
+}
+
+/**
+ * Cursor of the oldest record an overwrite reader still holds: `readIndex`
+ * when it is within the last `capacity` records before `writeIndex`, else the
+ * oldest record not yet overwritten.
+ */
+function overwriteRingFirstReadable(
+  readIndex: number,
+  writeIndex: number,
+  capacity: number,
+): number {
+  const lag = sonareRingCursorDistance(readIndex, writeIndex, capacity);
+  return lag <= capacity
+    ? readIndex
+    : (writeIndex - capacity + ringCursorSpan(capacity)) % ringCursorSpan(capacity);
+}
+
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -411,16 +467,17 @@ export function readSonareMeterRingBuffer(
   ring: SonareMeterRingBuffer,
   readIndex = 0,
 ): SonareMeterRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const recordFloats = Atomics.load(ring.header, 2) || SONARE_METER_RING_RECORD_FLOATS;
   const hasPlanes =
     Atomics.load(ring.header, 3) >= SONARE_METER_RING_PROTOCOL_VERSION &&
     recordFloats >= SONARE_METER_RING_RECORD_FLOATS;
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
+  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, ring.capacity);
+  const count = sonareRingCursorDistance(firstReadable, writeIndex, ring.capacity);
   const meters: SonareWorkletMeterSnapshot[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * recordFloats;
+  for (let i = 0; i < count; i++) {
+    const cursor = (firstReadable + i) % ringCursorSpan(ring.capacity);
+    const offset = sonareRingCursorSlot(cursor, ring.capacity) * recordFloats;
     const meter: SonareWorkletMeterSnapshot = {
       type: 'meter',
       frame: decodeFrame(ring.records[offset], ring.records[offset + 1]),
@@ -504,14 +561,15 @@ export function readSonareSpectrumRingBuffer(
   ring: SonareSpectrumRingBuffer,
   readIndex = 0,
 ): SonareSpectrumRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const recordFloats = Atomics.load(ring.header, 2) || 3 + ring.bands;
   const bands = Atomics.load(ring.header, 3) || ring.bands;
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
+  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, ring.capacity);
+  const count = sonareRingCursorDistance(firstReadable, writeIndex, ring.capacity);
   const spectra: SonareWorkletSpectrumSnapshot[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * recordFloats;
+  for (let i = 0; i < count; i++) {
+    const cursor = (firstReadable + i) % ringCursorSpan(ring.capacity);
+    const offset = sonareRingCursorSlot(cursor, ring.capacity) * recordFloats;
     const values = new Float32Array(bands);
     values.set(ring.records.subarray(offset + 3, offset + 3 + bands));
     spectra.push({
@@ -580,16 +638,17 @@ export function readSonareScopeRingBuffer(
   ring: SonareScopeRingBuffer,
   readIndex = 0,
 ): SonareScopeRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   const bands = Atomics.load(ring.header, 3) || ring.bands;
   const maxPoints = Atomics.load(ring.header, 4);
   const recordFloats =
     Atomics.load(ring.header, 2) || sonareScopeRingRecordFloats(bands, maxPoints);
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
+  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, ring.capacity);
+  const count = sonareRingCursorDistance(firstReadable, writeIndex, ring.capacity);
   const scopes: SonareWorkletScopeSnapshot[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * recordFloats;
+  for (let i = 0; i < count; i++) {
+    const cursor = (firstReadable + i) % ringCursorSpan(ring.capacity);
+    const offset = sonareRingCursorSlot(cursor, ring.capacity) * recordFloats;
     const bandCount = Math.min(bands, Math.max(0, ring.records[offset + 3]));
     const pointCount = Math.min(maxPoints, Math.max(0, ring.records[offset + 4]));
     const bandsView = new Float32Array(bandCount);
@@ -748,18 +807,20 @@ export function pushSonareExternalMidiRingBuffer(
     Atomics.add(ring.header, 4, 1);
     return false;
   }
-  const writeIndex = Atomics.load(ring.header, 0);
-  const readIndex = Atomics.load(ring.header, 1);
-  if (writeIndex - readIndex >= ring.capacity) {
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  if (sonareRingCursorDistance(readIndex, writeIndex, ring.capacity) >= ring.capacity) {
     Atomics.add(ring.header, 4, 1);
     return false;
   }
-  const offset = (writeIndex % ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
+  const offset =
+    sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
   Atomics.store(ring.records, offset, destination);
-  Atomics.store(ring.records, offset + 1, frame);
+  Atomics.store(ring.records, offset + 1, frame >>> 0);
   Atomics.store(ring.records, offset + 2, packedBytes);
   Atomics.store(ring.records, offset + 3, count);
-  Atomics.store(ring.header, 0, writeIndex + 1);
+  Atomics.store(ring.records, offset + 4, Math.floor(frame / RING_CURSOR_RANGE));
+  storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
   return true;
 }
 
@@ -767,19 +828,27 @@ export function pushSonareExternalMidiRingBuffer(
 export function readSonareExternalMidiRingBuffer(
   ring: SonareExternalMidiRingBuffer,
 ): SonareExternalMidiRingReadResult {
-  const readIndex = Atomics.load(ring.header, 1);
-  const writeIndex = Atomics.load(ring.header, 0);
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const pending = Math.min(
+    ring.capacity,
+    sonareRingCursorDistance(readIndex, writeIndex, ring.capacity),
+  );
   const events: SonareExternalMidiRingEvent[] = [];
-  for (let index = readIndex; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
+  for (let i = 0; i < pending; i++) {
+    const cursor = (readIndex + i) % ringCursorSpan(ring.capacity);
+    const offset =
+      sonareRingCursorSlot(cursor, ring.capacity) * SONARE_EXTERNAL_MIDI_RING_RECORD_UINT32S;
     events.push({
       destinationId: Atomics.load(ring.records, offset) >>> 0,
-      renderFrame: Atomics.load(ring.records, offset + 1) >>> 0,
+      renderFrame:
+        (Atomics.load(ring.records, offset + 4) >>> 0) * RING_CURSOR_RANGE +
+        (Atomics.load(ring.records, offset + 1) >>> 0),
       byteWord: Atomics.load(ring.records, offset + 2) >>> 0,
       byteCount: Atomics.load(ring.records, offset + 3) >>> 0,
     });
   }
-  Atomics.store(ring.header, 1, writeIndex);
+  storeSonareRingCursor(ring.header, 1, readIndex, ring.capacity, pending);
   return { events, dropped: Atomics.load(ring.header, 4) >>> 0 };
 }
 
@@ -820,17 +889,18 @@ export function pushSonareClipPageRequestRingBuffer(
     Atomics.add(ring.header, 4, 1);
     return false;
   }
-  const writeIndex = Atomics.load(ring.header, 0);
-  const readIndex = Atomics.load(ring.header, 1);
-  if (writeIndex - readIndex >= ring.capacity) {
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  if (sonareRingCursorDistance(readIndex, writeIndex, ring.capacity) >= ring.capacity) {
     Atomics.add(ring.header, 4, 1);
     return false;
   }
-  const offset = (writeIndex % ring.capacity) * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S;
+  const offset =
+    sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S;
   Atomics.store(ring.records, offset, clipId);
   Atomics.store(ring.records, offset + 1, pageIndex);
   // Publish only after both scalar fields have been written.
-  Atomics.store(ring.header, 0, writeIndex + 1);
+  storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
   return true;
 }
 
@@ -838,17 +908,23 @@ export function pushSonareClipPageRequestRingBuffer(
 export function readSonareClipPageRequestRingBuffer(
   ring: SonareClipPageRequestRingBuffer,
 ): SonareClipPageRequestRingReadResult {
-  const readIndex = Atomics.load(ring.header, 1);
-  const writeIndex = Atomics.load(ring.header, 0);
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const pending = Math.min(
+    ring.capacity,
+    sonareRingCursorDistance(readIndex, writeIndex, ring.capacity),
+  );
   const requests: SonareClipPageRequest[] = [];
-  for (let index = readIndex; index < writeIndex; index++) {
-    const offset = (index % ring.capacity) * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S;
+  for (let i = 0; i < pending; i++) {
+    const cursor = (readIndex + i) % ringCursorSpan(ring.capacity);
+    const offset =
+      sonareRingCursorSlot(cursor, ring.capacity) * SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S;
     requests.push({
-      clipId: Atomics.load(ring.records, offset),
-      pageIndex: Atomics.load(ring.records, offset + 1),
+      clipId: Atomics.load(ring.records, offset) >>> 0,
+      pageIndex: Atomics.load(ring.records, offset + 1) >>> 0,
     });
   }
-  Atomics.store(ring.header, 1, writeIndex);
+  storeSonareRingCursor(ring.header, 1, readIndex, ring.capacity, pending);
   return { requests, dropped: Atomics.load(ring.header, 4) >>> 0 };
 }
 
@@ -884,9 +960,9 @@ export function pushSonareEngineCommandRingBuffer(
   ring: SonareEngineCommandRingBuffer,
   command: SonareEngineCommandRecord,
 ): boolean {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const readIndex = Atomics.load(ring.header, 1);
-  if (writeIndex - readIndex >= ring.capacity) {
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  if (sonareRingCursorDistance(readIndex, writeIndex, ring.capacity) >= ring.capacity) {
     Atomics.add(ring.header, 4, 1);
     return false;
   }
@@ -895,39 +971,62 @@ export function pushSonareEngineCommandRingBuffer(
     recordOffset(writeIndex, ring.capacity, SONARE_ENGINE_COMMAND_RECORD_BYTES),
     command,
   );
-  Atomics.store(ring.header, 0, writeIndex + 1);
+  storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
   return true;
 }
 
 export function popSonareEngineCommandRingBuffer(
   ring: SonareEngineCommandRingBuffer,
 ): SonareEngineCommandRecord | null {
-  const readIndex = Atomics.load(ring.header, 1);
-  const writeIndex = Atomics.load(ring.header, 0);
-  if (readIndex >= writeIndex) {
+  const readIndex = loadSonareRingCursor(ring.header, 1, ring.capacity);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  if (readIndex === writeIndex) {
     return null;
   }
   const command = readEngineCommandRecord(
     ring.view,
     recordOffset(readIndex, ring.capacity, SONARE_ENGINE_COMMAND_RECORD_BYTES),
   );
-  Atomics.store(ring.header, 1, readIndex + 1);
+  storeSonareRingCursor(ring.header, 1, readIndex, ring.capacity);
   return command;
+}
+
+/** Commands published to the ring and not yet popped. */
+export function pendingSonareEngineCommandCount(ring: SonareEngineCommandRingBuffer): number {
+  return Math.min(
+    ring.capacity,
+    sonareRingCursorDistance(
+      loadSonareRingCursor(ring.header, 1, ring.capacity),
+      loadSonareRingCursor(ring.header, 0, ring.capacity),
+      ring.capacity,
+    ),
+  );
 }
 
 export function writeSonareEngineTelemetryRingBuffer(
   ring: SonareEngineTelemetryRingBuffer,
   telemetry: SonareEngineTelemetryRecord,
 ): void {
-  const writeIndex = Atomics.load(ring.header, 0);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
   writeEngineTelemetryRecord(
     ring.view,
     recordOffset(writeIndex, ring.capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
     telemetry,
   );
-  Atomics.store(ring.header, 0, writeIndex + 1);
-  if (writeIndex + 1 > ring.capacity) {
-    Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
+  commitSonareEngineTelemetryRingWrite(ring, writeIndex);
+}
+
+/**
+ * Publishes the telemetry record written at `writeIndex` and counts, in header
+ * slot 4, every record that overwrote one a reader could no longer reach.
+ */
+export function commitSonareEngineTelemetryRingWrite(
+  ring: Pick<SonareEngineTelemetryRingBuffer, 'header' | 'capacity'>,
+  writeIndex: number,
+): void {
+  storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+  if (Atomics.load(ring.header, 4) !== 0 || writeIndex >= ring.capacity) {
+    Atomics.add(ring.header, 4, 1);
   }
 }
 
@@ -935,15 +1034,16 @@ export function readSonareEngineTelemetryRingBuffer(
   ring: SonareEngineTelemetryRingBuffer,
   readIndex = 0,
 ): SonareEngineTelemetryRingReadResult {
-  const writeIndex = Atomics.load(ring.header, 0);
-  const nextReadIndex = Math.max(0, Math.min(readIndex, writeIndex));
-  const firstReadable = Math.max(nextReadIndex, writeIndex - ring.capacity);
+  const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+  const firstReadable = overwriteRingFirstReadable(readIndex, writeIndex, ring.capacity);
+  const count = sonareRingCursorDistance(firstReadable, writeIndex, ring.capacity);
   const telemetry: SonareEngineTelemetryRecord[] = [];
-  for (let index = firstReadable; index < writeIndex; index++) {
+  for (let i = 0; i < count; i++) {
+    const cursor = (firstReadable + i) % ringCursorSpan(ring.capacity);
     telemetry.push(
       readEngineTelemetryRecord(
         ring.view,
-        recordOffset(index, ring.capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
+        recordOffset(cursor, ring.capacity, SONARE_ENGINE_TELEMETRY_RECORD_BYTES),
       ),
     );
   }
@@ -1051,8 +1151,8 @@ export function clipPageRequestRingFromSharedBuffer(
   };
 }
 
-function recordOffset(index: number, capacity: number, recordBytes: number): number {
-  return (index % capacity) * recordBytes;
+function recordOffset(cursor: number, capacity: number, recordBytes: number): number {
+  return sonareRingCursorSlot(cursor, capacity) * recordBytes;
 }
 
 /**

@@ -162,8 +162,8 @@ void RealtimeEngineWasm::setGraph(val spec) {
     parameter_bindings.reserve(static_cast<size_t>(std::max(binding_count, 0)));
     for (int i = 0; i < binding_count; ++i) {
       val binding = bindings[i];
-      parameter_bindings.push_back({static_cast<uint32_t>(intProperty(binding, "paramId", 0)),
-                                    stringProperty(binding, "nodeId", "")});
+      parameter_bindings.push_back(
+          {uintProperty(binding, "paramId", 0), stringProperty(binding, "nodeId", "")});
     }
   }
   if (!engine_.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(), num_channels,
@@ -470,7 +470,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
     config.target_bits = dither_bits;
     if (config.target_bits <= 0) config.target_bits = 16;
     // Match the C API: seed == 0 means "keep the library default seed".
-    const auto requested_seed = static_cast<uint32_t>(intProperty(options_val, "ditherSeed", 0));
+    const auto requested_seed = uintProperty(options_val, "ditherSeed", 0);
     if (requested_seed != 0) config.seed = requested_seed;
     Audio dithered = mastering::final::dither_interleaved(
         Audio::from_buffer(interleaved.data(), interleaved.size(), target_sample_rate),
@@ -525,7 +525,7 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   owned->refresh_content_signature();
 
   sonare::engine::ClipSchedule schedule{};
-  schedule.id = static_cast<uint32_t>(intProperty(options_val, "clipId", 1));
+  schedule.id = uintProperty(options_val, "clipId", 1);
   if (schedule.id == 0) schedule.id = 1;
   schedule.buffer = {owned->channel_ptrs.data(), num_channels, total_frames};
   schedule.storage = owned;

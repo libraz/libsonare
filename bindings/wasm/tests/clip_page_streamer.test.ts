@@ -172,6 +172,80 @@ describe('ClipPageStreamer', () => {
     expect(cleared.filter((page) => page === 10)).toHaveLength(2);
   });
 
+  /** Binding whose fetches settle on demand and which models the provider's resident pages. */
+  function deferredBinding() {
+    const providerPages = new Set<number>();
+    const fetches: Array<{ page: number; settle: (ok: boolean) => void }> = [];
+    const binding = {
+      providerPages,
+      fetches,
+      provider: { clear: (page: number) => providerPages.delete(page) },
+      supplyPage: (page: number) =>
+        new Promise<boolean>((resolve) => {
+          fetches.push({
+            page,
+            settle: (ok) => {
+              if (ok) {
+                providerPages.add(page);
+              }
+              resolve(ok);
+            },
+          });
+        }),
+      close: () => undefined,
+    };
+    return binding;
+  }
+
+  it('evicts a page whose fetch completes after an overlapping pump moved the window', async () => {
+    const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
+    const binding = deferredBinding();
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    const first = streamer.pump();
+    engine.enqueue({ clipId: 1, channel: 0, sample: 20 });
+    const second = streamer.pump();
+    expect(binding.fetches.map((fetch) => fetch.page)).toEqual([0, 5]);
+    binding.fetches[1].settle(true);
+    binding.fetches[0].settle(true);
+    await Promise.all([first, second]);
+
+    // The bound is retainBehindPages + readAheadPages + 1 = 1 page.
+    expect([...binding.providerPages]).toEqual([5]);
+  });
+
+  it('does not evict a newer fetch of the same page when an older one completes last', async () => {
+    const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 12 }]);
+    const binding = deferredBinding();
+    const streamer = new ClipPageStreamer(engine, { readAheadPages: 0, retainBehindPages: 0 });
+    streamer.addSource({ clipId: 1, binding: binding as never, pageFrames: 4, numSamples: 4000 });
+
+    const first = streamer.pump();
+    streamer.resetSource(1);
+    engine.enqueue({ clipId: 1, channel: 0, sample: 12 });
+    const second = streamer.pump();
+    expect(binding.fetches.map((fetch) => fetch.page)).toEqual([3, 3]);
+    binding.fetches[1].settle(true);
+    binding.fetches[0].settle(true);
+    await Promise.all([first, second]);
+
+    expect([...binding.providerPages]).toEqual([3]);
+  });
+
+  it('refuses a source once closed', () => {
+    const streamer = new ClipPageStreamer(fakeEngine([]));
+    streamer.close();
+    expect(() =>
+      streamer.addSource({
+        clipId: 1,
+        binding: fakeBinding() as never,
+        pageFrames: 4,
+        numSamples: 400,
+      }),
+    ).toThrow(expect.objectContaining({ codeName: 'InvalidState' }));
+  });
+
   it('honors pages already resident before registration', async () => {
     const engine = fakeEngine([{ clipId: 1, channel: 0, sample: 0 }]);
     const binding = fakeBinding();

@@ -1,3 +1,4 @@
+import { OwnerEpoch } from './owner_epoch.js';
 import type { MidiCcBindOptions } from './realtime_engine.js';
 import { assertNibble } from './validation.js';
 
@@ -144,6 +145,19 @@ type BoundInput = {
   runningStatus: number;
 };
 
+// Owner of each engine's single MIDI input source: the binding that installed it
+// last. A replaced binding's close leaves its successor's source in place.
+const midiInputSourceOwners = new WeakMap<WebMidiEngine, OwnerEpoch>();
+
+function midiInputSourceOwner(engine: WebMidiEngine): OwnerEpoch {
+  let owner = midiInputSourceOwners.get(engine);
+  if (!owner) {
+    owner = new OwnerEpoch('Web MIDI binding');
+    midiInputSourceOwners.set(engine, owner);
+  }
+  return owner;
+}
+
 export function isWebMidiAvailable(): boolean {
   return (
     typeof (globalThis.navigator as NavigatorWithMidi | undefined)?.requestMIDIAccess === 'function'
@@ -174,6 +188,8 @@ export async function bindWebMidi(
     engine.bindMidiCc(binding.channel, binding.controller, binding.paramId, binding.options);
   }
   engine.setMidiInputSource(destinationId);
+  const sourceOwner = midiInputSourceOwner(engine);
+  const sourceToken = sourceOwner.advance();
 
   const bound = new Map<string, BoundInput>();
   let closed = false;
@@ -274,6 +290,9 @@ export async function bindWebMidi(
     access,
     inputs: snapshotInputs,
     close() {
+      if (closed) {
+        return;
+      }
       closed = true;
       if (access.removeEventListener) {
         access.removeEventListener('statechange', stateListener);
@@ -283,7 +302,9 @@ export async function bindWebMidi(
       for (const [, entry] of Array.from(bound)) {
         unbindInput(entry.input);
       }
-      engine.clearMidiInputSource();
+      if (sourceOwner.isCurrent(sourceToken)) {
+        engine.clearMidiInputSource();
+      }
     },
   };
 }

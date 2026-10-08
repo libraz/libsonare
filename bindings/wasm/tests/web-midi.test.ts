@@ -257,6 +257,30 @@ describe('Web MIDI helper', () => {
     expect(engine.sourceDestination).toBeNull();
   });
 
+  it('leaves the input source of a later binding in place when an earlier binding closes', async () => {
+    const access = new FakeAccess();
+    const input = new FakeInput('a');
+    access.inputs.set(input.id, input);
+    installMidi(access);
+    const engine = new FakeEngine();
+
+    const first = await bindWebMidi(engine as never, { destinationId: 1 });
+    first.close();
+    const second = await bindWebMidi(engine as never, { destinationId: 2 });
+    first.close();
+    expect(engine.sourceDestination).toBe(2);
+    input.emit([0x90, 60, 100]);
+    input.emit([0x80, 60, 0]);
+    expect(engine.messages.map((message) => message.kind)).toEqual(['on', 'off']);
+
+    // A replaced binding that was never closed does not own the source either.
+    const third = await bindWebMidi(engine as never, { destinationId: 3 });
+    second.close();
+    expect(engine.sourceDestination).toBe(3);
+    third.close();
+    expect(engine.sourceDestination).toBeNull();
+  });
+
   it('clears running status for system common messages and drops incomplete channel voice messages', async () => {
     const access = new FakeAccess();
     const input = new FakeInput('keys');

@@ -25,12 +25,15 @@ import {
 } from './messages.js';
 import {
   clipPageRequestRingFromSharedBuffer,
+  commitSonareEngineTelemetryRingWrite,
   encodeFrameHi,
   encodeFrameLo,
   engineRingFromSharedBuffer,
   externalMidiRingFromSharedBuffer,
+  loadSonareRingCursor,
   meterFromEngine,
   meterRingFromSharedBuffer,
+  pendingSonareEngineCommandCount,
   popSonareEngineCommandRingBuffer,
   pushSonareClipPageRequestRingBuffer,
   pushSonareExternalMidiRingBuffer,
@@ -55,6 +58,8 @@ import {
   type SonareWorkletMeterSnapshot,
   type SonareWorkletScopeSnapshot,
   scopeRingFromSharedBuffer,
+  sonareRingCursorSlot,
+  storeSonareRingCursor,
   telemetryFromEngine,
   writeInt64Words,
   writeSonareEngineTelemetryRingBuffer,
@@ -127,7 +132,12 @@ export class SonareRealtimeEngineWorkletProcessor {
   private monitorBuffers: Float32Array[] = [];
   private readonly cueOutput: boolean;
   private readonly liveClips = new Map<number, EngineClip>();
-  private readonly pagedClipProviders = new Map<number, number>();
+  // clipId -> native provider; `streamKey` marks a provider an OPFS stream owns,
+  // which outlives its clip's schedule until that stream closes.
+  private readonly pagedClipProviders = new Map<
+    number,
+    { providerId: number; streamKey: number | undefined }
+  >();
   private readonly pagedClipPageFrames = new Map<number, number>();
   private readonly pendingPagedClips = new Map<number, EngineClip>();
   // The worklet drains at most this many distinct page misses per render
@@ -405,7 +415,10 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
         this.engine.setClips(Array.from(nextClips.values()));
         for (const clipId of message.removeIds) {
-          this.removePagedClipProvider(clipId);
+          // A stream-owned provider stays, so re-adding its clip sounds again.
+          if (this.pagedClipProviders.get(clipId)?.streamKey === undefined) {
+            this.removePagedClipProvider(clipId);
+          }
         }
         this.liveClips.clear();
         for (const [clipId, clip] of nextClips) {
@@ -420,7 +433,10 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.pageFrames,
         );
         this.removePagedClipProvider(message.clipId);
-        this.pagedClipProviders.set(message.clipId, provider.id);
+        this.pagedClipProviders.set(message.clipId, {
+          providerId: provider.id,
+          streamKey: message.streamKey,
+        });
         this.pagedClipPageFrames.set(message.clipId, message.pageFrames);
         if (message.clip) {
           this.pendingPagedClips.set(message.clipId, message.clip);
@@ -428,14 +444,14 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPage': {
-        const providerId = this.pagedClipProviders.get(message.clipId);
+        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
         if (providerId !== undefined) {
           this.engine.supplyClipPage(providerId, message.pageIndex, message.channels);
         }
         break;
       }
       case 'syncClipPageClear': {
-        const providerId = this.pagedClipProviders.get(message.clipId);
+        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
         if (providerId !== undefined) {
           this.engine.clearClipPage(providerId, message.pageIndex);
         }
@@ -450,7 +466,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPageCommit': {
-        const providerId = this.pagedClipProviders.get(message.clipId);
+        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
         const clip = message.clip ?? this.pendingPagedClips.get(message.clipId);
         if (providerId !== undefined && clip) {
           const nextClip = { ...clip, pageProvider: providerId };
@@ -463,10 +479,17 @@ export class SonareRealtimeEngineWorkletProcessor {
         break;
       }
       case 'syncClipPageDestroy': {
-        const nextClips = new Map(this.liveClips);
-        nextClips.delete(message.clipId);
-        this.engine.setClips(Array.from(nextClips.values()));
-        this.liveClips.delete(message.clipId);
+        const providerId = this.ownedPagedClipProvider(message.clipId, message.streamKey);
+        if (providerId === undefined) {
+          break;
+        }
+        // Only a clip still reading this provider goes; a same-id successor stays.
+        if (this.liveClips.get(message.clipId)?.pageProvider === providerId) {
+          const nextClips = new Map(this.liveClips);
+          nextClips.delete(message.clipId);
+          this.engine.setClips(Array.from(nextClips.values()));
+          this.liveClips.delete(message.clipId);
+        }
         this.removePagedClipProvider(message.clipId);
         break;
       }
@@ -543,9 +566,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         // the normal 64-per-render budget cannot enter native after the strip
         // replacement has invalidated its target.
         if (this.commandRing) {
-          const write = Atomics.load(this.commandRing.header, 0);
-          const read = Atomics.load(this.commandRing.header, 1);
-          this.drainCommands(Math.min(this.commandRing.capacity, Math.max(0, write - read)));
+          this.drainCommands(pendingSonareEngineCommandCount(this.commandRing));
         }
         // Complete earlier immediate edits in message order. Scheduled
         // commands remain queued for their render frame.
@@ -1170,8 +1191,9 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeTelemetryScratch(ring: SonareEngineTelemetryRingBuffer): void {
-    const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
+    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+    const offset =
+      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_ENGINE_TELEMETRY_RECORD_BYTES;
     ring.view.setUint32(offset, this.engine.telemetryScratchType(), true);
     ring.view.setUint32(offset + 4, this.engine.telemetryScratchError(), true);
     writeInt64Words(ring.view, offset + 8, this.engine.telemetryScratchRenderFrame());
@@ -1181,10 +1203,7 @@ export class SonareRealtimeEngineWorkletProcessor {
     ring.view.setUint32(offset + 36, this.engine.telemetryScratchValue(), true);
     ring.view.setUint32(offset + 40, 0, true);
     ring.view.setUint32(offset + 44, 0, true);
-    Atomics.store(ring.header, 0, writeIndex + 1);
-    if (writeIndex + 1 > ring.capacity) {
-      Atomics.store(ring.header, 4, writeIndex + 1 - ring.capacity);
-    }
+    commitSonareEngineTelemetryRingWrite(ring, writeIndex);
   }
 
   private publishTelemetryRecord(record: SonareEngineTelemetryRecord): void {
@@ -1257,8 +1276,9 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeMeterScratch(ring: SharedMeterRingWriter): void {
-    const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+    const offset =
+      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     const frame = Number(this.engine.meterScratchRenderFrame());
     ring.records[offset] = encodeFrameLo(frame);
     ring.records[offset + 1] = encodeFrameHi(frame);
@@ -1281,7 +1301,7 @@ export class SonareRealtimeEngineWorkletProcessor {
         }
       }
     }
-    Atomics.store(ring.header, 0, writeIndex + 1);
+    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
   }
 
   // A snapshot-object ring writer used to live here as well. It was
@@ -1291,11 +1311,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   // render callback allocation-free by reading the engine's scratch registers
   // directly.
   //
-  // writeIndex is a free-running monotonic counter, so an overflow guard would
-  // fire on essentially every write past the first `capacity` records and store
-  // an ever-growing value, not a dropped-record count. Readers already detect
-  // silent overrun via firstReadable = max(readIndex, writeIndex - capacity),
-  // so header slot 3 is left at its initial 0.
+  // An overwrite ring keeps no drop count: readers detect overrun from the
+  // cursor distance, so header slot 3 is left at its initial 0.
 
   // Drains the engine's scope producer (FFT spectrum + goniometer points) into
   // the lock-free SAB scope ring or the bounded postMessage fallback. The SAB
@@ -1348,8 +1365,8 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private writeScopeScratch(ring: SharedScopeRingWriter): void {
-    const writeIndex = Atomics.load(ring.header, 0);
-    const base = (writeIndex % ring.capacity) * ring.recordFloats;
+    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+    const base = sonareRingCursorSlot(writeIndex, ring.capacity) * ring.recordFloats;
     const frame = Number(this.engine.scopeScratchRenderFrame());
     ring.records[base] = encodeFrameLo(frame);
     ring.records[base + 1] = encodeFrameHi(frame);
@@ -1367,7 +1384,7 @@ export class SonareRealtimeEngineWorkletProcessor {
       ring.records[pointsBase + 2 * i] = this.engine.scopeScratchPointLeft(i);
       ring.records[pointsBase + 2 * i + 1] = this.engine.scopeScratchPointRight(i);
     }
-    Atomics.store(ring.header, 0, writeIndex + 1);
+    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
   }
 
   // Drains queued external-MIDI events (already lowered to MIDI 1.0 bytes) and
@@ -1514,10 +1531,19 @@ export class SonareRealtimeEngineWorkletProcessor {
     }
   }
 
+  /** The provider of `clipId` when `streamKey` names its owner, else undefined. */
+  private ownedPagedClipProvider(
+    clipId: number,
+    streamKey: number | undefined,
+  ): number | undefined {
+    const entry = this.pagedClipProviders.get(clipId);
+    return entry !== undefined && entry.streamKey === streamKey ? entry.providerId : undefined;
+  }
+
   private removePagedClipProvider(clipId: number): void {
-    const providerId = this.pagedClipProviders.get(clipId);
-    if (providerId !== undefined) {
-      this.engine.destroyClipPageProvider(providerId);
+    const entry = this.pagedClipProviders.get(clipId);
+    if (entry !== undefined) {
+      this.engine.destroyClipPageProvider(entry.providerId);
     }
     this.pagedClipProviders.delete(clipId);
     this.pagedClipPageFrames.delete(clipId);

@@ -17,6 +17,8 @@ export interface EngineClipContext {
   ensureTrackLane(target: string | number): number;
   /** Commits a provider already primed through the worklet's OPFS pull bridge. */
   commitWorkletClipPageProvider(clip: EngineClip): boolean;
+  /** True while an OPFS stream owns the worklet provider slot of `clipId`. */
+  hasClipStream(clipId: number): boolean;
 }
 
 // Keep control-message work bounded even for long tempo-synced clips. The
@@ -24,6 +26,11 @@ export interface EngineClipContext {
 // chunks, and only schedules the clip after all pages arrive.
 const PREBAKED_CLIP_PAGE_THRESHOLD = 16_384;
 const PREBAKED_CLIP_PAGE_FRAMES = 4_096;
+
+/** Omitted, `0` and `'off'` all mean an unwarped clip, as the native reader treats them. */
+function isWarpOff(mode: EngineClip['warpMode']): boolean {
+  return mode === undefined || mode === 'off' || mode === 0;
+}
 
 export function addClip(
   ctx: EngineClipContext,
@@ -116,7 +123,9 @@ function syncClipsDelta(ctx: EngineClipContext, upserts: EngineClip[], removeIds
     }
     if (
       prepared.id === undefined ||
-      prepared.warpMode !== 'off' ||
+      // The worklet holds one provider per clip id; a stream's is not displaced.
+      ctx.hasClipStream(prepared.id) ||
+      !isWarpOff(prepared.warpMode) ||
       !channels ||
       channels.length === 0 ||
       channels[0].length <= PREBAKED_CLIP_PAGE_THRESHOLD

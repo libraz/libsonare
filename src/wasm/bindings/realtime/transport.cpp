@@ -263,22 +263,22 @@ val RealtimeEngineWasm::markerByIndex(const val& index_val) const {
 }
 
 val RealtimeEngineWasm::marker(const val& id_val) const {
-  const int id = checkedIntFromVal(id_val, "id");
+  const uint32_t id = checkedUintFromVal(id_val, "id");
   sonare::transport::Marker marker{};
-  if (!engine_.marker_by_id(static_cast<uint32_t>(id), &marker)) {
+  if (!engine_.marker_by_id(id, &marker)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown marker id");
   }
   return markerToVal(marker);
 }
 
 void RealtimeEngineWasm::seekMarker(const val& id_val, const val& render_frame_val) {
-  const int id = checkedIntFromVal(id_val, "id");
+  const uint32_t id = checkedUintFromVal(id_val, "id");
   // Mirror the C API (sonare_engine_seek_marker): a sample-accurate seek is
   // queued as a kSeekMarker command so it lands at the requested render frame
   // instead of mutating transport state immediately.
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kSeekMarker;
-  command.target_id = static_cast<uint32_t>(id);
+  command.target_id = id;
   command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -314,10 +314,9 @@ val RealtimeEngineWasm::getTransportState() const {
 
 void RealtimeEngineWasm::setLoopFromMarkers(const val& start_marker_id_val,
                                             const val& end_marker_id_val) {
-  const int start_marker_id = checkedIntFromVal(start_marker_id_val, "startMarkerId");
-  const int end_marker_id = checkedIntFromVal(end_marker_id_val, "endMarkerId");
-  if (!engine_.set_loop_from_markers(static_cast<uint32_t>(start_marker_id),
-                                     static_cast<uint32_t>(end_marker_id))) {
+  const uint32_t start_marker_id = checkedUintFromVal(start_marker_id_val, "startMarkerId");
+  const uint32_t end_marker_id = checkedUintFromVal(end_marker_id_val, "endMarkerId");
+  if (!engine_.set_loop_from_markers(start_marker_id, end_marker_id)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown loop marker id");
   }
 }

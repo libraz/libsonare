@@ -429,6 +429,11 @@ export interface SonareEngineSyncClipsDeltaMessage {
 export interface SonareEngineSyncClipPageProviderMessage {
   type: 'syncClipPageProvider';
   clipId: number;
+  /**
+   * Identity of the OPFS stream that owns the provider. A message whose key
+   * differs from the provider's is ignored; omitted for pre-baked transfers.
+   */
+  streamKey?: number;
   /** Omitted when an OPFS stream is primed before its clip is scheduled. */
   clip?: EngineClip;
   numChannels: number;
@@ -440,6 +445,8 @@ export interface SonareEngineSyncClipPageProviderMessage {
 export interface SonareEngineSyncClipPageMessage {
   type: 'syncClipPage';
   clipId: number;
+  /** Owning OPFS stream; see {@link SonareEngineSyncClipPageProviderMessage.streamKey}. */
+  streamKey?: number;
   pageIndex: number;
   channels: Float32Array[];
 }
@@ -469,6 +476,8 @@ export interface SonareEngineSyncWarpVoiceCapacityMessage {
 export interface SonareEngineSyncClipPageClearMessage {
   type: 'syncClipPageClear';
   clipId: number;
+  /** Owning OPFS stream; see {@link SonareEngineSyncClipPageProviderMessage.streamKey}. */
+  streamKey?: number;
   pageIndex: number;
 }
 
@@ -476,12 +485,16 @@ export interface SonareEngineSyncClipPageClearMessage {
 export interface SonareEngineSyncClipPageDestroyMessage {
   type: 'syncClipPageDestroy';
   clipId: number;
+  /** Owning OPFS stream; see {@link SonareEngineSyncClipPageProviderMessage.streamKey}. */
+  streamKey?: number;
 }
 
 /** Makes a fully supplied paged clip visible to the audio engine. */
 export interface SonareEngineSyncClipPageCommitMessage {
   type: 'syncClipPageCommit';
   clipId: number;
+  /** Owning OPFS stream; see {@link SonareEngineSyncClipPageProviderMessage.streamKey}. */
+  streamKey?: number;
   /**
    * Clip schedule to publish with a provider that was primed before its
    * schedule was known. The original pre-baked push path supplies it on the

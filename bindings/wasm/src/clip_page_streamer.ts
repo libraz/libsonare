@@ -1,8 +1,10 @@
+import { ErrorCode, SonareError } from './errors.js';
 import {
   createOpfsClipPageProvider,
   type OpfsClipPageProviderBinding,
   type OpfsClipPageProviderOptions,
 } from './opfs_clip_pages.js';
+import { OwnerEpoch } from './owner_epoch.js';
 import type { ClipPageProvider, ClipPageRequest, RealtimeEngine } from './realtime_engine.js';
 
 /**
@@ -57,13 +59,15 @@ export interface ClipPageStreamerOptions {
 interface SourceState {
   source: ClipPageStreamSource;
   lastPage: number;
-  /** Playback-window generation; advanced on reset or backward discontinuity. */
-  generation: number;
   /** Most recently serviced playback frontier, or null before the first miss. */
   lastFrontier: number | null;
-  /** Resident page -> generation, so in-flight stale fetches cannot alias. */
+  /** Resident page -> token of the fetch that owns it, so a superseded fetch cannot alias. */
   resident: Map<number, number>;
 }
+
+// Lifetime of each streamer, reachable from the standalone attach below without
+// widening the class's public surface.
+const streamerEpochs = new WeakMap<ClipPageStreamer, OwnerEpoch>();
 
 /**
  * Keeps OPFS-paged clips fed within a bounded sliding window around the live
@@ -87,10 +91,12 @@ export class ClipPageStreamer {
   private readonly retainBehindPages: number;
   private readonly maxRequestsPerPump: number;
   private readonly sources = new Map<number, SourceState>();
-  private closed = false;
+  private readonly epoch = new OwnerEpoch('ClipPageStreamer');
+  private nextFetchToken = 1;
 
   constructor(engine: ClipPageStreamerEngine, options: ClipPageStreamerOptions = {}) {
     this.engine = engine;
+    streamerEpochs.set(this, this.epoch);
     this.readAheadPages = Math.max(0, Math.floor(options.readAheadPages ?? 2));
     this.retainBehindPages = Math.max(0, Math.floor(options.retainBehindPages ?? 1));
     this.maxRequestsPerPump = Math.max(1, Math.floor(options.maxRequestsPerPump ?? 256));
@@ -99,9 +105,13 @@ export class ClipPageStreamer {
   /**
    * Register a paged clip. Pages already supplied to the provider before
    * registration (for example a primed first page) should be passed in
-   * `initialResidentPages` so they participate in eviction.
+   * `initialResidentPages` so they participate in eviction. Throws
+   * `InvalidState` once the streamer is closed.
    */
   addSource(source: ClipPageStreamSource, initialResidentPages: Iterable<number> = []): void {
+    if (this.epoch.closed) {
+      throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ClipPageStreamer is closed.');
+    }
     if (source.pageFrames <= 0 || source.numSamples <= 0) {
       throw new Error('pageFrames and numSamples must be positive');
     }
@@ -113,9 +123,8 @@ export class ClipPageStreamer {
     this.sources.set(source.clipId, {
       source,
       lastPage,
-      generation: 0,
       lastFrontier: null,
-      resident: new Map(Array.from(initialResidentPages, (page) => [page, 0])),
+      resident: new Map(Array.from(initialResidentPages, (page) => [page, this.nextFetchToken++])),
     });
   }
 
@@ -146,7 +155,7 @@ export class ClipPageStreamer {
    * fetches settle. Concurrent fetches are serialized inside each binding.
    */
   async pump(): Promise<void> {
-    if (this.closed) {
+    if (this.epoch.closed) {
       return;
     }
     // Collapse this round's misses to the latest observed frontier per clip.
@@ -186,15 +195,17 @@ export class ClipPageStreamer {
 
   /** Close every registered clip's binding and stop tracking. */
   close(): void {
-    if (this.closed) {
+    if (this.epoch.closed) {
       return;
     }
-    this.closed = true;
-    for (const state of this.sources.values()) {
+    const states = Array.from(this.sources.values());
+    this.sources.clear();
+    for (const state of states) {
       this.resetState(state);
       state.source.binding.close();
     }
-    this.sources.clear();
+    // Bindings still priming in attachOpfsClipStream are closed through here.
+    this.epoch.close();
   }
 
   /** Alias for {@link close}, provided for cross-binding compatibility. */
@@ -214,13 +225,11 @@ export class ClipPageStreamer {
 
   private serviceFrontier(state: SourceState, frontier: number): Promise<unknown>[] {
     // A lower frontier after a previously serviced high page is a seek/loop
-    // discontinuity. Advance generation before scheduling its new window so an
-    // older asynchronous fetch can never become resident in the new window.
+    // discontinuity: drop the old window before scheduling the new one.
     if (state.lastFrontier !== null && frontier < state.lastFrontier) {
       this.resetState(state);
     }
     state.lastFrontier = frontier;
-    const generation = state.generation;
     const low = Math.max(0, frontier - this.retainBehindPages);
     const high = Math.min(state.lastPage, frontier + this.readAheadPages);
 
@@ -235,27 +244,33 @@ export class ClipPageStreamer {
 
     const fetches: Promise<unknown>[] = [];
     for (let page = low; page <= high; ++page) {
-      if (state.resident.get(page) === generation) {
+      if (state.resident.has(page)) {
         continue;
       }
       // Mark resident eagerly so the same page is not fetched twice across
       // overlapping windows; drop it again if the fetch reports a miss.
-      state.resident.set(page, generation);
+      const token = this.nextFetchToken++;
+      state.resident.set(page, token);
       const pageIndex = page;
       fetches.push(
         state.source.binding.supplyPage(pageIndex).then(
           (ok) => {
-            if (state.generation !== generation) {
-              // The fetch crossed a seek/reset boundary. supplyPage may have
-              // installed it after resetState's clear pass, so clear it again.
+            if (state.resident.get(pageIndex) === token) {
+              if (!ok) {
+                // A superseded fetch of this page may have supplied it already.
+                state.resident.delete(pageIndex);
+                this.clearPage(state, pageIndex);
+              }
+            } else if (ok && !state.resident.has(pageIndex)) {
+              // The page left the window (eviction, reset or an overlapping
+              // pump) while this fetch was in flight; a newer fetch of the same
+              // page keeps it, otherwise the late supply is evicted here.
               this.clearPage(state, pageIndex);
-            } else if (!ok && state.resident.get(pageIndex) === generation) {
-              state.resident.delete(pageIndex);
             }
             return ok;
           },
           (error) => {
-            if (state.resident.get(pageIndex) === generation) {
+            if (state.resident.get(pageIndex) === token) {
               state.resident.delete(pageIndex);
             }
             throw error;
@@ -267,7 +282,6 @@ export class ClipPageStreamer {
   }
 
   private resetState(state: SourceState): void {
-    state.generation += 1;
     state.lastFrontier = null;
     for (const page of state.resident.keys()) {
       this.clearPage(state, page);
@@ -346,22 +360,38 @@ export async function attachOpfsClipStream(
     throw new Error('attachOpfsClipStream requires options.');
   }
   const { clipId, primePages = 1, ...providerOptions } = options;
-  const binding = createOpfsClipPageProvider(engine, providerOptions);
-  const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
-  const primed: number[] = [];
-  for (let page = 0; page < primePages && page <= lastPage; ++page) {
-    if (await binding.supplyPage(page)) {
-      primed.push(page);
-    }
+  const epoch = streamerEpochs.get(streamer);
+  if (!epoch || epoch.closed) {
+    throw new SonareError(ErrorCode.InvalidState, 'InvalidState', 'ClipPageStreamer is closed.');
   }
-  streamer.addSource(
-    {
-      clipId,
-      binding,
-      pageFrames: providerOptions.pageFrames,
-      numSamples: providerOptions.numSamples,
-    },
-    primed,
-  );
+  const token = epoch.current();
+  const binding = createOpfsClipPageProvider(engine, providerOptions);
+  // A close() while priming reclaims the binding before it is registered.
+  const releaseOnClose = epoch.onClose(() => binding.close());
+  try {
+    const lastPage = Math.ceil(providerOptions.numSamples / providerOptions.pageFrames) - 1;
+    const primed: number[] = [];
+    for (let page = 0; page < primePages && page <= lastPage; ++page) {
+      const ok = await binding.supplyPage(page);
+      epoch.assertCurrent(token);
+      if (ok) {
+        primed.push(page);
+      }
+    }
+    streamer.addSource(
+      {
+        clipId,
+        binding,
+        pageFrames: providerOptions.pageFrames,
+        numSamples: providerOptions.numSamples,
+      },
+      primed,
+    );
+  } catch (error) {
+    binding.close();
+    throw error;
+  } finally {
+    releaseOnClose();
+  }
   return { binding, provider: binding.provider };
 }

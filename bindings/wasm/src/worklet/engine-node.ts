@@ -1,6 +1,7 @@
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { engineCapabilities } from '../index.js';
+import { OwnerEpoch } from '../owner_epoch.js';
 import {
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
@@ -157,7 +158,7 @@ export class SonareRealtimeEngineNode {
   >();
   private resolveReady!: () => void;
   private rejectReady!: (reason?: unknown) => void;
-  private destroyed = false;
+  private readonly epoch = new OwnerEpoch('Realtime engine node');
 
   private constructor(
     node: AudioWorkletNode,
@@ -184,11 +185,23 @@ export class SonareRealtimeEngineNode {
     if (!capabilities.readyMessage) {
       this.resolveReady();
     }
+    // Destroy settles a pending ready wait; rejecting an already settled
+    // promise is a no-op, so a node that became ready stays resolved.
+    this.ready.catch(() => undefined);
+    this.epoch.onClose(() =>
+      this.rejectReady(
+        new SonareError(
+          ErrorCode.InvalidState,
+          'InvalidState',
+          'Realtime engine node was destroyed before it became ready.',
+        ),
+      ),
+    );
     this.node.port.onmessage = (event: MessageEvent<unknown>) => {
       // A host that kept its own reference to this handler (or a port
       // implementation that ignores the detach in destroy()) must not be able
       // to reach listeners of a node the host already disposed.
-      if (this.destroyed) {
+      if (this.epoch.closed) {
         return;
       }
       const captureRequestId = engineCaptureResponseRequestId(event.data);
@@ -486,7 +499,7 @@ export class SonareRealtimeEngineNode {
   }
 
   sendCommand(command: SonareEngineCommandRecord): boolean {
-    if (this.destroyed || !isValidCommandRecord(command)) {
+    if (this.epoch.closed || !isValidCommandRecord(command)) {
       return false;
     }
     if (this.commandRing) {
@@ -644,9 +657,14 @@ export class SonareRealtimeEngineNode {
   }
 
   /**
-   * Subscribe to external-MIDI batches drained from the engine (one call per
-   * render block that produced events), already lowered to MIDI 1.0 bytes for a
-   * Web MIDI output port. Returns an unsubscribe function.
+   * Subscribe to batches of external-MIDI events drained from the engine,
+   * already lowered to MIDI 1.0 bytes for a Web MIDI output port. Each event
+   * carries its absolute `renderFrame`; a batch is not a render block. With
+   * postMessage transport a batch holds one block's events; with the SAB ring
+   * it holds whatever accumulated since the previous poll (every 16 ms), which
+   * may span many blocks. While subscribed, the poll consumes the ring, so a
+   * manual {@link pollMidiOut} sees only what arrived since. Returns an
+   * unsubscribe function.
    */
   onMidiOut(callback: (events: SonareWorkletExternalMidiEvent[]) => void): () => void {
     this.midiOutListeners.add(callback);
@@ -669,10 +687,10 @@ export class SonareRealtimeEngineNode {
   }
 
   destroy(): void {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return;
     }
-    this.destroyed = true;
+    this.epoch.close();
     if (this.ringPollTimer !== undefined) {
       clearInterval(this.ringPollTimer);
       this.ringPollTimer = undefined;
@@ -718,11 +736,15 @@ export class SonareRealtimeEngineNode {
       return;
     }
     const poll = () => {
-      if (!this.destroyed) {
+      if (!this.epoch.closed) {
         this.pollTelemetry();
         this.pollMeters();
         this.pollScope();
-        this.pollMidiOut();
+        // The MIDI ring is a queue, not a telemetry snapshot: drain it only for
+        // an onMidiOut subscriber so a manual pollMidiOut still gets every event.
+        if (this.midiOutListeners.size > 0) {
+          this.pollMidiOut();
+        }
       }
     };
     poll();
@@ -766,7 +788,7 @@ export class SonareRealtimeEngineNode {
    * target is invalid or mixing is not compiled in.
    */
   pollInsertGainReduction(targetId: number): Promise<number[]> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return Promise.reject(new Error('Realtime engine node is destroyed.'));
     }
     const requestId = this.insertGainReductionRequestId++;
@@ -793,7 +815,7 @@ export class SonareRealtimeEngineNode {
   private sendCaptureRequest(
     op: SonareEngineCaptureRequestMessage['op'],
   ): Promise<SonareEngineCaptureResponseMessageInternal> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return Promise.reject(new Error('Realtime engine node is destroyed.'));
     }
     const requestId = this.captureRequestId++;
@@ -812,7 +834,7 @@ export class SonareRealtimeEngineNode {
   }
 
   private sendTransportRequest(): Promise<SonareEngineTransportResponseMessage> {
-    if (this.destroyed) {
+    if (this.epoch.closed) {
       return Promise.reject(new Error('Realtime engine node is destroyed.'));
     }
     const requestId = this.transportRequestId++;

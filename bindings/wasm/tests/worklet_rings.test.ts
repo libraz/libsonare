@@ -4,6 +4,7 @@ import {
   createSonareEngineTelemetryRingBuffer,
   createSonareExternalMidiRingBuffer,
   createSonareMeterRingBuffer,
+  createSonareSpectrumRingBuffer,
   describe,
   expect,
   it,
@@ -17,6 +18,7 @@ import {
   readSonareEngineTelemetryRingBuffer,
   readSonareExternalMidiRingBuffer,
   readSonareMeterRingBuffer,
+  readSonareSpectrumRingBuffer,
   SONARE_CLIP_PAGE_REQUEST_RING_HEADER_INTS,
   SONARE_CLIP_PAGE_REQUEST_RING_RECORD_UINT32S,
   SONARE_ENGINE_COMMAND_RECORD_BYTES,
@@ -80,6 +82,180 @@ describe('Sonare worklet ring buffers', () => {
         readSonareClipPageRequestRingBuffer({ sharedBuffer: sab, header, records, capacity }),
       ).toEqual({ requests: [{ clipId: 42, pageIndex: 7 }], dropped: 0 });
       expect(header[1]).toBe(1);
+    });
+  });
+
+  describe('free-running cursors across the 2^31 and 2^32 boundaries', () => {
+    // Cursors one step short of each boundary, stored as the Int32 header holds them.
+    const seeds = [2 ** 31 - 2, 2 ** 32 - 2];
+    const capacities = [1, 3, 128, 256];
+
+    function seedCursors(header: Int32Array, seed: number, slots: number[]): void {
+      for (const slot of slots) {
+        header[slot] = seed;
+      }
+    }
+
+    for (const capacity of capacities) {
+      for (const seed of seeds) {
+        it(`keeps the command ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
+          const ring = createSonareEngineCommandRingBuffer(capacity);
+          seedCursors(ring.header, seed, [0, 1]);
+          for (let round = 0; round < 3; round++) {
+            for (let i = 0; i < capacity; i++) {
+              const command = {
+                type: SonareEngineCommandType.TransportStop,
+                argInt: round * 1000 + i,
+              };
+              expect(pushSonareEngineCommandRingBuffer(ring, command)).toBe(true);
+            }
+            expect(
+              pushSonareEngineCommandRingBuffer(ring, {
+                type: SonareEngineCommandType.TransportStop,
+              }),
+            ).toBe(false);
+            for (let i = 0; i < capacity; i++) {
+              expect(popSonareEngineCommandRingBuffer(ring)?.argInt).toBe(round * 1000 + i);
+            }
+            expect(popSonareEngineCommandRingBuffer(ring)).toBeNull();
+          }
+        });
+
+        it(`keeps the clip-page request ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
+          const ring = createSonareClipPageRequestRingBuffer(capacity);
+          seedCursors(ring.header, seed, [0, 1]);
+          for (let round = 0; round < 3; round++) {
+            for (let i = 0; i < capacity; i++) {
+              expect(pushSonareClipPageRequestRingBuffer(ring, 0xffff_ffff, round * 1000 + i)).toBe(
+                true,
+              );
+            }
+            expect(pushSonareClipPageRequestRingBuffer(ring, 1, 1)).toBe(false);
+            const read = readSonareClipPageRequestRingBuffer(ring);
+            expect(read.requests.map((request) => request.pageIndex)).toEqual(
+              Array.from({ length: capacity }, (_, i) => round * 1000 + i),
+            );
+            expect(read.requests.every((request) => request.clipId === 0xffff_ffff)).toBe(true);
+            expect(readSonareClipPageRequestRingBuffer(ring).requests).toEqual([]);
+          }
+        });
+
+        it(`keeps the external-MIDI ring FIFO and bounded (capacity ${capacity}, cursor ${seed})`, () => {
+          const ring = createSonareExternalMidiRingBuffer(capacity);
+          seedCursors(ring.header, seed, [0, 1]);
+          for (let round = 0; round < 3; round++) {
+            for (let i = 0; i < capacity; i++) {
+              expect(
+                pushSonareExternalMidiRingBuffer(ring, 1, round * 1000 + i, 0x00003c80, 3),
+              ).toBe(true);
+            }
+            expect(pushSonareExternalMidiRingBuffer(ring, 1, 0, 0x00003c80, 3)).toBe(false);
+            expect(
+              readSonareExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame),
+            ).toEqual(Array.from({ length: capacity }, (_, i) => round * 1000 + i));
+            expect(readSonareExternalMidiRingBuffer(ring).events).toEqual([]);
+          }
+        });
+
+        it(`returns the newest telemetry in order (capacity ${capacity}, cursor ${seed})`, () => {
+          const ring = createSonareEngineTelemetryRingBuffer(capacity);
+          seedCursors(ring.header, seed, [0]);
+          const written = Math.min(capacity, 3);
+          for (let i = 0; i < 3; i++) {
+            writeSonareEngineTelemetryRingBuffer(ring, {
+              type: SonareEngineTelemetryType.ProcessBlock,
+              error: SonareEngineTelemetryError.None,
+              renderFrame: i,
+              timelineSample: i,
+              audibleTimelineSample: i,
+              graphLatencySamplesQ8: 0,
+              value: i,
+            });
+          }
+          const read = readSonareEngineTelemetryRingBuffer(ring, seed);
+          expect(read.telemetry.map((item) => item.renderFrame)).toEqual(
+            [0, 1, 2].slice(3 - written),
+          );
+          expect(readSonareEngineTelemetryRingBuffer(ring, read.nextReadIndex).telemetry).toEqual(
+            [],
+          );
+        });
+      }
+    }
+
+    it('round-trips external-MIDI render frames past 32 bits', () => {
+      const ring = createSonareExternalMidiRingBuffer(4);
+      const frames = [2 ** 32 - 1, 2 ** 32, 2 ** 32 + 1, Number.MAX_SAFE_INTEGER];
+      for (const frame of frames) {
+        expect(pushSonareExternalMidiRingBuffer(ring, 2, frame, 0x00403c90, 3)).toBe(true);
+      }
+      expect(
+        readSonareExternalMidiRingBuffer(ring).events.map((event) => event.renderFrame),
+      ).toEqual(frames);
+    });
+
+    it('reads the newest meter records across a wrapped write cursor', () => {
+      for (const seed of seeds) {
+        const ring = createSonareMeterRingBuffer(3);
+        ring.header[0] = seed;
+        const sceneJson = mixingScenePresetJson('vocalReverbSend');
+        const reference = Mixer.fromSceneJson(sceneJson, 48000, 128);
+        const stripCount = reference.stripCount();
+        reference.delete();
+        const processor = new SonareWorkletProcessor(
+          {
+            sceneJson,
+            sampleRate: 48000,
+            blockSize: 128,
+            meterIntervalFrames: 128,
+            meterSharedBuffer: ring.sharedBuffer,
+          },
+          {},
+        );
+        try {
+          for (let block = 0; block < 4; block++) {
+            const inputs = Array.from({ length: stripCount }, () => [
+              new Float32Array(128),
+              new Float32Array(128),
+            ]);
+            expect(
+              processor.process(inputs, [[new Float32Array(128), new Float32Array(128)]]),
+            ).toBe(true);
+          }
+          const read = readSonareMeterRingBuffer(ring, seed);
+          expect(read.meters.map((meter) => meter.frame)).toEqual([256, 384, 512]);
+        } finally {
+          processor.destroy();
+        }
+      }
+    });
+
+    it('reads the newest spectrum records across a wrapped write cursor', () => {
+      for (const seed of seeds) {
+        const ring = createSonareSpectrumRingBuffer(3, 4);
+        ring.header[0] = seed;
+        const processor = new SonareWorkletProcessor({
+          sceneJson: mixingScenePresetJson('vocalReverbSend'),
+          sampleRate: 48000,
+          blockSize: 128,
+          spectrumIntervalFrames: 128,
+          spectrumSharedBuffer: ring.sharedBuffer,
+        });
+        try {
+          for (let block = 0; block < 4; block++) {
+            const left = new Float32Array(128);
+            left[0] = 1;
+            expect(
+              processor.process([[left, new Float32Array(128)]], [[new Float32Array(128)]]),
+            ).toBe(true);
+          }
+          const read = readSonareSpectrumRingBuffer(ring, seed);
+          expect(read.spectra.map((spectrum) => spectrum.frame)).toEqual([256, 384, 512]);
+          expect(read.spectra.every((spectrum) => spectrum.bands.length === 4)).toBe(true);
+        } finally {
+          processor.destroy();
+        }
+      }
     });
   });
 

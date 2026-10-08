@@ -11,6 +11,7 @@ import type {
 import {
   encodeFrameHi,
   encodeFrameLo,
+  loadSonareRingCursor,
   magnitudeToDb,
   meterRingFromSharedBuffer,
   type SharedMeterRingWriter,
@@ -20,7 +21,9 @@ import {
   SONARE_METER_RING_RECORD_FLOATS,
   type SonareWorkletMeterSnapshot,
   type SonareWorkletSpectrumSnapshot,
+  sonareRingCursorSlot,
   spectrumRingFromSharedBuffer,
+  storeSonareRingCursor,
 } from './protocol.js';
 
 /**
@@ -299,8 +302,9 @@ export class SonareWorkletProcessor {
     if (!ring) {
       return;
     }
-    const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+    const offset =
+      sonareRingCursorSlot(writeIndex, ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
     ring.records[offset] = encodeFrameLo(meter.frame);
     ring.records[offset + 1] = encodeFrameHi(meter.frame);
     ring.records[offset + 2] = meter.targetId;
@@ -318,12 +322,9 @@ export class SonareWorkletProcessor {
     ring.records[offset + 14] = meter.inputPeakDbL;
     ring.records[offset + 15] = meter.inputPeakDbR;
     ring.records[offset + SONARE_METER_RING_CHANNEL_COUNT_OFFSET] = 2;
-    Atomics.store(ring.header, 0, writeIndex + 1);
-    // writeIndex is a free-running monotonic counter, so an overflow guard here
-    // would fire on essentially every write past the first `capacity` records
-    // and store an ever-growing value, not a dropped-record count. Readers
-    // already detect silent overrun via firstReadable = max(readIndex,
-    // writeIndex - capacity), so header slot 3 is left at its initial 0.
+    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    // An overwrite ring keeps no drop count: readers detect overrun from the
+    // cursor distance, so header slot 3 is left at its initial 0.
   }
 
   private publishSpectrum(left: Float32Array, right: Float32Array): void {
@@ -385,17 +386,14 @@ export class SonareWorkletProcessor {
     if (!ring) {
       return;
     }
-    const writeIndex = Atomics.load(ring.header, 0);
-    const offset = (writeIndex % ring.capacity) * SONARE_METER_RING_RECORD_FLOATS;
+    const writeIndex = loadSonareRingCursor(ring.header, 0, ring.capacity);
+    const offset = sonareRingCursorSlot(writeIndex, ring.capacity) * ring.recordFloats;
     ring.records[offset] = encodeFrameLo(frame);
     ring.records[offset + 1] = encodeFrameHi(frame);
     ring.records[offset + 2] = bands.length;
     ring.records.set(bands.subarray(0, ring.bands), offset + 3);
-    Atomics.store(ring.header, 0, writeIndex + 1);
-    // See writeMeterRing: header slot 4 (the spectrum-ring overflow slot) is
-    // left at its initial 0; readers detect silent overrun via the
-    // firstReadable = max(readIndex, writeIndex - capacity) clamp. (Slot 3 here
-    // holds the band count and is still written at ring creation.)
+    storeSonareRingCursor(ring.header, 0, writeIndex, ring.capacity);
+    // As in writeMeterRing, header slot 4 (the overflow slot) stays 0.
   }
 }
 

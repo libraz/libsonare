@@ -41,9 +41,8 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& 
     const sonare::mixing::SendTiming timing = timing_value == 1
                                                   ? sonare::mixing::SendTiming::PreFader
                                                   : sonare::mixing::SendTiming::PostFader;
-    out.push_back({static_cast<uint32_t>(intProperty(send, "busId", 0)),
-                   floatProperty(send, "levelDb", 0.0f), boolProperty(send, "enabled", true),
-                   timing});
+    out.push_back({uintProperty(send, "busId", 0), floatProperty(send, "levelDb", 0.0f),
+                   boolProperty(send, "enabled", true), timing});
   }
   return out;
 }
@@ -81,11 +80,11 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
     if (lane_val.typeOf().as<std::string>() == "number") {
       track_id = checkedUintFromVal(lane_val, "trackId");
     } else {
-      track_id = static_cast<uint32_t>(intProperty(lane_val, "trackId", 0));
+      track_id = uintProperty(lane_val, "trackId", 0);
     }
     sonare::engine::TrackLaneConfig config{track_id};
     if (lane_val.typeOf().as<std::string>() == "object") {
-      config.output_bus_id = static_cast<uint32_t>(intProperty(lane_val, "outputBusId", 0));
+      config.output_bus_id = uintProperty(lane_val, "outputBusId", 0);
       // Absent defaults to stereo, matching the C ABI / Node surfaces. An
       // out-of-range layout is rejected like the C ABI's is_valid check. The
       // full-range bound is checked BEFORE narrowing to uint8_t: narrowing
@@ -174,10 +173,10 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                     "invalid bus channel layout");
     }
-    sonare::engine::TrackBusConfig config{static_cast<uint32_t>(intProperty(bus, "busId", 0)),
+    sonare::engine::TrackBusConfig config{uintProperty(bus, "busId", 0),
                                           floatProperty(bus, "gainDb", 0.0f),
                                           static_cast<sonare::ChannelLayout>(layout_value)};
-    config.output_bus_id = static_cast<uint32_t>(intProperty(bus, "outputBusId", 0));
+    config.output_bus_id = uintProperty(bus, "outputBusId", 0);
     config.sends = readOptionalSends(bus);
     configs.push_back(std::move(config));
   }

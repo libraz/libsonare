@@ -680,3 +680,134 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
     }
   });
 });
+
+describe('uint32 ids keep their whole domain on every WASM id path', () => {
+  const LEGAL = [2 ** 31 - 1, 2 ** 31, 2 ** 32 - 1];
+  const REFUSED = [-1, 2 ** 32, 1.5];
+
+  const withEngine = <T>(fn: (engine: RealtimeEngine) => T): T => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      return fn(engine);
+    } finally {
+      engine.destroy();
+    }
+  };
+
+  it('addParameter registers each id outside the reserved ranges and resolves it later', () => {
+    // 2^32 - 1 sits in the reserved insert-parameter range, so the top legal id is 0xbfffffff.
+    for (const id of [2 ** 31 - 1, 2 ** 31, 0xbfff_ffff]) {
+      withEngine((engine) => {
+        engine.addParameter({ id, name: `p${id}`, minValue: 0, maxValue: 1, defaultValue: 0 });
+        expect(engine.parameterInfo(id).id).toBe(id);
+      });
+    }
+    for (const id of REFUSED) {
+      withEngine((engine) =>
+        expectInvalidParameter(() =>
+          engine.addParameter({ id, name: 'p', minValue: 0, maxValue: 1, defaultValue: 0 }),
+        ),
+      );
+    }
+  });
+
+  it('marker, seekMarker and setLoopFromMarkers address every id setMarkers accepts', () => {
+    withEngine((engine) => {
+      engine.setMarkers(LEGAL.map((id, index) => ({ id, ppq: index * 480 })));
+      for (const id of LEGAL) {
+        expect(engine.marker(id).id).toBe(id);
+        expect(() => engine.seekMarker(id)).not.toThrow();
+      }
+      expect(() => engine.setLoopFromMarkers(LEGAL[0], LEGAL[2])).not.toThrow();
+      for (const id of REFUSED) {
+        expectInvalidParameter(() => engine.marker(id));
+        expectInvalidParameter(() => engine.seekMarker(id));
+        expectInvalidParameter(() => engine.setLoopFromMarkers(id, LEGAL[2]));
+      }
+    });
+  });
+
+  it('a clip schedule takes every legal clip and track id and refuses the rest', () => {
+    const clip = (id: number, trackId: number) => ({
+      id,
+      trackId,
+      channels: [new Float32Array(8)],
+      startPpq: 0,
+    });
+    withEngine((engine) => {
+      for (const id of LEGAL) {
+        expect(() => engine.setClips([clip(id, id)])).not.toThrow();
+      }
+      for (const id of REFUSED) {
+        expectInvalidParameter(() => engine.setClips([clip(id, 1)]));
+        expectInvalidParameter(() => engine.setClips([clip(1, id)]));
+      }
+    });
+  });
+
+  it('routing descriptors read bus and track ids in the domain the numeric lane path reads', () => {
+    for (const id of LEGAL) {
+      withEngine((engine) => {
+        engine.setTrackBuses([{ busId: id, gainDb: 0 }]);
+        expect(() =>
+          engine.setTrackLanes([
+            { trackId: id, outputBusId: id, sends: [{ busId: id, levelDb: -6 }] },
+          ]),
+        ).not.toThrow();
+        expect(() => engine.setTrackLanes([id])).not.toThrow();
+      });
+    }
+    for (const id of REFUSED) {
+      withEngine((engine) => {
+        expectInvalidParameter(() => engine.setTrackLanes([id]));
+        expectInvalidParameter(() => engine.setTrackLanes([{ trackId: id }]));
+        expectInvalidParameter(() => engine.setTrackLanes([{ trackId: 1, outputBusId: id }]));
+        expectInvalidParameter(() => engine.setTrackBuses([{ busId: id, gainDb: 0 }]));
+        expectInvalidParameter(() =>
+          engine.setTrackBuses([{ busId: 7, gainDb: 0, outputBusId: id }]),
+        );
+        expectInvalidParameter(() =>
+          engine.setTrackBuses([{ busId: 7, gainDb: 0, sends: [{ busId: id, levelDb: 0 }] }]),
+        );
+      });
+    }
+  });
+
+  it('freezeOffline keeps a legal clip id and refuses the rest', () => {
+    for (const id of LEGAL) {
+      withEngine((engine) => {
+        engine.setClips([{ id: 5, channels: [new Float32Array(128).fill(0.25)], startPpq: 0 }]);
+        const frozen = engine.freezeOffline({
+          totalFrames: 128,
+          blockSize: 128,
+          numChannels: 1,
+          clipId: id,
+        });
+        expect(frozen.clipId).toBe(id);
+      });
+    }
+    for (const id of REFUSED) {
+      withEngine((engine) => {
+        engine.setClips([{ id: 5, channels: [new Float32Array(128).fill(0.25)], startPpq: 0 }]);
+        expectInvalidParameter(() =>
+          engine.freezeOffline({ totalFrames: 128, blockSize: 128, numChannels: 1, clipId: id }),
+        );
+      });
+    }
+  });
+
+  it('Project.setMarkerEx takes an explicit id past 2^31 and refuses negative or fractional ids', () => {
+    const project = new Project();
+    try {
+      // UINT32_MAX is the reserved id the C ABI refuses, so the top legal id is one below it.
+      for (const id of [2 ** 31 - 1, 2 ** 31, 2 ** 32 - 2]) {
+        expect(project.setMarkerEx({ id, ppq: 0, name: 'm' })).toBe(id);
+      }
+      for (const id of REFUSED) {
+        expectInvalidParameter(() => project.setMarkerEx({ id, ppq: 0, name: 'm' }));
+      }
+    } finally {
+      project.delete();
+    }
+  });
+});

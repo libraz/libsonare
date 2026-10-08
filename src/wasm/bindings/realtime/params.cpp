@@ -22,7 +22,7 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
 int automationCurveToInt(sonare::automation::CurveType curve) { return static_cast<int>(curve); }
 
 void RealtimeEngineWasm::addParameter(val info) {
-  const uint32_t id = static_cast<uint32_t>(intProperty(info, "id", 0));
+  const uint32_t id = uintProperty(info, "id", 0);
   if (id == 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter id must be non-zero");

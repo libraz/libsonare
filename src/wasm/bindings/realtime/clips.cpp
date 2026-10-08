@@ -186,10 +186,8 @@ void RealtimeEngineWasm::setClips(val clips) {
     }
 
     sonare::engine::ClipSchedule schedule{};
-    schedule.id = static_cast<uint32_t>(intProperty(clip_val, "id", i + 1));
-    schedule.track_id = hasProperty(clip_val, "trackId")
-                            ? static_cast<uint32_t>(intProperty(clip_val, "trackId", 0))
-                            : 0;
+    schedule.id = uintProperty(clip_val, "id", static_cast<uint32_t>(i + 1));
+    schedule.track_id = hasProperty(clip_val, "trackId") ? uintProperty(clip_val, "trackId", 0) : 0;
     if (has_page_provider) {
       // Truncating rather than refusing resolves a fractional handle onto a
       // real provider: 1.5 binds provider 1 and 2.9 binds provider 2.

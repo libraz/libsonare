@@ -173,6 +173,14 @@ self.onmessage = async (event) => {
 
 const heldOpfsClipPaths = new Map<string, number>();
 
+// One sequence for every request this realm posts, so bindings and writers that
+// share a Worker never issue the same id and cannot accept each other's reply.
+let nextOpfsWorkerRequestId = 1;
+
+function allocateOpfsWorkerRequestId(): number {
+  return nextOpfsWorkerRequestId++;
+}
+
 function opfsClipPathKey(path: string): string {
   return path.split('/').filter(Boolean).join('/');
 }
@@ -206,7 +214,6 @@ export function createOpfsClipPageProvider(
   const heldKey = opfsClipPathKey(options.path);
   heldOpfsClipPaths.set(heldKey, (heldOpfsClipPaths.get(heldKey) ?? 0) + 1);
   const ownsWorker = options.worker === undefined || options.terminateWorkerOnClose === true;
-  let nextRequestId = 1;
   let closed = false;
   let readQueue: Promise<void> = Promise.resolve();
   const pending = new Map<
@@ -252,7 +259,7 @@ export function createOpfsClipPageProvider(
     if (closed) {
       return Promise.reject(new Error('OpfsClipPageProvider is closed'));
     }
-    const requestId = nextRequestId++;
+    const requestId = allocateOpfsWorkerRequestId();
     const promise = new Promise<boolean>((resolve, reject) => {
       pending.set(requestId, { resolve, reject });
     });
@@ -403,7 +410,6 @@ export async function writeOpfsClip(
   }
   const worker = options.worker ?? createOpfsClipPageWorker();
   const ownsWorker = options.worker === undefined;
-  let nextRequestId = 1;
   const chunkFrames = Math.max(1, Math.floor(OPFS_WRITE_CHUNK_BYTES / (numChannels * 4)));
   try {
     for (let start = 0; start < numSamples; start += chunkFrames) {
@@ -415,7 +421,7 @@ export async function writeOpfsClip(
           out[i * numChannels + ch] = src[start + i];
         }
       }
-      const requestId = nextRequestId++;
+      const requestId = allocateOpfsWorkerRequestId();
       const response = await new Promise<WriteResponse>((resolve) => {
         const onMessage = (event: MessageEvent<WriteResponse>) => {
           if (
