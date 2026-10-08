@@ -350,9 +350,9 @@ SonareError sonare_project_set_mixer_scene_json(SonareProject* project, const ch
   // The scene is applied; unknown keys are a non-fatal warning, one line each.
   if (!unknown_keys.empty()) {
     std::string warning;
-    for (size_t n = 0; n < unknown_keys.size(); ++n) {
-      if (n > 0) warning += '\n';
-      warning += unknown_keys[n];
+    for (const std::string& key : unknown_keys) {
+      if (&key != &unknown_keys.front()) warning += '\n';
+      warning += key;
     }
     sonare_c_detail::set_last_warning(warning.c_str());
   }
