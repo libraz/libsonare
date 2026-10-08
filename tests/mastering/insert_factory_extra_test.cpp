@@ -1484,7 +1484,8 @@ TEST_CASE("velvet insert factory bounds excessive reverb time",
       make_insert("effects.reverb.velvet", R"({"reverbTimeS":40,"densityHz":3000,"decay":1})");
   REQUIRE(processor != nullptr);
   processor->prepare(48000.0, 512);
-  REQUIRE(processor->tail_samples() <= 18 * 48000);
+  // The 18 s cap, followed by the 20 Hz DC blocker's ring (under 100 ms).
+  REQUIRE(processor->tail_samples() <= 18 * 48000 + 48000 / 10);
 }
 #endif  // SONARE_WITH_FX
 

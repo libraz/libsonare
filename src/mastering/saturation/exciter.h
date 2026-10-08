@@ -53,6 +53,7 @@ class Exciter : public rt::ProcessorBase {
   ///   allpass paths are aligned.
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
 
   static void validate_config(const ExciterConfig& config);
 

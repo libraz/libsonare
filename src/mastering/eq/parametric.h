@@ -9,6 +9,7 @@
 
 #include "mastering/eq/eq_band.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::eq {
 
@@ -58,6 +59,7 @@ class ParametricEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
   void prepare_channels(int num_channels);
 
   /// @brief Installs @p band, designed for the current rate.
@@ -114,6 +116,7 @@ class ParametricEq : public rt::ProcessorBase {
   std::array<bool, kMaxBands> resolvable_{};
   std::array<Coefficients, kMaxBands> coefficients_{};
   std::array<std::vector<State>, kMaxBands> states_{};
+  std::array<rt::StageGate, kMaxBands> band_gates_{};
 };
 
 }  // namespace sonare::mastering::eq

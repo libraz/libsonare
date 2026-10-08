@@ -604,9 +604,11 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
     throw SonareException(ErrorCode::InvalidParameter, "max_abs_delay must be non-negative");
   }
 
-  const size_t length = std::min(source.size(), reference.size());
-  const int clamped_max_delay = static_cast<int>(
-      std::min<size_t>(static_cast<size_t>(max_abs_delay), length == 0 ? 0 : length - 1));
+  // Each signal keeps its full length: truncating the longer one to the shorter
+  // drops exactly the samples a delayed match lands on.
+  const size_t longest = std::max(source.size(), reference.size());
+  const int clamped_max_delay =
+      static_cast<int>(std::min<size_t>(static_cast<size_t>(max_abs_delay), longest - 1));
   if (clamped_max_delay <= 0) {
     return 0.0f;
   }
@@ -617,20 +619,21 @@ float estimate_reference_delay_samples(const Audio& source, const Audio& referen
   // i.e. the unnormalized cross-correlation. We map circular lags to signed lags
   // and normalize by the global signal energies so the score is comparable to
   // the previous Pearson-style correlation.
-  const int n_fft = next_power_of_two(length + static_cast<size_t>(clamped_max_delay) + 1);
+  // Linear (not circular) correlation over every lag the two lengths admit.
+  const int n_fft = next_power_of_two(source.size() + reference.size());
   FFT fft(n_fft);
 
   std::vector<float> source_padded(static_cast<size_t>(n_fft), 0.0f);
   std::vector<float> reference_padded(static_cast<size_t>(n_fft), 0.0f);
   double source_energy = 0.0;
   double reference_energy = 0.0;
-  for (size_t i = 0; i < length; ++i) {
-    const float s = source[i];
-    const float r = reference[i];
-    source_padded[i] = s;
-    reference_padded[i] = r;
-    source_energy += static_cast<double>(s) * s;
-    reference_energy += static_cast<double>(r) * r;
+  for (size_t i = 0; i < source.size(); ++i) {
+    source_padded[i] = source[i];
+    source_energy += static_cast<double>(source[i]) * source[i];
+  }
+  for (size_t i = 0; i < reference.size(); ++i) {
+    reference_padded[i] = reference[i];
+    reference_energy += static_cast<double>(reference[i]) * reference[i];
   }
   if (source_energy <= 0.0 || reference_energy <= 0.0) {
     return 0.0f;

@@ -6,6 +6,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 
@@ -86,6 +87,16 @@ void LowEndFocus::process(float* const* channels, int num_channels, int num_samp
     discarded |= discard_if_non_finite(transient_state_[index], 0.0f);
   }
   if (discarded) note_non_finite_discard();
+}
+
+int LowEndFocus::tail_samples() const noexcept {
+  // The low split, then the sub divider and the transient follower it feeds.
+  rt::TailBudget tail;
+  tail.decay(1.0 - rt::one_pole_lowpass_alpha(config_.cutoff_hz, sample_rate_));
+  rt::TailBudget fed;
+  fed.decay(1.0 - rt::one_pole_lowpass_alpha(config_.cutoff_hz * 0.5f, sample_rate_));
+  fed.alongside(rt::TailBudget().decay(1.0 - rt::one_pole_lowpass_alpha(25.0f, sample_rate_)));
+  return tail.then(fed).samples();
 }
 
 void LowEndFocus::reset() {

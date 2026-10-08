@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
@@ -20,6 +21,18 @@ namespace sonare::effects::modulation {
 /// Single-channel TPT state-variable filter, bandpass tap (Zavalishin form).
 class SvfBandpass {
  public:
+  /// @brief Ring of the section at @p cutoff_hz and @p q, read from its equivalent biquad.
+  static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
+    const double rate = sample_rate > 0.0 ? sample_rate : 48000.0;
+    const double fc = std::clamp(static_cast<double>(cutoff_hz), 10.0, 0.49 * 0.5 * rate);
+    const double g = std::tan(::sonare::constants::kPiD * fc / rate);
+    const double k = 1.0 / std::max(0.5, static_cast<double>(q));
+    const double d = 1.0 + g * (g + k);
+    rt::TailBudget tail;
+    tail.biquad(2.0, 2.0 * (g * g - 1.0) / d, (1.0 - g * k + g * g) / d);
+    return tail;
+  }
+
   void prepare(double sample_rate) noexcept {
     sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
     reset();

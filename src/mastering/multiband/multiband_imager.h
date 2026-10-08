@@ -4,10 +4,12 @@
 /// @brief Multiband stereo imager using mid/side width per band.
 
 #include <array>
+#include <cmath>
 #include <vector>
 
 #include "mastering/multiband/crossover.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::multiband {
 
@@ -39,6 +41,14 @@ class MultibandImager : public rt::ProcessorBase {
   // modes) so host plugin-delay-compensation stays correct. The per-band
   // imaging stages add no latency.
   int latency_samples() const noexcept override { return crossover_.latency_samples(); }
+  /// The band split, then the decorrelation allpasses where a band widens.
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail = crossover_.tail();
+    for (const float frequency_hz : kDecorrelationFrequenciesHz) {
+      tail.decay(std::fabs(allpass_coefficient(frequency_hz, sample_rate_)));
+    }
+    return tail.samples();
+  }
 
   void set_config(const MultibandImagerConfig& config);
   const MultibandImagerConfig& config() const { return config_; }
@@ -83,6 +93,7 @@ class MultibandImager : public rt::ProcessorBase {
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   bool prepared_ = false;
+  std::vector<rt::StageGate> decorrelation_gates_;
   Crossover crossover_;
   CrossoverScratch scratch_;
   std::vector<std::array<Allpass, kNumAllpassStages>> allpass_;

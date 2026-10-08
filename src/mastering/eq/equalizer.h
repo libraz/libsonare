@@ -37,6 +37,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
+  int tail_samples() const noexcept override;
   /// @brief Sets a per-band parameter addressed by an encoded @p param_id.
   /// @details The id encodes both the band and the parameter:
   ///   - `band_index = param_id / 3`

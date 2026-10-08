@@ -10,6 +10,8 @@
 
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::effects::reverb {
 
@@ -92,7 +94,9 @@ class ConvolutionReverb : public rt::ProcessorBase {
   /// response, so the decay tail equals the loaded/synthesized IR length. A
   /// dry-only configuration has processing latency but no audible decay tail.
   int tail_samples() const noexcept override {
-    return std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f ? static_cast<int>(ir_.size()) : 0;
+    rt::TailBudget tail;
+    if (std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f) tail.delay(static_cast<double>(ir_.size()));
+    return tail.samples();
   }
   int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
 
@@ -132,6 +136,7 @@ class ConvolutionReverb : public rt::ProcessorBase {
   std::vector<std::vector<float>> block_input_;
   std::vector<std::vector<float>> block_output_;
   std::vector<int> fill_count_;
+  rt::StageGate stage_;
 };
 
 }  // namespace sonare::effects::reverb

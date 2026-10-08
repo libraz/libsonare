@@ -406,6 +406,26 @@ std::vector<Crossover::FilterSection> Crossover::filter_sections(CrossoverSlope 
   return to_filter_sections(unscaled_rt_butterworth_sections(order));
 }
 
+rt::TailBudget Crossover::tail() const noexcept {
+  rt::TailBudget tail;
+  if (config_.mode == CrossoverMode::FirLinearPhase) {
+    return tail.delay(static_cast<double>(config_.fir_kernel_size) - 1.0 - latency_samples());
+  }
+  // Every channel carries the same coefficients, so channel 0 stands for all of them.
+  for (const auto& split : states_) {
+    if (split.empty()) continue;
+    for (const Biquad& section : split.front().lowpass) tail.section(section.c);
+    for (const Biquad& section : split.front().highpass) tail.section(section.c);
+  }
+  for (const auto& band : compensation_states_) {
+    if (band.empty()) continue;
+    for (const auto& allpasses : band.front().allpass_by_split) {
+      for (const Biquad& section : allpasses) tail.section(section.c);
+    }
+  }
+  return tail;
+}
+
 void Crossover::install_coefficients() {
   const auto sections = filter_sections(config_.slope, config_.mode);
   const auto assign_biquad = [](Biquad& target, const rt::BiquadCoeffs& coeffs) {

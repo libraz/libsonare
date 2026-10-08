@@ -91,7 +91,10 @@ int BusProcessor::latency_samples_q8() const noexcept {
   return total;
 }
 
-int BusProcessor::tail_samples() const noexcept { return processor_chain_tail_samples(inserts_); }
+int BusProcessor::tail_samples() const noexcept {
+  const rt::TailBudget tail = processor_chain_tail(inserts_);
+  return tail.samples();
+}
 
 std::optional<int> BusProcessor::insert_input_latency_samples_q8(
     unsigned int insert_index) const noexcept {

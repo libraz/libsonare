@@ -6,6 +6,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -99,6 +100,17 @@ void SpectralShaper::process(float* const* channels, int num_channels, int num_s
   }
   if (discarded) note_non_finite_discard();
   last_reduction_db_ = linear_to_db(min_gain);
+}
+
+int SpectralShaper::tail_samples() const noexcept {
+  // The two band-edge one-poles in series.
+  const float low_hz = std::min(config_.frequency_hz, config_.high_frequency_hz);
+  const float high_hz = std::max(std::max(config_.frequency_hz, config_.high_frequency_hz),
+                                 std::nextafter(low_hz, low_hz + 1.0f));
+  rt::TailBudget tail;
+  tail.decay(1.0 - rt::one_pole_lowpass_alpha(low_hz, sample_rate_));
+  tail.decay(1.0 - rt::one_pole_lowpass_alpha(high_hz, sample_rate_));
+  return tail.samples();
 }
 
 void SpectralShaper::reset() {

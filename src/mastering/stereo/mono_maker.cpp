@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -33,7 +34,8 @@ void MonoMaker::process(float* const* channels, int num_channels, int num_sample
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels < 2 || config_.amount == 0.0f) {
+  // Out of the path for a mono block or a zero amount; back in from rest.
+  if (!stage_.admit(num_channels >= 2 && config_.amount != 0.0f, [this] { reset(); })) {
     return;
   }
 
@@ -60,6 +62,15 @@ void MonoMaker::process(float* const* channels, int num_channels, int num_sample
     discarded |= discard_group_if_non_finite(highpass_input_[stage], highpass_output_[stage]);
   }
   if (discarded) note_non_finite_discard();
+}
+
+int MonoMaker::tail_samples() const noexcept {
+  // The side high-pass stages in series, while the stage is in the path at all.
+  rt::TailBudget tail;
+  if (config_.amount != 0.0f) {
+    for (size_t stage = 0; stage < highpass_output_.size(); ++stage) tail.decay(coefficient_);
+  }
+  return tail.samples();
 }
 
 void MonoMaker::reset() {

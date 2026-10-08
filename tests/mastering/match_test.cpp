@@ -670,3 +670,21 @@ TEST_CASE("a match the equalizer refuses leaves its bands in place", "[mastering
   REQUIRE(eq.band(3).frequency_hz == held.frequency_hz);
   REQUIRE(eq.band(3).gain_db == held.gain_db);
 }
+
+TEST_CASE("MatchEq delay estimation keeps the tail of the longer signal", "[mastering][match]") {
+  // The only event in the reference lies past the source's length; truncating the
+  // reference to that length leaves nothing to correlate against.
+  std::vector<float> source_samples(32, 0.0f);
+  source_samples[26] = 0.5f;
+  source_samples[31] = 0.5f;
+  std::vector<float> reference_samples(40, 0.0f);
+  reference_samples[31] = 0.5f;
+  reference_samples[36] = 0.5f;
+  const auto source = Audio::from_vector(source_samples, 48000);
+  const auto reference = Audio::from_vector(reference_samples, 48000);
+
+  REQUIRE_THAT(estimate_reference_delay_samples(source, reference, 8), WithinAbs(5.0f, 0.01f));
+  const auto aligned = align_reference_to_source(source, reference, 8);
+  REQUIRE(aligned[26] == 0.5f);
+  REQUIRE(aligned[31] == 0.5f);
+}

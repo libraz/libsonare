@@ -25,6 +25,8 @@ enum class DelayInterpolation {
   kLagrange3,  ///< Four-point Lagrange read; flatter at high frequencies, delay floor of 1 sample.
 };
 inline constexpr int kDelayInterpolationCount = 2;
+/// Samples past a fractional delay that either read still reaches back to.
+inline constexpr int kDelayReadStencilSamples = 2;
 
 /// True when @p value names a DelayInterpolation, for a realtime setter that refuses the rest.
 inline bool delay_interpolation_acceptable(float value) noexcept {

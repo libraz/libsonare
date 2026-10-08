@@ -14,7 +14,10 @@ struct BitDepthConfig {
   ///          cannot be represented and settings above 25 produce the same
   ///          output as 25.
   int target_bits = 16;
-  /// @brief Clamp to [-1, 1] before and after quantization.
+  /// @brief Accepted for configuration compatibility; has no effect on finite input.
+  /// @details Quantization always saturates to the word's code range
+  ///          [-1, 1 - 2^-(target_bits - 1)], which already lies inside [-1, 1],
+  ///          so a sample clamp before or after it changes nothing.
   bool clamp = true;
 };
 

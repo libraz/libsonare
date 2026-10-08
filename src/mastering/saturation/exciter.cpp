@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/adaa.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -291,6 +292,16 @@ void Exciter::declare_path_latencies() {
       {0, 0,
        sonare::rt::aliasing_latency_samples_q8(
            config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples())});
+}
+
+int Exciter::tail_samples() const noexcept {
+  // The band-pass, its aligning allpass and the even harmonics' DC tracker, then the harmonic
+  // path's aliasing control.
+  sonare::rt::TailBudget tail;
+  tail.section(bandpass_coeffs_.c).section(allpass_coeffs_.c).decay(1.0 - even_dc_coefficient_);
+  tail.then(sonare::rt::aliasing_tail(
+      config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples()));
+  return tail.samples();
 }
 
 int Exciter::latency_samples() const noexcept { return paths_.latency_samples(); }

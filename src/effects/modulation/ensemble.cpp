@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
@@ -12,6 +13,7 @@ namespace sonare::effects::modulation {
 
 using common::kMaxModulationPreDelayMs;
 using constants::kTwoPi;
+using constants::kTwoPiD;
 
 namespace {
 constexpr float kMaxDepthMs = 10.0f;
@@ -135,6 +137,21 @@ void Ensemble::process(float* const* channels, int num_channels, int num_samples
     }
   }
   discard_non_finite();
+}
+
+int Ensemble::tail_samples() const noexcept {
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  if (!(mix.wet > 0.0f)) return 0;
+  // The outer voice's longest read, then the tone low-pass after the taps.
+  const double sweep_ms = (config_.depth_slow_ms + config_.depth_fast_ms) *
+                          (1.0 + std::fabs(static_cast<double>(config_.depth_dev)));
+  const double longest_ms = config_.center_delay_ms + config_.pre_delay_dev_ms + sweep_ms;
+  const double tone_alpha =
+      std::clamp(1.0 - std::exp(-kTwoPiD * config_.tone_hz / sample_rate_), 0.01, 1.0);
+  rt::TailBudget tail;
+  tail.delay(longest_ms * 0.001 * sample_rate_ + kDelayReadStencilSamples).decay(1.0 - tone_alpha);
+  return tail.samples();
 }
 
 void Ensemble::discard_non_finite() noexcept {

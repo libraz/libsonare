@@ -478,11 +478,13 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   alignment_delay_.process(channels, num_channels, num_samples);
 
   const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
+  const EqPosition eq_at = eq_position_.load(std::memory_order_relaxed);
   float* const* staged = stage_channels(channels, num_channels, num_samples);
+  // The EQ re-enters from rest whenever it was off, moved, or skipped for a block.
+  const bool eq_pre = eq_pre_gate_.admit(
+      staged != nullptr && eq_enabled && eq_at == EqPosition::PreFader, [this] { eq_.reset(); });
   if (staged != nullptr) {
-    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
-      eq_.process(staged, num_channels, num_samples);
-    }
+    if (eq_pre) eq_.process(staged, num_channels, num_samples);
     process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0, 0);
   }
   // A muted pre-insert tail stays out of the output and meters.
@@ -517,10 +519,10 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
   }
 
   staged = stage_channels(channels, num_channels, num_samples);
+  const bool eq_post = eq_post_gate_.admit(
+      staged != nullptr && eq_enabled && eq_at == EqPosition::PostFader, [this] { eq_.reset(); });
   if (staged != nullptr) {
-    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
-      eq_.process(staged, num_channels, num_samples);
-    }
+    if (eq_post) eq_.process(staged, num_channels, num_samples);
     process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
                          pre_inserts_.size(), 0);
   }
@@ -582,11 +584,13 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   alignment_delay_.process(segment, num_channels, num_samples);
 
   const bool eq_enabled = eq_enabled_.load(std::memory_order_relaxed);
+  const EqPosition eq_at = eq_position_.load(std::memory_order_relaxed);
   float* const* staged = stage_channels(segment, num_channels, num_samples);
+  // The EQ re-enters from rest whenever it was off, moved, or skipped for a block.
+  const bool eq_pre = eq_pre_gate_.admit(
+      staged != nullptr && eq_enabled && eq_at == EqPosition::PreFader, [this] { eq_.reset(); });
   if (staged != nullptr) {
-    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PreFader) {
-      eq_.process(staged, num_channels, num_samples);
-    }
+    if (eq_pre) eq_.process(staged, num_channels, num_samples);
     process_insert_chain(pre_inserts_, pre_insert_spo_, staged, num_channels, num_samples, 0,
                          start);
   }
@@ -609,10 +613,10 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
   }
 
   staged = stage_channels(segment, num_channels, num_samples);
+  const bool eq_post = eq_post_gate_.admit(
+      staged != nullptr && eq_enabled && eq_at == EqPosition::PostFader, [this] { eq_.reset(); });
   if (staged != nullptr) {
-    if (eq_enabled && eq_position_.load(std::memory_order_relaxed) == EqPosition::PostFader) {
-      eq_.process(staged, num_channels, num_samples);
-    }
+    if (eq_post) eq_.process(staged, num_channels, num_samples);
     process_insert_chain(post_inserts_, post_insert_spo_, staged, num_channels, num_samples,
                          pre_inserts_.size(), start);
   }
@@ -742,14 +746,21 @@ int ChannelStrip::latency_samples() const noexcept { return latency_samples_q8()
 int ChannelStrip::latency_samples_q8() const noexcept { return post_fader_latency_samples_q8(); }
 
 int ChannelStrip::tail_samples() const noexcept {
-  return combine_tail_samples(pre_fader_tail_samples(), processor_chain_tail_samples(post_inserts_),
-                              TailTopology::kSerial);
+  rt::TailBudget tail = rt::TailBudget::reported(pre_fader_tail_samples());
+  if (eq_enabled() && eq_position() == EqPosition::PostFader) {
+    tail.then(rt::TailBudget::reported(eq_.tail_samples()));
+  }
+  return tail.then(processor_chain_tail(post_inserts_)).samples();
 }
 
 int ChannelStrip::pre_fader_tail_samples() const noexcept {
   // The channel delay is not latency, so the audio it holds back is owed as tail.
-  return combine_tail_samples(alignment_delay_.delay_samples(),
-                              processor_chain_tail_samples(pre_inserts_), TailTopology::kSerial);
+  rt::TailBudget tail;
+  tail.delay(alignment_delay_.delay_samples());
+  if (eq_enabled() && eq_position() == EqPosition::PreFader) {
+    tail.then(rt::TailBudget::reported(eq_.tail_samples()));
+  }
+  return tail.then(processor_chain_tail(pre_inserts_)).samples();
 }
 
 int ChannelStrip::pre_fader_latency_samples_q8() const noexcept {

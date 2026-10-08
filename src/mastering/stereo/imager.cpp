@@ -6,6 +6,7 @@
 #include "mastering/stereo/constant_power_width.h"
 #include "mastering/stereo/mid_side.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -98,6 +99,13 @@ void Imager::process(float* const* channels, int num_channels, int num_samples) 
     discarded |= discard_group_if_non_finite(stage.x1, stage.y1);
   }
   if (discarded) note_non_finite_discard();
+}
+
+int Imager::tail_samples() const noexcept {
+  // The four decorrelation allpasses in series.
+  rt::TailBudget tail;
+  for (const Allpass& allpass : allpass_) tail.decay(std::fabs(allpass.coefficient));
+  return tail.samples();
 }
 
 void Imager::reset() {

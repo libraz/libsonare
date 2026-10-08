@@ -384,3 +384,16 @@ TEST_CASE("A finalized PCM code survives a same-width WAV save", "[mastering][fi
     CHECK(code == static_cast<int32_t>(std::lround(levels[i] * scale)));
   }
 }
+
+TEST_CASE("BitDepth clamp leaves finite output unchanged at every width", "[mastering][final]") {
+  // The code range already lies inside [-1, 1], so the flag cannot move a finite sample.
+  const int bits = GENERATE(2, 8, 16, 24, 32);
+  const auto input = make_audio({3.0f, 1.0f, 0.999f, 0.5f, -0.25f, -1.0f, -7.5f, 1.0e30f});
+  const auto clamped = bit_depth(input, {bits, true});
+  const auto unclamped = bit_depth(input, {bits, false});
+  for (size_t i = 0; i < input.size(); ++i) {
+    CHECK(clamped[i] == unclamped[i]);
+    CHECK(unclamped[i] >= -1.0f);
+    CHECK(unclamped[i] < 1.0f);
+  }
+}

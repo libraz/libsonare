@@ -57,6 +57,16 @@ void Wah::process(float* const* channels, int num_channels, int num_samples) {
   if (discarded) note_non_finite_discard();
 }
 
+int Wah::tail_samples() const noexcept {
+  rt::TailBudget tail;
+  // The sweep's lowest corner rings longest at a given resonance.
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
+    tail = SvfBandpass::ring(std::min(config_.min_hz, config_.max_hz), config_.resonance,
+                             sample_rate_);
+  }
+  return tail.samples();
+}
+
 void Wah::reset() {
   lfo_.reset(0.0);
   for (auto& filter : filters_) {

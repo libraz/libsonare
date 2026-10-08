@@ -2,6 +2,8 @@
 
 #include <utility>
 
+#include "rt/tail_budget.h"
+
 namespace sonare::mixing {
 
 FxBus::FxBus(int max_inputs) : bus_(BusRole::Aux, max_inputs) {}
@@ -25,7 +27,9 @@ int FxBus::latency_samples() const noexcept { return bus_.latency_samples(); }
 
 int FxBus::latency_samples_q8() const noexcept { return bus_.latency_samples_q8(); }
 
-int FxBus::tail_samples() const noexcept { return bus_.tail_samples(); }
+int FxBus::tail_samples() const noexcept {
+  return rt::TailBudget::reported(bus_.tail_samples()).samples();
+}
 
 void FxBus::add_insert(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only) {
   bus_.add_insert(std::move(processor), stereo_pair_only);

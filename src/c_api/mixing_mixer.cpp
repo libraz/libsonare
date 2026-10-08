@@ -688,6 +688,16 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                        num_samples);
   }
 
+  SonareError sonare_mixer_flush_meters(SonareMixer * mixer) {
+    SONARE_C_API_ENTRY;
+    if (!mixer) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
+    for (auto& strip : mixer->strips) strip->strip.flush_meters();
+    for (auto& bus : mixer->bus_dsp) bus->fx.flush_meters();
+    return SONARE_OK;
+  }
+
   const char* sonare_mixing_scene_preset_names(void) {
     // thread_local (not plain static): each call reassigns the storage and returns
     // a borrowed pointer into it. A plain static would let a concurrent caller

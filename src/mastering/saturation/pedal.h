@@ -25,6 +25,7 @@
 #include "rt/oversampler.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::saturation {
 
@@ -66,6 +67,11 @@ class OverdriveCore {
   void process(float* samples, size_t count) noexcept;
   void reset() noexcept;
   bool state_finite() const noexcept;
+  /// Ring of the core's sections, in oversampled samples.
+  rt::TailBudget tail() const noexcept {
+    rt::TailBudget tail;
+    return tail.section(clip_highpass_.c).delay(1.0);
+  }
 
  private:
   rt::BiquadState clip_highpass_;
@@ -90,6 +96,11 @@ class DistortionCore {
   void process(float* samples, size_t count) noexcept;
   void reset() noexcept;
   bool state_finite() const noexcept;
+  /// Ring of the core's sections and both clippers' remembered inputs, in oversampled samples.
+  rt::TailBudget tail() const noexcept {
+    rt::TailBudget tail;
+    return tail.section(bandwidth_.c).delay(1.0).section(coupling_.c).delay(1.0);
+  }
 
  private:
   rt::BiquadState bandwidth_;
@@ -112,6 +123,7 @@ class Pedal : public rt::ProcessorBase {
   void reset() override;
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
   void set_config(const Config& config);
   const Config& config() const { return config_; }
 

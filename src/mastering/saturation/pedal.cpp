@@ -7,6 +7,7 @@
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -282,6 +283,20 @@ void Pedal<Core>::reset() {
 template <typename Core>
 int Pedal<Core>::latency_samples() const noexcept {
   return latency_samples_q8() >> 8;
+}
+
+template <typename Core>
+int Pedal<Core>::tail_samples() const noexcept {
+  // Input high-pass, the core at the oversampled rate, the FIR round trip past its latency,
+  // then the tone section.
+  rt::TailBudget tail;
+  if (states_.empty())
+    return tail.delay(oversampler_.streaming_round_trip_latency_samples()).samples();
+  const ChannelState& state = states_.front();
+  tail.section(state.input_highpass.c);
+  tail.delay(std::ceil(static_cast<double>(state.core.tail().samples()) / kOversampleFactor));
+  tail.delay(oversampler_.streaming_round_trip_latency_samples());
+  return tail.section(state.tone.c).samples();
 }
 
 template <typename Core>

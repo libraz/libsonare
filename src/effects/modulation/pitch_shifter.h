@@ -10,6 +10,7 @@
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::effects::modulation {
 
@@ -66,6 +67,7 @@ class PitchShifter : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, in-place scalar updates):
   //   0 = semitones (clamped to [-24, 24]), 1 = dry_wet, 2 = cents, 3 = pan,
@@ -103,6 +105,7 @@ class PitchShifter : public rt::ProcessorBase {
   float anti_alias_corner_hz_ = 0.0f;
   /// [channel][section]: two Butterworth sections make one Linkwitz-Riley 4.
   std::array<std::array<rt::BiquadState, 2>, 2> anti_alias_;
+  rt::StageGate anti_alias_gate_;
 };
 
 }  // namespace sonare::effects::modulation

@@ -7,6 +7,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -17,6 +18,10 @@ class MidSideEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail = rt::TailBudget::reported(mid_eq_.tail_samples());
+    return tail.alongside(rt::TailBudget::reported(side_eq_.tail_samples())).samples();
+  }
 
   void set_mid_band(size_t index, const EqBand& band);
   void set_side_band(size_t index, const EqBand& band);

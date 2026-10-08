@@ -36,6 +36,7 @@ class DeEsser : public rt::RtConfigLifecycle<DeEsser, DeEsserConfig> {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   // set_config() / config() are provided by RtConfigLifecycle: set_config
   // validates (DeEsser::validate_config) before publishing a lock-free snapshot

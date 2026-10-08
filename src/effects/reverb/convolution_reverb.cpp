@@ -89,8 +89,11 @@ void ConvolutionReverb::rebuild_convolvers() {
 
 void ConvolutionReverb::process(float* const* channels, int num_channels, int num_samples) {
   rt::ScopedNoDenormals no_denormals;
-  if (channels == nullptr || num_channels <= 0 || num_samples <= 0 || ir_.empty() ||
-      partition_size_ <= 0) {
+  if (channels == nullptr || num_channels <= 0 || num_samples <= 0) {
+    return;
+  }
+  // An empty IR passes audio through untouched; a reloaded IR resumes from rest.
+  if (!stage_.admit(!ir_.empty() && partition_size_ > 0, [this] { reset(); })) {
     return;
   }
   // Convolvers/buffers are preallocated for the maximum supported channel count;

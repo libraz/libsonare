@@ -10,6 +10,7 @@ namespace sonare::mastering::final {
 struct OutputChainConfig {
   int target_bits = 16;
   DitherType dither_type = DitherType::Tpdf;
+  /// @brief See BitDepthConfig::clamp: the code range already bounds the output.
   bool clamp = true;
 };
 

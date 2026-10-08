@@ -68,12 +68,10 @@ typedef struct {
   float integrated_lufs;
   float gain_reduction_db;
   /* Inter-sample (true) peak in dBFS, from the ITU-R BS.1770-4 polyphase
-     reconstruction at 4x. This is a STREAMING measurement and is very slightly
-     block-size dependent: the reconstruction's centered stencil needs a few
-     future samples a realtime path does not have, so each block's last samples
-     read marginally low (about 0.1 dB across 64..8192-sample blocks on a
-     near-Nyquist tone, always under-reading). Use sonare_metering_true_peak_db
-     over the whole signal when an exact dBTP number is required. */
+     reconstruction at 4x. This is a STREAMING measurement that runs one
+     reconstruction-filter group delay (a few samples) behind the block, so every
+     value has its whole stencil and the reading does not depend on the block
+     size. sonare_metering_true_peak_db measures a whole signal at once. */
   float true_peak_db_l;
   float true_peak_db_r;
   float max_true_peak_db;
@@ -408,6 +406,13 @@ SonareError sonare_mixer_process_stereo(SonareMixer* mixer, const float* const* 
 // with input_count=0 and NULL input arrays, but explicit for offline renderers.
 SonareError sonare_mixer_drain_tail_stereo(SonareMixer* mixer, float* output_left,
                                            float* output_right, size_t num_samples);
+// Marks the end of the signal for every strip and bus meter: the true-peak
+// reading, which runs one reconstruction-filter group delay behind the block,
+// reads that pending group delay against silence and folds it into the
+// published snapshot. An offline or one-shot caller calls it after its last
+// block so true_peak_db covers the whole signal. A later process call starts a
+// new signal. Returns INVALID_PARAMETER for a NULL mixer.
+SonareError sonare_mixer_flush_meters(SonareMixer* mixer);
 // Returns the built-in mixing-scene preset names, separated by '\n'. Same
 // storage contract as sonare_mixing_assistant_source_class_names: thread-local,
 // rebuilt on every call, so the pointer is valid only until the next call to

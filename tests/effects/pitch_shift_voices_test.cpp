@@ -313,3 +313,37 @@ TEST_CASE("realtime ids reach the voices and pre-delays", "[pitch-voices]") {
   REQUIRE(has_pre_delay);
   REQUIRE(has_pre_delay2);
 }
+
+TEST_CASE("PitchShifter anti-alias switched back in at the same pitch starts from rest",
+          "[effects][pitch]") {
+  PitchShifterConfig config;
+  config.semitones = 12.0f;
+  config.anti_alias = true;
+  PitchShifter shifter(config);
+  shifter.prepare(48000.0, 4096);
+
+  std::vector<float> left(4096);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = 0.8f * static_cast<float>(std::sin(0.05 * static_cast<double>(i)));
+  }
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  shifter.process(channels, 2, 4096);
+
+  // Off for long enough that the grain lines hold nothing but silence.
+  REQUIRE(shifter.set_parameter(11, 0.0f));
+  for (int block = 0; block < 4; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    shifter.process(channels, 2, 4096);
+  }
+
+  REQUIRE(shifter.set_parameter(11, 1.0f));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  shifter.process(channels, 2, 4096);
+  for (size_t i = 0; i < left.size(); ++i) {
+    REQUIRE(left[i] == 0.0f);
+    REQUIRE(right[i] == 0.0f);
+  }
+}

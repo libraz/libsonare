@@ -571,6 +571,8 @@ TEST_CASE("the mic stage is inert until a capsule is selected", "[mastering][sat
   AmpSimConfig posed = plain;
   posed.mic_axis = 1.0f;
   posed.mic_distance_cm = 80.0f;
+  // Level with the second mic, so no pair alignment is owed (see the blend case below).
+  posed.mic_b_distance_cm = 80.0f;
   posed.mic_b_axis = 1.0f;
   posed.mic_b_model = MicModel::kRibbon;  // the second mic is gated by mic_blend
   AmpSim without(plain);
@@ -665,14 +667,14 @@ TEST_CASE("a second mic combs against the first through their path difference",
   flipped.mic_b_invert = true;
   REQUIRE(rms_of(render(flipped, kNullHz)) > 2.0 * rms_of(render(pair, kNullHz)));
 
-  // With no cab IR loaded, the pair's delay line is the only stage that outlives
-  // its input (a loaded IR is the other one; see the cab-IR tail case below).
+  // The cab filters ring after the input stops either way; the pair adds the
+  // second mic's 12.5 cm path delay (about 17.5 samples at 48 kHz) on top.
   AmpSim single_amp(single);
   AmpSim pair_amp(pair);
   single_amp.prepare(kRate, 512);
   pair_amp.prepare(kRate, 512);
-  REQUIRE(single_amp.tail_samples() == 0);
-  REQUIRE(pair_amp.tail_samples() > 0);
+  REQUIRE(single_amp.tail_samples() > 0);
+  REQUIRE(pair_amp.tail_samples() >= single_amp.tail_samples() + 17);
 }
 
 TEST_CASE("the cone stage compresses the low band asymmetrically and is off by default",
@@ -2063,19 +2065,21 @@ TEST_CASE("a loaded cab IR is reported as the processor's tail", "[mastering][sa
   ir[0] = 1.0f;
   ir[static_cast<size_t>(kIrLength) - 1] = 0.8f;
 
-  AmpSim analytic{config};
-  analytic.prepare(kRate, 512);
-  const int mic_only_tail = analytic.tail_samples();
+  // The head's filters ring ahead of the cab, so the IR's length adds to what they report.
+  AmpSimConfig headless = config;
+  headless.cab = false;
+  AmpSim head{headless};
+  head.prepare(kRate, 512);
+  const int head_tail = head.tail_samples();
 
   AmpSim amp{config};
   amp.load_cab_ir(ir);
   amp.prepare(kRate, 512);
   REQUIRE(amp.cab_ir_samples() == kIrLength);
-  CHECK(amp.tail_samples() == amp.cab_ir_samples() - 1);
+  CHECK(amp.tail_samples() == head_tail + amp.cab_ir_samples() - 1);
 
   // Non-vacuity: render an impulse followed by silence and find where the
-  // output actually stops. The last audible sample must land past the tail the
-  // processor reported before this, or the old value would have been adequate.
+  // output actually stops; the IR's late tap has to be heard.
   std::vector<float> signal(static_cast<size_t>(kIrLength) * 4, 0.0f);
   signal[0] = 1.0f;
   const std::vector<float> out = process_mono(amp, signal);
@@ -2084,7 +2088,8 @@ TEST_CASE("a loaded cab IR is reported as the processor's tail", "[mastering][sa
     if (std::abs(out[static_cast<size_t>(i)]) > 1.0e-4f) last_audible = i;
   }
   CHECK(last_audible >= kIrLength - 1);
-  CHECK(last_audible > mic_only_tail);
+  // And the reported tail covers it (process_mono has already removed the latency).
+  CHECK(last_audible <= amp.tail_samples());
 }
 
 TEST_CASE("prepare reserves per-channel state for the channels it was told about",
@@ -2438,4 +2443,98 @@ TEST_CASE("the power stage keeps its ADAA delay whether or not it is engaged",
     REQUIRE(peak > 0.0f);
     REQUIRE(difference < 0.02f * peak);
   }
+}
+
+namespace {
+
+/// @brief Streams @p input through an already prepared @p amp in 512-sample mono blocks.
+void stream_mono(AmpSim& amp, std::vector<float>& input) {
+  for (size_t off = 0; off < input.size(); off += 512) {
+    const int count = static_cast<int>(std::min<size_t>(512, input.size() - off));
+    float* block[1] = {input.data() + off};
+    amp.process(block, 1, count);
+  }
+}
+
+}  // namespace
+
+TEST_CASE("AmpSim second mic blended back in starts from rest", "[mastering][saturation][amp]") {
+  AmpSimConfig config;
+  config.drive = 0.4f;
+  config.mic_blend = 1.0f;
+  config.mic_distance_cm = 2.5f;
+  config.mic_b_distance_cm = 30.0f;
+  AmpSim moved(config);
+  AmpSim control(config);
+  moved.prepare(kRate, 512);
+  control.prepare(kRate, 512);
+
+  std::vector<float> loud = sine(220.0, 0.5f, 8192);
+  std::vector<float> loud_copy = loud;
+  stream_mono(moved, loud);
+  stream_mono(control, loud_copy);
+
+  REQUIRE(moved.set_parameter(12, 0.0f));
+  std::vector<float> silence(static_cast<size_t>(kRate), 0.0f);
+  std::vector<float> silence_copy = silence;
+  stream_mono(moved, silence);
+  stream_mono(control, silence_copy);
+
+  REQUIRE(moved.set_parameter(12, 1.0f));
+  std::vector<float> resumed(2048, 0.0f);
+  std::vector<float> resumed_control(2048, 0.0f);
+  stream_mono(moved, resumed);
+  stream_mono(control, resumed_control);
+  float difference = 0.0f;
+  for (size_t i = 0; i < resumed.size(); ++i) {
+    difference = std::max(difference, std::fabs(resumed[i] - resumed_control[i]));
+  }
+  REQUIRE(difference < 1.0e-5f);
+}
+
+TEST_CASE("AmpSim first mic keeps its alignment and latency across the blend's zero",
+          "[mastering][saturation][amp]") {
+  // A first mic farther than the second carries the path difference at every blend and reports
+  // it as latency, so the blend never moves it in time.
+  AmpSimConfig config;
+  config.drive = 0.4f;
+  config.mic_distance_cm = 30.0f;
+  config.mic_b_distance_cm = 2.5f;
+  int latency_q8 = -1;
+  for (const float blend : {0.0f, 1.0e-6f, 0.5f, 1.0f}) {
+    config.mic_blend = blend;
+    AmpSim amp(config);
+    amp.prepare(kRate, 512);
+    if (latency_q8 < 0) latency_q8 = amp.latency_samples_q8();
+    CHECK(amp.latency_samples_q8() == latency_q8);
+  }
+  AmpSimConfig plain = config;
+  plain.mic_distance_cm = config.mic_b_distance_cm;
+  plain.mic_blend = 0.0f;
+  AmpSim reference(plain);
+  reference.prepare(kRate, 512);
+  // 27.5 cm at 343 m/s is about 38.5 samples at 48 kHz.
+  CHECK(latency_q8 - reference.latency_samples_q8() > 38 << 8);
+
+  // Automate the blend across zero mid-stream: no sample may step away from a render that
+  // stays just above zero.
+  config.mic_blend = 1.0e-6f;
+  AmpSim swept(config);
+  AmpSim steady(config);
+  swept.prepare(kRate, 512);
+  steady.prepare(kRate, 512);
+  std::vector<float> input = sine(330.0, 0.4f, 8 * 512);
+  std::vector<float> a = input;
+  std::vector<float> b = input;
+  float worst = 0.0f;
+  for (int block = 0; block < 8; ++block) {
+    if (block == 3) REQUIRE(swept.set_parameter(12, 0.0f));
+    if (block == 6) REQUIRE(swept.set_parameter(12, 1.0e-6f));
+    float* pa[1] = {a.data() + block * 512};
+    float* pb[1] = {b.data() + block * 512};
+    swept.process(pa, 1, 512);
+    steady.process(pb, 1, 512);
+  }
+  for (size_t i = 0; i < a.size(); ++i) worst = std::max(worst, std::fabs(a[i] - b[i]));
+  REQUIRE(worst < 1.0e-5f);
 }

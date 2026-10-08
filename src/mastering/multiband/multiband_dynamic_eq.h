@@ -29,6 +29,11 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   // DynamicEq processors are zero-latency (the detector lookahead does not
   // delay the audio path).
   int latency_samples() const noexcept override { return crossover_.latency_samples(); }
+  /// The band split rings on; the band dynamics hold no audio of their own.
+  int tail_samples() const noexcept override {
+    const rt::TailBudget tail = crossover_.tail();
+    return tail.samples();
+  }
 
   // Number of automatable parameters per crossover band: every crossover band
   // owns a full DynamicEq, so it spans kMaxBands * DynamicEq::kParamsPerBand

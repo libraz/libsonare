@@ -7,6 +7,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/overflow_counter.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::multiband {
@@ -118,6 +119,9 @@ class Crossover {
   int latency_samples() const {
     return config_.mode == CrossoverMode::FirLinearPhase ? config_.fir_kernel_size / 2 : 0;
   }
+  /// @brief Ring of the split and compensation filters after the input stops, every section
+  ///        a band can pass counted in series.
+  rt::TailBudget tail() const noexcept;
 
   /// @brief Validates cutoff ordering, positivity and the FIR kernel size.
   /// @details The cutoff-below-Nyquist rule is the only rate-dependent part, so

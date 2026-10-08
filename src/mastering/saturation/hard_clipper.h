@@ -53,6 +53,7 @@ class HardClipper : public rt::ProcessorBase {
   ///   the oversampler's streaming round-trip latency. The clipper is fully wet,
   ///   so there is no parallel path to align.
   int latency_samples() const noexcept override;
+  int tail_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
 
   /// @brief Infinities this stage replaced with the ceiling.

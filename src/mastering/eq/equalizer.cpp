@@ -7,6 +7,7 @@
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "rt/biquad_design.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -358,6 +359,25 @@ bool EqualizerProcessor::parameter_is_realtime_safe(unsigned int param_id) const
     return false;
   }
   return !uses_fir_backend(bands_[band_index], phase_mode_);
+}
+
+int EqualizerProcessor::tail_samples() const noexcept {
+  // Every backend sits in the one serial path; the L/R and M/S pairs ring alongside each other.
+  rt::TailBudget tail = rt::TailBudget::reported(stereo_iir_.tail_samples());
+  rt::TailBudget left_right = rt::TailBudget::reported(left_iir_.tail_samples());
+  left_right.alongside(rt::TailBudget::reported(right_iir_.tail_samples()));
+  rt::TailBudget mid_side = rt::TailBudget::reported(mid_iir_.tail_samples());
+  mid_side.alongside(rt::TailBudget::reported(side_iir_.tail_samples()));
+  tail.then(left_right).then(mid_side);
+  if (has_lr_linear_bands_) {
+    rt::TailBudget fir = rt::TailBudget::reported(left_channel_fir_.tail_samples());
+    tail.then(fir.alongside(rt::TailBudget::reported(right_channel_fir_.tail_samples())));
+  }
+  if (has_mid_side_linear_bands_) {
+    rt::TailBudget fir = rt::TailBudget::reported(mid_fir_.tail_samples());
+    tail.then(fir.alongside(rt::TailBudget::reported(side_fir_.tail_samples())));
+  }
+  return tail.samples();
 }
 
 int EqualizerProcessor::latency_samples() const noexcept {

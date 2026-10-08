@@ -84,6 +84,16 @@ void AutoWah::discard_non_finite() noexcept {
   if (discarded) note_non_finite_discard();
 }
 
+int AutoWah::tail_samples() const noexcept {
+  rt::TailBudget tail;
+  // The sweep's lowest corner rings longest at a given resonance.
+  if (std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f) {
+    tail = SvfBandpass::ring(std::min(config_.min_hz, config_.max_hz), config_.resonance,
+                             sample_rate_);
+  }
+  return tail.samples();
+}
+
 void AutoWah::reset() {
   envelope_ = 0.0f;
   lfo_.reset(0.0);

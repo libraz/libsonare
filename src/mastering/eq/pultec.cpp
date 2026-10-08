@@ -7,6 +7,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -76,6 +77,18 @@ void PultecEq::process(float* const* channels, int num_channels, int num_samples
     discarded |= discard_if_non_finite(state.high_charge, 0.0f);
   }
   if (discarded) note_non_finite_discard();
+}
+
+int PultecEq::tail_samples() const noexcept {
+  rt::TailBudget tail = rt::TailBudget::reported(eq_.tail_samples());
+  if (component_model_ == PultecComponentModel::Eqp1aWdf) {
+    // The two reactive charges ring in parallel after the curve.
+    rt::TailBudget charges;
+    charges.decay(1.0 - low_component_alpha_);
+    charges.alongside(rt::TailBudget().decay(1.0 - high_component_alpha_));
+    tail.then(charges);
+  }
+  return tail.samples();
 }
 
 void PultecEq::reset() {

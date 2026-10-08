@@ -57,6 +57,7 @@ class FxBus : public rt::ProcessorBase {
   ChannelLayout channel_layout() const noexcept { return bus_.channel_layout(); }
   BusProcessor& bus() noexcept { return bus_; }
   const BusProcessor& bus() const noexcept { return bus_; }
+  void flush_meters() noexcept { bus_.flush_meters(); }
 
  private:
   BusProcessor bus_;

@@ -11,6 +11,7 @@
 #include "mastering/multiband/crossover.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::multiband {
 
@@ -63,6 +64,15 @@ class MultibandSaturation : public rt::ProcessorBase {
   int latency_samples_q8() const noexcept override {
     return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
   }
+  /// The band split, then the longest band stage's ring.
+  int tail_samples() const noexcept override {
+    rt::TailBudget bands;
+    for (const auto& processor : processors_) {
+      bands.alongside(rt::TailBudget::reported(processor->tail_samples()));
+    }
+    rt::TailBudget tail = crossover_.tail();
+    return tail.then(bands).samples();
+  }
 
   void set_config(const MultibandSaturationConfig& config);
   const MultibandSaturationConfig& config() const { return config_; }
@@ -101,6 +111,7 @@ class MultibandSaturation : public rt::ProcessorBase {
   // One real saturation processor per band (type chosen by config). Created in
   // rebuild_processors()/prepare(); never allocated on the audio thread.
   std::vector<std::unique_ptr<rt::ProcessorBase>> processors_;
+  std::vector<rt::StageGate> band_gates_;
   // One path per band. Without the alignment the crossover's allpass
   // reconstruction is summed from bands that no longer share a time reference.
   rt::ParallelPaths band_paths_;

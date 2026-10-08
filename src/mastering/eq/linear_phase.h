@@ -11,6 +11,7 @@
 #include "mastering/eq/parametric.h"
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -65,6 +66,12 @@ class LinearPhaseEq : public rt::ProcessorBase {
   const EqBand& band(size_t index) const;
   const std::vector<float>& kernel() const { return kernel_; }
   int latency_samples() const noexcept override { return latency_samples_; }
+  /// The kernel keeps emitting for its length past the latency it reports.
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail;
+    if (!kernel_.empty()) tail.delay(static_cast<double>(kernel_.size()) - 1.0 - latency_samples_);
+    return tail.samples();
+  }
 
  private:
   struct ChannelState {

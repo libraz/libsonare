@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "rt/aliasing_control.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::rt {
 
@@ -192,6 +193,23 @@ constexpr int aliasing_latency_samples_q8(AliasingControl mode,
       break;
   }
   return 0;
+}
+
+/// @brief Tail a nonlinear stage leaves under @p mode after its input stops: the
+///        inputs ADAA remembers, or the oversampler's FIR ringing past its latency.
+inline TailBudget aliasing_tail(AliasingControl mode, int oversampled_round_trip_samples) noexcept {
+  TailBudget tail;
+  switch (mode) {
+    case AliasingControl::Adaa1:
+      return tail.delay(1.0);
+    case AliasingControl::Adaa2:
+      return tail.delay(2.0);
+    case AliasingControl::Oversample4x:
+      return tail.delay(oversampled_round_trip_samples);
+    case AliasingControl::None:
+      break;
+  }
+  return tail;
 }
 
 }  // namespace sonare::rt

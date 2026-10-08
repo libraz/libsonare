@@ -41,13 +41,18 @@ struct AuRuntimeApi {
   OSStatus (*reset)(AudioUnit, AudioUnitScope, AudioUnitElement);
   OSStatus (*midi_event)(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32);
   OSStatus (*dispose)(AudioComponentInstance);
+  OSStatus (*get_property_info)(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
+                                UInt32*, Boolean*);
+  OSStatus (*set_parameter)(AudioUnit, AudioUnitParameterID, AudioUnitScope, AudioUnitElement,
+                            AudioUnitParameterValue, UInt32);
 };
 
 const AuRuntimeApi kSystemAuRuntimeApi{
-    &AudioUnitSetProperty, &AudioUnitGetProperty,
-    &AudioUnitInitialize,  &AudioUnitUninitialize,
-    &AudioUnitRender,      &AudioUnitReset,
-    &MusicDeviceMIDIEvent, &AudioComponentInstanceDispose,
+    &AudioUnitSetProperty,     &AudioUnitGetProperty,
+    &AudioUnitInitialize,      &AudioUnitUninitialize,
+    &AudioUnitRender,          &AudioUnitReset,
+    &MusicDeviceMIDIEvent,     &AudioComponentInstanceDispose,
+    &AudioUnitGetPropertyInfo, &AudioUnitSetParameter,
 };
 
 /// Encode an AudioComponentDescription into the descriptor id string.
@@ -177,6 +182,78 @@ bool finalize_au_output(float* const* channels, int num_channels, int chans, int
 
 namespace {
 
+/// The global-scope parameters an AU publishes, read once in prepare() so the
+/// adapters apply the ids the provider advertises without querying the AU or
+/// allocating on the audio thread. An id the AU marks NonRealTime is refused:
+/// ProcessorBase::set_parameter may run inside the render callback.
+class AuParameterTable {
+ public:
+  /// CONTROL thread. Leaves the table empty when the AU publishes no list.
+  void load(const AuRuntimeApi& api, AudioUnit unit) {
+    entries_.clear();
+    UInt32 size = 0;
+    Boolean writable = false;
+    if (api.get_property_info(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
+                              &size, &writable) != noErr ||
+        size < sizeof(AudioUnitParameterID)) {
+      return;
+    }
+    std::vector<AudioUnitParameterID> ids(size / sizeof(AudioUnitParameterID));
+    if (api.get_property(unit, kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0,
+                         ids.data(), &size) != noErr) {
+      return;
+    }
+    ids.resize(size / sizeof(AudioUnitParameterID));
+    for (const AudioUnitParameterID id : ids) {
+      AudioUnitParameterInfo info{};
+      UInt32 info_size = sizeof(info);
+      if (api.get_property(unit, kAudioUnitProperty_ParameterInfo, kAudioUnitScope_Global, id,
+                           &info, &info_size) != noErr ||
+          (info.flags & kAudioUnitParameterFlag_IsWritable) == 0) {
+        continue;
+      }
+      // Released here: the table keeps only the numbers.
+      if ((info.flags & kAudioUnitParameterFlag_CFNameRelease) && info.cfNameString != nullptr) {
+        CFRelease(info.cfNameString);
+      }
+      entries_.push_back({id, info.minValue, info.maxValue,
+                          (info.flags & kAudioUnitParameterFlag_NonRealTime) == 0});
+    }
+    std::sort(entries_.begin(), entries_.end(),
+              [](const Entry& a, const Entry& b) { return a.id < b.id; });
+  }
+
+  bool realtime_safe(unsigned int id) const noexcept {
+    const Entry* entry = find(id);
+    return entry != nullptr && entry->realtime_safe;
+  }
+
+  /// ANY thread. Clamps to the published range; refuses unknown and NonRealTime ids.
+  bool apply(const AuRuntimeApi& api, AudioUnit unit, unsigned int id, float value) const noexcept {
+    const Entry* entry = find(id);
+    if (entry == nullptr || !entry->realtime_safe || !std::isfinite(value)) return false;
+    const float clamped = std::clamp(value, entry->min_value, entry->max_value);
+    return api.set_parameter(unit, entry->id, kAudioUnitScope_Global, 0, clamped, 0) == noErr;
+  }
+
+ private:
+  struct Entry {
+    AudioUnitParameterID id;
+    float min_value;
+    float max_value;
+    bool realtime_safe;
+  };
+
+  const Entry* find(unsigned int id) const noexcept {
+    const auto it =
+        std::lower_bound(entries_.begin(), entries_.end(), id,
+                         [](const Entry& entry, unsigned int key) { return entry.id < key; });
+    return it != entries_.end() && it->id == id ? &*it : nullptr;
+  }
+
+  std::vector<Entry> entries_;
+};
+
 class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentTelemetry {
  public:
   explicit AuMidiInstrument(AudioUnit unit, const AuRuntimeApi* api = &kSystemAuRuntimeApi)
@@ -215,6 +292,7 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
     // properties on the audio thread.
     output_channels_ = 2;
     latency_ = query_latency_samples(*api_, unit_, sample_rate_);
+    parameters_.load(*api_, unit_);
     position_ = 0;
     event_count_ = 0;
   }
@@ -323,6 +401,13 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
 
   int latency_samples() const noexcept override { return latency_; }
 
+  bool set_parameter_impl(unsigned int param_id, float value) override {
+    return initialized_ && parameters_.apply(*api_, unit_, param_id, value);
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return parameters_.realtime_safe(param_id);
+  }
+
   void on_event(uint32_t /*destination_id*/, const midi::MidiEvent& event) noexcept override {
     if (event_count_ < events_.size()) {
       events_[event_count_++] = event;
@@ -348,6 +433,7 @@ class AuMidiInstrument final : public midi::MidiInstrument, public AuInstrumentT
   double sample_rate_ = 48000.0;
   int max_block_ = 512;
   int latency_ = 0;
+  AuParameterTable parameters_;
   int output_channels_ = 0;
   bool initialized_ = false;
   // Block's first DEVICE render frame: overwritten by set_transport() under a
@@ -409,6 +495,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
     // on this control-thread seam and adapt mismatched process buffers safely.
     channels_ = 2;
     latency_ = query_latency_samples(*api_, unit_, sample_rate_);
+    parameters_.load(*api_, unit_);
     position_ = 0;
   }
 
@@ -467,6 +554,13 @@ class AuEffectProcessor final : public rt::ProcessorBase {
 
   int latency_samples() const noexcept override { return latency_; }
 
+  bool set_parameter_impl(unsigned int param_id, float value) override {
+    return initialized_ && parameters_.apply(*api_, unit_, param_id, value);
+  }
+  bool parameter_is_realtime_safe(unsigned int param_id) const noexcept override {
+    return parameters_.realtime_safe(param_id);
+  }
+
  private:
   static OSStatus input_trampoline(void* ref, AudioUnitRenderActionFlags* /*flags*/,
                                    const AudioTimeStamp* ts, UInt32 /*bus*/, UInt32 frames,
@@ -519,6 +613,7 @@ class AuEffectProcessor final : public rt::ProcessorBase {
   double sample_rate_ = 48000.0;
   int max_block_ = 512;
   int latency_ = 0;
+  AuParameterTable parameters_;
   int channels_ = 0;
   bool initialized_ = false;
   int64_t position_ = 0;
@@ -569,7 +664,20 @@ struct AuCallSpyState {
   // in for an AU that blew up internally. The host has no say in what a hosted AU
   // writes, so this is the only way the scrub path is reachable at all.
   UInt32 poison_samples = 0;
+
+  // --- parameter probe ---
+  // When set, the spy publishes a realtime gain and a NonRealTime parameter, and
+  // spy_render fills every plane with render_level scaled by the applied gain.
+  bool publish_parameters = false;
+  float render_level = 0.0f;
+  float gain = 1.0f;
+  unsigned set_parameter_calls = 0;
+  AudioUnitParameterValue last_parameter_value = 0.0f;
 };
+
+constexpr AudioUnitParameterID kSpyGainParameter = 7;
+constexpr AudioUnitParameterID kSpyNonRealtimeParameter = 9;
+constexpr float kSpyGainMax = 2.0f;
 
 thread_local AuCallSpyState* g_au_call_spy = nullptr;
 
@@ -584,8 +692,37 @@ OSStatus spy_set_property(AudioUnit, AudioUnitPropertyID prop_id, AudioUnitScope
   return noErr;
 }
 
-OSStatus spy_get_property(AudioUnit, AudioUnitPropertyID, AudioUnitScope, AudioUnitElement,
-                          void* value, UInt32* size) {
+OSStatus spy_get_property_info(AudioUnit, AudioUnitPropertyID prop_id, AudioUnitScope,
+                               AudioUnitElement, UInt32* size, Boolean* writable) {
+  if (size == nullptr) return kAudioUnitErr_InvalidParameter;
+  *size = prop_id == kAudioUnitProperty_ParameterList && g_au_call_spy->publish_parameters
+              ? 2 * sizeof(AudioUnitParameterID)
+              : 0;
+  if (writable != nullptr) *writable = false;
+  return noErr;
+}
+
+OSStatus spy_get_property(AudioUnit, AudioUnitPropertyID prop_id, AudioUnitScope,
+                          AudioUnitElement element, void* value, UInt32* size) {
+  if (g_au_call_spy->publish_parameters && value != nullptr && size != nullptr) {
+    if (prop_id == kAudioUnitProperty_ParameterList && *size >= 2 * sizeof(AudioUnitParameterID)) {
+      auto* ids = static_cast<AudioUnitParameterID*>(value);
+      ids[0] = kSpyNonRealtimeParameter;
+      ids[1] = kSpyGainParameter;
+      *size = 2 * sizeof(AudioUnitParameterID);
+      return noErr;
+    }
+    if (prop_id == kAudioUnitProperty_ParameterInfo && *size >= sizeof(AudioUnitParameterInfo)) {
+      auto* info = static_cast<AudioUnitParameterInfo*>(value);
+      *info = AudioUnitParameterInfo{};
+      info->minValue = 0.0f;
+      info->maxValue = kSpyGainMax;
+      info->defaultValue = 1.0f;
+      info->flags = kAudioUnitParameterFlag_IsWritable;
+      if (element == kSpyNonRealtimeParameter) info->flags |= kAudioUnitParameterFlag_NonRealTime;
+      return noErr;
+    }
+  }
   if (value != nullptr && size != nullptr && *size >= sizeof(Float64)) {
     *static_cast<Float64*>(value) = 0.0;
   }
@@ -605,6 +742,14 @@ OSStatus spy_uninitialize(AudioUnit) {
 OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTimeStamp* ts,
                     UInt32 bus, UInt32 /*frames*/, AudioBufferList* data) {
   ++g_au_call_spy->render_calls;
+  if (g_au_call_spy->render_level > 0.0f && data != nullptr) {
+    for (UInt32 b = 0; b < data->mNumberBuffers; ++b) {
+      auto* plane = static_cast<float*>(data->mBuffers[b].mData);
+      if (plane == nullptr) continue;
+      const UInt32 valid = data->mBuffers[b].mDataByteSize / sizeof(float);
+      std::fill(plane, plane + valid, g_au_call_spy->render_level * g_au_call_spy->gain);
+    }
+  }
   if (g_au_call_spy->poison_samples > 0 && data != nullptr) {
     for (UInt32 b = 0; b < data->mNumberBuffers; ++b) {
       auto* plane = static_cast<float*>(data->mBuffers[b].mData);
@@ -656,6 +801,14 @@ OSStatus spy_render(AudioUnit, AudioUnitRenderActionFlags* flags, const AudioTim
   return noErr;
 }
 
+OSStatus spy_set_parameter(AudioUnit, AudioUnitParameterID id, AudioUnitScope, AudioUnitElement,
+                           AudioUnitParameterValue value, UInt32) {
+  ++g_au_call_spy->set_parameter_calls;
+  g_au_call_spy->last_parameter_value = value;
+  if (id == kSpyGainParameter) g_au_call_spy->gain = value;
+  return noErr;
+}
+
 OSStatus spy_reset(AudioUnit, AudioUnitScope, AudioUnitElement) { return noErr; }
 
 OSStatus spy_midi_event(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32 frame) {
@@ -668,8 +821,10 @@ OSStatus spy_midi_event(MusicDeviceComponent, UInt32, UInt32, UInt32, UInt32 fra
 OSStatus spy_dispose(AudioComponentInstance) { return noErr; }
 
 const AuRuntimeApi kSpyAuRuntimeApi{
-    &spy_set_property, &spy_get_property, &spy_initialize, &spy_uninitialize,
-    &spy_render,       &spy_reset,        &spy_midi_event, &spy_dispose,
+    &spy_set_property,  &spy_get_property, &spy_initialize,
+    &spy_uninitialize,  &spy_render,       &spy_reset,
+    &spy_midi_event,    &spy_dispose,      &spy_get_property_info,
+    &spy_set_parameter,
 };
 
 /// Instantiate the AU named by `descriptor`, or nullptr.
@@ -921,6 +1076,45 @@ detail::AuInstrumentDroppedEventProbeResult detail::run_au_instrument_dropped_ev
       base->on_event(0, midi::MidiEvent{0, midi::make_midi1_note_on(0, 0, 61, 100)});
       result.dropped_after_overflow = telemetry->dropped_count();
     }
+  }
+  g_au_call_spy = nullptr;
+  return result;
+}
+
+detail::AuParameterApplyProbeResult detail::run_au_parameter_apply_probe() {
+  constexpr int kProbeBlock = 4;
+  AuCallSpyState state;
+  state.publish_parameters = true;
+  state.render_level = 0.5f;
+  g_au_call_spy = &state;
+  auto fake_unit = reinterpret_cast<AudioUnit>(static_cast<uintptr_t>(1));
+
+  detail::AuParameterApplyProbeResult result;
+  {
+    AuMidiInstrument instrument(fake_unit, &kSpyAuRuntimeApi);
+    instrument.prepare(48000.0, kProbeBlock);
+    std::array<float, kProbeBlock> left{};
+    std::array<float, kProbeBlock> right{};
+    float* planes[] = {left.data(), right.data()};
+    instrument.process(planes, 2, kProbeBlock);
+    result.output_before = left[kProbeBlock - 1];
+
+    result.gain_realtime_safe = instrument.parameter_is_realtime_safe(kSpyGainParameter);
+    result.non_realtime_realtime_safe =
+        instrument.parameter_is_realtime_safe(kSpyNonRealtimeParameter);
+    result.gain_accepted = instrument.set_parameter(kSpyGainParameter, 0.25f);
+    result.applied_value = state.last_parameter_value;
+    instrument.process(planes, 2, kProbeBlock);
+    result.output_after = left[kProbeBlock - 1];
+
+    const unsigned calls_before_refusals = state.set_parameter_calls;
+    result.non_realtime_accepted = instrument.set_parameter(kSpyNonRealtimeParameter, 0.5f);
+    result.unknown_accepted = instrument.set_parameter(42, 0.5f);
+    result.refusals_reached_unit = state.set_parameter_calls != calls_before_refusals;
+
+    result.over_range_accepted = instrument.set_parameter(kSpyGainParameter, 10.0f);
+    result.over_range_value = state.last_parameter_value;
+    result.ran = true;
   }
   g_au_call_spy = nullptr;
   return result;

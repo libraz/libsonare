@@ -1,9 +1,12 @@
 /// @file mixing_bus_control_test.cpp
 /// @brief Mixing bus, VCA, controller, delay, width, and meter tests.
 
+#include <atomic>
 #include <catch2/catch_approx.hpp>
 #include <cstdint>
+#include <thread>
 
+#include "metering/true_peak.h"
 #include "mixing/bus.h"
 #include "mixing/solo_mute.h"
 #include "mixing_test_helpers.h"
@@ -432,6 +435,65 @@ TEST_CASE("MeterProcessor true peak is consistent across block sizes (boundary h
   // reference closely.
   REQUIRE_THAT(tp_small_blocks, WithinAbs(tp_one_block, 0.3f));
   REQUIRE_THAT(tp_tiny_blocks, WithinAbs(tp_one_block, 0.3f));
+}
+
+TEST_CASE("MeterProcessor streaming true peak matches the whole-signal reading", "[mixing]") {
+  // Every reconstructed value has its whole stencil, so no block edge invents an
+  // over: a 0.99 sine stays under 0 dBTP at every block size.
+  constexpr int kSampleRate = 48000;
+  constexpr int kN = 9600;
+  std::vector<float> signal(static_cast<size_t>(kN));
+  for (int i = 0; i < kN; ++i) {
+    signal[static_cast<size_t>(i)] =
+        0.99f *
+        static_cast<float>(std::sin(2.0 * sonare::constants::kPiD * 1000.0 * i / kSampleRate));
+  }
+  const float offline_db =
+      sonare::linear_to_db(sonare::metering::true_peak(signal.data(), signal.size(), 4));
+
+  for (const int block : {64, 128, 512}) {
+    sonare::mixing::MeterConfig config;
+    config.measure_lufs = false;
+    config.measure_true_peak = true;
+    config.true_peak_oversample = 4;
+    sonare::mixing::MeterProcessor meter(config);
+    meter.prepare(static_cast<double>(kSampleRate), block);
+    float max_tp_db = sonare::constants::kFloorDb;
+    for (int offset = 0; offset < kN; offset += block) {
+      const int n = std::min(block, kN - offset);
+      float* channels[] = {signal.data() + offset};
+      meter.process(channels, 1, n);
+      max_tp_db = std::max(max_tp_db, meter.snapshot().max_true_peak_db);
+    }
+    INFO("block " << block << ", offline " << offline_db << ", live " << max_tp_db);
+    CHECK(max_tp_db < 0.0f);
+    CHECK_THAT(max_tp_db, WithinAbs(offline_db, 0.01f));
+  }
+}
+
+TEST_CASE("GoniometerBuffer hands a concurrent reader whole points in range", "[mixing]") {
+  // Each point is written as (v, -v); a torn or raced point would break the pair.
+  sonare::mixing::GoniometerBuffer<64> buffer;
+  std::atomic<bool> done{false};
+  std::thread writer([&] {
+    for (int i = 1; i <= 200000; ++i) {
+      const float v = static_cast<float>(i % 1000) / 1000.0f;
+      buffer.push(v, -v);
+    }
+    done.store(true);
+  });
+  std::array<sonare::mixing::GoniometerPoint, 64> points{};
+  bool whole = true;
+  bool counted = true;
+  while (!done.load()) {
+    const size_t count = buffer.read_latest(points.data(), points.size());
+    counted = counted && count <= points.size();
+    for (size_t i = 0; i < count; ++i) whole = whole && points[i].right == -points[i].left;
+  }
+  writer.join();
+  CHECK(whole);
+  CHECK(counted);
+  CHECK(buffer.read_latest(points.data(), points.size()) == points.size());
 }
 
 TEST_CASE("GoniometerBuffer returns latest scope points", "[mixing]") {

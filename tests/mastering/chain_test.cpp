@@ -2864,7 +2864,10 @@ TEST_CASE("StreamingMasteringChain rejected input preserves an in-progress drain
     CHECK(std::equal(actual.begin(), actual.begin() + written, expected.begin()));
     total += written;
   }
-  CHECK(total == chain.latency_samples());
+  // The flush covers the latency and then the oversampled limiter's ring.
+  sonare::mastering::maximizer::TruePeakLimiter limiter(config.maximizer.true_peak_limiter.config);
+  limiter.prepare(48000.0, kBlock);
+  CHECK(total == chain.latency_samples() + limiter.tail_samples());
 }
 
 TEST_CASE("StreamingMasteringChain rejects non-finite rates without losing preparation",

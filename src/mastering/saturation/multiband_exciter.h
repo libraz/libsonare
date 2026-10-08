@@ -6,6 +6,7 @@
 #include "mastering/saturation/exciter.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::saturation {
 
@@ -33,6 +34,15 @@ class MultibandExciter : public rt::ProcessorBase {
   int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
   int latency_samples_q8() const noexcept override {
     return (crossover_.latency_samples() << 8) + band_paths_.latency_samples_q8();
+  }
+  /// The band split, then the longest band exciter's ring.
+  int tail_samples() const noexcept override {
+    rt::TailBudget bands;
+    for (const Exciter& exciter : exciters_) {
+      bands.alongside(rt::TailBudget::reported(exciter.tail_samples()));
+    }
+    rt::TailBudget tail = crossover_.tail();
+    return tail.then(bands).samples();
   }
 
   // Automatable parameters (RT-safe, no allocation, no state reset).

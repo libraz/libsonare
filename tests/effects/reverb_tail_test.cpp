@@ -5,16 +5,51 @@
 #include <algorithm>
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 #include <cmath>
 #include <complex>
 #include <vector>
 
 #include "core/fft.h"
+#include "effects/common/dc_blocker.h"
 #include "effects/delay/stereo_delay.h"
+#include "effects/filter/vowel_filter.h"
+#include "effects/modulation/auto_wah.h"
+#include "effects/modulation/chorus.h"
+#include "effects/modulation/ensemble.h"
+#include "effects/modulation/flanger.h"
+#include "effects/modulation/phaser.h"
+#include "effects/modulation/pitch_shifter.h"
+#include "effects/modulation/rotary.h"
+#include "effects/modulation/wah.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/dattorro_reverb.h"
 #include "effects/reverb/fdn_reverb.h"
 #include "effects/reverb/velvet_reverb.h"
+#include "mastering/dynamics/deesser.h"
+#include "mastering/eq/cut_filter.h"
+#include "mastering/eq/equalizer.h"
+#include "mastering/eq/graphic_eq.h"
+#include "mastering/eq/parametric.h"
+#include "mastering/eq/pultec.h"
+#include "mastering/multiband/multiband_compressor.h"
+#include "mastering/saturation/amp_sim.h"
+#include "mastering/saturation/exciter.h"
+#include "mastering/saturation/hard_clipper.h"
+#include "mastering/saturation/pedal.h"
+#include "mastering/saturation/soft_clipper.h"
+#include "mastering/saturation/tape.h"
+#include "mastering/saturation/tube.h"
+#include "mastering/saturation/waveshaper.h"
+#include "mastering/spectral/air_band.h"
+#include "mastering/spectral/low_end_focus.h"
+#include "mastering/spectral/presence_enhancer.h"
+#include "mastering/spectral/spectral_shaper.h"
+#include "mastering/stereo/binaural_panner.h"
+#include "mastering/stereo/imager.h"
+#include "mastering/stereo/mono_maker.h"
+#include "rt/processor_base.h"
+#include "util/constants.h"
 
 using sonare::effects::delay::StereoDelay;
 using sonare::effects::delay::StereoDelayConfig;
@@ -26,6 +61,7 @@ using sonare::effects::reverb::FdnReverb;
 using sonare::effects::reverb::FdnReverbConfig;
 using sonare::effects::reverb::VelvetReverb;
 using sonare::effects::reverb::VelvetReverbConfig;
+using sonare::rt::ProcessorBase;
 
 namespace {
 
@@ -68,7 +104,165 @@ std::vector<double> velvet_tail_segments_db(VelvetReverbConfig config, double sa
   return segments_db;
 }
 
+/// @brief Renders a stereo impulse of @p amplitude followed by silence, in blocks, and
+///        returns the last sample index on either channel whose magnitude exceeds @p floor.
+int last_audible_after_impulse(ProcessorBase& processor, int length, float amplitude, float floor) {
+  constexpr int kBlockSize = 256;
+  std::vector<float> left(static_cast<size_t>(length), 0.0f);
+  std::vector<float> right(static_cast<size_t>(length), 0.0f);
+  left[0] = amplitude;
+  right[0] = amplitude;
+  for (int offset = 0; offset < length; offset += kBlockSize) {
+    const int count = std::min(kBlockSize, length - offset);
+    float* channels[] = {left.data() + offset, right.data() + offset};
+    processor.process(channels, 2, count);
+  }
+  int last = -1;
+  for (int i = 0; i < length; ++i) {
+    if (std::fabs(left[static_cast<size_t>(i)]) > floor ||
+        std::fabs(right[static_cast<size_t>(i)]) > floor) {
+      last = i;
+    }
+  }
+  return last;
+}
+
+/// @brief Requires every output past latency + tail to stay at or under @p floor, rendering
+///        well past the reported span so an under-report has room to show.
+void require_tail_contains_output(ProcessorBase& processor, float amplitude = 1.0f,
+                                  float floor = 1.0e-5f) {
+  const int span = processor.latency_samples() + processor.tail_samples();
+  const int length = 2 * span + 4096;
+  const int last = last_audible_after_impulse(processor, length, amplitude, floor);
+  INFO("latency " << processor.latency_samples() << ", tail " << processor.tail_samples()
+                  << ", last audible " << last);
+  REQUIRE(last >= 0);
+  REQUIRE(last <= span);
+}
+
 }  // namespace
+
+TEST_CASE("Modulated delays report the tail their lines emit", "[effects][tail]") {
+  const double rate = GENERATE(44100.0, 48000.0);
+  SECTION("chorus") {
+    sonare::effects::modulation::ChorusConfig config;
+    config.dry_wet = 1.0f;
+    config.feedback = GENERATE(0.0f, 0.6f);
+    sonare::effects::modulation::Chorus chorus(config);
+    chorus.prepare(rate, 256);
+    require_tail_contains_output(chorus);
+  }
+  SECTION("flanger") {
+    sonare::effects::modulation::FlangerConfig config;
+    config.dry_wet = 1.0f;
+    config.feedback = GENERATE(0.0f, -0.8f);
+    sonare::effects::modulation::Flanger flanger(config);
+    flanger.prepare(rate, 256);
+    require_tail_contains_output(flanger);
+  }
+  SECTION("ensemble") {
+    sonare::effects::modulation::EnsembleConfig config;
+    config.dry_wet = 1.0f;
+    config.pre_delay_dev_ms = 4.0f;
+    sonare::effects::modulation::Ensemble ensemble(config);
+    ensemble.prepare(rate, 256);
+    require_tail_contains_output(ensemble);
+  }
+  SECTION("pitch shifter") {
+    sonare::effects::modulation::PitchShifterConfig config;
+    config.semitones = 7.0f;
+    config.feedback = 0.5f;
+    config.pre_delay_ms = 10.0f;
+    config.anti_alias = true;
+    sonare::effects::modulation::PitchShifter shifter(config);
+    shifter.prepare(rate, 256);
+    require_tail_contains_output(shifter);
+  }
+}
+
+TEST_CASE("Delay and reverb tails cover degenerate settings", "[effects][tail]") {
+  SECTION("stereo delay recirculating through a zero-length line") {
+    StereoDelayConfig config;
+    config.delay_time_l_ms = 0.0f;
+    config.delay_time_r_ms = 0.0f;
+    config.feedback = 0.95f;
+    config.dry_wet = 1.0f;
+    StereoDelay delay(config);
+    delay.prepare(48000.0, 256);
+    // 0.95^n reaches -60 dB after 135 passes of one sample each.
+    REQUIRE(delay.tail_samples() >= 135);
+    require_tail_contains_output(delay);
+  }
+  SECTION("dattorro with the tank loop closed") {
+    DattorroReverbConfig config;
+    config.decay = 0.0f;
+    config.dry_wet = 1.0f;
+    DattorroReverb reverb(config);
+    reverb.prepare(48000.0, 256);
+    REQUIRE(reverb.tail_samples() > 0);
+    require_tail_contains_output(reverb);
+  }
+  SECTION("dattorro with a recirculating tank") {
+    DattorroReverbConfig config;
+    config.decay = 0.5f;
+    config.dry_wet = 1.0f;
+    DattorroReverb reverb(config);
+    reverb.prepare(48000.0, 256);
+    require_tail_contains_output(reverb);
+  }
+  SECTION("fdn with the shortest decay") {
+    FdnReverbConfig config;
+    config.decay = 0.0f;
+    config.dry_wet = 1.0f;
+    FdnReverb reverb(config);
+    reverb.prepare(48000.0, 256);
+    require_tail_contains_output(reverb);
+  }
+}
+
+TEST_CASE("Binaural speaker output reports its crossover ring", "[effects][tail]") {
+  sonare::mastering::stereo::BinauralPannerConfig config;
+  config.output = sonare::mastering::stereo::BinauralOutput::kSpeakers;
+  sonare::mastering::stereo::BinauralPanner panner(config);
+  panner.prepare(48000.0, 256);
+  require_tail_contains_output(panner);
+}
+
+TEST_CASE("Oversampled clippers report the FIR ring past their latency", "[effects][tail]") {
+  constexpr float kRingFloor = 1.0e-7f;
+  const auto aliasing = sonare::rt::AliasingControl::Oversample4x;
+  SECTION("hard clipper") {
+    sonare::mastering::saturation::HardClipperConfig config;
+    config.aliasing = aliasing;
+    sonare::mastering::saturation::HardClipper clipper(config);
+    clipper.prepare(48000.0, 256);
+    require_tail_contains_output(clipper, 0.5f, kRingFloor);
+  }
+  SECTION("soft clipper") {
+    sonare::mastering::saturation::SoftClipperConfig config;
+    config.aliasing = aliasing;
+    sonare::mastering::saturation::SoftClipper clipper(config);
+    clipper.prepare(48000.0, 256);
+    require_tail_contains_output(clipper, 0.5f, kRingFloor);
+  }
+  SECTION("waveshaper") {
+    sonare::mastering::saturation::WaveshaperConfig config;
+    config.aliasing = aliasing;
+    sonare::mastering::saturation::Waveshaper shaper(config);
+    shaper.prepare(48000.0, 256);
+    require_tail_contains_output(shaper, 0.5f, kRingFloor);
+  }
+  SECTION("tube") {
+    sonare::mastering::saturation::Tube tube;
+    tube.prepare(48000.0, 256);
+    require_tail_contains_output(tube, 0.5f, kRingFloor);
+  }
+  SECTION("air band") {
+    sonare::mastering::spectral::AirBand air;
+    air.prepare(48000.0, 256);
+    require_tail_contains_output(air, 0.5f, kRingFloor);
+  }
+}
 
 TEST_CASE("FdnReverb reports a non-zero decay tail", "[effects][reverb][fdn]") {
   FdnReverbConfig config;
@@ -146,8 +340,9 @@ TEST_CASE("VelvetReverb bounds excessive reverb time and tap work", "[effects][r
   VelvetReverb reverb(config);
   reverb.prepare(48000.0, 512);
 
-  // 12 s base time × the maximum 1.5 decay factor, rather than the requested 40 s.
-  REQUIRE(reverb.tail_samples() <= 18 * 48000);
+  // 12 s base time × the maximum 1.5 decay factor, rather than the requested 40 s,
+  // followed by the 20 Hz DC blocker's ring (under 100 ms).
+  REQUIRE(reverb.tail_samples() <= 18 * 48000 + 48000 / 10);
 
   std::vector<float> samples(512, 0.0f);
   samples[0] = 1.0f;
@@ -319,5 +514,176 @@ TEST_CASE("Delay and reverb tails are zero for dry-only configurations",
     effect.prepare(48000.0, 512);
     REQUIRE(effect.latency_samples() > 0);
     REQUIRE(effect.tail_samples() == 0);
+  }
+}
+
+TEST_CASE("ConvolutionReverb reloaded after an empty IR starts from silence",
+          "[effects][reverb][convolution]") {
+  std::vector<float> ir(64, 0.0f);
+  ir[0] = 1.0f;
+  ir[40] = 0.5f;
+  ConvolutionReverb reverb;
+  reverb.load_ir(ir);
+  reverb.prepare(48000.0, 512);
+
+  std::vector<float> block(512, 0.7f);
+  float* channels[] = {block.data()};
+  reverb.process(channels, 1, 512);
+
+  reverb.load_ir(std::vector<float>{});
+  std::vector<float> silence(1024, 0.0f);
+  channels[0] = silence.data();
+  reverb.process(channels, 1, 1024);
+
+  reverb.load_ir(ir);
+  std::vector<float> after(256, 0.0f);
+  channels[0] = after.data();
+  reverb.process(channels, 1, 256);
+  for (const float sample : after) REQUIRE(sample == 0.0f);
+}
+
+TEST_CASE("DattorroReverb reset returns the output gate to its prepared state",
+          "[effects][reverb][dattorro]") {
+  DattorroReverbConfig config;
+  config.dry_wet = 1.0f;
+  config.gate_threshold_db = -40.0f;
+  config.gate_hold_ms = 50.0f;
+  config.gate_type = sonare::effects::reverb::DattorroGateType::kSweep1;
+
+  const auto impulse_response = [](DattorroReverb& reverb) {
+    std::vector<float> left(4096, 0.0f);
+    std::vector<float> right(4096, 0.0f);
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    float* channels[] = {left.data(), right.data()};
+    reverb.process(channels, 2, 4096);
+    left.insert(left.end(), right.begin(), right.end());
+    return left;
+  };
+
+  DattorroReverb fresh(config);
+  fresh.prepare(48000.0, 4096);
+  DattorroReverb used(config);
+  used.prepare(48000.0, 4096);
+  impulse_response(used);  // opens the gate and moves its sweep
+  used.reset();
+
+  const std::vector<float> expected = impulse_response(fresh);
+  const std::vector<float> actual = impulse_response(used);
+  REQUIRE(actual == expected);
+}
+
+TEST_CASE("IIR stages report the ring their sections leave", "[effects][tail]") {
+  namespace eq = sonare::mastering::eq;
+  constexpr double kRate = 48000.0;
+  SECTION("parametric low resonant band") {
+    eq::ParametricEq parametric;
+    parametric.set_band(0, {eq::EqBandType::Peak, 40.0f, 12.0f, 8.0f, true});
+    parametric.prepare(kRate, 256);
+    require_tail_contains_output(parametric, 0.5f);
+  }
+  SECTION("graphic band") {
+    eq::GraphicEq graphic;
+    graphic.prepare(kRate, 256);
+    graphic.set_gain_for_frequency(63.0f, 12.0f);
+    require_tail_contains_output(graphic, 0.5f);
+  }
+  SECTION("steep high-pass") {
+    eq::CutFilter cut;
+    cut.prepare(kRate, 256);
+    cut.set_high_pass(30.0f, sonare::constants::kButterworthQ, eq::CutFilterSlope::Db48PerOct);
+    require_tail_contains_output(cut, 0.5f);
+  }
+  SECTION("equalizer processor") {
+    eq::EqualizerProcessor equalizer;
+    equalizer.prepare(kRate, 256);
+    equalizer.set_band(0, {eq::EqBandType::Peak, 50.0f, 9.0f, 6.0f, true});
+    require_tail_contains_output(equalizer, 0.5f);
+  }
+  SECTION("pultec") {
+    eq::PultecEq pultec;
+    pultec.prepare(kRate, 256);
+    pultec.set_low_boost(8.0f);
+    require_tail_contains_output(pultec, 0.5f);
+  }
+  SECTION("wah") {
+    sonare::effects::modulation::Wah wah;
+    wah.prepare(kRate, 256);
+    require_tail_contains_output(wah, 0.5f);
+  }
+  SECTION("auto wah") {
+    sonare::effects::modulation::AutoWah wah;
+    wah.prepare(kRate, 256);
+    require_tail_contains_output(wah, 0.5f);
+  }
+  SECTION("phaser") {
+    sonare::effects::modulation::PhaserConfig config;
+    config.feedback = 0.7f;
+    sonare::effects::modulation::Phaser phaser(config);
+    phaser.prepare(kRate, 256);
+    require_tail_contains_output(phaser, 0.5f);
+  }
+  SECTION("rotary") {
+    sonare::effects::modulation::Rotary rotary;
+    rotary.prepare(kRate, 256);
+    require_tail_contains_output(rotary, 0.5f);
+  }
+  SECTION("vowel filter") {
+    sonare::effects::filter::VowelFilter vowel;
+    vowel.prepare(kRate, 256);
+    require_tail_contains_output(vowel, 0.5f);
+  }
+  SECTION("dc blocker") {
+    sonare::effects::common::DcBlocker blocker;
+    blocker.prepare(kRate, 256);
+    require_tail_contains_output(blocker, 0.5f);
+  }
+  SECTION("de-esser") {
+    sonare::mastering::dynamics::DeEsser deesser;
+    deesser.prepare(kRate, 256);
+    require_tail_contains_output(deesser, 0.5f);
+  }
+  SECTION("multiband compressor") {
+    sonare::mastering::multiband::MultibandCompressor compressor;
+    compressor.prepare(kRate, 256);
+    require_tail_contains_output(compressor, 0.5f);
+  }
+  SECTION("mono maker") {
+    sonare::mastering::stereo::MonoMaker mono;
+    mono.prepare(kRate, 256);
+    require_tail_contains_output(mono, 0.5f);
+  }
+  SECTION("low end focus") {
+    sonare::mastering::spectral::LowEndFocus focus;
+    focus.prepare(kRate, 256);
+    require_tail_contains_output(focus, 0.5f);
+  }
+  SECTION("spectral shaper") {
+    sonare::mastering::spectral::SpectralShaper shaper;
+    shaper.prepare(kRate, 256);
+    require_tail_contains_output(shaper, 0.5f);
+  }
+  SECTION("exciter and presence") {
+    sonare::mastering::saturation::Exciter exciter;
+    exciter.prepare(kRate, 256);
+    require_tail_contains_output(exciter, 0.5f);
+    sonare::mastering::spectral::PresenceEnhancer presence;
+    presence.prepare(kRate, 256);
+    require_tail_contains_output(presence, 0.5f);
+  }
+  SECTION("tape and overdrive") {
+    sonare::mastering::saturation::Tape tape;
+    tape.prepare(kRate, 256);
+    require_tail_contains_output(tape, 0.5f);
+    sonare::mastering::saturation::Overdrive overdrive;
+    overdrive.prepare(kRate, 256);
+    require_tail_contains_output(overdrive, 0.5f);
+  }
+  SECTION("amp sim") {
+    sonare::mastering::saturation::AmpSimConfig config;
+    config.drive = 0.4f;
+    sonare::mastering::saturation::AmpSim amp(config);
+    amp.prepare(kRate, 256);
+    require_tail_contains_output(amp, 0.5f);
   }
 }

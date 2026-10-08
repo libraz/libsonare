@@ -330,3 +330,72 @@ TEST_CASE("a refused band leaves an EQ's bands and design untouched", "[masterin
   process(eq, after);
   REQUIRE(max_abs_difference(before, after) == 0.0f);
 }
+
+namespace {
+
+/// @brief Drives @p processor with a loud 60 Hz tone, applies @p take_out, feeds silence,
+///        applies @p put_back, and returns the peak of the next 256 silent samples.
+template <typename Processor, typename TakeOut, typename PutBack>
+float peak_after_reengage(Processor& processor, TakeOut take_out, PutBack put_back) {
+  std::vector<float> left(2048);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] =
+        0.8f * static_cast<float>(std::sin(2.0 * kPiD * 60.0 * static_cast<double>(i) / 48000.0));
+  }
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, 2048);
+  take_out();
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  processor.process(channels, 2, 2048);
+  put_back();
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  processor.process(channels, 2, 256);
+  float peak = 0.0f;
+  for (size_t i = 0; i < 256; ++i) peak = std::max({peak, std::fabs(left[i]), std::fabs(right[i])});
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("EQ stages taken out of the path re-enter from rest", "[mastering][eq]") {
+  SECTION("parametric band disabled and re-enabled") {
+    ParametricEq eq;
+    const EqBand band{EqBandType::Peak, 60.0f, 12.0f, 1.0f, true};
+    eq.set_band(0, band);
+    eq.prepare(48000.0, 2048);
+    EqBand off = band;
+    off.enabled = false;
+    REQUIRE(peak_after_reengage(
+                eq, [&] { eq.set_band(0, off); }, [&] { eq.set_band(0, band); }) == 0.0f);
+  }
+  SECTION("graphic band brought to zero gain and back") {
+    GraphicEq eq;
+    eq.prepare(48000.0, 2048);
+    eq.set_gain_for_frequency(60.0f, 12.0f);
+    REQUIRE(peak_after_reengage(
+                eq, [&] { eq.set_gain_for_frequency(60.0f, 0.0f); },
+                [&] { eq.set_gain_for_frequency(60.0f, 12.0f); }) == 0.0f);
+  }
+  SECTION("cut filter stages cleared and set again") {
+    CutFilter cut;
+    cut.prepare(48000.0, 2048);
+    cut.set_high_pass(80.0f);
+    REQUIRE(peak_after_reengage(
+                cut, [&] { cut.clear_high_pass(); }, [&] { cut.set_high_pass(80.0f); }) == 0.0f);
+    cut.clear_high_pass();
+    cut.set_low_pass(200.0f);
+    REQUIRE(peak_after_reengage(
+                cut, [&] { cut.clear_low_pass(); }, [&] { cut.set_low_pass(200.0f); }) == 0.0f);
+  }
+  SECTION("cut filter slope change rebuilds its cascade from rest") {
+    CutFilter cut;
+    cut.prepare(48000.0, 2048);
+    cut.set_high_pass(80.0f, kButterworthQ, CutFilterSlope::Db12PerOct);
+    REQUIRE(peak_after_reengage(
+                cut, [&] { cut.set_high_pass(80.0f, kButterworthQ, CutFilterSlope::Db24PerOct); },
+                [] {}) == 0.0f);
+  }
+}

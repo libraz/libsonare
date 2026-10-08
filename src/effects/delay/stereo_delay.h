@@ -16,6 +16,7 @@
 #include "effects/common/mix_law.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::effects::delay {
 
@@ -127,6 +128,7 @@ class StereoDelay : public rt::ProcessorBase {
   float smoothed_feedback_ = 0.0f;
   float smoothed_dry_wet_ = 0.5f;
   float smoothed_ping_pong_ = 0.0f;
+  rt::StageGate damping_gate_;
 };
 
 }  // namespace sonare::effects::delay

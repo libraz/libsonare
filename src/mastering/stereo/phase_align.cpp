@@ -5,6 +5,7 @@
 #include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::stereo {
@@ -45,17 +46,13 @@ void PhaseAlign::reset() {
 }
 
 int PhaseAlign::tail_samples() const noexcept {
-  if (!prepared_ || (config_.delay_samples == 0 && config_.fractional_delay_samples == 0.0f)) {
-    return 0;
-  }
+  rt::TailBudget tail;
+  if (!prepared_) return tail.samples();
   // An integer delay uses only tap 0. A non-zero fractional delay uses the full
   // five-point Lagrange stencil (taps whole_delay + 0..4), so its final possible
   // non-zero output is four samples after the whole-sample delay.
-  const int interpolation_tail = config_.fractional_delay_samples > 0.0f ? 4 : 0;
-  if (config_.delay_samples > std::numeric_limits<int>::max() - interpolation_tail) {
-    return std::numeric_limits<int>::max();
-  }
-  return config_.delay_samples + interpolation_tail;
+  tail.delay(config_.delay_samples).delay(config_.fractional_delay_samples > 0.0f ? 4 : 0);
+  return tail.samples();
 }
 
 void PhaseAlign::set_config(const PhaseAlignConfig& config) {

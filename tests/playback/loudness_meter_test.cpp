@@ -252,3 +252,30 @@ TEST_CASE("loudness stays finite at a rate whose Nyquist is below the K-weightin
     REQUIRE(std::isfinite(meter.integrated_lufs()));
   }
 }
+
+TEST_CASE("playback loudness meter keeps material louder than the old histogram ceiling",
+          "[playback][loudness]") {
+  constexpr int kRate = 48000;
+  constexpr size_t kFrames = static_cast<size_t>(kRate) * 3;
+  for (const int channels : {6, 8}) {
+    std::vector<float> interleaved(kFrames * static_cast<size_t>(channels));
+    for (size_t frame = 0; frame < kFrames; ++frame) {
+      // Near full scale where K-weighting lifts it: the planes together read well above +5 LUFS.
+      const float sample =
+          0.99f * static_cast<float>(std::sin(2.0 * sonare::constants::kPiD * 6000.0 *
+                                              static_cast<double>(frame) / kRate));
+      for (int ch = 0; ch < channels; ++ch) {
+        interleaved[frame * static_cast<size_t>(channels) + static_cast<size_t>(ch)] = sample;
+      }
+    }
+    const float reference =
+        sonare::metering::lufs_interleaved(interleaved.data(), kFrames, channels, kRate)
+            .integrated_lufs;
+    INFO(channels << " channels, offline " << reference);
+    REQUIRE(reference > 5.0f);
+
+    PlaybackLoudnessMeter meter(channels, kRate);
+    meter.push_interleaved(interleaved.data(), kFrames);
+    CHECK(std::abs(meter.integrated_lufs() - reference) <= 0.1f);
+  }
+}

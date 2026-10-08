@@ -9,6 +9,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -19,6 +20,10 @@ class GraphicEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail = rt::TailBudget::reported(low_eq_.tail_samples());
+    return tail.then(rt::TailBudget::reported(high_eq_.tail_samples())).samples();
+  }
 
   void set_gain_db(size_t index, float gain_db);
   void set_gain_for_frequency(float frequency_hz, float gain_db);

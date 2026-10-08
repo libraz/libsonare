@@ -828,3 +828,73 @@ TEST_CASE("A delay keeps its buffered audio when only the mix or fraction change
   REQUIRE(sonare::test::max_abs_difference(
               align_changed, tail_after(prepared<PhaseAlign>(align_fraction), nothing)) == 0.0f);
 }
+
+namespace {
+
+/// @brief Drives @p processor with decorrelated noise-like stereo, applies @p take_out,
+///        feeds one second of silence, applies @p put_back, and returns the peak of the
+///        next 2048 silent samples.
+template <typename TakeOut, typename PutBack>
+float stereo_peak_after_reengage(sonare::rt::ProcessorBase& processor, TakeOut take_out,
+                                 PutBack put_back) {
+  std::vector<float> left(4800);
+  std::vector<float> right(4800);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = 0.7f * static_cast<float>(std::sin(0.031 * static_cast<double>(i)));
+    right[i] = 0.7f * static_cast<float>(std::sin(0.047 * static_cast<double>(i) + 1.0));
+  }
+  process_stereo(processor, left, right);
+  take_out();
+  for (int block = 0; block < 10; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    process_stereo(processor, left, right);
+  }
+  put_back();
+  left.assign(2048, 0.0f);
+  right.assign(2048, 0.0f);
+  process_stereo(processor, left, right);
+  float peak = 0.0f;
+  for (size_t i = 0; i < left.size(); ++i) {
+    peak = std::max({peak, std::fabs(left[i]), std::fabs(right[i])});
+  }
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("Stereo stages switched off and on again start from rest", "[mastering][stereo]") {
+  SECTION("mono maker") {
+    MonoMaker mono;
+    mono.prepare(48000.0, 4800);
+    REQUIRE(stereo_peak_after_reengage(
+                mono, [&] { mono.set_parameter(0, 0.0f); }, [&] { mono.set_parameter(0, 1.0f); }) ==
+            0.0f);
+  }
+  SECTION("haas enhancer") {
+    HaasEnhancer haas;
+    haas.prepare(48000.0, 4800);
+    REQUIRE(stereo_peak_after_reengage(
+                haas, [&] { haas.set_parameter(1, 0.0f); }, [&] { haas.set_parameter(1, 1.0f); }) ==
+            0.0f);
+  }
+}
+
+TEST_CASE("Constant-power balance keeps its power while it glides", "[mastering][stereo]") {
+  StereoBalance balance({0.0f, true});
+  balance.prepare(48000.0, 4096);
+  std::vector<float> left(4096, 1.0f);
+  std::vector<float> right(4096, 1.0f);
+  process_stereo(balance, left, right);
+  const float settled_power = left.back() * left.back() + right.back() * right.back();
+
+  balance.set_parameter(0, 1.0f);
+  std::fill(left.begin(), left.end(), 1.0f);
+  std::fill(right.begin(), right.end(), 1.0f);
+  process_stereo(balance, left, right);
+  // 5 ms at 48 kHz: sample 120 is the middle of the glide.
+  const float mid_power = left[120] * left[120] + right[120] * right[120];
+  const float end_power = left.back() * left.back() + right.back() * right.back();
+  REQUIRE_THAT(end_power, WithinAbs(settled_power, 1e-4));
+  REQUIRE_THAT(mid_power, WithinAbs(settled_power, 1e-3));
+}

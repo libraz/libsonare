@@ -28,6 +28,7 @@
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
@@ -559,7 +560,9 @@ int StreamingMasteringChain::flush(float* const* channels, int num_channels, int
   if (max_samples == 0) return 0;
   rt::ProcessorBase::validate_channel_buffers(channels, num_channels);
   if (!flush_started_) {
-    flush_samples_remaining_ = latency_samples() + tail_samples();
+    flush_samples_remaining_ = rt::TailBudget::reported(latency_samples())
+                                   .then(rt::TailBudget::reported(tail_samples()))
+                                   .samples();
     flush_started_ = true;
   }
   if (flush_samples_remaining_ == 0) return 0;
@@ -690,14 +693,14 @@ std::uint32_t StreamingMasteringChain::non_finite_substitution_count() const noe
 }
 
 int StreamingMasteringChain::tail_samples() const noexcept {
-  int total = 0;
+  rt::TailBudget total;
   for (const auto& proc : impl_->processors) {
-    total += std::max(0, proc->tail_samples());
+    total.then(rt::TailBudget::reported(proc->tail_samples()));
   }
   if (impl_->loudness_limiter) {
-    total += std::max(0, impl_->loudness_limiter->tail_samples());
+    total.then(rt::TailBudget::reported(impl_->loudness_limiter->tail_samples()));
   }
-  return total;
+  return total.samples();
 }
 
 }  // namespace sonare::mastering::api

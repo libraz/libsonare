@@ -33,6 +33,11 @@ class MultibandLimiter : public rt::ProcessorBase {
   /// band is aligned before the sum.
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  /// The band split rings on; the band limiters hold no audio past their latency.
+  int tail_samples() const noexcept override {
+    const rt::TailBudget tail = crossover_.tail();
+    return tail.samples();
+  }
 
   void set_config(const MultibandLimiterConfig& config);
   const MultibandLimiterConfig& config() const { return config_; }

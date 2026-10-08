@@ -7,6 +7,7 @@
 #include "mastering/saturation/triode.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -219,6 +220,19 @@ void Tube::ensure_state(int num_channels) {
       paths_.num_channels() < static_cast<size_t>(num_channels)) {
     throw SonareException(ErrorCode::InvalidParameter, "num_channels exceeds prepared Tube state");
   }
+}
+
+int Tube::tail_samples() const noexcept {
+  // The oversampled wet path's FIR rings past its latency, then the Miller low-pass.
+  rt::TailBudget tail;
+  if (tube_config_.oversample_factor > 1) {
+    tail.delay(oversampler_.streaming_round_trip_latency_samples());
+  }
+  const float drive = db_to_linear(tube_config_.drive_db);
+  const float cutoff = std::clamp(22000.0f / (1.0f + 0.08f * drive), 2500.0f,
+                                  static_cast<float>(sample_rate_ * 0.45));
+  tail.decay(1.0 - rt::one_pole_lowpass_alpha_matched(cutoff, sample_rate_));
+  return tail.samples();
 }
 
 float Tube::apply_miller_filter(int channel, float sample) {

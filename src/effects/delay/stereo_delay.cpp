@@ -2,10 +2,10 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/non_finite_state.h"
@@ -147,6 +147,10 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
   float* left = channels[0];
   float* right = num_channels > 1 && channels[1] != nullptr ? channels[1] : channels[0];
   const bool stereo = right != left;
+  // Damping re-enters the loop from the signal circulating now, never from the
+  // sample it held when it was switched off.
+  const bool damped =
+      damping_gate_.admit(damping_gain_ > 0.0f, [this] { damping_state_ = feedback_state_; });
   for (int i = 0; i < num_samples; ++i) {
     delay_samples_[0] += (target_delay_samples[0] - delay_samples_[0]) * delay_coeff;
     delay_samples_[1] += (target_delay_samples[1] - delay_samples_[1]) * delay_coeff;
@@ -189,7 +193,7 @@ void StereoDelay::process(float* const* channels, int num_channels, int num_samp
                                                        ping_pong * feedback_state_[0]);
     float delayed_l = delays_[0].process(feed_l, read_l);
     float delayed_r = delays_[1].process(feed_r, read_r);
-    if (damping_gain_ > 0.0f) {
+    if (damped) {
       // One multiply and one state, with no zero at Nyquist, sitting inside the
       // recirculation so every pass takes one helping of it. Which side of the
       // line it sits on is not observable once round.
@@ -254,30 +258,24 @@ void StereoDelay::discard_non_finite() noexcept {
 
 int StereoDelay::tail_samples() const noexcept {
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
-  // After the input goes silent the last echo keeps circulating, losing the
-  // feedback gain on every pass through the (longer of the two) delay lines.
-  // The tail is the number of passes needed to decay 60 dB times that length.
-  const float delay_ms =
-      std::max(config_.delay_time_l_ms, config_.delay_time_r_ms) + config_.mod_depth_ms;
-  const float delay_samples =
-      std::clamp(delay_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate_);
-  // An inverted loop loses the same amount per pass as an upright one.
-  const float fb = std::fabs(clamp_feedback(config_.feedback));
-  double passes = 1.0;
-  if (fb > 0.0f) {
-    passes = std::max(1.0, std::log(1000.0) / -std::log(static_cast<double>(fb)));
-  }
+  const double to_samples = 0.001 * sample_rate_;
+  const double line =
+      std::clamp(std::max(config_.delay_time_l_ms, config_.delay_time_r_ms) + config_.mod_depth_ms,
+                 0.0f, kMaxDelayMs) *
+          to_samples +
+      modulation::kDelayReadStencilSamples;
+  // Each pass reads the longer line, then the one-sample feedback cell and the damping ring.
+  rt::TailBudget damping;
+  if (damping_gain_ > 0.0f) damping.decay(1.0 - damping_gain_);
+  rt::TailBudget loop;
+  loop.delay(line).recirculation(line + 1.0 + damping.samples(), clamp_feedback(config_.feedback));
   // The feed-forward taps ring once, at their own time.
-  const float tap_ms = std::max(config_.tap3_ms, config_.tap4_ms) + config_.mod_depth_ms;
-  const float tap_samples =
-      std::clamp(tap_ms, 0.0f, kMaxDelayMs) * 0.001f * static_cast<float>(sample_rate_);
-  const double samples =
-      std::max(static_cast<double>(delay_samples) * passes, static_cast<double>(tap_samples));
-  if (samples <= 0.0) return 0;
-  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
-    return std::numeric_limits<int>::max();
-  }
-  return static_cast<int>(std::ceil(samples));
+  rt::TailBudget taps;
+  taps.delay(std::clamp(std::max(config_.tap3_ms, config_.tap4_ms) + config_.mod_depth_ms, 0.0f,
+                        kMaxDelayMs) *
+                 to_samples +
+             modulation::kDelayReadStencilSamples);
+  return loop.alongside(taps).samples();
 }
 
 void StereoDelay::reset() {

@@ -1137,3 +1137,47 @@ TEST_CASE("Limiter holds its ceiling across a window it cannot evaluate", "[mast
     REQUIRE(poisoned <= ceiling * 1.01f);
   }
 }
+
+TEST_CASE("SidechainRouter key listen neither replays nor skews the main signal",
+          "[mastering][dynamics][sidechain]") {
+  SidechainRouterConfig config;
+  config.lookahead_ms = 5.0f;
+  SidechainRouter router(config);
+  router.prepare(48000.0, 4800);
+  const int lookahead = router.latency_samples();
+  REQUIRE(lookahead > 0);
+
+  std::vector<float> left(4800, 0.0f);
+  std::vector<float> right(4800, 0.0f);
+  float* channels[] = {left.data(), right.data()};
+  // The impulse sits in the lookahead line when listening starts.
+  left[4799] = 1.0f;
+  right[4799] = 1.0f;
+  router.process(channels, 2, 4800);
+
+  config.key_listen = true;
+  router.set_config(config);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  left[0] = 0.5f;
+  right[0] = 0.5f;
+  router.process(channels, 2, 4800);
+  // The audible key carries the same latency the router reports.
+  for (int i = 0; i < lookahead; ++i) REQUIRE(left[static_cast<size_t>(i)] == 0.0f);
+  REQUIRE(left[static_cast<size_t>(lookahead)] != 0.0f);
+  for (int block = 0; block < 9; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    router.process(channels, 2, 4800);
+  }
+
+  config.key_listen = false;
+  router.set_config(config);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  router.process(channels, 2, 200);
+  for (size_t i = 0; i < 200; ++i) {
+    REQUIRE(left[i] == 0.0f);
+    REQUIRE(right[i] == 0.0f);
+  }
+}

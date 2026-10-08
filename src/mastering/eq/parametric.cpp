@@ -6,6 +6,7 @@
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -102,12 +103,16 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
 
   bool discarded = false;
   for (size_t band_index = 0; band_index < kMaxBands; ++band_index) {
-    if (!bands_[band_index].enabled) {
+    auto& band_states = states_[band_index];
+    // A band coming back into the path starts from rest, never from the state it
+    // froze with when it was disabled.
+    if (!band_gates_[band_index].admit(bands_[band_index].enabled, [&band_states] {
+          for (auto& state : band_states) state = {};
+        })) {
       continue;
     }
 
     const auto c = coefficients_[band_index];
-    auto& band_states = states_[band_index];
     for (int ch = 0; ch < num_channels; ++ch) {
       auto& state = band_states[static_cast<size_t>(ch)];
       float* samples = channels[ch];
@@ -123,6 +128,13 @@ void ParametricEq::process(float* const* channels, int num_channels, int num_sam
     }
   }
   if (discarded) note_non_finite_discard();
+}
+
+int ParametricEq::tail_samples() const noexcept {
+  // Bands run in series; a disabled band's identity section adds nothing.
+  rt::TailBudget tail;
+  for (const Coefficients& coefficients : coefficients_) tail.section(coefficients);
+  return tail.samples();
 }
 
 void ParametricEq::reset() {

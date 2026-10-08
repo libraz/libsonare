@@ -98,6 +98,7 @@ void MeterProcessor::prepare(double sample_rate, int max_block_size) {
 void MeterProcessor::reset() {
   snapshot_.store(MeterSnapshot{});
   seq_ = 0;
+  true_peak_channels_ = 0;
   gain_reduction_db_.store(0.0f, std::memory_order_relaxed);
 
   // Clear only the filter delay state; the K-weighting coefficients are owned by
@@ -187,10 +188,10 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   if (config_.measure_true_peak) {
     // History-preserving RT-safe path: upsample each meter channel through the
     // filter's internal cross-block history (sized in prepare()) into the
-    // preallocated oversampled scratch, then take max(|sample|). The history
-    // carries past samples across block edges but there is no look-ahead, so the
-    // measurement is slightly block-size dependent and always under-reads (about
-    // 0.1 dB; see sonare_c_mixing.h). Bounded to kTruePeak channels. The public snapshot keeps
+    // preallocated oversampled scratch, then take max(|sample|). The reconstruction
+    // runs one FIR group delay behind the input, so every value it reads has its
+    // whole stencil and no block edge is interpolated against missing samples.
+    // Bounded to kTruePeak channels. The public snapshot keeps
     // per-channel L/R compatibility, but max_true_peak_db must include surround channels so
     // rear/LFE overs are not hidden on multichannel buses.
     const int tp_channels = std::min(num_channels, kTruePeakChannels);
@@ -204,11 +205,13 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
       // stays aligned to each channel slot (the upsampler rejects null inputs).
       true_peak_in_ptrs_[c] = channels[ch] != nullptr ? channels[ch] : true_peak_zero_in_.data();
       true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
+      true_peak_live_[c] = channels[ch] != nullptr;
     }
+    true_peak_channels_ = tp_channels;
     if (tp_samples > 0) {
       // Upsample all meter channels in one allocation-free call.
-      true_peak_filter_.upsample_with_history(true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(),
-                                              tp_channels, tp_samples);
+      true_peak_filter_.upsample_with_history_delayed(
+          true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), tp_channels, tp_samples);
     }
     const int oversample = true_peak_filter_.factor();
     const size_t oversampled = static_cast<size_t>(tp_samples) * static_cast<size_t>(oversample);
@@ -297,8 +300,9 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
           const double block_energy = momentary_sum_ / static_cast<double>(momentary_len_);
           const float block_lufs = energy_to_lufs(block_energy);
           if (block_lufs >= static_cast<float>(kHistLowLufs)) {
-            int bin = static_cast<int>((block_lufs - kHistLowLufs) / kHistBinLu);
-            if (bin >= 0 && bin < kHistBins) {
+            const int bin =
+                std::min(kHistBins - 1, static_cast<int>((block_lufs - kHistLowLufs) / kHistBinLu));
+            if (bin >= 0) {
               ++hist_count_[static_cast<size_t>(bin)];
               hist_energy_[static_cast<size_t>(bin)] += block_energy;
               histogram_dirty_ = true;
@@ -334,7 +338,7 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
 
         uint64_t rel_count = 0;
         double rel_energy = 0.0;
-        for (int b = std::max(0, gate_bin); b < kHistBins; ++b) {
+        for (int b = std::clamp(gate_bin, 0, kHistBins - 1); b < kHistBins; ++b) {
           rel_count += hist_count_[static_cast<size_t>(b)];
           rel_energy += hist_energy_[static_cast<size_t>(b)];
         }
@@ -347,6 +351,38 @@ void MeterProcessor::process(float* const* channels, int num_channels, int num_s
   }
 
   publish(next);
+}
+
+void MeterProcessor::flush_true_peak() noexcept {
+  if (!config_.measure_true_peak || true_peak_channels_ <= 0) return;
+  const int pending = std::min(true_peak_filter_.latency_samples(), max_block_size_);
+  if (pending <= 0) return;
+  for (int ch = 0; ch < true_peak_channels_; ++ch) {
+    const size_t c = static_cast<size_t>(ch);
+    true_peak_in_ptrs_[c] = true_peak_zero_in_.data();
+    true_peak_out_ptrs_[c] = true_peak_oversampled_[c].data();
+  }
+  true_peak_filter_.upsample_with_history_delayed(
+      true_peak_in_ptrs_.data(), true_peak_out_ptrs_.data(), true_peak_channels_, pending);
+  MeterSnapshot next = snapshot_.load();
+  const size_t oversampled =
+      static_cast<size_t>(pending) * static_cast<size_t>(true_peak_filter_.factor());
+  float max_true_peak = db_to_linear(next.max_true_peak_db);
+  for (int ch = 0; ch < true_peak_channels_; ++ch) {
+    const size_t c = static_cast<size_t>(ch);
+    if (!true_peak_live_[c]) continue;
+    float peak = 0.0f;
+    for (size_t i = 0; i < oversampled; ++i) {
+      peak = std::max(peak, std::abs(true_peak_oversampled_[c][i]));
+    }
+    if (c < next.true_peak_db.size()) {
+      next.true_peak_db[c] = std::max(next.true_peak_db[c], linear_to_db(peak));
+    }
+    max_true_peak = std::max(max_true_peak, peak);
+  }
+  next.max_true_peak_db = linear_to_db(max_true_peak);
+  publish(next);
+  true_peak_channels_ = 0;
 }
 
 void MeterProcessor::publish(const MeterSnapshot& next) noexcept {

@@ -170,6 +170,12 @@ void HardClipper::ensure_state(int num_channels) {
   }
 }
 
+int HardClipper::tail_samples() const noexcept {
+  const sonare::rt::TailBudget tail = sonare::rt::aliasing_tail(
+      config_.aliasing, oversampler_.streaming_round_trip_latency_samples());
+  return tail.samples();
+}
+
 int HardClipper::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
 
 int HardClipper::latency_samples_q8() const noexcept {

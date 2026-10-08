@@ -3,9 +3,9 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -335,11 +335,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   const int gate_ramp = std::max(1, gate_hold);
   const float detector_release = 1.0f - smoothing_coefficient(kGateDetectorReleaseMs, sample_rate_);
   const float gate_smoothing = smoothing_coefficient(kGateSmoothingMs, sample_rate_);
-  if (!gate_on) {
-    gate_env_ = 0.0f;
-    gate_gain_ = 1.0f;
-    gate_open_ = false;
-  }
+  gate_stage_.admit(gate_on, [this] { reset_gate(); });
 
   for (int i = 0; i < num_samples; ++i) {
     const float in_l = left[i];
@@ -463,7 +459,6 @@ void DattorroReverb::discard_non_finite() noexcept {
   // half whose tail is poisoned is not half a tank.
   if (!discard_group_if_non_finite(damp_l_, damp_r_, tail_l_, tail_r_)) return;
   note_non_finite_discard();
-  gate_env_ = 0.0f;
   // The lines and allpasses upstream are the loop that feeds these cells --
   // including the input diffusers, which recirculate their own output -- so the
   // poison cycles back instead of flowing out. O(line), recovery only.
@@ -478,6 +473,10 @@ void DattorroReverb::discard_non_finite() noexcept {
   delay_r2_.reset();
   decay_ap_l_.reset();
   decay_ap_r_.reset();
+  reset_gate();
+}
+
+void DattorroReverb::reset_gate() noexcept {
   gate_env_ = 0.0f;
   gate_gain_ = 1.0f;
   gate_open_ = false;
@@ -488,23 +487,35 @@ void DattorroReverb::discard_non_finite() noexcept {
 int DattorroReverb::tail_samples() const noexcept {
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   const double decay = std::clamp(static_cast<double>(config_.decay), 0.0, 0.98);
-  if (decay <= 0.0) return 0;
-
-  // Both halves' allpasses (672 + 908 + 1800 + 2656) plus the four delay lines at
-  // their character's ratios; 21589 for the canonical tank.
+  const double rate = sample_rate_ / kRefRate;
   const double* ratio = kCharacterRatios[clamp_character(config_.character)];
-  const double tank_loop_seconds = (672.0 + 908.0 + 1800.0 + 2656.0 + 4453.0 * ratio[0] +
-                                    3720.0 * ratio[1] + 4217.0 * ratio[2] + 3163.0 * ratio[3]) /
-                                   kRefRate;
-  const double t60_seconds = std::log(1000.0) * tank_loop_seconds / (-4.0 * std::log(decay));
-  const double pre_delay_seconds =
-      std::max(0.0, static_cast<double>(config_.pre_delay_samples)) / kRefRate;
-  const double samples = (pre_delay_seconds + t60_seconds) * sample_rate_;
-  if (samples <= 0.0) return 0;
-  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
-    return std::numeric_limits<int>::max();
+
+  // The front end is lossless allpasses (four input diffusers, the modulated tank allpass): their
+  // cascade rings no longer than its longest member, so they are budgeted alongside each other.
+  rt::TailBudget diffusion;
+  for (const double length : {142.0, 107.0, 379.0, 277.0}) {
+    diffusion.alongside(rt::TailBudget().recirculation(length * rate, kGainIn));
   }
-  return static_cast<int>(std::ceil(samples));
+  diffusion.alongside(rt::TailBudget().recirculation(
+      std::max(kModAllpassLeftRefLength, kModAllpassRightRefLength) * rate +
+          std::fabs(static_cast<double>(mod_depth_)) + 1.0,
+      kGainMod));
+  // The tank: its first line is heard through the output taps even when decay closes the loop;
+  // otherwise each figure-8 pass (both halves' allpasses 672 + 908 + 1800 + 2656 plus the four
+  // lines at their character's ratios) crosses four decay multiplies, carried to the floor.
+  const double tank_loop = (672.0 + 908.0 + 1800.0 + 2656.0 + 4453.0 * ratio[0] +
+                            3720.0 * ratio[1] + 4217.0 * ratio[2] + 3163.0 * ratio[3]) *
+                           rate;
+  rt::TailBudget tank;
+  tank.delay(std::max(4453.0 * ratio[0], 4217.0 * ratio[2]) * rate);
+  if (decay > 0.0) {
+    tank.alongside(
+        rt::TailBudget().delay(tank_loop * std::log(rt::kTailFloor) / (4.0 * std::log(decay))));
+  }
+  rt::TailBudget tail;
+  tail.delay(std::max(0.0, static_cast<double>(config_.pre_delay_samples)) * rate);
+  tail.then(diffusion).then(tank);
+  return tail.samples();
 }
 
 bool DattorroReverb::set_parameter_impl(unsigned int param_id, float value) {
@@ -612,6 +623,8 @@ void DattorroReverb::reset() {
   // offset is a design choice; a quarter cycle is the one that makes two
   // same-rate sinusoids uncorrelated.
   lfo_phase_r_ = kHalfPi;
+  reset_gate();
+  gate_stage_.close();
 }
 
 }  // namespace sonare::effects::reverb

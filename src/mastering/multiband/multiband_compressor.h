@@ -32,6 +32,11 @@ class MultibandCompressor : public rt::ProcessorBase {
   // modes) so host plugin-delay-compensation stays correct. The per-band
   // compressors add no latency.
   int latency_samples() const noexcept override { return crossover_.latency_samples(); }
+  /// The band split rings on; the band dynamics hold no audio of their own.
+  int tail_samples() const noexcept override {
+    const rt::TailBudget tail = crossover_.tail();
+    return tail.samples();
+  }
 
   void set_config(const MultibandCompressorConfig& config);
   const MultibandCompressorConfig& config() const { return config_; }

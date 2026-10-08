@@ -36,7 +36,7 @@ float quantize_to_grid(float value, float lsb, float min_code, float max_code) n
 Audio dither_interleaved(const Audio& audio, size_t channel_count, const DitherConfig& config,
                          size_t* non_finite_samples) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  if (config.target_bits < 2 || config.target_bits > 32) {
+  if (config.target_bits < kMinDitherTargetBits || config.target_bits > kMaxDitherTargetBits) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
   }
   if (channel_count == 0 || audio.size() % channel_count != 0) {

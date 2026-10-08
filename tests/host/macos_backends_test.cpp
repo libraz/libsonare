@@ -403,6 +403,26 @@ TEST_CASE("AU parameter metadata translation carries unit and non-realtime flags
   REQUIRE_FALSE(result.realtime_safe_with_flag);
 }
 
+TEST_CASE("AU adapters apply the parameter ids the provider publishes", "[host][au]") {
+  // The provider advertises each AU parameter id as the value passed to
+  // ProcessorBase::set_parameter, so that call has to reach the unit: clamped to
+  // the published range, and refused for an id the AU marks NonRealTime, since
+  // set_parameter may run inside the render callback.
+  const auto result = sonare::host::backends::detail::run_au_parameter_apply_probe();
+  REQUIRE(result.ran);
+  CHECK(result.gain_realtime_safe);
+  CHECK_FALSE(result.non_realtime_realtime_safe);
+  CHECK(result.gain_accepted);
+  CHECK(result.applied_value == 0.25f);
+  CHECK(result.output_before == 0.5f);
+  CHECK(result.output_after == 0.125f);
+  CHECK_FALSE(result.non_realtime_accepted);
+  CHECK_FALSE(result.unknown_accepted);
+  CHECK_FALSE(result.refusals_reached_unit);
+  CHECK(result.over_range_accepted);
+  CHECK(result.over_range_value == 2.0f);
+}
+
 TEST_CASE("AU MusicDevice instrument's dropped-event counter is reachable and counts overflow",
           "[host][au]") {
   // create_instrument() returns a plain midi::MidiInstrument*; before this fix

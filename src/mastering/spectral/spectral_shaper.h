@@ -23,6 +23,7 @@ class SpectralShaper : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
   void set_config(const SpectralShaperConfig& config);
   float last_reduction_db() const { return last_reduction_db_; }
   float last_gain_reduction_db() const noexcept override { return last_reduction_db_; }

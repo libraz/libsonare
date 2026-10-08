@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
@@ -224,14 +224,10 @@ void VelvetReverb::discard_non_finite() noexcept {
 int VelvetReverb::tail_samples() const noexcept {
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
   // The velvet-noise taps span one effective T60 (the same rt60 the tap tables
-  // are built for in prepare()), so the tail decays over that window.
-  const float rt60 = effective_rt60(config_);
-  const double samples = static_cast<double>(rt60) * sample_rate_;
-  if (samples <= 0.0) return 0;
-  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
-    return std::numeric_limits<int>::max();
-  }
-  return static_cast<int>(std::ceil(samples));
+  // are built for in prepare()), then the DC blocker rings out.
+  rt::TailBudget tail;
+  tail.seconds(effective_rt60(config_), sample_rate_).decay(dc_blocker_.pole());
+  return tail.samples();
 }
 
 bool VelvetReverb::set_parameter_impl(unsigned int param_id, float value) {

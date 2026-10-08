@@ -88,6 +88,8 @@ class BusProcessor : public rt::ProcessorBase {
   // set_insert_sidechain() clear their processor's sidechain; others are left alone.
   void clear_insert_sidechains() noexcept;
   MeterSnapshot meter_snapshot() const noexcept { return meter_.snapshot(); }
+  /// @brief Ends the signal for the bus meter (see MeterProcessor::flush_true_peak).
+  void flush_meters() noexcept { meter_.flush_true_peak(); }
   /// Per-insert audible gain reduction (dB <= 0) of the last block. Copies
   /// min(@p capacity, count) entries and returns the count. Audio-thread read only.
   size_t insert_gain_reduction_db(float* out, size_t capacity) const noexcept {

@@ -830,3 +830,43 @@ TEST_CASE("Mixing C API reports invalid scene JSON through last error", "[mixing
   REQUIRE(mixer == nullptr);
   REQUIRE(std::string(sonare_last_error_message()).find("expected") != std::string::npos);
 }
+
+TEST_CASE("Mixing C API one-shot true peak reads the signal's last samples once flushed",
+          "[mixing][capi]") {
+  // A one-shot mix is a single block. The meter reads one group delay behind it, so a peak in
+  // the final samples is only measured once the caller ends the signal.
+  constexpr size_t kLength = 256;
+  std::array<float, kLength> left{};
+  std::array<float, kLength> right{};
+  left[kLength - 3] = 0.9f;
+  left[kLength - 2] = 0.9f;
+  left[kLength - 1] = -0.9f;
+  float offline_db = 0.0f;
+  REQUIRE(sonare_metering_true_peak_db(left.data(), left.size(), 48000, 4, &offline_db) ==
+          SONARE_OK);
+
+  SonareMixer* mixer = sonare_mixer_create(48000, static_cast<int>(kLength));
+  REQUIRE(mixer != nullptr);
+  SonareStrip* strip = sonare_mixer_add_strip(mixer, "a");
+  REQUIRE(strip != nullptr);
+  REQUIRE(sonare_strip_set_pan(strip, 0.0f, SONARE_PAN_MODE_BALANCE) == SONARE_OK);
+  const float* inputs_l[] = {left.data()};
+  const float* inputs_r[] = {right.data()};
+  std::array<float, kLength> out_l{};
+  std::array<float, kLength> out_r{};
+  REQUIRE(sonare_mixer_process_stereo(mixer, inputs_l, inputs_r, 1, out_l.data(), out_r.data(),
+                                      kLength) == SONARE_OK);
+
+  SonareMixMeterSnapshot before{};
+  REQUIRE(sonare_strip_meter(strip, &before) == SONARE_OK);
+  REQUIRE(before.true_peak_db_l < offline_db - 0.01f);
+
+  REQUIRE(sonare_mixer_flush_meters(mixer) == SONARE_OK);
+  SonareMixMeterSnapshot after{};
+  REQUIRE(sonare_strip_meter(strip, &after) == SONARE_OK);
+  REQUIRE_THAT(after.true_peak_db_l, WithinAbs(offline_db, 1.0e-4));
+  REQUIRE_THAT(after.max_true_peak_db, WithinAbs(offline_db, 1.0e-4));
+
+  REQUIRE(sonare_mixer_flush_meters(nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+}

@@ -1072,6 +1072,45 @@ TEST_CASE("Tail and latency come from the layers", "[midi][layered]") {
   CHECK(inst.tail_samples() == 900);
 }
 
+namespace {
+
+/// A probe whose latency carries a fraction, as a Q8 sample count.
+class FractionalLatencyProbe final : public ProbeInstrument {
+ public:
+  explicit FractionalLatencyProbe(int latency_q8) : latency_q8_(latency_q8) {}
+  int latency_samples() const noexcept override { return latency_q8_ >> 8; }
+  int latency_samples_q8() const noexcept override { return latency_q8_; }
+
+ private:
+  int latency_q8_;
+};
+
+}  // namespace
+
+TEST_CASE("Layer latencies agree to the Q8 fraction", "[midi][layered]") {
+  SECTION("children agreeing on a fraction report it whole") {
+    LayeredInstrument inst;
+    REQUIRE(inst.add_layer(std::make_unique<FractionalLatencyProbe>(2688), InstrumentLayerSpec{}));
+    REQUIRE(inst.add_layer(std::make_unique<FractionalLatencyProbe>(2688), InstrumentLayerSpec{}));
+    inst.prepare(kRate, 128);
+    CHECK(inst.latency_samples_q8() == 2688);
+    CHECK(inst.latency_samples() == 10);
+  }
+  SECTION("children sharing a whole sample but not the fraction are refused") {
+    LayeredInstrument inst;
+    REQUIRE(inst.add_layer(std::make_unique<FractionalLatencyProbe>(2624), InstrumentLayerSpec{}));
+    REQUIRE(inst.add_layer(std::make_unique<FractionalLatencyProbe>(2752), InstrumentLayerSpec{}));
+    CHECK_THROWS(inst.prepare(kRate, 128));
+  }
+  SECTION("whole-sample children keep their integer latency") {
+    LayeredInstrument inst;
+    REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(1.0f, 32), InstrumentLayerSpec{}));
+    REQUIRE(inst.add_layer(std::make_unique<ProbeInstrument>(1.0f, 32), InstrumentLayerSpec{}));
+    inst.prepare(kRate, 128);
+    CHECK(inst.latency_samples_q8() == 32 << 8);
+  }
+}
+
 TEST_CASE("A parameter key addresses one layer", "[midi][layered]") {
   LayeredInstrument inst;
   auto a = std::make_unique<ProbeInstrument>();

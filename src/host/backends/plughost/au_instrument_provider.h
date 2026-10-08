@@ -106,6 +106,28 @@ struct AuInstrumentDroppedEventProbeResult {
 
 AuInstrumentDroppedEventProbeResult run_au_instrument_dropped_event_probe();
 
+/// Result from applying the parameter ids an AU publishes through the adapter's
+/// ProcessorBase::set_parameter, against a stand-in that publishes a realtime gain
+/// (range 0..2, scaling what it renders) and a NonRealTime parameter. No SDK object
+/// or installed plugin is required.
+struct AuParameterApplyProbeResult {
+  bool ran = false;
+  bool gain_realtime_safe = false;
+  bool non_realtime_realtime_safe = true;
+  bool gain_accepted = false;
+  float applied_value = 0.0f;
+  float output_before = 0.0f;
+  float output_after = 0.0f;
+  bool non_realtime_accepted = true;
+  bool unknown_accepted = true;
+  // Whether either refused call still reached the unit's setter.
+  bool refusals_reached_unit = true;
+  bool over_range_accepted = false;
+  float over_range_value = 0.0f;
+};
+
+AuParameterApplyProbeResult run_au_parameter_apply_probe();
+
 /// Result from probing where the MusicDevice adapter places queued events once
 /// the host pushes a transport snapshot. Two blocks are rendered: the second one
 /// starts at a render frame that does NOT continue the first, as a seek or a loop

@@ -538,3 +538,103 @@ TEST_CASE("Graph processes a ChannelStrip through an FxBus to master", "[graph][
   REQUIRE(out_r[7] < right[7]);
 }
 #endif
+
+namespace {
+
+/// Latency fixed by the rate prepare() is given: one millisecond, as a lookahead would.
+class RateLatencyProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double sample_rate, int) override {
+    latency_ = static_cast<int>(std::lround(sample_rate / 1000.0));
+    delay_.assign(static_cast<size_t>(latency_), 0.0f);
+    write_index_ = 0;
+  }
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    for (int i = 0; i < num_samples; ++i) {
+      const float input = channels[0][i];
+      channels[0][i] = delay_[static_cast<size_t>(write_index_)];
+      delay_[static_cast<size_t>(write_index_)] = input;
+      write_index_ = (write_index_ + 1) % latency_;
+    }
+    for (int ch = 1; ch < num_channels; ++ch)
+      std::fill(channels[ch], channels[ch] + num_samples, 0.0f);
+  }
+  void reset() override { std::fill(delay_.begin(), delay_.end(), 0.0f); }
+  int latency_samples() const noexcept override { return latency_; }
+
+ private:
+  int latency_ = 0;
+  int write_index_ = 0;
+  std::vector<float> delay_;
+};
+
+/// Writes 1 to its output while it holds an external key, and 0 otherwise.
+class KeyPresenceProcessor final : public sonare::rt::ProcessorBase {
+ public:
+  void prepare(double, int) override {}
+  void process(float* const* channels, int, int num_samples) override {
+    std::fill(channels[0], channels[0] + num_samples, key_ != nullptr ? 1.0f : 0.0f);
+  }
+  void reset() override {}
+  void set_sidechain(const float* const* channels, int, int) override { key_ = channels; }
+  void clear_sidechain() override { key_ = nullptr; }
+
+ private:
+  const float* const* key_ = nullptr;
+};
+
+}  // namespace
+
+TEST_CASE("Graph prepare aligns parallel paths with the latency prepare settled", "[graph]") {
+  const double rate = 48000.0;
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("input", pass(), 1));
+  REQUIRE(graph.add_node("late", std::make_unique<RateLatencyProcessor>(), 1));
+  REQUIRE(graph.add_node("dry", pass(), 1));
+  REQUIRE(graph.add_node("sum", pass(), 1));
+  REQUIRE(graph.connect({"input", 0, "late", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"input", 0, "dry", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"late", 0, "sum", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.connect({"dry", 0, "sum", 0, sonare::graph::Connection::Mix::Add}));
+  REQUIRE(graph.compile());
+
+  for (const double prepared_rate : {rate, 2.0 * rate}) {
+    graph.prepare(prepared_rate, 256);
+    graph.reset();
+    std::vector<float> response;
+    std::array<float, 256> block{};
+    block[0] = 1.0f;
+    for (int b = 0; b < 2; ++b) {
+      graph.clear_inputs(256);
+      graph.set_input("input", 0, block.data(), 256);
+      graph.process_block(256);
+      const float* out = graph.output("sum", 0);
+      response.insert(response.end(), out, out + 256);
+      block[0] = 0.0f;
+    }
+    const auto peak = std::max_element(response.begin(), response.end());
+    INFO("rate " << prepared_rate);
+    CHECK(*peak == 2.0f);
+    CHECK(peak - response.begin() == std::lround(prepared_rate / 1000.0));
+  }
+}
+
+TEST_CASE("Graph withdraws the key it bound when the sidechain ports are cleared", "[graph]") {
+  sonare::graph::Graph graph;
+  REQUIRE(graph.add_node("keyed", std::make_unique<KeyPresenceProcessor>(), 2));
+  REQUIRE(graph.set_node_sidechain_ports("keyed", 1, 1));
+  REQUIRE(graph.compile());
+  graph.prepare(48000.0, 64);
+
+  graph.clear_inputs(64);
+  graph.process_block(64);
+  REQUIRE(graph.output("keyed", 0)[0] == 1.0f);
+
+  REQUIRE(graph.set_node_sidechain_ports("keyed", 0, 0));
+  REQUIRE(graph.compile());
+  for (const int block : {64, 32}) {
+    graph.clear_inputs(block);
+    graph.process_block(block);
+    CHECK(graph.output("keyed", 0)[0] == 0.0f);
+  }
+}

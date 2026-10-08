@@ -177,6 +177,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
     return non_finite_substitution_count_.load();
   }
   int latency_samples() const noexcept override;
+  int tail_samples() const noexcept override;
 
   // Parameters:
   //   0 = ceiling_db (clamped <= 0; realtime-safe, in-place)

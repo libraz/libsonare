@@ -7,6 +7,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -15,6 +16,9 @@ class TiltEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override {
+    return rt::TailBudget::reported(eq_.tail_samples()).samples();
+  }
 
   void set_tilt_db(float tilt_db);
   void set_pivot_hz(float pivot_hz);

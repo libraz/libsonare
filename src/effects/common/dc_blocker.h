@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::effects::common {
 
@@ -16,6 +17,10 @@ class DcBlocker : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail;
+    return tail.decay(pole_).samples();
+  }
   float process_sample(int channel, float sample);
 
   /// @brief Returns the per-channel history to rest once a non-finite value has

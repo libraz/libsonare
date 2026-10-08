@@ -197,6 +197,12 @@ void Waveshaper::declare_path_latencies() {
               config_.aliasing, oversampler_.streaming_round_trip_latency_samples())});
 }
 
+int Waveshaper::tail_samples() const noexcept {
+  const sonare::rt::TailBudget tail = sonare::rt::aliasing_tail(
+      config_.aliasing, oversampler_.streaming_round_trip_latency_samples());
+  return tail.samples();
+}
+
 int Waveshaper::latency_samples() const noexcept { return paths_.latency_samples(); }
 
 int Waveshaper::latency_samples_q8() const noexcept { return paths_.latency_samples_q8(); }

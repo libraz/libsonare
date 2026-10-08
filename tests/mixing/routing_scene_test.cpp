@@ -5,9 +5,11 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+#include <algorithm>
 #include <catch2/matchers/catch_matchers_string.hpp>
 #include <catch2/matchers/catch_matchers_vector.hpp>
 
+#include "mastering/api/insert_factory.h"
 #include "mastering/eq/eq_band.h"
 #include "mixing/api/presets.h"
 #include "mixing/api/scene.h"
@@ -1415,5 +1417,30 @@ TEST_CASE("dynamic_bytes accounts a strip's EQ bands", "[mixing][routing]") {
   CHECK(dynamic_bytes(with_eq) > dynamic_bytes(empty));
 }
 #endif  // defined(SONARE_WITH_ARRANGEMENT)
+
+TEST_CASE("VocalReverbSend return insert is wet only", "[mixing][scene]") {
+  const auto scene =
+      sonare::mixing::api::scene_preset(sonare::mixing::api::ScenePreset::VocalReverbSend);
+  const auto strip = std::find_if(scene.strips.begin(), scene.strips.end(),
+                                  [](const auto& s) { return s.id == "vocal-verb-return"; });
+  REQUIRE(strip != scene.strips.end());
+  REQUIRE(strip->inserts.size() == 1);
+  auto reverb = sonare::mastering::api::make_insert(strip->inserts[0].processor_name,
+                                                    strip->inserts[0].params_json);
+  REQUIRE(reverb != nullptr);
+  reverb->prepare(48000.0, 512);
+
+  // An aux return carries only the effect: nothing reaches it before the 25 ms pre-delay.
+  std::vector<float> left(512, 0.0f);
+  std::vector<float> right(512, 0.0f);
+  left[0] = 1.0f;
+  right[0] = 1.0f;
+  float* channels[] = {left.data(), right.data()};
+  reverb->process(channels, 2, 512);
+  for (size_t i = 0; i < 512; ++i) {
+    REQUIRE(left[i] == 0.0f);
+    REQUIRE(right[i] == 0.0f);
+  }
+}
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

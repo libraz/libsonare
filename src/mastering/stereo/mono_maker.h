@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::stereo {
 
@@ -22,6 +23,7 @@ class MonoMaker : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   void set_config(const MonoMakerConfig& config);
   const MonoMakerConfig& config() const { return config_; }
@@ -44,6 +46,7 @@ class MonoMaker : public rt::ProcessorBase {
   std::array<float, 4> highpass_input_{};
   std::array<float, 4> highpass_output_{};
   float coefficient_ = 0.0f;
+  rt::StageGate stage_;
 };
 
 }  // namespace sonare::mastering::stereo

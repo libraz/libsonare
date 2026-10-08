@@ -9,6 +9,7 @@
 #include "mastering/saturation/triode.h"
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -571,7 +572,8 @@ void AmpSim::design_chain() {
                               config_.mic_b_distance_cm, config_.presence_db, sample_rate_);
   // Mic pair: only the path-length DIFFERENCE is applied, on whichever mic is
   // farther, so the near mic stays at zero latency and the two comb exactly as a
-  // real pair does. A single mic is left undelayed entirely (see mic_distance_cm).
+  // real pair does. The farther first mic is delayed at every blend and reports it as
+  // latency (see mic_distance_cm).
   //
   // The taps and the line capacity come from the DISTANCES, not from mic_blend:
   // the blend is realtime-automatable, so deriving the capacity from it would let
@@ -582,7 +584,6 @@ void AmpSim::design_chain() {
   mic_a_delay_q8_ = 0;
   mic_b_delay_q8_ = 0;
   mic_line_capacity_ = 0;
-  mic_tail_samples_ = 0;
   const float difference_cm = std::fabs(config_.mic_b_distance_cm - config_.mic_distance_cm);
   const float delay_samples = difference_cm / kSoundSpeedCmPerS * static_cast<float>(sample_rate_);
   const int delay_q8 = static_cast<int>(std::lround(delay_samples * 256.0f));
@@ -591,9 +592,6 @@ void AmpSim::design_chain() {
         delay_q8;
     // Capacity covers the whole delay plus the Lagrange stencil's lookahead.
     mic_line_capacity_ = static_cast<int>(std::ceil(delay_samples)) + 8;
-    if (config_.cab && config_.mic_blend > 0.0f) {
-      mic_tail_samples_ = static_cast<int>(std::ceil(delay_samples));
-    }
   }
   input_gain_ = sonare::db_to_linear(config_.input_db);
   level_gain_ = sonare::db_to_linear(config_.level_db);
@@ -862,6 +860,14 @@ void AmpSim::process_circuit_head(float* const* channels, int num_channels, int 
 
 void AmpSim::process_tail(float* const* channels, int num_channels, int num_samples) {
   const bool use_ir = config_.cab && !cab_ir_.empty();
+  const bool second_mic =
+      second_mic_gate_.admit(config_.cab && !use_ir && config_.mic_blend > 0.0f, [this] {
+        for (ChannelChain& chain : chains_) {
+          chain.cab_b = {};
+          std::fill(chain.mic_b_line.begin(), chain.mic_b_line.end(), 0.0f);
+          chain.mic_b_write = 0;
+        }
+      });
   for (int ch = 0; ch < num_channels; ++ch) {
     ChannelChain& chain = chains_[static_cast<size_t>(ch)];
     for (int i = 0; i < num_samples; ++i) {
@@ -943,29 +949,67 @@ void AmpSim::process_tail(float* const* channels, int num_channels, int num_samp
         chain.cab_ir_write = (chain.cab_ir_write + 1) & cab_ir_mask_;
         s = acc;
       } else if (config_.cab) {
-        if (config_.mic_blend > 0.0f) {
-          // Two mics on the same cab. The delay is applied AFTER the filters,
-          // which is equivalent (both stages are LTI) and costs one delay line
-          // per mic instead of two.
-          float a = process_cab(s, chain.cab_a, cab_a_c_);
-          float b = process_cab(s, chain.cab_b, cab_b_c_);
-          if (mic_a_delay_q8_ > 0) {
-            a = rt::lagrange3_fractional_delay(chain.mic_a_line.data(), chain.mic_a_line.size(),
-                                               chain.mic_a_write, mic_a_delay_q8_, a);
-          }
+        // Two mics on the same cab. The delay is applied AFTER the filters,
+        // which is equivalent (both stages are LTI) and costs one delay line
+        // per mic instead of two.
+        const float cab_in = s;
+        float a = process_cab(cab_in, chain.cab_a, cab_a_c_);
+        // The first mic keeps its alignment delay at every blend; it is reported as latency.
+        if (mic_a_delay_q8_ > 0) {
+          a = rt::lagrange3_fractional_delay(chain.mic_a_line.data(), chain.mic_a_line.size(),
+                                             chain.mic_a_write, mic_a_delay_q8_, a);
+        }
+        s = a;
+        if (second_mic) {
+          float b = process_cab(cab_in, chain.cab_b, cab_b_c_);
           if (mic_b_delay_q8_ > 0) {
             b = rt::lagrange3_fractional_delay(chain.mic_b_line.data(), chain.mic_b_line.size(),
                                                chain.mic_b_write, mic_b_delay_q8_, b);
           }
           if (config_.mic_b_invert) b = -b;
           s = (1.0f - config_.mic_blend) * a + config_.mic_blend * b;
-        } else {
-          s = process_cab(s, chain.cab_a, cab_a_c_);
         }
       }
       channels[ch][i] = s * level_gain_;
     }
   }
+}
+
+int AmpSim::tail_samples() const noexcept {
+  // Every stage in series, counted whichever head is selected: the voiced or circuit head and
+  // the circuit oversampler's ring, the power stage's filters, the Doppler line, then the cab
+  // (a loaded IR, or the analytic chain with the mic pair alongside the first mic).
+  rt::TailBudget tail;
+  tail.section(pre_c_).section(bass_c_).section(mid_c_).section(treble_c_);
+  for (int stage = 0; stage < active_stages_; ++stage) {
+    tail.decay(coupling_alpha_).section(cathode_c_);
+  }
+  tail.cubic(
+      std::abs(stack_c_.b0) + std::abs(stack_c_.b1) + std::abs(stack_c_.b2) + std::abs(stack_c_.b3),
+      stack_c_.a1, stack_c_.a2, stack_c_.a3);
+  tail.delay(circuit_latency_samples_);
+  if (config_.power > 0.0f) tail.section(nfb_shape_c_);
+  if (config_.transformer > 0.0f && xf_alpha_ > 0.0f) tail.decay(1.0 - xf_alpha_);
+  if (config_.doppler > 0.0f) tail.delay(2 * kDopplerBaseSamples);
+  const auto cab_chain = [](const CabDesign& design) {
+    rt::TailBudget cab;
+    cab.section(design.hp).section(design.bump).section(design.presence);
+    cab.section(design.lp1).section(design.lp2);
+    if (design.mic)
+      cab.section(design.mic_prox).section(design.mic_presence).section(design.mic_top);
+    return cab;
+  };
+  rt::TailBudget cab;
+  if (!cab_ir_.empty()) {
+    cab.delay(static_cast<double>(cab_ir_.size() - 1));
+  } else if (config_.cab) {
+    cab = cab_chain(cab_a_c_);
+    if (config_.mic_blend > 0.0f) {
+      rt::TailBudget second = cab_chain(cab_b_c_);
+      cab.alongside(second.delay(mic_b_delay_q8_ / 256.0));
+    }
+  }
+  return tail.then(cab).samples();
 }
 
 void AmpSim::reset() {

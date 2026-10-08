@@ -11,6 +11,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -119,6 +120,8 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   float hpf_b0_ = 1.0f;
   float hpf_a1_ = 0.0f;
   float last_gain_reduction_db_ = 0.0f;
+  rt::StageGate listen_gate_;
+  rt::StageGate duck_gate_;
 };
 
 }  // namespace sonare::mastering::dynamics

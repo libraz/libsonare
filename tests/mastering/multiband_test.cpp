@@ -1477,3 +1477,55 @@ TEMPLATE_TEST_CASE("A multiband dynamics processor leaves the excluded plane out
             return processor;
           }) == 0.0f);
 }
+
+namespace {
+
+/// @brief Drives @p processor with two unrelated tones, applies @p take_out, feeds one second
+///        of silence, applies @p put_back, and returns the peak of the next 2048 silent samples.
+template <typename Processor, typename TakeOut, typename PutBack>
+float multiband_peak_after_reengage(Processor& processor, TakeOut take_out, PutBack put_back) {
+  std::vector<float> left(4800);
+  std::vector<float> right(4800);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = 0.7f * static_cast<float>(std::sin(0.031 * static_cast<double>(i)));
+    right[i] = 0.7f * static_cast<float>(std::sin(0.193 * static_cast<double>(i) + 1.0));
+  }
+  float* channels[] = {left.data(), right.data()};
+  processor.process(channels, 2, 4800);
+  take_out();
+  for (int block = 0; block < 10; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    processor.process(channels, 2, 4800);
+  }
+  put_back();
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  processor.process(channels, 2, 2048);
+  float peak = 0.0f;
+  for (size_t i = 0; i < 2048; ++i)
+    peak = std::max({peak, std::fabs(left[i]), std::fabs(right[i])});
+  return peak;
+}
+
+}  // namespace
+
+TEST_CASE("Multiband imager decorrelation switched back in starts from rest",
+          "[mastering][multiband]") {
+  MultibandImagerConfig config;
+  for (auto& band : config.bands) {
+    band.width = 1.5f;
+    band.decorrelation_amount = 0.8f;
+  }
+  MultibandImager imager(config);
+  imager.prepare(48000.0, 4800);
+  const auto set_decorrelation = [&](float amount) {
+    for (unsigned int band = 0; band < config.bands.size(); ++band) {
+      REQUIRE(imager.set_parameter(band * MultibandImager::kBandStride + 1, amount));
+    }
+  };
+  // The crossover rings out over the silent second; only a frozen allpass could exceed this.
+  REQUIRE(multiband_peak_after_reengage(
+              imager, [&] { set_decorrelation(0.0f); }, [&] { set_decorrelation(0.8f); }) <
+          1.0e-7f);
+}

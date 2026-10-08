@@ -28,6 +28,7 @@ class Tube : public rt::ProcessorBase {
   ///   mix is aligned to it.
   int latency_samples() const noexcept override { return paths_.latency_samples(); }
   int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
+  int tail_samples() const noexcept override;
   void set_config(const TubeConfig& config);
   const TubeConfig& tube_config() const { return tube_config_; }
 

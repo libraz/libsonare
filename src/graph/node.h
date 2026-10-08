@@ -90,6 +90,8 @@ class Node {
   bool has_bypass_compensation_ = false;
   int sidechain_first_port_ = 0;
   int sidechain_num_ports_ = 0;
+  // Audio thread: the processor's key currently points at this node's ports.
+  bool graph_key_bound_ = false;
 };
 
 }  // namespace sonare::graph

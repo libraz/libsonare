@@ -5,6 +5,7 @@
 
 #include "mastering/common/parameter_domain.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::effects::filter {
 namespace {
@@ -87,6 +88,23 @@ void VowelFilter::prepare(double sample_rate, int) {
   }
   update_glide_coefficient();
   reset();
+}
+
+int VowelFilter::tail_samples() const noexcept {
+  if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
+  // The bank glides between table vowels, so take each band's longest ring over the table; the
+  // bands run in parallel after the saturator's one remembered sample.
+  const float amp = std::pow(10.0f, kFitPeakingDb / (2.0f * kDbPerAmplitudeDecade));
+  rt::TailBudget bank;
+  for (int vowel = 0; vowel < kVowelCount; ++vowel) {
+    for (const Triple& band : target_for(static_cast<float>(vowel))) {
+      bank.alongside(modulation::SvfBandpass::ring(std::exp(band.log_hz),
+                                                   amp * std::exp(band.log_q), sample_rate_));
+    }
+  }
+  rt::TailBudget tail;
+  tail.delay(1.0).then(bank);
+  return tail.samples();
 }
 
 void VowelFilter::reset() {

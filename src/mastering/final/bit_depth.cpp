@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "mastering/final/dither.h"
 #include "util/exception.h"
 #include "util/non_finite_sample.h"
 
@@ -14,7 +15,7 @@ namespace sonare::mastering::final {
 
 Audio bit_depth(const Audio& audio, const BitDepthConfig& config, size_t* non_finite_samples) {
   if (audio.empty()) throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
-  if (config.target_bits < 2 || config.target_bits > 32) {
+  if (config.target_bits < kMinDitherTargetBits || config.target_bits > kMaxDitherTargetBits) {
     throw SonareException(ErrorCode::InvalidParameter, "target_bits must be in [2, 32]");
   }
   const float scale = static_cast<float>(int64_t{1} << (config.target_bits - 1));

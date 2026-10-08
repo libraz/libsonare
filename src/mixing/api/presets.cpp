@@ -27,8 +27,8 @@ Scene make_vocal_reverb_send() {
   return_strip.id = "vocal-verb-return";
   return_strip.fader_db = -10.0f;
   return_strip.width = 1.25f;
-  return_strip.inserts.push_back(
-      {InsertSlot::PostFader, "effects.reverb.plate", "{\"decaySec\":1.8,\"preDelayMs\":25}"});
+  return_strip.inserts.push_back({InsertSlot::PostFader, "effects.reverb.plate",
+                                  "{\"decaySec\":1.8,\"preDelayMs\":25,\"dryWet\":1}"});
   scene.strips.push_back(return_strip);
 
   scene.connections.push_back({"vocal", "master"});

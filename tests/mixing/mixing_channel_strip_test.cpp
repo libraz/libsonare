@@ -2360,3 +2360,32 @@ TEST_CASE("ChannelStrip exposes detailed mastering insert gain reduction",
         [](const auto& processor) { return minimum_band_reduction(processor); });
   }
 }
+
+TEST_CASE("ChannelStrip EQ switched back on starts from rest", "[mixing][eq]") {
+  sonare::mixing::ChannelStrip strip;
+  strip.prepare(48000.0, 2048);
+  strip.set_eq_band(0, {sonare::mastering::eq::EqBandType::Peak, 60.0f, 12.0f, 1.0f, true});
+
+  std::vector<float> left(2048);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] = 0.5f * static_cast<float>(std::sin(2.0 * 3.141592653589793 * 60.0 *
+                                                 static_cast<double>(i) / 48000.0));
+  }
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  strip.process(channels, 2, 2048);
+
+  strip.set_eq_enabled(false);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  strip.process(channels, 2, 2048);
+
+  strip.set_eq_enabled(true);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  strip.process(channels, 2, 256);
+  for (size_t i = 0; i < 256; ++i) {
+    REQUIRE(left[i] == 0.0f);
+    REQUIRE(right[i] == 0.0f);
+  }
+}

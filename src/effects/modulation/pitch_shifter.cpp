@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 namespace sonare::effects::modulation {
@@ -138,6 +139,26 @@ void PitchShifter::reset() {
   }
 }
 
+int PitchShifter::tail_samples() const noexcept {
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  if (!(mix.wet > 0.0f)) return 0;
+  // A grain reads back at most one grain plus the longer pre-delay; feedback writes the
+  // shifted sum into the same line, so each pass costs that read again.
+  const double longest = static_cast<double>(grain_) +
+                         std::max(pre_delay_samples_[0], pre_delay_samples_[1]) +
+                         kDelayReadStencilSamples;
+  rt::TailBudget tail;
+  if (anti_alias_corner_hz_ > 0.0f) {
+    for (const auto& section : anti_alias_[0]) {
+      tail.biquad(std::fabs(section.c.b0) + std::fabs(section.c.b1) + std::fabs(section.c.b2),
+                  section.c.a1, section.c.a2);
+    }
+  }
+  tail.delay(longest).recirculation(longest, config_.feedback);
+  return tail.samples();
+}
+
 float PitchShifter::read_tap(int channel, float delay) const noexcept {
   // Same fractional-read hazard as ModDelayLine::process: a non-finite delay
   // cannot produce an in-range index, so the tap contributes nothing.
@@ -184,16 +205,11 @@ void PitchShifter::update_anti_alias(float max_ratio) noexcept {
   const double corner_hz = std::min(sample_rate_ / (2.0 * static_cast<double>(max_ratio)),
                                     kMaxAntiAliasCornerFraction * sample_rate_);
   if (static_cast<float>(corner_hz) == anti_alias_corner_hz_) return;
-  const bool engaging = anti_alias_corner_hz_ == 0.0f;
   anti_alias_corner_hz_ = static_cast<float>(corner_hz);
   const float w0 = static_cast<float>(sonare::constants::kTwoPiD * corner_hz / sample_rate_);
   const rt::BiquadCoeffs coeffs = rt::rbj_lowpass(w0, sonare::constants::kInvSqrt2);
   for (auto& channel : anti_alias_) {
-    for (auto& section : channel) {
-      section.set(coeffs);
-      // A section left out of the path holds stale history; start it from rest.
-      if (engaging) section.reset();
-    }
+    for (auto& section : channel) section.set(coeffs);
   }
 }
 
@@ -230,7 +246,13 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   if (anti_alias) {
     update_anti_alias(std::max(ratio, second ? ratio2 : 1.0f));
   }
-  const bool filtering = anti_alias && anti_alias_corner_hz_ > 0.0f;
+  // The anti-alias sections re-enter the path from rest, never from the history
+  // they froze with while the flag was off or the ratio was at or below 1.
+  const bool filtering = anti_alias_gate_.admit(anti_alias && anti_alias_corner_hz_ > 0.0f, [this] {
+    for (auto& channel : anti_alias_) {
+      for (auto& section : channel) section.reset();
+    }
+  });
   const float feedback = config_.feedback;
   const std::array<float, 2> pan = balance_gains(config_.pan);
   const std::array<float, 2> pan2 = balance_gains(config_.pan2);
@@ -257,6 +279,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
     // filling the grain buffers so a later shift starts from real history
     // rather than silence.
     anti_alias_corner_hz_ = 0.0f;
+    anti_alias_gate_.close();
     for (int i = 0; i < num_samples; ++i) {
       for (int ch = 0; ch < active; ++ch) {
         if (channels[ch] == nullptr) continue;

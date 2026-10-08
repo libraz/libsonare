@@ -151,6 +151,11 @@ void Node::process_block(int num_samples) noexcept {
       sidechain_channels_[static_cast<size_t>(port)] = output_port(sidechain_first_port_ + port);
     }
     processor_->set_sidechain(sidechain_channels_.data(), sidechain_num_ports_, num_samples);
+    graph_key_bound_ = true;
+  } else if (graph_key_bound_) {
+    // Withdraw only the key this node bound; one the caller set directly stays.
+    processor_->clear_sidechain();
+    graph_key_bound_ = false;
   }
   if (processor_->bypassed()) {
     // Soft bypass: compile() bakes this node's per-port latency into the

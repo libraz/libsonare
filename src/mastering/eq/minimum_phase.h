@@ -11,6 +11,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::eq {
 
@@ -21,6 +22,9 @@ class MinimumPhaseEq : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override {
+    return rt::TailBudget::reported(eq_.tail_samples()).samples();
+  }
   void prepare_channels(int num_channels);
 
   void set_band(size_t index, const EqBand& band);

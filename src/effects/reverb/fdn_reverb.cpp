@@ -2,9 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
@@ -113,16 +113,14 @@ void FdnReverb::discard_non_finite() noexcept {
 
 int FdnReverb::tail_samples() const noexcept {
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
-  // The low-frequency band has the longest T60 in the network (the HF band is
-  // shortened by hf_damping, see update_absorption()), so t60_lf bounds the
-  // audible tail. Mirror the T60 mapping used there.
+  // The first reflection leaves the longest line before any decay is heard; the low band has the
+  // longest T60 in the network (see update_absorption()), then the DC blocker rings out.
   const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
-  const double samples = static_cast<double>(t60_lf) * sample_rate_;
-  if (samples <= 0.0) return 0;
-  if (samples >= static_cast<double>(std::numeric_limits<int>::max())) {
-    return std::numeric_limits<int>::max();
-  }
-  return static_cast<int>(std::ceil(samples));
+  rt::TailBudget tail;
+  tail.delay(*std::max_element(lengths_.begin(), lengths_.end()))
+      .t60(t60_lf, sample_rate_)
+      .decay(dc_blocker_.pole());
+  return tail.samples();
 }
 
 bool FdnReverb::set_parameter_impl(unsigned int param_id, float value) {

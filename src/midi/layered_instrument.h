@@ -16,7 +16,7 @@
 /// once. Note-addressed controllers are routed to every layer whose source key
 /// range contains the addressed key, then receive that layer's transpose.
 ///
-/// Latency: children must agree, and prepare() throws when they do not. Summing
+/// Latency: children must agree to the Q8 fraction, and prepare() throws when they do not. Summing
 /// outputs of unequal latency would smear the attack, and a layered patch has
 /// no use for the delay network that would fix it.
 ///
@@ -81,6 +81,7 @@ class LayeredInstrument final : public MidiInstrument {
   void on_prepared_sysex_accepted(const uint8_t* data, size_t size,
                                   const PreparedMidiSysEx* prepared) noexcept override;
   int latency_samples() const noexcept override;
+  int latency_samples_q8() const noexcept override;
   int tail_samples() const noexcept override;
   int parameter_id_for_key(const std::string& key) const noexcept override;
   bool apply_parameter(unsigned int param_id, float value) noexcept override;

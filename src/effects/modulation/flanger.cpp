@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
@@ -110,6 +111,19 @@ void Flanger::process(float* const* channels, int num_channels, int num_samples)
     }
   }
   discard_non_finite();
+}
+
+int Flanger::tail_samples() const noexcept {
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  if (!(mix.wet > 0.0f)) return 0;
+  const double longest = (config_.center_delay_ms + config_.depth_ms) * 0.001 * sample_rate_ +
+                         kDelayReadStencilSamples;
+  rt::TailBudget tail;
+  tail.decay(pre_filters_[0].pole())
+      .delay(longest)
+      .recirculation(longest, std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback));
+  return tail.samples();
 }
 
 void Flanger::discard_non_finite() noexcept {

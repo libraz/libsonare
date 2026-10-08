@@ -89,8 +89,10 @@ void BitCrusher::process(float* const* channels, int num_channels, int num_sampl
   ensure_state(num_channels);
   // One cadence or the other: a hold rate in hertz replaces the sample count.
   const bool held_by_rate = hold_increment_ > 0.0;
-  const bool prefilter = pre_gain_ > 0.0;
-  const bool postfilter = post_gain_ > 0.0;
+  const bool prefilter = pre_filter_gate_.admit(
+      pre_gain_ > 0.0, [this] { std::fill(pre_state_.begin(), pre_state_.end(), 0.0f); });
+  const bool postfilter = post_filter_gate_.admit(
+      post_gain_ > 0.0, [this] { std::fill(post_state_.begin(), post_state_.end(), 0.0f); });
   const bool highpass = config_.filter_type == BitCrusherFilterType::kHighpass;
   const effects::common::MixGains mix =
       effects::common::mix_gains(config_.mix_law, std::clamp(config_.mix, 0.0f, 1.0f));

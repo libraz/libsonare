@@ -281,9 +281,11 @@ void Graph::prepare(double sample_rate, int max_block_size) {
                             "graph topology could not be compiled (cycle or invalid edge)");
     }
   } else {
-    for (RuntimeConnection& runtime_connection : runtime_connections_) {
-      prepare_delay_lines(runtime_connection);
-    }
+    // The nodes' latencies settle in their own prepare(), so the compensation a
+    // compile before it computed is recomputed against them, delay lines included.
+    runtime_connections_.clear();
+    node_latency_q8_.clear();
+    build_arrival_plan();
   }
 }
 

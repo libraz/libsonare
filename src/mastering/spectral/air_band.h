@@ -6,6 +6,7 @@
 #include "rt/oversampler.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::mastering::spectral {
 
@@ -27,6 +28,14 @@ class AirBand : public rt::ProcessorBase {
   // paths_, so the processor reports that round trip as its I/O latency.
   int latency_samples() const noexcept override { return paths_.latency_samples(); }
   int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
+  /// The detector, the oversampled harmonic path's FIR ring and the dynamic shelf, in series.
+  int tail_samples() const noexcept override {
+    rt::TailBudget tail;
+    if (!detector_.empty()) tail.section(detector_.front().c);
+    tail.delay(harmonic_oversampler_.streaming_round_trip_latency_samples());
+    if (!shelf_.empty()) tail.section(shelf_.front().c);
+    return tail.samples();
+  }
   void set_config(const AirBandConfig& config);
 
   // Automatable parameters (RT-safe: updates config in place; the shelf gain is

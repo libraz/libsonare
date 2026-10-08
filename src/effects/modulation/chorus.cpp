@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 
 namespace sonare::effects::modulation {
 
@@ -110,6 +111,23 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
     }
   }
   discard_non_finite();
+}
+
+int Chorus::tail_samples() const noexcept {
+  const common::MixGains mix =
+      common::mix_gains(config_.mix_law, std::clamp(config_.dry_wet, 0.0f, 1.0f));
+  if (!(mix.wet > 0.0f)) return 0;
+  // The longest modulated read, recirculating through the feedback low-pass.
+  const double longest = (config_.center_delay_ms + config_.depth_ms) * 0.001 * sample_rate_ +
+                         kDelayReadStencilSamples;
+  rt::TailBudget feedback_ring;
+  feedback_ring.decay(feedback_filters_[0].pole());
+  rt::TailBudget tail;
+  tail.decay(pre_filters_[0].pole())
+      .delay(longest)
+      .recirculation(longest + feedback_ring.samples(),
+                     std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback));
+  return tail.samples();
 }
 
 void Chorus::discard_non_finite() noexcept {

@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::stereo {
 
@@ -48,6 +49,7 @@ class HaasEnhancer : public rt::ProcessorBase {
   size_t delay_index_ = 0;
   std::vector<float> delay_;
   bool prepared_ = false;
+  rt::StageGate stage_;
 };
 
 }  // namespace sonare::mastering::stereo

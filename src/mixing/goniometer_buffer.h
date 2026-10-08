@@ -8,14 +8,17 @@
 /// only the most recent Capacity points. Thinning for display is the consumer's
 /// choice, made from what read_latest() returns.
 ///
-/// The writer publishes a monotonically increasing index, but individual point
-/// slots are not seqlock-protected. UI consumers may observe a torn point during
-/// wraparound; this buffer is intended only for visual metering, never audio or
-/// state decisions.
+/// Each point is one 64-bit atomic word, so a reader never sees half of a point
+/// and reader and writer never race. A reader that falls a whole ring behind
+/// drops the points it saw overwritten while it copied; the one point being
+/// written as the copy finishes can still arrive out of order. Intended for
+/// visual metering, never audio or state decisions.
 
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 
 namespace sonare::mixing {
 
@@ -30,13 +33,13 @@ class GoniometerBuffer {
   static_assert(Capacity > 0, "Capacity must be positive");
 
   void push(float left, float right) noexcept {
-    const size_t index = write_index_.load(std::memory_order_relaxed) % Capacity;
-    points_[index] = {left, right};
-    write_index_.store(write_index_.load(std::memory_order_relaxed) + 1, std::memory_order_release);
+    const size_t written = write_index_.load(std::memory_order_relaxed);
+    points_[written % Capacity].store(pack({left, right}), std::memory_order_relaxed);
+    write_index_.store(written + 1, std::memory_order_release);
   }
 
   void reset() noexcept {
-    points_ = {};
+    for (auto& point : points_) point.store(0, std::memory_order_relaxed);
     write_index_.store(0, std::memory_order_release);
   }
 
@@ -47,15 +50,35 @@ class GoniometerBuffer {
     const size_t written = write_index_.load(std::memory_order_acquire);
     const size_t count = written < Capacity ? written : Capacity;
     const size_t out_count = count < max_points ? count : max_points;
-    const size_t start = written > out_count ? written - out_count : 0;
+    const size_t start = written - out_count;
     for (size_t i = 0; i < out_count; ++i) {
-      dest[i] = points_[(start + i) % Capacity];
+      dest[i] = unpack(points_[(start + i) % Capacity].load(std::memory_order_relaxed));
     }
-    return out_count;
+    // Slots the writer lapped during the copy hold newer points; drop them from the front.
+    std::atomic_thread_fence(std::memory_order_acquire);
+    const size_t after = write_index_.load(std::memory_order_relaxed);
+    const size_t first_valid = after > Capacity ? after - Capacity : 0;
+    const size_t lapped = first_valid > start ? first_valid - start : 0;
+    if (lapped == 0) return out_count;
+    if (lapped >= out_count) return 0;
+    for (size_t i = lapped; i < out_count; ++i) dest[i - lapped] = dest[i];
+    return out_count - lapped;
   }
 
  private:
-  std::array<GoniometerPoint, Capacity> points_{};
+  static uint64_t pack(GoniometerPoint point) noexcept {
+    uint64_t word = 0;
+    std::memcpy(&word, &point, sizeof(point));
+    return word;
+  }
+  static GoniometerPoint unpack(uint64_t word) noexcept {
+    GoniometerPoint point;
+    std::memcpy(&point, &word, sizeof(point));
+    return point;
+  }
+
+  static_assert(sizeof(GoniometerPoint) == sizeof(uint64_t), "a point packs into one word");
+  std::array<std::atomic<uint64_t>, Capacity> points_{};
   std::atomic<size_t> write_index_{0};
 };
 

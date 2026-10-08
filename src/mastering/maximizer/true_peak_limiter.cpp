@@ -12,6 +12,7 @@
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/sliding_max.h"
+#include "rt/tail_budget.h"
 #include "rt/true_peak_fir.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -525,6 +526,15 @@ void TruePeakLimiter::validate_config(const TruePeakLimiterConfig& config) {
        config.oversample_factor != 16)) {
     throw SonareException(ErrorCode::InvalidParameter, "invalid true peak limiter configuration");
   }
+}
+
+int TruePeakLimiter::tail_samples() const noexcept {
+  // Only a signal that makes the round trip through the oversampler rings past the latency.
+  rt::TailBudget tail;
+  if (!config_.apply_gain_at_input_rate) {
+    tail.delay(oversampler_.streaming_round_trip_latency_samples());
+  }
+  return tail.samples();
 }
 
 int TruePeakLimiter::latency_samples() const noexcept {

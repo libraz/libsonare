@@ -4,11 +4,13 @@
 #include <cmath>
 #include <complex>
 #include <cstdint>
+#include <initializer_list>
 
 #include "core/fft.h"
 #include "core/resample.h"
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -219,7 +221,23 @@ void BinauralPanner::reset() {
 
 int BinauralPanner::tail_samples() const noexcept {
   const float max_itd = itd_.empty() ? 0.0f : *std::max_element(itd_.begin(), itd_.end());
-  return taps_ + static_cast<int>(std::ceil(max_itd)) + 4 + xtc_taps_;
+  // HRIR, then the interaural delay's read stencil, then the canceller.
+  rt::TailBudget tail;
+  tail.delay(taps_).delay(std::ceil(max_itd) + 4.0).delay(xtc_taps_);
+  if (config_.output == BinauralOutput::kSpeakers) {
+    // The crossover's two branches ring in parallel after the canceller.
+    rt::TailBudget crossover;
+    for (const rt::BiquadState* branch : {low_[0], high_[0]}) {
+      rt::TailBudget sections;
+      for (int stage = 0; stage < 2; ++stage) {
+        const rt::BiquadCoeffs& c = branch[stage].c;
+        sections.biquad(std::fabs(c.b0) + std::fabs(c.b1) + std::fabs(c.b2), c.a1, c.a2);
+      }
+      crossover.alongside(sections);
+    }
+    tail.then(crossover);
+  }
+  return tail.samples();
 }
 
 void BinauralPanner::advance_position() noexcept {

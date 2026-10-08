@@ -21,6 +21,7 @@
 #include "effects/common/mix_law.h"
 #include "mastering/final/dither.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::saturation {
 
@@ -187,6 +188,8 @@ class BitCrusher : public rt::ProcessorBase {
   std::vector<float> noise_;
   std::vector<float> pre_state_;
   std::vector<float> post_state_;
+  rt::StageGate pre_filter_gate_;
+  rt::StageGate post_filter_gate_;
   std::vector<float> held_;
   std::vector<int> counters_;
   /// Per-channel hold phase, in periods of the hold rate. Carries no audio --

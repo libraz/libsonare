@@ -10,6 +10,7 @@
 #include "mastering/eq/linear_phase.h"
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::mastering::eq {
@@ -40,6 +41,7 @@ class CutFilter : public rt::ProcessorBase {
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
   int latency_samples() const noexcept override;
+  int tail_samples() const noexcept override;
   void prepare_channels(int num_channels);
 
   void set_high_pass(float frequency_hz, float q = sonare::constants::kButterworthQ,
@@ -83,8 +85,17 @@ class CutFilter : public rt::ProcessorBase {
 
   void apply_high_pass();
   void apply_low_pass();
-  void build_sections(std::array<Section, kMaxSections>& sections, EqBandType type,
-                      float frequency_hz, float q, bool enabled, CutFilterSlope slope);
+  /// @param gates Closed when the stage's section layout changes, so every section
+  ///        that re-enters, or now holds a different order's stage, starts from rest.
+  void build_sections(std::array<Section, kMaxSections>& sections,
+                      std::array<rt::StageGate, kMaxSections>& gates, int& built_order,
+                      EqBandType type, float frequency_hz, float q, bool enabled,
+                      CutFilterSlope slope);
+  /// Admits each section through its gate once per block, clearing the history
+  /// of one coming back into the path.
+  static void admit_sections(const std::array<Section, kMaxSections>& sections,
+                             std::array<rt::StageGate, kMaxSections>& gates,
+                             std::array<std::vector<State>, kMaxSections>& states);
   void rebuild_brickwall();
   /// The one predicate that both selects the FIR rebuild in set_parameter_impl()
   /// and answers parameter_is_realtime_safe().
@@ -93,6 +104,7 @@ class CutFilter : public rt::ProcessorBase {
   bool low_pass_is_brickwall() const noexcept;
   /// @return true when any section's state was returned to its post-reset value.
   bool process_stage(const std::array<Section, kMaxSections>& sections,
+                     const std::array<rt::StageGate, kMaxSections>& gates,
                      std::array<std::vector<State>, kMaxSections>& states, float* samples,
                      int channel, int num_samples) const;
 
@@ -108,6 +120,10 @@ class CutFilter : public rt::ProcessorBase {
   std::array<Section, kMaxSections> low_pass_sections_{};
   std::array<std::vector<State>, kMaxSections> high_pass_states_{};
   std::array<std::vector<State>, kMaxSections> low_pass_states_{};
+  std::array<rt::StageGate, kMaxSections> high_pass_gates_{};
+  std::array<rt::StageGate, kMaxSections> low_pass_gates_{};
+  int high_pass_order_ = -1;
+  int low_pass_order_ = -1;
 };
 
 }  // namespace sonare::mastering::eq

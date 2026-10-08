@@ -60,6 +60,7 @@ void MultibandImager::prepare(double sample_rate, int max_block_size, int max_ch
   crossover_.prepare(sample_rate_, max_block_size_, max_working_channels_);
   crossover_.prepare_scratch(scratch_, max_working_channels_, max_block_size_);
   allpass_.resize(config_.bands.size());
+  decorrelation_gates_.assign(config_.bands.size(), rt::StageGate{});
   for (auto& band_stages : allpass_) {
     for (int stage = 0; stage < kNumAllpassStages; ++stage) {
       band_stages[static_cast<size_t>(stage)].coefficient =
@@ -95,22 +96,25 @@ void MultibandImager::process(float* const* channels, int num_channels, int num_
   if (num_channels >= 2) {
     for (int band = 0; band < num_bands; ++band) {
       const auto& band_config = config_.bands[static_cast<size_t>(band)];
+      auto& stages = allpass_[static_cast<size_t>(band)];
+      // The decorrelation allpass only contributes when widening (width > 1)
+      // with a non-zero amount; outside that it is skipped, and it comes back
+      // from rest rather than from the state it froze with.
+      const bool use_decorrelation = band_config.enabled && band_config.width > 1.0f &&
+                                     band_config.decorrelation_amount > 0.0f;
+      decorrelation_gates_[static_cast<size_t>(band)].admit(use_decorrelation, [&stages] {
+        for (auto& stage : stages) stage.reset();
+      });
       if (!band_config.enabled || band_config.width == 1.0f) {
         continue;
       }
 
       auto& left = scratch_.bands[static_cast<size_t>(band)][0];
       auto& right = scratch_.bands[static_cast<size_t>(band)][1];
-      // The decorrelation allpass only contributes when widening (width > 1)
-      // with a non-zero amount; otherwise running it would waste CPU and could
-      // subtly alter the signal, so skip it entirely.
-      const bool use_decorrelation =
-          band_config.decorrelation_amount > 0.0f && band_config.width > 1.0f;
       const float energy_scale =
           band_config.preserve_energy
               ? sonare::mastering::stereo::constant_power_width_gain(band_config.width)
               : 1.0f;
-      auto& stages = allpass_[static_cast<size_t>(band)];
       for (int i = 0; i < num_samples; ++i) {
         const size_t index = static_cast<size_t>(i);
         const float mid = 0.5f * (left[index] + right[index]);

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/non_finite_state.h"
@@ -254,6 +255,23 @@ void Rotary::reset_geometric() noexcept {
   }
   horn_peak_.reset();
   place_mics();
+}
+
+int Rotary::tail_samples() const noexcept {
+  if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
+  // Longest rotor path (twice the horn radius plus the microphone gap, under 2 ms), then every
+  // band filter either model runs, in series.
+  rt::TailBudget tail;
+  tail.delay((2.0 * config_.depth_ms + 2.0) * 0.001 * sample_rate_ + kDelayReadStencilSamples);
+  tail.decay(lp_coeff_);
+  for (int stage = 0; stage < 2; ++stage) {
+    tail.section(xover_lp_[stage].c).section(xover_hp_[stage].c);
+    tail.section(baffle_lp_[stage].c).section(baffle_hp_[stage].c);
+  }
+  tail.section(horn_peak_.c);
+  tail.then(SvfBandpass::ring(rotary_geometry::kOffAxisCornerHz, ::sonare::constants::kInvSqrt2,
+                              sample_rate_));
+  return tail.samples();
 }
 
 void Rotary::reset() {

@@ -49,6 +49,7 @@ class VowelFilter : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
   /// @brief ADAA1's half sample (Q8 128) on both paths of the pair.
   int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
   int latency_samples() const noexcept override { return paths_.latency_samples(); }

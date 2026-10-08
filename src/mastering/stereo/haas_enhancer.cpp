@@ -5,6 +5,7 @@
 
 #include "core/audio.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/exception.h"
 
 namespace sonare::mastering::stereo {
@@ -32,7 +33,9 @@ void HaasEnhancer::process(float* const* channels, int num_channels, int num_sam
   if (!validate_process_buffers(channels, num_channels, num_samples)) {
     return;
   }
-  if (num_channels < 2 || delay_samples_ == 0 || config_.mix == 0.0f) {
+  // Out of the path for a mono block, no delay or a zero mix; back in from rest.
+  if (!stage_.admit(num_channels >= 2 && delay_samples_ != 0 && config_.mix != 0.0f,
+                    [this] { reset(); })) {
     return;
   }
 
@@ -54,7 +57,9 @@ int HaasEnhancer::tail_samples() const noexcept {
   // The delayed cross-channel path is finite: after input becomes silent, the
   // last sample emerges exactly delay_samples_ later. A dry-only or zero-delay
   // configuration never contributes delayed output.
-  return prepared_ && config_.mix > 0.0f ? std::max(0, delay_samples_) : 0;
+  rt::TailBudget tail;
+  if (prepared_ && config_.mix > 0.0f) tail.delay(delay_samples_);
+  return tail.samples();
 }
 
 void HaasEnhancer::set_config(const HaasEnhancerConfig& config) {

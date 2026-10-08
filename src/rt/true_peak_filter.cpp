@@ -165,6 +165,13 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
 
 void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
                                                    float* const* output_oversampled,
+                                                   int num_channels, int num_samples) const {
+  upsample_with_history_delayed(input, output_oversampled, num_channels, num_samples,
+                                internal_history_, internal_scratch_);
+}
+
+void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
+                                                   float* const* output_oversampled,
                                                    int num_channels, int num_samples,
                                                    std::vector<std::vector<float>>& history,
                                                    std::vector<std::vector<float>>& scratch) const {

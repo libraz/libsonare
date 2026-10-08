@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
@@ -116,11 +118,14 @@ void CutFilter::process(float* const* channels, int num_channels, int num_sample
     throw SonareException(ErrorCode::InvalidParameter,
                           "num_channels exceeds prepared CutFilter state");
   }
+  admit_sections(high_pass_sections_, high_pass_gates_, high_pass_states_);
+  admit_sections(low_pass_sections_, low_pass_gates_, low_pass_states_);
   bool discarded = false;
   for (int ch = 0; ch < num_channels; ++ch) {
-    discarded |=
-        process_stage(high_pass_sections_, high_pass_states_, channels[ch], ch, num_samples);
-    discarded |= process_stage(low_pass_sections_, low_pass_states_, channels[ch], ch, num_samples);
+    discarded |= process_stage(high_pass_sections_, high_pass_gates_, high_pass_states_,
+                               channels[ch], ch, num_samples);
+    discarded |= process_stage(low_pass_sections_, low_pass_gates_, low_pass_states_, channels[ch],
+                               ch, num_samples);
   }
   if (discarded) note_non_finite_discard();
   if (high_pass_is_brickwall() || low_pass_is_brickwall()) {
@@ -140,6 +145,20 @@ void CutFilter::reset() {
     }
   }
   brickwall_.reset();
+}
+
+int CutFilter::tail_samples() const noexcept {
+  // Each stage is either a section cascade or the shared brickwall FIR.
+  rt::TailBudget tail;
+  for (const auto* sections : {&high_pass_sections_, &low_pass_sections_}) {
+    for (const Section& section : *sections) {
+      if (section.enabled) tail.section(section.coeffs);
+    }
+  }
+  if (high_pass_is_brickwall() || low_pass_is_brickwall()) {
+    tail.then(rt::TailBudget::reported(brickwall_.tail_samples()));
+  }
+  return tail.samples();
 }
 
 int CutFilter::latency_samples() const noexcept {
@@ -229,26 +248,34 @@ std::vector<rt::ParamDescriptor> CutFilter::parameter_descriptors() const {
 
 void CutFilter::apply_high_pass() {
   high_pass_.frequency_hz = clamp_frequency(high_pass_.frequency_hz, sample_rate_);
-  build_sections(high_pass_sections_, EqBandType::HighPass, high_pass_.frequency_hz, high_pass_.q,
-                 high_pass_.enabled, high_pass_slope_);
+  build_sections(high_pass_sections_, high_pass_gates_, high_pass_order_, EqBandType::HighPass,
+                 high_pass_.frequency_hz, high_pass_.q, high_pass_.enabled, high_pass_slope_);
 }
 
 void CutFilter::apply_low_pass() {
   low_pass_.frequency_hz = clamp_frequency(low_pass_.frequency_hz, sample_rate_);
-  build_sections(low_pass_sections_, EqBandType::LowPass, low_pass_.frequency_hz, low_pass_.q,
-                 low_pass_.enabled, low_pass_slope_);
+  build_sections(low_pass_sections_, low_pass_gates_, low_pass_order_, EqBandType::LowPass,
+                 low_pass_.frequency_hz, low_pass_.q, low_pass_.enabled, low_pass_slope_);
 }
 
-void CutFilter::build_sections(std::array<Section, kMaxSections>& sections, EqBandType type,
-                               float frequency_hz, float q, bool enabled, CutFilterSlope slope) {
+void CutFilter::build_sections(std::array<Section, kMaxSections>& sections,
+                               std::array<rt::StageGate, kMaxSections>& gates, int& built_order,
+                               EqBandType type, float frequency_hz, float q, bool enabled,
+                               CutFilterSlope slope) {
   for (auto& section : sections) {
     section = {};
   }
-  if (!enabled || slope == CutFilterSlope::Brickwall) {
+  const bool cascade = enabled && slope != CutFilterSlope::Brickwall;
+  const int order = cascade ? slope_db_oct(slope) / 6 : 0;
+  // A new order moves stages between slots; a retuned one keeps them in place.
+  if (order != built_order) {
+    for (auto& gate : gates) gate.close();
+    built_order = order;
+  }
+  if (!cascade) {
     return;
   }
 
-  const int order = slope_db_oct(slope) / 6;
   const float w0 =
       static_cast<float>(2.0 * kPiD * static_cast<double>(frequency_hz) / sample_rate_);
   size_t section_index = 0;
@@ -290,12 +317,24 @@ bool CutFilter::low_pass_is_brickwall() const noexcept {
   return low_pass_slope_ == CutFilterSlope::Brickwall && low_pass_.enabled;
 }
 
+void CutFilter::admit_sections(const std::array<Section, kMaxSections>& sections,
+                               std::array<rt::StageGate, kMaxSections>& gates,
+                               std::array<std::vector<State>, kMaxSections>& states) {
+  for (size_t index = 0; index < kMaxSections; ++index) {
+    auto& section_states = states[index];
+    gates[index].admit(sections[index].enabled, [&section_states] {
+      for (auto& state : section_states) state = {};
+    });
+  }
+}
+
 bool CutFilter::process_stage(const std::array<Section, kMaxSections>& sections,
+                              const std::array<rt::StageGate, kMaxSections>& gates,
                               std::array<std::vector<State>, kMaxSections>& states, float* samples,
                               int channel, int num_samples) const {
   bool discarded = false;
   for (size_t section_index = 0; section_index < kMaxSections; ++section_index) {
-    if (!sections[section_index].enabled) {
+    if (!gates[section_index].active()) {
       continue;
     }
     const auto c = sections[section_index].coeffs;

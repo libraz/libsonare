@@ -70,6 +70,17 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
     ensure_capacity(sidechain_num_channels_);
   }
 
+  // Listening and ducking share the main delay lines, so each mode enters from rest; listening
+  // delays the key by the same reported latency the ducked signal carries.
+  auto clear_lines = [this] {
+    for (auto& lookahead : lookahead_) lookahead.reset();
+  };
+  const bool listening = listen_gate_.admit(cfg.key_listen, clear_lines);
+  duck_gate_.admit(!cfg.key_listen, [this, &clear_lines] {
+    follower_.reset();
+    clear_lines();
+  });
+
   float max_reduction = 0.0f;
   // Sample-major loop with a single linked detector and a single shared
   // envelope follower: every output channel receives the same gain (preserves
@@ -77,9 +88,11 @@ void SidechainRouter::process(float* const* channels, int num_channels, int num_
   // channel per sample (no double-filtering across output channels).
   for (int i = 0; i < num_samples; ++i) {
     const float detector = detector_sample(channels, num_channels, i, cfg);
-    if (cfg.key_listen) {
+    if (listening) {
       for (int ch = 0; ch < num_channels; ++ch) {
-        channels[ch][i] = detector;
+        channels[ch][i] = lookahead_samples_ > 0
+                              ? lookahead_[static_cast<size_t>(ch)].process(detector)
+                              : detector;
       }
       continue;
     }

@@ -8,6 +8,9 @@
 namespace sonare::mastering::final {
 
 inline constexpr uint32_t kDitherChannelSeedSalt = 0x9E3779B9u;
+/// Word lengths the dither and bit-depth stages accept, inclusive.
+inline constexpr int kMinDitherTargetBits = 2;
+inline constexpr int kMaxDitherTargetBits = 32;
 
 /// @brief Dither noise shape added before quantization.
 /// @details @c None passes the input through unquantized (only non-finite

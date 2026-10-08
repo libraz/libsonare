@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/adaa.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -243,6 +244,15 @@ void PresenceEnhancer::declare_path_latencies() {
   paths_.set_path_latencies_q8(
       {0, sonare::rt::aliasing_latency_samples_q8(
               config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples())});
+}
+
+int PresenceEnhancer::tail_samples() const noexcept {
+  // The presence band-pass, then the harmonic path's aliasing control.
+  sonare::rt::TailBudget tail;
+  if (!bandpass_.empty()) tail.section(bandpass_.front().c);
+  tail.then(sonare::rt::aliasing_tail(
+      config_.aliasing, harmonic_oversampler_.streaming_round_trip_latency_samples()));
+  return tail.samples();
 }
 
 int PresenceEnhancer::latency_samples() const noexcept { return paths_.latency_samples(); }

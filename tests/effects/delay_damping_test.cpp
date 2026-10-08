@@ -532,3 +532,43 @@ TEST_CASE("the stereo delay's in-loop damping matches the measured band-dependen
   WARN("comparisons: " << tally.count());
   REQUIRE(tally.count() >= 40);
 }
+
+TEST_CASE("Damping switched back in starts from the loop, not the sample it froze with",
+          "[effects][delay][damping]") {
+  StereoDelayConfig config;
+  config.delay_time_l_ms = 10.0f;
+  config.delay_time_r_ms = 10.0f;
+  config.feedback = 0.8f;
+  config.dry_wet = 1.0f;
+  config.damping_hz = 2000.0f;
+  StereoDelay delay(config);
+  delay.prepare(48000.0, 4096);
+
+  std::vector<float> left(4096, 0.0f);
+  // One delay length of DC keeps the loop full, so the damping cell holds a large value.
+  std::fill(left.begin(), left.begin() + 480, 0.9f);
+  std::vector<float> right = left;
+  process_stereo(delay, left, right);
+  const float rung = *std::max_element(
+      left.begin() + 480, left.end(), [](float a, float b) { return std::fabs(a) < std::fabs(b); });
+  REQUIRE(std::fabs(rung) > 0.01f);
+
+  // Damping out and the loop opened: two seconds of silence drain every line.
+  config.damping_hz = 0.0f;
+  config.feedback = 0.0f;
+  delay.set_config(config);
+  for (int block = 0; block < 24; ++block) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    process_stereo(delay, left, right);
+  }
+
+  config.damping_hz = 2000.0f;
+  delay.set_config(config);
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  process_stereo(delay, left, right);
+  float peak = 0.0f;
+  for (size_t i = 0; i < 256; ++i) peak = std::max({peak, std::fabs(left[i]), std::fabs(right[i])});
+  REQUIRE(peak < 1.0e-6f);
+}

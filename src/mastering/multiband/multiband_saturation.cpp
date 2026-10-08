@@ -129,9 +129,15 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
   const int num_bands = scratch_.num_bands();
   for (int band = 0; band < num_bands; ++band) {
     const auto& band_config = config_.bands[static_cast<size_t>(band)];
-    if (band_config.enabled) {
+    auto& blend = blend_paths_[static_cast<size_t>(band)];
+    auto& processor = *processors_[static_cast<size_t>(band)];
+    // A band coming back into the path starts from rest, never from the
+    // saturator and blend history it froze with when it was disabled.
+    if (band_gates_[static_cast<size_t>(band)].admit(band_config.enabled, [&processor, &blend] {
+          processor.reset();
+          blend.reset();
+        })) {
       auto& band_channels = scratch_.band_channels[static_cast<size_t>(band)];
-      auto& blend = blend_paths_[static_cast<size_t>(band)];
       const bool blended = blend.num_paths() != 0;
       if (blended) {
         for (int ch = 0; ch < num_channels; ++ch) {
@@ -139,8 +145,7 @@ void MultibandSaturation::process(float* const* channels, int num_channels, int 
                       dry_scratch_[static_cast<size_t>(ch)].data());
         }
       }
-      processors_[static_cast<size_t>(band)]->process(band_channels.data(), num_channels,
-                                                      num_samples);
+      processor.process(band_channels.data(), num_channels, num_samples);
       if (blended) {
         const float mix = band_config.mix;
         for (int ch = 0; ch < num_channels; ++ch) {
@@ -203,6 +208,7 @@ void MultibandSaturation::set_config(const MultibandSaturationConfig& config) {
           for (size_t band = 0; band < processors_.size(); ++band) {
             if (config_.bands[band] == diff.held().bands[band]) continue;
             processors_[band] = make_processor(config_.bands[band]);
+            band_gates_[band].close();
             if (prepared_) {
               processors_[band]->prepare(sample_rate_, max_block_size_, max_working_channels_);
             }
@@ -296,6 +302,7 @@ void MultibandSaturation::rebuild_processors() {
   for (const auto& band_config : config_.bands) {
     processors_.push_back(make_processor(band_config));
   }
+  band_gates_.assign(processors_.size(), rt::StageGate{});
 }
 
 int MultibandSaturation::band_latency_q8(size_t band) const noexcept {

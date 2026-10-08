@@ -10,13 +10,10 @@
 namespace sonare::mastering::stereo {
 
 /// Which curve pair the balance is read through.
-enum  /// A change of the balance is glided over a fixed 5 ms so a control moved
-      /// between blocks does not step the gains; a balance that does not change
-      /// renders exactly as a fixed gain pair.
-    class StereoBalanceLaw {
-      kNormalized,        ///< unity at centre (see `constant_power`); the default.
-      kRawConstantPower,  ///< the constant-power curve's literal gains: centre is -3 dB.
-    };
+enum class StereoBalanceLaw {
+  kNormalized,        ///< unity at centre (see `constant_power`); the default.
+  kRawConstantPower,  ///< the constant-power curve's literal gains: centre is -3 dB.
+};
 inline constexpr int kStereoBalanceLawCount = 2;
 
 struct StereoBalanceConfig {
@@ -28,7 +25,9 @@ struct StereoBalanceConfig {
 
 /// A change of the balance is glided over a fixed 5 ms so a control moved
 /// between blocks does not step the gains; a balance that does not change
-/// renders exactly as a fixed gain pair.
+/// renders exactly as a fixed gain pair. The glide moves the balance position
+/// and reads the law at every step, so a constant-power move keeps its power;
+/// a law change crossfades the two laws' gains over the same 5 ms.
 class StereoBalance : public rt::ProcessorBase {
  public:
   explicit StereoBalance(StereoBalanceConfig config = {});
@@ -50,6 +49,8 @@ class StereoBalance : public rt::ProcessorBase {
  private:
   static void validate_config(const StereoBalanceConfig& config);
   static void gains(const StereoBalanceConfig& config, float& left, float& right);
+  /// Gains at the glide's current position and law blend.
+  void glide_gains(float& left, float& right) const;
 
   StereoBalanceConfig config_{};
   bool prepared_ = false;
@@ -60,10 +61,14 @@ class StereoBalance : public rt::ProcessorBase {
   bool primed_ = false;
   float left_gain_ = 1.0f;
   float right_gain_ = 1.0f;
-  float target_left_ = 1.0f;
-  float target_right_ = 1.0f;
-  float step_left_ = 0.0f;
-  float step_right_ = 0.0f;
+  /// Glide state: the balance position, and the law it is leaving and reaching.
+  float position_ = 0.0f;
+  float target_position_ = 0.0f;
+  float step_position_ = 0.0f;
+  StereoBalanceConfig from_law_{};
+  StereoBalanceConfig to_law_{};
+  float law_blend_ = 1.0f;
+  float step_law_blend_ = 0.0f;
   int ramp_remaining_ = 0;
 };
 

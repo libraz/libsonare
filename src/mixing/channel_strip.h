@@ -24,6 +24,7 @@
 #include "mixing/surround_panner.h"
 #include "rt/bounded_staging.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mixing::api {
 struct StripEq;
@@ -264,6 +265,11 @@ class ChannelStrip : public rt::ProcessorBase {
   // Embedded meters. The no-arg overload is kept as the post-chain/output meter.
   MeterSnapshot meter_snapshot() const noexcept { return meter_snapshot(TapPoint::PostFader); }
   MeterSnapshot meter_snapshot(TapPoint tap) const noexcept;
+  /// @brief Ends the signal for both meters (see MeterProcessor::flush_true_peak).
+  void flush_meters() noexcept {
+    if (pre_meter_) pre_meter_->flush_true_peak();
+    if (post_meter_) post_meter_->flush_true_peak();
+  }
   bool metering_enabled() const noexcept { return metering_enabled_; }
   /// Audible insert gain reduction from the last block, including when meters are disabled.
   float last_gain_reduction_db() const override { return last_gain_reduction_db_; }
@@ -574,6 +580,9 @@ class ChannelStrip : public rt::ProcessorBase {
   std::atomic<bool> implied_mute_{false};
   std::atomic<EqPosition> eq_position_{EqPosition::PreFader};
   std::atomic<bool> eq_enabled_{true};
+  // Audio thread: one gate per EQ position, both resetting the one shared EQ.
+  rt::StageGate eq_pre_gate_;
+  rt::StageGate eq_post_gate_;
 
   double sample_rate_ = 48000.0;
   int max_block_size_ = 0;

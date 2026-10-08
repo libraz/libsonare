@@ -339,3 +339,38 @@ TEST_CASE("the automation keys include the type ladder and refuse unknown values
   CHECK(crusher.set_parameter(18, 1.0f));
   CHECK(crusher.config().mono);
 }
+
+TEST_CASE("BitCrusher filters switched back in start from rest", "[effects][lofi]") {
+  BitCrusherConfig config;
+  config.mix = 1.0f;
+  config.quantizer_mode = QuantizerMode::kOff;
+  config.pre_filter_hz = 2000.0f;
+  config.post_filter_hz = 2000.0f;
+  BitCrusher crusher(config);
+  crusher.prepare(48000.0, 2048);
+
+  std::vector<float> left(2048);
+  for (size_t i = 0; i < left.size(); ++i) {
+    left[i] =
+        0.6f * static_cast<float>(std::sin(kTwoPiD * 300.0 * static_cast<double>(i) / 48000.0));
+  }
+  std::vector<float> right = left;
+  float* channels[] = {left.data(), right.data()};
+  crusher.process(channels, 2, 2048);
+
+  REQUIRE(crusher.set_parameter(12, 0.0f));
+  REQUIRE(crusher.set_parameter(13, 0.0f));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  crusher.process(channels, 2, 2048);
+
+  REQUIRE(crusher.set_parameter(12, 2000.0f));
+  REQUIRE(crusher.set_parameter(13, 2000.0f));
+  std::fill(left.begin(), left.end(), 0.0f);
+  std::fill(right.begin(), right.end(), 0.0f);
+  crusher.process(channels, 2, 256);
+  for (size_t i = 0; i < 256; ++i) {
+    REQUIRE(left[i] == 0.0f);
+    REQUIRE(right[i] == 0.0f);
+  }
+}

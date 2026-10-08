@@ -69,14 +69,11 @@ struct MeterSnapshot {
   /// MeterConfig::true_peak_oversample. Both stay at the dB floor when
   /// MeterConfig::measure_true_peak is false.
   ///
-  /// @note This is a STREAMING measurement and is very slightly block-size
-  /// dependent. The reconstruction's centered stencil needs a few future
-  /// base-rate samples, which a realtime path does not have, so the last samples
-  /// of each block interpolate against a zero-padded forward kernel and read
-  /// marginally low -- roughly 0.1 dB across 64..8192-sample blocks on a
-  /// near-Nyquist tone, always in the under-reading direction. Use the offline
-  /// metering::true_peak over the whole signal when an exact dBTP number is
-  /// required (a delivery ceiling check, say) rather than a live indication.
+  /// @note This is a STREAMING measurement that runs one reconstruction-filter
+  /// group delay behind the block (a few base-rate samples), so every value it
+  /// reads has its whole centered stencil and the reading does not depend on the
+  /// block size. A block's peak therefore covers the input up to that delay
+  /// earlier; the offline metering::true_peak covers the whole signal at once.
   std::array<float, kMaxMeterChannels> true_peak_db = detail::meter_floor_array();
   float max_true_peak_db = constants::kFloorDb;
   // Number of planes carrying valid per-channel meters (1..kMaxMeterChannels).
@@ -115,6 +112,13 @@ class MeterProcessor : public rt::ProcessorBase {
   MeterSnapshot snapshot() const noexcept;
   void set_gain_reduction_db(float db) noexcept;
 
+  /// @brief Ends the signal for the true-peak reading: runs the reconstruction's
+  ///        pending group delay against silence and folds those values into the
+  ///        published true peak, so the last samples of a signal are read whole.
+  ///        Control thread, not concurrent with process(); a later process()
+  ///        starts a new signal. A meter that has not measured true peak is left as is.
+  void flush_true_peak() noexcept;
+
   /// @brief Oversample factor (2, 4 or 8) the true-peak filter runs at once prepared.
   int true_peak_oversample_factor() const noexcept { return true_peak_filter_.factor(); }
 
@@ -133,9 +137,11 @@ class MeterProcessor : public rt::ProcessorBase {
 
   // True-peak oversample scratch, preallocated in prepare() so the per-block
   // path never allocates. The filter keeps cross-block history internally
-  // (set up via TruePeakFilter::prepare()). It has no look-ahead, so the reading is
-  // slightly block-size dependent and always under-reads (see sonare_c_mixing.h).
+  // (set up via TruePeakFilter::prepare()) and reads one group delay behind the block.
   static constexpr int kTruePeakChannels = 8;
+  // Planes the last process() fed with audio, for flush_true_peak().
+  int true_peak_channels_ = 0;
+  std::array<bool, kTruePeakChannels> true_peak_live_{};
   std::array<std::vector<float>, kTruePeakChannels> true_peak_oversampled_{};
   std::array<float*, kTruePeakChannels> true_peak_in_ptrs_{};
   std::array<float*, kTruePeakChannels> true_peak_out_ptrs_{};
@@ -171,9 +177,11 @@ class MeterProcessor : public rt::ProcessorBase {
   double short_term_sum_ = 0.0;
 
   // Integrated gating-block accumulation.
-  size_t gate_hop_ = 0;                  // 100 ms hop in samples
-  size_t gate_hop_counter_ = 0;          // samples since last gating block was taken
-  static constexpr int kHistBins = 750;  // -70.0 .. +5.0 LU in 0.1 LU steps
+  size_t gate_hop_ = 0;          // 100 ms hop in samples
+  size_t gate_hop_counter_ = 0;  // samples since last gating block was taken
+  // -70.0 .. +30.0 LUFS in 0.1 LU steps: past full scale on every 7.1 plane at once. A louder
+  // block lands in the top bin with its exact energy, so only the gate's bin resolution moves.
+  static constexpr int kHistBins = 1000;
   static constexpr double kHistLowLufs = -70.0;
   static constexpr double kHistBinLu = 0.1;
   std::array<uint64_t, kHistBins> hist_count_{};

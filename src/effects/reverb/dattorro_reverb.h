@@ -9,6 +9,7 @@
 
 #include "effects/common/mix_law.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 #include "util/constants.h"
 
 namespace sonare::effects::reverb {
@@ -142,6 +143,7 @@ class DattorroReverb : public rt::ProcessorBase {
   /// Returns the tank to rest once a non-finite value has reached it, once per
   /// block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;
+  void reset_gate() noexcept;
 
   DattorroReverbConfig config_{};
   double sample_rate_ = 48000.0;
@@ -173,6 +175,7 @@ class DattorroReverb : public rt::ProcessorBase {
   int gate_hold_left_ = 0;  ///< Samples until an open gate closes.
   int gate_elapsed_ = 0;    ///< Samples since the gate opened.
   bool gate_open_ = false;
+  rt::StageGate gate_stage_;
 
   // Output tap offsets (scaled to the working sample rate).
   size_t tap_l_l1a_ = 0, tap_l_l1b_ = 0, tap_l_apl_ = 0, tap_l_l2_ = 0;

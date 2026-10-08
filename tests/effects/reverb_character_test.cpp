@@ -139,7 +139,9 @@ TEST_CASE("the defaults leave the tank as it was", "[reverb-character]") {
 
   DattorroReverb canonical(DattorroReverbConfig{});
   canonical.prepare(kRate, kBlock);
-  REQUIRE(canonical.tail_samples() == 86752);
+  // At 48 kHz (x48000/29761): the modulated allpass's 33 passes of 1475 samples (48679), then the
+  // tank's 21589-sample figure-8 at decay^4 = 0.0625 carried to 1e-5 (34820 x 4.152 = 144589).
+  REQUIRE(canonical.tail_samples() == 193266);
 }
 
 TEST_CASE("the damping corner is a half-power point at every rate", "[reverb-character]") {

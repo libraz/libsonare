@@ -39,6 +39,7 @@ class SoftClipper : public rt::ProcessorBase {
   /// @brief Adaa1 adds half a sample (Q8 128); Oversample4x adds the
   ///   oversampler's streaming round-trip latency. The dry path is aligned to it.
   int latency_samples() const noexcept override;
+  int tail_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
 
  private:

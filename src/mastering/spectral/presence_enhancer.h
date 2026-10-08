@@ -46,6 +46,7 @@ class PresenceEnhancer : public rt::ProcessorBase {
   ///   oversampler's streaming round-trip latency. The dry path is aligned to it.
   int latency_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;
+  int tail_samples() const noexcept override;
 
   using Biquad = rt::BiquadState;
 

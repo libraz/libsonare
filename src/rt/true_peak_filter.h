@@ -39,9 +39,9 @@ class TruePeakFilter {
   /// zero-padded (truncated) forward kernel. This slightly UNDER-reads the true
   /// inter-sample peak right at each block boundary. The error vanishes for
   /// whole-signal / one-shot use (a single call covering the entire signal).
-  /// For sample-exact streaming true-peak measurement, the caller must feed an
-  /// explicit look-ahead delay so a sample's full forward stencil is available
-  /// before its oversampled value is consumed.
+  /// For streaming measurement use upsample_with_history_delayed(), which runs
+  /// one group delay behind so every value has its whole stencil; at the end of
+  /// the signal, feed it latency_samples() zeros to read the final values.
   ///
   /// Internal-history overload: uses the member history + scratch buffers sized
   /// by prepare(). RT-safe (no allocation) once prepared for >= num_channels and
@@ -62,6 +62,11 @@ class TruePeakFilter {
                                      int num_channels, int num_samples,
                                      std::vector<std::vector<float>>& history,
                                      std::vector<std::vector<float>>& scratch) const;
+  /// Internal-history overload of the delayed variant, for a streaming meter
+  /// that wants every reconstructed value complete. Same RT contract as the
+  /// internal-history upsample_with_history().
+  void upsample_with_history_delayed(const float* const* input, float* const* output_oversampled,
+                                     int num_channels, int num_samples) const;
 
   int factor() const noexcept { return factor_; }
   /// Number of base-rate samples retained for cross-block interpolation.

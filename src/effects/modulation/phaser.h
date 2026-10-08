@@ -52,6 +52,7 @@ class Phaser : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  int tail_samples() const noexcept override;
 
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = rate_hz (clamped to >= 0; updates the LFO in place)

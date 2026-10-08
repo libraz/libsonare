@@ -10,6 +10,7 @@
 #include "midi/source_residual.h"
 #include "midi/ump.h"
 #include "rt/pan_law.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/exception.h"
 
@@ -73,9 +74,9 @@ void LayeredInstrument::prepare(double sample_rate, int max_block_size) {
 
   // Unequal latencies would sum misaligned, and nothing downstream could tell.
   if (!layers_.empty()) {
-    const int first = layers_.front().instrument->latency_samples();
+    const int first = layers_.front().instrument->latency_samples_q8();
     for (const Layer& layer : layers_) {
-      if (layer.instrument->latency_samples() != first) {
+      if (layer.instrument->latency_samples_q8() != first) {
         throw SonareException(ErrorCode::InvalidState,
                               "LayeredInstrument layers must report the same latency");
       }
@@ -446,20 +447,22 @@ void LayeredInstrument::on_prepared_sysex_accepted(const uint8_t* data, size_t s
   }
 }
 
-int LayeredInstrument::latency_samples() const noexcept {
-  int latency = 0;
+int LayeredInstrument::latency_samples() const noexcept { return latency_samples_q8() >> 8; }
+
+int LayeredInstrument::latency_samples_q8() const noexcept {
+  int latency_q8 = 0;
   for (const Layer& layer : layers_) {
-    latency = std::max(latency, layer.instrument->latency_samples());
+    latency_q8 = std::max(latency_q8, layer.instrument->latency_samples_q8());
   }
-  return latency;
+  return latency_q8;
 }
 
 int LayeredInstrument::tail_samples() const noexcept {
-  int tail = 0;
+  rt::TailBudget tail;
   for (const Layer& layer : layers_) {
-    tail = std::max(tail, layer.instrument->tail_samples());
+    tail.alongside(rt::TailBudget::reported(layer.instrument->tail_samples()));
   }
-  return tail;
+  return tail.samples();
 }
 
 int LayeredInstrument::parameter_id_for_key(const std::string& key) const noexcept {

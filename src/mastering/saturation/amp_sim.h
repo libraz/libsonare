@@ -38,6 +38,7 @@
 #include "rt/nonlinearities.h"
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
+#include "rt/stage_gate.h"
 
 namespace sonare::mastering::saturation {
 
@@ -215,18 +216,18 @@ struct AmpSimConfig {
   /// actually does on a real cab.
   float mic_axis = 0.0f;
   /// Mic distance from the grille in cm, clamped to [0, kMaxMicDistanceCm].
-  /// Tonal only for a single mic: it sets how much of the capsule's proximity
-  /// lift survives and how much top the air has taken off. The propagation
-  /// delay is deliberately NOT applied to a single mic — absolute delay is
-  /// unobservable in a single-source render and would only cost the host a
-  /// latency compensation. With a second mic it is the DIFFERENCE in distance
-  /// that is applied, which is the audible part.
+  /// It sets how much of the capsule's proximity lift survives and how much top
+  /// the air has taken off. Absolute propagation delay is not applied; only the
+  /// DIFFERENCE against `mic_b_distance_cm` is, which is the audible part. When
+  /// this mic is the farther one it carries that difference at every
+  /// `mic_blend`, and latency_samples() reports it, so moving the blend never
+  /// moves this mic in time.
   float mic_distance_cm = kMicReferenceDistanceCm;
-  /// Second-mic blend in [0,1] (off-by-default; 0 = a single mic, bit-identical
-  /// — the second mic's filters and delay line are not even stepped). 1 = the
-  /// second mic alone. A linear crossfade, matching how a two-fader mic blend
-  /// behaves on a desk; the two mics are strongly correlated, so an equal-power
-  /// law would overshoot in the middle.
+  /// Second-mic blend in [0,1] (off-by-default; 0 = the first mic alone — the
+  /// second mic's filters and delay line are not stepped, and restart from rest
+  /// when blended back in). 1 = the second mic alone. A linear crossfade,
+  /// matching how a two-fader mic blend behaves on a desk; the two mics are strongly correlated, so
+  /// an equal-power law would overshoot in the middle.
   float mic_blend = 0.0f;
   /// Second-mic capsule (see `mic_model`). `kNone` is meaningful here: it gives
   /// a second mic with the cab's baked-in voicing, so a pure distance pair is
@@ -325,15 +326,18 @@ class AmpSim : public rt::ProcessorBase {
   /// that stage is on (its modulation swings around a fixed 2-sample centre, so
   /// the centre is real latency the host should compensate). None of the terms
   /// can move at runtime: `topology` and `doppler` are not automatable, and the
-  /// power stage keeps its half sample while `power` is 0.
-  /// The cab IR adds nothing — it is a direct FIR, not a partitioned one.
+  /// power stage keeps its half sample while `power` is 0. On the analytic cab
+  /// path a first mic farther than the second adds the pair's path difference at
+  /// every `mic_blend`. The cab IR adds nothing — it is a direct FIR.
   int latency_samples() const noexcept override { return latency_samples_q8() >> 8; }
   int latency_samples_q8() const noexcept override {
     const bool circuit = config_.topology == AmpTopology::kCircuit;
     const int head_q8 = circuit ? circuit_latency_samples_ << 8 : tube_.latency_samples_q8();
     const int power_q8 =
         circuit ? rt::kAdaa1LatencySamplesQ8 / kCircuitOversample : rt::kAdaa1LatencySamplesQ8;
-    return head_q8 + power_q8 + (config_.doppler > 0.0f ? kDopplerBaseSamples << 8 : 0);
+    // The first mic's alignment to a nearer second mic, on the analytic cab path at any blend.
+    const int mic_q8 = config_.cab && cab_ir_.empty() ? mic_a_delay_q8_ : 0;
+    return head_q8 + power_q8 + (config_.doppler > 0.0f ? kDopplerBaseSamples << 8 : 0) + mic_q8;
   }
 
   /// @brief Loads a cabinet impulse response, replacing the analytic cab chain.
@@ -393,16 +397,13 @@ class AmpSim : public rt::ProcessorBase {
   /// rather than for the realtime cap. Grows if process() is later handed more
   /// channels than prepare() was told about.
   int prepared_channels() const noexcept { return static_cast<int>(chains_.size()); }
-  /// Two stages outlive their input: the second mic's path-length delay, and a
+  /// Two stages outlive their input: the farther mic's path-length delay, and a
   /// loaded or generated cab IR, whose direct FIR keeps emitting for its length
   /// minus one after the last input sample. The two are mutually exclusive in
   /// the signal path (an IR replaces the whole analytic cab-and-mic chain), so
   /// the longer of them bounds the decay. Everything else is IIR filtering with
   /// no discrete tail.
-  int tail_samples() const noexcept override {
-    const int ir_tail = cab_ir_.empty() ? 0 : static_cast<int>(cab_ir_.size()) - 1;
-    return std::max(mic_tail_samples_, ir_tail);
-  }
+  int tail_samples() const noexcept override;
   const AmpSimConfig& amp_config() const { return config_; }
 
   // Automatable parameters (RT-safe scalar redesigns, no allocation):
@@ -630,8 +631,9 @@ class AmpSim : public rt::ProcessorBase {
   /// Delay-line capacity for the mic pair, in samples (0 when the second mic is
   /// off). Set by design_chain(), consumed by allocate_delay_lines().
   int mic_line_capacity_ = 0;
-  /// Whole-sample mic delay reported as the processor's tail.
-  int mic_tail_samples_ = 0;
+  /// Owns the second mic (its filters and path-length line), which runs only while it is
+  /// blended in.
+  rt::StageGate second_mic_gate_;
   /// Power-supply sag envelope smoothing coefficient (per sample; ~40 ms cap
   /// recovery). Set from the sample rate in design_chain().
   float sag_alpha_ = 0.0f;

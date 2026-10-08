@@ -5,6 +5,7 @@
 
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/non_finite_state.h"
 
@@ -12,6 +13,7 @@ namespace sonare::effects::modulation {
 
 using common::kMaxFeedback;
 using sonare::constants::kPi;
+using sonare::constants::kPiD;
 using sonare::constants::kTwoPiD;
 
 namespace {
@@ -158,6 +160,24 @@ bool Phaser::parameter_is_realtime_safe(unsigned int param_id) const noexcept {
 
 std::vector<rt::ParamDescriptor> Phaser::parameter_descriptors() const {
   return {{"rateHz", 0}, {"minHz", 1}, {"maxHz", 2}, {"dryWet", 3}, {"feedback", 4}, {"depth", 5}};
+}
+
+int Phaser::tail_samples() const noexcept {
+  if (!(std::clamp(config_.dry_wet, 0.0f, 1.0f) > 0.0f)) return 0;
+  // The sweep's lowest corner gives the slowest allpass pole; the cascade then
+  // recirculates through the one-sample loop and its 20 Hz high-pass.
+  const float sweep_limit = max_sweep_hz(sample_rate_);
+  const double low_hz = std::min(std::clamp(config_.min_hz, 1.0f, sweep_limit),
+                                 std::clamp(config_.max_hz, 1.0f, sweep_limit));
+  const double t = std::tan(kPiD * low_hz / sample_rate_);
+  const double pole = (1.0 - t) / (1.0 + t);
+  rt::TailBudget cascade;
+  for (int stage = 0; stage < std::clamp(config_.stages, 1, 12); ++stage) cascade.decay(pole);
+  rt::TailBudget tail = cascade;
+  tail.recirculation(cascade.samples() + 1.0,
+                     std::clamp(config_.feedback, -kMaxFeedback, kMaxFeedback))
+      .decay(loop_highpass_pole_);
+  return tail.samples();
 }
 
 void Phaser::reset() {

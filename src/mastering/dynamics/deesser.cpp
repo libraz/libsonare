@@ -7,6 +7,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -99,6 +100,12 @@ void DeEsser::process(float* const* channels, int num_channels, int num_samples)
 
   last_gain_reduction_db_ = max_reduction;
   minimum_gain_reduction_db_ = std::min(minimum_gain_reduction_db_, last_gain_reduction_db_);
+}
+
+int DeEsser::tail_samples() const noexcept {
+  // The attenuated band leaves the two cascaded band-pass sections after the input stops.
+  rt::TailBudget tail;
+  return tail.section(filter_coeffs_.c).section(filter_coeffs_.c).samples();
 }
 
 void DeEsser::reset() {
