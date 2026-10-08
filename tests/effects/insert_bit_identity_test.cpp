@@ -93,8 +93,8 @@ constexpr float kPitchShifterCentroidHz = 249.117661f;
 constexpr float kBitcrusherRms = 0.206448466f;
 constexpr float kBitcrusherCentroidHz = 249.123016f;
 
-constexpr float kVowelRms = 0.0293808971f;
-constexpr float kVowelCentroidHz = 262.751984f;
+constexpr float kVowelRms = 0.029375333f;
+constexpr float kVowelCentroidHz = 262.745209f;
 constexpr float kPresenceRms = 0.206874207f;
 constexpr float kPresenceCentroidHz = 249.200775f;
 

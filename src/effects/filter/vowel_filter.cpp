@@ -76,6 +76,8 @@ VowelFilter::VowelFilter(VowelFilterConfig config) : config_(config) {
   config_.drive = clamp_finite(config_.drive, 0.0f, 1.0f, defaults.drive);
   config_.dry_wet = clamp_finite(config_.dry_wet, 0.0f, 1.0f, defaults.dry_wet);
   drive_gain_ = std::pow(10.0f, config_.drive * kDriveMaxDb / kDbPerAmplitudeDecade);
+  paths_.set_path_latencies_q8({0, rt::kAdaa1LatencySamplesQ8});
+  paths_.ensure_channels(kPlanes);
 }
 
 void VowelFilter::prepare(double sample_rate, int) {
@@ -93,6 +95,8 @@ void VowelFilter::reset() {
   }
   for (auto& adaa : adaa_) adaa.reset();
   adaa_primed_.fill(false);
+  previous_in_.fill(0.0f);
+  paths_.reset();
   snap_ = true;
   countdown_ = 0;
 }
@@ -163,23 +167,26 @@ void VowelFilter::process(float* const* channels, int num_channels, int num_samp
       if (channels[ch] == nullptr) continue;
       const auto p = static_cast<size_t>(ch);
       const float in = channels[ch][i];
-      float u = in;
+      float u = 0.0f;
       if (drive_on) {
         // Full scale in stays full scale out; the antialiased tanh ahead of the bank.
-        const float pre = drive_gain_ * in;
+        // Primed on the previous input so engaging keeps the half-sample delay.
         if (!adaa_primed_[p]) {
-          adaa_[p].reset(pre);
+          adaa_[p].reset(drive_gain_ * previous_in_[p]);
           adaa_primed_[p] = true;
         }
-        u = post * adaa_[p].process(pre);
+        u = post * adaa_[p].process(drive_gain_ * in);
       } else {
+        // ADAA1's average without the tanh, so the wet delay is the same.
+        u = 0.5f * (in + previous_in_[p]);
         adaa_primed_[p] = false;
       }
+      previous_in_[p] = in;
       float y = direct_gain_ * u;
       for (int b = 0; b < kVowelBandCount; ++b) {
         y += band_gain_[static_cast<size_t>(b)] * bands_[p][static_cast<size_t>(b)].tick(u);
       }
-      channels[ch][i] = dry * in + wet * y;
+      channels[ch][i] = dry * paths_.align(0, p, in) + wet * paths_.align(1, p, y);
     }
   }
   bool discarded = false;

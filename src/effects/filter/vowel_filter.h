@@ -8,7 +8,10 @@
 /// drive sits in front of it. The continuous vowel position selects a
 /// (frequency, q, weight) triple per band by interpolating between adjacent
 /// vowels in log frequency; the bank glides to that target with a one-pole
-/// (accel) rather than passing through the vowels in between.
+/// (accel) rather than passing through the vowels in between. The drive runs
+/// through ADAA1, so the wet path is half a sample late whether or not the drive
+/// is on (off, its input is the matching two-tap average) and the dry path is
+/// aligned to it: the latency does not move with the automatable drive switch.
 
 #include <array>
 #include <vector>
@@ -16,6 +19,7 @@
 #include "effects/modulation/svf_bandpass.h"
 #include "rt/adaa.h"
 #include "rt/nonlinearities.h"
+#include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 
 namespace sonare::effects::filter {
@@ -36,7 +40,8 @@ struct VowelFilterConfig {
   float dry_wet = 1.0f;    ///< the filter is an insert, so wet by default.
 };
 
-/// The formant bank. Stereo-pair processor: planes beyond the pair pass through.
+/// The formant bank. Stereo-pair processor: planes beyond the pair pass through,
+/// unfiltered and without the half-sample delay.
 class VowelFilter : public rt::ProcessorBase {
  public:
   explicit VowelFilter(VowelFilterConfig config = {});
@@ -44,6 +49,9 @@ class VowelFilter : public rt::ProcessorBase {
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
   void reset() override;
+  /// @brief ADAA1's half sample (Q8 128) on both paths of the pair.
+  int latency_samples_q8() const noexcept override { return paths_.latency_samples_q8(); }
+  int latency_samples() const noexcept override { return paths_.latency_samples(); }
 
   // Automatable parameters (RT-safe, in-place scalar updates):
   //   0 = vowel (clamped to [0, 4])
@@ -80,6 +88,8 @@ class VowelFilter : public rt::ProcessorBase {
   std::array<std::array<modulation::SvfBandpass, kVowelBandCount>, kPlanes> bands_;
   std::array<rt::Adaa1<rt::TanhNonlinearity>, kPlanes> adaa_;
   std::array<bool, kPlanes> adaa_primed_{};
+  std::array<float, kPlanes> previous_in_{};  ///< last input, for the drive-off average.
+  rt::ParallelPaths paths_;                   ///< path 0 dry, path 1 wet.
 };
 
 }  // namespace sonare::effects::filter

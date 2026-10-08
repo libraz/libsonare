@@ -63,12 +63,27 @@ std::complex<double> peaking(double f0, double q, double w) {
   return num / den;
 }
 
-/// The fit's magnitude (dB) at @p hz with the three peak frequencies replaced by @p centres.
+/// The fit's magnitude (dB) at @p hz with the three peak frequencies replaced by @p centres,
+/// times the two-tap average |cos(pi f / sr)| that keeps the bank half a sample late (ADAA1's
+/// linear-region response, which the drive-off path matches).
 double fit_db(const double centres[3], double hz) {
   const double w = kTwoPiD * hz / kRate;
   std::complex<double> sum = kFitDirect;
   for (int b = 0; b < 3; ++b) sum += kFitWeight[b] * peaking(centres[b], kFitQ[b], w);
-  return 20.0 * std::log10(std::abs(sum)) + kFitConstantDb;
+  const double half_sample = std::fabs(std::cos(0.5 * w));
+  return 20.0 * std::log10(std::abs(sum) * half_sample) + kFitConstantDb;
+}
+
+/// The sequence whose two-tap average (from a zero history) is @p target, so a drive-off bank
+/// fed it sees exactly @p target.
+std::vector<float> before_average(const std::vector<float>& target) {
+  std::vector<float> out(target.size());
+  double previous = 0.0;
+  for (std::size_t i = 0; i < target.size(); ++i) {
+    previous = 2.0 * static_cast<double>(target[i]) - previous;
+    out[i] = static_cast<float>(previous);
+  }
+  return out;
 }
 
 /// Magnitude (dB) at @p hz of an impulse response, by direct DFT.
@@ -267,16 +282,17 @@ TEST_CASE("Vowel filter: the drive is an antiderivative-antialiased tanh ahead o
     shaped[i] = post * adaa.process(gain * input[i]);
     plain[i] = post * std::tanh(gain * input[i]);
   }
+  // The drive-off bank averages its input; feed it what averages to the shaped signal.
   VowelFilter bank_only(settled(0.0f));
   bank_only.prepare(kRate, n);
-  std::vector<float> reference = shaped;
+  std::vector<float> reference = before_average(shaped);
   sonare::test::process(bank_only, reference);
   CHECK(sonare::test::max_abs_difference(out, reference) < 1e-5f);
 
   // And it is not the plain tanh: the antialiasing changes the signal.
   VowelFilter bank_plain(settled(0.0f));
   bank_plain.prepare(kRate, n);
-  std::vector<float> plain_out = plain;
+  std::vector<float> plain_out = before_average(plain);
   sonare::test::process(bank_plain, plain_out);
   CHECK(sonare::test::max_abs_difference(out, plain_out) > 1e-4f);
 
@@ -302,6 +318,42 @@ TEST_CASE("Vowel filter: the drive is an antiderivative-antialiased tanh ahead o
   CHECK(sonare::test::max_abs_difference(a, b) < 1e-5f);
 }
 
+TEST_CASE("Vowel filter: the drive switch moves neither latency nor small-signal tone",
+          "[vowel-filter]") {
+  // Under ADAA1's linear region the driven path is the two-tap average the
+  // drive-off path applies, so toggling only scales a quiet signal by the
+  // drive's small-signal gain g / tanh(g).
+  constexpr float kDrive = 0.5f;
+  const float gain = std::pow(10.0f, kDrive * 36.0f / 20.0f);
+  const float small_signal_gain = gain / std::tanh(gain);
+  const int n = 4800;
+  const std::vector<float> input =
+      sonare::test::generate_sine(n, 3000.0f, static_cast<int>(kRate), 1.0e-5f);
+  VowelFilterConfig off = settled(0.0f);
+  off.drive = kDrive;
+  VowelFilterConfig on = off;
+  on.drive_on = true;
+  VowelFilter off_filter(off);
+  VowelFilter on_filter(on);
+  off_filter.prepare(kRate, n);
+  on_filter.prepare(kRate, n);
+  CHECK(off_filter.latency_samples_q8() == 128);
+  CHECK(on_filter.latency_samples_q8() == off_filter.latency_samples_q8());
+  REQUIRE(off_filter.set_parameter(3, 1.0f));
+  CHECK(off_filter.latency_samples_q8() == 128);
+  REQUIRE(off_filter.set_parameter(3, 0.0f));
+
+  std::vector<float> off_out = input;
+  std::vector<float> on_out = input;
+  sonare::test::process(off_filter, off_out);
+  sonare::test::process(on_filter, on_out);
+  const float peak = sonare::test::peak_abs(on_out);
+  REQUIRE(peak > 0.0f);
+  for (std::size_t i = 0; i < off_out.size(); ++i) {
+    CHECK(std::fabs(on_out[i] - small_signal_gain * off_out[i]) < 1.0e-3f * peak);
+  }
+}
+
 TEST_CASE("Vowel filter: dry/wet and the factory keys", "[vowel-filter]") {
   using sonare::mastering::api::make_insert;
   auto dry = make_insert("effects.filter.vowel", R"({"dryWet":0})");
@@ -311,7 +363,12 @@ TEST_CASE("Vowel filter: dry/wet and the factory keys", "[vowel-filter]") {
       sonare::test::generate_sine(512, 440.0f, static_cast<int>(kRate), 0.5f);
   std::vector<float> processed = signal;
   sonare::test::process(*dry, processed);
-  CHECK(processed == signal);
+  // Fully dry is the input aligned to the wet path's half sample.
+  float previous = 0.0f;
+  for (std::size_t i = 0; i < signal.size(); ++i) {
+    CHECK(processed[i] == 0.5f * signal[i] + 0.5f * previous);
+    previous = signal[i];
+  }
 
   auto full = make_insert("effects.filter.vowel",
                           R"({"vowel":2.5,"accelMs":30,"drive":0.7,"driveOn":true,"dryWet":0.8})");

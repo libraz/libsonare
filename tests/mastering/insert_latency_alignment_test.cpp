@@ -155,6 +155,9 @@ const std::vector<Exemption>& PeakShiftedConfigurations() {
       // Fully-wet swept resonant band-passes, same resonator shape as eq.bandPass.
       {"effects.modulation.wah", "*", "*", "resonator group delay"},
       {"effects.modulation.autoWah", "*", "*", "resonator group delay"},
+      // ADAA1's half sample, kept with the drive off by the matching two-tap
+      // average, so the response straddles lags 0 and 1.
+      {"effects.filter.vowel", "*", "*", "ADAA1 half-sample delay"},
 #endif
   };
   return kRows;
