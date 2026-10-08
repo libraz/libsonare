@@ -144,7 +144,8 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   Sf2Player& operator=(Sf2Player&&) = default;
 
   /// CONTROL thread: attach a parsed SoundFont. May be called before or after
-  /// prepare(), but never concurrently with the audio thread.
+  /// prepare(), but never concurrently with the audio thread. Silences every
+  /// sounding SoundFont voice; fallback-synth voices keep playing.
   void set_soundfont(std::shared_ptr<const Sf2File> soundfont);
 
   const Sf2File* soundfont() const noexcept { return soundfont_.get(); }

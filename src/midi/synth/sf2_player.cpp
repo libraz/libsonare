@@ -203,6 +203,8 @@ void Sf2Player::sync_prepared_base() noexcept {
 }
 
 void Sf2Player::set_soundfont(std::shared_ptr<const Sf2File> soundfont) {
+  // Sounding SF2 voices read the previous sample pool, which this assignment may free.
+  pool_.reset();
   soundfont_ = std::move(soundfont);
   // Longest release over reachable (preset zone, instrument zone) pairs, not independent maxima.
   max_release_timecents_ = -12000;

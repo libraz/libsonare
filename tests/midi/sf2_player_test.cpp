@@ -372,6 +372,21 @@ TEST_CASE("Sf2Player plays a looped sample at the root-key frequency", "[midi][s
   REQUIRE(rms(out.left, 36000) > 0.1f);
 }
 
+TEST_CASE("Sf2Player silences sounding voices when the SoundFont is replaced", "[midi][sf2]") {
+  // The player holds the only reference, so the swap frees the pool the voice was reading.
+  Sf2Player player = make_player(make_fixture());
+  player.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 127)));
+  REQUIRE(peak(render(player, 4800).left) > 0.1f);
+  REQUIRE(player.active_voice_count() == 1);
+
+  // A freed pool often reads as near-silence, so the level alone cannot show the voice is gone.
+  player.set_soundfont(make_fixture());
+  REQUIRE(player.active_voice_count() == 0);
+  const StereoRender out = render(player, 9600);
+  const std::vector<float> tail(out.left.begin() + 4800, out.left.end());
+  REQUIRE(peak(tail) < kSilenceFloor);
+}
+
 TEST_CASE("Sf2Player keeps a mode 3 loop running while a pedal holds the released key",
           "[midi][sf2]") {
   Sf2Builder b;
