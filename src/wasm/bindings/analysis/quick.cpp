@@ -54,7 +54,7 @@ KeyProfileType keyProfileFromInt(int profile_type) {
     case 6:
       return KeyProfileType::BellmanBudge;
     default:
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key profile");
+      throw WasmRangeError("invalid key profile");
   }
 }
 
@@ -62,8 +62,7 @@ KeyProfileType keyProfileFromInt(int profile_type) {
 // 1 = NNLS are defined) instead of silently treating any non-1 value as STFT.
 void validateChromaMethod(int chroma_method) {
   if (chroma_method != 0 && chroma_method != 1) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid chromaMethod (expected 0 = STFT or 1 = NNLS)");
+    throw WasmRangeError("invalid chromaMethod (expected 0 = STFT or 1 = NNLS)");
   }
 }
 
@@ -73,7 +72,7 @@ void validateChromaMethod(int chroma_method) {
 void validateKey(int key_root, int key_mode) {
   if (key_root < static_cast<int>(PitchClass::C) || key_root > static_cast<int>(PitchClass::B) ||
       key_mode < static_cast<int>(Mode::Major) || key_mode > static_cast<int>(Mode::Locrian)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid key root or mode");
+    throw WasmRangeError("invalid key root or mode");
   }
 }
 
@@ -82,12 +81,10 @@ void validateKey(int key_root, int key_mode) {
 // checks instead of passing either through to the DSP layer unchecked.
 void validateChordConfig(float smoothing_window, int hmm_beam_width) {
   if (smoothing_window <= 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "smoothingWindow must be positive");
+    throw WasmRangeError("smoothingWindow must be positive");
   }
   if (hmm_beam_width < 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "hmmBeamWidth must not be negative");
+    throw WasmRangeError("hmmBeamWidth must not be negative");
   }
 }
 
@@ -357,8 +354,7 @@ TuningArg tuningFromVal(const val& value, const char* key) {
   TuningArg out;
   if (value.isString()) {
     if (value.as<std::string>() != "auto") {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(key) + " must be a number or 'auto'");
+      throw WasmTypeError(std::string(key) + " must be a number or 'auto'");
     }
     out.measure = true;
     return out;
@@ -457,8 +453,7 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
 int onsetWindowFrames(val options, const char* key, int default_value) {
   const int frames = intProperty(options, key, default_value);
   if (frames < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be a non-negative frame count");
+    throw WasmRangeError(std::string(key) + " must be a non-negative frame count");
   }
   return frames;
 }
@@ -642,8 +637,7 @@ void setNumberOption(const val& options, const char* key, const char* subject, F
     converted_ok = sonare::numeric::checked_float_cast(raw, &converted);
   }
   if (!converted_ok) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + ": " + key + " must be a finite in-range number");
+    throw WasmRangeError(std::string(subject) + ": " + key + " must be a finite in-range number");
   }
   *field = converted;
 }
@@ -656,17 +650,15 @@ void setNumberOption(const val& options, const char* key, const char* subject, F
 std::vector<int> meterCandidateNumeratorsFromVal(const val& numerators, const char* subject) {
   const std::size_t length = wasmArrayLikeLength(numerators, subject);
   if (length > static_cast<std::size_t>(sonare::kMaxMeterCandidateNumerators)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must hold at most " +
-                              std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
+    throw WasmRangeError(std::string(subject) + " must hold at most " +
+                         std::to_string(sonare::kMaxMeterCandidateNumerators) + " entries");
   }
   std::vector<int> out;
   out.reserve(length);
   for (int i = 0; i < static_cast<int>(length); ++i) {
     int converted = 0;
     if (!sonare::numeric::checked_round_cast(numberFromVal(numerators[i], subject), &converted)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + " entries must be finite in-range numbers");
+      throw WasmRangeError(std::string(subject) + " entries must be finite in-range numbers");
     }
     out.push_back(converted);
   }
@@ -835,8 +827,7 @@ val js_analyze_impulse_response_ex(val samples, const val& sample_rate_val,
   const int n_octave_bands = checkedIntFromVal(n_octave_bands_val, "nOctaveBands");
   const float min_decay_db = checkedFloatFromVal(min_decay_db_val, "minDecayDb");
   if (min_decay_db <= 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "analyzeImpulseResponse: minDecayDb must be > 0");
+    throw WasmRangeError("analyzeImpulseResponse: minDecayDb must be > 0");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
@@ -864,8 +855,7 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
   // producing an empty-subband result (the C++ core treats them as benign).
   if (n_octave_bands < 0 || n_third_octave_subbands < 0 || min_decay_db <= 0.0f ||
       noise_floor_margin_db < 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "detectAcoustic parameters out of range");
+    throw WasmRangeError("detectAcoustic parameters out of range");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   AcousticConfig config;
@@ -921,8 +911,7 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
                             floatProperty(opts, "widthM", 5.0f),
                             floatProperty(opts, "heightM", 3.0f)};
   if (!std::isfinite(dims.length) || !std::isfinite(dims.width) || !std::isfinite(dims.height)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "room dimensions must be finite");
+    throw WasmRangeError("room dimensions must be finite");
   }
 
   // The precedence, the [0, 1] coefficient rejection and the band-wise
@@ -957,8 +946,7 @@ unsigned seedFromVal(val opts, unsigned fallback) {
   const double seed_in = seed_val.as<double>();
   if (!sonare::numeric::finite_in_closed_range(
           seed_in, 0.0, static_cast<double>(std::numeric_limits<uint32_t>::max()))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "seed must be within [0, 4294967295]");
+    throw WasmRangeError("seed must be within [0, 4294967295]");
   }
   // The range check above says nothing about a fraction, and 1.5 truncating onto
   // seed 1 is the same silent fold as a wrap: two seeds, one RIR.
@@ -979,10 +967,9 @@ sonare::acoustic::SourceListener placementFromVal(val opts) {
 // the same out-of-range rates (the C++ functions are otherwise called directly).
 void validateAcousticSampleRate(int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sampleRate out of supported range [" +
-                                      std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                                      std::to_string(sonare::kMaxAudioSampleRate) + "]");
+    throw WasmRangeError("sampleRate out of supported range [" +
+                         std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                         std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
 }
 
@@ -996,16 +983,14 @@ void validateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement
     return std::isfinite(v.x) && std::isfinite(v.y) && std::isfinite(v.z);
   };
   if (!finite3(placement.source) || !finite3(placement.listener)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "source/listener position must be finite");
+    throw WasmRangeError("source/listener position must be finite");
   }
   if (!std::isfinite(config.max_seconds) || config.max_seconds < 0.0f ||
       config.max_seconds > kMaxRirSeconds || !std::isfinite(config.mixing_time_ms) ||
       config.mixing_time_ms < 0.0f || config.mixing_time_ms > kMaxRirMixingTimeMs ||
       !std::isfinite(config.crossfade_ms) || config.crossfade_ms < 0.0f ||
       config.crossfade_ms > kMaxRirCrossfadeMs) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RIR timing parameters out of range");
+    throw WasmRangeError("RIR timing parameters out of range");
   }
 }
 
@@ -1013,12 +998,11 @@ void validateRirShapeAndTiming(const sonare::acoustic::SourceListener& placement
 // validate_audio_params contract for the estimate/morph entry points.
 void validateAcousticInput(const std::vector<float>& data) {
   if (data.empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "input buffer is empty");
+    throw WasmRangeError("input buffer is empty");
   }
   for (const float s : data) {
     if (!std::isfinite(s)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "input contains NaN or Inf samples");
+      throw WasmRangeError("input contains NaN or Inf samples");
     }
   }
 }
@@ -1057,8 +1041,7 @@ val js_synthesize_rir(val opts) {
   // Match the C ABI: reject a negative ISM order instead of clamping it to 0.
   config.ism_order = intProperty(opts, "ismOrder", config.ism_order);
   if (config.ism_order < 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "ismOrder must be non-negative");
+    throw WasmRangeError("ismOrder must be non-negative");
   }
   config.late_model = boolProperty(opts, "preferEyring", true)
                           ? sonare::acoustic::ReverbModel::Eyring
@@ -1226,8 +1209,7 @@ val js_room_geometry_from_estimate(val estimate) {
   const float width = floatOption(estimate, "widthM", nan);
   const float height = floatOption(estimate, "heightM", nan);
   if (!sonare::acoustic::estimated_dimensions_measured(length, width, height)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "room estimate has no measurable dimensions");
+    throw WasmRangeError("room estimate has no measurable dimensions");
   }
   val out = val::object();
   out.set("lengthM", length);
@@ -1271,8 +1253,7 @@ val js_chord_functions(val chords, const val& key_root_val, const val& key_mode_
     const int quality = checkedIntFromVal(entry["quality"], (at + ".quality").c_str());
     if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
         quality < 0 || quality >= sonare::kChordQualityCount) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    at + " has an invalid root or quality");
+      throw WasmRangeError(at + " has an invalid root or quality");
     }
     Chord chord{};
     chord.root = static_cast<PitchClass>(root);

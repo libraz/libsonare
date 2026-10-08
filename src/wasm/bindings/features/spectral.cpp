@@ -12,21 +12,19 @@ namespace {
 std::vector<float> load_segment_matrix(const char* fn_name, val input, int rows, int cols,
                                        const char* data_name) {
   if (rows <= 0 || cols <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": matrix dimensions must be positive");
+    throw WasmRangeError(std::string(fn_name) + ": matrix dimensions must be positive");
   }
   std::size_t expected = 0;
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(cols),
                                              kMaxWasmFloat32Elements, &expected) ||
       wasmFloat32ArrayLength(input, data_name) != expected) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(fn_name) + ": " + data_name +
-                                                           " length must equal rows * cols");
+    throw WasmRangeError(std::string(fn_name) + ": " + data_name +
+                         " length must equal rows * cols");
   }
   std::vector<float> data = float32ArrayToVector(input);
   if (!std::all_of(data.begin(), data.end(), [](float value) { return std::isfinite(value); })) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
+    throw WasmRangeError(std::string(fn_name) + ": " + data_name + " contains NaN or Inf");
   }
   return data;
 }
@@ -235,8 +233,7 @@ val js_segment_cross_similarity(val x, const val& x_rows_val, const val& x_cols_
   std::vector<float> x_data = load_segment_matrix("segmentCrossSimilarity", x, x_rows, x_cols, "x");
   std::vector<float> y_data = load_segment_matrix("segmentCrossSimilarity", y, y_rows, y_cols, "y");
   if (x_rows != y_rows || k < 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "segmentCrossSimilarity: feature dimensions must match and k must be non-negative");
   }
   const int rows = mode == "affinity" ? y_cols : x_cols;
@@ -256,8 +253,7 @@ val js_segment_recurrence_matrix(val data, const val& rows_val, const val& cols_
   std::vector<float> values =
       load_segment_matrix("segmentRecurrenceMatrix", data, rows, cols, "data");
   if (k < 0 || width < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "segmentRecurrenceMatrix: k and width must be non-negative");
+    throw WasmRangeError("segmentRecurrenceMatrix: k and width must be non-negative");
   }
   return segment_matrix_result(
       recurrence_matrix(values.data(), rows, cols, k, width, sym, metric, mode), cols, cols);
@@ -284,8 +280,7 @@ val js_segment_subsegment(val data, const val& rows_val, const val& cols_val, va
   const int n_segments = checkedIntFromVal(n_segments_val, "nSegments");
   std::vector<float> values = load_segment_matrix("segmentSubsegment", data, rows, cols, "data");
   if (n_segments <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "segmentSubsegment: n_segments must be positive");
+    throw WasmRangeError("segmentSubsegment: n_segments must be positive");
   }
   const std::vector<int32_t> source = int32ArrayToVector(boundaries);
   const std::vector<int> points(source.begin(), source.end());
@@ -299,7 +294,7 @@ val js_segment_agglomerative(val data, const val& rows_val, const val& cols_val,
   const int k = checkedIntFromVal(k_val, "k");
   std::vector<float> values = load_segment_matrix("segmentAgglomerative", data, rows, cols, "data");
   if (k <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "segmentAgglomerative: k must be positive");
+    throw WasmRangeError("segmentAgglomerative: k must be positive");
   }
   return vectorToInt32Array(agglomerative(values.data(), rows, cols, k, linkage));
 }
@@ -315,8 +310,7 @@ val js_segment_path_enhance(val recurrence, const val& n_val, const val& win_val
   std::vector<float> values =
       load_segment_matrix("segmentPathEnhance", recurrence, n, n, "recurrence");
   if (win <= 0 || max_ratio <= 0 || min_ratio < 0 || n_filters <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "segmentPathEnhance: invalid enhancement parameters");
+    throw WasmRangeError("segmentPathEnhance: invalid enhancement parameters");
   }
   return segment_matrix_result(path_enhance(values.data(), n, win, max_ratio, min_ratio, n_filters),
                                n, n);

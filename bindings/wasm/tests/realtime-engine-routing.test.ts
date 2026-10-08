@@ -6,6 +6,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 describe('Sonare WASM Module', () => {
   const rms = (data: Float32Array): number => {
@@ -61,11 +62,7 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badPpqError = error;
       }
-      expect(isSonareError(badPpqError)).toBe(true);
-      if (!isSonareError(badPpqError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badPpqError.code).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(badPpqError);
       expect(() => engine.sampleAtPpq(1e300)).toThrow();
       expect(() => engine.seekPpq(1e300)).toThrow();
       expect(() => engine.setLoop(0, 1e300, true)).toThrow();
@@ -772,10 +769,7 @@ describe('Sonare WASM Module', () => {
         duplicateLaneError = error;
       }
       expect(isSonareError(duplicateLaneError)).toBe(true);
-      if (!isSonareError(duplicateLaneError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(duplicateLaneError.code).toBe(ErrorCode.InvalidParameter);
+      expect((duplicateLaneError as { code: number }).code).toBe(ErrorCode.InvalidParameter);
       engine.setTrackLanes([10, { trackId: 20 }]);
 
       engine.play();
@@ -941,11 +935,7 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badGroupError = error;
       }
-      expect(isSonareError(badGroupError)).toBe(true);
-      if (!isSonareError(badGroupError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badGroupError.code).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(badGroupError);
 
       let badChannelError: unknown;
       try {
@@ -953,11 +943,7 @@ describe('Sonare WASM Module', () => {
       } catch (error) {
         badChannelError = error;
       }
-      expect(isSonareError(badChannelError)).toBe(true);
-      if (!isSonareError(badChannelError)) {
-        throw new Error('expected SonareError');
-      }
-      expect(badChannelError.code).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(badChannelError);
 
       let badSoundFontError: unknown;
       try {

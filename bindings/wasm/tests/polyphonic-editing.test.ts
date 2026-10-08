@@ -28,6 +28,7 @@ import {
   type NoteObject,
   type PolyphonicAnalysis,
 } from '../src/index';
+import { expectRefusalOf } from './_helpers';
 
 const sampleRate = 44100;
 /** The analysis default, and the hop the frame counts below belong to. */
@@ -278,23 +279,17 @@ describe('PolyphonicAnalysis curves', () => {
     // requireInt64Property path renderNotes uses; this exercises that shared
     // function through the polyphonic-editing entry point specifically, since
     // it is a separate call site from renderNotes'.
-    expectSonareError(
-      () => analysis.setNoteEdit(0, { timeOffsetSamples: 0.5 }),
-      ErrorCode.InvalidParameter,
-    );
-    expectSonareError(
-      () => analysis.setNoteEdit(0, { timeOffsetSamples: 1e300 }),
-      ErrorCode.InvalidParameter,
-    );
+    expectRefusalOf(() => analysis.setNoteEdit(0, { timeOffsetSamples: 0.5 }));
+    expectRefusalOf(() => analysis.setNoteEdit(0, { timeOffsetSamples: 1e300 }));
   });
 
   it('rejects a note index outside the set', () => {
     for (const index of [analysis.noteCount, analysis.noteCount + 4, -1, 1.5]) {
-      expectSonareError(() => analysis.noteF0(index), ErrorCode.InvalidParameter);
-      expectSonareError(() => analysis.noteAmplitude(index), ErrorCode.InvalidParameter);
-      expectSonareError(() => analysis.noteSalience(index), ErrorCode.InvalidParameter);
-      expectSonareError(() => analysis.noteEnvelope(index), ErrorCode.InvalidParameter);
-      expectSonareError(() => analysis.setNoteEdit(index, {}), ErrorCode.InvalidParameter);
+      expectRefusalOf(() => analysis.noteF0(index));
+      expectRefusalOf(() => analysis.noteAmplitude(index));
+      expectRefusalOf(() => analysis.noteSalience(index));
+      expectRefusalOf(() => analysis.noteEnvelope(index));
+      expectRefusalOf(() => analysis.setNoteEdit(index, {}));
     }
   });
 });
@@ -398,8 +393,8 @@ describe('PolyphonicAnalysis.render', () => {
 
   it('rejects a render option that cannot be one', () => {
     for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
-      expectSonareError(() => edited.render({ fadeMs: bad }), ErrorCode.InvalidParameter);
-      expectSonareError(() => edited.render({ vibratoCutoffHz: bad }), ErrorCode.InvalidParameter);
+      expectRefusalOf(() => edited.render({ fadeMs: bad }));
+      expectRefusalOf(() => edited.render({ vibratoCutoffHz: bad }));
     }
     // Positive control: 0 is the default on both, so the rejections above are
     // about the values rather than about the fields being read at all.

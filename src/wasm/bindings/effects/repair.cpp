@@ -91,8 +91,7 @@ mastering::repair::DeclickConfig readMasteringRepairDeclick(const val& options, 
   if (hasProperty(options, "maxClickSamples")) {
     const int v = intProperty(options, "maxClickSamples", static_cast<int>(cfg.max_click_samples));
     if (v <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    std::string(entry) + ": maxClickSamples must be positive");
+      throw WasmRangeError(std::string(entry) + ": maxClickSamples must be positive");
     }
     cfg.max_click_samples = static_cast<size_t>(v);
   }
@@ -183,8 +182,7 @@ mastering::repair::DenoiseMode parseDenoiseMode(const std::string& name) {
   if (s == "spectralsubtraction" || s == "spectral_subtraction" || s == "ss") {
     return mastering::repair::DenoiseMode::SpectralSubtraction;
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown denoise mode: " + name);
+  throw WasmRangeError("unknown denoise mode: " + name);
 }
 
 mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::string& name) {
@@ -195,8 +193,7 @@ mastering::repair::DenoiseNoiseEstimator parseDenoiseNoiseEstimator(const std::s
   if (s == "mcra") return mastering::repair::DenoiseNoiseEstimator::Mcra;
   if (s == "imcra") return mastering::repair::DenoiseNoiseEstimator::Imcra;
   if (s == "spp") return mastering::repair::DenoiseNoiseEstimator::Spp;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown denoise noise estimator: " + name);
+  throw WasmRangeError("unknown denoise noise estimator: " + name);
 }
 
 mastering::repair::DehumMode parseDehumMode(const std::string& name) {
@@ -205,7 +202,7 @@ mastering::repair::DehumMode parseDehumMode(const std::string& name) {
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (s == "subtract") return mastering::repair::DehumMode::Subtract;
   if (s == "notch") return mastering::repair::DehumMode::Notch;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown dehum mode: " + name);
+  throw WasmRangeError("unknown dehum mode: " + name);
 }
 
 mastering::repair::DehumConfig readMasteringRepairDehum(const val& options) {
@@ -267,12 +264,10 @@ mastering::repair::DenoiseClassicalConfig validatedDenoiseConfig(const val& opti
     cfg = readDenoiseConfig(options, cfg);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(entry) + ": nFft must be a positive power of two");
+    throw WasmRangeError(std::string(entry) + ": nFft must be a positive power of two");
   }
   if (cfg.hop_length <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(entry) + ": hopLength must be positive");
+    throw WasmRangeError(std::string(entry) + ": hopLength must be positive");
   }
   return cfg;
 }
@@ -284,12 +279,10 @@ mastering::repair::DereverbClassicalConfig validatedDereverbConfig(const val& op
     cfg = readDereverbConfig(options, cfg);
   }
   if (cfg.n_fft <= 0 || (cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(entry) + ": nFft must be a positive power of two");
+    throw WasmRangeError(std::string(entry) + ": nFft must be a positive power of two");
   }
   if (cfg.hop_length <= 0 || cfg.hop_length > cfg.n_fft / 2) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(entry) + ": hopLength must be in (0, nFft / 2]");
+    throw WasmRangeError(std::string(entry) + ": hopLength must be in (0, nFft / 2]");
   }
   return cfg;
 }
@@ -440,8 +433,7 @@ mastering::repair::DecrackleMode parseDecrackleMode(const std::string& name) {
   if (s == "waveletshrinkage" || s == "wavelet_shrinkage" || s == "wavelet") {
     return mastering::repair::DecrackleMode::WaveletShrinkage;
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown decrackle mode: " + name);
+  throw WasmRangeError("unknown decrackle mode: " + name);
 }
 
 mastering::repair::DecrackleConfig readMasteringRepairDecrackle(const val& options) {
@@ -466,8 +458,7 @@ mastering::repair::TrimSilenceMode parseTrimSilenceMode(const std::string& name)
   if (s == "lufsgated" || s == "lufs_gated" || s == "lufs") {
     return mastering::repair::TrimSilenceMode::LufsGated;
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown trim silence mode: " + name);
+  throw WasmRangeError("unknown trim silence mode: " + name);
 }
 
 // Read a trim options bag over `config`, leaving absent keys alone. `entry`
@@ -482,8 +473,7 @@ mastering::repair::TrimSilenceConfig readTrimSilenceConfig(
   if (hasProperty(options, "paddingSamples")) {
     const int v = intProperty(options, "paddingSamples", static_cast<int>(config.padding_samples));
     if (v < 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    std::string(entry) + ": paddingSamples must be non-negative");
+      throw WasmRangeError(std::string(entry) + ": paddingSamples must be non-negative");
     }
     config.padding_samples = static_cast<size_t>(v);
   }
@@ -683,9 +673,7 @@ val js_mastering_repair_dereverb_classical_linked(val channels, const val& sampl
 
 val js_mastering_repair_dereverb_config_for_room(val estimate, val options) {
   if (estimate.isUndefined() || estimate.isNull()) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairDereverbConfigForRoom: a room estimate is required");
+    throw WasmTypeError("masteringRepairDereverbConfigForRoom: a room estimate is required");
   }
   // Read AND written: the caller's config is the base, and only the two fields
   // the measurement determines come back changed.
@@ -805,13 +793,10 @@ val js_mastering_repair_noise_band_bins(const val& n_fft_val, const val& sample_
   const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   if (n_fft <= 0 || (n_fft & (n_fft - 1)) != 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "masteringRepairNoiseBandBins: nFft must be a positive power of two");
+    throw WasmRangeError("masteringRepairNoiseBandBins: nFft must be a positive power of two");
   }
   if (sample_rate <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "masteringRepairNoiseBandBins: sampleRate must be positive");
+    throw WasmRangeError("masteringRepairNoiseBandBins: sampleRate must be positive");
   }
   std::vector<int> bins(mastering::common::kRepairNoiseBandCount + 1);
   mastering::common::repair_noise_band_bins(n_fft, sample_rate, bins.data());

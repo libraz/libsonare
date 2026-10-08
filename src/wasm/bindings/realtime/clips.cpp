@@ -54,12 +54,11 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
 
   void supply(int64_t page_index, val channels_val) {
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
+      throw WasmRangeError("invalid page index");
     }
     const int channel_count = channels_val["length"].as<int>();
     if (channel_count != channels_) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip page channel count mismatch");
+      throw WasmRangeError("clip page channel count mismatch");
     }
     auto page = std::make_unique<Page>();
     page->channels.reserve(static_cast<size_t>(channels_));
@@ -70,12 +69,10 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
         const int64_t page_start = page_index * page_frames_;
         const int64_t max_frames = std::min<int64_t>(page_frames_, samples_ - page_start);
         if (page->frames != max_frames) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "invalid clip page frame count");
+          throw WasmRangeError("invalid clip page frame count");
         }
       } else if (static_cast<int64_t>(channel.size()) != page->frames) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "all clip page channels must have the same length");
+        throw WasmRangeError("all clip page channels must have the same length");
       }
       page->channels.push_back(std::move(channel));
     }
@@ -88,7 +85,7 @@ class WasmClipPageProvider final : public sonare::engine::ClipPagedAudioProvider
 
   void clear(int64_t page_index) {
     if (page_index < 0 || page_index >= static_cast<int64_t>(pages_.size())) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid page index");
+      throw WasmRangeError("invalid page index");
     }
     const size_t index = static_cast<size_t>(page_index);
     page_ptrs_[index].store(nullptr, std::memory_order_release);
@@ -161,8 +158,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     const int channel_count =
         has_page_provider ? 0 : static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
     if (!has_page_provider && channel_count <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip channels must not be empty");
+      throw WasmRangeError("clip channels must not be empty");
     }
     std::shared_ptr<sonare::engine::ClipAudioStorage> owned;
     if (!has_page_provider) {
@@ -175,12 +171,10 @@ void RealtimeEngineWasm::setClips(val clips) {
       if (ch == 0) {
         num_samples = static_cast<int64_t>(channel.size());
         if (num_samples <= 0) {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "clip channels must not be empty");
+          throw WasmRangeError("clip channels must not be empty");
         }
       } else if (static_cast<int64_t>(channel.size()) != num_samples) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "all clip channels must have the same length");
+        throw WasmRangeError("all clip channels must have the same length");
       }
       owned->channels.push_back(std::move(channel));
     }
@@ -206,8 +200,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     schedule.start_ppq = numberFromVal(objectProperty(clip_val, "startPpq"), "startPpq");
     if (!std::isfinite(schedule.start_ppq) ||
         !sonare::transport::valid_public_ppq(schedule.start_ppq)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip startPpq is outside the public timeline range");
+      throw WasmRangeError("clip startPpq is outside the public timeline range");
     }
     // clip_offset_samples / fade_*_samples are int64_t in ClipSchedule; read
     // them at full 64-bit precision (like length_samples below) so large
@@ -217,8 +210,7 @@ void RealtimeEngineWasm::setClips(val clips) {
                                        ? schedule.page_provider->num_samples()
                                        : num_samples;
     if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= source_samples) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip offset is outside the source");
+      throw WasmRangeError("clip offset is outside the source");
     }
     const int64_t default_length = source_samples - schedule.clip_offset_samples;
     const int64_t requested_length = int64Property(clip_val, "lengthSamples", 0);
@@ -226,20 +218,17 @@ void RealtimeEngineWasm::setClips(val clips) {
     // remaining source from clipOffsetSamples rather than an empty clip.
     schedule.length_samples = requested_length == 0 ? default_length : requested_length;
     if (schedule.length_samples <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip offset or length is outside the source");
+      throw WasmRangeError("clip offset or length is outside the source");
     }
     schedule.loop = boolProperty(clip_val, "loop", false);
     schedule.gain = floatProperty(clip_val, "gain", 1.0f);
     if (!(std::isfinite(schedule.gain) && schedule.gain >= 0.0f)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip gain must be a finite non-negative number");
+      throw WasmRangeError("clip gain must be a finite non-negative number");
     }
     schedule.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
     schedule.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
     if (schedule.fade_in_samples < 0 || schedule.fade_out_samples < 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "clip fade lengths must be non-negative");
+      throw WasmRangeError("clip fade lengths must be non-negative");
     }
     if (hasProperty(clip_val, "warpMode")) {
       val mode_val = objectProperty(clip_val, "warpMode");
@@ -254,7 +243,7 @@ void RealtimeEngineWasm::setClips(val clips) {
         } else if (mode == "time-stretch") {
           schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
         } else {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+          throw WasmRangeError("unknown warp mode");
         }
       } else {
         const int mode = checkedIntFromVal(mode_val, "warpMode");
@@ -267,7 +256,7 @@ void RealtimeEngineWasm::setClips(val clips) {
         } else if (mode == 3) {
           schedule.warp_mode = sonare::engine::WarpMode::kTimeStretch;
         } else {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+          throw WasmRangeError("unknown warp mode");
         }
       }
     }
@@ -286,8 +275,7 @@ void RealtimeEngineWasm::setClips(val clips) {
               anchor.warp_sample < 0.0 || anchor.source_sample < 0.0 ||
               (!anchors->empty() && (!(anchor.warp_sample > anchors->back().warp_sample) ||
                                      !(anchor.source_sample > anchors->back().source_sample)))) {
-            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                          "warp anchors must be finite and strictly increasing");
+            throw WasmRangeError("warp anchors must be finite and strictly increasing");
           }
           anchors->push_back(anchor);
         }
@@ -297,16 +285,13 @@ void RealtimeEngineWasm::setClips(val clips) {
     const bool tempo_sync_baked = schedule.warp_mode == sonare::engine::WarpMode::kTempoSync;
     if (tempo_sync_baked) {
       if (has_page_provider) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "tempo-sync paged clips are not supported");
+        throw WasmRangeError("tempo-sync paged clips are not supported");
       }
       if (schedule.loop) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "tempo-sync direct clips do not support loop=true yet");
+        throw WasmRangeError("tempo-sync direct clips do not support loop=true yet");
       }
       if (schedule.clip_offset_samples < 0 || schedule.clip_offset_samples >= num_samples) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "tempo-sync clip offset is outside the source");
+        throw WasmRangeError("tempo-sync clip offset is outside the source");
       }
       const auto rounded_nonnegative_sample = [](double sample, size_t* out) noexcept {
         return sonare::numeric::checked_round_cast(sample, out) && sample >= 0.0;
@@ -329,26 +314,22 @@ void RealtimeEngineWasm::setClips(val clips) {
               !rounded_nonnegative_sample(next.source_sample, &source_end) ||
               !rounded_nonnegative_sample(prev.warp_sample, &target_start) ||
               !rounded_nonnegative_sample(next.warp_sample, &target_end)) {
-            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                          "tempo-sync warp anchor is out of sample range");
+            throw WasmRangeError("tempo-sync warp anchor is out of sample range");
           }
           sonare::engine::TempoSyncWarpSegment segment;
           if (!sonare::numeric::checked_add(base_offset, source_start, &segment.source_offset)) {
-            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                          "tempo-sync warp source offset is out of range");
+            throw WasmRangeError("tempo-sync warp source offset is out of range");
           }
           segment.source_samples = source_end > source_start ? source_end - source_start : 0;
           segment.target_samples = target_end > target_start ? target_end - target_start : 0;
           if (segment.source_offset > static_cast<size_t>(num_samples) ||
               segment.source_samples > static_cast<size_t>(num_samples) - segment.source_offset ||
               segment.source_samples == 0 || segment.target_samples == 0) {
-            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                          "tempo-sync warp anchors must span positive samples");
+            throw WasmRangeError("tempo-sync warp anchors must span positive samples");
           }
           if (!sonare::numeric::checked_add(target_samples, segment.target_samples,
                                             &target_samples)) {
-            throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                          "tempo-sync warp target length is out of range");
+            throw WasmRangeError("tempo-sync warp target length is out of range");
           }
           segments.push_back(segment);
         }
@@ -361,8 +342,7 @@ void RealtimeEngineWasm::setClips(val clips) {
         segments.push_back(segment);
       }
       if (segments.empty() || target_samples == 0)
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "tempo-sync clip has an empty source or target span");
+        throw WasmRangeError("tempo-sync clip has an empty source or target span");
       sonare::engine::TempoSyncWarpBakeConfig bake_config;
       bake_config.sample_rate = static_cast<int>(std::lround(engine_.sample_rate()));
       std::vector<const float*> source_channel_ptrs;
@@ -388,8 +368,7 @@ void RealtimeEngineWasm::setClips(val clips) {
     } else if ((schedule.warp_mode == sonare::engine::WarpMode::kRepitch ||
                 schedule.warp_mode == sonare::engine::WarpMode::kTimeStretch) &&
                schedule.loop && schedule.warp_anchors && schedule.warp_anchors->size() >= 2) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "warped clips do not support loop=true yet");
+      throw WasmRangeError("warped clips do not support loop=true yet");
     }
     if (!has_page_provider && !tempo_sync_baked) {
       owned->channel_ptrs.clear();
@@ -436,8 +415,7 @@ int RealtimeEngineWasm::createClipPageProvider(const val& num_channels_val, int6
                                                int64_t page_frames) {
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   if (!sonare::engine::validate_clip_page_dimensions(num_channels, num_samples, page_frames)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "clip page provider dimensions must be positive");
+    throw WasmRangeError("clip page provider dimensions must be positive");
   }
   auto provider = std::make_shared<WasmClipPageProvider>(num_channels, num_samples, page_frames);
   for (size_t index = 0; index < clip_page_providers_.size(); ++index) {
@@ -511,8 +489,7 @@ uint32_t RealtimeEngineWasm::warpStretchOverflowCount() const {
 void RealtimeEngineWasm::setWarpVoiceCapacity(const emscripten::val& voices_val) {
   const uint32_t voices = checkedUintFromVal(voices_val, "voices");
   if (!engine_.set_warp_voice_capacity(voices)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "warp voice capacity must be in [0, 64]");
+    throw WasmRangeError("warp voice capacity must be in [0, 64]");
   }
 }
 
@@ -527,8 +504,7 @@ void RealtimeEngineWasm::setClipPagePrefetchFrames(double frames) {
   // 2^63 rather than numeric_limits: INT64_MAX is not a representable double and rounds up.
   static constexpr double kInt64UpperBound = 9223372036854775808.0;
   if (!sonare::numeric::finite_non_negative(frames) || frames >= kInt64UpperBound) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "clip page prefetch frames must be finite and within [0, 2^63)");
+    throw WasmRangeError("clip page prefetch frames must be finite and within [0, 2^63)");
   }
   engine_.set_clip_page_prefetch_frames(static_cast<int64_t>(frames));
 }

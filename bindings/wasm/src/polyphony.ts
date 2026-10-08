@@ -107,7 +107,7 @@ export class PolyphonicAnalysis {
    * names one place.
    *
    * @param note - Index below {@link noteCount}
-   * @throws {SonareError} `InvalidParameter` when `note` is out of range
+   * @throws {RangeError} when `note` is out of range
    */
   setNoteEdit(note: number, edit: NoteEditInput): void {
     this.handle().setNoteEdit(note, edit);
@@ -133,7 +133,7 @@ export class PolyphonicAnalysis {
    * back in; here the handle already holds it, so a curve edit needs nothing from
    * the caller.
    *
-   * @throws {SonareError} `InvalidParameter` when `note` is out of range
+   * @throws {RangeError} when `note` is out of range
    */
   noteF0(note: number): Float32Array {
     return this.handle().noteF0(note);
@@ -208,10 +208,10 @@ export class PolyphonicAnalysis {
    * contribution is identical between two renders. That is also the limit: a host
    * cannot tell from two renders whether a claim set divided the energy correctly.
    *
-   * @throws {SonareError} `InvalidParameter` on an option or an edit field the
-   *   renderer rejects — a non-positive stretch ratio, a negative or non-finite
-   *   envelope point, or a vibrato or drift edit on a note carrying no usable
-   *   pitch curve
+   * @throws {RangeError} on a negative or non-finite `fadeMs` or `vibratoCutoffHz`
+   * @throws {SonareError} `InvalidParameter` on an edit field the renderer
+   *   rejects — a non-positive stretch ratio, a negative or non-finite envelope
+   *   point, or a vibrato or drift edit on a note carrying no usable pitch curve
    */
   render(options: PolyphonicRenderOptions = {}): Float32Array {
     return this.handle().render(options as Record<string, unknown>);

@@ -41,10 +41,9 @@ editing::note_model::NoteExtractorConfig noteExtractorConfigFromVal(val options,
       !std::isfinite(reference_hz) || !std::isfinite(voiced_threshold) || threshold_cents < 0.0f ||
       min_note_ms < 0.0f || reference_hz < 0.0f || voiced_threshold < 0.0f ||
       voiced_threshold > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(entry_point) +
-                              ": config values must be finite and non-negative, and "
-                              "voicedThreshold must be in [0, 1]");
+    throw WasmRangeError(std::string(entry_point) +
+                         ": config values must be finite and non-negative, and "
+                         "voicedThreshold must be in [0, 1]");
   }
   if (threshold_cents > 0.0f) config.segmenter.segmentation_threshold_cents = threshold_cents;
   if (min_note_ms > 0.0f) config.segmenter.min_note_ms = min_note_ms;
@@ -60,8 +59,7 @@ int noteFrameArg(double value, const char* subject) {
   constexpr double kLowest = static_cast<double>(std::numeric_limits<int>::lowest());
   constexpr double kHighest = static_cast<double>(std::numeric_limits<int>::max());
   if (!std::isfinite(value) || std::floor(value) != value || value < kLowest || value > kHighest) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must be an integer frame index");
+    throw WasmRangeError(std::string(subject) + " must be an integer frame index");
   }
   return static_cast<int>(value);
 }
@@ -79,11 +77,10 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   const bool has_prob = !has_voiced && !voiced_prob.isUndefined() && !voiced_prob.isNull();
   if (!has_voiced && !has_prob) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "voiced or voicedProb is required");
+    throw WasmRangeError(prefix + "voiced or voicedProb is required");
   }
   if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          prefix + "frameRate must be a finite positive number");
+    throw WasmRangeError(prefix + "frameRate must be a finite positive number");
   }
   accumulateWasmFloat32ArrayLength(samples, "samples", budget.c_str(), cumulative_count);
   accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
@@ -97,13 +94,12 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   const size_t n_frames = f0.size();
   if (n_frames == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "f0Hz must not be empty");
+    throw WasmRangeError(prefix + "f0Hz must not be empty");
   }
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          prefix + "voiced and voicedProb must match f0Hz length");
+    throw WasmRangeError(prefix + "voiced and voicedProb must match f0Hz length");
   }
   for (size_t i = 0; i < n_frames; ++i) {
     // f0Hz values are not checked: a frame carrying no pitch is spelled zero,
@@ -111,8 +107,7 @@ editing::pitch_editor::F0Track noteTrackFromVal(const val& samples, int sample_r
     // it -- and every consumer reads all three as contributing no measurement.
     // voicedProb is read only when voiced is absent, so it is validated only then.
     if (!has_voiced && (!std::isfinite(prob_vec[i]) || prob_vec[i] < 0.0f || prob_vec[i] > 1.0f)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            prefix + "voicedProb values must be in [0, 1]");
+      throw WasmRangeError(prefix + "voicedProb values must be in [0, 1]");
     }
   }
 
@@ -143,7 +138,7 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced, cons
   accumulateWasmFloat32ArrayLength(f0_hz, "f0Hz", budget.c_str(), cumulative_count);
   std::vector<float> f0 = float32ArrayToVector(f0_hz);
   if (f0.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, prefix + "f0Hz must not be empty");
+    throw WasmRangeError(prefix + "f0Hz must not be empty");
   }
 
   std::vector<float> voiced_vec;
@@ -151,7 +146,7 @@ std::vector<float> normalizedF0FromVal(const val& f0_hz, const val& voiced, cons
     accumulateWasmFloat32ArrayLength(voiced, "voiced", budget.c_str(), cumulative_count);
     voiced_vec = float32ArrayToVector(voiced);
     if (voiced_vec.size() != f0.size()) {
-      throw SonareException(ErrorCode::InvalidParameter, prefix + "voiced must match f0Hz length");
+      throw WasmRangeError(prefix + "voiced must match f0Hz length");
     }
   }
 
@@ -189,8 +184,7 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
         "renderNotes note.frameEnd");
     if (frame_start < 0 || frame_end < frame_start ||
         static_cast<std::size_t>(frame_end) > f0.size()) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "renderNotes: every note's frame span must lie inside f0Hz");
+      throw WasmRangeError("renderNotes: every note's frame span must lie inside f0Hz");
     }
     note.median_hz = static_cast<float>(
         hasProperty(row, "medianHz") ? requireNumberProperty(row, "medianHz", "renderNotes note")
@@ -200,8 +194,7 @@ editing::note_model::NoteObject renderableNoteFromVal(const val& row, const std:
     note.f0_hz.frame_offset = frame_start;
   } else if (note.edit.vibrato_depth_change != 0.0f || note.edit.drift_change != 0.0f) {
     // A curve edit with no track has nothing to act on.
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "renderNotes: vibratoDepthChange and driftChange need f0Hz");
+    throw WasmRangeError("renderNotes: vibratoDepthChange and driftChange need f0Hz");
   }
   return note;
 }
@@ -236,7 +229,7 @@ std::vector<NoteSetEntry> noteSetFromVal(const val& notes, const char* entry_poi
                                    (subject + ".frameEnd").c_str());
     entry.edit = noteRowEditFromVal(row, entry_point, cumulative_count);
     if (!editing::note_model::is_valid_note_edit(entry.edit)) {
-      throw SonareException(ErrorCode::InvalidParameter, subject + ".edit contains invalid values");
+      throw WasmRangeError(subject + ".edit contains invalid values");
     }
     out.push_back(std::move(entry));
   }
@@ -293,14 +286,12 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   editing::note_model::NoteRenderConfig config;
   const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
   if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "renderNotes: fadeMs must be finite and non-negative");
+    throw WasmRangeError("renderNotes: fadeMs must be finite and non-negative");
   }
   if (fade_ms > 0.0f) config.fade_ms = fade_ms;
   const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
   if (!std::isfinite(vibrato_cutoff_hz) || vibrato_cutoff_hz < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "renderNotes: vibratoCutoffHz must be finite and non-negative");
+    throw WasmRangeError("renderNotes: vibratoCutoffHz must be finite and non-negative");
   }
   if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
 
@@ -313,14 +304,13 @@ val js_render_notes(val samples, const val& sample_rate, val notes, val options)
   const val voiced = objectProperty(options, "voiced");
   const bool has_voiced = !voiced.isUndefined() && !voiced.isNull();
   if (has_voiced && !has_track) {
-    throw SonareException(ErrorCode::InvalidParameter, "renderNotes: voiced requires f0Hz");
+    throw WasmRangeError("renderNotes: voiced requires f0Hz");
   }
   const float frame_rate = floatProperty(options, "frameRate", 0.0f);
   std::vector<float> f0;
   if (has_track) {
     if (!std::isfinite(frame_rate) || frame_rate <= 0.0f) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "renderNotes: frameRate must be a finite positive number when f0Hz is given");
     }
     f0 = normalizedF0FromVal(f0_hz, voiced, "renderNotes", &cumulative_count);
@@ -347,16 +337,13 @@ val js_decompose_note_pitch(val f0_hz, const val& voiced, const val& frame_rate_
   // A note with no pitch is spelled 0, so only a value that cannot be a centre
   // or a cutoff at all is rejected.
   if (median_hz < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: medianHz must be non-negative");
+    throw WasmRangeError("decomposeNotePitch: medianHz must be non-negative");
   }
   if (vibrato_cutoff_hz < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: vibratoCutoffHz must be non-negative");
+    throw WasmRangeError("decomposeNotePitch: vibratoCutoffHz must be non-negative");
   }
   if (frame_rate <= 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "decomposeNotePitch: frameRate must be a positive number");
+    throw WasmRangeError("decomposeNotePitch: frameRate must be a positive number");
   }
   std::size_t cumulative_count = 0;
   std::vector<float> f0 =
@@ -394,7 +381,7 @@ val js_split_note(val samples, const val& sample_rate_val, val f0_hz, val voiced
                        config.voiced_threshold, "splitNote", &cumulative_count);
   std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "splitNote", &cumulative_count);
   if (note_index >= entries.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "splitNote: index is outside the note set");
+    throw WasmRangeError("splitNote: index is outside the note set");
   }
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
@@ -418,8 +405,7 @@ val js_merge_notes(val samples, const val& sample_rate_val, val f0_hz, val voice
                        config.voiced_threshold, "mergeNotes", &cumulative_count);
   std::vector<NoteSetEntry> entries = noteSetFromVal(notes, "mergeNotes", &cumulative_count);
   if (!(first_index < last_index) || last_index >= entries.size()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "mergeNotes: first and last must be an ascending run inside the set");
+    throw WasmRangeError("mergeNotes: first and last must be an ascending run inside the set");
   }
 
   Audio audio = loadValidatedAudio(samples, sample_rate);
@@ -447,8 +433,7 @@ UnmatchedTargetPolicy unmatchedTargetPolicyFromVal(const val& request) {
     if (name == "mute") return UnmatchedTargetPolicy::Mute;
     if (name == "nearest") return UnmatchedTargetPolicy::Nearest;
   }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "assignNoteTargets: unmatchedPolicy must be 'leave', 'mute' or 'nearest'");
+  throw WasmRangeError("assignNoteTargets: unmatchedPolicy must be 'leave', 'mute' or 'nearest'");
 }
 
 // Both floats fall back to a default-constructed config, so the defaults are the
@@ -465,12 +450,10 @@ NoteTargetAssignConfig noteTargetAssignConfigFromVal(const val& request) {
   // nothing downstream can tell from a deliberate one. This is the C ABI's
   // resolve_note_target_config, which this surface does not go through.
   if (config.min_overlap_ratio < 0.0f || config.min_overlap_ratio > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "assignNoteTargets: minOverlapRatio must be in [0, 1]");
+    throw WasmRangeError("assignNoteTargets: minOverlapRatio must be in [0, 1]");
   }
   if (config.max_correction_semitones < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "assignNoteTargets: maxCorrectionSemitones must not be negative");
+    throw WasmRangeError("assignNoteTargets: maxCorrectionSemitones must not be negative");
   }
   return config;
 }
@@ -494,8 +477,7 @@ std::vector<NoteTarget> noteTargetsFromVal(const val& targets, const char* entry
     // float32 turns a finite value past FLT_MAX into an infinity, and the
     // correction clamp would then report the saturated bound as the answer.
     if (std::abs(target_midi) > static_cast<double>(std::numeric_limits<float>::max())) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            subject + ".targetMidi must be within the 32-bit float range");
+      throw WasmRangeError(subject + ".targetMidi must be within the 32-bit float range");
     }
     target.target_midi = static_cast<float>(target_midi);
     out.push_back(target);
@@ -548,8 +530,7 @@ val assignedNoteToVal(const val& row, const editing::note_model::NoteEdit& edit)
 val js_assign_note_targets(val notes, const val& sample_rate_val, val targets, val request) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   if (sample_rate <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "assignNoteTargets: sampleRate must be a positive number");
+    throw WasmRangeError("assignNoteTargets: sampleRate must be a positive number");
   }
   const NoteTargetAssignConfig config = noteTargetAssignConfigFromVal(request);
   const std::vector<NoteTarget> core_targets = noteTargetsFromVal(targets, "assignNoteTargets");

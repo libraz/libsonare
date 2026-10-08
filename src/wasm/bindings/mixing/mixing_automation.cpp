@@ -61,7 +61,7 @@ val MixerWasm::stripMeter(const val& strip_index_val) {
 
 val MixerWasm::busMeter(std::string bus_id) {
   SonareMixMeterSnapshot snapshot{};
-  checkStripError(sonare_mixer_bus_meter(mixer_, bus_id.c_str(), &snapshot),
+  checkStripError(sonare_mixer_bus_meter(mixer_, wasmCString(bus_id, "busId"), &snapshot),
                   "failed to read bus meter");
   return mixMeterSnapshotToVal(snapshot);
 }
@@ -81,8 +81,9 @@ uint32_t MixerWasm::stripNonFiniteDiscardCount(const val& strip_index_val) {
 // sonare_mixer_bus_non_finite_discard_count.
 uint32_t MixerWasm::busNonFiniteDiscardCount(std::string bus_id) {
   uint32_t count = 0;
-  checkStripError(sonare_mixer_bus_non_finite_discard_count(mixer_, bus_id.c_str(), &count),
-                  "failed to read bus non-finite discard count");
+  checkStripError(
+      sonare_mixer_bus_non_finite_discard_count(mixer_, wasmCString(bus_id, "busId"), &count),
+      "failed to read bus non-finite discard count");
   return count;
 }
 

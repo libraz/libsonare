@@ -25,17 +25,15 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   hzToMel,
   hzToMidi,
   hzToNote,
   init,
-  isSonareError,
   melToHz,
   midiToHz,
-  type SonareError,
   timeToFrames,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const SR = 22050;
 const HOP = 512;
@@ -73,9 +71,7 @@ function run(call: () => unknown): Outcome {
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
-  expect(isSonareError(caught), `${context}: expected a SonareError`).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code, context).toBe(ErrorCode.InvalidParameter);
+  const error = expectArgumentRefusal(caught, RangeError, context);
   expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
 }
 

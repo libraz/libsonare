@@ -106,7 +106,7 @@ class StreamingMasteringChainWrapper {
 
   void setParameter(const std::string& key, const val& value) {
     if (value.typeOf().as<std::string>() != "number") {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "value must be a number");
+      throw WasmTypeError("value must be a number");
     }
     chain_.set_parameter(key, checkedDoubleFromVal(value, "value"));
   }
@@ -146,8 +146,7 @@ class StreamingMasteringChainWrapper {
 
   void validateBlockLength(std::size_t length) const {
     if (max_block_size_ > 0 && length > static_cast<std::size_t>(max_block_size_)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "process block exceeds prepared maxBlockSize");
+      throw WasmRangeError("process block exceeds prepared maxBlockSize");
     }
   }
 

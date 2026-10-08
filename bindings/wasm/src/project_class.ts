@@ -1213,9 +1213,10 @@ export class Project {
    * @returns the number of notes written (half the events)
    * @throws {RangeError} on empty `samples`, a non-finite sample, or a
    *   `sampleRate` outside `[8000, 384000]`
+   * @throws {RangeError} on an option outside its domain
    * @throws {SonareError} `InvalidParameter` when `clipId` is unknown or not a
-   *   MIDI clip, or on an option outside its domain; `NotSupported` when the
-   *   library was built without the pitch editor
+   *   MIDI clip; `NotSupported` when the library was built without the pitch
+   *   editor
    */
   transcribeToClip(request: ProjectTranscribeRequest): number {
     assertSamples('Project.transcribeToClip', request.samples, true);

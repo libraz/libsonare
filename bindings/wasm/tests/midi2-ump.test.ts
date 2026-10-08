@@ -160,16 +160,10 @@ describe('RealtimeEngine raw UMP push', () => {
 
   it('pushMidiUmp refuses data messages and mismatched word counts', () => {
     withEngine((engine) => {
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x30160000, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x50000000, 0, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x41923c00]))).toBe(ErrorCode.InvalidParameter);
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x41923c00, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
+      expect(() => engine.pushMidiUmp(0, [0x30160000, 0])).toThrow(RangeError);
+      expect(() => engine.pushMidiUmp(0, [0x50000000, 0, 0, 0])).toThrow(RangeError);
+      expect(() => engine.pushMidiUmp(0, [0x41923c00])).toThrow(RangeError);
+      expect(() => engine.pushMidiUmp(0, [0x41923c00, 0, 0])).toThrow(RangeError);
     });
   });
 
@@ -194,15 +188,9 @@ describe('RealtimeEngine raw UMP push', () => {
       engine.setMidiInputSource(0);
       expect(() => engine.pushMidiInputUmp(new Uint32Array(NOTE_ON_2W))).not.toThrow();
       expect(() => engine.pushMidiInputUmp(NOTE_ON_2W, 128)).not.toThrow();
-      expect(errorCode(() => engine.pushMidiInputUmp([0x30160000, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiInputUmp([0x50000000, 0, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiInputUmp([0x41923c00]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
+      expect(() => engine.pushMidiInputUmp([0x30160000, 0])).toThrow(RangeError);
+      expect(() => engine.pushMidiInputUmp([0x50000000, 0, 0, 0])).toThrow(RangeError);
+      expect(() => engine.pushMidiInputUmp([0x41923c00])).toThrow(RangeError);
       expect(() => engine.pushMidiInputUmp([])).toThrow(RangeError);
     });
   });

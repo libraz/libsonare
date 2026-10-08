@@ -148,7 +148,14 @@ function workerError(
       message.error.message,
     );
   }
-  const error = new Error(message.error.message);
+  // An argument refusal crosses the worker as its native class, so a caller's
+  // `instanceof RangeError` / `TypeError` holds on both sides.
+  const error =
+    message.error.name === 'RangeError'
+      ? new RangeError(message.error.message)
+      : message.error.name === 'TypeError'
+        ? new TypeError(message.error.message)
+        : new Error(message.error.message);
   error.name = message.error.name;
   return error;
 }

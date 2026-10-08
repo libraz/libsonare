@@ -47,8 +47,7 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   const auto read = [&config](const char* key) {
     const float value = floatProperty(config, key, 0.0f);
     if (!std::isfinite(value)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(key) + " must be a finite number");
+      throw WasmRangeError(std::string(key) + " must be a finite number");
     }
     return value;
   };
@@ -227,8 +226,7 @@ class PolyphonicAnalysisWasm {
     const float vibrato_cutoff_hz = floatProperty(options, "vibratoCutoffHz", 0.0f);
     if (!std::isfinite(fade_ms) || fade_ms < 0.0f || !std::isfinite(vibrato_cutoff_hz) ||
         vibrato_cutoff_hz < 0.0f) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "render: fadeMs and vibratoCutoffHz must be finite and non-negative");
+      throw WasmRangeError("render: fadeMs and vibratoCutoffHz must be finite and non-negative");
     }
     if (fade_ms > 0.0f) config.fade_ms = fade_ms;
     if (vibrato_cutoff_hz > 0.0f) config.decomposition.vibrato_cutoff_hz = vibrato_cutoff_hz;
@@ -244,7 +242,7 @@ class PolyphonicAnalysisWasm {
   std::size_t noteIndex(double note) const {
     const std::size_t index = wasmIndexArg(note, "note index");
     if (index >= analysis_.notes.size()) {
-      throw SonareException(ErrorCode::InvalidParameter, "note index is out of range");
+      throw WasmRangeError("note index is out of range");
     }
     return index;
   }

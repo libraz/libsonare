@@ -155,16 +155,13 @@ class StreamAnalyzerWrapper {
     config.emit_every_n_frames = emit_every_n_frames;
     config.magnitude_downsample = magnitude_downsample;
     if (!numeric::checked_integral_cast(max_pending_frames, &config.max_pending_frames)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "maxPendingFrames must be a non-negative integer");
+      throw WasmRangeError("maxPendingFrames must be a non-negative integer");
     }
     if (!numeric::checked_integral_cast(max_progression_entries, &config.max_progression_entries)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "maxProgressionEntries must be a non-negative integer");
+      throw WasmRangeError("maxProgressionEntries must be a non-negative integer");
     }
     if (output_format != 0) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "outputFormat is deprecated; use readFramesU8/readFramesI16");
+      throw WasmRangeError("outputFormat is deprecated; use readFramesU8/readFramesI16");
     }
     config.output_format = OutputFormat::Float32;
     config.key_update_interval_sec = key_update_interval_sec;

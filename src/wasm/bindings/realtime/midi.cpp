@@ -30,7 +30,8 @@
 namespace {
 
 void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
-  const SonareError error = sonare_c_detail::midi_fx_chain_from_json(config_json.c_str(), chain);
+  const SonareError error =
+      sonare_c_detail::midi_fx_chain_from_json(wasmCString(config_json, "configJson"), chain);
   if (error == SONARE_ERROR_INVALID_FORMAT) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid MIDI-FX JSON");
   }
@@ -126,9 +127,7 @@ void RealtimeEngineWasm::setBuiltinInstrument(const val& destination_id_val, val
                          .checked_non_negative(0.0f, "releaseMs");
     const int polyphony = intProperty(config, "polyphony", 0);
     if (polyphony < 0) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "polyphony must be 0 (the library default) or a positive voice count");
+      throw WasmRangeError("polyphony must be 0 (the library default) or a positive voice count");
     }
     cfg.polyphony = polyphony;
   }
@@ -157,8 +156,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     // Match the C ABI: reject a non-finite clip start (WASM bypasses the C-ABI
     // guard), otherwise ppq->sample placement is undefined in the sequencer.
     if (!std::isfinite(clip.start_ppq)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMidiClips: clip startPpq must be finite");
+      throw WasmRangeError("setMidiClips: clip startPpq must be finite");
     }
     clip.length_samples = int64Property(clip_val, "lengthSamples", 0);
     // Linear gain envelope over the destination's rendered audio (matches
@@ -166,19 +164,16 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
     // Absent gain defaults to unity, absent fades default to none.
     clip.gain = floatProperty(clip_val, "gain", 1.0f);
     if (!(std::isfinite(clip.gain) && clip.gain >= 0.0f)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMidiClips: clip gain must be a finite non-negative number");
+      throw WasmRangeError("setMidiClips: clip gain must be a finite non-negative number");
     }
     clip.fade_in_samples = int64Property(clip_val, "fadeInSamples", 0);
     clip.fade_out_samples = int64Property(clip_val, "fadeOutSamples", 0);
     if (clip.fade_in_samples < 0 || clip.fade_out_samples < 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMidiClips: clip fade lengths must be non-negative");
+      throw WasmRangeError("setMidiClips: clip fade lengths must be non-negative");
     }
     // An open-ended clip (length_samples <= 0) has no end to fade out towards.
     if (clip.fade_out_samples > 0 && clip.length_samples <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMidiClips: fade-out requires a bounded clip length");
+      throw WasmRangeError("setMidiClips: fade-out requires a bounded clip length");
     }
     clip.loop_mode = boolProperty(clip_val, "loop", false) ? sonare::midi::MidiLoopMode::kLoop
                                                            : sonare::midi::MidiLoopMode::kOneShot;
@@ -223,8 +218,7 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
       // derivation must not read this line as coverage.
       const uint32_t group = uintProperty(event_val, "group", 0);
       if (group > 15) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "setMidiClips: event group must be in [0,15]");
+        throw WasmRangeError("setMidiClips: event group must be in [0,15]");
       }
       ump.group = sonare::midi::ump_group_from_word0(ump.words[0]);
       ump.sysex_handle = uintProperty(event_val, "sysexHandle", 0);
@@ -312,8 +306,7 @@ void RealtimeEngineWasm::loadSoundFont(val data) {
   // error, as in sonare_engine_load_soundfont; parse() applies the same SF2 file
   // size limit, and the engine's SoundFont is replaced only after it succeeds.
   if (bytes.empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "SoundFont data must not be empty");
+    throw WasmRangeError("SoundFont data must not be empty");
   }
   auto soundfont = std::make_shared<sonare::midi::synth::Sf2File>();
   std::string error;
@@ -345,9 +338,7 @@ void RealtimeEngineWasm::setSf2Instrument(const val& destination_id_val, val con
                    .checked_non_negative(cfg.gain, "gain");
     const int polyphony = intProperty(config, "polyphony", 0);
     if (polyphony < 0) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "polyphony must be 0 (the library default) or a positive voice count");
+      throw WasmRangeError("polyphony must be 0 (the library default) or a positive voice count");
     }
     if (polyphony != 0) cfg.polyphony = polyphony;
     cfg.prefer_model_for_modeled_families =
@@ -453,9 +444,9 @@ void RealtimeEngineWasm::bindMidiCc(const val& channel_val, const val& controlle
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   if (channel < 0 || channel > 15 || controller < 0 || controller > 127 || param_id == 0 ||
       max_value < min_value) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "bindMidiCc: channel in [0,15], controller in [0,127], paramId "
-                                  "non-zero, maxValue >= minValue");
+    throw WasmRangeError(
+        "bindMidiCc: channel in [0,15], controller in [0,127], paramId "
+        "non-zero, maxValue >= minValue");
   }
   if (!engine_.bind_midi_cc(static_cast<uint8_t>(controller), static_cast<uint8_t>(channel),
                             param_id, min_value, max_value)) {
@@ -500,8 +491,7 @@ void RealtimeEngineWasm::bindMidiCcBinding(val object) {
       binding.max_value < binding.min_value ||
       (binding.kind == sonare::midi::CcBindingKind::kControlChange14 &&
        (binding.cc_number > 31 || binding.cc_lsb_number != binding.cc_number + 32u))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid full MIDI CC binding");
+    throw WasmRangeError("invalid full MIDI CC binding");
   }
   if (!engine_.bind_midi_cc(binding)) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
@@ -541,8 +531,7 @@ void RealtimeEngineWasm::setControllerProfile(const val& destination_id_val,
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   sonare::midi::ControllerProfile profile;
   if (!sonare::midi::ControllerProfile::preset(preset_name, &profile)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown controller profile preset: '" + preset_name + "'");
+    throw WasmRangeError("unknown controller profile preset: '" + preset_name + "'");
   }
   wasmInstallControllerProfile(engine_, destination_id, profile);
 #else
@@ -589,12 +578,10 @@ void RealtimeEngineWasm::bindController(const val& destination_id_val, val bindi
   // it is refused here rather than substituted: a mapping silently replaced by a
   // default is a mapping the caller believes it installed.
   if (!std::isfinite(lo) || !std::isfinite(hi)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "binding range must be finite");
+    throw WasmRangeError("binding range must be finite");
   }
   if (!std::isfinite(curve) || curve <= 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "binding curve must be finite and positive");
+    throw WasmRangeError("binding curve must be finite and positive");
   }
   entry.lo = lo;
   entry.hi = hi;
@@ -826,12 +813,12 @@ void RealtimeEngineWasm::setPartRig(const val& destination_id_val, const val& pa
       sonare_wasm_synth::enumFromVal(mode, kPartRigModes, 3, "part rig mode"));
   const bool has_inserts = !inserts_json.isUndefined() && !inserts_json.isNull();
   if ((rig.mode == sonare::midi::PartRigMode::kChain) != has_inserts) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "insertsJson is required for the chain mode and only then");
+    throw WasmRangeError("insertsJson is required for the chain mode and only then");
   }
   if (has_inserts) {
     const std::string json = inserts_json.as<std::string>();
-    const SonareError parsed = sonare_c_detail::parse_part_rig_inserts(json.c_str(), &rig.stages);
+    const SonareError parsed =
+        sonare_c_detail::parse_part_rig_inserts(wasmCString(json, "insertsJson"), &rig.stages);
     if (parsed == SONARE_ERROR_INVALID_FORMAT) {
       throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, "invalid part rig inserts");
     }
@@ -993,10 +980,8 @@ val RealtimeEngineWasm::drainExternalMidi(const val& max_records_val) {
   constexpr int kMaxLoweredMessages =
       static_cast<int>(std::extent<decltype(sonare::host::ExternalMidi1Lowered::messages)>::value);
   if (max_records > 0 && max_records < kMaxLoweredMessages) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "drainExternalMidi: maxRecords must be at least " +
-                                      std::to_string(kMaxLoweredMessages) +
-                                      " to guarantee forward progress");
+    throw WasmRangeError("drainExternalMidi: maxRecords must be at least " +
+                         std::to_string(kMaxLoweredMessages) + " to guarantee forward progress");
   }
   if (max_records <= 0 || engine_.external_midi_pending_count() == 0) return out;
   sonare::host::ExternalMidiRecord record{};
@@ -1094,8 +1079,7 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
   const int value = checkedIntFromVal(value_val, "value");
   if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
       controller < 0 || controller > 127 || value < 0 || value > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "pushMidiInputCc: source enabled, group/channel in [0,15], controller/value in [0,127]");
   }
   if (!midi_input_source_.push_event(
@@ -1139,9 +1123,7 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
   // range rather than narrow it.
   const int bend14 = checkedIntFromVal(bend_val, "bend14");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || bend14 < 0 || bend14 > 16383) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiInputPitchBend: group/channel in [0,15], bend14 in [0,16383]");
+    throw WasmRangeError("pushMidiInputPitchBend: group/channel in [0,15], bend14 in [0,16383]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   pushMidiInputUmpInternal(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
@@ -1165,8 +1147,7 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || pressure < 0 || pressure > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "pushMidiInputChannelPressure: group/channel in [0,15], pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1193,8 +1174,7 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
       pressure < 0 || pressure > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "pushMidiInputPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1252,9 +1232,7 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   const int value = checkedIntFromVal(value_val, "value");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || controller < 0 ||
       controller > 127 || value < 0 || value > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiCc: group/channel in [0,15], controller/value in [0,127]");
+    throw WasmRangeError("pushMidiCc: group/channel in [0,15], controller/value in [0,127]");
   }
   const uint64_t packed = static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
                           (static_cast<uint64_t>(channel) << 16) |
@@ -1277,8 +1255,7 @@ namespace {
 size_t umpWordsFromVal(const val& words_val, uint32_t (&words)[4], const char* what) {
   const size_t count = wasmArrayLikeLength(words_val, "words");
   if (count < 1 || count > 4) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(what) + ": words must contain 1..4 UMP words");
+    throw WasmRangeError(std::string(what) + ": words must contain 1..4 UMP words");
   }
   for (size_t i = 0; i < count; ++i) {
     words[i] = checkedWordFromVal(words_val[i], "words[]");
@@ -1305,8 +1282,7 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
     case sonare::engine::MidiUmpPushResult::kQueued:
       return;
     case sonare::engine::MidiUmpPushResult::kInvalidMessage:
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "pushMidiUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
     case sonare::engine::MidiUmpPushResult::kSlotsFull:
     case sonare::engine::MidiUmpPushResult::kQueueFull:
@@ -1321,8 +1297,7 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_tim
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words, "pushMidiInputUmp");
   if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "pushMidiInputUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1369,9 +1344,7 @@ void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const 
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int bend14 = checkedIntFromVal(bend_val, "bend14");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || bend14 < 0 || bend14 > 16383) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiPitchBend: group/channel in [0,15], bend14 in [0,16383]");
+    throw WasmRangeError("pushMidiPitchBend: group/channel in [0,15], bend14 in [0,16383]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   queueMidiUmp(
@@ -1400,9 +1373,7 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || pressure < 0 || pressure > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiChannelPressure: group/channel in [0,15], pressure in [0,127]");
+    throw WasmRangeError("pushMidiChannelPressure: group/channel in [0,15], pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   queueMidiUmp(destination_id,
@@ -1433,9 +1404,7 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
       pressure < 0 || pressure > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
+    throw WasmRangeError("pushMidiPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
   }
 #if defined(SONARE_WITH_ARRANGEMENT)
   queueMidiUmp(destination_id,
@@ -1474,9 +1443,8 @@ void RealtimeEngineWasm::pushMidiSysex(const val& destination_id_val, val data,
   // constant, not a copy of its value, so raising it moves this guard with it.
   constexpr size_t kMaxSysExBytes = sonare::engine::RealtimeEngine::kMaxSysExPayloadBytes;
   if (bytes.empty() || bytes.size() > kMaxSysExBytes) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiSysex: data must contain 1.." + std::to_string(kMaxSysExBytes) + " bytes");
+    throw WasmRangeError("pushMidiSysex: data must contain 1.." + std::to_string(kMaxSysExBytes) +
+                         " bytes");
   }
   if (!engine_.push_midi_sysex(destination_id, bytes.data(), bytes.size(),
                                renderFrameFromVal(render_frame_val))) {
@@ -1511,9 +1479,7 @@ void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int ch
                                       sonare::rt::CommandType type) {
   if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
       velocity < 0 || velocity > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "pushMidiNote: group/channel in [0,15], note/velocity in [0,127]");
+    throw WasmRangeError("pushMidiNote: group/channel in [0,15], note/velocity in [0,127]");
   }
   const uint64_t packed = static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
                           (static_cast<uint64_t>(channel) << 16) |
@@ -1534,8 +1500,7 @@ void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, in
 #if defined(SONARE_WITH_ARRANGEMENT)
   if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
       note < 0 || note > 127 || velocity < 0 || velocity > 127) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "pushMidiInputNote: source enabled, group/channel in [0,15], note/velocity in [0,127]");
   }
   const sonare::midi::Ump ump =

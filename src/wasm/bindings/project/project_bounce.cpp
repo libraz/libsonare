@@ -102,9 +102,8 @@ double numberField(val object, const char* key, const char* subject, double fall
 double integerField(val object, const char* key, const char* subject, double max) {
   const double value = numberField(object, key, subject, 0.0);
   if (value < 0.0 || value > max || std::floor(value) != value) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(subject) + "." + key + " must be an integer in [0, " +
-                                      std::to_string(static_cast<long long>(max)) + "]");
+    throw WasmRangeError(std::string(subject) + "." + key + " must be an integer in [0, " +
+                         std::to_string(static_cast<long long>(max)) + "]");
   }
   return value;
 }
@@ -121,9 +120,8 @@ int sampleDescLoopMode(val desc) {
     if (name == "none") return 0;
     if (name == "continuous") return 1;
     if (name == "key-down") return 3;
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "Unknown sample loop mode name: '" + name + "' (expected none, continuous or key-down)");
+    throw WasmRangeError("Unknown sample loop mode name: '" + name +
+                         "' (expected none, continuous or key-down)");
   }
   return static_cast<int>(integerField(desc, "loopMode", "sample descriptor", 3.0));
 }
@@ -223,8 +221,7 @@ void jsInstrumentRender(void* userData, float* const* channels, int numChannels,
 JsInstrumentSlot instrumentSlotFromVal(const val& desc, InstrumentFailure* failure,
                                        SonareInstrumentBinding* binding) {
   if (desc.typeOf().as<std::string>() != "object" || desc.isNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "instrument bindings must be objects");
+    throw WasmTypeError("instrument bindings must be objects");
   }
   JsInstrumentSlot slot;
   slot.self = desc;
@@ -268,8 +265,7 @@ SonareSampleBank* SampleBankWasm::lookup(uint32_t id) {
 
 uint32_t SampleBankWasm::addSample(val data, val desc) {
   if (wasmFloat32ArrayLength(data, "sample data") == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sample data must not be empty");
+    throw WasmRangeError("sample data must not be empty");
   }
   const std::vector<float> frames = float32ArrayToVector(data);
 
@@ -300,8 +296,7 @@ void SampleBankWasm::addZone(const val& set_index_val, val zone) {
   // documents as the neutral zone; a present one that is not an object is a
   // caller mistake rather than a default.
   if (!zone.isUndefined() && !zone.isNull() && zone.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "addZone zone must be an object");
+    throw WasmTypeError("addZone zone must be an object");
   }
   SonareSampleZoneDesc c{};
   c.sample_index =
@@ -384,8 +379,7 @@ SonareProjectBounceOptions ProjectWasm::bounceOptionsFromVal(val options) {
       // Reject them here so WASM matches the C-ABI oracle up front. A
       // non-positive count defers to the C-ABI default (stereo).
       if (opts.num_channels > 2) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "unsupported bounce channel count");
+        throw WasmRangeError("unsupported bounce channel count");
       }
     }
     if (hasProperty(options, "sampleRate")) {
@@ -711,9 +705,8 @@ int js_synth_gs_variation_is_voiced_apart(const val& bank, const val& program) {
 val js_synth_preset_patch(const std::string& name) {
   const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
   SonareSynthPatch patch{};
-  if (sonare_synth_preset_patch(bare.c_str(), &patch) != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown synth preset name: '" + name + "'");
+  if (sonare_synth_preset_patch(wasmCString(bare, "preset"), &patch) != SONARE_OK) {
+    throw WasmRangeError("unknown synth preset name: '" + name + "'");
   }
   return sonare_wasm_synth::synthPatchToVal(patch);
 }

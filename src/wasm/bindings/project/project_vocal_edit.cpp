@@ -41,7 +41,12 @@ bool absent(const val& value) { return value.isUndefined() || value.isNull(); }
 
 val property(const val& object, const char* key) { return object[key]; }
 
-[[noreturn]] void invalid(const std::string& message) {
+[[noreturn]] void invalid(const std::string& message) { throw WasmRangeError(message); }
+
+[[noreturn]] void invalidType(const std::string& message) { throw WasmTypeError(message); }
+
+// A native result the library built wrongly is a library failure, not a refused argument.
+[[noreturn]] void nativeResultInvalid(const std::string& message) {
   throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
 }
 
@@ -62,7 +67,7 @@ std::string decimalString(uint64_t value) { return std::to_string(value); }
 
 std::array<uint8_t, 32> hexSha256(const val& value, const char* field) {
   if (value.typeOf().as<std::string>() != "string") {
-    invalid(std::string(field) + " must be a 64-character hexadecimal string");
+    invalidType(std::string(field) + " must be a 64-character hexadecimal string");
   }
   const std::string text = value.as<std::string>();
   if (text.size() != 64) {
@@ -125,7 +130,7 @@ struct TokenStorage {
 
 SonareVocalStateToken tokenFromVal(const val& value) {
   if (value.isNull() || value.isUndefined() || value.typeOf().as<std::string>() != "object") {
-    invalid("renderToken must be an object");
+    invalidType("renderToken must be an object");
   }
   SonareVocalStateToken result{};
   result.session_epoch =
@@ -153,7 +158,7 @@ struct ApplyStorage {
 
 SonareProjectVocalEditApplyDesc applyDescFromVal(const val& request, ApplyStorage* storage) {
   if (request.isNull() || request.isUndefined() || request.typeOf().as<std::string>() != "object") {
-    invalid("request must be an object");
+    invalidType("request must be an object");
   }
   sonare_project_vocal_edit_apply_desc_init(&storage->desc);
   storage->desc.clip_id =
@@ -239,10 +244,10 @@ val dependencyToVal(const SonareProjectVocalEditDependency& dependency) {
 
 val dependenciesToVal(const SonareProjectVocalEditDependenciesResult& result) {
   if (result.dependency_count > 0 && result.dependencies == nullptr) {
-    invalid("native vocal dependency result has a null array");
+    nativeResultInvalid("native vocal dependency result has a null array");
   }
   if (result.dependency_count > std::numeric_limits<unsigned>::max()) {
-    invalid("native vocal dependency result is too large");
+    nativeResultInvalid("native vocal dependency result is too large");
   }
   val out = val::array();
   for (uint64_t index = 0; index < result.dependency_count; ++index) {
@@ -263,10 +268,10 @@ val rehydrateItemToVal(const SonareProjectVocalRehydrateItem& item) {
 
 val rehydrateItemsToVal(const SonareProjectVocalRehydrateResult& result) {
   if (result.item_count > 0 && result.items == nullptr) {
-    invalid("native vocal rehydrate result has a null array");
+    nativeResultInvalid("native vocal rehydrate result has a null array");
   }
   if (result.item_count > std::numeric_limits<unsigned>::max()) {
-    invalid("native vocal rehydrate result is too large");
+    nativeResultInvalid("native vocal rehydrate result is too large");
   }
   val out = val::array();
   for (uint64_t index = 0; index < result.item_count; ++index) {
@@ -294,7 +299,7 @@ struct OriginalStorage {
 
 OriginalStorage originalsFromVal(const val& originals) {
   if (!val::global("Array").call<bool>("isArray", originals)) {
-    invalid("originals must be an array");
+    invalidType("originals must be an array");
   }
   const size_t count = wasmArrayLikeLength(originals, "originals");
   OriginalStorage storage;
@@ -305,7 +310,7 @@ OriginalStorage originalsFromVal(const val& originals) {
   for (size_t index = 0; index < count; ++index) {
     const val source = originals[static_cast<unsigned>(index)];
     if (source.isNull() || source.isUndefined() || source.typeOf().as<std::string>() != "object") {
-      invalid("originals entries must be objects");
+      invalidType("originals entries must be objects");
     }
     auto& row = storage.rows[index];
     sonare_project_vocal_original_source_init(&row);
@@ -374,7 +379,7 @@ val ProjectWasm::rehydrateVocalEdits(val originals, val cancel) {
   const auto project_keepalive = project_;
   OriginalStorage storage = originalsFromVal(originals);
   if (!absent(cancel) && cancel.typeOf().as<std::string>() != "function") {
-    invalid("cancel must be a function");
+    invalidType("cancel must be a function");
   }
   CancelStorage cancel_storage{cancel, false, val::undefined()};
   RehydrateGuard result;

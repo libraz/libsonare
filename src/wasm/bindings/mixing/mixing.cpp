@@ -34,8 +34,7 @@ void setPerPlaneMeters(val& out, const float* peak_db, const float* rms_db,
 MixerWasm::MixerWasm(SonareMixer* mixer, int sample_rate, int block_size)
     : mixer_(mixer), sample_rate_(sample_rate), block_size_(block_size) {
   if (block_size_ <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "mixer block size must be positive");
+    throw WasmRangeError("mixer block size must be positive");
   }
   out_scratch_left_.resize(static_cast<size_t>(block_size_));
   out_scratch_right_.resize(static_cast<size_t>(block_size_));
@@ -73,7 +72,8 @@ MixerWasm::~MixerWasm() {
 }
 
 MixerWasm* MixerWasm::fromSceneJson(std::string json, int sample_rate, int block_size) {
-  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), sample_rate, block_size);
+  SonareMixer* mixer =
+      sonare_mixer_from_scene_json(wasmCString(json, "json"), sample_rate, block_size);
   if (mixer == nullptr) {
     throwLastCError("failed to build mixer from scene JSON: ");
   }
@@ -107,7 +107,7 @@ val MixerWasm::sceneWarnings() const {
 
 std::string MixerWasm::presetJson(std::string name) {
   char* json = nullptr;
-  SonareError err = sonare_mixing_scene_preset_json(name.c_str(), &json);
+  SonareError err = sonare_mixing_scene_preset_json(wasmCString(name, "name"), &json);
   if (err != SONARE_OK || json == nullptr) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,
@@ -146,7 +146,7 @@ SonareStrip* MixerWasm::stripAt(unsigned int strip_index) {
 // number | null).
 int MixerWasm::stripById(std::string id) {
   const size_t count = sonare_mixer_strip_count(mixer_);
-  SonareStrip* target = sonare_mixer_strip_by_id(mixer_, id.c_str());
+  SonareStrip* target = sonare_mixer_strip_by_id(mixer_, wasmCString(id, "id"));
   if (target == nullptr) {
     return -1;
   }
@@ -236,14 +236,14 @@ std::optional<float> optionalNumberAt(val options, const char* key, int index) {
     const int mode = checkedIntFromVal(value, "mixing pan mode");
     if (mode < static_cast<int>(mixing::PanMode::Balance) ||
         mode > static_cast<int>(mixing::PanMode::DualPan)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+      throw WasmRangeError("unknown mixing pan mode");
     }
     if (mode == 1) return mixing::PanMode::StereoPan;
     if (mode == 2) return mixing::PanMode::DualPan;
     return mixing::PanMode::Balance;
   }
   if (value.typeOf().as<std::string>() != "string") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    throw WasmRangeError("unknown mixing pan mode");
   }
   std::string mode = value.as<std::string>();
   for (char& ch : mode) {
@@ -257,8 +257,7 @@ std::optional<float> optionalNumberAt(val options, const char* key, int index) {
     return mixing::PanMode::DualPan;
   }
   if (mode == "balance") return mixing::PanMode::Balance;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown mixing pan mode: " + mode);
+  throw WasmRangeError("unknown mixing pan mode: " + mode);
 }
 
 // Same: the graph build reports meters through the scene walker instead.
@@ -305,12 +304,12 @@ int panModeOrdinalFromVal(val value) {
     // narrowing is shared, the domain answer keeps the C ABI's own wording.
     const int ordinal = checkedIntFromVal(value, "mixing pan mode");
     if (ordinal < SONARE_PAN_MODE_BALANCE || ordinal > SONARE_PAN_MODE_DUAL_PAN) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+      throw WasmRangeError("unknown mixing pan mode");
     }
     return ordinal;
   }
   if (value.typeOf().as<std::string>() != "string") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    throw WasmRangeError("unknown mixing pan mode");
   }
   std::string mode = value.as<std::string>();
   for (char& ch : mode) {
@@ -324,8 +323,7 @@ int panModeOrdinalFromVal(val value) {
     return SONARE_PAN_MODE_DUAL_PAN;
   }
   if (mode == "balance") return SONARE_PAN_MODE_BALANCE;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown mixing pan mode: " + mode);
+  throw WasmRangeError("unknown mixing pan mode: " + mode);
 }
 
 void checkOneShotSetter(SonareError err, const char* what) {
@@ -343,7 +341,7 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   if (!options.isUndefined() && !options.isNull() &&
       options.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "options must be an object");
+    throw WasmTypeError("options must be an object");
   }
   // require_non_zero defaults to true: mixStereo has no meaning over zero
   // input channels, so requireMatchedLength rejects that itself now.
@@ -356,10 +354,8 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     const val value = options[key];
     if (val::global("Array").call<bool>("isArray", value) &&
         wasmArrayLikeLength(value, key) > static_cast<std::size_t>(count)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    std::string("mixStereo: '") + key +
-                                        "' has more entries than strips (" + std::to_string(count) +
-                                        ")");
+      throw WasmRangeError(std::string("mixStereo: '") + key + "' has more entries than strips (" +
+                           std::to_string(count) + ")");
     }
   }
 
@@ -374,23 +370,19 @@ val js_mix_stereo(val left_channels, val right_channels, const val& sample_rate_
     const size_t left_length = wasmFloat32ArrayLength(left_channels[index], "left channel");
     const size_t right_length = wasmFloat32ArrayLength(right_channels[index], "right channel");
     if (left_length != right_length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "left and right channel lengths must match");
+      throw WasmRangeError("left and right channel lengths must match");
     }
     if (index == 0) {
       length = left_length;
     } else if (left_length != length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "all strips must have the same length");
+      throw WasmRangeError("all strips must have the same length");
     }
     if (left_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "mixStereo inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("mixStereo inputs exceed the WASM Float32 input budget");
     }
     total_input_elements += left_length;
     if (right_length > kMaxWasmFloat32Elements - total_input_elements) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "mixStereo inputs exceed the WASM Float32 input budget");
+      throw WasmRangeError("mixStereo inputs exceed the WASM Float32 input budget");
     }
     total_input_elements += right_length;
   }

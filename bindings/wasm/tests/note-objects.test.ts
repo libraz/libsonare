@@ -25,10 +25,10 @@ import {
   type NoteSetEntry,
   pitchPyin,
   renderNotes,
-  type SonareError,
   splitNote,
 } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { expectArgumentRefusal, expectRefusalOf } from './_helpers';
 
 const sampleRate = 22050;
 const hopLength = 512;
@@ -225,8 +225,18 @@ function expectWithinRel(actual: number, expected: number, rel: number): void {
   expect(Math.abs(actual - expected)).toBeLessThanOrEqual(Math.abs(expected) * rel);
 }
 
-/** Asserts that @p action throws a SonareError carrying InvalidParameter. */
-function expectInvalidParameter(action: () => void): void {
+/** Asserts that @p action throws a RangeError: an argument the binding refused itself. */
+function expectRangeRefusal(action: () => void): void {
+  expectRefusalOf(action);
+}
+
+/** Asserts that @p action throws a TypeError: a wrong-typed argument. */
+function expectTypeRefusal(action: () => void): void {
+  expectRefusalOf(action, TypeError);
+}
+
+/** Asserts that @p action throws a SonareError carrying InvalidParameter (the library's answer). */
+function expectCodedInvalidParameter(action: () => void): void {
   let caught: unknown;
   try {
     action();
@@ -478,12 +488,12 @@ describe('extractNotes', () => {
   it('rejects a malformed request', () => {
     const voiced = voicedFlags(true);
     // Neither voicing input given.
-    expectInvalidParameter(() => extractNotes({ samples, sampleRate, f0Hz, frameRate }));
-    expectInvalidParameter(() => extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate: 0 }));
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() => extractNotes({ samples, sampleRate, f0Hz, frameRate }));
+    expectRangeRefusal(() => extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate: 0 }));
+    expectRangeRefusal(() =>
       extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate, minNoteMs: -1 }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       extractNotes({ samples, sampleRate, f0Hz, voiced, frameRate, voicedThreshold: 1.5 }),
     );
     // A frame carrying no pitch is spelled zero, negative or non-finite, so the
@@ -571,17 +581,17 @@ describe('renderNotes', () => {
   });
 
   it('rejects a malformed request', () => {
-    expectInvalidParameter(() =>
+    expectTypeRefusal(() =>
       renderNotes({
         samples,
         sampleRate,
         notes: [{ offsetSample: 8192 } as unknown as NoteObjectInput],
       }),
     );
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderNotes({ samples, sampleRate, notes: [{ onsetSample: 8192, offsetSample: 4096 }] }),
     );
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderNotes({
         samples,
         sampleRate,
@@ -591,8 +601,8 @@ describe('renderNotes', () => {
         ],
       }),
     );
-    expectInvalidParameter(() => renderNotes({ samples, sampleRate, notes, fadeMs: -1 }));
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() => renderNotes({ samples, sampleRate, notes, fadeMs: -1 }));
+    expectCodedInvalidParameter(() =>
       renderNotes({
         samples,
         sampleRate,
@@ -644,14 +654,14 @@ describe('renderNotes', () => {
   // that with the same fraction/range refusal onsetSample and offsetSample
   // already get.
   it('refuses a fractional or out-of-int64-range timeOffsetSamples instead of truncating it', () => {
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       renderNotes({
         samples,
         sampleRate,
         notes: [{ onsetSample: 0, offsetSample: 8192, edit: { timeOffsetSamples: 0.5 } }],
       }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       renderNotes({
         samples,
         sampleRate,
@@ -726,9 +736,9 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
   for (const [name, note, fragment] of MALFORMED) {
     it(`refuses a note whose ${name}, naming the field`, () => {
       const caught = render(note);
-      expect(isSonareError(caught), `expected a SonareError for ${name}`).toBe(true);
-      const error = caught as SonareError;
-      expect(error.code).toBe(ErrorCode.InvalidParameter);
+      // A missing or wrong-typed bound is a TypeError; a bound out of its domain a RangeError.
+      const kind = /is required|must be a number/.test(fragment) ? TypeError : RangeError;
+      const error = expectArgumentRefusal(caught, kind, name);
       // The field, not merely "something threw". A refusal for an unrelated
       // reason is indistinguishable from this one without it, which is exactly
       // the case the defect produced.
@@ -843,7 +853,7 @@ describe('renderNotes refuses a note that omits a sample bound', () => {
       { frameStart: 1, frameEnd: 2 },
       { frameStart: 2, frameEnd: 3 },
     ];
-    expectInvalidParameter(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
+    expectCodedInvalidParameter(() => mergeNotes({ ...source, notes: entries, first: 0, last: 1 }));
   });
 });
 
@@ -857,21 +867,21 @@ describe('note input validation', () => {
       onsetSample: 6399,
       offsetSample: 6401,
     };
-    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [outside] }));
+    expectCodedInvalidParameter(() => renderNotes({ ...loudSource, notes: [outside] }));
 
     const positiveExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
       onsetSample: Number.MAX_SAFE_INTEGER - 1,
       offsetSample: Number.MAX_SAFE_INTEGER,
     };
-    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
+    expectCodedInvalidParameter(() => renderNotes({ ...loudSource, notes: [positiveExtreme] }));
 
     const negativeExtreme: NoteObjectInput = {
       ...handNote(0, 6400),
       onsetSample: -Number.MAX_SAFE_INTEGER,
       offsetSample: -Number.MAX_SAFE_INTEGER + 1,
     };
-    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [negativeExtreme] }));
+    expectCodedInvalidParameter(() => renderNotes({ ...loudSource, notes: [negativeExtreme] }));
 
     // The parser also keeps values outside the signed 64-bit range out of the
     // core; this is distinct from a representable position past this audio.
@@ -880,22 +890,22 @@ describe('note input validation', () => {
       onsetSample: 0,
       offsetSample: Number.MAX_VALUE,
     };
-    expectInvalidParameter(() => renderNotes({ ...loudSource, notes: [outsideInt64] }));
+    expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [outsideInt64] }));
 
     // A bad pass-through row must be validated along with the selected row.
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderNotes({ ...loudSource, notes: [handNote(0, 3200), outside] }),
     );
   });
 
   it('rejects finite gain and envelope edits that would produce non-finite samples', () => {
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderNotes({
         ...loudSource,
         notes: [{ ...handNote(0, 6400), edit: { gainDb: 1000 } }],
       }),
     );
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderNotes({
         ...loudSource,
         notes: [
@@ -934,13 +944,13 @@ describe('note input validation', () => {
 
     for (const field of fields) {
       for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           renderNotes({
             ...loudSource,
             notes: [{ ...handNote(0, 3200), edit: badEdit(field, bad) }],
           }),
         );
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           renderNotes({
             ...loudSource,
             notes: [handNote(0, 3200), { ...handNote(3200, 6400), edit: badEdit(field, bad) }],
@@ -958,20 +968,16 @@ describe('note input validation', () => {
     const selectedInvalid = extracted.map((note, index) =>
       index === 0 ? { ...note, edit: { timeStretchRatio: -1 } } : note,
     );
-    expectInvalidParameter(() =>
-      splitNote({ ...source, notes: selectedInvalid, index: 0, frame: 5 }),
-    );
-    expectInvalidParameter(() =>
-      mergeNotes({ ...source, notes: selectedInvalid, first: 0, last: 1 }),
-    );
+    expectRangeRefusal(() => splitNote({ ...source, notes: selectedInvalid, index: 0, frame: 5 }));
+    expectRangeRefusal(() => mergeNotes({ ...source, notes: selectedInvalid, first: 0, last: 1 }));
 
     const passThroughInvalid = extracted.map((note, index) =>
       index === 1 ? { ...note, edit: { timeStretchRatio: -1 } } : note,
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       splitNote({ ...source, notes: passThroughInvalid, index: 0, frame: 5 }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       mergeNotes({ ...source, notes: passThroughInvalid, first: 0, last: 1 }),
     );
 
@@ -990,18 +996,14 @@ describe('note input validation', () => {
         const selected = extracted.map((note, index) =>
           index === 0 ? { ...note, edit: badEdit(field, bad) } : note,
         );
-        expectInvalidParameter(() => splitNote({ ...source, notes: selected, index: 0, frame: 5 }));
-        expectInvalidParameter(() => mergeNotes({ ...source, notes: selected, first: 0, last: 1 }));
+        expectRangeRefusal(() => splitNote({ ...source, notes: selected, index: 0, frame: 5 }));
+        expectRangeRefusal(() => mergeNotes({ ...source, notes: selected, first: 0, last: 1 }));
 
         const passThrough = extracted.map((note, index) =>
           index === 1 ? { ...note, edit: badEdit(field, bad) } : note,
         );
-        expectInvalidParameter(() =>
-          splitNote({ ...source, notes: passThrough, index: 0, frame: 5 }),
-        );
-        expectInvalidParameter(() =>
-          mergeNotes({ ...source, notes: passThrough, first: 0, last: 1 }),
-        );
+        expectRangeRefusal(() => splitNote({ ...source, notes: passThrough, index: 0, frame: 5 }));
+        expectRangeRefusal(() => mergeNotes({ ...source, notes: passThrough, first: 0, last: 1 }));
       }
     }
 
@@ -1085,7 +1087,7 @@ describe('renderNotes amplitude envelope', () => {
 
   it('rejects an envelope value that is not a usable linear gain', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      expectInvalidParameter(() =>
+      expectCodedInvalidParameter(() =>
         renderNotes({
           samples: source,
           sampleRate: fixtureRate,
@@ -1142,7 +1144,7 @@ describe('renderNotes pitch curve edits', () => {
     for (const edit of [{ vibratoDepthChange: -1 }, { driftChange: 1 }]) {
       const note = { ...handNote(0, 6400, 220), edit };
       // The curve the edit acts on is the caller's own track, and there is none.
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         renderNotes({ samples: source, sampleRate: fixtureRate, notes: [note] }),
       );
 
@@ -1164,7 +1166,7 @@ describe('renderNotes pitch curve edits', () => {
     const note = { ...handNote(0, 6400, 220), edit: { vibratoDepthChange: -1 } };
     // A note whose frames run past the end of the track: the curve it would be
     // edited on is not there to slice.
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       renderNotes({
         samples: source,
         sampleRate: fixtureRate,
@@ -1174,7 +1176,7 @@ describe('renderNotes pitch curve edits', () => {
       }),
     );
     for (const badRate of [0, -100]) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         renderNotes({
           samples: source,
           sampleRate: fixtureRate,
@@ -1242,7 +1244,7 @@ describe('renderNotes pitch curve edits', () => {
 
   it('rejects a cutoff that cannot be one', () => {
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1]) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         renderNotes({
           samples: source,
           sampleRate: fixtureRate,
@@ -1592,7 +1594,7 @@ describe('decomposeNotePitch', () => {
 
   it('rejects malformed arguments', () => {
     const base = { f0Hz: curve, frameRate: fixtureFrameRate, medianHz: centreHz };
-    expectInvalidParameter(() => decomposeNotePitch({ ...base, f0Hz: new Float32Array(0) }));
+    expectRangeRefusal(() => decomposeNotePitch({ ...base, f0Hz: new Float32Array(0) }));
     expect(() => decomposeNotePitch({ ...base, voiced: new Int32Array(curveFrames - 1) })).toThrow(
       'decomposeNotePitch: voiced must have the same length as f0Hz',
     );
@@ -1613,7 +1615,7 @@ describe('decomposeNotePitch', () => {
       expect(decomposeNotePitch({ ...base, f0Hz: track }).centreHz).toBeGreaterThan(0);
     }
     for (const badRate of [0, -100]) {
-      expectInvalidParameter(() => decomposeNotePitch({ ...base, frameRate: badRate }));
+      expectRangeRefusal(() => decomposeNotePitch({ ...base, frameRate: badRate }));
     }
     for (const badRate of [Number.NaN, Number.POSITIVE_INFINITY]) {
       expect(() => decomposeNotePitch({ ...base, frameRate: badRate })).toThrow(
@@ -1623,8 +1625,8 @@ describe('decomposeNotePitch', () => {
     // 0 is the no-pitch spelling and 0 is the default cutoff, so only a value
     // that cannot be either at all is rejected.
     for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expectInvalidParameter(() => decomposeNotePitch({ ...base, medianHz: bad }));
-      expectInvalidParameter(() => decomposeNotePitch({ ...base, vibratoCutoffHz: bad }));
+      expectRangeRefusal(() => decomposeNotePitch({ ...base, medianHz: bad }));
+      expectRangeRefusal(() => decomposeNotePitch({ ...base, vibratoCutoffHz: bad }));
     }
     // Positive control: the same call with nothing poisoned succeeds.
     expect(decomposeNotePitch(base).driftCents).toHaveLength(curveFrames);
@@ -1798,7 +1800,7 @@ describe('splitNote', () => {
       }),
     ).toThrow(RangeError);
     for (const voicedProb of invalidProbabilities.slice(1)) {
-      expectInvalidParameter(() => extractNotes({ ...source, voiced: undefined, voicedProb }));
+      expectRangeRefusal(() => extractNotes({ ...source, voiced: undefined, voicedProb }));
     }
   });
 
@@ -2031,14 +2033,14 @@ describe('splitNote', () => {
     expect(before).toHaveLength(3);
 
     for (const index of [before.length, before.length + 4]) {
-      expectInvalidParameter(() => splitNote({ ...source, notes: before, index, frame: 18 }));
+      expectRangeRefusal(() => splitNote({ ...source, notes: before, index, frame: 18 }));
     }
-    expectInvalidParameter(() => splitNote({ ...source, notes: [], index: 0, frame: 18 }));
+    expectRangeRefusal(() => splitNote({ ...source, notes: [], index: 0, frame: 18 }));
 
     // Strictly inside the note's own span, so neither of its boundaries is a
     // legal cut and neither is a frame belonging to another note.
     for (const frame of [12, 25, 5, 30, -1, 100]) {
-      expectInvalidParameter(() => splitNote({ ...source, notes: before, index: 1, frame }));
+      expectCodedInvalidParameter(() => splitNote({ ...source, notes: before, index: 1, frame }));
     }
 
     // A note the set cannot describe: an empty span, and one running past the
@@ -2046,20 +2048,22 @@ describe('splitNote', () => {
     const emptySpan = before.map((note, index) =>
       index === 1 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectInvalidParameter(() => splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }));
+    expectCodedInvalidParameter(() =>
+      splitNote({ ...source, notes: emptySpan, index: 0, frame: 5 }),
+    );
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectInvalidParameter(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
+    expectCodedInvalidParameter(() => splitNote({ ...source, notes: beyond, index: 0, frame: 5 }));
 
     // The track arguments extraction itself rejects.
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       splitNote({ ...source, voiced: undefined, notes: before, index: 1, frame: 18 }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       splitNote({ ...source, frameRate: 0, notes: before, index: 1, frame: 18 }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       splitNote({
         ...source,
         notes: before.map((note) => ({
@@ -2155,25 +2159,27 @@ describe('mergeNotes', () => {
       [0, before.length],
       [before.length, before.length + 1],
     ]) {
-      expectInvalidParameter(() => mergeNotes({ ...source, notes: before, first, last }));
+      expectRangeRefusal(() => mergeNotes({ ...source, notes: before, first, last }));
     }
-    expectInvalidParameter(() => mergeNotes({ ...source, notes: [], first: 0, last: 1 }));
+    expectRangeRefusal(() => mergeNotes({ ...source, notes: [], first: 0, last: 1 }));
 
     // A note the set cannot describe, the same two ways a split rejects.
     const emptySpan = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: note.frameStart } : note,
     );
-    expectInvalidParameter(() => mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }));
+    expectCodedInvalidParameter(() =>
+      mergeNotes({ ...source, notes: emptySpan, first: 0, last: 1 }),
+    );
     const beyond = before.map((note, index) =>
       index === 2 ? { ...note, frameEnd: fixtureFrames + 1 } : note,
     );
-    expectInvalidParameter(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
+    expectCodedInvalidParameter(() => mergeNotes({ ...source, notes: beyond, first: 0, last: 1 }));
 
     // The track arguments extraction itself rejects.
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       mergeNotes({ ...source, voiced: undefined, notes: before, first: 0, last: 1 }),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       mergeNotes({ ...source, frameRate: 0, notes: before, first: 0, last: 1 }),
     );
 
@@ -2281,8 +2287,7 @@ describe('an index into a note set is refused above the addressable range', () =
       caught = error;
     }
     expect(caught, 'expected a refusal, got none').toBeDefined();
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
+    expectArgumentRefusal(caught);
     const message = String((caught as Error).message);
     expect(message).toMatch(ADDRESS_REFUSAL);
     return message;
@@ -2302,7 +2307,7 @@ describe('an index into a note set is refused above the addressable range', () =
     }
     // And an index merely past the end of the set is still the set's own
     // refusal, not this one -- the two failures stay distinguishable.
-    expectInvalidParameter(() => splitNote({ ...source, notes: before, index: 99, frame: 18 }));
+    expectRangeRefusal(() => splitNote({ ...source, notes: before, index: 99, frame: 18 }));
     let pastEnd: unknown;
     try {
       splitNote({ ...source, notes: before, index: 99, frame: 18 });

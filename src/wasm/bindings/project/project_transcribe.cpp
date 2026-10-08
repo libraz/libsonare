@@ -37,9 +37,8 @@ namespace {
 float signedField(val config, const char* key, bool want_positive) {
   const float value = floatProperty(config, key, 0.0f);
   if (hasProperty(config, key) && (want_positive ? !(value > 0.0f) : !(value < 0.0f))) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(key) + (want_positive ? " must be a positive number" : " must be negative"));
+    throw WasmRangeError(std::string(key) +
+                         (want_positive ? " must be a positive number" : " must be negative"));
   }
   return value;
 }
@@ -56,8 +55,7 @@ float signedField(val config, const char* key, bool want_positive) {
 int velocityField(val config, const char* key) {
   const int value = intProperty(config, key, 0);
   if (hasProperty(config, key) && (value < 1 || value > 127)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be an integer in [1, 127]");
+    throw WasmRangeError(std::string(key) + " must be an integer in [1, 127]");
   }
   return value;
 }
@@ -71,8 +69,7 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   const val reference = config["referenceHz"];
   if (reference.isString()) {
     if (reference.as<std::string>() != "auto") {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "referenceHz must be a positive number or 'auto'");
+      throw WasmRangeError("referenceHz must be a positive number or 'auto'");
     }
     out.reference_auto = 1;
   } else {

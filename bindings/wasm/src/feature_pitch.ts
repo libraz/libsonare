@@ -271,7 +271,7 @@ export function pitchTuning(
  *
  * @param tuning - Finite fraction of a semitone.
  * @param a4 - Finite positive concert pitch the tuning is measured from. Default 440.
- * @throws `SonareError` for a non-finite `tuning` or a non-positive `a4`.
+ * @throws `RangeError` for a non-finite `tuning`, `SonareError` for a non-positive `a4`.
  */
 export function tuningToReferenceHz(tuning: number, a4 = 440): number {
   return requireModule().tuningToReferenceHz(tuning, a4);
@@ -283,7 +283,7 @@ export function tuningToReferenceHz(tuning: number, a4 = 440): number {
  *
  * @param hz - Finite positive reference frequency.
  * @param a4 - Finite positive concert pitch. Default 440.
- * @throws `SonareError` for a non-positive `hz` or `a4`.
+ * @throws `RangeError` for a non-finite `hz` or `a4`, `SonareError` for a non-positive one.
  */
 export function referenceHzToTuning(hz: number, a4 = 440): number {
   return requireModule().referenceHzToTuning(hz, a4);

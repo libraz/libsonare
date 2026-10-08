@@ -23,8 +23,7 @@ sonare::engine::CaptureSource captureSourceFromVal(const val& source) {
       if (ordinal == 1) return sonare::engine::CaptureSource::kInput;
     }
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "capture source must be 'output' or 'input' (or ordinal 0 or 1)");
+  throw WasmRangeError("capture source must be 'output' or 'input' (or ordinal 0 or 1)");
 }
 
 const char* captureSourceName(sonare::engine::CaptureSource source) {
@@ -38,8 +37,7 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int capacity_frames = checkedIntFromVal(capacity_frames_val, "capacityFrames");
   if (num_channels <= 0 || capacity_frames <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "capture buffer dimensions must be positive");
+    throw WasmRangeError("capture buffer dimensions must be positive");
   }
   allocatePlanes(capture_storage_, capture_ptrs_, num_channels, capacity_frames);
   engine_.set_capture_segment(
@@ -49,8 +47,7 @@ void RealtimeEngineWasm::setCaptureBuffer(const val& num_channels_val,
 void RealtimeEngineWasm::armCapture(bool armed) { engine_.set_capture_armed(armed); }
 void RealtimeEngineWasm::setCapturePunch(int64_t start_sample, int64_t end_sample, bool enabled) {
   if (start_sample < 0 || end_sample < start_sample) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "capture punch range must satisfy 0 <= start <= end");
+    throw WasmRangeError("capture punch range must satisfy 0 <= start <= end");
   }
   engine_.set_capture_punch(start_sample, end_sample, enabled);
 }

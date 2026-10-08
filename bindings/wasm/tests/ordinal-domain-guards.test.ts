@@ -32,16 +32,14 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
   detectOnsets,
-  ErrorCode,
   extractPercussiveEvents,
   init,
-  isSonareError,
   masteringDynamicsCompressor,
   RealtimeEngine,
-  type SonareError,
   type SynthModRouting,
   tempogram,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
@@ -51,16 +49,7 @@ beforeAll(async () => {
 const SATURATING = [2 ** 31, 2 ** 40, 3e9, 4294967295];
 
 function expectRefusalNaming(field: string, run: () => unknown): void {
-  let caught: unknown;
-  try {
-    run();
-  } catch (error) {
-    caught = error;
-  }
-  expect(caught, `expected ${field} to be refused, got no throw`).toBeDefined();
-  expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
+  const error = expectRefusalOf(run);
   // The field has to be named, or the message cannot tell the caller which of
   // the options they passed was the bad one.
   expect(error.message).toContain(field);
@@ -132,10 +121,10 @@ describe('the saturating values are refused rather than collapsed onto one resul
       try {
         return `ok:${onsetDigest({ nFft: value })}`;
       } catch (error) {
-        return `refused:${(error as SonareError).code}`;
+        return `refused:${(error as Error).constructor.name}`;
       }
     });
-    expect(outcomes).toEqual(SATURATING.map(() => `refused:${ErrorCode.InvalidParameter}`));
+    expect(outcomes).toEqual(SATURATING.map(() => 'refused:RangeError'));
   });
 });
 

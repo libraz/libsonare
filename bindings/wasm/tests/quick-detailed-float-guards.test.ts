@@ -21,16 +21,8 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  analyzeBpm,
-  analyzeDynamics,
-  analyzeRhythm,
-  analyzeTimbre,
-  ErrorCode,
-  init,
-  isSonareError,
-  type SonareError,
-} from '../dist/index.js';
+import { analyzeBpm, analyzeDynamics, analyzeRhythm, analyzeTimbre, init } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 /** The suffix every one of these refusals ends with, whatever the key is. */
 const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
@@ -59,9 +51,7 @@ function capture(run: () => unknown): unknown {
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
-  expect(isSonareError(caught), `${context}: expected a SonareError`).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code, context).toBe(ErrorCode.InvalidParameter);
+  const error = expectArgumentRefusal(caught, RangeError, context);
   expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
 }
 

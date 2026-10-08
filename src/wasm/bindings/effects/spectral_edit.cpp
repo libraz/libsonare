@@ -20,8 +20,7 @@ SpectralEditMode parseSpectralEditMode(val mode) {
   if (s == "attenuate") return SpectralEditMode::Attenuate;
   if (s == "mute") return SpectralEditMode::Mute;
   if (s == "heal") return SpectralEditMode::Heal;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "spectralEdit: unknown mode: " + s);
+  throw WasmRangeError("spectralEdit: unknown mode: " + s);
 }
 
 // Map a window string ('hann'|'hamming'|'blackman'|'rectangular') or a
@@ -45,8 +44,7 @@ WindowType parseSpectralEditWindow(val window) {
     }
   }
   if (!window.isString()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "spectralEdit: window must be a window name or a window ordinal");
+    throw WasmRangeError("spectralEdit: window must be a window name or a window ordinal");
   }
   std::string s = window.as<std::string>();
   std::transform(s.begin(), s.end(), s.begin(),
@@ -55,8 +53,7 @@ WindowType parseSpectralEditWindow(val window) {
   if (s == "hamming") return WindowType::Hamming;
   if (s == "blackman") return WindowType::Blackman;
   if (s == "rectangular" || s == "rect") return WindowType::Rectangular;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "spectralEdit: unknown window: " + s);
+  throw WasmRangeError("spectralEdit: unknown window: " + s);
 }
 
 }  // namespace

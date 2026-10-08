@@ -154,8 +154,7 @@ float js_metering_true_peak_db(val samples, const val& sample_rate_val,
   Audio audio = loadValidatedAudio(samples, sample_rate);
   const int factor = oversample_factor == 0 ? 4 : oversample_factor;
   if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "oversample must be 0 or a power of two from 1 to 16");
+    throw WasmRangeError("oversample must be 0 or a power of two from 1 to 16");
   }
   return metering::true_peak_db(audio, factor);
 }
@@ -167,7 +166,7 @@ val js_metering_detect_clipping(val samples, const val& sample_rate_val, const v
   const int min_region_samples = checkedIntFromVal(min_region_samples_val, "minRegionSamples");
   Audio audio = loadValidatedAudio(samples, sample_rate);
   if (min_region_samples < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "minRegionSamples must be non-negative");
+    throw WasmRangeError("minRegionSamples must be non-negative");
   }
   // Only the documented sentinel (0) selects the library default; any other
   // out-of-domain threshold is rejected, matching the C ABI.
@@ -221,16 +220,13 @@ namespace {
 void ensureStereoPair(const val& left, const val& right, int sample_rate, const char* fn_label,
                       std::vector<float>* out_left, std::vector<float>* out_right) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(fn_label) + ": sampleRate is out of range");
+    throw WasmRangeError(std::string(fn_label) + ": sampleRate is out of range");
   }
   const std::size_t left_length = wasmFloat32ArrayLength(left, "left channel");
   const std::size_t right_length = wasmFloat32ArrayLength(right, "right channel");
   validateWasmFloat32ElementBudget({left_length, right_length}, "stereo meter input");
   if (left_length != right_length) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        std::string(fn_label) + ": left and right must have the same length");
+    throw WasmRangeError(std::string(fn_label) + ": left and right must have the same length");
   }
   *out_left = float32ArrayToVector(left);
   *out_right = float32ArrayToVector(right);
@@ -356,8 +352,7 @@ val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
     if (hasProperty(options, "nFft")) {
       const int n = checkedIntFromVal(options["nFft"], "nFft");
       if (n < 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrum: nFft must be non-negative");
+        throw WasmRangeError("meteringSpectrum: nFft must be non-negative");
       }
       if (n > 0) cfg.n_fft = n;
     }
@@ -366,8 +361,7 @@ val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
     if (hasProperty(options, "octaveFraction")) {
       const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrum: octaveFraction must be non-negative");
+        throw WasmRangeError("meteringSpectrum: octaveFraction must be non-negative");
       }
       if (f > 0) cfg.octave_fraction = f;
     }
@@ -383,8 +377,7 @@ val js_metering_spectrum(val samples, const val& sample_rate_val, val options) {
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "meteringSpectrum: nFft must be a power of two");
+    throw WasmRangeError("meteringSpectrum: nFft must be a power of two");
   }
   metering::SpectrumResult result = metering::spectrum(audio, cfg);
   val out = val::object();
@@ -421,8 +414,7 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
     if (hasProperty(options, "nFft")) {
       const int n = checkedIntFromVal(options["nFft"], "nFft");
       if (n < 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrumFrame: nFft must be non-negative");
+        throw WasmRangeError("meteringSpectrumFrame: nFft must be non-negative");
       }
       if (n > 0) cfg.n_fft = n;
     }
@@ -431,8 +423,7 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
     if (hasProperty(options, "octaveFraction")) {
       const int f = checkedIntFromVal(options["octaveFraction"], "octaveFraction");
       if (f < 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "meteringSpectrumFrame: octaveFraction must be non-negative");
+        throw WasmRangeError("meteringSpectrumFrame: octaveFraction must be non-negative");
       }
       if (f > 0) cfg.octave_fraction = f;
     }
@@ -448,8 +439,7 @@ val js_metering_spectrum_frame(val samples, const val& sample_rate_val, double f
     }
   }
   if ((cfg.n_fft & (cfg.n_fft - 1)) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "meteringSpectrumFrame: nFft must be a power of two");
+    throw WasmRangeError("meteringSpectrumFrame: nFft must be a power of two");
   }
   // The loader hands back the frame alone, clamped, so the frame starts at 0 of
   // what it returned -- the same shape the C ABI passes to its prevalidated call.
@@ -485,8 +475,7 @@ val js_waveform_peaks(val samples, const val& channels_val, const val& samples_p
   // silently dropping a trailing partial frame (matches the Node/Python facades,
   // which throw on the same input).
   if (channels <= 0 || data.size() % static_cast<size_t>(channels) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "waveformPeaks: samples length must be a multiple of channels");
+    throw WasmRangeError("waveformPeaks: samples length must be a multiple of channels");
   }
   const size_t frames = data.size() / static_cast<size_t>(channels);
   return emit_waveform_peaks_result(
@@ -508,8 +497,7 @@ val js_waveform_peak_pyramid(val samples, const val& channels_val, val js_levels
   // silently dropping a trailing partial frame (matches the Node/Python facades,
   // which throw on the same input).
   if (channels <= 0 || data.size() % static_cast<size_t>(channels) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "waveformPeakPyramid: samples length must be a multiple of channels");
+    throw WasmRangeError("waveformPeakPyramid: samples length must be a multiple of channels");
   }
   const size_t frames = data.size() / static_cast<size_t>(channels);
   const auto pyramid = metering::waveform_peak_pyramid(data.data(), frames, channels, levels);

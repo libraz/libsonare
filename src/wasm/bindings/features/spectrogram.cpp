@@ -11,33 +11,28 @@ namespace {
 
 void validate_positive(const char* fn_name, int value, const char* arg_name) {
   if (value <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": " + arg_name + " must be positive");
+    throw WasmRangeError(std::string(fn_name) + ": " + arg_name + " must be positive");
   }
 }
 
 void validate_sample_rate(const char* fn_name, int sample_rate) {
   if (sample_rate < sonare::kMinAudioSampleRate || sample_rate > sonare::kMaxAudioSampleRate) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": sample_rate out of supported range [" +
-                              std::to_string(sonare::kMinAudioSampleRate) + ", " +
-                              std::to_string(sonare::kMaxAudioSampleRate) + "]");
+    throw WasmRangeError(std::string(fn_name) + ": sample_rate out of supported range [" +
+                         std::to_string(sonare::kMinAudioSampleRate) + ", " +
+                         std::to_string(sonare::kMaxAudioSampleRate) + "]");
   }
 }
 
 void validate_mel_range(const char* fn_name, float fmin, float fmax, int sample_rate) {
   if (!std::isfinite(fmin) || !std::isfinite(fmax)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": fmin/fmax must be finite");
+    throw WasmRangeError(std::string(fn_name) + ": fmin/fmax must be finite");
   }
   if (fmin < 0.0f || fmax < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": fmin/fmax must be non-negative");
+    throw WasmRangeError(std::string(fn_name) + ": fmin/fmax must be non-negative");
   }
   const float effective_fmax = fmax == 0.0f ? static_cast<float>(sample_rate) * 0.5f : fmax;
   if (effective_fmax <= fmin) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": fmax must be greater than fmin");
+    throw WasmRangeError(std::string(fn_name) + ": fmax must be greater than fmin");
   }
 }
 
@@ -54,13 +49,12 @@ std::vector<float> load_validated_matrix(const char* fn_name, val input, int row
   if (!sonare::numeric::checked_size_product(static_cast<std::size_t>(rows),
                                              static_cast<std::size_t>(frames),
                                              kMaxWasmFloat32Elements, &expected)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) + ": matrix shape exceeds WASM budget");
+    throw WasmRangeError(std::string(fn_name) + ": matrix shape exceeds WASM budget");
   }
   const std::size_t actual = wasmFloat32ArrayLength(input, data_name);
   if (expected != actual) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(fn_name) + ": " + data_name +
-                                                           " length must equal rows * n_frames");
+    throw WasmRangeError(std::string(fn_name) + ": " + data_name +
+                         " length must equal rows * n_frames");
   }
   return float32ArrayToVector(input);
 }
@@ -212,8 +206,7 @@ val js_mel_delta(val features, const val& n_features_val, const val& n_frames_va
   std::vector<float> data =
       load_validated_matrix("melDelta", features, n_features, n_frames, "features", "n_features");
   if (width < 3 || width % 2 == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "melDelta: width must be an odd integer of at least 3");
+    throw WasmRangeError("melDelta: width must be an odd integer of at least 3");
   }
   return vectorToFloat32Array(MelSpectrogram::delta(data.data(), n_features, n_frames, width));
 }
@@ -228,8 +221,7 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   validate_positive("reassignedSpectrogram", n_fft, "n_fft");
   validate_positive("reassignedSpectrogram", hop_length, "hop_length");
   if (ref_power < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "reassignedSpectrogram: ref_power must be non-negative");
+    throw WasmRangeError("reassignedSpectrogram: ref_power must be non-negative");
   }
   StftConfig config;
   config.n_fft = n_fft;
@@ -331,7 +323,7 @@ val js_griffin_lim(val magnitude, const val& n_bins_val, const val& n_frames_val
   validate_positive("griffinLim", n_iter, "n_iter");
   if (n_bins != n_fft / 2 + 1 || n_iter > sonare::resource::kMaxGriffinLimIterations ||
       momentum < 0.0f || momentum >= 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter, "griffinLim: invalid shape or options");
+    throw WasmRangeError("griffinLim: invalid shape or options");
   }
   GriffinLimConfig config;
   config.n_iter = n_iter;
@@ -415,7 +407,7 @@ val js_cqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   validate_positive("cqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("cqtToAudio", n_iter, "n_iter");
   if (fmin <= 0.0f || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw SonareException(ErrorCode::InvalidParameter, "cqtToAudio: invalid fmin or n_iter");
+    throw WasmRangeError("cqtToAudio: invalid fmin or n_iter");
   }
   CqtConfig config;
   config.hop_length = hop_length;
@@ -443,8 +435,7 @@ val js_vqt_to_audio(val magnitude, const val& n_bins_val, const val& n_frames_va
   validate_positive("vqtToAudio", bins_per_octave, "bins_per_octave");
   validate_positive("vqtToAudio", n_iter, "n_iter");
   if (fmin <= 0.0f || std::isinf(gamma) || n_iter > sonare::resource::kMaxGriffinLimIterations) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "vqtToAudio: invalid fmin, gamma, or n_iter");
+    throw WasmRangeError("vqtToAudio: invalid fmin, gamma, or n_iter");
   }
   VqtConfig config;
   config.hop_length = hop_length;

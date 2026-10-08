@@ -17,9 +17,9 @@
 void RealtimeEngineWasm::validatePrepare(double sample_rate, int max_block_size) {
   if (!std::isfinite(sample_rate) || sample_rate < sonare::kMinAudioSampleRate ||
       sample_rate > sonare::kMaxAudioSampleRate || max_block_size <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "prepare: sample_rate must be finite and within 8000..384000; "
-                                  "max_block_size must be positive");
+    throw WasmRangeError(
+        "prepare: sample_rate must be finite and within 8000..384000; "
+        "max_block_size must be positive");
   }
 }
 
@@ -89,16 +89,13 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
   // so raising the ceiling moves the guard and the text a host reads together.
   constexpr int kMaxChannels = static_cast<int>(sonare::engine::RealtimeEngine::kMaxAudioChannels);
   if (max_channels <= 0 || max_channels > kMaxChannels) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "prepare: max_channels must be within 1.." + std::to_string(kMaxChannels));
+    throw WasmRangeError("prepare: max_channels must be within 1.." + std::to_string(kMaxChannels));
   }
   // The C ABI takes both as size_t, so only this surface can express a negative
   // one. Refuse it here rather than letting capacity() read it as the sentinel,
   // which would answer a caller error with the default queue.
   if (command_capacity < 0 || telemetry_capacity < 0) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "prepare: command_capacity and telemetry_capacity must be 0 (the internal minimum) or "
         "positive");
   }
@@ -108,8 +105,7 @@ void RealtimeEngineWasm::prepareWithChannels(double sample_rate, const val& max_
   // metered lane, so its fan-out dwarfs the requested number.
   if (capacity(command_capacity) > sonare::engine::RealtimeEngine::kMaxCommandCapacity ||
       capacity(telemetry_capacity) > sonare::engine::RealtimeEngine::kMaxTelemetryCapacity) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "prepare: command_capacity or telemetry_capacity exceeds its documented maximum");
   }
   engine_.prepare(sample_rate, max_block_size, capacity(command_capacity),

@@ -64,11 +64,12 @@ export interface TranscribeRequest extends TranscribeOptions {
  *
  * @throws {RangeError} on empty `samples`, a non-finite sample, or a
  *   `sampleRate` outside `[8000, 384000]`
- * @throws {SonareError} `InvalidParameter` on an option outside its domain —
- *   a non-negative `velocityFloorDb`, a `fixedVelocity` outside `[1, 127]`, a
- *   `group` or `channel` outside `[0, 15]`, an `fmax` at or below `fmin`, or a
- *   written `0` on any field but `group` and `channel` — or `NotSupported`
- *   when the library was built without the pitch editor
+ * @throws {RangeError} also on an option outside its domain that the reader
+ *   refuses — a non-negative `velocityFloorDb`, a `fixedVelocity` outside
+ *   `[1, 127]`, or a written `0` on any field but `group` and `channel`
+ * @throws {SonareError} `InvalidParameter` on a `group` or `channel` outside
+ *   `[0, 15]` or an `fmax` at or below `fmin`, which the C ABI refuses, or
+ *   `NotSupported` when the library was built without the pitch editor
  *
  * @example
  * ```typescript

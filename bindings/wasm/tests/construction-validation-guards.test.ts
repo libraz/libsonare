@@ -32,6 +32,7 @@ import {
   spectralEdit,
   waveformPeakPyramid,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 const SR = 22050;
 
@@ -61,6 +62,14 @@ function expectInvalidParameter(fn: () => unknown): void {
   expect(isSonareError(caught)).toBe(true);
   expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
+
+const expectRangeRefusal = (fn: () => unknown): void => {
+  expectRefusalOf(fn);
+};
+
+const expectTypeRefusal = (fn: () => unknown): void => {
+  expectRefusalOf(fn, TypeError);
+};
 
 function midi1Word(status: number, channel: number, data1: number, data2: number): number {
   return (
@@ -119,7 +128,7 @@ describe('offline render honours the prepared channel count', () => {
     // `dither` to 0..3, so this is the plain-JavaScript caller's path.
     for (const dither of [-1, 4, 999] as unknown as Array<0 | 1 | 2 | 3>) {
       const engine = new RealtimeEngine(48000, 128, 1024, 1024, preparedChannels);
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         engine.bounceOffline({
           totalFrames: 256,
           blockSize: 128,
@@ -157,8 +166,8 @@ describe('analyze rejects the same configurations as the C ABI', () => {
   }
 
   it('rejects a non-finite option instead of narrowing it', () => {
-    expectInvalidParameter(() => analyze(samples, SR, { bpmMin: Number.NaN }));
-    expectInvalidParameter(() => analyze(samples, SR, { nFft: Number.POSITIVE_INFINITY }));
+    expectRangeRefusal(() => analyze(samples, SR, { bpmMin: Number.NaN }));
+    expectRangeRefusal(() => analyze(samples, SR, { nFft: Number.POSITIVE_INFINITY }));
   });
 
   it('rejects an odd nFft, which has no n_fft/2 + 1 bin layout', () => {
@@ -223,7 +232,7 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
   for (const maxRecords of [1, 2, 3]) {
     it(`rejects maxRecords = ${maxRecords}`, () => {
       const engine = engineWithPendingExternalMidi();
-      expectInvalidParameter(() => engine.drainExternalMidi(maxRecords));
+      expectRangeRefusal(() => engine.drainExternalMidi(maxRecords));
       // The queue is untouched, so a caller with a workable budget still drains.
       expect(engine.drainExternalMidi(4).length).toBeGreaterThan(0);
       engine.destroy();
@@ -234,18 +243,19 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
 describe('caller-supplied JS lengths cannot drive an allocation', () => {
   const paramId = 0x4d580001;
 
-  const rejectedPoints: Array<[string, unknown]> = [
-    ['undefined', undefined],
-    ['an over-budget length', { length: 2e9 }],
-    ['a negative length', { length: -1 }],
-    ['a fractional length', { length: 1.5 }],
+  const rejectedPoints: Array<[string, unknown, typeof RangeError | typeof TypeError]> = [
+    ['undefined', undefined, TypeError],
+    ['an over-budget length', { length: 2e9 }, RangeError],
+    ['a negative length', { length: -1 }, RangeError],
+    ['a fractional length', { length: 1.5 }, RangeError],
   ];
 
-  for (const [label, points] of rejectedPoints) {
+  for (const [label, points, refusal] of rejectedPoints) {
     it(`setAutomationLane rejects ${label}`, () => {
       const engine = new RealtimeEngine(48000, 128);
-      expectInvalidParameter(() =>
-        engine.setAutomationLane(paramId, points as EngineAutomationPoint[]),
+      expectRefusalOf(
+        () => engine.setAutomationLane(paramId, points as EngineAutomationPoint[]),
+        refusal,
       );
       engine.destroy();
     });
@@ -264,7 +274,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         return Reflect.get(target, property, receiver);
       },
     });
-    expectInvalidParameter(() => fixFrames(lying, 0, -1, true));
+    expectRangeRefusal(() => fixFrames(lying, 0, -1, true));
   });
 
   it('spectralEdit rejects an over-budget op-list length before reserving', () => {
@@ -272,7 +282,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     // does not back would otherwise pre-reserve that many SpectralRegionOps.
     const samples = new Float32Array(2048);
     for (const length of [2e9, -1, 1.5]) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         spectralEdit(samples, SR, { length } as unknown as SpectralRegionOp[]),
       );
     }
@@ -299,9 +309,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       },
     });
     const samples = new Float32Array(2048);
-    expectInvalidParameter(() =>
-      waveformPeakPyramid(samples, 1, { samplesPerBucketLevels: levels }),
-    );
+    expectRangeRefusal(() => waveformPeakPyramid(samples, 1, { samplesPerBucketLevels: levels }));
   });
 
   it('sizes RealtimeVoiceChanger.processMono from the real sample count', () => {
@@ -311,7 +319,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     expect(vc.processMono(new Float32Array(4)).length).toBe(4);
     expect(vc.processMono(new Float32Array(8)).length).toBe(8);
     for (const length of [-1, 1.5, 2e9]) {
-      expectInvalidParameter(() => vc.processMono({ length } as unknown as Float32Array));
+      expectRangeRefusal(() => vc.processMono({ length } as unknown as Float32Array));
     }
   });
 
@@ -323,9 +331,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
     expect(() => vc.processMonoInto(input, new Float32Array(4))).not.toThrow();
     expect(() => vc.processMonoInto(input, new Float32Array(3))).toThrow();
     for (const length of [-1, 1.5, 2e9]) {
-      expectInvalidParameter(() =>
-        vc.processMonoInto(input, { length } as unknown as Float32Array),
-      );
+      expectRangeRefusal(() => vc.processMonoInto(input, { length } as unknown as Float32Array));
     }
   });
 
@@ -337,7 +343,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       expect(() => engine.setTrackBuses([{ busId: 1 }])).not.toThrow();
       expect(() => engine.setTrackBuses([{ busId: 1 }, { busId: 2, channelLayout: 99 }])).toThrow();
       for (const length of [-1, 1.5, 2e9]) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setTrackBuses({ length } as unknown as Parameters<typeof engine.setTrackBuses>[0]),
         );
       }
@@ -372,7 +378,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       expect(engine.graphConnectionCount()).toBe(1);
       type GraphSpec = Parameters<typeof engine.setGraph>[0];
       for (const length of [-1, 1.5, 2e9]) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setGraph({
             nodes: { length } as unknown as GraphSpec['nodes'],
             connections: [],
@@ -381,7 +387,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
             numChannels: 1,
           }),
         );
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setGraph({
             nodes: [{ id: 'a', numPorts: 1 }],
             connections: { length } as unknown as GraphSpec['connections'],
@@ -390,7 +396,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
             numChannels: 1,
           }),
         );
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setGraph({
             nodes: [{ id: 'a', numPorts: 1 }],
             connections: [],
@@ -417,7 +423,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
       expect(() => engine.setClips([{ id: 1, channels: [chA, chB], startPpq: 0 }])).toThrow();
       type Clip = Parameters<typeof engine.setClips>[0][number];
       for (const length of [-1, 1.5, 2e9]) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setClips([
             { id: 1, channels: { length } as unknown as Clip['channels'], startPpq: 0 } as Clip,
           ]),
@@ -450,7 +456,7 @@ describe('caller-supplied JS lengths cannot drive an allocation', () => {
         ]),
       ).toThrow();
       for (const length of [-1, 1.5, 2e9]) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setClips([
             {
               id: 2,
@@ -511,7 +517,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     expect(platformCount([platform('a')])).toBe(1);
     expect(platformCount([platform('a'), platform('b')])).toBe(2);
     for (const length of WRAPPING_LENGTHS) {
-      expectInvalidParameter(() => platformCount({ length }));
+      expectTypeRefusal(() => platformCount({ length }));
     }
   });
 
@@ -527,9 +533,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       mixer.addVcaGroup('vg2', 0, ['a', 'b']);
       expect(membersOf('vg2')).toEqual(['a', 'b']);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
-          mixer.addVcaGroup('bad', 0, { length } as unknown as string[]),
-        );
+        expectRangeRefusal(() => mixer.addVcaGroup('bad', 0, { length } as unknown as string[]));
       }
 
       mixer.addVcaGroup('vg3', 0, []);
@@ -538,7 +542,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       mixer.setVcaGroupMembers('vg3', ['a', 'b']);
       expect(membersOf('vg3')).toEqual(['a', 'b']);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           mixer.setVcaGroupMembers('vg3', { length } as unknown as string[]),
         );
       }
@@ -560,7 +564,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setWarpMap({ id: 1, anchors: [anchor(0), anchor(1), anchor(2)] });
       expect(anchorsOf().length).toBe(3);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           project.setWarpMap({
             id: 1,
             anchors: { length } as unknown as Parameters<typeof project.setWarpMap>[0]['anchors'],
@@ -584,7 +588,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.annotateKeys([key(0), key(1)]);
       expect(keysOf().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           project.annotateKeys({ length } as unknown as Parameters<typeof project.annotateKeys>[0]),
         );
       }
@@ -605,7 +609,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.annotateChords([chord(0), chord(1)]);
       expect(chordsOf().length).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           project.annotateChords({ length } as unknown as Parameters<
             typeof project.annotateChords
           >[0]),
@@ -632,9 +636,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       expect(extensionsOf()).toEqual([9, 11]);
       // `Array.isArray` gates this site, so only a real (if sparse) Array
       // reaches it; -1 and 1.5 cannot be a real Array's `.length` at all.
-      expectInvalidParameter(() =>
-        project.annotateChords(chordWithExtensions(hugeArray()) as never),
-      );
+      expectRangeRefusal(() => project.annotateChords(chordWithExtensions(hugeArray()) as never));
     } finally {
       project.destroy();
     }
@@ -653,7 +655,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ]);
       expect(project.tempoSegmentCount()).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           project.setTempoSegments({ length } as unknown as Parameters<
             typeof project.setTempoSegments
           >[0]),
@@ -677,7 +679,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       ]);
       expect(project.timeSignatureCount()).toBe(2);
       for (const length of WRAPPING_LENGTHS) {
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           project.setTimeSignatures({ length } as unknown as Parameters<
             typeof project.setTimeSignatures
           >[0]),
@@ -727,7 +729,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     expect(() => attack.bounceWithBuiltinInstrument(hugeArray() as never, {})).toThrow(
       /instrument\[0\]/,
     );
-    expectInvalidParameter(() => nativeOf(attack).bounceWithBuiltinInstrument(hugeArray(), {}));
+    expectRangeRefusal(() => nativeOf(attack).bounceWithBuiltinInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
@@ -747,7 +749,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     expect(() => attack.bounceWithSynthInstrument(hugeArray() as never, {})).toThrow(
       /instrument\[0\]/,
     );
-    expectInvalidParameter(() => nativeOf(attack).bounceWithSynthInstrument(hugeArray(), {}));
+    expectRangeRefusal(() => nativeOf(attack).bounceWithSynthInstrument(hugeArray(), {}));
     attack.destroy();
   });
 
@@ -764,7 +766,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     expect(() => attack.bounceWithSf2Instrument(hugeArray() as never, {})).toThrow(
       /instrument\[0\]/,
     );
-    expectInvalidParameter(() => nativeOf(attack).bounceWithSf2Instrument(hugeArray(), {}));
+    expectRangeRefusal(() => nativeOf(attack).bounceWithSf2Instrument(hugeArray(), {}));
     attack.destroy();
   });
 
@@ -781,7 +783,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       project.setClipTakes(clipId, [{ id: 1 }, { id: 2 }], 1);
       expect(takesOf().length).toBe(2);
       // Array.isArray gates this site, so the attack needs a real Array.
-      expectInvalidParameter(() => project.setClipTakes(clipId, hugeArray() as never, 1));
+      expectRangeRefusal(() => project.setClipTakes(clipId, hugeArray() as never, 1));
     } finally {
       project.destroy();
     }
@@ -803,7 +805,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
         { startPpq: 1, endPpq: 2, takeId: 1 },
       ]);
       expect(segmentsOf().length).toBe(2);
-      expectInvalidParameter(() => project.setClipCompSegments(clipId, hugeArray() as never));
+      expectRangeRefusal(() => project.setClipCompSegments(clipId, hugeArray() as never));
     } finally {
       project.destroy();
     }
@@ -832,7 +834,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     // `.stems.map(...)` in the facade requires a real Array too.
     const project3 = new Project();
     project3.setSampleRate(48000);
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       project3.importExternalStems({ sampleRate: 48000, stems: hugeArray() } as never),
     );
     project3.destroy();
@@ -872,7 +874,7 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
       const engine = new RealtimeEngine(48000, 2048);
       try {
         engine.setBuiltinInstrument({ gain: 0.5 }, 0);
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.setMidiClips([
             {
               id: 1,
@@ -900,6 +902,6 @@ describe('a second batch of array-like `.length` reads refuse a wrapped, negativ
     // `modes.map(...)` in the facade requires a real Array too, and
     // `Array.prototype.map` refuses to allocate past the engine's own
     // array-length ceiling before -1 or 1.5 could reach the native reader.
-    expectInvalidParameter(() => detectKeyCandidates(samples, SR, { modes: hugeArray() as never }));
+    expectRangeRefusal(() => detectKeyCandidates(samples, SR, { modes: hugeArray() as never }));
   });
 });

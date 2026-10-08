@@ -35,8 +35,7 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& 
     val send = sends[send_index];
     const int timing_value = intProperty(send, "sendTiming", 0);
     if (timing_value != 0 && timing_value != 1) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "unknown mixing send timing");
+      throw WasmRangeError("unknown mixing send timing");
     }
     const sonare::mixing::SendTiming timing = timing_value == 1
                                                   ? sonare::mixing::SendTiming::PreFader
@@ -50,8 +49,7 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& 
 sonare::engine::SidechainSourceKind sidechainSourceKind(int source_kind) {
   if (source_kind != static_cast<int>(sonare::engine::SidechainSourceKind::Track) &&
       source_kind != static_cast<int>(sonare::engine::SidechainSourceKind::Bus)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown sidechain source kind");
+    throw WasmRangeError("unknown sidechain source kind");
   }
   return static_cast<sonare::engine::SidechainSourceKind>(source_kind);
 }
@@ -93,12 +91,10 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
                                          static_cast<int>(sonare::ChannelLayout::Stereo));
       if (raw_layout < 0 || raw_layout > 255 ||
           !sonare::is_valid_channel_layout(static_cast<uint8_t>(raw_layout))) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "invalid source channel layout");
+        throw WasmRangeError("invalid source channel layout");
       }
       if (raw_layout != static_cast<int>(sonare::ChannelLayout::Stereo)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      sonare::engine::kTrackLaneLayoutRefusal);
+        throw WasmRangeError(sonare::engine::kTrackLaneLayoutRefusal);
       }
       config.source_layout = sonare::ChannelLayout::Stereo;
     }
@@ -170,8 +166,7 @@ void RealtimeEngineWasm::setTrackBuses(val buses) {
     // ChannelLayout and pass silently.
     if (layout_value < 0 || layout_value > 255 ||
         !sonare::is_valid_channel_layout(static_cast<uint8_t>(layout_value))) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "invalid bus channel layout");
+      throw WasmRangeError("invalid bus channel layout");
     }
     sonare::engine::TrackBusConfig config{uintProperty(bus, "busId", 0),
                                           floatProperty(bus, "gainDb", 0.0f),
@@ -301,7 +296,7 @@ void RealtimeEngineWasm::setTrackStripJson(const val& track_id_val, const std::s
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
 #if defined(SONARE_WITH_MIXING)
   if (track_id == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "track id must be non-zero");
+    throw WasmRangeError("track id must be non-zero");
   }
   sonare::mixing::api::Scene scene;
   std::vector<std::string> unknown_keys;
@@ -328,8 +323,9 @@ void RealtimeEngineWasm::setTrackStripEqBandJson(const val& track_id_val, const 
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
   if (track_id == 0 || band_index < 0 ||
-      !engine_.set_track_eq_band(track_id, static_cast<size_t>(band_index),
-                                 sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+      !engine_.set_track_eq_band(
+          track_id, static_cast<size_t>(band_index),
+          sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson")))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid track strip EQ band target");
   }
@@ -348,8 +344,9 @@ void RealtimeEngineWasm::setBusStripEqBandJson(const val& bus_id_val, const val&
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
   if (bus_id == 0 || band_index < 0 ||
-      !engine_.set_bus_eq_band(bus_id, static_cast<size_t>(band_index),
-                               sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+      !engine_.set_bus_eq_band(
+          bus_id, static_cast<size_t>(band_index),
+          sonare::c_api::parse_eq_band_json(wasmCString(band_json, "bandJson")))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid bus strip EQ band target");
   }
@@ -405,9 +402,9 @@ void RealtimeEngineWasm::setMasterStripEqBandJson(const val& band_index_val,
                                                   const std::string& band_json) {
   const int band_index = checkedIntFromVal(band_index_val, "bandIndex");
 #if defined(SONARE_WITH_MIXING)
-  if (band_index < 0 ||
-      !engine_.set_master_eq_band(static_cast<size_t>(band_index),
-                                  sonare::c_api::parse_eq_band_json(band_json.c_str()))) {
+  if (band_index < 0 || !engine_.set_master_eq_band(static_cast<size_t>(band_index),
+                                                    sonare::c_api::parse_eq_band_json(
+                                                        wasmCString(band_json, "bandJson")))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "invalid master strip EQ band target");
   }
@@ -746,7 +743,7 @@ void RealtimeEngineWasm::setTrackStripPanLaw(const val& track_id_val, const val&
   const int pan_law = checkedIntFromVal(pan_law_val, "panLaw");
 #if defined(SONARE_WITH_MIXING)
   if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+    throw WasmRangeError("unknown mixing pan law");
   }
   requireMixingTarget(
       engine_.set_track_pan_law(track_id, static_cast<sonare::mixing::PanLaw>(pan_law)),
@@ -764,7 +761,7 @@ void RealtimeEngineWasm::setTrackStripPanMode(const val& track_id_val, const val
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
 #if defined(SONARE_WITH_MIXING)
   if (pan_mode < 0 || pan_mode > 2) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    throw WasmRangeError("unknown mixing pan mode");
   }
   requireMixingTarget(
       engine_.set_track_pan_mode(track_id, static_cast<sonare::mixing::PanMode>(pan_mode)),
@@ -800,7 +797,7 @@ void RealtimeEngineWasm::setTrackStripDualPan(const val& track_id_val, const val
 void RealtimeEngineWasm::setTrackStripSurroundPan(const val& track_id_val, const val& pan_val) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   if (pan_val.isNull() || pan_val.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pan must be an object");
+    throw WasmTypeError("pan must be an object");
   }
   const auto field = [&](const char* key, float fallback) {
     return floatProperty(pan_val, key, fallback);
@@ -840,7 +837,7 @@ void RealtimeEngineWasm::setBusStripPanLaw(const val& bus_id_val, const val& pan
   const int pan_law = checkedIntFromVal(pan_law_val, "panLaw");
 #if defined(SONARE_WITH_MIXING)
   if (pan_law < 0 || pan_law >= sonare::mixing::kPanLawCount) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan law");
+    throw WasmRangeError("unknown mixing pan law");
   }
   requireMixingTarget(engine_.set_bus_pan_law(bus_id, static_cast<sonare::mixing::PanLaw>(pan_law)),
                       "invalid bus strip pan-law target");
@@ -857,7 +854,7 @@ void RealtimeEngineWasm::setBusStripPanMode(const val& bus_id_val, const val& pa
   const int pan_mode = checkedIntFromVal(pan_mode_val, "panMode");
 #if defined(SONARE_WITH_MIXING)
   if (pan_mode < 0 || pan_mode > 2) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown mixing pan mode");
+    throw WasmRangeError("unknown mixing pan mode");
   }
   requireMixingTarget(
       engine_.set_bus_pan_mode(bus_id, static_cast<sonare::mixing::PanMode>(pan_mode)),

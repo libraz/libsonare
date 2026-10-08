@@ -27,9 +27,8 @@ editing::event_model::PercussiveSeparationConfig percussiveSeparationFromVal(
   // Rejected before the sentinel promotion: a negative value must not be
   // swallowed by the "0 keeps the default" rule that follows.
   if (n_fft < 0 || hop_length < 0 || kernel_harmonic < 0 || kernel_percussive < 0) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(entry_point) + ": the framing and kernel sizes must not be negative");
+    throw WasmRangeError(std::string(entry_point) +
+                         ": the framing and kernel sizes must not be negative");
   }
   if (n_fft != 0) separation.n_fft = n_fft;
   if (hop_length != 0) separation.hop_length = hop_length;
@@ -93,10 +92,10 @@ val js_extract_percussive_events(val samples, const val& sample_rate, val option
   if (!std::isfinite(onset_delta) || !std::isfinite(max_event_ms) ||
       !std::isfinite(min_percussive_ratio) || onset_wait < 0 || max_event_ms < 0.0f ||
       min_percussive_ratio < 0.0f || min_percussive_ratio > 1.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "extractPercussiveEvents: onsetDelta, maxEventMs and "
-                          "minPercussiveRatio must be finite, onsetWait and maxEventMs must not "
-                          "be negative, and minPercussiveRatio must be in [0, 1]");
+    throw WasmRangeError(
+        "extractPercussiveEvents: onsetDelta, maxEventMs and "
+        "minPercussiveRatio must be finite, onsetWait and maxEventMs must not "
+        "be negative, and minPercussiveRatio must be in [0, 1]");
   }
   // config.onset keeps percussive_onset_defaults(), so backtracking stays on:
   // a span that opened after its own transient would report the next hit's peak
@@ -124,8 +123,7 @@ val js_render_percussive_events(val samples, const val& sample_rate, val events,
   config.separation = percussiveSeparationFromVal(options, "renderPercussiveEvents");
   const float fade_ms = floatProperty(options, "fadeMs", 0.0f);
   if (!std::isfinite(fade_ms) || fade_ms < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "renderPercussiveEvents: fadeMs must be finite and non-negative");
+    throw WasmRangeError("renderPercussiveEvents: fadeMs must be finite and non-negative");
   }
   if (fade_ms != 0.0f) config.fade_ms = fade_ms;
 

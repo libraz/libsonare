@@ -53,8 +53,7 @@ std::string realtimeVoiceChangerConfigTextFromVal(val config) {
 
 editing::voice_changer::RealtimeVoiceChangerConfig realtimeVoiceChangerConfigFromPodVal(val pod) {
   if (pod.isNull() || pod.isUndefined() || pod.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "voice changer POD config must be an object");
+    throw WasmTypeError("voice changer POD config must be an object");
   }
   editing::voice_changer::RealtimeVoiceChangerConfig parsed;
   static constexpr char kSubject[] = "voice changer POD config";
@@ -147,8 +146,7 @@ class RealtimeVoiceChangerWrapper {
     const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     require_block_within_max(length);
     if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "output buffer is too small");
+      throw WasmRangeError("output buffer is too small");
     }
     ensure_mono_capacity(static_cast<size_t>(length));
     copyFloat32Array(samples, mono_input_.data(), static_cast<size_t>(length));
@@ -171,13 +169,11 @@ class RealtimeVoiceChangerWrapper {
     require_prepared();
     const int length = static_cast<int>(wasmArrayLikeLength(samples, "samples"));
     if (channels <= 0 || length % channels != 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "invalid interleaved channel count");
+      throw WasmRangeError("invalid interleaved channel count");
     }
     require_prepared_channels(channels);
     if (static_cast<int>(wasmArrayLikeLength(output, "output")) < length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "output buffer is too small");
+      throw WasmRangeError("output buffer is too small");
     }
     const size_t frames = static_cast<size_t>(length / channels);
     require_block_within_max(static_cast<int>(frames));
@@ -209,8 +205,7 @@ class RealtimeVoiceChangerWrapper {
     const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.getMonoInputBuffer: out-of-range length");
+      throw WasmRangeError("RealtimeVoiceChanger.getMonoInputBuffer: out-of-range length");
     }
     ensure_mono_capacity(static_cast<size_t>(num_samples));
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_input_.data()));
@@ -220,9 +215,7 @@ class RealtimeVoiceChangerWrapper {
     const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger.getMonoOutputBuffer: out-of-range length");
+      throw WasmRangeError("RealtimeVoiceChanger.getMonoOutputBuffer: out-of-range length");
     }
     ensure_mono_capacity(static_cast<size_t>(num_samples));
     return val(typed_memory_view(static_cast<size_t>(num_samples), mono_output_.data()));
@@ -232,9 +225,7 @@ class RealtimeVoiceChangerWrapper {
     const int num_samples = checkedIntFromVal(num_samples_val, "numSamples");
     require_prepared();
     if (num_samples <= 0 || num_samples > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger.processPreparedMono: out-of-range length");
+      throw WasmRangeError("RealtimeVoiceChanger.processPreparedMono: out-of-range length");
     }
     if (mono_input_.size() < static_cast<size_t>(num_samples) ||
         mono_output_.size() < static_cast<size_t>(num_samples)) {
@@ -250,12 +241,10 @@ class RealtimeVoiceChangerWrapper {
     const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.getInterleavedInputBuffer: bad dims");
+      throw WasmRangeError("RealtimeVoiceChanger.getInterleavedInputBuffer: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger.getInterleavedInputBuffer: frames exceed max block size");
     }
     require_prepared_channels(num_channels);
@@ -269,12 +258,10 @@ class RealtimeVoiceChangerWrapper {
     const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.getInterleavedOutputBuffer: bad dims");
+      throw WasmRangeError("RealtimeVoiceChanger.getInterleavedOutputBuffer: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger.getInterleavedOutputBuffer: frames exceed max block size");
     }
     require_prepared_channels(num_channels);
@@ -288,12 +275,10 @@ class RealtimeVoiceChangerWrapper {
     const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
     require_prepared();
     if (num_frames <= 0 || num_channels <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.processPreparedInterleaved: bad dims");
+      throw WasmRangeError("RealtimeVoiceChanger.processPreparedInterleaved: bad dims");
     }
     if (num_frames > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger.processPreparedInterleaved: frames exceed max block size");
     }
     require_prepared_channels(num_channels);
@@ -334,18 +319,14 @@ class RealtimeVoiceChangerWrapper {
     const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     require_prepared();
     if (num_frames <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.getPlanarChannelBuffer: bad frames");
+      throw WasmRangeError("RealtimeVoiceChanger.getPlanarChannelBuffer: bad frames");
     }
     if (num_frames > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger.getPlanarChannelBuffer: frames exceed max block size");
     }
     if (channel < 0 || channel >= prepared_channels_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "RealtimeVoiceChanger.getPlanarChannelBuffer: channel out of range");
+      throw WasmRangeError("RealtimeVoiceChanger.getPlanarChannelBuffer: channel out of range");
     }
     ensure_interleaved_capacity(static_cast<size_t>(num_frames), prepared_channels_);
     return val(typed_memory_view(static_cast<size_t>(num_frames),
@@ -356,12 +337,10 @@ class RealtimeVoiceChangerWrapper {
     const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
     require_prepared();
     if (num_frames <= 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger.processPreparedPlanar: bad frames");
+      throw WasmRangeError("RealtimeVoiceChanger.processPreparedPlanar: bad frames");
     }
     if (num_frames > max_block_size_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger.processPreparedPlanar: frames exceed max block size");
     }
     const size_t channel_count = static_cast<size_t>(prepared_channels_);
@@ -373,8 +352,7 @@ class RealtimeVoiceChangerWrapper {
     }
     for (size_t ch = 0; ch < channel_count; ++ch) {
       if (planar_[ch].size() < static_cast<size_t>(num_frames)) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
+        throw WasmRangeError(
             "RealtimeVoiceChanger.processPreparedPlanar: planar buffer too small for requested "
             "frames");
       }
@@ -421,9 +399,9 @@ class RealtimeVoiceChangerWrapper {
   /// element-wise paths must too — mirroring the C-ABI behaviour of throwing.
   void require_block_within_max(int block) const {
     if (block > max_block_size_) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "RealtimeVoiceChanger: block size exceeds the prepared "
-                                    "max block size");
+      throw WasmRangeError(
+          "RealtimeVoiceChanger: block size exceeds the prepared "
+          "max block size");
     }
   }
 
@@ -437,8 +415,7 @@ class RealtimeVoiceChangerWrapper {
   /// allocated planar state the changer was configured for.
   void require_prepared_channels(int channels) const {
     if (channels < 1 || channels > prepared_channels_) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
+      throw WasmRangeError(
           "RealtimeVoiceChanger: channel count must be between 1 and the prepared layout");
     }
   }

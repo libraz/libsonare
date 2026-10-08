@@ -63,9 +63,7 @@ std::string js_mastering_insert_param_info(std::string name) {
 // rate outside the supported range.
 std::string js_mastering_insert_param_info_at_rate(std::string name, double sample_rate) {
   if (!(sample_rate >= sonare::kMinAudioSampleRate && sample_rate <= sonare::kMaxAudioSampleRate)) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "sample_rate " + std::to_string(sample_rate) + " is out of range");
+    throw WasmRangeError("sample_rate " + std::to_string(sample_rate) + " is out of range");
   }
   return mastering::api::insert_param_info_json_at_rate(name, sample_rate);
 }
@@ -524,9 +522,8 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
       if (!hasProperty(params_obj, key.c_str())) continue;
       val value = params_obj[key];
       if (value.typeOf().as<std::string>() != "string") {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "'" + key + "' must be one of the delivery-target names: " +
-                                  mastering::assistant::platform_names_joined());
+        throw WasmRangeError("'" + key + "' must be one of the delivery-target names: " +
+                             mastering::assistant::platform_names_joined());
       }
       platform = value.as<std::string>();
       has_platform = true;
@@ -534,8 +531,7 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
     if (hasProperty(params_obj, "preset")) {
       val value = params_obj["preset"];
       if (value.typeOf().as<std::string>() != "string") {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "'preset' must be a mastering preset name");
+        throw WasmRangeError("'preset' must be a mastering preset name");
       }
       preset = value.as<std::string>();
       has_preset = true;
@@ -573,7 +569,7 @@ val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
   const json::Value parsed = json::parse_strict(mastering::api::chain_config_to_json(config));
   const json::Object& params = parsed["params"].as_object();
   if (params.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, "chain config carries no params block");
+    throw WasmRangeError("chain config carries no params block");
   }
   val out = val::object();
   for (const auto& [key, value] : params) {
@@ -582,9 +578,8 @@ val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
     } else if (value.is_bool()) {
       out.set(key, value.as_bool());
     } else {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          "chain config param '" + key + "' is not a number or boolean (schema v2 nested value)");
+      throw WasmTypeError("chain config param '" + key +
+                          "' is not a number or boolean (schema v2 nested value)");
     }
   }
   return out;
@@ -671,8 +666,7 @@ std::vector<mastering::maximizer::StreamingPlatform> streamingPlatformsFromVal(v
     return out;
   }
   if (!val::global("Array").call<bool>("isArray", platforms)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "platforms must be an array");
+    throw WasmTypeError("platforms must be an array");
   }
   const int length = static_cast<int>(wasmArrayLikeLength(platforms, "platforms"));
   out.reserve(static_cast<size_t>(length));

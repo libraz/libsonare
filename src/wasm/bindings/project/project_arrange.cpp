@@ -26,21 +26,19 @@ uint32_t ProjectWasm::addTrack(val desc) {
         } else if (k == "aux") {
           d.kind = SONARE_TRACK_AUX;
         } else {
-          throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                        "unknown project track kind");
+          throw WasmRangeError("unknown project track kind");
         }
       } else if (kind.typeOf().as<std::string>() == "number") {
         const int ordinal = checkedIntFromVal(kind, "project track kind");
         requireOrdinalInRange(ordinal, SONARE_TRACK_AUDIO, SONARE_TRACK_AUX, "project track kind");
         d.kind = static_cast<uint32_t>(ordinal);
       } else {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "project track kind must be a string or number");
+        throw WasmTypeError("project track kind must be a string or number");
       }
     }
     if (hasProperty(desc, "name")) {
       name = desc["name"].as<std::string>();
-      d.name = name.c_str();
+      d.name = wasmCString(name, "name");
     }
   }
   uint32_t out = 0;
@@ -50,8 +48,7 @@ uint32_t ProjectWasm::addTrack(val desc) {
 
 uint32_t ProjectWasm::addClip(val desc) {
   if (desc.isUndefined() || desc.isNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "addClip expects a descriptor object");
+    throw WasmTypeError("addClip expects a descriptor object");
   }
   SonareProjectClipDesc d{};
   std::vector<float> audio;
@@ -72,15 +69,14 @@ uint32_t ProjectWasm::addClip(val desc) {
     if (d.audio_channels == 0) d.audio_channels = 1;
     audio = float32ArrayToVector(desc["audio"]);
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "audio length must be a multiple of audioChannels");
+      throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
     d.audio_interleaved = audio.data();
     d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
   }
   if (hasProperty(desc, "sourceUri")) {
     source_uri = desc["sourceUri"].as<std::string>();
-    d.source_uri = source_uri.c_str();
+    d.source_uri = wasmCString(source_uri, "sourceUri");
   }
   uint32_t out = 0;
   checkCError(sonare_project_add_clip(project_.get(), &d, &out), "failed to add clip");
@@ -89,8 +85,7 @@ uint32_t ProjectWasm::addClip(val desc) {
 
 val ProjectWasm::addLoopRecordingTakes(val desc) {
   if (desc.isUndefined() || desc.isNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "addLoopRecordingTakes expects a descriptor object");
+    throw WasmTypeError("addLoopRecordingTakes expects a descriptor object");
   }
   SonareProjectLoopRecordingDesc d{};
   std::vector<float> audio;
@@ -107,14 +102,12 @@ val ProjectWasm::addLoopRecordingTakes(val desc) {
   if (partial_tail == "drop") {
     d.flags = SONARE_PROJECT_LOOP_RECORDING_DROP_PARTIAL_TAIL;
   } else if (partial_tail != "keep") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "partialTail must be 'keep' or 'drop'");
+    throw WasmRangeError("partialTail must be 'keep' or 'drop'");
   }
   if (hasProperty(desc, "audio")) {
     audio = float32ArrayToVector(desc["audio"]);
     if (d.audio_channels <= 0 || audio.size() % static_cast<size_t>(d.audio_channels) != 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "audio length must be a multiple of audioChannels");
+      throw WasmRangeError("audio length must be a multiple of audioChannels");
     }
     d.audio_interleaved = audio.data();
     d.audio_frames = static_cast<int64_t>(audio.size()) / d.audio_channels;
@@ -191,13 +184,13 @@ void ProjectWasm::setClipWarpMode(const val& clip_id_val, val mode_val) {
     } else if (mode_string == "time-stretch") {
       mode = SONARE_PROJECT_WARP_MODE_TIME_STRETCH;
     } else {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+      throw WasmRangeError("unknown warp mode");
     }
   } else {
     const int mode_int = mode_val.as<int>();
     if (mode_int < SONARE_PROJECT_WARP_MODE_OFF ||
         mode_int > SONARE_PROJECT_WARP_MODE_TIME_STRETCH) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown warp mode");
+      throw WasmRangeError("unknown warp mode");
     }
     mode = static_cast<SonareProjectWarpMode>(mode_int);
   }
@@ -220,7 +213,7 @@ void ProjectWasm::setWarpMap(val desc) {
   std::string name = stringProperty(desc, "name", "");
   SonareProjectWarpMapDesc cdesc{};
   cdesc.id = uintProperty(desc, "id", 0u);
-  cdesc.name = name.empty() ? nullptr : name.c_str();
+  cdesc.name = name.empty() ? nullptr : wasmCString(name, "name");
   cdesc.anchors = anchors.empty() ? nullptr : anchors.data();
   cdesc.anchor_count = anchors.size();
   checkCError(sonare_project_set_warp_map(project_.get(), &cdesc), "failed to set warp map");
@@ -347,9 +340,10 @@ void ProjectWasm::setPartRig(const val& destination_id_val, const val& part_val,
   std::string inserts_json;
   const bool has_inserts = !inserts_json_val.isUndefined() && !inserts_json_val.isNull();
   if (has_inserts) inserts_json = inserts_json_val.as<std::string>();
-  checkCError(sonare_project_set_part_rig(project_.get(), destination_id, part, mode,
-                                          has_inserts ? inserts_json.c_str() : nullptr),
-              "failed to set part rig");
+  checkCError(
+      sonare_project_set_part_rig(project_.get(), destination_id, part, mode,
+                                  has_inserts ? wasmCString(inserts_json, "insertsJson") : nullptr),
+      "failed to set part rig");
 }
 
 // Returns null when no entry is stored for (destinationId, part); otherwise

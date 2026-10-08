@@ -31,10 +31,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import {
   type CompressorOptions,
   deemphasis,
-  ErrorCode,
   type GateOptions,
   init,
-  isSonareError,
   masteringDynamicsCompressor,
   masteringDynamicsGate,
   masteringDynamicsTransientShaper,
@@ -44,6 +42,7 @@ import {
   spectralEdit,
   type TransientShaperOptions,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const SR = 44100;
 
@@ -104,9 +103,7 @@ function capture(run: () => unknown): unknown {
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
-  expect(isSonareError(caught), `${context}: expected a SonareError`).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code, context).toBe(ErrorCode.InvalidParameter);
+  const error = expectArgumentRefusal(caught, RangeError, context);
   expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
 }
 

@@ -702,8 +702,7 @@ export class RealtimeEngine {
    * One queued record lowers to at most 4 MIDI 1.0 messages (a MIDI 2.0
    * registered or assignable controller becomes CC 101/100 or 99/98 plus Data
    * Entry 6/38), so a positive `maxRecords` below 4 could never consume a record
-   * and is rejected with an `InvalidParameter` `SonareError` instead of
-   * returning nothing forever.
+   * and is rejected with a `RangeError` instead of returning nothing forever.
    */
   drainExternalMidi(maxRecords = 1024): WasmExternalMidiEvent[] {
     return this.native.drainExternalMidi(maxRecords);
@@ -1886,8 +1885,8 @@ export class RealtimeEngine {
 
   /**
    * Render `channels` offline from the current transport position. Requesting
-   * more planes than `prepare` reserved throws an `InvalidParameter`
-   * `SonareError` rather than returning silence that reads as a finished render.
+   * more planes than `prepare` reserved throws a `RangeError` rather than
+   * returning silence that reads as a finished render.
    *
    * Set `finalize: false` to render one chunk of a longer timeline; see
    * {@link RenderOfflineRequest.finalize} and {@link finishOfflineRender}.
@@ -1920,7 +1919,7 @@ export class RealtimeEngine {
 
   /**
    * Bounce the timeline to an interleaved buffer. `numChannels` above the
-   * prepared channel count throws an `InvalidParameter` `SonareError`.
+   * prepared channel count throws a `RangeError`.
    */
   bounceOffline(options: EngineBounceOptions): EngineBounceResult {
     return this.native.bounceOffline(options);
@@ -1928,7 +1927,7 @@ export class RealtimeEngine {
 
   /**
    * Freeze the current graph to audio. `numChannels` above the prepared channel
-   * count throws an `InvalidParameter` `SonareError`.
+   * count throws a `RangeError`.
    */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     return this.native.freezeOffline(options);

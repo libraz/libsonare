@@ -36,8 +36,7 @@ std::unique_ptr<rt::ProcessorBase> makeWasmGraphProcessor(val node) {
 RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_val) {
   const int count = static_cast<int>(wasmArrayLikeLength(channels_val, "channels"));
   if (count <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "channels must not be empty");
+    throw WasmRangeError("channels must not be empty");
   }
   ChannelBlock block;
   block.storage.reserve(static_cast<size_t>(count));
@@ -47,12 +46,10 @@ RealtimeEngineWasm::ChannelBlock RealtimeEngineWasm::readChannels(val channels_v
     if (ch == 0) {
       block.frames = static_cast<int>(channel.size());
       if (block.frames <= 0) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "channels must not be empty");
+        throw WasmRangeError("channels must not be empty");
       }
     } else if (static_cast<int>(channel.size()) != block.frames) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "all channels must have the same length");
+      throw WasmRangeError("all channels must have the same length");
     }
     block.storage.push_back(std::move(channel));
   }
@@ -96,7 +93,7 @@ mastering::final::DitherType RealtimeEngineWasm::ditherTypeFromInt(int value) {
       // Callers validate the ordinal before rendering; falling through to None
       // here would return undithered audio with no way to tell the request was
       // ignored, which is what the C-ABI oracle rejects.
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unsupported dither type");
+      throw WasmRangeError("unsupported dither type");
   }
 }
 
@@ -106,16 +103,14 @@ void RealtimeEngineWasm::setGraph(val spec) {
   val nodes = spec["nodes"];
   const int node_count = static_cast<int>(wasmArrayLikeLength(nodes, "nodes"));
   if (node_count <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "graph nodes must not be empty");
+    throw WasmRangeError("graph nodes must not be empty");
   }
   const int num_channels = intProperty(spec, "numChannels", 2);
   for (int i = 0; i < node_count; ++i) {
     val node = nodes[i];
     auto processor = makeWasmGraphProcessor(node);
     if (!processor) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "unsupported graph node type");
+      throw WasmRangeError("unsupported graph node type");
     }
     const std::string id = stringProperty(node, "id", "");
     // Match the C ABI (sonare_engine_set_graph): an explicit `numPorts: 0`, which
@@ -123,8 +118,7 @@ void RealtimeEngineWasm::setGraph(val spec) {
     // is refused there and must be refused here for the same value.
     const int requested_ports = intProperty(node, "numPorts", num_channels);
     if (requested_ports < 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "graph node numPorts must not be negative");
+      throw WasmRangeError("graph node numPorts must not be negative");
     }
     const int ports = requested_ports == 0 ? num_channels : requested_ports;
     if (!graph->add_node(id, std::move(processor), ports)) {
@@ -166,7 +160,8 @@ void RealtimeEngineWasm::setGraph(val spec) {
           {uintProperty(binding, "paramId", 0), stringProperty(binding, "nodeId", "")});
     }
   }
-  if (!engine_.swap_graph(std::move(graph), input_node.c_str(), output_node.c_str(), num_channels,
+  if (!engine_.swap_graph(std::move(graph), wasmCString(input_node, "inputNode"),
+                          wasmCString(output_node, "outputNode"), num_channels,
                           std::move(parameter_bindings))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "failed to swap graph");
   }
@@ -221,10 +216,8 @@ void RealtimeEngineWasm::prepareChannels(const val& num_channels_val, const val&
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.prepareChannels: channels must be within 1.." +
-                                      std::to_string(kMaxPreparedChannels) +
-                                      "; max_frames must be positive");
+    throw WasmRangeError("RealtimeEngine.prepareChannels: channels must be within 1.." +
+                         std::to_string(kMaxPreparedChannels) + "; max_frames must be positive");
   }
   prepared_channels_ = num_channels;
   prepared_capacity_ = max_frames;
@@ -235,13 +228,12 @@ val RealtimeEngineWasm::getChannelBuffer(const val& channel_val, const val& num_
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= prepared_channels_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.getChannelBuffer: channel out of range; call "
-                                  "prepareChannels() first");
+    throw WasmRangeError(
+        "RealtimeEngine.getChannelBuffer: channel out of range; call "
+        "prepareChannels() first");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.getChannelBuffer: out-of-range frame count");
+    throw WasmRangeError("RealtimeEngine.getChannelBuffer: out-of-range frame count");
   }
   return val(typed_memory_view(static_cast<size_t>(num_frames),
                                prepared_storage_[static_cast<size_t>(channel)].data()));
@@ -255,8 +247,7 @@ void RealtimeEngineWasm::processPrepared(const val& num_frames_val) {
                                   "called first");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.processPrepared: out-of-range frame count");
+    throw WasmRangeError("RealtimeEngine.processPrepared: out-of-range frame count");
   }
   engine_.process(prepared_ptrs_.data(), prepared_channels_, num_frames);
 }
@@ -272,11 +263,10 @@ void RealtimeEngineWasm::prepareMonitorChannels(const val& num_channels_val,
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int max_frames = checkedIntFromVal(max_frames_val, "maxFrames");
   if (num_channels <= 0 || num_channels > kMaxPreparedChannels || max_frames <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.prepareMonitorChannels: channels must be "
-                                  "within 1.." +
-                                      std::to_string(kMaxPreparedChannels) +
-                                      "; max_frames must be positive");
+    throw WasmRangeError(
+        "RealtimeEngine.prepareMonitorChannels: channels must be "
+        "within 1.." +
+        std::to_string(kMaxPreparedChannels) + "; max_frames must be positive");
   }
   monitor_channels_ = num_channels;
   monitor_capacity_ = max_frames;
@@ -287,15 +277,14 @@ val RealtimeEngineWasm::getMonitorChannelBuffer(const val& channel_val, const va
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int num_frames = checkedIntFromVal(num_frames_val, "numFrames");
   if (channel < 0 || channel >= monitor_channels_) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
+    throw WasmRangeError(
         "RealtimeEngine.getMonitorChannelBuffer: channel out of range; call "
         "prepareMonitorChannels() first");
   }
   if (num_frames <= 0 || num_frames > monitor_capacity_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.getMonitorChannelBuffer: out-of-range frame "
-                                  "count");
+    throw WasmRangeError(
+        "RealtimeEngine.getMonitorChannelBuffer: out-of-range frame "
+        "count");
   }
   return val(typed_memory_view(static_cast<size_t>(num_frames),
                                monitor_storage_[static_cast<size_t>(channel)].data()));
@@ -316,14 +305,14 @@ void RealtimeEngineWasm::processPreparedWithMonitor(const val& num_frames_val) {
   // The engine writes one cue plane per program channel, so a narrower monitor
   // plane would be written past its end.
   if (monitor_channels_ < prepared_channels_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.processPreparedWithMonitor: monitor channel "
-                                  "count must be at least the prepared channel count");
+    throw WasmRangeError(
+        "RealtimeEngine.processPreparedWithMonitor: monitor channel "
+        "count must be at least the prepared channel count");
   }
   if (num_frames <= 0 || num_frames > prepared_capacity_ || num_frames > monitor_capacity_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "RealtimeEngine.processPreparedWithMonitor: out-of-range frame "
-                                  "count");
+    throw WasmRangeError(
+        "RealtimeEngine.processPreparedWithMonitor: out-of-range frame "
+        "count");
   }
   engine_.process_with_monitor(prepared_ptrs_.data(), monitor_ptrs_.data(), prepared_channels_,
                                num_frames);
@@ -359,8 +348,7 @@ val RealtimeEngineWasm::renderOffline(val channels_val, const val& block_size_va
   // size is an error, not silently clamped to 1 as the core would do (WASM
   // bypasses the C-ABI guard, and the sibling bounce/freeze paths reject it).
   if (block_size <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "renderOffline block size must be positive");
+    throw WasmRangeError("renderOffline block size must be positive");
   }
   ChannelBlock block = readChannels(channels_val);
   engine_.render_offline(block.pointers.data(), static_cast<int>(block.storage.size()),
@@ -403,15 +391,14 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
       dither > 3 ||
       !sonare::resource::engine_bounce_shape_fits(total_frames, num_channels, source_sample_rate,
                                                   target_sample_rate, dither != 0)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid bounce options");
+    throw WasmRangeError("invalid bounce options");
   }
   // The bounce width must map to a supported speaker layout (1 mono, 2 stereo,
   // 6 = 5.1, 8 = 7.1); counts like 3/4/5/7 have no layout and would silently
   // leave their extra planes unpanned. Mirror the C-ABI oracle round-trip
   // (sonare_c_engine.cpp) so WASM rejects them instead of writing garbage planes.
   if (sonare::channel_count(sonare::layout_from_channel_count(num_channels)) != num_channels) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unsupported bounce channel count");
+    throw WasmRangeError("unsupported bounce channel count");
   }
   // Mirror the C-ABI oracle (sonare_engine_bounce_offline): a never-prepared
   // engine renders silence with no telemetry channel, so fail closed rather than
@@ -422,8 +409,7 @@ val RealtimeEngineWasm::bounceOffline(val options_val) {
   // The render runs at the prepared rate, which an explicit sourceSampleRate must name exactly.
   if (requested_source_rate > 0 &&
       engine_.sample_rate() != static_cast<double>(requested_source_rate)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "bounce source sample rate must match the prepared rate");
+    throw WasmRangeError("bounce source sample rate must match the prepared rate");
   }
 
   // Offline pre-roll, as in the C-ABI oracle (sonare_engine_bounce_offline): a
@@ -495,7 +481,7 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   const int num_channels = intProperty(options_val, "numChannels", 2);
   if (total_frames <= 0 || block_size <= 0 || num_channels <= 0 ||
       !sonare::resource::engine_offline_shape_fits(total_frames, num_channels, 1)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "invalid freeze options");
+    throw WasmRangeError("invalid freeze options");
   }
   // Mirror the C-ABI oracle (sonare_engine_freeze_offline): freezing a
   // never-prepared engine would capture pure silence with no error channel.
@@ -547,8 +533,7 @@ val RealtimeEngineWasm::freezeOffline(val options_val) {
   if (!std::isfinite(schedule.start_ppq) ||
       !sonare::transport::valid_public_ppq(schedule.start_ppq) || !std::isfinite(schedule.gain) ||
       schedule.gain < 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid freeze startPpq or gain");
+    throw WasmRangeError("invalid freeze startPpq or gain");
   }
   std::vector<std::shared_ptr<const sonare::engine::ClipAudioStorage>> new_storage;
   new_storage.push_back(owned);

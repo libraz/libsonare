@@ -13,9 +13,11 @@ import {
   Project,
   RealtimeEngine,
   SampleBank,
+  type SonareError,
   SYNTH_ENGINE_MODES,
   synthEnumTables,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 const SAMPLE_RATE = 48000;
 
@@ -49,7 +51,18 @@ function tone(hz: number, seconds: number): Float32Array {
   return out;
 }
 
-function expectInvalidParameter(action: () => void): void {
+/** Asserts that @p action throws a RangeError: an argument the binding refused itself. */
+function expectRangeRefusal(action: () => void): void {
+  expectRefusalOf(action);
+}
+
+/** Asserts that @p action throws a TypeError: a wrong-typed argument. */
+function expectTypeRefusal(action: () => void): void {
+  expectRefusalOf(action, TypeError);
+}
+
+/** Asserts that @p action throws a SonareError carrying InvalidParameter (the library's answer). */
+function expectCodedInvalidParameter(action: () => void): void {
   let caught: unknown;
   try {
     action();
@@ -57,9 +70,7 @@ function expectInvalidParameter(action: () => void): void {
     caught = error;
   }
   expect(isSonareError(caught)).toBe(true);
-  if (isSonareError(caught)) {
-    expect(caught.code).toBe(ErrorCode.InvalidParameter);
-  }
+  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 describe('Sonare WASM sample bank', () => {
@@ -85,7 +96,7 @@ describe('Sonare WASM sample bank', () => {
     try {
       const pcm = tone(261.6256, 0.2);
 
-      expectInvalidParameter(() => bank.addSample(new Float32Array(0)));
+      expectRangeRefusal(() => bank.addSample(new Float32Array(0)));
       expect(bank.sampleCount()).toBe(0);
       expect(bank.setCount()).toBe(0);
 
@@ -94,34 +105,28 @@ describe('Sonare WASM sample bank', () => {
 
       // Descriptor fields are range- and type-checked before they are narrowed:
       // a bare cast would wrap 200 into a valid-looking MIDI key.
-      expectInvalidParameter(() => bank.addSample(pcm, { rootKey: 200 }));
-      expectInvalidParameter(() => bank.addSample(pcm, { rootKey: 60.5 }));
-      expectInvalidParameter(() => bank.addSample(pcm, { rootKey: -1 }));
-      expectInvalidParameter(() =>
-        bank.addSample(pcm, { fineTuneCents: 'flat' as unknown as number }),
-      );
-      expectInvalidParameter(() => bank.addSample(pcm, { sourceRate: Number.NaN }));
+      expectRangeRefusal(() => bank.addSample(pcm, { rootKey: 200 }));
+      expectRangeRefusal(() => bank.addSample(pcm, { rootKey: 60.5 }));
+      expectRangeRefusal(() => bank.addSample(pcm, { rootKey: -1 }));
+      expectTypeRefusal(() => bank.addSample(pcm, { fineTuneCents: 'flat' as unknown as number }));
+      expectRangeRefusal(() => bank.addSample(pcm, { sourceRate: Number.NaN }));
       // loopMode is the raw SoundFont sampleModes number or one of its three
       // names — not the patch's SonareSampleLoopMode, which numbers them
       // differently and has a 'default' the recording itself cannot have.
-      expectInvalidParameter(() =>
-        bank.addSample(pcm, { loopMode: 'sometimes' as unknown as number }),
-      );
-      expectInvalidParameter(() =>
-        bank.addSample(pcm, { loopMode: 'default' as unknown as number }),
-      );
+      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'sometimes' as unknown as number }));
+      expectRangeRefusal(() => bank.addSample(pcm, { loopMode: 'default' as unknown as number }));
       expect(bank.addSample(pcm, { loopMode: 3 })).toBe(1);
       expect(bank.addSample(pcm, { loopMode: 'key-down' })).toBe(2);
       expect(bank.sampleCount()).toBe(3);
 
-      expectInvalidParameter(() => bank.addZone({ sampleIndex: 9 }));
-      expectInvalidParameter(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
+      expectCodedInvalidParameter(() => bank.addZone({ sampleIndex: 9 }));
+      expectCodedInvalidParameter(() => bank.addZone({ setIndex: 4096, sampleIndex: 0 }));
       // Genuinely inverted, both edges given: a rejection the per-bound
       // defaults cannot explain away.
-      expectInvalidParameter(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
-      expectInvalidParameter(() => bank.addZone({ velLo: 100, velHi: 10 }));
-      expectInvalidParameter(() => bank.addZone({ setIndex: -1 }));
-      expectInvalidParameter(() => bank.addZone({ keyLo: 200 }));
+      expectCodedInvalidParameter(() => bank.addZone({ keyLo: 80, keyHi: 20 }));
+      expectCodedInvalidParameter(() => bank.addZone({ velLo: 100, velHi: 10 }));
+      expectRangeRefusal(() => bank.addZone({ setIndex: -1 }));
+      expectRangeRefusal(() => bank.addZone({ keyLo: 200 }));
       expect(bank.setCount()).toBe(0);
 
       bank.addZone({ sampleIndex: 0 });

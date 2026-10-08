@@ -231,7 +231,7 @@ describe('RealtimeEngine.loadSoundFont failures', () => {
     await init();
   });
 
-  it('answers empty bytes with InvalidParameter and unparsable bytes with InvalidFormat', () => {
+  it('refuses empty bytes as a RangeError and answers unparsable bytes with InvalidFormat', () => {
     const engine = new RealtimeEngine(SR, 128);
     try {
       let empty: unknown;
@@ -240,7 +240,7 @@ describe('RealtimeEngine.loadSoundFont failures', () => {
       } catch (error) {
         empty = error;
       }
-      expect(empty).toMatchObject({ code: ErrorCode.InvalidParameter });
+      expect(empty).toBeInstanceOf(RangeError);
       let junk: unknown;
       try {
         engine.loadSoundFont(new Uint8Array([9, 9, 9]));

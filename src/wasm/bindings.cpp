@@ -212,6 +212,8 @@ val js_capabilities() {
 // raw exception-object pointer (a number). Given that pointer, surface a
 // structured { code, codeName, message } so the JS glue can rebuild a
 // SonareError whose numeric code matches the C ABI / Node / Python surfaces.
+// A WasmArgumentError adds a `kind` ("TypeError" / "RangeError") and is rebuilt
+// as that JS class instead.
 // The integer codes mirror the C ABI SonareError enum (the C-ABI TU is not
 // linked into WASM, so the values are written out here rather than referenced).
 // The switch carries no default:, so a new ErrorCode enumerator fails the build
@@ -224,6 +226,13 @@ val js_sonare_exception_info(std::uintptr_t exception_ptr) {
   auto* base = reinterpret_cast<std::exception*>(exception_ptr);
   if (base != nullptr) {
     message = base->what();
+    // An argument the binding refused itself surfaces as the native JS class, not
+    // a coded SonareError; code and codeName below still read InvalidParameter.
+    if (const auto* argument = dynamic_cast<const WasmArgumentError*>(base)) {
+      info.set("kind",
+               std::string(argument->kind() == WasmArgumentError::Kind::Type ? "TypeError"
+                                                                             : "RangeError"));
+    }
     if (const auto* se = dynamic_cast<const sonare::SonareException*>(base)) {
       switch (se->code()) {
         // An exception carrying Ok is a programming error, not a success: code 0
@@ -378,12 +387,12 @@ bool vc_preset_in_range(int preset) {
 val js_voice_character_preset_id(const val& preset_val) {
   const int preset = checkedIntFromVal(preset_val, "preset");
   if (!vc_preset_in_range(preset)) {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+    throw WasmRangeError("unknown voice-character preset ordinal");
   }
   const char* id = editing::voice_changer::realtime_voice_changer_preset_id(
       static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
   if (id == nullptr || id[0] == '\0') {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+    throw WasmRangeError("unknown voice-character preset ordinal");
   }
   return val(std::string(id));
 }
@@ -394,7 +403,7 @@ val js_voice_character_preset_id(const val& preset_val) {
 val js_realtime_voice_changer_preset_config(const val& preset_val) {
   const int preset = checkedIntFromVal(preset_val, "preset");
   if (!vc_preset_in_range(preset)) {
-    throw SonareException(ErrorCode::InvalidParameter, "unknown voice-character preset ordinal");
+    throw WasmRangeError("unknown voice-character preset ordinal");
   }
   const auto cfg = editing::voice_changer::realtime_voice_changer_preset(
       static_cast<editing::voice_changer::VoiceCharacterPreset>(preset));
@@ -457,13 +466,11 @@ val js_decode_channels(val bytes) {
 
 val js_downmix(val channels, int target_layout) {
   if (channels.isUndefined() || channels.isNull()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "downmix: channels must be an array of Float32Array");
+    throw WasmTypeError("downmix: channels must be an array of Float32Array");
   }
   const size_t count = wasmArrayLikeLength(channels, "channels");
   if (count == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "downmix: channels must hold at least one channel");
+    throw WasmRangeError("downmix: channels must hold at least one channel");
   }
   // The C entry takes one planar block, so the planes are packed back to back.
   std::vector<float> packed;
@@ -474,7 +481,7 @@ val js_downmix(val channels, int target_layout) {
       frames = plane.size();
       packed.reserve(frames * count);
     } else if (plane.size() != frames) {
-      throw SonareException(ErrorCode::InvalidParameter, "downmix: channel lengths must match");
+      throw WasmRangeError("downmix: channel lengths must match");
     }
     packed.insert(packed.end(), plane.begin(), plane.end());
   }

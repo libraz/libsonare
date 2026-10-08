@@ -18,8 +18,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   if (!metering.isUndefined() && !metering.isNull() &&
       (metering.typeOf().as<std::string>() != "object" ||
        val::global("Array").call<bool>("isArray", metering))) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "addStrip: metering must be a plain object");
+    throw WasmTypeError("addStrip: metering must be a plain object");
   }
   const bool enabled = boolProperty(metering, "enabled", true);
   const bool lufs = boolProperty(metering, "lufs", true);
@@ -29,7 +28,7 @@ void MixerWasm::addStrip(std::string id, val metering) {
   // Returns the strip pointer rather than a SonareError, so NULL is the whole
   // failure signal and the detail is in the thread-local error slot. The pointer
   // is mixer-owned and never reaches JS: strips are addressed by index or id.
-  if (sonare_mixer_add_strip_ex(mixer_, id.c_str(), enabled ? 1 : 0, lufs ? 1 : 0,
+  if (sonare_mixer_add_strip_ex(mixer_, wasmCString(id, "id"), enabled ? 1 : 0, lufs ? 1 : 0,
                                 true_peak ? 1 : 0, true_peak_oversample) == nullptr) {
     throwLastCError("failed to add strip: ");
   }
@@ -41,7 +40,8 @@ void MixerWasm::addStrip(std::string id, val metering) {
 // (empty defaults to "aux"). Marks the routing graph dirty; call compile (or
 // process) to rebuild.
 void MixerWasm::addBus(std::string id, std::string role) {
-  SonareError err = sonare_mixer_add_bus(mixer_, id.c_str(), role.empty() ? nullptr : role.c_str());
+  SonareError err = sonare_mixer_add_bus(mixer_, wasmCString(id, "id"),
+                                         role.empty() ? nullptr : wasmCString(role, "role"));
   if (err != SONARE_OK) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   std::string("failed to add bus: ") + sonare_error_message(err));
@@ -49,7 +49,7 @@ void MixerWasm::addBus(std::string id, std::string role) {
 }
 
 void MixerWasm::removeBus(std::string id) {
-  SonareError err = sonare_mixer_remove_bus(mixer_, id.c_str());
+  SonareError err = sonare_mixer_remove_bus(mixer_, wasmCString(id, "id"));
   if (err != SONARE_OK) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,
@@ -82,10 +82,10 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
       member_storage.push_back(members[i].as<std::string>());
     }
     for (const auto& member : member_storage) {
-      member_ptrs.push_back(member.c_str());
+      member_ptrs.push_back(wasmCString(member, "members"));
     }
   }
-  SonareError err = sonare_mixer_add_vca_group(mixer_, id.c_str(), gain_db,
+  SonareError err = sonare_mixer_add_vca_group(mixer_, wasmCString(id, "id"), gain_db,
                                                member_ptrs.empty() ? nullptr : member_ptrs.data(),
                                                member_ptrs.size());
   if (err != SONARE_OK) {
@@ -96,7 +96,7 @@ void MixerWasm::addVcaGroup(std::string id, const val& gain_db_val, val members)
 }
 
 void MixerWasm::removeVcaGroup(std::string id) {
-  SonareError err = sonare_mixer_remove_vca_group(mixer_, id.c_str());
+  SonareError err = sonare_mixer_remove_vca_group(mixer_, wasmCString(id, "id"));
   if (err != SONARE_OK) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,
@@ -106,7 +106,7 @@ void MixerWasm::removeVcaGroup(std::string id) {
 
 void MixerWasm::setVcaGroupGainDb(std::string id, const val& gain_db_val) {
   const float gain_db = checkedFloatFromVal(gain_db_val, "gainDb");
-  SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, id.c_str(), gain_db);
+  SonareError err = sonare_mixer_set_vca_group_gain_db(mixer_, wasmCString(id, "id"), gain_db);
   if (err != SONARE_OK) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,
@@ -121,9 +121,10 @@ void MixerWasm::setVcaGroupMembers(std::string id, val members) {
   member_storage.reserve(static_cast<size_t>(count));
   member_ptrs.reserve(static_cast<size_t>(count));
   for (int i = 0; i < count; ++i) member_storage.push_back(members[i].as<std::string>());
-  for (const auto& member : member_storage) member_ptrs.push_back(member.c_str());
+  for (const auto& member : member_storage) member_ptrs.push_back(wasmCString(member, "members"));
   const SonareError err = sonare_mixer_set_vca_group_members(
-      mixer_, id.c_str(), member_ptrs.empty() ? nullptr : member_ptrs.data(), member_ptrs.size());
+      mixer_, wasmCString(id, "id"), member_ptrs.empty() ? nullptr : member_ptrs.data(),
+      member_ptrs.size());
   if (err != SONARE_OK) {
     throw sonare::SonareException(
         sonare::ErrorCode::InvalidState,

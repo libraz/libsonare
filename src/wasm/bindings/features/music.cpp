@@ -64,8 +64,9 @@ val js_chroma_cens(val samples, const val& sample_rate, const val& hop_length, c
                    const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
-               ErrorCode::InvalidParameter);
+  if (bins_per_octave <= 0 || bins_per_octave > std::numeric_limits<int>::max() / 7) {
+    throw WasmRangeError("binsPerOctave is out of range");
+  }
 
   ChromaCensConfig config;
   config.base.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -79,8 +80,9 @@ val js_chroma_cqt(val samples, const val& sample_rate, const val& hop_length, co
                   const val& bins_per_octave_val) {
   const int bins_per_octave = checkedIntFromVal(bins_per_octave_val, "binsPerOctave");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
-  SONARE_CHECK(bins_per_octave > 0 && bins_per_octave <= std::numeric_limits<int>::max() / 7,
-               ErrorCode::InvalidParameter);
+  if (bins_per_octave <= 0 || bins_per_octave > std::numeric_limits<int>::max() / 7) {
+    throw WasmRangeError("binsPerOctave is out of range");
+  }
 
   ChromaCqtConfig config;
   config.cqt.hop_length = checkedIntFromVal(hop_length, "hopLength");
@@ -146,8 +148,7 @@ val js_analyze_sections(val samples, const val& sample_rate, const val& n_fft_va
   // WASM rejects identically to the C ABI / Node. The TS layer (which always
   // passes explicit values) carries the matching guards.
   if (n_fft <= 0 || hop_length <= 0 || !numeric::finite_non_negative(min_section_sec)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "analyzeSections: require nFft > 0, hopLength > 0, minSectionSec >= 0");
+    throw WasmRangeError("analyzeSections: require nFft > 0, hopLength > 0, minSectionSec >= 0");
   }
 
   SectionConfig config;
@@ -199,9 +200,9 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
   // run before the audio is loaded, in the order the C ABI applies them.
   if (config.n_fft <= 0 || config.hop_length <= 0 || config.kernel_size <= 0 ||
       config.n_mfcc <= 0 || config.n_chroma <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "detectBoundaries: require nFft > 0, hopLength > 0, kernelSize > 0, "
-                          "nMfcc > 0, nChroma > 0");
+    throw WasmRangeError(
+        "detectBoundaries: require nFft > 0, hopLength > 0, kernelSize > 0, "
+        "nMfcc > 0, nChroma > 0");
   }
   // Both thresholds, the peak spacing and the reference span are compared against
   // measured values, so a non-finite one silently accepts or rejects every peak
@@ -210,15 +211,14 @@ val js_detect_boundaries(val samples, const val& sample_rate, val options) {
       !numeric::finite_non_negative(config.absolute_threshold) ||
       !numeric::finite_non_negative(config.peak_distance) ||
       !numeric::finite_non_negative(config.reference_window)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "detectBoundaries: threshold, absoluteThreshold, peakDistance and "
-                          "referenceWindow must be finite and non-negative");
+    throw WasmRangeError(
+        "detectBoundaries: threshold, absoluteThreshold, peakDistance and "
+        "referenceWindow must be finite and non-negative");
   }
   // The detector combines the two feature streams frame-for-frame; with neither
   // enabled there is nothing to combine and the novelty curve is undefined.
   if (!config.use_mfcc && !config.use_chroma) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "detectBoundaries: require useMfcc or useChroma");
+    throw WasmRangeError("detectBoundaries: require useMfcc or useChroma");
   }
 
   Audio audio = loadValidatedAudio(samples, sr);
@@ -266,9 +266,9 @@ val js_analyze_melody(val samples, const val& sample_rate, const val& fmin_val, 
   // are plain bools selecting the pYIN tracker and frame centering.
   if (!numeric::finite_positive(fmin) || !numeric::finite_ordered_range(fmin, fmax) ||
       frame_length <= 0 || hop_length <= 0 || !numeric::finite_positive(threshold)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "analyzeMelody: require fmin > 0, fmax > fmin, frameLength > 0, "
-                          "hopLength > 0, threshold > 0");
+    throw WasmRangeError(
+        "analyzeMelody: require fmin > 0, fmax > fmin, frameLength > 0, "
+        "hopLength > 0, threshold > 0");
   }
 
   MelodyConfig config;
@@ -324,7 +324,7 @@ val js_cqt(val samples, const val& sample_rate, const val& hop_length, const val
   const float fmin = checkedFloatFromVal(fmin_val, "fmin");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   if (!numeric::finite_positive(fmin)) {
-    throw SonareException(ErrorCode::InvalidParameter, "cqt: require fmin > 0");
+    throw WasmRangeError("cqt: require fmin > 0");
   }
 
   CqtConfig config;
@@ -370,8 +370,7 @@ val js_vqt(val samples, const val& sample_rate, const val& hop_length, const val
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   // Mirror sonare_vqt: a NaN gamma selects automatic bandwidth, an infinity does not.
   if (!numeric::finite_positive(fmin) || std::isinf(gamma)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "vqt: require fmin > 0 and a non-infinite gamma");
+    throw WasmRangeError("vqt: require fmin > 0 and a non-infinite gamma");
   }
 
   VqtConfig config;

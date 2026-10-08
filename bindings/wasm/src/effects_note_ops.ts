@@ -298,11 +298,10 @@ export function noteMove(
  * @returns One {@link NoteObject} per segmented note, in time order; an empty
  *   array when the track segments to nothing
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
- *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
- *   samples/sample rate fail the shared input checks
- * @throws SonareError (`InvalidParameter`) on an empty `f0Hz`, a non-positive
- *   `frameRate`, a `voicedProb` outside
- *   `[0, 1]`, or a negative option value
+ *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), the
+ *   samples/sample rate fail the shared input checks, or on an empty `f0Hz`, a
+ *   non-positive `frameRate`, a `voicedProb` outside `[0, 1]`, or a negative
+ *   option value
  *
  * @example
  * ```ts
@@ -363,11 +362,13 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * @throws RangeError when `frameRate` is non-finite, `voiced` is supplied
  *   without `f0Hz`, when its length differs from `f0Hz`, or when the samples or
  *   sample rate fail shared checks
- * @throws SonareError (`InvalidParameter`) on a note whose span is empty,
- *   reversed or missing, overlapping source spans, a non-finite or non-positive
- *   edit field, a negative or non-finite envelope value, a negative `fadeMs` or
- *   `vibratoCutoffHz`, a frame span outside `f0Hz`, or a `vibratoDepthChange` /
- *   `driftChange` on a note with no usable pitch curve to apply it to
+ * @throws TypeError on a note whose span is missing or not a number
+ * @throws RangeError on a non-finite or out-of-range edit field, a negative or
+ *   non-finite `fadeMs` or `vibratoCutoffHz`, or a frame span outside `f0Hz`
+ * @throws SonareError (`InvalidParameter`) on a note whose span is empty or
+ *   reversed, overlapping source spans, a negative or non-finite envelope value,
+ *   or a `vibratoDepthChange` / `driftChange` on a note with no usable pitch
+ *   curve to apply it to
  *
  * @example
  * ```ts
@@ -442,10 +443,9 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * @returns The centre and the two curves, each one entry per frame of `f0Hz`
  * @throws TypeError when `f0Hz` is not a `Float32Array` or `voiced` is not a
  *   supported flag array
- * @throws RangeError when `frameRate` is not finite or `voiced` differs in
- *   length from `f0Hz`
- * @throws SonareError (`InvalidParameter`) on an empty `f0Hz`, a non-positive
- *   `frameRate`, a negative `medianHz`, or a negative `vibratoCutoffHz`
+ * @throws RangeError when `frameRate` is not finite or not positive, `voiced`
+ *   differs in length from `f0Hz`, `f0Hz` is empty, or `medianHz` or
+ *   `vibratoCutoffHz` is negative
  *
  * @example
  * ```ts
@@ -502,10 +502,10 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks
+ * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws SonareError (`InvalidParameter`) on an out-of-range `index`, a `frame`
- *   that is not strictly inside that note's own span, a note whose frame span is
- *   empty or runs past the track, or the track arguments {@link extractNotes}
- *   itself rejects
+ *   that is not strictly inside that note's own span, or a note whose frame span
+ *   is empty or runs past the track
  *
  * @example
  * ```ts
@@ -558,9 +558,9 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  * @throws RangeError when the selected voicing array differs from `f0Hz` in
  *   length (`voiced`, or `voicedProb` when `voiced` is omitted or `null`), or the
  *   samples/sample rate fail the shared input checks
+ * @throws RangeError on the track arguments {@link extractNotes} itself rejects
  * @throws SonareError (`InvalidParameter`) unless `first < last < notes.length`,
- *   on a note whose frame span is empty or runs past the track, or on the track
- *   arguments {@link extractNotes} itself rejects
+ *   or on a note whose frame span is empty or runs past the track
  *
  * @example
  * ```ts
@@ -661,10 +661,11 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * @param request - The notes, their sample rate, the reference melody, and the
  *   three tunable knobs
  * @returns The new note set and how many notes received a target
- * @throws SonareError (`InvalidParameter`) on a non-positive `sampleRate`, an
- *   unknown `unmatchedPolicy`, a `minOverlapRatio` outside `[0, 1]`, a negative
- *   `maxCorrectionSemitones`, a note missing `onsetSample` / `offsetSample`, or a
- *   target whose `startSec`, `endSec` or `targetMidi` is not finite
+ * @throws TypeError on a note missing `onsetSample` / `offsetSample`
+ * @throws RangeError on a non-positive `sampleRate`, an unknown
+ *   `unmatchedPolicy`, a `minOverlapRatio` outside `[0, 1]`, a negative
+ *   `maxCorrectionSemitones`, or a target whose `startSec`, `endSec` or
+ *   `targetMidi` is not finite
  *
  * @example
  * ```ts

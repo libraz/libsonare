@@ -16,11 +16,9 @@ import {
   detectKey,
   detectKeyCandidates,
   detectOnsets,
-  ErrorCode,
   fixLength,
   frameSignal,
   init,
-  isSonareError,
   Mixer,
   masteringChain,
   meteringDetectClipping,
@@ -35,24 +33,21 @@ import {
   trimSilence,
 } from '../dist/index.js';
 import { SonareEngineTelemetryError } from '../dist/worklet.js';
+import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
 });
 
-/** Asserts that @p action throws a SonareError carrying InvalidParameter. */
-const expectInvalidParameter = (action: () => void) => {
-  let caught: unknown;
-  try {
-    action();
-  } catch (error) {
-    caught = error;
-  }
-  expect(isSonareError(caught)).toBe(true);
-  if (isSonareError(caught)) {
-    expect(caught.code).toBe(ErrorCode.InvalidParameter);
-  }
-};
+/** Asserts that @p action throws a RangeError: an argument the binding refused itself. */
+function expectRangeRefusal(action: () => void): void {
+  expectRefusalOf(action);
+}
+
+/** Asserts that @p action throws a TypeError: a wrong-typed argument. */
+function expectTypeRefusal(action: () => void): void {
+  expectRefusalOf(action, TypeError);
+}
 
 describe('RealtimeEngine prepare/time-signature/loop guards', () => {
   it('rejects invalid sample rates or block sizes in the constructor', () => {
@@ -294,7 +289,7 @@ describe('RealtimeVoiceChanger.setPodConfig rejects a partial POD instead of zer
       formantBody: 0,
       formantBrightness: 0,
       formantNasal: 0,
-      formantMode: 'relative',
+      formantMode: 'relative' as const,
       eqHighpassHz: 80,
       eqBodyDb: 0,
       eqPresenceDb: 0,
@@ -502,35 +497,35 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
     expect(() =>
       engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 1 } as CcBindingDescriptor),
     ).not.toThrow();
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, minValue: 2 } as CcBindingDescriptor),
     );
     // minValue defaults to exactly 0, bracketed the same way.
     expect(() =>
       engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: 0 } as CcBindingDescriptor),
     ).not.toThrow();
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({ ccNumber: 7, paramId: 1, maxValue: -1 } as CcBindingDescriptor),
     );
   });
 
   it('still rejects a supplied non-finite range instead of defaulting it', () => {
     const engine = new RealtimeEngine(48000, 128);
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({
         ccNumber: 7,
         paramId: 1,
         minValue: Number.NaN,
       } as CcBindingDescriptor),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({
         ccNumber: 7,
         paramId: 1,
         maxValue: Number.POSITIVE_INFINITY,
       } as CcBindingDescriptor),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({
         ccNumber: 7,
         paramId: 1,
@@ -543,10 +538,10 @@ describe('RealtimeEngine.bindMidiCcBinding defaults omitted descriptor fields', 
 
   it('still requires paramId and range-checks a supplied kind', () => {
     const engine = new RealtimeEngine(48000, 128);
-    expectInvalidParameter(() =>
+    expectTypeRefusal(() =>
       engine.bindMidiCcBinding({ ccNumber: 7 } as unknown as CcBindingDescriptor),
     );
-    expectInvalidParameter(() =>
+    expectRangeRefusal(() =>
       engine.bindMidiCcBinding({
         ccNumber: 7,
         kind: 9,
@@ -586,7 +581,7 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
       const bad = new Float32Array(256).fill(0.1);
       bad[10] = Number.NaN;
       bad[20] = Number.POSITIVE_INFINITY;
-      expectInvalidParameter(() => retune.processMono(bad));
+      expectRangeRefusal(() => retune.processMono(bad));
 
       // Refused means untouched: the block the caller still holds is the block
       // it passed, not a repaired one it never asked for.
@@ -607,16 +602,16 @@ describe('StreamingRetune refuses non-finite input and clamps finite ranges', ()
   it('rejects a non-finite control and keeps the value it already had', async () => {
     const { StreamingRetune } = await import('../dist/index.js');
     // Construction refuses each of the three controls on its own.
-    expectInvalidParameter(() => new StreamingRetune({ semitones: Number.NaN }));
-    expectInvalidParameter(() => new StreamingRetune({ mix: Number.POSITIVE_INFINITY }));
-    expectInvalidParameter(() => new StreamingRetune({ grainSize: Number.NaN }));
+    expectRangeRefusal(() => new StreamingRetune({ semitones: Number.NaN }));
+    expectRangeRefusal(() => new StreamingRetune({ mix: Number.POSITIVE_INFINITY }));
+    expectRangeRefusal(() => new StreamingRetune({ grainSize: Number.NaN }));
 
     const retune = new StreamingRetune({ semitones: 5, mix: 0.25, grainSize: 512 });
     try {
       retune.prepare(48000, 128);
       const before = retune.config();
-      expectInvalidParameter(() => retune.setConfig({ semitones: Number.NaN }));
-      expectInvalidParameter(() => retune.setConfig({ mix: Number.NEGATIVE_INFINITY }));
+      expectRangeRefusal(() => retune.setConfig({ semitones: Number.NaN }));
+      expectRangeRefusal(() => retune.setConfig({ mix: Number.NEGATIVE_INFINITY }));
       // A rejected update leaves the whole config as it was: the refusal is not
       // a partial write that applied the keys it read before the bad one.
       expect(retune.config()).toEqual(before);

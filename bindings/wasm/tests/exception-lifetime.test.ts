@@ -19,7 +19,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, isSonareError } from '../src/index';
+import { init } from '../src/index';
 import { getSonareModule, nativeExceptionPtr } from '../src/module_state';
 import type { SonareModule } from '../src/sonare.js';
 
@@ -118,11 +118,12 @@ describe('native exception objects are released once surfaced', () => {
     const before = throwAndRelease();
 
     // The public path: the wrapper in module_state.ts catches the pointer,
-    // decodes it into a SonareError, and releases it in a finally.
+    // decodes it into the JS error it names (a RangeError for a refused
+    // argument), and releases it in a finally.
     const wrapped = getSonareModule();
     for (let i = 0; i < 200; i++) {
       const error = reject(wrapped);
-      expect(isSonareError(error)).toBe(true);
+      expect(error).toBeInstanceOf(RangeError);
     }
 
     expect(throwAndRelease()).toBe(before);
@@ -133,7 +134,7 @@ describe('native exception objects are released once surfaced', () => {
     // read before the release. A regression would surface as the generic
     // "libsonare native exception (<ptr>)" fallback text.
     const error = reject(getSonareModule());
-    expect(isSonareError(error)).toBe(true);
+    expect(error).toBeInstanceOf(RangeError);
     expect((error as Error).message).toMatch(/chromaMethod/);
   });
 

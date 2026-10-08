@@ -150,6 +150,55 @@ val vectorToInt32Array(const int* data, std::size_t n);
 val vectorToInt32Array(const std::vector<int>& vec);
 val vectorToUint8Array(const uint8_t* data, std::size_t n);
 val vectorToUint8Array(const std::vector<uint8_t>& vec);
+/// @brief An argument the binding layer refused itself, before any library call.
+/// @details The refusal contract of the JS surface: a wrong-typed argument is a
+///   JS `TypeError` and an out-of-domain one a `RangeError`, while a failure the
+///   library or an object's state reports stays a coded `SonareError`. This base
+///   is mapped to the JS class by @c sonareExceptionInfo through @ref kind. It
+///   derives from SonareException(InvalidParameter) so a C++ handler that catches
+///   the library exception keeps catching it.
+class WasmArgumentError : public sonare::SonareException {
+ public:
+  /// @brief The JS error class a refusal surfaces as.
+  enum class Kind { Type, Range };
+
+  Kind kind() const { return kind_; }
+
+ protected:
+  WasmArgumentError(Kind kind, const std::string& message)
+      : sonare::SonareException(sonare::ErrorCode::InvalidParameter, message), kind_(kind) {}
+
+ private:
+  Kind kind_;
+};
+
+/// @brief A wrong-typed argument; surfaces as a JS `TypeError`.
+class WasmTypeError final : public WasmArgumentError {
+ public:
+  explicit WasmTypeError(const std::string& message) : WasmArgumentError(Kind::Type, message) {}
+};
+
+/// @brief An out-of-domain argument; surfaces as a JS `RangeError`.
+class WasmRangeError final : public WasmArgumentError {
+ public:
+  explicit WasmRangeError(const std::string& message) : WasmArgumentError(Kind::Range, message) {}
+};
+
+/// @brief The C string for a JS-supplied name, key, JSON text or other string
+///        that is about to reach a NUL-terminated API.
+/// @details The C ABI and the internal `const char*` functions end a string at
+///   its first NUL, so a value carrying one would be cut there and succeed as
+///   its prefix, indistinguishable from a value the caller chose. Every
+///   `.c_str()` handoff of a string that came from JS goes through here; the
+///   returned pointer is @p text's own storage and lives as long as it does.
+/// @param subject The JS field or argument name the refusal reports.
+/// @throws WasmRangeError when @p text contains a NUL.
+const char* wasmCString(const std::string& text, const char* subject);
+/// @brief The NUL check of @ref wasmCString for a string that is read from JS
+///        and stays a @c std::string, so the refusal lands at the read.
+/// @throws WasmRangeError when @p text contains a NUL.
+void wasmRefuseEmbeddedNul(const std::string& text, const char* subject);
+
 /// Conservative wasm32 budget for caller-owned Float32Array data copied into
 /// the linear-memory heap. Keeping this below the native offline ceiling leaves
 /// room for the input copy, DSP work buffers, and output arrays.
@@ -173,7 +222,7 @@ inline constexpr std::size_t kMaxWasmObjectArrayReserve = 1u * 1024u * 1024u;
 ///   A value at or above 2^32 therefore comes back as the largest address rather
 ///   than as itself, which is harmless for a request a real container caps and
 ///   is not harmless for anything that addresses memory.
-/// @throws SonareException(InvalidParameter) for a non-finite, negative,
+/// @throws WasmArgumentError for a non-finite, negative,
 ///   fractional, or unsafe value.
 std::size_t wasmCountArg(double value, const char* subject);
 /// Validates a caller-supplied INDEX or OFFSET into a buffer: wasmCountArg plus
@@ -181,7 +230,7 @@ std::size_t wasmCountArg(double value, const char* subject);
 /// rather than silently landing on the last address. Use this wherever the
 /// number names a position; use wasmCountArg where it names a quantity the
 /// callee will cap against something real.
-/// @throws SonareException(InvalidParameter) for everything wasmCountArg
+/// @throws WasmArgumentError for everything wasmCountArg
 ///   refuses, and for a value the build cannot address.
 std::size_t wasmIndexArg(double value, const char* subject);
 /// Reads an array-like object's element count after rejecting null, undefined,
@@ -219,13 +268,13 @@ std::vector<float> float32ArrayWindowToVector(val arr, std::size_t start, std::s
 /// validation (rejects null/empty, an out-of-range sampleRate, an oversized
 /// buffer, and any non-finite sample). Mirrors the C ABI validate_audio_params
 /// so the WASM surface rejects the same inputs even though it bypasses the
-/// C-ABI translation unit. @throws SonareException(InvalidParameter).
+/// C-ABI translation unit. @throws WasmArgumentError.
 Audio loadValidatedAudio(val samples, int sample_rate);
 /// @brief Loads a JS array of equal-length Float32Array channels, running
 /// loadValidatedAudio over EVERY channel. A linked core entry guards channels[0]
 /// alone and takes one shared length, so this is the whole non-finite and length
 /// guard on the set. @p entry names the caller in each message.
-/// @throws SonareException(InvalidParameter).
+/// @throws WasmArgumentError.
 std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate, const char* entry);
 /// @brief loadValidatedAudio for an entry point that reads one window of the
 /// buffer. The null/empty, sampleRate and buffer-size rules still cover the
@@ -233,14 +282,14 @@ std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
 /// [@p scan_offset, @p scan_offset + @p scan_count) clamped to the end. A
 /// sample outside that window is never read, so its value is not a precondition
 /// -- the contract the C ABI states for its windowed calls.
-/// @throws SonareException(InvalidParameter).
+/// @throws WasmArgumentError.
 Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_offset,
                                std::size_t scan_count);
 /// @brief Interleaved sibling for the (samples, channels, sampleRate) facade.
 /// Validates channels > 0, the shared offline-input rules over the whole buffer,
 /// and that the length is a whole number of frames (no silent truncation of a
 /// trailing partial frame). Writes the per-channel frame count to @p frames and
-/// returns the copied samples. @throws SonareException(InvalidParameter).
+/// returns the copied samples. @throws WasmArgumentError.
 std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
                                             size_t* frames);
 std::vector<int32_t> int32ArrayToVector(val arr);
@@ -258,7 +307,7 @@ val objectProperty(val object, const char* key);
 ///          Use @ref floatOption for the fields whose owner documents
 ///          "non-finite means unspecified". Every property reader below shares
 ///          this contract: absent is the only way to ask for the default.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 float floatProperty(val object, const char* key, float default_value);
 /// @brief Fallback float reader: a field that is absent, or present but not a
 ///        finite number, takes @p default_value. A wrong-typed value, and a
@@ -274,7 +323,7 @@ float floatProperty(val object, const char* key, float default_value);
 ///          number, and answering it with the default reports success carrying a
 ///          value they did not choose. A wrong TYPE is outside the convention
 ///          entirely: nothing documents a string as meaning "unspecified".
-/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+/// @throws WasmArgumentError naming @p key, for a wrong-typed
 ///         value and for a finite value wider than a 32-bit float.
 float floatOption(val object, const char* key, float default_value);
 /// @brief Refuses a fractional number, the integrality half of the narrowings
@@ -284,7 +333,7 @@ float floatOption(val object, const char* key, float default_value);
 ///          otherwise has nothing to reach for and hand-writes the trunc
 ///          comparison. Truncation is the same silent value change as a wrap
 ///          from the other end.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 void requireIntegral(double number, const char* key);
 /// @brief Narrows a JS number to int, rejecting anything out of range or
 ///        fractional.
@@ -295,12 +344,12 @@ void requireIntegral(double number, const char* key);
 ///          silent value change from the other end, so both are refused here
 ///          rather than per facade -- a JS-side check cannot see a caller
 ///          driving the embind classes directly.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 int checkedIntFromVal(const val& value, const char* key);
 
 /// @brief Resolves a musical mode given as its ordinal (0..6) or its lowercase
 ///        church-mode name ("major", "minor", "dorian", ...).
-/// @throws SonareException(InvalidParameter) naming @p what for any other value.
+/// @throws WasmArgumentError naming @p what for any other value.
 Mode modeFromVal(const val& value, const char* what);
 /// @brief Presence- AND type-checked int reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
@@ -308,14 +357,14 @@ Mode modeFromVal(const val& value, const char* what);
 /// @details @ref floatProperty's integer sibling, for a COUNT or a SIZE. A
 ///          present number still goes through @ref checkedIntFromVal, so
 ///          out-of-range and fractional stay refused.
-/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+/// @throws WasmArgumentError naming @p key, for a wrong-typed
 ///         value and for one @ref checkedIntFromVal refuses.
 int intProperty(val object, const char* key, int default_value);
 /// @brief Unsigned sibling of @ref checkedIntFromVal.
 /// @details val::as<uint32_t>() saturates at the top and clamps a negative to 0,
 ///          so -1 -- the sentinel several fields here spell "none" with -- lands
 ///          on the first real id or the first enum member instead.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 uint32_t checkedUintFromVal(const val& value, const char* key);
 uint32_t uintProperty(val object, const char* key, uint32_t default_value);
 /// @brief Reads a raw 32-bit word (a UMP word, a packed MIDI 1.0 message).
@@ -324,7 +373,7 @@ uint32_t uintProperty(val object, const char* key, uint32_t default_value);
 ///          int once bit 31 is set, so a negative is reinterpreted as its
 ///          two's-complement word rather than refused. Only a value outside
 ///          [-2^31, 2^32) or a fractional one is a caller error.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 uint32_t checkedWordFromVal(const val& value, const char* key);
 uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 /// @brief MIDI-byte sibling of @ref checkedIntFromVal, narrowing only: the
@@ -333,34 +382,34 @@ uint32_t wordProperty(val object, const char* key, uint32_t default_value);
 ///          byte domain, so no downstream range check can see it: 256 reads as
 ///          controller 0, 300 as controller 44, and 511 as the any-channel
 ///          wildcard.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 uint8_t checkedByteFromVal(const val& value, const char* key);
 uint8_t byteProperty(val object, const char* key, uint8_t default_value);
 /// @brief 64-bit sibling of @ref checkedIntFromVal.
 /// @details Reading through double instead of the BigInt conversion turns NaN
 ///          into 0 and truncates a fractional frame position, neither of which
 ///          any downstream non-negative check can tell from a real request.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 int64_t checkedInt64FromVal(const val& value, const char* key);
 int64_t int64Property(val object, const char* key, int64_t default_value);
 /// @brief Reads a 64-bit unsigned value carried as a canonical-length decimal
 ///        string, the only spelling a JS number cannot corrupt above 2^53.
 /// @details Refuses a non-string, an empty string, a sign, whitespace, trailing
 ///          characters and a value past 2^64 - 1; nothing is coerced.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 uint64_t checkedDecimalUint64FromVal(const val& value, const char* key);
 /// @brief Presence-checked sibling of @ref checkedDecimalUint64FromVal: an absent
 ///        field -- omitted, `undefined` or `null` -- takes @p default_value.
 uint64_t decimalUint64Property(val object, const char* key, uint64_t default_value);
 /// @brief Reads a trailing render-frame argument; undefined is -1 ("now").
-/// @throws SonareException(InvalidParameter) for anything checkedInt64FromVal refuses.
+/// @throws WasmArgumentError for anything checkedInt64FromVal refuses.
 int64_t renderFrameFromVal(const val& value);
 /// @brief Narrows a JS number to float, rejecting what float cannot hold.
 /// @details The integer readers' counterpart for the other overflow: a value
 ///          past FLT_MAX becomes +inf, and a config validator that rejects NaN
 ///          need not reject inf, so distinct absurd requests collapse into one
 ///          accepted result.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 float checkedFloatFromVal(const val& value, const char* key);
 /// @brief Refuses a non-finite double. No narrowing to do -- a JS number is a
 ///        double already -- so finiteness is the whole check.
@@ -369,12 +418,12 @@ float checkedFloatFromVal(const val& value, const char* key);
 ///          an explicit isfinite on the marker id and the MIDI clip start), so
 ///          this is the family's guarantee rather than the only guard. It is
 ///          what a field added to one of those bags inherits.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 double checkedDoubleFromVal(const val& value, const char* key);
 /// @brief Reads a JS number as a double, refusing every other JS type.
 /// @details val::as<double>() accepts a boolean as 0 or 1, so a caller error would
 ///          arrive as a value; every checked narrowing above starts here.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 double numberFromVal(const val& value, const char* key);
 /// @brief Presence- AND type-checked double reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
@@ -383,7 +432,7 @@ double numberFromVal(const val& value, const char* key);
 ///          declares as a double. It carries no range check because a double IS
 ///          what a JS number is, which is why @ref floatProperty's 32-bit bound
 ///          has no counterpart here.
-/// @throws SonareException(InvalidParameter) naming @p key, for a wrong-typed
+/// @throws WasmArgumentError naming @p key, for a wrong-typed
 ///         value and for a non-finite one.
 double doubleProperty(val object, const char* key, double default_value);
 /// @brief Resolves a built-in oscillator waveform given as a JS string or a JS
@@ -394,7 +443,7 @@ double doubleProperty(val object, const char* key, double default_value);
 ///          first value past the enum is 4, not some implausible number. Not
 ///          reachable through @ref checkedIntFromVal alone: 4 and -1 are in range
 ///          for an int, so this is a domain check, not a narrowing check.
-/// @throws SonareException(InvalidParameter) for any value outside the set.
+/// @throws WasmArgumentError for any value outside the set.
 int builtinWaveformFromVal(const val& value);
 /// @brief Presence- AND type-checked bool reader: an absent field -- omitted,
 ///        `undefined` or `null` -- takes @p default_value, a present one must be
@@ -402,25 +451,25 @@ int builtinWaveformFromVal(const val& value);
 /// @details For a FLAG, whose two values are the whole domain. val::as<bool>()
 ///          applies JS truthiness, so `'false'`, `[]` and `0` would each arrive
 ///          as a flag the caller never wrote; the type test is the whole check.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 bool boolProperty(val object, const char* key, bool default_value);
 /// @brief Reads the GS insertion-effect realisation ("modern" or "classic") as
 ///        its C ABI ordinal (0 or 1): absent, `undefined` or `null` is modern.
-/// @throws SonareException(InvalidParameter) naming @p key for a non-string or
+/// @throws WasmArgumentError naming @p key for a non-string or
 ///         any other name.
 int gsEfxRealizationProperty(val object, const char* key);
 /// @brief String reader: absent, `undefined` or `null` takes @p default_value, a
 ///        present one must be a JS string.
-/// @throws SonareException(InvalidParameter) naming @p key.
+/// @throws WasmArgumentError naming @p key.
 std::string stringProperty(val object, const char* key, const std::string& default_value);
 /// @brief Optional number reader: std::nullopt only when @p v is undefined or
 ///        null, so the caller skips the assignment.
 /// @details A present number narrows through @ref checkedFloatFromVal.
-/// @throws SonareException(InvalidParameter) naming @p key when @p v is not a
+/// @throws WasmArgumentError naming @p key when @p v is not a
 ///         number, or is one the 32-bit float cannot hold.
 std::optional<float> optionalNumber(const val& v, const char* key);
 /// @brief Boolean sibling of optionalNumber.
-/// @throws SonareException(InvalidParameter) naming @p key when @p v is present
+/// @throws WasmArgumentError naming @p key when @p v is present
 ///         and not a JS boolean.
 std::optional<bool> optionalBool(const val& v, const char* key);
 /// Invokes a JS cancellation callback and returns true only when it returns the
@@ -434,7 +483,7 @@ bool cancelCallbackRequested(const val& callback);
 /// zero-strip mixer configuration, which already handles `count == 0` as a
 /// no-op downstream) pass false explicitly with a comment explaining why.
 /// Returns the common length.
-/// @throws SonareException(InvalidParameter) on mismatch, or (when required)
+/// @throws WasmArgumentError on mismatch, or (when required)
 /// zero length.
 int requireMatchedLength(const val& a, const val& b, const char* subject,
                          bool require_non_zero = true);
@@ -444,10 +493,10 @@ int requireMatchedLength(const val& a, const val& b, const char* subject,
 /// Mirrors the C ABI's range-checked enum converters (e.g. core_common.cpp's
 /// fill_key_profile / fill_key_modes, sonare_c_internal.h's valid_window),
 /// which reject an unmapped ordinal rather than defaulting it.
-/// @throws SonareException(InvalidParameter) when @p value is outside
+/// @throws WasmArgumentError when @p value is outside
 /// [@p min, @p max].
 void requireOrdinalInRange(int value, int min, int max, const char* subject);
-/// @brief Reads a REQUIRED field of exactly type T: throws InvalidParameter
+/// @brief Reads a REQUIRED field of exactly type T: throws a WasmArgumentError
 /// naming @p subject and @p key if the field is absent, null, or not the
 /// expected JS type (a non-bool T additionally requires a finite number).
 /// Unlike floatProperty/intProperty/boolProperty (which take a default for an
@@ -468,8 +517,7 @@ inline double requireNumberProperty(const val& object, const char* key, const ch
   const val value = requireTypedProperty(object, key, subject, "number", "a number");
   const double number = value.as<double>();
   if (!std::isfinite(number)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " must be finite");
+    throw WasmRangeError(std::string(subject) + "." + key + " must be finite");
   }
   return number;
 }

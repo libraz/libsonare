@@ -57,16 +57,13 @@ void RealtimeEngineWasm::primeOfflineParameters(const val& num_channels_val,
   const int num_channels = checkedIntFromVal(num_channels_val, "numChannels");
   const int block_size = checkedIntFromVal(block_size_val, "blockSize");
   if (num_channels <= 0 || block_size <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "primeOfflineParameters: counts must be positive");
+    throw WasmRangeError("primeOfflineParameters: counts must be positive");
   }
   if (engine_.max_block_size() <= 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState, "engine not prepared");
   }
   if (num_channels > engine_.prepared_channels()) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "primeOfflineParameters: numChannels exceeds the prepared channel count");
+    throw WasmRangeError("primeOfflineParameters: numChannels exceeds the prepared channel count");
   }
   engine_.prime_offline_parameters(num_channels, block_size);
 }
@@ -98,8 +95,7 @@ void RealtimeEngineWasm::seekSample(int64_t timeline_sample, const val& render_f
 
 void RealtimeEngineWasm::seekPpq(double ppq, const val& render_frame_val) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "seekPpq: ppq is outside the public timeline range");
+    throw WasmRangeError("seekPpq: ppq is outside the public timeline range");
   }
   sonare::rt::Command command{};
   command.type = sonare::rt::CommandType::kTransportSeekPpq;
@@ -122,8 +118,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
     // oversized list before reserving so a crafted length cannot drive an
     // unbounded allocation.
     if (count > sonare::kMaxAudioBufferSize) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setTempoSegments: segment count exceeds the maximum");
+      throw WasmRangeError("setTempoSegments: segment count exceeds the maximum");
     }
     parsed.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
@@ -133,8 +128,7 @@ void RealtimeEngineWasm::setTempoSegments(val segments) {
       segment.bpm = doubleProperty(entry, "bpm", 0.0);
       segment.end_bpm = doubleProperty(entry, "endBpm", 0.0);
       if (!sonare::transport::valid_public_tempo_segment(segment)) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
+        throw WasmRangeError(
             "setTempoSegments: segments require finite startPpq and positive bpm/endBpm");
       }
       parsed.push_back(segment);
@@ -149,8 +143,7 @@ void RealtimeEngineWasm::setTimeSignature(const val& numerator_val, const val& d
   // non-positive numerator/denominator instead of silently collapsing to 1/1
   // (tempo_map clamps with std::max(...,1)).
   if (numerator <= 0 || denominator <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "setTimeSignature: numerator and denominator must be positive");
+    throw WasmRangeError("setTimeSignature: numerator and denominator must be positive");
   }
   engine_.set_time_signature(numerator, denominator);
 }
@@ -162,8 +155,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
     // an oversized list before reserving so a crafted length cannot drive an
     // unbounded allocation.
     if (count > sonare::kMaxAudioBufferSize) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setTimeSignatureSegments: segment count exceeds the maximum");
+      throw WasmRangeError("setTimeSignatureSegments: segment count exceeds the maximum");
     }
     parsed.reserve(count);
     for (unsigned i = 0; i < count; ++i) {
@@ -173,8 +165,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
       segment.time_sig.numerator = intProperty(entry, "numerator", 0);
       segment.time_sig.denominator = intProperty(entry, "denominator", 0);
       if (!sonare::transport::valid_public_time_signature_segment(segment)) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
+        throw WasmRangeError(
             "setTimeSignatureSegments: segments require finite startPpq and positive signature");
       }
       parsed.push_back(segment);
@@ -184,8 +175,7 @@ void RealtimeEngineWasm::setTimeSignatureSegments(val segments) {
 }
 int64_t RealtimeEngineWasm::sampleAtPpq(double ppq) {
   if (!std::isfinite(ppq) || !sonare::transport::valid_public_ppq(ppq)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sampleAtPpq: ppq is outside the public timeline range");
+    throw WasmRangeError("sampleAtPpq: ppq is outside the public timeline range");
   }
   return engine_.sample_at_ppq(ppq);
 }
@@ -195,8 +185,7 @@ void RealtimeEngineWasm::setLoop(double start_ppq, double end_ppq, bool enabled)
   if (!std::isfinite(start_ppq) || !std::isfinite(end_ppq) ||
       !sonare::transport::valid_public_ppq(start_ppq) ||
       !sonare::transport::valid_public_ppq(end_ppq) || (enabled && end_ppq <= start_ppq)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "setLoop: bounds must be finite, non-negative, and end > start");
+    throw WasmRangeError("setLoop: bounds must be finite, non-negative, and end > start");
   }
   engine_.set_loop(start_ppq, end_ppq, enabled);
 }
@@ -211,8 +200,7 @@ void RealtimeEngineWasm::setMarkers(val markers) {
   // C-ABI segment setters enforce, so a crafted length cannot drive an unbounded
   // allocation.
   if (count < 0 || static_cast<size_t>(count) > sonare::kMaxAudioBufferSize) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "setMarkers: marker count exceeds the maximum");
+    throw WasmRangeError("setMarkers: marker count exceeds the maximum");
   }
   prepared.reserve(static_cast<size_t>(count));
   std::vector<uint32_t> ids;
@@ -221,23 +209,20 @@ void RealtimeEngineWasm::setMarkers(val markers) {
     val marker = markers[i];
     const double ppq = numberFromVal(objectProperty(marker, "ppq"), "ppq");
     if (!std::isfinite(ppq) || ppq < 0.0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMarkers: marker ppq must be finite and non-negative");
+      throw WasmRangeError("setMarkers: marker ppq must be finite and non-negative");
     }
     // The narrowing is uintProperty's; zero stays this field's own rule, which
     // sonare_engine_set_markers enforces on the C side.
     const uint32_t id = uintProperty(marker, "id", static_cast<uint32_t>(i + 1));
     if (id == 0) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMarkers: marker id must be positive");
+      throw WasmRangeError("setMarkers: marker id must be positive");
     }
     if (std::find(ids.begin(), ids.end(), id) != ids.end()) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "setMarkers: marker ids must be unique");
+      throw WasmRangeError("setMarkers: marker ids must be unique");
     }
     ids.push_back(id);
     staged_strings.push_back(stringProperty(marker, "name", ""));
-    prepared.push_back({ppq, id, staged_strings.back().c_str(),
+    prepared.push_back({ppq, id, wasmCString(staged_strings.back(), "name"),
                         static_cast<uint8_t>(intProperty(marker, "kind", 0)),
                         static_cast<int8_t>(intProperty(marker, "keyFifths", 0)),
                         boolProperty(marker, "keyMinor", false)});
@@ -333,8 +318,7 @@ void RealtimeEngineWasm::setMetronome(val config) {
       !std::isfinite(metronome.accent_gain) || metronome.accent_gain < 0.0f ||
       metronome.click_samples < 0 ||
       metronome.click_samples > sonare::engine::kMaxMetronomeClickSamples) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "metronome gains or click length are invalid");
+    throw WasmRangeError("metronome gains or click length are invalid");
   }
   // clickSeconds is optional: a value > 0 overrides the engine's 2 ms default
   // click length (parity with the C-ABI/Python/Node click_seconds field). A
@@ -345,8 +329,7 @@ void RealtimeEngineWasm::setMetronome(val config) {
           : 0.0;
   if (!std::isfinite(click_seconds) || click_seconds < 0.0 ||
       click_seconds > sonare::engine::kMaxMetronomeClickSeconds) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "metronome clickSeconds is invalid");
+    throw WasmRangeError("metronome clickSeconds is invalid");
   }
   if (click_seconds > 0.0) {
     metronome.click_seconds = click_seconds;

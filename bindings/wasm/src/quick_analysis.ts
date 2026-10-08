@@ -824,7 +824,7 @@ export function estimateRoom(
  * outside a small estimated room. Absorption bands that did not converge are
  * left out, so the scalar `absorption` applies.
  *
- * @throws SonareError when the estimate has no measurable dimensions (NaN).
+ * @throws RangeError when the estimate has no measurable dimensions (NaN).
  */
 export function roomGeometryFromEstimate(
   request: RoomGeometryFromEstimateRequest,

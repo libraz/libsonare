@@ -13,8 +13,7 @@ sonare::automation::CurveType automationCurveFromInt(int curve) {
   // Reject an out-of-range curve ordinal (not clamp), matching the C ABI and
   // Python so every surface returns the same error for the same invalid input.
   if (curve < 0 || curve > 3) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "automation curve ordinal is out of range");
+    throw WasmRangeError("automation curve ordinal is out of range");
   }
   return static_cast<sonare::automation::CurveType>(curve);
 }
@@ -24,12 +23,10 @@ int automationCurveToInt(sonare::automation::CurveType curve) { return static_ca
 void RealtimeEngineWasm::addParameter(val info) {
   const uint32_t id = uintProperty(info, "id", 0);
   if (id == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "parameter id must be non-zero");
+    throw WasmRangeError("parameter id must be non-zero");
   }
   if (sonare::engine::RealtimeEngine::parameter_target_reserved(id)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "parameter id is reserved by the engine");
+    throw WasmRangeError("parameter id is reserved by the engine");
   }
   const std::string name = stringProperty(info, "name", "");
   const std::string unit = stringProperty(info, "unit", "");
@@ -40,8 +37,7 @@ void RealtimeEngineWasm::addParameter(val info) {
   // Match the C ABI: reject an inverted range instead of registering it (WASM bypasses
   // the C-ABI guard). Non-finite minValue/maxValue/defaultValue are refused by floatProperty.
   if (parameter.max_value < parameter.min_value) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "parameter maxValue must be >= minValue");
+    throw WasmRangeError("parameter maxValue must be >= minValue");
   }
   parameter.default_value = floatProperty(info, "defaultValue", 0.0f);
   parameter.rt_safe = boolProperty(info, "rtSafe", true);
@@ -53,8 +49,8 @@ void RealtimeEngineWasm::addParameter(val info) {
 
   parameter_strings_.push_back(name);
   parameter_strings_.push_back(unit);
-  parameter.name = parameter_strings_[parameter_strings_.size() - 2].c_str();
-  parameter.unit = parameter_strings_[parameter_strings_.size() - 1].c_str();
+  parameter.name = wasmCString(parameter_strings_[parameter_strings_.size() - 2], "name");
+  parameter.unit = wasmCString(parameter_strings_[parameter_strings_.size() - 1], "unit");
   if (!parameters_.add(parameter)) {
     parameter_strings_.pop_back();
     parameter_strings_.pop_back();
@@ -121,8 +117,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
     // Match the C ABI: reject non-finite automation breakpoints (WASM bypasses the C-ABI guard).
     const int curve = intProperty(point, "curveToNext", 0);
     if (!sonare::automation::valid_public_breakpoint(ppq, value, curve)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "automation breakpoint ppq and value must be finite");
+      throw WasmRangeError("automation breakpoint ppq and value must be finite");
     }
     breakpoints.push_back({ppq, value, automationCurveFromInt(curve)});
   }
@@ -194,8 +189,7 @@ void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_
 void RealtimeEngineWasm::setParamSmoothingMs(const val& smoothing_ms_val) {
   const float smoothing_ms = checkedFloatFromVal(smoothing_ms_val, "smoothingMs");
   if (smoothing_ms < 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "smoothing_ms must be non-negative");
+    throw WasmRangeError("smoothing_ms must be non-negative");
   }
   engine_.set_param_smoothing_ms(smoothing_ms);
 }
@@ -235,8 +229,7 @@ void RealtimeEngineWasm::setTrackMonitorMode(const val& lane_index_val, const va
   // The C-ABI guard runs before the feature gate, so invalid modes remain an
   // InvalidParameter even in an analysis-only (mixing-disabled) WASM build.
   if (mode < 0 || mode > 2) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown track monitor mode");
+    throw WasmRangeError("unknown track monitor mode");
   }
 #if defined(SONARE_WITH_MIXING)
   sonare::rt::Command command{};

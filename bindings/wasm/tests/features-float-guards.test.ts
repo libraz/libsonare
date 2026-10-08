@@ -26,8 +26,9 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, type SonareError } from '../src/index';
+import { init } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { expectArgumentRefusal } from './_helpers';
 
 const SR = 8000;
 const N = 4096; // ~0.512s at SR -- short enough for the expensive (CQT/pYIN) entries too.
@@ -59,9 +60,7 @@ function capture(run: () => unknown): unknown {
 
 /** Asserts the caught value is the float-range refusal naming `key`. */
 function expectRangeRefusal(caught: unknown, key: string, context: string): void {
-  expect(isSonareError(caught), `${context}: expected a SonareError`).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code, context).toBe(ErrorCode.InvalidParameter);
+  const error = expectArgumentRefusal(caught, RangeError, context);
   expect(error.message, context).toBe(`${key} ${RANGE_MESSAGE}`);
 }
 

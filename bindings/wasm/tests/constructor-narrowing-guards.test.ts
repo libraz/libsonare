@@ -33,12 +33,17 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, type SonareError } from '../src/index';
 import { getSonareModule } from '../src/module_state';
+import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
 });
 
-function refusalFor(fn: () => unknown): SonareError {
+/** Analyzer fields whose domain guard lives in the binding rather than the core. */
+const BINDING_GUARDS = new Set(['window', 'outputFormat']);
+
+/** A coded `SonareError` (`InvalidParameter`): the library's own domain guard answered. */
+function codedRefusalFor(fn: () => unknown): Error {
   let caught: unknown;
   try {
     fn();
@@ -48,7 +53,12 @@ function refusalFor(fn: () => unknown): SonareError {
   expect(caught, 'expected a SonareError, got no throw').toBeDefined();
   expect(isSonareError(caught)).toBe(true);
   expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
-  return caught as SonareError;
+  return caught as Error;
+}
+
+/** An argument refusal: a native `RangeError`, not a coded `SonareError`. */
+function refusalFor(fn: () => unknown): Error {
+  return expectRefusalOf(fn);
 }
 
 /** The two refusals the shared checked reader can produce, verbatim. */
@@ -310,7 +320,11 @@ describe('a narrowed constructor position refuses what a wrap made legal', () =>
       // -1 is representable, so the reader passes it on. The field's own guard
       // is what must refuse it, and seeing the reader's wording here would mean
       // the narrowing check had grown into a domain check it does not own.
-      const error = refusalFor(() => slot.construct(-1));
+      // The engine's and the two ordinal guards are the binding's own, so they are a
+      // RangeError; the analyzer's other guards are the core's and stay coded.
+      const bindingOwned =
+        slot.entry.startsWith('RealtimeEngine') || BINDING_GUARDS.has(slot.field);
+      const error = (bindingOwned ? refusalFor : codedRefusalFor)(() => slot.construct(-1));
       expect(error.message).toContain(slot.domainRefusal);
       expect(error.message).not.toContain(READER_RANGE);
       expect(error.message).not.toContain(READER_FRACTIONAL);
@@ -366,7 +380,7 @@ describe('each entry point reads back which value it was constructed with', () =
     expect(renderWidth(6)).toBe(6);
     // Two channels cannot answer a six-plane render, which is what makes the
     // acceptance above a measurement of the argument rather than of its absence.
-    refusalFor(() => renderWidth(2));
+    codedRefusalFor(() => renderWidth(2));
   });
 
   it('StreamAnalyzer keeps the sample rate, mel count and hop it was given', () => {
@@ -440,7 +454,9 @@ describe('the untouched neighbours of the narrowed positions are unchanged', () 
         }
         continue;
       }
-      const error = refusalFor(() => newAnalyzer({ fmin: shape.value }));
+      // Only the reader's own wording is the binding's refusal; the rest are the core's.
+      const refuse = expected === 'fmin must be a finite number' ? refusalFor : codedRefusalFor;
+      const error = refuse(() => newAnalyzer({ fmin: shape.value }));
       expect(error.message, `fmin = ${shape.label}`).toContain(expected);
       expect(error.message, `fmin = ${shape.label}`).not.toContain(READER_RANGE);
       expect(error.message, `fmin = ${shape.label}`).not.toContain(READER_FRACTIONAL);

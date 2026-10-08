@@ -5,7 +5,8 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
+import { init, RealtimeEngine } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 256;
@@ -130,9 +131,7 @@ describe('RealtimeEngine.setTrackStripSurroundPan (WASM)', () => {
         return undefined;
       };
       const nan = refused(() => engine.setTrackStripSurroundPan(TRACK, { azimuth: Number.NaN }));
-      expect(isSonareError(nan)).toBe(true);
-      expect((nan as { code: unknown }).code).toBe(ErrorCode.InvalidParameter);
-      expect(String((nan as Error).message)).toMatch(/azimuth/);
+      expect(expectArgumentRefusal(nan).message).toMatch(/azimuth/);
       expect(() =>
         engine.setTrackStripSurroundPan(TRACK, { lfe: Number.POSITIVE_INFINITY }),
       ).toThrow();

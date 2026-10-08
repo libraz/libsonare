@@ -16,6 +16,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { ProjectMidiEvent, TranscribeOptions, TranscribeRequest } from '../src/index';
 import { ErrorCode, init, isSonareError, Project, transcribe } from '../src/index';
+import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 44100;
 const noteSeconds = 0.5;
@@ -303,19 +304,21 @@ describe('WASM transcribe', () => {
     // already says that here -- so a 0 the caller wrote is a value, and it is out
     // of domain. Accepting it would answer with the default under a number they
     // did not choose.
-    const rejected: Array<[string, TranscribeOptions]> = [
-      ['fixedVelocity 0', { fixedVelocity: 0 }],
-      ['fixedVelocity 128', { fixedVelocity: 128 }],
-      ['velocityFloorDb 0', { velocityFloorDb: 0 }],
-      ['velocityFloorDb positive', { velocityFloorDb: 6 }],
-      ['referenceHz 0', { referenceHz: 0 }],
-      ['minNoteMs 0', { minNoteMs: 0 }],
-      ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }],
-      ['fmax below fmin', { fmin: 500, fmax: 400 }],
-      ['channel above 15', { channel: 16 }],
-      ['group above 15', { group: 16 }],
+    // The reader refuses the first group itself (a RangeError); the C ABI owns the
+    // last three, so those stay a coded SonareError.
+    const rejected: Array<[string, TranscribeOptions, 'range' | 'coded']> = [
+      ['fixedVelocity 0', { fixedVelocity: 0 }, 'range'],
+      ['fixedVelocity 128', { fixedVelocity: 128 }, 'range'],
+      ['velocityFloorDb 0', { velocityFloorDb: 0 }, 'range'],
+      ['velocityFloorDb positive', { velocityFloorDb: 6 }, 'range'],
+      ['referenceHz 0', { referenceHz: 0 }, 'range'],
+      ['minNoteMs 0', { minNoteMs: 0 }, 'range'],
+      ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }, 'range'],
+      ['fmax below fmin', { fmin: 500, fmax: 400 }, 'coded'],
+      ['channel above 15', { channel: 16 }, 'coded'],
+      ['group above 15', { group: 16 }, 'coded'],
     ];
-    for (const [name, options] of rejected) {
+    for (const [name, options, owner] of rejected) {
       let thrown: unknown;
       try {
         transcribe({ samples, sampleRate, tempoBpm: 120, ...options });
@@ -323,7 +326,11 @@ describe('WASM transcribe', () => {
         thrown = error;
       }
       expect(thrown, name).toBeDefined();
-      expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      if (owner === 'range') {
+        expectArgumentRefusal(thrown, RangeError, name);
+      } else {
+        expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      }
     }
   });
 
@@ -473,8 +480,7 @@ describe('WASM Project.transcribeToClip', () => {
       } catch (error) {
         thrown = error;
       }
-      expect(thrown, name).toBeDefined();
-      expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(thrown, RangeError, name);
     }
   });
 });

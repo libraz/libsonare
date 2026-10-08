@@ -10,13 +10,11 @@ namespace {
 
 void validateFiniteVector(const std::vector<float>& values, const char* function) {
   if (values.size() > kMaxAudioBufferSize) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(function) + ": input buffer is too large");
+    throw WasmRangeError(std::string(function) + ": input buffer is too large");
   }
   for (float value : values) {
     if (!std::isfinite(value)) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(function) + ": input contains NaN or Inf");
+      throw WasmRangeError(std::string(function) + ": input contains NaN or Inf");
     }
   }
 }
@@ -25,8 +23,7 @@ void validateMatrix(const std::vector<float>& values, int rows, int columns, con
   if (rows <= 0 || columns <= 0 ||
       static_cast<size_t>(rows) > kMaxAudioBufferSize / static_cast<size_t>(columns) ||
       values.size() != static_cast<size_t>(rows) * static_cast<size_t>(columns)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(function) + ": matrix dimensions do not match input");
+    throw WasmRangeError(std::string(function) + ": matrix dimensions do not match input");
   }
   validateFiniteVector(values, function);
 }
@@ -37,8 +34,7 @@ void validateMatrix(const std::vector<float>& values, int rows, int columns, con
 // inside the [kMin,kMax]AudioSampleRate audio band.
 void validatePositiveSampleRate(const char* function, int sample_rate) {
   if (sample_rate <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(function) + ": sample rate must be positive");
+    throw WasmRangeError(std::string(function) + ": sample rate must be positive");
   }
 }
 
@@ -174,8 +170,7 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
 
   const std::size_t signal_count = wasmArrayLikeLength(signals, "signals");
   if (signal_count == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(function) + ": signals must not be empty");
+    throw WasmRangeError(std::string(function) + ": signals must not be empty");
   }
 
   const std::string budget_subject = std::string(function) + " input";
@@ -186,8 +181,7 @@ CommonSplitReport splitSilenceCommonImpl(val signals, const val& top_db_val,
   for (std::size_t index = 0; index < signal_count; ++index) {
     const val signal = signals[index];
     if (signal.isUndefined() || signal.isNull()) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "signals[" + std::to_string(index) + "] must be a Float32Array");
+      throw WasmTypeError("signals[" + std::to_string(index) + "] must be a Float32Array");
     }
     accumulateWasmFloat32ArrayLength(signal, "signals entry", budget_subject.c_str(), &budget);
     buffers[index] = float32ArrayToVector(signal);
@@ -283,7 +277,7 @@ val js_pad_center(val values, const val& size_val, const val& pad_value_val) {
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "padCenter");
   if (size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "padCenter: size must be non-negative");
+    throw WasmRangeError("padCenter: size must be non-negative");
   }
   return vectorToFloat32Array(pad_center(data, static_cast<size_t>(size), pad_value));
 }
@@ -294,7 +288,7 @@ val js_fix_length(val values, const val& size_val, const val& pad_value_val) {
   std::vector<float> data = float32ArrayToVector(values);
   validateFiniteVector(data, "fixLength");
   if (size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "fixLength: size must be non-negative");
+    throw WasmRangeError("fixLength: size must be non-negative");
   }
   return vectorToFloat32Array(fix_length(data, static_cast<size_t>(size), pad_value));
 }
@@ -384,16 +378,14 @@ TempogramMode tempogramModeFromValue(val mode) {
     const int mode_id = checkedIntFromVal(mode, "tempogram mode");
     if (mode_id == SONARE_TEMPOGRAM_AUTOCORRELATION) return TempogramMode::kAutocorrelation;
     if (mode_id == SONARE_TEMPOGRAM_COSINE) return TempogramMode::kCosine;
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "tempogram mode must be 'autocorrelation' or 'cosine'");
+    throw WasmRangeError("tempogram mode must be 'autocorrelation' or 'cosine'");
   }
   const std::string value = mode.as<std::string>();
   if (value == "autocorrelation" || value == "auto" || value == "ac") {
     return TempogramMode::kAutocorrelation;
   }
   if (value == "cosine") return TempogramMode::kCosine;
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "tempogram mode must be 'autocorrelation' or 'cosine'");
+  throw WasmRangeError("tempogram mode must be 'autocorrelation' or 'cosine'");
 }
 
 val js_tempogram(val onset_envelope, const val& sample_rate_val, const val& hop_length_val,

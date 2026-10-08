@@ -35,9 +35,8 @@ SonareProjectClipFade ProjectWasm::clipFadeFromVal(val desc) {
     val curve = desc["curve"];
     if (curve.typeOf().as<std::string>() == "string") {
       const std::string s = curve.as<std::string>();
-      if (sonare_project_fade_curve_from_name(s.c_str(), &fade.curve) != SONARE_OK) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "unknown fade curve: " + s);
+      if (sonare_project_fade_curve_from_name(wasmCString(s, "curve"), &fade.curve) != SONARE_OK) {
+        throw WasmRangeError("unknown fade curve: " + s);
       }
     } else {
       fade.curve = checkedUintFromVal(curve, "curve");
@@ -91,8 +90,7 @@ void ProjectWasm::setSourceAudio(const val& source_id_val, val audio, const val&
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const std::vector<float> samples = float32ArrayToVector(audio);
   if (channels <= 0 || samples.size() % static_cast<size_t>(channels) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "audio length must be a multiple of channels");
+    throw WasmRangeError("audio length must be a multiple of channels");
   }
   checkCError(sonare_project_set_source_audio(project_.get(), source_id, samples.data(),
                                               static_cast<int64_t>(samples.size() / channels),
@@ -104,7 +102,8 @@ void ProjectWasm::setAudioSourceMetadata(const val& source_id_val, const std::st
                                          const std::string& external_stem_role) {
   const uint32_t source_id = checkedUintFromVal(source_id_val, "sourceId");
   checkCError(sonare_project_set_audio_source_metadata(
-                  project_.get(), source_id, content_hash.c_str(), external_stem_role.c_str()),
+                  project_.get(), source_id, wasmCString(content_hash, "contentHash"),
+                  wasmCString(external_stem_role, "externalStemRole")),
               "failed to set audio source metadata");
 }
 
@@ -113,8 +112,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   const uint32_t active_take_id = checkedUintFromVal(active_take_id_val, "activeTakeId");
   if (!val::global("Array").call<bool>("isArray", takes_val)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "clip takes must be an array");
+    throw WasmTypeError("clip takes must be an array");
   }
   const size_t count = wasmArrayLikeLength(takes_val, "takes");
   std::vector<SonareProjectClipTake> takes;
@@ -131,7 +129,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
     }
     if (hasProperty(entry, "name")) {
       name_storage.push_back(entry["name"].as<std::string>());
-      take.name = name_storage.back().empty() ? nullptr : name_storage.back().c_str();
+      take.name = name_storage.back().empty() ? nullptr : wasmCString(name_storage.back(), "name");
     }
     takes.push_back(take);
   }
@@ -144,8 +142,7 @@ void ProjectWasm::setClipTakes(const val& clip_id_val, val takes_val,
 void ProjectWasm::setClipCompSegments(const val& clip_id_val, val segments_val) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   if (!val::global("Array").call<bool>("isArray", segments_val)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "clip comp segments must be an array");
+    throw WasmTypeError("clip comp segments must be an array");
   }
   const size_t count = wasmArrayLikeLength(segments_val, "segments");
   std::vector<SonareProjectClipCompSegment> segments;
@@ -196,9 +193,9 @@ void ProjectWasm::removeTrack(const val& track_id_val) {
 
 void ProjectWasm::renameTrack(const val& track_id_val, const std::string& name) {
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
-  checkCError(
-      sonare_project_rename_track(project_.get(), track_id, name.empty() ? nullptr : name.c_str()),
-      "failed to rename track");
+  checkCError(sonare_project_rename_track(project_.get(), track_id,
+                                          name.empty() ? nullptr : wasmCString(name, "name")),
+              "failed to rename track");
 }
 
 void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& channel_strip_ref,
@@ -206,8 +203,9 @@ void ProjectWasm::setTrackRoute(const val& track_id_val, const std::string& chan
   const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
   checkCError(
       sonare_project_set_track_route(
-          project_.get(), track_id, channel_strip_ref.empty() ? nullptr : channel_strip_ref.c_str(),
-          output_target.empty() ? nullptr : output_target.c_str()),
+          project_.get(), track_id,
+          channel_strip_ref.empty() ? nullptr : wasmCString(channel_strip_ref, "channelStripRef"),
+          output_target.empty() ? nullptr : wasmCString(output_target, "outputTarget")),
       "failed to set track route");
 }
 
@@ -247,8 +245,7 @@ int automationCurveFromVal(val curve) {
   if (s == "s-curve" || s == "scurve") {
     return SONARE_CURVE_SCURVE;
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "unknown automation curve: " + s);
+  throw WasmRangeError("unknown automation curve: " + s);
 }
 
 }  // namespace
@@ -259,8 +256,7 @@ std::vector<SonareAutomationPoint> ProjectWasm::automationPointsFromVal(val poin
     return out;
   }
   if (!val::global("Array").call<bool>("isArray", points)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "automation points must be an array");
+    throw WasmTypeError("automation points must be an array");
   }
   // The point count comes from an untrusted JS `.length`: validate it through
   // the shared safe-integer + budget guard, and cap the pre-reserve so a
@@ -291,8 +287,7 @@ SonareAutomationLaneDesc ProjectWasm::automationLaneDescFromVal(
     val desc, std::vector<SonareAutomationPoint>* storage) {
   SonareAutomationLaneDesc d{};
   if (desc.isUndefined() || desc.isNull()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "automation lane descriptor required");
+    throw WasmTypeError("automation lane descriptor required");
   }
   d.target_param_id = uintProperty(desc, "targetParamId", 0);
   *storage = automationPointsFromVal(hasProperty(desc, "points") ? desc["points"] : val::array());
@@ -322,8 +317,7 @@ uint32_t automationTargetKindFromVal(val desc) {
     if (name == "track-fader-db") return SONARE_AUTOMATION_TARGET_TRACK_FADER_DB;
     if (name == "track-pan") return SONARE_AUTOMATION_TARGET_TRACK_PAN;
   }
-  throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                "invalid automation target kind");
+  throw WasmRangeError("invalid automation target kind");
 }
 
 }  // namespace

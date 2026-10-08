@@ -17,6 +17,7 @@ import {
   synthGsDrumKitName,
   synthGsVariationIsVoicedApart,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 describe('Sonare WASM Project', () => {
   beforeAll(async () => {
@@ -773,11 +774,7 @@ describe('Sonare WASM Project', () => {
         } catch (error) {
           caught = error;
         }
-        expect(isSonareError(caught)).toBe(true);
-        if (!isSonareError(caught)) {
-          throw new Error('expected SonareError');
-        }
-        expect(caught.code).toBe(ErrorCode.InvalidParameter);
+        expectArgumentRefusal(caught, TypeError);
       }
     } finally {
       project.delete();

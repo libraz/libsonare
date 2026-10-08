@@ -33,10 +33,9 @@ DecomposeStemsConfig readDecomposeStemsConfig(const char* fn_name, val options) 
   // default" rule that follows.
   if (n_components < 0 || n_fft < 0 || hop_length < 0 || n_iter < 0 || !std::isfinite(beta) ||
       !std::isfinite(mask_power) || mask_power < 0.0f) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(fn_name) +
-                              ": counts must not be negative, beta and maskPower must "
-                              "be finite, and maskPower must not be negative");
+    throw WasmRangeError(std::string(fn_name) +
+                         ": counts must not be negative, beta and maskPower must "
+                         "be finite, and maskPower must not be negative");
   }
   if (n_components > 0) config.n_components = n_components;
   if (n_fft > 0) config.n_fft = n_fft;
@@ -63,16 +62,16 @@ val js_decompose(val s, const val& n_features_val, const val& n_frames_val,
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
+    throw WasmRangeError("n_components must be positive");
   }
   if (n_iter <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
+    throw WasmRangeError("n_iter must be positive");
   }
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+    throw WasmRangeError("spectrogram dimensions exceed input");
   }
   DecomposeResult result =
       decompose(data.data(), n_features, n_frames, n_components, n_iter, "mu", beta);
@@ -97,16 +96,16 @@ val js_decompose_with_init(val s, const val& n_features_val, const val& n_frames
   const float beta = checkedFloatFromVal(beta_val, "beta");
   std::vector<float> data = float32ArrayToVector(s);
   if (n_components <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "n_components must be positive");
+    throw WasmRangeError("n_components must be positive");
   }
   if (n_iter <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "n_iter must be positive");
+    throw WasmRangeError("n_iter must be positive");
   }
   if (n_features <= 0 || n_frames <= 0 ||
       static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+    throw WasmRangeError("spectrogram dimensions exceed input");
   }
   if (init.empty()) init = "random";
   DecomposeResult result =
@@ -192,7 +191,7 @@ val js_nn_filter(val s, const val& n_features_val, const val& n_frames_val, std:
       static_cast<size_t>(n_features) >
           std::numeric_limits<size_t>::max() / static_cast<size_t>(std::max(1, n_frames)) ||
       static_cast<size_t>(n_features) * static_cast<size_t>(n_frames) > data.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, "spectrogram dimensions exceed input");
+    throw WasmRangeError("spectrogram dimensions exceed input");
   }
   if (aggregate.empty()) aggregate = "mean";
   std::vector<float> filtered = nn_filter(data.data(), n_features, n_frames, aggregate, k, width);
@@ -217,8 +216,7 @@ val js_remix(val samples, val intervals, const val& sample_rate, bool align_zero
   // slice. Read the Int32Array straight into int32 storage instead.
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
   if (interval_ints.size() % 2 != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "remix intervals must be (start, end) pairs");
+    throw WasmRangeError("remix intervals must be (start, end) pairs");
   }
   std::vector<std::pair<int, int>> pairs;
   pairs.reserve(interval_ints.size() / 2);
@@ -238,8 +236,7 @@ val js_remix_aligned_intervals(val samples, val intervals, const val& sample_rat
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
   std::vector<int32_t> interval_ints = int32ArrayToVector(intervals);
   if (interval_ints.size() % 2 != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "remix intervals must be (start, end) pairs");
+    throw WasmRangeError("remix intervals must be (start, end) pairs");
   }
   std::vector<std::pair<int, int>> pairs;
   pairs.reserve(interval_ints.size() / 2);

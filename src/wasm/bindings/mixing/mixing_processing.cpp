@@ -28,19 +28,16 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     const size_t right_length = accumulateWasmFloat32ArrayLength(
         right_channels[index], "right channel", "mixer process input", &cumulative_count);
     if (left_length != right_length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "left and right channel lengths must match");
+      throw WasmRangeError("left and right channel lengths must match");
     }
     if (index == 0) {
       length = left_length;
     } else if (left_length != length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "all strips must have the same length");
+      throw WasmRangeError("all strips must have the same length");
     }
   }
   if (length > static_cast<size_t>(block_size_)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "block length exceeds the mixer's configured block size");
+    throw WasmRangeError("block length exceeds the mixer's configured block size");
   }
   for (int index = 0; index < count; ++index) {
     left_inputs.push_back(float32ArrayToVector(left_channels[index]));
@@ -78,12 +75,10 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
                                   val out_right) {
   const int count = left_channels["length"].as<int>();
   if (count < 0 || right_channels["length"].as<int>() != count) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "leftChannels and rightChannels must have the same length");
+    throw WasmRangeError("leftChannels and rightChannels must have the same length");
   }
   if (static_cast<size_t>(count) != left_scratch_.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "input channel count must match the mixer's strip count");
+    throw WasmRangeError("input channel count must match the mixer's strip count");
   }
 
   // require_non_zero=false: a zero-sample block is a legitimate no-op here
@@ -93,16 +88,14 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
       requireMatchedLength(out_left, out_right, "output channels", /*require_non_zero=*/false);
   const size_t length = static_cast<size_t>(length_i);
   if (length > static_cast<size_t>(block_size_)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "block length exceeds the mixer's configured block size");
+    throw WasmRangeError("block length exceeds the mixer's configured block size");
   }
 
   for (int index = 0; index < count; ++index) {
     val left = left_channels[index];
     val right = right_channels[index];
     if (left["length"].as<int>() != length_i || right["length"].as<int>() != length_i) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "all input and output channels must have the same length");
+      throw WasmRangeError("all input and output channels must have the same length");
     }
     auto& left_dest = left_scratch_[static_cast<size_t>(index)];
     auto& right_dest = right_scratch_[static_cast<size_t>(index)];
@@ -138,8 +131,7 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
 val MixerWasm::inputLeftView(const val& index_val) {
   const size_t index = static_cast<size_t>(checkedUintFromVal(index_val, "index"));
   if (index >= left_scratch_.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "mixer input index out of range");
+    throw WasmRangeError("mixer input index out of range");
   }
   return val(typed_memory_view(static_cast<size_t>(block_size_), left_scratch_[index].data()));
 }
@@ -147,8 +139,7 @@ val MixerWasm::inputLeftView(const val& index_val) {
 val MixerWasm::inputRightView(const val& index_val) {
   const size_t index = static_cast<size_t>(checkedUintFromVal(index_val, "index"));
   if (index >= right_scratch_.size()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "mixer input index out of range");
+    throw WasmRangeError("mixer input index out of range");
   }
   return val(typed_memory_view(static_cast<size_t>(block_size_), right_scratch_[index].data()));
 }
@@ -164,8 +155,7 @@ val MixerWasm::outputRightView() {
 void MixerWasm::processPreparedStereo(const val& num_samples_val) {
   const size_t num_samples = static_cast<size_t>(checkedUintFromVal(num_samples_val, "numSamples"));
   if (num_samples == 0 || num_samples > static_cast<size_t>(block_size_)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid prepared mixer block length");
+    throw WasmRangeError("invalid prepared mixer block length");
   }
   const size_t count = left_scratch_.size();
   SonareError err = sonare_mixer_process_stereo(
@@ -198,8 +188,7 @@ void MixerWasm::configureMeter(bool enabled, const val& true_peak_oversample) {
   const int requested = checkedIntFromVal(true_peak_oversample, "truePeakOversample");
   const int factor = requested == 0 ? 4 : requested;
   if (factor < 1 || factor > 16 || (factor & (factor - 1)) != 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "meter oversample must be 0 or a power of two from 1 to 16");
+    throw WasmRangeError("meter oversample must be 0 or a power of two from 1 to 16");
   }
   if (!meter_.has_value() || meter_oversample_ != factor) {
     sonare::mixing::MeterConfig config;
@@ -294,8 +283,7 @@ int MixerWasm::latencySamples() {
 val MixerWasm::drainTailStereo(double num_samples) {
   const size_t count = wasmCountArg(num_samples, "mixer drain numSamples");
   if (count == 0 || count > static_cast<size_t>(block_size_)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "mixer drain numSamples must be in [1, prepared block size]");
+    throw WasmRangeError("mixer drain numSamples must be in [1, prepared block size]");
   }
   std::vector<float> out_left(count, 0.0f);
   std::vector<float> out_right(count, 0.0f);

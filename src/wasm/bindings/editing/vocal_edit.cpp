@@ -73,7 +73,7 @@ T* handlePointer(double value, const char* field) {
   const double addressSpaceLimit = std::ldexp(1.0, sizeof(Handle) * 8);
   if (!std::isfinite(value) || value <= 0.0 || std::floor(value) != value ||
       value >= addressSpaceLimit) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(field) + " must be a handle");
+    throw WasmTypeError(std::string(field) + " must be a handle");
   }
   return reinterpret_cast<T*>(static_cast<Handle>(value));
 }
@@ -91,23 +91,25 @@ std::string stringPropertyStrict(const val& object, const char* key, const char*
   const val value = property(object, key);
   if (absent(value)) return fallback == nullptr ? std::string{} : std::string(fallback);
   if (value.typeOf().as<std::string>() != "string") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a string");
+    throw WasmTypeError(std::string(key) + " must be a string");
   }
-  return value.as<std::string>();
+  std::string text = value.as<std::string>();
+  wasmRefuseEmbeddedNul(text, key);
+  return text;
 }
 
 bool booleanProperty(const val& object, const char* key, bool fallback) {
   const val value = property(object, key);
   if (absent(value)) return fallback;
   if (value.typeOf().as<std::string>() != "boolean") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be boolean");
+    throw WasmTypeError(std::string(key) + " must be boolean");
   }
   return value.as<bool>();
 }
 
 uint32_t nonZeroId(uint32_t id, const char* key) {
   if (id == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be non-zero");
+    throw WasmRangeError(std::string(key) + " must be non-zero");
   }
   return id;
 }
@@ -124,8 +126,7 @@ std::vector<float> floatArray(const val& value, const char* field, bool non_nega
         non_negative ? 0.0 : -static_cast<double>(std::numeric_limits<float>::max());
     const double maximum = static_cast<double>(std::numeric_limits<float>::max());
     if (!std::isfinite(number) || number < minimum || number > maximum) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(field) + " must contain finite numeric values");
+      throw WasmRangeError(std::string(field) + " must contain finite numeric values");
     }
     result[i] = static_cast<float>(number);
   }
@@ -138,12 +139,11 @@ std::vector<uint8_t> byteArray(const val& value, const char* field) {
   for (std::size_t i = 0; i < count; ++i) {
     const val item = value[static_cast<unsigned>(i)];
     if (item.typeOf().as<std::string>() != "number") {
-      throw SonareException(ErrorCode::InvalidParameter, std::string(field) + " must be bytes");
+      throw WasmTypeError(std::string(field) + " must be bytes");
     }
     const double number = item.as<double>();
     if (!std::isfinite(number) || std::floor(number) != number || number < 0.0 || number > 255.0) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(field) + " must contain bytes");
+      throw WasmTypeError(std::string(field) + " must contain bytes");
     }
     result[i] = static_cast<uint8_t>(number);
   }
@@ -157,7 +157,7 @@ std::vector<uint32_t> idArray(const val& value, const char* field) {
     const val item = value[static_cast<unsigned>(i)];
     const uint32_t id = checkedUintFromVal(item, field);
     if (id == 0) {
-      throw SonareException(ErrorCode::InvalidParameter, std::string(field) + " contains zero id");
+      throw WasmRangeError(std::string(field) + " contains zero id");
     }
     result[i] = id;
   }
@@ -166,11 +166,11 @@ std::vector<uint32_t> idArray(const val& value, const char* field) {
 
 void validateSource(const std::vector<float>& source) {
   if (source.empty()) {
-    throw SonareException(ErrorCode::InvalidParameter, "samples must not be empty");
+    throw WasmRangeError("samples must not be empty");
   }
   for (float sample : source) {
     if (!std::isfinite(sample)) {
-      throw SonareException(ErrorCode::InvalidParameter, "samples must be finite");
+      throw WasmRangeError("samples must be finite");
     }
   }
 }
@@ -182,17 +182,17 @@ struct EditStorage {
 
 SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
-    throw SonareException(ErrorCode::InvalidParameter, "edit must be an object");
+    throw WasmTypeError("edit must be an object");
   }
   SonareVocalNoteEdit result;
   sonare_vocal_note_edit_init(&result);
   const val pitch = property(object, "pitch");
   if (pitch.isNull() || pitch.isUndefined() || pitch.typeOf().as<std::string>() != "object") {
-    throw SonareException(ErrorCode::InvalidParameter, "edit.pitch must be an object");
+    throw WasmTypeError("edit.pitch must be an object");
   }
   const val target = property(pitch, "target");
   if (target.isNull() || target.isUndefined() || target.typeOf().as<std::string>() != "object") {
-    throw SonareException(ErrorCode::InvalidParameter, "edit.pitch.target must be an object");
+    throw WasmTypeError("edit.pitch.target must be an object");
   }
   const std::string targetMode = stringPropertyStrict(target, "mode", "none");
   if (targetMode == "none") {
@@ -205,7 +205,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     const val points = property(target, "points");
     const std::size_t count = wasmArrayLikeLength(points, "target.points");
     if (count < 2) {
-      throw SonareException(ErrorCode::InvalidParameter, "target.points must contain two points");
+      throw WasmRangeError("target.points must contain two points");
     }
     storage->points.reserve(count);
     double previous = -std::numeric_limits<double>::infinity();
@@ -214,8 +214,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
       const double source = doubleProperty(point, "sourceSample", 0.0);
       const double midi = doubleProperty(point, "midi", 0.0);
       if (source <= previous) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "target.points must be strictly increasing");
+        throw WasmRangeError("target.points must be strictly increasing");
       }
       storage->points.push_back({source, midi});
       previous = source;
@@ -223,7 +222,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     result.target_points = storage->points.data();
     result.target_point_count = storage->points.size();
   } else {
-    throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch target mode");
+    throw WasmRangeError("unsupported pitch target mode");
   }
   result.amount = doubleProperty(pitch, "amount", result.amount);
   result.speed_ms = doubleProperty(pitch, "speedMs", result.speed_ms);
@@ -239,7 +238,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
   const val muted = property(object, "muted");
   if (!absent(muted)) {
     if (muted.typeOf().as<std::string>() != "boolean") {
-      throw SonareException(ErrorCode::InvalidParameter, "edit.muted must be boolean");
+      throw WasmTypeError("edit.muted must be boolean");
     }
     result.muted = muted.as<bool>() ? 1u : 0u;
   }
@@ -251,7 +250,7 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
     else if (mode == "shift")
       result.formant_mode = SONARE_VOCAL_FORMANT_SHIFT;
     else
-      throw SonareException(ErrorCode::InvalidParameter, "unsupported formant mode");
+      throw WasmRangeError("unsupported formant mode");
     result.formant_shift_semitones = doubleProperty(formant, "shiftSemitones", 0.0);
   }
   const val envelope = property(object, "amplitudeEnvelope");
@@ -265,15 +264,14 @@ SonareVocalNoteEdit editFromVal(const val& object, EditStorage* storage) {
 
 int64_t nonNegativeWindow(int64_t value, const char* field) {
   if (value < 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(field) + " must be a non-negative integer");
+    throw WasmRangeError(std::string(field) + " must be a non-negative integer");
   }
   return value;
 }
 
 SonareVocalTransition transitionFromVal(const val& object) {
   if (object.isNull() || object.isUndefined() || object.typeOf().as<std::string>() != "object") {
-    throw SonareException(ErrorCode::InvalidParameter, "transition must be an object");
+    throw WasmTypeError("transition must be an object");
   }
   SonareVocalTransition result{};
   result.struct_size = sizeof(result);
@@ -288,11 +286,10 @@ SonareVocalTransition transitionFromVal(const val& object) {
                                                   "transition.rightWindowSamples");
   result.strength = doubleProperty(object, "strength", std::numeric_limits<double>::quiet_NaN());
   if (!(result.strength >= 0.0 && result.strength <= 1.0)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "transition.strength must be a number in [0, 1]");
+    throw WasmRangeError("transition.strength must be a number in [0, 1]");
   }
   if (stringPropertyStrict(object, "curve", "") != "smoothstep") {
-    throw SonareException(ErrorCode::InvalidParameter, "transition.curve must be smoothstep");
+    throw WasmRangeError("transition.curve must be smoothstep");
   }
   return result;
 }
@@ -332,7 +329,7 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
     else if (policy == "reset")
       result.merge_policy = SONARE_VOCAL_MERGE_RESET;
     else
-      throw SonareException(ErrorCode::InvalidParameter, "unsupported merge policy");
+      throw WasmRangeError("unsupported merge policy");
   } else if (kind == "setTransition") {
     result.kind = SONARE_VOCAL_SET_TRANSITION;
     result.transition = transitionFromVal(property(object, "transition"));
@@ -348,7 +345,7 @@ SonareVocalOperation operationFromVal(const val& object, OperationStorage* stora
     result.note_ids = storage->ids.data();
     result.note_id_count = storage->ids.size();
   } else {
-    throw SonareException(ErrorCode::InvalidParameter, "unsupported vocal edit operation");
+    throw WasmRangeError("unsupported vocal edit operation");
   }
   return result;
 }
@@ -424,18 +421,14 @@ SonareVocalCreateOptions optionsFromVal(const val& object, CreateStorage* storag
     storage->f0 = floatArray(property(analysis, "f0Hz"), "analysis.f0Hz");
     storage->voiced = byteArray(property(analysis, "voiced"), "analysis.voiced");
     if (storage->f0.size() != storage->voiced.size()) {
-      throw SonareException(ErrorCode::InvalidParameter, "analysis arrays must have equal length");
+      throw WasmRangeError("analysis arrays must have equal length");
     }
     storage->algorithm = stringPropertyStrict(analysis, "algorithmId", "host");
-    if (storage->algorithm.find('\0') != std::string::npos) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "analysis.algorithmId must not contain NUL");
-    }
     storage->analysis.algorithm_version = uintProperty(analysis, "algorithmVersion", 1);
     storage->analysis.f0_hz = storage->f0.data();
     storage->analysis.voiced = storage->voiced.data();
     storage->analysis.frame_count = storage->f0.size();
-    storage->analysis.algorithm_id = storage->algorithm.c_str();
+    storage->analysis.algorithm_id = wasmCString(storage->algorithm, "analysis.algorithmId");
     storage->options.analysis = &storage->analysis;
   }
   return storage->options;

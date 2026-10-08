@@ -61,9 +61,9 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
     const std::vector<mastering::api::Param> params = masteringParamsFromObject(flat_params);
     return mastering::api::parse_chain_config_params(params.data(), params.size());
   }
-  throw SonareException(ErrorCode::InvalidParameter,
-                        "mastering chain config must be the flattened parameter map the facade "
-                        "builds; a nested config object passed straight to the module is not read");
+  throw WasmRangeError(
+      "mastering chain config must be the flattened parameter map the facade "
+      "builds; a nested config object passed straight to the module is not read");
 }
 
 val js_mastering_chain(val samples, const val& sample_rate_val, val config) {

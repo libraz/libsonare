@@ -105,8 +105,7 @@ val RealtimeEngineWasm::meterTargetInsertGainReduction(const val& target_id_val)
   size_t count = 0;
   if (!engine_.read_meter_target_insert_gain_reduction(target_id, values, SONARE_METER_MAX_INSERTS,
                                                        &count)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "targetId is outside the meter target range");
+    throw WasmRangeError("targetId is outside the meter target range");
   }
   if (count > SONARE_METER_MAX_INSERTS) count = SONARE_METER_MAX_INSERTS;
   for (size_t i = 0; i < count; ++i) out.set(static_cast<unsigned>(i), values[i]);

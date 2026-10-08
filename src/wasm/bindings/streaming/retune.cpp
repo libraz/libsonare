@@ -33,15 +33,13 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   if (const auto semitones = optionalNumber(objectProperty(config, "semitones"), "semitones");
       semitones) {
     if (!std::isfinite(*semitones)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "StreamingRetune: semitones must be finite");
+      throw WasmRangeError("StreamingRetune: semitones must be finite");
     }
     result.semitones = std::clamp(*semitones, -24.0f, 24.0f);
   }
   if (const auto mix = optionalNumber(objectProperty(config, "mix"), "mix"); mix) {
     if (!std::isfinite(*mix)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "StreamingRetune: mix must be finite");
+      throw WasmRangeError("StreamingRetune: mix must be finite");
     }
     result.mix = std::clamp(*mix, 0.0f, 1.0f);
   }
@@ -51,8 +49,7 @@ editing::voice_changer::StreamingRetuneConfig streamingRetuneConfigFromVal(
   const auto grain = snake_case_grain_size ? snake_case_grain_size : grain_size;
   if (grain) {
     if (!std::isfinite(*grain)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "StreamingRetune: grainSize must be finite");
+      throw WasmRangeError("StreamingRetune: grainSize must be finite");
     }
     result.grain_size = static_cast<int>(std::lround(std::clamp(*grain, 0.0f, 8192.0f)));
   }
@@ -113,8 +110,7 @@ class StreamingRetuneWrapper {
     // its input is the asymmetry that keeps regrowing here.
     for (const float sample : block) {
       if (!std::isfinite(sample)) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "StreamingRetune: input samples must be finite");
+        throw WasmRangeError("StreamingRetune: input samples must be finite");
       }
     }
     std::vector<float> out(block.size());
@@ -135,8 +131,7 @@ class StreamingRetuneWrapper {
 
   void validateBlockLength(std::size_t length) const {
     if (length > static_cast<std::size_t>(max_block_size_)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "process block exceeds prepared maxBlockSize");
+      throw WasmRangeError("process block exceeds prepared maxBlockSize");
     }
   }
 

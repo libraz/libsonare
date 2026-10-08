@@ -20,8 +20,7 @@
 mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
   const auto parsed = mastering::eq::band_type_from_string(value);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band type: " + value);
+    throw WasmRangeError("unknown EQ band type: " + value);
   }
   return *parsed;
 }
@@ -29,8 +28,7 @@ mastering::eq::EqBandType eqBandTypeFromString(const std::string& value) {
 mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
   const auto parsed = mastering::eq::coeff_mode_from_string(value);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ coefficient mode: " + value);
+    throw WasmRangeError("unknown EQ coefficient mode: " + value);
   }
   return *parsed;
 }
@@ -38,8 +36,7 @@ mastering::eq::BiquadCoeffMode eqCoeffModeFromString(const std::string& value) {
 mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
   const auto parsed = mastering::eq::placement_from_string(value);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ placement: " + value);
+    throw WasmRangeError("unknown EQ placement: " + value);
   }
   return *parsed;
 }
@@ -47,8 +44,7 @@ mastering::eq::StereoPlacement eqPlacementFromString(const std::string& value) {
 mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
   const auto parsed = mastering::eq::phase_mode_from_string(value);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "unknown EQ band phase mode: " + value);
+    throw WasmRangeError("unknown EQ band phase mode: " + value);
   }
   return *parsed;
 }
@@ -56,7 +52,7 @@ mastering::eq::PhaseMode eqBandPhaseFromString(const std::string& value) {
 mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
   const auto parsed = mastering::eq::phase_mode_from_int(mode);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ phase mode");
+    throw WasmRangeError("unknown EQ phase mode");
   }
   return *parsed;
 }
@@ -64,7 +60,7 @@ mastering::eq::PhaseMode eqPhaseFromInt(int mode) {
 mastering::eq::StereoPlacement eqPlacementFromInt(int placement) {
   const auto parsed = mastering::eq::placement_from_int(placement);
   if (!parsed) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "unknown EQ band placement");
+    throw WasmRangeError("unknown EQ band placement");
   }
   return *parsed;
 }
@@ -170,8 +166,7 @@ class EqualizerWrapper {
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right sidechain");
     validateWasmFloat32ElementBudget({left_length, right_length}, "stereo sidechain");
     if (left_length != right_length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "sidechain channel lengths must match");
+      throw WasmRangeError("sidechain channel lengths must match");
     }
     if (left_length == 0) return clearSidechain();
     validateBlockLength(left_length, "sidechain");
@@ -218,8 +213,7 @@ class EqualizerWrapper {
     const std::size_t right_length = wasmFloat32ArrayLength(right_samples, "right process block");
     validateWasmFloat32ElementBudget({left_length, right_length}, "stereo process block");
     if (left_length != right_length) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "stereo channel lengths must match");
+      throw WasmRangeError("stereo channel lengths must match");
     }
     validateBlockLength(left_length, "process block");
     std::vector<float> left = float32ArrayToVector(left_samples);
@@ -286,8 +280,7 @@ class EqualizerWrapper {
     validate_offline_audio_input(src.data(), src.size(), sample_rate);
     validate_offline_audio_input(ref.data(), ref.size(), sample_rate);
     if (max_bands <= 0) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "StreamingEqualizer.match: maxBands must be positive");
+      throw WasmRangeError("StreamingEqualizer.match: maxBands must be positive");
     }
     Audio src_audio = Audio::from_buffer(src.data(), src.size(), sample_rate);
     Audio ref_audio = Audio::from_buffer(ref.data(), ref.size(), sample_rate);
@@ -301,8 +294,7 @@ class EqualizerWrapper {
  private:
   void validateBlockLength(std::size_t length, const char* subject) const {
     if (length > static_cast<std::size_t>(max_block_size_)) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    std::string(subject) + " exceeds prepared maxBlockSize");
+      throw WasmRangeError(std::string(subject) + " exceeds prepared maxBlockSize");
     }
   }
 

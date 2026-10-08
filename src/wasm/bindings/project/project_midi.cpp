@@ -109,7 +109,8 @@ void ProjectWasm::setProgramOnChannel(const val& clip_id_val, const val& group_v
 
 void ProjectWasm::bakeMidiFx(const val& clip_id_val, const std::string& config_json) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
-  const SonareError err = sonare_project_bake_midi_fx(project_.get(), clip_id, config_json.c_str());
+  const SonareError err =
+      sonare_project_bake_midi_fx(project_.get(), clip_id, wasmCString(config_json, "configJson"));
   if (err != SONARE_OK) {
     throwCError(err, "failed to set MIDI FX");
   }
@@ -121,17 +122,17 @@ val ProjectWasm::bakeMidiFxWithSourceIndex(const val& clip_id_val, const std::st
   // exactly-fitting buffer, rather than a bake that has to be repeated when the
   // guess is short.
   size_t expected = 0;
-  const SonareError count_err =
-      sonare_project_preview_midi_fx_count(project_.get(), clip_id, config_json.c_str(), &expected);
+  const SonareError count_err = sonare_project_preview_midi_fx_count(
+      project_.get(), clip_id, wasmCString(config_json, "configJson"), &expected);
   if (count_err != SONARE_OK) {
     throwCError(count_err, "failed to set MIDI FX");
   }
   static_assert(sizeof(int) == sizeof(int32_t), "vectorToInt32Array assumes a 32-bit int");
   std::vector<int> source_index(expected, -1);
   size_t written = 0;
-  const SonareError err =
-      sonare_project_bake_midi_fx_ex(project_.get(), clip_id, config_json.c_str(),
-                                     source_index.data(), source_index.size(), &written);
+  const SonareError err = sonare_project_bake_midi_fx_ex(
+      project_.get(), clip_id, wasmCString(config_json, "configJson"), source_index.data(),
+      source_index.size(), &written);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set MIDI FX");
   }
@@ -142,8 +143,8 @@ val ProjectWasm::bakeMidiFxWithSourceIndex(const val& clip_id_val, const std::st
 uint32_t ProjectWasm::previewMidiFxCount(const val& clip_id_val, const std::string& config_json) {
   const uint32_t clip_id = checkedUintFromVal(clip_id_val, "clipId");
   size_t count = 0;
-  const SonareError err =
-      sonare_project_preview_midi_fx_count(project_.get(), clip_id, config_json.c_str(), &count);
+  const SonareError err = sonare_project_preview_midi_fx_count(
+      project_.get(), clip_id, wasmCString(config_json, "configJson"), &count);
   if (err != SONARE_OK) {
     throwCError(err, "failed to preview MIDI FX");
   }
@@ -258,7 +259,7 @@ val js_midi_gm_instrument_name(const val& program) {
 }
 
 int js_midi_gm_program_for_name(const std::string& name) {
-  return sonare_midi_gm_program_for_name(name.c_str());
+  return sonare_midi_gm_program_for_name(wasmCString(name, "name"));
 }
 
 val js_midi_gm_family_name(const val& family) {
@@ -279,7 +280,7 @@ val js_midi_gm_drum_name(const val& note) {
 }
 
 int js_midi_gm_drum_note_for_name(const std::string& name) {
-  return sonare_midi_gm_drum_note_for_name(name.c_str());
+  return sonare_midi_gm_drum_note_for_name(wasmCString(name, "name"));
 }
 
 val js_midi_gm2_drum_set_name(const val& bank_lsb) {
@@ -296,7 +297,7 @@ val js_midi_cc_name(const val& controller) {
 }
 
 int js_midi_cc_index_for_name(const std::string& name) {
-  return sonare_midi_cc_index_for_name(name.c_str());
+  return sonare_midi_cc_index_for_name(wasmCString(name, "name"));
 }
 
 val js_midi_per_note_controller_name(const val& index) {
@@ -391,8 +392,7 @@ val js_midi_cc_learn(val events, const val& param_id_val, const val& min_value_v
   const float max_value = checkedFloatFromVal(max_value_val, "maxValue");
   const uint8_t min_movement = checkedByteFromVal(min_movement_val, "minMovement");
   if (min_movement > 127) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "minMovement must be an integer within [0, 127]");
+    throw WasmRangeError("minMovement must be an integer within [0, 127]");
   }
   const size_t count =
       events.isUndefined() || events.isNull() ? 0 : wasmArrayLikeLength(events, "events");

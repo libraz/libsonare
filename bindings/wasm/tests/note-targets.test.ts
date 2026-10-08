@@ -24,6 +24,7 @@ import {
   Project,
   type SonareError,
 } from '../src/index';
+import { expectRefusalOf } from './_helpers';
 
 const sampleRate = 48000;
 /** A4: the fixture notes' measured pitch, so a target's MIDI number is the shift plus 69. */
@@ -128,7 +129,7 @@ describe('WASM note targets', () => {
           targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
           unmatchedPolicy,
         } as unknown as AssignNoteTargetsRequest;
-        expectSonareError(() => assignNoteTargets(request), ErrorCode.InvalidParameter);
+        expectRefusalOf(() => assignNoteTargets(request));
       }
     });
 
@@ -143,8 +144,8 @@ describe('WASM note targets', () => {
           sampleRate,
           targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
         });
-      expectSonareError(() => runWith(0.5, note(0, 1).offsetSample), ErrorCode.InvalidParameter);
-      expectSonareError(() => runWith(note(0, 1).onsetSample, 1e300), ErrorCode.InvalidParameter);
+      expectRefusalOf(() => runWith(0.5, note(0, 1).offsetSample));
+      expectRefusalOf(() => runWith(note(0, 1).onsetSample, 1e300));
     });
 
     it('saturates the shift at maxCorrectionSemitones, and an explicit 0 survives', () => {
@@ -174,15 +175,13 @@ describe('WASM note targets', () => {
     });
 
     it('refuses a negative maxCorrectionSemitones', () => {
-      expectSonareError(
-        () =>
-          assignNoteTargets({
-            notes: [note(0, 1)],
-            sampleRate,
-            targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
-            maxCorrectionSemitones: -1,
-          }),
-        ErrorCode.InvalidParameter,
+      expectRefusalOf(() =>
+        assignNoteTargets({
+          notes: [note(0, 1)],
+          sampleRate,
+          targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+          maxCorrectionSemitones: -1,
+        }),
       );
     });
 
@@ -207,9 +206,8 @@ describe('WASM note targets', () => {
     it('refuses a minOverlapRatio outside [0, 1]', () => {
       const targets = [{ startSec: 0, endSec: 1, targetMidi: 72 }];
       for (const minOverlapRatio of [-0.1, 1.1]) {
-        expectSonareError(
-          () => assignNoteTargets({ notes: [note(0, 1)], sampleRate, targets, minOverlapRatio }),
-          ErrorCode.InvalidParameter,
+        expectRefusalOf(() =>
+          assignNoteTargets({ notes: [note(0, 1)], sampleRate, targets, minOverlapRatio }),
         );
       }
     });
@@ -301,35 +299,28 @@ describe('WASM note targets', () => {
         { startSec: 0, endSec: 1, targetMidi: 1e300 },
       ];
       for (const target of bad) {
-        expectSonareError(
-          () => assignNoteTargets({ notes, sampleRate, targets: [target] }),
-          ErrorCode.InvalidParameter,
-        );
+        expectRefusalOf(() => assignNoteTargets({ notes, sampleRate, targets: [target] }));
       }
       // The nearest policy reaches a target through a second path, so it is
       // refused there too rather than only on the overlap comparison.
-      expectSonareError(
-        () =>
-          assignNoteTargets({
-            notes: [note(5, 6)],
-            sampleRate,
-            targets: [{ startSec: Number.NaN, endSec: 1, targetMidi: 72 }],
-            unmatchedPolicy: 'nearest',
-          }),
-        ErrorCode.InvalidParameter,
+      expectRefusalOf(() =>
+        assignNoteTargets({
+          notes: [note(5, 6)],
+          sampleRate,
+          targets: [{ startSec: Number.NaN, endSec: 1, targetMidi: 72 }],
+          unmatchedPolicy: 'nearest',
+        }),
       );
     });
 
     it('refuses a non-positive sample rate', () => {
       for (const rate of [0, -48000]) {
-        expectSonareError(
-          () =>
-            assignNoteTargets({
-              notes: [note(0, 1)],
-              sampleRate: rate,
-              targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
-            }),
-          ErrorCode.InvalidParameter,
+        expectRefusalOf(() =>
+          assignNoteTargets({
+            notes: [note(0, 1)],
+            sampleRate: rate,
+            targets: [{ startSec: 0, endSec: 1, targetMidi: 72 }],
+          }),
         );
       }
     });

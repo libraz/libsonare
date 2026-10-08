@@ -84,7 +84,9 @@ void ProjectWasm::annotateChords(val chords) {
       sym.extensions = ext_storage.back().empty() ? nullptr : ext_storage.back().data();
       sym.extension_count = ext_storage.back().size();
       roman_storage.push_back(stringProperty(entry, "romanNumeral", std::string()));
-      sym.roman_numeral = roman_storage.back().empty() ? nullptr : roman_storage.back().c_str();
+      sym.roman_numeral = roman_storage.back().empty()
+                              ? nullptr
+                              : wasmCString(roman_storage.back(), "romanNumeral");
       symbols.push_back(sym);
     }
   }
@@ -102,8 +104,8 @@ void ProjectWasm::setAssistSidecar(const std::string& module_id, const val& sche
   const uint32_t target_track_id = checkedUintFromVal(target_track_id_val, "targetTrackId");
   std::vector<uint8_t> bytes = uint8ArrayToVector(payload);
   const SonareError err = sonare_project_set_assist_sidecar(
-      project_.get(), module_id.c_str(), schema_version, target_track_id, region_start_ppq,
-      region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());
+      project_.get(), wasmCString(module_id, "moduleId"), schema_version, target_track_id,
+      region_start_ppq, region_end_ppq, bytes.empty() ? nullptr : bytes.data(), bytes.size());
   if (err != SONARE_OK) {
     throwCError(err, "failed to set assist sidecar");
   }
@@ -159,7 +161,8 @@ double ProjectWasm::getSampleRate() const {
 }
 
 val ProjectWasm::setMixerSceneJson(const std::string& scene_json) {
-  const SonareError err = sonare_project_set_mixer_scene_json(project_.get(), scene_json.c_str());
+  const SonareError err =
+      sonare_project_set_mixer_scene_json(project_.get(), wasmCString(scene_json, "sceneJson"));
   if (err != SONARE_OK) {
     throwCError(err, "failed to set mixer scene JSON");
   }
@@ -183,7 +186,7 @@ uint32_t ProjectWasm::setMarker(const val& marker_id_val, double ppq, const std:
   const uint32_t marker_id = checkedUintFromVal(marker_id_val, "markerId");
   uint32_t out_id = 0;
   const SonareError err =
-      sonare_project_set_marker(project_.get(), marker_id, ppq, name.c_str(), &out_id);
+      sonare_project_set_marker(project_.get(), marker_id, ppq, wasmCString(name, "name"), &out_id);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set marker");
   }
@@ -200,7 +203,7 @@ uint32_t ProjectWasm::setMarkerEx(val marker) {
   const std::string name = stringProperty(marker, "name", "");
   uint32_t out_id = 0;
   const SonareError err =
-      sonare_project_set_marker_ex_name(project_.get(), &desc, name.c_str(), &out_id);
+      sonare_project_set_marker_ex_name(project_.get(), &desc, wasmCString(name, "name"), &out_id);
   if (err != SONARE_OK) {
     throwCError(err, "failed to set marker");
   }

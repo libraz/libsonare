@@ -1,14 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  init,
-  isSonareError,
-  mixStereo,
-  Project,
-  RealtimeEngine,
-} from '../dist/index.js';
+import { init, mixStereo, Project, RealtimeEngine } from '../dist/index.js';
 import type { MixOptions } from '../src/public_types_mixing';
+import { expectArgumentRefusal } from './_helpers';
 
 type CorpusMarker = { id: number | 'uint32_max'; ppq: number | 'nan' | 'inf'; name: string };
 type CorpusCase = { id: string; accepted: boolean; markers: CorpusMarker[] };
@@ -84,10 +78,7 @@ describe('shared public-input conformance corpus (WASM)', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      if (isSonareError(caught)) {
-        expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      }
+      expectArgumentRefusal(caught);
     }
     expect(Project.midiCcLearn(events, 3, { minMovement: 10 })).not.toBeNull();
     expect(Project.midiCcLearn(events, 3, { minMovement: 11 })).toBeNull();

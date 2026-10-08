@@ -119,7 +119,7 @@ void MixerWasm::setDualPan(const val& strip_index_val, const val& left_pan_val,
 void MixerWasm::setSurroundPan(const val& strip_index_val, val pan) {
   const unsigned int strip_index = checkedUintFromVal(strip_index_val, "stripIndex");
   if (pan.isNull() || pan.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, "pan must be an object");
+    throw WasmTypeError("pan must be an object");
   }
   const auto field = [&](const char* key, float fallback) {
     return optionalNumber(pan[key], key).value_or(fallback);
@@ -143,8 +143,9 @@ size_t MixerWasm::addSend(const val& strip_index_val, std::string id,
   const float send_db = checkedFloatFromVal(send_db_val, "sendDb");
   const int timing = checkedIntFromVal(timing_val, "timing");
   size_t index = 0;
-  checkStripError(sonare_strip_add_send(stripAt(strip_index), id.c_str(),
-                                        destination_bus_id.c_str(), send_db, timing, &index),
+  checkStripError(sonare_strip_add_send(stripAt(strip_index), wasmCString(id, "id"),
+                                        wasmCString(destination_bus_id, "destinationBusId"),
+                                        send_db, timing, &index),
                   "failed to add send");
   return index;
 }

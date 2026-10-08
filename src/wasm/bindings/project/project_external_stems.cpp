@@ -20,8 +20,7 @@ size_t channel_count(uint32_t layout) {
 val ProjectWasm::importExternalStems(val request) {
   if (request.isUndefined() || request.isNull() || !hasProperty(request, "stems") ||
       !val::global("Array").call<bool>("isArray", request["stems"])) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "external stem import requires a request with stems array");
+    throw WasmTypeError("external stem import requires a request with stems array");
   }
   const val stem_values = request["stems"];
   const size_t count = wasmArrayLikeLength(stem_values, "stems");
@@ -41,22 +40,19 @@ val ProjectWasm::importExternalStems(val request) {
         !stem["name"].isString() || !hasProperty(stem, "layout") ||
         !hasProperty(stem, "planarSamples") ||
         !val::global("Array").call<bool>("isArray", stem["planarSamples"])) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "each external stem needs name, layout, and planarSamples");
+      throw WasmRangeError("each external stem needs name, layout, and planarSamples");
     }
     const uint32_t layout = checkedUintFromVal(stem["layout"], "layout");
     const size_t channels = channel_count(layout);
     const val source_planes = stem["planarSamples"];
     if (channels == 0 || source_planes["length"].as<size_t>() != channels) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "planarSamples must match mono or stereo layout");
+      throw WasmRangeError("planarSamples must match mono or stereo layout");
     }
     names.push_back(stem["name"].as<std::string>());
     const val role = stem["role"];
     const bool has_role = !role.isUndefined() && !role.isNull();
     if (has_role && !role.isString()) {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "external stem role must be a string");
+      throw WasmTypeError("external stem role must be a string");
     }
     if (has_role) roles.push_back(role.as<std::string>());
     sample_storage.emplace_back();
@@ -71,14 +67,13 @@ val ProjectWasm::importExternalStems(val request) {
       if (channel == 0) {
         frames = samples.back().size();
       } else if (samples.back().size() != frames) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "all external stem planes must have equal length");
+        throw WasmRangeError("all external stem planes must have equal length");
       }
       planes.push_back(samples.back().data());
     }
     SonareExternalStemDesc descriptor{};
-    descriptor.name = names.back().c_str();
-    descriptor.role = has_role ? roles.back().c_str() : nullptr;
+    descriptor.name = wasmCString(names.back(), "name");
+    descriptor.role = has_role ? wasmCString(roles.back(), "role") : nullptr;
     descriptor.layout = layout;
     descriptor.planar_samples = planes.data();
     descriptor.frame_count = static_cast<int64_t>(frames);

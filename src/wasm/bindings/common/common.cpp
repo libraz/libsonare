@@ -83,12 +83,22 @@ val vectorToUint8Array(const std::vector<uint8_t>& vec) {
   return vectorToUint8Array(vec.data(), vec.size());
 }
 
+void wasmRefuseEmbeddedNul(const std::string& text, const char* subject) {
+  if (text.find('\0') != std::string::npos) {
+    throw WasmRangeError(std::string(subject) + " must not contain NUL");
+  }
+}
+
+const char* wasmCString(const std::string& text, const char* subject) {
+  wasmRefuseEmbeddedNul(text, subject);
+  return text.c_str();
+}
+
 std::size_t wasmCountArg(double value, const char* subject) {
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(value) || value < 0.0 || std::floor(value) != value ||
       value > kMaxSafeInteger) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must be a non-negative safe integer");
+    throw WasmRangeError(std::string(subject) + " must be a non-negative safe integer");
   }
   return static_cast<std::size_t>(value);
 }
@@ -101,32 +111,27 @@ std::size_t wasmIndexArg(double value, const char* subject) {
   // does not, and a pair of indices least of all -- saturated, any `first <=
   // last` test passes on a pair that is entirely out of range.
   if (value > static_cast<double>(std::numeric_limits<std::size_t>::max())) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " is larger than this build can address");
+    throw WasmRangeError(std::string(subject) + " is larger than this build can address");
   }
   return wasmCountArg(value, subject);
 }
 
 std::size_t wasmArrayLikeLength(const val& arr, const char* subject, const char* length_key) {
   if (arr.isNull() || arr.isUndefined()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must be an array-like object");
+    throw WasmTypeError(std::string(subject) + " must be an array-like object");
   }
   const val length_value = arr[length_key];
   if (length_value.isUndefined() || length_value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " length must be a number");
+    throw WasmTypeError(std::string(subject) + " length must be a number");
   }
   const double length = length_value.as<double>();
   constexpr double kMaxSafeInteger = 9007199254740991.0;
   if (!std::isfinite(length) || length < 0.0 || std::floor(length) != length ||
       length > kMaxSafeInteger) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " length must be a non-negative safe integer");
+    throw WasmRangeError(std::string(subject) + " length must be a non-negative safe integer");
   }
   if (length > static_cast<double>(kMaxWasmFloat32Elements)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " exceeds the WASM Float32 input budget");
+    throw WasmRangeError(std::string(subject) + " exceeds the WASM Float32 input budget");
   }
   return static_cast<std::size_t>(length);
 }
@@ -140,8 +145,7 @@ void validateWasmFloat32ElementBudget(std::initializer_list<std::size_t> counts,
   std::size_t total = 0;
   for (const std::size_t count : counts) {
     if (!sonare::numeric::checked_add(total, count, &total) || total > kMaxWasmFloat32Elements) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            std::string(subject) + " exceeds the WASM Float32 input budget");
+      throw WasmRangeError(std::string(subject) + " exceeds the WASM Float32 input budget");
     }
   }
 }
@@ -156,8 +160,7 @@ std::size_t accumulateWasmFloat32ArrayLength(const val& arr, const char* array_s
   const std::size_t count = wasmFloat32ArrayLength(arr, array_subject);
   if (!sonare::numeric::checked_add(*cumulative_count, count, cumulative_count) ||
       *cumulative_count > kMaxWasmFloat32Elements) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(budget_subject) + " exceeds the WASM Float32 input budget");
+    throw WasmRangeError(std::string(budget_subject) + " exceeds the WASM Float32 input budget");
   }
   return count;
 }
@@ -171,8 +174,7 @@ void validateWasmFloat32ArrayPair(const val& first, const char* first_subject, c
   const std::size_t second_count =
       accumulateWasmFloat32ArrayLength(second, second_subject, budget_subject, &cumulative_count);
   if (require_matching_lengths && first_count != second_count) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(budget_subject) + " channel lengths must match");
+    throw WasmRangeError(std::string(budget_subject) + " channel lengths must match");
   }
 }
 
@@ -202,13 +204,11 @@ std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
                                            const char* entry) {
   const std::string subject(entry);
   if (channels.isUndefined() || channels.isNull()) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          subject + ": channels must be an array of Float32Array");
+    throw WasmTypeError(subject + ": channels must be an array of Float32Array");
   }
   const std::size_t count = wasmArrayLikeLength(channels, "channels");
   if (count == 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          subject + ": channels must hold at least one channel");
+    throw WasmRangeError(subject + ": channels must hold at least one channel");
   }
   const std::string budget = subject + " input";
   std::vector<Audio> loaded;
@@ -218,16 +218,15 @@ std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
   for (std::size_t index = 0; index < count; ++index) {
     const val channel = channels[index];
     if (channel.isUndefined() || channel.isNull()) {
-      throw SonareException(
-          ErrorCode::InvalidParameter,
-          subject + ": channels[" + std::to_string(index) + "] must be a Float32Array");
+      throw WasmTypeError(subject + ": channels[" + std::to_string(index) +
+                          "] must be a Float32Array");
     }
     const std::size_t frames =
         accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
     if (index == 0) {
       length = frames;
     } else if (frames != length) {
-      throw SonareException(ErrorCode::InvalidParameter, subject + ": channel lengths must match");
+      throw WasmRangeError(subject + ": channel lengths must match");
     }
     loaded.push_back(loadValidatedAudio(channel, sample_rate));
   }
@@ -280,13 +279,12 @@ Audio loadValidatedAudioWindow(val samples, int sample_rate, std::size_t scan_of
 std::vector<float> loadValidatedInterleaved(val samples, int channels, int sample_rate,
                                             size_t* frames) {
   if (channels <= 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "channels must be positive");
+    throw WasmRangeError("channels must be positive");
   }
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   if (data.size() % static_cast<size_t>(channels) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "interleaved sample count must be a whole number of frames");
+    throw WasmRangeError("interleaved sample count must be a whole number of frames");
   }
   if (frames != nullptr) *frames = data.size() / static_cast<size_t>(channels);
   return data;
@@ -333,8 +331,7 @@ std::vector<mastering::api::Param> masteringParamsFromObject(
     } else if (value.typeOf().as<std::string>() == "boolean") {
       params.push_back({key, value.as<bool>() ? 1.0 : 0.0});
     } else {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "mastering override '" + key + "' must be a number or boolean");
+      throw WasmTypeError("mastering override '" + key + "' must be a number or boolean");
     }
   }
   return params;
@@ -350,13 +347,11 @@ bool hasProperty(val object, const char* key) {
 val requireTypedProperty(const val& object, const char* key, const char* subject,
                          const char* js_type, const char* article_type) {
   if (!hasProperty(object, key)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " is required");
+    throw WasmTypeError(std::string(subject) + "." + key + " is required");
   }
   val value = object[key];
   if (value.typeOf().as<std::string>() != js_type) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + "." + key + " must be " + article_type);
+    throw WasmTypeError(std::string(subject) + "." + key + " must be " + article_type);
   }
   return value;
 }
@@ -376,7 +371,7 @@ val typedPropertyValue(const val& object, const char* key, const char* type) {
   val value = objectProperty(object, key);
   if (value.isUndefined() || value.isNull()) return val::undefined();
   if (value.typeOf().as<std::string>() != type) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a " + type);
+    throw WasmTypeError(std::string(key) + " must be a " + type);
   }
   return value;
 }
@@ -385,7 +380,7 @@ val typedPropertyValue(const val& object, const char* key, const char* type) {
 
 double numberFromVal(const val& value, const char* key) {
   if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+    throw WasmTypeError(std::string(key) + " must be a number");
   }
   return value.as<double>();
 }
@@ -404,7 +399,7 @@ float floatOption(val object, const char* key, float default_value) {
   // numeric string read as an omitted field on one surface and as the number on
   // the other.
   if (value.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+    throw WasmTypeError(std::string(key) + " must be a number");
   }
   // Read as double, because as<float>() turns a finite value the float cannot
   // hold into an infinity, which then takes the substitution below -- the field
@@ -412,9 +407,8 @@ float floatOption(val object, const char* key, float default_value) {
   const double number = numberFromVal(value, key);
   if (std::isfinite(number) &&
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(key) + " must be a finite number within the 32-bit float range");
+    throw WasmRangeError(std::string(key) +
+                         " must be a finite number within the 32-bit float range");
   }
   return std::isfinite(number) ? static_cast<float>(number) : default_value;
 }
@@ -425,7 +419,7 @@ float floatOption(val object, const char* key, float default_value) {
 // these fields read as "keep the default".
 void requireIntegral(double number, const char* key) {
   if (number != std::trunc(number)) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be an integer");
+    throw WasmRangeError(std::string(key) + " must be an integer");
   }
 }
 
@@ -436,9 +430,8 @@ namespace {
 double checkedUnsignedNumber(const val& value, const char* key, double max) {
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < 0.0 || number > max) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be a finite number within [0, " +
-                              std::to_string(static_cast<long long>(max)) + "]");
+    throw WasmRangeError(std::string(key) + " must be a finite number within [0, " +
+                         std::to_string(static_cast<long long>(max)) + "]");
   }
   requireIntegral(number, key);
   return number;
@@ -458,9 +451,8 @@ int checkedIntFromVal(const val& value, const char* key) {
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < static_cast<double>(std::numeric_limits<int>::min()) ||
       number > static_cast<double>(std::numeric_limits<int>::max())) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(key) + " must be a finite number within the 32-bit integer range");
+    throw WasmRangeError(std::string(key) +
+                         " must be a finite number within the 32-bit integer range");
   }
   requireIntegral(number, key);
   return static_cast<int>(number);
@@ -473,13 +465,11 @@ Mode modeFromVal(const val& value, const char* what) {
          ++ordinal) {
       if (name == mode_name(static_cast<Mode>(ordinal))) return static_cast<Mode>(ordinal);
     }
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(what) + " is not a mode name: '" + name + "'");
+    throw WasmRangeError(std::string(what) + " is not a mode name: '" + name + "'");
   }
   const int ordinal = checkedIntFromVal(value, what);
   if (ordinal < static_cast<int>(Mode::Major) || ordinal > static_cast<int>(Mode::Locrian)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(what) + " must be a mode name or an ordinal in [0, 6]");
+    throw WasmRangeError(std::string(what) + " must be a mode name or an ordinal in [0, 6]");
   }
   return static_cast<Mode>(ordinal);
 }
@@ -504,8 +494,7 @@ uint32_t checkedWordFromVal(const val& value, const char* key) {
   static constexpr double kUnsignedMax = 4294967295.0;  // 2^32 - 1
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < kSignedMin || number > kUnsignedMax) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be a finite 32-bit word value");
+    throw WasmRangeError(std::string(key) + " must be a finite 32-bit word value");
   }
   requireIntegral(number, key);
   return number < 0.0 ? static_cast<uint32_t>(static_cast<int64_t>(number))
@@ -534,9 +523,8 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
   static constexpr double kUpperBound = 9223372036854775808.0;  // 2^63
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) || number < -kUpperBound || number >= kUpperBound) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(key) + " must be a finite number within the 64-bit integer range");
+    throw WasmRangeError(std::string(key) +
+                         " must be a finite number within the 64-bit integer range");
   }
   requireIntegral(number, key);
   return static_cast<int64_t>(number);
@@ -545,16 +533,16 @@ int64_t checkedInt64FromVal(const val& value, const char* key) {
 uint64_t checkedDecimalUint64FromVal(const val& value, const char* key) {
   const std::string message = std::string(key) + " must be a decimal uint64 string";
   if (value.typeOf().as<std::string>() != "string") {
-    throw SonareException(ErrorCode::InvalidParameter, message);
+    throw WasmTypeError(message);
   }
   const std::string text = value.as<std::string>();
   uint64_t result = 0;
   if (text.size() > 1 && text.front() == '0') {
-    throw SonareException(ErrorCode::InvalidParameter, message);
+    throw WasmRangeError(message);
   }
   const auto parsed = std::from_chars(text.data(), text.data() + text.size(), result, 10);
   if (text.empty() || parsed.ec != std::errc{} || parsed.ptr != text.data() + text.size()) {
-    throw SonareException(ErrorCode::InvalidParameter, message);
+    throw WasmRangeError(message);
   }
   return result;
 }
@@ -577,9 +565,8 @@ float checkedFloatFromVal(const val& value, const char* key) {
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number) ||
       std::abs(number) > static_cast<double>(std::numeric_limits<float>::max())) {
-    throw SonareException(
-        ErrorCode::InvalidParameter,
-        std::string(key) + " must be a finite number within the 32-bit float range");
+    throw WasmRangeError(std::string(key) +
+                         " must be a finite number within the 32-bit float range");
   }
   return static_cast<float>(number);
 }
@@ -591,8 +578,7 @@ double checkedDoubleFromVal(const val& value, const char* key) {
   // those bags is covered without someone having to repeat it.
   const double number = numberFromVal(value, key);
   if (!std::isfinite(number)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(key) + " must be a finite number");
+    throw WasmRangeError(std::string(key) + " must be a finite number");
   }
   return number;
 }
@@ -611,10 +597,9 @@ int builtinWaveformFromVal(const val& value) {
   const std::string type = value.typeOf().as<std::string>();
   if (type == "string") {
     const std::string name = value.as<std::string>();
-    const int mapped = sonare_synth_builtin_waveform_from_name(name.c_str());
+    const int mapped = sonare_synth_builtin_waveform_from_name(wasmCString(name, "waveform"));
     if (mapped < 0) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "Unknown synth waveform: '" + name + kExpected);
+      throw WasmRangeError("Unknown synth waveform: '" + name + kExpected);
     }
     return mapped;
   }
@@ -622,13 +607,11 @@ int builtinWaveformFromVal(const val& value) {
   // surfaces back out of step: the addon's typed read rejects a boolean, while
   // val::as<double>() would coerce true to 1 and render a saw.
   if (type != "number") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "Unknown synth waveform: '" + type + kExpected);
+    throw WasmTypeError("Unknown synth waveform: '" + type + kExpected);
   }
   const int ordinal = checkedIntFromVal(value, "waveform");
   if (ordinal < SONARE_SYNTH_WAVEFORM_SINE || ordinal > SONARE_SYNTH_WAVEFORM_TRIANGLE) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "Unknown synth waveform: '" + std::to_string(ordinal) + kExpected);
+    throw WasmRangeError("Unknown synth waveform: '" + std::to_string(ordinal) + kExpected);
   }
   return ordinal;
 }
@@ -644,19 +627,21 @@ int gsEfxRealizationProperty(val object, const char* key) {
   const std::string name = value.as<std::string>();
   if (name == "modern") return 0;
   if (name == "classic") return 1;
-  throw SonareException(ErrorCode::InvalidParameter,
-                        std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
+  throw WasmRangeError(std::string(key) + " must be 'modern' or 'classic', got '" + name + "'");
 }
 
 std::string stringProperty(val object, const char* key, const std::string& default_value) {
   val value = typedPropertyValue(object, key, "string");
-  return value.isUndefined() ? default_value : value.as<std::string>();
+  if (value.isUndefined()) return default_value;
+  std::string text = value.as<std::string>();
+  wasmRefuseEmbeddedNul(text, key);
+  return text;
 }
 
 std::optional<float> optionalNumber(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
   if (v.typeOf().as<std::string>() != "number") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a number");
+    throw WasmTypeError(std::string(key) + " must be a number");
   }
   return checkedFloatFromVal(v, key);
 }
@@ -664,7 +649,7 @@ std::optional<float> optionalNumber(const val& v, const char* key) {
 std::optional<bool> optionalBool(const val& v, const char* key) {
   if (v.isUndefined() || v.isNull()) return std::nullopt;
   if (v.typeOf().as<std::string>() != "boolean") {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(key) + " must be a boolean");
+    throw WasmTypeError(std::string(key) + " must be a boolean");
   }
   return v.as<bool>();
 }
@@ -679,18 +664,17 @@ int requireMatchedLength(const val& a, const val& b, const char* subject, bool r
   const std::size_t a_length = wasmArrayLikeLength(a, subject);
   const std::size_t b_length = wasmArrayLikeLength(b, subject);
   if (a_length != b_length) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          std::string(subject) + " must have the same length");
+    throw WasmRangeError(std::string(subject) + " must have the same length");
   }
   if (require_non_zero && a_length == 0) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(subject) + " must not be empty");
+    throw WasmRangeError(std::string(subject) + " must not be empty");
   }
   return static_cast<int>(a_length);
 }
 
 void requireOrdinalInRange(int value, int min, int max, const char* subject) {
   if (value < min || value > max) {
-    throw SonareException(ErrorCode::InvalidParameter, std::string(subject) + " is out of range");
+    throw WasmRangeError(std::string(subject) + " is out of range");
   }
 }
 

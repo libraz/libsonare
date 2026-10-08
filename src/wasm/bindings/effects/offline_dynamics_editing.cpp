@@ -31,8 +31,7 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
       case 2:
         return mastering::dynamics::DetectorMode::LogRms;
       default:
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "masteringDynamicsCompressor: unknown detector code");
+        throw WasmRangeError("masteringDynamicsCompressor: unknown detector code");
     }
   }
   if (type == "string") {
@@ -42,8 +41,7 @@ mastering::dynamics::DetectorMode parseCompressorDetector(
     if (s == "peak") return mastering::dynamics::DetectorMode::Peak;
     if (s == "rms") return mastering::dynamics::DetectorMode::Rms;
     if (s == "log_rms" || s == "logrms") return mastering::dynamics::DetectorMode::LogRms;
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "masteringDynamicsCompressor: unknown detector mode: " + s);
+    throw WasmRangeError("masteringDynamicsCompressor: unknown detector mode: " + s);
   }
   return fallback;
 }
@@ -201,16 +199,13 @@ namespace {
 editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_mask,
                                                             float reference_midi) {
   if (root < 0 || root > 11) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "scaleQuantizer: root must be in [0, 11]");
+    throw WasmRangeError("scaleQuantizer: root must be in [0, 11]");
   }
   if (mode_mask == 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "scaleQuantizer: modeMask must be non-zero");
+    throw WasmRangeError("scaleQuantizer: modeMask must be non-zero");
   }
   if (mode_mask < 0 || mode_mask > 4095) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "scaleQuantizer: modeMask must be in [0, 4095]");
+    throw WasmRangeError("scaleQuantizer: modeMask must be in [0, 4095]");
   }
   editing::pitch_editor::ScaleQuantizerConfig cfg;
   cfg.root = root;
@@ -226,8 +221,7 @@ editing::pitch_editor::ScaleQuantizerConfig makeScaleConfig(int root, int mode_m
 int js_scale_mask_for_mode(const val& root_val, const val& mode_val) {
   const int root = checkedIntFromVal(root_val, "root");
   if (root < 0 || root > 11) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "scaleMaskForMode: root must be in [0, 11]");
+    throw WasmRangeError("scaleMaskForMode: root must be in [0, 11]");
   }
   return sonare::scale_mask_for_mode(modeFromVal(mode_val, "mode"));
 }
@@ -252,8 +246,7 @@ bool js_scale_pitch_class_enabled(const val& root, const val& mode_mask,
                                   const val& pitch_class_val) {
   const int pitch_class = checkedIntFromVal(pitch_class_val, "pitchClass");
   if (pitch_class < 0 || pitch_class > 11) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "scalePitchClassEnabled: pitchClass must be in [0, 11]");
+    throw WasmRangeError("scalePitchClassEnabled: pitchClass must be in [0, 11]");
   }
   editing::pitch_editor::ScaleQuantizer q(makeScaleConfig(
       checkedIntFromVal(root, "root"), checkedIntFromVal(mode_mask, "modeMask"), 0.0f));
@@ -270,14 +263,12 @@ val js_resample(val samples, const val& src_sr_val, const val& target_sr_val) {
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), src_sr);
   if (target_sr < kMinAudioSampleRate || target_sr > kMaxAudioSampleRate) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "resample: target sample rate is out of range");
+    throw WasmRangeError("resample: target sample rate is out of range");
   }
   const double projected = static_cast<double>(data.size()) * static_cast<double>(target_sr) /
                            static_cast<double>(src_sr);
   if (projected > static_cast<double>(kMaxAudioBufferSize)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "resample: output buffer would be too large");
+    throw WasmRangeError("resample: output buffer would be too large");
   }
   std::vector<float> result = resample(data.data(), data.size(), src_sr, target_sr);
   return vectorToFloat32Array(result);

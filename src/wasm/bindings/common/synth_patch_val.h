@@ -155,14 +155,12 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
     for (int i = 0; i < count; ++i) {
       if (name == names[i]) return i;
     }
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string("Unknown ") + what + " name: '" + name + "'");
+    throw WasmRangeError(std::string("Unknown ") + what + " name: '" + name + "'");
   }
   // Reject non-number, non-string values (e.g. a boolean) instead of coercing
   // them to a bogus ordinal, matching the Node addon's enum reader.
   if (value.typeOf().as<std::string>() != "number") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string("Expected ") + what + " to be a number or string");
+    throw WasmTypeError(std::string("Expected ") + what + " to be a number or string");
   }
   // The name path cannot spell an ordinal outside the table, so the numeric path
   // must not either: mod source and destination land in a struct field the core
@@ -192,15 +190,14 @@ inline void enumProperty(emscripten::val object, const char* key, const char* co
 inline void requiredEnumProperty(emscripten::val object, const char* key, const char* const* names,
                                  int count, const char* what, int* out) {
   if (!hasProperty(object, key)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string("Missing required ") + what + ": '" + key + "'");
+    throw WasmTypeError(std::string("Missing required ") + what + ": '" + key + "'");
   }
   enumProperty(object, key, names, count, what, out);
 }
 
 inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
   const std::string bare = name.rfind("va:", 0) == 0 ? name.substr(3) : name;
-  std::strncpy(patch->preset, bare.c_str(), SONARE_SYNTH_PRESET_NAME_MAX - 1);
+  std::strncpy(patch->preset, wasmCString(bare, "preset"), SONARE_SYNTH_PRESET_NAME_MAX - 1);
 }
 
 /// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
@@ -218,14 +215,12 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
     return patch;
   }
   if (desc.typeOf().as<std::string>() != "object") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "synth patch must be a preset-name string or an object");
+    throw WasmTypeError("synth patch must be a preset-name string or an object");
   }
   if (hasProperty(desc, "preset")) {
     emscripten::val preset = desc["preset"];
     if (preset.typeOf().as<std::string>() != "string") {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "synth patch preset must be a string");
+      throw WasmTypeError("synth patch preset must be a string");
     }
     setPresetName(&patch, preset.as<std::string>());
   }
@@ -296,8 +291,7 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
     if (emscripten::val::global("Array").call<bool>("isArray", routings)) {
       const size_t count = routings["length"].as<size_t>();
       if (count > SONARE_SYNTH_PATCH_MOD_ROUTINGS) {
-        throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                      "a synth patch supports at most 8 mod routings");
+        throw WasmRangeError("a synth patch supports at most 8 mod routings");
       }
       patch.num_mod_routings = static_cast<int>(count);
       // An explicitly supplied array — including an empty one — replaces the

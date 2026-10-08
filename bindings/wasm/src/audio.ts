@@ -216,8 +216,9 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  *
  * @param channels - One `Float32Array` per channel, all of the same length.
  * @param targetLayout - `0` mono, `1` stereo, `2` 5.1, `3` 7.1.
- * @throws SonareError with `codeName: 'InvalidParameter'` for an upmix, an
- *   unknown layout, no channels, or channels of differing length.
+ * @throws SonareError with `codeName: 'InvalidParameter'` for an upmix or an
+ *   unknown layout.
+ * @throws RangeError for no channels, or channels of differing length.
  * @returns One `Float32Array` per channel of the target layout.
  */
 export function downmix(channels: Float32Array[], targetLayout: ChannelLayout): Float32Array[] {

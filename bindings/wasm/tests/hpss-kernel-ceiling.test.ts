@@ -36,6 +36,7 @@ import {
   renderPercussiveEvents,
   type SonareError,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 22050;
 
@@ -175,6 +176,11 @@ function expectParameterRefusal(caught: unknown): SonareError {
   return error;
 }
 
+/** The binding's own reader refused the value before the core saw it: a `RangeError`. */
+function expectReaderRefusal(caught: unknown): Error {
+  return expectArgumentRefusal(caught);
+}
+
 /** The refusal names the filter, the value passed, and the ceiling. */
 function expectCeilingRefusal(caught: unknown, direction: Direction, kernel: number): void {
   const error = expectParameterRefusal(caught);
@@ -304,7 +310,7 @@ describe('percussive-event separation kernel', () => {
 
     for (const { passed, wrapsTo } of WRAPPING) {
       it(`refuses a ${direction} kernel of ${passed} by naming the option`, () => {
-        const error = expectParameterRefusal(
+        const error = expectReaderRefusal(
           capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: passed })),
         );
         expect(error.message).toContain(`${key} must be a finite number within the 32-bit integer`);
@@ -344,14 +350,14 @@ describe('percussive-event separation kernel', () => {
     });
 
     it(`refuses a ${direction} kernel past the signed range by name`, () => {
-      const error = expectParameterRefusal(
+      const error = expectReaderRefusal(
         capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: INT_MAX + 1 })),
       );
       expect(error.message).toContain(`${key} must be a finite number within the 32-bit integer`);
     });
 
     it(`refuses a negative ${direction} kernel by name`, () => {
-      const error = expectParameterRefusal(
+      const error = expectReaderRefusal(
         capture(() => extractPercussiveEvents({ samples: hits, sampleRate, [key]: -1 })),
       );
       expect(error.message).toContain('must not be negative');

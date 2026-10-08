@@ -1,6 +1,7 @@
 /**
  * WASM error-surface tests: native (C++) failures must reach JS as a
- * SonareError carrying name / numeric code / codeName, matching the C ABI.
+ * SonareError carrying name / numeric code / codeName, matching the C ABI. An
+ * argument the binding refuses itself reaches JS as a TypeError / RangeError.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -11,6 +12,7 @@ import {
   init,
   isSonareError,
   Mixer,
+  RealtimeEngine,
   SonareError,
   synthPresetPatch,
 } from '../dist/index.js';
@@ -45,11 +47,15 @@ describe('SonareError', () => {
   });
 
   it('rethrows a native C++ exception as a coded SonareError', () => {
+    // An unknown marker id is the engine's answer, not a refused argument.
+    const engine = new RealtimeEngine(48000, 128);
     let caught: unknown;
     try {
-      synthPresetPatch('definitely-not-a-real-preset');
+      engine.marker(999);
     } catch (e) {
       caught = e;
+    } finally {
+      engine.destroy();
     }
     expect(caught).toBeInstanceOf(SonareError);
     expect(isSonareError(caught)).toBe(true);
@@ -59,7 +65,31 @@ describe('SonareError', () => {
     expect(err.code).toBe(ErrorCode.InvalidParameter);
     expect(err.codeName).toBe('InvalidParameter');
     // The native detail message survives the pointer round-trip.
-    expect(err.message).toContain('preset');
+    expect(err.message).toContain('marker');
+  });
+
+  it('rethrows a refused argument as the native JS class, not a SonareError', () => {
+    let caught: unknown;
+    try {
+      synthPresetPatch('definitely-not-a-real-preset');
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(RangeError);
+    expect(isSonareError(caught)).toBe(false);
+    expect((caught as Error).message).toContain('preset');
+
+    const engine = new RealtimeEngine(48000, 128);
+    let wrongType: unknown;
+    try {
+      engine.setMarkers([{ id: 1, ppq: 'x' as unknown as number }]);
+    } catch (e) {
+      wrongType = e;
+    } finally {
+      engine.destroy();
+    }
+    expect(wrongType).toBeInstanceOf(TypeError);
+    expect(isSonareError(wrongType)).toBe(false);
   });
 });
 
@@ -79,11 +109,14 @@ describe('SonareError is a value class with brand-based instanceof', () => {
   });
 
   it('narrows a native failure through instanceof as well as isSonareError', () => {
+    const engine = new RealtimeEngine(48000, 128);
     let caught: unknown;
     try {
-      synthPresetPatch('definitely-not-a-real-preset');
+      engine.marker(999);
     } catch (e) {
       caught = e;
+    } finally {
+      engine.destroy();
     }
     expect(isSonareError(caught)).toBe(true);
     // The two must never disagree: instanceof delegates to the same predicate.

@@ -22,6 +22,7 @@ import {
   PROJECT_AUTOMATION_CURVE_VALUES,
   projectAutomationCurveCode,
 } from '../src/codes';
+import { expectArgumentRefusal } from './_helpers';
 
 interface AutomationCurveCorpus {
   accepted: Array<{ value: string; ordinal: number }>;
@@ -363,12 +364,8 @@ describe('Sonare WASM Project edit ops', () => {
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught)).toBe(true);
-      if (!isSonareError(caught)) {
-        throw new Error('expected SonareError');
-      }
-      expect(caught.code).toBe(ErrorCode.InvalidParameter);
-      expect(caught.message).toContain('crossfadePpq');
+      const caughtRefusal = expectArgumentRefusal(caught, TypeError);
+      expect(caughtRefusal.message).toContain('crossfadePpq');
     } finally {
       project.delete();
     }

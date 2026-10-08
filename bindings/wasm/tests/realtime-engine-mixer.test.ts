@@ -6,6 +6,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ErrorCode, init, isSonareError, RealtimeEngine } from '../dist/index.js';
 import { sidechainCheckFromCode } from '../src/codes';
+import { expectRefusalOf } from './_helpers';
 
 describe('Sonare WASM Module', () => {
   const rms = (data: Float32Array): number => {
@@ -633,9 +634,9 @@ describe('Sonare WASM Module', () => {
 
     it('primeOfflineParameters refuses bad counts and resetProcessorState a full queue', () => {
       const engine = new RealtimeEngine(SR, BLOCK);
-      expectInvalidParameter(() => engine.primeOfflineParameters(0, BLOCK));
-      expectInvalidParameter(() => engine.primeOfflineParameters(2, 0));
-      expectInvalidParameter(() => engine.primeOfflineParameters(10_000, BLOCK));
+      expectRefusalOf(() => engine.primeOfflineParameters(0, BLOCK));
+      expectRefusalOf(() => engine.primeOfflineParameters(2, 0));
+      expectRefusalOf(() => engine.primeOfflineParameters(10_000, BLOCK));
       expect(() => engine.primeOfflineParameters('2' as unknown as number, BLOCK)).toThrow(
         /numChannels/,
       );

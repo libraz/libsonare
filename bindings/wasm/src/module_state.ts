@@ -15,6 +15,8 @@ interface NativeExceptionInfo {
   code: number;
   codeName: string;
   message: string;
+  /** Present when the binding refused an argument itself: the JS class to rebuild it as. */
+  kind?: 'TypeError' | 'RangeError';
 }
 
 /**
@@ -41,10 +43,13 @@ export function nativeExceptionPtr(error: unknown): number | null {
 }
 
 /**
- * Turn a thrown native exception pointer into a {@link SonareError}. The bound
- * `sonareExceptionInfo` decodes the pointer back into { code, codeName,
- * message }, then `sonareReleaseException` drops the reference emscripten's
- * `__cxa_throw` took before rethrowing the pointer into JS.
+ * Turn a thrown native exception pointer into a {@link SonareError}, or into a
+ * `TypeError` / `RangeError` when the binding refused an argument itself (a
+ * wrong-typed or out-of-domain value, as opposed to a library or object-state
+ * failure, which stays a coded `SonareError`). The bound `sonareExceptionInfo`
+ * decodes the pointer back into { code, codeName, message, kind }, then
+ * `sonareReleaseException` drops the reference emscripten's `__cxa_throw` took
+ * before rethrowing the pointer into JS.
  *
  * The release is mandatory, not an optimization: no C++ frame catches the
  * exception, so that reference is the only one and nothing else ever drops it.
@@ -54,9 +59,10 @@ export function nativeExceptionPtr(error: unknown): number | null {
  * documented usage of this API. It runs in a `finally` so a decode failure
  * still frees, and after decoding because freeing invalidates the message.
  */
-function makeSonareError(raw: SonareModule, thrown: number): SonareError {
+function makeSonareError(raw: SonareModule, thrown: number): Error {
   let code: number = ErrorCode.Unknown;
   let codeName = 'Unknown';
+  let kind: NativeExceptionInfo['kind'];
   let message = `libsonare native exception (${thrown})`;
   try {
     const info = (
@@ -66,6 +72,7 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
       code = info.code ?? code;
       codeName = info.codeName ?? codeName;
       message = info.message || message;
+      kind = info.kind;
     }
   } catch {
     // Fall back to the generic message if decoding fails.
@@ -76,6 +83,12 @@ function makeSonareError(raw: SonareModule, thrown: number): SonareError {
       // A module built before the release binding existed still yields an error
       // object; it just keeps leaking, which is what this replaces.
     }
+  }
+  if (kind === 'TypeError') {
+    return new TypeError(message);
+  }
+  if (kind === 'RangeError') {
+    return new RangeError(message);
   }
   return new SonareError(code, codeName, message);
 }

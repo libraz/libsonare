@@ -191,7 +191,11 @@ function workerError(message: VocalWorkerErrorMessage): Error {
   const error =
     message.error.name === 'SonareError' && typeof code === 'number'
       ? new SonareError(code, codeName ?? '', message.error.message)
-      : new Error(message.error.message);
+      : message.error.name === 'RangeError'
+        ? new RangeError(message.error.message)
+        : message.error.name === 'TypeError'
+          ? new TypeError(message.error.message)
+          : new Error(message.error.message);
   error.name = message.error.name;
   for (const key of [
     'code',

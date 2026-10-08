@@ -27,6 +27,7 @@ import {
   type SonareError,
   spectralEdit,
 } from '../dist/index.js';
+import { expectRefusalOf } from './_helpers';
 
 beforeAll(async () => {
   await init();
@@ -65,8 +66,8 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
     expect(legal(7, 8)).toEqual([7, 8]);
 
     for (const value of [...SATURATING, ...NON_FINITE, 4.5]) {
-      expectInvalidParameter(() => legal(value, 4));
-      expectInvalidParameter(() => legal(4, value));
+      expectRangeRefusal(() => legal(value, 4));
+      expectRangeRefusal(() => legal(4, value));
     }
   });
 
@@ -88,7 +89,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
     // A rate the project does not carry is refused, which is what makes the
     // acceptance above a measurement of the field rather than of its absence.
     expectInvalidParameter(() => importAt(44100));
-    expectInvalidParameter(() => importAt(48000.5));
+    expectRangeRefusal(() => importAt(48000.5));
   });
 
   it('keeps the -1 routing sentinel while refusing what a cast turned into a filter', () => {
@@ -108,7 +109,7 @@ describe('int fields refuse a saturating, fractional or non-finite value', () =>
 
     for (const key of ['filterGroup', 'filterChannel', 'remapChannel']) {
       for (const value of [...SATURATING, ...NON_FINITE, 1.5]) {
-        expectInvalidParameter(() => routed({ [key]: value }));
+        expectRangeRefusal(() => routed({ [key]: value }));
       }
     }
   });
@@ -155,9 +156,13 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     expect(withProvider(1)).toBeCloseTo(0.25, 4);
     expect(withProvider(2)).toBeCloseTo(-0.5, 4);
     // 1.5 and 2.9 used to resolve onto those same two providers.
-    expectInvalidParameter(() => withProvider(1.5));
-    expectInvalidParameter(() => withProvider(2.9));
-    for (const value of [...NON_FINITE, ...SATURATING, 0, -1, 3]) {
+    expectRangeRefusal(() => withProvider(1.5));
+    expectRangeRefusal(() => withProvider(2.9));
+    for (const value of [...NON_FINITE, ...SATURATING]) {
+      expectRangeRefusal(() => withProvider(value));
+    }
+    // A whole number that names no live provider is the engine's answer, not an argument refusal.
+    for (const value of [0, -1, 3]) {
       expectInvalidParameter(() => withProvider(value));
     }
   });
@@ -169,7 +174,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
       6,
     );
     for (const value of [...SATURATING, ...NON_FINITE, 1.5]) {
-      expectInvalidParameter(() => render({ lengthSamples: 128, warpMode: value }));
+      expectRangeRefusal(() => render({ lengthSamples: 128, warpMode: value }));
     }
   });
 });
@@ -196,7 +201,7 @@ describe('synth patch enum ordinals refuse a fractional or non-finite value', ()
     expect(render({ engineMode: 1 })).not.toBeCloseTo(render({ engineMode: 2 }), 8);
     for (const key of ['engineMode', 'waveform', 'filterModel', 'body']) {
       for (const value of [...NON_FINITE, 1.5]) {
-        expectInvalidParameter(() => render({ [key]: value }));
+        expectRangeRefusal(() => render({ [key]: value }));
       }
     }
   });
@@ -232,7 +237,7 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
   it('refuses a controller number past the byte instead of wrapping it', () => {
     // 256 used to emit controller 0, 300 controller 44, and 512 controller 0.
     for (const value of [256, 300, 512, -1, 1.5, ...NON_FINITE, ...SATURATING]) {
-      expectInvalidParameter(() => encode({ ccNumber: value }));
+      expectRangeRefusal(() => encode({ ccNumber: value }));
     }
   });
 
@@ -240,7 +245,7 @@ describe('MIDI byte fields refuse a value that would wrap into the byte domain',
     expect((encode({ channel: 255 }) >>> 16) & 0xf).toBe(0);
     expect((encode({ channel: 7 }) >>> 16) & 0xf).toBe(7);
     for (const value of [256, 257, 511, 512, -1, 1.5, ...NON_FINITE]) {
-      expectInvalidParameter(() => encode({ channel: value }));
+      expectRangeRefusal(() => encode({ channel: value }));
     }
   });
 
@@ -300,7 +305,7 @@ describe('a positional parameter id refuses what the positional path used to wra
     // constants shared by this file are deliberately NOT reused here: most of
     // them are legal uint32 ids, so refusing them would be the wrong answer.
     for (const value of [2 ** 32 + 5, 5.5, -1, 2 ** 40, 2 ** 53 + 1, ...NON_FINITE]) {
-      expectInvalidParameter(() => selectedCc(value));
+      expectRangeRefusal(() => selectedCc(value));
     }
   });
 
@@ -359,7 +364,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     expect(sound({ destinationId: 6 }, 6)).toBeGreaterThan(0);
     // -1 and NaN both used to clamp onto destination 0 and sound there.
     for (const value of [-1, 1.5, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
-      expectInvalidParameter(() => sound({ destinationId: value }));
+      expectRangeRefusal(() => sound({ destinationId: value }));
     }
   });
 
@@ -370,7 +375,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     expect(at(0)).toBeGreaterThan(at(64));
     expect(at(64)).toBeGreaterThan(0);
     for (const value of [1.5, ...NON_FINITE]) {
-      expectInvalidParameter(() => at(value));
+      expectRangeRefusal(() => at(value));
     }
   });
 
@@ -389,7 +394,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     expect(bounce(128)).toBe(128);
     expect(bounce(256)).toBe(256);
     for (const value of [1.5, ...NON_FINITE, -1, 0]) {
-      expectInvalidParameter(() => bounce(value));
+      expectRangeRefusal(() => bounce(value));
     }
   });
 
@@ -410,7 +415,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     expect(bounceAt(256)).toBe(256);
     expect(bounceAt(512)).toBe(512);
     for (const value of [1.5, ...NON_FINITE, 1e300]) {
-      expectInvalidParameter(() => bounceAt(value));
+      expectRangeRefusal(() => bounceAt(value));
     }
     // A numeric string differentiates requireInt64Property from int64Property:
     // both refuse a fraction or an out-of-range value equally, but only the
@@ -430,7 +435,7 @@ describe('realtime-engine options-bag readers refuse a silently coerced value', 
     expect(editWithStart(0)).toHaveLength(samples.length);
     expect(editWithStart(2048)).toHaveLength(samples.length);
     for (const value of [1.5, ...NON_FINITE, 1e300]) {
-      expectInvalidParameter(() => editWithStart(value));
+      expectRangeRefusal(() => editWithStart(value));
     }
     // Same differentiation as Project.bounce's totalFrames above: a numeric
     // string is the one input requireInt64Property refuses that int64Property
@@ -460,7 +465,7 @@ describe('annotation ordinals refuse a value that clamps or truncates onto a mem
   it('refuses a negative, fractional or non-finite pitch class', () => {
     for (const key of ['tonicPc', 'mode']) {
       for (const value of [-1, -2, 1.5, ...NON_FINITE, 2 ** 32, 2 ** 53 + 1]) {
-        expectInvalidParameter(() => annotate({ [key]: value }));
+        expectRangeRefusal(() => annotate({ [key]: value }));
       }
     }
   });
@@ -487,7 +492,7 @@ describe('float options refuse a value the float type cannot hold', () => {
     expect(dereverb(0.2)).not.toBeCloseTo(dereverb(1.0), 6);
     // 3.5e38, 1e39, 1e300 and Infinity all became +inf and reached one result.
     for (const value of [3.5e38, 1e39, 1e300, Number.POSITIVE_INFINITY]) {
-      expectInvalidParameter(() => dereverb(value));
+      expectRangeRefusal(() => dereverb(value));
     }
   });
 });
@@ -529,7 +534,7 @@ describe('a positional offset refuses what the positional path used to wrap', ()
 
   it('refuses an offset that used to fold onto a real window', () => {
     for (const value of [2 ** 32 + 100, 100.5, -1, 2 ** 40, ...NON_FINITE]) {
-      expectInvalidParameter(() => peakHz(value));
+      expectRangeRefusal(() => peakHz(value));
     }
   });
 
@@ -547,16 +552,7 @@ describe('the double reader refuses a non-finite number at the read', () => {
   // the point: the check belongs to the reader so the next field added to one of
   // these bags inherits it, and the assertions below are written on the message
   // because that is the only thing a caller can see change.
-  const refusalFor = (fn: () => unknown): SonareError => {
-    let caught: unknown;
-    try {
-      fn();
-    } catch (e) {
-      caught = e;
-    }
-    expect(isSonareError(caught)).toBe(true);
-    return caught as SonareError;
-  };
+  const refusalFor = (fn: () => unknown): Error => expectRefusalOf(fn);
 
   const withEngine = <T>(fn: (engine: RealtimeEngine) => T): T => {
     const engine = new RealtimeEngine(48000, 128);
@@ -581,7 +577,6 @@ describe('the double reader refuses a non-finite number at the read', () => {
       const error = withEngine((engine) =>
         refusalFor(() => engine.setTempoSegments([{ startPpq: 0, bpm: value }])),
       );
-      expect(error.code).toBe(ErrorCode.InvalidParameter);
       expect(error.message).toContain('bpm must be a finite number');
       // The site's own composite check is the fallback, not the first line of
       // defence; seeing its wording here would mean the reader let the value by.
@@ -593,7 +588,6 @@ describe('the double reader refuses a non-finite number at the read', () => {
     const error = withEngine((engine) =>
       refusalFor(() => engine.setMarkers([{ ppq: 0, id: Number.NaN }])),
     );
-    expect(error.code).toBe(ErrorCode.InvalidParameter);
     expect(error.message).toContain('id must be a finite number');
   });
 });
@@ -630,7 +624,7 @@ describe('fixFrames reads each frame element through the scalar guard, not a raw
     // 2**32 + 5 used to wrap onto 5 -- identical to the legal [5] above -- and
     // 1.5 used to truncate onto 1.
     for (const value of [2 ** 32 + 5, 1.5, ...SATURATING, ...NON_FINITE]) {
-      expectInvalidParameter(() => fixFrames(lyingElement([0], 0, value), -1, -1, false));
+      expectRangeRefusal(() => fixFrames(lyingElement([0], 0, value), -1, -1, false));
     }
   });
 });
@@ -652,7 +646,7 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
     expect(Project.midiRouteEvents(oneEvent, {}).events.length).toBe(1);
     expect(Project.midiRouteEvents(twoEvents, {}).events.length).toBe(2);
     for (const value of WRAPPING_LENGTHS) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         Project.midiRouteEvents({ length: value } as unknown as typeof oneEvent, {}),
       );
     }
@@ -668,10 +662,10 @@ describe('array-like `.length` reads refuse a wrapped, negative or fractional co
     expect(Project.midiParamToCc([], 1, 0.5, 0, 0)).toBeNull();
     expect(Project.midiParamToCc([binding(7)], 1, 0.5, 0, 0)).not.toBeNull();
     for (const value of WRAPPING_LENGTHS) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         Project.midiParamToCc({ length: value } as unknown as CcBinding[], 1, 0.5, 0, 0),
       );
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         Project.midiCcLearn(
           { length: value } as unknown as ReturnType<typeof Project.midiNoteOn>[],
           1,
@@ -704,7 +698,7 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
     }
     for (const id of REFUSED) {
       withEngine((engine) =>
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.addParameter({ id, name: 'p', minValue: 0, maxValue: 1, defaultValue: 0 }),
         ),
       );
@@ -720,9 +714,9 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
       }
       expect(() => engine.setLoopFromMarkers(LEGAL[0], LEGAL[2])).not.toThrow();
       for (const id of REFUSED) {
-        expectInvalidParameter(() => engine.marker(id));
-        expectInvalidParameter(() => engine.seekMarker(id));
-        expectInvalidParameter(() => engine.setLoopFromMarkers(id, LEGAL[2]));
+        expectRangeRefusal(() => engine.marker(id));
+        expectRangeRefusal(() => engine.seekMarker(id));
+        expectRangeRefusal(() => engine.setLoopFromMarkers(id, LEGAL[2]));
       }
     });
   });
@@ -739,8 +733,8 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
         expect(() => engine.setClips([clip(id, id)])).not.toThrow();
       }
       for (const id of REFUSED) {
-        expectInvalidParameter(() => engine.setClips([clip(id, 1)]));
-        expectInvalidParameter(() => engine.setClips([clip(1, id)]));
+        expectRangeRefusal(() => engine.setClips([clip(id, 1)]));
+        expectRangeRefusal(() => engine.setClips([clip(1, id)]));
       }
     });
   });
@@ -759,14 +753,12 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
     }
     for (const id of REFUSED) {
       withEngine((engine) => {
-        expectInvalidParameter(() => engine.setTrackLanes([id]));
-        expectInvalidParameter(() => engine.setTrackLanes([{ trackId: id }]));
-        expectInvalidParameter(() => engine.setTrackLanes([{ trackId: 1, outputBusId: id }]));
-        expectInvalidParameter(() => engine.setTrackBuses([{ busId: id, gainDb: 0 }]));
-        expectInvalidParameter(() =>
-          engine.setTrackBuses([{ busId: 7, gainDb: 0, outputBusId: id }]),
-        );
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() => engine.setTrackLanes([id]));
+        expectRangeRefusal(() => engine.setTrackLanes([{ trackId: id }]));
+        expectRangeRefusal(() => engine.setTrackLanes([{ trackId: 1, outputBusId: id }]));
+        expectRangeRefusal(() => engine.setTrackBuses([{ busId: id, gainDb: 0 }]));
+        expectRangeRefusal(() => engine.setTrackBuses([{ busId: 7, gainDb: 0, outputBusId: id }]));
+        expectRangeRefusal(() =>
           engine.setTrackBuses([{ busId: 7, gainDb: 0, sends: [{ busId: id, levelDb: 0 }] }]),
         );
       });
@@ -789,7 +781,7 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
     for (const id of REFUSED) {
       withEngine((engine) => {
         engine.setClips([{ id: 5, channels: [new Float32Array(128).fill(0.25)], startPpq: 0 }]);
-        expectInvalidParameter(() =>
+        expectRangeRefusal(() =>
           engine.freezeOffline({ totalFrames: 128, blockSize: 128, numChannels: 1, clipId: id }),
         );
       });
@@ -804,10 +796,14 @@ describe('uint32 ids keep their whole domain on every WASM id path', () => {
         expect(project.setMarkerEx({ id, ppq: 0, name: 'm' })).toBe(id);
       }
       for (const id of REFUSED) {
-        expectInvalidParameter(() => project.setMarkerEx({ id, ppq: 0, name: 'm' }));
+        expectRangeRefusal(() => project.setMarkerEx({ id, ppq: 0, name: 'm' }));
       }
     } finally {
       project.delete();
     }
   });
 });
+
+const expectRangeRefusal = (fn: () => unknown): void => {
+  expectRefusalOf(fn);
+};

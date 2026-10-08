@@ -96,7 +96,7 @@ val js_pitch_shift_ex(val samples, const val& sample_rate_val, const val& semito
   const float semitones = checkedFloatFromVal(semitones_val, "semitones");
   PitchShiftPlan plan;
   if (!make_pitch_shift_plan(samples["length"].as<size_t>(), sample_rate, semitones, &plan)) {
-    throw SonareException(ErrorCode::InvalidParameter, "unsupported pitch-shift expansion");
+    throw WasmRangeError("unsupported pitch-shift expansion");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
   PitchShiftConfig config;
@@ -192,8 +192,7 @@ val js_pitch_correct_to_midi_timevarying(val samples, const val& sample_rate_val
   std::vector<float> voiced_vec = has_voiced ? float32ArrayToVector(voiced) : std::vector<float>{};
   std::vector<float> prob_vec = has_prob ? float32ArrayToVector(voiced_prob) : std::vector<float>{};
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "voiced and voicedProb must match f0Hz length");
+    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
   }
 
   const editing::pitch_editor::F0Track track =
@@ -246,14 +245,13 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     if (hasProperty(options, "mode")) {
       const val mode_value = options["mode"];
       if (mode_value.typeOf().as<std::string>() != "string") {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "pitch correction mode must be 'midi' or 'scale'");
+        throw WasmRangeError("pitch correction mode must be 'midi' or 'scale'");
       }
       const std::string mode = mode_value.as<std::string>();
       if (mode == "scale") {
         scale_mode = true;
       } else if (mode != "midi") {
-        throw SonareException(ErrorCode::InvalidParameter, "unknown pitch correction mode");
+        throw WasmRangeError("unknown pitch correction mode");
       }
     }
     target_midi = floatProperty(options, "targetMidi", target_midi);
@@ -265,8 +263,7 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
             ? static_cast<int>(scale_mask_for_mode(modeFromVal(mask_value, "scaleModeMask")))
             : intProperty(options, "scaleModeMask", static_cast<int>(config.scale.mode_mask));
     if (scale_mode_mask < 0 || scale_mode_mask > 0x0FFF) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "scaleModeMask must be a non-zero 12-bit mask");
+      throw WasmRangeError("scaleModeMask must be a non-zero 12-bit mask");
     }
     config.scale.mode_mask = static_cast<uint16_t>(scale_mode_mask);
     config.scale.reference_midi =
@@ -281,11 +278,10 @@ val js_pitch_correct_timevarying(val samples, const val& sample_rate_val, val f0
     if (has_prob) prob_vec = float32ArrayToVector(voiced_prob);
   }
   if ((has_voiced && voiced_vec.size() != n_frames) || (has_prob && prob_vec.size() != n_frames)) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "voiced and voicedProb must match f0Hz length");
+    throw WasmRangeError("voiced and voicedProb must match f0Hz length");
   }
   if (!scale_mode && (!std::isfinite(target_midi) || target_midi < 0.0f || target_midi > 127.0f)) {
-    throw SonareException(ErrorCode::InvalidParameter, "targetMidi must be finite and in [0, 127]");
+    throw WasmRangeError("targetMidi must be finite and in [0, 127]");
   }
   const editing::pitch_editor::F0Track track =
       buildF0Track(sample_rate, hop_length, f0, has_voiced, voiced_vec, has_prob, prob_vec);
@@ -304,7 +300,7 @@ val js_auto_tune(val samples, const val& sample_rate_val, const val& key_val, va
   if (!key_val.isUndefined() && !key_val.isNull()) {
     const int root = checkedIntFromVal(key_val["root"], "key.root");
     if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B)) {
-      throw SonareException(ErrorCode::InvalidParameter, "key.root must be in [0, 11]");
+      throw WasmRangeError("key.root must be in [0, 11]");
     }
     named = Key{static_cast<PitchClass>(root), modeFromVal(key_val["mode"], "key.mode"), 1.0f};
   }
@@ -381,8 +377,9 @@ val js_voice_change_realtime(val samples, const val& sample_rate, std::string pr
   std::vector<float> input = float32ArrayToVector(samples);
   float* output = nullptr;
   size_t output_length = 0;
-  const SonareError err = sonare_voice_change_realtime(
-      input.data(), input.size(), rate, preset.c_str(), channel_count, &output, &output_length);
+  const SonareError err =
+      sonare_voice_change_realtime(input.data(), input.size(), rate, wasmCString(preset, "preset"),
+                                   channel_count, &output, &output_length);
   if (err != SONARE_OK) {
     sonare_free_floats(output);
     // Map the C code back rather than collapsing every failure onto
@@ -446,8 +443,7 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
   // ABI rate > 0 check (sonare_phase_vocoder); no upper cap is imposed on fast
   // rates.
   if (rate <= 0.0f) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "phaseVocoder: rate must be a positive number");
+    throw WasmRangeError("phaseVocoder: rate must be a positive number");
   }
   Audio audio = loadValidatedAudio(samples, sample_rate);
 
@@ -469,7 +465,7 @@ val js_phase_vocoder(val samples, const val& sample_rate_val, const val& rate_va
 val js_normalize_ex(val samples, const val& sample_rate, const val& target_db_val,
                     const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
-    throw SonareException(ErrorCode::InvalidParameter, "normalize: mode must be 'peak' or 'rms'");
+    throw WasmRangeError("normalize: mode must be 'peak' or 'rms'");
   }
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");
   Audio audio = loadValidatedAudio(samples, checkedIntFromVal(sample_rate, "sampleRate"));
@@ -489,8 +485,7 @@ val js_normalize(val samples, const val& sample_rate, const val& target_db) {
 val js_normalize_stereo(val left_samples, val right_samples, const val& sample_rate_val,
                         const val& target_db_val, const std::string& mode) {
   if (mode != "peak" && mode != "rms") {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "normalizeStereo: mode must be 'peak' or 'rms'");
+    throw WasmRangeError("normalizeStereo: mode must be 'peak' or 'rms'");
   }
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const float target_db = checkedFloatFromVal(target_db_val, "targetDb");

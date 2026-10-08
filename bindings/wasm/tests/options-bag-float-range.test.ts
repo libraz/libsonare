@@ -37,14 +37,12 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
-  ErrorCode,
   init,
-  isSonareError,
   masteringRepairDereverbConfigForRoom,
   pcen,
   type RoomEstimateResult,
-  type SonareError,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 /** The suffix both readers' refusal message ends with, whatever the key is. */
 const RANGE_MESSAGE = 'must be a finite number within the 32-bit float range';
@@ -72,10 +70,8 @@ const capture = (run: () => unknown): unknown => {
 };
 
 /** Asserts the caught value is the reader's out-of-float-range refusal for `key`. */
-function expectRangeRefusal(caught: unknown, key: string): SonareError {
-  expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
+function expectRangeRefusal(caught: unknown, key: string): Error {
+  const error = expectArgumentRefusal(caught);
   expect(error.message).toBe(`${key} ${RANGE_MESSAGE}`);
   return error;
 }
@@ -148,9 +144,8 @@ describe('floatOption refuses a finite value wider than a float', () => {
     expect(omitted.lateDelayMs).not.toBe(configForRoom(900).lateDelayMs);
     for (const value of WRONG_TYPES) {
       const caught = capture(() => configForRoom(value));
-      expect(isSonareError(caught), `volume ${JSON.stringify(value)}`).toBe(true);
-      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
-      expect((caught as SonareError).message).toBe('volume must be a number');
+      const error = expectArgumentRefusal(caught, TypeError, `volume ${JSON.stringify(value)}`);
+      expect(error.message).toBe('volume must be a number');
     }
   });
 });
@@ -193,15 +188,14 @@ describe('floatProperty refuses a finite value wider than a float', () => {
     // coerce into a number nobody wrote; none reaches the narrowing.
     for (const value of ['0.8', [0.8], true, {}]) {
       const caught = capture(() => pcenWith(value));
-      expect(isSonareError(caught), `gain ${JSON.stringify(value)}`).toBe(true);
-      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
-      expect((caught as SonareError).message).toBe('gain must be a number');
+      const error = expectArgumentRefusal(caught, TypeError, `gain ${JSON.stringify(value)}`);
+      expect(error.message).toBe('gain must be a number');
     }
   });
 });
 
 describe('both readers answer 1e300 the same way', () => {
-  it('refuses it by the same code and the same message, naming each field', () => {
+  it('refuses it by the same class and the same message, naming each field', () => {
     const fromOption = expectRangeRefusal(
       capture(() => configForRoom(1e300)),
       'volume',
@@ -210,7 +204,7 @@ describe('both readers answer 1e300 the same way', () => {
       capture(() => pcenWith(1e300)),
       'gain',
     );
-    expect(fromOption.code).toBe(fromProperty.code);
+    expect(fromOption.constructor).toBe(fromProperty.constructor);
     expect(fromOption.message.replace('volume', '<key>')).toBe(
       fromProperty.message.replace('gain', '<key>'),
     );

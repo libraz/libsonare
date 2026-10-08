@@ -23,14 +23,8 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import {
-  detectOnsets,
-  ErrorCode,
-  extractPercussiveEvents,
-  init,
-  isSonareError,
-  type SonareError,
-} from '../dist/index.js';
+import { detectOnsets, extractPercussiveEvents, init } from '../dist/index.js';
+import { expectArgumentRefusal, expectRefusalOf } from './_helpers';
 
 const sampleRate = 22050;
 
@@ -62,17 +56,8 @@ beforeAll(async () => {
 const onsets = (options: Record<string, number | boolean>): number[] =>
   Array.from(detectOnsets(clicks, sampleRate, options));
 
-function expectRefusalNaming(field: string, options: Record<string, number>): SonareError {
-  let caught: unknown;
-  try {
-    detectOnsets(clicks, sampleRate, options);
-  } catch (error) {
-    caught = error;
-  }
-  expect(caught, `expected ${field} = ${options[field]} to be refused`).toBeDefined();
-  expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
+function expectRefusalNaming(field: string, options: Record<string, number>): Error {
+  const error = expectRefusalOf(() => detectOnsets(clicks, sampleRate, options));
   expect(error.message).toContain(field);
   return error;
 }
@@ -194,9 +179,7 @@ describe('the percussive extractor refuses a wait that is not a whole frame coun
         caught = error;
       }
       expect(result, `onsetWait = ${value} must not return the default-wait set`).toBeUndefined();
-      expect(isSonareError(caught)).toBe(true);
-      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
-      expect((caught as SonareError).message).toContain('onsetWait must be an integer');
+      expect(expectArgumentRefusal(caught).message).toContain('onsetWait must be an integer');
     }
     // The set the refusals must not have silently produced.
     expect(base).toHaveLength(3);
@@ -210,8 +193,7 @@ describe('the percussive extractor refuses a wait that is not a whole frame coun
       } catch (error) {
         caught = error;
       }
-      expect(isSonareError(caught), `onsetWait = ${value} must be refused`).toBe(true);
-      expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+      expectArgumentRefusal(caught, RangeError, `onsetWait = ${value} must be refused`);
     }
   });
 });

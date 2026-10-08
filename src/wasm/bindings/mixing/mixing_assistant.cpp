@@ -55,23 +55,18 @@ bool isAbsent(const val& value) { return value.isUndefined() || value.isNull(); 
 // optional arrays are the caller's business and are handled at the call site.
 void requireJsArray(const val& value, const char* subject) {
   if (!isJsArray(value)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  std::string(subject) + " must be an array");
+    throw WasmTypeError(std::string(subject) + " must be an array");
   }
 }
 
 std::string requireTrackId(const val& ids, std::size_t index) {
   const val value = ids[index];
   if (isAbsent(value) || value.typeOf().as<std::string>() != "string") {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "trackIds[" + std::to_string(index) + "] must be a non-empty string");
+    throw WasmTypeError("trackIds[" + std::to_string(index) + "] must be a non-empty string");
   }
   std::string id = value.as<std::string>();
   if (id.empty()) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidParameter,
-        "trackIds[" + std::to_string(index) + "] must be a non-empty string");
+    throw WasmTypeError("trackIds[" + std::to_string(index) + "] must be a non-empty string");
   }
   return id;
 }
@@ -83,8 +78,7 @@ std::string optionalTrackName(const val& names, std::size_t index) {
   const val value = names[index];
   if (isAbsent(value)) return {};
   if (value.typeOf().as<std::string>() != "string") {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "trackNames[" + std::to_string(index) + "] must be a string");
+    throw WasmTypeError("trackNames[" + std::to_string(index) + "] must be a string");
   }
   return value.as<std::string>();
 }
@@ -98,16 +92,13 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
 
   const std::size_t count = wasmArrayLikeLength(left_channels, "leftChannels");
   if (wasmArrayLikeLength(track_ids, "trackIds") != count) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "trackIds must have one entry per track");
+    throw WasmRangeError("trackIds must have one entry per track");
   }
   if (!isAbsent(right_channels) && wasmArrayLikeLength(right_channels, "rightChannels") != count) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "rightChannels must have one entry per track");
+    throw WasmRangeError("rightChannels must have one entry per track");
   }
   if (!isAbsent(track_names) && wasmArrayLikeLength(track_names, "trackNames") != count) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "trackNames must have one entry per track");
+    throw WasmRangeError("trackNames must have one entry per track");
   }
 
   AssistantInput input;
@@ -116,8 +107,7 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
   // is audio for it to describe.
   if (count == 0) return input;
   if (sample_rate <= 0) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "sampleRate must be positive");
+    throw WasmRangeError("sampleRate must be positive");
   }
 
   input.left.resize(count);
@@ -131,9 +121,7 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
 
     const val left = left_channels[index];
     if (isAbsent(left)) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "leftChannels[" + std::to_string(index) + "] must be a Float32Array");
+      throw WasmTypeError("leftChannels[" + std::to_string(index) + "] must be a Float32Array");
     }
     const std::size_t frames = accumulateWasmFloat32ArrayLength(
         left, "leftChannels entry", "mixingAssistantSuggest input", &budget);
@@ -146,9 +134,8 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
       const std::size_t right_frames = accumulateWasmFloat32ArrayLength(
           right, "rightChannels entry", "mixingAssistantSuggest input", &budget);
       if (right_frames != frames) {
-        throw sonare::SonareException(
-            sonare::ErrorCode::InvalidParameter,
-            "track " + std::to_string(index) + " left and right lengths must match");
+        throw WasmRangeError("track " + std::to_string(index) +
+                             " left and right lengths must match");
       }
       input.right[index] = float32ArrayToVector(right);
     }

@@ -22,7 +22,9 @@ import {
   type PercussiveEvent,
   type PercussiveEventInput,
   renderPercussiveEvents,
+  type SonareError,
 } from '../src/index';
+import { expectRefusalOf } from './_helpers';
 
 const sampleRate = 22050;
 const hopLength = 512;
@@ -286,8 +288,18 @@ function expectWellFormed(events: readonly PercussiveEvent[], samples: Float32Ar
   }
 }
 
-/** Asserts that `action` throws a SonareError carrying InvalidParameter. */
-function expectInvalidParameter(action: () => void): void {
+/** Asserts that @p action throws a RangeError: an argument the binding refused itself. */
+function expectRangeRefusal(action: () => void): void {
+  expectRefusalOf(action);
+}
+
+/** Asserts that @p action throws a TypeError: a wrong-typed argument. */
+function expectTypeRefusal(action: () => void): void {
+  expectRefusalOf(action, TypeError);
+}
+
+/** Asserts that @p action throws a SonareError carrying InvalidParameter (the library's answer). */
+function expectCodedInvalidParameter(action: () => void): void {
   let caught: unknown;
   try {
     action();
@@ -295,9 +307,7 @@ function expectInvalidParameter(action: () => void): void {
     caught = error;
   }
   expect(isSonareError(caught)).toBe(true);
-  if (isSonareError(caught)) {
-    expect(caught.code).toBe(ErrorCode.InvalidParameter);
-  }
+  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 /**
@@ -317,6 +327,18 @@ const brokenFramings: readonly { nFft: number; hopLength: number }[] = [
   { nFft: 1024, hopLength: 513 }, // the same bound at another size
   { nFft: 2048, hopLength: 2048 }, // no overlap at all
 ];
+
+/**
+ * Refuses a broken framing: a negative size is the binding's own refusal (a
+ * RangeError), every other break is the STFT configuration's (a coded SonareError).
+ */
+function expectBrokenFraming(framing: { nFft: number; hopLength: number }, run: () => unknown) {
+  if (framing.nFft < 0 || framing.hopLength < 0) {
+    expectRangeRefusal(run);
+  } else {
+    expectCodedInvalidParameter(run);
+  }
+}
 
 /** Framings inside the rule, including its inclusive end. */
 const validFramings: readonly { nFft: number; hopLength: number }[] = [
@@ -637,13 +659,13 @@ describe('extractPercussiveEvents', () => {
       { hpssKernelPercussive: -1 },
       { onsetWait: -1 },
     ]) {
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, ...options }));
+      expectRangeRefusal(() => extractPercussiveEvents({ ...base, ...options }));
     }
 
     // A framing that cannot be overlap-added back is an error, because the
     // separation inverts an STFT.
     for (const framing of brokenFramings) {
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, ...framing }));
+      expectBrokenFraming(framing, () => extractPercussiveEvents({ ...base, ...framing }));
     }
 
     // A median kernel is rejected rather than rounded when it is even, and 0 is
@@ -654,17 +676,17 @@ describe('extractPercussiveEvents', () => {
       { hpssKernelHarmonic: 32 },
       { hpssKernelPercussive: 2 },
     ]) {
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, ...options }));
+      expectCodedInvalidParameter(() => extractPercussiveEvents({ ...base, ...options }));
     }
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, onsetDelta: bad }));
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, maxEventMs: bad }));
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, minPercussiveRatio: bad }));
+      expectRangeRefusal(() => extractPercussiveEvents({ ...base, onsetDelta: bad }));
+      expectRangeRefusal(() => extractPercussiveEvents({ ...base, maxEventMs: bad }));
+      expectRangeRefusal(() => extractPercussiveEvents({ ...base, minPercussiveRatio: bad }));
     }
-    expectInvalidParameter(() => extractPercussiveEvents({ ...base, maxEventMs: -1 }));
+    expectRangeRefusal(() => extractPercussiveEvents({ ...base, maxEventMs: -1 }));
     for (const bad of [-0.01, -1, 1.01, 2]) {
-      expectInvalidParameter(() => extractPercussiveEvents({ ...base, minPercussiveRatio: bad }));
+      expectRangeRefusal(() => extractPercussiveEvents({ ...base, minPercussiveRatio: bad }));
     }
 
     // Positive controls: both ends of the documented ratio range are values, an
@@ -930,46 +952,42 @@ describe('renderPercussiveEvents', () => {
 
     // An event that is not one: a missing or non-numeric span bound is rejected
     // here rather than read as 0.
-    expectInvalidParameter(() => render([{ offsetSample: 8192 } as PercussiveEventInput]));
-    expectInvalidParameter(() => render([{ onsetSample: 0 } as PercussiveEventInput]));
-    expectInvalidParameter(() =>
+    expectTypeRefusal(() => render([{ offsetSample: 8192 } as PercussiveEventInput]));
+    expectTypeRefusal(() => render([{ onsetSample: 0 } as PercussiveEventInput]));
+    expectTypeRefusal(() =>
       render([{ onsetSample: '0', offsetSample: 8192 } as unknown as PercussiveEventInput]),
     );
-    expectInvalidParameter(() => render(undefined as unknown as readonly PercussiveEventInput[]));
+    expectTypeRefusal(() => render(undefined as unknown as readonly PercussiveEventInput[]));
 
     // renderablePercussiveEventFromVal (percussive_events.cpp) reads onsetSample,
     // offsetSample and edit.timeOffsetSamples through requireInt64Property, not a
     // raw static_cast<int64_t> of a double: a fraction like 0.5 must be refused
     // rather than silently truncated, and 1e300 rather than cast into undefined
     // behavior.
-    expectInvalidParameter(() => render([edited(4410.5, 8192)]));
-    expectInvalidParameter(() => render([edited(0, 1e300)]));
-    expectInvalidParameter(() =>
-      render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 0.5 } }]),
-    );
-    expectInvalidParameter(() =>
-      render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 1e300 } }]),
-    );
+    expectRangeRefusal(() => render([edited(4410.5, 8192)]));
+    expectRangeRefusal(() => render([edited(0, 1e300)]));
+    expectRangeRefusal(() => render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 0.5 } }]));
+    expectRangeRefusal(() => render([{ ...edited(0, 8192), edit: { timeOffsetSamples: 1e300 } }]));
 
     // An empty span has nothing to lift, a reversed one is not a span, and
     // neither end may sit outside the audio.
-    expectInvalidParameter(() => render([edited(4410, 4410)]));
-    expectInvalidParameter(() => render([edited(15435, 4410)]));
-    expectInvalidParameter(() => render([edited(-512, 4410)]));
-    expectInvalidParameter(() => render([edited(4410, length + 1)]));
-    expectInvalidParameter(() => render([edited(length, length + 4410)]));
+    expectCodedInvalidParameter(() => render([edited(4410, 4410)]));
+    expectCodedInvalidParameter(() => render([edited(15435, 4410)]));
+    expectCodedInvalidParameter(() => render([edited(-512, 4410)]));
+    expectCodedInvalidParameter(() => render([edited(4410, length + 1)]));
+    expectCodedInvalidParameter(() => render([edited(length, length + 4410)]));
 
     // Overlapping source spans are not a renderable set; touching ones are.
-    expectInvalidParameter(() => render([edited(0, 22050), edited(11025, 33075)]));
+    expectCodedInvalidParameter(() => render([edited(0, 22050), edited(11025, 33075)]));
     expect(() => render([edited(0, 22050), edited(22050, 33075)])).not.toThrow();
 
     for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      expectInvalidParameter(() =>
+      expectRangeRefusal(() =>
         render([{ onsetSample: 4410, offsetSample: 15435, edit: { gainDb: bad } }]),
       );
-      expectInvalidParameter(() => render([edited(4410, 15435)], { fadeMs: bad }));
+      expectRangeRefusal(() => render([edited(4410, 15435)], { fadeMs: bad }));
     }
-    expectInvalidParameter(() => render([edited(4410, 15435)], { fadeMs: -1 }));
+    expectRangeRefusal(() => render([edited(4410, 15435)], { fadeMs: -1 }));
     for (const options of [
       { nFft: -2048 },
       { hopLength: -512 },
@@ -978,7 +996,11 @@ describe('renderPercussiveEvents', () => {
       { hpssKernelHarmonic: 4 },
       { hpssKernelPercussive: 4 },
     ]) {
-      expectInvalidParameter(() => render([edited(4410, 15435)], options));
+      // A negative size is the binding's refusal; an even kernel is the core's.
+      const negative = Object.values(options).some((value) => value < 0);
+      (negative ? expectRangeRefusal : expectCodedInvalidParameter)(() =>
+        render([edited(4410, 15435)], options),
+      );
     }
 
     // A zero-length fade is the default here rather than the hard cut the core
@@ -999,10 +1021,10 @@ describe('renderPercussiveEvents', () => {
     expect(renderPercussiveEvents({ samples: three, sampleRate, events: identity })).toEqual(three);
 
     for (const framing of brokenFramings) {
-      expectInvalidParameter(() =>
+      expectBrokenFraming(framing, () =>
         renderPercussiveEvents({ samples: three, sampleRate, events: identity, ...framing }),
       );
-      expectInvalidParameter(() =>
+      expectBrokenFraming(framing, () =>
         renderPercussiveEvents({ samples: three, sampleRate, events: [], ...framing }),
       );
     }
@@ -1029,14 +1051,14 @@ describe('renderPercussiveEvents', () => {
     const render = (events: readonly PercussiveEventInput[]): Float32Array =>
       renderPercussiveEvents({ samples: three, sampleRate, events });
 
-    expectInvalidParameter(() => render([span(4410, 4410)]));
-    expectInvalidParameter(() => render([span(15435, 4410)]));
-    expectInvalidParameter(() => render([span(-512, 4410)]));
-    expectInvalidParameter(() => render([span(4410, three.length + 1)]));
-    expectInvalidParameter(() => render([span(0, 22050), span(11025, 33075)]));
+    expectCodedInvalidParameter(() => render([span(4410, 4410)]));
+    expectCodedInvalidParameter(() => render([span(15435, 4410)]));
+    expectCodedInvalidParameter(() => render([span(-512, 4410)]));
+    expectCodedInvalidParameter(() => render([span(4410, three.length + 1)]));
+    expectCodedInvalidParameter(() => render([span(0, 22050), span(11025, 33075)]));
     // One bad event poisons a set that is otherwise renderable and otherwise
     // entirely identity.
-    expectInvalidParameter(() => render([span(0, 11025), span(22050, 11025)]));
+    expectCodedInvalidParameter(() => render([span(0, 11025), span(22050, 11025)]));
   });
 
   it('round-trips an extracted set through an edit and back', () => {
@@ -1066,10 +1088,10 @@ describe('renderPercussiveEvents', () => {
     const poisoned = Float32Array.from(compact);
     poisoned[100] = Number.NaN;
     expect(() => extractPercussiveEvents({ samples: poisoned, sampleRate })).toThrow(RangeError);
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       extractPercussiveEvents({ samples: poisoned, sampleRate, validate: false }),
     );
-    expectInvalidParameter(() =>
+    expectCodedInvalidParameter(() =>
       renderPercussiveEvents({ samples: poisoned, sampleRate, events: [], validate: false }),
     );
 

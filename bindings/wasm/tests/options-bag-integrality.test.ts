@@ -35,6 +35,7 @@ import {
   pcen,
   type SonareError,
 } from '../dist/index.js';
+import { expectArgumentRefusal } from './_helpers';
 
 const sampleRate = 22050;
 
@@ -57,13 +58,14 @@ const capture = (run: () => unknown): unknown => {
   }
 };
 
-function expectParameterRefusal(caught: unknown): SonareError {
+function expectParameterRefusal(caught: unknown): Error {
+  return expectArgumentRefusal(caught);
+}
+
+/** The facade's own check answers before the binding is reached: a coded `SonareError`. */
+function expectFacadeRefusal(caught: unknown): void {
   expect(isSonareError(caught)).toBe(true);
-  const error = caught as SonareError;
-  expect(error.name).toBe('SonareError');
-  expect(error.code).toBe(ErrorCode.InvalidParameter);
-  expect(error.codeName).toBe('InvalidParameter');
-  return error;
+  expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
 }
 
 /** One options-bag field, with the call that reaches it. */
@@ -202,22 +204,33 @@ describe('the facade and the reader refuse the same inputs', () => {
   // reader then refuses it for range. That is agreement about the input and
   // disagreement about the responsible layer, which is what this asserts —
   // equality of the refusal SETS, not of the messages.
-  const PROBES: ReadonlyArray<{ value: number; refused: boolean; why: string }> = [
+  const PROBES: ReadonlyArray<{
+    value: number;
+    refused: boolean;
+    why: string;
+    /** Who refuses on the facade layer: its own check (coded), or the reader behind it (range). */
+    facade?: 'range';
+  }> = [
     { value: 1024, refused: false, why: 'an ordinary legal size' },
     { value: 0, refused: false, why: 'the documented keep-the-default sentinel' },
     { value: 1024.5, refused: true, why: 'fractional, in range' },
     { value: -0.5, refused: true, why: 'fractional, truncates onto the default' },
     { value: Number.NaN, refused: true, why: 'not finite' },
     { value: Number.POSITIVE_INFINITY, refused: true, why: 'not finite' },
-    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range' },
-    { value: 2 ** 53, refused: true, why: 'integral, and the largest exact JS integer step' },
+    { value: 2 ** 32, refused: true, why: 'integral but past the 32-bit range', facade: 'range' },
+    {
+      value: 2 ** 53,
+      refused: true,
+      why: 'integral, and the largest exact JS integer step',
+      facade: 'range',
+    },
   ];
 
   const hits = new Float32Array(sampleRate).map((_, i) =>
     i % 2205 < 200 ? Math.sin((2 * Math.PI * 900 * i) / sampleRate) : 0,
   );
 
-  for (const { value, refused, why } of PROBES) {
+  for (const { value, refused, why, facade } of PROBES) {
     it(`${refused ? 'refuses' : 'accepts'} nFft = ${value} on both layers (${why})`, () => {
       const facadeChecked = capture(() =>
         extractPercussiveEvents({ samples: hits, sampleRate, nFft: value }),
@@ -226,7 +239,11 @@ describe('the facade and the reader refuse the same inputs', () => {
       expect(facadeChecked === undefined).toBe(!refused);
       expect(readerOnly === undefined).toBe(!refused);
       if (refused) {
-        expectParameterRefusal(facadeChecked);
+        if (facade === 'range') {
+          expectParameterRefusal(facadeChecked);
+        } else {
+          expectFacadeRefusal(facadeChecked);
+        }
         expectParameterRefusal(readerOnly);
       }
     });
