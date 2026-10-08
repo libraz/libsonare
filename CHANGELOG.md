@@ -157,6 +157,7 @@
 - Multiband setters reconfigure the crossover the processor owns, before or after prepare. A sparse dynamic-EQ sub-band keeps the slot its parameter keys name.
 - Gated silence trimming no longer rescans the full RMS window for every sample.
 - The streaming chain's loudness errors and the `loudnessStaticGainDb` / `loudnessStaticGainPeakDb` docs said to measure the source; the measurement is taken at the loudness stage's input.
+- The streaming analyzer's per-frame and progression chord confidences stay in their documented 0–1 range, as the offline chord analyzer's do; the root, third and fifth bonuses in the template score had pushed them above 1.
 
 ## v1.8.2 (2026-10-06)
 

@@ -241,9 +241,7 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   StreamConfig config;
   config.sample_rate = 22050;
   config.n_fft = 2048;
-  // An 11.6 ms hop: the 1e-3 match below separates the chords' frames only at this
-  // resolution (a 23 ms hop fails at 44100 Hz as well).
-  config.hop_length = 256;
+  config.hop_length = 512;
   config.compute_chroma = true;
 
   StreamAnalyzer analyzer(config);
@@ -295,15 +293,36 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   auto frames = analyzer.read_frames(100000);
   REQUIRE(frames.size() > 1);
 
-  const float first_chord_boundary = chord_sec;  // seconds
+  auto stats = analyzer.stats();
+  const auto& prog = stats.estimate.chord_progression;
+  REQUIRE_FALSE(prog.empty());
+  const ChordChange& completed = prog.front();
+
+  // The completed entry spans the frames the analyzer labelled as that chord; the smoothed
+  // label outlasts the 4 s boundary by a few hops, so a timestamp split misassigns them.
+  size_t run_end = 0;
   float first_chord_max_conf = 0.0f;
+  while (run_end < frames.size() && frames[run_end].chord_root == completed.root &&
+         frames[run_end].chord_quality == completed.quality) {
+    first_chord_max_conf = std::max(first_chord_max_conf, frames[run_end].chord_confidence);
+    ++run_end;
+  }
+  REQUIRE(run_end > 0);
+  REQUIRE(run_end < frames.size());
+  // The label run has to end at the chord change, or a label that never flips would pass.
+  REQUIRE(std::abs(frames[run_end - 1].timestamp - chord_sec) < 0.25f);
   float second_chord_max_conf = 0.0f;
+  for (size_t i = run_end; i < frames.size(); ++i) {
+    second_chord_max_conf = std::max(second_chord_max_conf, frames[i].chord_confidence);
+  }
+  // The noisy triad's template score exceeds 1 with its root/third bonuses; the reported
+  // confidence stays in its documented 0-1 range.
   for (const auto& f : frames) {
-    if (f.timestamp < first_chord_boundary) {
-      first_chord_max_conf = std::max(first_chord_max_conf, f.chord_confidence);
-    } else {
-      second_chord_max_conf = std::max(second_chord_max_conf, f.chord_confidence);
-    }
+    REQUIRE(f.chord_confidence >= 0.0f);
+    REQUIRE(f.chord_confidence <= 1.0f);
+  }
+  for (const auto& change : prog) {
+    REQUIRE(change.confidence <= 1.0f);
   }
 
   // Sanity: the two chords must hold clearly DIFFERENT confidences, otherwise
@@ -318,14 +337,9 @@ TEST_CASE("StreamAnalyzer chord_progression confidence tracks the completed chor
   // together, so a 0.04 separation (still 40x the match tolerance) suffices.
   REQUIRE(std::abs(first_chord_max_conf - second_chord_max_conf) > 0.04f);
 
-  auto stats = analyzer.stats();
-  const auto& prog = stats.estimate.chord_progression;
-  REQUIRE_FALSE(prog.empty());
-
   // The first progression entry corresponds to the COMPLETED first chord. Its
   // recorded confidence must reflect the first chord's own held confidence
   // (running-max over its stable span), i.e. close to first_chord_max_conf.
-  const ChordChange& completed = prog.front();
   REQUIRE_THAT(completed.confidence, WithinAbs(first_chord_max_conf, 1e-3f));
 
   // The pre-fix bug stored the second (triggering) chord's confidence here.

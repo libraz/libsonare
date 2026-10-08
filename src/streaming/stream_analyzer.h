@@ -3,6 +3,7 @@
 /// @file stream_analyzer.h
 /// @brief Streaming audio analyzer for real-time visualization.
 
+#include <algorithm>
 #include <array>
 #include <complex>
 #include <memory>
@@ -458,6 +459,11 @@ class StreamAnalyzer {
   /// evidence they emit the unknown sentinel (-1 / confidence 0 / no BarChord) instead of a guess.
   static bool has_chord_evidence(float correlation) {
     return correlation >= kChordConfidenceThreshold;
+  }
+  /// Template scores carry root/third/fifth bonuses above cosine similarity; the reported
+  /// confidence is held to its documented 0-1 range, as the offline chord analyzer does.
+  static float reported_chord_confidence(float correlation) {
+    return std::clamp(correlation, 0.0f, 1.0f);
   }
   static bool has_tonal_evidence(float chroma_sum) {
     return chroma_sum > sonare::constants::kEpsilon;

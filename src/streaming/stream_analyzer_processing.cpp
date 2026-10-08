@@ -391,12 +391,12 @@ void StreamAnalyzer::process_single_frame(const float* frame_start, size_t sampl
       if (has_chord_evidence(chord_corr)) {
         frame.chord_root = static_cast<int>(best_chord.root);
         frame.chord_quality = static_cast<int>(best_chord.quality);
-        frame.chord_confidence = chord_corr;
+        frame.chord_confidence = reported_chord_confidence(chord_corr);
       } else {
         /// Low confidence: hold the last confident chord, or report unknown before any
         frame.chord_root = (prev_chord_root_ >= 0) ? prev_chord_root_ : -1;
         frame.chord_quality = (prev_chord_quality_ >= 0) ? prev_chord_quality_ : -1;
-        frame.chord_confidence = std::max(0.0f, chord_corr);
+        frame.chord_confidence = reported_chord_confidence(chord_corr);
       }
     }
   }

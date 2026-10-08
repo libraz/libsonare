@@ -133,7 +133,7 @@ void StreamAnalyzer::update_progressive_estimate(float current_time) {
         new_quality = static_cast<int>(best_chord.quality);
         chord_corr = corr;
       }
-      float new_confidence = std::max(0.0f, chord_corr);
+      float new_confidence = reported_chord_confidence(chord_corr);
 
       /// Only update if confidence is above threshold
       if (has_chord_evidence(new_confidence)) {
