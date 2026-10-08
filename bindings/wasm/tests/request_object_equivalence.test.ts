@@ -2011,7 +2011,7 @@ const ROWS: Row[] = [
     name: 'analyzeBpm',
     fn: sonare.analyzeBpm,
     params: 'samples sampleRate? ...options?',
-    values: { samples: SIG, sampleRate: ALT_SR, options: { hopLength: 256, maxCandidates: 2 } },
+    values: { samples: SIG, sampleRate: ALT_SR, options: { hopLength: 256, maxCandidates: 1 } },
     invalid: { sampleRate: 0 },
   },
 
