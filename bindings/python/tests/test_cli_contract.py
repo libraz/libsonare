@@ -1264,8 +1264,9 @@ def test_project_bounce_uses_the_project_own_sample_rate_by_default(tmp_path, st
 def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate) -> None:
     """A project rate that is not a whole number of hertz is refused at load.
 
-    No stage rounds it any more: the load fails with ``invalid_sample_rate``
-    and no file is written.
+    No stage rounds it: the load fails as a malformed document (exit 5, the C
+    ABI's INVALID_FORMAT) with ``invalid_sample_rate``, exactly as the native
+    CLI does (tests/cli/cli_project_test.cpp), and no file is written.
     """
     proj = tmp_path / "project.sonare"
     wav = tmp_path / "bounce.wav"
@@ -1277,7 +1278,7 @@ def test_project_bounce_refuses_a_fractional_project_rate(tmp_path, stored_rate)
     result = _run_console(
         "project", "bounce", "--in", str(proj), "-o", str(wav), "--frames", "64", "--json"
     )
-    assert result.returncode == 3
+    assert result.returncode == 5
     assert (
         "invalid_sample_rate: sample_rate must be a whole number of hertz within the "
         "supported range" in result.stderr

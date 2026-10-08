@@ -41,7 +41,9 @@ ProjectWasm ProjectWasm::fromJson(const std::string& json) {
     std::string message = diag != nullptr ? std::string(diag) : std::string("invalid project JSON");
     sonare_free_string(diag);
     sonare_project_destroy(handle);
-    throw sonare::SonareException(sonare::ErrorCode::InvalidFormat, message);
+    // The C return code, as on every other surface.
+    throw sonare::SonareException(
+        err != SONARE_OK ? codeFromCError(err) : sonare::ErrorCode::InvalidFormat, message);
   }
   sonare_free_string(diag);
   return ProjectWasm(handle);
@@ -56,7 +58,7 @@ val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
   if (err != SONARE_OK || handle == nullptr) {
     sonare_project_destroy(handle);
     throw sonare::SonareException(
-        sonare::ErrorCode::InvalidFormat,
+        err != SONARE_OK ? codeFromCError(err) : sonare::ErrorCode::InvalidFormat,
         diagnostics.empty() ? std::string("invalid project JSON") : diagnostics);
   }
   val out = val::object();
@@ -66,11 +68,7 @@ val ProjectWasm::fromJsonWithDiagnostics(const std::string& json) {
 }
 
 void ProjectWasm::setSampleRate(double sample_rate) {
-  const SonareError err = sonare_project_set_sample_rate(project_.get(), sample_rate);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "invalid project sample rate");
-  }
+  checkCError(sonare_project_set_sample_rate(project_.get(), sample_rate), "setSampleRate");
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT

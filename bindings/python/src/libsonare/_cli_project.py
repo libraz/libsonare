@@ -48,10 +48,7 @@ _ALIGNED_WARP_MODE = "time-stretch"
 
 
 def _load_project(path: str) -> object:
-    from . import Project
-
-    data = _read_bounded(path, _MAX_PROJECT_OR_MIDI_BYTES)
-    return Project.from_json(data)
+    return cast(Any, _load_project_with_diagnostics(path)).project
 
 
 def _project_from_document(document: bytes) -> object:
@@ -60,11 +57,12 @@ def _project_from_document(document: bytes) -> object:
 
     try:
         return Project.from_json_with_diagnostics(document)
+    except SonareError:
+        # Carries the C ABI's own code, so the exit status matches the native CLI.
+        raise
     except ValueError as exc:
-        # ``Project.from_json*`` intentionally keeps its public ValueError
-        # contract.  The CLI, however, publishes the C-ABI InvalidFormat
-        # class for malformed project documents, so translate only at this
-        # private command boundary.
+        # A refusal before the C ABI (e.g. the document is not UTF-8) is a
+        # malformed document too.
         raise SonareError(int(ErrorCode.INVALID_FORMAT), str(exc)) from exc
 
 

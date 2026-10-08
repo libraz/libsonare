@@ -101,6 +101,23 @@ TEST_CASE("CLI project command group", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("unknown project subcommand"));
   }
 
+  SECTION("a fractional project rate is refused as a malformed document") {
+    // The Python CLI pins the same exit code and diagnostic (test_cli_contract.py).
+    const std::string project = unique_temp_path(".sonare");
+    const std::string wav = unique_temp_path(".wav");
+    {
+      std::ofstream out(project);
+      out << R"({"version":1,"sample_rate":44100.5,"tracks":[],"clips":[]})";
+    }
+    const SplitResult result =
+        exec_command_split(CLI + " project bounce --in " + project + " -o " + wav + " --frames 64");
+    CHECK(result.exit_code == 5);
+    CHECK_THAT(result.err, ContainsSubstring("invalid_sample_rate: sample_rate must be a whole "
+                                             "number of hertz within the supported range"));
+    CHECK_FALSE(std::ifstream(wav).good());
+    std::remove(project.c_str());
+  }
+
   SECTION("abi prints the project ABI version") {
     auto [code, output] = exec_command(CLI + " project abi");
     REQUIRE(code == 0);

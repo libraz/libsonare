@@ -1096,6 +1096,36 @@ describe('Sonare WASM Project', () => {
     expect(() => Project.fromJson('{ not valid project json')).toThrow();
   });
 
+  it('refuses a fractional project rate with the C code, on load and on set', () => {
+    const document = JSON.stringify({ version: 1, sample_rate: 44100.5, tracks: [], clips: [] });
+    for (const load of [
+      () => Project.fromJson(document),
+      () => Project.fromJsonWithDiagnostics(document),
+    ]) {
+      let caught: unknown;
+      try {
+        load();
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidFormat);
+      expect(String((caught as Error).message)).toContain('invalid_sample_rate');
+    }
+    const project = new Project();
+    try {
+      let caught: unknown;
+      try {
+        project.setSampleRate(44100.5);
+      } catch (error) {
+        caught = error;
+      }
+      expect(isSonareError(caught) && caught.code).toBe(ErrorCode.InvalidParameter);
+      expect(String((caught as Error).message)).toContain('whole number of hertz');
+    } finally {
+      project.delete();
+    }
+  });
+
   it('reports clip count after add, import, and remove', () => {
     const project = new Project();
     try {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BuiltinSynthConfig } from '../src/index.js';
 import {
+  ErrorCode,
   EXPECTED_PROJECT_ABI_VERSION,
   MarkerKind,
   Project,
@@ -318,6 +319,21 @@ describe('Project native binding', () => {
     expect(project.trackCount()).toBe(2);
     expect(project.clipCount()).toBe(2);
     project.destroy();
+  });
+
+  it('refuses a fractional project rate with the C code, on load and on set', () => {
+    const document = JSON.stringify({ version: 1, sample_rate: 44100.5, tracks: [], clips: [] });
+    expect(() => Project.fromJson(document)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+    );
+    expect(() => Project.fromJsonWithDiagnostics(document)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidFormat }),
+    );
+    const project = Project.create();
+    expect(() => project.setSampleRate(44100.5)).toThrow(/whole number of hertz/);
+    expect(() => project.setSampleRate(44100.5)).toThrow(
+      expect.objectContaining({ code: ErrorCode.InvalidParameter }),
+    );
   });
 
   it('round-trips toJson -> fromJson -> toJson byte-for-byte', () => {
