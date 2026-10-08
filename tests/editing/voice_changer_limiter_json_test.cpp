@@ -691,3 +691,41 @@ TEST_CASE("RealtimeVoiceChanger JSON clamps out-of-int-range reverb seed", "[voi
     for (float sample : output) REQUIRE(std::isfinite(sample));
   }
 }
+
+TEST_CASE("ISP limiter bounds the original sample peaks, not only the reconstruction",
+          "[voice_changer][isp][sample-peak]") {
+  constexpr float ceiling_dbtp = -3.0f;
+  constexpr float tolerance_db = 0.1f;
+  const float bound = std::pow(10.0f, (ceiling_dbtp + tolerance_db) / 20.0f);
+  for (const int sample_rate : {16000, 22050, 44100, 48000, 96000}) {
+    for (const bool impulses : {false, true}) {
+      for (const int block_size : {512, 97}) {
+        const int total = 16384;
+        std::vector<float> input(static_cast<std::size_t>(total), 0.0f);
+        for (int i = 0; i < total; ++i) {
+          input[static_cast<std::size_t>(i)] =
+              impulses ? (i % 127 == 0 ? 0.9f : 0.0f)
+                       : 0.9f * std::cos(static_cast<float>(sonare::constants::kTwoPiD * 0.46 * i));
+        }
+        IspLimiter limiter;
+        limiter.prepare(sample_rate, block_size);
+        limiter.set_config({ceiling_dbtp, 50.0f});
+        std::vector<float> output = input;
+        for (int offset = 0; offset < total; offset += block_size) {
+          limiter.process_block(output.data() + offset, std::min(block_size, total - offset));
+        }
+        // After startup: the tail past the attack and filter settling.
+        const std::size_t skip = 4096;
+        float sample_peak = 0.0f;
+        for (std::size_t i = skip; i < output.size(); ++i) {
+          sample_peak = std::max(sample_peak, std::abs(output[i]));
+        }
+        const float true_peak =
+            sonare::metering::true_peak(output.data() + skip, output.size() - skip, 4);
+        INFO("rate=" << sample_rate << " impulses=" << impulses << " block=" << block_size);
+        REQUIRE(sample_peak <= bound);
+        REQUIRE(true_peak <= bound);
+      }
+    }
+  }
+}

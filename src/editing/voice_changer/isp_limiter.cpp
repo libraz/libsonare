@@ -52,9 +52,12 @@ void IspLimiter::prepare(double sample_rate, int max_block_size) {
   oversampled_.assign(oversampled_capacity, 0.0f);
   lookahead_.prepare(static_cast<std::size_t>(std::max(0, lookahead_samples_)));
   // Keep the same two-latency horizon in the peak detector. The +1 includes
-  // the current sample alongside the completed forward stencil.
+  // the current sample alongside the completed forward stencil, and each base sample
+  // pushes its own magnitude after its oversampled phases.
   const std::size_t window_size =
-      static_cast<std::size_t>(std::max(1, lookahead_samples_ + 1) * oversample_factor_);
+      static_cast<std::size_t>(std::max(1, lookahead_samples_ + 1) * (oversample_factor_ + 1));
+  aligned_input_abs_.assign(static_cast<std::size_t>(std::max(1, filter_.latency_samples())), 0.0f);
+  aligned_pos_ = 0;
   oversampled_peak_window_.prepare(window_size);
 
   // Pre-size the per-channel history / scratch buffers used by the
@@ -78,6 +81,8 @@ void IspLimiter::reset() noexcept {
   lookahead_.reset();
   oversampled_peak_window_.reset();
   std::fill(oversampled_.begin(), oversampled_.end(), 0.0f);
+  std::fill(aligned_input_abs_.begin(), aligned_input_abs_.end(), 0.0f);
+  aligned_pos_ = 0;
   for (auto& h : history_holder_) std::fill(h.begin(), h.end(), 0.0f);
   for (auto& s : scratch_holder_) std::fill(s.begin(), s.end(), 0.0f);
   gain_ = 1.0f;
@@ -93,6 +98,7 @@ void IspLimiter::discard_detector_state() noexcept {
   // The substituted sample is still resident in the FIR history and the peak
   // window, and the gain they produced is not a value the input can explain.
   oversampled_peak_window_.reset();
+  std::fill(aligned_input_abs_.begin(), aligned_input_abs_.end(), 0.0f);
   for (auto& h : history_holder_) std::fill(h.begin(), h.end(), 0.0f);
   gain_ = 1.0f;
 }
@@ -170,6 +176,12 @@ void IspLimiter::process_block(float* buffer, int num_samples) noexcept {
       const float os_sample = oversampled_[static_cast<std::size_t>(i * factor + phase)];
       oversampled_peak_window_.push(std::abs(os_sample));
     }
+    // The gain scales the original sample too, and a reconstruction that attenuates content
+    // near Nyquist can read below it, so the sample itself bounds the gain as well. It enters
+    // the window delayed by the filter latency, in step with the reconstruction.
+    oversampled_peak_window_.push(aligned_input_abs_[aligned_pos_]);
+    aligned_input_abs_[aligned_pos_] = std::abs(buffer[i]);
+    aligned_pos_ = (aligned_pos_ + 1) % aligned_input_abs_.size();
     ceiling_dbtp_.process();
     release_ms_.process();
     if (control_cadence_.advance()) update_cached_controls();

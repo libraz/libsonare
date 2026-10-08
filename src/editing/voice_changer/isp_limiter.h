@@ -93,6 +93,10 @@ class IspLimiter {
   rt::LookaheadBuffer lookahead_;
   rt::SlidingMax<float> oversampled_peak_window_{1};
   std::vector<float> oversampled_;
+  /// Magnitudes of the last filter-latency input samples, so each base-rate sample reaches the
+  /// peak window at the instant its own reconstruction does.
+  std::vector<float> aligned_input_abs_;
+  std::size_t aligned_pos_ = 0;
   std::vector<float> history_;
   std::vector<float> scratch_;
   // Pointer-of-pointer scratch buffers reused per block so process_block does
