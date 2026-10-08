@@ -313,23 +313,37 @@ class VocalSetNoteEdit:
 
 class VocalSetNoteSourceSpan:
     note_id: int
-    source_start_sample: int
-    source_end_sample: int
+    source_start_sample: int | None
+    source_end_sample: int | None
     destination_start_sample: int
     destination_length_samples: int
+    source_start_sec: float | None
+    source_end_sec: float | None
+    destination_start_sec: float | None
+    destination_length_sec: float | None
     def __init__(
         self,
         note_id: int,
-        source_start_sample: int,
-        source_end_sample: int,
+        source_start_sample: int | None = ...,
+        source_end_sample: int | None = ...,
         destination_start_sample: int = ...,
         destination_length_samples: int = ...,
+        source_start_sec: float | None = ...,
+        source_end_sec: float | None = ...,
+        destination_start_sec: float | None = ...,
+        destination_length_sec: float | None = ...,
     ) -> None: ...
 
 class VocalSplitNote:
     note_id: int
-    cut_source_sample: int
-    def __init__(self, note_id: int, cut_source_sample: int) -> None: ...
+    cut_source_sample: int | None
+    cut_source_sec: float | None
+    def __init__(
+        self,
+        note_id: int,
+        cut_source_sample: int | None = ...,
+        cut_source_sec: float | None = ...,
+    ) -> None: ...
 
 class VocalMergeNotes:
     note_ids: tuple[int, ...]
@@ -424,8 +438,10 @@ class VocalEditSession:
     def export_state(self) -> bytes: ...
     def render(
         self,
-        range: VocalRange | Sequence[int] | None = ...,
+        range: VocalRange | Sequence[int | None] | None = ...,
         *,
+        start_sec: float | None = ...,
+        end_sec: float | None = ...,
         request_id: int = ...,
         cancel: Callable[[], bool] | None = ...,
     ) -> VocalRenderResult: ...
@@ -458,15 +474,19 @@ class VocalRenderSnapshot:
     def output_length_samples(self) -> int: ...
     def render(
         self,
-        range: VocalRange | Sequence[int] | None = ...,
+        range: VocalRange | Sequence[int | None] | None = ...,
         *,
+        start_sec: float | None = ...,
+        end_sec: float | None = ...,
         request_id: int = ...,
         cancel: Callable[[], bool] | None = ...,
     ) -> VocalRenderResult: ...
     def begin_render_job(
         self,
-        range: VocalRange | Sequence[int] | None = ...,
+        range: VocalRange | Sequence[int | None] | None = ...,
         *,
+        start_sec: float | None = ...,
+        end_sec: float | None = ...,
         request_id: int = ...,
     ) -> VocalRenderJob: ...
 

@@ -182,19 +182,29 @@ export interface VocalSetEditOperation {
   edit: VocalNoteEdit;
 }
 
+/**
+ * Each of the four positions is given in samples or in seconds (rounded to the
+ * nearest sample at the session's rate), one spelling each.
+ */
 export interface VocalSetSourceSpanOperation {
   kind: 'setSourceSpan';
   noteId: number;
-  sourceStartSample: number;
-  sourceEndSample: number;
-  destinationStartSample: number;
-  destinationLengthSamples: number;
+  sourceStartSample?: number;
+  sourceStartSec?: number;
+  sourceEndSample?: number;
+  sourceEndSec?: number;
+  destinationStartSample?: number;
+  destinationStartSec?: number;
+  destinationLengthSamples?: number;
+  destinationLengthSec?: number;
 }
 
+/** The cut position is `sourceSample` or `sourceSec`, not both. */
 export interface VocalSplitOperation {
   kind: 'split';
   noteId: number;
-  sourceSample: number;
+  sourceSample?: number;
+  sourceSec?: number;
 }
 
 export interface VocalMergeOperation {
@@ -254,9 +264,21 @@ export interface VocalPitchEvaluation {
   hasTarget: Uint8Array;
 }
 
+/**
+ * A destination range to render. Each bound is samples or seconds (rounded to
+ * the nearest sample at the session's rate), one spelling each; an omitted start
+ * is 0 and an omitted end is the end of the output. Negative bounds are refused.
+ */
+export interface VocalRangeInput {
+  startSample?: number;
+  startSec?: number;
+  endSample?: number;
+  endSec?: number;
+}
+
 export interface VocalRenderRequest {
   /** Omit to render the complete destination output. */
-  range?: VocalRange;
+  range?: VocalRangeInput;
   requestId?: VocalUint64;
   signal?: AbortSignal;
 }

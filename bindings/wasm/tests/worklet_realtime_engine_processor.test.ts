@@ -1280,9 +1280,10 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           type: 'syncClips',
           clips: [{ id: 1, trackId: 10, channels: [source], startPpq: 0 }],
         });
+        const liveEngine = (processor as unknown as { engine: RealtimeEngine }).engine;
         processor.receiveCommand({
           type: SonareEngineCommandType.SetParam,
-          targetId: 0x4d580001,
+          targetId: liveEngine.resolveTrackLaneAutomationId(10, 'faderDb'),
           argFloat: -12,
           sampleTime: -1,
         });

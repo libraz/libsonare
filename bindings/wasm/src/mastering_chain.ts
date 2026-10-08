@@ -36,6 +36,10 @@ function resolveNormalizeMode(value: unknown, context = 'normalize'): NormalizeM
 export interface NormalizeRequest extends ValidateOptions {
   samples: Float32Array;
   sampleRate?: number;
+  /**
+   * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
+   * -20 for `mode: 'rms'`.
+   */
   targetDb?: number;
   mode?: NormalizeMode;
 }
@@ -45,8 +49,9 @@ export interface NormalizeRequest extends ValidateOptions {
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz (default: 22050)
- * @param targetDb - Finite target at or below 0 dBFS (default: 0 dB = full scale).
- *   For `mode: 'peak'`, this is the peak target; for `mode: 'rms'`, this is the RMS target.
+ * @param targetDb - Finite target at or below 0 dBFS. For `mode: 'peak'`, this is the
+ *   peak target (default 0 dB = full scale); for `mode: 'rms'`, this is the RMS target
+ *   (default -20 dB).
  * @param mode - Normalization mode: `'peak'` (default) or `'rms'`.
  * @returns Normalized audio
  */
@@ -67,7 +72,7 @@ export function normalize(
 export function normalize(
   samples: Float32Array | NormalizeRequest,
   sampleRate?: number,
-  targetDb = 0.0,
+  targetDb?: number,
   modeOrOptions: NormalizeMode | ValidateOptions = 'peak',
   options: ValidateOptions = {},
 ): Float32Array {
@@ -94,7 +99,7 @@ export function normalize(
   return requireModule().normalizeEx(
     request.samples,
     request.sampleRate ?? 22050,
-    request.targetDb ?? 0.0,
+    request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0),
     mode,
   );
 }
@@ -157,11 +162,8 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
     throw new RangeError('Stereo channel lengths must match.');
   }
   const mode = resolveNormalizeMode(request.mode, 'normalizeStereo');
-  // Mode-dependent, unlike the mono `normalize` on this surface, which defaults
-  // to 0 dB in both modes. 0 dBFS RMS is not a usable default -- the peaks sit
-  // well above the RMS, so every one of them clips -- and the library and the
-  // other surfaces all default RMS to -20. A new entry point takes the shared
-  // default rather than inheriting a surface-local one.
+  // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
+  // default -- the peaks sit well above the RMS, so every one of them clips.
   const targetDb = request.targetDb ?? (mode === 'rms' ? -20.0 : 0.0);
   return requireModule().normalizeStereo(
     request.left,

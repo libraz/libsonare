@@ -23,14 +23,4 @@ constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;
 constexpr uint32_t kEngineParamKindMask = 0x000000FFu;
 constexpr uint32_t kEngineParamLaneShift = 8u;
 
-// Arrangement typed track automation is resolved to this engine namespace on
-// the control thread.  Keep the encoding in one header so the compiler and the
-// realtime router cannot drift while the public project ABI remains opaque.
-inline constexpr uint32_t make_track_lane_param_id(size_t lane_index,
-                                                   uint32_t target_kind) noexcept {
-  return kEngineParamNamespace |
-         ((static_cast<uint32_t>(lane_index) << kEngineParamLaneShift) & kEngineParamLaneMask) |
-         (target_kind & kEngineParamKindMask);
-}
-
 }  // namespace sonare::engine

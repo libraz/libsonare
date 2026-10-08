@@ -6,6 +6,7 @@ import type {
   WasmTempogramResult,
   WasmTrimResult,
 } from './sonare.js';
+import { resolveOptionalNonNegative } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -218,6 +219,7 @@ export interface FixLengthRequest {
 export interface FixFramesRequest {
   frames: Int32Array;
   xMin?: number;
+  /** Upper bound; omit for none. Negative is refused. */
   xMax?: number;
   pad?: boolean;
 }
@@ -615,13 +617,18 @@ export function fixFrames(
 export function fixFrames(
   frames: Int32Array | FixFramesRequest,
   xMin = 0,
-  xMax = -1,
+  xMax?: number,
   pad = true,
 ): Int32Array {
   if (!(frames instanceof Int32Array)) {
     return fixFrames(frames.frames, frames.xMin, frames.xMax, frames.pad);
   }
-  return requireModule().fixFrames(frames, xMin, xMax, pad);
+  return requireModule().fixFrames(
+    frames,
+    xMin,
+    resolveOptionalNonNegative('fixFrames', xMax, 'xMax'),
+    pad,
+  );
 }
 
 export function onsetBacktrack(request: OnsetBacktrackRequest): Int32Array;

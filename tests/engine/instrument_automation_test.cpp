@@ -176,6 +176,48 @@ TEST_CASE("Distinct destinations get distinct automation slots", "[engine][autom
   engine.set_midi_instrument(2, nullptr);
 }
 
+TEST_CASE("An instrument id resolved on one engine drives a second engine that only binds",
+          "[engine][automation]") {
+  // The worklet resolves on its main-thread mirror and the processor engine never
+  // resolves, so the id must already exist once the same bindings are configured.
+  constexpr int kBlock = 256;
+  RealtimeEngine mirror;
+  RealtimeEngine processor;
+  mirror.prepare(48000.0, kBlock);
+  processor.prepare(48000.0, kBlock);
+  ProbeInstrument mirror_a;
+  ProbeInstrument mirror_b;
+  ProbeInstrument processor_a;
+  ProbeInstrument processor_b;
+  REQUIRE(mirror.set_midi_instrument(1, &mirror_a));
+  REQUIRE(mirror.set_midi_instrument(2, &mirror_b));
+  REQUIRE(processor.set_midi_instrument(1, &processor_a));
+  REQUIRE(processor.set_midi_instrument(2, &processor_b));
+
+  const int64_t id = mirror.resolve_instrument_automation_id(2, "level");
+  REQUIRE(id >= 0);
+
+  sonare::rt::Command play{};
+  play.type = sonare::rt::CommandType::kTransportPlay;
+  play.sample_time = -1;
+  REQUIRE(processor.push_command(play));
+  sonare::rt::Command set{};
+  set.type = sonare::rt::CommandType::kSetParam;
+  set.target_id = static_cast<uint32_t>(id);
+  set.sample_time = -1;
+  set.arg.f = 0.5f;
+  REQUIRE(processor.push_command(set));
+  run_blocks(processor, kBlock, 4);
+  REQUIRE(processor_b.level() == 0.5f);
+  REQUIRE(processor_a.level() == 0.0f);
+  REQUIRE(processor.resolve_instrument_automation_id(2, "level") == id);
+
+  mirror.set_midi_instrument(1, nullptr);
+  mirror.set_midi_instrument(2, nullptr);
+  processor.set_midi_instrument(1, nullptr);
+  processor.set_midi_instrument(2, nullptr);
+}
+
 TEST_CASE("An instrument-parameter lane drives the instrument at block precision",
           "[engine][automation]") {
   constexpr int kBlock = 256;
@@ -458,9 +500,6 @@ TEST_CASE("parameterInfo prefixes a LayeredInstrument child's name with its laye
 #if defined(SONARE_WITH_MIXING)
 
 namespace {
-constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
-  return 0x4D580000u | (lane_index << 8u) | param_kind;
-}
 constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
   return 0x4D580000u | (0xFFu << 8u) | param_kind;
 }
@@ -542,8 +581,9 @@ TEST_CASE("parameterInfo describes the lane fader and master width targets",
   REQUIRE(engine.set_track_lanes({{10}}));
 
   sonare::automation::ParameterDescription fader{};
-  const uint32_t fader_id =
-      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  const int64_t resolved = engine.resolve_track_lane_automation_id(10, "faderDb");
+  REQUIRE(resolved >= 0);
+  const uint32_t fader_id = static_cast<uint32_t>(resolved);
   REQUIRE(engine.describe_reserved_parameter(fader_id, &fader));
   REQUIRE(fader.name == "faderDb");
   REQUIRE(fader.unit == "dB");
@@ -562,9 +602,11 @@ TEST_CASE("parameterInfo describes the lane fader and master width targets",
 
   // Width is a master-only control, not a track-lane target.
   sonare::automation::ParameterDescription lane_width{};
-  const uint32_t lane_width_id =
-      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kWidth);
+  const uint32_t lane_width_id = (fader_id & ~0xFFu) | sonare::engine::TrackMixerRuntime::kWidth;
   REQUIRE_FALSE(engine.describe_reserved_parameter(lane_width_id, &lane_width));
+  // A lane position in the master/bus namespace names no track.
+  REQUIRE_FALSE(engine.describe_reserved_parameter(
+      0x4D580000u | sonare::engine::TrackMixerRuntime::kFaderDb, &lane_width));
 }
 
 TEST_CASE("parameterInfo cannot resolve an insert on an externally bound strip",

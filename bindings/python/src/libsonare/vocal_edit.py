@@ -52,6 +52,7 @@ from ._runtime import (
     _check,
     _get_lib,
     _narrow_int,
+    _resolve_sample_bound,
     _to_c_int,
     _utf8_arg,
     _validate_samples,
@@ -239,14 +240,38 @@ def _native_output_length(lib: ctypes.CDLL, symbol: str, handle: ctypes.c_void_p
 
 
 _RANGE_BOUND_NAMES = ("range.start_sample", "range.end_sample")
+_RANGE_SECOND_NAMES = ("start_sec", "end_sec")
 
 
-def _range(value: VocalRange | Sequence[int] | None, *, output_length: int) -> SonareVocalRange:
+def _range(
+    value: VocalRange | Sequence[int | None] | None,
+    *,
+    output_length: int,
+    sample_rate: int,
+    start_sec: float | None = None,
+    end_sec: float | None = None,
+) -> SonareVocalRange:
+    """Resolve a render range from a pair of samples or from seconds.
+
+    The range is ``value`` (a :class:`VocalRange` or a ``(start_sample,
+    end_sample)`` pair whose entries may be ``None``) or ``start_sec`` /
+    ``end_sec``, not both. An omitted start is 0 and an omitted end is the end of
+    the output; negative bounds are refused.
+    """
+    if value is not None and (start_sec is not None or end_sec is not None):
+        raise SonareValueError("give range or start_sec/end_sec, not both")
     if value is None:
-        return SonareVocalRange(0, output_length)
-    if isinstance(value, VocalRange):
-        start_i = _int64(value.start_sample, "range.start_sample")
-        end_i = _int64(value.end_sample, "range.end_sample")
+        start_i = _resolve_sample_bound(
+            None, start_sec, sample_rate, _RANGE_BOUND_NAMES[0], "start_sec"
+        )
+        end_i = _resolve_sample_bound(None, end_sec, sample_rate, _RANGE_BOUND_NAMES[1], "end_sec")
+    elif isinstance(value, VocalRange):
+        start_i = _resolve_sample_bound(
+            value.start_sample, None, sample_rate, _RANGE_BOUND_NAMES[0], "start_sec"
+        )
+        end_i = _resolve_sample_bound(
+            value.end_sample, None, sample_rate, _RANGE_BOUND_NAMES[1], "end_sec"
+        )
     else:
         try:
             length = len(value)
@@ -256,8 +281,15 @@ def _range(value: VocalRange | Sequence[int] | None, *, output_length: int) -> S
             ) from exc
         if length != 2:
             raise SonareValueError("render range must be a (start_sample, end_sample) pair")
-        start_i, end_i = (_int64(item, _RANGE_BOUND_NAMES[i]) for i, item in enumerate(value))
-    if start_i < 0 or end_i < start_i:
+        start_i, end_i = (
+            _resolve_sample_bound(
+                item, None, sample_rate, _RANGE_BOUND_NAMES[i], _RANGE_SECOND_NAMES[i]
+            )
+            for i, item in enumerate(value)
+        )
+    start_i = 0 if start_i is None else start_i
+    end_i = output_length if end_i is None else end_i
+    if end_i < start_i:
         raise SonareValueError("render range must satisfy 0 <= start_sample <= end_sample")
     return SonareVocalRange(start_i, end_i)
 
@@ -451,17 +483,33 @@ class VocalSetNoteEdit:
 
 @dataclass(frozen=True, slots=True)
 class VocalSetNoteSourceSpan:
+    """Set a note's source span and its destination placement.
+
+    Each position is given in samples or in seconds (``*_sec``, rounded to the
+    nearest sample at the session's rate), one spelling per position. The source
+    bounds have no default; ``destination_start_sample`` and
+    ``destination_length_samples`` read 0 as unset, so giving a ``*_sec`` beside
+    a non-zero sample value is the refused case.
+    """
+
     note_id: int
-    source_start_sample: int
-    source_end_sample: int
+    source_start_sample: int | None = None
+    source_end_sample: int | None = None
     destination_start_sample: int = 0
     destination_length_samples: int = 0
+    source_start_sec: float | None = None
+    source_end_sec: float | None = None
+    destination_start_sec: float | None = None
+    destination_length_sec: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class VocalSplitNote:
+    """Cut a note at ``cut_source_sample`` or at ``cut_source_sec`` seconds."""
+
     note_id: int
-    cut_source_sample: int
+    cut_source_sample: int | None = None
+    cut_source_sec: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -667,8 +715,37 @@ def _transition_to_c(lib: ctypes.CDLL, transition: VocalTransition) -> SonareVoc
     return raw
 
 
+def _operation_position(
+    operation_name: str,
+    sample_value: int | None,
+    sec_value: float | None,
+    sample_rate: int,
+    sample_name: str,
+    sec_name: str,
+    *,
+    zero_is_unset: bool = False,
+    required: bool = True,
+) -> int:
+    """Resolve one operation position from samples or seconds.
+
+    ``zero_is_unset`` is for the destination fields whose sample default is 0:
+    only a non-zero sample value counts as giving the sample spelling.
+    """
+    given = sample_value
+    if zero_is_unset and sample_value == 0:
+        given = None
+    resolved = _resolve_sample_bound(given, sec_value, sample_rate, sample_name, sec_name)
+    if resolved is not None:
+        return resolved
+    if sample_value is None:
+        if required:
+            raise SonareValueError(f"{operation_name} needs {sample_name} or {sec_name}")
+        return 0
+    return _int64(sample_value, sample_name)
+
+
 def _operation_to_c(
-    lib: ctypes.CDLL, operation: VocalOperation
+    lib: ctypes.CDLL, operation: VocalOperation, sample_rate: int
 ) -> tuple[SonareVocalOperation, list[Any]]:
     raw = SonareVocalOperation()
     lib.sonare_vocal_operation_init(ctypes.byref(raw))
@@ -681,18 +758,53 @@ def _operation_to_c(
     elif isinstance(operation, VocalSetNoteSourceSpan):
         raw.kind = int(VocalOperationKind.SET_SOURCE_SPAN)
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
-        raw.source_start_sample = _int64(operation.source_start_sample, "source_start_sample")
-        raw.source_end_sample = _int64(operation.source_end_sample, "source_end_sample")
-        raw.destination_start_sample = _int64(
-            operation.destination_start_sample, "destination_start_sample"
+        raw.source_start_sample = _operation_position(
+            "VocalSetNoteSourceSpan",
+            operation.source_start_sample,
+            operation.source_start_sec,
+            sample_rate,
+            "source_start_sample",
+            "source_start_sec",
         )
-        raw.destination_length_samples = _int64(
-            operation.destination_length_samples, "destination_length_samples"
+        raw.source_end_sample = _operation_position(
+            "VocalSetNoteSourceSpan",
+            operation.source_end_sample,
+            operation.source_end_sec,
+            sample_rate,
+            "source_end_sample",
+            "source_end_sec",
+        )
+        raw.destination_start_sample = _operation_position(
+            "VocalSetNoteSourceSpan",
+            operation.destination_start_sample,
+            operation.destination_start_sec,
+            sample_rate,
+            "destination_start_sample",
+            "destination_start_sec",
+            zero_is_unset=True,
+            required=False,
+        )
+        raw.destination_length_samples = _operation_position(
+            "VocalSetNoteSourceSpan",
+            operation.destination_length_samples,
+            operation.destination_length_sec,
+            sample_rate,
+            "destination_length_samples",
+            "destination_length_sec",
+            zero_is_unset=True,
+            required=False,
         )
     elif isinstance(operation, VocalSplitNote):
         raw.kind = int(VocalOperationKind.SPLIT)
         raw.note_id = _uint32(operation.note_id, "note_id", allow_zero=False)
-        raw.cut_source_sample = _int64(operation.cut_source_sample, "cut_source_sample")
+        raw.cut_source_sample = _operation_position(
+            "VocalSplitNote",
+            operation.cut_source_sample,
+            operation.cut_source_sec,
+            sample_rate,
+            "cut_source_sample",
+            "cut_source_sec",
+        )
     elif isinstance(operation, VocalMergeNotes):
         raw.kind = int(VocalOperationKind.MERGE)
         raw.merge_policy = _enum(operation.merge_policy, VocalMergePolicy, "merge_policy")
@@ -1021,6 +1133,7 @@ class VocalEditSession(_HandleOwner):
         )
         self._handle = handle
         self._source_length = int(source.size)
+        self._sample_rate = rate
         self._keepalive: tuple[Any, ...] = (source, raw_options, keepalive)
         try:
             self._output_length = _native_output_length(
@@ -1069,6 +1182,7 @@ class VocalEditSession(_HandleOwner):
         )
         obj._handle = handle
         obj._source_length = int(source.size)
+        obj._sample_rate = rate
         obj._keepalive = (source, payload)
         try:
             obj._output_length = _native_output_length(
@@ -1215,7 +1329,7 @@ class VocalEditSession(_HandleOwner):
         _vocal_check(
             lib.sonare_vocal_session_capture_snapshot(self._require_handle(), ctypes.byref(handle))
         )
-        return VocalRenderSnapshot(handle)
+        return VocalRenderSnapshot(handle, self._sample_rate)
 
     def export_state(self) -> bytes:
         lib = _get_lib()
@@ -1230,15 +1344,32 @@ class VocalEditSession(_HandleOwner):
 
     def render(
         self,
-        range: VocalRange | Sequence[int] | None = None,
+        range: VocalRange | Sequence[int | None] | None = None,
         *,
+        start_sec: float | None = None,
+        end_sec: float | None = None,
         request_id: int = 0,
         cancel: Callable[[], bool] | None = None,
     ) -> VocalRenderResult:
+        """Render a destination range given in samples (``range``) or seconds.
+
+        ``range`` is a :class:`VocalRange` or a ``(start_sample, end_sample)``
+        pair; ``start_sec`` / ``end_sec`` spell the same bounds in seconds,
+        rounded to the nearest sample at the session's rate. Give one form, not
+        both. An omitted start is 0 and an omitted end is the end of the output.
+        """
         request_id = _uint64(request_id, "request_id")
-        _range(range, output_length=self.output_length_samples)
+        _range(
+            range,
+            output_length=self.output_length_samples,
+            sample_rate=self._sample_rate,
+            start_sec=start_sec,
+            end_sec=end_sec,
+        )
         with self._native_call(), self.capture_render_snapshot() as snapshot:
-            return snapshot.render(range, request_id=request_id, cancel=cancel)
+            return snapshot.render(
+                range, start_sec=start_sec, end_sec=end_sec, request_id=request_id, cancel=cancel
+            )
 
 
 class VocalEditDraft(_HandleOwner):
@@ -1275,7 +1406,7 @@ class VocalEditDraft(_HandleOwner):
         raw_ops = (SonareVocalOperation * len(ops))()
         keepalive: list[Any] = []
         for i, operation in enumerate(ops):
-            raw_ops[i], buffers = _operation_to_c(lib, operation)
+            raw_ops[i], buffers = _operation_to_c(lib, operation, self._session._sample_rate)
             keepalive.extend(buffers)
         raw = _new_result(lib, "sonare_vocal_edit_result_init", SonareVocalEditResult)
         try:
@@ -1340,14 +1471,15 @@ class VocalEditDraft(_HandleOwner):
         _vocal_check(
             lib.sonare_vocal_draft_capture_snapshot(self._require_handle(), ctypes.byref(handle))
         )
-        return VocalRenderSnapshot(handle)
+        return VocalRenderSnapshot(handle, self._session._sample_rate)
 
 
 class VocalRenderSnapshot(_HandleOwner):
     _destroy_symbol = "sonare_vocal_snapshot_destroy"
 
-    def __init__(self, handle: ctypes.c_void_p) -> None:
+    def __init__(self, handle: ctypes.c_void_p, sample_rate: int) -> None:
         self._handle = handle
+        self._sample_rate = sample_rate
         try:
             self._output_length = _native_output_length(
                 _get_lib(), "sonare_vocal_snapshot_output_length", handle
@@ -1362,11 +1494,14 @@ class VocalRenderSnapshot(_HandleOwner):
 
     def render(
         self,
-        range: VocalRange | Sequence[int] | None = None,
+        range: VocalRange | Sequence[int | None] | None = None,
         *,
+        start_sec: float | None = None,
+        end_sec: float | None = None,
         request_id: int = 0,
         cancel: Callable[[], bool] | None = None,
     ) -> VocalRenderResult:
+        """Render a destination range in samples or seconds, as :meth:`VocalEditSession.render`."""
         with self._native_call():
             lib = _get_lib()
             raw = _new_result(lib, "sonare_vocal_render_result_init", SonareVocalRenderResult)
@@ -1376,7 +1511,13 @@ class VocalRenderSnapshot(_HandleOwner):
                     errors,
                     lib.sonare_vocal_snapshot_render(
                         self._require_handle(),
-                        _range(range, output_length=self._output_length),
+                        _range(
+                            range,
+                            output_length=self._output_length,
+                            sample_rate=self._sample_rate,
+                            start_sec=start_sec,
+                            end_sec=end_sec,
+                        ),
                         _uint64(request_id, "request_id"),
                         callback,
                         None,
@@ -1389,8 +1530,10 @@ class VocalRenderSnapshot(_HandleOwner):
 
     def begin_render_job(
         self,
-        range: VocalRange | Sequence[int] | None = None,
+        range: VocalRange | Sequence[int | None] | None = None,
         *,
+        start_sec: float | None = None,
+        end_sec: float | None = None,
         request_id: int = 0,
     ) -> VocalRenderJob:
         lib = _get_lib()
@@ -1398,7 +1541,13 @@ class VocalRenderSnapshot(_HandleOwner):
         _vocal_check(
             lib.sonare_vocal_render_job_begin(
                 self._require_handle(),
-                _range(range, output_length=self._output_length),
+                _range(
+                    range,
+                    output_length=self._output_length,
+                    sample_rate=self._sample_rate,
+                    start_sec=start_sec,
+                    end_sec=end_sec,
+                ),
                 _uint64(request_id, "request_id"),
                 ctypes.byref(handle),
             )

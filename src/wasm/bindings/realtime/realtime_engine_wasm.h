@@ -303,6 +303,8 @@ class RealtimeEngineWasm {
   double resolveTrackInsertAutomationId(const emscripten::val& track_id_val,
                                         const emscripten::val& insert_index_val,
                                         const std::string& param_name);
+  double resolveTrackLaneAutomationId(const emscripten::val& track_id_val,
+                                      const std::string& param_name);
   double resolveMasterInsertAutomationId(const emscripten::val& insert_index_val,
                                          const std::string& param_name);
   double resolveBusInsertAutomationId(const emscripten::val& bus_id_val,

@@ -810,7 +810,9 @@ def phase_vocoder(
     Args:
         samples: Input audio.
         sample_rate: Sample rate in Hz (default 22050).
-        rate: Time stretch rate (< 1.0 slower, > 1.0 faster). Must be > 0.
+        rate: Playback speed (< 1.0 slower and longer, > 1.0 faster and shorter). Must
+            be > 0. The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
+            duration ratio.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop length used for analysis/synthesis, in ``(0, n_fft / 2]``

@@ -32,6 +32,7 @@ from ._runtime import (
     _narrow_int,
     _optional_float_array_result,
     _out_float_array,
+    _resolve_optional_non_negative,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -1016,18 +1017,18 @@ def metering_dynamic_range(
     sample_rate: int = 22050,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
-    low_percentile: float = -1.0,
-    high_percentile: float = -1.0,
+    low_percentile: float | None = None,
+    high_percentile: float | None = None,
     *,
     validate: bool = True,
 ) -> DynamicRangeReport:
     """Sliding-window dynamic range for mono audio (high_percentile - low_percentile, in dB).
 
     Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
-    (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` a
-    NEGATIVE value (the default ``-1.0``) selects the library default percentiles
-    (low=0.10, high=0.95); ``0.0`` is a real request for the 0th percentile (the
-    minimum-RMS window), not the default.
+    (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` ``None``
+    (the default) selects the library default percentiles (low=0.10, high=0.95);
+    ``0.0`` is a real request for the 0th percentile (the minimum-RMS window), and a
+    negative value is refused.
     """
     sample_buf = _validate_samples("metering_dynamic_range", samples, validate=validate)
     lib = _get_lib()
@@ -1039,8 +1040,12 @@ def metering_dynamic_range(
         _to_c_int(sample_rate, "sample_rate"),
         _to_c_float(window_sec, "window_sec"),
         _to_c_float(hop_sec, "hop_sec"),
-        _to_c_float(low_percentile, "low_percentile"),
-        _to_c_float(high_percentile, "high_percentile"),
+        _to_c_float(
+            _resolve_optional_non_negative(low_percentile, "low_percentile"), "low_percentile"
+        ),
+        _to_c_float(
+            _resolve_optional_non_negative(high_percentile, "high_percentile"), "high_percentile"
+        ),
         ctypes.byref(out),
     )
     _check(rc)

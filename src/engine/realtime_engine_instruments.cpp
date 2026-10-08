@@ -19,22 +19,10 @@ int64_t RealtimeEngine::resolve_instrument_automation_id(uint32_t destination_id
   if (id < 0) return -1;
   const unsigned int param_id = static_cast<unsigned int>(id);
   if (param_id > kInstrumentParamFieldMask) return -1;
-
-  // Reuse the destination's existing slot so repeated resolves for the same
-  // destination mint the same ids (an automation lane saved earlier keeps
-  // matching), and so a rebind does not consume a second slot.
-  const size_t count = instrument_auto_destination_count_.load(std::memory_order_relaxed);
-  for (size_t slot = 0; slot < count; ++slot) {
-    if (instrument_auto_destinations_[slot] == destination_id) {
-      return make_instrument_param_id(static_cast<uint32_t>(slot), param_id);
-    }
-  }
-  if (count >= instrument_auto_destinations_.size()) return -1;
-  instrument_auto_destinations_[count] = destination_id;
-  // Release: the destination must be visible before the audio thread can reach
-  // the slot through the published count.
-  instrument_auto_destination_count_.store(count + 1, std::memory_order_release);
-  return make_instrument_param_id(static_cast<uint32_t>(count), param_id);
+  // The bind minted the destination's slot; resolving only looks it up.
+  const int64_t slot = instrument_auto_destinations_.find(destination_id);
+  if (slot < 0) return -1;
+  return make_instrument_param_id(static_cast<uint32_t>(slot), param_id);
 }
 
 bool RealtimeEngine::route_instrument_param_smoothed(uint32_t destination_id, unsigned int param_id,
@@ -123,23 +111,23 @@ void RealtimeEngine::clear_instrument_automations() noexcept {
 }
 
 bool RealtimeEngine::route_instrument_parameter(uint32_t target_id, float value) noexcept {
-  const uint32_t slot = instrument_param_slot(target_id);
-  // Acquire pairs with the release store in resolve_instrument_automation_id.
-  const size_t count = instrument_auto_destination_count_.load(std::memory_order_acquire);
-  if (slot >= count) return false;
-  return route_instrument_param_smoothed(instrument_auto_destinations_[slot],
-                                         instrument_param_param(target_id), value);
+  uint32_t destination_id = 0;
+  if (!instrument_auto_destinations_.destination(instrument_param_slot(target_id),
+                                                 &destination_id)) {
+    return false;
+  }
+  return route_instrument_param_smoothed(destination_id, instrument_param_param(target_id), value);
 }
 
 bool RealtimeEngine::describe_instrument_reserved_parameter(
     uint32_t target_id, automation::ParameterDescription* out) const {
   if (out == nullptr) return false;
-  const uint32_t slot = instrument_param_slot(target_id);
-  // Acquire pairs with the release store in resolve_instrument_automation_id.
-  const size_t count = instrument_auto_destination_count_.load(std::memory_order_acquire);
-  if (slot >= count) return false;
-  const midi::MidiInstrument* instrument =
-      instrument_rack_.get(instrument_auto_destinations_[slot]);
+  uint32_t destination_id = 0;
+  if (!instrument_auto_destinations_.destination(instrument_param_slot(target_id),
+                                                 &destination_id)) {
+    return false;
+  }
+  const midi::MidiInstrument* instrument = instrument_rack_.get(destination_id);
   if (instrument == nullptr) return false;
   return instrument->describe_parameter(instrument_param_param(target_id), out);
 }

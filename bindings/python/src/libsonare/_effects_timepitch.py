@@ -55,7 +55,9 @@ def time_stretch(
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        rate: Stretch factor (>1 speeds up, <1 slows down).
+        rate: Playback speed: ``>1`` is faster and shorter, ``<1`` slower and longer.
+            The opposite sense of :func:`note_stretch`'s ``stretch_ratio``, a
+            duration ratio.
         n_fft: FFT size used for analysis/synthesis; an even integer >= 4
             (default 2048).
         hop_length: Hop size used for analysis/synthesis, in ``(0, n_fft / 2]``

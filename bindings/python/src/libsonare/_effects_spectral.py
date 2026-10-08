@@ -15,17 +15,15 @@ from ._ffi import (
     SonareSpectralRegionOp,
 )
 from ._runtime import (
-    _INT64_MAX,
-    _INT64_MIN,
     SonareValueError,
     _check,
     _float_array_result,
     _get_lib,
     _guard_buffer,
-    _narrow_int,
     _out_float_array,
     _require_power_of_two,
     _resolve_enum,
+    _resolve_sample_bound,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -81,17 +79,22 @@ class SpectralRegionOp:
     ``"attenuate"``, ``"mute"`` or ``"heal"`` (or the matching integer enum
     value from ``SONARE_SPECTRAL_EDIT_MODE_*``).
 
-    An omitted ``end_sample`` (left at the ``-1`` sentinel) spans to the end of
-    the signal, matching the Node/WASM facades where ``endSample`` defaults to
-    the signal length.
+    Each time bound is given in samples (``start_sample`` / ``end_sample``) or in
+    seconds (``start_sec`` / ``end_sec``, rounded to the nearest sample at the
+    call's ``sample_rate``), one spelling per bound; giving both is refused. An
+    omitted start is 0 and an omitted end (``None``) spans to the end of the
+    signal, matching the Node/WASM facades where ``endSample`` is omitted. A
+    negative bound is refused.
     """
 
-    start_sample: int = 0
-    end_sample: int = -1
+    start_sample: int | None = None
+    end_sample: int | None = None
     low_hz: float = 0.0
     high_hz: float = 0.0
     gain_db: float = 0.0
     mode: str | int = "gain"
+    start_sec: float | None = None
+    end_sec: float | None = None
 
 
 @_guard_buffer("samples")
@@ -175,19 +178,25 @@ def spectral_edit(
     if n_ops > 0:
         c_ops = (SonareSpectralRegionOp * n_ops)()
         for i, op in enumerate(ops):
-            # An omitted end_sample (-1 sentinel) spans to the end of the signal,
-            # matching the Node/WASM facades; the core clamps to [0, length].
-            # Narrowed ahead of the sentinel test: int() takes -0.5 as 0 and 100.7
-            # as 100, so a fraction would read as a span the caller never asked for.
-            requested_end = _narrow_int(
-                op.end_sample, f"spectral_edit: ops[{i}].end_sample", _INT64_MIN, _INT64_MAX
+            # An omitted end spans to the end of the signal; the core clamps to
+            # [0, length], so negatives are refused here rather than clamped.
+            start_sample = _resolve_sample_bound(
+                op.start_sample,
+                op.start_sec,
+                sample_rate,
+                f"spectral_edit: ops[{i}].start_sample",
+                f"spectral_edit: ops[{i}].start_sec",
             )
-            end_sample = requested_end if requested_end >= 0 else length
+            end_sample = _resolve_sample_bound(
+                op.end_sample,
+                op.end_sec,
+                sample_rate,
+                f"spectral_edit: ops[{i}].end_sample",
+                f"spectral_edit: ops[{i}].end_sec",
+            )
             c_ops[i] = SonareSpectralRegionOp(
-                start_sample=_narrow_int(
-                    op.start_sample, f"spectral_edit: ops[{i}].start_sample", _INT64_MIN, _INT64_MAX
-                ),
-                end_sample=end_sample,
+                start_sample=0 if start_sample is None else start_sample,
+                end_sample=length if end_sample is None else end_sample,
                 low_hz=float(op.low_hz),
                 high_hz=float(op.high_hz),
                 gain_db=float(op.gain_db),

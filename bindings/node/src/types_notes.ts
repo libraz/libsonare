@@ -90,11 +90,19 @@ export interface AutoTuneResult {
 
 /** Options for {@link noteStretch}. All fields are optional. */
 export interface NoteStretchOptions {
-  /** First sample of the note to stretch. Default 0. */
+  /** First sample of the note to stretch. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
-  /** Last sample of the note to stretch. Defaults to the input length. */
+  /** First second of the note to stretch, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** Last sample of the note to stretch. Defaults to the input length. Not with `offsetSec`. */
   offsetSample?: number;
-  /** Stretch ratio (1 = unchanged), a finite number. Default 1. */
+  /** Last second of the note to stretch, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
+  /**
+   * Duration ratio of the note: `> 1` lengthens it, `< 1` shortens it, 1 is
+   * unchanged (a finite number, default 1). This is the opposite sense of
+   * {@link timeStretch}'s `rate`, which is a speed (`> 1` shortens).
+   */
   stretchRatio?: number;
 }
 
@@ -147,7 +155,10 @@ export interface NoteEdit {
   pitchShiftSemitones: number;
   /** Level change applied to the note's span. */
   gainDb: number;
-  /** `>1` lengthens the note, `<1` shortens it; pitch is preserved. */
+  /**
+   * Duration ratio: `>1` lengthens the note, `<1` shortens it; pitch is
+   * preserved. The opposite sense of {@link timeStretch}'s `rate`, a speed.
+   */
   timeStretchRatio: number;
   /**
    * Moves the spectral envelope, in semitones, on top of whatever the pitch
@@ -186,6 +197,12 @@ export interface NoteEdit {
  */
 export type NoteEditInput = Partial<Omit<NoteEdit, 'amplitudeEnvelope'>> & {
   amplitudeEnvelope?: readonly number[] | Float32Array;
+  /**
+   * {@link NoteEdit.timeOffsetSamples} in seconds, rounded to the nearest sample
+   * at the call's sample rate; negative moves the note earlier. Not with
+   * `timeOffsetSamples`.
+   */
+  timeOffsetSec?: number;
 };
 
 /**
@@ -232,10 +249,14 @@ export interface NoteObject {
  * and nothing else.
  */
 export interface NoteObjectInput {
-  /** First sample of the note's span. */
-  onsetSample: number;
-  /** One past the last sample of the span. */
-  offsetSample: number;
+  /** First sample of the note's span. Give this or `onsetSec`. */
+  onsetSample?: number;
+  /** First second of the span, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** One past the last sample of the span. Give this or `offsetSec`. */
+  offsetSample?: number;
+  /** End of the span in seconds, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
   /**
    * First frame of the span in the request's `f0Hz`. Read only by a
    * `vibratoDepthChange` / `driftChange` edit, which slices the track with it.
@@ -498,7 +519,14 @@ export interface PercussiveEventEdit {
  * Every field is optional and an omitted one is the identity, so `{}` leaves the
  * hit untouched.
  */
-export type PercussiveEventEditInput = Partial<PercussiveEventEdit>;
+export type PercussiveEventEditInput = Partial<PercussiveEventEdit> & {
+  /**
+   * {@link PercussiveEventEdit.timeOffsetSamples} in seconds, rounded to the
+   * nearest sample at the call's sample rate; negative moves the hit earlier.
+   * Not with `timeOffsetSamples`.
+   */
+  timeOffsetSec?: number;
+};
 
 /**
  * One editable percussive event returned by {@link extractPercussiveEvents}.
@@ -550,10 +578,14 @@ export interface PercussiveEvent {
  * `edit` changed and nothing else.
  */
 export interface PercussiveEventInput {
-  /** First sample of the hit's span. */
-  onsetSample: number;
-  /** One past the last sample of the span; must be greater than `onsetSample`. */
-  offsetSample: number;
+  /** First sample of the hit's span. Give this or `onsetSec`. */
+  onsetSample?: number;
+  /** First second of the span, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** One past the last sample of the span; must be greater than the onset. Give this or `offsetSec`. */
+  offsetSample?: number;
+  /** End of the span in seconds, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
   /** Omit for the identity edit. */
   edit?: PercussiveEventEditInput;
 }
@@ -576,8 +608,16 @@ export interface PitchDecompositionResult {
 
 /** Options for {@link noteMove}. */
 export interface NoteMoveOptions {
+  /** First sample of the note to move. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
-  /** Defaults to the input length. */
+  /** First second of the note to move, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** Defaults to the input length. Not with `offsetSec`. */
   offsetSample?: number;
+  /** Last second of the note to move, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
+  /** Sample the note's onset moves to. Default 0. Not with `targetOnsetSec`. */
   targetOnsetSample?: number;
+  /** Second the note's onset moves to, rounded to the nearest sample. Not with `targetOnsetSample`. */
+  targetOnsetSec?: number;
 }

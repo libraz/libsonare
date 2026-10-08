@@ -18,6 +18,11 @@ import type {
 import { assertFiniteScalar } from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
+  /**
+   * Playback speed: `> 1` is faster and shorter (2 halves the duration), `< 1`
+   * is slower and longer (0.5 doubles it). The opposite sense of
+   * a note's `stretchRatio`, which is a duration ratio.
+   */
   rate: number;
   nFft?: number;
   hopLength?: number;
@@ -61,7 +66,8 @@ export interface AutoTuneRequest extends EffectSamplesRequest, AutoTuneOptions {
  *
  * @param samples - Audio samples (mono, float32)
  * @param sampleRate - Sample rate in Hz
- * @param rate - Time stretch rate (0.5 = double duration, 2.0 = half duration)
+ * @param rate - Playback speed (0.5 = double duration, 2.0 = half duration); the
+ *   opposite sense of the per-note `stretchRatio`, a duration ratio
  * @param nFft - FFT size: an even integer >= 4 (default 2048)
  * @param hopLength - Hop in samples, in `(0, nFft / 2]` (default 512), so
  *   frames overlap by at least half a window

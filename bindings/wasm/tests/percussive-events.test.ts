@@ -973,7 +973,7 @@ describe('renderPercussiveEvents', () => {
     // neither end may sit outside the audio.
     expectCodedInvalidParameter(() => render([edited(4410, 4410)]));
     expectCodedInvalidParameter(() => render([edited(15435, 4410)]));
-    expectCodedInvalidParameter(() => render([edited(-512, 4410)]));
+    expectRangeRefusal(() => render([edited(-512, 4410)]));
     expectCodedInvalidParameter(() => render([edited(4410, length + 1)]));
     expectCodedInvalidParameter(() => render([edited(length, length + 4410)]));
 
@@ -1053,7 +1053,7 @@ describe('renderPercussiveEvents', () => {
 
     expectCodedInvalidParameter(() => render([span(4410, 4410)]));
     expectCodedInvalidParameter(() => render([span(15435, 4410)]));
-    expectCodedInvalidParameter(() => render([span(-512, 4410)]));
+    expectRangeRefusal(() => render([span(-512, 4410)]));
     expectCodedInvalidParameter(() => render([span(4410, three.length + 1)]));
     expectCodedInvalidParameter(() => render([span(0, 22050), span(11025, 33075)]));
     // One bad event poisons a set that is otherwise renderable and otherwise

@@ -81,6 +81,18 @@ PROBES: dict[str, tuple[tuple[object, ...], tuple[object, ...]]] = {
     "_to_c_size_t": ((1.5, "probe"), (7, "probe")),
     "_to_c_float": ((1e40, "probe"), (1.5, "probe")),
     "_to_c_double": ((math.inf, "probe"), (1.5, "probe")),
+    # The optional-position resolvers. A sample position takes the fraction; the
+    # "absent unless given" numeric takes the infinity, as the double reader does.
+    "_resolve_sample_bound": (
+        (1.5, None, 48000, "probe", "probe_sec"),
+        (7, None, 48000, "probe", "probe_sec"),
+    ),
+    "_resolve_time_offset": (
+        (1.5, None, 48000, "probe", "probe_sec"),
+        (7, None, 48000, "probe", "probe_sec"),
+    ),
+    "_resolve_optional_non_negative": ((math.inf, "probe"), (7, "probe")),
+    "_resolve_render_frame": ((1.5,), (7,)),
     # The array refusals, where the fraction is in an element rather than in the
     # argument.
     "_reject_unrepresentable_int32": ((np.array([1.5]), "probe"), (np.array([1, 2]), "probe")),

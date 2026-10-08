@@ -30,7 +30,6 @@
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_ARRANGEMENT)
 
 #include "c_api/sonare_c_internal.h"
-#include "engine/track_mixer.h"
 #include "util/constants.h"
 
 namespace {
@@ -327,9 +326,9 @@ SonareRealtimeEngine* make_engine(const Row& row, const EngineOptions& options =
     }
   }
   if (row.source_fader_m12 && keys_from_track(row)) {
-    // Lane index 0 (the MIDI lane), TrackMixerRuntime::kFaderDb.
-    const uint32_t lane_fader =
-        0x4D580000u | (0u << 8u) | sonare::engine::TrackMixerRuntime::kFaderDb;
+    uint32_t lane_fader = 0;
+    REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, kMidiTrack, "faderDb",
+                                                           &lane_fader) == SONARE_OK);
     REQUIRE(sonare_engine_set_parameter(engine, lane_fader, kSourceFaderDb, 0) == SONARE_OK);
     REQUIRE(sonare_engine_flush_control_commands(engine) == SONARE_OK);
   }

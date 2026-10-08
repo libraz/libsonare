@@ -5,18 +5,19 @@
 ///
 /// Every insert id names one entry: the strip (track, bus or master) by identity,
 /// the insert slot, and the parameter layout of the processor in that slot (its
-/// dynamic type plus ProcessorBase::parameter_layout_variant()). Entries
-/// are minted when the mixer is configured, in a canonical order (lanes, then
-/// buses, then master, each slot in index order), so two engines that receive
-/// the same configuration sequence number them identically; resolving an id only
-/// looks one up. An entry is retired when its track or bus leaves the mixer or
-/// its slot comes to hold a processor of another layout, and it is never reused,
-/// so an id outlives a lane reorder but never reaches another strip or another
-/// processor. Entries are written on the control thread and published by a
-/// release store of the count, the instrument destination table's pattern; the
-/// audio thread acquires the count and indexes an entry directly. Storage grows
-/// in fixed chunks so an engine with few inserts does not carry the whole 13-bit
-/// selector namespace.
+/// dynamic type plus ProcessorBase::parameter_layout_variant()). A track lane's
+/// own fader and pan share the table as one slot-less entry per track. Entries
+/// are minted when the mixer is configured, in a canonical order (each lane's
+/// fader/pan entry then its slots, then buses, then master, slots in index
+/// order), so two engines that receive the same configuration sequence number
+/// them identically; resolving an id only looks one up. An entry is retired when
+/// its track or bus leaves the mixer or its slot comes to hold a processor of
+/// another layout, and it is never reused, so an id outlives a lane reorder but
+/// never reaches another strip or another processor. Entries are written on the
+/// control thread and published by a release store of the count, the instrument
+/// destination table's pattern; the audio thread acquires the count and indexes
+/// an entry directly. Storage grows in fixed chunks so an engine with few
+/// inserts does not carry the whole 13-bit selector namespace.
 
 #include <array>
 #include <atomic>
@@ -31,8 +32,10 @@
 
 namespace sonare::engine {
 
-/// Which strip family an insert-automation entry addresses.
-enum class InsertStripKind : uint8_t { kTrack, kBus, kMaster };
+/// Which strip family an insert-automation entry addresses. kTrackLane is a track
+/// lane's fader and pan rather than an insert slot: its insert index is 0, its
+/// processor layout empty, and the id's param field a TrackMixerRuntime::ParamId.
+enum class InsertStripKind : uint8_t { kTrack, kBus, kMaster, kTrackLane };
 
 /// What gives a processor's param ids their meaning. Empty for an empty slot.
 struct InsertProcessorLayout {
@@ -95,7 +98,7 @@ class InsertAutomationTargetTable {
   /// CONTROL thread. Returns the live entry for @p target, minting one when none
   /// exists. False when the table is full or a chunk cannot be allocated.
   bool ensure(const InsertAutomationTarget& target) noexcept {
-    if (target.processor.empty()) return false;
+    if (target.processor.empty() != (target.strip == InsertStripKind::kTrackLane)) return false;
     if (find(target) >= 0) return true;
     const size_t count = count_.load(std::memory_order_relaxed);
     if (count >= kCapacity) return false;

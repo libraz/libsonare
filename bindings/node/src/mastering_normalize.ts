@@ -6,7 +6,10 @@ export type NormalizeMode = 'peak' | 'rms';
 export interface NormalizeRequest {
   samples: Float32Array;
   sampleRate?: number;
-  /** Finite target level at or below 0 dBFS. Default 0. */
+  /**
+   * Finite target level at or below 0 dBFS. Defaults to 0 for `mode: 'peak'` and
+   * -20 for `mode: 'rms'`.
+   */
   targetDb?: number;
   /** Normalization statistic. Defaults to peak normalization. */
   mode?: NormalizeMode;
@@ -22,7 +25,7 @@ export function normalize(
 export function normalize(
   samples: Float32Array | NormalizeRequest,
   sampleRate = 22050,
-  targetDb = 0.0,
+  targetDb?: number,
   mode?: NormalizeMode,
 ): Float32Array {
   const request =
@@ -33,7 +36,7 @@ export function normalize(
   return addon.normalize(
     request.samples,
     resolvedSampleRate,
-    request.targetDb ?? 0.0,
+    request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0),
     resolvedMode,
   );
 }
@@ -119,11 +122,8 @@ export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStere
   const resolvedMode = resolveNormalizeMode('normalizeStereo', request.mode);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('normalizeStereo', resolvedSampleRate);
-  // Mode-dependent, unlike the mono `normalize` on this surface, which defaults
-  // to 0 dB in both modes. 0 dBFS RMS is not a usable default -- the peaks sit
-  // well above the RMS, so effectively all of them clip -- and the library, the
-  // Python surface and the CLI all default RMS to -20. A new entry point takes
-  // the shared default rather than inheriting a surface-local one.
+  // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
+  // default -- the peaks sit well above the RMS, so effectively all of them clip.
   const resolvedTargetDb = request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0);
   return addon.normalizeStereo(
     request.left,

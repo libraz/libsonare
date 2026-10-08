@@ -680,7 +680,7 @@ describe('RealtimeEngine native binding', () => {
     });
     // Live parameter injection must not throw.
     engine.setParameter(3, 3.0);
-    engine.setParameterSmoothed(3, -3.0, -1);
+    engine.setParameterSmoothed(3, -3.0);
 
     engine.play();
     engine.process([new Float32Array(128), new Float32Array(128)]);

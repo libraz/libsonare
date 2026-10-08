@@ -605,7 +605,8 @@ export interface PhaseVocoderRequest extends SpectralFrameRequest {
 }
 
 /**
- * Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower).
+ * Phase-vocoder time-scale modification. `rate` is a speed (> 1 faster and
+ * shorter, < 1 slower and longer), the opposite sense of a note's `stretchRatio`.
  */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(

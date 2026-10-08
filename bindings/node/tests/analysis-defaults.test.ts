@@ -179,8 +179,8 @@ describe('analysis options-bag defaults are pinned to the documented values', ()
     const defaults: Required<Omit<MeteringDynamicRangeOptions, 'validate'>> = {
       windowSec: 0,
       hopSec: 0,
-      lowPercentile: -1,
-      highPercentile: -1,
+      lowPercentile: 0.1,
+      highPercentile: 0.95,
     };
     expect(meteringDynamicRange(x, SR)).toEqual(meteringDynamicRange(x, SR, defaults));
   });

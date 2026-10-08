@@ -20,14 +20,14 @@ from ._ffi import (
 from ._runtime import (
     _C_INT_MAX,
     _C_INT_MIN,
-    _INT64_MAX,
-    _INT64_MIN,
     SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
     _int_refusal,
     _narrow_int,
+    _resolve_sample_bound,
+    _resolve_time_offset,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -58,12 +58,16 @@ class NoteEdit:
 
     Attributes:
         time_offset_samples: Moves the note along the timeline; negative moves
-            it earlier.
+            it earlier. 0 is the identity, so it is also what an unset offset
+            reads as; set this or ``time_offset_sec``, not both.
+        time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
+            nearest sample at the call's sample rate; ``None`` when unset.
         pitch_shift_semitones: Transposes the note; pitch only, duration is
             unchanged.
         gain_db: Level change applied over the note's span.
-        time_stretch_ratio: ``>1`` lengthens the note, ``<1`` shortens it, with
-            pitch preserved.
+        time_stretch_ratio: Duration ratio: ``>1`` lengthens the note, ``<1``
+            shortens it, with pitch preserved. The opposite sense of
+            :func:`time_stretch`'s ``rate``, which is a speed.
         muted: ``True`` silences the note's span; the other fields then do not
             apply.
         formant_shift_semitones: Moves the spectral envelope, on top of whatever
@@ -106,6 +110,7 @@ class NoteEdit:
     amplitude_envelope: np.ndarray = dataclasses.field(
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
+    time_offset_sec: float | None = None
 
     def __eq__(self, other: object) -> bool:
         """Compare every field, the envelope element by element."""
@@ -125,6 +130,7 @@ class NoteEdit:
             self.formant_shift_semitones,
             self.vibrato_depth_change,
             self.drift_change,
+            self.time_offset_sec,
         )
 
 
@@ -144,10 +150,13 @@ class NoteObject:
     bare ``NoteObject(onset_sample=..., offset_sample=...)`` for a span it found
     some other way.
 
-    The span has no default, so a note built by hand states it. The other
-    surfaces declare the same two fields mandatory on their own note input and
-    reject an omitted one; a default of 0 here would instead have been a
-    zero-length span, rendering the note's edit as nothing.
+    The span is stated in samples (``onset_sample`` / ``offset_sample``) or in
+    seconds (``onset_sec`` / ``offset_sec``, rounded to the nearest sample at the
+    call's sample rate), one spelling per bound. Neither is defaulted: a note
+    built by hand states its span, and a call given a note with neither bound
+    rejects it, as the other surfaces do, because a default of 0 would be a
+    zero-length span that renders the note's edit as nothing. Notes returned by
+    :func:`extract_notes` always carry the sample bounds.
 
     Attributes:
         onset_sample: First sample of the note.
@@ -162,10 +171,14 @@ class NoteObject:
             part of ``==``, which compares the span, the metrics and the edit.
         edit: The pending :class:`NoteEdit`, identity on a freshly extracted
             note.
+        onset_sec: ``onset_sample`` in seconds; ``None`` when the span is given
+            in samples.
+        offset_sec: ``offset_sample`` in seconds; ``None`` when the span is
+            given in samples.
     """
 
-    onset_sample: int
-    offset_sample: int
+    onset_sample: int | None = None
+    offset_sample: int | None = None
     frame_start: int = 0
     frame_end: int = 0
     median_hz: float = 0.0
@@ -177,6 +190,8 @@ class NoteObject:
         default_factory=lambda: np.empty(0, dtype=np.float32), compare=False
     )
     edit: NoteEdit = dataclasses.field(default_factory=NoteEdit)
+    onset_sec: float | None = None
+    offset_sec: float | None = None
 
 
 @dataclasses.dataclass
@@ -419,7 +434,9 @@ def _note_from_c(row: SonareNoteObject, amplitude: np.ndarray, envelopes: np.nda
     )
 
 
-def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int, object, int]:
+def _notes_to_c(
+    fn_name: str, notes: Sequence[NoteObject], sample_rate: int
+) -> tuple[object, int, object, int]:
     """Marshal a note list into the C note array plus its shared envelope pool.
 
     The C ABI carries every note's envelope in one array the edits index into,
@@ -445,12 +462,25 @@ def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int,
         # the far side reads them back.
         # Narrowed rather than coerced, as the edit below is: int() takes 100.7
         # as 100, and the note would be rendered from a boundary nobody asked for.
-        c_notes[i].onset_sample = _narrow_int(
-            note.onset_sample, f"{fn_name}: notes[{i}].onset_sample", _INT64_MIN, _INT64_MAX
+        onset = _resolve_sample_bound(
+            note.onset_sample,
+            note.onset_sec,
+            sample_rate,
+            f"{fn_name}: notes[{i}].onset_sample",
+            f"{fn_name}: notes[{i}].onset_sec",
         )
-        c_notes[i].offset_sample = _narrow_int(
-            note.offset_sample, f"{fn_name}: notes[{i}].offset_sample", _INT64_MIN, _INT64_MAX
+        offset = _resolve_sample_bound(
+            note.offset_sample,
+            note.offset_sec,
+            sample_rate,
+            f"{fn_name}: notes[{i}].offset_sample",
+            f"{fn_name}: notes[{i}].offset_sec",
         )
+        if onset is None or offset is None:
+            missing = "onset" if onset is None else "offset"
+            raise SonareValueError(f"{fn_name}: notes[{i}] needs {missing}_sample or {missing}_sec")
+        c_notes[i].onset_sample = onset
+        c_notes[i].offset_sample = offset
         c_notes[i].frame_start = _narrow_int(
             note.frame_start, f"{fn_name}: notes[{i}].frame_start", _C_INT_MIN, _C_INT_MAX
         )
@@ -464,11 +494,12 @@ def _notes_to_c(fn_name: str, notes: Sequence[NoteObject]) -> tuple[object, int,
             # success. Int64-bounded like onset_sample/offset_sample above: the
             # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
             # would refuse an offset the C ABI, Node and WASM all accept.
-            time_offset_samples=_narrow_int(
+            time_offset_samples=_resolve_time_offset(
                 note.edit.time_offset_samples,
+                note.edit.time_offset_sec,
+                sample_rate,
                 f"{fn_name}: notes[{i}].edit.time_offset_samples",
-                _INT64_MIN,
-                _INT64_MAX,
+                f"{fn_name}: notes[{i}].edit.time_offset_sec",
             ),
             envelope_offset=envelope_offset,
             envelope_count=int(curve.size),
@@ -527,7 +558,7 @@ def _note_set_edit(
     c_array, length = _to_c_float_array(samples)
     f0_array, n_frames = _to_c_float_array(f0_hz, arg_name="f0_hz")
     prob_array, voiced_array = _note_voicing_arrays(fn_name, n_frames, voiced, voiced_prob)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c(fn_name, notes)
+    c_notes, note_count, envelopes, envelope_count = _notes_to_c(fn_name, notes, sample_rate)
 
     out = SonareNoteObjectsResult()
     rc = getattr(lib, symbol)(

@@ -755,8 +755,8 @@ class _EngineMixingMixin:
 
         The returned id drives :meth:`set_automation_lane`,
         :meth:`set_parameter`, or :meth:`set_parameter_smoothed` exactly like a
-        fader/pan id. Raises :class:`SonareError` if the track, insert, or name
-        is unknown.
+        :meth:`resolve_track_lane_automation_id` id. Raises :class:`SonareError`
+        if the track, insert, or name is unknown.
 
         This trio is how a mastering processor gets time-varying automation:
         the ``eq.*``, ``dynamics.*``, ``saturation.*``, ``spectral.*``,
@@ -783,6 +783,27 @@ class _EngineMixingMixin:
                 self._require_handle(),
                 _to_c_uint32(track_id, "track_id"),
                 _to_c_uint(insert_index, "insert_index"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def resolve_track_lane_automation_id(self, track_id: int, param_name: str) -> int:
+        """Resolve a track lane's fader or pan to its reserved automation id.
+
+        ``param_name`` is ``"faderDb"`` or ``"pan"``. Same lifetime rule as
+        :meth:`resolve_track_insert_automation_id`: the id names the track, not
+        its lane position, so it keeps driving that track across
+        :meth:`set_track_lanes` reorders and applies nothing once the track is
+        removed. Raises :class:`SonareError` if the track has no lane or the name
+        is neither.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_track_lane_automation_id(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
                 _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )

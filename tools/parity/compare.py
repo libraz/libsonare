@@ -1220,6 +1220,17 @@ def _core_default_drift(
                         else "the core struct field has no literal initializer",
                     )
                     continue
+                # A default spelled as absence (`None`) hands the call the core's
+                # own value, so there is no facade default to hold against it.
+                if canonical_default(p.default) == "none":
+                    rep.decline(
+                        "core_default",
+                        f"{key}.{p.name}",
+                        s,
+                        "the facade spells its default as absence, which resolves "
+                        "to the core's own value",
+                    )
+                    continue
                 verdict = AGREED
                 if "::" in core_def:
                     # Enum-member core default. The facade may spell it as a

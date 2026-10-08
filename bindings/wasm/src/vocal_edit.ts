@@ -14,6 +14,7 @@ import type {
   VocalNotesResult,
   VocalPitchEvaluation,
   VocalRange,
+  VocalRangeInput,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -22,6 +23,7 @@ import type {
   VocalUint64,
 } from './public_types_vocal_edit.js';
 import type { SonareModule } from './sonare.js';
+import { resolveSampleBound } from './validation.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
@@ -244,16 +246,106 @@ function resolveRevision(
   return requireToken(value, 'expectedRevision', fallback);
 }
 
-function requireRange(range: VocalRange): VocalRange {
+function resolveRange(
+  range: VocalRangeInput,
+  sampleRate: number,
+  outputLengthSamples: number,
+): VocalRange {
   if (!range || typeof range !== 'object') {
     throw new TypeError('range must be an object');
   }
-  const startSample = requireSample(range.startSample, 'range.startSample');
-  const endSample = requireSample(range.endSample, 'range.endSample');
+  const fn = 'VocalRenderSnapshot.render';
+  const start =
+    resolveSampleBound(
+      fn,
+      range.startSample,
+      range.startSec,
+      sampleRate,
+      'range.startSample',
+      'range.startSec',
+    ) ?? 0;
+  const end =
+    resolveSampleBound(
+      fn,
+      range.endSample,
+      range.endSec,
+      sampleRate,
+      'range.endSample',
+      'range.endSec',
+    ) ?? outputLengthSamples;
+  const startSample = requireSample(start, 'range.startSample');
+  const endSample = requireSample(end, 'range.endSample');
   if (endSample < startSample) {
     throw new RangeError('range.endSample must be >= startSample');
   }
   return { startSample, endSample };
+}
+
+/**
+ * Fold the seconds spellings of an operation's sample positions into the sample
+ * fields the core reads. Operations that carry no seconds field pass through.
+ */
+function resolveOperationTimes(
+  operations: readonly VocalEditOperation[],
+  sampleRate: number,
+): readonly VocalEditOperation[] {
+  const fn = 'VocalEditDraft.apply';
+  return operations.map((operation, index) => {
+    const at = `operations[${index}]`;
+    if (operation?.kind === 'setSourceSpan') {
+      const { sourceStartSec, sourceEndSec, destinationStartSec, destinationLengthSec, ...rest } =
+        operation;
+      const bound = (
+        sample: number | undefined,
+        sec: number | undefined,
+        sampleName: string,
+        secName: string,
+      ) =>
+        resolveSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+      return {
+        ...rest,
+        sourceStartSample: bound(
+          rest.sourceStartSample,
+          sourceStartSec,
+          'sourceStartSample',
+          'sourceStartSec',
+        ),
+        sourceEndSample: bound(
+          rest.sourceEndSample,
+          sourceEndSec,
+          'sourceEndSample',
+          'sourceEndSec',
+        ),
+        destinationStartSample: bound(
+          rest.destinationStartSample,
+          destinationStartSec,
+          'destinationStartSample',
+          'destinationStartSec',
+        ),
+        destinationLengthSamples: bound(
+          rest.destinationLengthSamples,
+          destinationLengthSec,
+          'destinationLengthSamples',
+          'destinationLengthSec',
+        ),
+      } as VocalEditOperation;
+    }
+    if (operation?.kind === 'split') {
+      const { sourceSec, ...rest } = operation;
+      return {
+        ...rest,
+        sourceSample: resolveSampleBound(
+          fn,
+          rest.sourceSample,
+          sourceSec,
+          sampleRate,
+          `${at}.sourceSample`,
+          `${at}.sourceSec`,
+        ),
+      } as VocalEditOperation;
+    }
+    return operation;
+  });
 }
 
 function copyToken(token: VocalStateToken): VocalStateToken {
@@ -414,6 +506,7 @@ function validateCreate(request: VocalCreateRequest): void {
 function normalizeRequest(
   request: VocalRenderRequest,
   outputLengthSamples: number,
+  sampleRate: number,
 ): {
   range: VocalRange;
   requestId: VocalUint64;
@@ -421,7 +514,11 @@ function normalizeRequest(
   const range =
     request.range === undefined
       ? { startSample: 0, endSample: requireSample(outputLengthSamples, 'outputLengthSamples') }
-      : requireRange(request.range);
+      : resolveRange(
+          request.range,
+          sampleRate,
+          requireSample(outputLengthSamples, 'outputLengthSamples'),
+        );
   const requestId = requireToken(request.requestId, 'requestId');
   return { range, requestId };
 }
@@ -450,6 +547,7 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
   }
   return new VocalEditSession(
     module().vocalEditSessionCreate(request.samples, request.sampleRate, request),
+    request.sampleRate,
   );
 }
 
@@ -475,6 +573,7 @@ export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEdit
   }
   return new VocalEditSession(
     module().vocalEditSessionRestore(request.samples, request.sampleRate, request.state, request),
+    request.sampleRate,
   );
 }
 
@@ -483,11 +582,13 @@ export class VocalEditSession {
   private handle: number;
   private readonly drafts = new Set<VocalEditDraft>();
   private disposed = false;
+  private readonly sampleRate: number;
 
   /** @internal Instances are created by {@link createVocalEditSession} and {@link restoreVocalEditSession}. */
-  constructor(handle: number) {
+  constructor(handle: number, sampleRate: number) {
     requireHandle(handle, 'session');
     this.handle = handle;
+    this.sampleRate = sampleRate;
   }
 
   dispose(): void {
@@ -564,6 +665,7 @@ export class VocalEditSession {
     const draft = new VocalEditDraft(
       module().vocalEditSessionBeginEdit(this.native(), resolveRevision(options, this.revision())),
       this,
+      this.sampleRate,
     );
     this.drafts.add(draft);
     return draft;
@@ -618,7 +720,10 @@ export class VocalEditSession {
   }
 
   captureRenderSnapshot(): VocalRenderSnapshot {
-    return new VocalRenderSnapshot(module().vocalEditCaptureSnapshot(this.native(), false));
+    return new VocalRenderSnapshot(
+      module().vocalEditCaptureSnapshot(this.native(), false),
+      this.sampleRate,
+    );
   }
 
   exportState(): Uint8Array {
@@ -635,12 +740,14 @@ export class VocalEditDraft {
   private handle: number;
   private disposed = false;
   private readonly owner: VocalEditSession;
+  private readonly sampleRate: number;
 
   /** @internal Instances are created by {@link VocalEditSession.beginEdit}. */
-  constructor(handle: number, owner: VocalEditSession) {
+  constructor(handle: number, owner: VocalEditSession, sampleRate: number) {
     requireHandle(handle, 'draft');
     this.handle = handle;
     this.owner = owner;
+    this.sampleRate = sampleRate;
   }
 
   private native(): number {
@@ -672,7 +779,11 @@ export class VocalEditDraft {
       throw new TypeError('operations must be an array');
     }
     return copyEditResult(
-      module().vocalEditDraftApply(this.native(), generation, request.operations),
+      module().vocalEditDraftApply(
+        this.native(),
+        generation,
+        resolveOperationTimes(request.operations, this.sampleRate),
+      ),
     );
   }
 
@@ -721,7 +832,10 @@ export class VocalEditDraft {
   }
 
   captureRenderSnapshot(): VocalRenderSnapshot {
-    return new VocalRenderSnapshot(module().vocalEditCaptureSnapshot(this.native(), true));
+    return new VocalRenderSnapshot(
+      module().vocalEditCaptureSnapshot(this.native(), true),
+      this.sampleRate,
+    );
   }
 
   dispose(): void {
@@ -751,11 +865,13 @@ export class VocalEditDraft {
 export class VocalRenderSnapshot {
   private handle: number;
   private disposed = false;
+  private readonly sampleRate: number;
 
   /** @internal Instances are created by a session or draft. */
-  constructor(handle: number) {
+  constructor(handle: number, sampleRate: number) {
     requireHandle(handle, 'snapshot');
     this.handle = handle;
+    this.sampleRate = sampleRate;
   }
 
   private native(): number {
@@ -782,7 +898,7 @@ export class VocalRenderSnapshot {
     if (request.signal?.aborted) {
       throw new DOMException('The render was aborted', 'AbortError');
     }
-    const normalized = normalizeRequest(request, this.outputLengthSamples());
+    const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
     return copyRender(
       module().vocalEditSnapshotRender(
         handle,
@@ -798,7 +914,7 @@ export class VocalRenderSnapshot {
     if (request.signal?.aborted) {
       throw new DOMException('The render was aborted', 'AbortError');
     }
-    const normalized = normalizeRequest(request, this.outputLengthSamples());
+    const normalized = normalizeRequest(request, this.outputLengthSamples(), this.sampleRate);
     return new VocalRenderJob(
       module().vocalEditRenderJobBegin(
         handle,

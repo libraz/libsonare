@@ -259,12 +259,6 @@ void write_manifest(const std::filesystem::path& path) {
 }
 
 #if defined(SONARE_WITH_MIXING)
-// Automation target id for a lane parameter, the packing
-// engine::make_track_lane_param_id applies (1 = fader dB).
-constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
-  return 0x4D580000u | (lane_index << 8u) | param_kind;
-}
-
 // Engine with one unity clip on a lane whose fader has been driven to -12 dB
 // but never rendered, so the fader smoother still holds its reset value. Any
 // offline entry point has to open at the target, not ramp down into it.
@@ -295,8 +289,10 @@ struct AttenuatedLaneEngine {
 
     SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
     REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-    REQUIRE(sonare_engine_set_parameter(engine, engine_lane_param_target(0, 1), kFaderDb, -1) ==
+    uint32_t fader_id = 0;
+    REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, 10, "faderDb", &fader_id) ==
             SONARE_OK);
+    REQUIRE(sonare_engine_set_parameter(engine, fader_id, kFaderDb, -1) == SONARE_OK);
     REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
     REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   }

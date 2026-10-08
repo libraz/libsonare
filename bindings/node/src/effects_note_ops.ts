@@ -4,11 +4,7 @@
  */
 
 import type { EffectSamplesRequest } from './_effects_common.js';
-import {
-  assertEditTimeOffsets,
-  assertPitchTrackLengths,
-  toVoicedInt32,
-} from './_effects_common.js';
+import { assertPitchTrackLengths, resolveEntryTimes, toVoicedInt32 } from './_effects_common.js';
 import { addon } from './native.js';
 import type {
   AssignNoteTargetsResult,
@@ -23,7 +19,12 @@ import type {
   PitchDecompositionResult,
   VoicedFlags,
 } from './types.js';
-import { assertFiniteScalar, assertIntegerValue, assertSampleRate } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertIntegerValue,
+  assertSampleRate,
+  resolveSampleBound,
+} from './validation.js';
 
 export interface NoteStretchRequest extends EffectSamplesRequest, NoteStretchOptions {}
 
@@ -215,11 +216,26 @@ export function noteStretch(
   options: NoteStretchOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const rate = request.sampleRate ?? 22050;
   return addon.noteStretch(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.onsetSample ?? 0,
-    request.offsetSample ?? request.samples.length,
+    rate,
+    resolveSampleBound(
+      'noteStretch',
+      request.onsetSample,
+      request.onsetSec,
+      rate,
+      'onsetSample',
+      'onsetSec',
+    ) ?? 0,
+    resolveSampleBound(
+      'noteStretch',
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    ) ?? request.samples.length,
     request.stretchRatio ?? 1.0,
   );
 }
@@ -237,12 +253,34 @@ export function noteMove(
   options: NoteMoveOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const rate = request.sampleRate ?? 22050;
   return addon.noteMove(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.onsetSample ?? 0,
-    request.offsetSample ?? request.samples.length,
-    request.targetOnsetSample ?? 0,
+    rate,
+    resolveSampleBound(
+      'noteMove',
+      request.onsetSample,
+      request.onsetSec,
+      rate,
+      'onsetSample',
+      'onsetSec',
+    ) ?? 0,
+    resolveSampleBound(
+      'noteMove',
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    ) ?? request.samples.length,
+    resolveSampleBound(
+      'noteMove',
+      request.targetOnsetSample,
+      request.targetOnsetSec,
+      rate,
+      'targetOnsetSample',
+      'targetOnsetSec',
+    ) ?? 0,
   );
 }
 
@@ -368,9 +406,9 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
     }
     assertPitchTrackLengths('renderNotes', options.f0Hz, voiced);
   }
-  assertEditTimeOffsets('renderNotes', notes, 'notes');
+  const nativeNotes = resolveEntryTimes('renderNotes', notes, 'notes', sampleRate, true);
   const nativeOptions = nativeVoiced === undefined ? options : { ...options, voiced: nativeVoiced };
-  return addon.renderNotes(samples, sampleRate, notes, nativeOptions);
+  return addon.renderNotes(samples, sampleRate, nativeNotes, nativeOptions);
 }
 
 /**
@@ -491,7 +529,8 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
     throw new TypeError('splitNote: notes must be an array');
   }
   assertNoteSetEntries('splitNote', notes);
-  return addon.splitNote(samples, sampleRate, f0Hz, frameRate, notes, index, frame, {
+  const nativeNotes = resolveEntryTimes('splitNote', notes, 'notes', sampleRate, false);
+  return addon.splitNote(samples, sampleRate, f0Hz, frameRate, nativeNotes, index, frame, {
     ...options,
     voiced: nativeVoiced,
     voicedProb: voicedProb ?? undefined,
@@ -557,7 +596,8 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
     throw new TypeError('mergeNotes: notes must be an array');
   }
   assertNoteSetEntries('mergeNotes', notes);
-  return addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, notes, first, last, {
+  const nativeNotes = resolveEntryTimes('mergeNotes', notes, 'notes', sampleRate, false);
+  return addon.mergeNotes(samples, sampleRate, f0Hz, frameRate, nativeNotes, first, last, {
     ...options,
     voiced: nativeVoiced,
     voicedProb: voicedProb ?? undefined,

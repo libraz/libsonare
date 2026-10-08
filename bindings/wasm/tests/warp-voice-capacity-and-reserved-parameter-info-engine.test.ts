@@ -133,9 +133,7 @@ describe('Sonare WASM Module', () => {
       const engine = new RealtimeEngine(48000, 256);
       try {
         engine.setTrackLanes([10]);
-        // Reserved mixer namespace: 0x4D580000 | (laneIndex << 8) | kind, kind
-        // 1 = faderDb (same encoding realtime-engine-mixer.test.ts's siblings use).
-        const laneFaderId = 0x4d580001;
+        const laneFaderId = engine.resolveTrackLaneAutomationId(10, 'faderDb');
         const fader = engine.parameterInfo(laneFaderId);
         expect(fader).toMatchObject({
           name: 'faderDb',

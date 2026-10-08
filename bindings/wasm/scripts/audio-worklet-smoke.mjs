@@ -52,6 +52,7 @@ function startServer() {
 <meta charset="utf-8">
 <script type="module">
 import { init, SonareEngineCommandType, SonareRealtimeEngineNode } from '/dist/worklet.js';
+import { RealtimeEngine } from '/dist/index.js';
 
 window.runSonareSmoke = async () => {
   const progress = [];
@@ -81,6 +82,11 @@ window.runSonareSmoke = async () => {
     mark('mixer-context');
     const mixerContext = new OfflineAudioContext(1, 4096, 48000);
     const clip = new Float32Array(4096).fill(1);
+    // An engine given the same lanes numbers track 10's fader as the worklet engine does.
+    const laneMirror = new RealtimeEngine(48000, 128);
+    laneMirror.setTrackLanes([10]);
+    const track10Fader = laneMirror.resolveTrackLaneAutomationId(10, 'faderDb');
+    laneMirror.destroy();
     mark('mixer-create-node');
     mixerEngine = await SonareRealtimeEngineNode.create(mixerContext, {
       mode: 'sab',
@@ -100,7 +106,7 @@ window.runSonareSmoke = async () => {
       initialCommands: [
         {
           type: SonareEngineCommandType.SetParamSmoothed,
-          targetId: 0x4d580001,
+          targetId: track10Fader,
           sampleTime: -1,
           argFloat: -12,
         },

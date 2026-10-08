@@ -88,7 +88,7 @@ def test_engine_track_monitor_mode_pfl_and_afl() -> None:
         assert monitor[0][block // 2] == pytest.approx(1.0, abs=0.01)
         assert monitor[0][-1] == pytest.approx(1.0, abs=0.01)
 
-        engine.set_parameter(0x4D580001, -6.0)
+        engine.set_parameter(engine.resolve_track_lane_automation_id(10, "faderDb"), -6.0)
         for _ in range(9):
             main, monitor = engine.process_with_monitor([[0.0] * block])
         assert 0.4 < main[0][-1] < 0.7
@@ -137,7 +137,7 @@ def test_engine_track_lanes_route_clips_and_lane_commands() -> None:
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert 0.75 < processed[0][-1] < 1.25
 
-        engine.set_parameter_smoothed(0x4D580001, -12.0, render_frame=-1)
+        engine.set_parameter_smoothed(engine.resolve_track_lane_automation_id(10, "faderDb"), -12.0)
         for _ in range(6):
             processed = engine.process([[0.0] * 256, [0.0] * 256])
         assert processed[0][-1] < 0.45

@@ -717,6 +717,29 @@ SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine*
 #endif
 }
 
+SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t track_id,
+                                                           const char* param_name,
+                                                           uint32_t* out_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || track_id == 0 || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Defined on every exit path, as in the insert resolvers.
+  *out_id = 0;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id = engine->engine.resolve_track_lane_automation_id(track_id, param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_track_strip_pan(SonareRealtimeEngine* engine, uint32_t track_id,
                                               float pan) {
   SONARE_C_API_ENTRY;

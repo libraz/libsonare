@@ -29,8 +29,12 @@
 namespace {
 
 #if defined(SONARE_WITH_MIXING)
-constexpr uint32_t engine_lane_param_target(uint32_t lane_index, uint32_t param_kind) {
-  return 0x4D580000u | (lane_index << 8u) | param_kind;
+// The engine's fader/pan id for @p track_id's lane.
+uint32_t track_lane_target(const sonare::engine::RealtimeEngine& engine, uint32_t track_id,
+                           unsigned int param_kind) {
+  const int64_t id = engine.track_lane_automation_id(track_id, param_kind);
+  REQUIRE(id >= 0);
+  return static_cast<uint32_t>(id);
 }
 
 constexpr uint32_t engine_master_param_target(uint32_t param_kind) {
@@ -1564,7 +1568,7 @@ TEST_CASE("Future queued track insert edits follow the track through a lane reor
   REQUIRE(probe_b_ptr->insert_value == Catch::Approx(1.0f));
 }
 
-TEST_CASE("Queued generic lane fader and pan edits follow a lane reorder",
+TEST_CASE("Queued lane fader and pan edits keep their track through a lane reorder",
           "[engine][realtime][mixing]") {
   constexpr int kBlock = 256;
   constexpr int kFrames = kBlock * 8;
@@ -1603,21 +1607,20 @@ TEST_CASE("Queued generic lane fader and pan edits follow a lane reorder",
 
   sonare::rt::Command fader{};
   fader.type = sonare::rt::CommandType::kSetParam;
-  fader.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  fader.target_id = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
   fader.sample_time = -1;
   fader.arg.f = -12.0f;
   REQUIRE(engine.push_command(fader));
 
   sonare::rt::Command pan{};
   pan.type = sonare::rt::CommandType::kSetParam;
-  pan.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kPan);
+  pan.target_id = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kPan);
   pan.sample_time = -1;
   pan.arg.f = 1.0f;
   REQUIRE(engine.push_command(pan));
 
-  // Both commands still carry the original lane 0 selector. Remapping them
-  // before the next process block must leave track 20 centered and apply the
-  // gain/pan pair to track 10 now at lane 1.
+  // Both ids name track 10, so the pair must reach it at lane 1 and leave track 20,
+  // now at lane 0, centered.
   REQUIRE(engine.set_track_lanes({{20}, {10}}));
   left.fill(0.0f);
   right.fill(0.0f);
@@ -2542,7 +2545,7 @@ TEST_CASE("RealtimeEngine track lanes route clip audio through lane state", "[en
 
 TEST_CASE("RealtimeEngine automation lanes drive reserved track mixer faders",
           "[engine][realtime]") {
-  // An automation lane targeting the reserved engine namespace (lane 0 fader)
+  // An automation lane targeting a reserved track fader id (track 10)
   // must reach the track mixer runtime without any ProcessorBase binding: held
   // at 0 dB before the breakpoint, dropping to -60 dB after it.
   constexpr int kBlock = 256;
@@ -2564,7 +2567,7 @@ TEST_CASE("RealtimeEngine automation lanes drive reserved track mixer faders",
   // Breakpoint at sample 1024 (= 4 blocks). 1 ppq = 24000 samples at 120 bpm.
   constexpr double kBreakpointPpq = 1024.0 / 24000.0;
   const uint32_t fader_target =
-      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+      track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
   sonare::automation::AutomationLane lane(fader_target);
   lane.set_points({{0.0, 0.0f, sonare::automation::CurveType::Hold},
                    {kBreakpointPpq, -60.0f, sonare::automation::CurveType::Hold}});
@@ -2625,7 +2628,7 @@ TEST_CASE("RealtimeEngine settle_parameters snaps lane faders for offline render
   REQUIRE(engine.set_track_lanes({{10}}));
 
   const uint32_t fader_target =
-      engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+      track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
   sonare::automation::AutomationLane lane(fader_target);
   lane.set_points({{0.0, -60.0f, sonare::automation::CurveType::Hold}});
   engine.automation().set_lanes({lane});
@@ -2832,7 +2835,7 @@ TEST_CASE("RealtimeEngine commands drive track lane params and solo mute", "[eng
 
   sonare::rt::Command fader{};
   fader.type = sonare::rt::CommandType::kSetParamSmoothed;
-  fader.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  fader.target_id = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
   fader.sample_time = -1;
   fader.arg.f = -12.0f;
   REQUIRE(engine.push_command(fader));
@@ -2886,7 +2889,7 @@ TEST_CASE("RealtimeEngine lane state follows track id across track lane republis
 
   sonare::rt::Command fader{};
   fader.type = sonare::rt::CommandType::kSetParamSmoothed;
-  fader.target_id = engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb);
+  fader.target_id = track_lane_target(engine, 10, sonare::engine::TrackMixerRuntime::kFaderDb);
   fader.sample_time = -1;
   fader.arg.f = -12.0f;
   REQUIRE(engine.push_command(fader));

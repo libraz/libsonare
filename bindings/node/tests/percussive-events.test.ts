@@ -977,7 +977,7 @@ describe('renderPercussiveEvents', () => {
     expectInvalidParameter(() => render([{ onsetSample: 4410, offsetSample: 4410 }]));
     expectInvalidParameter(() => render([{ onsetSample: 15435, offsetSample: 4410 }]));
     // Outside the audio at either end.
-    expectInvalidParameter(() => render([{ onsetSample: -512, offsetSample: 4410 }]));
+    expect(() => render([{ onsetSample: -512, offsetSample: 4410 }])).toThrow(RangeError);
     expectInvalidParameter(() => render([{ onsetSample: 4410, offsetSample: length + 1 }]));
     expectInvalidParameter(() => render([{ onsetSample: length, offsetSample: length + 4410 }]));
     // Overlapping source spans are not a renderable set; touching ones are.

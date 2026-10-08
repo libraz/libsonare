@@ -204,8 +204,8 @@ SonareRealtimeEngine* make_pre_roll_engine(const float* const* clip_channels, fl
 
   SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, 1}};
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_lane_param_target(0, 1), fader_db,
-                                               -1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter_smoothed(
+              engine, engine_track_lane_target(engine, 10, "faderDb"), fader_db, -1) == SONARE_OK);
   return engine;
 }
 
@@ -453,8 +453,8 @@ TEST_CASE("sonare_engine track lanes route clips and accept lane commands", "[c_
   REQUIRE(left.back() < 1.25f);
   REQUIRE(left.back() > 0.75f);
 
-  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_lane_param_target(0, 1), -12.0f,
-                                               -1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter_smoothed(
+              engine, engine_track_lane_target(engine, 10, "faderDb"), -12.0f, -1) == SONARE_OK);
   for (int block = 0; block < 30; ++block) {
     left.fill(0.0f);
     right.fill(0.0f);
@@ -529,8 +529,8 @@ TEST_CASE("sonare_engine schedules track monitor modes on the prepared monitor b
 
   // Set the lane fader down and let its 5 ms smoother settle. PFL remains at
   // the post-strip/pre-lane-fader level, while AFL follows the lane fader.
-  REQUIRE(sonare_engine_set_parameter(engine, engine_lane_param_target(0, 1), -6.0f, -1) ==
-          SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, engine_track_lane_target(engine, 10, "faderDb"),
+                                      -6.0f, -1) == SONARE_OK);
   for (int block = 0; block < 8; ++block) {
     main.fill(0.0f);
     monitor.fill(0.0f);
@@ -885,6 +885,62 @@ TEST_CASE("sonare_engine_set_automation_lane with no points removes the lane", "
   REQUIRE(sonare_engine_set_automation_lane(engine, id, nullptr, 0) == SONARE_OK);
   REQUIRE(sonare_engine_automation_lane_count(engine, &lane_count) == SONARE_OK);
   REQUIRE(lane_count == 0);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a track fader id held across a lane reorder keeps driving its own track",
+          "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 80;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  // Only track 20 sounds, so the output reads track 20's fader alone.
+  std::vector<float> source(kFrames, 1.0f);
+  const float* source_channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 20;
+  clip.channels = source_channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineTrackLane lanes[] = {{10, nullptr, 0, 0, 1}, {20, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  uint32_t track10_fader = 0;
+  REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, 10, "faderDb", &track10_fader) ==
+          SONARE_OK);
+
+  SonareEngineTrackLane reordered[] = {{20, nullptr, 0, 0, 1}, {10, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, reordered, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, track10_fader, -60.0f, -1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  const auto render = [&](int blocks) {
+    for (int block = 0; block < blocks; ++block) {
+      out.fill(0.0f);
+      REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+    }
+  };
+  render(30);
+  REQUIRE(out.back() == Catch::Approx(1.0f).margin(1.0e-3));
+
+  // Once track 10 is removed its id addresses nothing, not the track now at its old position.
+  SonareEngineTrackLane only20[] = {{20, nullptr, 0, 0, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, only20, 1) == SONARE_OK);
+  SonareParameterInfo info{};
+  REQUIRE(sonare_engine_parameter_info(engine, track10_fader, &info) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_parameter(engine, track10_fader, -60.0f, -1) == SONARE_OK);
+  render(30);
+  REQUIRE(out.back() == Catch::Approx(1.0f).margin(1.0e-3));
 
   sonare_engine_destroy(engine);
 }

@@ -506,10 +506,11 @@ TEST_CASE("installed_automation is the lane vector the engine plays",
   REQUIRE(result.installed_automation.size() == engine.automation().lane_count());
   REQUIRE(result.installed_automation.size() == 1);
 #if defined(SONARE_WITH_MIXING)
-  // The typed lane carries the resolved lane-0 id, not its persistent edit id.
-  REQUIRE(result.installed_automation.front().target_param_id() ==
-          sonare::engine::make_track_lane_param_id(
-              0, static_cast<uint32_t>(sonare::automation::AutomationTargetKind::kTrackFaderDb)));
+  // The typed lane carries its track's engine fader id, not its persistent edit id.
+  const int64_t fader_id =
+      engine.resolve_track_lane_automation_id(a.track_lanes.front().track_id, "faderDb");
+  REQUIRE(fader_id >= 0);
+  REQUIRE(result.installed_automation.front().target_param_id() == static_cast<uint32_t>(fader_id));
 #endif
 
   // Republishing the returned vector, as a binding wrapper does, must not change playback.
@@ -770,18 +771,12 @@ arr::CompiledTimeline only_track(arr::CompiledTimeline timeline, arr::TrackId ke
   return timeline;
 }
 
-/// The engine param id of @p kind on the lane currently holding @p track_id.
+/// The engine param id of @p kind for @p track_id's lane.
 uint32_t lane_param_id(RealtimeEngine& engine, arr::TrackId track_id,
                        sonare::automation::AutomationTargetKind kind) {
-  std::vector<uint32_t> ids(sonare::engine::TrackMixerRuntime::kMaxTrackLanes);
-  ids.resize(engine.track_mixer().copy_lane_track_ids(ids.data(), ids.size()));
-  for (size_t i = 0; i < ids.size(); ++i) {
-    if (ids[i] == track_id) {
-      return sonare::engine::make_track_lane_param_id(i, static_cast<uint32_t>(kind));
-    }
-  }
-  FAIL("track has no lane");
-  return 0;
+  const int64_t id = engine.track_lane_automation_id(track_id, static_cast<unsigned int>(kind));
+  REQUIRE(id >= 0);
+  return static_cast<uint32_t>(id);
 }
 
 void set_param_manually(RealtimeEngine& engine, uint32_t target_id, float value) {

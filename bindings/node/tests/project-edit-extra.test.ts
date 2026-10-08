@@ -705,9 +705,9 @@ describe('RealtimeEngine MIDI / parameter bindings', () => {
   it('pushMidiCc and pushMidiPanic do not throw on a prepared engine', () => {
     const engine = preparedEngine();
     expect(() => engine.pushMidiCc(0, 0, 0, 7, 100)).not.toThrow();
-    expect(() => engine.pushMidiCc(0, 0, 0, 7, 100, -1)).not.toThrow();
+    expect(() => engine.pushMidiCc(0, 0, 0, 7, 100)).not.toThrow();
     expect(() => engine.pushMidiPanic()).not.toThrow();
-    expect(() => engine.pushMidiPanic(-1)).not.toThrow();
+    expect(() => engine.pushMidiPanic()).not.toThrow();
     engine.destroy();
   });
 
@@ -724,7 +724,7 @@ describe('RealtimeEngine MIDI / parameter bindings', () => {
     // GM System On (0xF0 0x7E 0x7F 0x09 0x01 0xF7).
     const gmSystemOn = new Uint8Array([0xf0, 0x7e, 0x7f, 0x09, 0x01, 0xf7]);
     expect(() => engine.pushMidiSysex(0, gmSystemOn)).not.toThrow();
-    expect(() => engine.pushMidiSysex(0, gmSystemOn, -1)).not.toThrow();
+    expect(() => engine.pushMidiSysex(0, gmSystemOn)).not.toThrow();
     engine.destroy();
   });
 

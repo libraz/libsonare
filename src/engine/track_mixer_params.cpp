@@ -84,10 +84,21 @@ bool TrackMixerRuntime::set_lane_parameter(size_t lane_index, unsigned int param
   }
 }
 
-bool TrackMixerRuntime::restore_lane_parameter(size_t lane_index, unsigned int param_id) noexcept {
+bool TrackMixerRuntime::set_track_parameter(uint32_t track_id, unsigned int param_id,
+                                            float value) noexcept {
+  acquire_lanes();
+  if (const std::vector<TrackLaneConfig>* lanes = lanes_.current()) {
+    if (lanes != applied_lane_snapshot_) prepare_lanes_from_snapshot(*lanes);
+  }
+  const int lane_index = lane_index_for_track(track_id);
+  if (lane_index < 0) return false;
+  return set_lane_parameter(static_cast<size_t>(lane_index), param_id, value);
+}
+
+bool TrackMixerRuntime::restore_track_parameter(uint32_t track_id, unsigned int param_id) noexcept {
   // The rest values prepare() and reset() seed: unity gain, centre pan.
   if (param_id != kFaderDb && param_id != kPan) return false;
-  return set_lane_parameter(lane_index, param_id, 0.0f);
+  return set_track_parameter(track_id, param_id, 0.0f);
 }
 
 bool TrackMixerRuntime::set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept {

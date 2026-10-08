@@ -84,6 +84,7 @@ from ._runtime import (
     _get_lib,
     _int_refusal,
     _narrow_int,
+    _resolve_render_frame,
     _to_c_float,
     _to_c_int,
     _to_c_int64,
@@ -221,6 +222,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         one-for-one: the engine reserves that many meter records per metered
         lane, so its memory cost is far larger than the number given here.
         """
+        self._sample_rate = float(sample_rate)
         lib = _get_lib()
         prepare_with_channels = getattr(lib, "sonare_engine_prepare_with_channels", None)
         supports_max_channels = prepare_with_channels is not None
@@ -242,14 +244,15 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
-    def play(self, render_frame: int = -1) -> None:
+    def play(self, render_frame: int | None = None) -> None:
         _check(
             _get_lib().sonare_engine_play(
-                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
-    def stop(self, render_frame: int = -1) -> None:
+    def stop(self, render_frame: int | None = None) -> None:
         """Stop the transport.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
@@ -258,11 +261,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(
             _get_lib().sonare_engine_stop(
-                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
-    def seek_sample(self, timeline_sample: int, render_frame: int = -1) -> None:
+    def seek_sample(self, timeline_sample: int, render_frame: int | None = None) -> None:
         """Move the playhead to a timeline sample.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
@@ -273,7 +277,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             _get_lib().sonare_engine_seek_sample(
                 self._require_handle(),
                 _to_c_int64(timeline_sample, "timeline_sample"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -367,7 +371,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
             )
         )
 
-    def seek_ppq(self, ppq: float, render_frame: int = -1) -> None:
+    def seek_ppq(self, ppq: float, render_frame: int | None = None) -> None:
         """Move the playhead to a PPQ position.
 
         A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
@@ -376,7 +380,9 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         """
         _check(
             _get_lib().sonare_engine_seek_ppq(
-                self._require_handle(), float(ppq), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                float(ppq),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -611,12 +617,12 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
         return _marker_from_c(raw)
 
-    def seek_marker(self, marker_id: int, render_frame: int = -1) -> None:
+    def seek_marker(self, marker_id: int, render_frame: int | None = None) -> None:
         _check(
             _get_lib().sonare_engine_seek_marker(
                 self._require_handle(),
                 _to_c_uint32(marker_id, "marker_id"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -665,11 +671,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         _check(_get_lib().sonare_engine_clip_count(self._require_handle(), ctypes.byref(out)))
         return int(out.value)
 
-    def set_parameter(self, param_id: int, value: float, render_frame: int = -1) -> None:
+    def set_parameter(self, param_id: int, value: float, render_frame: int | None = None) -> None:
         """Push a live parameter value to the engine (immediate jump).
 
-        ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate. This value also becomes ``param_id``'s base value: if an
+        ``render_frame`` is the render-frame time to apply (``None`` for
+        immediate). This value also becomes ``param_id``'s base value: if an
         automation lane later starts (and stops) driving ``param_id``, the
         target reverts to this value once that lane empties -- see
         :meth:`set_automation_lane`.
@@ -682,11 +688,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 self._require_handle(),
                 _to_c_uint32(param_id, "param_id"),
                 _to_c_float(value, "value"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
-    def set_parameter_smoothed(self, param_id: int, value: float, render_frame: int = -1) -> None:
+    def set_parameter_smoothed(
+        self, param_id: int, value: float, render_frame: int | None = None
+    ) -> None:
         """Push a live parameter value to the engine using a smoothed ramp.
 
         The ramp's target (not its in-flight position) becomes ``param_id``'s
@@ -701,7 +709,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 self._require_handle(),
                 _to_c_uint32(param_id, "param_id"),
                 _to_c_float(value, "value"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -724,7 +732,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         )
 
     def set_solo_mute(
-        self, lane_index: int, solo: bool, mute: bool, render_frame: int = -1
+        self, lane_index: int, solo: bool, mute: bool, render_frame: int | None = None
     ) -> None:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_solo_mute"):
@@ -735,7 +743,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 _to_c_uint32(lane_index, "lane_index"),
                 1 if solo else 0,
                 1 if mute else 0,
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -743,7 +751,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         self,
         lane_index: int,
         mode: EngineTrackMonitorMode | str | int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Schedule a PFL/AFL monitor tap for a configured track lane.
 
@@ -764,7 +772,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
                 self._require_handle(),
                 _to_c_uint32(lane_index, "lane_index"),
                 _to_c_int(mode_value, "mode"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 

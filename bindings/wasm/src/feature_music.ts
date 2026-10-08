@@ -20,7 +20,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
-  assertVqtGamma,
+  resolveOptionalNonNegative,
 } from './validation.js';
 
 function requireModule() {
@@ -330,8 +330,8 @@ export function hybridCqt(
  * @param fmin - Minimum frequency in Hz (default: 32.70319566257483, C1)
  * @param nBins - Number of frequency bins (default: 84)
  * @param binsPerOctave - Bins per octave (default: 12)
- * @param gamma - Bandwidth offset; a negative value or NaN selects the automatic
- *   ERB-derived value, while 0 is equivalent to CQT (default: -1)
+ * @param gamma - Bandwidth offset; omit it for the automatic ERB-derived value,
+ *   while 0 is equivalent to CQT. A negative or non-finite value is refused
  * @returns VQT magnitude result (same shape as CQT)
  */
 export function vqt(request: VqtRequest): CqtResult;
@@ -352,7 +352,7 @@ export function vqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
-  gamma = -1,
+  gamma?: number,
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
@@ -371,8 +371,15 @@ export function vqt(
   validateMusicSamples('vqt', samples, sampleRate, options);
   validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('vqt', fmin);
-  assertVqtGamma('vqt', gamma);
-  return requireModule().vqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma);
+  return requireModule().vqt(
+    samples,
+    sampleRate,
+    hopLength,
+    fmin,
+    nBins,
+    binsPerOctave,
+    resolveOptionalNonNegative('vqt', gamma, 'gamma'),
+  );
 }
 
 function validateCqtInverse(
@@ -486,7 +493,7 @@ export function vqtToAudio(
   hopLength = 512,
   fmin = 32.70319566257483,
   binsPerOctave = 12,
-  gamma = -1,
+  gamma?: number,
   nIter = 32,
   options: GuardedOptions = {},
 ): Float32Array {
@@ -517,7 +524,6 @@ export function vqtToAudio(
     nIter,
     options,
   );
-  assertVqtGamma('vqtToAudio', gamma);
   return requireModule().vqtToAudio(
     magnitude,
     nBins,
@@ -526,7 +532,7 @@ export function vqtToAudio(
     hopLength,
     fmin,
     binsPerOctave,
-    gamma,
+    resolveOptionalNonNegative('vqtToAudio', gamma, 'gamma'),
     nIter,
   );
 }

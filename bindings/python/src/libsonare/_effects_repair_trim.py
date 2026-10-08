@@ -25,8 +25,8 @@ from ._runtime import (
     _check,
     _get_lib,
     _guard_buffer,
-    _narrow_int,
     _resolve_enum,
+    _resolve_sample_bound,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -43,6 +43,24 @@ _TRIM_SILENCE_MODE_NAMES = {
     "lufs_gated": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
     "lufs": SONARE_TRIM_SILENCE_MODE_LUFS_GATED,  # noqa: F405
 }
+
+
+def _resolve_padding(
+    padding_samples: int | None, padding_sec: float | None, sample_rate: int
+) -> int:
+    """Resolve the kept margin from samples or seconds; unset is no padding.
+
+    Narrowed rather than coerced: ``int()`` takes 0.5 as 0, which is "no padding
+    at all", and a negative count would arrive as an enormous ``size_t``.
+    """
+    resolved = _resolve_sample_bound(
+        padding_samples, padding_sec, sample_rate, "padding_samples", "padding_sec"
+    )
+    if resolved is None:
+        return 0
+    if resolved > _SIZE_T_MAX:
+        raise SonareValueError("padding_samples must fit a size_t")
+    return resolved
 
 
 def _coerce_trim_silence_mode(value: int | str) -> int:
@@ -62,20 +80,21 @@ def mastering_repair_trim_silence(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
 ) -> np.ndarray:
-    """Offline silence trimmer (peak threshold or LUFS-gated)."""
-    if padding_samples < 0:
-        raise SonareValueError("padding_samples must be non-negative")
+    """Offline silence trimmer (peak threshold or LUFS-gated).
+
+    The margin kept around the signal is ``padding_samples`` or ``padding_sec``,
+    not both.
+    """
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
         # Narrowed rather than coerced: int() takes 0.5 as 0, which is "no padding at all".
-        padding_samples=_narrow_int(
-            padding_samples, "mastering_repair_trim_silence: padding_samples", 0, _SIZE_T_MAX
-        ),
+        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -103,7 +122,8 @@ def mastering_repair_detect_trim_range(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -132,7 +152,9 @@ def mastering_repair_detect_trim_range(
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer (default 0). A pass that kept nothing is not
-            padded.
+            padded. Not together with ``padding_sec``.
+        padding_sec: The same margin in seconds, rounded to the nearest sample
+            at ``sample_rate``.
         mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
@@ -147,17 +169,9 @@ def mastering_repair_detect_trim_range(
             sample.
         SonareError: If the C call rejects the request.
     """
-    # Refused here rather than at the C validator: `padding_samples` is a
-    # size_t, so a negative count arrives as a value near SIZE_MAX and the core
-    # rejects it as out of range -- a true statement about the wrapped value
-    # that says nothing about what the caller passed. Matches the trim entries.
-    if padding_samples < 0:
-        raise SonareValueError("padding_samples must be non-negative")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=_narrow_int(
-            padding_samples, "mastering_repair_detect_trim_range: padding_samples", 0, _SIZE_T_MAX
-        ),
+        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -180,7 +194,8 @@ def mastering_repair_detect_trim_range_stereo(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -211,7 +226,9 @@ def mastering_repair_detect_trim_range_stereo(
         sample_rate: Sample rate in Hz (default 22050).
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
-            clamped to the buffer (default 0).
+            clamped to the buffer (default 0). Not together with ``padding_sec``.
+        padding_sec: The same margin in seconds, rounded to the nearest sample
+            at ``sample_rate``.
         mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
@@ -226,8 +243,6 @@ def mastering_repair_detect_trim_range_stereo(
             buffer is empty or carries a non-finite sample.
         SonareError: If the C call rejects the request.
     """
-    if padding_samples < 0:
-        raise SonareValueError("padding_samples must be non-negative")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -236,12 +251,7 @@ def mastering_repair_detect_trim_range_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=_narrow_int(
-            padding_samples,
-            "mastering_repair_detect_trim_range_stereo: padding_samples",
-            0,
-            _SIZE_T_MAX,
-        ),
+        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),
@@ -266,7 +276,8 @@ def mastering_repair_trim_silence_stereo(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -309,7 +320,10 @@ def mastering_repair_trim_silence_stereo(
         threshold: Peak threshold, ``"peak"`` mode only (default 0.001).
         padding_samples: Samples to retain either side of the kept range,
             clamped to the buffer so it can never reach past an end (default 0).
-            A pass that kept nothing is not padded.
+            A pass that kept nothing is not padded. Not together with
+            ``padding_sec``.
+        padding_sec: The same margin in seconds, rounded to the nearest sample
+            at ``sample_rate``.
         mode: ``"peak"`` or ``"lufs_gated"`` (default ``"peak"``).
         gate_lufs: Gate in dBFS, ``"lufs_gated"`` mode only (default -60.0).
         window_ms: Analysis window, ``"lufs_gated"`` mode only (default 400.0).
@@ -323,12 +337,6 @@ def mastering_repair_trim_silence_stereo(
             differ in length.
         SonareError: If the C call rejects the request.
     """
-    # Refused here rather than at the C validator: `padding_samples` is a
-    # size_t, so a negative count arrives as a value near SIZE_MAX and the core
-    # rejects it as out of range -- a true statement about the wrapped value
-    # that says nothing about what the caller passed. Matches the mono entry.
-    if padding_samples < 0:
-        raise SonareValueError("padding_samples must be non-negative")
 
     lib = _get_lib()
     left_array, left_length = _to_c_float_array(left)
@@ -337,12 +345,7 @@ def mastering_repair_trim_silence_stereo(
         raise SonareValueError("left and right channel lengths must match")
     config = SonareTrimSilenceConfig(  # noqa: F405
         threshold=float(threshold),
-        padding_samples=_narrow_int(
-            padding_samples,
-            "mastering_repair_trim_silence_stereo: padding_samples",
-            0,
-            _SIZE_T_MAX,
-        ),
+        padding_samples=_resolve_padding(padding_samples, padding_sec, sample_rate),
         mode=_coerce_trim_silence_mode(mode),
         gate_lufs=float(gate_lufs),
         window_ms=float(window_ms),

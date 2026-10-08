@@ -989,7 +989,7 @@ describe('v1.2 feature additions (WASM)', () => {
 
       // Sample-accurate + smoothed parameter changes queue without throwing.
       expect(() => engine.setParameter(5, 6)).not.toThrow();
-      expect(() => engine.setParameterSmoothed(5, -3, -1)).not.toThrow();
+      expect(() => engine.setParameterSmoothed(5, -3)).not.toThrow();
       expect(engine.midiCcBindingCount()).toBe(0);
       expect(() => engine.bindMidiCc(0, 74, 5, { minValue: -60, maxValue: 12 })).not.toThrow();
       expect(engine.midiCcBindingCount()).toBe(1);
@@ -1105,8 +1105,10 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.setClips([
         { trackId: 10, channels: [ones, ones], startPpq: 0, lengthSamples: frames },
       ]);
-      // Lane 0 fader (reserved mixer namespace) held at -60 dB from ppq 0.
-      engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -60, curveToNext: 2 }]);
+      // Track 10's fader held at -60 dB from ppq 0.
+      engine.setAutomationLane(engine.resolveTrackLaneAutomationId(10, 'faderDb'), [
+        { ppq: 0, value: -60, curveToNext: 2 },
+      ]);
       engine.seekSample(0);
       // Priming block with the transport stopped applies the automation target;
       // settleParameters snaps the lane fader smoother to it so the first
@@ -1257,7 +1259,7 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.setLaneSidechain(10, 0, 20);
       // Keep the key lane out of the measured mix; the key snapshot is
       // pre-fader, so the binding still sees it at full level.
-      engine.setParameter(0x4d580101, -120, -1);
+      engine.setParameter(engine.resolveTrackLaneAutomationId(20, 'faderDb'), -120);
       engine.seekSample(0);
       engine.process([new Float32Array(128), new Float32Array(128)]);
       engine.settleParameters();
@@ -1280,7 +1282,7 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.setMarkers([{ id: 9, ppq: 4, name: 'verse' }]);
       // Seek to marker 9 (4 quarter notes at 60bpm = 4s = 192000 samples),
       // scheduled at the head of the block.
-      expect(() => engine.seekMarker(9, -1)).not.toThrow();
+      expect(() => engine.seekMarker(9)).not.toThrow();
       engine.play();
       engine.process([new Float32Array(128), new Float32Array(128)]);
       const state = engine.getTransportState();
@@ -1625,14 +1627,12 @@ describe('v1.2 feature additions (WASM)', () => {
       expect(() => nnlsChroma(new Float32Array([Number.NaN]), SR)).toThrow(/NaN|Inf/);
       expect(() => cqt(signal, 7999)).toThrow(/sampleRate/);
       expect(() => cqt(signal, SR, 0)).toThrow(/hopLength/);
-      // A NaN gamma is one of the two spellings of the automatic ERB-derived
-      // bandwidth, so the facade passes it through and it agrees exactly with
-      // the negative spelling. An infinity selects nothing and is still refused.
-      expect(() => vqt(signal, SR, 512, 32.7, 24, 12, Number.POSITIVE_INFINITY)).toThrow(/gamma/);
-      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN).magnitude)).toEqual(
-        Array.from(vqt(signal, SR, 512, 32.7, 24, 12, -1).magnitude),
-      );
-      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12, Number.NaN).magnitude)).not.toEqual(
+      // An omitted gamma is the automatic ERB-derived bandwidth; 0 is the
+      // constant-Q transform. Negative, NaN and infinite gamma are refused.
+      for (const gamma of [Number.POSITIVE_INFINITY, Number.NaN, -1]) {
+        expect(() => vqt(signal, SR, 512, 32.7, 24, 12, gamma)).toThrow(/gamma/);
+      }
+      expect(Array.from(vqt(signal, SR, 512, 32.7, 24, 12).magnitude)).not.toEqual(
         Array.from(vqt(signal, SR, 512, 32.7, 24, 12, 0).magnitude),
       );
       expect(() => analyzeSections(signal, SR, { minSectionSec: -1 })).toThrow(/minSectionSec/);

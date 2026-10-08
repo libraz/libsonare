@@ -4,10 +4,6 @@ const ENGINE_MIXER_TARGET_BASE = 0x4d580000;
 export const ENGINE_MIXER_PARAM_FADER_DB = 1;
 export const ENGINE_MIXER_PARAM_PAN = 2;
 
-export function engineMixerLaneTarget(laneIndex: number, paramKind: number): number {
-  return ENGINE_MIXER_TARGET_BASE | ((laneIndex & 0xff) << 8) | (paramKind & 0xff);
-}
-
 export function engineMixerBusTarget(busIndex: number, paramKind: number): number {
   return ENGINE_MIXER_TARGET_BASE | (((0xfe - busIndex) & 0xff) << 8) | (paramKind & 0xff);
 }

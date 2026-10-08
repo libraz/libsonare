@@ -11,6 +11,7 @@ import type {
   VocalNote,
   VocalPitchEvaluation,
   VocalRange,
+  VocalRangeInput,
   VocalRenderRequest,
   VocalRenderResult,
   VocalRestoreRequest,
@@ -18,6 +19,7 @@ import type {
   VocalTransition,
   VocalUint64,
 } from './types_vocal_edit.js';
+import { resolveSampleBound } from './validation.js';
 
 interface NativeSession {
   notes(): { notes: VocalNote[]; transitions: VocalTransition[] };
@@ -121,7 +123,10 @@ const disposedSessions = new WeakSet<VocalEditSession>();
 export class VocalEditSession implements Disposable {
   private disposed = false;
 
-  protected constructor(private readonly native: NativeSession) {}
+  protected constructor(
+    private readonly native: NativeSession,
+    private readonly sampleRate: number,
+  ) {}
 
   notes(): { notes: VocalNote[]; transitions: VocalTransition[] } {
     this.requireAlive();
@@ -160,7 +165,11 @@ export class VocalEditSession implements Disposable {
 
   beginEdit(options: { expectedRevision?: VocalUint64 } = {}): VocalEditDraft {
     this.requireAlive();
-    return wrapVocalEditDraft(this.native.beginEdit(options.expectedRevision), this);
+    return wrapVocalEditDraft(
+      this.native.beginEdit(options.expectedRevision),
+      this,
+      this.sampleRate,
+    );
   }
 
   undo(options: { expectedRevision?: VocalUint64 } = {}): VocalEditResult {
@@ -190,7 +199,7 @@ export class VocalEditSession implements Disposable {
 
   captureRenderSnapshot(): VocalRenderSnapshot {
     this.requireAlive();
-    return wrapVocalRenderSnapshot(this.native.captureRenderSnapshot());
+    return wrapVocalRenderSnapshot(this.native.captureRenderSnapshot(), this.sampleRate);
   }
 
   exportState(): Uint8Array {
@@ -233,6 +242,7 @@ export class VocalEditDraft implements Disposable {
   protected constructor(
     private readonly native: NativeDraft,
     private readonly owner: VocalEditSession,
+    private readonly sampleRate: number,
   ) {}
 
   notes(): { notes: VocalNote[]; transitions: VocalTransition[] } {
@@ -247,7 +257,10 @@ export class VocalEditDraft implements Disposable {
 
   apply(request: VocalApplyRequest): VocalEditResult {
     this.requireAlive();
-    return this.native.apply(request.expectedGeneration, request.operations);
+    return this.native.apply(
+      request.expectedGeneration,
+      resolveVocalOperationTimes(request.operations, this.sampleRate),
+    );
   }
 
   commit(options: { expectedRevision?: VocalUint64 } = {}): VocalEditResult {
@@ -282,7 +295,7 @@ export class VocalEditDraft implements Disposable {
 
   captureRenderSnapshot(): VocalRenderSnapshot {
     this.requireAlive();
-    return wrapVocalRenderSnapshot(this.native.captureRenderSnapshot());
+    return wrapVocalRenderSnapshot(this.native.captureRenderSnapshot(), this.sampleRate);
   }
 
   dispose(): void {
@@ -316,7 +329,10 @@ export class VocalEditDraft implements Disposable {
 export class VocalRenderSnapshot implements Disposable {
   private disposed = false;
 
-  protected constructor(private readonly native: NativeSnapshot) {}
+  protected constructor(
+    private readonly native: NativeSnapshot,
+    private readonly sampleRate: number,
+  ) {}
 
   outputLengthSamples(): number {
     this.requireAlive();
@@ -369,10 +385,27 @@ export class VocalRenderSnapshot implements Disposable {
   }
 
   private resolveRange(request: VocalRenderRequest): VocalRange {
-    if (request.range !== undefined) {
-      return { ...request.range };
-    }
-    return { startSample: 0, endSample: this.native.outputLengthSamples() };
+    const range: VocalRangeInput = request.range ?? {};
+    const start = resolveSampleBound(
+      'VocalRenderSnapshot.render',
+      range.startSample,
+      range.startSec,
+      this.sampleRate,
+      'range.startSample',
+      'range.startSec',
+    );
+    const end = resolveSampleBound(
+      'VocalRenderSnapshot.render',
+      range.endSample,
+      range.endSec,
+      this.sampleRate,
+      'range.endSample',
+      'range.endSec',
+    );
+    return {
+      startSample: start ?? 0,
+      endSample: end ?? this.native.outputLengthSamples(),
+    };
   }
 }
 
@@ -432,20 +465,20 @@ export class VocalRenderJob implements Disposable {
 // subclasses are the only construction path used by the module-level factories
 // and by wrapper-to-wrapper methods.
 class VocalEditSessionHandle extends VocalEditSession {
-  constructor(native: NativeSession) {
-    super(native);
+  constructor(native: NativeSession, sampleRate: number) {
+    super(native, sampleRate);
   }
 }
 
 class VocalEditDraftHandle extends VocalEditDraft {
-  constructor(native: NativeDraft, owner: VocalEditSession) {
-    super(native, owner);
+  constructor(native: NativeDraft, owner: VocalEditSession, sampleRate: number) {
+    super(native, owner, sampleRate);
   }
 }
 
 class VocalRenderSnapshotHandle extends VocalRenderSnapshot {
-  constructor(native: NativeSnapshot) {
-    super(native);
+  constructor(native: NativeSnapshot, sampleRate: number) {
+    super(native, sampleRate);
   }
 }
 
@@ -455,20 +488,94 @@ class VocalRenderJobHandle extends VocalRenderJob {
   }
 }
 
-function wrapVocalEditSession(native: NativeSession): VocalEditSession {
-  return new VocalEditSessionHandle(native);
+function wrapVocalEditSession(native: NativeSession, sampleRate: number): VocalEditSession {
+  return new VocalEditSessionHandle(native, sampleRate);
 }
 
-function wrapVocalEditDraft(native: NativeDraft, owner: VocalEditSession): VocalEditDraft {
-  return new VocalEditDraftHandle(native, owner);
+function wrapVocalEditDraft(
+  native: NativeDraft,
+  owner: VocalEditSession,
+  sampleRate: number,
+): VocalEditDraft {
+  return new VocalEditDraftHandle(native, owner, sampleRate);
 }
 
-function wrapVocalRenderSnapshot(native: NativeSnapshot): VocalRenderSnapshot {
-  return new VocalRenderSnapshotHandle(native);
+function wrapVocalRenderSnapshot(native: NativeSnapshot, sampleRate: number): VocalRenderSnapshot {
+  return new VocalRenderSnapshotHandle(native, sampleRate);
 }
 
 function wrapVocalRenderJob(native: NativeJob): VocalRenderJob {
   return new VocalRenderJobHandle(native);
+}
+
+/**
+ * Fold the seconds spellings of an operation's sample positions into the sample
+ * fields the addon reads. Operations that carry no seconds field pass through.
+ */
+function resolveVocalOperationTimes(
+  operations: readonly VocalEditOperation[],
+  sampleRate: number,
+): readonly VocalEditOperation[] {
+  if (!Array.isArray(operations)) {
+    return operations;
+  }
+  return operations.map((operation, index) => {
+    const at = `operations[${index}]`;
+    const fn = 'VocalEditDraft.apply';
+    if (operation?.kind === 'setSourceSpan') {
+      const { sourceStartSec, sourceEndSec, destinationStartSec, destinationLengthSec, ...rest } =
+        operation;
+      const bound = (
+        sample: number | undefined,
+        sec: number | undefined,
+        sampleName: string,
+        secName: string,
+      ) =>
+        resolveSampleBound(fn, sample, sec, sampleRate, `${at}.${sampleName}`, `${at}.${secName}`);
+      return {
+        ...rest,
+        sourceStartSample: bound(
+          rest.sourceStartSample,
+          sourceStartSec,
+          'sourceStartSample',
+          'sourceStartSec',
+        ),
+        sourceEndSample: bound(
+          rest.sourceEndSample,
+          sourceEndSec,
+          'sourceEndSample',
+          'sourceEndSec',
+        ),
+        destinationStartSample: bound(
+          rest.destinationStartSample,
+          destinationStartSec,
+          'destinationStartSample',
+          'destinationStartSec',
+        ),
+        destinationLengthSamples: bound(
+          rest.destinationLengthSamples,
+          destinationLengthSec,
+          'destinationLengthSamples',
+          'destinationLengthSec',
+        ),
+      } as VocalEditOperation;
+    }
+    if (operation?.kind === 'split') {
+      const { sourceSec, ...rest } = operation;
+      return {
+        ...rest,
+        sourceSample: resolveSampleBound(
+          fn,
+          rest.sourceSample,
+          sourceSec,
+          sampleRate,
+          `${at}.sourceSample`,
+          `${at}.sourceSec`,
+        ),
+      } as VocalEditOperation;
+    }
+    return operation;
+  });
 }
 
 /** Whether this build has the C vocal-edit surface linked. */
@@ -482,11 +589,11 @@ export function vocalEditApiVersion(): number {
 }
 
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
-  return wrapVocalEditSession(vocalAddon.createVocalEditSession(request));
+  return wrapVocalEditSession(vocalAddon.createVocalEditSession(request), request.sampleRate);
 }
 
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
-  return wrapVocalEditSession(vocalAddon.restoreVocalEditSession(request));
+  return wrapVocalEditSession(vocalAddon.restoreVocalEditSession(request), request.sampleRate);
 }
 
 function clonePitchEvaluation(value: VocalPitchEvaluation): VocalPitchEvaluation {
@@ -530,6 +637,7 @@ export type {
   VocalPitchPoint,
   VocalPitchTarget,
   VocalRange,
+  VocalRangeInput,
   VocalRemoveTransitionOperation,
   VocalRenderRequest,
   VocalRenderResult,

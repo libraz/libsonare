@@ -2,6 +2,7 @@ import { ErrorCode, SonareError } from '../errors.js';
 import type { EngineCaptureStatus, EngineTransportState } from '../index.js';
 import { engineCapabilities } from '../index.js';
 import { OwnerEpoch } from '../owner_epoch.js';
+import { resolveRenderFrame } from '../validation.js';
 import {
   engineCaptureResponseRequestId,
   isClipPageRequestMessage,
@@ -461,39 +462,52 @@ export class SonareRealtimeEngineNode {
     );
   }
 
-  play(sampleTime = -1): boolean {
-    return this.sendCommand({ type: SonareEngineCommandType.TransportPlay, sampleTime });
+  play(sampleTime?: number): boolean {
+    return this.sendCommand({
+      type: SonareEngineCommandType.TransportPlay,
+      sampleTime: resolveRenderFrame('play', sampleTime),
+    });
   }
 
   /** Queues a reset of the master's integrated-loudness accumulator. */
-  resetMasterLoudnessMeter(sampleTime = -1): boolean {
-    return this.sendCommand({ type: SonareEngineCommandType.ResetMasterLoudnessMeter, sampleTime });
+  resetMasterLoudnessMeter(sampleTime?: number): boolean {
+    return this.sendCommand({
+      type: SonareEngineCommandType.ResetMasterLoudnessMeter,
+      sampleTime: resolveRenderFrame('resetMasterLoudnessMeter', sampleTime),
+    });
   }
 
   /** Queues a reset of every mixer and effect processor to its prepared state. */
-  resetProcessorState(sampleTime = -1): boolean {
-    return this.sendCommand({ type: SonareEngineCommandType.ResetProcessorState, sampleTime });
+  resetProcessorState(sampleTime?: number): boolean {
+    return this.sendCommand({
+      type: SonareEngineCommandType.ResetProcessorState,
+      sampleTime: resolveRenderFrame('resetProcessorState', sampleTime),
+    });
   }
 
-  stop(sampleTime = -1): boolean {
-    return this.sendCommand({ type: SonareEngineCommandType.TransportStop, sampleTime });
+  stop(sampleTime?: number): boolean {
+    return this.sendCommand({
+      type: SonareEngineCommandType.TransportStop,
+      sampleTime: resolveRenderFrame('stop', sampleTime),
+    });
   }
 
-  seekSample(timelineSample: number, sampleTime = -1): boolean {
+  seekSample(timelineSample: number, sampleTime?: number): boolean {
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekSample,
-      sampleTime,
+      sampleTime: resolveRenderFrame('seekSample', sampleTime),
       argInt: timelineSample,
     });
   }
 
-  seekPpq(ppq: number, sampleTime = -1): boolean {
-    if (!Number.isFinite(ppq) || !Number.isSafeInteger(sampleTime)) {
+  seekPpq(ppq: number, sampleTime?: number): boolean {
+    const frame = resolveRenderFrame('seekPpq', sampleTime);
+    if (!Number.isFinite(ppq) || !Number.isSafeInteger(frame)) {
       return false;
     }
     return this.sendCommand({
       type: SonareEngineCommandType.TransportSeekPpq,
-      sampleTime,
+      sampleTime: frame,
       argFloat: ppq,
     });
   }

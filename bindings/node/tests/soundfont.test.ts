@@ -145,7 +145,7 @@ describe('RealtimeEngine SoundFont (SF2) binding', () => {
     // Binding before a SoundFont is loaded is allowed: live MIDI plays through
     // the built-in synthesizer GM fallback (the data-free floor).
     engine.setSf2Instrument({}, 7);
-    engine.pushMidiNoteOn(7, 0, 0, 60, 100, -1);
+    engine.pushMidiNoteOn(7, 0, 0, 60, 100);
     const [fbLeft, fbRight] = engine.process([new Float32Array(128), new Float32Array(128)]);
     expect(Math.max(peak(fbLeft), peak(fbRight))).toBeGreaterThan(0);
     engine.clearMidiInstrument(7);
@@ -156,7 +156,7 @@ describe('RealtimeEngine SoundFont (SF2) binding', () => {
     engine.setSf2Instrument({ gain: 1 }, 7);
     expect(engine.midiInstrumentCount()).toBe(1);
 
-    engine.pushMidiNoteOn(7, 0, 0, 60, 100, -1);
+    engine.pushMidiNoteOn(7, 0, 0, 60, 100);
     const [left, right] = engine.process([new Float32Array(128), new Float32Array(128)]);
     expect(Math.max(peak(left), peak(right))).toBeGreaterThan(0);
 
@@ -191,7 +191,7 @@ function renderOverdrive(gsEfxRealization?: 'modern' | 'classic'): Float32Array 
     engine.setSf2Instrument(gsEfxRealization === undefined ? {} : { gsEfxRealization }, 7);
     engine.pushMidiSysex(7, gsDt1(0x40, 0x03, 0x00, [0x01, 0x10]));
     engine.pushMidiSysex(7, gsDt1(0x40, 0x41, 0x22, [0x01]));
-    engine.pushMidiNoteOn(7, 0, 0, 60, 100, -1);
+    engine.pushMidiNoteOn(7, 0, 0, 60, 100);
     const out = new Float32Array(64 * 128);
     for (let block = 0; block < 64; block++) {
       const [left] = engine.process([new Float32Array(128), new Float32Array(128)]);

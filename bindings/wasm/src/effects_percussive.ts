@@ -3,6 +3,7 @@
  * edited set of them back.
  */
 
+import { resolveEntryTimes } from './_effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
@@ -209,10 +210,19 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
   assertSamples('renderPercussiveEvents', request.samples, request.validate !== false);
   assertSampleRate('renderPercussiveEvents', request.sampleRate);
   assertPercussiveSeparation('renderPercussiveEvents', request);
+  const events = Array.isArray(request.events)
+    ? resolveEntryTimes(
+        'renderPercussiveEvents',
+        request.events,
+        'events',
+        request.sampleRate,
+        true,
+      )
+    : request.events;
   return requireModule().renderPercussiveEvents(
     request.samples,
     request.sampleRate,
-    request.events,
+    events,
     request,
   );
 }

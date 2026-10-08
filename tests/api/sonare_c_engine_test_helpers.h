@@ -20,9 +20,13 @@
 namespace {
 
 #if defined(SONARE_WITH_MIXING)
-[[maybe_unused]] constexpr uint32_t engine_lane_param_target(uint32_t lane_index,
-                                                             uint32_t param_kind) {
-  return 0x4D580000u | (lane_index << 8u) | param_kind;
+// Resolved fader ("faderDb") or pan ("pan") id of @p track_id's lane.
+[[maybe_unused]] uint32_t engine_track_lane_target(SonareRealtimeEngine* engine, uint32_t track_id,
+                                                   const char* param_name) {
+  uint32_t id = 0;
+  REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, track_id, param_name, &id) ==
+          SONARE_OK);
+  return id;
 }
 
 [[maybe_unused]] constexpr uint32_t engine_bus_param_target(uint32_t bus_index,

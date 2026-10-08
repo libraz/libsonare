@@ -39,6 +39,7 @@ import {
 import { OwnerEpoch } from '../owner_epoch.js';
 import type { SurroundPan } from '../public_types.js';
 import type { ClipPageProvider } from '../realtime_engine.js';
+import { resolveRenderFrame } from '../validation.js';
 import type { EngineAutomationContext } from './engine-automation.js';
 import * as automation from './engine-automation.js';
 import type { EngineCaptureContext } from './engine-capture-facade.js';
@@ -74,10 +75,6 @@ import type {
   SonareWorkletExternalMidiEvent,
 } from './messages.js';
 import {
-  ENGINE_MIXER_PARAM_FADER_DB,
-  ENGINE_MIXER_PARAM_PAN,
-  engineMixerLaneTarget,
-  engineMixerMasterTarget,
   SonareEngineCommandType,
   type SonareEngineTelemetryRecord,
   type SonareWorkletMeterSnapshot,
@@ -474,13 +471,13 @@ export class SonareEngine {
   setTrackMonitorMode(
     target: string | number,
     mode: EngineTrackMonitorMode,
-    renderFrame = -1,
+    renderFrame?: number,
   ): boolean {
     return parameter.setTrackMonitorMode(this.parameterContext, target, mode, renderFrame);
   }
 
   setStripGain(target: string | number, db: number): boolean {
-    const sent = this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_FADER_DB), db);
+    const sent = this.sendSmoothedParam(this.automationParamId(target, 'faderDb'), db);
     if (sent && target === 'master') {
       strips.cacheMasterStripScalar(this.stripContext, 'faderDb', db);
     }
@@ -488,7 +485,7 @@ export class SonareEngine {
   }
 
   setStripPan(target: string | number, pan: number): boolean {
-    const sent = this.sendSmoothedParam(this.stripParamId(target, ENGINE_MIXER_PARAM_PAN), pan);
+    const sent = this.sendSmoothedParam(this.automationParamId(target, 'pan'), pan);
     if (sent && target === 'master') {
       strips.cacheMasterStripScalar(this.stripContext, 'pan', pan);
     }
@@ -496,29 +493,31 @@ export class SonareEngine {
   }
 
   /** Resets the master's integrated loudness accumulator in both engine mirrors. */
-  resetMasterLoudnessMeter(renderFrame = -1): boolean {
+  resetMasterLoudnessMeter(renderFrame?: number): boolean {
+    const frame = resolveRenderFrame('resetMasterLoudnessMeter', renderFrame);
     this.offlineEngine.resetMasterLoudnessMeter(renderFrame);
     return this.sendMirroredCommand({
       type: SonareEngineCommandType.ResetMasterLoudnessMeter,
-      sampleTime: renderFrame,
+      sampleTime: frame,
     });
   }
 
   /**
    * Queues a reset of every mixer and effect processor to its prepared state,
    * applied to the offline mirror immediately and to the live engine at
-   * `renderFrame` (negative: the next block head). The same command that
+   * `renderFrame` (omitted: the next block head). The same command that
    * follows it on the queue, such as `play()`, starts from the state an offline
    * render starts from. Instruments are not reset. During playback it cuts
    * running insert tails and delay lines mid-sound, like a seek.
    *
    * @returns Whether the live command was queued
    */
-  resetProcessorState(renderFrame = -1): boolean {
+  resetProcessorState(renderFrame?: number): boolean {
+    const frame = resolveRenderFrame('resetProcessorState', renderFrame);
     this.offlineEngine.resetProcessorState(renderFrame);
     return this.sendMirroredCommand({
       type: SonareEngineCommandType.ResetProcessorState,
-      sampleTime: renderFrame,
+      sampleTime: frame,
     });
   }
 
@@ -1080,7 +1079,7 @@ export class SonareEngine {
     channel: number,
     note: number,
     velocity: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiNoteOn(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
   }
@@ -1091,7 +1090,7 @@ export class SonareEngine {
     channel: number,
     note: number,
     velocity = 0,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiNoteOff(this.stripContext, trackId, group, channel, note, velocity, renderFrame);
   }
@@ -1102,7 +1101,7 @@ export class SonareEngine {
     channel: number,
     controller: number,
     value: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiCc(this.stripContext, trackId, group, channel, controller, value, renderFrame);
   }
@@ -1112,7 +1111,7 @@ export class SonareEngine {
     group: number,
     channel: number,
     bend14: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiPitchBend(this.stripContext, trackId, group, channel, bend14, renderFrame);
   }
@@ -1122,7 +1121,7 @@ export class SonareEngine {
     group: number,
     channel: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiChannelPressure(
       this.stripContext,
@@ -1140,7 +1139,7 @@ export class SonareEngine {
     channel: number,
     note: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
     strips.pushMidiPolyPressure(
       this.stripContext,
@@ -1153,11 +1152,11 @@ export class SonareEngine {
     );
   }
 
-  pushMidiUmp(trackId: string | number, words: number | UmpWords, renderFrame = -1): void {
+  pushMidiUmp(trackId: string | number, words: number | UmpWords, renderFrame?: number): void {
     strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
   }
 
-  pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame = -1): void {
+  pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame?: number): void {
     strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
   }
 
@@ -1295,9 +1294,10 @@ export class SonareEngine {
     this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, portTimeSamples });
   }
 
-  pushMidiPanic(renderFrame = -1): void {
+  pushMidiPanic(renderFrame?: number): void {
+    const frame = resolveRenderFrame('pushMidiPanic', renderFrame);
     this.offlineEngine.pushMidiPanic(renderFrame);
-    this.postSync({ type: 'syncMidiPanic', renderFrame });
+    this.postSync({ type: 'syncMidiPanic', renderFrame: frame });
   }
 
   configureCapture(options: CaptureOptions): void {
@@ -1868,15 +1868,6 @@ export class SonareEngine {
       sendCommand: (command) => this.sendMirroredCommand(command),
       setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
     };
-  }
-
-  // Resolves the reserved mixer parameter id for a fader/pan target, declaring a
-  // track lane on first use; 'master' addresses the master strip namespace.
-  private stripParamId(target: string | number, paramKind: number): number {
-    if (target === 'master') {
-      return engineMixerMasterTarget(paramKind);
-    }
-    return engineMixerLaneTarget(this.ensureTrackLane(target), paramKind);
   }
 
   // Mirrors a smoothed parameter into the offline engine and pushes a

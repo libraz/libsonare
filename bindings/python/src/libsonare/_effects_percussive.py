@@ -16,14 +16,14 @@ from ._ffi import (
     SonarePercussiveRenderConfig,
 )
 from ._runtime import (
-    _INT64_MAX,
-    _INT64_MIN,
+    SonareValueError,
     _check,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
-    _narrow_int,
     _out_float_array,
+    _resolve_sample_bound,
+    _resolve_time_offset,
     _to_c_float_array,
     _to_c_int,
     _to_c_size_t,
@@ -53,7 +53,11 @@ class PercussiveEventEdit:
     Attributes:
         time_offset_samples: Moves the hit along the timeline; negative moves it
             earlier. A shift that pushes the signal past either end of the audio
-            is truncated there rather than wrapped.
+            is truncated there rather than wrapped. 0 is the identity, so it is
+            also what an unset offset reads as; set this or ``time_offset_sec``,
+            not both.
+        time_offset_sec: ``time_offset_samples`` in seconds, rounded to the
+            nearest sample at the call's sample rate; ``None`` when unset.
         gain_db: Level change applied to the hit. It scales the percussive
             component of the span, which is the signal ``peak_amplitude`` is
             measured on, not the source.
@@ -69,6 +73,7 @@ class PercussiveEventEdit:
     time_offset_samples: int = 0
     gain_db: float = 0.0
     muted: bool = False
+    time_offset_sec: float | None = None
 
 
 @dataclasses.dataclass
@@ -88,10 +93,13 @@ class PercussiveEvent:
     ``PercussiveEvent(onset_sample=..., offset_sample=...)`` for a span it found
     some other way.
 
-    The span has no default, so an event built by hand states it. The other
-    surfaces declare the same two fields mandatory on their own event input and
-    reject an omitted one; a default of 0 here would instead have been a
-    zero-length span, rendering the event's edit as nothing.
+    The span is stated in samples (``onset_sample`` / ``offset_sample``) or in
+    seconds (``onset_sec`` / ``offset_sec``, rounded to the nearest sample at the
+    call's sample rate), one spelling per bound. Neither is defaulted: a call
+    given an event with neither bound rejects it, as the other surfaces do,
+    because a default of 0 would be a zero-length span that renders the event's
+    edit as nothing. Events returned by :func:`extract_percussive_events` always
+    carry the sample bounds.
 
     Attributes:
         onset_sample: First sample of the event, backtracked to the start of the
@@ -110,14 +118,20 @@ class PercussiveEvent:
             the span's energy. So it is not a test for whether a hit is there.
         edit: The pending :class:`PercussiveEventEdit`, identity on a freshly
             extracted event.
+        onset_sec: ``onset_sample`` in seconds; ``None`` when the span is given
+            in samples.
+        offset_sec: ``offset_sample`` in seconds; ``None`` when the span is
+            given in samples.
     """
 
-    onset_sample: int
-    offset_sample: int
+    onset_sample: int | None = None
+    offset_sample: int | None = None
     strength: float = 0.0
     peak_amplitude: float = 0.0
     percussive_ratio: float = 0.0
     edit: PercussiveEventEdit = dataclasses.field(default_factory=PercussiveEventEdit)
+    onset_sec: float | None = None
+    offset_sec: float | None = None
 
 
 def _percussive_separation(
@@ -163,7 +177,9 @@ def _percussive_event_from_c(row: SonarePercussiveEvent) -> PercussiveEvent:
     )
 
 
-def _percussive_events_to_c(events: Sequence[PercussiveEvent]) -> tuple[object, int]:
+def _percussive_events_to_c(
+    events: Sequence[PercussiveEvent], sample_rate: int
+) -> tuple[object, int]:
     """Marshal an event list into the C event array; an empty set is NULL and 0."""
     count = len(events)
     if count == 0:
@@ -173,29 +189,37 @@ def _percussive_events_to_c(events: Sequence[PercussiveEvent]) -> tuple[object, 
     for i, event in enumerate(events):
         # The three measured figures are not marshalled: rendering reads the span
         # and the edit, so nothing on the far side reads them back.
-        c_events[i].onset_sample = _narrow_int(
+        onset = _resolve_sample_bound(
             event.onset_sample,
+            event.onset_sec,
+            sample_rate,
             f"render_percussive_events: events[{i}].onset_sample",
-            _INT64_MIN,
-            _INT64_MAX,
+            f"render_percussive_events: events[{i}].onset_sec",
         )
-        c_events[i].offset_sample = _narrow_int(
+        offset = _resolve_sample_bound(
             event.offset_sample,
+            event.offset_sec,
+            sample_rate,
             f"render_percussive_events: events[{i}].offset_sample",
-            _INT64_MIN,
-            _INT64_MAX,
+            f"render_percussive_events: events[{i}].offset_sec",
         )
+        if onset is None or offset is None:
+            missing = "onset" if onset is None else "offset"
+            raise SonareValueError(
+                f"render_percussive_events: events[{i}] needs {missing}_sample or {missing}_sec"
+            )
+        c_events[i].onset_sample = onset
+        c_events[i].offset_sample = offset
         c_events[i].edit = SonarePercussiveEventEdit(
             # Narrowed rather than coerced: int(0.5) is 0, which is this field's
             # identity, so a sub-sample shift would render unmoved and report
-            # success. Int64-bounded like onset_sample/offset_sample above: the
-            # ctypes field is c_int64, and _validate_c_int_field's 32-bit range
-            # would refuse an offset the C ABI, Node and WASM all accept.
-            time_offset_samples=_narrow_int(
+            # success. Int64-bounded: the ctypes field is c_int64.
+            time_offset_samples=_resolve_time_offset(
                 event.edit.time_offset_samples,
+                event.edit.time_offset_sec,
+                sample_rate,
                 f"render_percussive_events: events[{i}].edit.time_offset_samples",
-                _INT64_MIN,
-                _INT64_MAX,
+                f"render_percussive_events: events[{i}].edit.time_offset_sec",
             ),
             gain_db=float(event.edit.gain_db),
             muted=1 if event.edit.muted else 0,
@@ -415,7 +439,7 @@ def render_percussive_events(
         raise _unsupported_effect_symbol("sonare_render_percussive_events")
 
     c_array, length = _to_c_float_array(samples)
-    c_events, count = _percussive_events_to_c(events)
+    c_events, count = _percussive_events_to_c(events, sample_rate)
     config = SonarePercussiveRenderConfig(
         struct_version=_PERCUSSIVE_STRUCT_VERSION,
         **_percussive_separation(

@@ -117,8 +117,9 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
    default: the field initializer of the config struct, or the default argument
    of the free function, that backs the call. This catches the case the
    facade-vs-facade check is blind to — every facade agreeing on a value the
-   core never intended, or one facade silently drifting from core. Driven by
-   [`core_map.toml`](#extending-core_maptoml).
+   core never intended, or one facade silently drifting from core. A default
+   spelled as absence (`None`) is not compared: it hands the call the core's own
+   value. Driven by [`core_map.toml`](#extending-core_maptoml).
 4. **order** — a surface's config parameter order/name/count diverges from the C
    canonical order (after stripping the leading audio-input group).
 5. **input** — the audio-input params (`samples` / `sr` / `left` / …) are named

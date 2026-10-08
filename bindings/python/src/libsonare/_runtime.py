@@ -24,11 +24,17 @@ from ._errors import SonareValueError as SonareValueError
 from ._errors import _unsupported_effect_symbol as _unsupported_effect_symbol
 from ._ffi import *  # noqa: F403
 from ._narrowing import _FLOAT32_MAX as _FLOAT32_MAX
+from ._narrowing import _INT64_MAX as _INT64_MAX
+from ._narrowing import _INT64_MIN as _INT64_MIN
 from ._narrowing import _float_narrowing_error as _float_narrowing_error
 from ._narrowing import _narrow_double as _narrow_double
 from ._narrowing import _narrow_float as _narrow_float
 from ._narrowing import _narrow_int as _narrow_int
 from ._narrowing import _narrowing_error as _narrowing_error
+from ._narrowing import _resolve_optional_non_negative as _resolve_optional_non_negative
+from ._narrowing import _resolve_render_frame as _resolve_render_frame
+from ._narrowing import _resolve_sample_bound as _resolve_sample_bound
+from ._narrowing import _resolve_time_offset as _resolve_time_offset
 from ._narrowing import _utf8_arg as _utf8_arg
 from .types import *  # noqa: F403
 
@@ -637,8 +643,6 @@ _UINT_MAX = (1 << (ctypes.sizeof(ctypes.c_uint) * 8)) - 1
 _UINT8_MAX = 2**8 - 1
 _UINT16_MAX = 2**16 - 1
 _UINT32_MAX = 2**32 - 1
-_INT64_MIN = -(2**63)
-_INT64_MAX = 2**63 - 1
 
 
 def _to_c_int(value: object, name: str) -> ctypes.c_int:

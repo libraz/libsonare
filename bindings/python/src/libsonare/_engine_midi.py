@@ -36,6 +36,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _get_lib,
+    _resolve_render_frame,
     _to_c_float,
     _to_c_int,
     _to_c_int64,
@@ -67,13 +68,13 @@ class _EngineMidiMixin:
         channel: int,
         controller: int,
         value: int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate (live) MIDI control change to a MIDI destination.
 
         Values are 7-bit (``controller`` / ``value`` in 0..127); ``channel`` and
-        ``group`` in 0..15. ``render_frame`` is the render-frame time to apply,
-        or ``-1`` for immediate.
+        ``group`` in 0..15. ``render_frame`` is the render-frame time to apply
+        (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_cc"):
@@ -86,7 +87,7 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(controller, "controller"),
                 _to_c_uint8(value, "value"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -94,13 +95,13 @@ class _EngineMidiMixin:
         self,
         destination_id: int,
         data: bytes | bytearray | memoryview,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate (live) MIDI SysEx message to a MIDI destination.
 
         ``data`` is the full SysEx frame including the leading ``0xF0`` and
         trailing ``0xF7`` (1..512 bytes). ``render_frame`` is the render-frame
-        time to apply, or ``-1`` for immediate. Raises :class:`SonareError`
+        time to apply (``None`` for immediate). Raises :class:`SonareError`
         with code ``INVALID_PARAMETER`` if the payload exceeds the accepted
         size or the destination instrument cannot prepare it (retrying cannot
         help), and with code ``OUT_OF_MEMORY`` if the payload slots or the
@@ -119,7 +120,7 @@ class _EngineMidiMixin:
                 _to_c_uint32(destination_id, "destination_id"),
                 c_data,
                 ctypes.c_size_t(len(buf)),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -127,7 +128,7 @@ class _EngineMidiMixin:
         self,
         destination_id: int,
         words: Iterable[int],
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate (live) raw UMP message to a MIDI destination.
 
@@ -137,7 +138,7 @@ class _EngineMidiMixin:
         (MT 0x3 / 0x5) are refused: use :meth:`push_midi_sysex`. Raises
         :class:`SonareError` for a malformed or refused message, or when the
         engine queue is full. ``render_frame`` is the render-frame time to
-        apply, or ``-1`` for immediate.
+        apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_ump"):
@@ -149,22 +150,22 @@ class _EngineMidiMixin:
                 _to_c_uint32(destination_id, "destination_id"),
                 c_words,
                 _to_c_size_t(count, "word_count"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
-    def push_midi_panic(self, render_frame: int = -1) -> None:
+    def push_midi_panic(self, render_frame: int | None = None) -> None:
         """Queue a MIDI panic (all-notes-off) releasing every sounding note.
 
-        ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate.
+        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_panic"):
             raise _not_supported("libsonare was built without live-MIDI support")
         _check(
             lib.sonare_engine_push_midi_panic(
-                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -979,12 +980,11 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         velocity: int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate live MIDI note-on to a MIDI destination.
 
-        ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate.
+        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_note_on"):
@@ -997,7 +997,7 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(note, "note"),
                 _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -1008,12 +1008,11 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         velocity: int = 0,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate live MIDI note-off to a MIDI destination.
 
-        ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate.
+        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_note_off"):
@@ -1026,7 +1025,7 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(note, "note"),
                 _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -1036,15 +1035,14 @@ class _EngineMidiMixin:
         group: int,
         channel: int,
         bend14: int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate live MIDI pitch bend to a MIDI destination.
 
         ``bend14`` is the unsigned 14-bit bend with centre ``8192`` (0..16383),
         carried at its own width because no 7-bit scalar command can spell it;
         a value above the range is refused rather than clamped.
-        ``render_frame`` is the render-frame time to apply, or ``-1`` for
-        immediate.
+        ``render_frame`` is the render-frame time to apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_pitch_bend"):
@@ -1056,7 +1054,7 @@ class _EngineMidiMixin:
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint16(bend14, "bend14"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -1066,12 +1064,12 @@ class _EngineMidiMixin:
         group: int,
         channel: int,
         pressure: int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate live MIDI channel pressure to a MIDI destination.
 
         ``pressure`` is 7-bit (0..127). ``render_frame`` is the render-frame
-        time to apply, or ``-1`` for immediate.
+        time to apply (``None`` for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_channel_pressure"):
@@ -1083,7 +1081,7 @@ class _EngineMidiMixin:
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
@@ -1094,13 +1092,13 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         pressure: int,
-        render_frame: int = -1,
+        render_frame: int | None = None,
     ) -> None:
         """Queue an immediate live MIDI key pressure to a MIDI destination.
 
         ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
-        (both 0..127). ``render_frame`` is the render-frame time to apply, or
-        ``-1`` for immediate.
+        (both 0..127). ``render_frame`` is the render-frame time to apply (``None`` for
+        immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_poly_pressure"):
@@ -1113,6 +1111,6 @@ class _EngineMidiMixin:
                 _to_c_uint8(channel, "channel"),
                 _to_c_uint8(note, "note"),
                 _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(render_frame, "render_frame"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )

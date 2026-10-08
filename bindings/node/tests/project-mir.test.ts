@@ -150,10 +150,9 @@ describe('Project MIR integer arguments are range-checked', () => {
     withProject((project) => {
       const { clipId } = project.addMidiClip(0, 4);
       expect(() => project.setProgram(clipId, 24)).not.toThrow();
-      // A negative bank is meaningful (no Bank Select emitted), so the int
-      // guard must not reject it the way the size_t guard rejects -1.
-      expect(() => project.setProgram(clipId, 24, -1)).not.toThrow();
-      expect(() => project.setProgramOnChannel(clipId, 0, 3, 24, -1)).not.toThrow();
+      // An omitted bank emits no Bank Select; an explicit bank is a real value.
+      expect(() => project.setProgram(clipId, 24, 0)).not.toThrow();
+      expect(() => project.setProgramOnChannel(clipId, 0, 3, 24)).not.toThrow();
       expect(project.snapToGrid(0.27, 1.0, 4)).toBe(0.25);
       // An in-range index on an empty sidecar list is the C ABI's rejection,
       // which carries a SonareError code rather than being a RangeError.

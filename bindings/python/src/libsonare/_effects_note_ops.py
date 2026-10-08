@@ -47,6 +47,7 @@ from ._runtime import (
     _narrow_double,
     _narrow_float,
     _out_float_array,
+    _resolve_sample_bound,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -97,29 +98,46 @@ def _optional_note_voiced(
 def note_stretch(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    onset_sample: int = 0,
+    onset_sample: int | None = None,
     offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
+    *,
+    onset_sec: float | None = None,
+    offset_sec: float | None = None,
 ) -> list[float]:
     """Time-stretch a single note region without changing pitch.
 
     Args:
         samples: Audio samples.
         sample_rate: Sample rate in Hz (default 22050).
-        onset_sample: Start sample index of the note region.
-        offset_sample: End sample index of the note region (defaults to the input length).
-        stretch_ratio: Stretch factor for the region (>1 lengthens).
+        onset_sample: Start sample index of the note region (default 0). Not
+            together with ``onset_sec``.
+        offset_sample: End sample index of the note region (defaults to the input
+            length). Not together with ``offset_sec``.
+        stretch_ratio: Duration ratio of the region: ``>1`` lengthens it, ``<1``
+            shortens it, 1 is unchanged. The opposite sense of
+            :func:`time_stretch`'s ``rate``, which is a speed (``>1`` shortens).
+        onset_sec: Start of the note region in seconds, rounded to the nearest
+            sample at ``sample_rate``.
+        offset_sec: End of the note region in seconds, rounded the same way.
 
     Returns:
         List of samples with the note region stretched.
+
+    Raises:
+        SonareValueError: If a bound is given in both samples and seconds, or is
+            negative.
     """
-    resolved_offset = len(samples) if offset_sample is None else offset_sample
+    onset = _resolve_sample_bound(onset_sample, onset_sec, sample_rate, "onset_sample", "onset_sec")
+    offset = _resolve_sample_bound(
+        offset_sample, offset_sec, sample_rate, "offset_sample", "offset_sec"
+    )
     return _call_float_transform(
         "sonare_note_stretch",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(onset_sample, "onset_sample"),
-        _to_c_int(resolved_offset, "resolved_offset"),
+        _to_c_int(0 if onset is None else onset, "onset_sample"),
+        _to_c_int(len(samples) if offset is None else offset, "offset_sample"),
         _to_c_float(stretch_ratio, "stretch_ratio"),
     )
 
@@ -128,19 +146,42 @@ def note_stretch(
 def note_move(
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    onset_sample: int = 0,
+    onset_sample: int | None = None,
     offset_sample: int | None = None,
-    target_onset_sample: int = 0,
+    target_onset_sample: int | None = None,
+    *,
+    onset_sec: float | None = None,
+    offset_sec: float | None = None,
+    target_onset_sec: float | None = None,
 ) -> list[float]:
-    """Move a note region to a new onset without changing its duration."""
-    resolved_offset = len(samples) if offset_sample is None else offset_sample
+    """Move a note region to a new onset without changing its duration.
+
+    Each of ``onset``, ``offset`` and ``target_onset`` is given in samples
+    (``*_sample``, default 0 / the input length / 0) or in seconds (``*_sec``,
+    rounded to the nearest sample at ``sample_rate``), one spelling per bound.
+
+    Raises:
+        SonareValueError: If a bound is given in both samples and seconds, or is
+            negative.
+    """
+    onset = _resolve_sample_bound(onset_sample, onset_sec, sample_rate, "onset_sample", "onset_sec")
+    offset = _resolve_sample_bound(
+        offset_sample, offset_sec, sample_rate, "offset_sample", "offset_sec"
+    )
+    target = _resolve_sample_bound(
+        target_onset_sample,
+        target_onset_sec,
+        sample_rate,
+        "target_onset_sample",
+        "target_onset_sec",
+    )
     return _call_float_transform(
         "sonare_note_move",
         samples,
         _to_c_int(sample_rate, "sample_rate"),
-        _to_c_int(onset_sample, "onset_sample"),
-        _to_c_int(resolved_offset, "resolved_offset"),
-        _to_c_int(target_onset_sample, "target_onset_sample"),
+        _to_c_int(0 if onset is None else onset, "onset_sample"),
+        _to_c_int(len(samples) if offset is None else offset, "offset_sample"),
+        _to_c_int(0 if target is None else target, "target_onset_sample"),
     )
 
 
@@ -323,7 +364,7 @@ def render_notes(
         raise _unsupported_effect_symbol("sonare_render_notes")
 
     c_array, length = _to_c_float_array(samples)
-    c_notes, note_count, envelopes, envelope_count = _notes_to_c("render_notes", notes)
+    c_notes, note_count, envelopes, envelope_count = _notes_to_c("render_notes", notes, sample_rate)
 
     f0_array = None
     voiced_array = None
@@ -897,7 +938,9 @@ def assign_note_targets(
             "assign_note_targets", max_correction_semitones, "max_correction_semitones"
         )
 
-    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c("assign_note_targets", notes)
+    c_notes, note_count, _envelopes, _envelope_count = _notes_to_c(
+        "assign_note_targets", notes, sample_rate
+    )
     c_targets, target_count = _note_targets_to_c("assign_note_targets", targets)
     assigned = ctypes.c_size_t()
     _check(

@@ -268,7 +268,7 @@ def test_engine_apply_commands_due_now_preserves_future_commands() -> None:
         engine.settle_insert_parameters()
         # Unscheduled (-1) and frame-0 seeks are due now and apply in FIFO order;
         # the later two fall inside the second and third blocks.
-        engine.seek_sample(111, render_frame=-1)
+        engine.seek_sample(111)
         engine.seek_sample(222, render_frame=0)
         engine.seek_sample(5000, render_frame=300)
         engine.seek_sample(6000, render_frame=600)

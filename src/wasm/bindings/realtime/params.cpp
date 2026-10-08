@@ -96,7 +96,7 @@ void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
   // synchronous throw is kept here intentionally because setAutomationLane
   // is a control-thread (offline) setter, so an immediate, actionable error
   // is preferable to a deferred telemetry record. Unregistered ids — notably
-  // the reserved engine namespace (0x4D58xxxx mixer fader/pan targets) — are
+  // the reserved engine fader/pan, insert and instrument targets — are
   // accepted, matching the C oracle's gating.
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,

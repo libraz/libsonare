@@ -284,6 +284,7 @@ export interface NativeEngine {
     insertIndex: unknown,
     paramName: unknown,
   ): number;
+  resolveTrackLaneAutomationId(trackId: unknown, paramName: unknown): number;
   resolveMasterInsertAutomationId(insertIndex: unknown, paramName: unknown): number;
   resolveBusInsertAutomationId(busId: unknown, insertIndex: unknown, paramName: unknown): number;
   insertParameterConstructedValue(paramId: unknown): number;

@@ -17,6 +17,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _out_float_array,
+    _resolve_optional_non_negative,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -640,7 +641,7 @@ def vqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    gamma: float = -1.0,
+    gamma: float | None = None,
 ) -> CqtResult:
     """Compute the Variable-Q Transform magnitude (``gamma`` controls Q).
 
@@ -651,8 +652,9 @@ def vqt(
         fmin: Lowest center frequency in Hz (default C1).
         n_bins: Total number of frequency bins (default 84).
         bins_per_octave: Bins per octave (default 12).
-        gamma: Bandwidth offset. A negative value or NaN selects the automatic
-            ERB-derived value; zero is equivalent to CQT (default -1.0).
+        gamma: Bandwidth offset. ``None`` (the default) selects the automatic
+            ERB-derived value; zero is equivalent to CQT. A negative or
+            non-finite value is refused.
 
     Returns:
         A :class:`CqtResult` with the magnitude matrix and bin frequencies.
@@ -670,7 +672,7 @@ def vqt(
         _to_c_float(fmin, "fmin"),
         _to_c_int(n_bins, "n_bins"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
-        _to_c_float(gamma, "gamma"),
+        _to_c_float(_resolve_optional_non_negative(gamma, "gamma"), "gamma"),
         ctypes.byref(out),
     )
     _check(rc)
@@ -689,7 +691,7 @@ def vqt_to_audio(
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
-    gamma: float = -1.0,
+    gamma: float | None = None,
     n_iter: int = 32,
 ) -> list[float]:
     """Reconstruct mono audio from row-major VQT magnitude via Griffin-Lim."""
@@ -706,7 +708,7 @@ def vqt_to_audio(
         _to_c_int(hop_length, "hop_length"),
         _to_c_float(fmin, "fmin"),
         _to_c_int(bins_per_octave, "bins_per_octave"),
-        _to_c_float(gamma, "gamma"),
+        _to_c_float(_resolve_optional_non_negative(gamma, "gamma"), "gamma"),
         _to_c_int(n_iter, "n_iter"),
         ctypes.byref(out),
         ctypes.byref(out_length),

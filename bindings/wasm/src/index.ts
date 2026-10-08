@@ -978,6 +978,7 @@ export type {
   EngineBounceResult,
   EngineBus,
   EngineCapabilities,
+  EngineCapturePunchRequest,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,

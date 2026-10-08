@@ -147,7 +147,7 @@ def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
         engine.push_midi_ump(0, [w0, w1])
-        engine.push_midi_ump(0, (w0, w1), render_frame=-1)
+        engine.push_midi_ump(0, (w0, w1))
         engine.push_midi_ump(0, [0x20903C64])
 
 

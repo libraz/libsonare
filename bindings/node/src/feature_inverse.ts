@@ -12,6 +12,7 @@ import {
   assertIntegralSampleRate,
   assertPositiveInteger,
   assertSampleRate,
+  resolveOptionalNonNegative,
 } from './validation.js';
 
 export interface CqtToAudioRequest {
@@ -349,12 +350,12 @@ export function vqtToAudio(
   hopLength = 512,
   fmin = 32.70319566257483,
   binsPerOctave = 12,
-  gamma = -1,
+  gamma?: number,
   nIter = 32,
 ): Float32Array {
   // The request form delegates to the positional form so the defaults live in
-  // exactly one place: `gamma` in particular must reach the core as the
-  // automatic-VQT sentinel (-1), not as the constant-Q value (0).
+  // exactly one place: an omitted `gamma` must reach the core as the
+  // automatic-VQT value (-1), not as the constant-Q value (0).
   if (!(magnitude instanceof Float32Array)) {
     return vqtToAudio(
       magnitude.magnitude,
@@ -381,7 +382,7 @@ export function vqtToAudio(
     hopLength,
     fmin,
     binsPerOctave,
-    gamma,
+    resolveOptionalNonNegative('vqtToAudio', gamma, 'gamma'),
     nIter,
   );
 }
@@ -665,7 +666,10 @@ export function mfccToAudio(
   );
 }
 
-/** Phase-vocoder time-scale modification (rate > 1 faster, < 1 slower). */
+/**
+ * Phase-vocoder time-scale modification. `rate` is a speed (> 1 faster and
+ * shorter, < 1 slower and longer), the opposite sense of a note's `stretchRatio`.
+ */
 export function phaseVocoder(request: PhaseVocoderRequest): Float32Array;
 export function phaseVocoder(
   samples: Float32Array,

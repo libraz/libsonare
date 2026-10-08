@@ -24,6 +24,7 @@ from ._runtime import (
     _narrow_int,
     _out_float_array,
     _out_int_array,
+    _resolve_optional_non_negative,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -468,10 +469,14 @@ def fix_length(
 def fix_frames(
     frames: Sequence[int] | list[int],
     x_min: int = 0,
-    x_max: int = -1,
+    x_max: int | None = None,
     pad: bool = True,
 ) -> list[int]:
-    """Adjust frame indices to fit within bounds."""
+    """Adjust frame indices to fit within bounds.
+
+    ``x_max`` is the inclusive upper bound; ``None`` (the default) means none, and a
+    negative value is refused.
+    """
     lib = _get_lib()
     c_array, length = _to_c_int_array(frames, "frames")
     with _out_int_array(lib) as (out, out_length):
@@ -479,7 +484,7 @@ def fix_frames(
             c_array,
             _to_c_size_t(length, "length"),
             _to_c_int(x_min, "x_min"),
-            _to_c_int(x_max, "x_max"),
+            _to_c_int(_resolve_optional_non_negative(x_max, "x_max"), "x_max"),
             ctypes.c_int(1 if pad else 0),
             ctypes.byref(out),
             ctypes.byref(out_length),

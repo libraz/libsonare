@@ -774,6 +774,13 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.resolveTrackLaneAutomationId',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'paramName', call: (e) => e.resolveTrackLaneAutomationId(TRACK_ID, 42) },
+    ],
+  },
+  {
     name: 'RealtimeEngine.resolveMasterInsertAutomationId',
     missingRequired: [],
     badArguments: [

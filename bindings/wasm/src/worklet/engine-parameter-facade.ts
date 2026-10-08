@@ -5,12 +5,12 @@ import type {
   EngineTrackMonitorMode,
   RealtimeEngine,
 } from '../index.js';
+import { resolveRenderFrame } from '../validation.js';
 import type { SonareEngineSyncMessage } from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
   engineMixerBusTarget,
-  engineMixerLaneTarget,
   engineMixerMasterTarget,
   SonareEngineCommandType,
 } from './protocol.js';
@@ -77,7 +77,7 @@ export function setTrackMonitorMode(
   ctx: EngineParameterContext,
   target: string | number,
   mode: EngineTrackMonitorMode,
-  renderFrame = -1,
+  renderFrame?: number,
 ): boolean {
   // Resolve the mode before declaring a lane or touching either engine. This
   // keeps booleans, fractions, and unknown spellings from reaching the queue.
@@ -91,7 +91,7 @@ export function setTrackMonitorMode(
   return ctx.sendCommand({
     type: SonareEngineCommandType.SetTrackMonitorMode,
     targetId: laneIndex,
-    sampleTime: renderFrame,
+    sampleTime: resolveRenderFrame('setTrackMonitorMode', renderFrame),
     argInt: modeOrdinal,
   });
 }
@@ -101,7 +101,9 @@ export function setTrackMonitorMode(
  *
  * The id addresses the engine's reserved mixer namespace, so it can be fed
  * straight to setAutomationLane to automate a fader or pan without
- * registering a parameter.
+ * registering a parameter. A track's id is resolved on the offline engine,
+ * which numbers it as the worklet engine does, and keeps naming that track
+ * across lane reorders (see `resolveTrackLaneAutomationId`).
  *
  * @param target Track id (declares a mixer lane on first use) or 'master'.
  * @param kind Strip parameter to address.
@@ -112,11 +114,13 @@ export function automationParamId(
   target: string | number,
   kind: 'faderDb' | 'pan',
 ): number {
-  const paramKind = kind === 'pan' ? ENGINE_MIXER_PARAM_PAN : ENGINE_MIXER_PARAM_FADER_DB;
   if (target === 'master') {
-    return engineMixerMasterTarget(paramKind);
+    return engineMixerMasterTarget(
+      kind === 'pan' ? ENGINE_MIXER_PARAM_PAN : ENGINE_MIXER_PARAM_FADER_DB,
+    );
   }
-  return engineMixerLaneTarget(ctx.ensureTrackLane(target), paramKind);
+  const laneIndex = ctx.ensureTrackLane(target);
+  return ctx.offlineEngine.resolveTrackLaneAutomationId(ctx.trackLaneIds[laneIndex], kind);
 }
 
 /**
@@ -197,7 +201,8 @@ export function resolveBusInsertAutomationId(
  *
  * The instrument must already be bound on the offline engine for the
  * destination (the worklet mirrors every instrument sync onto it), otherwise
- * the resolve returns -1.
+ * the resolve returns -1. Both engines number the id when the instrument is
+ * bound, so the worklet engine applies it without resolving.
  *
  * @param destinationId MIDI destination the instrument is bound to.
  * @param paramName Instrument JSON-key parameter name (e.g. `cutoffHz`).

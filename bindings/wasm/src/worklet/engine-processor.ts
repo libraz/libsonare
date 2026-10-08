@@ -88,6 +88,12 @@ const METER_TARGET_SLOTS = 42;
 const METER_SCRATCH_CHANNEL_COUNT = 11;
 const METER_SCRATCH_PLANES = 12;
 
+/** The wire spells "apply at the next block head" as a negative frame; the engine facade as absence. */
+function wireRenderFrame(frame: number | bigint | undefined): number | undefined {
+  const value = Number(frame ?? -1);
+  return value < 0 ? undefined : value;
+}
+
 /**
  * AudioWorklet-style bridge for the DAW realtime engine facade.
  *
@@ -787,7 +793,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.note,
           message.velocity,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiNoteOff':
@@ -797,7 +803,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.note,
           message.velocity,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiCc':
@@ -807,7 +813,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.controller,
           message.value,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiPitchBend':
@@ -816,7 +822,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiChannelPressure':
@@ -825,7 +831,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiPolyPressure':
@@ -835,21 +841,25 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiUmp':
         this.engine.pushMidiUmp(
           message.destinationId,
           message.words ?? [message.word0],
-          message.renderFrame,
+          wireRenderFrame(message.renderFrame),
         );
         break;
       case 'syncMidiSysex':
-        this.engine.pushMidiSysex(message.destinationId, message.data, message.renderFrame);
+        this.engine.pushMidiSysex(
+          message.destinationId,
+          message.data,
+          wireRenderFrame(message.renderFrame),
+        );
         break;
       case 'syncMidiPanic':
-        this.engine.pushMidiPanic(message.renderFrame);
+        this.engine.pushMidiPanic(wireRenderFrame(message.renderFrame));
         break;
       case 'syncMidiDestinationExternal':
         this.engine.setMidiDestinationExternal(message.destinationId, message.external);
@@ -1064,7 +1074,7 @@ export class SonareRealtimeEngineWorkletProcessor {
   }
 
   private applyCommand(command: SonareEngineCommandRecord): void {
-    const sampleTime = Number(command.sampleTime ?? -1);
+    const sampleTime = wireRenderFrame(command.sampleTime);
     switch (command.type) {
       case SonareEngineCommandType.SetParam:
         // paramId is carried in targetId, the new value in argFloat (matches the

@@ -582,6 +582,17 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
     return report(MidiInstrumentBindStatus::kPreparationFailed);
   }
 
+  // Mint the destination's automation slot at configuration, so an engine that
+  // receives the same bindings numbers its ids identically without resolving.
+  if (instrument != nullptr && instrument_auto_destinations_.find(destination_id) < 0) {
+    if (instrument_auto_destinations_.remaining() == 0) {
+      return report(MidiInstrumentBindStatus::kRackFull);
+    }
+    if (!instrument_auto_destinations_.ensure(destination_id)) {
+      return report(MidiInstrumentBindStatus::kOutOfMemory);
+    }
+  }
+
   try {
     // Last fallible step: publish while the old rack is still live.
     midi_sequencer_.set_midi_clips(std::move(next_clips));

@@ -213,9 +213,12 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   size_t copy_lane_track_ids(uint32_t* out, size_t capacity) const noexcept;
 
   bool set_lane_parameter(size_t lane_index, unsigned int param_id, float value) noexcept;
-  /// Glides a lane's fader (kFaderDb) or pan (kPan) back to the value it holds with no
-  /// automation: 0 dB, centre. Same thread contract as set_lane_parameter.
-  bool restore_lane_parameter(size_t lane_index, unsigned int param_id) noexcept;
+  /// set_lane_parameter for the lane @p track_id holds in this block's snapshot;
+  /// false when no lane holds it.
+  bool set_track_parameter(uint32_t track_id, unsigned int param_id, float value) noexcept;
+  /// Glides a track lane's fader (kFaderDb) or pan (kPan) back to the value it holds with
+  /// no automation: 0 dB, centre. Same thread contract as set_lane_parameter.
+  bool restore_track_parameter(uint32_t track_id, unsigned int param_id) noexcept;
   bool set_lane_solo_mute(size_t lane_index, bool solo, bool mute) noexcept;
   /// AUDIO thread: applies a queued lane monitor mode. The mode is deliberately
   /// plain lane state (not a raw ChannelStrip registration) so it survives lane

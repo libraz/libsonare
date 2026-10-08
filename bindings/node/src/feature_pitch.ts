@@ -3,7 +3,12 @@ import { resolveFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest, StftRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult } from './types.js';
-import { assertPositiveInteger, assertSampleRate, assertSamples } from './validation.js';
+import {
+  assertPositiveInteger,
+  assertSampleRate,
+  assertSamples,
+  resolveOptionalNonNegative,
+} from './validation.js';
 
 /**
  * Options for the constant-Q chroma variants.
@@ -349,7 +354,10 @@ export function hybridCqt(
   );
 }
 
-/** Compute VQT magnitude (a negative or NaN `gamma` selects the automatic ERB-derived value). */
+/**
+ * Compute VQT magnitude. Omit `gamma` for the automatic ERB-derived value; 0 is
+ * the constant-Q transform, and a negative or non-finite `gamma` is refused.
+ */
 export function vqt(request: VqtRequest): CqtResult;
 export function vqt(
   samples: Float32Array,
@@ -367,7 +375,7 @@ export function vqt(
   fmin = 32.70319566257483,
   nBins = 84,
   binsPerOctave = 12,
-  gamma = -1.0,
+  gamma?: number,
 ): CqtResult {
   const request =
     samples instanceof Float32Array
@@ -385,7 +393,7 @@ export function vqt(
     request.fmin ?? 32.70319566257483,
     request.nBins ?? 84,
     request.binsPerOctave ?? 12,
-    request.gamma ?? -1,
+    resolveOptionalNonNegative('vqt', request.gamma, 'gamma'),
   );
 }
 

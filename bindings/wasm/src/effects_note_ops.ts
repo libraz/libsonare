@@ -3,7 +3,7 @@
  * rendering an edited set back, and the split/merge operations over it.
  */
 
-import { assertPitchTrackLengths, toVoicedFloat32 } from './_effects_common.js';
+import { assertPitchTrackLengths, resolveEntryTimes, toVoicedFloat32 } from './_effects_common.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -20,7 +20,12 @@ import type {
   VoicedFlags,
 } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation.js';
+import {
+  assertFiniteScalar,
+  assertSampleRate,
+  assertSamples,
+  resolveSampleBound,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -242,11 +247,26 @@ export function noteStretch(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('noteStretch', request.samples, request.validate !== false);
+  const rate = request.sampleRate ?? 22050;
   return requireModule().noteStretch(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.onsetSample ?? 0,
-    request.offsetSample ?? request.samples.length,
+    rate,
+    resolveSampleBound(
+      'noteStretch',
+      request.onsetSample,
+      request.onsetSec,
+      rate,
+      'onsetSample',
+      'onsetSec',
+    ) ?? 0,
+    resolveSampleBound(
+      'noteStretch',
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    ) ?? request.samples.length,
     request.stretchRatio ?? 1.0,
   );
 }
@@ -265,12 +285,34 @@ export function noteMove(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   assertSamples('noteMove', request.samples, request.validate !== false);
+  const rate = request.sampleRate ?? 22050;
   return requireModule().noteMove(
     request.samples,
-    request.sampleRate ?? 22050,
-    request.onsetSample ?? 0,
-    request.offsetSample ?? request.samples.length,
-    request.targetOnsetSample ?? 0,
+    rate,
+    resolveSampleBound(
+      'noteMove',
+      request.onsetSample,
+      request.onsetSec,
+      rate,
+      'onsetSample',
+      'onsetSec',
+    ) ?? 0,
+    resolveSampleBound(
+      'noteMove',
+      request.offsetSample,
+      request.offsetSec,
+      rate,
+      'offsetSample',
+      'offsetSec',
+    ) ?? request.samples.length,
+    resolveSampleBound(
+      'noteMove',
+      request.targetOnsetSample,
+      request.targetOnsetSec,
+      rate,
+      'targetOnsetSample',
+      'targetOnsetSec',
+    ) ?? 0,
   );
 }
 
@@ -415,7 +457,8 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   }
   assertSamples('renderNotes', request.samples, request.validate !== false);
   const options = { ...withoutVoiced, voiced };
-  return requireModule().renderNotes(request.samples, request.sampleRate, request.notes, options);
+  const notes = resolveEntryTimes('renderNotes', request.notes, 'notes', request.sampleRate, true);
+  return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);
 }
 
 /**
@@ -524,6 +567,9 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  */
 export function splitNote(request: SplitNoteRequest): NoteObject[] {
   const voicedF32 = assertNoteTrack('splitNote', request);
+  const notes = Array.isArray(request.notes)
+    ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
+    : request.notes;
   return requireModule().splitNote(
     request.samples,
     request.sampleRate,
@@ -531,7 +577,7 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
     request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
     voicedF32,
     request.frameRate,
-    request.notes,
+    notes,
     request.index,
     request.frame,
     request,
@@ -579,6 +625,9 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  */
 export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
   const voicedF32 = assertNoteTrack('mergeNotes', request);
+  const notes = Array.isArray(request.notes)
+    ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
+    : request.notes;
   return requireModule().mergeNotes(
     request.samples,
     request.sampleRate,
@@ -586,7 +635,7 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
     request.voiced == null ? (request.voicedProb ?? undefined) : undefined,
     voicedF32,
     request.frameRate,
-    request.notes,
+    notes,
     request.first,
     request.last,
     request,

@@ -881,7 +881,8 @@ describe('note input validation', () => {
       onsetSample: -Number.MAX_SAFE_INTEGER,
       offsetSample: -Number.MAX_SAFE_INTEGER + 1,
     };
-    expectCodedInvalidParameter(() => renderNotes({ ...loudSource, notes: [negativeExtreme] }));
+    // A negative position is refused by name, not read as an out-of-range sample.
+    expectRangeRefusal(() => renderNotes({ ...loudSource, notes: [negativeExtreme] }));
 
     // The parser also keeps values outside the signed 64-bit range out of the
     // core; this is distinct from a representable position past this audio.

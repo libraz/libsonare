@@ -82,6 +82,7 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value ClearBusInsertParameterBases(const Napi::CallbackInfo& info);
   Napi::Value SetBusStripInsertBypassed(const Napi::CallbackInfo& info);
   Napi::Value ResolveTrackInsertAutomationId(const Napi::CallbackInfo& info);
+  Napi::Value ResolveTrackLaneAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value ResolveBusInsertAutomationId(const Napi::CallbackInfo& info);
   Napi::Value InsertParameterConstructedValue(const Napi::CallbackInfo& info);

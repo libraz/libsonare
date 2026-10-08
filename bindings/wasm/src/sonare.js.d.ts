@@ -1553,6 +1553,7 @@ export interface WasmRealtimeEngine {
     insertIndex: number,
     paramName: string,
   ) => number;
+  resolveTrackLaneAutomationId: (trackId: number, paramName: string) => number;
   resolveMasterInsertAutomationId: (insertIndex: number, paramName: string) => number;
   resolveBusInsertAutomationId: (busId: number, insertIndex: number, paramName: string) => number;
   resolveInstrumentAutomationId: (destinationId: number, paramName: string) => number;

@@ -641,6 +641,10 @@ python = [
 # and a redundant count would let them disagree; same ergonomic options-fold +
 # array-length derivation already accepted for midi_route_events. Remapped to C
 # order in the ctypes wrapper. Not order drift.
+# note_stretch / note_move (python): the facade appends the `onset_sec` /
+# `offset_sec` (and `target_onset_sec`) keyword-only alternatives to the C sample
+# parameters; each pair is mutually exclusive and converted to samples at the
+# call's rate before the C call. Binding-side seconds, not order drift.
 # extract_notes (python): C is (f0_hz, voiced_prob, voiced, n_frames, frame_rate,
 # config). The facade exposes (f0_hz, frame_rate, ...) and DERIVES n_frames from
 # the f0_hz array length, then folds the SonareNoteExtractorConfig fields and the
@@ -730,6 +734,8 @@ python = [
   "midi_cc_learn",
   "midi_route_events",
   "spectral_edit",
+  "note_stretch",
+  "note_move",
   "extract_notes",
   "render_notes",
   "decompose_note_pitch",
@@ -855,6 +861,13 @@ names = []
 # Category 1 (ergonomic rename or fold) and category 2 (array-length derivation).
 # Every entry below was read against both the C header and the facade source.
 fields = [
+  # --- seconds alternatives to the sample fields ---
+  # Node and WASM spell a region's time bounds in samples or in seconds; the
+  # binding converts seconds to samples at the call's rate, so the C struct keeps
+  # samples only.
+  "spectral_region_op.start_sec",
+  "spectral_region_op.end_sec",
+
   # --- the `auto` flag folded into `tuning` ---
   # The C option structs carry a `tuning_auto` flag beside the float `tuning`;
   # Node and WASM spell it `tuning: 'auto'` on the one field.

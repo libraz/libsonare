@@ -616,7 +616,7 @@ def vqt(
     fmin: float = 32.70319566257483,
     n_bins: int = 84,
     bins_per_octave: int = 12,
-    gamma: float = -1.0,
+    gamma: float | None = None,
 ) -> CqtResult: ...
 def version() -> str: ...
 def capabilities() -> Capabilities: ...
@@ -703,16 +703,23 @@ def auto_tune(
 def note_stretch(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    onset_sample: int = 0,
+    onset_sample: int | None = None,
     offset_sample: int | None = None,
     stretch_ratio: float = 1.0,
+    *,
+    onset_sec: float | None = None,
+    offset_sec: float | None = None,
 ) -> list[float]: ...
 def note_move(
     samples: FloatSamples,
     sample_rate: int = 22050,
-    onset_sample: int = 0,
+    onset_sample: int | None = None,
     offset_sample: int | None = None,
-    target_onset_sample: int = 0,
+    target_onset_sample: int | None = None,
+    *,
+    onset_sec: float | None = None,
+    offset_sec: float | None = None,
+    target_onset_sec: float | None = None,
 ) -> list[float]: ...
 def voice_change(
     samples: FloatSamples,
@@ -732,6 +739,7 @@ class NoteEdit:
     vibrato_depth_change: float
     drift_change: float
     amplitude_envelope: np.ndarray[Any, Any]
+    time_offset_sec: float | None
     def __init__(
         self,
         time_offset_samples: int = 0,
@@ -743,11 +751,12 @@ class NoteEdit:
         vibrato_depth_change: float = 0.0,
         drift_change: float = 0.0,
         amplitude_envelope: np.ndarray[Any, Any] = ...,
+        time_offset_sec: float | None = None,
     ) -> None: ...
 
 class NoteObject:
-    onset_sample: int
-    offset_sample: int
+    onset_sample: int | None
+    offset_sample: int | None
     frame_start: int
     frame_end: int
     median_hz: float
@@ -755,10 +764,12 @@ class NoteObject:
     f0_stability: float
     amplitude: np.ndarray[Any, Any]
     edit: NoteEdit
+    onset_sec: float | None
+    offset_sec: float | None
     def __init__(
         self,
-        onset_sample: int,
-        offset_sample: int,
+        onset_sample: int | None = None,
+        offset_sample: int | None = None,
         frame_start: int = 0,
         frame_end: int = 0,
         median_hz: float = 0.0,
@@ -766,6 +777,8 @@ class NoteObject:
         f0_stability: float = 0.0,
         amplitude: np.ndarray[Any, Any] = ...,
         edit: NoteEdit = ...,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
     ) -> None: ...
 
 def extract_notes(
@@ -827,28 +840,34 @@ class PercussiveEventEdit:
     time_offset_samples: int
     gain_db: float
     muted: bool
+    time_offset_sec: float | None
     def __init__(
         self,
         time_offset_samples: int = 0,
         gain_db: float = 0.0,
         muted: bool = False,
+        time_offset_sec: float | None = None,
     ) -> None: ...
 
 class PercussiveEvent:
-    onset_sample: int
-    offset_sample: int
+    onset_sample: int | None
+    offset_sample: int | None
     strength: float
     peak_amplitude: float
     percussive_ratio: float
     edit: PercussiveEventEdit
+    onset_sec: float | None
+    offset_sec: float | None
     def __init__(
         self,
-        onset_sample: int,
-        offset_sample: int,
+        onset_sample: int | None = None,
+        offset_sample: int | None = None,
         strength: float = 0.0,
         peak_amplitude: float = 0.0,
         percussive_ratio: float = 0.0,
         edit: PercussiveEventEdit = ...,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
     ) -> None: ...
 
 def extract_percussive_events(
@@ -955,20 +974,24 @@ def assign_note_targets(
 ) -> tuple[list[NoteObject], int]: ...
 
 class SpectralRegionOp:
-    start_sample: int
-    end_sample: int
+    start_sample: int | None
+    end_sample: int | None
     low_hz: float
     high_hz: float
     gain_db: float
     mode: str | int
+    start_sec: float | None
+    end_sec: float | None
     def __init__(
         self,
-        start_sample: int = 0,
-        end_sample: int = -1,
+        start_sample: int | None = None,
+        end_sample: int | None = None,
         low_hz: float = 0.0,
         high_hz: float = 0.0,
         gain_db: float = 0.0,
         mode: str | int = "gain",
+        start_sec: float | None = None,
+        end_sec: float | None = None,
     ) -> None: ...
 
 def spectral_edit(
@@ -1919,7 +1942,7 @@ def frame_signal(
 def pad_center(values: FloatSamples, target_size: int, pad_value: float = 0.0) -> list[float]: ...
 def fix_length(values: FloatSamples, target_size: int, pad_value: float = 0.0) -> list[float]: ...
 def fix_frames(
-    frames: IntSamples, x_min: int = 0, x_max: int = -1, pad: bool = True
+    frames: IntSamples, x_min: int = 0, x_max: int | None = None, pad: bool = True
 ) -> list[int]: ...
 def peak_pick(
     values: FloatSamples,
@@ -2296,7 +2319,8 @@ def mastering_repair_detect_trim_range(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -2307,7 +2331,8 @@ def mastering_repair_detect_trim_range_stereo(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -2317,7 +2342,8 @@ def mastering_repair_trim_silence(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -2328,7 +2354,8 @@ def mastering_repair_trim_silence_stereo(
     sample_rate: int = 22050,
     *,
     threshold: float = 0.001,
-    padding_samples: int = 0,
+    padding_samples: int | None = None,
+    padding_sec: float | None = None,
     mode: int | str = "peak",
     gate_lufs: float = -60.0,
     window_ms: float = 400.0,
@@ -2465,8 +2492,8 @@ def metering_dynamic_range(
     sample_rate: int = 22050,
     window_sec: float = 0.0,
     hop_sec: float = 0.0,
-    low_percentile: float = -1.0,
-    high_percentile: float = -1.0,
+    low_percentile: float | None = None,
+    high_percentile: float | None = None,
     *,
     validate: bool = True,
 ) -> DynamicRangeReport: ...
@@ -2506,7 +2533,7 @@ def vqt_to_audio(
     hop_length: int = 512,
     fmin: float = 32.70319566257483,
     bins_per_octave: int = 12,
-    gamma: float = -1.0,
+    gamma: float | None = None,
     n_iter: int = 32,
 ) -> list[float]: ...
 def mel_to_audio(

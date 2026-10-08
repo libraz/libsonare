@@ -8,12 +8,13 @@
 namespace sonare::engine {
 
 /// Reserved engine-namespace id encoding for automating an insert parameter of a
-/// mixer strip (track lane, master, or bus) from a PPQ breakpoint lane.
+/// mixer strip (track lane, master, or bus), or a track lane's fader or pan, from
+/// a PPQ breakpoint lane.
 ///
-/// The mixer fader/pan/width namespace (0x4D580000, top bits 010) fills its low
-/// 16 bits, leaving no room for the (strip, insert, param) triple an insert needs.
-/// Insert ids therefore live in a disjoint octant (top 3 bits 111) so the two
-/// namespaces never collide and a single bit test distinguishes them:
+/// The master and bus fader/pan/width namespace (0x4D580000, top bits 010) fills
+/// its low 16 bits, leaving no room for the (strip, insert, param) triple an
+/// insert needs. Insert ids therefore live in a disjoint octant (top 3 bits 111)
+/// so the two namespaces never collide and a single bit test distinguishes them:
 ///
 ///     [31:29] tag = 111
 ///     [28:16] strip  (13 bits)
@@ -23,7 +24,8 @@ namespace sonare::engine {
 /// The strip field selects an entry of the engine's insert-automation target
 /// table (insert_automation_targets.h), which names the strip by identity and
 /// pins the processor type of the slot, so the id survives a lane or bus reorder
-/// and fails once its strip is removed or its slot holds another processor.
+/// and fails once its strip is removed or its slot holds another processor. A
+/// track fader/pan id selects its track's slot-less entry, with insert field 0.
 constexpr uint32_t kInsertParamTag = 0xE0000000u;
 constexpr uint32_t kInsertParamMask = 0xE0000000u;
 constexpr uint32_t kInsertStripShift = 16u;

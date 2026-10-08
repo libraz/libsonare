@@ -41,6 +41,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _narrow_int,
+    _resolve_optional_non_negative,
     _to_c_double,
     _to_c_float,
     _to_c_float_array,
@@ -284,23 +285,24 @@ class _ProjectMidiMixin:
             if out:
                 lib.sonare_free_bytes(out)
 
-    def set_program(self, clip_id: int, program: int, bank: int = -1) -> None:
+    def set_program(self, clip_id: int, program: int, bank: int | None = None) -> None:
         """Set a MIDI clip's channel-0 program / bank at source PPQ 0.
 
-        ``bank`` defaults to ``-1`` (no Bank Select emitted), matching
-        :meth:`set_program_on_channel`; pass ``>= 0`` to emit a Bank Select.
+        ``bank`` defaults to ``None`` (no Bank Select emitted), matching
+        :meth:`set_program_on_channel`; pass ``>= 0`` to emit a Bank Select. A
+        negative ``bank`` is refused.
         """
         _check(
             _get_lib().sonare_project_set_program(
                 self._require_handle(),
                 _to_c_uint32(clip_id, "clip_id"),
                 _to_c_int(program, "program"),
-                _to_c_int(bank, "bank"),
+                _to_c_int(_resolve_optional_non_negative(bank, "bank"), "bank"),
             )
         )
 
     def set_program_on_channel(
-        self, clip_id: int, group: int, channel: int, program: int, bank: int = -1
+        self, clip_id: int, group: int, channel: int, program: int, bank: int | None = None
     ) -> None:
         """Set a MIDI clip's program / bank for one UMP group and channel."""
         _check(
@@ -310,7 +312,7 @@ class _ProjectMidiMixin:
                 _to_c_uint8(group, "group"),
                 _to_c_uint8(channel, "channel"),
                 _to_c_int(program, "program"),
-                _to_c_int(bank, "bank"),
+                _to_c_int(_resolve_optional_non_negative(bank, "bank"), "bank"),
             )
         )
 

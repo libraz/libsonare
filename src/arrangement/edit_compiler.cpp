@@ -15,7 +15,6 @@
 #include "core/audio.h"
 #include "core/resample.h"
 #include "engine/mixing_runtime.h"
-#include "engine/realtime_engine_internal.h"
 #include "engine/tempo_sync.h"
 #include "midi/midi_clip.h"
 #include "rt/pan_law.h"
@@ -1347,11 +1346,13 @@ ApplyResult apply_refused(ErrorCode code, std::string message) {
   return result;
 }
 
-// Resolves typed lanes to engine-reserved ids against the compiled lane order.
-// Opaque ids remain untouched for legacy host targets; the compiler already
-// applied project-order first-wins filtering to them, and set_lanes()
-// defensively preserves that contract for a hand-built snapshot.
-std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTimeline& timeline) {
+// Collects the playback lanes; @p lane_tracks receives, per lane, the track a typed
+// lane drives (0 for an opaque one), whose engine id exists only once the engine
+// holds the track lanes. Opaque ids remain untouched for legacy host targets; the
+// compiler already applied project-order first-wins filtering to them, and
+// set_lanes() defensively preserves that contract for a hand-built snapshot.
+std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTimeline& timeline,
+                                                               std::vector<TrackId>* lane_tracks) {
   std::vector<automation::AutomationLane> playback_lanes;
   playback_lanes.reserve(timeline.mixer.automation_bindings.empty()
                              ? timeline.automation_lanes.size()
@@ -1364,30 +1365,44 @@ std::vector<automation::AutomationLane> resolve_playback_lanes(const CompiledTim
     for (const automation::AutomationLane& lane : timeline.automation_lanes) {
       if (lane.target_kind() == automation::AutomationTargetKind::kOpaque) {
         playback_lanes.push_back(lane);
+        lane_tracks->push_back(0);
       }
     }
     return playback_lanes;
   }
   for (const MixerAutomationBinding& binding : timeline.mixer.automation_bindings) {
-    automation::AutomationLane lane = binding.lane;
-    if (lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
-      size_t lane_index = 0;
-      bool found = false;
-      for (size_t i = 0; i < timeline.track_lanes.size(); ++i) {
-        if (timeline.track_lanes[i].track_id == binding.track_id) {
-          lane_index = i;
-          found = true;
-          break;
-        }
+    TrackId track_id = 0;
+    if (binding.lane.target_kind() != automation::AutomationTargetKind::kOpaque) {
+#if defined(SONARE_WITH_MIXING)
+      for (const CompiledTrackLane& track_lane : timeline.track_lanes) {
+        if (track_lane.track_id == binding.track_id) track_id = binding.track_id;
       }
-      if (!found || lane_index > 0xFFu) continue;
-      lane.set_target_param_id(
-          engine::make_track_lane_param_id(lane_index, static_cast<uint32_t>(lane.target_kind())));
+#endif
+      // A typed lane with no engine track lane has nothing to drive.
+      if (track_id == 0) continue;
     }
-    playback_lanes.push_back(std::move(lane));
+    playback_lanes.push_back(binding.lane);
+    lane_tracks->push_back(track_id);
   }
   return playback_lanes;
 }
+
+#if defined(SONARE_WITH_MIXING)
+// Points each typed lane at its track's fader/pan id, minted by set_track_lanes.
+bool bind_playback_lane_targets(const engine::RealtimeEngine& engine,
+                                const std::vector<TrackId>& lane_tracks,
+                                std::vector<automation::AutomationLane>* lanes) noexcept {
+  for (size_t i = 0; i < lane_tracks.size() && i < lanes->size(); ++i) {
+    if (lane_tracks[i] == 0) continue;
+    automation::AutomationLane& lane = (*lanes)[i];
+    const int64_t id = engine.track_lane_automation_id(
+        lane_tracks[i], static_cast<unsigned int>(lane.target_kind()));
+    if (id < 0) return false;
+    lane.set_target_param_id(static_cast<uint32_t>(id));
+  }
+  return true;
+}
+#endif
 
 #if defined(SONARE_WITH_MIXING)
 const mixing::api::Strip* find_scene_strip(const MixerRequest& mixer,
@@ -1494,6 +1509,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
 #endif
 
   std::vector<automation::AutomationLane> playback_lanes;
+  std::vector<TrackId> playback_lane_tracks;
   ApplyResult result;
 #if defined(SONARE_WITH_MIXING)
   std::vector<engine::TrackLaneConfig> track_lanes;
@@ -1533,7 +1549,7 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
       }
     }
 #endif
-    playback_lanes = resolve_playback_lanes(timeline);
+    playback_lanes = resolve_playback_lanes(timeline, &playback_lane_tracks);
     result.installed_automation = playback_lanes;
 
     // (2) Own and prepare every SysEx payload without publishing.
@@ -1551,6 +1567,11 @@ ApplyResult apply_to_engine(const CompiledTimeline& timeline, engine::RealtimeEn
 #if defined(SONARE_WITH_MIXING)
     if (!engine.set_track_lanes(std::move(track_lanes))) {
       return apply_refused(ErrorCode::InvalidParameter, "the engine refuses the track-lane vector");
+    }
+    if (!bind_playback_lane_targets(engine, playback_lane_tracks, &playback_lanes) ||
+        !bind_playback_lane_targets(engine, playback_lane_tracks, &result.installed_automation)) {
+      return apply_cleared(engine, ErrorCode::InvalidState,
+                           "the engine holds no fader/pan id for a track lane");
     }
 #endif
 

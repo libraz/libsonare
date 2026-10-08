@@ -9,6 +9,7 @@ import {
   assertSampleRate,
   assertSamples,
   assertSamplesInWindow,
+  resolveOptionalNonNegative,
 } from './validation.js';
 
 // The FFT size the library falls back to when `nFft` is 0 or omitted. Mirrored
@@ -60,9 +61,9 @@ export interface MeteringDynamicRangeOptions extends ValidateOptions {
   windowSec?: number;
   /** Hop length in seconds (0 = library default, 1 s). Default 0. */
   hopSec?: number;
-  /** Low percentile in [0,1] (negative = library default, 0.10). Default -1. */
+  /** Low percentile in [0,1]; omit for the library default (0.10). 0 is a real request; negative is refused. */
   lowPercentile?: number;
-  /** High percentile in [0,1] (negative = library default, 0.95). Default -1. */
+  /** High percentile in [0,1]; omit for the library default (0.95). 0 is a real request; negative is refused. */
   highPercentile?: number;
 }
 
@@ -304,10 +305,9 @@ export function meteringDetectClipping(
 
 /**
  * Sliding-window dynamic range for mono audio (high_percentile_db - low_percentile_db).
- * Pass 0 for window/hop to use the library default (window=3 s, hop=1 s). The
- * percentiles use a NEGATIVE sentinel for "use the library default" (low=0.10,
- * high=0.95) because 0 is a literal 0th percentile; omitted percentiles default
- * to -1.
+ * Pass 0 for window/hop to use the library default (window=3 s, hop=1 s). An
+ * omitted percentile takes the library default (low=0.10, high=0.95); 0 is a
+ * literal 0th percentile and a negative one is refused.
  */
 export function meteringDynamicRange(request: MeteringDynamicRangeRequest): DynamicRangeReport;
 export function meteringDynamicRange(
@@ -329,8 +329,8 @@ export function meteringDynamicRange(
     resolvedSampleRate,
     request.windowSec ?? 0,
     request.hopSec ?? 0,
-    request.lowPercentile ?? -1,
-    request.highPercentile ?? -1,
+    resolveOptionalNonNegative('meteringDynamicRange', request.lowPercentile, 'lowPercentile'),
+    resolveOptionalNonNegative('meteringDynamicRange', request.highPercentile, 'highPercentile'),
   );
 }
 

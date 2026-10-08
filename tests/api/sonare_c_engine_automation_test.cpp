@@ -469,7 +469,7 @@ TEST_CASE("sonare_engine restores a lane fader's manual value once its automatio
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
 
-  const uint32_t fader_target = engine_lane_param_target(0, 1);  // TrackMixerRuntime::kFaderDb.
+  const uint32_t fader_target = engine_track_lane_target(engine, 10, "faderDb");
   // Manual value first: -24 dB.
   REQUIRE(sonare_engine_set_parameter(engine, fader_target, -24.0f, -1) == SONARE_OK);
 

@@ -2,6 +2,7 @@ import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
 import type { SurroundPan } from '../public_types.js';
+import { resolveRenderFrame } from '../validation.js';
 import type { InsertParamOverrideMap } from './engine-mixer-facade.js';
 import {
   emptyStripJson,
@@ -388,7 +389,7 @@ export function pushMidiNoteOn(
   channel: number,
   note: number,
   velocity: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
@@ -399,7 +400,7 @@ export function pushMidiNoteOn(
     channel,
     note,
     velocity,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiNoteOn', renderFrame),
   });
 }
 
@@ -410,7 +411,7 @@ export function pushMidiNoteOff(
   channel: number,
   note: number,
   velocity: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
@@ -421,7 +422,7 @@ export function pushMidiNoteOff(
     channel,
     note,
     velocity,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiNoteOff', renderFrame),
   });
 }
 
@@ -432,7 +433,7 @@ export function pushMidiCc(
   channel: number,
   controller: number,
   value: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
@@ -443,7 +444,7 @@ export function pushMidiCc(
     channel,
     controller,
     value,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiCc', renderFrame),
   });
 }
 
@@ -453,7 +454,7 @@ export function pushMidiPitchBend(
   group: number,
   channel: number,
   bend14: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
@@ -464,7 +465,7 @@ export function pushMidiPitchBend(
     channel,
     data0: bend14,
     data1: 0,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiPitchBend', renderFrame),
   });
 }
 
@@ -474,7 +475,7 @@ export function pushMidiChannelPressure(
   group: number,
   channel: number,
   pressure: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
@@ -485,7 +486,7 @@ export function pushMidiChannelPressure(
     channel,
     data0: pressure,
     data1: 0,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiChannelPressure', renderFrame),
   });
 }
 
@@ -496,7 +497,7 @@ export function pushMidiPolyPressure(
   channel: number,
   note: number,
   pressure: number,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiPolyPressure(
@@ -514,7 +515,7 @@ export function pushMidiPolyPressure(
     channel,
     data0: note,
     data1: pressure,
-    renderFrame,
+    renderFrame: resolveRenderFrame('pushMidiPolyPressure', renderFrame),
   });
 }
 
@@ -522,17 +523,27 @@ export function pushMidiUmp(
   ctx: EngineStripContext,
   trackId: string | number,
   word0: number | UmpWords,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   if (typeof word0 === 'number') {
     ctx.offlineEngine.pushMidiUmp(destinationId, word0, renderFrame);
-    ctx.postSync({ type: 'syncMidiUmp', destinationId, word0, renderFrame });
+    ctx.postSync({
+      type: 'syncMidiUmp',
+      destinationId,
+      word0,
+      renderFrame: resolveRenderFrame('pushMidiUmp', renderFrame),
+    });
     return;
   }
   const words = word0 instanceof Uint32Array ? new Uint32Array(word0) : word0.slice();
   ctx.offlineEngine.pushMidiUmp(destinationId, words, renderFrame);
-  ctx.postSync({ type: 'syncMidiUmp', destinationId, words, renderFrame });
+  ctx.postSync({
+    type: 'syncMidiUmp',
+    destinationId,
+    words,
+    renderFrame: resolveRenderFrame('pushMidiUmp', renderFrame),
+  });
 }
 
 export function setBuiltinInstrument(
@@ -621,14 +632,22 @@ export function pushMidiSysex(
   ctx: EngineStripContext,
   trackId: string | number,
   data: Uint8Array,
-  renderFrame: number,
+  renderFrame: number | undefined,
 ): void {
   const destinationId = ctx.resolveTargetId(trackId);
   ctx.offlineEngine.pushMidiSysex(destinationId, data, renderFrame);
-  ctx.postSync({ type: 'syncMidiSysex', destinationId, data, renderFrame });
+  ctx.postSync({
+    type: 'syncMidiSysex',
+    destinationId,
+    data,
+    renderFrame: resolveRenderFrame('pushMidiSysex', renderFrame),
+  });
 }
 
-export function pushMidiPanic(ctx: EngineStripContext, renderFrame: number): void {
+export function pushMidiPanic(ctx: EngineStripContext, renderFrame: number | undefined): void {
   ctx.offlineEngine.pushMidiPanic(renderFrame);
-  ctx.postSync({ type: 'syncMidiPanic', renderFrame });
+  ctx.postSync({
+    type: 'syncMidiPanic',
+    renderFrame: resolveRenderFrame('pushMidiPanic', renderFrame),
+  });
 }

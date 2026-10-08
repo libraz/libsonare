@@ -3,7 +3,7 @@
  */
 
 import type { VoicedFlags } from './types.js';
-import { assertInt64 } from './validation.js';
+import { assertInt64, resolveSampleBound } from './validation.js';
 
 // The addon reads the companion voicing array as an Int32Array and silently
 // ignores any other type, so validate and normalize here rather than at the
@@ -36,21 +36,79 @@ export function toVoicedInt32(fnName: string, voiced: VoicedFlags): Int32Array {
   return out;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** The time fields a note or event entry may spell in samples or in seconds. */
+interface TimedEntry {
+  onsetSample?: number;
+  onsetSec?: number;
+  offsetSample?: number;
+  offsetSec?: number;
+  edit?: { timeOffsetSamples?: number; timeOffsetSec?: number };
+}
+
 /**
- * Check the pending time offsets of a note or event set before the addon
- * narrows them. Zero is this field's identity rather than a default, so a
- * truncated sub-sample shift renders the set unmoved and reports success.
+ * Resolve the time fields of a note or event set into the samples the addon
+ * reads, and check the pending time offsets before the addon narrows them.
+ *
+ * A bound or offset may be spelled in samples or in seconds (rounded to the
+ * nearest sample at `sampleRate`), one spelling each. Zero is the offset's
+ * identity rather than a default, so a truncated sub-sample shift would render
+ * the set unmoved and report success. `spans` is false for entries identified by
+ * frame bounds, which carry no sample span.
  */
-export function assertEditTimeOffsets(
+export function resolveEntryTimes<T extends TimedEntry>(
   fnName: string,
-  entries: ReadonlyArray<{ edit?: { timeOffsetSamples?: number } }>,
+  entries: readonly T[],
   arrayName: string,
-): void {
-  entries.forEach((entry, index) => {
-    const offset = entry?.edit?.timeOffsetSamples;
-    if (offset !== undefined) {
-      assertInt64(fnName, offset, `${arrayName}[${index}].edit.timeOffsetSamples`);
+  sampleRate: number,
+  spans: boolean,
+): T[] {
+  return entries.map((entry, index) => {
+    if (entry === null || typeof entry !== 'object') {
+      return entry;
     }
+    const at = `${arrayName}[${index}]`;
+    const { onsetSec, offsetSec, ...rest } = entry;
+    const resolved: TimedEntry = { ...rest };
+    if (spans) {
+      resolved.onsetSample = resolveSampleBound(
+        fnName,
+        entry.onsetSample,
+        onsetSec,
+        sampleRate,
+        `${at}.onsetSample`,
+        `${at}.onsetSec`,
+      );
+      resolved.offsetSample = resolveSampleBound(
+        fnName,
+        entry.offsetSample,
+        offsetSec,
+        sampleRate,
+        `${at}.offsetSample`,
+        `${at}.offsetSec`,
+      );
+    }
+    if (isPlainObject(entry.edit)) {
+      const { timeOffsetSec, ...edit } = entry.edit;
+      const offset = resolveSampleBound(
+        fnName,
+        edit.timeOffsetSamples,
+        timeOffsetSec,
+        sampleRate,
+        `${at}.edit.timeOffsetSamples`,
+        `${at}.edit.timeOffsetSec`,
+        'signed',
+      );
+      if (offset !== undefined) {
+        assertInt64(fnName, offset, `${at}.edit.timeOffsetSamples`);
+      }
+      resolved.edit = { ...entry.edit, timeOffsetSamples: offset };
+      delete (resolved.edit as { timeOffsetSec?: number }).timeOffsetSec;
+    }
+    return resolved as T;
   });
 }
 

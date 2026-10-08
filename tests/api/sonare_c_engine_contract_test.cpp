@@ -914,9 +914,8 @@ TEST_CASE("sonare_engine_parameter_info describes the lane fader and master widt
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
 
   SonareParameterInfo fader{};
-  REQUIRE(sonare_engine_parameter_info(
-              engine, engine_lane_param_target(0, sonare::engine::TrackMixerRuntime::kFaderDb),
-              &fader) == SONARE_OK);
+  REQUIRE(sonare_engine_parameter_info(engine, engine_track_lane_target(engine, 10, "faderDb"),
+                                       &fader) == SONARE_OK);
   CHECK(std::strcmp(fader.name, "faderDb") == 0);
   CHECK(std::strcmp(fader.unit, "dB") == 0);
   CHECK(fader.min_value == sonare::constants::kFloorDb);
@@ -932,8 +931,8 @@ TEST_CASE("sonare_engine_parameter_info describes the lane fader and master widt
   CHECK(width.max_value == 2.0f);
   CHECK(width.default_value == 1.0f);
 
-  // Lane 0's insert id (strip selector 0, insert 0, param 0) is unassigned:
-  // sonare_engine_set_track_strip_json was never called for it.
+  // Selector 0 is track 10's fader/pan entry, whose param 0 is neither, and no
+  // strip was ever set, so the id names nothing.
   SonareParameterInfo missing{};
   REQUIRE(sonare_engine_parameter_info(engine, 0xE0000000u, &missing) ==
           SONARE_ERROR_INVALID_PARAMETER);

@@ -78,20 +78,36 @@ export interface AutoTuneResult {
 
 /** Options for `noteStretch`. All fields are optional. */
 export interface NoteStretchOptions {
-  /** Note onset position in samples (selects the region). Default 0. */
+  /** Note onset position in samples (selects the region). Default 0. Not with `onsetSec`. */
   onsetSample?: number;
-  /** Note offset position in samples (selects the region). Defaults to the input length. */
+  /** Note onset in seconds, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** Note offset position in samples (selects the region). Defaults to the input length. Not with `offsetSec`. */
   offsetSample?: number;
-  /** Stretch ratio (0.5 = half duration, 2.0 = double duration). Default 1. */
+  /** Note offset in seconds, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
+  /**
+   * Duration ratio of the note (0.5 = half duration, 2.0 = double duration);
+   * default 1. This is the opposite sense of `timeStretch`'s `rate`, a speed
+   * (`> 1` shortens).
+   */
   stretchRatio?: number;
 }
 
 /** Options for `noteMove`. */
 export interface NoteMoveOptions {
+  /** First sample of the note to move. Default 0. Not with `onsetSec`. */
   onsetSample?: number;
-  /** Defaults to the input length. */
+  /** First second of the note to move, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** Defaults to the input length. Not with `offsetSec`. */
   offsetSample?: number;
+  /** Last second of the note to move, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
+  /** Sample the note's onset moves to. Default 0. Not with `targetOnsetSec`. */
   targetOnsetSample?: number;
+  /** Second the note's onset moves to, rounded to the nearest sample. Not with `targetOnsetSample`. */
+  targetOnsetSec?: number;
 }
 
 /** Segmentation tuning for `extractNotes`. All fields are optional; 0 or absent takes the default. */
@@ -128,7 +144,10 @@ export interface NoteEdit {
   pitchShiftSemitones: number;
   /** Level change applied to the note's span. */
   gainDb: number;
-  /** `>1` lengthens the note, `<1` shortens it; pitch is preserved. 0 reads as 1. */
+  /**
+   * Duration ratio: `>1` lengthens the note, `<1` shortens it; pitch is
+   * preserved. 0 reads as 1. The opposite sense of `timeStretch`'s `rate`, a speed.
+   */
   timeStretchRatio: number;
   /**
    * Moves the spectral envelope, in semitones, on top of whatever the pitch
@@ -178,6 +197,12 @@ export interface NoteEdit {
  */
 export type NoteEditInput = Omit<Partial<NoteEdit>, 'amplitudeEnvelope'> & {
   amplitudeEnvelope?: Float32Array | readonly number[];
+  /**
+   * `NoteEdit.timeOffsetSamples` in seconds, rounded to the nearest sample at the
+   * call's sample rate; negative moves the note earlier. Not with
+   * `timeOffsetSamples`.
+   */
+  timeOffsetSec?: number;
 };
 
 /**
@@ -225,10 +250,14 @@ export interface NoteObject {
  * back with its `edit` changed and nothing else.
  */
 export interface NoteObjectInput {
-  /** First sample of the note's span. */
-  onsetSample: number;
-  /** One past the last sample of the span. */
-  offsetSample: number;
+  /** First sample of the note's span. Give this or `onsetSec`. */
+  onsetSample?: number;
+  /** First second of the span, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** One past the last sample of the span. Give this or `offsetSec`. */
+  offsetSample?: number;
+  /** End of the span in seconds, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
   /**
    * First frame of the span in the request's `f0Hz` track. Read only when a
    * track is given; a curve edit acts on `f0Hz.subarray(frameStart, frameEnd)`.
@@ -498,7 +527,14 @@ export interface PercussiveEventEdit {
  * field is optional and an omitted one is the identity, so `{}` leaves the event
  * untouched.
  */
-export type PercussiveEventEditInput = Partial<PercussiveEventEdit>;
+export type PercussiveEventEditInput = Partial<PercussiveEventEdit> & {
+  /**
+   * `PercussiveEventEdit.timeOffsetSamples` in seconds, rounded to the nearest
+   * sample at the call's sample rate; negative moves the hit earlier. Not with
+   * `timeOffsetSamples`.
+   */
+  timeOffsetSec?: number;
+};
 
 /**
  * One editable percussive event returned by `extractPercussiveEvents`.
@@ -548,10 +584,14 @@ export interface PercussiveEvent {
  * changed and nothing else.
  */
 export interface PercussiveEventInput {
-  /** First sample of the span. */
-  onsetSample: number;
-  /** One past the last sample of the span. */
-  offsetSample: number;
+  /** First sample of the span. Give this or `onsetSec`. */
+  onsetSample?: number;
+  /** First second of the span, rounded to the nearest sample. Not with `onsetSample`. */
+  onsetSec?: number;
+  /** One past the last sample of the span. Give this or `offsetSec`. */
+  offsetSample?: number;
+  /** End of the span in seconds, rounded to the nearest sample. Not with `offsetSample`. */
+  offsetSec?: number;
   /** Omit for the identity edit. */
   edit?: PercussiveEventEditInput;
 }
@@ -564,10 +604,17 @@ export type SpectralEditWindow = 'hann' | 'hamming' | 'blackman' | 'rectangular'
 
 /** One time x frequency rectangle edit op for `spectralEdit`. */
 export interface SpectralRegionOp {
-  /** Region time start (input samples); clamped to [0, length]. Default 0. */
+  /** Region time start in input samples (clamped to `[0, length]`). Default 0. Not with `startSec`. */
   startSample?: number;
-  /** Region time end, exclusive (input samples); clamped to [0, length]. Default = signal length. */
+  /** Region time start in seconds, rounded to the nearest sample. Not with `startSample`. */
+  startSec?: number;
+  /**
+   * Region time end (exclusive) in input samples. Omit for the end of the signal;
+   * a negative value is refused. Not with `endSec`.
+   */
   endSample?: number;
+  /** Region time end in seconds, rounded to the nearest sample. Not with `endSample`. */
+  endSec?: number;
   /** Region frequency low edge in Hz; clamped to [0, nyquist]. Default 0. */
   lowHz?: number;
   /** Region frequency high edge in Hz; <=0 or >= nyquist means nyquist. Default 0. */

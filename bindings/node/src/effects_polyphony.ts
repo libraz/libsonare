@@ -5,7 +5,7 @@ import type {
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
 } from './types.js';
-import { assertInt32, assertInt64, assertSampleRate } from './validation.js';
+import { assertInt32, assertInt64, assertSampleRate, resolveSampleBound } from './validation.js';
 
 /** Audio, its sample rate, and the analysis tuning, flat in one request. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
@@ -75,6 +75,7 @@ function assertPolyphonicOptions(fnName: string, options: PolyphonicAnalysisOpti
  */
 export class PolyphonicAnalysis {
   private native: InstanceType<typeof addon.PolyphonicAnalysis>;
+  private readonly sampleRate: number;
 
   /**
    * Analyses `samples`. Equivalent to {@link analyzePolyphonic}, which is the
@@ -84,6 +85,7 @@ export class PolyphonicAnalysis {
     const { samples, sampleRate, ...options } = request;
     assertSampleRate('analyzePolyphonic', sampleRate);
     assertPolyphonicOptions('analyzePolyphonic', options);
+    this.sampleRate = sampleRate;
     this.native = new addon.PolyphonicAnalysis(samples, sampleRate, options);
   }
 
@@ -133,12 +135,26 @@ export class PolyphonicAnalysis {
    * @throws {SonareError} `note` is past the last note.
    */
   setNoteEdit(note: number, edit?: NoteEditInput): void {
-    if (edit?.timeOffsetSamples !== undefined) {
-      // 0 is this field's identity, and the addon truncates onto it, so a
-      // sub-sample shift would render unmoved.
-      assertInt64('setNoteEdit', edit.timeOffsetSamples, 'edit.timeOffsetSamples');
+    if (edit === undefined || edit === null || typeof edit !== 'object' || Array.isArray(edit)) {
+      this.native.setNoteEdit(note, edit);
+      return;
     }
-    this.native.setNoteEdit(note, edit);
+    // 0 is this field's identity, and the addon truncates onto it, so a
+    // sub-sample shift would render unmoved.
+    const { timeOffsetSec, ...rest } = edit;
+    const offset = resolveSampleBound(
+      'setNoteEdit',
+      rest.timeOffsetSamples,
+      timeOffsetSec,
+      this.sampleRate,
+      'edit.timeOffsetSamples',
+      'edit.timeOffsetSec',
+      'signed',
+    );
+    if (offset !== undefined) {
+      assertInt64('setNoteEdit', offset, 'edit.timeOffsetSamples');
+    }
+    this.native.setNoteEdit(note, { ...rest, timeOffsetSamples: offset });
   }
 
   /**

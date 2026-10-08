@@ -16,6 +16,7 @@ from ._runtime import (
     _get_lib,
     _guard_buffer,
     _out_float_array,
+    _resolve_optional_non_negative,
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
@@ -846,22 +847,45 @@ class Audio:
         return _pitch_correct_to_midi(self.data, self.sample_rate, current_midi, target_midi)
 
     def note_stretch(
-        self, onset_sample: int = 0, offset_sample: int | None = None, stretch_ratio: float = 1.0
+        self,
+        onset_sample: int | None = None,
+        offset_sample: int | None = None,
+        stretch_ratio: float = 1.0,
+        *,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
     ) -> list[float]:
         """Time-stretch a single note region without changing pitch."""
         return _note_stretch(
-            self.data, self.sample_rate, onset_sample, offset_sample, stretch_ratio
+            self.data,
+            self.sample_rate,
+            onset_sample,
+            offset_sample,
+            stretch_ratio,
+            onset_sec=onset_sec,
+            offset_sec=offset_sec,
         )
 
     def note_move(
         self,
-        onset_sample: int = 0,
+        onset_sample: int | None = None,
         offset_sample: int | None = None,
-        target_onset_sample: int = 0,
+        target_onset_sample: int | None = None,
+        *,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
+        target_onset_sec: float | None = None,
     ) -> list[float]:
         """Move a note region to a new onset without changing its duration."""
         return _note_move(
-            self.data, self.sample_rate, onset_sample, offset_sample, target_onset_sample
+            self.data,
+            self.sample_rate,
+            onset_sample,
+            offset_sample,
+            target_onset_sample,
+            onset_sec=onset_sec,
+            offset_sec=offset_sec,
+            target_onset_sec=target_onset_sec,
         )
 
     def voice_change(
@@ -1219,16 +1243,16 @@ class Audio:
         self,
         window_sec: float = 0.0,
         hop_sec: float = 0.0,
-        low_percentile: float = -1.0,
-        high_percentile: float = -1.0,
+        low_percentile: float | None = None,
+        high_percentile: float | None = None,
     ) -> DynamicRangeReport:
         """Sliding-window dynamic range (high_percentile - low_percentile, in dB).
 
         Pass 0.0 for ``window_sec`` / ``hop_sec`` to use the library default
-        (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile`` a
-        NEGATIVE value (the default ``-1.0``) selects the library default
-        percentiles (low=0.10, high=0.95); ``0.0`` is a real request for the
-        0th percentile (the minimum-RMS window), not the default.
+        (window=3 s, hop=1 s). For ``low_percentile`` / ``high_percentile``
+        ``None`` (the default) selects the library default percentiles
+        (low=0.10, high=0.95); ``0.0`` is a real request for the 0th percentile
+        (the minimum-RMS window), and a negative value is refused.
         """
         from ._ffi import SonareDynamicRangeResult
 
@@ -1238,8 +1262,13 @@ class Audio:
             handle,
             _to_c_float(window_sec, "window_sec"),
             _to_c_float(hop_sec, "hop_sec"),
-            _to_c_float(low_percentile, "low_percentile"),
-            _to_c_float(high_percentile, "high_percentile"),
+            _to_c_float(
+                _resolve_optional_non_negative(low_percentile, "low_percentile"), "low_percentile"
+            ),
+            _to_c_float(
+                _resolve_optional_non_negative(high_percentile, "high_percentile"),
+                "high_percentile",
+            ),
             ctypes.byref(out),
         )
         _check(rc)

@@ -5,7 +5,7 @@
 import type { MasteringRepairSamplesRequest } from './_repair_common.js';
 import { addon } from './native.js';
 import type { TrimRange, TrimSilenceStereoResult } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertSampleRate, resolveSampleBound } from './validation.js';
 
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
@@ -13,7 +13,10 @@ export type TrimSilenceMode = 'peak' | 'lufsGated';
 /** Options for `masteringRepairTrimSilence`. */
 export interface TrimSilenceOptions {
   threshold?: number;
+  /** Kept margin around the signal, in samples. Not with `paddingSec`. */
   paddingSamples?: number;
+  /** Kept margin in seconds, rounded to the nearest sample. Not with `paddingSamples`. */
+  paddingSec?: number;
   mode?: TrimSilenceMode;
   gateLufs?: number;
   windowMs?: number;
@@ -22,6 +25,24 @@ export interface TrimSilenceOptions {
 export interface MasteringRepairTrimSilenceRequest
   extends MasteringRepairSamplesRequest,
     TrimSilenceOptions {}
+
+/** The options with `paddingSec` folded into `paddingSamples`, which is what the addon reads. */
+function withPadding<T extends TrimSilenceOptions>(
+  fnName: string,
+  request: T,
+  sampleRate: number,
+): Omit<T, 'paddingSec'> {
+  const { paddingSec, ...rest } = request;
+  const padding = resolveSampleBound(
+    fnName,
+    rest.paddingSamples,
+    paddingSec,
+    sampleRate,
+    'paddingSamples',
+    'paddingSec',
+  );
+  return padding === undefined ? rest : { ...rest, paddingSamples: padding };
+}
 
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
 export function masteringRepairTrimSilence(
@@ -40,7 +61,11 @@ export function masteringRepairTrimSilence(
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairTrimSilence', resolvedSampleRate);
-  return addon.masteringRepairTrimSilence(request.samples, resolvedSampleRate, request);
+  return addon.masteringRepairTrimSilence(
+    request.samples,
+    resolvedSampleRate,
+    withPadding('masteringRepairTrimSilence', request, resolvedSampleRate),
+  );
 }
 
 /** Request form of `masteringRepairTrimSilenceStereo`. */
@@ -83,6 +108,8 @@ export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOpti
  * `paddingSamples` widens the kept range in both directions and is clamped to
  * the buffer, so it can never reach past either end; a pass that kept nothing
  * is not padded. A negative count is refused by name rather than folded into 0.
+ * `paddingSec` spells the same margin in seconds, rounded to the nearest sample;
+ * give `paddingSamples` or `paddingSec`, not both.
  *
  * @example
  * ```ts
@@ -104,7 +131,7 @@ export function masteringRepairTrimSilenceStereo(
     request.left,
     request.right,
     resolvedSampleRate,
-    request,
+    withPadding('masteringRepairTrimSilenceStereo', request, resolvedSampleRate),
   );
 }
 
@@ -132,7 +159,11 @@ export function masteringRepairDetectTrimRange(
 ): TrimRange {
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('masteringRepairDetectTrimRange', resolvedSampleRate);
-  return addon.masteringRepairDetectTrimRange(request.samples, resolvedSampleRate, request);
+  return addon.masteringRepairDetectTrimRange(
+    request.samples,
+    resolvedSampleRate,
+    withPadding('masteringRepairDetectTrimRange', request, resolvedSampleRate),
+  );
 }
 
 /** Request form of `masteringRepairDetectTrimRangeStereo`. */
@@ -170,6 +201,6 @@ export function masteringRepairDetectTrimRangeStereo(
     request.left,
     request.right,
     resolvedSampleRate,
-    request,
+    withPadding('masteringRepairDetectTrimRangeStereo', request, resolvedSampleRate),
   );
 }

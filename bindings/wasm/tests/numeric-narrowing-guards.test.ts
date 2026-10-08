@@ -648,15 +648,15 @@ describe('fixFrames reads each frame element through the scalar guard, not a raw
   }
 
   it('keeps two legal single-frame arrays as themselves', () => {
-    expect(Array.from(fixFrames(new Int32Array([5]), -1, -1, false))).toEqual([5]);
-    expect(Array.from(fixFrames(new Int32Array([6]), -1, -1, false))).toEqual([6]);
+    expect(Array.from(fixFrames(new Int32Array([5]), -1, undefined, false))).toEqual([5]);
+    expect(Array.from(fixFrames(new Int32Array([6]), -1, undefined, false))).toEqual([6]);
   });
 
   it('refuses an element that used to wrap or truncate onto a legal frame', () => {
     // 2**32 + 5 used to wrap onto 5 -- identical to the legal [5] above -- and
     // 1.5 used to truncate onto 1.
     for (const value of [2 ** 32 + 5, 1.5, ...SATURATING, ...NON_FINITE]) {
-      expectRangeRefusal(() => fixFrames(lyingElement([0], 0, value), -1, -1, false));
+      expectRangeRefusal(() => fixFrames(lyingElement([0], 0, value), -1, undefined, false));
     }
   });
 });

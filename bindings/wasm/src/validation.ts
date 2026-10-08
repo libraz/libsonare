@@ -105,16 +105,6 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
   }
 }
 
-/**
- * A NaN gamma is the automatic-bandwidth sentinel the variable-Q transform
- * documents, alongside a negative value, so only an infinity is out of domain.
- */
-export function assertVqtGamma(fnName: string, gamma: number): void {
-  if (gamma === Number.POSITIVE_INFINITY || gamma === Number.NEGATIVE_INFINITY) {
-    throw new RangeError(`${fnName}: gamma must not be infinite`);
-  }
-}
-
 export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
   // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
   // out of range names an argument that is not the one at fault. `argName` is
@@ -381,4 +371,116 @@ export function assertInterleavedSamples(
   if (samples.length % channels !== 0) {
     throw new RangeError(`${fnName}: samples length must be a multiple of channels`);
   }
+}
+
+/**
+ * Convert a time in seconds to the nearest whole sample at `sampleRate`.
+ *
+ * Refuses a non-finite time, and one too large for the result to stay an exact
+ * JS integer.
+ */
+export function secondsToSampleCount(
+  fnName: string,
+  seconds: number,
+  sampleRate: number,
+  argName: string,
+): number {
+  if (typeof seconds !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  assertFiniteScalar(fnName, seconds, argName);
+  const samples = Math.round(seconds * sampleRate);
+  if (!Number.isSafeInteger(samples)) {
+    throw new RangeError(`${fnName}: ${argName} is out of range at ${sampleRate} Hz`);
+  }
+  return samples;
+}
+
+/** How {@link resolveSampleBound} treats the sign of the value it resolves. */
+export type SampleBoundSign = 'non-negative' | 'signed';
+
+/**
+ * Resolve one time bound that is spelled either in samples or in seconds.
+ *
+ * `undefined` / `null` on both spellings is absence, and the result is
+ * `undefined` so the caller applies its own default (an end bound's default is
+ * the end of the signal). Giving both spellings is refused by name. A position
+ * is `'non-negative'`; a displacement (a time offset, which may move a note
+ * earlier) is `'signed'`. A negative value is refused, never read as "absent".
+ */
+export function resolveSampleBound(
+  fnName: string,
+  sampleValue: number | null | undefined,
+  secValue: number | null | undefined,
+  sampleRate: number,
+  sampleName: string,
+  secName: string,
+  sign: SampleBoundSign = 'non-negative',
+): number | undefined {
+  const hasSample = sampleValue !== undefined && sampleValue !== null;
+  const hasSec = secValue !== undefined && secValue !== null;
+  if (hasSample && hasSec) {
+    throw new RangeError(`${fnName}: give ${sampleName} or ${secName}, not both`);
+  }
+  if (!hasSample && !hasSec) {
+    return undefined;
+  }
+  const value = hasSec
+    ? secondsToSampleCount(fnName, secValue as number, sampleRate, secName)
+    : (sampleValue as number);
+  const name = hasSec ? secName : sampleName;
+  // A non-number or non-finite sample value is left for the native layer to refuse by name.
+  if (typeof value !== 'number' || (!hasSec && !Number.isFinite(value))) {
+    return value;
+  }
+  if (sign === 'non-negative' && value < 0) {
+    throw new RangeError(`${fnName}: ${name} must be non-negative`);
+  }
+  return value === 0 ? 0 : value;
+}
+
+/** The C ABI spelling of "absent" for the optional numeric parameters that use `-1` for it. */
+const C_ABSENT = -1;
+
+/**
+ * Map an optional numeric argument onto the C value: absence (`undefined` /
+ * `null`) is the C ABI's `-1` "not given", and an explicit negative or
+ * non-finite value is refused rather than read as the same thing.
+ */
+export function resolveOptionalNonNegative(
+  fnName: string,
+  value: number | null | undefined,
+  argName: string,
+): number {
+  if (value === undefined || value === null) {
+    return C_ABSENT;
+  }
+  if (typeof value !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
+  assertFiniteScalar(fnName, value, argName);
+  if (value < 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be negative (omit it for the default)`);
+  }
+  return value;
+}
+
+/**
+ * Map an optional engine `renderFrame` onto the C value: absence is "immediate"
+ * (-1), and a negative frame is refused rather than read as the same thing.
+ */
+export function resolveRenderFrame(fnName: string, renderFrame: number | null | undefined): number {
+  if (renderFrame === undefined || renderFrame === null) {
+    return C_ABSENT;
+  }
+  if (typeof renderFrame !== 'number') {
+    throw new TypeError(`${fnName}: renderFrame must be a number`);
+  }
+  assertFiniteScalar(fnName, renderFrame, 'renderFrame');
+  if (renderFrame < 0) {
+    throw new RangeError(
+      `${fnName}: renderFrame must not be negative (omit it to apply immediately)`,
+    );
+  }
+  return renderFrame;
 }

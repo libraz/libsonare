@@ -31,6 +31,7 @@ import allowlist as allowlist_mod
 import check_parity
 import compare
 import report as report_mod
+from core_defaults import CoreConfig
 from model import SURFACES, Extraction, FunctionSig, Param
 
 
@@ -114,6 +115,46 @@ def test_a_divergence_is_still_found_when_the_comparison_runs() -> None:
     )
     assert rep.comparison_counts()["default"] == 1
     assert [f.key for f in rep.active() if f.category == "default"] == ["normalize"]
+
+
+# ---------------------------------------------------------------------------
+# A default spelled as absence.
+
+
+def _core(default: str) -> dict[str, CoreConfig]:
+    return {
+        "normalize": CoreConfig(
+            key="normalize",
+            header="core.h",
+            name="NormalizeConfig",
+            fields={"target_db": default},
+        )
+    }
+
+
+def _core_default_findings(facade_default: str) -> tuple[list, int]:
+    allow = allowlist_mod.Allowlist()
+    extractions = {
+        "c": _c("normalize", "target_db"),
+        "python": _facade("python", "normalize", "target_db", facade_default),
+    }
+    rep = compare.build_report(extractions, allow, ["c", "python"], core_configs=_core("-1.0f"))
+    findings = [f for f in rep.active() if f.category == "core_default"]
+    declined = [n for n in rep.not_compared if n["category"] == "core_default"]
+    return findings, len(declined)
+
+
+def test_a_default_spelled_as_absence_is_declined_not_compared() -> None:
+    findings, declined = _core_default_findings("None")
+    assert findings == []
+    assert declined == 1
+
+
+def test_a_concrete_default_that_diverges_from_the_core_is_still_found() -> None:
+    """Non-vacuity for the decline above: only absence is exempt."""
+    findings, declined = _core_default_findings("0.0")
+    assert [f.key for f in findings] == ["normalize"]
+    assert declined == 0
 
 
 # ---------------------------------------------------------------------------

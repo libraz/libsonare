@@ -911,6 +911,8 @@ describe('SonareRealtimeEngineNode', () => {
         ).toBe(false);
         expect(engine.transport.stop()).toBe(true);
 
+        const track3Fader = engine.automationParamId(3, 'faderDb');
+        const track3Pan = engine.automationParamId(3, 'pan');
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ type: SonareEngineCommandType.TransportPlay }),
@@ -931,12 +933,12 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: SonareEngineCommandType.SetParamSmoothed,
-              targetId: 0x4d580001,
+              targetId: track3Fader,
               argFloat: -6,
             }),
             expect.objectContaining({
               type: SonareEngineCommandType.SetParamSmoothed,
-              targetId: 0x4d580002,
+              targetId: track3Pan,
               argFloat: 0.25,
             }),
             expect.objectContaining({
@@ -3041,14 +3043,18 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
 
-      // Reserved mixer namespace encodings: master = lane 0xff, first track
-      // lane = index 0, first bus = index 0 (lane byte 0xfe); kind 1 = faderDb,
-      // kind 2 = pan.
+      // Reserved mixer namespace encodings: master = lane 0xff, first bus =
+      // index 0 (lane byte 0xfe); kind 1 = faderDb, kind 2 = pan. A track's ids
+      // are resolved by track and stay put when another lane is declared.
       const masterFader = engine.automationParamId('master', 'faderDb');
       expect(masterFader).toBe(0x4d58ff01);
       expect(engine.automationParamId('master', 'pan')).toBe(0x4d58ff02);
-      expect(engine.automationParamId(10, 'faderDb')).toBe(0x4d580001);
-      expect(engine.automationParamId(10, 'pan')).toBe(0x4d580002);
+      const track10Fader = engine.automationParamId(10, 'faderDb');
+      const track10Pan = engine.automationParamId(10, 'pan');
+      expect(track10Fader).toBeGreaterThan(0);
+      expect(track10Pan).not.toBe(track10Fader);
+      expect(engine.automationParamId(20, 'faderDb')).not.toBe(track10Fader);
+      expect(engine.automationParamId(10, 'faderDb')).toBe(track10Fader);
       expect(engine.busAutomationParamId(1)).toBe(0x4d58fe01);
 
       // Replace-all installs the sorted lane on the offline engine and mirrors

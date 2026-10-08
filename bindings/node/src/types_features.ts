@@ -573,10 +573,17 @@ export type SpectralEditMode = 'gain' | 'attenuate' | 'mute' | 'heal';
  * array order. Mirrors the C `SonareSpectralRegionOp`.
  */
 export interface SpectralRegionOp {
-  /** Region time start in input samples (clamped to `[0, length]`). Default 0. */
+  /** Region time start in input samples (clamped to `[0, length]`). Default 0. Not with `startSec`. */
   startSample?: number;
-  /** Region time end (exclusive) in input samples. Default = signal length. */
+  /** Region time start in seconds, rounded to the nearest sample. Not with `startSample`. */
+  startSec?: number;
+  /**
+   * Region time end (exclusive) in input samples. Omit for the end of the signal;
+   * a negative value is refused. Not with `endSec`.
+   */
   endSample?: number;
+  /** Region time end in seconds, rounded to the nearest sample. Not with `endSample`. */
+  endSec?: number;
   /** Region frequency low edge in Hz (clamped to `[0, nyquist]`). Default 0. */
   lowHz?: number;
   /** Region frequency high edge in Hz; `<= 0` or `>= nyquist` means nyquist. Default 0. */

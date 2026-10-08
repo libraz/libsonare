@@ -70,6 +70,7 @@ import {
   assertU7,
   assertU32,
   midi1Event,
+  resolveOptionalNonNegative,
 } from './validation.js';
 import {
   normalizeInstrumentBindings,
@@ -1366,12 +1367,12 @@ export class Project {
   }
 
   /**
-   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. `bank` defaults
-   * to `-1` (no Bank Select emitted), matching `setProgramOnChannel` and the
-   * Python/WASM surfaces; pass `>= 0` to emit a Bank Select.
+   * Set a MIDI clip's channel-0 program / bank at source PPQ 0. Omit `bank` for
+   * no Bank Select, matching `setProgramOnChannel` and the Python/WASM surfaces;
+   * pass `>= 0` to emit a Bank Select. A negative `bank` is refused.
    */
-  setProgram(clipId: number, program: number, bank = -1): void {
-    this.native.setProgram(clipId, program, bank);
+  setProgram(clipId: number, program: number, bank?: number): void {
+    this.native.setProgram(clipId, program, resolveOptionalNonNegative('setProgram', bank, 'bank'));
   }
 
   /** Set a MIDI clip's program / bank for one UMP group and channel. */
@@ -1380,9 +1381,15 @@ export class Project {
     group: number,
     channel: number,
     program: number,
-    bank = -1,
+    bank?: number,
   ): void {
-    this.native.setProgramOnChannel(clipId, group, channel, program, bank);
+    this.native.setProgramOnChannel(
+      clipId,
+      group,
+      channel,
+      program,
+      resolveOptionalNonNegative('setProgramOnChannel', bank, 'bank'),
+    );
   }
 
   /**

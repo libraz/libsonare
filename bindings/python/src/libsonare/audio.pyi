@@ -153,15 +153,22 @@ class Audio:
     ) -> list[float]: ...
     def note_stretch(
         self,
-        onset_sample: int = 0,
+        onset_sample: int | None = None,
         offset_sample: int | None = None,
         stretch_ratio: float = 1.0,
+        *,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
     ) -> list[float]: ...
     def note_move(
         self,
-        onset_sample: int = 0,
+        onset_sample: int | None = None,
         offset_sample: int | None = None,
-        target_onset_sample: int = 0,
+        target_onset_sample: int | None = None,
+        *,
+        onset_sec: float | None = None,
+        offset_sec: float | None = None,
+        target_onset_sec: float | None = None,
     ) -> list[float]: ...
     def voice_change(
         self,
@@ -263,8 +270,8 @@ class Audio:
         self,
         window_sec: float = 0.0,
         hop_sec: float = 0.0,
-        low_percentile: float = -1.0,
-        high_percentile: float = -1.0,
+        low_percentile: float | None = None,
+        high_percentile: float | None = None,
     ) -> DynamicRangeReport: ...
     def spectrum(
         self,

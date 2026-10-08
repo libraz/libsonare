@@ -61,6 +61,7 @@ import type {
   WasmExternalMidiEvent,
   WasmRealtimeEngine,
 } from './sonare.js';
+import { resolveRenderFrame, resolveSampleBound } from './validation.js';
 
 export type ExternalMidiEvent = WasmExternalMidiEvent;
 
@@ -72,6 +73,20 @@ export type EngineMarker = WasmEngineMarker;
 export type EngineMetronomeConfig = WasmEngineMetronomeConfig;
 export type EngineGraphSpec = WasmEngineGraphSpec;
 export type EngineCaptureStatus = WasmEngineCaptureStatus;
+
+/** Punch-in window for {@link RealtimeEngine.setCapturePunch}; each bound is samples or seconds, not both. */
+export interface EngineCapturePunchRequest {
+  /** First timeline sample captured. Not with `startSec`. */
+  startSample?: number;
+  /** First timeline second captured, rounded to the nearest sample. Not with `startSample`. */
+  startSec?: number;
+  /** One past the last timeline sample captured. Not with `endSec`. */
+  endSample?: number;
+  /** End of the window in timeline seconds, rounded to the nearest sample. Not with `endSample`. */
+  endSec?: number;
+  /** Whether the punch window is active. Default `true`. */
+  enabled?: boolean;
+}
 export type EngineCaptureSource = EngineCaptureStatus['source'] | number;
 export type EngineBounceOptions = WasmEngineBounceOptions;
 export type EngineBounceResult = WasmEngineBounceResult;
@@ -303,6 +318,7 @@ export function engineCapabilities(): EngineCapabilities {
 export class RealtimeEngine {
   private native: WasmRealtimeEngine;
   private released = false;
+  private sampleRate: number;
 
   constructor(
     sampleRate = 48000,
@@ -320,6 +336,7 @@ export class RealtimeEngine {
         `Engine ABI mismatch: wasm=${capabilities.engineAbiVersion}, expected=${capabilities.expectedEngineAbiVersion}`,
       );
     }
+    this.sampleRate = sampleRate;
     this.native = new module.RealtimeEngine(
       sampleRate,
       maxBlockSize,
@@ -352,16 +369,21 @@ export class RealtimeEngine {
       telemetryCapacity,
       maxChannels,
     );
+    this.sampleRate = sampleRate;
   }
 
   /** Queue a sample-accurate parameter change (engine kSetParam). */
-  setParameter(paramId: number, value: number, renderFrame = -1): void {
-    this.native.setParameter(paramId, value, renderFrame);
+  setParameter(paramId: number, value: number, renderFrame?: number): void {
+    this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
   }
 
   /** Queue a smoothed parameter change (engine kSetParamSmoothed). */
-  setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
-    this.native.setParameterSmoothed(paramId, value, renderFrame);
+  setParameterSmoothed(paramId: number, value: number, renderFrame?: number): void {
+    this.native.setParameterSmoothed(
+      paramId,
+      value,
+      resolveRenderFrame('setParameterSmoothed', renderFrame),
+    );
   }
 
   /**
@@ -376,13 +398,17 @@ export class RealtimeEngine {
     this.native.setParamSmoothingMs(smoothingMs);
   }
 
-  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
-    this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number): void {
+    this.native.setSoloMute(laneIndex, solo, mute, resolveRenderFrame('setSoloMute', renderFrame));
   }
 
   /** Queue a per-track PFL/AFL monitor tap mode change. */
-  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame = -1): void {
-    this.native.setTrackMonitorMode(laneIndex, trackMonitorModeCode(mode), renderFrame);
+  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
+    this.native.setTrackMonitorMode(
+      laneIndex,
+      trackMonitorModeCode(mode),
+      resolveRenderFrame('setTrackMonitorMode', renderFrame),
+    );
   }
 
   setMidiClips(clips: readonly EngineMidiClipSchedule[]): void {
@@ -820,9 +846,16 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     velocity: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOn(
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      resolveRenderFrame('pushMidiNoteOn', renderFrame),
+    );
   }
 
   pushMidiNoteOff(
@@ -831,16 +864,23 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     velocity = 0,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOff(
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      resolveRenderFrame('pushMidiNoteOff', renderFrame),
+    );
   }
 
   /**
    * Queue an immediate (live) MIDI control change to a MIDI destination
    * (engine kMidiCcImmediate). `group`/`channel` are 0..15; `controller`/`value`
-   * are 7-bit (0..127). `renderFrame` is the frame to fire at, or -1 for
-   * immediate. Mirrors the Node/Python/C-ABI `pushMidiCc`.
+   * are 7-bit (0..127). `renderFrame` is the frame to fire at (omit for
+   * immediate). Mirrors the Node/Python/C-ABI `pushMidiCc`.
    */
   pushMidiCc(
     destinationId: number,
@@ -848,15 +888,22 @@ export class RealtimeEngine {
     channel: number,
     controller: number,
     value: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+    this.native.pushMidiCc(
+      destinationId,
+      group,
+      channel,
+      controller,
+      value,
+      resolveRenderFrame('pushMidiCc', renderFrame),
+    );
   }
 
   /**
    * Queue an immediate (live) MIDI pitch bend to a MIDI destination. `bend14`
    * is unsigned 14-bit with centre 8192 (0..16383); `renderFrame` is the frame
-   * to fire at, or -1 for immediate. Mirrors the Node/Python/C-ABI
+   * to fire at (omit for immediate). Mirrors the Node/Python/C-ABI
    * `pushMidiPitchBend`.
    */
   pushMidiPitchBend(
@@ -864,30 +911,42 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     bend14: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
+    this.native.pushMidiPitchBend(
+      destinationId,
+      group,
+      channel,
+      bend14,
+      resolveRenderFrame('pushMidiPitchBend', renderFrame),
+    );
   }
 
   /**
    * Queue an immediate (live) MIDI channel pressure to a MIDI destination.
-   * `pressure` is 7-bit (0..127); `renderFrame` is the frame to fire at, or -1
-   * for immediate. Mirrors the Node/Python/C-ABI `pushMidiChannelPressure`.
+   * `pressure` is 7-bit (0..127); `renderFrame` is the frame to fire at (omit
+   * for immediate). Mirrors the Node/Python/C-ABI `pushMidiChannelPressure`.
    */
   pushMidiChannelPressure(
     destinationId: number,
     group: number,
     channel: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
+    this.native.pushMidiChannelPressure(
+      destinationId,
+      group,
+      channel,
+      pressure,
+      resolveRenderFrame('pushMidiChannelPressure', renderFrame),
+    );
   }
 
   /**
    * Queue an immediate (live) MIDI polyphonic key pressure to a MIDI
    * destination. `note` and `pressure` are 7-bit (0..127); `renderFrame` is the
-   * frame to fire at, or -1 for immediate. Mirrors the Node/Python/C-ABI
+   * frame to fire at (omit for immediate). Mirrors the Node/Python/C-ABI
    * `pushMidiPolyPressure`.
    */
   pushMidiPolyPressure(
@@ -896,9 +955,16 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
+    this.native.pushMidiPolyPressure(
+      destinationId,
+      group,
+      channel,
+      note,
+      pressure,
+      resolveRenderFrame('pushMidiPolyPressure', renderFrame),
+    );
   }
 
   /**
@@ -908,12 +974,16 @@ export class RealtimeEngine {
    * width; SysEx7 / data messages (MT 0x3 / 0x5) are refused, use
    * {@link pushMidiSysex}. Throws when the slot ring or command queue is full
    * (retry after a process block). `renderFrame` is the render-frame time to
-   * apply, or -1 for immediate. A bare number is accepted as a one-word
+   * apply (omit for immediate). A bare number is accepted as a one-word
    * message.
    */
-  pushMidiUmp(destinationId: number, words: UmpWords | number, renderFrame = -1): void {
+  pushMidiUmp(destinationId: number, words: UmpWords | number, renderFrame?: number): void {
     const list = typeof words === 'number' ? [words] : words;
-    this.native.pushMidiUmp(destinationId, assertUmpWords('pushMidiUmp', list), renderFrame);
+    this.native.pushMidiUmp(
+      destinationId,
+      assertUmpWords('pushMidiUmp', list),
+      resolveRenderFrame('pushMidiUmp', renderFrame),
+    );
   }
 
   /**
@@ -928,22 +998,26 @@ export class RealtimeEngine {
   /**
    * Queue an immediate (live) MIDI SysEx frame to a MIDI destination. `data` is
    * the full message including the leading 0xF0 and trailing 0xF7 (1..512
-   * bytes). `renderFrame` is the frame to fire at, or -1 for immediate. Throws
+   * bytes). `renderFrame` is the frame to fire at (omit for immediate). Throws
    * `InvalidParameter` when the destination instrument cannot prepare
    * the SysEx (retrying cannot help), and `OutOfMemory` when the payload
    * slots or the command queue are full (retry after a processed block).
    * Mirrors the Node/Python/C-ABI `pushMidiSysex`.
    */
-  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
-    this.native.pushMidiSysex(destinationId, data, renderFrame);
+  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame?: number): void {
+    this.native.pushMidiSysex(
+      destinationId,
+      data,
+      resolveRenderFrame('pushMidiSysex', renderFrame),
+    );
   }
 
   /**
    * Queue a MIDI panic (all-notes-off) releasing every sounding note at
-   * `renderFrame` (-1 = immediate). Mirrors the C-ABI `pushMidiPanic`.
+   * `renderFrame` (omitted = immediate). Mirrors the C-ABI `pushMidiPanic`.
    */
-  pushMidiPanic(renderFrame = -1): void {
-    this.native.pushMidiPanic(renderFrame);
+  pushMidiPanic(renderFrame?: number): void {
+    this.native.pushMidiPanic(resolveRenderFrame('pushMidiPanic', renderFrame));
   }
 
   /**
@@ -960,8 +1034,10 @@ export class RealtimeEngine {
   }
 
   /** Queues an integrated-loudness reset; short-term and momentary windows are retained. */
-  resetMasterLoudnessMeter(renderFrame = -1): void {
-    this.native.resetMasterLoudnessMeter(renderFrame);
+  resetMasterLoudnessMeter(renderFrame?: number): void {
+    this.native.resetMasterLoudnessMeter(
+      resolveRenderFrame('resetMasterLoudnessMeter', renderFrame),
+    );
   }
 
   /** Reads the immutable factory value for a resolved insert parameter id. */
@@ -969,8 +1045,8 @@ export class RealtimeEngine {
     return this.native.insertParameterConstructedValue(paramId);
   }
 
-  play(renderFrame = -1): void {
-    this.native.play(renderFrame);
+  play(renderFrame?: number): void {
+    this.native.play(resolveRenderFrame('play', renderFrame));
   }
 
   /**
@@ -978,8 +1054,8 @@ export class RealtimeEngine {
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
    */
-  stop(renderFrame = -1): void {
-    this.native.stop(renderFrame);
+  stop(renderFrame?: number): void {
+    this.native.stop(resolveRenderFrame('stop', renderFrame));
   }
 
   /**
@@ -987,8 +1063,8 @@ export class RealtimeEngine {
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
    */
-  seekSample(timelineSample: number, renderFrame = -1): void {
-    this.native.seekSample(timelineSample, renderFrame);
+  seekSample(timelineSample: number, renderFrame?: number): void {
+    this.native.seekSample(timelineSample, resolveRenderFrame('seekSample', renderFrame));
   }
 
   /**
@@ -1023,7 +1099,7 @@ export class RealtimeEngine {
 
   /**
    * Queues a reset of every mixer and effect processor to its prepared state.
-   * At `renderFrame` (negative: the next block head) the lane, bus, master,
+   * At `renderFrame` (omitted: the next block head) the lane, bus, master,
    * monitor and graph processors drop their tails, delay lines and envelopes,
    * automation is applied at the transport position and every smoother is
    * snapped to its target, so playback queued after it starts from the state an
@@ -1032,11 +1108,11 @@ export class RealtimeEngine {
    * playback it cuts running insert tails and delay lines mid-sound, like a
    * seek.
    *
-   * @param renderFrame - Block-relative frame to apply at, or negative for the next block head
+   * @param renderFrame - Block-relative frame to apply at; omit for the next block head (negative is refused)
    * @throws If the command queue is full
    */
-  resetProcessorState(renderFrame = -1): void {
-    this.native.resetProcessorState(renderFrame);
+  resetProcessorState(renderFrame?: number): void {
+    this.native.resetProcessorState(resolveRenderFrame('resetProcessorState', renderFrame));
   }
 
   /**
@@ -1075,8 +1151,8 @@ export class RealtimeEngine {
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
    */
-  seekPpq(ppq: number, renderFrame = -1): void {
-    this.native.seekPpq(ppq, renderFrame);
+  seekPpq(ppq: number, renderFrame?: number): void {
+    this.native.seekPpq(ppq, resolveRenderFrame('seekPpq', renderFrame));
   }
 
   /** Set a finite tempo in the range (0, 100000] BPM. */
@@ -1149,8 +1225,8 @@ export class RealtimeEngine {
     return this.native.marker(id);
   }
 
-  seekMarker(markerId: number, renderFrame = -1): void {
-    this.native.seekMarker(markerId, renderFrame);
+  seekMarker(markerId: number, renderFrame?: number): void {
+    this.native.seekMarker(markerId, resolveRenderFrame('seekMarker', renderFrame));
   }
 
   setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
@@ -1586,6 +1662,18 @@ export class RealtimeEngine {
   }
 
   /**
+   * Resolve a track lane's fader (`'faderDb'`) or pan (`'pan'`) to its reserved
+   * automation id. Same lifetime rule as {@link resolveTrackInsertAutomationId}:
+   * the id names the track, not its lane position, so it keeps driving that
+   * track across {@link setTrackLanes} reorders and applies nothing once the
+   * track is removed. Returns `-1` when the track has no lane or the name is
+   * neither.
+   */
+  resolveTrackLaneAutomationId(trackId: number, paramName: 'faderDb' | 'pan'): number {
+    return this.native.resolveTrackLaneAutomationId(trackId, paramName);
+  }
+
+  /**
    * Resolves a hosted instrument's continuous parameter (by its JSON-key name)
    * to the reserved automation id usable with `setAutomationLane` /
    * `setParameter`, so an instrument parameter is driven at audio-block
@@ -1786,8 +1874,46 @@ export class RealtimeEngine {
     this.native.armCapture(armed);
   }
 
-  setCapturePunch(startSample: number, endSample: number, enabled = true): void {
-    this.native.setCapturePunch(startSample, endSample, enabled);
+  /**
+   * Set the punch-in window, half-open `[start, end)` in timeline samples.
+   *
+   * Each bound is samples or seconds (rounded to the nearest sample at the
+   * engine's sample rate), one spelling each; both bounds are required and a
+   * negative one is refused.
+   */
+  setCapturePunch(request: EngineCapturePunchRequest): void;
+  setCapturePunch(startSample: number, endSample: number, enabled?: boolean): void;
+  setCapturePunch(
+    first: EngineCapturePunchRequest | number,
+    endSample?: number,
+    enabled = true,
+  ): void {
+    const request: EngineCapturePunchRequest =
+      typeof first === 'object' && first !== null
+        ? first
+        : { startSample: first, endSample, enabled };
+    const start = resolveSampleBound(
+      'setCapturePunch',
+      request.startSample,
+      request.startSec,
+      this.sampleRate,
+      'startSample',
+      'startSec',
+    );
+    const end = resolveSampleBound(
+      'setCapturePunch',
+      request.endSample,
+      request.endSec,
+      this.sampleRate,
+      'endSample',
+      'endSec',
+    );
+    if (start === undefined || end === undefined) {
+      throw new RangeError(
+        'setCapturePunch: both bounds are required (startSample or startSec, endSample or endSec)',
+      );
+    }
+    this.native.setCapturePunch(start, end, request.enabled ?? true);
   }
 
   setCaptureSource(source: EngineCaptureSource): void {

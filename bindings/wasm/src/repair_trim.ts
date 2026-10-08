@@ -4,6 +4,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { MasteringRepairTrimSilenceStereoResult, TrimRange } from './public_types_repair.js';
+import { resolveSampleBound } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -15,7 +16,10 @@ export type TrimSilenceMode = 'peak' | 'lufsGated';
 /** Options for `masteringRepairTrimSilence`. */
 export interface TrimSilenceOptions {
   threshold?: number;
+  /** Kept margin around the signal, in samples. Not with `paddingSec`. */
   paddingSamples?: number;
+  /** Kept margin in seconds, rounded to the nearest sample. Not with `paddingSamples`. */
+  paddingSec?: number;
   mode?: TrimSilenceMode;
   gateLufs?: number;
   windowMs?: number;
@@ -33,6 +37,24 @@ export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOpti
   sampleRate?: number;
 }
 
+/** The options with `paddingSec` folded into `paddingSamples`, which is what the core reads. */
+function withPadding<T extends TrimSilenceOptions>(
+  fnName: string,
+  request: T,
+  sampleRate: number,
+): Omit<T, 'paddingSec'> {
+  const { paddingSec, ...rest } = request;
+  const padding = resolveSampleBound(
+    fnName,
+    rest.paddingSamples,
+    paddingSec,
+    sampleRate,
+    'paddingSamples',
+    'paddingSec',
+  );
+  return padding === undefined ? rest : { ...rest, paddingSamples: padding };
+}
+
 /** Offline silence trimmer (peak threshold or LUFS-gated). */
 export function masteringRepairTrimSilence(
   request: MasteringRepairTrimSilenceRequest,
@@ -48,10 +70,11 @@ export function masteringRepairTrimSilence(
   options: TrimSilenceOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const rate = request.sampleRate ?? 22050;
   return requireModule().masteringRepairTrimSilence(
     request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    rate,
+    withPadding('masteringRepairTrimSilence', request, rate),
   );
 }
 
@@ -89,6 +112,8 @@ export function masteringRepairTrimSilence(
  * can never reach past either end; a pass that kept nothing is not padded. A NEGATIVE count is
  * refused by name rather than absorbed into 0 or into the default — the underlying field is
  * unsigned, and a negative one would arrive as an enormous count instead.
+ * `paddingSec` spells the same margin in seconds, rounded to the nearest sample; give
+ * `paddingSamples` or `paddingSec`, not both.
  *
  * @example
  * ```ts
@@ -126,7 +151,7 @@ export function masteringRepairTrimSilenceStereo(
     leftSamples,
     rightSamples,
     rate ?? 22050,
-    options,
+    withPadding('masteringRepairTrimSilenceStereo', options, rate ?? 22050),
   );
 }
 
@@ -170,10 +195,11 @@ export function masteringRepairDetectTrimRange(
   options: TrimSilenceOptions = {},
 ): TrimRange {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const rate = request.sampleRate ?? 22050;
   return requireModule().masteringRepairDetectTrimRange(
     request.samples,
-    request.sampleRate ?? 22050,
-    request,
+    rate,
+    withPadding('masteringRepairDetectTrimRange', request, rate),
   );
 }
 
@@ -219,6 +245,6 @@ export function masteringRepairDetectTrimRangeStereo(
     leftSamples,
     rightSamples,
     rate ?? 22050,
-    options,
+    withPadding('masteringRepairDetectTrimRangeStereo', options, rate ?? 22050),
   );
 }

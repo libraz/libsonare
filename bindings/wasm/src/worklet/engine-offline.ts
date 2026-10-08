@@ -66,14 +66,14 @@ export interface EngineTransportContext {
 /** Builds the public transport facade that fans control to both engines. */
 export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineTransportFacade {
   return {
-    play: (sampleTime = -1) => {
+    play: (sampleTime) => {
       const ok = ctx.realtimeNode.play(sampleTime);
       if (ok) {
         ctx.setTransportPlaying(true);
       }
       return ok;
     },
-    stop: (sampleTime = -1) => {
+    stop: (sampleTime) => {
       const ok = ctx.realtimeNode.stop(sampleTime);
       if (ok) {
         ctx.setTransportPlaying(false);
@@ -81,13 +81,13 @@ export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineT
       }
       return ok;
     },
-    seekPpq: (ppq, sampleTime = -1) => {
+    seekPpq: (ppq, sampleTime) => {
       ctx.offlineEngine.seekPpq(ppq, sampleTime);
       const ok = ctx.realtimeNode.seekPpq(ppq, sampleTime);
       ctx.flushOfflineMirror();
       return ok;
     },
-    seekSeconds: (seconds, sampleTime = -1) => {
+    seekSeconds: (seconds, sampleTime) => {
       const timelineSample = Math.max(0, Math.round(seconds * ctx.sampleRate));
       ctx.offlineEngine.seekSample(timelineSample, sampleTime);
       const ok = ctx.realtimeNode.seekSample(timelineSample, sampleTime);

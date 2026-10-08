@@ -809,8 +809,14 @@ def test_a_hand_built_event_has_to_state_its_span() -> None:
     # renders as nothing: the edit below would have been dropped in silence while
     # the call reported success, which is what the sibling surfaces reject.
     audio = _two_hits()
-    with pytest.raises(TypeError):
-        libsonare.PercussiveEvent()  # type: ignore[call-arg]
+    # The bounds are samples or seconds, so the event can be built without either;
+    # the refusal arrives at the render, naming the bound that is missing.
+    with pytest.raises(libsonare.SonareValueError, match="onset_sample or onset_sec"):
+        libsonare.render_percussive_events(audio, SR, [libsonare.PercussiveEvent()])
+    with pytest.raises(libsonare.SonareValueError, match="offset_sample or offset_sec"):
+        libsonare.render_percussive_events(
+            audio, SR, [libsonare.PercussiveEvent(onset_sample=4410)]
+        )
 
     stated = libsonare.PercussiveEvent(onset_sample=4410, offset_sample=15435)
     stated.edit.muted = True

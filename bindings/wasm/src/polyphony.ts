@@ -8,7 +8,7 @@ import type {
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSampleRate, assertSamples } from './validation.js';
+import { assertSampleRate, assertSamples, resolveSampleBound } from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
@@ -42,11 +42,13 @@ export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, Val
  */
 export class PolyphonicAnalysis {
   private native: WasmPolyphonicAnalysis | null;
+  private readonly sampleRate: number;
 
   /** Analyses the request's audio. {@link analyzePolyphonic} is the same call. */
   constructor(request: AnalyzePolyphonicRequest) {
     assertSamples('analyzePolyphonic', request.samples, request.validate !== false);
     assertSampleRate('analyzePolyphonic', request.sampleRate);
+    this.sampleRate = request.sampleRate;
     const module = getSonareModule();
     this.native = module.createPolyphonicAnalysis(
       request.samples,
@@ -110,7 +112,23 @@ export class PolyphonicAnalysis {
    * @throws {RangeError} when `note` is out of range
    */
   setNoteEdit(note: number, edit: NoteEditInput): void {
-    this.handle().setNoteEdit(note, edit);
+    let nativeEdit = edit;
+    if (edit !== null && typeof edit === 'object' && !Array.isArray(edit)) {
+      const { timeOffsetSec, ...rest } = edit;
+      nativeEdit = {
+        ...rest,
+        timeOffsetSamples: resolveSampleBound(
+          'setNoteEdit',
+          rest.timeOffsetSamples,
+          timeOffsetSec,
+          this.sampleRate,
+          'edit.timeOffsetSamples',
+          'edit.timeOffsetSec',
+          'signed',
+        ),
+      };
+    }
+    this.handle().setNoteEdit(note, nativeEdit);
   }
 
   /**

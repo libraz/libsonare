@@ -145,6 +145,123 @@ def _narrow_double(value: object, name: str) -> float:
     raise SonareValueError(f"{name} must be a finite number")
 
 
+_INT64_MIN = -(2**63)
+_INT64_MAX = 2**63 - 1
+
+# The C ABI spells "not given" as -1 for the optional numeric parameters below.
+_C_ABSENT = -1
+
+
+def _seconds_to_samples(seconds: object, sample_rate: float, name: str) -> int:
+    """Convert a time in seconds to the nearest whole sample at ``sample_rate``.
+
+    Halves round up, as ``Math.round`` does in the JS facades, so one request
+    names the same sample on every surface.
+
+    Raises:
+        SonareValueError: If ``seconds`` is not a finite number, or the result
+            does not fit an ``int64``.
+    """
+    samples = math.floor(_narrow_double(seconds, name) * sample_rate + 0.5)
+    if not _INT64_MIN <= samples <= _INT64_MAX:
+        raise SonareValueError(f"{name} is out of range at {sample_rate} Hz")
+    return samples
+
+
+def _resolve_sample_bound(
+    sample_value: object,
+    sec_value: object,
+    sample_rate: float,
+    sample_name: str,
+    sec_name: str,
+    *,
+    signed: bool = False,
+) -> int | None:
+    """Resolve one time bound spelled either in samples or in seconds.
+
+    ``None`` on both spellings is absence and returns ``None`` so the caller
+    applies its own default (an end bound's default is the end of the signal).
+    Giving both is refused by name. A position is non-negative; a displacement
+    (``signed=True``, such as a note's time offset) may be negative. A negative
+    value is refused, never read as "absent".
+
+    Raises:
+        SonareValueError: If both spellings are given, the value is not a valid
+            number, or a position is negative.
+    """
+    if sample_value is not None and sec_value is not None:
+        raise SonareValueError(f"give {sample_name} or {sec_name}, not both")
+    if sample_value is None and sec_value is None:
+        return None
+    if sec_value is not None:
+        value = _seconds_to_samples(sec_value, sample_rate, sec_name)
+        name = sec_name
+    else:
+        value = _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
+        name = sample_name
+    if not signed and value < 0:
+        raise SonareValueError(f"{name} must be non-negative")
+    return value
+
+
+def _resolve_time_offset(
+    sample_value: object,
+    sec_value: object,
+    sample_rate: float,
+    sample_name: str,
+    sec_name: str,
+) -> int:
+    """Resolve a pending time offset from samples or seconds; unset is 0.
+
+    ``time_offset_samples`` is 0 when unset, so only a non-zero sample value
+    counts as giving the sample spelling; both spellings given is refused. The
+    offset is signed, since a negative one moves the note or hit earlier.
+    """
+    resolved = _resolve_sample_bound(
+        sample_value if sample_value != 0 else None,
+        sec_value,
+        sample_rate,
+        sample_name,
+        sec_name,
+        signed=True,
+    )
+    if resolved is not None:
+        return resolved
+    # Zero is the identity; a zero-valued non-integer still fails here.
+    return _narrow_int(sample_value, sample_name, _INT64_MIN, _INT64_MAX)
+
+
+def _resolve_render_frame(render_frame: object) -> int:
+    """Map an optional engine ``render_frame`` onto the C value.
+
+    ``None`` is "apply at the next block head" (the C ABI's ``-1``); a negative
+    frame is refused rather than read as the same thing.
+
+    Raises:
+        SonareValueError: If ``render_frame`` is not a non-negative integer.
+    """
+    if render_frame is None:
+        return _C_ABSENT
+    return _narrow_int(render_frame, "render_frame", 0, _INT64_MAX)
+
+
+def _resolve_optional_non_negative(value: object, name: str) -> int | float:
+    """Map an optional numeric argument onto the C value for "not given".
+
+    ``None`` becomes the C ABI's ``-1``; an explicit negative or non-finite value
+    is refused rather than read as the same thing.
+
+    Raises:
+        SonareValueError: If ``value`` is not a finite number, or is negative.
+    """
+    if value is None:
+        return _C_ABSENT
+    number = _narrow_double(value, name)
+    if number < 0:
+        raise SonareValueError(f"{name} must be non-negative (use None for the default)")
+    return value  # type: ignore[return-value]
+
+
 def _utf8_arg(value: str, name: str) -> bytes:
     """Encode ``value`` for a NUL-terminated ``char *``, refusing an embedded NUL.
 

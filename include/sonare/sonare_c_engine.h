@@ -288,17 +288,19 @@ SonareError sonare_engine_set_clips(SonareRealtimeEngine* engine, const SonareEn
 SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_count);
 /// @brief Replaces the configured track-lane order and membership.
 /// @details A successful call may reorder existing track ids, remove track ids,
-///   or add new ones. Insert automation ids keep naming their track across a
-///   reorder (see @ref sonare_engine_resolve_track_insert_automation_id); the
-///   ids of a removed track stop applying, and its queued insert edits are
-///   dropped. Positional lane targets -- the @p lane_index of
+///   or add new ones. Track fader/pan and insert automation ids keep naming
+///   their track across a reorder (see
+///   @ref sonare_engine_resolve_track_lane_automation_id and
+///   @ref sonare_engine_resolve_track_insert_automation_id); the ids of a
+///   removed track stop applying, and its queued edits under them are dropped.
+///   Positional lane targets -- the @p lane_index of
 ///   @ref sonare_engine_set_solo_mute -- address whichever track holds that
 ///   position after the call. Control-thread only; do not call concurrently
 ///   with @ref sonare_engine_process.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an invalid lane list, a topology
-///   that cannot be published, or added tracks whose inserts would not fit the
-///   insert automation id table; SONARE_ERROR_NOT_SUPPORTED when mixing support
-///   is disabled.
+///   that cannot be published, or added tracks whose fader/pan and insert ids
+///   would not fit the automation id table; SONARE_ERROR_NOT_SUPPORTED when
+///   mixing support is disabled.
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
@@ -528,17 +530,18 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngin
 /// @brief Resolves a track-lane insert parameter to its reserved automation id.
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
-///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed,
-///   exactly like a fader/pan id. Track, bus and master insert ids share one
-///   lifetime rule: an id names the strip by identity and the kind of processor
-///   in its slot (for `effects.gsEfx`, its EFX type too), so it survives lane
-///   and bus reorders and the removal of other strips, and stays valid until
-///   its track or bus is removed or its slot comes to hold another kind of
-///   processor. After that it applies nothing (an unknown target), its queued
-///   edits and stored bases are dropped, and it is never reissued; resolve
-///   again for the new processor. Every configured slot gets its id when the
-///   mixer is configured, so resolving never allocates; the id table holds 8192
-///   slot entries for the engine's lifetime, and a strip, bus or lane change
+///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed.
+///   Track fader/pan ids and track, bus and master insert ids share one
+///   lifetime rule: an id names the strip by identity and, for an insert, the
+///   kind of processor in its slot (for `effects.gsEfx`, its EFX type too), so
+///   it survives lane and bus reorders and the removal of other strips, and
+///   stays valid until its track or bus is removed or its slot comes to hold
+///   another kind of processor. After that it applies nothing (an unknown
+///   target), its queued edits and stored bases are dropped, and it is never
+///   reissued; resolve again for the new track or processor. Every configured
+///   track lane and slot gets its id when the mixer is configured, so resolving
+///   never allocates; the id table holds 8192 entries (one per track lane plus
+///   one per slot) for the engine's lifetime, and a strip, bus or lane change
 ///   that would exceed it is refused with SONARE_ERROR_INVALID_PARAMETER (a
 ///   rebuild that keeps every slot's kind needs no new entry). Returns
 ///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown
@@ -557,6 +560,18 @@ SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngin
                                                              unsigned int insert_index,
                                                              const char* param_name,
                                                              uint32_t* out_id);
+/// @brief Resolves a track lane's fader or pan to its reserved automation id.
+/// @details @p param_name is `faderDb` (dB) or `pan` (-1..1). Same lifetime
+///   rule as @ref sonare_engine_resolve_track_insert_automation_id: the id
+///   names the track, not its lane position, so it keeps driving that track
+///   across @ref sonare_engine_set_track_lanes reorders and fails as an unknown
+///   target once the track is removed. Returns SONARE_ERROR_INVALID_PARAMETER
+///   if the track has no lane or the name is neither (and sets @p out_id to 0);
+///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine* engine,
+                                                           uint32_t track_id,
+                                                           const char* param_name,
+                                                           uint32_t* out_id);
 /// @brief Resolves a master-strip insert parameter to its reserved automation id.
 /// @details Master-strip counterpart of
 ///   @ref sonare_engine_resolve_track_insert_automation_id.
@@ -1184,6 +1199,11 @@ SonareError sonare_engine_set_synth_instrument_binding(SonareRealtimeEngine* eng
 ///   name is unknown; @p out_id is left untouched. The id survives an
 ///   unbind/rebind of the same destination and applies nothing while that
 ///   destination is unbound, so a stale lane is inert rather than dangling.
+///   Its number is assigned when an instrument is first bound to
+///   @p destination_id, so engines given the same bindings in the same order
+///   number it identically; an engine numbers 8192 destinations for its
+///   lifetime, and a bind to a further one is refused with
+///   SONARE_ERROR_OUT_OF_MEMORY, as a full instrument rack is.
 SonareError sonare_engine_resolve_instrument_automation_id(SonareRealtimeEngine* engine,
                                                            uint32_t destination_id,
                                                            const char* param_name,

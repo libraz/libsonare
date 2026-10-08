@@ -437,6 +437,20 @@ export interface FileClipPageProviderOptions {
   dataOffsetBytes?: number;
 }
 
+/** Punch-in window for {@link RealtimeEngine.setCapturePunch}; each bound is samples or seconds, not both. */
+export interface EngineCapturePunchRequest {
+  /** First timeline sample captured. Not with `startSec`. */
+  startSample?: number;
+  /** First timeline second captured, rounded to the nearest sample. Not with `startSample`. */
+  startSec?: number;
+  /** One past the last timeline sample captured. Not with `endSec`. */
+  endSample?: number;
+  /** End of the window in timeline seconds, rounded to the nearest sample. Not with `endSample`. */
+  endSec?: number;
+  /** Whether the punch window is active. Default `true`. */
+  enabled?: boolean;
+}
+
 export interface EngineCaptureStatus {
   capturedFrames: number;
   overflowCount: number;

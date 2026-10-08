@@ -3,7 +3,7 @@
 Covers:
 1. Mixer.set_pan string-enum pan_mode and keep-current-mode default.
 2. Mixer.process_stereo MixerStereoResult shape + empty-input silent master.
-3. Project.set_program default bank=-1 (no Bank Select) vs explicit bank.
+3. Project.set_program default bank=None (no Bank Select) vs explicit bank.
 4. Project.bounce frees the sentinel buffer on empty bounces (no leak/crash).
 5. Audio.from_buffer default sample_rate is 48000.
 """
@@ -492,21 +492,21 @@ def test_process_stereo_empty_input_returns_silent_master(mixer) -> None:
 # --- Program-change default bank --------------------------------------------
 
 
-def test_set_program_default_bank_is_minus_one() -> None:
-    """set_program defaults bank to -1 (no Bank Select), matching the channel API."""
+def test_set_program_default_bank_is_none() -> None:
+    """set_program defaults bank to None (no Bank Select), matching the channel API."""
     import inspect
 
     from libsonare import Project
 
     sig = inspect.signature(Project.set_program)
-    assert sig.parameters["bank"].default == -1
+    assert sig.parameters["bank"].default is None
 
     project = Project()
     try:
         project.set_sample_rate(48000.0)
         _, clip = project.add_midi_clip(0.0, 4.0)
 
-        # Default bank (-1) emits program only; explicit bank>=0 emits Bank Select.
+        # Default bank (None) emits program only; explicit bank>=0 emits Bank Select.
         project.set_program(clip, 40)
         exported = project.export_smf()
         assert bytes([0xC0, 40]) in exported

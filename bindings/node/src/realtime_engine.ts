@@ -10,6 +10,7 @@ import type {
   EngineBounceOptions,
   EngineBounceResult,
   EngineBus,
+  EngineCapturePunchRequest,
   EngineCaptureSource,
   EngineCaptureStatus,
   EngineClip,
@@ -51,7 +52,11 @@ import type {
   SynthPatch,
   UmpWords,
 } from './types.js';
-import { assertNonNegativeSafeInteger } from './validation.js';
+import {
+  assertNonNegativeSafeInteger,
+  resolveRenderFrame,
+  resolveSampleBound,
+} from './validation.js';
 import {
   engineAutomationPointValue,
   normalizePartRig,
@@ -122,6 +127,7 @@ function sidechainCheck(code: number): SidechainCheck {
 export class RealtimeEngine {
   private native: InstanceType<typeof addon.RealtimeEngine>;
   private disposed = false;
+  private sampleRate: number;
 
   constructor(
     sampleRate = 48000,
@@ -130,6 +136,7 @@ export class RealtimeEngine {
     telemetryCapacity = 1024,
     maxChannels = 64,
   ) {
+    this.sampleRate = sampleRate;
     this.native = new addon.RealtimeEngine(
       sampleRate,
       maxBlockSize,
@@ -156,19 +163,11 @@ export class RealtimeEngine {
     maxChannels = 64,
   ): void {
     this.native.prepare(sampleRate, maxBlockSize, commandCapacity, telemetryCapacity, maxChannels);
+    this.sampleRate = sampleRate;
   }
 
-  play(renderFrame = -1): void {
-    this.native.play(renderFrame);
-  }
-
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
-  stop(renderFrame = -1): void {
-    this.native.stop(renderFrame);
+  play(renderFrame?: number): void {
+    this.native.play(resolveRenderFrame('play', renderFrame));
   }
 
   /**
@@ -176,8 +175,17 @@ export class RealtimeEngine {
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
    */
-  seekSample(timelineSample: number, renderFrame = -1): void {
-    this.native.seekSample(timelineSample, renderFrame);
+  stop(renderFrame?: number): void {
+    this.native.stop(resolveRenderFrame('stop', renderFrame));
+  }
+
+  /**
+   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
+   * centred pitch bend on every channel played since the last reset, so
+   * controller values set before a loop region are not restored at the wrap.
+   */
+  seekSample(timelineSample: number, renderFrame?: number): void {
+    this.native.seekSample(timelineSample, resolveRenderFrame('seekSample', renderFrame));
   }
 
   /**
@@ -212,7 +220,7 @@ export class RealtimeEngine {
 
   /**
    * Queues a reset of every mixer and effect processor to its prepared state.
-   * At `renderFrame` (negative: the next block head) the lane, bus, master,
+   * At `renderFrame` (omitted: the next block head) the lane, bus, master,
    * monitor and graph processors drop their tails, delay lines and envelopes,
    * automation is applied at the transport position and every smoother is
    * snapped to its target, so playback queued after it starts from the state an
@@ -221,11 +229,11 @@ export class RealtimeEngine {
    * playback it cuts running insert tails and delay lines mid-sound, like a
    * seek.
    *
-   * @param renderFrame - Block-relative frame to apply at, or negative for the next block head
+   * @param renderFrame - Block-relative frame to apply at; omit for the next block head (negative is refused)
    * @throws If the command queue is full
    */
-  resetProcessorState(renderFrame = -1): void {
-    this.native.resetProcessorState(renderFrame);
+  resetProcessorState(renderFrame?: number): void {
+    this.native.resetProcessorState(resolveRenderFrame('resetProcessorState', renderFrame));
   }
 
   /**
@@ -280,8 +288,8 @@ export class RealtimeEngine {
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
    */
-  seekPpq(ppq: number, renderFrame = -1): void {
-    this.native.seekPpq(ppq, renderFrame);
+  seekPpq(ppq: number, renderFrame?: number): void {
+    this.native.seekPpq(ppq, resolveRenderFrame('seekPpq', renderFrame));
   }
 
   /** Set a finite tempo in the range (0, 100000] BPM. */
@@ -372,8 +380,8 @@ export class RealtimeEngine {
     return this.native.marker(id);
   }
 
-  seekMarker(markerId: number, renderFrame = -1): void {
-    this.native.seekMarker(markerId, renderFrame);
+  seekMarker(markerId: number, renderFrame?: number): void {
+    this.native.seekMarker(markerId, resolveRenderFrame('seekMarker', renderFrame));
   }
 
   setLoopFromMarkers(startMarkerId: number, endMarkerId: number): void {
@@ -815,6 +823,18 @@ export class RealtimeEngine {
     return this.native.resolveBusInsertAutomationId(busId, insertIndex, paramName);
   }
 
+  /**
+   * Resolve a track lane's fader (`'faderDb'`) or pan (`'pan'`) to its reserved
+   * automation id. Same lifetime rule as {@link resolveTrackInsertAutomationId}:
+   * the id names the track, not its lane position, so it keeps driving that
+   * track across {@link setTrackLanes} reorders and applies nothing once the
+   * track is removed. Returns `-1` when the track has no lane or the name is
+   * neither.
+   */
+  resolveTrackLaneAutomationId(trackId: number, paramName: 'faderDb' | 'pan'): number {
+    return this.native.resolveTrackLaneAutomationId(trackId, paramName);
+  }
+
   /** Return the immutable construction value for a resolved insert parameter. */
   insertParameterConstructedValue(paramId: number): number {
     return this.native.insertParameterConstructedValue(paramId);
@@ -1056,8 +1076,46 @@ export class RealtimeEngine {
     this.native.armCapture(armed);
   }
 
-  setCapturePunch(startSample: number, endSample: number, enabled = true): void {
-    this.native.setCapturePunch(startSample, endSample, enabled);
+  /**
+   * Set the punch-in window, half-open `[start, end)` in timeline samples.
+   *
+   * Each bound is samples or seconds (rounded to the nearest sample at the
+   * engine's sample rate), one spelling each; both bounds are required and a
+   * negative one is refused.
+   */
+  setCapturePunch(request: EngineCapturePunchRequest): void;
+  setCapturePunch(startSample: number, endSample: number, enabled?: boolean): void;
+  setCapturePunch(
+    first: EngineCapturePunchRequest | number,
+    endSample?: number,
+    enabled = true,
+  ): void {
+    const request: EngineCapturePunchRequest =
+      typeof first === 'object' && first !== null
+        ? first
+        : { startSample: first, endSample, enabled };
+    const start = resolveSampleBound(
+      'setCapturePunch',
+      request.startSample,
+      request.startSec,
+      this.sampleRate,
+      'startSample',
+      'startSec',
+    );
+    const end = resolveSampleBound(
+      'setCapturePunch',
+      request.endSample,
+      request.endSec,
+      this.sampleRate,
+      'endSample',
+      'endSec',
+    );
+    if (start === undefined || end === undefined) {
+      throw new RangeError(
+        'setCapturePunch: both bounds are required (startSample or startSec, endSample or endSec)',
+      );
+    }
+    this.native.setCapturePunch(start, end, request.enabled ?? true);
   }
 
   setCaptureSource(source: EngineCaptureSource): void {
@@ -1158,6 +1216,16 @@ export class RealtimeEngine {
     return this.native.bounceOffline(options);
   }
 
+  /**
+   * Render the source layer over the span and install it as the only clip.
+   * Bakes every audio clip and hosted MIDI instrument through the lane strips,
+   * lane inserts and group buses; the master strip, monitor bus, engine graph,
+   * capture and metronome stay live and process the frozen clip once on
+   * playback. The frozen clip replaces the whole clip set and every MIDI clip is
+   * withdrawn in the same call, so nothing plays twice; live MIDI input still
+   * reaches the instruments. `numChannels` above the prepared channel count
+   * throws.
+   */
   freezeOffline(options: EngineFreezeOptions): EngineFreezeResult {
     return this.native.freezeOffline(options);
   }
@@ -1198,8 +1266,10 @@ export class RealtimeEngine {
   }
 
   /** Queue a reset of the master integrated-loudness meter. */
-  resetMasterLoudnessMeter(renderFrame = -1): void {
-    this.native.resetMasterLoudnessMeter(renderFrame);
+  resetMasterLoudnessMeter(renderFrame?: number): void {
+    this.native.resetMasterLoudnessMeter(
+      resolveRenderFrame('resetMasterLoudnessMeter', renderFrame),
+    );
   }
 
   /**
@@ -1223,14 +1293,14 @@ export class RealtimeEngine {
    *
    * @param paramId - Target parameter id
    * @param value - New value
-   * @param renderFrame - Render-frame time to apply, or `-1` for immediate
+   * @param renderFrame - Render-frame time to apply; omit for immediate (negative is refused)
    *
    * This value also becomes `paramId`'s base value: if an automation lane
    * later starts (and stops) driving `paramId`, the target reverts to this
    * value once that lane empties — see {@link setAutomationLane}.
    */
-  setParameter(paramId: number, value: number, renderFrame = -1): void {
-    this.native.setParameter(paramId, value, renderFrame);
+  setParameter(paramId: number, value: number, renderFrame?: number): void {
+    this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
   }
 
   /**
@@ -1239,8 +1309,12 @@ export class RealtimeEngine {
    * value, with the same restore-on-lane-release behavior as
    * {@link setParameter}.
    */
-  setParameterSmoothed(paramId: number, value: number, renderFrame = -1): void {
-    this.native.setParameterSmoothed(paramId, value, renderFrame);
+  setParameterSmoothed(paramId: number, value: number, renderFrame?: number): void {
+    this.native.setParameterSmoothed(
+      paramId,
+      value,
+      resolveRenderFrame('setParameterSmoothed', renderFrame),
+    );
   }
 
   /**
@@ -1255,13 +1329,17 @@ export class RealtimeEngine {
     this.native.setParamSmoothingMs(smoothingMs);
   }
 
-  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame = -1): void {
-    this.native.setSoloMute(laneIndex, solo, mute, renderFrame);
+  setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number): void {
+    this.native.setSoloMute(laneIndex, solo, mute, resolveRenderFrame('setSoloMute', renderFrame));
   }
 
   /** Schedule a per-track PFL/AFL monitor tap at a render-frame boundary. */
-  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame = -1): void {
-    this.native.setTrackMonitorMode(laneIndex, trackMonitorModeValue(mode), renderFrame);
+  setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
+    this.native.setTrackMonitorMode(
+      laneIndex,
+      trackMonitorModeValue(mode),
+      resolveRenderFrame('setTrackMonitorMode', renderFrame),
+    );
   }
 
   /**
@@ -1661,9 +1739,16 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     velocity: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOn(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOn(
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      resolveRenderFrame('pushMidiNoteOn', renderFrame),
+    );
   }
 
   pushMidiNoteOff(
@@ -1672,15 +1757,22 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     velocity = 0,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiNoteOff(destinationId, group, channel, note, velocity, renderFrame);
+    this.native.pushMidiNoteOff(
+      destinationId,
+      group,
+      channel,
+      note,
+      velocity,
+      resolveRenderFrame('pushMidiNoteOff', renderFrame),
+    );
   }
 
   /**
    * Queue an immediate (live) MIDI control change to a MIDI destination. Values
    * are 7-bit; channel 0..15, group 0..15. `renderFrame` is the render-frame
-   * time to apply, or -1 for immediate.
+   * time to apply; omit for immediate (negative is refused).
    */
   pushMidiCc(
     destinationId: number,
@@ -1688,9 +1780,16 @@ export class RealtimeEngine {
     channel: number,
     controller: number,
     value: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiCc(destinationId, group, channel, controller, value, renderFrame);
+    this.native.pushMidiCc(
+      destinationId,
+      group,
+      channel,
+      controller,
+      value,
+      resolveRenderFrame('pushMidiCc', renderFrame),
+    );
   }
 
   /**
@@ -1705,7 +1804,7 @@ export class RealtimeEngine {
    * @param channel MIDI channel (0..15).
    * @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383). A value outside
    *   that range is refused rather than wrapped into it.
-   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   * @param renderFrame Render-frame time to apply; omit for immediate (negative is refused).
    * @example
    * ```ts
    * engine.pushMidiNoteOn(destinationId, 0, 0, 60, 100);
@@ -1717,9 +1816,15 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     bend14: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiPitchBend(destinationId, group, channel, bend14, renderFrame);
+    this.native.pushMidiPitchBend(
+      destinationId,
+      group,
+      channel,
+      bend14,
+      resolveRenderFrame('pushMidiPitchBend', renderFrame),
+    );
   }
 
   /**
@@ -1731,16 +1836,22 @@ export class RealtimeEngine {
    * @param channel MIDI channel (0..15).
    * @param pressure 7-bit channel pressure (0..127), applying to every sounding
    *   note on the channel.
-   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   * @param renderFrame Render-frame time to apply; omit for immediate (negative is refused).
    */
   pushMidiChannelPressure(
     destinationId: number,
     group: number,
     channel: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiChannelPressure(destinationId, group, channel, pressure, renderFrame);
+    this.native.pushMidiChannelPressure(
+      destinationId,
+      group,
+      channel,
+      pressure,
+      resolveRenderFrame('pushMidiChannelPressure', renderFrame),
+    );
   }
 
   /**
@@ -1753,7 +1864,7 @@ export class RealtimeEngine {
    * @param note Key the pressure belongs to (0..127), so it reaches that voice
    *   alone rather than the whole channel.
    * @param pressure 7-bit key pressure (0..127).
-   * @param renderFrame Render-frame time to apply, or -1 for immediate.
+   * @param renderFrame Render-frame time to apply; omit for immediate (negative is refused).
    */
   pushMidiPolyPressure(
     destinationId: number,
@@ -1761,30 +1872,41 @@ export class RealtimeEngine {
     channel: number,
     note: number,
     pressure: number,
-    renderFrame = -1,
+    renderFrame?: number,
   ): void {
-    this.native.pushMidiPolyPressure(destinationId, group, channel, note, pressure, renderFrame);
+    this.native.pushMidiPolyPressure(
+      destinationId,
+      group,
+      channel,
+      note,
+      pressure,
+      resolveRenderFrame('pushMidiPolyPressure', renderFrame),
+    );
   }
 
   /**
    * Queue a MIDI panic (all-notes-off) releasing every sounding note.
-   * `renderFrame` is the render-frame time to apply, or -1 for immediate.
+   * `renderFrame` is the render-frame time to apply; omit for immediate (negative is refused).
    */
-  pushMidiPanic(renderFrame = -1): void {
-    this.native.pushMidiPanic(renderFrame);
+  pushMidiPanic(renderFrame?: number): void {
+    this.native.pushMidiPanic(resolveRenderFrame('pushMidiPanic', renderFrame));
   }
 
   /**
    * Queue an immediate (live) MIDI SysEx message to a MIDI destination. `data`
    * is the full SysEx frame including the leading 0xF0 and trailing 0xF7, and
-   * must be 1..512 bytes. `renderFrame` is the render-frame time to apply, or
-   * -1 for immediate. Throws `InvalidParameter` when the destination
+   * must be 1..512 bytes. `renderFrame` is the render-frame time to apply
+   * (omit for immediate). Throws `InvalidParameter` when the destination
    * instrument cannot prepare the SysEx (retrying cannot help), and
    * `OutOfMemory` when the payload slots or the command queue are full
    * (retry after a processed block).
    */
-  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame = -1): void {
-    this.native.pushMidiSysex(destinationId, data, renderFrame);
+  pushMidiSysex(destinationId: number, data: Uint8Array, renderFrame?: number): void {
+    this.native.pushMidiSysex(
+      destinationId,
+      data,
+      resolveRenderFrame('pushMidiSysex', renderFrame),
+    );
   }
 
   /**
@@ -1794,10 +1916,10 @@ export class RealtimeEngine {
    * width; SysEx7 / data messages (MT 0x3 / 0x5) are refused, use
    * {@link pushMidiSysex}. Throws when the slot ring or command queue is full
    * (retry after a process block). `renderFrame` is the render-frame time to
-   * apply, or -1 for immediate.
+   * apply (omit for immediate).
    */
-  pushMidiUmp(destinationId: number, words: UmpWords, renderFrame = -1): void {
-    this.native.pushMidiUmp(destinationId, words, renderFrame);
+  pushMidiUmp(destinationId: number, words: UmpWords, renderFrame?: number): void {
+    this.native.pushMidiUmp(destinationId, words, resolveRenderFrame('pushMidiUmp', renderFrame));
   }
 
   /**

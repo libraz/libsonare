@@ -63,6 +63,8 @@ from ._runtime import (
     _get_lib,
     _narrow_int,
     _planar_channel_arrays,
+    _resolve_render_frame,
+    _resolve_sample_bound,
     _to_c_float,
     _to_c_int,
     _to_c_int64,
@@ -75,6 +77,7 @@ from ._runtime import (
 class _EngineIoMixin:
     _capture_arrays: list[ctypes.Array[ctypes.c_float]]
     _capture_ptrs: ctypes.Array[Any] | None
+    _sample_rate: float
 
     if TYPE_CHECKING:
 
@@ -107,12 +110,36 @@ class _EngineIoMixin:
     def arm_capture(self, armed: bool = True) -> None:
         _check(_get_lib().sonare_engine_arm_capture(self._require_handle(), 1 if armed else 0))
 
-    def set_capture_punch(self, start_sample: int, end_sample: int, enabled: bool = True) -> None:
+    def set_capture_punch(
+        self,
+        start_sample: int | None = None,
+        end_sample: int | None = None,
+        enabled: bool = True,
+        *,
+        start_sec: float | None = None,
+        end_sec: float | None = None,
+    ) -> None:
+        """Set the punch-in window, half-open ``[start, end)`` in timeline samples.
+
+        Each bound is samples (``start_sample`` / ``end_sample``) or seconds
+        (``start_sec`` / ``end_sec``, rounded to the nearest sample at the
+        engine's sample rate), one spelling per bound. Both bounds are required
+        and a negative one is refused.
+        """
+        start = _resolve_sample_bound(
+            start_sample, start_sec, self._sample_rate, "start_sample", "start_sec"
+        )
+        end = _resolve_sample_bound(end_sample, end_sec, self._sample_rate, "end_sample", "end_sec")
+        if start is None or end is None:
+            raise SonareValueError(
+                "set_capture_punch needs both bounds (start_sample or start_sec, "
+                "end_sample or end_sec)"
+            )
         _check(
             _get_lib().sonare_engine_set_capture_punch(
                 self._require_handle(),
-                _to_c_int64(start_sample, "start_sample"),
-                _to_c_int64(end_sample, "end_sample"),
+                _to_c_int64(start, "start_sample"),
+                _to_c_int64(end, "end_sample"),
                 1 if enabled else 0,
             )
         )
@@ -420,21 +447,22 @@ class _EngineIoMixin:
         )
         return [_telemetry_from_c(raw[i]) for i in range(written.value)]
 
-    def reset_master_loudness_meter(self, render_frame: int = -1) -> None:
+    def reset_master_loudness_meter(self, render_frame: int | None = None) -> None:
         """Queue a reset of the master integrated-loudness meter."""
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_reset_master_loudness_meter"):
             raise _not_supported("libsonare was built without master-meter reset support")
         _check(
             lib.sonare_engine_reset_master_loudness_meter(
-                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 
-    def reset_processor_state(self, render_frame: int = -1) -> None:
+    def reset_processor_state(self, render_frame: int | None = None) -> None:
         """Queue a reset of every lane, bus, master and graph processor state.
 
-        At ``render_frame`` (negative: the next block head) tails, delay lines
+        At ``render_frame`` (``None``: the next block head) tails, delay lines
         and envelopes are dropped, automation is applied at the transport
         position and every smoother is snapped to its target. Instruments keep
         their state. Raises when the command queue is full.
@@ -444,7 +472,8 @@ class _EngineIoMixin:
             raise _not_supported("libsonare was built without processor-state reset support")
         _check(
             lib.sonare_engine_reset_processor_state(
-                self._require_handle(), _to_c_int64(render_frame, "render_frame")
+                self._require_handle(),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
             )
         )
 

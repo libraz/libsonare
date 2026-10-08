@@ -911,8 +911,8 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
   it('pushMidiCc / pushMidiPanic queue without throwing', () => {
     const engine = new RealtimeEngine(48000, 128, 1024, 1024);
     try {
-      expect(() => engine.pushMidiCc(0, 0, 0, 7, 100, -1)).not.toThrow();
-      expect(() => engine.pushMidiPanic(-1)).not.toThrow();
+      expect(() => engine.pushMidiCc(0, 0, 0, 7, 100)).not.toThrow();
+      expect(() => engine.pushMidiPanic()).not.toThrow();
     } finally {
       engine.destroy();
     }
@@ -921,8 +921,8 @@ describe('Sonare WASM RealtimeEngine MIDI / parameter ops', () => {
   it('pushMidiCc rejects out-of-range values', () => {
     const engine = new RealtimeEngine(48000, 128, 1024, 1024);
     try {
-      expect(() => engine.pushMidiCc(0, 0, 0, 7, 200, -1)).toThrow();
-      expect(() => engine.pushMidiCc(0, 99, 0, 7, 10, -1)).toThrow();
+      expect(() => engine.pushMidiCc(0, 0, 0, 7, 200)).toThrow();
+      expect(() => engine.pushMidiCc(0, 99, 0, 7, 10)).toThrow();
     } finally {
       engine.destroy();
     }

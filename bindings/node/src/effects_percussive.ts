@@ -3,7 +3,7 @@
  * edited set of them back.
  */
 
-import { assertEditTimeOffsets, toSamples } from './_effects_common.js';
+import { resolveEntryTimes, toSamples } from './_effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
 import { assertInt32, assertSampleRate } from './validation.js';
@@ -228,6 +228,12 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }
   assertPercussiveSeparation('renderPercussiveEvents', options);
-  assertEditTimeOffsets('renderPercussiveEvents', events, 'events');
-  return addon.renderPercussiveEvents(toSamples(samples), sampleRate, events, options);
+  const nativeEvents = resolveEntryTimes(
+    'renderPercussiveEvents',
+    events,
+    'events',
+    sampleRate,
+    true,
+  );
+  return addon.renderPercussiveEvents(toSamples(samples), sampleRate, nativeEvents, options);
 }

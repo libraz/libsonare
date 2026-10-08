@@ -3,7 +3,7 @@ import type { FeatureSamplesRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
 import type { SilenceCommonReport } from './types_features.js';
-import { assertPositiveInteger } from './validation.js';
+import { assertPositiveInteger, resolveOptionalNonNegative } from './validation.js';
 
 export interface TrimSilenceRequest {
   samples: Float32Array;
@@ -358,6 +358,7 @@ export function fixLength(
 export function fixFrames(request: {
   frames: Int32Array | number[];
   xMin?: number;
+  /** Upper bound; omit for none. Negative is refused. */
   xMax?: number;
   pad?: boolean;
 }): Int32Array;
@@ -373,7 +374,7 @@ export function fixFrames(
     | number[]
     | { frames: Int32Array | number[]; xMin?: number; xMax?: number; pad?: boolean },
   xMin = 0,
-  xMax = -1,
+  xMax?: number,
   pad = true,
 ): Int32Array {
   const request =
@@ -381,7 +382,7 @@ export function fixFrames(
   return addon.fixFrames(
     request.frames,
     request.xMin ?? 0,
-    request.xMax ?? -1,
+    resolveOptionalNonNegative('fixFrames', request.xMax, 'xMax'),
     request.pad ?? true,
   );
 }
