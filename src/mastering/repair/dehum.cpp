@@ -72,8 +72,10 @@ struct HarmonicCanceller {
   /// @details The correction decays at step*sample_rate/2, which is the same
   ///   selectivity a notch of bandwidth @p frequency_hz / @p q has, expressed as
   ///   a rate rather than as a pole pair -- so q means one thing in both modes.
+  ///   The update contracts the estimate only for steps below 2, so a band too
+  ///   wide for the rate is held at 1, where the correction lands in one sample.
   void set_selectivity(float frequency_hz, float sample_rate, float q) {
-    step = kTwoPi * (frequency_hz / q) / sample_rate;
+    step = std::min(kTwoPi * (frequency_hz / q) / sample_rate, 1.0f);
   }
 
   float process(float x, float cosine, float sine) {

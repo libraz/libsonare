@@ -152,18 +152,14 @@ void GraphicEq::rebuild_bands() {
 
 void GraphicEq::rebuild_band(size_t index) {
   const bool enabled = gains_db_[index] != 0.0f;
-  // Clamp the fixed ISO center to the open interval (0 Hz, Nyquist) so bands
-  // above Nyquist (e.g. the 12.5/16/20 kHz bands at sample rates <= 40 kHz)
-  // still design a valid biquad instead of throwing from make_coefficients().
-  // Mirrors ParametricEq::set_parameter's clamping of the frequency control.
-  const float center = std::clamp(kCenterFrequencies[index], 1.0e-3f,
-                                  static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
-  const EqBand band{EqBandType::Peak, center, gains_db_[index],
+  // A fixed ISO center above the rate's Nyquist (the 12.5/16/20 kHz bands at
+  // rates <= 40 kHz) is designed at the rate's ceiling rather than refused.
+  const EqBand band{EqBandType::Peak, kCenterFrequencies[index], gains_db_[index],
                     q_ > 0.0f ? q_ : band_q_for_gain_db(gains_db_[index]), enabled};
   if (index < ParametricEq::kMaxBands) {
-    low_eq_.set_band(index, band);
+    low_eq_.set_band_at_rate(index, band);
   } else {
-    high_eq_.set_band(index - ParametricEq::kMaxBands, band);
+    high_eq_.set_band_at_rate(index - ParametricEq::kMaxBands, band);
   }
 }
 

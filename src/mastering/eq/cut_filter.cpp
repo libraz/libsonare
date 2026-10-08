@@ -18,10 +18,10 @@ using sonare::constants::kButterworthQ;
 using sonare::constants::kPiD;
 using sonare::mastering::dynamics::kRealtimePreparedChannels;
 
-// The ceiling sibling stages design at: keeps w0 safely below pi after float
-// rounding, where a corner at Nyquist turns an RBJ section unstable.
+// The design domain's ceiling: the sections stay stable, and the brickwall FIR
+// corner stays strictly below Nyquist in float, as LinearPhaseEq::set_band requires.
 float clamp_frequency(float frequency_hz, double sample_rate) {
-  return std::clamp(frequency_hz, 1.0e-3f, static_cast<float>(sample_rate * 0.49));
+  return std::clamp(frequency_hz, 1.0e-3f, sonare::rt::max_design_frequency_hz(sample_rate));
 }
 
 int slope_db_oct(CutFilterSlope slope) {

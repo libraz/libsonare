@@ -19,6 +19,8 @@
 namespace sonare::mastering::eq {
 
 struct EqualizerProcessorConfig {
+  /// Widest block process() accepts. Linear-phase bands process at most two
+  /// channels, so with any of them a wider block is refused.
   int max_channels = 2;
   uint64_t spectrum_instance_id = 0;
   LinearPhaseEqConfig linear_phase_config{};
@@ -59,6 +61,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
   PhaseMode phase_mode() const noexcept { return phase_mode_; }
 
   void set_band(size_t index, const EqBand& band);
+  /// @brief Throws exactly where set_band() would refuse @p band, changing nothing.
+  void validate_band(const EqBand& band) const;
   void clear_band(size_t index);
   void clear();
   /// Borrows sidechain buffers until the next process/clear call. Dynamic bands
@@ -123,6 +127,8 @@ class EqualizerProcessor : public rt::ProcessorBase {
                                       float* out_db);
   static void validate_process_args(float* const* channels, int num_channels, int num_samples);
   static void validate_band_index(size_t index);
+  // set_band without the refusal of a frequency the current rate cannot carry.
+  void install_band(size_t index, const EqBand& band);
   static void validate_supported_band(const EqBand& band, PhaseMode global_phase);
   /// Whether @p band runs on the FIR backend: linear phase, or a brickwall cut.
   /// Selects the kernel-rebuilding set_parameter path and answers

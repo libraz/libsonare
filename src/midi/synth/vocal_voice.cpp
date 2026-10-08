@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/tunable.h"
 
@@ -118,22 +119,19 @@ void VocalVoiceCore::start(const VocalPatchParams& params, double sample_rate, u
 
   // Formant bank: RBJ constant-0dB-peak bandpass biquads at the vowel's F1..F5.
   // form_a1_/form_a2_ hold the NEGATED normalized denominator so render() only
-  // accumulates. All poles lie strictly inside the unit circle (alpha > 0), so
-  // the bank is unconditionally stable.
+  // accumulates. rt::rbj_bandpass returns a strictly stable section, so the bank
+  // is unconditionally stable.
   const int vowel = (params.vowel >= 0 && params.vowel < kVocalVowels) ? params.vowel : 0;
   num_formants_ = kVocalFormants;
   for (int i = 0; i < kVocalFormants; ++i) {
     const VowelFormant& fm = kVowelTable[vowel][i];
     const float srf = static_cast<float>(sr);
     const float f = std::min(fm.freq_hz, 0.45f * srf);
-    const float q = f / std::max(1.0f, fm.bw_hz);
-    const float w = kTwoPi * f / srf;
-    const float alpha = std::sin(w) / (2.0f * q);
-    const float a0 = 1.0f + alpha;
-    form_b0_[i] = alpha / a0;
-    form_b2_[i] = -form_b0_[i];
-    form_a1_[i] = 2.0f * std::cos(w) / a0;
-    form_a2_[i] = -(1.0f - alpha) / a0;
+    const rt::BiquadCoeffs c = rt::rbj_bandpass(kTwoPi * f / srf, f / std::max(1.0f, fm.bw_hz));
+    form_b0_[i] = c.b0;
+    form_b2_[i] = c.b2;
+    form_a1_[i] = -c.a1;
+    form_a2_[i] = -c.a2;
     // Brightness opens the upper formants; F1 (the vowel anchor) stays put.
     const float open_db = (bright - 0.5f) * kBrightFormantSpanDb *
                           (static_cast<float>(i) / static_cast<float>(kVocalFormants - 1));

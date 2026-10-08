@@ -45,6 +45,12 @@ struct BiquadCoefficients {
 ///         (0 Hz, Nyquist), or a band type with no single-section design.
 BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate);
 
+/// @brief @p band with its frequency lowered to the highest one @p sample_rate carries.
+/// @details For a band whose frequency was chosen without this rate in view (stored
+///          before a re-prepare, or held by an owner at a fixed value): it is designed
+///          at the design domain's ceiling rather than refused. Lowers only.
+EqBand band_at_rate(EqBand band, double sample_rate) noexcept;
+
 class ParametricEq : public rt::ProcessorBase {
  public:
   static constexpr size_t kMaxBands = 24;
@@ -54,14 +60,25 @@ class ParametricEq : public rt::ProcessorBase {
   void reset() override;
   void prepare_channels(int num_channels);
 
+  /// @brief Installs @p band, designed for the current rate.
+  /// @details Before the first prepare() the rate is not known yet, so a band
+  ///          above that rate's Nyquist is refused by prepare() instead; once
+  ///          accepted at a rate, a later prepare() at a lower one designs it at
+  ///          that rate's ceiling.
+  /// @throws SonareException for a band design_eq_biquad refuses at the current
+  ///         rate; nothing changes then.
   void set_band(size_t index, const EqBand& band);
+  /// @brief As set_band, but a frequency the current rate cannot carry is designed
+  ///        through band_at_rate instead of refused. The band is stored as given, so
+  ///        a later prepare at a higher rate designs the frequency it asked for.
+  void set_band_at_rate(size_t index, const EqBand& band);
   void clear_band(size_t index);
   void clear();
 
   // Automatable parameters (RT-safe: recomputes the affected band's biquad
   // coefficients in place, preserves filter state). Bands are laid out in
   // blocks of 3, so band `b` occupies ids `3*b .. 3*b+2`:
-  //   3*b + 0 = frequency_hz (clamped to (0 Hz, Nyquist))
+  //   3*b + 0 = frequency_hz (clamped to (0 Hz, rt::max_design_frequency_hz))
   //   3*b + 1 = gain_db
   //   3*b + 2 = Q (clamped to > 0)
   // Only bands that are currently enabled produce audible coefficient changes;
@@ -83,7 +100,7 @@ class ParametricEq : public rt::ProcessorBase {
     float z2 = 0.0f;
   };
 
-  void update_coefficients(size_t index);
+  void install_band(size_t index, const EqBand& band, const EqBand& designed);
   static void validate_band_index(size_t index);
   void ensure_prepared() const;
 
@@ -92,6 +109,9 @@ class ParametricEq : public rt::ProcessorBase {
   int num_channels_ = 0;
   bool prepared_ = false;
   std::array<EqBand, kMaxBands> bands_{};
+  // Whether prepare() may lower a band's frequency to the new rate's ceiling: set
+  // once the band has been accepted at a known rate, or by set_band_at_rate.
+  std::array<bool, kMaxBands> resolvable_{};
   std::array<Coefficients, kMaxBands> coefficients_{};
   std::array<std::vector<State>, kMaxBands> states_{};
 };

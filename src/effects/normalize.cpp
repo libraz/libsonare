@@ -97,7 +97,10 @@ Audio apply_gain(const Audio& audio, float gain_db, bool clip) {
                    "gain_db must be finite, got " + util::to_text(gain_db));
   if (audio.empty()) return audio;
 
-  float gain_linear = db_to_linear(gain_db);
+  const float gain_linear = db_to_linear(gain_db);
+  // A finite dB value past ~770 dB has no finite multiplier; 0 * inf would be NaN.
+  SONARE_CHECK_MSG(std::isfinite(gain_linear), ErrorCode::InvalidParameter,
+                   "gain_db must produce a finite linear gain, got " + util::to_text(gain_db));
 
   std::vector<float> samples(audio.size());
   const float* data = audio.data();

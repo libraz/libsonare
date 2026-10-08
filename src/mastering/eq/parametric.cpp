@@ -53,6 +53,16 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
     throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
   }
 
+  // Every band is designed at the new rate before anything is committed. A band
+  // accepted at an earlier rate, or installed through set_band_at_rate, is
+  // resolved; one set before any rate was known meets its rate here and is
+  // refused like set_band would refuse it.
+  std::array<Coefficients, kMaxBands> designed{};
+  for (size_t i = 0; i < kMaxBands; ++i) {
+    designed[i] = design_eq_biquad(
+        resolvable_[i] ? band_at_rate(bands_[i], sample_rate) : bands_[i], sample_rate);
+  }
+
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;
@@ -61,10 +71,8 @@ void ParametricEq::prepare(double sample_rate, int max_block_size) {
   // wider than this throw instead of allocating.
   prepare_channels(static_cast<int>(kRealtimePreparedChannels));
   reset();
-
-  for (size_t i = 0; i < kMaxBands; ++i) {
-    update_coefficients(i);
-  }
+  coefficients_ = designed;
+  resolvable_.fill(true);
 }
 
 void ParametricEq::prepare_channels(int num_channels) {
@@ -126,9 +134,13 @@ void ParametricEq::reset() {
 }
 
 void ParametricEq::set_band(size_t index, const EqBand& band) {
-  validate_band_index(index);
-  bands_[index] = band;
-  update_coefficients(index);
+  install_band(index, band, band);
+  resolvable_[index] = prepared_;
+}
+
+void ParametricEq::set_band_at_rate(size_t index, const EqBand& band) {
+  install_band(index, band, band_at_rate(band, sample_rate_));
+  resolvable_[index] = true;
 }
 
 bool ParametricEq::set_parameter_impl(unsigned int param_id, float value) {
@@ -147,10 +159,8 @@ bool ParametricEq::set_parameter_impl(unsigned int param_id, float value) {
   }
   switch (param_id % 3u) {
     case 0:
-      // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never
-      // throws on the audio thread.
       band.frequency_hz =
-          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+          std::clamp(value, 1.0e-3f, sonare::rt::max_design_frequency_hz(sample_rate_));
       break;
     case 1:
       band.gain_db = value;
@@ -161,8 +171,9 @@ bool ParametricEq::set_parameter_impl(unsigned int param_id, float value) {
     default:
       return false;
   }
-  // set_band recomputes only this band's coefficients without touching state.
-  set_band(band_index, band);
+  // Recomputes only this band's coefficients without touching state. The band's
+  // other fields may hold a frequency set before a re-prepare to a lower rate.
+  set_band_at_rate(band_index, band);
   return true;
 }
 
@@ -297,9 +308,17 @@ BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate) {
   return {};
 }
 
-void ParametricEq::update_coefficients(size_t index) {
+EqBand band_at_rate(EqBand band, double sample_rate) noexcept {
+  const float ceiling = sonare::rt::max_design_frequency_hz(sample_rate);
+  if (band.frequency_hz > ceiling) band.frequency_hz = ceiling;
+  return band;
+}
+
+void ParametricEq::install_band(size_t index, const EqBand& band, const EqBand& designed) {
   validate_band_index(index);
-  coefficients_[index] = design_eq_biquad(bands_[index], sample_rate_);
+  const Coefficients coefficients = design_eq_biquad(designed, sample_rate_);
+  bands_[index] = band;
+  coefficients_[index] = coefficients;
 }
 
 void ParametricEq::validate_band_index(size_t index) {

@@ -52,9 +52,9 @@ struct HpssConfig {
   int kernel_size_harmonic = 31;
   /// Vertical median filter size: odd, positive, at most @ref kMaxHpssKernelSize.
   int kernel_size_percussive = 31;
-  float power = 2.0f;              ///< Exponent for mask computation (typically 1.0-2.0)
-  float margin_harmonic = 1.0f;    ///< Weight for harmonic mask (> 1.0 favors harmonic)
-  float margin_percussive = 1.0f;  ///< Weight for percussive mask (> 1.0 favors percussive)
+  float power = 2.0f;              ///< Mask exponent: finite, > 0 (typically 1.0-2.0)
+  float margin_harmonic = 1.0f;    ///< Harmonic weight: finite, >= 0 (> 1.0 favors harmonic)
+  float margin_percussive = 1.0f;  ///< Percussive weight: finite, >= 0 (> 1.0 favors percussive)
                                    ///< Soft mask (librosa parity, margin applied before the
                                    ///< power): mask_harm = H^p / (H^p + (margin_h * P)^p),
                                    ///< mask_perc = P^p / (P^p + (margin_p * H)^p)

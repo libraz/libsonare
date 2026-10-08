@@ -1547,3 +1547,60 @@ TEST_CASE("Spectrogram from_complex takes ownership of a moved buffer", "[spectr
                                               22050, WindowType::Hann),
                     SonareException);
 }
+
+TEST_CASE("magphase refuses a power that overflows the magnitude", "[spectrum]") {
+  const std::vector<std::complex<float>> spec = {{3.0f, 4.0f}, {0.0f, 0.0f}};
+  REQUIRE_THROWS_AS(magphase(spec.data(), spec.size(), 100.0f), SonareException);
+  const MagPhase squared = magphase(spec.data(), spec.size(), 2.0f);
+  REQUIRE(squared.magnitude[0] == 25.0f);
+  REQUIRE(squared.magnitude[1] == 0.0f);
+}
+
+TEST_CASE("non-centred reassignment places an impulse at its sample with a short window",
+          "[spectrum]") {
+  // Past the 192-sample offset at which a 128-sample window sits in a 512-point frame.
+  constexpr int kRate = 48000;
+  constexpr int kImpulse = 640;
+  std::vector<float> samples(2048, 0.0f);
+  samples[kImpulse] = 1.0f;
+  const Audio audio = Audio::from_vector(samples, kRate);
+  for (const int win_length : {128, 512}) {
+    StftConfig config;
+    config.n_fft = 512;
+    config.win_length = win_length;
+    config.hop_length = 32;
+    config.center = false;
+    INFO("win_length " << win_length);
+    const auto times = reassign_times(audio, config, 1.0e-6f, true);
+    const auto full = reassigned_spectrogram(audio, config, 1.0e-6f, true);
+    REQUIRE(times.size() == full.times.size());
+    const double expected = static_cast<double>(kImpulse) / kRate;
+    size_t reassigned = 0;
+    for (size_t i = 0; i < times.size(); ++i) {
+      if (std::isnan(times[i])) continue;
+      ++reassigned;
+      REQUIRE(std::abs(times[i] - expected) < 1.0 / kRate);
+      REQUIRE(full.times[i] == times[i]);
+    }
+    REQUIRE(reassigned > 0);
+  }
+}
+
+TEST_CASE("griffin_lim refuses a single frame whatever the iteration count",
+          "[spectrum][griffin_lim]") {
+  constexpr int kNFft = 16;
+  const std::vector<float> magnitude(kNFft / 2 + 1, 1.0f);
+  for (const int n_iter : {0, 1, 4}) {
+    GriffinLimConfig config;
+    config.n_iter = n_iter;
+    INFO("n_iter " << n_iter);
+    REQUIRE_THROWS_AS(
+        griffin_lim(magnitude.data(), kNFft / 2 + 1, 1, kNFft, kNFft / 4, 22050, config),
+        SonareException);
+  }
+  GriffinLimConfig two_frames;
+  two_frames.n_iter = 1;
+  const std::vector<float> wider(static_cast<size_t>(kNFft / 2 + 1) * 2, 1.0f);
+  REQUIRE_FALSE(
+      griffin_lim(wider.data(), kNFft / 2 + 1, 2, kNFft, kNFft / 4, 22050, two_frames).empty());
+}

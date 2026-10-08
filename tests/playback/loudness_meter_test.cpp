@@ -225,3 +225,30 @@ TEST_CASE("playback loudness meter measures the frames after the last internal b
   CAPTURE(reference, meter.integrated_lufs());
   CHECK(std::abs(meter.integrated_lufs() - reference) <= 0.1f);
 }
+
+TEST_CASE("loudness stays finite at a rate whose Nyquist is below the K-weighting shelf",
+          "[playback][loudness]") {
+  // 1681 Hz is above 2 kHz audio's Nyquist, the rate the shelf used to diverge at.
+  for (const int rate : {1000, 2000, 3000}) {
+    constexpr int kChannels = 2;
+    const size_t frames = static_cast<size_t>(rate) * 4;
+    std::vector<float> interleaved(frames * kChannels);
+    for (size_t i = 0; i < frames; ++i) {
+      const float s = 0.25f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 200.0 *
+                                                          static_cast<double>(i) / rate));
+      interleaved[i * kChannels] = s;
+      interleaved[i * kChannels + 1] = s;
+    }
+    INFO("rate " << rate);
+    const auto offline =
+        sonare::metering::lufs_interleaved(interleaved.data(), frames, kChannels, rate);
+    REQUIRE(std::isfinite(offline.integrated_lufs));
+    REQUIRE(std::isfinite(offline.momentary_lufs));
+    REQUIRE(std::isfinite(offline.short_term_lufs));
+    REQUIRE(std::isfinite(offline.max_momentary_lufs));
+    REQUIRE(std::isfinite(offline.max_short_term_lufs));
+    PlaybackLoudnessMeter meter(kChannels, rate);
+    meter.push_interleaved(interleaved.data(), frames);
+    REQUIRE(std::isfinite(meter.integrated_lufs()));
+  }
+}

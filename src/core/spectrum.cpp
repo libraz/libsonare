@@ -13,6 +13,7 @@
 #include "core/window.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/padding.h"
 #include "util/reflect_padding.h"
@@ -600,6 +601,10 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
                   int sample_rate, const GriffinLimConfig& config) {
   SONARE_CHECK(magnitude != nullptr, ErrorCode::InvalidParameter);
   SONARE_CHECK(n_bins > 0 && n_frames > 0, ErrorCode::InvalidParameter);
+  // A centred single frame stands for a signal of length 0, which no re-analysis
+  // can return to, so it is refused whatever the iteration count.
+  SONARE_CHECK_MSG(n_frames >= 2, ErrorCode::InvalidParameter,
+                   "griffin_lim: magnitude needs at least two frames");
   SONARE_CHECK(n_bins == n_fft / 2 + 1, ErrorCode::InvalidParameter);
   // This is an overlap-add reconstruction, so it owes the same geometry the other
   // reconstructing paths check: past nFft/2 the windows stop summing to a constant
@@ -675,92 +680,57 @@ Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, i
   }
   const int target_length = std::max(0, (n_frames - 1) * hop_length);
 
-  if (n_frames <= 1) {
-    // to_audio(0) takes the auto-trim path and can return an empty
-    // reconstruction, which Spectrogram::compute then turns into a 0x0
-    // spectrogram -- a shape the fast path below (sized for n_frames > 1)
-    // cannot reuse. Rare enough to keep the original per-iteration path
-    // for it rather than special-case it into the hoisted buffers.
-    for (int iter = 0; iter < config.n_iter; ++iter) {
-      Spectrogram spec = Spectrogram::from_complex(spectrum.data(), n_bins, n_frames, n_fft,
-                                                   hop_length, sample_rate, stft_config.window,
-                                                   /*center=*/true);
-      Audio reconstructed = spec.to_audio(target_length);
-      Spectrogram new_spec = Spectrogram::compute(reconstructed, stft_config);
+  // n_fft, hop_length, window and geometry are fixed for the whole call, so
+  // hoist the FFT plan and the per-iteration buffers out of the loop instead
+  // of paying Spectrogram::from_complex's copy and Spectrogram::compute's
+  // fresh allocation (and a fresh FFT plan for each) on every pass.
+  const int win_length = checked.actual_win_length();
+  std::vector<float> analysis_window = build_padded_window(checked.window, win_length, n_fft, true);
+  std::vector<float> synthesis_window =
+      build_padded_window(checked.window, win_length, n_fft, false);
+  Eigen::Map<const Eigen::VectorXf> analysis_window_vec(analysis_window.data(), n_fft);
+  Eigen::Map<const Eigen::VectorXf> synthesis_window_vec(synthesis_window.data(), n_fft);
+  const Eigen::VectorXf window_product_vec = analysis_window_vec.cwiseProduct(synthesis_window_vec);
 
-      for (int f = 0; f < n_bins; ++f) {
-        for (int t = 0; t < n_frames; ++t) {
-          const size_t idx =
-              static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
-          float target_mag = magnitude[idx];
-          std::complex<float> rebuilt = new_spec.at(f, t);
+  const int full_length = (n_frames - 1) * hop_length + n_fft;
 
-          std::complex<float> angles = rebuilt;
-          if (config.momentum > 0.0f) {
-            angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
-          }
-          const float norm = std::abs(angles) + 1e-16f;
+  FFT fft(n_fft);
+  std::vector<float> frame(n_fft);
+  std::vector<std::complex<float>> frame_spectrum(n_bins);
+  std::vector<float> output(static_cast<size_t>(full_length));
+  std::vector<float> window_sum(static_cast<size_t>(full_length));
+  std::vector<std::complex<float>> new_spectrum(total);
 
-          tprev[idx] = rebuilt;
-          spectrum[idx] = (target_mag / norm) * angles;
+  for (int iter = 0; iter < config.n_iter; ++iter) {
+    Audio reconstructed = griffin_lim_synthesize(
+        spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, target_length,
+        synthesis_window, window_product_vec, fft, frame_spectrum, frame, output, window_sum);
+    griffin_lim_analyze(reconstructed, checked.pad_mode, analysis_window, n_fft, hop_length, n_bins,
+                        n_frames, fft, frame, frame_spectrum, new_spectrum);
+
+    // Update phase while preserving magnitude
+    for (int f = 0; f < n_bins; ++f) {
+      for (int t = 0; t < n_frames; ++t) {
+        const size_t idx =
+            static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
+        float target_mag = magnitude[idx];
+
+        std::complex<float> rebuilt = new_spectrum[idx];
+
+        // librosa's fast Griffin-Lim momentum, operating in the complex plane:
+        //   angles  = rebuilt - (momentum / (1 + momentum)) * tprev
+        //   angles /= |angles| + eps
+        //   estimate = target_mag * angles
+        // This preserves magnitude weighting and avoids the 2*pi phase-wrap
+        // discontinuities of scalar-angle extrapolation.
+        std::complex<float> angles = rebuilt;
+        if (config.momentum > 0.0f) {
+          angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
         }
-      }
-    }
-  } else {
-    // n_fft, hop_length, window and geometry are fixed for the whole call, so
-    // hoist the FFT plan and the per-iteration buffers out of the loop instead
-    // of paying Spectrogram::from_complex's copy and Spectrogram::compute's
-    // fresh allocation (and a fresh FFT plan for each) on every pass.
-    const int win_length = checked.actual_win_length();
-    std::vector<float> analysis_window =
-        build_padded_window(checked.window, win_length, n_fft, true);
-    std::vector<float> synthesis_window =
-        build_padded_window(checked.window, win_length, n_fft, false);
-    Eigen::Map<const Eigen::VectorXf> analysis_window_vec(analysis_window.data(), n_fft);
-    Eigen::Map<const Eigen::VectorXf> synthesis_window_vec(synthesis_window.data(), n_fft);
-    const Eigen::VectorXf window_product_vec =
-        analysis_window_vec.cwiseProduct(synthesis_window_vec);
+        const float norm = std::abs(angles) + 1e-16f;
 
-    const int full_length = (n_frames - 1) * hop_length + n_fft;
-
-    FFT fft(n_fft);
-    std::vector<float> frame(n_fft);
-    std::vector<std::complex<float>> frame_spectrum(n_bins);
-    std::vector<float> output(static_cast<size_t>(full_length));
-    std::vector<float> window_sum(static_cast<size_t>(full_length));
-    std::vector<std::complex<float>> new_spectrum(total);
-
-    for (int iter = 0; iter < config.n_iter; ++iter) {
-      Audio reconstructed = griffin_lim_synthesize(
-          spectrum.data(), n_bins, n_frames, n_fft, hop_length, sample_rate, target_length,
-          synthesis_window, window_product_vec, fft, frame_spectrum, frame, output, window_sum);
-      griffin_lim_analyze(reconstructed, checked.pad_mode, analysis_window, n_fft, hop_length,
-                          n_bins, n_frames, fft, frame, frame_spectrum, new_spectrum);
-
-      // Update phase while preserving magnitude
-      for (int f = 0; f < n_bins; ++f) {
-        for (int t = 0; t < n_frames; ++t) {
-          const size_t idx =
-              static_cast<size_t>(f) * static_cast<size_t>(n_frames) + static_cast<size_t>(t);
-          float target_mag = magnitude[idx];
-
-          std::complex<float> rebuilt = new_spectrum[idx];
-
-          // librosa's fast Griffin-Lim momentum, operating in the complex plane:
-          //   angles  = rebuilt - (momentum / (1 + momentum)) * tprev
-          //   angles /= |angles| + eps
-          //   estimate = target_mag * angles
-          // This preserves magnitude weighting and avoids the 2*pi phase-wrap
-          // discontinuities of scalar-angle extrapolation.
-          std::complex<float> angles = rebuilt;
-          if (config.momentum > 0.0f) {
-            angles -= (config.momentum / (1.0f + config.momentum)) * tprev[idx];
-          }
-          const float norm = std::abs(angles) + 1e-16f;
-
-          tprev[idx] = rebuilt;  // Store the full complex estimate for next iter.
-          spectrum[idx] = (target_mag / norm) * angles;
-        }
+        tprev[idx] = rebuilt;  // Store the full complex estimate for next iter.
+        spectrum[idx] = (target_mag / norm) * angles;
       }
     }
   }
@@ -798,7 +768,7 @@ MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power) {
     } else {
       out.phase[i] = spec[i] / mag;
     }
-    out.magnitude[i] = (power == 1.0f) ? mag : std::pow(mag, power);
+    out.magnitude[i] = (power == 1.0f) ? mag : finite_pow(mag, power);
   }
   return out;
 }
@@ -821,9 +791,11 @@ namespace {
 ///          non-cyclic edge difference (treating samples outside the window as
 ///          zero) introduces a spurious half-amplitude spike at both ends and
 ///          biases the reassigned frequencies near DC and Nyquist.
+///          `window_center` is the sample offset of the window's centre within
+///          a frame, where a non-centred frame's unreassigned time sits.
 void build_reassignment_windows(const StftConfig& config, std::vector<float>& padded_window,
                                 std::vector<float>& t_window, std::vector<float>& dw_window,
-                                double& half_n) {
+                                double& window_center) {
   const int n_fft = config.n_fft;
   const int win_length = config.actual_win_length();
   const auto window_handle = get_window_cached(config.window, win_length, true);
@@ -833,7 +805,8 @@ void build_reassignment_windows(const StftConfig& config, std::vector<float>& pa
   t_window.assign(n_fft, 0.0f);
   dw_window.assign(n_fft, 0.0f);
   std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
-  half_n = 0.5 * static_cast<double>(win_length - 1);
+  const double half_n = 0.5 * static_cast<double>(win_length - 1);
+  window_center = static_cast<double>(win_offset) + half_n;
   for (int i = 0; i < win_length; ++i) {
     const double t_sample = static_cast<double>(i) - half_n;
     t_window[win_offset + i] = static_cast<float>(t_sample * window[i]);
@@ -865,8 +838,8 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
   std::vector<float> padded_window, t_window, dw_window;
-  double half_n = 0.0;
-  build_reassignment_windows(config, padded_window, t_window, dw_window, half_n);
+  double window_center = 0.0;
+  build_reassignment_windows(config, padded_window, t_window, dw_window, window_center);
 
   const int sr = audio.sample_rate();
   const float* signal = audio.data();
@@ -901,7 +874,8 @@ ReassignedSpectrogram reassigned_spectrogram(const Audio& audio, const StftConfi
       const float power = std::norm(S);
       out.magnitude[idx] = std::sqrt(power);
       const float center_time =
-          (static_cast<float>(t * hop_length) + (config.center ? 0.0f : half_n)) * sample_to_sec;
+          (static_cast<float>(t * hop_length) + (config.center ? 0.0f : window_center)) *
+          sample_to_sec;
       const float center_freq = static_cast<float>(k) * bin_to_hz;
       if (power < ref_power) {
         out.times[idx] = fill_nan ? nan : center_time;
@@ -936,8 +910,8 @@ std::vector<float> reassign_axis(const Audio& audio, const StftConfig& config, f
   SONARE_CHECK(win_length <= n_fft, ErrorCode::InvalidParameter);
 
   std::vector<float> padded_window, t_window, dw_window;
-  double half_n = 0.0;
-  build_reassignment_windows(config, padded_window, t_window, dw_window, half_n);
+  double window_center = 0.0;
+  build_reassignment_windows(config, padded_window, t_window, dw_window, window_center);
   const std::vector<float>& second_window = use_time_window ? t_window : dw_window;
 
   const int sr = audio.sample_rate();
@@ -956,7 +930,7 @@ std::vector<float> reassign_axis(const Audio& audio, const StftConfig& config, f
 
   const int n_bins = n_fft / 2 + 1;
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames, 0.0f);
-  const auto center_of = center_of_factory(sr, n_fft, hop_length, config.center, half_n);
+  const auto center_of = center_of_factory(sr, n_fft, hop_length, config.center, window_center);
   const auto combine_of = combine_of_factory(sr);
   const float nan = std::numeric_limits<float>::quiet_NaN();
   for (int k = 0; k < n_bins; ++k) {
@@ -998,10 +972,11 @@ std::vector<float> reassign_times(const Audio& audio, const StftConfig& config, 
                                   bool fill_nan) {
   return reassign_axis(
       audio, config, ref_power, fill_nan, /*use_time_window=*/true,
-      [](int sr, int, int hop_length, bool center, double half_n) {
+      [](int sr, int, int hop_length, bool center, double window_center) {
         const float sample_to_sec = 1.0f / static_cast<float>(sr);
         return [=](int, int t) {
-          return (static_cast<float>(t * hop_length) + (center ? 0.0f : half_n)) * sample_to_sec;
+          return (static_cast<float>(t * hop_length) + (center ? 0.0f : window_center)) *
+                 sample_to_sec;
         };
       },
       [](int sr) {

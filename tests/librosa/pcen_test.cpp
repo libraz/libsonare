@@ -198,3 +198,28 @@ TEST_CASE("pcen matches the oracle on single-row and single-column inputs", "[li
     require_bit_equal(pcen(S.data(), 1, n_frames, cfg), oracle_pcen(S.data(), 1, n_frames, cfg));
   }
 }
+
+TEST_CASE("pcen never returns a non-finite cell for a finite configuration", "[pcen][validation]") {
+  // A silent row decays the smoother toward 0, where (M + eps)^-gain overflows a
+  // float once gain * log10(1 / eps) passes ~38.
+  constexpr int kBins = 2;
+  constexpr int kFrames = 400;
+  std::vector<float> S(static_cast<size_t>(kBins * kFrames), 0.0f);
+  for (int t = 0; t < kFrames; ++t) S[static_cast<size_t>(kFrames + t)] = 1.0f;
+  for (const float gain : {0.98f, 10.0f, 40.0f}) {
+    for (const float power : {0.0f, 0.5f}) {
+      PcenConfig config;
+      config.gain = gain;
+      config.eps = 1.0e-6f;
+      config.power = power;
+      INFO("gain " << gain << ", power " << power);
+      try {
+        const auto out = pcen(S, kBins, kFrames, config);
+        for (const float v : out) REQUIRE(std::isfinite(v));
+      } catch (const SonareException& e) {
+        REQUIRE(e.code() == ErrorCode::InvalidParameter);
+        REQUIRE(gain > 1.0f);
+      }
+    }
+  }
+}

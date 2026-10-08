@@ -923,3 +923,27 @@ TEST_CASE("an all-pass band is refused where it would be a wire", "[mastering][e
   EqualizerProcessor eq;
   REQUIRE_THROWS(eq.set_band(0, band));
 }
+
+TEST_CASE("EqualizerProcessor treats every channel of a wide block alike or refuses it",
+          "[mastering][eq]") {
+  constexpr int kRate = 48000;
+  constexpr int kBlock = 1024;
+  for (const PhaseMode mode : {PhaseMode::ZeroLatency, PhaseMode::LinearPhase}) {
+    EqualizerProcessor eq({3});
+    eq.set_phase_mode(mode);
+    eq.prepare(kRate, kBlock);
+    eq.set_band(0, {EqBandType::Peak, 1000.0f, 9.0f, 1.0f, true});
+    std::vector<std::vector<float>> planes(3, sine(1000.0f, kRate, kBlock));
+    float* channels[] = {planes[0].data(), planes[1].data(), planes[2].data()};
+    INFO("linear phase " << (mode == PhaseMode::LinearPhase));
+    if (mode == PhaseMode::LinearPhase) {
+      const auto before = planes;
+      REQUIRE_THROWS_AS(eq.process(channels, 3, kBlock), sonare::SonareException);
+      REQUIRE(planes == before);
+    } else {
+      eq.process(channels, 3, kBlock);
+      REQUIRE(planes[2] == planes[0]);
+      REQUIRE(planes[1] == planes[0]);
+    }
+  }
+}

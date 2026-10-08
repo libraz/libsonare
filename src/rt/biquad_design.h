@@ -43,6 +43,38 @@ struct BiquadState {
   }
 };
 
+/// @brief Lowest normalized angular frequency (2*pi*fc/fs) any designer here builds at.
+/// @details Keeps sin(w0), and with it every bandwidth term, away from zero. A float
+///          section whose rounded poles land on the unit circle near either end is
+///          pulled back inside by the designers' narrowing step, not by this bound.
+inline constexpr double kMinDesignW0 = 1.0e-6;
+/// @brief Highest normalized angular frequency, the floor's mirror below pi.
+inline constexpr double kMaxDesignW0 = sonare::constants::kPiD - kMinDesignW0;
+/// @brief Q range every designer here builds at.
+inline constexpr double kMinDesignQ = 1.0e-6;
+inline constexpr double kMaxDesignQ = 1.0e6;
+
+/// @brief A (w0, Q) pair inside the region where every designer here returns
+///        finite, stable coefficients.
+struct DesignDomain {
+  double w0 = kMinDesignW0;
+  double q = kMinDesignQ;
+};
+
+/// @brief Maps a requested (w0, Q) into the design domain.
+/// @details Every designer in this header passes its request through here first,
+///          so no caller can reach a coefficient formula with an angle at or past
+///          Nyquist, a vanishing angle, or a degenerate Q. A NaN or non-positive
+///          w0 or Q maps to the lower bound, an infinite one to the upper bound.
+///          The float designers then narrow their taps so the section is strictly
+///          stable as stored, which is what makes every request here usable.
+DesignDomain clamp_design_domain(double w0, double q) noexcept;
+
+/// @brief Highest corner frequency in Hz the design domain admits at @p sample_rate.
+/// @details Strictly below Nyquist after rounding to float, so a frequency clamped
+///          to it passes any `frequency < sample_rate / 2` check as well.
+float max_design_frequency_hz(double sample_rate) noexcept;
+
 BiquadCoeffs vicanek_lowpass(float w0, float q);
 BiquadCoeffs vicanek_highpass(float w0, float q);
 BiquadCoeffs vicanek_bandpass(float w0, float q);
@@ -193,6 +225,13 @@ BiquadCoeffsD rbj_high_shelf_from_design_d(const HighShelfDesignD& design, doubl
 /// @brief RBJ high-pass design in double precision (normalized by a0).
 BiquadCoeffsD rbj_highpass_d(double frequency, double sample_rate, double q);
 
+/// @brief RBJ low-pass design in double precision (normalized by a0).
+BiquadCoeffsD rbj_lowpass_d(double frequency, double sample_rate, double q);
+
+/// @brief `tan(pi * frequency / sample_rate)` of the domain-clamped corner: the
+///        bilinear-transform prewarp for designs built from an analog prototype.
+double bilinear_tan(double frequency, double sample_rate) noexcept;
+
 /// @brief RBJ constant-skirt-gain band-pass design in double precision (normalized by a0).
 BiquadCoeffsD rbj_bandpass_d(double frequency, double sample_rate, double q);
 
@@ -207,7 +246,9 @@ struct KWeightingCoeffs {
 
 /// @brief Designs the ITU-R BS.1770 K-weighting coefficients for @p sample_rate.
 /// @details Returns the exact reference coefficients for 48000 Hz, otherwise
-/// derives the shelf + high-pass via the analytic BS.1770 formulas.
+/// derives the shelf + high-pass via the analytic BS.1770 formulas. At a rate
+/// whose Nyquist lies below a stage's corner the corner is held at the design
+/// domain's ceiling, so both stages stay stable at every positive rate.
 KWeightingCoeffs k_weighting_coefficients(double sample_rate);
 
 }  // namespace sonare::rt

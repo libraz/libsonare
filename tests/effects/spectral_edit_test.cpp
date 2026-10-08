@@ -398,3 +398,15 @@ TEST_CASE("spectral_edit bounds n_fft by magnitude and not only by shape", "[spe
     REQUIRE(out.size() == audio.size());
   }
 }
+
+TEST_CASE("spectral_edit mutes the whole input to silence at any length", "[spectral_edit]") {
+  // 8192 is hop-aligned: the last frame is centred on the sample past the end.
+  for (const int samples : {8192, 8191, 8193, 1000}) {
+    Audio audio = Audio::from_vector(generate_sine(samples, 1000.0f, 0.3f), kSampleRate);
+    SpectralRegionOp mute{0, samples, 0.0f, 0.0f, 0.0f, SpectralEditMode::Mute};
+    const Audio out = spectral_edit(audio, default_config(), &mute, 1);
+    INFO("samples " << samples);
+    REQUIRE(out.size() == static_cast<size_t>(samples));
+    for (size_t i = 0; i < out.size(); ++i) REQUIRE(out[i] == 0.0f);
+  }
+}

@@ -23,8 +23,6 @@
 
 namespace sonare {
 
-using sonare::constants::kEpsilon;
-
 namespace {
 
 size_t checked_spectrogram_size(int n_bins, int n_frames) {
@@ -287,6 +285,15 @@ namespace {
 /// @brief Which component a single-component HPSS pass reconstructs.
 enum class HpssComponent { kHarmonic, kPercussive };
 
+/// @brief Refuses a mask power or margin the mask expressions are not defined for.
+void validate_mask_config(const HpssConfig& config) {
+  SONARE_CHECK_MSG(std::isfinite(config.power) && config.power > 0.0f, ErrorCode::InvalidParameter,
+                   "HPSS power must be finite and positive");
+  SONARE_CHECK_MSG(std::isfinite(config.margin_harmonic) && config.margin_harmonic >= 0.0f &&
+                       std::isfinite(config.margin_percussive) && config.margin_percussive >= 0.0f,
+                   ErrorCode::InvalidParameter, "HPSS margins must be finite and non-negative");
+}
+
 /// @brief Fills the requested separation masks from a spectrogram's magnitude.
 /// @param spec Analysis spectrogram
 /// @param config HPSS configuration
@@ -300,6 +307,7 @@ enum class HpssComponent { kHarmonic, kPercussive };
 ///          expressions exist once and the two cannot drift apart.
 void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int total_size,
                      std::vector<float>* harmonic_mask, std::vector<float>* percussive_mask) {
+  validate_mask_config(config);
   const int n_bins = spec.n_bins();
   const int n_frames = spec.n_frames();
 
@@ -312,37 +320,34 @@ void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int tota
   std::vector<float> percussive_enhanced =
       median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-  /// Raise the filtered magnitudes to the mask power in place: the unpowered
-  /// values are not read again, and two more magnitude-sized buffers would sit
-  /// on top of every other buffer the separation holds.
-  Eigen::Map<Eigen::ArrayXf> h_pow(harmonic_enhanced.data(), total_size);
-  Eigen::Map<Eigen::ArrayXf> p_pow(percussive_enhanced.data(), total_size);
-  h_pow = h_pow.pow(config.power);
-  p_pow = p_pow.pow(config.power);
+  Eigen::Map<Eigen::ArrayXf> h_mag(harmonic_enhanced.data(), total_size);
+  Eigen::Map<Eigen::ArrayXf> p_mag(percussive_enhanced.data(), total_size);
 
   if (config.use_soft_mask) {
     /// Soft masks matching librosa: the margin is applied to the *opposing*
     /// component before the power, i.e.
     ///   mask_harm = H^p / (H^p + (margin_h * P)^p)
     ///   mask_perc = P^p / (P^p + (margin_p * H)^p)
-    /// Since margin is inside the power, it contributes margin^power (not the
-    /// margin^1 that a post-power multiply would give).
-    const float mh_p = std::pow(config.margin_harmonic, config.power);
-    const float mp_p = std::pow(config.margin_percussive, config.power);
-
-    if (harmonic_mask != nullptr) {
-      Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask->data(), total_size);
-      h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
-    }
-    if (percussive_mask != nullptr) {
-      Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask->data(), total_size);
-      p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
+    /// so the margin contributes margin^power, not margin^1.
+    const auto& h = harmonic_enhanced;
+    const auto& p = percussive_enhanced;
+    const double mh = config.margin_harmonic;
+    const double mp = config.margin_percussive;
+    for (int i = 0; i < total_size; ++i) {
+      const size_t cell = static_cast<size_t>(i);
+      if (harmonic_mask != nullptr) {
+        (*harmonic_mask)[cell] = soft_mask(h[cell], mh * p[cell], config.power);
+      }
+      if (percussive_mask != nullptr) {
+        (*percussive_mask)[cell] = soft_mask(p[cell], mp * h[cell], config.power);
+      }
     }
   } else {
-    /// Hard mask: h >= p -> harmonic=1, else percussive=1
+    /// Hard mask: h >= p -> harmonic=1, else percussive=1. A positive power
+    /// preserves the order, so the magnitudes are compared unpowered.
     if (harmonic_mask != nullptr) {
       Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask->data(), total_size);
-      h_mask = (h_pow >= p_pow).cast<float>();
+      h_mask = (h_mag >= p_mag).cast<float>();
     }
     if (percussive_mask != nullptr) {
       Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask->data(), total_size);
@@ -352,7 +357,7 @@ void fill_hpss_masks(const Spectrogram& spec, const HpssConfig& config, int tota
       } else {
         /// The percussive mask is the harmonic one's complement, so a
         /// percussive-only pass forms the harmonic mask in place and inverts it.
-        p_mask = (h_pow >= p_pow).cast<float>();
+        p_mask = (h_mag >= p_mag).cast<float>();
         p_mask = 1.0f - p_mask;
       }
     }
@@ -476,6 +481,7 @@ Audio percussive(const Audio& audio, const HpssConfig& config, const StftConfig&
 HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
                                                      const HpssConfig& config) {
   SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  validate_mask_config(config);
 
   int n_bins = spec.n_bins();
   int n_frames = spec.n_frames();
@@ -495,25 +501,21 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
     std::vector<float> percussive_enhanced =
         median_filter_vertical(magnitude.data(), n_bins, n_frames, config.kernel_size_percussive);
 
-    /// Raised to the mask power in place (see fill_hpss_masks).
-    Eigen::Map<Eigen::ArrayXf> h_pow(harmonic_enhanced.data(), total_size);
-    Eigen::Map<Eigen::ArrayXf> p_pow(percussive_enhanced.data(), total_size);
-    h_pow = h_pow.pow(config.power);
-    p_pow = p_pow.pow(config.power);
-
     Eigen::Map<Eigen::ArrayXf> h_mask(harmonic_mask.data(), total_size);
     Eigen::Map<Eigen::ArrayXf> p_mask(percussive_mask.data(), total_size);
     Eigen::Map<Eigen::ArrayXf> r_mask(residual_mask.data(), total_size);
+    const auto& h = harmonic_enhanced;
+    const auto& p = percussive_enhanced;
 
     if (config.use_soft_mask) {
-      /// Soft masks matching librosa: the margin is applied to the *opposing*
-      /// component before the power (see hpss() above for the derivation), so the
-      /// margin contributes margin^power rather than margin^1.
-      const float mh_p = std::pow(config.margin_harmonic, config.power);
-      const float mp_p = std::pow(config.margin_percussive, config.power);
-
-      h_mask = h_pow / (h_pow + mh_p * p_pow + kEpsilon);
-      p_mask = p_pow / (p_pow + mp_p * h_pow + kEpsilon);
+      /// The same soft masks as fill_hpss_masks.
+      const double mh = config.margin_harmonic;
+      const double mp = config.margin_percussive;
+      for (int i = 0; i < total_size; ++i) {
+        const size_t cell = static_cast<size_t>(i);
+        h_mask[i] = soft_mask(h[cell], mh * p[cell], config.power);
+        p_mask[i] = soft_mask(p[cell], mp * h[cell], config.power);
+      }
 
       /// Residual is 1 - sum when margins push both masks below their full share
       Eigen::ArrayXf mask_sum = h_mask + p_mask;
@@ -525,14 +527,14 @@ HpssSpectrogramResultWithResidual hpss_with_residual(const Spectrogram& spec,
       p_mask /= total_all;
       r_mask /= total_all;
     } else {
-      /// Hard mask: residual is where neither dominates clearly
-      Eigen::ArrayXf ratio = (h_pow + kEpsilon) / (p_pow + kEpsilon);
-
-      /// ratio > 2.0 -> harmonic only
-      /// ratio < 0.5 -> percussive only
-      /// else -> residual
-      h_mask = (ratio > 2.0f).cast<float>();
-      p_mask = (ratio < 0.5f).cast<float>();
+      /// Hard mask: residual is where neither dominates clearly. H^p / P^p above 2
+      /// is a share above 2/3, below 0.5 a share below 1/3; an empty cell is residual.
+      for (int i = 0; i < total_size; ++i) {
+        const size_t cell = static_cast<size_t>(i);
+        const float share = soft_mask(h[cell], p[cell], config.power, 0.5f);
+        h_mask[i] = share > 2.0f / 3.0f ? 1.0f : 0.0f;
+        p_mask[i] = share < 1.0f / 3.0f ? 1.0f : 0.0f;
+      }
       r_mask = 1.0f - h_mask - p_mask;
     }
   }

@@ -630,3 +630,43 @@ TEST_CASE("MatchEq FIR realizes unity outside the matched band", "[mastering][ma
   CHECK(response_db(200.0) > 6.0);
   CHECK(response_db(12000.0) > 6.0);
 }
+
+TEST_CASE("MatchEq never places a band at or above the curve's Nyquist", "[mastering][match]") {
+  // At 8 kHz the default 18 kHz ceiling admits the 4 kHz Nyquist bin itself.
+  constexpr int kRate = 8000;
+  ReferenceSpectrum source{{100.0f, 1000.0f, 2000.0f, 3000.0f, 4000.0f},
+                           {-20.0f, -20.0f, -20.0f, -20.0f, -20.0f},
+                           kRate};
+  ReferenceSpectrum reference{
+      {100.0f, 1000.0f, 2000.0f, 3000.0f, 4000.0f}, {-20.0f, -15.0f, -20.0f, -20.0f, -2.0f}, kRate};
+  const MatchEqConfig config;
+  const auto bands = match_eq_bands(source, reference, config);
+  REQUIRE_FALSE(bands.empty());
+  for (const auto& band : bands) {
+    INFO("band at " << band.frequency_hz);
+    REQUIRE(band.frequency_hz > 0.0f);
+    REQUIRE(band.frequency_hz < kRate * 0.5f);
+  }
+
+  sonare::mastering::eq::EqualizerProcessor eq({1});
+  eq.prepare(kRate, 512);
+  REQUIRE_NOTHROW(configure_equalizer_from_match(eq, source, reference, config));
+  REQUIRE(eq.band(0).enabled);
+}
+
+TEST_CASE("a match the equalizer refuses leaves its bands in place", "[mastering][match]") {
+  // Measured at 48 kHz, applied to an equalizer running at 8 kHz: the 12 kHz band
+  // the match places is one the equalizer cannot carry.
+  ReferenceSpectrum source{{100.0f, 1000.0f, 12000.0f}, {-20.0f, -20.0f, -20.0f}, 48000};
+  ReferenceSpectrum reference{{100.0f, 1000.0f, 12000.0f}, {-20.0f, -20.0f, -8.0f}, 48000};
+  sonare::mastering::eq::EqualizerProcessor eq({1});
+  eq.prepare(8000.0, 512);
+  const sonare::mastering::eq::EqBand held{sonare::mastering::eq::EqBandType::Peak, 500.0f, 4.0f,
+                                           1.0f, true};
+  eq.set_band(3, held);
+  REQUIRE_THROWS(
+      configure_equalizer_from_match(eq, source, reference, {2, 12.0f, 40.0f, 18000.0f, 1.0f, 0}));
+  REQUIRE(eq.band(3).enabled);
+  REQUIRE(eq.band(3).frequency_hz == held.frequency_hz);
+  REQUIRE(eq.band(3).gain_db == held.gain_db);
+}

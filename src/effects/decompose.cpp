@@ -10,6 +10,7 @@
 #include "core/spectrum.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/math_utils.h"
 #include "util/numeric_validation.h"
 #include "util/validated.h"
 
@@ -139,6 +140,9 @@ void build_component_model(const DecomposeResult& factors, int n_bins, int n_fra
   const std::size_t cells = static_cast<std::size_t>(n_bins) * static_cast<std::size_t>(n_frames);
   model.assign(cells * static_cast<std::size_t>(k), 0.0f);
   denominator.assign(cells, 0.0f);
+  // Each cell is weighed against its loudest component, so the weights sit in
+  // [0, 1] whatever the input level and no power of them can overflow.
+  std::vector<float> loudest(cells, 0.0f);
   for (int component = 0; component < k; ++component) {
     float* plane = model.data() + static_cast<std::size_t>(component) * cells;
     for (int bin = 0; bin < n_bins; ++bin) {
@@ -148,14 +152,21 @@ void build_component_model(const DecomposeResult& factors, int n_bins, int n_fra
         const float h =
             factors.H[static_cast<std::size_t>(component) * static_cast<std::size_t>(n_frames) +
                       static_cast<std::size_t>(frame)];
-        const float value = std::max(w * h, 0.0f);
-        const float weighted = mask_power == 1.0f ? value : std::pow(value, mask_power);
         const std::size_t cell =
             static_cast<std::size_t>(bin) * static_cast<std::size_t>(n_frames) +
             static_cast<std::size_t>(frame);
-        plane[cell] = weighted;
-        denominator[cell] += weighted;
+        plane[cell] = std::max(w * h, 0.0f);
+        loudest[cell] = std::max(loudest[cell], plane[cell]);
       }
+    }
+  }
+  for (int component = 0; component < k; ++component) {
+    float* plane = model.data() + static_cast<std::size_t>(component) * cells;
+    for (std::size_t cell = 0; cell < cells; ++cell) {
+      if (loudest[cell] == 0.0f) continue;
+      const float scaled = plane[cell] / loudest[cell];
+      plane[cell] = mask_power == 1.0f ? scaled : finite_pow(scaled, mask_power);
+      denominator[cell] += plane[cell];
     }
   }
 }
@@ -218,8 +229,8 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
     // Build feature-space numerator/denominator factors.
     for (size_t i = 0; i < WH.size(); ++i) {
       const float wh = WH[i] + kEps;
-      const float pow_num = (exp_num == 0.0f) ? 1.0f : std::pow(wh, exp_num);
-      const float pow_den = (exp_den == 0.0f) ? 1.0f : std::pow(wh, exp_den);
+      const float pow_num = (exp_num == 0.0f) ? 1.0f : finite_pow(wh, exp_num);
+      const float pow_den = (exp_den == 0.0f) ? 1.0f : finite_pow(wh, exp_den);
       num_feat[i] = S[i] * pow_num;
       den_feat[i] = pow_den;
     }
@@ -250,8 +261,8 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
     multiply_WH(out.W, out.H, n_features, n_components, n_frames, WH);
     for (size_t i = 0; i < WH.size(); ++i) {
       const float wh = WH[i] + kEps;
-      const float pow_num = (exp_num == 0.0f) ? 1.0f : std::pow(wh, exp_num);
-      const float pow_den = (exp_den == 0.0f) ? 1.0f : std::pow(wh, exp_den);
+      const float pow_num = (exp_num == 0.0f) ? 1.0f : finite_pow(wh, exp_num);
+      const float pow_den = (exp_den == 0.0f) ? 1.0f : finite_pow(wh, exp_den);
       num_feat[i] = S[i] * pow_num;
       den_feat[i] = pow_den;
     }
@@ -268,6 +279,12 @@ DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_co
         }
         out.W[f * n_components + c] *= num / (den + kEps);
       }
+    }
+    // Each power is finite, but a product or sum of them can still overflow.
+    if (!all_finite(out.W.data(), n_features, n_components) ||
+        !all_finite(out.H.data(), n_components, n_frames)) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            "decompose: beta overflows the factor update for this input");
     }
   }
   return out;
@@ -445,6 +462,10 @@ void validate_config(const DecomposeStemsConfig& config) {
   SONARE_CHECK_MSG(numeric::finite(config.mask_power) && config.mask_power >= 1.0f,
                    ErrorCode::InvalidParameter,
                    "DecomposeStemsConfig: maskPower must be finite and at least 1");
+  // The components are resynthesised, so the analysis has to overlap-add back
+  // to the input under the same rule every other resynthesising effect applies.
+  const StftConfig stft = make_stft_config(config.n_fft, config.hop_length);
+  validate_cola_geometry(stft.n_fft, stft.hop_length, stft.window, stft.actual_win_length());
 }
 
 DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
@@ -512,7 +533,7 @@ DecomposeStemsLinkedResult decompose_stems_linked(const float* const* channels,
         // where the factorisation has none. One mask per cell, applied
         // unchanged to every channel's own spectrum.
         const float total = denominator[cell];
-        const float mask = total > kEps ? plane[cell] / total : 0.0f;
+        const float mask = total > 0.0f ? plane[cell] / total : 0.0f;
         masked[cell] = source[cell] * mask;
       }
       const Spectrogram component_spectrum =

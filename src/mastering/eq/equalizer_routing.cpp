@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 
 #include "mastering/eq/equalizer.h"
@@ -208,7 +209,11 @@ void EqualizerProcessor::magnitude_response_db(const EqBand* bands, size_t band_
 void EqualizerProcessor::magnitude_response_db(StereoPlacement placement,
                                                const float* frequencies_hz, size_t frequency_count,
                                                float* out_db) const {
-  magnitude_response_impl(bands_.data(), kMaxBands, sample_rate_, phase_mode_, gain_scale_,
+  // Resolved to the rate the way the backends are, so a band stored before a
+  // re-prepare to a lower rate is drawn as it is heard rather than refused.
+  std::array<EqBand, kMaxBands> resolved;
+  for (size_t i = 0; i < kMaxBands; ++i) resolved[i] = band_at_rate(bands_[i], sample_rate_);
+  magnitude_response_impl(resolved.data(), kMaxBands, sample_rate_, phase_mode_, gain_scale_,
                           last_applied_gain_db_.data(), placement, frequencies_hz, frequency_count,
                           out_db);
   // The output stage is a broadband gain, so it moves the whole curve.
@@ -243,7 +248,7 @@ void EqualizerProcessor::update_iir_bands_preserving_state(int num_samples) {
         throw SonareException(ErrorCode::InvalidParameter,
                               "EqualizerProcessor IIR backend band capacity exceeded");
       }
-      backend.set_band(index++, routed);
+      backend.set_band_at_rate(index++, routed);
     };
     switch (routed.placement) {
       case StereoPlacement::Stereo:
@@ -368,7 +373,7 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
         throw SonareException(ErrorCode::InvalidParameter,
                               "EqualizerProcessor IIR backend band capacity exceeded");
       }
-      backend.set_band(index++, routed);
+      backend.set_band_at_rate(index++, routed);
     };
     switch (routed.placement) {
       case StereoPlacement::Stereo:
@@ -401,7 +406,7 @@ void EqualizerProcessor::rebuild_iir(int num_samples) {
         throw SonareException(ErrorCode::InvalidParameter,
                               "EqualizerProcessor FIR backend band capacity exceeded");
       }
-      backend.set_band(index++, routed);
+      backend.set_band(index++, band_at_rate(routed, sample_rate_));
       has_linear_bands_ = true;
     };
     switch (routed.placement) {

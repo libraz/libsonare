@@ -21,14 +21,12 @@ using sonare::discard_group_if_non_finite;
 constexpr float MultibandImager::kDecorrelationFrequenciesHz[];
 
 float MultibandImager::allpass_coefficient(float frequency_hz, double sample_rate) noexcept {
-  // First-order all-pass break-frequency coefficient via the bilinear transform:
-  //   c = (tan(pi*fc/fs) - 1) / (tan(pi*fc/fs) + 1)
-  // matched to the difference equation y = -c*x + x1 + c*y1. The cutoff is
-  // clamped below Nyquist so high target frequencies stay well-defined at low
-  // sample rates.
+  // y = -c*x + x1 + c*y1 is H(z) = (z^-1 - c) / (1 - c*z^-1), whose -90 degree
+  // point sits at fc for c = (1 - tan(pi*fc/fs)) / (1 + tan(pi*fc/fs)). The
+  // cutoff is clamped below Nyquist so tan() stays finite at low sample rates.
   const double fc = std::clamp(static_cast<double>(frequency_hz), 1.0, sample_rate * 0.49);
   const double t = std::tan(sonare::constants::kPiD * fc / sample_rate);
-  return static_cast<float>((t - 1.0) / (t + 1.0));
+  return static_cast<float>((1.0 - t) / (1.0 + t));
 }
 
 float MultibandImager::Allpass::process(float input) noexcept {

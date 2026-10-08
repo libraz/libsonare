@@ -734,32 +734,26 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
   // flat through the tenor while the stopband falls at the measured slope.
   {
     const float w = kTwoPi * kRadiationHpHz / static_cast<float>(sr);
-    const float cw = std::cos(w);
-    const float sw = std::sin(w);
     for (int i = 0; i < kRadiationHpSections; ++i) {
       HpSection& s = hp_[static_cast<size_t>(i)];
-      const float alpha = sw / (2.0f * kRadiationHpSectionQ[static_cast<size_t>(i)]);
-      const float a0 = 1.0f + alpha;
-      s.b0 = (1.0f + cw) * 0.5f / a0;
-      s.b1 = -(1.0f + cw) / a0;
-      s.a1 = -2.0f * cw / a0;
-      s.a2 = (1.0f - alpha) / a0;
+      const rt::BiquadCoeffs c = rt::rbj_highpass(w, kRadiationHpSectionQ[static_cast<size_t>(i)]);
+      s.b0 = c.b0;
+      s.b1 = c.b1;
+      s.a1 = c.a1;
+      s.a2 = c.a2;
       s.x1 = s.x2 = s.y1 = s.y2 = 0.0f;
     }
   }
 
   // Bridge-hill emphasis coefficients (RBJ peaking) and state.
   {
-    const float big_a = std::pow(10.0f, kBridgeHillGainDb / 40.0f);
-    const float w = kTwoPi * kBridgeHillHz / static_cast<float>(sr);
-    const float cw = std::cos(w);
-    const float alpha = std::sin(w) / (2.0f * kBridgeHillQ);
-    const float a0 = 1.0f + alpha / big_a;
-    bh_b0_ = (1.0f + alpha * big_a) / a0;
-    bh_b1_ = -2.0f * cw / a0;
-    bh_b2_ = (1.0f - alpha * big_a) / a0;
-    bh_a1_ = -2.0f * cw / a0;
-    bh_a2_ = (1.0f - alpha / big_a) / a0;
+    const rt::BiquadCoeffs c = rt::rbj_peak(kTwoPi * kBridgeHillHz / static_cast<float>(sr),
+                                            kBridgeHillQ, kBridgeHillGainDb);
+    bh_b0_ = c.b0;
+    bh_b1_ = c.b1;
+    bh_b2_ = c.b2;
+    bh_a1_ = c.a1;
+    bh_a2_ = c.a2;
     bh_x1_ = bh_x2_ = bh_y1_ = bh_y2_ = 0.0f;
   }
 }

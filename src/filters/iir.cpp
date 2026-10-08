@@ -218,20 +218,17 @@ void butterworth_zero_phase(std::vector<float>& x, float cutoff_hz, int sr, int 
   if (x.empty()) return;
 
   // Double precision: low-cutoff poles near the unit circle make float noise reach -60 dB.
-  const double w0 = constants::kTwoPiD * static_cast<double>(cutoff_hz) / static_cast<double>(sr);
-  const double cos_w0 = std::cos(w0);
-  const double sin_w0 = std::sin(w0);
   const int sections = order / 2;
   for (int pair = 0; pair < sections; ++pair) {
     const double q = static_cast<double>(rt::butterworth_stage_q(order, pair));
-    const double alpha = sin_w0 / (2.0 * q);
-    const double a0 = 1.0 + alpha;
-    const double edge = highpass ? (1.0 + cos_w0) * 0.5 : (1.0 - cos_w0) * 0.5;
-    const double b0 = edge / a0;
-    const double b1 = (highpass ? -2.0 : 2.0) * edge / a0;
-    const double b2 = b0;
-    const double a1 = -2.0 * cos_w0 / a0;
-    const double a2 = (1.0 - alpha) / a0;
+    const rt::BiquadCoeffsD c =
+        highpass ? rt::rbj_highpass_d(static_cast<double>(cutoff_hz), static_cast<double>(sr), q)
+                 : rt::rbj_lowpass_d(static_cast<double>(cutoff_hz), static_cast<double>(sr), q);
+    const double b0 = c.b0;
+    const double b1 = c.b1;
+    const double b2 = c.b2;
+    const double a1 = c.a1;
+    const double a2 = c.a2;
     for (int pass = 0; pass < 2; ++pass) {
       double z1 = 0.0;
       double z2 = 0.0;

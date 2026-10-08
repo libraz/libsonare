@@ -286,3 +286,19 @@ TEST_CASE("K-weighting response is continuous across sample-rate boundary near 4
     REQUIRE_THAT(resp_exact, WithinAbs(resp_nearby, 0.01));
   }
 }
+
+TEST_CASE("K-weighting stays stable at every positive rate", "[rt][k_weighting]") {
+  // The shelf corner sits above Nyquist below about 3.4 kHz.
+  for (const double rate : {500.0, 1000.0, 2000.0, 3000.0, 4000.0, 8000.0, 11025.0, 22050.0,
+                            44100.0, 96000.0, 192000.0, 384000.0}) {
+    const auto coeffs = sonare::rt::k_weighting_coefficients(rate);
+    INFO("rate " << rate);
+    for (const auto& stage : {coeffs.pre, coeffs.rlb}) {
+      REQUIRE(std::isfinite(stage.b0));
+      REQUIRE(std::isfinite(stage.b1));
+      REQUIRE(std::isfinite(stage.b2));
+      REQUIRE(std::abs(stage.a2) < 1.0);
+      REQUIRE(std::abs(stage.a1) < 1.0 + stage.a2);
+    }
+  }
+}

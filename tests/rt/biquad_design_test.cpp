@@ -3,6 +3,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <iterator>
 #include <limits>
 
 #include "util/constants.h"
@@ -196,4 +197,117 @@ TEST_CASE("first-order shelves put half their gain on the corner", "[rt][biquad]
       REQUIRE_THAT(db(boost, hz) + db(cut, hz), WithinAbs(0.0, 1.0e-2));
     }
   }
+}
+
+namespace {
+
+bool strictly_stable(const sonare::rt::BiquadCoeffs& c) {
+  const double a1 = c.a1;
+  const double a2 = c.a2;
+  return std::abs(a2) < 1.0 && std::abs(a1) < 1.0 + a2;
+}
+
+bool all_finite(const sonare::rt::BiquadCoeffs& c) {
+  return std::isfinite(c.b0) && std::isfinite(c.b1) && std::isfinite(c.b2) && std::isfinite(c.a1) &&
+         std::isfinite(c.a2);
+}
+
+}  // namespace
+
+TEST_CASE("every float biquad designer returns finite taps stable as stored", "[rt][biquad]") {
+  namespace rt = sonare::rt;
+  using sonare::constants::kPi;
+  constexpr float kInf = std::numeric_limits<float>::infinity();
+  constexpr float kNaN = std::numeric_limits<float>::quiet_NaN();
+  // From below the domain to past Nyquist, the float neighbours of pi included.
+  const float angles[] = {-1.0f,
+                          0.0f,
+                          1.0e-9f,
+                          1.0e-7f,
+                          1.0e-6f,
+                          1.0e-5f,
+                          1.0e-4f,
+                          3.0e-4f,
+                          1.0e-3f,
+                          0.01f,
+                          0.1f,
+                          1.0f,
+                          3.0f,
+                          kPi - 1.0e-3f,
+                          kPi - 1.0e-6f,
+                          kPi,
+                          std::nextafter(kPi, 4.0f),
+                          10.0f,
+                          kInf,
+                          kNaN};
+  const float qs[] = {-1.0f, 0.0f,  1.0e-9f, 1.0e-6f, 1.0e-3f, 0.01f, 0.5f, 0.7071f,
+                      1.0f,  10.0f, 1.0e3f,  1.0e5f,  1.0e7f,  kInf,  kNaN};
+  const float gains[] = {-60.0f, -24.0f, -6.0f, 0.0f, 6.0f, 24.0f, 60.0f};
+  for (const float w0 : angles) {
+    for (const float q : qs) {
+      for (const float gain : gains) {
+        const rt::BiquadCoeffs designs[] = {rt::rbj_lowpass(w0, q),
+                                            rt::rbj_highpass(w0, q),
+                                            rt::rbj_bandpass(w0, q),
+                                            rt::rbj_notch(w0, q),
+                                            rt::rbj_allpass(w0, q),
+                                            rt::rbj_peak(w0, q, gain),
+                                            rt::rbj_low_shelf(w0, q, gain),
+                                            rt::rbj_high_shelf(w0, q, gain),
+                                            rt::vicanek_lowpass(w0, q),
+                                            rt::vicanek_highpass(w0, q),
+                                            rt::vicanek_bandpass(w0, q),
+                                            rt::vicanek_notch(w0, q),
+                                            rt::vicanek_peak(w0, q, gain),
+                                            rt::vicanek_high_shelf(w0, gain),
+                                            rt::vicanek_low_shelf(w0, gain),
+                                            rt::first_order_lowpass(w0),
+                                            rt::first_order_highpass(w0),
+                                            rt::first_order_low_shelf(w0, gain),
+                                            rt::first_order_high_shelf(w0, gain)};
+        for (size_t d = 0; d < std::size(designs); ++d) {
+          INFO("designer " << d << ", w0 " << w0 << ", q " << q << ", gain " << gain);
+          REQUIRE(all_finite(designs[d]));
+          REQUIRE(strictly_stable(designs[d]));
+        }
+        // The cut filters keep their passband at unity as stored, however close
+        // the rounded denominator sits to the unit circle.
+        const auto low = rt::rbj_lowpass(w0, q);
+        const auto high = rt::rbj_highpass(w0, q);
+        INFO("w0 " << w0 << ", q " << q);
+        REQUIRE_THAT((static_cast<double>(low.b0) + low.b1 + low.b2) / (1.0 + low.a1 + low.a2),
+                     WithinAbs(1.0, 1.0e-6));
+        REQUIRE_THAT((static_cast<double>(high.b0) - high.b1 + high.b2) / (1.0 - high.a1 + high.a2),
+                     WithinAbs(1.0, 1.0e-6));
+      }
+    }
+  }
+}
+
+TEST_CASE("an overdamped Vicanek section stays finite at a low Q", "[rt][biquad]") {
+  const auto w0 = static_cast<float>(2.0 * sonare::constants::kPiD * 16000.0 / 48000.0);
+  sonare::rt::BiquadState state;
+  state.set(sonare::rt::vicanek_lowpass(w0, 0.01f));
+  REQUIRE(all_finite(state.c));
+  int non_finite = 0;
+  for (int i = 0; i < 512; ++i) {
+    if (!std::isfinite(state.process(i == 0 ? 1.0f : 0.0f))) ++non_finite;
+  }
+  REQUIRE(non_finite == 0);
+}
+
+TEST_CASE("the design ceiling sits strictly below Nyquist in float", "[rt][biquad]") {
+  for (const double rate : {1000.0, 8000.0, 22050.0, 44100.0, 48000.0, 88200.0, 96000.0, 192000.0,
+                            384000.0, 768000.0}) {
+    const float ceiling = sonare::rt::max_design_frequency_hz(rate);
+    INFO("rate " << rate);
+    REQUIRE(ceiling > 0.0f);
+    REQUIRE(ceiling < static_cast<float>(rate * 0.5));
+  }
+  REQUIRE(sonare::rt::max_design_frequency_hz(0.0) == 0.0f);
+  const auto domain = sonare::rt::clamp_design_domain(std::numeric_limits<double>::quiet_NaN(),
+                                                      std::numeric_limits<double>::infinity());
+  REQUIRE(domain.w0 == sonare::rt::kMinDesignW0);
+  REQUIRE(domain.q == sonare::rt::kMaxDesignQ);
+  REQUIRE(sonare::rt::clamp_design_domain(4.0, 1.0).w0 == sonare::rt::kMaxDesignW0);
 }

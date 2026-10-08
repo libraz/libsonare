@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "mastering/dynamics/channel_limits.h"
+#include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
 #include "util/db.h"
@@ -138,7 +139,8 @@ void PultecEq::rebuild() {
   // disabled case (ParametricEq skips disabled bands during processing), so we
   // do not clear() first. This lets rebuild() run on the audio thread for
   // parameter automation: enabled bands get fresh coefficients while their
-  // filter state (z1/z2) is preserved.
+  // filter state (z1/z2) is preserved. A corner the prepared rate cannot carry,
+  // such as the 10 kHz default at 16 kHz, is designed at the rate's ceiling.
   const bool low_boost_enabled = low_boost_ > 0.0f;
   const bool low_atten_enabled = low_attenuation_ > 0.0f;
   const bool high_boost_enabled = high_boost_ > 0.0f;
@@ -147,25 +149,24 @@ void PultecEq::rebuild() {
   const float low_interaction = component_model_ == PultecComponentModel::Eqp1aWdf
                                     ? std::min(low_boost_, low_attenuation_) * 0.12f
                                     : 0.0f;
-  eq_.set_band(0, {EqBandType::LowShelf, low_frequency_hz_, low_boost_ * 1.7f - low_interaction,
-                   0.65f, low_boost_enabled});
-  eq_.set_band(1, {EqBandType::Peak, low_frequency_hz_ * 1.45f,
-                   -low_attenuation_ * 1.2f - low_interaction, 0.75f, low_atten_enabled});
+  eq_.set_band_at_rate(0, {EqBandType::LowShelf, low_frequency_hz_,
+                           low_boost_ * 1.7f - low_interaction, 0.65f, low_boost_enabled});
+  eq_.set_band_at_rate(1, {EqBandType::Peak, low_frequency_hz_ * 1.45f,
+                           -low_attenuation_ * 1.2f - low_interaction, 0.75f, low_atten_enabled});
 
   const float high_q = 0.6f + high_bandwidth_ * 3.0f;
-  eq_.set_band(2, {EqBandType::Peak, high_boost_frequency_hz_, high_boost_ * 1.5f, high_q,
-                   high_boost_enabled});
-  eq_.set_band(3, {EqBandType::HighShelf, high_attenuation_frequency_hz_, -high_attenuation_ * 1.2f,
-                   0.7f, high_atten_enabled});
+  eq_.set_band_at_rate(2, {EqBandType::Peak, high_boost_frequency_hz_, high_boost_ * 1.5f, high_q,
+                           high_boost_enabled});
+  eq_.set_band_at_rate(3, {EqBandType::HighShelf, high_attenuation_frequency_hz_,
+                           -high_attenuation_ * 1.2f, 0.7f, high_atten_enabled});
 }
 
 bool PultecEq::set_parameter_impl(unsigned int param_id, float value) {
-  // Keep frequencies inside (0 Hz, Nyquist) so coefficient design never throws
-  // on the audio thread. Band 1 derives its center as low_frequency_hz * 1.45,
-  // so the low frequency is clamped against Nyquist / 1.45.
-  const float nyquist = static_cast<float>(sample_rate_ * 0.5);
-  const float low_freq_max = std::max(nyquist / 1.45f - 1.0e-3f, 1.0e-3f);
-  const float high_freq_max = std::max(nyquist - 1.0e-3f, 1.0e-3f);
+  // Keep frequencies inside the design domain. Band 1 derives its center as
+  // low_frequency_hz * 1.45, so the low frequency is clamped against the ceiling / 1.45.
+  const float ceiling = sonare::rt::max_design_frequency_hz(sample_rate_);
+  const float low_freq_max = std::max(ceiling / 1.45f, 1.0e-3f);
+  const float high_freq_max = std::max(ceiling, 1.0e-3f);
   switch (param_id) {
     case 0:
       low_frequency_hz_ = std::clamp(value, 1.0e-3f, low_freq_max);

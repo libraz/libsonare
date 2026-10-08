@@ -53,8 +53,10 @@ RegionWindow resolve_window(const SpectralRegionOp& op, int n_bins, int n_frames
   }
   int frame_lo = static_cast<int>(start / hop_length);
   // end_sample is exclusive. Mapping end directly made adjacent edits share
-  // the boundary frame; map the final included sample instead.
-  int frame_hi = static_cast<int>((end - 1) / hop_length);
+  // the boundary frame; map the final included sample instead. A region that
+  // reaches the input's end also owns the padding frames centred past it, which
+  // still overlap its last samples and have no later region to belong to.
+  int frame_hi = end == length ? n_frames - 1 : static_cast<int>((end - 1) / hop_length);
   frame_lo = std::clamp(frame_lo, 0, n_frames - 1);
   frame_hi = std::clamp(frame_hi, 0, n_frames - 1);
   if (frame_lo > frame_hi) {

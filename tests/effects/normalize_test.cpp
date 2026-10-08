@@ -397,3 +397,17 @@ TEST_CASE("a silent stereo pair is left alone", "[effects][normalize]") {
   const Audio quiet = create_audio_with_amplitude(0.01f);
   REQUIRE(normalize_stereo(quiet, quiet).applied_gain_db > 10.0f);
 }
+
+TEST_CASE("apply_gain refuses a finite dB value with no finite multiplier", "[normalize]") {
+  const Audio silent = Audio::from_vector(std::vector<float>(64, 0.0f), 48000);
+  for (const bool clip : {true, false}) {
+    REQUIRE_THROWS_AS(apply_gain(silent, 800.0f, clip), SonareException);
+  }
+  // A large but representable gain still applies, and the clip keeps it in range.
+  const Audio quiet = Audio::from_vector(std::vector<float>(64, 1.0e-30f), 48000);
+  const Audio gained = apply_gain(quiet, 700.0f, true);
+  for (size_t i = 0; i < gained.size(); ++i) {
+    REQUIRE(std::isfinite(gained[i]));
+    REQUIRE(std::abs(gained[i]) <= 1.0f);
+  }
+}

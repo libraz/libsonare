@@ -68,15 +68,12 @@ class MultibandImager : public rt::ProcessorBase {
 
   static constexpr int kNumAllpassStages = 4;
 
-  // Target decorrelation break frequencies (Hz) for the cascaded first-order
-  // all-pass network. The sign of the recomputed coefficient alternates by
-  // stage (low frequency -> positive coefficient, high frequency -> negative)
-  // to spread the phase response across the spectrum. These frequencies
-  // reproduce the previously hardcoded 44.1 kHz coefficients
-  // {0.63, -0.51, 0.42, -0.34} and are re-warped to the actual sample rate in
-  // prepare() so behavior is correct at 48 k / 96 k.
-  static constexpr float kDecorrelationFrequenciesHz[kNumAllpassStages] = {18917.0f, 4405.0f,
-                                                                           16607.0f, 6424.0f};
+  // Decorrelation break frequencies (Hz) of the cascaded first-order all-pass
+  // network: each stage's -90 degree point, held in Hz so prepare() places it
+  // there at every rate. At 44.1 kHz they give the coefficients
+  // {0.63, -0.51, 0.42, -0.34}, alternating low and high to spread the phase.
+  static constexpr float kDecorrelationFrequenciesHz[kNumAllpassStages] = {3133.0f, 17645.0f,
+                                                                           5443.0f, 15626.0f};
 
   static void validate_config(const MultibandImagerConfig& config);
   static float allpass_coefficient(float frequency_hz, double sample_rate) noexcept;

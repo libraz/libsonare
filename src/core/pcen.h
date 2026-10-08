@@ -36,6 +36,9 @@ struct PcenConfig {
 /// @param n_frames Number of time frames.
 /// @param config PCEN configuration.
 /// @return Normalized spectrogram [n_bins x n_frames] row-major.
+/// @throws SonareException(InvalidParameter) for a configuration out of range, or
+///         one whose gain or power overflows the float range for this @p S; no cell
+///         of a returned spectrogram is non-finite.
 std::vector<float> pcen(const float* S, int n_bins, int n_frames,
                         const PcenConfig& config = PcenConfig());
 

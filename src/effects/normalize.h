@@ -101,6 +101,8 @@ std::pair<size_t, size_t> detect_silence_boundaries(const Audio& audio, float th
 /// @param gain_db Gain in dB (positive = louder, negative = quieter)
 /// @param clip If true, hard-clip the output to [-1, 1]; if false, no clipping
 /// @return Audio with applied gain (clipped to [-1, 1] when @p clip is true)
+/// @throws SonareException(InvalidParameter) when @p gain_db is not finite or has
+///         no finite linear multiplier.
 Audio apply_gain(const Audio& audio, float gain_db, bool clip = true);
 
 /// @brief Applies fade in to audio.

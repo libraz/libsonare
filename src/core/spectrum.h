@@ -421,7 +421,8 @@ struct MagPhase {
 /// @param n Total number of complex entries (n_bins * n_frames)
 /// @param power Exponent applied to magnitude (default 1.0; e.g. 2.0 for power)
 /// @return MagPhase. phase[i] = spec[i] / max(|spec[i]|, eps); magnitude[i] = |spec[i]|^power.
-/// @throw sonare::SonareException if n > 0 and spec is null, or power <= 0.
+/// @throw sonare::SonareException if n > 0 and spec is null, power <= 0, or a
+///        magnitude raised to @p power overflows the float range.
 MagPhase magphase(const std::complex<float>* spec, std::size_t n, float power = 1.0f);
 
 /// @brief Convenience overload accepting a Spectrogram.
@@ -437,8 +438,8 @@ MagPhase magphase(const Spectrogram& spec, float power = 1.0f);
 /// @param config Griffin-Lim configuration
 /// @return Reconstructed audio
 /// @throw sonare::SonareException (InvalidParameter) on a null @p magnitude, a
-///        non-positive dimension, an @p n_bins that is not n_fft/2 + 1, or any
-///        non-finite element of @p magnitude. The finiteness precondition lives
+///        non-positive dimension, fewer than two frames, an @p n_bins that is not
+///        n_fft/2 + 1, or any non-finite element of @p magnitude. The finiteness precondition lives
 ///        here so every surface reports it identically.
 Audio griffin_lim(const float* magnitude, int n_bins, int n_frames, int n_fft, int hop_length,
                   int sample_rate, const GriffinLimConfig& config = GriffinLimConfig());

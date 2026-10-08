@@ -36,7 +36,8 @@ struct DecomposeResult {
 ///        fewer iterations but costs an SVD up-front.
 /// @throw sonare::SonareException (InvalidParameter) on a null @p S, a
 ///        non-positive dimension, an unsupported solver, a non-finite @p beta,
-///        a negative @p n_iter, or any non-finite element of @p S. The
+///        a negative @p n_iter, any non-finite element of @p S, or a @p beta
+///        whose update overflows the float range for this @p S. The
 ///        finiteness precondition lives here rather than in each binding so
 ///        every surface reports it identically.
 DecomposeResult decompose(const float* S, int n_features, int n_frames, int n_components,
@@ -63,7 +64,8 @@ struct DecomposeStemsConfig {
 ///          that build the config directly inherit the rules from that single
 ///          entry point.
 /// @throws SonareException(InvalidParameter) for a non-positive size or count,
-///         a non-finite beta, or a mask power below 1.
+///         a non-finite beta, a mask power below 1, or an STFT geometry that does
+///         not overlap-add back to the input (odd or < 4 nFft, hop above nFft / 2).
 void validate_config(const DecomposeStemsConfig& config);
 
 /// @brief Output of @ref decompose_stems.

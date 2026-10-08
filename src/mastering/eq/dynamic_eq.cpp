@@ -159,8 +159,8 @@ void DynamicEq::apply_band_gain(size_t index, float gain_db) {
     return;
   }
   last_applied_coeff_gain_db_[index] = gain_db;
-  eq_.set_band(index,
-               {dynamic_band.type, dynamic_band.frequency_hz, gain_db, dynamic_band.q, true});
+  eq_.set_band_at_rate(
+      index, {dynamic_band.type, dynamic_band.frequency_hz, gain_db, dynamic_band.q, true});
 }
 
 void DynamicEq::reset() {
@@ -251,10 +251,7 @@ bool DynamicEq::set_parameter_impl(unsigned int param_id, float value) {
   DynamicEqBand& band = bands_[band_index];
   switch (param_id % kParamsPerBand) {
     case 0:
-      // Clamp to the open interval (0 Hz, Nyquist) so coefficient design never
-      // throws on the audio thread.
-      band.frequency_hz =
-          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+      band.frequency_hz = std::clamp(value, 1.0e-3f, rt::max_design_frequency_hz(sample_rate_));
       break;
     case 1:
       band.static_gain_db = value;
@@ -522,8 +519,8 @@ void DynamicEq::rebuild(int /*num_samples*/) {
     target_gain_db_[i] = target_gain;
     last_applied_gain_db_[i] = target_gain;
     last_applied_coeff_gain_db_[i] = target_gain;
-    eq_.set_band(i,
-                 {dynamic_band.type, dynamic_band.frequency_hz, target_gain, dynamic_band.q, true});
+    eq_.set_band_at_rate(
+        i, {dynamic_band.type, dynamic_band.frequency_hz, target_gain, dynamic_band.q, true});
   }
 }
 

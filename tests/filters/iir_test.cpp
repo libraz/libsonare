@@ -3,9 +3,11 @@
 
 #include "filters/iir.h"
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 #include "rt/biquad_design.h"
@@ -268,4 +270,39 @@ TEST_CASE("IIR preemphasis keeps zero initial condition contract", "[iir]") {
   REQUIRE_THAT(result[0], WithinAbs(0.5f, 1e-6f));
   REQUIRE_THAT(result[1], WithinAbs(0.75f, 1e-6f));
   REQUIRE_THAT(result[2], WithinAbs(-0.75f, 1e-6f));
+}
+
+TEST_CASE("low-cutoff Butterworth sections keep their passband and decay", "[iir]") {
+  const auto stable = [](const BiquadCoeffs& c) {
+    return std::abs(static_cast<double>(c.a2)) < 1.0 &&
+           std::abs(static_cast<double>(c.a1)) < 1.0 + c.a2;
+  };
+  for (const auto& [cutoff, sr] :
+       {std::pair<float, int>{5.0f, 192000}, std::pair<float, int>{0.5f, 48000},
+        std::pair<float, int>{1.0f, 8000}}) {
+    INFO("cutoff " << cutoff << " Hz at " << sr);
+    const auto low = lowpass_coeffs(cutoff, sr);
+    const auto high = highpass_coeffs(cutoff, sr);
+    REQUIRE(low.b0 > 0.0f);
+    REQUIRE(stable(low));
+    REQUIRE(stable(high));
+    // DC gain of the low-pass and Nyquist gain of the high-pass, as stored.
+    REQUIRE_THAT((static_cast<double>(low.b0) + low.b1 + low.b2) / (1.0 + low.a1 + low.a2),
+                 WithinAbs(1.0, 1.0e-6));
+    REQUIRE_THAT((static_cast<double>(high.b0) - high.b1 + high.b2) / (1.0 - high.a1 + high.a2),
+                 WithinAbs(1.0, 1.0e-6));
+  }
+
+  // The high-pass impulse response dies away rather than ringing on.
+  std::vector<float> impulse(static_cast<size_t>(48000 * 20), 0.0f);
+  impulse[0] = 1.0f;
+  const auto response = apply_biquad(impulse, highpass_coeffs(0.5f, 48000));
+  float early = 0.0f;
+  float late = 0.0f;
+  for (size_t i = 1; i < 4800; ++i) early = std::max(early, std::abs(response[i]));
+  for (size_t i = response.size() - 4800; i < response.size(); ++i) {
+    late = std::max(late, std::abs(response[i]));
+  }
+  REQUIRE(std::isfinite(late));
+  REQUIRE(late < early * 0.5f);
 }

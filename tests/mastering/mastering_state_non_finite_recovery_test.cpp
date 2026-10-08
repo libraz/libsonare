@@ -103,6 +103,11 @@ constexpr int kMultibandImagerRecoveryBlocks = 700;
 // instead, and the ceiling is a decade above the largest measured on either
 // target (3.4e-5). That ceiling moves with the fixture.
 constexpr double kMultibandImagerResidual = 1.0e-3;
+// The Pultec component model is the same kind of exception: its nonlinear charges
+// carry a rounding-level difference that swells and shrinks (1e-7 to 8e-5 measured
+// past its bound) and merges with the control after anywhere from 360 to 5700
+// blocks, so it too is read against a ceiling at its bound.
+constexpr double kPultecResidual = 1.0e-3;
 constexpr int kMonoMakerRecoveryBlocks = 15;
 constexpr int kTruePeakRecoveryBlocks = 300;
 constexpr int kAdaptiveReleaseBlocks = 160;
@@ -425,7 +430,7 @@ TEST_CASE("the pultec equalizer bounds a non-finite sample to its own block", "[
     return Owner{wrap(processor), {}};
   };
 
-  check_owner(make, kPultecRecoveryBlocks);
+  check_owner_within(make, kPultecRecoveryBlocks, kPultecResidual);
 }
 
 TEST_CASE("low end focus bounds a non-finite sample to its own block", "[mastering][spectral]") {

@@ -14,11 +14,14 @@ namespace sonare {
 
 /// Fade-curve law applied to a clip fade-in / fade-out region.
 enum class FadeCurve {
-  /// Linear-amplitude ramp (default; preserves existing golden output and
-  /// dips ~-3 dB at the midpoint of equal-gain crossfades).
+  /// Linear-amplitude ramp (default; preserves existing golden output). Each
+  /// gain is 0.5 (-6 dB) at the midpoint of a symmetric crossfade: coherent
+  /// material sums to unity there, while uncorrelated equal-power material dips
+  /// ~-3 dB in power.
   Linear,
-  /// Equal-power (constant-energy) ramp using a sine/cosine law; holds a
-  /// constant -3 dB sum across symmetric crossfades.
+  /// Equal-power ramp using a sine/cosine law: the squared gains sum to 1, so
+  /// each gain is ~0.707 (-3 dB) at the midpoint. Uncorrelated equal-power
+  /// material holds its power; coherent material rises ~+3 dB there.
   EqualPower,
   /// Slow start, fast finish (x^2).
   Exponential,

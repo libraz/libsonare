@@ -665,3 +665,25 @@ TEST_CASE("ApiStyleEq boosts selected band more than distant bands", "[mastering
   REQUIRE(rms_tail(center, 4096) / center_before > 1.8f);
   REQUIRE(rms_tail(distant, 4096) / distant_before < 1.15f);
 }
+
+TEST_CASE("Pultec and API-style defaults automate at every accepted rate", "[mastering][eq]") {
+  for (const int rate : {8000, 16000, 22050, 48000}) {
+    INFO("rate " << rate);
+    PultecEq pultec;
+    REQUIRE_NOTHROW(pultec.prepare(rate, 512));
+    for (unsigned int id = 0; id < 9; ++id) {
+      INFO("pultec id " << id);
+      REQUIRE_NOTHROW(pultec.set_parameter(id, 5.0f));
+    }
+    ApiStyleEq api;
+    REQUIRE_NOTHROW(api.prepare(rate, 512));
+    for (unsigned int id = 0; id < 8; ++id) {
+      INFO("api id " << id);
+      REQUIRE_NOTHROW(api.set_parameter(id, id % 2 == 0 ? 20000.0f : 6.0f));
+    }
+    auto audio = sine(440.0f, rate, 4096);
+    process(pultec, audio);
+    process(api, audio);
+    REQUIRE(std::all_of(audio.begin(), audio.end(), [](float x) { return std::isfinite(x); }));
+  }
+}

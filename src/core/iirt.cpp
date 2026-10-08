@@ -60,7 +60,8 @@ std::vector<BiquadCoeffs> design_butterworth_bandpass(double f0, double band_q, 
   const double f_lo = f0 - 0.5 * bandwidth;
   const double f_hi = f0 + 0.5 * bandwidth;
   const double fs2 = 2.0 * sr;  // bilinear pre-scale (2*fs)
-  auto warp = [&](double f) { return fs2 * std::tan(kPiD * f / sr); };
+  // A band edge past Nyquist is held below it, where the prewarp stays finite.
+  auto warp = [&](double f) { return fs2 * rt::bilinear_tan(f, sr); };
   const double wlo = warp(f_lo);
   const double whi = warp(f_hi);
   const double wo2 = wlo * whi;  // analog center frequency squared

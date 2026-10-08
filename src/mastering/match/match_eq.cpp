@@ -717,11 +717,16 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
     float strength = 0.0f;
     bool extrema = false;
   };
+  const double sample_rate =
+      curve.sample_rate > 0 ? static_cast<double>(curve.sample_rate) : kDefaultDawSampleRate;
+  // A band at or above the curve's Nyquist is one no equalizer at that rate accepts.
+  const float nyquist = static_cast<float>(sample_rate * 0.5);
   std::vector<Candidate> candidates;
   candidates.reserve(curve.frequencies.size());
   for (size_t i = 0; i < curve.frequencies.size(); ++i) {
     const float frequency = curve.frequencies[i];
-    if (frequency < config.min_frequency_hz || frequency > config.max_frequency_hz) {
+    if (frequency < config.min_frequency_hz || frequency > config.max_frequency_hz ||
+        !(frequency < nyquist)) {
       continue;
     }
     const float gain = curve.gain_db[i];
@@ -819,8 +824,6 @@ std::vector<eq::EqBand> match_eq_bands_from_curve(const MatchEqCurve& curve,
   // Solve every gain at once against the composite response of the placed bands,
   // then bound that response by max_gain_db. Reading each band's gain straight
   // off the curve would let overlapping neighbours stack past the limit.
-  const double sample_rate =
-      curve.sample_rate > 0 ? static_cast<double>(curve.sample_rate) : kDefaultDawSampleRate;
   const std::vector<float> gains = solve_band_gains(curve.frequencies, curve.gain_db, centres,
                                                     config.q, config.max_gain_db, sample_rate);
 
@@ -837,6 +840,9 @@ void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,
                                     const ReferenceSpectrum& reference,
                                     const MatchEqConfig& config) {
   const auto bands = match_eq_bands(source, reference, config);
+  // Every band is checked before the equalizer is cleared, so a refused match
+  // leaves the bands it held in place.
+  for (const auto& band : bands) equalizer.validate_band(band);
   equalizer.clear();
   for (size_t i = 0; i < bands.size(); ++i) {
     equalizer.set_band(i, bands[i]);

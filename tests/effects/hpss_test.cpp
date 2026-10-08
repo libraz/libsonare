@@ -1452,3 +1452,57 @@ TEST_CASE("audio hpss refuses a window that leaves samples uncovered", "[hpss]")
   const HpssAudioResult result = hpss(audio, config);
   CHECK(result.harmonic.size() == audio.size());
 }
+
+// The soft mask is a ratio, so it must not depend on the level of the input, and a
+// large power must neither overflow nor be drowned by an additive floor.
+TEST_CASE("HPSS soft masks follow the ratio at any level and power", "[hpss]") {
+  constexpr int kBins = 9;
+  constexpr int kFrames = 9;
+  const int idx = 4 * kFrames + 4;
+  for (const float amp : {1.0e-7f, 1.0e-6f, 1.0f, 1.0e6f}) {
+    for (const float power : {1.0f, 2.0f, 32.0f, 200.0f}) {
+      INFO("amplitude " << amp << ", power " << power);
+      std::vector<std::complex<float>> data(static_cast<size_t>(kBins * kFrames),
+                                            std::complex<float>(amp, 0.0f));
+      Spectrogram spec =
+          Spectrogram::from_complex(data.data(), kBins, kFrames, 16, 8, 22050, WindowType::Hann);
+      HpssConfig config;
+      config.power = power;
+      config.kernel_size_harmonic = 3;
+      config.kernel_size_percussive = 3;
+      const HpssSpectrogramResult result = hpss(spec, config);
+      for (const float value : result.harmonic.magnitude()) REQUIRE(std::isfinite(value));
+      REQUIRE_THAT(result.harmonic.magnitude()[static_cast<size_t>(idx)] / amp,
+                   WithinAbs(0.5f, 1e-4f));
+      REQUIRE_THAT(result.percussive.magnitude()[static_cast<size_t>(idx)] / amp,
+                   WithinAbs(0.5f, 1e-4f));
+
+      // With margins, the residual takes what the two masks leave, and the three sum to 1.
+      config.margin_harmonic = 2.0f;
+      config.margin_percussive = 2.0f;
+      const auto split = hpss_with_residual(spec, config);
+      const float h = split.harmonic.magnitude()[static_cast<size_t>(idx)] / amp;
+      const float p = split.percussive.magnitude()[static_cast<size_t>(idx)] / amp;
+      const float r = split.residual.magnitude()[static_cast<size_t>(idx)] / amp;
+      const float share = 1.0f / (1.0f + std::pow(2.0f, power));
+      REQUIRE_THAT(h, WithinAbs(share, 1e-4f));
+      REQUIRE_THAT(p, WithinAbs(share, 1e-4f));
+      REQUIRE_THAT(h + p + r, WithinAbs(1.0f, 1e-4f));
+    }
+  }
+}
+
+TEST_CASE("HPSS refuses a mask power or margin outside its domain", "[hpss]") {
+  std::vector<std::complex<float>> data(81, std::complex<float>(1.0f, 0.0f));
+  Spectrogram spec = Spectrogram::from_complex(data.data(), 9, 9, 16, 8, 22050, WindowType::Hann);
+  for (const float power : {0.0f, -1.0f, std::numeric_limits<float>::infinity()}) {
+    HpssConfig config;
+    config.power = power;
+    INFO("power " << power);
+    REQUIRE_THROWS_AS(hpss(spec, config), SonareException);
+    REQUIRE_THROWS_AS(hpss_with_residual(spec, config), SonareException);
+  }
+  HpssConfig config;
+  config.margin_harmonic = -1.0f;
+  REQUIRE_THROWS_AS(hpss(spec, config), SonareException);
+}

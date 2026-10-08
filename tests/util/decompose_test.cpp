@@ -18,6 +18,7 @@
 
 #include "support/golden_hash.h"
 #include "util/constants.h"
+#include "util/exception.h"
 
 using namespace sonare;
 
@@ -189,7 +190,7 @@ TEST_CASE("decompose_stems output digest is pinned across the linked rewrite",
   hash = fold_fnv1a_bits(hash, r.W);
   hash = fold_fnv1a_bits(hash, r.H);
 
-  REQUIRE(hash == 0xffb444499430c7f2ull);
+  REQUIRE(hash == 0x89570551b30504e7ull);
 }
 
 namespace {
@@ -903,4 +904,81 @@ TEST_CASE("nn_filter matches the oracle on single-row and single-column inputs",
                         oracle_nn_filter(S.data(), 1, n_frames, aggregate, /*k=*/3, /*width=*/2));
     }
   }
+}
+
+TEST_CASE("decompose_stems masks do not depend on the input level or mask power",
+          "[util][decompose]") {
+  // One component: wherever the model has energy its mask is 1, so the component is
+  // the input, however quiet the input and however steep the mask power.
+  constexpr int kSampleRate = 22050;
+  const std::vector<float> loud = two_gated_tones(kSampleRate, 8192);
+  for (const float level : {1.0e-5f, 1.0f}) {
+    std::vector<float> x(loud.size());
+    for (std::size_t i = 0; i < x.size(); ++i) x[i] = loud[i] * level;
+    for (const float mask_power : {1.0f, 4.0f, 32.0f}) {
+      INFO("level " << level << ", mask power " << mask_power);
+      DecomposeStemsConfig config;
+      config.n_components = 1;
+      config.n_fft = 1024;
+      config.hop_length = 256;
+      config.n_iter = 10;
+      config.mask_power = mask_power;
+      const auto r = decompose_stems(x.data(), x.size(), kSampleRate, config);
+      REQUIRE(r.components.size() == 1);
+      double err = 0.0;
+      double ref = 0.0;
+      for (std::size_t i = 1024; i < x.size() - 1024; ++i) {
+        REQUIRE(std::isfinite(r.components[0][i]));
+        err += (r.components[0][i] - x[i]) * (r.components[0][i] - x[i]);
+        ref += static_cast<double>(x[i]) * x[i];
+      }
+      REQUIRE(ref > 0.0);
+      REQUIRE(std::sqrt(err / ref) < 1.0e-3);
+    }
+  }
+}
+
+TEST_CASE("decompose refuses a beta whose update overflows rather than returning NaN",
+          "[util][decompose]") {
+  constexpr int kFeatures = 16;
+  constexpr int kFrames = 24;
+  std::vector<float> S(static_cast<std::size_t>(kFeatures * kFrames));
+  std::uint32_t state = 12345u;
+  for (float& v : S) {
+    state = state * 1664525u + 1013904223u;
+    v = 1.0f + 4.0f * static_cast<float>(state >> 8) / static_cast<float>(1u << 24);
+  }
+  for (const float beta : {60.0f, -40.0f}) {
+    INFO("beta " << beta);
+    try {
+      const DecomposeResult r = decompose(S.data(), kFeatures, kFrames, 3, 20, "mu", beta);
+      for (const float w : r.W) REQUIRE(std::isfinite(w));
+      for (const float h : r.H) REQUIRE(std::isfinite(h));
+    } catch (const SonareException& e) {
+      REQUIRE(e.code() == ErrorCode::InvalidParameter);
+    }
+  }
+}
+
+TEST_CASE("decompose_stems refuses an STFT geometry that cannot overlap-add back",
+          "[util][decompose]") {
+  std::vector<float> x(8192, 0.0f);
+  x[1536] = 1.0f;
+  DecomposeStemsConfig config;
+  config.n_components = 2;
+  config.n_fft = 1024;
+  config.n_iter = 10;
+  for (const int hop : {1024, 513}) {
+    config.hop_length = hop;
+    INFO("hop " << hop);
+    REQUIRE_THROWS_AS(decompose_stems(x.data(), x.size(), 22050, config), SonareException);
+    const float* channels[] = {x.data()};
+    REQUIRE_THROWS_AS(decompose_stems_linked(channels, 1, x.size(), 22050, config),
+                      SonareException);
+  }
+  config.hop_length = 256;
+  const auto r = decompose_stems(x.data(), x.size(), 22050, config);
+  double at_impulse = 0.0;
+  for (const auto& component : r.components) at_impulse += component[1536];
+  REQUIRE(std::abs(at_impulse - 1.0) < 1.0e-3);
 }

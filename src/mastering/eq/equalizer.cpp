@@ -6,6 +6,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
+#include "rt/biquad_design.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -43,6 +44,16 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   }
   if (!(sample_rate > 0.0)) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
+  }
+  // Bands stored before any rate was known meet it here and are refused as
+  // set_band() refuses them; once prepared, a later rate designs them at its ceiling.
+  if (!prepared_) {
+    for (const EqBand& band : bands_) {
+      if (band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "EQ band frequency must be between 0 Hz and Nyquist");
+      }
+    }
   }
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
@@ -103,6 +114,17 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
                           "EqualizerProcessor num_samples exceeds prepared max_block_size");
   }
   validate_sidechain(num_samples);
+  // The linear-phase backends carry one stream per stereo side, so a wider block
+  // would leave its other channels unfiltered and undelayed. Refused before any
+  // stage runs, like a Mid/Side band given anything but stereo.
+  if (has_lr_linear_bands_ && num_channels > 2) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor linear-phase bands support at most two channels");
+  }
+  if (has_mid_side_linear_bands_ && num_channels != 2) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EqualizerProcessor Mid/Side placement requires stereo input");
+  }
   EqualizerSpectrumSnapshot pre_snapshot;
   capture_stream(const_cast<const float* const*>(channels), num_channels, num_samples,
                  pre_snapshot.pre, pre_snapshot.pre_count);
@@ -136,10 +158,6 @@ void EqualizerProcessor::process(float* const* channels, int num_channels, int n
     }
   }
   if (has_mid_side_linear_bands_) {
-    if (num_channels != 2) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "EqualizerProcessor Mid/Side placement requires stereo input");
-    }
     for (int i = 0; i < num_samples; ++i) {
       const float left = channels[0][i];
       const float right = channels[1][i];
@@ -274,7 +292,7 @@ bool EqualizerProcessor::set_parameter_impl(unsigned int param_id, float value) 
   switch (param_id % 3u) {
     case 0:
       band.frequency_hz =
-          std::clamp(value, 1.0e-3f, static_cast<float>(sample_rate_ * 0.5) - 1.0e-3f);
+          std::clamp(value, 1.0e-3f, sonare::rt::max_design_frequency_hz(sample_rate_));
       break;
     case 1:
       band.gain_db = value;
@@ -298,7 +316,7 @@ bool EqualizerProcessor::set_parameter_impl(unsigned int param_id, float value) 
     return true;
   }
   if (uses_fir_backend(band, phase_mode_)) {
-    set_band(band_index, band);
+    install_band(band_index, band);
     return true;
   }
   const EqBand old_band = bands_[band_index];
@@ -367,7 +385,23 @@ void EqualizerProcessor::set_phase_mode(PhaseMode mode) {
   }
 }
 
+void EqualizerProcessor::validate_band(const EqBand& band) const {
+  validate_supported_band(band, phase_mode_);
+  // A band requested at a known rate is refused if the rate cannot carry it; one
+  // stored before prepare() is resolved to that rate instead.
+  if (prepared_ && band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "EQ band frequency must be between 0 Hz and Nyquist");
+  }
+}
+
 void EqualizerProcessor::set_band(size_t index, const EqBand& band) {
+  validate_band_index(index);
+  validate_band(band);
+  install_band(index, band);
+}
+
+void EqualizerProcessor::install_band(size_t index, const EqBand& band) {
   validate_band_index(index);
   validate_supported_band(band, phase_mode_);
   const EqBand old_band = bands_[index];

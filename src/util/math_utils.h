@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "constants.h"
+#include "util/exception.h"
 
 namespace sonare {
 
@@ -35,6 +36,32 @@ class FFT;
 template <typename T>
 T clamp(T value, T min_val, T max_val) {
   return std::clamp(value, min_val, max_val);
+}
+
+/// @brief pow() refused, rather than returned, when the result overflows the float range.
+/// @details For an exponent, gain or beta a caller accepted: a result past the largest
+///          float would hand an infinity, and then a NaN, to the arithmetic after it.
+///          A NaN operand is returned as NaN.
+/// @throws SonareException(InvalidParameter) when the power is infinite.
+inline float finite_pow(float base, float exponent) {
+  const float result = std::pow(base, exponent);
+  if (std::isinf(result)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "a power exponent overflows the float range for this input");
+  }
+  return result;
+}
+
+/// @brief Soft mask `x^p / (x^p + ref^p)`, taken against `z = max(x, ref)`.
+/// @details Scaling both terms by the cell's larger value keeps the ratio independent
+///          of the input level and puts both powers in [0, 1], where none can overflow.
+///          A cell with neither term gets @p empty_value. @p power must be positive.
+inline float soft_mask(double x, double ref, float power, float empty_value = 0.0f) {
+  const double z = std::max(x, ref);
+  if (z == 0.0) return empty_value;
+  const float own = finite_pow(static_cast<float>(x / z), power);
+  const float other = finite_pow(static_cast<float>(ref / z), power);
+  return own / (own + other);
 }
 
 /// @brief Returns the index of the maximum element.

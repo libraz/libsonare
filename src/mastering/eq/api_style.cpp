@@ -117,7 +117,8 @@ void ApiStyleEq::rebuild_band(Band band) {
     type = EqBandType::HighShelf;
   }
 
-  eq_.set_band(
+  // The stepped tables reach 20 kHz, which a low prepared rate designs at its ceiling.
+  eq_.set_band_at_rate(
       i, {type, state.frequency_hz, state.gain_db, proportional_q(state.gain_db), state.enabled});
 }
 

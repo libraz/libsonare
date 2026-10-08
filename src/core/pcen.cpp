@@ -3,6 +3,7 @@
 #include <cmath>
 
 #include "util/exception.h"
+#include "util/math_utils.h"
 
 namespace sonare {
 
@@ -88,7 +89,7 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
   // Loop-invariant across every cell; `config` and `b` do not change below.
   const float one_minus_b = 1.0f - b;
   const bool logarithmic = config.power == 0.0f;
-  const float bias_term = logarithmic ? 0.0f : std::pow(config.bias, config.power);
+  const float bias_term = logarithmic ? 0.0f : finite_pow(config.bias, config.power);
 
   std::vector<float> out(static_cast<size_t>(n_bins) * n_frames);
   // Bin-major: S and out are row-major [n_bins x n_frames], so both sides of a bin are one
@@ -104,11 +105,17 @@ std::vector<float> pcen(const float* S, int n_bins, int n_frames, const PcenConf
       // Direct-Form II Transposed AR(1) step (matches scipy.signal.lfilter).
       const float y = b * s + state;
       state = one_minus_b * y;
-      const float smooth = std::pow(y + config.eps, -config.gain);
+      const float smooth = finite_pow(y + config.eps, -config.gain);
+      // A finite gain can still drive S / (M + eps)^gain past the float range. The
+      // product is re-formed below rather than stored, so it contracts as it did.
+      if (std::isinf(s * smooth)) {
+        throw SonareException(ErrorCode::InvalidParameter,
+                              "pcen: gain overflows the float range for this input");
+      }
       // librosa special-cases power==0 as logarithmic compression
       // (S_out = log1p(S * smooth)); the power law would yield 1 - 1 = 0.
       out_row[t] = logarithmic ? std::log1p(s * smooth)
-                               : std::pow(s * smooth + config.bias, config.power) - bias_term;
+                               : finite_pow(s * smooth + config.bias, config.power) - bias_term;
     }
   }
   return out;
