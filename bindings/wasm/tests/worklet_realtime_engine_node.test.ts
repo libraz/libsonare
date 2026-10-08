@@ -913,6 +913,7 @@ describe('SonareRealtimeEngineNode', () => {
 
         const track3Fader = engine.automationParamId(3, 'faderDb');
         const track3Pan = engine.automationParamId(3, 'pan');
+        const bus100Fader = engine.busAutomationParamId(100);
         expect(posted).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ type: SonareEngineCommandType.TransportPlay }),
@@ -953,7 +954,7 @@ describe('SonareRealtimeEngineNode', () => {
             }),
             expect.objectContaining({
               type: SonareEngineCommandType.SetParamSmoothed,
-              targetId: 0x4d58fe01,
+              targetId: bus100Fader,
               argFloat: -9,
             }),
           ]),
@@ -3043,9 +3044,9 @@ describe('SonareRealtimeEngineNode', () => {
           }),
       });
 
-      // Reserved mixer namespace encodings: master = lane 0xff, first bus =
-      // index 0 (lane byte 0xfe); kind 1 = faderDb, kind 2 = pan. A track's ids
-      // are resolved by track and stay put when another lane is declared.
+      // Reserved mixer namespace encoding: master = lane 0xff; kind 1 = faderDb,
+      // kind 2 = pan. Track and bus ids are resolved by track or bus and stay put
+      // when another lane or bus is declared.
       const masterFader = engine.automationParamId('master', 'faderDb');
       expect(masterFader).toBe(0x4d58ff01);
       expect(engine.automationParamId('master', 'pan')).toBe(0x4d58ff02);
@@ -3055,7 +3056,10 @@ describe('SonareRealtimeEngineNode', () => {
       expect(track10Pan).not.toBe(track10Fader);
       expect(engine.automationParamId(20, 'faderDb')).not.toBe(track10Fader);
       expect(engine.automationParamId(10, 'faderDb')).toBe(track10Fader);
-      expect(engine.busAutomationParamId(1)).toBe(0x4d58fe01);
+      const bus1Fader = engine.busAutomationParamId(1);
+      expect(bus1Fader).toBeGreaterThan(0);
+      expect(engine.busAutomationParamId(2)).not.toBe(bus1Fader);
+      expect(engine.busAutomationParamId(1)).toBe(bus1Fader);
 
       // Replace-all installs the sorted lane on the offline engine and mirrors
       // it to the live worklet via syncAutomation.

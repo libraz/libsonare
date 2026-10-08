@@ -843,6 +843,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   int64_t resolve_track_lane_automation_id(uint32_t track_id, const std::string& key) noexcept;
   // resolve_track_lane_automation_id for a TrackMixerRuntime::kFaderDb / kPan @p param_id.
   int64_t track_lane_automation_id(uint32_t track_id, unsigned int param_id) const noexcept;
+  // Resolves a bus's fader ("faderDb") to its reserved id, which shares the insert
+  // ids' table and lifetime. -1 when the bus is not configured or the key is not
+  // "faderDb". Control-thread; touches no audio state.
+  int64_t resolve_bus_automation_id(uint32_t bus_id, const std::string& key) noexcept;
   /// Reads the immutable construction value captured by the resolved insert
   /// parameter. Control-thread only; this never mutates live DSP state and
   /// returns false for a null output, an unknown target, or a target whose
@@ -1053,9 +1057,9 @@ class RealtimeEngine : private ClipPageRequestSink {
   void purge_insert_edits(const InsertPurge& purge) noexcept;
   // Control thread, not concurrent with process(): retires entries whose strip
   // left the mixer or whose slot changed processor layout, mints entries for
-  // every configured lane and slot in canonical order (each lane's fader/pan
-  // entry then its slots, buses, master; slots in index order), then purges the
-  // edits and bases of any id it retired.
+  // every configured lane, bus and slot in canonical order (each lane's fader/pan
+  // entry then its slots, each bus's fader entry then its slots, master; slots in
+  // index order), then purges the edits and bases of any id it retired.
   void sync_insert_automation_targets() noexcept;
   // Control thread: true when @p needed more entries fit in the table.
   bool insert_automation_room(size_t needed) const noexcept {

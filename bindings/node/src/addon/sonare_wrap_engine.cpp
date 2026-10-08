@@ -257,6 +257,7 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
               "resolveTrackInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveTrackLaneAutomationId>(
               "resolveTrackLaneAutomationId"),
+          InstanceMethod<&RealtimeEngineWrap::ResolveBusAutomationId>("resolveBusAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveMasterInsertAutomationId>(
               "resolveMasterInsertAutomationId"),
           InstanceMethod<&RealtimeEngineWrap::ResolveBusInsertAutomationId>(

@@ -29,9 +29,11 @@ namespace {
   return id;
 }
 
-[[maybe_unused]] constexpr uint32_t engine_bus_param_target(uint32_t bus_index,
-                                                            uint32_t param_kind) {
-  return 0x4D580000u | ((0xFEu - bus_index) << 8u) | param_kind;
+// Resolved fader id of @p bus_id.
+[[maybe_unused]] uint32_t engine_bus_fader_target(SonareRealtimeEngine* engine, uint32_t bus_id) {
+  uint32_t id = 0;
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, bus_id, "faderDb", &id) == SONARE_OK);
+  return id;
 }
 
 [[maybe_unused]] constexpr uint32_t engine_master_param_target(uint32_t param_kind) {

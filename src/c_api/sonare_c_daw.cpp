@@ -589,9 +589,9 @@ SonareError sonare_auto_tune(const float* samples, size_t length, int sample_rat
                              float** out, size_t* out_length, SonareKey* out_key) {
   SONARE_C_API_ENTRY;
   // Refused and zeroed before the gate, so the stub below leaves them defined too.
-  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
   if (!out_key) return SONARE_ERROR_INVALID_PARAMETER;
   *out_key = SonareKey{};
+  if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_PITCH_EDITOR)
   if (key && (key->root < SONARE_PITCH_C || key->root > SONARE_PITCH_B ||
               key->mode < SONARE_MODE_MAJOR || key->mode > SONARE_MODE_LOCRIAN)) {

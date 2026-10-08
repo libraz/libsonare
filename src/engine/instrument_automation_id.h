@@ -15,9 +15,9 @@ namespace sonare::engine {
 /// Three id namespaces now share the 32-bit target space and must stay
 /// mutually exclusive:
 ///
-///     master/bus fader/pan/width     : 0x4D580000 (top 3 bits 010)
-///     strip inserts, track fader/pan : 0xE0000000 (top 3 bits 111)
-///     instrument params              : 0xC0000000 (top 3 bits 110)  <- this file
+///     master fader/pan/width                    : 0x4D580000 (top 3 bits 010)
+///     strip inserts, track fader/pan, bus fader : 0xE0000000 (top 3 bits 111)
+///     instrument params                         : 0xC0000000 (top 3 bits 110)  <- this file
 ///
 /// The insert namespace tests `(id & 0xE0000000) == 0xE0000000`, so the 110
 /// octant is disjoint from it under the same mask and a single bit test still

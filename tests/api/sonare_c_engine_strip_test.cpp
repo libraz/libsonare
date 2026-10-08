@@ -694,7 +694,7 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   send[0].enabled = 1;
   send[0].level_db = 0.0f;
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
-  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_bus_param_target(0, 1), -6.0206f,
+  REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_bus_fader_target(engine, 1), -6.0206f,
                                                -1) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   for (int block = 0; block < 30; ++block) {
@@ -941,6 +941,105 @@ TEST_CASE("a track fader id held across a lane reorder keeps driving its own tra
   REQUIRE(sonare_engine_set_parameter(engine, track10_fader, -60.0f, -1) == SONARE_OK);
   render(30);
   REQUIRE(out.back() == Catch::Approx(1.0f).margin(1.0e-3));
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a bus fader id held across a bus reorder keeps driving its own bus", "[c_api][engine]") {
+  constexpr int kBlock = 256;
+  constexpr int kFrames = kBlock * 80;
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kBlock, 64, 16) == SONARE_OK);
+
+  // Only track 20 sounds and it feeds bus 200, so the output reads bus 200's fader alone.
+  std::vector<float> source(kFrames, 1.0f);
+  const float* source_channels[] = {source.data()};
+  SonareEngineClip clip{};
+  clip.id = 1;
+  clip.track_id = 20;
+  clip.channels = source_channels;
+  clip.num_channels = 1;
+  clip.num_samples = kFrames;
+  clip.length_samples = kFrames;
+  clip.gain = 1.0f;
+  REQUIRE(sonare_engine_set_clips(engine, &clip, 1) == SONARE_OK);
+
+  SonareEngineBus buses[] = {{100, 0.0f, 1, 0, nullptr, 0}, {200, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
+  SonareEngineTrackLane lane[] = {{20, nullptr, 0, 200, 1}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  const uint32_t bus100_fader = engine_bus_fader_target(engine, 100);
+  const uint32_t bus200_fader = engine_bus_fader_target(engine, 200);
+  REQUIRE(bus100_fader != bus200_fader);
+
+  SonareEngineBus reordered[] = {{200, 0.0f, 1, 0, nullptr, 0}, {100, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, reordered, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_parameter(engine, bus200_fader, -60.0f, -1) == SONARE_OK);
+
+  REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+  std::array<float, kBlock> out{};
+  float* io[] = {out.data()};
+  const auto render = [&](int blocks) {
+    for (int block = 0; block < blocks; ++block) {
+      out.fill(0.0f);
+      REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
+    }
+  };
+  render(30);
+  REQUIRE(out.back() == Catch::Approx(0.001f).margin(1.0e-4));
+
+  // Once bus 100 is removed its id addresses nothing, not the bus now at its old position.
+  REQUIRE(sonare_engine_set_parameter(engine, bus200_fader, 0.0f, -1) == SONARE_OK);
+  SonareEngineBus only200[] = {{200, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, only200, 1) == SONARE_OK);
+  SonareParameterInfo info{};
+  REQUIRE(sonare_engine_parameter_info(engine, bus100_fader, &info) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_set_parameter(engine, bus100_fader, -60.0f, -1) == SONARE_OK);
+  render(30);
+  REQUIRE(out.back() == Catch::Approx(1.0f).margin(1.0e-3));
+  REQUIRE(engine_bus_fader_target(engine, 200) == bus200_fader);
+
+  // Re-adding bus 100 mints a new id; the retired one is never reissued.
+  REQUIRE(sonare_engine_set_track_buses(engine, reordered, 2) == SONARE_OK);
+  REQUIRE(engine_bus_fader_target(engine, 100) != bus100_fader);
+
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_resolve_bus_automation_id refuses an unknown bus or name",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+  SonareEngineBus buses[] = {{100, 0.0f, 1, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+
+  uint32_t id = 7;
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 200, "faderDb", &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(id == 0);
+  id = 7;
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 100, "pan", &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(id == 0);
+  REQUIRE(sonare_engine_resolve_bus_automation_id(nullptr, 100, "faderDb", &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 0, "faderDb", &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 100, "", &id) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 100, "faderDb", nullptr) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+  REQUIRE(sonare_engine_resolve_bus_automation_id(engine, 100, "faderDb", &id) == SONARE_OK);
+  SonareParameterInfo info{};
+  REQUIRE(sonare_engine_parameter_info(engine, id, &info) == SONARE_OK);
+  REQUIRE(std::string(info.name) == "faderDb");
+  // The former positional bus encoding addresses nothing.
+  REQUIRE(sonare_engine_parameter_info(engine, 0x4D58FE01u, &info) ==
+          SONARE_ERROR_INVALID_PARAMETER);
 
   sonare_engine_destroy(engine);
 }

@@ -691,12 +691,6 @@ bool TrackMixerRuntime::set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept
   return true;
 }
 
-bool TrackMixerRuntime::set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept {
-  if (!std::isfinite(gain_db) || bus_index >= bus_configs_.size()) return false;
-  bus_states_[bus_index].gain.set_target(db_to_linear(std::clamp(gain_db, kFloorDb, kMaxGainDb)));
-  return true;
-}
-
 bool TrackMixerRuntime::set_lane_sidechain(uint32_t track_id, unsigned int insert_index,
                                            uint32_t source_track_id) noexcept {
   if (can_set_lane_sidechain(track_id, insert_index, source_track_id) != SidechainRefusal::kNone) {

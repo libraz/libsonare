@@ -51,7 +51,6 @@ bool RealtimeEngine::read_meter_target_insert_gain_reduction(uint32_t target_id,
 namespace {
 
 constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
-constexpr uint32_t kEngineParamLaneBusBase = 0xFEu;
 
 // A non-finite insert-parameter value has no meaning for any processor and is
 // actively dangerous for the delay-based ones: std::clamp propagates NaN (every
@@ -350,6 +349,12 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
 }
 
 bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
+  // An entering bus mints its fader entry; its slots are minted when its strip is set.
+  size_t entering = 0;
+  for (const TrackBusConfig& bus : buses) {
+    if (!track_mixer_runtime_.configured_bus(bus.bus_id)) ++entering;
+  }
+  if (!insert_automation_room(entering)) return false;
   const bool ok = track_mixer_runtime_.set_buses(std::move(buses));
   if (ok) {
     // A removed bus's ids are retired, and their queued edits and bases go with
@@ -656,6 +661,7 @@ const rt::ProcessorBase* RealtimeEngine::current_insert_processor(
                  ? owned_master_strip_->insert_processor(target.insert_index)
                  : nullptr;
     case InsertStripKind::kTrackLane:
+    case InsertStripKind::kBusLane:
       return nullptr;
   }
   return nullptr;
@@ -665,6 +671,9 @@ bool RealtimeEngine::insert_target_current(const InsertAutomationTarget& target)
   if (target.strip == InsertStripKind::kTrackLane) {
     uint32_t position = 0;
     return track_mixer_runtime_.track_lane_position(target.owner_id, &position);
+  }
+  if (target.strip == InsertStripKind::kBusLane) {
+    return track_mixer_runtime_.configured_bus(target.owner_id);
   }
   return insert_processor_layout(current_insert_processor(target)) == target.processor;
 }
@@ -690,6 +699,7 @@ void RealtimeEngine::sync_insert_automation_targets() noexcept {
          track_mixer_runtime_.track_insert_count(track_ids[i]));
   }
   for (const TrackBusConfig& bus : track_mixer_runtime_.bus_configs()) {
+    (void)insert_automation_targets_.ensure({InsertStripKind::kBusLane, bus.bus_id, 0, {}});
     mint(InsertStripKind::kBus, bus.bus_id, track_mixer_runtime_.bus_insert_count(bus.bus_id));
   }
   if (owned_master_strip_ != nullptr) {
@@ -722,6 +732,13 @@ int64_t RealtimeEngine::resolve_track_lane_automation_id(uint32_t track_id,
   if (key == "faderDb") return track_lane_automation_id(track_id, TrackMixerRuntime::kFaderDb);
   if (key == "pan") return track_lane_automation_id(track_id, TrackMixerRuntime::kPan);
   return -1;
+}
+
+int64_t RealtimeEngine::resolve_bus_automation_id(uint32_t bus_id,
+                                                  const std::string& key) noexcept {
+  if (key != "faderDb") return -1;
+  return insert_automation_id({InsertStripKind::kBusLane, bus_id, 0, {}},
+                              TrackMixerRuntime::kFaderDb);
 }
 
 int64_t RealtimeEngine::resolve_track_insert_automation_id(uint32_t track_id,
@@ -901,6 +918,9 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
       case InsertStripKind::kTrackLane:
         // Width is not a track lane control; set_lane_parameter refuses it.
         return track_mixer_runtime_.set_track_parameter(target->owner_id, param_id, value);
+      case InsertStripKind::kBusLane:
+        if (param_id != TrackMixerRuntime::kFaderDb) return false;
+        return track_mixer_runtime_.set_bus_gain_db(target->owner_id, value);
     }
     return false;
   }
@@ -908,12 +928,6 @@ bool RealtimeEngine::route_engine_parameter(uint32_t target_id, float value) noe
   const uint32_t kind = target_id & kEngineParamKindMask;
   if (lane == kEngineParamLaneMaster) {
     return mixing_runtime_.set_parameter(kind, value);
-  }
-  if (lane <= kEngineParamLaneBusBase &&
-      lane > kEngineParamLaneBusBase - TrackMixerRuntime::kMaxBusLanes) {
-    if (kind != TrackMixerRuntime::kFaderDb) return false;
-    const uint32_t bus_index = kEngineParamLaneBusBase - lane;
-    return track_mixer_runtime_.set_bus_gain_db_by_index(bus_index, value);
   }
   return false;
 }
@@ -934,7 +948,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   const bool insert_id = is_insert_param_id(id);
   const InsertAutomationTarget* target = insert_id ? live_insert_target(id) : nullptr;
   if (insert_id && (target == nullptr || !insert_target_current(*target))) return false;
-  if (insert_id && target->strip != InsertStripKind::kTrackLane) {
+  if (insert_id && !insert_strip_slotless(target->strip)) {
     const unsigned int insert_index = target->insert_index;
     const unsigned int param_id = static_cast<unsigned int>(insert_param_param(id));
     std::string processor_name;
@@ -961,8 +975,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
   const uint32_t lane = (id & kEngineParamLaneMask) >> kEngineParamLaneShift;
   const uint32_t kind = insert_id ? insert_param_param(id) : id & kEngineParamKindMask;
   const bool is_master = !insert_id && lane == kEngineParamLaneMaster;
-  const bool is_bus = !insert_id && !is_master && lane <= kEngineParamLaneBusBase &&
-                      lane > kEngineParamLaneBusBase - TrackMixerRuntime::kMaxBusLanes;
+  const bool is_bus = insert_id && target->strip == InsertStripKind::kBusLane;
   // Mirrors route_engine_parameter's own per-scope kind restriction: a bus
   // owns only its fader, a track lane owns fader and pan, and width is a
   // master-only control.
@@ -984,7 +997,7 @@ bool RealtimeEngine::describe_reserved_parameter(uint32_t id,
         out->min_value = -std::numeric_limits<float>::infinity();
         out->max_value = std::numeric_limits<float>::infinity();
       } else {
-        // TrackMixerRuntime::set_lane_parameter / set_bus_gain_db_by_index.
+        // TrackMixerRuntime::set_lane_parameter / set_bus_gain_db.
         out->min_value = kFloorDb;
         out->max_value = TrackMixerRuntime::kMaxGainDb;
       }
@@ -1032,6 +1045,7 @@ bool RealtimeEngine::constructed_insert_parameter_base(uint32_t target_id,
       return track_mixer_runtime_.lane_insert_constructed_parameter_value(
           target->owner_id, insert_index, param_id, out_value);
     case InsertStripKind::kTrackLane:
+    case InsertStripKind::kBusLane:
       return false;
   }
   return false;
@@ -1058,7 +1072,8 @@ bool RealtimeEngine::insert_target_holds(const InsertAutomationTarget& target) c
       return track_mixer_runtime_.lane_insert_holds(target.owner_id, target.insert_index,
                                                     target.processor);
     case InsertStripKind::kTrackLane:
-      // A live entry's track is configured; set_track_parameter finds its lane.
+    case InsertStripKind::kBusLane:
+      // A live entry's track or bus is configured; the fader setter finds it by id.
       return true;
   }
   return false;

@@ -835,6 +835,18 @@ export class RealtimeEngine {
     return this.native.resolveTrackLaneAutomationId(trackId, paramName);
   }
 
+  /**
+   * Resolve a bus's fader (`'faderDb'`) to its reserved automation id. Same
+   * lifetime rule as {@link resolveTrackInsertAutomationId}: the id names the
+   * bus, not its position in the bus list, so it keeps driving that bus across
+   * {@link setTrackBuses} reorders and the removal of other buses, and applies
+   * nothing once the bus is removed. Returns `-1` when the bus is not
+   * configured or the name is not `'faderDb'`.
+   */
+  resolveBusAutomationId(busId: number, paramName: 'faderDb'): number {
+    return this.native.resolveBusAutomationId(busId, paramName);
+  }
+
   /** Return the immutable construction value for a resolved insert parameter. */
   insertParameterConstructedValue(paramId: number): number {
     return this.native.insertParameterConstructedValue(paramId);

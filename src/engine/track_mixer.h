@@ -442,8 +442,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   // for a non-finite field; distance <= 0 stores the default 1.
   bool set_track_surround_pan(uint32_t track_id, const mixing::SurroundPanParams& params) noexcept;
   bool set_track_channel_delay_samples(uint32_t track_id, int delay_samples) noexcept;
+  /// AUDIO thread (fader automation): glides @p bus_id's fader to @p gain_db,
+  /// clamped to the fader range. False for an unknown bus or a non-finite value.
   bool set_bus_gain_db(uint32_t bus_id, float gain_db) noexcept;
-  bool set_bus_gain_db_by_index(size_t bus_index, float gain_db) noexcept;
   // Applies a bus spec. Everything is validated before anything is applied. An
   // unchanged insert chain is kept (with its tails and insert automation);
   // otherwise it is rebuilt. Pan and EQ live outside the chain either way, and

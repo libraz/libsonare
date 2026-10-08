@@ -216,10 +216,6 @@ class RtPublisher {
   /// thread only changes it inside acquire(). RT-safe.
   const T* current() const noexcept { return audio_current_.get(); }
 
-  /// Owning snapshot the audio thread currently holds. RT-safe to read; do not
-  /// copy on the audio thread.
-  const std::shared_ptr<const T>& current_shared() const noexcept { return audio_current_; }
-
   /// Most recently published snapshot as seen by the control thread.
   const std::shared_ptr<const T>& control_current() const noexcept { return control_current_; }
 

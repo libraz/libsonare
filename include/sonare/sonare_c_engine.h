@@ -330,8 +330,12 @@ SonareError sonare_engine_can_set_lane_sidechain(SonareRealtimeEngine* engine, u
 ///   state unchanged) an output or send naming an undeclared bus or the bus
 ///   itself, a cycle through outputs, sends or bus-sourced sidechain keys, a
 ///   non-default width on a surround bus, and a bus still referenced by a track
-///   lane's output or send. Control-thread only; must not run concurrently with
-///   process().
+///   lane's output or send, and added buses whose fader ids would not fit the
+///   automation id table. Bus fader and insert automation ids keep naming their
+///   bus across a reorder (see @ref sonare_engine_resolve_bus_automation_id and
+///   @ref sonare_engine_resolve_bus_insert_automation_id); the ids of a removed
+///   bus stop applying, and its queued edits under them are dropped.
+///   Control-thread only; must not run concurrently with process().
 SonareError sonare_engine_set_track_buses(SonareRealtimeEngine* engine,
                                           const SonareEngineBus* buses, size_t bus_count);
 
@@ -531,21 +535,21 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngin
 /// @details The returned id can be driven over time with
 ///   @ref sonare_engine_set_automation_lane (a PPQ breakpoint lane) or set once
 ///   with @ref sonare_engine_set_parameter / @ref sonare_engine_set_parameter_smoothed.
-///   Track fader/pan ids and track, bus and master insert ids share one
-///   lifetime rule: an id names the strip by identity and, for an insert, the
+///   Track fader/pan ids, bus fader ids and track, bus and master insert ids
+///   share one lifetime rule: an id names the strip by identity and, for an insert, the
 ///   kind of processor in its slot (for `effects.gsEfx`, its EFX type too), so
 ///   it survives lane and bus reorders and the removal of other strips, and
 ///   stays valid until its track or bus is removed or its slot comes to hold
 ///   another kind of processor. After that it applies nothing (an unknown
 ///   target), its queued edits and stored bases are dropped, and it is never
-///   reissued; resolve again for the new track or processor. Every configured
-///   track lane and slot gets its id when the mixer is configured, so resolving
-///   never allocates; the id table holds 8192 entries (one per track lane plus
-///   one per slot) for the engine's lifetime, and a strip, bus or lane change
-///   that would exceed it is refused with SONARE_ERROR_INVALID_PARAMETER (a
-///   rebuild that keeps every slot's kind needs no new entry). Returns
-///   SONARE_ERROR_INVALID_PARAMETER if the track, insert, or name is unknown
-///   (and sets @p out_id to 0).
+///   reissued; resolve again for the new track, bus or processor. Every
+///   configured track lane, bus and slot gets its id when the mixer is
+///   configured, so resolving never allocates; the id table holds 8192 entries
+///   (one per track lane, one per bus and one per slot) for the engine's
+///   lifetime, and a strip, bus or lane change that would exceed it is refused
+///   with SONARE_ERROR_INVALID_PARAMETER (a rebuild that keeps every slot's kind
+///   needs no new entry). Returns SONARE_ERROR_INVALID_PARAMETER if the
+///   track, insert, or name is unknown (and sets @p out_id to 0).
 ///
 ///   This trio is how a mastering processor gets time-varying automation: the
 ///   `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
@@ -572,6 +576,17 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine*
                                                            uint32_t track_id,
                                                            const char* param_name,
                                                            uint32_t* out_id);
+/// @brief Resolves a bus's fader to its reserved automation id.
+/// @details @p param_name is `faderDb` (dB). Same lifetime rule as
+///   @ref sonare_engine_resolve_track_insert_automation_id: the id names the
+///   bus, not its position in the bus list, so it keeps driving that bus across
+///   @ref sonare_engine_set_track_buses reorders and the removal of other buses,
+///   and fails as an unknown target once the bus is removed. Returns
+///   SONARE_ERROR_INVALID_PARAMETER if the bus is not configured or the name is
+///   not `faderDb` (and sets @p out_id to 0); SONARE_ERROR_NOT_SUPPORTED when
+///   mixing support is disabled.
+SonareError sonare_engine_resolve_bus_automation_id(SonareRealtimeEngine* engine, uint32_t bus_id,
+                                                    const char* param_name, uint32_t* out_id);
 /// @brief Resolves a master-strip insert parameter to its reserved automation id.
 /// @details Master-strip counterpart of
 ///   @ref sonare_engine_resolve_track_insert_automation_id.

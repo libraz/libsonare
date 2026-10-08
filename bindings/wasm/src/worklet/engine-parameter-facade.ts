@@ -10,7 +10,6 @@ import type { SonareEngineSyncMessage } from './messages.js';
 import {
   ENGINE_MIXER_PARAM_FADER_DB,
   ENGINE_MIXER_PARAM_PAN,
-  engineMixerBusTarget,
   engineMixerMasterTarget,
   SonareEngineCommandType,
 } from './protocol.js';
@@ -124,13 +123,16 @@ export function automationParamId(
 }
 
 /**
- * Returns the automation target id for a bus fader.
+ * Returns the automation target id for a bus fader. The id is resolved on the
+ * offline engine, which numbers it as the worklet engine does, and keeps naming
+ * that bus across bus reorders (see `resolveBusAutomationId`).
  *
  * @param busId Bus id (declares the mixer bus on first use).
  * @returns Reserved engine parameter id for the bus fader gain (dB).
  */
 export function busAutomationParamId(ctx: EngineParameterContext, busId: number): number {
-  return engineMixerBusTarget(ctx.ensureBus(busId), ENGINE_MIXER_PARAM_FADER_DB);
+  ctx.ensureBus(busId);
+  return ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb');
 }
 
 /**

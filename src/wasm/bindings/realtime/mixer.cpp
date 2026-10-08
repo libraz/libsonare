@@ -709,6 +709,18 @@ double RealtimeEngineWasm::resolveTrackLaneAutomationId(const val& track_id_val,
 #endif
 }
 
+double RealtimeEngineWasm::resolveBusAutomationId(const val& bus_id_val,
+                                                  const std::string& param_name) {
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+#if defined(SONARE_WITH_MIXING)
+  return static_cast<double>(engine_.resolve_bus_automation_id(bus_id, param_name));
+#else
+  (void)bus_id;
+  (void)param_name;
+  return -1.0;
+#endif
+}
+
 double RealtimeEngineWasm::resolveMasterInsertAutomationId(const val& insert_index_val,
                                                            const std::string& param_name) {
   const uint32_t insert_index = checkedUintFromVal(insert_index_val, "insertIndex");
@@ -971,6 +983,7 @@ void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
       .function("resolveTrackInsertAutomationId",
                 &RealtimeEngineWasm::resolveTrackInsertAutomationId)
       .function("resolveTrackLaneAutomationId", &RealtimeEngineWasm::resolveTrackLaneAutomationId)
+      .function("resolveBusAutomationId", &RealtimeEngineWasm::resolveBusAutomationId)
       .function("resolveMasterInsertAutomationId",
                 &RealtimeEngineWasm::resolveMasterInsertAutomationId)
       .function("resolveBusInsertAutomationId", &RealtimeEngineWasm::resolveBusInsertAutomationId)

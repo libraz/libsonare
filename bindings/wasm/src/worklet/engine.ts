@@ -333,7 +333,9 @@ export class SonareEngine {
   }
 
   /**
-   * Returns the automation target id for a bus fader.
+   * Returns the automation target id for a bus fader. The id names the bus, so
+   * it keeps driving that bus across bus reorders and the removal of other
+   * buses, and applies nothing once the bus is removed.
    *
    * @param busId Bus id (declares the mixer bus on first use).
    * @returns Reserved engine parameter id for the bus fader gain (dB).

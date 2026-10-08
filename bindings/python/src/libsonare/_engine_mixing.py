@@ -810,6 +810,27 @@ class _EngineMixingMixin:
         )
         return int(out_id.value)
 
+    def resolve_bus_automation_id(self, bus_id: int, param_name: str) -> int:
+        """Resolve a bus's fader to its reserved automation id.
+
+        ``param_name`` is ``"faderDb"``. Same lifetime rule as
+        :meth:`resolve_track_insert_automation_id`: the id names the bus, not its
+        position in the bus list, so it keeps driving that bus across
+        :meth:`set_track_buses` reorders and the removal of other buses, and
+        applies nothing once the bus is removed. Raises :class:`SonareError` if
+        the bus is not configured or the name is not ``"faderDb"``.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_bus_automation_id(
+                self._require_handle(),
+                _to_c_uint32(bus_id, "bus_id"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
     def resolve_master_insert_automation_id(self, insert_index: int, param_name: str) -> int:
         """Resolve a master-strip insert parameter to its reserved automation id.
 

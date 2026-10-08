@@ -401,6 +401,27 @@ Napi::Value RealtimeEngineWrap::ResolveTrackLaneAutomationId(const Napi::Callbac
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value RealtimeEngineWrap::ResolveBusAutomationId(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t bus_id = 0;
+  std::string param_name;
+  if (!OptionalUint32Arg(env, info, 0, "busId", 0, &bus_id) ||
+      !OptionalStringArg(env, info, 1, "paramName", "", &param_name)) {
+    return env.Undefined();
+  }
+  uint32_t out_id = 0;
+  const SonareError err =
+      sonare_engine_resolve_bus_automation_id(engine_, bus_id, param_name.c_str(), &out_id);
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    return Napi::Number::New(env, -1.0);
+  }
+  ThrowIfError(env, err);
+  if (env.IsExceptionPending()) return env.Undefined();
+  return Napi::Number::New(env, static_cast<double>(out_id));
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value RealtimeEngineWrap::ResolveMasterInsertAutomationId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

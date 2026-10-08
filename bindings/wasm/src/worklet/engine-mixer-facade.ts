@@ -12,7 +12,6 @@ import type {
   SonareEngineSyncMessage,
   SonareEngineSyncMixerInsertParamOverride,
 } from './messages.js';
-import { ENGINE_MIXER_PARAM_FADER_DB, engineMixerBusTarget } from './protocol.js';
 
 /** A latest by-name insert value retained across a later topology replay. */
 export interface InsertParamOverride {
@@ -898,7 +897,7 @@ export function setBusGain(ctx: EngineMixerContext, busId: number, db: number): 
   ctx.buses[busIndex] = { ...ctx.buses[busIndex], busId, gainDb: db };
   // The reserved smoothed parameter updates both engines. Rebuilding the bus
   // topology for every fader tick would reset insert slots and their tails.
-  return ctx.sendSmoothedParam(engineMixerBusTarget(busIndex, ENGINE_MIXER_PARAM_FADER_DB), db);
+  return ctx.sendSmoothedParam(ctx.offlineEngine.resolveBusAutomationId(busId, 'faderDb'), db);
 }
 
 /** Control-side state a strip-scene replacement reads and updates. */

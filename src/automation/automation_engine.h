@@ -7,7 +7,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 #include "automation/automation_lane.h"
@@ -41,25 +40,11 @@ class AutomationEngine {
   /// and stateless: configured at prepare time, called on the audio thread.
   using EngineParamGate = bool (*)(uint32_t param_id);
   using ExternalTargetResolver = rt::ProcessorBase* (*)(void* context, uint32_t param_id) noexcept;
-  /// Callback invoked by acquire_lanes() on the audio thread, or by a
-  /// control-quiescent lane remap, for a target whose lane held points before
-  /// the newly adopted lane set and holds none now (dropped entirely or
-  /// replaced by an empty lane). Lets the engine restore whatever value should
-  /// apply once nothing is driving the target anymore. Callers must serialize
-  /// either path with their target routing transition.
+  /// Callback invoked by acquire_lanes() on the audio thread for a target whose
+  /// lane held points before the newly adopted lane set and holds none now
+  /// (dropped entirely or replaced by an empty lane). Lets the engine restore
+  /// whatever value should apply once nothing is driving the target anymore.
   using LaneReleaseCallback = void (*)(void* context, uint32_t param_id);
-  /// Control-thread remapper used when a host changes the positional encoding
-  /// of a reserved target while the logical target remains alive. Returning
-  /// false drops the lane (for example, when its track was removed).
-  using LaneTargetRemapper = bool (*)(void* context, uint32_t old_param_id,
-                                      uint32_t* new_param_id) noexcept;
-
-  /// A prepared lane snapshot whose publication is the commit point of a
-  /// control-thread target remap. The owning engine must keep the audio thread
-  /// quiescent between prepare and commit.
-  struct PreparedLaneRemap {
-    std::shared_ptr<const std::vector<AutomationLane>> snapshot{};
-  };
 
   void prepare(double sample_rate, const transport::TempoMap* tempo_map);
   void set_tempo_map(const transport::TempoMap* tempo_map) noexcept { tempo_map_ = tempo_map; }
@@ -97,16 +82,6 @@ class AutomationEngine {
     lane_release_context_ = context;
   }
   void set_lanes(std::vector<AutomationLane> lanes);
-  /// Prepare a target-id remap while the audio consumer is quiescent. Pending
-  /// snapshots are adopted first and their ordinary release callback is fired
-  /// once, before the caller changes the target routing. The returned snapshot
-  /// is not published until commit_lane_remap_control_quiescent().
-  bool prepare_lane_remap_control_quiescent(LaneTargetRemapper remapper, void* context,
-                                            PreparedLaneRemap* out) noexcept;
-  /// Publish a snapshot prepared by prepare_lane_remap_control_quiescent().
-  /// Publication and quiescent adoption are allocation-free; no release
-  /// callback runs for the numeric-id rewrite because it preserves identity.
-  void commit_lane_remap_control_quiescent(PreparedLaneRemap&& prepared) noexcept;
   bool bind_target(uint32_t param_id, rt::ProcessorBase* processor) noexcept;
   void clear_targets() noexcept;
 

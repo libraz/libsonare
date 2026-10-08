@@ -1674,6 +1674,18 @@ export class RealtimeEngine {
   }
 
   /**
+   * Resolve a bus's fader (`'faderDb'`) to its reserved automation id. Same
+   * lifetime rule as {@link resolveTrackInsertAutomationId}: the id names the
+   * bus, not its position in the bus list, so it keeps driving that bus across
+   * {@link setTrackBuses} reorders and the removal of other buses, and applies
+   * nothing once the bus is removed. Returns `-1` when the bus is not
+   * configured or the name is not `'faderDb'`.
+   */
+  resolveBusAutomationId(busId: number, paramName: 'faderDb'): number {
+    return this.native.resolveBusAutomationId(busId, paramName);
+  }
+
+  /**
    * Resolves a hosted instrument's continuous parameter (by its JSON-key name)
    * to the reserved automation id usable with `setAutomationLane` /
    * `setParameter`, so an instrument parameter is driven at audio-block
