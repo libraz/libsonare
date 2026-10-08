@@ -297,6 +297,7 @@ const char* sonare_material_preset_name(int preset);
 
 /// @brief Name of a SONARE_ACOUSTIC_MODE_* value ("auto", "blind", "impulse_response"), or NULL
 ///        when @p mode is not one. Contiguous from 0, enumerated as sonare_material_preset_name.
+///        Static storage, never invalidated; do not free.
 const char* sonare_acoustic_mode_name(int mode);
 
 /// @brief Room geometry for sonare_synthesize_rir taken from a room estimate.
@@ -308,7 +309,8 @@ const char* sonare_acoustic_mode_name(int mode);
 ///   absorption applies. Refuses (SONARE_ERROR_INVALID_PARAMETER, with a message) an estimate
 ///   whose dimensions are not finite and positive, i.e. no decay was measurable.
 /// @param estimate Result of sonare_estimate_room.
-/// @param out      Receives the geometry; nothing to free.
+/// @param out      Receives the geometry. Its band pointer is borrowed from @p estimate and
+///                 released with it by sonare_free_room_estimate; do not free it.
 SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimate,
                                                SonareRirSynthConfig* out);
 
