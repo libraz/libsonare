@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <climits>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 #include "core/resample.h"
 #include "effects/native_spectral_stretch.h"
@@ -50,6 +52,14 @@ bool make_pitch_shift_plan(std::size_t input_samples, int sample_rate, float sem
   return make_pitch_shift_ratio_plan(input_samples, sample_rate, ratio, out);
 }
 
+Audio resample_pitch_shifted(const Audio& stretched, const PitchShiftPlan& plan,
+                             const Audio& input) {
+  std::vector<float> samples =
+      resample(stretched.data(), stretched.size(), plan.effective_sample_rate, input.sample_rate());
+  samples.resize(input.size(), 0.0f);
+  return Audio::from_vector(std::move(samples), input.sample_rate());
+}
+
 Audio pitch_shift(const Audio& audio, float semitones, const PitchShiftConfig& config) {
   PitchShiftPlan plan;
   SONARE_CHECK(make_pitch_shift_plan(audio.size(), audio.sample_rate(), semitones, &plan),
@@ -82,19 +92,11 @@ Audio pitch_shift_ratio(const Audio& audio, float ratio, const PitchShiftConfig&
   Audio stretched = time_stretch(audio, 1.0f / ratio, ts_config);
 
   /// Step 2: Resample the stretched signal (treated as if sampled at sr*ratio)
-  /// back to the original sample rate. Length: (N*ratio) * sr/(sr*ratio) = N.
-  int original_sr = audio.sample_rate();
-  /// The resample step treats the stretched signal as if sampled at sr*ratio.
-  /// If that effective rate falls outside the supported resampler range, the
-  /// old code silently clamped it, which changed the effective ratio and
-  /// returned wrong-pitch audio. Reject such ratios explicitly instead so the
-  /// caller learns the request is unsupported rather than getting bad output.
-  /// (In-range ratios — roughly +/-2 octaves at 44.1/48 kHz — are unaffected.)
-  /// Single resample from effective rate to original rate
-  std::vector<float> result_samples =
-      resample(stretched.data(), stretched.size(), plan.effective_sample_rate, original_sr);
-
-  return Audio::from_vector(std::move(result_samples), original_sr);
+  /// back to the original sample rate. Length: (N*ratio) * sr/(sr*ratio) = N,
+  /// up to the rounding the helper trims away. An effective rate outside the
+  /// resampler's range was refused by the plan rather than clamped, which
+  /// would change the ratio.
+  return resample_pitch_shifted(stretched, plan, audio);
 }
 
 }  // namespace sonare

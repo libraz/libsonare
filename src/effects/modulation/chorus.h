@@ -124,6 +124,9 @@ class Chorus : public rt::ProcessorBase {
   std::array<PreFilter, 2> pre_filters_;
   /// [L, R] low-pass sections in the feedback return; their state is the return.
   std::array<PreFilter, 2> feedback_filters_;
+  // Each feedback filter's last output. Read rather than the filter's state, which
+  // a section left out of the path (corner at or above Nyquist) never updates.
+  std::array<float, 2> feedback_{};
 };
 
 }  // namespace sonare::effects::modulation

@@ -143,6 +143,10 @@ class StreamingPhaseVocoder {
   size_t process_into(const float* samples, size_t count, float rate, float* out,
                       size_t out_capacity);
   Audio finalize(float rate);
+  /// @brief Ends the stream into @p out and returns how many samples it wrote.
+  /// @details A tail longer than @p out_capacity is kept: call again, pushing
+  ///   nothing in between, until it returns fewer samples than the capacity. The
+  ///   stream resets once the whole tail has been delivered.
   size_t finalize_into(float rate, float* out, size_t out_capacity);
   Audio finish(float rate);
   void reserve(size_t max_input_samples, size_t max_output_samples);
@@ -160,6 +164,7 @@ class StreamingPhaseVocoder {
   void synthesize_output_frame(int t_out);
   Audio drain_available(bool final);
   size_t drain_into(bool final, float* out, size_t out_capacity);
+  size_t undelivered_samples(bool final) const;
   void compact_buffers();
   float normalized_output_sample(size_t user_sample) const noexcept;
   const std::complex<float>& analysis_frame_at(int frame, int bin) const noexcept;

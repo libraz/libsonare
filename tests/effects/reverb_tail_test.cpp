@@ -6,8 +6,10 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
+#include <complex>
 #include <vector>
 
+#include "core/fft.h"
 #include "effects/delay/stereo_delay.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/dattorro_reverb.h"
@@ -85,6 +87,55 @@ TEST_CASE("VelvetReverb reports a non-zero decay tail", "[effects][reverb][velve
   reverb.prepare(48000.0, 512);
   // rt60 = 1.5 * (0.5 + 0.45) ~= 1.425 s -> ~68400 samples.
   REQUIRE(reverb.tail_samples() > 48000);
+}
+
+TEST_CASE("VelvetReverb impulse response has no comb from a periodic tap table",
+          "[effects][reverb][velvet]") {
+  // Velvet noise has a flat expected spectrum; a periodic sign or position
+  // sequence shows up as bins tens of dB above their neighbourhood.
+  constexpr int kFftLength = 32768;
+  for (const double rate : {44100.0, 48000.0}) {
+    VelvetReverbConfig config;
+    config.dry_wet = 1.0f;
+    config.reverb_time_s = 0.4f;
+    config.enable_shelf = false;
+    VelvetReverb reverb(config);
+    reverb.prepare(rate, kFftLength);
+    std::vector<float> left(kFftLength, 0.0f);
+    std::vector<float> right(kFftLength, 0.0f);
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    float* channels[] = {left.data(), right.data()};
+    reverb.process(channels, 2, kFftLength);
+
+    sonare::FFT plan(kFftLength);
+    std::vector<std::complex<float>> spectrum(static_cast<size_t>(plan.n_bins()));
+    for (std::vector<float>* channel : {&left, &right}) {
+      CAPTURE(rate, channel == &left);
+      plan.forward(channel->data(), spectrum.data());
+      std::vector<double> power(spectrum.size());
+      for (size_t k = 0; k < power.size(); ++k) power[k] = std::norm(spectrum[k]);
+      const double bin_hz = rate / kFftLength;
+      double worst_db = -1000.0;
+      for (size_t k = static_cast<size_t>(200.0 / bin_hz); k * bin_hz < 8000.0; ++k) {
+        // Median power over a sixth of an octave either side.
+        const double hz = static_cast<double>(k) * bin_hz;
+        const auto lo = static_cast<size_t>(hz * std::pow(2.0, -1.0 / 6.0) / bin_hz);
+        const auto hi = static_cast<size_t>(hz * std::pow(2.0, 1.0 / 6.0) / bin_hz);
+        std::vector<double> window(power.begin() + static_cast<std::ptrdiff_t>(lo),
+                                   power.begin() + static_cast<std::ptrdiff_t>(hi) + 1);
+        std::nth_element(window.begin(),
+                         window.begin() + static_cast<std::ptrdiff_t>(window.size() / 2),
+                         window.end());
+        const double median = window[window.size() / 2];
+        worst_db = std::max(worst_db, 10.0 * std::log10(power[k] / median));
+      }
+      CAPTURE(worst_db);
+      // An exponentially distributed bin exceeds 15 dB over its median with odds
+      // near 3e-10; the periodic table put 1 kHz about 47 dB over.
+      CHECK(worst_db < 15.0);
+    }
+  }
 }
 
 TEST_CASE("VelvetReverb bounds excessive reverb time and tap work", "[effects][reverb][velvet]") {

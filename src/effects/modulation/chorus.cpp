@@ -93,13 +93,13 @@ void Chorus::process(float* const* channels, int num_channels, int num_samples) 
     float feed_r = pre_filters_[1].process(in_r);
     // Skipped at zero gain so an untouched chorus stays bit-identical.
     if (fb != 0.0f) {
-      feed_l += fb * feedback_filters_[0].state();
-      feed_r += fb * feedback_filters_[1].state();
+      feed_l += fb * feedback_[0];
+      feed_r += fb * feedback_[1];
     }
     const float wet_l = delays_[0].process(feed_l, delay_l);
     const float wet_r = delays_[1].process(feed_r, delay_r);
-    feedback_filters_[0].process(wet_l);
-    feedback_filters_[1].process(wet_r);
+    feedback_[0] = feedback_filters_[0].process(wet_l);
+    feedback_[1] = feedback_filters_[1].process(wet_r);
     if (stereo) {
       left[i] = dry * in_l + wet * wet_l;
       right[i] = dry * in_r + wet * wet_r;
@@ -116,11 +116,13 @@ void Chorus::discard_non_finite() noexcept {
   // The section is recursive, so one non-finite sample would stay in it for
   // good; the line only carries what the section already let through.
   if (std::isfinite(pre_filters_[0].state()) && std::isfinite(pre_filters_[1].state()) &&
-      std::isfinite(feedback_filters_[0].state()) && std::isfinite(feedback_filters_[1].state())) {
+      std::isfinite(feedback_filters_[0].state()) && std::isfinite(feedback_filters_[1].state()) &&
+      std::isfinite(feedback_[0]) && std::isfinite(feedback_[1])) {
     return;
   }
   for (auto& pre_filter : pre_filters_) pre_filter.reset();
   for (auto& filter : feedback_filters_) filter.reset();
+  feedback_.fill(0.0f);
   for (auto& delay : delays_) delay.reset();
   note_non_finite_discard();
 }
@@ -213,6 +215,7 @@ void Chorus::reset() {
   for (auto& filter : feedback_filters_) {
     filter.reset();
   }
+  feedback_.fill(0.0f);
   lfos_[0].reset(0.0);
   lfos_[1].reset(static_cast<double>(config_.phase_deg) / kDegreesPerTurn);
 }

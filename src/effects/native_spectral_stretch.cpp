@@ -5,7 +5,6 @@
 #include <cmath>
 #include <vector>
 
-#include "core/resample.h"
 #include "effects/phase_vocoder.h"
 #include "effects/pitch_shift.h"
 #include "util/constants.h"
@@ -51,11 +50,7 @@ Audio native_spectral_pitch_shift_ratio(const Audio& audio, float ratio, int n_f
   // sampled at sr*ratio back to sr: raises pitch by ratio, restores length.
   Audio stretched = native_spectral_time_stretch(audio, 1.0f / ratio, n_fft, hop_length);
 
-  // Reject ratios whose effective rate falls outside the supported resampler
-  // range instead of clamping (which silently changed the ratio -> wrong pitch).
-  std::vector<float> result_samples =
-      resample(stretched.data(), stretched.size(), plan.effective_sample_rate, audio.sample_rate());
-  return Audio::from_vector(std::move(result_samples), audio.sample_rate());
+  return resample_pitch_shifted(stretched, plan, audio);
 }
 
 }  // namespace sonare

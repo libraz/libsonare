@@ -86,6 +86,33 @@ TEST_CASE("chorus feedback builds a comb at multiples of the loop delay", "[chor
   CHECK(db_at(positive, kNotchHz) < -3.0);
 }
 
+TEST_CASE("chorus feedback returns the wet signal at rates where its low-pass sits out",
+          "[chorus-feedback]") {
+  // At 12 kHz and below the 6 kHz feedback corner is at or above Nyquist, so the
+  // section is out of the path; the loop must still close.
+  for (const double rate : {8000.0, 12000.0, 48000.0}) {
+    CAPTURE(rate);
+    const auto render = [rate](float feedback) {
+      Chorus chorus(still_chorus(feedback));
+      chorus.prepare(rate, 4096);
+      std::vector<float> impulse = sonare::test::generate_impulse(4096);
+      sonare::test::process(chorus, impulse);
+      return impulse;
+    };
+    const std::vector<float> open = render(0.0f);
+    const std::vector<float> closed = render(0.5f);
+    // The first echo arrives one loop delay in; the second only exists with feedback.
+    const auto loop = static_cast<std::size_t>(std::lround(kLoopDelayMs * 0.001 * rate));
+    const auto window_peak = [&](const std::vector<float>& x, std::size_t at) {
+      float peak = 0.0f;
+      for (std::size_t n = at - 2; n <= at + 2; ++n) peak = std::max(peak, std::abs(x[n]));
+      return peak;
+    };
+    CHECK(window_peak(open, 2 * loop) < 1.0e-6f);
+    CHECK(window_peak(closed, 2 * loop) > 0.1f * window_peak(closed, loop));
+  }
+}
+
 TEST_CASE("chorus feedback is clamped and automatable in place", "[chorus-feedback]") {
   Chorus chorus(still_chorus(0.0f));
   chorus.prepare(kRate, kFftLength);

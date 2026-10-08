@@ -23,6 +23,9 @@ constexpr float kMaxAttenuation = 0.8f;
 constexpr float kKneeLo = 0.2f;
 constexpr float kKneeHi = 0.7f;
 constexpr float kPeakFloor = 1e-6f;
+// Envelope level (-80 dBFS) below which there is no tail left to suppress, so
+// the gain rests at unity and the onset that ends a silence passes untouched.
+constexpr float kSilenceFloor = 1e-4f;
 
 float one_pole_coef(float tau_seconds, int sample_rate) {
   const float tau = std::max(1e-4f, tau_seconds);
@@ -135,7 +138,7 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
         const float r = st.env / (st.peak + kPeakFloor);
         float t = std::clamp((r - kKneeLo) / (kKneeHi - kKneeLo), 0.0f, 1.0f);
         t = t * t * (3.0f - 2.0f * t);  // smoothstep
-        const float target_gain = (1.0f - max_cut) + max_cut * t;
+        const float target_gain = st.env < kSilenceFloor ? 1.0f : (1.0f - max_cut) + max_cut * t;
         st.gain = gain_smooth_ * st.gain + (1.0f - gain_smooth_) * target_gain;
         d[i] *= st.gain;
       }

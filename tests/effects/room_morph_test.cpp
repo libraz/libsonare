@@ -175,6 +175,31 @@ TEST_CASE("room_morph suppression reduces the source tail energy",
   REQUIRE(out_peak >= 0.8f);  // input onset was 1.0
 }
 
+TEST_CASE("room_morph silence does not pull the suppressor gain down before an onset",
+          "[effects][acoustic][room_morph]") {
+  const int sr = 48000;
+  RoomMorphConfig config;
+  config.target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  config.placement = {{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  config.wet = 0.0f;  // isolate the suppressor
+  config.source_tail_suppression = 1.0f;
+
+  const auto onset_after = [&](std::vector<float> lead_in) {
+    const size_t onset = lead_in.size();
+    lead_in.resize(onset + 1000, 0.0f);
+    lead_in[onset] = 1.0f;
+    const Audio out = room_morph(Audio::from_vector(std::move(lead_in), sr), config).audio;
+    return out[onset];
+  };
+  const float fresh = onset_after({});
+  REQUIRE(fresh > 0.99f);
+  // One second of silence, with and without a decaying tail ahead of it.
+  REQUIRE(std::abs(onset_after(std::vector<float>(sr, 0.0f)) - fresh) < 1.0e-3f);
+  std::vector<float> tail(static_cast<size_t>(sr) * 2, 0.0f);
+  for (int i = 0; i < 6000; ++i) tail[static_cast<size_t>(i)] = 0.5f * std::exp(-i / 1500.0f);
+  REQUIRE(std::abs(onset_after(tail) - fresh) < 1.0e-3f);
+}
+
 TEST_CASE("room_morph rejects an invalid target room before processing",
           "[effects][acoustic][room_morph]") {
   const int sr = 48000;

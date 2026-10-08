@@ -349,6 +349,36 @@ TEST_CASE("StreamingPhaseVocoder process_into uses caller-owned output",
   }
 }
 
+TEST_CASE("StreamingPhaseVocoder finalize_into keeps a tail that does not fit",
+          "[phase_vocoder][streaming]") {
+  const int sr = 22050;
+  Audio audio = make_sine(180.0f, sr, 0.25f);
+  StreamingPhaseVocoderConfig config;
+  config.sample_rate = sr;
+  config.n_fft = 512;
+  config.hop_length = 128;
+
+  StreamingPhaseVocoder reference(config);
+  reference.push(audio);
+  const Audio expected = reference.finish(0.8f);
+
+  StreamingPhaseVocoder streamer(config);
+  streamer.push(audio);
+  // Drained 64 samples at a time; each short call leaves the rest for the next.
+  std::vector<float> out;
+  std::vector<float> chunk(64, 0.0f);
+  for (int call = 0; call < 10000; ++call) {
+    const size_t written = streamer.finalize_into(0.8f, chunk.data(), chunk.size());
+    out.insert(out.end(), chunk.begin(), chunk.begin() + static_cast<std::ptrdiff_t>(written));
+    if (written < chunk.size()) break;
+  }
+  REQUIRE(out.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    REQUIRE(std::abs(out[i] - expected[i]) <= 1.0e-4f);
+  }
+  REQUIRE(streamer.pending_input_samples() == 0);
+}
+
 TEST_CASE("StreamingPhaseVocoder process_into is allocation-free after reserve",
           "[phase_vocoder][streaming][step5][rt]") {
   const int sr = 22050;

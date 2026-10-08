@@ -31,6 +31,13 @@ bool make_pitch_shift_ratio_plan(std::size_t input_samples, int sample_rate, flo
 bool make_pitch_shift_plan(std::size_t input_samples, int sample_rate, float semitones,
                            PitchShiftPlan* out) noexcept;
 
+/// @brief The step both backends end on: resamples @p stretched from the plan's
+///        effective rate back to @p input's rate and returns exactly
+///        input.size() samples, trimming or zero-padding the few the integer
+///        effective rate and the stretch rounding leave over or short.
+Audio resample_pitch_shifted(const Audio& stretched, const PitchShiftPlan& plan,
+                             const Audio& input);
+
 /// @brief Pitch-shifts audio without changing duration.
 /// @details Uses time stretching followed by resampling.
 /// @param audio Input audio

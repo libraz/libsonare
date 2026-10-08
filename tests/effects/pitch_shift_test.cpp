@@ -208,3 +208,33 @@ TEST_CASE("pitch_shift accepts an even n_fft that is not a power of two", "[pitc
     for (const float value : shifted) REQUIRE(std::isfinite(value));
   }
 }
+
+namespace {
+
+void require_exact_length(float seconds, int sample_rate) {
+  const Audio audio = create_test_audio(440.0f, sample_rate, seconds);
+  for (const StretchBackend backend :
+       {StretchBackend::NativeSpectral, StretchBackend::PhaseVocoder}) {
+    for (const float ratio : {std::pow(2.0f, 7.0f / 12.0f), std::pow(2.0f, -5.0f / 12.0f), 1.37f}) {
+      CAPTURE(seconds, sample_rate, static_cast<int>(backend), ratio);
+      PitchShiftConfig config;
+      config.backend = backend;
+      REQUIRE(pitch_shift_ratio(audio, ratio, config).size() == audio.size());
+    }
+  }
+}
+
+}  // namespace
+
+TEST_CASE("pitch_shift returns exactly the input's sample count on both backends",
+          "[pitch_shift]") {
+  require_exact_length(1.0f, 8000);
+  require_exact_length(1.0f, 48000);
+}
+
+TEST_CASE("pitch_shift keeps the exact sample count over long inputs", "[pitch_shift][.][slow]") {
+  for (const float seconds : {10.0f, 60.0f}) {
+    require_exact_length(seconds, 8000);
+    require_exact_length(seconds, 48000);
+  }
+}

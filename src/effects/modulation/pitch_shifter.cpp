@@ -234,6 +234,18 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
   const float feedback = config_.feedback;
   const std::array<float, 2> pan = balance_gains(config_.pan);
   const std::array<float, 2> pan2 = balance_gains(config_.pan2);
+  // A shifting voice sums two sin/cos-faded taps, which reads up to sqrt(2) of a
+  // correlated line; a unity voice reads one tap. The fed-back share is divided
+  // by the channel's worst-case voice sum, so the loop gain stays within
+  // |feedback| for every voice configuration.
+  const float peak1 = unity ? 1.0f : ::sonare::constants::kSqrt2;
+  const float peak2 = unity2 ? 1.0f : ::sonare::constants::kSqrt2;
+  std::array<float, 2> feedback_gain{};
+  for (size_t c = 0; c < feedback_gain.size(); ++c) {
+    const float voice_sum =
+        peak1 * std::abs(level1 * pan[c]) + (second ? peak2 * std::abs(level2 * pan2[c]) : 0.0f);
+    feedback_gain[c] = feedback / std::max(1.0f, voice_sum);
+  }
   // Stereo-pair processor: grain buffers exist for two planes only, so planes
   // beyond the pair pass through dry (see the registry's stereoPairOnly
   // classification).
@@ -289,7 +301,7 @@ void PitchShifter::process(float* const* channels, int num_channels, int num_sam
       }
       if (feedback != 0.0f) {
         // Written after the taps have read, so the loop is one pre-delay long.
-        buffers_[c][static_cast<size_t>(write_pos_[c])] += feedback * shifted;
+        buffers_[c][static_cast<size_t>(write_pos_[c])] += feedback_gain[c] * shifted;
         feedback_state_[c] = shifted;
         non_finite = non_finite || !std::isfinite(shifted);
       }

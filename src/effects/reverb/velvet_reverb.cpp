@@ -24,6 +24,19 @@ float bounded_reverb_time(float value) {
 float effective_rt60(const VelvetReverbConfig& config) {
   return bounded_reverb_time(config.reverb_time_s) * (0.5f + std::clamp(config.decay, 0.0f, 1.0f));
 }
+
+/// Avalanching 32-bit integer hash. A bare LCG step of the pulse index would
+/// leave the low bits periodic (the sign bit strictly alternates), which turns
+/// the velvet sequence into a comb.
+std::uint32_t mix32(std::uint32_t x) noexcept {
+  x ^= x >> 16;
+  x *= 0x7feb352du;
+  x ^= x >> 15;
+  x *= 0x846ca68bu;
+  x ^= x >> 16;
+  return x;
+}
+
 }  // namespace
 
 // --- Ring ------------------------------------------------------------------
@@ -63,11 +76,11 @@ void VelvetReverb::build_table(std::vector<Tap>& taps, std::uint32_t seed_offset
   const std::uint32_t ls = static_cast<std::uint32_t>(grid_ls);
   for (int k = 0; k < num_pulses; ++k) {
     const std::uint32_t kk = static_cast<std::uint32_t>(k) + seed_offset;
-    const std::uint32_t s_pos = 1664525u * (kk + 1u) + 1013904223u;
-    const std::uint32_t s_sign = 1664525u * s_pos + 1013904223u;
+    const std::uint32_t s_pos = mix32(2u * kk);
+    const std::uint32_t s_sign = mix32(2u * kk + 1u);
     int tap = k * grid_ls + static_cast<int>(s_pos % ls);
     tap = std::clamp(tap, 1, n_seg - 1);
-    const float sign = (s_sign & 1u) ? 1.0f : -1.0f;
+    const float sign = (s_sign >> 31) != 0u ? 1.0f : -1.0f;
     const float gain =
         sign * std::exp(-decay_rate * static_cast<float>(tap) / static_cast<float>(sr));
     taps.push_back({tap, gain});

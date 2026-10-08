@@ -156,6 +156,39 @@ TEST_CASE("feedback repeats the shifted sum once per pre-delay", "[pitch-voices]
   CHECK(at(inverted.left, 2 * kFirst) == Approx(-0.5f).margin(1e-3));
 }
 
+TEST_CASE("feedback decays with every voice configuration", "[pitch-voices]") {
+  // A low tone keeps the two faded taps of a shifting voice correlated, which is
+  // the worst case for the loop gain; both voices at full level and centred.
+  constexpr int kLength = 3 * 48000;
+  std::vector<float> burst(static_cast<std::size_t>(kLength), 0.0f);
+  for (int i = 0; i < 24000; ++i) {
+    burst[static_cast<std::size_t>(i)] =
+        static_cast<float>(0.5 * std::sin(sonare::constants::kTwoPiD * 30.0 * i / kRate));
+  }
+  for (const float feedback : {0.75f, 0.95f, -0.95f}) {
+    for (const float semitones : {0.0f, 7.0f}) {
+      CAPTURE(feedback, semitones);
+      PitchShifterConfig config;
+      config.semitones = semitones;
+      config.semitones2 = -5.0f;
+      config.level2 = 1.0f;
+      config.pre_delay_ms = 10.0f;
+      config.pre_delay2_ms = 10.0f;
+      config.feedback = feedback;
+      const Stereo out = run(config, burst);
+      float early = 0.0f;
+      float late = 0.0f;
+      for (int i = 0; i < 24000; ++i) early = std::max(early, std::fabs(at(out.left, i)));
+      for (int i = kLength - 24000; i < kLength; ++i) {
+        late = std::max(late, std::fabs(at(out.left, i)));
+      }
+      REQUIRE(std::isfinite(early));
+      REQUIRE(std::isfinite(late));
+      CHECK(late < 0.01f * early);
+    }
+  }
+}
+
 TEST_CASE("feedback holds a non-finite sample out of the loop", "[pitch-voices]") {
   PitchShifterConfig config = unity_voices();
   config.feedback = 0.5f;

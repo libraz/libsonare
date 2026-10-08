@@ -469,7 +469,7 @@ Audio StreamingPhaseVocoder::drain_available(bool final) {
   return Audio::from_vector(std::move(chunk), config_.sample_rate);
 }
 
-size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
+size_t StreamingPhaseVocoder::undelivered_samples(bool final) const {
   size_t stable_user_samples = 0;
   if (final) {
     stable_user_samples =
@@ -480,9 +480,14 @@ size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capa
     const size_t center = static_cast<size_t>(config_.n_fft / 2);
     stable_user_samples = stable_full_samples > center ? stable_full_samples - center : 0;
   }
+  return stable_user_samples > emitted_output_samples_
+             ? stable_user_samples - emitted_output_samples_
+             : 0;
+}
 
-  if (stable_user_samples <= emitted_output_samples_) return 0;
-  const size_t available = stable_user_samples - emitted_output_samples_;
+size_t StreamingPhaseVocoder::drain_into(bool final, float* out, size_t out_capacity) {
+  const size_t available = undelivered_samples(final);
+  if (available == 0) return 0;
   SONARE_CHECK(out != nullptr || available == 0, ErrorCode::InvalidParameter);
   const size_t to_write = std::min(available, out_capacity);
   for (size_t i = 0; i < to_write; ++i) {
@@ -535,7 +540,8 @@ size_t StreamingPhaseVocoder::finalize_into(float rate, float* out, size_t out_c
   analyze_available_frames(true);
   synthesize_available_frames(true);
   const size_t written = drain_into(true, out, out_capacity);
-  reset();
+  // A tail that did not fit stays for the next call; the stream ends once it is out.
+  if (undelivered_samples(true) == 0) reset();
   return written;
 }
 
