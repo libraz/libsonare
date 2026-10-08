@@ -21,10 +21,19 @@ namespace sonare::effects::modulation {
 /// Single-channel TPT state-variable filter, bandpass tap (Zavalishin form).
 class SvfBandpass {
  public:
+  /// Highest cutoff the filter realizes, as a fraction of the sample rate. The TPT form is stable
+  /// at any finite corner, so this only keeps tan() away from its pole at Nyquist.
+  static constexpr double kMaxCutoffRatio = 0.49;
+
+  /// @brief The cutoff, in hertz, that process(), set() and ring() clamp to at @p sample_rate.
+  static float max_cutoff_hz(double sample_rate) noexcept {
+    return static_cast<float>(kMaxCutoffRatio * sample_rate);
+  }
+
   /// @brief Ring of the section at @p cutoff_hz and @p q, read from its equivalent biquad.
   static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
     const double rate = sample_rate > 0.0 ? sample_rate : 48000.0;
-    const double fc = std::clamp(static_cast<double>(cutoff_hz), 10.0, 0.49 * 0.5 * rate);
+    const double fc = std::clamp(static_cast<double>(cutoff_hz), 10.0, kMaxCutoffRatio * rate);
     const double g = std::tan(::sonare::constants::kPiD * fc / rate);
     const double k = 1.0 / std::max(0.5, static_cast<double>(q));
     const double d = 1.0 + g * (g + k);
@@ -51,8 +60,7 @@ class SvfBandpass {
   /// The bandpass output is scaled to unity peak gain at resonance; with
   /// @p lowpass the second integrator's state is returned instead.
   float process(float input, float cutoff_hz, float q, bool lowpass = false) noexcept {
-    const float nyquist = static_cast<float>(sample_rate_ * 0.5);
-    const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist);
+    const float fc = std::clamp(cutoff_hz, 10.0f, max_cutoff_hz(sample_rate_));
     const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
                              static_cast<float>(sample_rate_));
     const float k = 1.0f / std::max(0.5f, q);
@@ -72,8 +80,7 @@ class SvfBandpass {
   /// Sets the coefficients for tick(): centre frequency (Hz) and resonance Q,
   /// clamped exactly as process() clamps them.
   void set(float cutoff_hz, float q) noexcept {
-    const float nyquist = static_cast<float>(sample_rate_ * 0.5);
-    const float fc = std::clamp(cutoff_hz, 10.0f, 0.49f * nyquist);
+    const float fc = std::clamp(cutoff_hz, 10.0f, max_cutoff_hz(sample_rate_));
     const float g = std::tan(static_cast<float>(::sonare::constants::kPiD) * fc /
                              static_cast<float>(sample_rate_));
     k_ = 1.0f / std::max(0.5f, q);

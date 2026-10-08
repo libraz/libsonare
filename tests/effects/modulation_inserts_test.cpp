@@ -303,3 +303,89 @@ TEST_CASE("the GS-EFX modulation inserts build through the insert factory",
                                           .get()) != nullptr);
 }
 #endif
+
+namespace {
+
+/// Steady-state amplitude of a unit sine at @p hz after @p process, read over the last half.
+template <typename Process>
+double svf_steady_gain(double rate, double hz, Process process) {
+  const int n = static_cast<int>(rate);  // one second
+  std::vector<float> x(static_cast<size_t>(n));
+  for (int i = 0; i < n; ++i) {
+    x[static_cast<size_t>(i)] =
+        static_cast<float>(std::sin(2.0 * 3.14159265358979323846 * hz * i / rate));
+  }
+  process(x);
+  double re = 0.0;
+  double im = 0.0;
+  for (int i = n / 2; i < n; ++i) {
+    const double t = 2.0 * 3.14159265358979323846 * hz * i / rate;
+    re += x[static_cast<size_t>(i)] * std::cos(t);
+    im += x[static_cast<size_t>(i)] * std::sin(t);
+  }
+  return 2.0 * std::hypot(re, im) / (n - n / 2);
+}
+
+}  // namespace
+
+TEST_CASE("the shared SVF realizes in-band corners above a quarter of the sample rate",
+          "[effects][wah]") {
+  // The unity-peak bandpass has gain 1 exactly at its prewarped centre, so a corner anywhere
+  // below the ceiling must show unity gain at that frequency, at every sample rate.
+  for (const double rate : {16000.0, 24000.0, 48000.0, 96000.0}) {
+    for (const double fraction : {0.1, 0.3, 0.4}) {
+      const double fc = fraction * rate;
+      CAPTURE(rate, fc);
+      SvfBandpass filter;
+      filter.prepare(rate);
+      const double via_process = svf_steady_gain(rate, fc, [&](std::vector<float>& x) {
+        for (float& s : x) s = filter.process(s, static_cast<float>(fc), 4.0f);
+      });
+      REQUIRE(std::abs(via_process - 1.0) < 0.02);
+
+      filter.reset();
+      filter.set(static_cast<float>(fc), 4.0f);
+      const double via_tick = svf_steady_gain(rate, fc, [&](std::vector<float>& x) {
+        for (float& s : x) s = filter.tick(s);
+      });
+      REQUIRE(std::abs(via_tick - 1.0) < 0.02);
+    }
+  }
+}
+
+TEST_CASE("Wah and AutoWah keep a fixed in-band centre above a quarter of the sample rate",
+          "[effects][wah]") {
+  struct Case {
+    double rate;
+    float hz;
+  };
+  for (const Case c : {Case{8000.0, 3000.0f}, Case{16000.0, 6000.0f}, Case{48000.0, 6000.0f}}) {
+    CAPTURE(c.rate, c.hz);
+    const int block = 256;
+    const auto run = [&](sonare::rt::ProcessorBase& p) {
+      p.prepare(c.rate, block);
+      return svf_steady_gain(c.rate, c.hz, [&](std::vector<float>& x) {
+        for (size_t off = 0; off < x.size(); off += block) {
+          float* ch[2] = {x.data() + off, nullptr};
+          const int count = static_cast<int>(std::min<size_t>(block, x.size() - off));
+          p.process(ch, 1, count);
+        }
+      });
+    };
+    WahConfig wah_config;
+    wah_config.min_hz = wah_config.max_hz = c.hz;
+    wah_config.rate_hz = 0.0f;
+    wah_config.resonance = 4.0f;
+    wah_config.dry_wet = 1.0f;
+    Wah wah(wah_config);
+    REQUIRE(std::abs(run(wah) - 1.0) < 0.03);
+
+    AutoWahConfig auto_config;
+    auto_config.min_hz = auto_config.max_hz = c.hz;
+    auto_config.resonance = 4.0f;
+    auto_config.dry_wet = 1.0f;
+    auto_config.lfo_depth = 0.0f;
+    AutoWah auto_wah(auto_config);
+    REQUIRE(std::abs(run(auto_wah) - 1.0) < 0.03);
+  }
+}
