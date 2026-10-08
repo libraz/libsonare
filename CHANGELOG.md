@@ -26,12 +26,18 @@
 - Negative sample positions on spectral edit regions, `noteStretch` / `noteMove`, note objects, percussive events, vocal render ranges and `setSourceSpan`, trim padding and the punch-in window (`RangeError` / `SonareValueError`); `endSample: -1` on Node and WASM used to clamp to an empty region and edit nothing, while Python read it as the full length. Also a negative or non-finite `xMax`, `bank`, metering percentile, `gamma` or `renderFrame`, and both spellings (`*Sample` and `*Sec`) of one bound together.
 - Node refuses a string argument or object property carrying an embedded NUL (names, ids, keys, JSON text, preset names, file paths) with a `RangeError` naming the field; it used to be cut at the NUL and used as its prefix. Every string the addon reads goes through the shared readers, so a non-string at any of those sites is a `TypeError` naming it.
 
+- A project or engine sample rate that is not a whole number of hertz within the supported range is refused on every surface. Project JSON with a fractional `sample_rate` fails to load with `InvalidFormat` and the diagnostic `invalid_sample_rate`, and `project bounce` in both CLIs exits 5 for it instead of rounding the rate.
+- The WASM worklet engine, playback and stream-analyzer node factories throw `RangeError` for a `sampleRate` that differs from the `AudioContext`'s.
+- Node `extractPercussiveEvents` refuses an integer option past the 32-bit range with `RangeError`, as WASM does.
+
 #### Error classes
 
 - A failure that comes from the library or from an object's state is a `SonareError` carrying the C-ABI code on every surface. On Node and WASM a released, destroyed or uninitialised handle, including a WASM embind object already deleted, throws `SonareError` with `InvalidState` where it threw a plain `Error` or `TypeError`; in Python the bare `RuntimeError`s became `SonareError` (still a `RuntimeError` subclass) with `NOT_SUPPORTED`, `INVALID_STATE` or `UNKNOWN`.
 - An argument the WASM binding refuses itself is a native `TypeError` (wrong type or missing) or `RangeError` (out of its domain), as on Node, where it was a `SonareError` with code `InvalidParameter`. Failures the library or an object's state reports stay a coded `SonareError`, including the argument checks the core makes itself (empty or non-finite audio, sample rate, STFT and stream configuration). The offline and vocal-edit worker clients rebuild `TypeError` and `RangeError` across the worker boundary.
 - Two buffers whose lengths must match are refused with a `RangeError` on Node and WASM, where some paths threw `TypeError` or a plain `Error`.
 - The streaming `ChordChange` / `BarChord` constructors take `name` after `quality`.
+
+- Loading a malformed project document raises the C ABI's own code on every surface: WASM `Project.fromJson` / `fromJsonWithDiagnostics` threw `InvalidFormat` whatever the native code was, WASM `setSampleRate` threw `InvalidParameter` without the native message, and Python `Project.from_json` raised `SonareValueError` without a code. The Python CLI exits 5 for a malformed project document, as the native CLI does, where it exited 3.
 
 #### Renamed and removed
 
@@ -105,9 +111,13 @@
 - Decode audio bytes once and keep every channel, and fold channels to a narrower layout with the ITU-R BS.775 rule the decoders use: center and surround at -3 dB, LFE dropped (C: `sonare_decode_channels`, `sonare_downmix`; Node and WASM: `decodeChannels(bytes)` returning `{ sampleRate, channels }` and `downmix(channels, targetLayout)`; Python: `decode_channels(data)` returning `(channels, sample_rate)` with a `(channels, frames)` array, and `downmix(channels, target_layout)`). The functions are additive, so no ABI version moves.
 - `SonareEngine.attachOpfsClipStream` no longer requires SharedArrayBuffer: on the postMessage path the worklet reads page misses without allocating and posts a request when the set of missing pages changes, re-posting an unchanged set every 250 ms so a failed read is retried. `capabilities.clipPageRequestsRealtimeSafe` still reports whether the SAB ring is in use.
 
+- Add, replace or remove one clip without resending the clip set (C: `sonare_engine_upsert_clip`, `sonare_engine_remove_clip`; Node and WASM: `upsertClip`, `removeClip`; Python: `upsert_clip`, `remove_clip`). The functions are additive. The worklet engine sends clip edits as single-clip deltas.
+
 #### Mixing
 
 - Ask whether a lane, bus or master sidechain binding would be accepted, and why not, without changing anything (C: `sonare_engine_can_set_lane_sidechain`, `sonare_engine_can_set_bus_sidechain`, `sonare_engine_can_set_master_sidechain`, `SonareSidechainRefusal`; Node, WASM and the worklet engine: `canSetLaneSidechain`, `canSetBusSidechain`, `canSetMasterSidechain` returning `SidechainCheck`; Python: `can_set_lane_sidechain`, `can_set_bus_sidechain`, `can_set_master_sidechain` returning `SidechainCheck`).
+
+- Fold the true-peak meter's pending window in at the end of a signal (C: `sonare_mixer_flush_meters`; Node and WASM: `Mixer.flushMeters()`; Python: `flush_meters()`). The function is additive. Offline engine renders and the one-shot mix flush every meter themselves.
 
 #### Editing and voice
 
@@ -162,6 +172,13 @@
 - Loudness matching solves for the gain that lands the remeasured signal on the target. This covers A/B match, reference matching, LUFS normalize, the chain's loudness stages and `maximizer.loudnessOptimize`. When the gain moves blocks across the absolute gate, the applied gain is no longer `reference − source` (C: `applied_gain_db`).
 - The mixing assistant counts the measured peaks of short audible tracks toward master headroom. Phase alignment picks its window by the activity in the span the correlation actually uses.
 
+- The true-peak meter reads one reconstruction-filter group delay behind the block, so its reading no longer depends on the block size; call `flushMeters` at the end of a signal to include its last samples.
+- Reported tails cover the output down to 1e-5 for every insert, including IIR EQs, filters, saturation and stereo inserts that reported none, the modulated delays, oversampled stages, multiband crossovers and the channel strip. Dattorro, FDN, Velvet and StereoDelay tails cover a decay of 0 and 0 ms feedback, and the streaming repair stages report the ring they leave (dehum reported none, denoise one hop too many). Bounce and freeze lengths and the capability catalog's `tailSamples` change accordingly.
+- AmpSim aligns the farther first microphone at every blend and reports that delay as latency, so its latency no longer changes with the blend. `maximizer.adaptiveRelease` and `maximizer.truePeakLimiter` report 129 samples of latency.
+- Changing a project's sample rate rescales warp anchors, and undo restores them exactly.
+- Parameter glides settle exactly on their targets at every sample rate instead of stopping a rate-dependent distance short: mixer faders and pans, the Rotary rotor speed, StereoDelay delay and tap times with its feedback, wet and ping-pong, VowelFilter morphs and the Dattorro gate. A 1 s StereoDelay time at 192 kHz used to land 15 samples early.
+- WASM worklet `setMetronome` returns a boolean, `false` when the live ring cannot queue the command. A worklet edit that the ring or the offline engine refuses changes neither engine nor the facade's caches.
+
 ### Fixes
 
 - The realtime voice changer's pitch stage shifts by exactly `2^(semitones/12)` on every surface. Its grains used to re-lock to the input period, landing tens of hertz off (a +4 semitone shift of 220 Hz came out near 306 Hz) and cancelling 7 to 25 dB of level; they now read one continuous resampling of the source and re-align by a source-period search. The wet path carries a shift-dependent delay of up to two grains on top of the reported latency.
@@ -190,6 +207,15 @@
 - Gated silence trimming no longer rescans the full RMS window for every sample.
 - The streaming chain's loudness errors and the `loudnessStaticGainDb` / `loudnessStaticGainPeakDb` docs said to measure the source; the measurement is taken at the loudness stage's input.
 - The streaming analyzer's per-frame and progression chord confidences stay in their documented 0–1 range, as the offline chord analyzer's do; the root, third and fifth bonuses in the template score had pushed them above 1.
+- A stage switched off and back on starts from rest instead of replaying the history it held: delays, reverbs, the pitch shifter, cut filter, parametric and channel-strip EQ, stereo processors, AmpSim's second microphone, BitCrusher filters, multiband saturation bands and Dynamic EQ bands.
+- `set_config` on dynamics, EQ, saturation, stereo and multiband processors rebuilds only the stage whose field changed, and a refused configuration leaves the processor as it was. Limiters owned by multiband and maximizer wrappers honour the detector-excluded channel.
+- `griffinLim` accepts a single frame again, as CQT and VQT inversion pass it.
+- An engine command the engine refuses (strip, bus, release, dither and capture updates, a bus reorder) leaves the previous state untouched, and an offline render that fails to allocate keeps the transport and metronome.
+- Note-offs are no longer lost: one a full MIDI output refuses is retried every block, a full MIDI FX queue releases the note at once and withdraws its pending note-on, and a block refused for its size or channel count still dispatches its MIDI.
+- One-shot mix true peak includes the final samples again.
+- Scene solo gates the engine's other tracks, a disabled send contributes exactly nothing, a callback instrument shared by tracks mixing into one place bounces, an offline render that read a missing streamed page is refused, and `clearParameters` keeps automation lanes on every surface.
+- The WASM worklet's `configureCapture` validates before replacing the capture buffer, external MIDI that finds the ring full is delivered on a later quantum instead of being dropped, and registering a parameter no longer clears the live engine's automation lanes.
+- The streaming LUFS histogram spans -70 to +30 LUFS, sidechain key-listen delays the key by its reported latency, the vocal reverb send's return is wet-only, a layered instrument reports fractional latency, and AU instrument `set_parameter` applies published parameter ids.
 
 ## v1.8.2 (2026-10-06)
 
