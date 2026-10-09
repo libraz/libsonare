@@ -185,6 +185,10 @@ import sys
 import typing
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ast_utils import own_body as _own_body
+
 ROOT = Path(__file__).resolve().parents[2]
 BINDING = ROOT / "bindings" / "python" / "src" / "libsonare"
 
@@ -1623,19 +1627,6 @@ def _local_imports(function: ast.AST) -> dict[str, str]:
                 found[alias.asname or alias.name] = node.module
     return found
 
-
-def _own_body(function: ast.AST):
-    """Every node of `function` except a nested function's own.
-
-    A value handed into a closure is followed as a call argument instead, so
-    walking into the closure here would credit an outer parameter for a guard on
-    a name that merely shadows it.
-    """
-    for child in ast.iter_child_nodes(function):
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            continue
-        yield child
-        yield from _own_body(child)
 
 
 class Records:

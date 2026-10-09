@@ -102,6 +102,10 @@ import sys
 import tokenize
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from ast_utils import own_body as _own_body
+
 ROOT = Path(__file__).resolve().parents[2]
 BINDING = ROOT / "bindings" / "python" / "src" / "libsonare"
 RECORDS = Path(__file__).resolve().parent / "python_narrowing_records.json"
@@ -504,18 +508,6 @@ def _reader_bound_names(function: ast.AST) -> frozenset[str]:
                 reader_bound.add(target.id)
     return frozenset(name for name in reader_bound if bindings[name] == 1)
 
-
-def _own_body(function: ast.AST):
-    """Every node of ``function`` except those belonging to a nested function.
-
-    A name bound inside a closure is that closure's, and letting it out would
-    bless an outer call site nothing checked.
-    """
-    for child in ast.iter_child_nodes(function):
-        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
-            continue
-        yield child
-        yield from _own_body(child)
 
 
 def _is_shared_reader_call(node: ast.AST | None) -> bool:
