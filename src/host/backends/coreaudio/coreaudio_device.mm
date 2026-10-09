@@ -2,6 +2,7 @@
 /// @brief AUHAL implementation of host::AudioDevice. See coreaudio_device.h.
 
 #include "host/backends/coreaudio/coreaudio_device.h"
+#include "host/backends/apple_time.h"
 #include "host/backends/coreaudio/coreaudio_render_utils.h"
 
 #include <AudioToolbox/AudioToolbox.h>
@@ -17,6 +18,8 @@
 #include <vector>
 
 namespace sonare::host::backends {
+
+using detail::host_ticks_to_ns;
 namespace {
 
 /// Round a CoreAudio OSStatus check: returns true on noErr.
@@ -110,17 +113,6 @@ double read_device_nominal_sample_rate(AudioObjectID device) noexcept {
     return 0.0;
   }
   return static_cast<double>(value);
-}
-
-bool host_ticks_to_ns(uint64_t ticks, const mach_timebase_info_data_t& timebase,
-                      uint64_t* out) noexcept {
-  if (out == nullptr || timebase.denom == 0) return false;
-  const unsigned __int128 scaled = static_cast<unsigned __int128>(ticks) *
-                                   static_cast<unsigned __int128>(timebase.numer) /
-                                   static_cast<unsigned __int128>(timebase.denom);
-  if (scaled > std::numeric_limits<uint64_t>::max()) return false;
-  *out = static_cast<uint64_t>(scaled);
-  return true;
 }
 
 }  // namespace

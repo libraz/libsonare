@@ -2,6 +2,7 @@
 /// @brief CoreMIDI implementation of the MIDI I/O seams. See coremidi_io.h.
 
 #include "host/backends/coremidi/coremidi_io.h"
+#include "host/backends/apple_time.h"
 
 #include <CoreMIDI/CoreMIDI.h>
 #include <mach/mach_time.h>
@@ -17,6 +18,8 @@
 #include "midi/ump.h"
 
 namespace sonare::host::backends {
+
+using detail::host_ticks_to_ns;
 namespace {
 
 constexpr size_t kInputCapacity = 1024;
@@ -64,17 +67,6 @@ struct FallbackTime {
   int64_t value = 0;
   bool absolute = false;
 };
-
-bool host_ticks_to_ns(uint64_t ticks, const mach_timebase_info_data_t& timebase,
-                      uint64_t* out) noexcept {
-  if (out == nullptr || timebase.denom == 0) return false;
-  const unsigned __int128 scaled = static_cast<unsigned __int128>(ticks) *
-                                   static_cast<unsigned __int128>(timebase.numer) /
-                                   static_cast<unsigned __int128>(timebase.denom);
-  if (scaled > std::numeric_limits<uint64_t>::max()) return false;
-  *out = static_cast<uint64_t>(scaled);
-  return true;
-}
 
 bool ns_to_host_ticks(uint64_t nanoseconds, const mach_timebase_info_data_t& timebase,
                       MIDITimeStamp* out) noexcept {

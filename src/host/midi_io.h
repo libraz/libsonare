@@ -70,6 +70,49 @@ inline int64_t block_end_frame(int64_t block_start_frame, int num_frames,
   return end_overflowed ? numeric::saturating_add(block_start_frame, int64_t{num_frames}) : end;
 }
 
+template <size_t Capacity>
+constexpr size_t spsc_increment(size_t index) noexcept {
+  return (index + 1) % (Capacity + 1);
+}
+
+template <size_t Capacity>
+constexpr size_t spsc_distance(size_t read, size_t write) noexcept {
+  return write >= read ? write - read : Capacity + 1 - read + write;
+}
+
+template <size_t Capacity, typename Record>
+bool spsc_push(std::array<Record, Capacity + 1>& queue, const std::atomic<size_t>& read_index,
+               std::atomic<size_t>& write_index, std::atomic<uint32_t>& dropped_count,
+               const Record& record) noexcept {
+  const size_t write = write_index.load(std::memory_order_relaxed);
+  const size_t next = spsc_increment<Capacity>(write);
+  if (next == read_index.load(std::memory_order_acquire)) {
+    dropped_count.fetch_add(1, std::memory_order_relaxed);
+    return false;
+  }
+  queue[write] = record;
+  write_index.store(next, std::memory_order_release);
+  return true;
+}
+
+template <size_t Capacity, typename Record>
+size_t spsc_drain(std::array<Record, Capacity + 1>& queue, std::atomic<size_t>& read_index,
+                  const std::atomic<size_t>& write_index, Record* out, size_t capacity) noexcept {
+  if (out == nullptr || capacity == 0) {
+    return 0;
+  }
+  size_t read = read_index.load(std::memory_order_relaxed);
+  const size_t write = write_index.load(std::memory_order_acquire);
+  size_t n = 0;
+  while (read != write && n < capacity) {
+    out[n] = queue[read];
+    read = spsc_increment<Capacity>(read);
+    ++n;
+  }
+  read_index.store(read, std::memory_order_release);
+  return n;
+}
+
 }  // namespace detail
 
 /// Lock-free correlation between a monotonic host clock and the engine's
@@ -497,38 +540,18 @@ class FixedMidiOutputSink final : public MidiOutputSink {
       dropped_count_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
-    const size_t write = write_index_.load(std::memory_order_relaxed);
-    const size_t next = increment(write);
-    if (next == read_index_.load(std::memory_order_acquire)) {
-      dropped_count_.fetch_add(1, std::memory_order_relaxed);
-      return false;
-    }
-    queue_[write] = event;
-    write_index_.store(next, std::memory_order_release);
-    return true;
+    return detail::spsc_push<Capacity>(queue_, read_index_, write_index_, dropped_count_, event);
   }
 
   size_t queued_count() const noexcept override {
-    return distance(read_index_.load(std::memory_order_acquire),
-                    write_index_.load(std::memory_order_acquire));
+    return detail::spsc_distance<Capacity>(read_index_.load(std::memory_order_acquire),
+                                           write_index_.load(std::memory_order_acquire));
   }
 
   /// HOST/device thread: drain up to `capacity` queued events into `out`.
   /// Drained events are removed. No allocation.
   size_t drain_queued(midi::MidiEvent* out, size_t capacity) noexcept {
-    if (out == nullptr || capacity == 0) {
-      return 0;
-    }
-    size_t read = read_index_.load(std::memory_order_relaxed);
-    const size_t write = write_index_.load(std::memory_order_acquire);
-    size_t n = 0;
-    while (read != write && n < capacity) {
-      out[n] = queue_[read];
-      read = increment(read);
-      ++n;
-    }
-    read_index_.store(read, std::memory_order_release);
-    return n;
+    return detail::spsc_drain<Capacity>(queue_, read_index_, write_index_, out, capacity);
   }
 
   uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
@@ -543,12 +566,6 @@ class FixedMidiOutputSink final : public MidiOutputSink {
 
  private:
   static constexpr size_t kSlots = Capacity + 1;
-
-  static constexpr size_t increment(size_t index) noexcept { return (index + 1) % kSlots; }
-
-  static constexpr size_t distance(size_t read, size_t write) noexcept {
-    return write >= read ? write - read : kSlots - read + write;
-  }
 
   std::array<midi::MidiEvent, kSlots> queue_{};
   std::atomic<size_t> read_index_{0};
@@ -654,38 +671,19 @@ class FixedExternalMidiOutputQueue {
       dropped_count_.fetch_add(1, std::memory_order_relaxed);
       return false;
     }
-    const size_t write = write_index_.load(std::memory_order_relaxed);
-    const size_t next = increment(write);
-    if (next == read_index_.load(std::memory_order_acquire)) {
-      dropped_count_.fetch_add(1, std::memory_order_relaxed);
-      return false;
-    }
-    queue_[write] = ExternalMidiRecord{destination_id, event};
-    write_index_.store(next, std::memory_order_release);
-    return true;
+    return detail::spsc_push<Capacity>(queue_, read_index_, write_index_, dropped_count_,
+                                       ExternalMidiRecord{destination_id, event});
   }
 
   /// HOST/control thread: drain up to `capacity` records into `out`. Drained
   /// records are removed. No allocation. Returns the count written.
   size_t drain(ExternalMidiRecord* out, size_t capacity) noexcept {
-    if (out == nullptr || capacity == 0) {
-      return 0;
-    }
-    size_t read = read_index_.load(std::memory_order_relaxed);
-    const size_t write = write_index_.load(std::memory_order_acquire);
-    size_t n = 0;
-    while (read != write && n < capacity) {
-      out[n] = queue_[read];
-      read = increment(read);
-      ++n;
-    }
-    read_index_.store(read, std::memory_order_release);
-    return n;
+    return detail::spsc_drain<Capacity>(queue_, read_index_, write_index_, out, capacity);
   }
 
   size_t pending_count() const noexcept {
-    return distance(read_index_.load(std::memory_order_acquire),
-                    write_index_.load(std::memory_order_acquire));
+    return detail::spsc_distance<Capacity>(read_index_.load(std::memory_order_acquire),
+                                           write_index_.load(std::memory_order_acquire));
   }
 
   uint32_t dropped_count() const noexcept { return dropped_count_.load(std::memory_order_relaxed); }
@@ -694,12 +692,6 @@ class FixedExternalMidiOutputQueue {
 
  private:
   static constexpr size_t kSlots = Capacity + 1;
-
-  static constexpr size_t increment(size_t index) noexcept { return (index + 1) % kSlots; }
-
-  static constexpr size_t distance(size_t read, size_t write) noexcept {
-    return write >= read ? write - read : kSlots - read + write;
-  }
 
   std::array<ExternalMidiRecord, kSlots> queue_{};
   std::atomic<size_t> read_index_{0};
