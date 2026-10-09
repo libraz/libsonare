@@ -405,6 +405,7 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "processors[].params[].dependsOn",
       "processors[].params[].dependsOn[].key",
       "processors[].params[].dependsOn[].relation",
+      "processors[].params[].dependsOn[].factor",
       "processors[].slots",
       "processors[].slots[].name",
       "processors[].slots[].parent",

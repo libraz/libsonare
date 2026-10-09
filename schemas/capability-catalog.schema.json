@@ -145,10 +145,11 @@
                   "items": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["key", "relation"],
+                    "required": ["key", "relation", "factor"],
                     "properties": {
                       "key": { "type": "string", "minLength": 1 },
-                      "relation": { "enum": ["lt", "le", "gt", "ge"] }
+                      "relation": { "enum": ["lt", "le", "gt", "ge"] },
+                      "factor": { "type": "number", "exclusiveMinimum": 0 }
                     }
                   }
                 }

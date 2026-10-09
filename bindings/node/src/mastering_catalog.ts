@@ -147,7 +147,7 @@ export interface MasteringInsertParamInfo {
    */
   slot: string | null;
   /**
-   * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
+   * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
    * empty for an independent key. `min` and `max` are measured with every sibling at its default.
    */
   dependsOn: MasteringInsertParamDependency[];

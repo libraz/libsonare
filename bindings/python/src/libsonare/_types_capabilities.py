@@ -124,12 +124,14 @@ class MasteringInsertSlot(TypedDict):
 class MasteringInsertParamDependency(TypedDict):
     """A sibling key whose value bounds this parameter's.
 
-    ``relation`` reads from this parameter's side: ``"le"`` means this
-    parameter's value must be less than or equal to the sibling's.
+    ``relation`` reads from this parameter's side against ``factor`` times
+    the sibling's value: ``"le"`` with ``factor`` 0.5 means this parameter's
+    value must be at most half the sibling's.
     """
 
     key: str
     relation: MasteringInsertParamRelation
+    factor: float
 
 
 class MasteringInsertParamInfo(TypedDict):

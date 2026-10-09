@@ -945,6 +945,10 @@ std::vector<std::string> descriptor_defects(const json::Array& params) {
       if (relation != "lt" && relation != "le" && relation != "gt" && relation != "ge") {
         defects.push_back(name + ": dependsOn relation is unknown");
       }
+      const json::Value* factor = dependency.find("factor");
+      if (factor == nullptr || !factor->is_number() || !(factor->as_number() > 0)) {
+        defects.push_back(name + ": dependsOn factor is not a positive number");
+      }
     }
   }
   return defects;
@@ -1008,10 +1012,12 @@ TEST_CASE("the descriptor check reports each defect it exists to catch", "[maste
           R"("maxExclusive":true,"maxRelativeTo":null,"default":1,"unit":"Hz","uiMin":null,"uiMax":10)")
           .size() == 1);
   CHECK(defects_of(R"("uiMin":null,"uiMax":null)", R"("uiMin":6,"uiMax":5)").size() == 1);
-  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le"}])").size() ==
-        1);
-  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"a","relation":"le"}])").size() ==
-        1);
+  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le","factor":1}])")
+            .size() == 1);
+  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"a","relation":"le","factor":1}])")
+            .size() == 1);
+  CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le","factor":0}])")
+            .size() == 2);
   CHECK(defects_of(R"("type":"number")", R"("type":"boolean")").size() == 1);
 }
 
@@ -1373,14 +1379,17 @@ TEST_CASE("a repair sibling bound is one the stage enforces", "[mastering][catal
       for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
         const std::string sibling = field(dependency, "key").as_string();
         const std::string relation = field(dependency, "relation").as_string();
+        const double factor = field(dependency, "factor").as_number();
         const json::Array params = repair_param_info(id);
         const json::Value* other = find_param(params, sibling);
         REQUIRE(other != nullptr);
         REQUIRE(field(*other, "default").is_number());
         const bool upper = relation == "lt" || relation == "le";
-        const double violating = field(*other, "default").as_number() + (upper ? 1.0 : -1.0);
-        INFO(id << " " << key << " " << relation << " " << sibling);
-        CHECK_FALSE(repair_accepts(id, key, violating));
+        const bool inclusive = relation == "le" || relation == "ge";
+        const double bound = factor * field(*other, "default").as_number();
+        INFO(id << " " << key << " " << relation << " " << factor << " x " << sibling);
+        CHECK(repair_accepts(id, key, bound) == inclusive);
+        CHECK_FALSE(repair_accepts(id, key, bound + (upper ? 1.0 : -1.0)));
         ++checked;
       }
     }

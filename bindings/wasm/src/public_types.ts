@@ -81,13 +81,15 @@ export type MasteringInsertParamUnit =
 /** Axis a control draws an insert parameter on. */
 export type MasteringInsertParamScale = 'linear' | 'log';
 
-/** How a parameter's value is ordered against a sibling's, read as `this <relation> sibling`. */
+/** How a parameter's value is ordered against a sibling's, read as `this <relation> factor * sibling`. */
 export type MasteringInsertParamRelation = 'lt' | 'le' | 'gt' | 'ge';
 
 /** A sibling whose live value bounds an insert parameter. */
 export interface MasteringInsertParamDependency {
   key: string;
   relation: MasteringInsertParamRelation;
+  /** Positive multiplier on the sibling's value; 1 for a plain ordering. */
+  factor: number;
 }
 
 /** One named value an enum- or closed-integer-typed insert param accepts. */
@@ -188,7 +190,7 @@ export interface CapabilityCatalogParameter {
    */
   slot: string | null;
   /**
-   * Siblings whose live value bounds this key, each read as `this <relation> sibling`;
+   * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
    * empty for an independent key. `min` and `max` are measured with every sibling at its default.
    */
   dependsOn: MasteringInsertParamDependency[];

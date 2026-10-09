@@ -120,6 +120,8 @@ struct ParamDefault {
 struct ParamDependency {
   std::string key;
   Relation relation = Relation::Le;
+  /// Multiplier on the sibling's value: the bound is `key <relation> factor * sibling`.
+  double factor = 1.0;
 };
 
 /// @brief A group of keys that exists only under a condition: an EQ band, a
@@ -215,14 +217,15 @@ class ParamMap {
   const std::unordered_map<std::string, ParamMeta>& probed_meta() const { return meta_; }
 
   /// @brief Records that @p key's value is bounded by @p sibling's under @p relation
-  ///        (`key <relation> sibling`).
-  void note_depends(const std::string& key, const std::string& sibling, Relation relation) const {
+  ///        (`key <relation> factor * sibling`).
+  void note_depends(const std::string& key, const std::string& sibling, Relation relation,
+                    double factor = 1.0) const {
     if (!records_declarations_) return;
     auto& list = depends_[key];
     for (const auto& existing : list) {
       if (existing.key == sibling) return;
     }
-    list.push_back(ParamDependency{sibling, relation});
+    list.push_back(ParamDependency{sibling, relation, factor});
   }
 
   /// @brief Sibling bounds declared for each key, in declaration order.
@@ -277,7 +280,9 @@ class ParamMap {
     for (const auto& [key, kind] : other.kinds_) note_kind(key, kind);
     for (const auto& [key, meta] : other.meta_) note_meta(key, meta);
     for (const auto& [key, list] : other.depends_) {
-      for (const auto& dependency : list) note_depends(key, dependency.key, dependency.relation);
+      for (const auto& dependency : list) {
+        note_depends(key, dependency.key, dependency.relation, dependency.factor);
+      }
     }
     for (const auto& [key, value] : other.effective_) effective_.try_emplace(key, value);
     for (const auto& [key, choices] : other.choices_) note_choices(key, choices);
@@ -463,11 +468,12 @@ inline void read_field(const ParamMap& params, const char* key, T& dst, ParamMet
   read_field(params, key, dst);
 }
 
-/// @brief Declares `first <relation> second` on both keys, so each names the other as its bound.
+/// @brief Declares `first <relation> factor * second` on both keys, so each names the other as
+///        its bound.
 inline void note_pair_order(const ParamMap& params, const char* first, Relation relation,
-                            const char* second) {
-  params.note_depends(first, second, relation);
-  params.note_depends(second, first, inverse(relation));
+                            const char* second, double factor = 1.0) {
+  params.note_depends(first, second, relation, factor);
+  params.note_depends(second, first, inverse(relation), 1.0 / factor);
 }
 
 /// Most `cutoff<i>Hz` keys a crossover reads, so one fewer than the most bands it splits into.
@@ -1355,7 +1361,7 @@ inline repair::DehumConfig dehum_config(const ParamMap& params) {
 inline repair::DenoiseClassicalConfig denoise_classical_config(const ParamMap& params) {
   repair::DenoiseClassicalConfig config;
   SONARE_FIELDS_DENOISE_CLASSICAL(SONARE_READ_FIELD)
-  note_pair_order(params, "hopLength", Relation::Le, "nFft");
+  note_pair_order(params, "hopLength", Relation::Le, "nFft", 0.5);
   repair::validate_config(config);
   return config;
 }
@@ -1363,7 +1369,7 @@ inline repair::DenoiseClassicalConfig denoise_classical_config(const ParamMap& p
 inline repair::DereverbClassicalConfig dereverb_classical_config(const ParamMap& params) {
   repair::DereverbClassicalConfig config;
   SONARE_FIELDS_DEREVERB_CLASSICAL(SONARE_READ_FIELD)
-  note_pair_order(params, "hopLength", Relation::Le, "nFft");
+  note_pair_order(params, "hopLength", Relation::Le, "nFft", 0.5);
   repair::validate_config(config);
   return config;
 }

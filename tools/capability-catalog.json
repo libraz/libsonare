@@ -1069,6 +1069,7 @@
           "default": -50,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "closeThresholdDb",
               "relation": "ge"
             }
@@ -1150,6 +1151,7 @@
           "default": -50,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "thresholdDb",
               "relation": "le"
             }
@@ -2567,6 +2569,7 @@
           "default": 5,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "lengthM",
               "relation": "le"
             }
@@ -2591,6 +2594,7 @@
           "default": 4,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "widthM",
               "relation": "le"
             }
@@ -2615,6 +2619,7 @@
           "default": 1.7,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "heightM",
               "relation": "le"
             }
@@ -2734,6 +2739,7 @@
           "default": 1,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "lengthM",
               "relation": "le"
             }
@@ -2758,6 +2764,7 @@
           "default": 1,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "widthM",
               "relation": "le"
             }
@@ -2782,6 +2789,7 @@
           "default": 1.2,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "heightM",
               "relation": "le"
             }
@@ -7096,6 +7104,7 @@
           "default": 5,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "lengthM",
               "relation": "le"
             }
@@ -7120,6 +7129,7 @@
           "default": 4,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "widthM",
               "relation": "le"
             }
@@ -7144,6 +7154,7 @@
           "default": 1.7,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "heightM",
               "relation": "le"
             }
@@ -7206,6 +7217,7 @@
           "default": 1,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "lengthM",
               "relation": "le"
             }
@@ -7230,6 +7242,7 @@
           "default": 1,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "widthM",
               "relation": "le"
             }
@@ -7254,6 +7267,7 @@
           "default": 1.2,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "heightM",
               "relation": "le"
             }
@@ -23573,6 +23587,7 @@
           "default": 2048,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "kernelSize",
               "relation": "ge"
             }
@@ -23616,6 +23631,7 @@
           "default": 513,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "fftSize",
               "relation": "le"
             }
@@ -37343,6 +37359,7 @@
           "default": 2048,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "kernelSize",
               "relation": "ge"
             }
@@ -37367,6 +37384,7 @@
           "default": 513,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "fftSize",
               "relation": "le"
             }
@@ -90264,6 +90282,7 @@
           "default": 20,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "maxReleaseMs",
               "relation": "le"
             }
@@ -90288,6 +90307,7 @@
           "default": 250,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "minReleaseMs",
               "relation": "ge"
             }
@@ -90331,6 +90351,7 @@
           "default": 2,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "crestHigh",
               "relation": "le"
             }
@@ -90355,6 +90376,7 @@
           "default": 10,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "crestLow",
               "relation": "ge"
             }
@@ -91785,6 +91807,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -91809,10 +91832,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -91837,10 +91862,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -91865,10 +91892,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -91893,10 +91922,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -91921,10 +91952,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -91949,10 +91982,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -91977,6 +92012,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -113686,6 +113722,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -113710,10 +113747,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -113738,10 +113777,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -113766,10 +113807,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -113794,10 +113837,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -113822,10 +113867,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -113850,10 +113897,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -113878,6 +113927,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -115346,6 +115396,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -115370,10 +115421,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -115398,10 +115451,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -115426,10 +115481,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -115454,10 +115511,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -115482,10 +115541,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -115510,10 +115571,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -115538,6 +115601,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -116403,6 +116467,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -116427,10 +116492,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -116455,10 +116522,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -116483,10 +116552,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -116511,10 +116582,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -116539,10 +116612,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -116567,10 +116642,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -116595,6 +116672,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -117289,6 +117367,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -117313,10 +117392,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -117341,10 +117422,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -117369,10 +117452,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -117397,10 +117482,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -117425,10 +117512,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -117453,10 +117542,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -117481,6 +117572,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -118670,6 +118762,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -118694,10 +118787,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -118722,10 +118817,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -118750,10 +118847,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -118778,10 +118877,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -118806,10 +118907,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -118834,10 +118937,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -118862,6 +118967,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -119554,6 +119660,7 @@
           "default": 256,
           "dependsOn": [
             {
+              "factor": 0.5,
               "key": "nFft",
               "relation": "le"
             }
@@ -119610,6 +119717,7 @@
           "default": 1024,
           "dependsOn": [
             {
+              "factor": 2,
               "key": "hopLength",
               "relation": "ge"
             }
@@ -119795,6 +119903,7 @@
           "default": 256,
           "dependsOn": [
             {
+              "factor": 0.5,
               "key": "nFft",
               "relation": "le"
             }
@@ -119838,6 +119947,7 @@
           "default": 1024,
           "dependsOn": [
             {
+              "factor": 2,
               "key": "hopLength",
               "relation": "ge"
             }
@@ -122620,6 +122730,7 @@
           "default": 120,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "lt"
             }
@@ -122644,10 +122755,12 @@
           "default": 2000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff0Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "lt"
             }
@@ -122672,10 +122785,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff1Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "lt"
             }
@@ -122700,10 +122815,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff2Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "lt"
             }
@@ -122728,10 +122845,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff3Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "lt"
             }
@@ -122756,10 +122875,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff4Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "lt"
             }
@@ -122784,10 +122905,12 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff5Hz",
               "relation": "gt"
             },
             {
+              "factor": 1,
               "key": "cutoff7Hz",
               "relation": "lt"
             }
@@ -122812,6 +122935,7 @@
           "default": null,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "cutoff6Hz",
               "relation": "gt"
             }
@@ -124084,6 +124208,7 @@
           "default": 3000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "highFrequencyHz",
               "relation": "lt"
             }
@@ -124108,6 +124233,7 @@
           "default": 6000,
           "dependsOn": [
             {
+              "factor": 1,
               "key": "frequencyHz",
               "relation": "gt"
             }

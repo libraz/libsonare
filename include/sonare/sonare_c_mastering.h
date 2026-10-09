@@ -556,8 +556,9 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   a seed). `uiMin` and `uiMax` are a display range inside `[min, max]`, or null
 ///   where the accepted range is also the display range. `scale` is `"linear"` or
 ///   `"log"`, the axis a control draws the key on. `dependsOn` lists
-///   `[{"key","relation"}]`, each naming a sibling whose live value bounds this key
-///   (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> sibling`) and is
+///   `[{"key","relation","factor"}]`, each naming a sibling whose live value bounds this
+///   key (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> factor * sibling`,
+///   `factor` a positive multiplier, 1 for a plain ordering) and is
 ///   empty for an independent key; it is how a control narrows `min` and `max`,
 ///   which are measured with every sibling at its default. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of

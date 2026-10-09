@@ -191,11 +191,14 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
     for dependency_index, dependency_value in enumerate(parameter["dependsOn"]):
         dependency_path = f"{path}.dependsOn[{dependency_index}]"
         dependency = require_object(dependency_value, dependency_path)
-        require_keys(dependency, dependency_path, {"key", "relation"})
+        require_keys(dependency, dependency_path, {"key", "relation", "factor"})
         if not isinstance(dependency["key"], str) or not dependency["key"]:
             raise ValueError(f"{dependency_path}.key must be a non-empty string")
         if dependency["relation"] not in DEPENDENCY_RELATIONS:
             raise ValueError(f"{dependency_path}.relation must be lt, le, gt or ge")
+        factor = dependency["factor"]
+        if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not factor > 0:
+            raise ValueError(f"{dependency_path}.factor must be a positive number")
 
 
 def validate_slots(processor: dict[str, Any], path: str) -> set[str]:

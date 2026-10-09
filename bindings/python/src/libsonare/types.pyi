@@ -141,11 +141,13 @@ class MasteringInsertSlot(TypedDict):
 class MasteringInsertParamDependency(TypedDict):
     """A sibling key whose value bounds this parameter's.
 
-    ``relation`` reads from this parameter's side.
+    ``relation`` reads from this parameter's side against ``factor`` times
+    the sibling's value.
     """
 
     key: str
     relation: MasteringInsertParamRelation
+    factor: float
 
 class MasteringInsertParamInfo(TypedDict):
     """One key an insert processor's construction or automation reads.

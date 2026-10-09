@@ -109,7 +109,7 @@ const catalogParameter = {
   scale: 'linear',
   choices: null,
   slot: 'band1',
-  dependsOn: [{ key: 'maxHz', relation: 'le' }],
+  dependsOn: [{ key: 'maxHz', relation: 'le', factor: 1 }],
 } satisfies CapabilityCatalogParameter;
 
 const catalogSlot = {

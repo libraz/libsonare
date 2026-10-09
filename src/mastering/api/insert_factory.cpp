@@ -1169,7 +1169,7 @@ repair::DenoiseClassicalConfig streaming_denoise_config(const ParamMap& params) 
   repair::DenoiseClassicalConfig config;
   config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
   SONARE_FIELDS_DENOISE_CLASSICAL(SONARE_READ_FIELD)
-  detail::note_pair_order(params, "hopLength", detail::Relation::Le, "nFft");
+  detail::note_pair_order(params, "hopLength", detail::Relation::Le, "nFft", 0.5);
   return config;
 }
 
@@ -2041,7 +2041,9 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
       out += dependency.key;
       out += "\",\"relation\":\"";
       out += detail::relation_name(dependency.relation);
-      out += "\"}";
+      out += "\",\"factor\":";
+      out += format_catalog_number(dependency.factor);
+      out += '}';
     }
   }
   out += "]}";
@@ -2166,6 +2168,7 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].dependsOn",
       "[].dependsOn[].key",
       "[].dependsOn[].relation",
+      "[].dependsOn[].factor",
   };
   return paths;
 }
