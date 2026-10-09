@@ -52,6 +52,29 @@ Material make_material(MaterialPreset preset) {
   return from_table(kConcrete);  // unreachable; keeps the compiler happy
 }
 
+bool material_preset_from_selector(int selector, MaterialPreset* out) noexcept {
+  if (out == nullptr) return false;
+  switch (selector) {
+    case 1:
+      *out = MaterialPreset::Concrete;
+      return true;
+    case 2:
+      *out = MaterialPreset::Wood;
+      return true;
+    case 3:
+      *out = MaterialPreset::Curtain;
+      return true;
+    case 4:
+      *out = MaterialPreset::Carpet;
+      return true;
+    case 5:
+      *out = MaterialPreset::Glass;
+      return true;
+    default:
+      return false;
+  }
+}
+
 Material uniform_material(float absorption, float scattering, int n_bands) {
   const int n = n_bands > 0 ? n_bands : kDefaultOctaveBands;
   Material m;

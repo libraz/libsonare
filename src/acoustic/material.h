@@ -34,6 +34,12 @@ enum class MaterialPreset {
   Glass,     ///< large glass pane — slight LF absorption, smooth
 };
 
+/// @brief Map a public material selector to its preset enum.
+/// @details Selector 0 means no preset; selectors 1 through 5 follow the
+///          declaration order above. Unknown selectors return false without
+///          modifying @p out.
+bool material_preset_from_selector(int selector, MaterialPreset* out) noexcept;
+
 /// @brief Build a material from a named preset (always `kDefaultOctaveBands` bands).
 Material make_material(MaterialPreset preset);
 
