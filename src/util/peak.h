@@ -57,7 +57,7 @@ std::vector<float> sliding_max_without_lone_peaks(const float* x, std::size_t n,
 
 /// @brief Select the strongest candidates that are at least `min_distance` apart.
 /// @param candidates Candidate frame indices (valid indices into `values`)
-/// @param values Strength per frame
+/// @param values Strength per frame; NaN at a candidate is refused (InvalidParameter)
 /// @param min_distance Minimum spacing between accepted frames
 /// @return Accepted frames in ascending order.
 /// @details Candidates are visited by descending `values[frame]` (ties: earlier frame first) and

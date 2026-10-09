@@ -4,9 +4,8 @@
 #include "util/peak.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
-#include <deque>
-#include <functional>
 
 #include "util/exception.h"
 
@@ -73,18 +72,21 @@ std::vector<float> sliding_max(const float* x, std::size_t n, std::size_t radius
     throw SonareException(ErrorCode::InvalidParameter,
                           "sliding_max: null input with non-zero length");
   }
-  // Indices whose values are decreasing; the front is the window maximum.
-  std::deque<std::size_t> window;
+  // Indices whose values are decreasing, from window[head]; the head is the window maximum.
+  // Each index is pushed once, so a vector with a moving head is the whole queue.
+  std::vector<std::size_t> window;
+  window.reserve(n);
+  std::size_t head = 0;
   std::size_t next = 0;  // next index to push
   for (std::size_t i = 0; i < n; ++i) {
     const std::size_t hi = (radius >= n - 1 - i) ? n - 1 : i + radius;
     for (; next <= hi; ++next) {
-      while (!window.empty() && x[window.back()] <= x[next]) window.pop_back();
+      while (window.size() > head && x[window.back()] <= x[next]) window.pop_back();
       window.push_back(next);
     }
     const std::size_t lo = (i > radius) ? i - radius : 0;
-    while (window.front() < lo) window.pop_front();
-    y[i] = x[window.front()];
+    while (window[head] < lo) ++head;
+    y[i] = x[window[head]];
   }
   return y;
 }
@@ -111,9 +113,10 @@ std::vector<float> sliding_max_without_lone_peaks(const float* x, std::size_t n,
     if (lo_index != prev_lo || hi_index != prev_hi || heights.empty()) {
       heights.clear();
       for (auto it = lo; it != hi; ++it) heights.push_back(x[*it]);
-      std::sort(heights.begin(), heights.end(), std::greater<float>());
-      std::size_t k = 0;
-      while (k + 1 < heights.size() && heights[k + 1] < ratio * heights[k]) ++k;
+      // Ascending reuses the shared float sort; walk down from the largest.
+      std::sort(heights.begin(), heights.end());
+      std::size_t k = heights.size() - 1;
+      while (k > 0 && heights[k - 1] < ratio * heights[k]) --k;
       prev_lo = lo_index;
       prev_hi = hi_index;
       prev_ref = heights[k];
@@ -125,12 +128,30 @@ std::vector<float> sliding_max_without_lone_peaks(const float* x, std::size_t n,
 
 std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, const float* values,
                                            int min_distance) {
-  std::vector<int> order(candidates);
-  std::sort(order.begin(), order.end());
-  if (min_distance <= 1) return order;
+  std::vector<int> by_frame(candidates);
+  std::sort(by_frame.begin(), by_frame.end());
+  if (min_distance <= 1) return by_frame;
 
-  std::stable_sort(order.begin(), order.end(),
-                   [values](int a, int b) { return values[a] > values[b]; });
+  // Stable descending order by value: a candidate's slot is the count of larger values plus
+  // the earlier frames sharing its value. Reuses the shared float sort instead of a stable sort.
+  const std::size_t n = by_frame.size();
+  std::vector<float> sorted_values(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    sorted_values[i] = values[by_frame[i]];
+    // An unordered value would send the slot arithmetic below out of range.
+    SONARE_CHECK_MSG(!std::isnan(sorted_values[i]), ErrorCode::InvalidParameter,
+                     "select_peaks_min_distance: NaN candidate value");
+  }
+  std::sort(sorted_values.begin(), sorted_values.end());
+  std::vector<std::size_t> filled(n, 0);
+  std::vector<int> order(n);
+  for (int c : by_frame) {
+    const auto not_larger =
+        std::upper_bound(sorted_values.begin(), sorted_values.end(), values[c]) -
+        sorted_values.begin();
+    const std::size_t larger = n - static_cast<std::size_t>(not_larger);
+    order[larger + filled[larger]++] = c;
+  }
   std::vector<int> accepted;
   for (int c : order) {
     bool ok = true;
@@ -149,8 +170,9 @@ std::vector<int> select_peaks_min_distance(const std::vector<int>& candidates, c
 float max_excluding_top(std::vector<float> values, std::size_t ignored) {
   if (values.empty()) return 0.0f;
   if (values.size() <= ignored) return *std::max_element(values.begin(), values.end());
-  const auto nth = values.begin() + static_cast<std::ptrdiff_t>(ignored);
-  std::nth_element(values.begin(), nth, values.end(), std::greater<float>());
+  // Ascending reuses the shared nth_element; the ignored largest sit above nth.
+  const auto nth = values.end() - 1 - static_cast<std::ptrdiff_t>(ignored);
+  std::nth_element(values.begin(), nth, values.end());
   return *nth;
 }
 
