@@ -13,6 +13,7 @@
 #include "effects/hpss.h"
 #include "effects/normalize.h"
 #include "effects/pitch_shift.h"
+#include "effects/repair_common.h"
 #include "effects/time_stretch.h"
 #include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
@@ -36,6 +37,7 @@
 #include "util/constants.h"
 
 using namespace sonare_node;
+using namespace sonare_node::repair_detail;
 
 // ============================================================================
 // Effects - librosa.decompose / effects.remix / hpss-with-residual /
@@ -217,11 +219,7 @@ Napi::Value SonareWrap::Decompose(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
   SONARE_NODE_TRY
   auto arr = info[0].As<Napi::Float32Array>();
   int sr = node_narrow_int(env, info[1], "sr");
@@ -260,11 +258,7 @@ Napi::Value SonareWrap::DecomposeStems(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::DecomposeStemsLinked(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !info[0].IsArray() || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[] channels, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckLinkedArgs(env, info)) return env.Undefined();
   SONARE_NODE_TRY
   ChannelInputs inputs;
   if (!ReadChannelInputs(env, info[0], "decomposeStemsLinked", &inputs)) {

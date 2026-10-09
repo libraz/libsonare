@@ -14,8 +14,9 @@ import {
   type ProjectBounceOptions,
 } from '../src/index.js';
 
+const TOTAL_FRAMES = 48000;
 const OPTIONS: ProjectBounceOptions = {
-  totalFrames: 48000,
+  totalFrames: TOTAL_FRAMES,
   blockSize: 128,
   numChannels: 2,
   sampleRate: 48000,
@@ -239,7 +240,7 @@ describe('bounceWithInstruments', () => {
         ),
       ).toThrow('once');
       expect(project.bounceWithInstruments([new ConstantInstrument()], OPTIONS)).toHaveLength(
-        OPTIONS.totalFrames! * 2,
+        TOTAL_FRAMES * 2,
       );
     });
   });
@@ -327,7 +328,7 @@ describe('bounceWithInstruments', () => {
     }
     // The refusals changed nothing: the project still bounces and keeps its rate.
     expect(project.getSampleRate()).toBe(48000);
-    expect(project.bounce(OPTIONS)).toHaveLength(OPTIONS.totalFrames! * 2);
+    expect(project.bounce(OPTIONS)).toHaveLength(TOTAL_FRAMES * 2);
   });
 
   it('reports a native failure ahead of a callback error', () => {
@@ -370,13 +371,13 @@ describe('bounceWithInstruments', () => {
         {
           render(outputs, frames) {
             outputs[0].fill(0.3, 0, frames);
-            structuredClone(outputs[0].buffer, { transfer: [outputs[0].buffer] });
+            structuredClone(outputs[0].buffer, { transfer: [outputs[0].buffer as ArrayBuffer] });
           },
         },
       ],
       OPTIONS,
     );
-    expect(audio).toHaveLength(OPTIONS.totalFrames! * 2);
+    expect(audio).toHaveLength(TOTAL_FRAMES * 2);
     expect(audio.every(Number.isFinite)).toBe(true);
   });
 

@@ -2,13 +2,14 @@
 #define SONARE_NODE_EFFECTS_REPAIR_COMMON_H_
 
 /// @file
-/// @brief The two argument shapes the repair entry points share.
+/// @brief Argument checks and ownership helpers shared by effect entry points.
 /// @details These leave internal linkage only because the repair families
 ///   live in separate translation units; nothing outside effects/ uses them.
 
 #include <napi.h>
 
 #include <cstddef>
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -16,15 +17,49 @@
 
 namespace sonare_node::repair_detail {
 
-/// @brief Argument check shared by the mono detect entries, which all take
+/// @brief Argument check shared by the mono entries, which all take
 ///        (Float32Array, sampleRate, options?).
-inline bool CheckDetectMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
+inline bool CheckMonoArgs(Napi::Env env, const Napi::CallbackInfo& info) {
   if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
     Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
         .ThrowAsJavaScriptException();
     return false;
   }
   return true;
+}
+
+/// @brief Frees the two heap-owned channels of a stereo repair result.
+template <typename Result>
+class StereoResultGuard {
+ public:
+  explicit StereoResultGuard(Result* result) : result_(result) {}
+  StereoResultGuard(const StereoResultGuard&) = delete;
+  StereoResultGuard& operator=(const StereoResultGuard&) = delete;
+  ~StereoResultGuard() {
+    sonare_free_floats(result_->left);
+    sonare_free_floats(result_->right);
+  }
+
+ private:
+  Result* result_;
+};
+
+/// @brief Copy the two heap-owned channels into the common `{ left, right }` result shape.
+/// @details Repair-specific reports and ranges are appended by each caller after this common
+///   channel copy. Keeping the copy here makes the result length and null/empty handling identical
+///   across every stereo repair entry point.
+template <typename Result>
+inline Napi::Object EmitStereoResult(Napi::Env env, const Result& result) {
+  auto left = Napi::Float32Array::New(env, result.length);
+  auto right = Napi::Float32Array::New(env, result.length);
+  if (result.length > 0) {
+    std::memcpy(left.Data(), result.left, result.length * sizeof(float));
+    std::memcpy(right.Data(), result.right, result.length * sizeof(float));
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", left);
+  out.Set("right", right);
+  return out;
 }
 
 /// @brief Input and output planes of one channel-linked repair call.

@@ -50,7 +50,7 @@ describe('decodeChannels', () => {
           expect(plane).toBeInstanceOf(Float32Array);
           expect(plane).toHaveLength(FRAMES);
           expect(Array.from(plane)).toEqual(
-            Array.from(Audio.fromFileChannel(file, channel).data()),
+            Array.from(Audio.fromFileChannel(file, channel).getData()),
           );
         }
       } finally {
@@ -64,7 +64,7 @@ describe('decodeChannels', () => {
       const bytes = pcm16Wav(channelCount);
       const mono = downmix(decodeChannels(bytes).channels, 0);
       expect(mono).toHaveLength(1);
-      expect(Array.from(mono[0])).toEqual(Array.from(Audio.fromMemory(bytes).data()));
+      expect(Array.from(mono[0])).toEqual(Array.from(Audio.fromMemory(bytes).getData()));
     }
   });
 

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "effects/repair_common.h"
 #include "mastering/api/internal_processor_runner.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/dynamics/gate.h"
@@ -14,6 +15,7 @@
 #include "sonare_wrap_utils.h"
 
 using namespace sonare_node;
+using namespace sonare_node::repair_detail;
 
 namespace {
 
@@ -81,11 +83,7 @@ Napi::Object make_dynamics_result(Napi::Env env, const std::vector<float>& sampl
 
 Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -119,11 +117,7 @@ Napi::Value SonareWrap::MasteringDynamicsCompressor(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -152,11 +146,7 @@ Napi::Value SonareWrap::MasteringDynamicsGate(const Napi::CallbackInfo& info) {
 
 Napi::Value SonareWrap::MasteringDynamicsTransientShaper(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

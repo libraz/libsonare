@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { PercussiveEvent, PercussiveEventInput, SonareError } from '../src/index.js';
+import type {
+  PercussiveEvent,
+  PercussiveEventInput,
+  PercussiveSeparationOptions,
+  SonareError,
+} from '../src/index.js';
 import {
   ErrorCode,
   extractPercussiveEvents,
@@ -548,7 +553,7 @@ describe('extractPercussiveEvents', () => {
     // a kernel that was ignored collapses one of the first two, and two kernels
     // written to one field collapse the third. (A straight swap of the two is
     // not visible from here — nothing on this surface separates independently.)
-    const extractWith = (options: Record<string, number>): number[][] =>
+    const extractWith = (options: PercussiveSeparationOptions): number[][] =>
       measuredSet(extractPercussiveEvents({ samples: layered.mixed, sampleRate: SR, ...options }));
 
     const shortHarmonic = extractWith({ hpssKernelHarmonic: 3 });
@@ -912,7 +917,7 @@ describe('renderPercussiveEvents', () => {
   });
 
   it('lifts the signal with the separation the request names', () => {
-    const renderWith = (options: Record<string, number>): Float32Array =>
+    const renderWith = (options: PercussiveSeparationOptions): Float32Array =>
       renderPercussiveEvents({
         samples: two,
         sampleRate: SR,
@@ -927,7 +932,7 @@ describe('renderPercussiveEvents', () => {
     // has to land in its own slot; see the extraction case above for why all
     // three comparisons are needed.
     const target = eventAt(layeredEvents, LAYERED_HIT_START);
-    const renderLayered = (options: Record<string, number>): Float32Array =>
+    const renderLayered = (options: PercussiveSeparationOptions): Float32Array =>
       renderPercussiveEvents({
         samples: layered.mixed,
         sampleRate: SR,

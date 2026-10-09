@@ -85,34 +85,11 @@ bool ReadTrimSilenceConfig(Napi::Env env, const Napi::Object& options,
   return true;
 }
 
-/// @brief Frees both heap-owned channels of a SonareTrimSilenceStereoResult on
-///        scope exit -- mirrors DereverbStereoResultGuard above.
-/// @details A pass that kept nothing hands back two NULLs rather than two
-///   zero-length allocations, which no other repair stereo entry can produce;
-///   sonare_free_floats accepts NULL, so that case needs no branch here.
-class TrimSilenceStereoResultGuard {
- public:
-  explicit TrimSilenceStereoResultGuard(SonareTrimSilenceStereoResult* result) : result_(result) {}
-  TrimSilenceStereoResultGuard(const TrimSilenceStereoResultGuard&) = delete;
-  TrimSilenceStereoResultGuard& operator=(const TrimSilenceStereoResultGuard&) = delete;
-  ~TrimSilenceStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareTrimSilenceStereoResult* result_;
-};
-
 }  // namespace
 
 Napi::Value SonareWrap::MasteringRepairTrimSilence(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -178,18 +155,10 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  TrimSilenceStereoResultGuard guard(&result);
+  StereoResultGuard<SonareTrimSilenceStereoResult> guard(&result);
   // result.length is the OUTPUT length, not the input's: trimming shortens the
   // pair, and an all-silent pair comes back at 0.
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("report", EmitTrimReport(env, result.report));
   out.Set("leftRange", EmitTrimRange(env, result.left_range));
   out.Set("rightRange", EmitTrimRange(env, result.right_range));
@@ -199,7 +168,7 @@ Napi::Value SonareWrap::MasteringRepairTrimSilenceStereo(const Napi::CallbackInf
 
 Napi::Value SonareWrap::MasteringRepairDetectTrimRange(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

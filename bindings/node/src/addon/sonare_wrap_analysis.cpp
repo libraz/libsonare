@@ -11,23 +11,42 @@
 #include "sonare_wrap_key_options.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 
 using namespace sonare_node;
+
+namespace {
+
+struct MonoAnalysisInput {
+  Napi::Float32Array samples;
+  const float* data = nullptr;
+  size_t length = 0;
+  int sample_rate = 0;
+};
+
+bool ReadMonoAnalysisInput(const Napi::CallbackInfo& info, MonoAnalysisInput* out,
+                           int default_sample_rate) {
+  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) return false;
+  out->samples = info[0].As<Napi::Float32Array>();
+  out->data = out->samples.Data();
+  out->length = out->samples.ElementLength();
+  if (!OptionalIntArg(info.Env(), info, 1, "sampleRate", default_sample_rate, &out->sample_rate))
+    return false;
+  return true;
+}
+
+}  // namespace
 
 Napi::Value SonareWrap::DetectBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   float bpm = 0.0f;
   SonareError err = sonare_detect_bpm(data, length, sample_rate, &bpm);
@@ -44,16 +63,12 @@ Napi::Value SonareWrap::DetectKey(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   int n_fft = 4096;
   int hop_length = 512;
@@ -98,16 +113,12 @@ Napi::Value SonareWrap::DetectKeyCandidates(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   int n_fft = 4096;
   int hop_length = 512;
@@ -158,16 +169,12 @@ Napi::Value SonareWrap::DetectBeats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   float* times = nullptr;
   size_t count = 0;
@@ -190,16 +197,12 @@ Napi::Value SonareWrap::DetectDownbeats(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   float* times = nullptr;
   size_t count = 0;
@@ -272,16 +275,12 @@ Napi::Value SonareWrap::DetectOnsets(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
 
   SonareOnsetDetectConfig config{};
   config.n_fft = 2048;
@@ -331,16 +330,12 @@ Napi::Value SonareWrap::Analyze(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   SonareMusicAnalyzeOptions options{};
   const bool has_options = info.Length() >= 3 && ReadMusicAnalyzeOptions(info[2], &options);
   if (env.IsExceptionPending()) return env.Undefined();
@@ -480,15 +475,12 @@ Napi::Value SonareWrap::AnalyzeBpm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   float bpm_min{};
   if (!OptionalFloatArg(env, info, 2, "bpmMin", 30.0f, &bpm_min)) return env.Undefined();
   float bpm_max{};
@@ -566,15 +558,13 @@ Napi::Value SonareWrap::AnalyzeImpulseResponse(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input,
+                             static_cast<int>(sonare::constants::kDefaultDawSampleRate)))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   int n_octave_bands{};
   if (!OptionalIntArg(env, info, 2, "nOctaveBands", 6, &n_octave_bands)) return env.Undefined();
   float min_decay_db{};
@@ -615,15 +605,13 @@ Napi::Value SonareWrap::DetectAcoustic(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input,
+                             static_cast<int>(sonare::constants::kDefaultDawSampleRate)))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 48000, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   int n_octave_bands{};
   if (!OptionalIntArg(env, info, 2, "nOctaveBands", 6, &n_octave_bands)) return env.Undefined();
   int n_third_octave_subbands{};
@@ -671,15 +659,12 @@ Napi::Value SonareWrap::AnalyzeRhythm(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   float bpm_min{};
   if (!OptionalFloatArg(env, info, 2, "bpmMin", 60.0f, &bpm_min)) return env.Undefined();
   float bpm_max{};
@@ -731,15 +716,12 @@ Napi::Value SonareWrap::AnalyzeDynamics(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   float window_sec{};
   if (!OptionalFloatArg(env, info, 2, "windowSec", 0.4f, &window_sec)) return env.Undefined();
   int hop_length{};
@@ -782,15 +764,12 @@ Napi::Value SonareWrap::AnalyzeTimbre(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   int n_fft{};
   if (!OptionalIntArg(env, info, 2, "nFft", 2048, &n_fft)) return env.Undefined();
   int hop_length{};
@@ -947,15 +926,12 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
 
-  if (!RequireFloat32Array(info, 0, "Expected Float32Array argument")) {
+  MonoAnalysisInput input;
+  if (!ReadMonoAnalysisInput(info, &input, sonare::constants::kDefaultSampleRate))
     return env.Undefined();
-  }
-
-  auto typed = info[0].As<Napi::Float32Array>();
-  const float* data = typed.Data();
-  size_t length = typed.ElementLength();
-  int sample_rate{};
-  if (!OptionalIntArg(env, info, 1, "sampleRate", 22050, &sample_rate)) return env.Undefined();
+  const float* data = input.data;
+  size_t length = input.length;
+  int sample_rate = input.sample_rate;
   float min_duration{};
   if (!OptionalFloatArg(env, info, 2, "minDuration", 0.3f, &min_duration)) return env.Undefined();
   float smoothing_window{};

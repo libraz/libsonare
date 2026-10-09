@@ -90,23 +90,6 @@ SonareDeclickConfig read_declick_config_c(Napi::Env env, const Napi::Object& opt
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDeclickStereoResult on
-///        scope exit -- the struct carries no dedicated free function, unlike
-///        the CResultGuard-eligible C-ABI results elsewhere in the addon.
-class DeclickStereoResultGuard {
- public:
-  explicit DeclickStereoResultGuard(SonareDeclickStereoResult* result) : result_(result) {}
-  DeclickStereoResultGuard(const DeclickStereoResultGuard&) = delete;
-  DeclickStereoResultGuard& operator=(const DeclickStereoResultGuard&) = delete;
-  ~DeclickStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDeclickStereoResult* result_;
-};
-
 /// @brief Marshal one channel's clip detection into the JS shape shared by the
 ///        declip stereo report.
 Napi::Object EmitClipDetection(Napi::Env env, const SonareClipDetection& detection) {
@@ -149,23 +132,6 @@ SonareDeclipConfig read_declip_config_c(const Napi::Object& options, SonareDecli
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDeclipStereoResult on
-///        scope exit -- the struct carries no dedicated free function, unlike
-///        the CResultGuard-eligible C-ABI results elsewhere in the addon.
-class DeclipStereoResultGuard {
- public:
-  explicit DeclipStereoResultGuard(SonareDeclipStereoResult* result) : result_(result) {}
-  DeclipStereoResultGuard(const DeclipStereoResultGuard&) = delete;
-  DeclipStereoResultGuard& operator=(const DeclipStereoResultGuard&) = delete;
-  ~DeclipStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDeclipStereoResult* result_;
-};
-
 /// @brief Marshal one channel's crackle detection into the JS shape shared by
 ///        the decrackle stereo report.
 Napi::Object EmitCrackleDetection(Napi::Env env, const SonareCrackleDetection& detection) {
@@ -200,31 +166,11 @@ SonareDecrackleConfig read_decrackle_config_c(const Napi::Object& options,
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDecrackleStereoResult on
-///        scope exit -- mirrors DeclipStereoResultGuard above.
-class DecrackleStereoResultGuard {
- public:
-  explicit DecrackleStereoResultGuard(SonareDecrackleStereoResult* result) : result_(result) {}
-  DecrackleStereoResultGuard(const DecrackleStereoResultGuard&) = delete;
-  DecrackleStereoResultGuard& operator=(const DecrackleStereoResultGuard&) = delete;
-  ~DecrackleStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDecrackleStereoResult* result_;
-};
-
 }  // namespace
 
 Napi::Value SonareWrap::MasteringRepairDeclick(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -288,16 +234,8 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DeclickStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDeclickStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("leftReport", EmitDeclickReport(env, result.left_report));
   out.Set("rightReport", EmitDeclickReport(env, result.right_report));
   return out;
@@ -306,7 +244,7 @@ Napi::Value SonareWrap::MasteringRepairDeclickStereo(const Napi::CallbackInfo& i
 
 Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -327,11 +265,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClicks(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringRepairDeclip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -386,16 +320,8 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DeclipStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDeclipStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("leftReport", EmitDeclipReport(env, result.left_report));
   out.Set("rightReport", EmitDeclipReport(env, result.right_report));
   return out;
@@ -404,7 +330,7 @@ Napi::Value SonareWrap::MasteringRepairDeclipStereo(const Napi::CallbackInfo& in
 
 Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -425,11 +351,7 @@ Napi::Value SonareWrap::MasteringRepairDetectClipping(const Napi::CallbackInfo& 
 
 Napi::Value SonareWrap::MasteringRepairDecrackle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -483,16 +405,8 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DecrackleStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDecrackleStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("leftReport", EmitDecrackleReport(env, result.left_report));
   out.Set("rightReport", EmitDecrackleReport(env, result.right_report));
   return out;
@@ -501,7 +415,7 @@ Napi::Value SonareWrap::MasteringRepairDecrackleStereo(const Napi::CallbackInfo&
 
 Napi::Value SonareWrap::MasteringRepairDetectCrackle(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

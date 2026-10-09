@@ -112,6 +112,7 @@ describe('embedded NUL refusal, by reader', () => {
     withEngine((engine) => {
       expect(() => engine.setBuiltinInstrument({ waveform: 'sine' }, 0)).not.toThrow();
       expectNulRefusal(
+        // @ts-expect-error deliberately invalid waveform name for runtime refusal.
         () => engine.setBuiltinInstrument({ waveform: `sine${NUL}x` }, 0),
         'waveform',
       );

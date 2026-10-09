@@ -97,32 +97,6 @@ bool ValidateAcousticInput(const Napi::Env& env, const float* data, size_t lengt
   return true;
 }
 
-// Maps a materialPreset selector (mirroring SONARE_MATERIAL_PRESET_*: 1 concrete,
-// 2 wood, 3 curtain, 4 carpet, 5 glass) onto a MaterialPreset. Returns false for
-// 0/none or any unknown value, in which case the per-band/scalar path applies.
-bool MaterialPresetFromInt(int selector, sonare::acoustic::MaterialPreset* out) {
-  using sonare::acoustic::MaterialPreset;
-  switch (selector) {
-    case 1:
-      *out = MaterialPreset::Concrete;
-      return true;
-    case 2:
-      *out = MaterialPreset::Wood;
-      return true;
-    case 3:
-      *out = MaterialPreset::Curtain;
-      return true;
-    case 4:
-      *out = MaterialPreset::Carpet;
-      return true;
-    case 5:
-      *out = MaterialPreset::Glass;
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Reads an optional Float32Array/number[] option into a vector (empty if absent).
 std::vector<float> NodeFloatArrayOption(const Napi::Object& opts, const char* key) {
   Napi::Value value = opts.Get(key);
@@ -158,7 +132,7 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
   // option bag builds the same room on every surface. Reading the options is
   // the only part that is Node's.
   WallMaterialRequest request;
-  request.has_preset = MaterialPresetFromInt(
+  request.has_preset = sonare::acoustic::material_preset_from_selector(
       NamedSelectorProperty(opts, "materialPreset", sonare::acoustic::kMaterialPresetSelectorNames,
                             0),
       &request.preset);

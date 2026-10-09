@@ -7,7 +7,34 @@
 #include "sonare_wrap.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
+#include "util/constants.h"
 namespace sonare_node::features {
+
+/// @brief The common sample-rate and frame geometry arguments used by feature calls.
+struct FrameAnalysisArgs {
+  int sample_rate{};
+  int frame_length{};
+  int hop_length{};
+};
+
+/// @brief Read a feature call's sample rate, frame size, and hop length.
+/// @details The frame argument is named by the public entry point: STFT-based
+///   functions use @c nFft, while frame-statistics functions use @c frameLength.
+///   Reading the fields in one place keeps their defaults and strict narrowing
+///   aligned without changing the order in which argument errors are reported.
+inline bool ReadFrameAnalysisArgs(Napi::Env env, const Napi::CallbackInfo& info,
+                                  FrameAnalysisArgs* out, const char* frame_name = "nFft") {
+  if (!OptionalIntArg(env, info, 1, "sampleRate", sonare::constants::kDefaultSampleRate,
+                      &out->sample_rate))
+    return false;
+  if (!OptionalIntArg(env, info, 2, frame_name, sonare::constants::kDefaultNFft,
+                      &out->frame_length))
+    return false;
+  if (!OptionalIntArg(env, info, 3, "hopLength", sonare::constants::kDefaultHopLength,
+                      &out->hop_length))
+    return false;
+  return true;
+}
 
 inline Napi::Float32Array FloatResult(Napi::Env env, float* data, size_t count) {
   auto out = Napi::Float32Array::New(env, count);

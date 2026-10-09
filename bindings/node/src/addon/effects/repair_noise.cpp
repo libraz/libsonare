@@ -136,22 +136,6 @@ SonareDenoiseClassicalConfig read_denoise_config(const Napi::Object& options,
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDenoiseStereoResult on scope
-///        exit -- mirrors DeclickStereoResultGuard above.
-class DenoiseStereoResultGuard {
- public:
-  explicit DenoiseStereoResultGuard(SonareDenoiseStereoResult* result) : result_(result) {}
-  DenoiseStereoResultGuard(const DenoiseStereoResultGuard&) = delete;
-  DenoiseStereoResultGuard& operator=(const DenoiseStereoResultGuard&) = delete;
-  ~DenoiseStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDenoiseStereoResult* result_;
-};
-
 /// @brief Marshal one channel's hum detection into the JS shape shared by the
 ///        dehum stereo report.
 Napi::Object EmitHumDetection(Napi::Env env, const SonareHumDetection& detection) {
@@ -193,31 +177,11 @@ SonareDehumConfig read_dehum_config_c(const Napi::Object& options, SonareDehumCo
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDehumStereoResult on scope
-///        exit -- mirrors DecrackleStereoResultGuard above.
-class DehumStereoResultGuard {
- public:
-  explicit DehumStereoResultGuard(SonareDehumStereoResult* result) : result_(result) {}
-  DehumStereoResultGuard(const DehumStereoResultGuard&) = delete;
-  DehumStereoResultGuard& operator=(const DehumStereoResultGuard&) = delete;
-  ~DehumStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDehumStereoResult* result_;
-};
-
 }  // namespace
 
 Napi::Value SonareWrap::MasteringRepairDenoiseClassical(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -299,16 +263,8 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalStereo(const Napi::Callba
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DenoiseStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDenoiseStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("report", EmitDenoiseReport(env, result.report));
   return out;
   SONARE_NODE_CATCH(env)
@@ -345,7 +301,7 @@ Napi::Value SonareWrap::MasteringRepairDenoiseClassicalLinked(const Napi::Callba
 
 Napi::Value SonareWrap::MasteringRepairDetectNoiseFloor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -386,11 +342,7 @@ Napi::Value SonareWrap::MasteringRepairNoiseBandBins(const Napi::CallbackInfo& i
 
 Napi::Value SonareWrap::MasteringRepairDehum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -450,16 +402,8 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DehumStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDehumStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("leftReport", EmitDehumReport(env, result.left_report));
   out.Set("rightReport", EmitDehumReport(env, result.right_report));
   return out;
@@ -468,7 +412,7 @@ Napi::Value SonareWrap::MasteringRepairDehumStereo(const Napi::CallbackInfo& inf
 
 Napi::Value SonareWrap::MasteringRepairDetectHum(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();

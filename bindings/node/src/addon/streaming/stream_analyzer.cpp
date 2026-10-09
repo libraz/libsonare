@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "analysis/chord_analyzer.h"
@@ -44,35 +45,62 @@ sonare::QuantizeConfig QuantizeConfigFromValue(const Napi::Value& value) {
   return qconfig;
 }
 
-Napi::Float32Array Float32FromVec(Napi::Env env, const std::vector<float>& vec) {
-  Napi::Float32Array out = Napi::Float32Array::New(env, vec.size());
-  if (!vec.empty()) {
-    std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(float));
+template <typename Array, typename Value>
+Array TypedArrayFromVec(Napi::Env env, const std::vector<Value>& vec) {
+  Array out = Array::New(env, vec.size());
+  if constexpr (std::is_same_v<Value, int>) {
+    for (size_t i = 0; i < vec.size(); ++i) {
+      out[i] = vec[i];
+    }
+  } else if (!vec.empty()) {
+    std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(Value));
   }
   return out;
+}
+
+Napi::Float32Array Float32FromVec(Napi::Env env, const std::vector<float>& vec) {
+  return TypedArrayFromVec<Napi::Float32Array>(env, vec);
 }
 
 Napi::Int32Array Int32FromVec(Napi::Env env, const std::vector<int>& vec) {
-  Napi::Int32Array out = Napi::Int32Array::New(env, vec.size());
-  for (size_t i = 0; i < vec.size(); ++i) {
-    out[i] = vec[i];
-  }
+  return TypedArrayFromVec<Napi::Int32Array>(env, vec);
+}
+
+template <typename Buffer>
+void SetFrameBufferMetadata(Napi::Env env, Napi::Object& out, const Buffer& buffer) {
+  out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
+  out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
+  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
+  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
+}
+
+Napi::Object FrameBufferToObject(Napi::Env env, const sonare::FrameBuffer& buffer) {
+  Napi::Object out = Napi::Object::New(env);
+  SetFrameBufferMetadata(env, out, buffer);
+  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
+  out.Set("mel", Float32FromVec(env, buffer.mel));
+  out.Set("chroma", Float32FromVec(env, buffer.chroma));
+  out.Set("onsetStrength", Float32FromVec(env, buffer.onset_strength));
+  out.Set("rmsEnergy", Float32FromVec(env, buffer.rms_energy));
+  out.Set("spectralCentroid", Float32FromVec(env, buffer.spectral_centroid));
+  out.Set("spectralFlatness", Float32FromVec(env, buffer.spectral_flatness));
+  out.Set("chordRoot", Int32FromVec(env, buffer.chord_root));
+  out.Set("chordQuality", Int32FromVec(env, buffer.chord_quality));
+  out.Set("chordConfidence", Float32FromVec(env, buffer.chord_confidence));
   return out;
 }
 
-Napi::Uint8Array Uint8FromVec(Napi::Env env, const std::vector<uint8_t>& vec) {
-  Napi::Uint8Array out = Napi::Uint8Array::New(env, vec.size());
-  if (!vec.empty()) {
-    std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(uint8_t));
-  }
-  return out;
-}
-
-Napi::Int16Array Int16FromVec(Napi::Env env, const std::vector<int16_t>& vec) {
-  Napi::Int16Array out = Napi::Int16Array::New(env, vec.size());
-  if (!vec.empty()) {
-    std::memcpy(out.Data(), vec.data(), vec.size() * sizeof(int16_t));
-  }
+template <typename Array, typename Buffer>
+Napi::Object QuantizedFrameBufferToObject(Napi::Env env, const Buffer& buffer) {
+  Napi::Object out = Napi::Object::New(env);
+  SetFrameBufferMetadata(env, out, buffer);
+  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
+  out.Set("mel", TypedArrayFromVec<Array>(env, buffer.mel));
+  out.Set("chroma", TypedArrayFromVec<Array>(env, buffer.chroma));
+  out.Set("onsetStrength", TypedArrayFromVec<Array>(env, buffer.onset_strength));
+  out.Set("rmsEnergy", TypedArrayFromVec<Array>(env, buffer.rms_energy));
+  out.Set("spectralCentroid", TypedArrayFromVec<Array>(env, buffer.spectral_centroid));
+  out.Set("spectralFlatness", TypedArrayFromVec<Array>(env, buffer.spectral_flatness));
   return out;
 }
 
@@ -333,23 +361,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesSoa(const Napi::CallbackInfo& info) {
   if (!NonNegativeSizeTArg(env, info, 0, "maxFrames", &max_frames)) return env.Undefined();
   sonare::FrameBuffer buffer;
   analyzer_->read_frames_soa(max_frames, buffer);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
-  out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
-  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
-  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
-  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
-  out.Set("mel", Float32FromVec(env, buffer.mel));
-  out.Set("chroma", Float32FromVec(env, buffer.chroma));
-  out.Set("onsetStrength", Float32FromVec(env, buffer.onset_strength));
-  out.Set("rmsEnergy", Float32FromVec(env, buffer.rms_energy));
-  out.Set("spectralCentroid", Float32FromVec(env, buffer.spectral_centroid));
-  out.Set("spectralFlatness", Float32FromVec(env, buffer.spectral_flatness));
-  out.Set("chordRoot", Int32FromVec(env, buffer.chord_root));
-  out.Set("chordQuality", Int32FromVec(env, buffer.chord_quality));
-  out.Set("chordConfidence", Float32FromVec(env, buffer.chord_confidence));
-  return out;
+  return FrameBufferToObject(env, buffer);
   SONARE_NODE_CATCH(env)
 }
 
@@ -371,20 +383,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesU8(const Napi::CallbackInfo& info) {
   sonare::QuantizeConfig qconfig =
       QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
   analyzer_->read_frames_quantized_u8(max_frames, buffer, qconfig);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
-  out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
-  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
-  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
-  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
-  out.Set("mel", Uint8FromVec(env, buffer.mel));
-  out.Set("chroma", Uint8FromVec(env, buffer.chroma));
-  out.Set("onsetStrength", Uint8FromVec(env, buffer.onset_strength));
-  out.Set("rmsEnergy", Uint8FromVec(env, buffer.rms_energy));
-  out.Set("spectralCentroid", Uint8FromVec(env, buffer.spectral_centroid));
-  out.Set("spectralFlatness", Uint8FromVec(env, buffer.spectral_flatness));
-  return out;
+  return QuantizedFrameBufferToObject<Napi::Uint8Array>(env, buffer);
   SONARE_NODE_CATCH(env)
 }
 
@@ -406,20 +405,7 @@ Napi::Value StreamAnalyzerWrap::ReadFramesI16(const Napi::CallbackInfo& info) {
   sonare::QuantizeConfig qconfig =
       QuantizeConfigFromValue(info.Length() > 1 ? info[1] : env.Null());
   analyzer_->read_frames_quantized_i16(max_frames, buffer, qconfig);
-
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("nFrames", Napi::Number::New(env, static_cast<double>(buffer.n_frames)));
-  out.Set("nMels", Napi::Number::New(env, buffer.n_mels));
-  out.Set("nChroma", Napi::Number::New(env, buffer.n_chroma));
-  out.Set("featureFlags", Napi::Number::New(env, buffer.feature_flags));
-  out.Set("timestamps", Float32FromVec(env, buffer.timestamps));
-  out.Set("mel", Int16FromVec(env, buffer.mel));
-  out.Set("chroma", Int16FromVec(env, buffer.chroma));
-  out.Set("onsetStrength", Int16FromVec(env, buffer.onset_strength));
-  out.Set("rmsEnergy", Int16FromVec(env, buffer.rms_energy));
-  out.Set("spectralCentroid", Int16FromVec(env, buffer.spectral_centroid));
-  out.Set("spectralFlatness", Int16FromVec(env, buffer.spectral_flatness));
-  return out;
+  return QuantizedFrameBufferToObject<Napi::Int16Array>(env, buffer);
   SONARE_NODE_CATCH(env)
 }
 

@@ -79,31 +79,11 @@ SonareDereverbClassicalConfig read_dereverb_config_c(const Napi::Object& options
   return config;
 }
 
-/// @brief Frees both heap-owned channels of a SonareDereverbStereoResult on
-///        scope exit -- mirrors DenoiseStereoResultGuard above.
-class DereverbStereoResultGuard {
- public:
-  explicit DereverbStereoResultGuard(SonareDereverbStereoResult* result) : result_(result) {}
-  DereverbStereoResultGuard(const DereverbStereoResultGuard&) = delete;
-  DereverbStereoResultGuard& operator=(const DereverbStereoResultGuard&) = delete;
-  ~DereverbStereoResultGuard() {
-    sonare_free_floats(result_->left);
-    sonare_free_floats(result_->right);
-  }
-
- private:
-  SonareDereverbStereoResult* result_;
-};
-
 }  // namespace
 
 Napi::Value SonareWrap::MasteringRepairDereverbClassical(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (info.Length() < 2 || !IsFloat32Array(info[0]) || !info[1].IsNumber()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options?)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
@@ -163,16 +143,8 @@ Napi::Value SonareWrap::MasteringRepairDereverbClassicalStereo(const Napi::Callb
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
   }
-  DereverbStereoResultGuard guard(&result);
-  auto left_out = Napi::Float32Array::New(env, result.length);
-  auto right_out = Napi::Float32Array::New(env, result.length);
-  if (result.length > 0) {
-    std::memcpy(left_out.Data(), result.left, result.length * sizeof(float));
-    std::memcpy(right_out.Data(), result.right, result.length * sizeof(float));
-  }
-  Napi::Object out = Napi::Object::New(env);
-  out.Set("left", left_out);
-  out.Set("right", right_out);
+  StereoResultGuard<SonareDereverbStereoResult> guard(&result);
+  Napi::Object out = EmitStereoResult(env, result);
   out.Set("report", EmitDereverbReport(env, result.report));
   return out;
   SONARE_NODE_CATCH(env)
@@ -218,7 +190,7 @@ Napi::Value SonareWrap::MasteringRepairDereverbConfigForRoom(const Napi::Callbac
 
 Napi::Value SonareWrap::MasteringRepairDetectReverb(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  if (!CheckDetectMonoArgs(env, info)) return env.Undefined();
+  if (!CheckMonoArgs(env, info)) return env.Undefined();
 
   SONARE_NODE_TRY
   auto typed = info[0].As<Napi::Float32Array>();
