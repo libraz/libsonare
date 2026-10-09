@@ -205,7 +205,7 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'As the features_spectral_pitch field of the same name.',
   },
   {
-    file: 'src/c_api/sonare_c_daw.cpp',
+    file: 'src/c_api/note_render_common.h',
     field: 'fade_ms',
     reason: 'Note-render fade length; 0 keeps the core default, negative and non-finite refused.',
   },
@@ -275,14 +275,9 @@ const REFUSED_OPTION_FIELDS: ReadonlyArray<{
     reason: 'Dither target word length; 0 keeps the default (16), negative refused.',
   },
   {
-    file: 'src/c_api/sonare_c_polyphony.cpp',
-    field: 'fade_ms',
-    reason: 'As the sonare_c_daw field of the same name; one config resolved the same way.',
-  },
-  {
-    file: 'src/c_api/sonare_c_polyphony.cpp',
+    file: 'src/c_api/note_render_common.h',
     field: 'vibrato_cutoff_hz',
-    reason: 'As the sonare_c_daw field of the same name.',
+    reason: 'Shared note-render cutoff; 0 keeps the core default, negative and non-finite refused.',
   },
   {
     file: 'src/c_api/synth_patch_common.h',

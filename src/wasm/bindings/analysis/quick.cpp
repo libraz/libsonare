@@ -9,6 +9,7 @@
 #include <type_traits>
 
 #include "acoustic/estimate_geometry.h"
+#include "acoustic/material.h"
 #include "acoustic/selector_names.h"
 #include "analysis/analysis_json.h"
 #include "analysis/meter_analyzer.h"
@@ -363,16 +364,11 @@ TuningArg tuningFromVal(const val& value, const char* key) {
   return out;
 }
 
-val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
-                               const val& hop_length_val, bool use_hpss, bool loudness_weighted,
-                               const val& high_pass_hz_val, val modes, const val& profile_type_val,
-                               std::string genre_hint, const val& tuning_val) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
-  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
+namespace {
+
+KeyConfig makeKeyConfig(int n_fft, int hop_length, bool use_hpss, bool loudness_weighted,
+                        float high_pass_hz, val modes, int profile_type,
+                        const std::string& genre_hint) {
   KeyConfig config;
   config.n_fft = n_fft;
   config.hop_length = hop_length;
@@ -386,6 +382,23 @@ val js_detect_key_with_options(val samples, const val& sample_rate_val, const va
   if (!genre_hint.empty()) {
     config.genre_hint = genre_hint;
   }
+  return config;
+}
+
+}  // namespace
+
+val js_detect_key_with_options(val samples, const val& sample_rate_val, const val& n_fft_val,
+                               const val& hop_length_val, bool use_hpss, bool loudness_weighted,
+                               const val& high_pass_hz_val, val modes, const val& profile_type_val,
+                               std::string genre_hint, const val& tuning_val) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int n_fft = checkedIntFromVal(n_fft_val, "nFft");
+  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
+  const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
+  const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
+  Audio audio = loadValidatedAudio(samples, sample_rate);
+  KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz,
+                                   modes, profile_type, genre_hint);
   const TuningArg tuning = tuningFromVal(tuning_val, "tuning");
   config.tuning = tuning.tuning;
   config.auto_tuning = tuning.measure;
@@ -412,19 +425,8 @@ val js_detect_key_candidates(val samples, const val& sample_rate_val, const val&
   const int profile_type = checkedIntFromVal(profile_type_val, "profileType");
   const float high_pass_hz = checkedFloatFromVal(high_pass_hz_val, "highPassHz");
   Audio audio = loadValidatedAudio(samples, sample_rate);
-  KeyConfig config;
-  config.n_fft = n_fft;
-  config.hop_length = hop_length;
-  config.use_hpss = use_hpss;
-  config.loudness_weighted = loudness_weighted;
-  config.high_pass_hz = high_pass_hz;
-  config.modes = modesFromVal(modes);
-  if (profile_type >= 0) {
-    config.profile_type = keyProfileFromInt(profile_type);
-  }
-  if (!genre_hint.empty()) {
-    config.genre_hint = genre_hint;
-  }
+  const KeyConfig config = makeKeyConfig(n_fft, hop_length, use_hpss, loudness_weighted,
+                                         high_pass_hz, modes, profile_type, genre_hint);
   const auto candidates =
       quick::detect_key_candidates(audio.data(), audio.size(), sample_rate, config);
   val out = val::array();
@@ -876,32 +878,6 @@ val js_detect_acoustic(val samples, const val& sample_rate_val, const val& n_oct
 // which is why the guard has to be reachable from the core rather than sitting
 // in the C-ABI translation unit.
 
-// Maps a materialPreset selector (mirroring SONARE_MATERIAL_PRESET_*: 1 concrete,
-// 2 wood, 3 curtain, 4 carpet, 5 glass) onto a MaterialPreset. Returns false for
-// 0/none or any unknown value, leaving the per-band/scalar path to apply.
-bool materialPresetFromInt(int selector, sonare::acoustic::MaterialPreset* out) {
-  using sonare::acoustic::MaterialPreset;
-  switch (selector) {
-    case 1:
-      *out = MaterialPreset::Concrete;
-      return true;
-    case 2:
-      *out = MaterialPreset::Wood;
-      return true;
-    case 3:
-      *out = MaterialPreset::Curtain;
-      return true;
-    case 4:
-      *out = MaterialPreset::Carpet;
-      return true;
-    case 5:
-      *out = MaterialPreset::Glass;
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Builds a uniform shoebox from a JS options object, honouring the same wall-
 // material precedence as the C ABI: materialPreset (non-zero) > per-band
 // bandAbsorption (Float32Array/number[]) > scalar absorption.
@@ -919,8 +895,8 @@ sonare::acoustic::ShoeboxRoom roomFromVal(val opts, float def_absorption) {
   // option bag builds the same room on every surface. Reading the val is the
   // only part that is WASM's.
   WallMaterialRequest request;
-  request.has_preset =
-      materialPresetFromInt(intProperty(opts, "materialPreset", 0), &request.preset);
+  request.has_preset = sonare::acoustic::material_preset_from_selector(
+      intProperty(opts, "materialPreset", 0), &request.preset);
   if (hasProperty(opts, "bandAbsorption")) {
     request.absorption_bands = float32ArrayToVector(opts["bandAbsorption"]);
   }

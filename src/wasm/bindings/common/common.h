@@ -276,6 +276,11 @@ Audio loadValidatedAudio(val samples, int sample_rate);
 /// guard on the set. @p entry names the caller in each message.
 /// @throws WasmArgumentError.
 std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate, const char* entry);
+
+enum class ChannelSetValidation { Offline, StructureOnly };
+std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const char* entry,
+                                  ChannelSetValidation validation);
+
 /// @brief loadValidatedAudio for an entry point that reads one window of the
 /// buffer. The null/empty, sampleRate and buffer-size rules still cover the
 /// whole buffer; only the non-finite scan narrows, to

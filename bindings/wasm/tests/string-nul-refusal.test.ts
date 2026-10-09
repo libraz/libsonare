@@ -280,11 +280,6 @@ describe('embedded NUL refusal, scan', () => {
       text: '("strip" + std::to_string(index)).c_str()',
       reason: 'strip id generated internally',
     },
-    {
-      file: 'playback/playback.cpp',
-      text: 'budget.c_str()',
-      reason: 'error-subject label built from literals',
-    },
   ];
 
   /** Every `.c_str()` call outside comments, as file:line plus the source text. */

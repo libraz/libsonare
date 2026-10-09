@@ -202,6 +202,11 @@ Audio loadValidatedAudio(val samples, int sample_rate) {
 
 std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
                                            const char* entry) {
+  return loadChannelSet(channels, sample_rate, entry, ChannelSetValidation::Offline);
+}
+
+std::vector<Audio> loadChannelSet(const val& channels, int sample_rate, const char* entry,
+                                  ChannelSetValidation validation) {
   const std::string subject(entry);
   if (channels.isUndefined() || channels.isNull()) {
     throw WasmTypeError(subject + ": channels must be an array of Float32Array");
@@ -228,7 +233,12 @@ std::vector<Audio> loadValidatedChannelSet(const val& channels, int sample_rate,
     } else if (frames != length) {
       throw WasmRangeError(subject + ": channel lengths must match");
     }
-    loaded.push_back(loadValidatedAudio(channel, sample_rate));
+    if (validation == ChannelSetValidation::Offline) {
+      loaded.push_back(loadValidatedAudio(channel, sample_rate));
+    } else {
+      const std::vector<float> data = float32ArrayToVector(channel);
+      loaded.push_back(Audio::from_buffer(data.data(), data.size(), sample_rate));
+    }
   }
   return loaded;
 }

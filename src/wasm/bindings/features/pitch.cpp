@@ -9,9 +9,31 @@
 // Features - Pitch
 // ============================================================================
 
-val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
-                 const val& hop_length_val, const val& fmin_val, const val& fmax_val,
-                 const val& threshold_val, bool fill_na) {
+namespace {
+
+val pitch_result_to_val(const PitchResult& result) {
+  val out = val::object();
+  out.set("f0", vectorToFloat32Array(result.f0));
+  out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
+
+  // std::vector<bool>::operator[] returns a bit-reference proxy that embind
+  // cannot marshal, so cast each element explicitly.
+  val voiced_arr = val::array();
+  for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
+    voiced_arr.call<void>("push", static_cast<bool>(result.voiced_flag[i]));
+  }
+  out.set("voicedFlag", voiced_arr);
+
+  out.set("nFrames", result.n_frames());
+  out.set("medianF0", result.median_f0());
+  out.set("meanF0", result.mean_f0());
+  return out;
+}
+
+template <typename PitchFn>
+val run_pitch_track(val samples, const val& sample_rate_val, const val& frame_length_val,
+                    const val& hop_length_val, const val& fmin_val, const val& fmax_val,
+                    const val& threshold_val, bool fill_na, PitchFn pitch) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
   const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
@@ -28,66 +50,27 @@ val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_lengt
   config.threshold = threshold;
   config.fill_na = fill_na;
 
-  PitchResult result = yin_track(audio, config);
+  PitchResult result = pitch(audio, config);
+  return pitch_result_to_val(result);
+}
 
-  val out = val::object();
-  out.set("f0", vectorToFloat32Array(result.f0));
+}  // namespace
 
-  // Convert voiced_prob to Float32Array
-  out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
-
-  // Convert voiced_flag to array of bools.
-  // std::vector<bool>::operator[] returns a __bit_reference proxy that embind
-  // cannot marshal, so we cast to bool explicitly.
-  val voiced_arr = val::array();
-  for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
-    voiced_arr.call<void>("push", static_cast<bool>(result.voiced_flag[i]));
-  }
-  out.set("voicedFlag", voiced_arr);
-
-  out.set("nFrames", result.n_frames());
-  out.set("medianF0", result.median_f0());
-  out.set("meanF0", result.mean_f0());
-
-  return out;
+val js_pitch_yin(val samples, const val& sample_rate_val, const val& frame_length_val,
+                 const val& hop_length_val, const val& fmin_val, const val& fmax_val,
+                 const val& threshold_val, bool fill_na) {
+  return run_pitch_track(
+      samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val, threshold_val,
+      fill_na,
+      [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
 }
 
 val js_pitch_pyin(val samples, const val& sample_rate_val, const val& frame_length_val,
                   const val& hop_length_val, const val& fmin_val, const val& fmax_val,
                   const val& threshold_val, bool fill_na) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  const int frame_length = checkedIntFromVal(frame_length_val, "frameLength");
-  const int hop_length = checkedIntFromVal(hop_length_val, "hopLength");
-  const float fmin = checkedFloatFromVal(fmin_val, "fmin");
-  const float fmax = checkedFloatFromVal(fmax_val, "fmax");
-  const float threshold = checkedFloatFromVal(threshold_val, "threshold");
-  Audio audio = loadValidatedAudio(samples, sample_rate);
-
-  PitchConfig config;
-  config.frame_length = frame_length;
-  config.hop_length = hop_length;
-  config.fmin = fmin;
-  config.fmax = fmax;
-  config.threshold = threshold;
-  config.fill_na = fill_na;
-
-  PitchResult result = pyin(audio, config);
-
-  val out = val::object();
-  out.set("f0", vectorToFloat32Array(result.f0));
-  out.set("voicedProb", vectorToFloat32Array(result.voiced_prob));
-
-  val voiced_arr = val::array();
-  for (size_t i = 0; i < result.voiced_flag.size(); ++i) {
-    voiced_arr.call<void>("push", static_cast<bool>(result.voiced_flag[i]));
-  }
-  out.set("voicedFlag", voiced_arr);
-
-  out.set("nFrames", result.n_frames());
-  out.set("medianF0", result.median_f0());
-  out.set("meanF0", result.mean_f0());
-
-  return out;
+  return run_pitch_track(
+      samples, sample_rate_val, frame_length_val, hop_length_val, fmin_val, fmax_val, threshold_val,
+      fill_na, [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
 val js_note_segments(val f0_hz, val voiced_prob, const val& frame_rate_val, val options) {

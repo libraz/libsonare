@@ -177,7 +177,7 @@ describe('clip fields refuse a handle or an ordinal that is not whole', () => {
     for (let i = 0; i < long.length; i++) {
       long[i] = Math.sin(i * 0.3);
     }
-    const renderLong = (warpMode: number): number => {
+    const renderLong = (warpMode: 0 | 3): number => {
       const engine = new RealtimeEngine(48000, 2048);
       try {
         engine.setClips([

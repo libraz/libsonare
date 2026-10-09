@@ -58,39 +58,10 @@ void checkPlayback(SonareError err, const char* context) {
 // shape and matching channel lengths -- and leaves content (emptiness,
 // finiteness) to the renderer, matching processInterleaved's own contract.
 std::vector<Audio> loadPlaybackChannelSet(const val& channels, int sample_rate, const char* entry) {
-  const std::string subject(entry);
-  if (channels.isUndefined() || channels.isNull()) {
-    throw WasmTypeError(subject + ": channels must be an array of Float32Array");
-  }
-  const std::size_t count = wasmArrayLikeLength(channels, "channels");
-  if (count == 0) {
-    throw WasmRangeError(subject + ": channels must hold at least one channel");
-  }
-  const std::string budget = subject + " input";
-  std::vector<Audio> loaded;
-  loaded.reserve(std::min(count, kMaxWasmObjectArrayReserve));
-  std::size_t cumulative = 0;
-  std::size_t length = 0;
-  for (std::size_t index = 0; index < count; ++index) {
-    const val channel = channels[index];
-    if (channel.isUndefined() || channel.isNull()) {
-      throw WasmTypeError(subject + ": channels[" + std::to_string(index) +
-                          "] must be a Float32Array");
-    }
-    const std::size_t frames =
-        accumulateWasmFloat32ArrayLength(channel, "channels entry", budget.c_str(), &cumulative);
-    if (index == 0) {
-      length = frames;
-    } else if (frames != length) {
-      throw WasmRangeError(subject + ": channel lengths must match");
-    }
-    const std::vector<float> data = float32ArrayToVector(channel);
-    loaded.push_back(Audio::from_buffer(data.data(), data.size(), sample_rate));
-  }
-  return loaded;
+  return loadChannelSet(channels, sample_rate, entry, ChannelSetValidation::StructureOnly);
 }
 
-// Structural sibling of the loop above, for the offline (interleaved) render
+// Structural sibling of the channel loader above, for the offline (interleaved) render
 // path: no emptiness or finiteness policy, matching processInterleaved's.
 std::vector<float> loadPlaybackInterleaved(val samples, int channels, const char* entry,
                                            std::size_t* out_frames) {
