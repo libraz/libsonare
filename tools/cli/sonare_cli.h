@@ -16,6 +16,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "analysis/acoustic_analyzer.h"
@@ -117,6 +118,8 @@ struct CommandInfo {
 
 std::vector<float> parse_float_list(const std::string& text);
 std::vector<int> parse_int_list(const std::string& text);
+int print_name_catalog(const CliArgs& args, std::string_view key,
+                       const std::vector<std::string>& names);
 std::string read_plain_text_file(const std::string& path);
 #ifdef SONARE_WITH_ARRANGEMENT
 /// Reads a file into a byte buffer, binary-safe, refusing an input past the
@@ -127,6 +130,8 @@ std::string read_plain_text_file(const std::string& path);
 /// @throws std::invalid_argument — the input exceeds the cap.
 bool read_binary_file(const std::string& path, std::vector<uint8_t>* out);
 #endif
+std::string lowercase_cli_value(std::string value);
+
 std::vector<std::string> split_string(const std::string& text, char delimiter);
 void set_json_path(sonare::util::json::Value& root, const std::string& path,
                    sonare::util::json::Value value);

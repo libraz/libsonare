@@ -269,15 +269,7 @@ int cmd_project_synth_presets(const CliArgs& args) {
   const std::vector<std::string> names = joined != nullptr && joined[0] != '\0'
                                              ? split_string(joined, '\n')
                                              : std::vector<std::string>{};
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("presets").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "presets", names);
 }
 
 // `project new -o out.json` — create an empty project and serialize it to disk.

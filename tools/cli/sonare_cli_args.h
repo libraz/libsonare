@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include "util/constants.h"
 #include "util/types.h"
 
 /// One option occurrence the parser accepted, in command-line order, recorded
@@ -56,10 +57,10 @@ struct CliArgs {
   bool quiet = false;
   bool help = false;
 
-  int n_fft = 2048;
+  int n_fft = sonare::constants::kDefaultNFft;
   bool n_fft_explicit = false;
-  int hop_length = 512;
-  int n_mels = 128;
+  int hop_length = sonare::constants::kDefaultHopLength;
+  int n_mels = sonare::constants::kDefaultNMels;
   float fmin = 0.0f;
   float fmax = 0.0f;
 

@@ -6,6 +6,76 @@
 
 #ifdef SONARE_WITH_ARRANGEMENT
 
+namespace {
+
+using ProjectMidiImportFn = SonareError (*)(SonareProject*, const uint8_t*, size_t, uint32_t*);
+
+struct ProjectMidiImportSpec {
+  const char* input_option;
+  const char* missing_input_message;
+  const char* input_kind;
+  const char* import_error_context;
+  const char* success_format;
+  ProjectMidiImportFn import;
+};
+
+int cmd_project_import_midi(const CliArgs& args, const ProjectMidiImportSpec& spec) {
+  const std::string input_path = args.get_string(spec.input_option);
+  if (input_path.empty()) {
+    std::cerr << color::red << spec.missing_input_message << color::reset << "\n";
+    return 1;
+  }
+  std::vector<uint8_t> bytes;
+  if (!read_binary_file(input_path, &bytes)) {
+    std::cerr << color::red << "Error: cannot open " << spec.input_kind << " file: " << input_path
+              << color::reset << "\n";
+    // A user-named input file that cannot be opened keeps the file-not-found
+    // class here for the same reason load_project_from_args does: a caller that
+    // branches on "fetch the input again" versus "the arguments are wrong" must
+    // get the same answer from whichever subcommand read the file.
+    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
+  }
+  ProjectHandle handle;
+  SonareError err = sonare_project_create(&handle.ptr);
+  if (err != SONARE_OK) {
+    project_report_error("create project", err);
+    return project_exit_code(err);
+  }
+  uint32_t first_clip = 0;
+  err = spec.import(handle.ptr, bytes.data(), bytes.size(), &first_clip);
+  if (err != SONARE_OK) {
+    project_report_error(spec.import_error_context, err);
+    return project_exit_code(err);
+  }
+  char* json = nullptr;
+  size_t len = 0;
+  err = sonare_project_serialize(handle.ptr, &json, &len);
+  if (err != SONARE_OK) {
+    project_report_error("serialize project", err);
+    return project_exit_code(err);
+  }
+  const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
+  sonare_free_string(json);
+  if (!ok) {
+    return report_output_write_failure(args.output_file);
+  }
+  if (args.json_output) {
+    JsonBuilder()
+        .begin_object()
+        .kv("output", args.output_file)
+        .kv("first_clip_id", static_cast<int>(first_clip))
+        .kv("bytes", len)
+        .end_object()
+        .print();
+  } else if (!args.quiet) {
+    std::cout << color::green << "Imported " << spec.success_format << " to " << args.output_file
+              << color::reset << "\n";
+  }
+  return 0;
+}
+
+}  // namespace
+
 // `transcribe in.wav -o out.mid` — audio to a Standard MIDI File. The notes
 // land on a PROJECT's tempo map, which is why an explicit --tempo-bpm is
 // installed as that map rather than handed to the transcriber: the clip entry
@@ -182,110 +252,15 @@ int cmd_project_export_midi2(const CliArgs& args) {
 // `project import-smf --smf in.mid -o out.json` — import an SMF into a new
 // project and serialize it to JSON.
 int cmd_project_import_smf(const CliArgs& args) {
-  const std::string smf_path = args.get_string("smf");
-  if (smf_path.empty()) {
-    std::cerr << color::red << "Error: missing SMF input (use --smf <file.mid>)" << color::reset
-              << "\n";
-    return 1;
-  }
-  std::vector<uint8_t> smf;
-  if (!read_binary_file(smf_path, &smf)) {
-    std::cerr << color::red << "Error: cannot open SMF file: " << smf_path << color::reset << "\n";
-    // A user-named input file that cannot be opened keeps the file-not-found
-    // class here for the same reason load_project_from_args does: a caller that
-    // branches on "fetch the input again" versus "the arguments are wrong" must
-    // get the same answer from whichever subcommand read the file.
-    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
-  }
-  ProjectHandle handle;
-  SonareError err = sonare_project_create(&handle.ptr);
-  if (err != SONARE_OK) {
-    project_report_error("create project", err);
-    return project_exit_code(err);
-  }
-  uint32_t first_clip = 0;
-  err = sonare_project_import_smf(handle.ptr, smf.data(), smf.size(), &first_clip);
-  if (err != SONARE_OK) {
-    project_report_error("import SMF", err);
-    return project_exit_code(err);
-  }
-  char* json = nullptr;
-  size_t len = 0;
-  err = sonare_project_serialize(handle.ptr, &json, &len);
-  if (err != SONARE_OK) {
-    project_report_error("serialize project", err);
-    return project_exit_code(err);
-  }
-  const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
-  sonare_free_string(json);
-  if (!ok) {
-    return report_output_write_failure(args.output_file);
-  }
-  if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("output", args.output_file)
-        .kv("first_clip_id", static_cast<int>(first_clip))
-        .kv("bytes", len)
-        .end_object()
-        .print();
-  } else if (!args.quiet) {
-    std::cout << color::green << "Imported SMF to " << args.output_file << color::reset << "\n";
-  }
-  return 0;
+  return cmd_project_import_midi(args, {"smf", "Error: missing SMF input (use --smf <file.mid>)",
+                                        "SMF", "import SMF", "SMF", sonare_project_import_smf});
 }
 
 // `project import-midi2 --midi2 in.midi2 -o out.json` — import a MIDI 2.0 Clip
 // File into a new project and serialize it to JSON.
 int cmd_project_import_midi2(const CliArgs& args) {
-  const std::string midi2_path = args.get_string("midi2");
-  if (midi2_path.empty()) {
-    std::cerr << color::red << "Error: missing MIDI2 input (use --midi2 <file.midi2>)"
-              << color::reset << "\n";
-    return 1;
-  }
-  std::vector<uint8_t> midi2;
-  if (!read_binary_file(midi2_path, &midi2)) {
-    std::cerr << color::red << "Error: cannot open MIDI2 file: " << midi2_path << color::reset
-              << "\n";
-    return project_exit_code(SONARE_ERROR_FILE_NOT_FOUND);
-  }
-  ProjectHandle handle;
-  SonareError err = sonare_project_create(&handle.ptr);
-  if (err != SONARE_OK) {
-    project_report_error("create project", err);
-    return project_exit_code(err);
-  }
-  uint32_t first_clip = 0;
-  err = sonare_project_import_clip_file(handle.ptr, midi2.data(), midi2.size(), &first_clip);
-  if (err != SONARE_OK) {
-    project_report_error("import MIDI2 Clip File", err);
-    return project_exit_code(err);
-  }
-  char* json = nullptr;
-  size_t len = 0;
-  err = sonare_project_serialize(handle.ptr, &json, &len);
-  if (err != SONARE_OK) {
-    project_report_error("serialize project", err);
-    return project_exit_code(err);
-  }
-  const bool ok = write_binary_file(args.output_file, reinterpret_cast<const uint8_t*>(json), len);
-  sonare_free_string(json);
-  if (!ok) {
-    return report_output_write_failure(args.output_file);
-  }
-  if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("output", args.output_file)
-        .kv("first_clip_id", static_cast<int>(first_clip))
-        .kv("bytes", len)
-        .end_object()
-        .print();
-  } else if (!args.quiet) {
-    std::cout << color::green << "Imported MIDI2 Clip File to " << args.output_file << color::reset
-              << "\n";
-  }
-  return 0;
+  return cmd_project_import_midi(
+      args, {"midi2", "Error: missing MIDI2 input (use --midi2 <file.midi2>)", "MIDI2",
+             "import MIDI2 Clip File", "MIDI2 Clip File", sonare_project_import_clip_file});
 }
 #endif  // SONARE_WITH_ARRANGEMENT

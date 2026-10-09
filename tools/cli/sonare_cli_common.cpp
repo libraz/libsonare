@@ -1,47 +1,55 @@
 #include <algorithm>
+#include <cctype>
 #include <limits>
+#include <optional>
 
 #include "sonare_cli.h"
 
-// The list parsers name --values and the element that failed, so a bad entry
-// reads the same way as a bad scalar option instead of surfacing the standard
-// library's own "stof: no conversion" text with no indication of which entry.
-std::vector<float> parse_float_list(const std::string& text) {
-  std::vector<float> values;
-  std::stringstream stream(text);
-  std::string item;
-  while (std::getline(stream, item, ',')) {
-    if (item.empty()) continue;
+namespace {
+
+template <typename T, typename Parse>
+std::vector<T> parse_number_list(const std::string& text, Parse parse, const char* kind,
+                                 const char* empty_message) {
+  std::vector<T> values;
+  for (const auto& item : split_string(text, ',')) {
     try {
       size_t consumed = 0;
-      const float parsed = std::stof(item, &consumed);
+      const T parsed = parse(item, &consumed);
       if (consumed != item.size()) throw std::invalid_argument("trailing characters");
       values.push_back(parsed);
     } catch (const std::exception&) {
-      throw std::invalid_argument("invalid float value in --values: " + item);
+      throw std::invalid_argument(std::string("invalid ") + kind + " value in --values: " + item);
     }
   }
-  if (values.empty()) throw std::invalid_argument("--values must contain at least one number");
+  if (values.empty()) throw std::invalid_argument(empty_message);
   return values;
 }
 
-std::vector<int> parse_int_list(const std::string& text) {
-  std::vector<int> values;
-  std::stringstream stream(text);
-  std::string item;
-  while (std::getline(stream, item, ',')) {
-    if (item.empty()) continue;
-    try {
-      size_t consumed = 0;
-      const int parsed = std::stoi(item, &consumed);
-      if (consumed != item.size()) throw std::invalid_argument("trailing characters");
-      values.push_back(parsed);
-    } catch (const std::exception&) {
-      throw std::invalid_argument("invalid integer value in --values: " + item);
-    }
+}  // namespace
+
+int print_name_catalog(const CliArgs& args, std::string_view key,
+                       const std::vector<std::string>& names) {
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object().key(std::string(key)).begin_array();
+    for (const auto& name : names) json.value(name);
+    json.end_array().end_object().print();
+  } else {
+    for (const auto& name : names) std::cout << name << "\n";
   }
-  if (values.empty()) throw std::invalid_argument("--values must contain at least one integer");
-  return values;
+  return 0;
+}
+
+std::vector<float> parse_float_list(const std::string& text) {
+  return parse_number_list<float>(
+      text, [](const std::string& item, size_t* consumed) { return std::stof(item, consumed); },
+      "float", "--values must contain at least one number");
+}
+
+std::vector<int> parse_int_list(const std::string& text) {
+  return parse_number_list<int>(
+      text, [](const std::string& item, size_t* consumed) { return std::stoi(item, consumed); },
+      "integer", "--values must contain at least one integer");
 }
 
 std::string read_plain_text_file(const std::string& path) {
@@ -54,7 +62,10 @@ std::string read_plain_text_file(const std::string& path) {
   return buffer.str();
 }
 
-Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t expected_size) {
+namespace {
+
+Audio load_reference_audio_impl(const CliArgs& args, int expected_sample_rate,
+                                std::optional<size_t> expected_size) {
   const std::string path = args.get_string("reference");
   if (path.empty()) {
     throw std::invalid_argument("--reference is required");
@@ -63,27 +74,21 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
   if (sample_rate != expected_sample_rate) {
     throw std::invalid_argument("reference sample rate must match input sample rate");
   }
-  if (samples.size() != expected_size) {
+  if (expected_size && samples.size() != *expected_size) {
     throw std::invalid_argument("reference length must match input length");
   }
-  // The offline-input policy Audio::from_file applies to the main input. This
-  // pairing skips it otherwise, from_vector checking only the sample rate.
   validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
   return Audio::from_vector(std::move(samples), sample_rate);
 }
 
+}  // namespace
+
+Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t expected_size) {
+  return load_reference_audio_impl(args, expected_sample_rate, expected_size);
+}
+
 Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate) {
-  const std::string path = args.get_string("reference");
-  if (path.empty()) {
-    throw std::invalid_argument("--reference is required");
-  }
-  auto [samples, sample_rate] = load_audio(path);
-  if (sample_rate != expected_sample_rate) {
-    throw std::invalid_argument("reference sample rate must match input sample rate");
-  }
-  // Same policy as the length-matched loader above.
-  validate_offline_audio_input(samples.data(), samples.size(), sample_rate);
-  return Audio::from_vector(std::move(samples), sample_rate);
+  return load_reference_audio_impl(args, expected_sample_rate, std::nullopt);
 }
 
 StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
@@ -108,6 +113,12 @@ void save_stereo_wav(const std::string& path, const std::vector<float>& left,
   }
   save_wav_multichannel(path, interleaved.data(), left.size(), 2, ChannelLayout::Stereo,
                         sample_rate, bits);
+}
+
+std::string lowercase_cli_value(std::string value) {
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return value;
 }
 
 std::vector<std::string> split_string(const std::string& text, char delimiter) {
@@ -207,9 +218,7 @@ PitchClass parse_pitch_class_option(const std::string& value) {
 }
 
 Mode parse_mode_option(const std::string& value) {
-  std::string key = value;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string key = lowercase_cli_value(value);
   if (key == "major" || key == "maj") return Mode::Major;
   if (key == "minor" || key == "min" || key == "m") return Mode::Minor;
   if (key == "dorian") return Mode::Dorian;
@@ -221,9 +230,7 @@ Mode parse_mode_option(const std::string& value) {
 }
 
 std::vector<Mode> parse_mode_list_option(const std::string& value) {
-  std::string key = value;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string key = lowercase_cli_value(value);
   if (key == "all" || key == "modal") {
     return {Mode::Major,  Mode::Minor,      Mode::Dorian, Mode::Phrygian,
             Mode::Lydian, Mode::Mixolydian, Mode::Locrian};
@@ -233,12 +240,8 @@ std::vector<Mode> parse_mode_list_option(const std::string& value) {
   }
 
   std::vector<Mode> modes;
-  std::stringstream stream(value);
-  std::string item;
-  while (std::getline(stream, item, ',')) {
-    if (!item.empty()) {
-      modes.push_back(parse_mode_option(item));
-    }
+  for (const auto& item : split_string(value, ',')) {
+    modes.push_back(parse_mode_option(item));
   }
   if (modes.empty()) {
     throw std::invalid_argument("--modes must contain at least one mode");
@@ -247,9 +250,7 @@ std::vector<Mode> parse_mode_list_option(const std::string& value) {
 }
 
 KeyProfileType parse_key_profile_option(const std::string& value) {
-  std::string key = value;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string key = lowercase_cli_value(value);
   if (key == "ks" || key == "krumhansl" || key == "krumhansl-schmuckler") {
     return KeyProfileType::KrumhanslSchmuckler;
   }

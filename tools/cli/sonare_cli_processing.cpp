@@ -1,5 +1,3 @@
-#include <cctype>
-
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -308,9 +306,7 @@ std::vector<float> polyphonic_note_salience(const editing::polyphony::Polyphonic
 // The flag literals the parser's own `--flag=false` form accepts, so one spelling
 // does not mean two things depending on where it is written.
 bool parse_edit_bool(const std::string& field, const std::string& value) {
-  std::string lowered = value;
-  std::transform(lowered.begin(), lowered.end(), lowered.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string lowered = lowercase_cli_value(value);
   if (lowered == "true" || lowered == "1" || lowered == "yes" || lowered == "on") return true;
   if (lowered == "false" || lowered == "0" || lowered == "no" || lowered == "off") return false;
   throw std::invalid_argument("invalid boolean value for --edit " + field + ": " + value);
@@ -742,15 +738,7 @@ int cmd_voice_change(const CliArgs& args, const Audio& audio) {
 
 int cmd_voice_presets(const CliArgs& args, const Audio&) {
   const auto names = editing::voice_changer::realtime_voice_changer_preset_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("presets").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "presets", names);
 }
 
 int cmd_voice_preset(const CliArgs& args, const Audio&) {
@@ -851,8 +839,7 @@ int cmd_decompose_stems(const CliArgs& args, const Audio& audio) {
   // and `-o out.wav` name the same set.
   std::string base = args.output_file;
   if (base.size() > 4) {
-    std::string suffix = base.substr(base.size() - 4);
-    for (char& c : suffix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const std::string suffix = lowercase_cli_value(base.substr(base.size() - 4));
     if (suffix == ".wav") base = base.substr(0, base.size() - 4);
   }
 
@@ -935,8 +922,7 @@ int cmd_hpss(const CliArgs& args, const Audio& audio) {
   // named artifacts from one command line.
   std::string base = args.output_file;
   if (base.size() > 4) {
-    std::string suffix = base.substr(base.size() - 4);
-    for (char& c : suffix) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    const std::string suffix = lowercase_cli_value(base.substr(base.size() - 4));
     if (suffix == ".wav") base = base.substr(0, base.size() - 4);
   }
 

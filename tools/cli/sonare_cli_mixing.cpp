@@ -1,14 +1,10 @@
-#include <algorithm>
-#include <cctype>
 #include <utility>
 
 #include "sonare_cli.h"
 
 #ifdef SONARE_WITH_MIXING
 mixing::PanMode parse_pan_mode_option(const std::string& value) {
-  std::string key = value;
-  std::transform(key.begin(), key.end(), key.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  const std::string key = lowercase_cli_value(value);
   if (key == "balance") return mixing::PanMode::Balance;
   if (key == "stereopan" || key == "stereo-pan" || key == "pan") return mixing::PanMode::StereoPan;
   if (key == "dualpan" || key == "dual-pan") return mixing::PanMode::DualPan;
@@ -17,15 +13,7 @@ mixing::PanMode parse_pan_mode_option(const std::string& value) {
 
 int cmd_mixing_presets(const CliArgs& args, const Audio&) {
   const auto names = mixing::api::scene_preset_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("presets").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "presets", names);
 }
 
 int cmd_mixing_preset(const CliArgs& args, const Audio&) {
@@ -51,14 +39,9 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   // answer that nothing kept in step with the first.
   const int source_channels = args.source_channels;
   if (source_channels == 2) {
-    auto [interleaved, sample_rate, channels] = load_audio_interleaved(args.input_file);
-    SONARE_CHECK(sample_rate == audio.sample_rate() && channels == 2, ErrorCode::DecodeFailed);
-    left.resize(interleaved.size() / 2);
-    right.resize(interleaved.size() / 2);
-    for (size_t frame = 0; frame < left.size(); ++frame) {
-      left[frame] = interleaved[2 * frame];
-      right[frame] = interleaved[2 * frame + 1];
-    }
+    auto planes = load_stereo_planes(args, audio);
+    left = std::move(planes.left);
+    right = std::move(planes.right);
   } else if (width != 1.0f) {
     std::cerr << color::red << "Error: --width requires a stereo input" << color::reset << "\n";
     return 1;
@@ -75,13 +58,7 @@ int cmd_mix(const CliArgs& args, const Audio& audio) {
   strip.process(channels, 2, frames);
 
   if (!args.output_file.empty()) {
-    std::vector<float> interleaved(2 * left.size());
-    for (size_t frame = 0; frame < left.size(); ++frame) {
-      interleaved[2 * frame] = left[frame];
-      interleaved[2 * frame + 1] = right[frame];
-    }
-    save_wav_multichannel(args.output_file, interleaved.data(), left.size(), 2,
-                          ChannelLayout::Stereo, audio.sample_rate());
+    save_stereo_wav(args.output_file, left, right, audio.sample_rate());
   }
 
   const auto meter = strip.meter_snapshot();
@@ -193,9 +170,7 @@ AssistantTrack load_assistant_track(const std::string& entry, int sample_rate) {
 /// decoded at its own rate rather than at --sample-rate, because resampling
 /// first would measure a different signal.
 double resolve_assistant_tempo(const std::string& raw, const std::string& first_entry) {
-  std::string lowered;
-  for (char c : raw)
-    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(c))));
+  const std::string lowered = lowercase_cli_value(raw);
   if (lowered != "auto") {
     std::istringstream stream(raw);
     stream.imbue(std::locale::classic());

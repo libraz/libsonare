@@ -788,67 +788,27 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
 
 int cmd_mastering_processors(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::processor_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("processors").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "processors", names);
 }
 
 int cmd_mastering_pair_processors(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::pair_processor_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("processors").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "processors", names);
 }
 
 int cmd_mastering_pair_analyses(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::pair_analysis_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("analyses").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "analyses", names);
 }
 
 int cmd_mastering_stereo_analyses(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::stereo_analysis_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("analyses").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "analyses", names);
 }
 
 int cmd_mastering_presets(const CliArgs& args, const Audio&) {
   const auto names = mastering::api::preset_names();
-  if (args.json_output) {
-    JsonBuilder json;
-    json.begin_object().key("presets").begin_array();
-    for (const auto& name : names) json.value(name);
-    json.end_array().end_object().print();
-  } else {
-    for (const auto& name : names) std::cout << name << "\n";
-  }
-  return 0;
+  return print_name_catalog(args, "presets", names);
 }
 
 /// Print a C ABI JSON document on CLI stdout.
