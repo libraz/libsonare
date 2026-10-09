@@ -85,49 +85,36 @@ double num_or(const Value& obj, const char* key, double fallback) {
   return v->as_number();
 }
 
-uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
+namespace {
+
+template <typename Int>
+Int integral_or(const Value& obj, const char* key, Int fallback) {
   const auto* v = obj.find(key);
   if (!v) return fallback;
   if (!v->is_number()) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "integer field must be numeric: " + std::string(key));
   }
-  uint32_t converted = 0;
+  Int converted = 0;
   if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
     throw SonareException(ErrorCode::InvalidFormat,
                           "integer field is fractional or out of range: " + std::string(key));
   }
   return converted;
+}
+
+}  // namespace
+
+uint32_t uint_or(const Value& obj, const char* key, uint32_t fallback) {
+  return integral_or(obj, key, fallback);
 }
 
 int int_or(const Value& obj, const char* key, int fallback) {
-  const auto* v = obj.find(key);
-  if (!v) return fallback;
-  if (!v->is_number()) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field must be numeric: " + std::string(key));
-  }
-  int converted = 0;
-  if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field is fractional or out of range: " + std::string(key));
-  }
-  return converted;
+  return integral_or(obj, key, fallback);
 }
 
 int8_t int8_or(const Value& obj, const char* key, int8_t fallback) {
-  const auto* v = obj.find(key);
-  if (!v) return fallback;
-  if (!v->is_number()) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field must be numeric: " + std::string(key));
-  }
-  int8_t converted = 0;
-  if (!numeric::checked_integral_cast(v->as_number(), &converted)) {
-    throw SonareException(ErrorCode::InvalidFormat,
-                          "integer field is fractional or out of range: " + std::string(key));
-  }
-  return converted;
+  return integral_or(obj, key, fallback);
 }
 
 bool parse_uint32_key(const std::string& key, uint32_t* out) {
