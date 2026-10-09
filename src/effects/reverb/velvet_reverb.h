@@ -9,6 +9,7 @@
 #include "effects/common/dc_blocker.h"
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::reverb {
 
@@ -82,7 +83,7 @@ class VelvetReverb : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   VelvetReverbConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
   Ring ring_l_;

@@ -9,6 +9,7 @@
 #include "effects/common/dc_blocker.h"
 #include "rt/delay_line.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::reverb {
 
@@ -44,7 +45,7 @@ class FdnReverb : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   FdnReverbConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   std::array<int, 4> lengths_{{1, 1, 1, 1}};
   std::array<rt::DelayLine, 4> delays_;

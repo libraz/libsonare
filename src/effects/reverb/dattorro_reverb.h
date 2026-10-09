@@ -146,7 +146,7 @@ class DattorroReverb : public rt::ProcessorBase {
   void reset_gate() noexcept;
 
   DattorroReverbConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared ring holds.
 
   // Stage 1 input diffusion.

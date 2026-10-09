@@ -10,6 +10,8 @@
 
 namespace sonare::effects::reverb {
 
+using constants::kDefaultDawSampleRate;
+
 using sonare::constants::kTwoPi;
 
 namespace {
@@ -88,7 +90,7 @@ void VelvetReverb::build_table(std::vector<Tap>& taps, std::uint32_t seed_offset
 }
 
 void VelvetReverb::prepare(double sample_rate, int max_block_size) {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   sample_rate_ = sr;
   max_block_size_ = max_block_size;
   prepared_ = true;

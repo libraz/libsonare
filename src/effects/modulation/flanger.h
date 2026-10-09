@@ -19,6 +19,7 @@
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -76,7 +77,7 @@ class Flanger : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   FlangerConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   std::array<ModDelayLine, 2> delays_;
   std::array<Lfo, 2> lfos_;
   /// [L, R] pre-filter sections. One per channel, never shared with another

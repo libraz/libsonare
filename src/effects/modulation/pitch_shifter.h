@@ -12,6 +12,7 @@
 #include "rt/gain_pair_glide.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -97,7 +98,7 @@ class PitchShifter : public rt::ProcessorBase {
   PitchShifterConfig config_{};
   float max_window_ms_ = 0.0f;     ///< largest window the prepared delay line holds.
   float max_pre_delay_ms_ = 0.0f;  ///< largest pre-delay the prepared delay line holds.
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int grain_ = 2048;     ///< grain length in samples: two of config_.window_ms.
   float phase_ = 0.0f;   ///< voice 1 tap-1 delay position in [0, grain_).
   float phase2_ = 0.0f;  ///< the same for voice 2.

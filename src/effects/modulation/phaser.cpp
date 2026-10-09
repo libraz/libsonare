@@ -11,6 +11,8 @@
 
 namespace sonare::effects::modulation {
 
+using constants::kDefaultDawSampleRate;
+
 using common::kMaxFeedback;
 using sonare::constants::kPi;
 using sonare::constants::kPiD;
@@ -27,7 +29,7 @@ constexpr double kLoopHighpassHz = 20.0;
 // closed around it is stable while its gain stays under one (kMaxFeedback).
 
 double effective_sample_rate(double sample_rate) noexcept {
-  return sample_rate > 0.0 && std::isfinite(sample_rate) ? sample_rate : 48000.0;
+  return sample_rate > 0.0 && std::isfinite(sample_rate) ? sample_rate : kDefaultDawSampleRate;
 }
 
 float max_sweep_hz(double sample_rate) noexcept {

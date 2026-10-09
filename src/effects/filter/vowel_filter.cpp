@@ -7,8 +7,11 @@
 #include "rt/param_smoother.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::effects::filter {
+
+using constants::kDefaultDawSampleRate;
 namespace {
 
 // The hardware-measured vowel (a): a peaking-form fit of three sections, each
@@ -83,7 +86,7 @@ VowelFilter::VowelFilter(VowelFilterConfig config) : config_(config) {
 }
 
 void VowelFilter::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   for (auto& plane : bands_) {
     for (auto& band : plane) band.prepare(sample_rate_);
   }

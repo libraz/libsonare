@@ -10,6 +10,7 @@
 #include "effects/modulation/svf_bandpass.h"
 #include "effects/modulation/wah.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -73,7 +74,7 @@ class AutoWah : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   AutoWahConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float attack_coeff_ = 0.0f;
   float release_coeff_ = 0.0f;
   float envelope_ = 0.0f;

@@ -4,8 +4,11 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kDefaultDawSampleRate;
 
 Wah::Wah(WahConfig config) : config_(config) {
   config_.rate_hz = std::max(0.0f, config_.rate_hz);
@@ -13,7 +16,7 @@ Wah::Wah(WahConfig config) : config_(config) {
 }
 
 void Wah::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   lfo_.prepare(sample_rate_);
   lfo_.set_rate_hz(config_.rate_hz);
   for (auto& filter : filters_) {

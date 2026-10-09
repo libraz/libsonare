@@ -7,6 +7,7 @@
 
 #include "core/spectrum.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 
 namespace sonare {
@@ -139,7 +140,7 @@ void apply_op(std::vector<std::complex<float>>& buf, int n_frames, int n_fft, in
   switch (op.mode) {
     case SpectralEditMode::Gain:
     case SpectralEditMode::Attenuate: {
-      const float g = std::pow(10.0f, op.gain_db / 20.0f);
+      const float g = db_to_linear(op.gain_db);
       for (int bin = w.bin_lo; bin <= w.bin_hi; ++bin) {
         const int base = bin * n_frames;
         for (int f = w.frame_lo; f <= w.frame_hi; ++f) {

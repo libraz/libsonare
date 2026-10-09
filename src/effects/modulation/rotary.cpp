@@ -12,6 +12,8 @@
 
 namespace sonare::effects::modulation {
 
+using constants::kDefaultDawSampleRate;
+
 namespace {
 
 constexpr float kMaxDepthMs = 20.0f;
@@ -58,7 +60,7 @@ float Rotary::drum_target_hz() const noexcept {
 }
 
 void Rotary::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   prepared_ = true;
   // One-pole lowpass crossover coefficient.
   const double x =

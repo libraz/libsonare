@@ -21,6 +21,7 @@
 
 #include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -82,7 +83,7 @@ class Phaser : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   PhaserConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   /// [L, R] sweep oscillators, offset by a quarter cycle in reset() so the two
   /// channels' notches never sit on the same frequencies (as in Chorus/Flanger).
   std::array<Lfo, 2> lfos_;

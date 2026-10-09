@@ -28,6 +28,7 @@
 #include "effects/modulation/svf_bandpass.h"
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -163,7 +164,7 @@ class Rotary : public rt::ProcessorBase {
   static constexpr float kCrossoverHz = 800.0f;
 
   RotaryConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   float lp_coeff_ = 0.0f;
   double accel_coeff_ = 1.0;  ///< per-sample gap fraction closed while speeding up.

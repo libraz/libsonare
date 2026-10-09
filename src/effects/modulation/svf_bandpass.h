@@ -32,7 +32,7 @@ class SvfBandpass {
 
   /// @brief Ring of the section at @p cutoff_hz and @p q, read from its equivalent biquad.
   static rt::TailBudget ring(float cutoff_hz, float q, double sample_rate) noexcept {
-    const double rate = sample_rate > 0.0 ? sample_rate : 48000.0;
+    const double rate = sample_rate > 0.0 ? sample_rate : sonare::constants::kDefaultDawSampleRate;
     const double fc = std::clamp(static_cast<double>(cutoff_hz), 10.0, kMaxCutoffRatio * rate);
     const double g = std::tan(::sonare::constants::kPiD * fc / rate);
     const double k = 1.0 / std::max(0.5, static_cast<double>(q));
@@ -43,7 +43,7 @@ class SvfBandpass {
   }
 
   void prepare(double sample_rate) noexcept {
-    sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+    sample_rate_ = sample_rate > 0.0 ? sample_rate : sonare::constants::kDefaultDawSampleRate;
     reset();
   }
   void reset() noexcept {
@@ -101,7 +101,7 @@ class SvfBandpass {
   }
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float k_ = 1.0f;
   float a1_ = 0.0f;
   float a2_ = 0.0f;

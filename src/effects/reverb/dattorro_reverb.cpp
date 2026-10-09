@@ -8,11 +8,13 @@
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::reverb {
 
+using sonare::constants::kDefaultDawSampleRate;
 using sonare::constants::kHalfPi;
 using sonare::constants::kTwoPi;
 
@@ -265,7 +267,7 @@ void DattorroReverb::update_character_geometry() noexcept {
 }
 
 void DattorroReverb::prepare(double sample_rate, int) {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   float depth = 0.0f;
   if (!scale_modulation_depth(config_.mod_depth_samples, sr, &depth)) {
     throw SonareException(ErrorCode::InvalidParameter,
@@ -330,7 +332,7 @@ void DattorroReverb::process(float* const* channels, int num_channels, int num_s
   const float dry = mix.dry;
 
   const bool gate_on = config_.gate_threshold_db > kDattorroGateOffDb;
-  const float gate_threshold = gate_on ? std::pow(10.0f, config_.gate_threshold_db / 20.0f) : 0.0f;
+  const float gate_threshold = gate_on ? db_to_linear(config_.gate_threshold_db) : 0.0f;
   const int gate_hold =
       static_cast<int>(std::lround(std::max(0.0f, config_.gate_hold_ms) * sample_rate_ / 1000.0));
   const int gate_ramp = std::max(1, gate_hold);

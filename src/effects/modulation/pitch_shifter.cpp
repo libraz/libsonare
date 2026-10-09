@@ -10,6 +10,8 @@
 
 namespace sonare::effects::modulation {
 
+using constants::kDefaultDawSampleRate;
+
 using common::kMaxFeedback;
 
 namespace {
@@ -115,7 +117,7 @@ void PitchShifter::update_pre_delay_samples() noexcept {
 }
 
 void PitchShifter::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   anti_alias_corner_hz_ = 0.0f;
   const int max_grain =
       std::max(64, static_cast<int>(sample_rate_ * kWindowsPerGrain * max_window_ms_ * 0.001));

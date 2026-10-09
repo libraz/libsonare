@@ -39,7 +39,9 @@ class PreFilter {
   /// Derives the pole from @p corner_hz. A corner that is not a usable frequency
   /// at this rate leaves the section out of the path, as kOff does.
   void prepare(PreFilterMode mode, float corner_hz, double sample_rate) noexcept {
-    const double rate = sample_rate > 0.0 && std::isfinite(sample_rate) ? sample_rate : 48000.0;
+    const double rate = sample_rate > 0.0 && std::isfinite(sample_rate)
+                            ? sample_rate
+                            : sonare::constants::kDefaultDawSampleRate;
     const bool usable =
         std::isfinite(corner_hz) && corner_hz > 0.0f && static_cast<double>(corner_hz) < rate * 0.5;
     mode_ = usable ? mode : PreFilterMode::kOff;
@@ -118,7 +120,7 @@ class Chorus : public rt::ProcessorBase {
   void discard_non_finite() noexcept;
 
   ChorusConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   std::array<ModDelayLine, 2> delays_;
   std::array<Lfo, 2> lfos_;
   /// [L, R] pre-filter sections. One per channel, never shared with another

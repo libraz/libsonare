@@ -21,6 +21,7 @@
 #include "rt/nonlinearities.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::filter {
 
@@ -85,7 +86,7 @@ class VowelFilter : public rt::ProcessorBase {
   void update_glide_coefficient();
 
   VowelFilterConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   double glide_ = 1.0;       ///< one-pole coefficient per sub-block.
   float drive_gain_ = 1.0f;  ///< linear pre-gain, from config_.drive.
   bool snap_ = true;         ///< next bank update lands on the target with no glide.

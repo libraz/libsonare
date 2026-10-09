@@ -4,10 +4,13 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kDefaultDawSampleRate;
 
 AutoWah::AutoWah(AutoWahConfig config) : config_(config) {
   config_.resonance = std::max(0.5f, config_.resonance);
@@ -16,7 +19,7 @@ AutoWah::AutoWah(AutoWahConfig config) : config_(config) {
 }
 
 void AutoWah::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   for (auto& filter : filters_) {
     filter.prepare(sample_rate_);
   }

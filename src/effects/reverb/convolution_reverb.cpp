@@ -4,9 +4,12 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::effects::reverb {
+
+using constants::kDefaultDawSampleRate;
 
 namespace {
 // The library targets mono/stereo only; preallocate engines for two channels.
@@ -32,7 +35,7 @@ inline std::uint32_t xorshift32(std::uint32_t& state) {
 }  // namespace
 
 void ConvolutionReverb::synthesize_default_ir(double sample_rate) {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double sr = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const float decay_sec = std::clamp(config_.decay_sec, 0.0f, kMaxDecaySeconds);
   const float pre_delay_sec = std::clamp(config_.pre_delay_ms / 1000.0f, 0.0f, kMaxPreDelaySeconds);
   const int pre_delay_samples = static_cast<int>(std::lround(pre_delay_sec * sr));

@@ -10,12 +10,14 @@
 
 namespace sonare::effects::reverb {
 
+using constants::kDefaultDawSampleRate;
+
 using sonare::constants::kEpsilon;
 
 FdnReverb::FdnReverb(FdnReverbConfig config) : config_(config) {}
 
 void FdnReverb::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const double sr = sample_rate_;
   // Reference delay lengths defined at 48 kHz, scaled to the working rate.
   const std::array<double, 4> seconds{{0.0311, 0.0377, 0.0419, 0.0533}};

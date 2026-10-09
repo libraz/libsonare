@@ -17,6 +17,7 @@
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::effects::delay {
 
@@ -107,7 +108,7 @@ class StereoDelay : public rt::ProcessorBase {
   void apply_interpolation() noexcept;
 
   StereoDelayConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   std::array<modulation::ModDelayLine, 2> delays_;
   /// Taps 3 and 4, each its own read of the mono input.
   std::array<modulation::ModDelayLine, 2> tap_delays_;

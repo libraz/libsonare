@@ -10,6 +10,7 @@
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/svf_bandpass.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -68,7 +69,7 @@ class Wah : public rt::ProcessorBase {
 
  private:
   WahConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   Lfo lfo_;
   std::array<SvfBandpass, 2> filters_;
 };

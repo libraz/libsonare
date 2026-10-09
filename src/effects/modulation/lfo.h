@@ -47,7 +47,7 @@ inline float lfo_shape_value(LfoShape shape, double phase) noexcept {
 class Lfo {
  public:
   void prepare(double sample_rate) noexcept {
-    sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+    sample_rate_ = sample_rate > 0.0 ? sample_rate : sonare::constants::kDefaultDawSampleRate;
   }
   void reset(double phase = 0.0) noexcept { phase_ = phase - std::floor(phase); }
   void set_rate_hz(float rate_hz) noexcept { rate_hz_ = std::max(0.0f, rate_hz); }
@@ -62,7 +62,7 @@ class Lfo {
   }
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   double phase_ = 0.0;
   float rate_hz_ = 1.0f;
 };

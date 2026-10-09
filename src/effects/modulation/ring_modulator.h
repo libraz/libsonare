@@ -8,6 +8,7 @@
 #include "effects/common/mix_law.h"
 #include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -49,7 +50,7 @@ class RingModulator : public rt::ProcessorBase {
 
  private:
   RingModulatorConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   double phase_ = 0.0;
 };
 

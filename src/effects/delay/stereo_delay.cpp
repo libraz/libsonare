@@ -13,6 +13,8 @@
 
 namespace sonare::effects::delay {
 
+using constants::kDefaultDawSampleRate;
+
 using common::kLevelFloorDb;
 using common::kMaxFeedback;
 using constants::kPiD;
@@ -78,7 +80,7 @@ StereoDelay::StereoDelay(StereoDelayConfig config) : config_(sanitize_config(con
 }
 
 void StereoDelay::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   const int max_delay = static_cast<int>(sample_rate_ * 4.0);
   for (auto& delay : delays_) {
     delay.prepare(max_delay);

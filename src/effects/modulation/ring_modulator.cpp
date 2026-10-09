@@ -4,8 +4,11 @@
 #include <cmath>
 
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kDefaultDawSampleRate;
 
 namespace {
 
@@ -22,7 +25,7 @@ RingModulator::RingModulator(RingModulatorConfig config) : config_(config) {
 }
 
 void RingModulator::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   reset();
 }
 

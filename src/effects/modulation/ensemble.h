@@ -18,6 +18,7 @@
 #include "effects/modulation/lfo.h"
 #include "effects/modulation/mod_delay_line.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
 
@@ -85,7 +86,7 @@ class Ensemble : public rt::ProcessorBase {
   void apply_rates() noexcept;
 
   EnsembleConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   /// 3 taps x 2 channels.
   std::array<ModDelayLine, 6> delays_;
   /// 3-phase (0 / 120 / 240 degree) slow and fast LFO banks.

@@ -6,9 +6,12 @@
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 #include "util/non_finite_state.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kDefaultDawSampleRate;
 
 using common::kMaxFeedback;
 using common::kMaxModulationPreDelayMs;
@@ -32,7 +35,7 @@ Flanger::Flanger(FlangerConfig config) : config_(config) {
 }
 
 void Flanger::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Size the buffer for the maximum AUTOMATABLE modulated delay, not just the
   // initial config: set_parameter clamps center and depth, so the LFO peak can
   // reach the sum of both ceilings. Sizing to the initial config would let later

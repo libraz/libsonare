@@ -6,8 +6,11 @@
 #include "effects/common/control_ranges.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::effects::modulation {
+
+using constants::kDefaultDawSampleRate;
 
 using common::kMaxFeedback;
 using common::kMaxModulationPreDelayMs;
@@ -39,7 +42,7 @@ Chorus::Chorus(ChorusConfig config) : config_(config) {
 }
 
 void Chorus::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Size the buffer for the maximum AUTOMATABLE modulated delay (center + depth,
   // each clamped by set_parameter), not just the initial config, so later
   // automation up to the clamped range is fully representable rather than

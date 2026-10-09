@@ -11,6 +11,8 @@
 
 namespace sonare::effects::modulation {
 
+using constants::kDefaultDawSampleRate;
+
 using common::kMaxModulationPreDelayMs;
 using constants::kTwoPi;
 using constants::kTwoPiD;
@@ -49,7 +51,7 @@ void Ensemble::apply_rates() noexcept {
 }
 
 void Ensemble::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   // Size for the maximum automatable modulated delay so later automation is
   // never silently truncated by the delay-line read clamp: the outer voice sits
   // the deviation past the centre, and its sweep is both depths scaled by the
