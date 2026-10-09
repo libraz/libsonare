@@ -1050,14 +1050,13 @@ TEST_CASE("each wind voice sounds its equal-tempered fundamental across its comp
   // The tolerances are one scan step of the estimator (0.87 cents) over the largest residual
   // left across the compass once every term the loop compensation can name is in it: the
   // cone's highpass lead enters by a regime-dependent share (within 5.2 cents at the shipped
-  // 0.75), the cylinder keeps the share its regimes allow (+12.1 at note 48, within 4.3 above
-  // 54), the flute's jet lock sits on the period (within 4.3), the brass lip's +2.6 is its
-  // named trim (within 2.6), and the organ carries its deliberate per-pipe detune of up to 4
-  // cents (within 8.7 at the bottom of a 16' rank). Before the compensations were complete
-  // the cone sat +8.6 across its top octave, the flute -5 to -8 and +11 at note 48, the brass
-  // -4.3.
-  // The reeds take a bright bell as well as the shipped 0.5, which stops the cylinder speaking
-  // above note 108; at 1.0 both drop notes, at 0.9 they reach 124 and 126. The jet cannot
+  // 0.75), the cylinder's 3 Hz blocker leaves +3.5 (its lead is not compensated: the square
+  // wave is timed by its edges), the flute's jet lock sits on the period (within 4.3), the brass
+  // lip's +2.6 is its named trim (within 2.6), and the organ carries its deliberate per-pipe detune
+  // of up to 4 cents (within 8.7 at the bottom of a 16' rank). Before the compensations were
+  // complete the cone sat +8.6 across its top octave, the flute -5 to -8 and +11 at note 48, the
+  // brass -4.3. The reeds take a bright bell as well as the shipped 0.5, which stops the cylinder
+  // speaking above note 108; at 1.0 both drop notes, at 0.9 they reach 124 and 126. The jet cannot
   // drive a flute bore under seven samples at any rate (silent at 96 kHz too), so the flute's
   // compass ends at note 116.
   struct ReedSpecimen {
@@ -1068,7 +1067,7 @@ TEST_CASE("each wind voice sounds its equal-tempered fundamental across its comp
     int compass_top;
     double tolerance_cents;
   };
-  const ReedSpecimen reeds[] = {{"cylindrical reed, shipped bell", false, 0.5f, 48, 108, 13.0},
+  const ReedSpecimen reeds[] = {{"cylindrical reed, shipped bell", false, 0.5f, 48, 108, 4.4},
                                 {"cylindrical reed, bright bell", false, 0.9f, 100, 124, 4.4},
                                 {"conical reed, shipped bell", true, 0.5f, 44, 109, 6.1},
                                 {"conical reed, bright bell", true, 0.9f, 100, 126, 6.1}};

@@ -80,14 +80,14 @@ SONARE_TUNABLE(kBorePrefill, 0.02f);
 // the corner.
 SONARE_TUNABLE(kHpCornerFracF0, 0.06f);
 SONARE_TUNABLE(kHpCornerFloorHz, 10.0f);
+// The cylinder's corner, fixed: at 10 Hz the blocker's sag over a half period (pi*fc/f0, 48% at
+// note 36) shaped the wave and read +12 cents at 48; at 3 Hz the note sits within 2.6 cents
+// from 42 up and the regimes the reed tests guard hold, which 1 Hz (24 kHz floor) does not.
+SONARE_TUNABLE(kHpCornerCylinderHz, 3.0f);
 // Share of the highpass phase lead folded into the loop compensation: all of it moves the
 // period where the bore runs sinusoidal, less where it runs square. At 48 kHz 1.0 sits the
 // cone 10 cents flat around note 65 and 0.5 up to 9 sharp at 108; 0.75 holds 44..108 within 5.
 SONARE_TUNABLE(kHpCompScale, 0.75f);
-// The cylinder's share. Raising it (0.85, with the corner tracking f0) tunes the held note
-// within 6 cents but moves the oscillator's regimes: the twelfth wins the onset, a bright note
-// starts 21 cents under one moved there, a slur lands 33 flat. 0.5 keeps them; +12 at 48 stays.
-SONARE_TUNABLE(kHpCompScaleCylinder, 0.5f);
 // The same fraction for the Bernoulli valve, which oscillates on a different
 // waveform and so turns a different part of that phase delay into the shift the
 // compensation removes. Measured over the baritone's grid: at the table's 0.5
@@ -300,10 +300,9 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // has a resonant sub-fundamental (DC) mode that the rectified reed drive can
   // excite into a rumble; its corner therefore tracks the pitch so nothing below
   // the fundamental resonates. The CYLINDER (negative feedback) is anti-resonant
-  // at DC and never rumbles, so it keeps the low fixed corner (tracked, the
-  // larger lead moves its regimes; see kHpCompScaleCylinder).
+  // at DC and never rumbles, so it keeps a low fixed corner that only sheds DC.
   const float hp_corner =
-      params.conical ? std::max(kHpCornerFloorHz, kHpCornerFracF0 * f0) : kHpCornerFloorHz;
+      params.conical ? std::max(kHpCornerFloorHz, kHpCornerFracF0 * f0) : kHpCornerCylinderHz;
   dc_r_ = 1.0f - static_cast<float>(kTwoPi * hp_corner / sr);
 
   // Tuning compensation: one feedback register (bore_.out is consumed one sample
@@ -319,9 +318,11 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
   const float tau_hp = phase_hp / std::max(omega, 1.0e-6f);
+  // The cylinder's square wave is timed by its edges, which a 3 Hz lead does not move: with no
+  // compensation it reads +1.7 cents over notes 42..72, with the full lead -7.8 at 36.
   const float hp_scale = closing_pressure_ > 0.0f ? kHpCompScaleValve
                          : params.conical         ? kHpCompScale
-                                                  : kHpCompScaleCylinder;
+                                                  : 0.0f;
   comp_omega_ = omega;
   comp_lead_scale_ = hp_scale;
   comp_lead_ = tau_hp;
