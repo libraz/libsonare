@@ -79,6 +79,10 @@ struct BarBeat {
   double beat_fraction = 0.0;
 };
 
+/// Stable-orders segments by start_ppq; equal starts keep their order.
+void sort_by_start(std::vector<TempoSegment>* segments);
+void sort_by_start(std::vector<TimeSignatureSegment>* segments);
+
 class TempoMap {
  public:
   void prepare(double sample_rate);

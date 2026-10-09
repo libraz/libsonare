@@ -805,15 +805,8 @@ SmfImportResult import_smf(const uint8_t* data, size_t size,
                                  !result.time_signatures.empty() || !result.markers.empty() ||
                                  !result.sequence_name.empty();
 
-  std::stable_sort(result.tempo_segments.begin(), result.tempo_segments.end(),
-                   [](const transport::TempoSegment& a, const transport::TempoSegment& b) {
-                     return a.start_ppq < b.start_ppq;
-                   });
-  std::stable_sort(
-      result.time_signatures.begin(), result.time_signatures.end(),
-      [](const transport::TimeSignatureSegment& a, const transport::TimeSignatureSegment& b) {
-        return a.start_ppq < b.start_ppq;
-      });
+  transport::sort_by_start(&result.tempo_segments);
+  transport::sort_by_start(&result.time_signatures);
   // Until a file's first Set Tempo / Time Signature the SMF defaults of 120 BPM
   // and 4/4 apply, so each map starts with them unless an event sits at tick 0.
   // This also hands TempoMap::set_segments a non-empty vector. A recovered

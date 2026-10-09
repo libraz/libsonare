@@ -242,8 +242,7 @@ constexpr const char* kOverBudgetMessage =
 /// Orders @p segments by start_ppq and keeps only the last segment of each tick.
 template <typename Segment>
 void sort_and_dedupe_by_start_ppq(std::vector<Segment>* segments) {
-  std::stable_sort(segments->begin(), segments->end(),
-                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+  transport::sort_by_start(segments);
   std::vector<Segment> deduped;
   deduped.reserve(segments->size());
   for (Segment& s : *segments) {

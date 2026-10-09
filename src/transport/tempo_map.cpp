@@ -105,11 +105,16 @@ int64_t saturating_to_int64(double value) noexcept {
   return static_cast<int64_t>(value);
 }
 
+template <typename Segment>
+void stable_sort_by_start(std::vector<Segment>* segments) {
+  std::stable_sort(segments->begin(), segments->end(),
+                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+}
+
 // Orders by start and keeps the last-supplied entry at each start position.
 template <typename Segment>
 void keep_last_per_start(std::vector<Segment>* segments) {
-  std::stable_sort(segments->begin(), segments->end(),
-                   [](const Segment& a, const Segment& b) { return a.start_ppq < b.start_ppq; });
+  sort_by_start(segments);
   auto last =
       std::unique(segments->rbegin(), segments->rend(),
                   [](const Segment& a, const Segment& b) { return a.start_ppq == b.start_ppq; });
@@ -169,6 +174,10 @@ std::vector<TimeSignatureSegment> normalize_time_signatures(
 }
 
 }  // namespace
+
+void sort_by_start(std::vector<TempoSegment>* segments) { stable_sort_by_start(segments); }
+
+void sort_by_start(std::vector<TimeSignatureSegment>* segments) { stable_sort_by_start(segments); }
 
 void TempoMap::prepare(double sample_rate) {
   if (sample_rate > 0.0 && std::isfinite(sample_rate)) {
