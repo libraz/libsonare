@@ -18,9 +18,9 @@
 #include "mixing/assistant/image_occupancy.h"
 #include "mixing/assistant/masking.h"
 #include "mixing/assistant/phase_alignment.h"
+#include "mixing/assistant/scene_delta_internal.h"
 #include "util/db.h"
 #include "util/exception.h"
-#include "util/insertion_sort.h"
 #include "util/json.h"
 #include "util/number_format.h"
 
@@ -452,12 +452,7 @@ MixAssistantResult suggest_scene(const std::vector<TrackProfile>& profiles, cons
 
   // The explanation is the deltas' own reasons in application order, never a
   // re-summary. Reading it top to bottom retraces how the scene was built.
-  std::vector<const SceneDelta*> ordered;
-  ordered.reserve(deltas.size());
-  for (const auto& delta : deltas) ordered.push_back(&delta);
-  insertion_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
-    return static_cast<int>(a->domain) < static_cast<int>(b->domain);
-  });
+  const std::vector<const SceneDelta*> ordered = detail::ordered_deltas(deltas);
   result.explanation.reserve(ordered.size() + notes.size());
   for (const SceneDelta* delta : ordered) {
     if (!delta->reason.empty()) result.explanation.push_back(delta->reason);

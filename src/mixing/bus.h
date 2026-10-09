@@ -16,6 +16,7 @@
 #include "mixing/insert_chain.h"
 #include "mixing/meter.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mixing {
 
@@ -163,7 +164,7 @@ class BusProcessor : public rt::ProcessorBase {
   std::array<std::vector<float>, kMaxBusScratchChannels> bypass_scratch_;
   std::array<float*, kMaxBusScratchChannels> bypass_scratch_channels_{};
   MeterProcessor meter_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
 };
 

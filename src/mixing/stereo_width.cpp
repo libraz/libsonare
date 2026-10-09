@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::mixing {
+
+using constants::kDefaultDawSampleRate;
 
 StereoWidthProcessor::StereoWidthProcessor(float width, float smoothing_ms)
     : smoothing_ms_(std::isfinite(smoothing_ms) && smoothing_ms >= 0.0f ? smoothing_ms : 5.0f),
@@ -15,7 +19,7 @@ StereoWidthProcessor::StereoWidthProcessor(float width, float smoothing_ms)
 }
 
 void StereoWidthProcessor::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   smoother_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }

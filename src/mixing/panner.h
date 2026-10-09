@@ -9,6 +9,7 @@
 #include "mixing/pan_law.h"
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mixing {
 
@@ -90,13 +91,13 @@ class PannerProcessor : public rt::ProcessorBase {
     }
   };
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float smoothing_ms_ = 5.0f;
   // Glides act on the pan positions and the law is evaluated per sample from the
   // smoothed position, so every instant of a glide is a valid static placement.
-  rt::ParamSmoother pan_smoother_{0.0f, 5.0f, 48000.0};
-  rt::ParamSmoother dual_left_smoother_{-1.0f, 5.0f, 48000.0};
-  rt::ParamSmoother dual_right_smoother_{1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother pan_smoother_{0.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother dual_left_smoother_{-1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
+  rt::ParamSmoother dual_right_smoother_{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
   GainCache pan_cache_;
   GainCache dual_left_cache_;
   GainCache dual_right_cache_;

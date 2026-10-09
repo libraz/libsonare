@@ -8,6 +8,8 @@
 
 namespace sonare::mixing {
 
+using constants::kDefaultDawSampleRate;
+
 namespace {
 
 /// One speaker on the horizontal panning ring.
@@ -213,7 +215,7 @@ void SurroundPanGlide::evaluate(float azimuth, float divergence, float lfe) noex
 }
 
 void SurroundPannerProcessor::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   glide_.prepare(sample_rate_, smoothing_ms_);
   reset();
 }

@@ -25,6 +25,7 @@
 #include "rt/bounded_staging.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mixing::api {
 struct StripEq;
@@ -467,6 +468,9 @@ class ChannelStrip : public rt::ProcessorBase {
   // stand-in. nullptr when a null row cannot be covered (wider or longer than prepared).
   float* const* stage_channels(float* const* channels, int num_channels, int num_samples) noexcept;
   void apply_automation_event(const AutomationEvent& event) noexcept;
+  void add_insert_impl(std::unique_ptr<rt::ProcessorBase> processor, bool stereo_pair_only,
+                       std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                       std::vector<uint8_t>& stereo_pair_flags);
   void process_insert_chain(std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
                             const std::vector<uint8_t>& stereo_pair_only, float* const* channels,
                             int num_channels, int num_samples, size_t first_insert_index,
@@ -584,7 +588,7 @@ class ChannelStrip : public rt::ProcessorBase {
   rt::StageGate eq_pre_gate_;
   rt::StageGate eq_post_gate_;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
 
   // Preallocated scratch taps, [max(kPreparedChannels, prepared_channels_)][max_block_size_].

@@ -877,23 +877,18 @@ size_t ChannelStrip::read_goniometer_latest(GoniometerPoint* dest,
 
 void ChannelStrip::add_pre_insert(std::unique_ptr<rt::ProcessorBase> processor,
                                   bool stereo_pair_only) {
-  if (!processor) {
-    throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
-  }
-  if (pre_inserts_.size() + post_inserts_.size() >= kMaxInserts) {
-    throw SonareException(ErrorCode::InvalidState, "ChannelStrip insert cap exceeded");
-  }
-  if (max_block_size_ > 0) {
-    processor->prepare(sample_rate_, max_block_size_);
-  }
-  pre_inserts_.push_back(std::move(processor));
-  pre_insert_spo_.push_back(stereo_pair_only ? 1u : 0u);
-  insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
-  prepare_insert_alignment_delays();
+  add_insert_impl(std::move(processor), stereo_pair_only, pre_inserts_, pre_insert_spo_);
 }
 
 void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor,
                                    bool stereo_pair_only) {
+  add_insert_impl(std::move(processor), stereo_pair_only, post_inserts_, post_insert_spo_);
+}
+
+void ChannelStrip::add_insert_impl(std::unique_ptr<rt::ProcessorBase> processor,
+                                   bool stereo_pair_only,
+                                   std::vector<std::unique_ptr<rt::ProcessorBase>>& inserts,
+                                   std::vector<uint8_t>& stereo_pair_flags) {
   if (!processor) {
     throw SonareException(ErrorCode::InvalidParameter, "insert processor must not be null");
   }
@@ -903,8 +898,8 @@ void ChannelStrip::add_post_insert(std::unique_ptr<rt::ProcessorBase> processor,
   if (max_block_size_ > 0) {
     processor->prepare(sample_rate_, max_block_size_);
   }
-  post_inserts_.push_back(std::move(processor));
-  post_insert_spo_.push_back(stereo_pair_only ? 1u : 0u);
+  inserts.push_back(std::move(processor));
+  stereo_pair_flags.push_back(stereo_pair_only ? 1u : 0u);
   insert_sidechains_.resize(pre_inserts_.size() + post_inserts_.size());
   prepare_insert_alignment_delays();
 }

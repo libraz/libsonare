@@ -4,10 +4,13 @@
 #include <cmath>
 #include <limits>
 
+#include "util/constants.h"
 #include "util/db.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::mixing {
+
+using constants::kDefaultDawSampleRate;
 namespace {
 
 // Largest dB whose float linear gain is finite; fader, trim and VCA sums clamp here.
@@ -35,7 +38,7 @@ GainProcessor::GainProcessor(GainConfig config)
       gain_db_(std::isfinite(config.gain_db) ? config.gain_db : 0.0f) {}
 
 void GainProcessor::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   smoother_.prepare(sample_rate_, smoothing_ms_);
   smoother_.reset(summed_db_to_linear(gain_db_.load(std::memory_order_relaxed) + vca_offset_db()));
 }

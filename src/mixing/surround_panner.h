@@ -14,6 +14,7 @@
 
 #include "core/channel_layout.h"
 #include "rt/param_smoother.h"
+#include "util/constants.h"
 
 namespace sonare::mixing {
 
@@ -171,7 +172,7 @@ class SurroundPannerProcessor {
                    int num_out_planes, int num_samples);
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float smoothing_ms_ = 5.0f;
   SurroundPanGlide glide_;
   // The layout the glide was last snapped on, or kUnprimed after prepare()/reset().

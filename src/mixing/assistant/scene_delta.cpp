@@ -1,13 +1,12 @@
 /// @file scene_delta.cpp
 /// @brief Delta composition for the mixing assistant.
 
-#include "mixing/assistant/scene_delta.h"
-
 #include <algorithm>
 #include <map>
 #include <string>
 #include <utility>
 
+#include "mixing/assistant/scene_delta_internal.h"
 #include "util/insertion_sort.h"
 
 namespace sonare::mixing::assistant {
@@ -87,18 +86,21 @@ const char* delta_domain_to_string(DeltaDomain domain) noexcept {
   return "unknown";
 }
 
-api::Scene apply_deltas(const api::Scene& base, const std::vector<SceneDelta>& deltas,
-                        std::vector<std::string>* notes) {
-  api::Scene scene = base;
-
-  // Stable so that the caller's order survives within a domain while the fixed
-  // cross-domain order is imposed on top of it.
+std::vector<const SceneDelta*> detail::ordered_deltas(const std::vector<SceneDelta>& deltas) {
   std::vector<const SceneDelta*> ordered;
   ordered.reserve(deltas.size());
   for (const auto& delta : deltas) ordered.push_back(&delta);
   insertion_sort(ordered.begin(), ordered.end(), [](const SceneDelta* a, const SceneDelta* b) {
     return static_cast<int>(a->domain) < static_cast<int>(b->domain);
   });
+  return ordered;
+}
+
+api::Scene apply_deltas(const api::Scene& base, const std::vector<SceneDelta>& deltas,
+                        std::vector<std::string>* notes) {
+  api::Scene scene = base;
+
+  const std::vector<const SceneDelta*> ordered = detail::ordered_deltas(deltas);
 
   std::map<std::string, GainAccumulator> gains;
 

@@ -7,9 +7,12 @@
 
 #include "mixing/tail_utils.h"
 #include "rt/scoped_no_denormals.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 namespace sonare::mixing {
+
+using constants::kDefaultDawSampleRate;
 
 namespace {
 
@@ -31,7 +34,7 @@ BusProcessor::BusProcessor(BusRole role, int max_inputs) : role_(role), max_inpu
 }
 
 void BusProcessor::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   max_block_size_ = max_block_size;
   const size_t scratch_samples = static_cast<size_t>(std::max(0, max_block_size_));
   for (int ch = 0; ch < kMaxBusScratchChannels; ++ch) {

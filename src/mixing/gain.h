@@ -7,6 +7,7 @@
 
 #include "rt/param_smoother.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mixing {
 
@@ -44,9 +45,9 @@ class GainProcessor : public rt::ProcessorBase {
   float vca_group_offset_db() const noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float smoothing_ms_ = 5.0f;
-  rt::ParamSmoother smoother_{1.0f, 5.0f, 48000.0};
+  rt::ParamSmoother smoother_{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
   std::atomic<float> gain_db_{0.0f};
   std::atomic<float> vca_trim_offset_db_{0.0f};
   std::atomic<float> vca_group_offset_db_{0.0f};

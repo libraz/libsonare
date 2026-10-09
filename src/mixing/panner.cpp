@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
+
 namespace sonare::mixing {
+
+using constants::kDefaultDawSampleRate;
 
 PannerProcessor::PannerProcessor(PannerConfig config)
     : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
@@ -14,7 +18,7 @@ PannerProcessor::PannerProcessor(PannerConfig config)
       pan_mode_(config.mode) {}
 
 void PannerProcessor::prepare(double sample_rate, int) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   pan_smoother_.prepare(sample_rate_, smoothing_ms_);
   dual_left_smoother_.prepare(sample_rate_, smoothing_ms_);
   dual_right_smoother_.prepare(sample_rate_, smoothing_ms_);
