@@ -136,18 +136,11 @@ std::size_t choose_window_start(const ActivityEnvelope& reference, const Activit
   const std::size_t margin = std::min(lag_range, window_samples / 2);
   const std::size_t core = window_samples - 2 * margin;
 
-  std::vector<std::size_t> candidates;
-  for (std::size_t edge = 0; edge <= shared_frames; edge += block_size) {
-    candidates.push_back(std::min(edge, last_start));
-    if (edge >= margin) candidates.push_back(std::min(edge - margin, last_start));
-    if (edge >= margin + core) candidates.push_back(std::min(edge - margin - core, last_start));
-  }
-  std::sort(candidates.begin(), candidates.end());
-  candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
-
+  // Scored in edge order; a tie keeps the earliest start, which is what visiting the
+  // sorted, de-duplicated candidates in ascending order picked.
   double best = -1.0;
   std::size_t best_start = 0;
-  for (const std::size_t start : candidates) {
+  const auto consider = [&](std::size_t start) {
     const std::size_t core_begin = start + margin;
     const std::size_t core_end = core_begin + core;
     double score = 0.0;
@@ -158,10 +151,15 @@ std::size_t choose_window_start(const ActivityEnvelope& reference, const Activit
       const double joint = std::min(reference.activity[block], target.activity[block]);
       score += joint * static_cast<double>(hi - lo) / static_cast<double>(block_size);
     }
-    if (score > best) {
+    if (score > best || (score == best && start < best_start)) {
       best = score;
       best_start = start;
     }
+  };
+  for (std::size_t edge = 0; edge <= shared_frames; edge += block_size) {
+    consider(std::min(edge, last_start));
+    if (edge >= margin) consider(std::min(edge - margin, last_start));
+    if (edge >= margin + core) consider(std::min(edge - margin - core, last_start));
   }
   return best_start;
 }
