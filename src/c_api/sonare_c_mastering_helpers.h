@@ -290,6 +290,37 @@ inline void fill_stereo_chain_result(const sonare::mastering::api::StereoChainRe
   set_chain_metrics(result, out);
 }
 
+inline SonareError process_mastering_chain_mono(sonare::mastering::api::MasteringChain& chain,
+                                                const float* samples, size_t length,
+                                                int sample_rate, SonareCancelCallback cancel_cb,
+                                                SonareMasteringChainResult* out) {
+  if (cancel_cb) {
+    auto result = chain.process_mono_cancellable(samples, length, sample_rate);
+    if (!result) return SONARE_ERROR_CANCELLED;
+    fill_mono_chain_result(*result, out);
+    return SONARE_OK;
+  }
+  auto result = chain.process_mono(samples, length, sample_rate);
+  fill_mono_chain_result(result, out);
+  return SONARE_OK;
+}
+
+inline SonareError process_mastering_chain_stereo(sonare::mastering::api::MasteringChain& chain,
+                                                  const float* left, const float* right,
+                                                  size_t length, int sample_rate,
+                                                  SonareCancelCallback cancel_cb,
+                                                  SonareMasteringChainStereoResult* out) {
+  if (cancel_cb) {
+    auto result = chain.process_stereo_cancellable(left, right, length, sample_rate);
+    if (!result) return SONARE_ERROR_CANCELLED;
+    fill_stereo_chain_result(*result, out);
+    return SONARE_OK;
+  }
+  auto result = chain.process_stereo(left, right, length, sample_rate);
+  fill_stereo_chain_result(result, out);
+  return SONARE_OK;
+}
+
 }  // namespace sonare_c_mastering_detail
 
 #endif  // SONARE_C_MASTERING_HELPERS_H_

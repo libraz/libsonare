@@ -489,6 +489,27 @@ void sonare_free_reassigned_spectrogram_result(SonareReassignedSpectrogramResult
   *result = {};
 }
 
+namespace {
+
+template <typename PitchFn>
+SonareError run_pitch_track(const float* samples, size_t length, int sample_rate, int frame_length,
+                            int hop_length, float fmin, float fmax, float threshold, int fill_na,
+                            SonarePitchResult* out, PitchFn pitch) {
+  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
+    PitchConfig config;
+    config.frame_length = frame_length;
+    config.hop_length = hop_length;
+    config.fmin = fmin;
+    config.fmax = fmax;
+    config.threshold = threshold;
+    config.fill_na = fill_na != 0;
+    PitchResult result = pitch(audio, config);
+    return fill_pitch_result(result, out);
+  });
+}
+
+}  // namespace
+
 SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rate, int frame_length,
                              int hop_length, float fmin, float fmax, float threshold, int fill_na,
                              SonarePitchResult* out) {
@@ -499,17 +520,9 @@ SonareError sonare_pitch_yin(const float* samples, size_t length, int sample_rat
   out->voiced_prob = nullptr;
   out->voiced_flag = nullptr;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    PitchConfig config;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.threshold = threshold;
-    config.fill_na = fill_na != 0;
-    PitchResult result = yin_track(audio, config);
-    return fill_pitch_result(result, out);
-  });
+  return run_pitch_track(
+      samples, length, sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na, out,
+      [](const Audio& audio, const PitchConfig& config) { return yin_track(audio, config); });
 }
 
 SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_rate,
@@ -522,17 +535,9 @@ SonareError sonare_pitch_pyin(const float* samples, size_t length, int sample_ra
   out->voiced_prob = nullptr;
   out->voiced_flag = nullptr;
 
-  return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    PitchConfig config;
-    config.frame_length = frame_length;
-    config.hop_length = hop_length;
-    config.fmin = fmin;
-    config.fmax = fmax;
-    config.threshold = threshold;
-    config.fill_na = fill_na != 0;
-    PitchResult result = pyin(audio, config);
-    return fill_pitch_result(result, out);
-  });
+  return run_pitch_track(
+      samples, length, sample_rate, frame_length, hop_length, fmin, fmax, threshold, fill_na, out,
+      [](const Audio& audio, const PitchConfig& config) { return pyin(audio, config); });
 }
 
 SonareError sonare_note_segments(const float* f0_hz, size_t f0_count, const float* voiced_prob,

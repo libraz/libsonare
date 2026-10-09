@@ -1,11 +1,11 @@
 #include <algorithm>
-#include <cmath>
 #include <cstddef>
 #include <memory>
 #include <utility>
 #include <vector>
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
+#include "c_api/note_render_common.h"
 #include "editing/polyphony/polyphonic_edit.h"
 #endif
 #include <sonare/sonare_c.h>
@@ -382,19 +382,8 @@ SonareError sonare_polyphonic_render(const SonarePolyphonicAnalysis* analysis,
   // Resolved the way sonare_render_notes resolves the same struct, so one config
   // means one thing whichever door applies it.
   sonare::editing::note_model::NoteRenderConfig render_config;
-  if (config != nullptr) {
-    if (config->struct_version < 0 || config->struct_version > 1) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f ||
-        !std::isfinite(config->vibrato_cutoff_hz) || config->vibrato_cutoff_hz < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (config->fade_ms > 0.0f) render_config.fade_ms = config->fade_ms;
-    if (config->vibrato_cutoff_hz > 0.0f) {
-      render_config.decomposition.vibrato_cutoff_hz = config->vibrato_cutoff_hz;
-    }
-  }
+  const SonareError config_error = resolve_note_render_config(config, render_config);
+  if (config_error != SONARE_OK) return config_error;
 
   SONARE_C_TRY
   const Audio rendered =

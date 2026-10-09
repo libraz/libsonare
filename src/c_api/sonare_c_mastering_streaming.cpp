@@ -14,6 +14,7 @@
 #include "sonare_c_internal.h"
 #include "sonare_c_mastering_helpers.h"
 #include "util/constants.h"
+#include "util/numeric_validation.h"
 
 using namespace sonare;
 using namespace sonare_c_detail;
@@ -289,30 +290,6 @@ struct SonareStreamingMasteringChain {
   int max_block_size = 0;
 };
 
-namespace {
-
-bool all_finite(const float* samples, size_t num_samples) noexcept {
-  if (!samples) return num_samples == 0;
-  for (size_t i = 0; i < num_samples; ++i) {
-    if (!std::isfinite(samples[i])) return false;
-  }
-  return true;
-}
-
-// Reproduces the two rejections StreamingMasteringChain::process_block makes on
-// state and block size, so the finite-sample scan never runs over a block the
-// core would have refused. Error classes match the core's exactly.
-SonareError check_block_bounds(const SonareStreamingMasteringChain* handle,
-                               size_t num_samples) noexcept {
-  if (handle->max_block_size <= 0) return SONARE_ERROR_INVALID_STATE;
-  if (num_samples > static_cast<size_t>(handle->max_block_size)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
-}
-
-}  // namespace
-
 SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
     const SonareMasteringParam* params, size_t param_count, float loudness_static_gain_db,
     float loudness_static_gain_peak_db) {
@@ -371,10 +348,14 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     if (num_samples == 0) return SONARE_OK;
-    if (const SonareError bounds = check_block_bounds(handle, num_samples); bounds != SONARE_OK) {
+    if (const SonareError bounds =
+            sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
+        bounds != SONARE_OK) {
       return bounds;
     }
-    if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
+    if (!sonare::numeric::all_finite(samples, num_samples)) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
     SONARE_C_TRY
     float* channels[] = {samples};
     handle->chain->process_block(channels, 1, static_cast<int>(num_samples));
@@ -389,10 +370,13 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     if (num_samples == 0) return SONARE_OK;
-    if (const SonareError bounds = check_block_bounds(handle, num_samples); bounds != SONARE_OK) {
+    if (const SonareError bounds =
+            sonare_c_detail::check_streaming_block_bounds(handle->max_block_size, num_samples);
+        bounds != SONARE_OK) {
       return bounds;
     }
-    if (!all_finite(left, num_samples) || !all_finite(right, num_samples)) {
+    if (!sonare::numeric::all_finite(left, num_samples) ||
+        !sonare::numeric::all_finite(right, num_samples)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
     SONARE_C_TRY

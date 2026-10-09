@@ -28,6 +28,51 @@ using namespace sonare_c_detail;
 using sonare_c_mastering_detail::copy_stereo_channels;
 using sonare_c_mastering_detail::validate_stereo_audio_params;
 
+namespace {
+
+bool fill_decompose_stems_config(const SonareDecomposeStemsConfig* config,
+                                 DecomposeStemsConfig* core_config) {
+  if (config != nullptr) {
+    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
+        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
+        config->mask_power < 0.0f) {
+      return false;
+    }
+    if (config->n_components > 0) core_config->n_components = config->n_components;
+    if (config->n_fft > 0) core_config->n_fft = config->n_fft;
+    if (config->hop_length > 0) core_config->hop_length = config->hop_length;
+    if (config->n_iter > 0) core_config->n_iter = config->n_iter;
+    if (config->beta != 0.0f) core_config->beta = config->beta;
+    if (config->init != nullptr && config->init[0] != '\0') core_config->init = config->init;
+    if (config->mask_power > 0.0f) core_config->mask_power = config->mask_power;
+  }
+  if (core_config->mask_power < 1.0f) return false;
+  return true;
+}
+
+template <typename DecomposeResult>
+SonareError copy_decompose_factors(const DecomposeResult& result, float** out_w,
+                                   size_t* out_w_length, float** out_h, size_t* out_h_length) {
+  if (out_w != nullptr) {
+    SonareError werr = copy_vector(result.W, out_w, out_w_length);
+    if (werr != SONARE_OK) return werr;
+  }
+  if (out_h != nullptr) {
+    SonareError herr = copy_vector(result.H, out_h, out_h_length);
+    if (herr != SONARE_OK) {
+      if (out_w != nullptr) {
+        sonare_free_floats(*out_w);
+        *out_w = nullptr;
+        *out_w_length = 0;
+      }
+      return herr;
+    }
+  }
+  return SONARE_OK;
+}
+
+}  // namespace
+
 SonareError sonare_hpss(const float* samples, size_t length, int sample_rate, int kernel_harmonic,
                         int kernel_percussive, SonareHpssResult* out) {
   SONARE_C_API_ENTRY;
@@ -371,23 +416,10 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
   if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
   DecomposeStemsConfig core_config;
-  if (config != nullptr) {
-    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
-        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
-        config->mask_power < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (config->n_components > 0) core_config.n_components = config->n_components;
-    if (config->n_fft > 0) core_config.n_fft = config->n_fft;
-    if (config->hop_length > 0) core_config.hop_length = config->hop_length;
-    if (config->n_iter > 0) core_config.n_iter = config->n_iter;
-    if (config->beta != 0.0f) core_config.beta = config->beta;
-    if (config->init != nullptr && config->init[0] != '\0') core_config.init = config->init;
-    if (config->mask_power > 0.0f) core_config.mask_power = config->mask_power;
+  if (!fill_decompose_stems_config(config, &core_config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (core_config.mask_power < 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     DecomposeStemsResult result =
@@ -403,21 +435,9 @@ SonareError sonare_decompose_stems(const float* samples, size_t length, int samp
       std::memcpy(flat.get() + component * component_length, result.components[component].data(),
                   component_length * sizeof(float));
     }
-    if (out_w != nullptr) {
-      SonareError werr = copy_vector(result.W, out_w, out_w_length);
-      if (werr != SONARE_OK) return werr;
-    }
-    if (out_h != nullptr) {
-      SonareError herr = copy_vector(result.H, out_h, out_h_length);
-      if (herr != SONARE_OK) {
-        if (out_w != nullptr) {
-          sonare_free_floats(*out_w);
-          *out_w = nullptr;
-          *out_w_length = 0;
-        }
-        return herr;
-      }
-    }
+    SonareError factors_err =
+        copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
+    if (factors_err != SONARE_OK) return factors_err;
     *out = flat.release();
     *out_component_count = result.components.size();
     *out_component_length = component_length;
@@ -461,23 +481,10 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
   if (config != nullptr && (config->struct_version < 0 || config->struct_version > 1)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
-
   DecomposeStemsConfig core_config;
-  if (config != nullptr) {
-    if (config->n_components < 0 || config->n_fft < 0 || config->hop_length < 0 ||
-        config->n_iter < 0 || !std::isfinite(config->beta) || !std::isfinite(config->mask_power) ||
-        config->mask_power < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (config->n_components > 0) core_config.n_components = config->n_components;
-    if (config->n_fft > 0) core_config.n_fft = config->n_fft;
-    if (config->hop_length > 0) core_config.hop_length = config->hop_length;
-    if (config->n_iter > 0) core_config.n_iter = config->n_iter;
-    if (config->beta != 0.0f) core_config.beta = config->beta;
-    if (config->init != nullptr && config->init[0] != '\0') core_config.init = config->init;
-    if (config->mask_power > 0.0f) core_config.mask_power = config->mask_power;
+  if (!fill_decompose_stems_config(config, &core_config)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
   }
-  if (core_config.mask_power < 1.0f) return SONARE_ERROR_INVALID_PARAMETER;
 
   std::vector<Audio> audio;
   audio.reserve(channel_count);
@@ -509,21 +516,9 @@ SonareError sonare_decompose_stems_linked(const float* const* channels, size_t c
                   result.components[component][c].data(), component_length * sizeof(float));
     }
   }
-  if (out_w != nullptr) {
-    SonareError werr = copy_vector(result.W, out_w, out_w_length);
-    if (werr != SONARE_OK) return werr;
-  }
-  if (out_h != nullptr) {
-    SonareError herr = copy_vector(result.H, out_h, out_h_length);
-    if (herr != SONARE_OK) {
-      if (out_w != nullptr) {
-        sonare_free_floats(*out_w);
-        *out_w = nullptr;
-        *out_w_length = 0;
-      }
-      return herr;
-    }
-  }
+  SonareError factors_err =
+      copy_decompose_factors(result, out_w, out_w_length, out_h, out_h_length);
+  if (factors_err != SONARE_OK) return factors_err;
   *out = flat.release();
   *out_component_count = result.components.size();
   *out_channel_count = channel_count;

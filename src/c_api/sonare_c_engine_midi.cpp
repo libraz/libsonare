@@ -12,7 +12,6 @@
 #include "rt/command.h"
 #include "sonare_c_internal.h"
 #include "util/resource_limits.h"
-#include "util/zero_is_default.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "c_api/midi_fx_json.h"
@@ -34,25 +33,6 @@ using namespace sonare_c_detail;
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace {
-
-sonare::midi::BuiltinSynthConfig engine_synth_config_from_c(
-    const SonareEngineBuiltinSynthConfig& c) {
-  sonare::midi::BuiltinSynthConfig cfg;
-  cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
-  // clamp_synth_config reads a non-positive or non-finite field as "use the
-  // built-in default" and reports nothing, so a request that reached it came
-  // back as a successful call at a level the caller never chose. Refused here,
-  // where it is still visible; 0 stays the documented way to ask for the default.
-  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(0.0f, "gain");
-  cfg.attack_ms = sonare::ZeroIsDefault(c.attack_ms).checked_non_negative(0.0f, "attack_ms");
-  cfg.decay_ms = sonare::ZeroIsDefault(c.decay_ms).checked_non_negative(0.0f, "decay_ms");
-  cfg.sustain = sonare::ZeroIsDefault(c.sustain).checked_non_negative(0.0f, "sustain");
-  cfg.release_ms = sonare::ZeroIsDefault(c.release_ms).checked_non_negative(0.0f, "release_ms");
-  SONARE_CHECK_MSG(c.polyphony >= 0, sonare::ErrorCode::InvalidParameter,
-                   "polyphony must be 0 (the library default) or a positive voice count");
-  cfg.polyphony = c.polyphony;
-  return sonare::midi::clamp_synth_config(cfg);
-}
 
 // Maps a refused set_midi_instrument() to its C status: a permanent refusal is
 // an invalid parameter, a full rack or failed allocation is out of memory.
@@ -213,7 +193,8 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 #else
   if (!valid_builtin_waveform(config->waveform)) return SONARE_ERROR_INVALID_PARAMETER;
   SONARE_C_TRY
-  auto synth = std::make_unique<sonare::midi::BuiltinSynth>(engine_synth_config_from_c(*config));
+  auto synth = std::make_unique<sonare::midi::BuiltinSynth>(
+      sonare_c_detail::builtin_synth_config_from_c(*config));
   return bind_engine_instrument(engine, destination_id, std::move(synth));
   SONARE_C_CATCH
 #endif
@@ -346,25 +327,7 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
   // A missing SoundFont is allowed: the player's NativeSynth GM fallback is
   // the data-free floor, so live MIDI stays audible with zero data.
   SONARE_C_TRY
-  sonare::midi::synth::Sf2PlayerConfig cfg;
-  // 0 selects the player's own default for both; the player clamps the rest. A
-  // negative or non-finite gain it would substitute in silence is refused here.
-  cfg.gain = sonare::ZeroIsDefault(config->gain).checked_non_negative(cfg.gain, "gain");
-  SONARE_CHECK_MSG(config->polyphony >= 0, sonare::ErrorCode::InvalidParameter,
-                   "polyphony must be 0 (the library default) or a positive voice count");
-  if (config->polyphony != 0) cfg.polyphony = config->polyphony;
-  if (config->struct_version >= 2) {
-    cfg.prefer_model_for_modeled_families = config->prefer_model_for_modeled_families != 0;
-  }
-  if (config->struct_version >= 3 && config->clear_bank_rig != 0) cfg.bank_rig_binding = false;
-  if (config->struct_version >= 4) {
-    SONARE_CHECK_MSG(config->gs_efx_realization == 0 || config->gs_efx_realization == 1,
-                     sonare::ErrorCode::InvalidParameter,
-                     "gs_efx_realization must be 0 (modern) or 1 (classic)");
-    if (config->gs_efx_realization == 1) {
-      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
-    }
-  }
+  auto cfg = sonare_c_detail::sf2_player_config_from_c(*config);
   // Prepare GS insertion-effect processors on CONTROL; scheduled SysEx selects
   // and updates them at its render frame. An unknown name or an FX-less build
   // yields a null insert that is bypassed.

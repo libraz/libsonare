@@ -12,6 +12,7 @@
 #include <limits>
 #include <vector>
 
+#include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
 #include "acoustic/room_model.h"
 #include "analysis/room_estimator.h"
@@ -33,31 +34,6 @@ using sonare_c_detail::run_offline;
 namespace {
 
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
-// Map a SONARE_MATERIAL_PRESET_* selector onto sonare::acoustic::MaterialPreset.
-// Returns false for SONARE_MATERIAL_PRESET_NONE or any out-of-range value.
-bool preset_from_int(int selector, sonare::acoustic::MaterialPreset* out) {
-  using sonare::acoustic::MaterialPreset;
-  switch (selector) {
-    case SONARE_MATERIAL_PRESET_CONCRETE:
-      *out = MaterialPreset::Concrete;
-      return true;
-    case SONARE_MATERIAL_PRESET_WOOD:
-      *out = MaterialPreset::Wood;
-      return true;
-    case SONARE_MATERIAL_PRESET_CURTAIN:
-      *out = MaterialPreset::Curtain;
-      return true;
-    case SONARE_MATERIAL_PRESET_CARPET:
-      *out = MaterialPreset::Carpet;
-      return true;
-    case SONARE_MATERIAL_PRESET_GLASS:
-      *out = MaterialPreset::Glass;
-      return true;
-    default:
-      return false;  // NONE / unknown
-  }
-}
-
 // Map a SONARE_REVERB_MODEL_* selector onto sonare::acoustic::ReverbModel.
 // SONARE_REVERB_MODEL_DEFAULT (0, the zero-initialized value) and any unknown
 // selector resolve to the C++ library default (Eyring), so a {}-zeroed config
@@ -81,7 +57,7 @@ sonare::acoustic::ShoeboxRoom make_room(float length, float width, float height,
   using namespace sonare::acoustic;
 
   WallMaterialRequest request;
-  request.has_preset = preset_from_int(material_preset, &request.preset);
+  request.has_preset = material_preset_from_selector(material_preset, &request.preset);
   if (absorption_bands != nullptr && absorption_band_count > 0) {
     request.absorption_bands.assign(absorption_bands, absorption_bands + absorption_band_count);
   }

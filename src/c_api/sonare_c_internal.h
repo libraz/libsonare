@@ -65,6 +65,16 @@ constexpr int kMinSampleRate = sonare::kMinAudioSampleRate;
 constexpr int kMaxSampleRate = sonare::kMaxAudioSampleRate;
 constexpr size_t kMaxBufferSize = sonare::kMaxAudioBufferSize;
 
+/// @brief Checks the prepared-state and maximum block-size preconditions shared
+/// by the realtime C ABI wrappers.
+inline SonareError check_streaming_block_bounds(int max_block_size, size_t num_samples) noexcept {
+  if (max_block_size <= 0) return SONARE_ERROR_INVALID_STATE;
+  if (num_samples > static_cast<size_t>(max_block_size)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_OK;
+}
+
 // Single source of truth for the message recorded when a caught exception is not
 // a std::exception subtype. Shared by SONARE_C_CATCH, SONARE_C_CATCH_RETURN, and
 // the run_*_offline helpers so the wording never drifts between them.

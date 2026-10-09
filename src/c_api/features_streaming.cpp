@@ -1,3 +1,5 @@
+#include <type_traits>
+
 #include "c_api/features_internal.h"
 
 // ============================================================================
@@ -44,6 +46,44 @@ SonareStreamPatternScore* copy_pattern_scores(const std::vector<std::pair<std::s
     buf[i].score = v[i].second;
   }
   return release_array(buf);
+}
+
+template <typename Buffer, typename Frames>
+void copy_stream_frame_arrays(const Buffer& buffer, Frames* out) {
+  out->n_frames = static_cast<int>(buffer.n_frames);
+  out->n_mels = buffer.n_mels;
+  out->timestamps = copy_vector(buffer.timestamps);
+  out->mel = copy_vector(buffer.mel);
+  out->chroma = copy_vector(buffer.chroma);
+  out->onset_strength = copy_vector(buffer.onset_strength);
+  out->rms_energy = copy_vector(buffer.rms_energy);
+  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
+  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
+  if constexpr (std::is_same_v<std::remove_cv_t<Buffer>, FrameBuffer>) {
+    out->chord_root = copy_vector(buffer.chord_root);
+    out->chord_quality = copy_vector(buffer.chord_quality);
+    out->chord_confidence = copy_vector(buffer.chord_confidence);
+  }
+  out->feature_flags = buffer.feature_flags;
+  out->n_chroma = buffer.n_chroma;
+}
+
+template <typename Frames>
+void free_stream_frame_arrays(Frames* frames) {
+  if (!frames) return;
+  delete[] frames->timestamps;
+  delete[] frames->mel;
+  delete[] frames->chroma;
+  delete[] frames->onset_strength;
+  delete[] frames->rms_energy;
+  delete[] frames->spectral_centroid;
+  delete[] frames->spectral_flatness;
+  if constexpr (std::is_same_v<std::remove_cv_t<Frames>, SonareStreamFrames>) {
+    delete[] frames->chord_root;
+    delete[] frames->chord_quality;
+    delete[] frames->chord_confidence;
+  }
+  *frames = {};
 }
 
 }  // namespace
@@ -195,21 +235,7 @@ SonareError sonare_stream_analyzer_read_frames(SonareStreamAnalyzer* analyzer, s
   SONARE_C_TRY
   FrameBuffer buffer;
   analyzer->analyzer->read_frames_soa(max_frames, buffer);
-
-  out->n_frames = static_cast<int>(buffer.n_frames);
-  out->n_mels = buffer.n_mels;
-  out->timestamps = copy_vector(buffer.timestamps);
-  out->mel = copy_vector(buffer.mel);
-  out->chroma = copy_vector(buffer.chroma);
-  out->onset_strength = copy_vector(buffer.onset_strength);
-  out->rms_energy = copy_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
-  out->chord_root = copy_vector(buffer.chord_root);
-  out->chord_quality = copy_vector(buffer.chord_quality);
-  out->chord_confidence = copy_vector(buffer.chord_confidence);
-  out->feature_flags = buffer.feature_flags;
-  out->n_chroma = buffer.n_chroma;
+  copy_stream_frame_arrays(buffer, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -262,18 +288,7 @@ SonareError sonare_stream_analyzer_read_frames_u8_ex(SonareStreamAnalyzer* analy
   SONARE_C_TRY
   QuantizedFrameBufferU8 buffer;
   analyzer->analyzer->read_frames_quantized_u8(max_frames, buffer, to_quantize_config(config));
-
-  out->n_frames = static_cast<int>(buffer.n_frames);
-  out->n_mels = buffer.n_mels;
-  out->timestamps = copy_vector(buffer.timestamps);
-  out->mel = copy_vector(buffer.mel);
-  out->chroma = copy_vector(buffer.chroma);
-  out->onset_strength = copy_vector(buffer.onset_strength);
-  out->rms_energy = copy_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
-  out->feature_flags = buffer.feature_flags;
-  out->n_chroma = buffer.n_chroma;
+  copy_stream_frame_arrays(buffer, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -297,18 +312,7 @@ SonareError sonare_stream_analyzer_read_frames_i16_ex(SonareStreamAnalyzer* anal
   SONARE_C_TRY
   QuantizedFrameBufferI16 buffer;
   analyzer->analyzer->read_frames_quantized_i16(max_frames, buffer, to_quantize_config(config));
-
-  out->n_frames = static_cast<int>(buffer.n_frames);
-  out->n_mels = buffer.n_mels;
-  out->timestamps = copy_vector(buffer.timestamps);
-  out->mel = copy_vector(buffer.mel);
-  out->chroma = copy_vector(buffer.chroma);
-  out->onset_strength = copy_vector(buffer.onset_strength);
-  out->rms_energy = copy_vector(buffer.rms_energy);
-  out->spectral_centroid = copy_vector(buffer.spectral_centroid);
-  out->spectral_flatness = copy_vector(buffer.spectral_flatness);
-  out->feature_flags = buffer.feature_flags;
-  out->n_chroma = buffer.n_chroma;
+  copy_stream_frame_arrays(buffer, out);
   return SONARE_OK;
   SONARE_C_CATCH
 }
@@ -438,41 +442,12 @@ SonareError sonare_stream_analyzer_set_tuning_ref_hz(SonareStreamAnalyzer* analy
   SONARE_C_CATCH
 }
 
-void sonare_free_stream_frames(SonareStreamFrames* frames) {
-  if (!frames) return;
-  delete[] frames->timestamps;
-  delete[] frames->mel;
-  delete[] frames->chroma;
-  delete[] frames->onset_strength;
-  delete[] frames->rms_energy;
-  delete[] frames->spectral_centroid;
-  delete[] frames->spectral_flatness;
-  delete[] frames->chord_root;
-  delete[] frames->chord_quality;
-  delete[] frames->chord_confidence;
-  *frames = {};
-}
+void sonare_free_stream_frames(SonareStreamFrames* frames) { free_stream_frame_arrays(frames); }
 
 void sonare_free_stream_frames_u8(SonareStreamFramesU8* frames) {
-  if (!frames) return;
-  delete[] frames->timestamps;
-  delete[] frames->mel;
-  delete[] frames->chroma;
-  delete[] frames->onset_strength;
-  delete[] frames->rms_energy;
-  delete[] frames->spectral_centroid;
-  delete[] frames->spectral_flatness;
-  *frames = {};
+  free_stream_frame_arrays(frames);
 }
 
 void sonare_free_stream_frames_i16(SonareStreamFramesI16* frames) {
-  if (!frames) return;
-  delete[] frames->timestamps;
-  delete[] frames->mel;
-  delete[] frames->chroma;
-  delete[] frames->onset_strength;
-  delete[] frames->rms_energy;
-  delete[] frames->spectral_centroid;
-  delete[] frames->spectral_flatness;
-  *frames = {};
+  free_stream_frame_arrays(frames);
 }

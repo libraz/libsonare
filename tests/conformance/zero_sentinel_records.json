@@ -34,13 +34,7 @@
       "reason": "Same segmentation threshold as the features_spectral_pitch.cpp copy; moves with it."
     },
     {
-      "file": "src/c_api/sonare_c_daw.cpp",
-      "value": "config->vibrato_cutoff_hz",
-      "measured": "no",
-      "reason": "Decomposition vibrato cutoff on the struct path; core response not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_polyphony.cpp",
+      "file": "src/c_api/note_render_common.h",
       "value": "config->vibrato_cutoff_hz",
       "measured": "no",
       "reason": "Decomposition vibrato cutoff on the struct path; core response not driven."
@@ -124,7 +118,7 @@
       "reason": "Core response to a negative or non-finite threshold not driven."
     },
     {
-      "file": "src/c_api/sonare_c_daw.cpp",
+      "file": "src/c_api/note_render_common.h",
       "value": "config->fade_ms",
       "measured": "no",
       "reason": "Core response to a negative or non-finite fade not driven."
@@ -194,12 +188,6 @@
       "value": "options->dither_bits",
       "measured": "no",
       "reason": "Dither target bit depth; core response to a negative not driven."
-    },
-    {
-      "file": "src/c_api/sonare_c_polyphony.cpp",
-      "value": "config->fade_ms",
-      "measured": "no",
-      "reason": "Core response to a negative or non-finite fade not driven."
     },
     {
       "file": "src/wasm/bindings/editing/polyphony.cpp",

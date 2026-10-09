@@ -10,6 +10,51 @@ bool valid_chord_options_version(int version) {
   return version == 0 || version == SONARE_CHORD_DETECTION_OPTIONS_VERSION;
 }
 
+bool valid_chord_detection_options(const SonareChordDetectionOptions& options) {
+  if (!valid_chord_options_version(options.struct_version)) return false;
+  if (!std::isfinite(options.min_duration) || options.min_duration < 0.0f ||
+      !std::isfinite(options.smoothing_window) || options.smoothing_window <= 0.0f ||
+      !std::isfinite(options.threshold) || options.threshold < 0.0f || options.threshold > 1.0f ||
+      options.n_fft <= 0 || options.hop_length <= 0 || options.hmm_beam_width < 0) {
+    return false;
+  }
+  // Reject out-of-range enum-like fields instead of silently mapping them to a
+  // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
+  // is enabled, also require an in-range key_root / key_mode rather than letting
+  // from_c_pitch_class / from_c_mode silently clamp garbage to C / Major.
+  if (options.chroma_method != 0 && options.chroma_method != 1) return false;
+  if (options.use_key_context != 0) {
+    const int root = static_cast<int>(options.key_root);
+    const int mode = static_cast<int>(options.key_mode);
+    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
+        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+ChordConfig chord_config_from_options(const SonareChordDetectionOptions& options) {
+  ChordConfig config;
+  config.min_duration = options.min_duration;
+  config.smoothing_window = options.smoothing_window;
+  config.threshold = options.threshold;
+  config.use_triads_only = options.use_triads_only != 0;
+  config.n_fft = options.n_fft;
+  config.hop_length = options.hop_length;
+  config.use_beat_sync = options.use_beat_sync != 0;
+  config.use_hmm = options.use_hmm != 0;
+  config.hmm_beam_width = options.hmm_beam_width;
+  config.use_key_context = options.use_key_context != 0;
+  config.key_root = from_c_pitch_class(options.key_root);
+  config.key_mode = from_c_mode(options.key_mode);
+  config.detect_inversions = options.detect_inversions != 0;
+  config.chroma_method = options.chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
+  config.tuning = options.tuning;
+  config.auto_tuning = options.tuning_auto != 0;
+  return config;
+}
+
 }  // namespace
 
 SonareError sonare_analyze_bpm(const float* samples, size_t length, int sample_rate, float bpm_min,
@@ -328,48 +373,10 @@ SonareError sonare_detect_chords_ex(const float* samples, size_t length, int sam
   *out = {};
   out->struct_version = SONARE_CHORD_ANALYSIS_RESULT_VERSION;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_chord_options_version(options->struct_version)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
-      !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
-      !std::isfinite(options->threshold) || options->threshold < 0.0f ||
-      options->threshold > 1.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
-      options->hmm_beam_width < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  // Reject out-of-range enum-like fields instead of silently mapping them to a
-  // default (chroma_method only documents 0 = STFT, 1 = NNLS). When key context
-  // is enabled, also require an in-range key_root / key_mode rather than letting
-  // from_c_pitch_class / from_c_mode silently clamp garbage to C / Major.
-  if (options->chroma_method != 0 && options->chroma_method != 1) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (options->use_key_context != 0) {
-    const int root = static_cast<int>(options->key_root);
-    const int mode = static_cast<int>(options->key_mode);
-    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
-        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
+  if (!valid_chord_detection_options(*options)) return SONARE_ERROR_INVALID_PARAMETER;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    ChordConfig config;
-    config.min_duration = options->min_duration;
-    config.smoothing_window = options->smoothing_window;
-    config.threshold = options->threshold;
-    config.use_triads_only = options->use_triads_only != 0;
-    config.n_fft = options->n_fft;
-    config.hop_length = options->hop_length;
-    config.use_beat_sync = options->use_beat_sync != 0;
-    config.use_hmm = options->use_hmm != 0;
-    config.hmm_beam_width = options->hmm_beam_width;
-    config.use_key_context = options->use_key_context != 0;
-    config.key_root = from_c_pitch_class(options->key_root);
-    config.key_mode = from_c_mode(options->key_mode);
-    config.detect_inversions = options->detect_inversions != 0;
-    config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
-    config.tuning = options->tuning;
-    config.auto_tuning = options->tuning_auto != 0;
+    const ChordConfig config = chord_config_from_options(*options);
 
     ChordAnalyzer analyzer(audio, config);
     fill_chord_result(analyzer.chords(), analyzer.tuning(), out);
@@ -437,25 +444,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   functions->items = nullptr;
   functions->count = 0;
   if (!options) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!valid_chord_options_version(options->struct_version)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (!std::isfinite(options->min_duration) || options->min_duration < 0.0f ||
-      !std::isfinite(options->smoothing_window) || options->smoothing_window <= 0.0f ||
-      !std::isfinite(options->threshold) || options->threshold < 0.0f ||
-      options->threshold > 1.0f || options->n_fft <= 0 || options->hop_length <= 0 ||
-      options->hmm_beam_width < 0) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (options->chroma_method != 0 && options->chroma_method != 1) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  if (options->use_key_context != 0) {
-    const int root = static_cast<int>(options->key_root);
-    const int mode = static_cast<int>(options->key_mode);
-    if (root < static_cast<int>(PitchClass::C) || root > static_cast<int>(PitchClass::B) ||
-        mode < static_cast<int>(Mode::Major) || mode > static_cast<int>(Mode::Locrian)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-  }
+  if (!valid_chord_detection_options(*options)) return SONARE_ERROR_INVALID_PARAMETER;
   // The analysis key drives the Roman-numeral labelling; reject out-of-range
   // enum-like values rather than silently clamping them to C / Major.
   {
@@ -468,23 +457,7 @@ SonareError sonare_chord_functional_analysis(const float* samples, size_t length
   }
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
-    ChordConfig config;
-    config.min_duration = options->min_duration;
-    config.smoothing_window = options->smoothing_window;
-    config.threshold = options->threshold;
-    config.use_triads_only = options->use_triads_only != 0;
-    config.n_fft = options->n_fft;
-    config.hop_length = options->hop_length;
-    config.use_beat_sync = options->use_beat_sync != 0;
-    config.use_hmm = options->use_hmm != 0;
-    config.hmm_beam_width = options->hmm_beam_width;
-    config.use_key_context = options->use_key_context != 0;
-    config.key_root = from_c_pitch_class(options->key_root);
-    config.key_mode = from_c_mode(options->key_mode);
-    config.detect_inversions = options->detect_inversions != 0;
-    config.chroma_method = options->chroma_method == 1 ? ChromaMethod::NNLS : ChromaMethod::STFT;
-    config.tuning = options->tuning;
-    config.auto_tuning = options->tuning_auto != 0;
+    const ChordConfig config = chord_config_from_options(*options);
 
     ChordAnalyzer analyzer(audio, config);
     fill_chord_result(analyzer.chords(), analyzer.tuning(), chords);

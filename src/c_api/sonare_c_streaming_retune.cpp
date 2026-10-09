@@ -39,14 +39,6 @@ namespace {
 #if defined(SONARE_WITH_VOICE_CHANGER)
 using sonare_c_detail::set_last_error;
 
-bool all_finite(const float* samples, size_t num_samples) noexcept {
-  if (!samples) return num_samples == 0;
-  for (size_t i = 0; i < num_samples; ++i) {
-    if (!std::isfinite(samples[i])) return false;
-  }
-  return true;
-}
-
 // The two live controls are clamped by the core to its documented ranges, but a
 // NON-FINITE value is a caller error rather than a request to clamp: the core
 // substitutes a default for it, which would let a NaN arrive here and leave as
@@ -54,19 +46,6 @@ bool all_finite(const float* samples, size_t num_samples) noexcept {
 // scalar C entry point does.
 bool finite_controls(float semitones, float mix) noexcept {
   return std::isfinite(semitones) && std::isfinite(mix);
-}
-
-// Reproduces the two rejections StreamingRetune::process_block makes on state
-// and block size. The core's is noexcept and answers a violated precondition
-// with a silent no-op to stay audio-thread callable, so a C caller would get
-// SONARE_OK and an unchanged buffer with nothing to distinguish it from a
-// successful render. Report them here instead.
-SonareError check_block_bounds(const SonareStreamingRetune* handle, size_t num_samples) noexcept {
-  if (handle->max_block_size <= 0) return SONARE_ERROR_INVALID_STATE;
-  if (num_samples > static_cast<size_t>(handle->max_block_size)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  return SONARE_OK;
 }
 
 #endif
@@ -196,10 +175,14 @@ SonareError sonare_streaming_retune_process_mono(SonareStreamingRetune* retune, 
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   if (num_samples == 0) return SONARE_OK;
-  if (const SonareError bounds = check_block_bounds(retune, num_samples); bounds != SONARE_OK) {
+  if (const SonareError bounds =
+          sonare_c_detail::check_streaming_block_bounds(retune->max_block_size, num_samples);
+      bounds != SONARE_OK) {
     return bounds;
   }
-  if (!all_finite(samples, num_samples)) return SONARE_ERROR_INVALID_PARAMETER;
+  if (!sonare::numeric::all_finite(samples, num_samples)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
   // The bounds check above already refused anything longer than the prepared
   // maximum, which is exactly what the scratch was sized for, so this copy
   // cannot grow it. process_block is noexcept and the copy allocates nothing,

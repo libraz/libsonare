@@ -336,11 +336,7 @@ SonareError sonare_project_marker_by_index(const SonareProject* project, size_t 
   out->key_fifths = m.key_fifths;
   out->key_minor = m.key_minor ? 1 : 0;
   out->ppq = m.ppq;
-  size_t n = std::min(m.name.size(), sizeof(out->name) - 1u);
-  while (n > 0 && n < m.name.size() && (static_cast<unsigned char>(m.name[n]) & 0xc0u) == 0x80u)
-    --n;
-  std::memcpy(out->name, m.name.data(), n);
-  out->name[n] = '\0';
+  copy_utf8_prefix(out->name, m.name);
   return SONARE_OK;
 #else
   if (out) *out = {};

@@ -149,15 +149,7 @@ SonareError sonare_master_audio_with_progress_ex(
   }
   sonare::mastering::api::MasteringChain chain(std::move(config));
   attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
-  if (cancel_cb) {
-    auto result = chain.process_mono_cancellable(samples, length, sample_rate);
-    if (!result) return SONARE_ERROR_CANCELLED;
-    fill_mono_chain_result(*result, out);
-    return SONARE_OK;
-  }
-  auto result = chain.process_mono(samples, length, sample_rate);
-  fill_mono_chain_result(result, out);
-  return SONARE_OK;
+  return process_mastering_chain_mono(chain, samples, length, sample_rate, cancel_cb, out);
   SONARE_C_CATCH
 }
 
@@ -186,15 +178,7 @@ SonareError sonare_master_audio_stereo_with_progress_ex(
   }
   sonare::mastering::api::MasteringChain chain(std::move(config));
   attach_chain_callbacks(chain, callback, user_data, cancel_cb, cancel_user_data);
-  if (cancel_cb) {
-    auto result = chain.process_stereo_cancellable(left, right, length, sample_rate);
-    if (!result) return SONARE_ERROR_CANCELLED;
-    fill_stereo_chain_result(*result, out);
-    return SONARE_OK;
-  }
-  auto result = chain.process_stereo(left, right, length, sample_rate);
-  fill_stereo_chain_result(result, out);
-  return SONARE_OK;
+  return process_mastering_chain_stereo(chain, left, right, length, sample_rate, cancel_cb, out);
   SONARE_C_CATCH
 }
 

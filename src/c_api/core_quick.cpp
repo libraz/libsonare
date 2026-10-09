@@ -7,6 +7,27 @@
 #include "c_api/core_internal.h"
 #include "util/numeric_validation.h"
 
+namespace {
+
+bool make_key_config(int n_fft, int hop_length, int use_hpss, int loudness_weighted,
+                     float high_pass_hz, const SonareMode* modes, size_t mode_count,
+                     SonareKeyProfileType profile_type, const char* genre_hint,
+                     KeyConfig* out_config) {
+  out_config->n_fft = n_fft;
+  out_config->hop_length = hop_length;
+  out_config->use_hpss = use_hpss != 0;
+  out_config->loudness_weighted = loudness_weighted != 0;
+  out_config->high_pass_hz = high_pass_hz;
+  if (!fill_key_modes(modes, mode_count, out_config)) return false;
+  if (!fill_key_profile(profile_type, out_config)) return false;
+  if (genre_hint != nullptr && genre_hint[0] != '\0') {
+    out_config->genre_hint = genre_hint;
+  }
+  return true;
+}
+
+}  // namespace
+
 // Quick detection functions
 
 SonareError sonare_detect_bpm(const float* samples, size_t length, int sample_rate,
@@ -83,19 +104,9 @@ SonareError sonare_detect_key_with_tuning(const float* samples, size_t length, i
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     KeyConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.use_hpss = use_hpss != 0;
-    config.loudness_weighted = loudness_weighted != 0;
-    config.high_pass_hz = high_pass_hz;
-    if (!fill_key_modes(modes, mode_count, &config)) {
+    if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz, modes,
+                         mode_count, profile_type, genre_hint, &config)) {
       return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!fill_key_profile(profile_type, &config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (genre_hint != nullptr && genre_hint[0] != '\0') {
-      config.genre_hint = genre_hint;
     }
     config.tuning = tuning;
     config.auto_tuning = tuning_auto != 0;
@@ -146,19 +157,9 @@ SonareError sonare_detect_key_candidates_with_extended_options(
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     KeyConfig config;
-    config.n_fft = n_fft;
-    config.hop_length = hop_length;
-    config.use_hpss = use_hpss != 0;
-    config.loudness_weighted = loudness_weighted != 0;
-    config.high_pass_hz = high_pass_hz;
-    if (!fill_key_modes(modes, mode_count, &config)) {
+    if (!make_key_config(n_fft, hop_length, use_hpss, loudness_weighted, high_pass_hz, modes,
+                         mode_count, profile_type, genre_hint, &config)) {
       return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!fill_key_profile(profile_type, &config)) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (genre_hint != nullptr && genre_hint[0] != '\0') {
-      config.genre_hint = genre_hint;
     }
 
     const auto candidates =

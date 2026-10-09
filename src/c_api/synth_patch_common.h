@@ -1,9 +1,8 @@
 #pragma once
 
 /// @file synth_patch_common.h
-/// @brief Shared SonareSynthPatch -> NativeSynthConfig conversion used by the
-///        project bounce surface and the realtime engine surface (the 2-host
-///        principle: one patch struct drives both).
+/// @brief Shared C-ABI instrument config conversions used by project bounce and
+///        realtime engine surfaces.
 
 #include <sonare/sonare_c_project_instruments.h>
 #include <sonare/sonare_c_types.h>
@@ -11,10 +10,71 @@
 #include <algorithm>
 #include <cstring>
 
+#include "midi/builtin_synth.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
+#include "util/zero_is_default.h"
 
 namespace sonare_c_detail {
+
+/// Converts either C ABI built-in-synth config spelling to the core config.
+/// The engine and project surfaces intentionally carry identical fields under
+/// different public names; keeping this conversion templated leaves both ABI
+/// structs independent while making their validation order and diagnostics one
+/// implementation.
+template <typename C>
+inline sonare::midi::BuiltinSynthConfig builtin_synth_config_from_c(const C& c) {
+  sonare::midi::BuiltinSynthConfig cfg;
+  cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
+  // clamp_synth_config reads a non-positive or non-finite field as "use the
+  // built-in default" and reports nothing, so a request that reached it came
+  // back as a successful call at a level the caller never chose. Refused here,
+  // where it is still visible; 0 stays the documented way to ask for the default.
+  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(0.0f, "gain");
+  cfg.attack_ms = sonare::ZeroIsDefault(c.attack_ms).checked_non_negative(0.0f, "attack_ms");
+  cfg.decay_ms = sonare::ZeroIsDefault(c.decay_ms).checked_non_negative(0.0f, "decay_ms");
+  cfg.sustain = sonare::ZeroIsDefault(c.sustain).checked_non_negative(0.0f, "sustain");
+  cfg.release_ms = sonare::ZeroIsDefault(c.release_ms).checked_non_negative(0.0f, "release_ms");
+  if (!(c.polyphony >= 0)) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "polyphony must be 0 (the library default) or a positive voice count");
+  }
+  cfg.polyphony = c.polyphony;
+  return sonare::midi::clamp_synth_config(cfg);
+}
+
+/// Converts either C ABI SF2 config spelling to the core player config.
+/// Version gates are kept here so engine and bounce bindings cannot drift;
+/// callers retain ownership of the version upper-bound check and any
+/// surface-specific offline options.
+template <typename C>
+inline sonare::midi::synth::Sf2PlayerConfig sf2_player_config_from_c(const C& c) {
+  sonare::midi::synth::Sf2PlayerConfig cfg;
+  // Passed through, the player's constructor would substitute for it in silence.
+  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(cfg.gain, "gain");
+  if (!(c.polyphony >= 0)) {
+    throw sonare::SonareException(
+        sonare::ErrorCode::InvalidParameter,
+        "polyphony must be 0 (the library default) or a positive voice count");
+  }
+  if (c.polyphony != 0) cfg.polyphony = c.polyphony;
+  if (c.struct_version >= 2) {
+    cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
+  }
+  if (c.struct_version >= 3 && c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
+  if (c.struct_version >= 4) {
+    if (!(c.gs_efx_realization == 0 || c.gs_efx_realization == 1)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                    "gs_efx_realization must be 0 (modern) or 1 (classic)");
+    }
+    if (c.gs_efx_realization == 1) {
+      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
+    }
+  }
+  return cfg;
+}
 
 static_assert(static_cast<int>(sonare::midi::synth::SynthEngineMode::kSubtractive) + 1 ==
               SONARE_SYNTH_ENGINE_SUBTRACTIVE);

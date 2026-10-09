@@ -8,6 +8,7 @@
 #include <vector>
 
 #if defined(SONARE_WITH_PITCH_EDITOR)
+#include "c_api/note_render_common.h"
 #include "editing/note_model/note_extractor.h"
 #include "editing/note_model/note_renderer.h"
 #include "editing/note_model/note_split_merge.h"
@@ -705,19 +706,8 @@ SonareError sonare_render_notes(const float* samples, size_t length, int sample_
   }
 
   editing::note_model::NoteRenderConfig render_config;
-  if (config != nullptr) {
-    if (config->struct_version < 0 || config->struct_version > 1) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (!std::isfinite(config->fade_ms) || config->fade_ms < 0.0f ||
-        !std::isfinite(config->vibrato_cutoff_hz) || config->vibrato_cutoff_hz < 0.0f) {
-      return SONARE_ERROR_INVALID_PARAMETER;
-    }
-    if (config->fade_ms > 0.0f) render_config.fade_ms = config->fade_ms;
-    if (config->vibrato_cutoff_hz > 0.0f) {
-      render_config.decomposition.vibrato_cutoff_hz = config->vibrato_cutoff_hz;
-    }
-  }
+  const SonareError config_error = resolve_note_render_config(config, render_config);
+  if (config_error != SONARE_OK) return config_error;
 
   return run_offline(samples, length, sample_rate, [&](const Audio& audio) -> SonareError {
     std::vector<editing::note_model::NoteObject> core_notes(note_count);

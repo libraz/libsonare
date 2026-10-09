@@ -8,7 +8,6 @@
 
 #include "c_api/project_internal.h"
 #include "util/numeric_validation.h"
-#include "util/zero_is_default.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include <cmath>
@@ -382,67 +381,6 @@ SonareError do_project_bounce(SonareProject* project, const SonareProjectBounceO
   return SONARE_OK;
 }
 
-// Maps the public built-in waveform ordinal to the core enum. The ordinal is
-// the caller's to get right: valid_builtin_waveform gates it at the entry point
-// before this runs.
-sonare::midi::BuiltinSynthConfig synth_config_from_c(const SonareBuiltinSynthConfig& c) {
-  sonare::midi::BuiltinSynthConfig cfg;
-  cfg.waveform = static_cast<sonare::midi::SynthWaveform>(c.waveform);
-  // clamp_synth_config reads a non-positive or non-finite field as "use the
-  // built-in default" and reports nothing, so a request that reached it came
-  // back as a successful call at a level the caller never chose. Refused here,
-  // where it is still visible; 0 stays the documented way to ask for the default.
-  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(0.0f, "gain");
-  cfg.attack_ms = sonare::ZeroIsDefault(c.attack_ms).checked_non_negative(0.0f, "attack_ms");
-  cfg.decay_ms = sonare::ZeroIsDefault(c.decay_ms).checked_non_negative(0.0f, "decay_ms");
-  cfg.sustain = sonare::ZeroIsDefault(c.sustain).checked_non_negative(0.0f, "sustain");
-  cfg.release_ms = sonare::ZeroIsDefault(c.release_ms).checked_non_negative(0.0f, "release_ms");
-  SONARE_CHECK_MSG(c.polyphony >= 0, sonare::ErrorCode::InvalidParameter,
-                   "polyphony must be 0 (the library default) or a positive voice count");
-  cfg.polyphony = c.polyphony;
-  return sonare::midi::clamp_synth_config(cfg);
-}
-
-// Maps the public versioned SF2 patch to the player config ("0 => default";
-// struct_version 0/1 preserve the original layout; version 2 enables the
-// model-first field, version 3 the rig clear and version 4 the EFX realisation. Anything newer is
-// rejected by the caller). The player clamps polyphony itself.
-sonare::midi::synth::Sf2PlayerConfig sf2_config_from_c(const SonareSf2InstrumentConfig& c) {
-  sonare::midi::synth::Sf2PlayerConfig cfg;
-  // Passed through, the player's constructor would substitute for it in silence.
-  cfg.gain = sonare::ZeroIsDefault(c.gain).checked_non_negative(cfg.gain, "gain");
-  SONARE_CHECK_MSG(c.polyphony >= 0, sonare::ErrorCode::InvalidParameter,
-                   "polyphony must be 0 (the library default) or a positive voice count");
-  if (c.polyphony != 0) cfg.polyphony = c.polyphony;
-  if (c.struct_version >= 2) {
-    cfg.prefer_model_for_modeled_families = c.prefer_model_for_modeled_families != 0;
-  }
-  if (c.struct_version >= 3 && c.clear_bank_rig != 0) cfg.bank_rig_binding = false;
-  if (c.struct_version >= 4) {
-    SONARE_CHECK_MSG(c.gs_efx_realization == 0 || c.gs_efx_realization == 1,
-                     sonare::ErrorCode::InvalidParameter,
-                     "gs_efx_realization must be 0 (modern) or 1 (classic)");
-    if (c.gs_efx_realization == 1) {
-      cfg.gs_efx_realization = sonare::midi::synth::GsEfxRealization::kClassic;
-    }
-  }
-#if defined(SONARE_WITH_MASTERING)
-  // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
-  // mastering factory itself, so the host injects it. An EFX SysEx on the
-  // compiled timeline then installs its inserts and rings through the per-part
-  // bus. The bounce is single-threaded and offline, so pending EFX changes are
-  // realised inline in process() (the allocation is safe off the audio thread).
-  cfg.insert_factory = [](std::string_view name,
-                          std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
-    return sonare::mastering::api::make_insert(std::string(name), std::string(json));
-  };
-#endif
-  // Without a factory, kProcessor slots stay silent no-ops (see
-  // Sf2PlayerConfig::insert_factory); harmless to leave set regardless.
-  cfg.realize_efx_inline = true;
-  return cfg;
-}
-
 #if defined(SONARE_TUNING) && SONARE_TUNING
 // SONARE_RENDER_PATH_DUMP=<path>: the signal path one bounce realised, for the
 // first hosted instrument. Unlike SONARE_TUNING_DUMP, which a static destructor
@@ -584,8 +522,8 @@ SonareError sonare_project_bounce_with_builtin_instruments(
     }
   }
   for (size_t i = 0; i < instrument_count; ++i) {
-    owned.push_back(
-        std::make_unique<sonare::midi::BuiltinSynth>(synth_config_from_c(instruments[i].config)));
+    owned.push_back(std::make_unique<sonare::midi::BuiltinSynth>(
+        sonare_c_detail::builtin_synth_config_from_c(instruments[i].config)));
     hosted.push_back({instruments[i].destination_id, owned.back().get()});
   }
   return do_project_bounce(project, options, hosted, out_interleaved, out_len);
@@ -683,8 +621,19 @@ SonareError sonare_project_bounce_with_sf2_instruments(
   owned.reserve(instrument_count);
   hosted.reserve(instrument_count);
   for (size_t i = 0; i < instrument_count; ++i) {
-    auto player =
-        std::make_unique<sonare::midi::synth::Sf2Player>(sf2_config_from_c(instruments[i].config));
+    auto player_config = sonare_c_detail::sf2_player_config_from_c(instruments[i].config);
+#if defined(SONARE_WITH_MASTERING)
+    // Wire the GS insertion-effect (EFX) path: the SF2 player never depends on the
+    // mastering factory itself, so the host injects it.
+    player_config.insert_factory =
+        [](std::string_view name,
+           std::string_view json) -> std::unique_ptr<sonare::rt::ProcessorBase> {
+      return sonare::mastering::api::make_insert(std::string(name), std::string(json));
+    };
+#endif
+    // The bounce is single-threaded and offline: pending EFX changes realise inline.
+    player_config.realize_efx_inline = true;
+    auto player = std::make_unique<sonare::midi::synth::Sf2Player>(std::move(player_config));
     player->set_soundfont(project->soundfont);
     owned.push_back(std::move(player));
     if (!apply_project_part_rigs(project, instruments[i].destination_id, owned.back().get())) {
