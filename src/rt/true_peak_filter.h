@@ -74,6 +74,12 @@ class TruePeakFilter {
   int latency_samples() const noexcept { return fir_.taps_per_phase / 2; }
 
  private:
+  void upsample_with_history_impl(const float* const* input, float* const* output_oversampled,
+                                  int num_channels, int num_samples,
+                                  std::vector<std::vector<float>>& history,
+                                  std::vector<std::vector<float>>& scratch,
+                                  int delay_samples) const;
+
   int factor_ = 4;
   PolyphaseFir fir_;
 

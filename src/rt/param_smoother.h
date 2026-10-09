@@ -5,6 +5,8 @@
 
 #include <atomic>
 
+#include "util/constants.h"
+
 namespace sonare::rt {
 
 /// One step of a first-order glide from @p current toward @p target, held in double. A step
@@ -48,7 +50,7 @@ class ParamSmoother {
  private:
   void update_coefficient();
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float time_ms_ = 20.0f;
   double coefficient_ = 0.0;
   double current_ = 0.0;

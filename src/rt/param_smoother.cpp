@@ -3,12 +3,16 @@
 #include <algorithm>
 #include <cmath>
 
+#include "util/constants.h"
 #include "util/dsp_primitives.h"
 
 namespace sonare::rt {
 
+using constants::kDefaultDawSampleRate;
+
 ParamSmoother::ParamSmoother(float initial_value, float time_ms, double sample_rate)
-    : sample_rate_(std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate : 48000.0),
+    : sample_rate_(std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate
+                                                                   : kDefaultDawSampleRate),
       time_ms_(std::isfinite(time_ms) && time_ms >= 0.0f ? time_ms : 0.0f),
       current_(std::isfinite(initial_value) ? initial_value : 0.0f),
       target_(std::isfinite(initial_value) ? initial_value : 0.0f) {

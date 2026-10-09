@@ -3,6 +3,8 @@
 /// @file envelope_follower.h
 /// @brief Attack/release envelope detector.
 
+#include "util/constants.h"
+
 namespace sonare::rt {
 
 class EnvelopeFollower {
@@ -21,7 +23,7 @@ class EnvelopeFollower {
   [[nodiscard]] bool discard_if_non_finite() noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float attack_coeff_ = 1.0f;
   float release_coeff_ = 1.0f;
   float envelope_ = 0.0f;

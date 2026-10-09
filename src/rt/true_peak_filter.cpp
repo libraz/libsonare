@@ -93,8 +93,8 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   // Fully internal path: history and scratch are member-owned and pre-sized by
   // prepare(), so this is allocation-free on the audio thread for any channel
   // count / block size within the prepared bounds.
-  upsample_with_history(input, output_oversampled, num_channels, num_samples, internal_history_,
-                        internal_scratch_);
+  upsample_with_history_impl(input, output_oversampled, num_channels, num_samples,
+                             internal_history_, internal_scratch_, 0);
 }
 
 void TruePeakFilter::upsample_with_history(const float* const* input,
@@ -104,8 +104,8 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   // Route through the scratch-aware overload using a member-backed scratch so
   // this audio-thread-callable path performs no per-call allocation once the
   // scratch has grown to the working size.
-  upsample_with_history(input, output_oversampled, num_channels, num_samples, history,
-                        internal_scratch_);
+  upsample_with_history_impl(input, output_oversampled, num_channels, num_samples, history,
+                             internal_scratch_, 0);
 }
 
 void TruePeakFilter::upsample_with_history(const float* const* input,
@@ -113,6 +113,16 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
                                            int num_samples,
                                            std::vector<std::vector<float>>& history,
                                            std::vector<std::vector<float>>& scratch) const {
+  upsample_with_history_impl(input, output_oversampled, num_channels, num_samples, history, scratch,
+                             0);
+}
+
+void TruePeakFilter::upsample_with_history_impl(const float* const* input,
+                                                float* const* output_oversampled, int num_channels,
+                                                int num_samples,
+                                                std::vector<std::vector<float>>& history,
+                                                std::vector<std::vector<float>>& scratch,
+                                                int delay_samples) const {
   validate_buffers(input, num_channels, num_samples);
   if (num_channels == 0 || num_samples == 0) return;
   if (output_oversampled == nullptr) {
@@ -126,6 +136,7 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
   if (scratch.size() < requested_channels) {
     scratch.resize(requested_channels);
   }
+  const size_t delay = static_cast<size_t>(delay_samples);
 
   for (int ch = 0; ch < num_channels; ++ch) {
     if (output_oversampled[ch] == nullptr) {
@@ -145,7 +156,7 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
     std::copy(input[ch], input[ch] + num_samples,
               extended.begin() + static_cast<std::ptrdiff_t>(history_size));
     for (int i = 0; i < num_samples; ++i) {
-      const size_t index = history_size + static_cast<size_t>(i);
+      const size_t index = history_size + static_cast<size_t>(i) - delay;
       for (int phase = 0; phase < factor_; ++phase) {
         output_oversampled[ch][i * factor_ + phase] =
             interpolate_polyphase_sample(extended.data(), extended_size, index, phase, fir_);
@@ -166,8 +177,8 @@ void TruePeakFilter::upsample_with_history(const float* const* input,
 void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
                                                    float* const* output_oversampled,
                                                    int num_channels, int num_samples) const {
-  upsample_with_history_delayed(input, output_oversampled, num_channels, num_samples,
-                                internal_history_, internal_scratch_);
+  upsample_with_history_impl(input, output_oversampled, num_channels, num_samples,
+                             internal_history_, internal_scratch_, latency_samples());
 }
 
 void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
@@ -175,47 +186,8 @@ void TruePeakFilter::upsample_with_history_delayed(const float* const* input,
                                                    int num_channels, int num_samples,
                                                    std::vector<std::vector<float>>& history,
                                                    std::vector<std::vector<float>>& scratch) const {
-  validate_buffers(input, num_channels, num_samples);
-  if (num_channels == 0 || num_samples == 0) return;
-  if (output_oversampled == nullptr) {
-    throw SonareException(ErrorCode::InvalidParameter, "output must not be null");
-  }
-  const size_t history_size = static_cast<size_t>(std::max(0, fir_.taps_per_phase));
-  const size_t requested_channels = static_cast<size_t>(num_channels);
-  if (history.size() < requested_channels) {
-    history.resize(requested_channels, std::vector<float>(history_size, 0.0f));
-  }
-  if (scratch.size() < requested_channels) scratch.resize(requested_channels);
-
-  const size_t delay = static_cast<size_t>(latency_samples());
-  for (int ch = 0; ch < num_channels; ++ch) {
-    if (output_oversampled[ch] == nullptr) {
-      throw SonareException(ErrorCode::InvalidParameter, "output channel must not be null");
-    }
-    auto& channel_history = history[static_cast<size_t>(ch)];
-    if (channel_history.size() != history_size) channel_history.assign(history_size, 0.0f);
-    auto& extended = scratch[static_cast<size_t>(ch)];
-    const size_t extended_size = history_size + static_cast<size_t>(num_samples);
-    if (extended.size() < extended_size) extended.resize(extended_size, 0.0f);
-    std::copy(channel_history.begin(), channel_history.end(), extended.begin());
-    std::copy(input[ch], input[ch] + num_samples,
-              extended.begin() + static_cast<std::ptrdiff_t>(history_size));
-    for (int i = 0; i < num_samples; ++i) {
-      const size_t index = history_size + static_cast<size_t>(i) - delay;
-      for (int phase = 0; phase < factor_; ++phase) {
-        output_oversampled[ch][i * factor_ + phase] =
-            interpolate_polyphase_sample(extended.data(), extended_size, index, phase, fir_);
-      }
-    }
-    const size_t keep = std::min(history_size, extended_size);
-    std::copy(extended.begin() + static_cast<std::ptrdiff_t>(extended_size - keep),
-              extended.begin() + static_cast<std::ptrdiff_t>(extended_size),
-              channel_history.end() - static_cast<std::ptrdiff_t>(keep));
-    if (keep < history_size) {
-      std::fill(channel_history.begin(), channel_history.end() - static_cast<std::ptrdiff_t>(keep),
-                0.0f);
-    }
-  }
+  upsample_with_history_impl(input, output_oversampled, num_channels, num_samples, history, scratch,
+                             latency_samples());
 }
 
 }  // namespace sonare::rt
