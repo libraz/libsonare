@@ -7,6 +7,7 @@
 #include <memory>
 #include <tuple>
 
+#include "c_api/project_bounce_internal.h"
 #include "midi/channel_voice_decode.h"
 #include "midi/synth/sf2_player.h"
 #include "util/resource_limits.h"
@@ -41,22 +42,8 @@ std::unique_ptr<synth::Sf2Player> make_scan_player(
 std::vector<SonareSf2ProgramStatus> build_manifest(
     const arr::CompiledTimeline& timeline, const std::shared_ptr<const synth::Sf2File>& soundfont,
     double sample_rate) {
-  // Merge all clip events into one (render_frame, destination, event) stream.
-  struct ScanEvent {
-    int64_t render_frame = 0;
-    uint32_t destination_id = 0;
-    const sonare::midi::MidiEvent* event = nullptr;
-  };
-  std::vector<ScanEvent> events;
-  for (const auto& clip : timeline.midi_clips) {
-    events.reserve(events.size() + clip.events.size());
-    for (const auto& event : clip.events) {
-      events.push_back({event.render_frame, clip.destination_id, &event});
-    }
-  }
-  std::stable_sort(events.begin(), events.end(), [](const ScanEvent& a, const ScanEvent& b) {
-    return a.render_frame < b.render_frame;
-  });
+  const std::vector<sonare_c_bounce_detail::TimelineEvent> events =
+      sonare_c_bounce_detail::timeline_events_in_render_order(timeline);
 
   std::map<uint32_t, std::unique_ptr<synth::Sf2Player>> players;
   const auto player_for = [&](uint32_t destination) -> synth::Sf2Player& {
@@ -70,7 +57,7 @@ std::vector<SonareSf2ProgramStatus> build_manifest(
   using sonare::midi::ChannelVoiceKind;
   using synth::Sf2Player;
 
-  for (const ScanEvent& scan : events) {
+  for (const sonare_c_bounce_detail::TimelineEvent& scan : events) {
     Sf2Player& player = player_for(scan.destination_id);
     sonare::midi::ChannelVoiceEvent ev;
     const bool channel_voice = sonare::midi::decode_channel_voice(scan.event->ump, &ev);

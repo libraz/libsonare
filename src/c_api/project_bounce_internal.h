@@ -8,6 +8,7 @@
 #include <array>
 #include <functional>
 #include <limits>
+#include <optional>
 #include <vector>
 
 #include "c_api/project_internal.h"
@@ -174,6 +175,32 @@ struct HostedInstrument {
   // rather than a downcast at the end of every render.
   CallbackInstrument* callback = nullptr;
 };
+
+// A scheduled MIDI event with the destination its clip is bound for.
+struct TimelineEvent {
+  int64_t render_frame = 0;
+  uint32_t destination_id = 0;
+  const sonare::midi::MidiEvent* event = nullptr;
+};
+
+// Every MIDI clip event in render order, only @p destination's when given. Equal
+// frames keep clip order, then the clip's own event order.
+inline std::vector<TimelineEvent> timeline_events_in_render_order(
+    const arr::CompiledTimeline& timeline, std::optional<uint32_t> destination = std::nullopt) {
+  std::vector<TimelineEvent> events;
+  for (const auto& clip : timeline.midi_clips) {
+    if (destination && clip.destination_id != *destination) continue;
+    events.reserve(events.size() + clip.events.size());
+    for (const auto& event : clip.events) {
+      events.push_back({event.render_frame, clip.destination_id, &event});
+    }
+  }
+  std::stable_sort(events.begin(), events.end(),
+                   [](const TimelineEvent& a, const TimelineEvent& b) {
+                     return a.render_frame < b.render_frame;
+                   });
+  return events;
+}
 
 // Renders the compiled timeline offline through a fresh engine into `channels`
 // (num_channels deinterleaved buffers of length render_frames). `keep` selects

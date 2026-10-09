@@ -73,22 +73,15 @@ bool arrangement_end_frames(const arr::CompiledTimeline& timeline, int64_t* out_
 // reading the tail, and the render prepares it again.
 bool replay_destination_events(const arr::CompiledTimeline& timeline,
                                const HostedInstrument& hosted) {
-  std::vector<const sonare::midi::MidiEvent*> events;
-  for (const auto& clip : timeline.midi_clips) {
-    if (clip.destination_id != hosted.destination_id) continue;
-    for (const auto& event : clip.events) events.push_back(&event);
-  }
-  std::stable_sort(events.begin(), events.end(),
-                   [](const sonare::midi::MidiEvent* a, const sonare::midi::MidiEvent* b) {
-                     return a->render_frame < b->render_frame;
-                   });
+  const std::vector<TimelineEvent> events =
+      timeline_events_in_render_order(timeline, hosted.destination_id);
   // A prepared token is owned only by the published schedule (or a live
   // payload slot), neither of which exists for this throwaway probe. Keep the
   // replay's tokens alive until every copied event has been consumed.
   std::vector<std::shared_ptr<const sonare::midi::PreparedMidiSysEx>> prepared;
   prepared.reserve(events.size());
-  for (const sonare::midi::MidiEvent* event : events) {
-    sonare::midi::MidiEvent replay = *event;
+  for (const TimelineEvent& scheduled : events) {
+    sonare::midi::MidiEvent replay = *scheduled.event;
     if (sonare::midi::is_sysex_event(replay) && replay.sysex_payload_size > 0) {
       std::shared_ptr<const sonare::midi::PreparedMidiSysEx> token;
       try {
