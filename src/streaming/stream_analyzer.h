@@ -545,6 +545,9 @@ class StreamAnalyzer {
   void compute_voted_pattern(int pattern_length = 4);
   void correct_voted_pattern_by_known_patterns();
   void detect_progression_pattern();
+  template <typename Buffer, typename Quantizer>
+  void read_frames_quantized(size_t max_frames, Buffer& buffer, const QuantizeConfig& qconfig,
+                             Quantizer quantize);
   void process_internal(const float* samples, size_t n_samples);
   void process_complete_frames();
   void emit_frame(const float* frame_start, size_t frame_sample_offset, bool force_emit);

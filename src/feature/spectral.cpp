@@ -8,6 +8,7 @@
 
 #include "util/dsp_primitives.h"
 #include "util/exception.h"
+#include "util/frequency_bins.h"
 #include "util/math_utils.h"
 #include "util/non_finite_sample.h"
 #include "util/numeric_validation.h"
@@ -26,16 +27,6 @@ void check_spectrogram_shape(int n_bins, int n_frames, int sr, int n_fft) {
   SONARE_CHECK_MSG(n_frames > 0, ErrorCode::InvalidParameter, "n_frames must be > 0");
   SONARE_CHECK_MSG(sr > 0, ErrorCode::InvalidParameter, "sr must be > 0");
   SONARE_CHECK_MSG(n_fft > 0, ErrorCode::InvalidParameter, "n_fft must be > 0");
-}
-
-/// @brief Computes frequency for each FFT bin.
-std::vector<float> bin_frequencies(int n_bins, int sr, int n_fft) {
-  std::vector<float> freqs(n_bins);
-  float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) {
-    freqs[i] = static_cast<float>(i) * bin_width;
-  }
-  return freqs;
 }
 
 std::vector<float> pad_for_centered_frames(const float* samples, size_t n_samples,
@@ -80,7 +71,7 @@ std::vector<float> spectral_centroid(const float* magnitude, int n_bins, int n_f
   SONARE_CHECK_MSG(magnitude != nullptr, ErrorCode::InvalidParameter, "magnitude must not be null");
   check_spectrogram_shape(n_bins, n_frames, sr, n_fft);
 
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroid(n_frames);
 
   // Bin-major with per-frame accumulators, as spectral_flatness below: `magnitude` is
@@ -121,7 +112,7 @@ std::vector<float> spectral_bandwidth(const float* magnitude, int n_bins, int n_
   SONARE_CHECK_MSG(numeric::finite_positive(p), ErrorCode::InvalidParameter,
                    "p must be finite and > 0, got " + util::to_text(p));
 
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> centroids = spectral_centroid(magnitude, n_bins, n_frames, sr, n_fft);
   std::vector<float> bandwidth(n_frames);
 
@@ -166,7 +157,7 @@ std::vector<float> spectral_rolloff(const float* magnitude, int n_bins, int n_fr
   SONARE_CHECK_MSG(roll_percent > 0.0f && roll_percent < 1.0f, ErrorCode::InvalidParameter,
                    "roll_percent must be in (0, 1), got " + util::to_text(roll_percent));
 
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> rolloff(n_frames);
 
   // Two bin-major passes over the row-major [n_bins x n_frames] buffer, as spectral_centroid
@@ -317,7 +308,7 @@ std::vector<float> spectral_contrast(const Spectrogram& spec, int sr, int n_band
     band_edges[i] = fmin * std::pow(2.0f, static_cast<float>(i - 1));
   }
 
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
   std::vector<float> peak((n_bands + 1) * n_frames, 0.0f);
   std::vector<float> valley((n_bands + 1) * n_frames, 0.0f);
   // Frame-tile staging buffer, reused across every band and tile; resized per band below.
@@ -441,7 +432,7 @@ std::vector<float> poly_features(const float* magnitude, int n_bins, int n_frame
 
   // librosa.feature.poly_features computes np.polyfit(freqs, S[:, t], order).
   // Output is [order + 1, n_frames] with coefficients ordered highest-degree first.
-  std::vector<float> freqs = bin_frequencies(n_bins, sr, n_fft);
+  std::vector<float> freqs = util::bin_frequencies(n_bins, sr, n_fft);
 
   // Build Vandermonde matrix A [n_bins x (order + 1)] with columns
   // x^order, x^(order-1), ..., 1. With raw frequencies up to ~sr/2 (~11 kHz at

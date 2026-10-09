@@ -341,14 +341,9 @@ Spectrogram Spectrogram::compute(const Audio& audio, const StftConfig& config,
   int hop_length = checked.hop_length;
   int win_length = checked.actual_win_length();
 
-  // Get cached window (periodic for STFT, matching librosa/scipy fftbins=True).
-  const auto window_handle = get_window_cached(checked.window, win_length, true);
-  const std::vector<float>& window = *window_handle;
-
-  /// Pad window to n_fft if necessary
-  std::vector<float> padded_window(n_fft, 0.0f);
-  int win_offset = (n_fft - win_length) / 2;
-  std::copy(window.begin(), window.end(), padded_window.begin() + win_offset);
+  // Build the cached periodic window and center-pad it to n_fft, matching
+  // librosa/scipy fftbins=True.
+  std::vector<float> padded_window = build_padded_window(checked.window, win_length, n_fft, true);
 
   /// Run the shared framing/FFT loop (handles centering, frame count, progress).
   int n_frames = 0;
@@ -495,20 +490,11 @@ Audio Spectrogram::to_audio(int length, WindowType window_type) const {
 
   // STFT analysis uses a periodic window (fftbins=True). iSTFT uses a symmetric
   // synthesis window and normalizes by analysis*synthesis overlap to preserve
-  // reconstruction gain when the two window shapes differ.
-  const auto analysis_window_handle = get_window_cached(window_type, win_length_, true);
-  const auto synthesis_window_handle = get_window_cached(window_type, win_length_, false);
-  const std::vector<float>& analysis_win_short = *analysis_window_handle;
-  const std::vector<float>& synthesis_win_short = *synthesis_window_handle;
-
-  // Zero-pad window to n_fft if win_length < n_fft (matches analysis padding)
-  std::vector<float> analysis_window(n_fft_, 0.0f);
-  std::vector<float> synthesis_window(n_fft_, 0.0f);
-  int win_offset = (n_fft_ - win_length_) / 2;
-  std::copy(analysis_win_short.begin(), analysis_win_short.end(),
-            analysis_window.begin() + win_offset);
-  std::copy(synthesis_win_short.begin(), synthesis_win_short.end(),
-            synthesis_window.begin() + win_offset);
+  // reconstruction gain when the two window shapes differ. Both are centered
+  // and padded through the shared builder.
+  std::vector<float> analysis_window = build_padded_window(window_type, win_length_, n_fft_, true);
+  std::vector<float> synthesis_window =
+      build_padded_window(window_type, win_length_, n_fft_, false);
 
   // Calculate full reconstruction length (before trimming)
   int full_length = (n_frames_ - 1) * hop_length_ + n_fft_;

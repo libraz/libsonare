@@ -10,11 +10,11 @@
 
 #include "core/fft.h"
 #include "core/window.h"
-#include "metering/frequency_bins.h"
 #include "util/constants.h"
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/fractional_octave.h"
+#include "util/frequency_bins.h"
 #include "util/resource_limits.h"
 #include "util/thread_local_cache.h"
 
@@ -47,7 +47,7 @@ SpectrumResult make_empty_result(const Audio& audio, const SpectrumConfig& confi
   result.n_fft = config.n_fft;
   result.sample_rate = audio.sample_rate();
   const int n_bins = config.n_fft / 2 + 1;
-  result.frequencies = bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
+  result.frequencies = util::bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
   result.magnitude.assign(n_bins, 0.0f);
   result.power.assign(n_bins, 0.0f);
   result.db.assign(n_bins, sonare::constants::kFloorDb);

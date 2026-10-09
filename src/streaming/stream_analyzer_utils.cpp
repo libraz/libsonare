@@ -8,6 +8,7 @@
 #include "filters/mel.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/frequency_bins.h"
 #include "util/math_utils.h"
 #include "util/non_finite_sample.h"
 
@@ -16,12 +17,7 @@ namespace sonare::streaming_detail {
 using sonare::constants::kEpsilon;
 
 std::vector<float> compute_bin_frequencies(int n_bins, int sr, int n_fft) {
-  std::vector<float> freqs(n_bins);
-  float bin_width = static_cast<float>(sr) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) {
-    freqs[i] = static_cast<float>(i) * bin_width;
-  }
-  return freqs;
+  return util::bin_frequencies(n_bins, sr, n_fft);
 }
 
 float compute_centroid_frame(const float* magnitude, int n_bins, const float* frequencies) {

@@ -64,6 +64,49 @@ void copy_append_only_history(const std::vector<T>& source, std::vector<T>& stor
 
 }  // namespace
 
+template <typename Buffer, typename Quantizer>
+void StreamAnalyzer::read_frames_quantized(size_t max_frames, Buffer& buffer,
+                                           const QuantizeConfig& qconfig, Quantizer quantize) {
+  validate_quantize_config(qconfig);
+  buffer.clear();
+
+  size_t count = std::min(max_frames, available_frames());
+  buffer.n_frames = count;
+  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
+                 output_feature_flags(config_));
+
+  if (count == 0) {
+    return;
+  }
+
+  for (size_t i = 0; i < count; ++i) {
+    const StreamFrame& frame = output_front();
+
+    buffer.timestamps.push_back(frame.timestamp);
+
+    for (float mel_power : frame.mel) {
+      float db = single_power_to_db(mel_power);
+      buffer.mel.push_back(quantize(db, qconfig.mel_db_min, qconfig.mel_db_max));
+    }
+
+    for (float c : frame.chroma) {
+      buffer.chroma.push_back(quantize(c, 0.0f, 1.0f));
+    }
+
+    if (config_.compute_onset) {
+      buffer.onset_strength.push_back(quantize(frame.onset_strength, 0.0f, qconfig.onset_max));
+    }
+    buffer.rms_energy.push_back(quantize(frame.rms_energy, 0.0f, qconfig.rms_max));
+    if (config_.compute_spectral) {
+      buffer.spectral_centroid.push_back(
+          quantize(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
+      buffer.spectral_flatness.push_back(quantize(frame.spectral_flatness, 0.0f, 1.0f));
+    }
+
+    pop_output_front();
+  }
+}
+
 void StreamAnalyzer::prepare_output_frame(StreamFrame& frame) const {
   if (config_.compute_magnitude) {
     frame.magnitude.reserve(static_cast<size_t>(n_bins() / config_.magnitude_downsample));
@@ -305,88 +348,18 @@ void StreamAnalyzer::read_frames_soa(size_t max_frames, FrameBuffer& buffer) {
 
 void StreamAnalyzer::read_frames_quantized_u8(size_t max_frames, QuantizedFrameBufferU8& buffer,
                                               const QuantizeConfig& qconfig) {
-  validate_quantize_config(qconfig);
-  buffer.clear();
-
-  size_t count = std::min(max_frames, available_frames());
-  buffer.n_frames = count;
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
-                 output_feature_flags(config_));
-
-  if (count == 0) {
-    return;
-  }
-
-  for (size_t i = 0; i < count; ++i) {
-    const StreamFrame& frame = output_front();
-
-    buffer.timestamps.push_back(frame.timestamp);
-
-    for (float mel_power : frame.mel) {
-      float db = single_power_to_db(mel_power);
-      buffer.mel.push_back(quantize_to_u8(db, qconfig.mel_db_min, qconfig.mel_db_max));
-    }
-
-    for (float c : frame.chroma) {
-      buffer.chroma.push_back(quantize_to_u8(c, 0.0f, 1.0f));
-    }
-
-    if (config_.compute_onset) {
-      buffer.onset_strength.push_back(
-          quantize_to_u8(frame.onset_strength, 0.0f, qconfig.onset_max));
-    }
-    buffer.rms_energy.push_back(quantize_to_u8(frame.rms_energy, 0.0f, qconfig.rms_max));
-    if (config_.compute_spectral) {
-      buffer.spectral_centroid.push_back(
-          quantize_to_u8(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-      buffer.spectral_flatness.push_back(quantize_to_u8(frame.spectral_flatness, 0.0f, 1.0f));
-    }
-
-    pop_output_front();
-  }
+  read_frames_quantized(max_frames, buffer, qconfig,
+                        [](float value, float min_value, float max_value) {
+                          return quantize_to_u8(value, min_value, max_value);
+                        });
 }
 
 void StreamAnalyzer::read_frames_quantized_i16(size_t max_frames, QuantizedFrameBufferI16& buffer,
                                                const QuantizeConfig& qconfig) {
-  validate_quantize_config(qconfig);
-  buffer.clear();
-
-  size_t count = std::min(max_frames, available_frames());
-  buffer.n_frames = count;
-  buffer.reserve(count, config_.compute_mel ? config_.n_mels : 0, config_.compute_chroma ? 12 : 0,
-                 output_feature_flags(config_));
-
-  if (count == 0) {
-    return;
-  }
-
-  for (size_t i = 0; i < count; ++i) {
-    const StreamFrame& frame = output_front();
-
-    buffer.timestamps.push_back(frame.timestamp);
-
-    for (float mel_power : frame.mel) {
-      float db = single_power_to_db(mel_power);
-      buffer.mel.push_back(quantize_to_i16(db, qconfig.mel_db_min, qconfig.mel_db_max));
-    }
-
-    for (float c : frame.chroma) {
-      buffer.chroma.push_back(quantize_to_i16(c, 0.0f, 1.0f));
-    }
-
-    if (config_.compute_onset) {
-      buffer.onset_strength.push_back(
-          quantize_to_i16(frame.onset_strength, 0.0f, qconfig.onset_max));
-    }
-    buffer.rms_energy.push_back(quantize_to_i16(frame.rms_energy, 0.0f, qconfig.rms_max));
-    if (config_.compute_spectral) {
-      buffer.spectral_centroid.push_back(
-          quantize_to_i16(frame.spectral_centroid, 0.0f, qconfig.centroid_max));
-      buffer.spectral_flatness.push_back(quantize_to_i16(frame.spectral_flatness, 0.0f, 1.0f));
-    }
-
-    pop_output_front();
-  }
+  read_frames_quantized(max_frames, buffer, qconfig,
+                        [](float value, float min_value, float max_value) {
+                          return quantize_to_i16(value, min_value, max_value);
+                        });
 }
 
 void StreamAnalyzer::reset(size_t base_sample_offset) {

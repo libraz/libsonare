@@ -15,6 +15,42 @@ inline constexpr uint32_t kStreamFeatureChroma = 1u << 1;
 inline constexpr uint32_t kStreamFeatureOnset = 1u << 2;
 inline constexpr uint32_t kStreamFeatureSpectral = 1u << 3;
 
+namespace streaming_detail {
+
+/// @brief Clears the fields common to every streaming frame buffer.
+template <typename Buffer>
+inline void clear_frame_buffer(Buffer& buffer) {
+  buffer.n_frames = 0;
+  buffer.n_mels = 0;
+  buffer.n_chroma = 0;
+  buffer.feature_flags = 0;
+  buffer.timestamps.clear();
+  buffer.mel.clear();
+  buffer.chroma.clear();
+  buffer.onset_strength.clear();
+  buffer.rms_energy.clear();
+  buffer.spectral_centroid.clear();
+  buffer.spectral_flatness.clear();
+}
+
+/// @brief Reserves the fields common to every streaming frame buffer.
+template <typename Buffer>
+inline void reserve_frame_buffer(Buffer& buffer, size_t n, int mels, int chroma,
+                                 uint32_t features) {
+  buffer.n_mels = mels;
+  buffer.n_chroma = chroma;
+  buffer.feature_flags = features;
+  buffer.timestamps.reserve(n);
+  buffer.mel.reserve(n * static_cast<size_t>(mels));
+  buffer.chroma.reserve(n * static_cast<size_t>(chroma));
+  buffer.onset_strength.reserve(n);
+  buffer.rms_energy.reserve(n);
+  buffer.spectral_centroid.reserve(n);
+  buffer.spectral_flatness.reserve(n);
+}
+
+}  // namespace streaming_detail
+
 /// @brief A detected chord change in the progression.
 struct ChordChange {
   int root = -1;            ///< Chord root (0-11 for C-B, -1 = unknown)
@@ -161,17 +197,7 @@ struct FrameBuffer {
 
   /// @brief Clears all data.
   void clear() {
-    n_frames = 0;
-    n_mels = 0;
-    n_chroma = 0;
-    feature_flags = 0;
-    timestamps.clear();
-    mel.clear();
-    chroma.clear();
-    onset_strength.clear();
-    rms_energy.clear();
-    spectral_centroid.clear();
-    spectral_flatness.clear();
+    streaming_detail::clear_frame_buffer(*this);
     chord_root.clear();
     chord_quality.clear();
     chord_confidence.clear();
@@ -179,16 +205,7 @@ struct FrameBuffer {
 
   /// @brief Reserves capacity for n frames.
   void reserve(size_t n, int mels, int chroma, uint32_t features) {
-    n_mels = mels;
-    n_chroma = chroma;
-    feature_flags = features;
-    timestamps.reserve(n);
-    mel.reserve(n * static_cast<size_t>(mels));
-    this->chroma.reserve(n * static_cast<size_t>(chroma));
-    onset_strength.reserve(n);
-    rms_energy.reserve(n);
-    spectral_centroid.reserve(n);
-    spectral_flatness.reserve(n);
+    streaming_detail::reserve_frame_buffer(*this, n, mels, chroma, features);
     chord_root.reserve(n);
     chord_quality.reserve(n);
     chord_confidence.reserve(n);
@@ -240,32 +257,11 @@ struct QuantizedFrameBufferU8 {
   std::vector<uint8_t> spectral_flatness;  ///< [n_frames] quantized flatness
 
   /// @brief Clears all data.
-  void clear() {
-    n_frames = 0;
-    n_mels = 0;
-    n_chroma = 0;
-    feature_flags = 0;
-    timestamps.clear();
-    mel.clear();
-    chroma.clear();
-    onset_strength.clear();
-    rms_energy.clear();
-    spectral_centroid.clear();
-    spectral_flatness.clear();
-  }
+  void clear() { streaming_detail::clear_frame_buffer(*this); }
 
   /// @brief Reserves capacity for n frames.
   void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
-    n_mels = mels;
-    n_chroma = chroma_bins;
-    feature_flags = features;
-    timestamps.reserve(n);
-    mel.reserve(n * mels);
-    chroma.reserve(n * static_cast<size_t>(chroma_bins));
-    onset_strength.reserve(n);
-    rms_energy.reserve(n);
-    spectral_centroid.reserve(n);
-    spectral_flatness.reserve(n);
+    streaming_detail::reserve_frame_buffer(*this, n, mels, chroma_bins, features);
   }
 };
 
@@ -286,32 +282,11 @@ struct QuantizedFrameBufferI16 {
   std::vector<int16_t> spectral_flatness;  ///< [n_frames] quantized flatness
 
   /// @brief Clears all data.
-  void clear() {
-    n_frames = 0;
-    n_mels = 0;
-    n_chroma = 0;
-    feature_flags = 0;
-    timestamps.clear();
-    mel.clear();
-    chroma.clear();
-    onset_strength.clear();
-    rms_energy.clear();
-    spectral_centroid.clear();
-    spectral_flatness.clear();
-  }
+  void clear() { streaming_detail::clear_frame_buffer(*this); }
 
   /// @brief Reserves capacity for n frames.
   void reserve(size_t n, int mels, int chroma_bins, uint32_t features) {
-    n_mels = mels;
-    n_chroma = chroma_bins;
-    feature_flags = features;
-    timestamps.reserve(n);
-    mel.reserve(n * mels);
-    chroma.reserve(n * static_cast<size_t>(chroma_bins));
-    onset_strength.reserve(n);
-    rms_energy.reserve(n);
-    spectral_centroid.reserve(n);
-    spectral_flatness.reserve(n);
+    streaming_detail::reserve_frame_buffer(*this, n, mels, chroma_bins, features);
   }
 };
 

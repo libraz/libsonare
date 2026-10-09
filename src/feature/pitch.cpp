@@ -326,9 +326,7 @@ void check_yin_rate_params(int sr, const PitchConfig& config) {
           " or frame_length=" + std::to_string(static_cast<int>(std::ceil(periods)) + 1));
 }
 
-}  // namespace
-
-PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
+int validate_yin_track_input(const Audio& audio, const PitchConfig& config) {
   SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
   SONARE_CHECK_MSG(config.frame_length > 0, ErrorCode::InvalidParameter,
                    "frame_length must be > 0");
@@ -350,28 +348,50 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
                    ErrorCode::InvalidParameter,
                    "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
 
-  int sr = audio.sample_rate();
+  const int sr = audio.sample_rate();
   check_yin_rate_params(sr, config);
+  return sr;
+}
+
+struct PreparedPitchFrames {
   std::vector<float> padded;
-  const float* data = audio.data();
-  size_t signal_samples = audio.size();
+  size_t signal_samples = 0;
+  int n_frames = 0;
+
+  const float* data(const Audio& audio) const noexcept {
+    return padded.empty() ? audio.data() : padded.data();
+  }
+};
+
+PreparedPitchFrames prepare_pitch_frames(const Audio& audio, const PitchConfig& config) {
+  PreparedPitchFrames frames;
+  frames.signal_samples = audio.size();
   if (config.center) {
-    padded = sonare::pad_center(audio.data(), audio.size(),
-                                audio.size() + static_cast<size_t>(config.frame_length));
-    data = padded.data();
-    signal_samples = padded.size();
+    frames.padded = sonare::pad_center(audio.data(), audio.size(),
+                                       audio.size() + static_cast<size_t>(config.frame_length));
+    frames.signal_samples = frames.padded.size();
   }
   // Compute the frame count in size_t to avoid int overflow / unsigned wrap for
   // long signals; guard the case where the signal is shorter than one frame.
-  if (signal_samples < static_cast<size_t>(config.frame_length)) {
-    return PitchResult();
+  if (frames.signal_samples < static_cast<size_t>(config.frame_length)) {
+    return frames;
   }
-  int n_frames = 1 + static_cast<int>((signal_samples - static_cast<size_t>(config.frame_length)) /
-                                      static_cast<size_t>(config.hop_length));
+  frames.n_frames =
+      1 + static_cast<int>((frames.signal_samples - static_cast<size_t>(config.frame_length)) /
+                           static_cast<size_t>(config.hop_length));
+  return frames;
+}
 
-  if (n_frames <= 0) {
+}  // namespace
+
+PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
+  const int sr = validate_yin_track_input(audio, config);
+  const PreparedPitchFrames frames = prepare_pitch_frames(audio, config);
+  if (frames.n_frames <= 0) {
     return PitchResult();
   }
+  const float* data = frames.data(audio);
+  const int n_frames = frames.n_frames;
 
   PitchResult result;
   result.f0.resize(n_frames);
@@ -402,51 +422,13 @@ PitchResult yin_track(const Audio& audio, const PitchConfig& config) {
 }
 
 PitchResult pyin(const Audio& audio, const PitchConfig& config) {
-  SONARE_CHECK_MSG(!audio.empty(), ErrorCode::InvalidParameter, "audio must not be empty");
-  SONARE_CHECK_MSG(config.frame_length > 0, ErrorCode::InvalidParameter,
-                   "frame_length must be > 0");
-  SONARE_CHECK_MSG(config.hop_length > 0, ErrorCode::InvalidParameter, "hop_length must be > 0");
-  // Exclusive lower bound, so not SONARE_CHECK_RANGE.
-  SONARE_CHECK_MSG(config.threshold > 0.0f && config.threshold <= 1.0f, ErrorCode::InvalidParameter,
-                   "threshold must be in (0, 1], got " + util::to_text(config.threshold));
-  // The same domain the piptrack front-end already enforces on these two
-  // fields. Both engines are reachable from one public entry point (the pitch
-  // command's --algorithm switch), so a config either engine rejects has to be
-  // rejected by the other: yin_track used to accept fmin >= fmax and answer
-  // "0 Hz, 0 % voiced" for every frame, which reads as a valid analysis of an
-  // untuned signal rather than as the swapped-arguments mistake it is. Checked
-  // before the short-signal early returns so the verdict is a property of the
-  // arguments, not of the input length.
-  SONARE_CHECK_MSG(numeric::finite_positive(config.fmin), ErrorCode::InvalidParameter,
-                   "fmin must be finite and > 0, got " + util::to_text(config.fmin));
-  // Finite, not merely > fmin: n_pitch_bins below is cast to int from
-  // log2(fmax / fmin), and an infinite fmax makes that conversion undefined.
-  SONARE_CHECK_MSG(numeric::finite(config.fmax) && config.fmax > config.fmin,
-                   ErrorCode::InvalidParameter,
-                   "fmax must be finite and > fmin, got " + util::to_text(config.fmax));
-
-  int sr = audio.sample_rate();
-  check_yin_rate_params(sr, config);
-  std::vector<float> padded;
-  const float* data = audio.data();
-  size_t signal_samples = audio.size();
-  if (config.center) {
-    padded = sonare::pad_center(audio.data(), audio.size(),
-                                audio.size() + static_cast<size_t>(config.frame_length));
-    data = padded.data();
-    signal_samples = padded.size();
-  }
-  // Compute the frame count in size_t to avoid int overflow / unsigned wrap for
-  // long signals; guard the case where the signal is shorter than one frame.
-  if (signal_samples < static_cast<size_t>(config.frame_length)) {
+  const int sr = validate_yin_track_input(audio, config);
+  const PreparedPitchFrames frames = prepare_pitch_frames(audio, config);
+  if (frames.n_frames <= 0) {
     return PitchResult();
   }
-  int n_frames = 1 + static_cast<int>((signal_samples - static_cast<size_t>(config.frame_length)) /
-                                      static_cast<size_t>(config.hop_length));
-
-  if (n_frames <= 0) {
-    return PitchResult();
-  }
+  const float* data = frames.data(audio);
+  const int n_frames = frames.n_frames;
 
   // Convert frequency to period
   int min_period = static_cast<int>(std::floor(static_cast<float>(sr) / config.fmax));
