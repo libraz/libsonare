@@ -153,8 +153,8 @@ def stft(
             n_fft=out.n_fft,
             hop_length=out.hop_length,
             sample_rate=out.sample_rate,
-            magnitude=[float(out.magnitude[i]) for i in range(total)],
-            power=[float(out.power[i]) for i in range(total)],
+            magnitude=_float_array_result(out.magnitude, total),
+            power=_float_array_result(out.power, total),
         )
     finally:
         lib.sonare_free_stft_result(ctypes.byref(out))
@@ -260,8 +260,8 @@ def mel_spectrogram(
             n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            power=[float(out.power[i]) for i in range(total)],
-            db=[float(out.db[i]) for i in range(total)],
+            power=_float_array_result(out.power, total),
+            db=_float_array_result(out.db, total),
             n_fft=out.n_fft,
             fmin=float(out.fmin),
             fmax=float(out.fmax),
@@ -325,7 +325,7 @@ def mfcc(
         return MfccResult(
             n_mfcc=out.n_mfcc,
             n_frames=out.n_frames,
-            coefficients=[float(out.coefficients[i]) for i in range(total)],
+            coefficients=_float_array_result(out.coefficients, total),
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
             n_fft=out.n_fft,
@@ -420,8 +420,8 @@ def chroma(
             n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            features=[float(out.features[i]) for i in range(total)],
-            mean_energy=[float(out.mean_energy[i]) for i in range(out.n_chroma)],
+            features=_float_array_result(out.features, total),
+            mean_energy=_float_array_result(out.mean_energy, out.n_chroma),
         )
     finally:
         lib.sonare_free_chroma_result(ctypes.byref(out))
@@ -462,8 +462,8 @@ def _chroma_variant(
             n_frames=out.n_frames,
             sample_rate=out.sample_rate,
             hop_length=out.hop_length,
-            features=[float(out.features[i]) for i in range(total)],
-            mean_energy=[float(out.mean_energy[i]) for i in range(out.n_chroma)],
+            features=_float_array_result(out.features, total),
+            mean_energy=_float_array_result(out.mean_energy, out.n_chroma),
         )
     finally:
         lib.sonare_free_chroma_result(ctypes.byref(out))

@@ -23,6 +23,7 @@ from ._runtime import (
     _SIZE_T_MAX,
     SonareValueError,
     _check,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _resolve_enum,
@@ -366,8 +367,8 @@ def mastering_repair_trim_silence_stereo(
         # instead would index a NULL pointer and raise on a documented success.
         n = int(out.length)
         return TrimSilenceStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             report=_extract_trim_report(out.report),
             left_range=_extract_trim_range(out.left_range),

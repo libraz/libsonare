@@ -16,6 +16,7 @@ from ._runtime import (
     SonareValueError,
     _call_float_transform,
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -575,8 +576,8 @@ def hpss(
     try:
         n = out.length
         return HpssResult(
-            harmonic=[float(out.harmonic[i]) for i in range(n)],
-            percussive=[float(out.percussive[i]) for i in range(n)],
+            harmonic=_float_array_result(out.harmonic, n),
+            percussive=_float_array_result(out.percussive, n),
             length=int(n),
             sample_rate=int(out.sample_rate),
         )
@@ -606,8 +607,8 @@ def _hpss_legacy(
     try:
         n = out.length
         return HpssResult(
-            harmonic=[float(out.harmonic[i]) for i in range(n)],
-            percussive=[float(out.percussive[i]) for i in range(n)],
+            harmonic=_float_array_result(out.harmonic, n),
+            percussive=_float_array_result(out.percussive, n),
             length=int(n),
             sample_rate=int(out.sample_rate),
         )

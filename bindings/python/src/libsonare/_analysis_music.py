@@ -22,6 +22,7 @@ from ._ffi import (
 from ._runtime import (
     SonareValueError,
     _check,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _to_c_float,
@@ -498,7 +499,7 @@ def detect_boundaries(
                 )
                 for i in range(out.boundary_count)
             ],
-            novelty_curve=[float(out.novelty_curve[i]) for i in range(out.novelty_length)],
+            novelty_curve=_float_array_result(out.novelty_curve, out.novelty_length),
             novelty_peak=float(out.novelty_peak),
             sample_rate=int(out.sample_rate),
             hop_length=int(out.hop_length),

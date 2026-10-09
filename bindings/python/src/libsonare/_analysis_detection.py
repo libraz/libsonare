@@ -14,6 +14,7 @@ from ._ffi_types_core import (
 from ._runtime import (
     SonareValueError,
     _check,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _mode_values,
@@ -246,7 +247,7 @@ def detect_beats(
         )
         _check(rc)
         count = out_count.value
-        return [float(out_times[i]) for i in range(count)]
+        return _float_array_result(out_times, count)
 
 
 @_guard_buffer("samples")
@@ -267,7 +268,7 @@ def detect_downbeats(
         )
         _check(rc)
         count = out_count.value
-        return [float(out_times[i]) for i in range(count)]
+        return _float_array_result(out_times, count)
 
 
 @_guard_buffer("samples")
@@ -327,7 +328,7 @@ def detect_onsets(
         )
         _check(rc)
         count = out_count.value
-        return [float(out_times[i]) for i in range(count)]
+        return _float_array_result(out_times, count)
 
 
 # camelCase → snake_case quality name table (mirrors detect_chords).

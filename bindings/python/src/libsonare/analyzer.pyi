@@ -571,7 +571,8 @@ def detect_boundaries(
 
     ``reference_window`` is a one-sided span in seconds (default 60) for the local
     reference the relative ``threshold`` is measured against, a lone dominant event
-    set aside; 0 disables that threshold. Boundaries with ``strength`` below ``threshold`` can still be
+    set aside; 0 disables that threshold. Boundaries with ``strength`` below ``threshold``
+    can still be
     returned, because the gate is local while ``strength`` ranks within the track.
     """
     ...

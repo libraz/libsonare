@@ -82,7 +82,7 @@ def hz_to_note(hz: float) -> str:
         SonareValueError: If ``hz`` is not finite and positive.
     """
     lib = _get_lib()
-    result = lib.sonare_hz_to_note(_to_c_float(hz, "hz"))
+    result: bytes | None = lib.sonare_hz_to_note(_to_c_float(hz, "hz"))
     if not result:
         raise _refused_argument(f"hz has no note name: {hz!r}")
     return result.decode("utf-8")

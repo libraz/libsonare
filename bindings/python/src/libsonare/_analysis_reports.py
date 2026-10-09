@@ -31,6 +31,7 @@ from ._runtime import (
     SonareError,
     SonareValueError,
     _check,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _narrow_int,
@@ -308,7 +309,7 @@ def analyze(
     )
     _check(rc)
     try:
-        beat_times = [float(out.beat_times[i]) for i in range(out.beat_count)]
+        beat_times = _float_array_result(out.beat_times, out.beat_count)
         relation_names = ("primary", "half", "double", "other")
         return AnalysisResult(
             bpm=float(out.bpm),
@@ -703,10 +704,8 @@ def analyze_bpm(
                 )
                 for i in range(out.candidate_count)
             ],
-            autocorrelation=[
-                float(out.autocorrelation[i]) for i in range(out.autocorrelation_count)
-            ],
-            tempogram=[float(out.tempogram[i]) for i in range(out.tempogram_count)],
+            autocorrelation=_float_array_result(out.autocorrelation, out.autocorrelation_count),
+            tempogram=_float_array_result(out.tempogram, out.tempogram_count),
         )
     finally:
         lib.sonare_free_bpm_analysis_result(ctypes.byref(out))
@@ -779,8 +778,8 @@ def analyze_impulse_response(
             c50=float(out.c50),
             c80=float(out.c80),
             d50=float(out.d50),
-            rt60_bands=[float(out.rt60_bands[i]) for i in range(count)],
-            edt_bands=[float(out.edt_bands[i]) for i in range(count)],
+            rt60_bands=_float_array_result(out.rt60_bands, count),
+            edt_bands=_float_array_result(out.edt_bands, count),
             c50_bands=_optional_float_array_result(out.c50_bands, count),
             c80_bands=_optional_float_array_result(out.c80_bands, count),
             confidence=float(out.confidence),
@@ -822,8 +821,8 @@ def detect_acoustic(
             c50=float(out.c50),
             c80=float(out.c80),
             d50=float(out.d50),
-            rt60_bands=[float(out.rt60_bands[i]) for i in range(count)],
-            edt_bands=[float(out.edt_bands[i]) for i in range(count)],
+            rt60_bands=_float_array_result(out.rt60_bands, count),
+            edt_bands=_float_array_result(out.edt_bands, count),
             c50_bands=_optional_float_array_result(out.c50_bands, count),
             c80_bands=_optional_float_array_result(out.c80_bands, count),
             confidence=float(out.confidence),
@@ -889,7 +888,7 @@ def analyze_rhythm(
             syncopation=float(out.syncopation),
             pattern_regularity=float(out.pattern_regularity),
             tempo_stability=float(out.tempo_stability),
-            beat_intervals=[float(out.beat_intervals[i]) for i in range(out.beat_interval_count)],
+            beat_intervals=_float_array_result(out.beat_intervals, out.beat_interval_count),
         )
     finally:
         lib.sonare_free_rhythm_result(ctypes.byref(out))
@@ -925,8 +924,8 @@ def analyze_dynamics(
             crest_factor=float(out.crest_factor),
             loudness_range_db=float(out.loudness_range_db),
             is_compressed=bool(out.is_compressed),
-            loudness_times=[float(out.loudness_times[i]) for i in range(out.loudness_count)],
-            loudness_rms_db=[float(out.loudness_rms_db[i]) for i in range(out.loudness_count)],
+            loudness_times=_float_array_result(out.loudness_times, out.loudness_count),
+            loudness_rms_db=_float_array_result(out.loudness_rms_db, out.loudness_count),
         )
     finally:
         lib.sonare_free_dynamics_result(ctypes.byref(out))
@@ -969,15 +968,13 @@ def analyze_timbre(
             density=float(out.density),
             roughness=float(out.roughness),
             complexity=float(out.complexity),
-            spectral_centroid=[
-                float(out.spectral_centroid[i]) for i in range(out.spectral_centroid_count)
-            ],
-            spectral_flatness=[
-                float(out.spectral_flatness[i]) for i in range(out.spectral_flatness_count)
-            ],
-            spectral_rolloff=[
-                float(out.spectral_rolloff[i]) for i in range(out.spectral_rolloff_count)
-            ],
+            spectral_centroid=_float_array_result(
+                out.spectral_centroid, out.spectral_centroid_count
+            ),
+            spectral_flatness=_float_array_result(
+                out.spectral_flatness, out.spectral_flatness_count
+            ),
+            spectral_rolloff=_float_array_result(out.spectral_rolloff, out.spectral_rolloff_count),
             timbre_over_time=[
                 TimbreFrame(
                     brightness=float(out.timbre_over_time[i].brightness),

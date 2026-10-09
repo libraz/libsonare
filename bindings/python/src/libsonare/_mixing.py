@@ -22,6 +22,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _curve_value,
+    _float_array_result,
     _get_lib,
     _last_error,
     _meter_tap_value,
@@ -885,8 +886,8 @@ class Mixer:
             )
         )
         return MixerStereoResult(
-            left=[float(out_left[i]) for i in range(length)],
-            right=[float(out_right[i]) for i in range(length)],
+            left=_float_array_result(out_left, length),
+            right=_float_array_result(out_right, length),
             sample_rate=int(self._sample_rate),
         )
 
@@ -945,8 +946,8 @@ class Mixer:
             )
         )
         return MixerStereoResult(
-            left=[float(out_left[i]) for i in range(count)],
-            right=[float(out_right[i]) for i in range(count)],
+            left=_float_array_result(out_left, count),
+            right=_float_array_result(out_right, count),
             sample_rate=int(self._sample_rate),
         )
 
@@ -1179,8 +1180,8 @@ def mix_stereo(
             meters.append(_mix_meter_from_c(snapshot))
 
         return MixResult(
-            left=[float(out_left[i]) for i in range(length)],
-            right=[float(out_right[i]) for i in range(length)],
+            left=_float_array_result(out_left, length),
+            right=_float_array_result(out_right, length),
             sample_rate=int(sample_rate),
             meters=meters,
         )

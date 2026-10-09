@@ -12,6 +12,7 @@ from ._effects_repair_common import _linked_channel_planes
 from ._errors import SonareValueError, _invalid_state, _not_supported, _unknown_error
 from ._runtime import (
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -613,7 +614,7 @@ class Audio:
                 handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
-            return [float(out_times[i]) for i in range(out_count.value)]
+            return _float_array_result(out_times, out_count.value)
 
     def detect_downbeats(self) -> list[float]:
         """Detect downbeat times in seconds.
@@ -637,7 +638,7 @@ class Audio:
                 handle, ctypes.byref(out_times), ctypes.byref(out_count)
             )
             _check(rc)
-            return [float(out_times[i]) for i in range(out_count.value)]
+            return _float_array_result(out_times, out_count.value)
 
     def detect_onsets(self) -> list[float]:
         """Detect onset times in seconds.
@@ -653,7 +654,7 @@ class Audio:
         )
         _check(rc)
         try:
-            return [float(out_times[i]) for i in range(out_count.value)]
+            return _float_array_result(out_times, out_count.value)
         finally:
             if out_times and out_count.value > 0:
                 self._lib.sonare_free_floats(out_times)
@@ -1273,7 +1274,7 @@ class Audio:
         )
         _check(rc)
         try:
-            windows = [float(out.window_rms_db[i]) for i in range(int(out.window_count))]
+            windows = _float_array_result(out.window_rms_db, int(out.window_count))
             return DynamicRangeReport(
                 dynamic_range_db=float(out.dynamic_range_db),
                 low_percentile_db=float(out.low_percentile_db),

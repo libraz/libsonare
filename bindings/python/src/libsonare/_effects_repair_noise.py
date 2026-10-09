@@ -39,6 +39,7 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -193,7 +194,7 @@ def mastering_repair_denoise_classical(
 def _extract_noise_detection(raw: Any) -> NoiseDetection:
     return NoiseDetection(
         floor_dbfs=float(raw.floor_dbfs),
-        band_floor_dbfs=[float(v) for v in raw.band_floor_dbfs],
+        band_floor_dbfs=_float_array_result(raw.band_floor_dbfs, len(raw.band_floor_dbfs)),
     )
 
 
@@ -472,8 +473,8 @@ def mastering_repair_denoise_classical_stereo(
         _check(rc)
         n = int(out.length)
         return DenoiseStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             report=_extract_denoise_report(out.report),
         )
@@ -682,7 +683,7 @@ def _extract_hum_detection(raw: Any) -> HumDetection:
         fundamental_hz=float(raw.fundamental_hz),
         fundamental_prominence=float(raw.fundamental_prominence),
         harmonics=int(raw.harmonics),
-        harmonic_dbfs=[float(v) for v in raw.harmonic_dbfs],
+        harmonic_dbfs=_float_array_result(raw.harmonic_dbfs, len(raw.harmonic_dbfs)),
     )
 
 
@@ -858,8 +859,8 @@ def mastering_repair_dehum_stereo(
         _check(rc)
         n = int(out.length)
         return DehumStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             left_report=_extract_dehum_report(out.left_report),
             right_report=_extract_dehum_report(out.right_report),

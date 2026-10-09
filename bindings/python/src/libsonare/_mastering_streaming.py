@@ -22,6 +22,7 @@ from ._runtime import (
     SonareValueError,
     _check,
     _check_realtime,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _last_error,
@@ -275,7 +276,7 @@ class StreamingMasteringChain:
             self._handle, c_array, _to_c_size_t(length, "length")
         )
         _check(rc)
-        return [float(c_array[i]) for i in range(length)]
+        return _float_array_result(c_array, length)
 
     def process_stereo(
         self,
@@ -297,8 +298,8 @@ class StreamingMasteringChain:
         )
         _check(rc)
         return (
-            [float(left_array[i]) for i in range(left_length)],
-            [float(right_array[i]) for i in range(right_length)],
+            _float_array_result(left_array, left_length),
+            _float_array_result(right_array, right_length),
         )
 
     def flush_mono(self) -> list[float]:
@@ -318,7 +319,7 @@ class StreamingMasteringChain:
             ctypes.byref(written),
         )
         _check(rc)
-        return [float(block[i]) for i in range(written.value)]
+        return _float_array_result(block, written.value)
 
     def flush_stereo(self) -> tuple[list[float], list[float]]:
         """Stereo counterpart of :meth:`flush_mono`."""
@@ -335,8 +336,8 @@ class StreamingMasteringChain:
         )
         _check(rc)
         return (
-            [float(left[i]) for i in range(written.value)],
-            [float(right[i]) for i in range(written.value)],
+            _float_array_result(left, written.value),
+            _float_array_result(right, written.value),
         )
 
     def reset(self) -> None:
@@ -673,7 +674,7 @@ class StreamingEqualizer:
             )
         )
         self._sidechain_refs = None
-        return [float(c_array[i]) for i in range(length)]
+        return _float_array_result(c_array, length)
 
     def process_stereo(
         self,
@@ -702,8 +703,8 @@ class StreamingEqualizer:
         )
         self._sidechain_refs = None
         return (
-            [float(left_array[i]) for i in range(left_length)],
-            [float(right_array[i]) for i in range(right_length)],
+            _float_array_result(left_array, left_length),
+            _float_array_result(right_array, right_length),
         )
 
     def spectrum(self) -> EqSpectrumSnapshot:
@@ -714,16 +715,16 @@ class StreamingEqualizer:
         pre_count = int(out.pre_count)
         post_count = int(out.post_count)
         return EqSpectrumSnapshot(
-            pre_left=[float(out.pre_left[i]) for i in range(pre_count)],
-            pre_right=[float(out.pre_right[i]) for i in range(pre_count)],
-            post_left=[float(out.post_left[i]) for i in range(post_count)],
-            post_right=[float(out.post_right[i]) for i in range(post_count)],
+            pre_left=_float_array_result(out.pre_left, pre_count),
+            pre_right=_float_array_result(out.pre_right, pre_count),
+            post_left=_float_array_result(out.post_left, post_count),
+            post_right=_float_array_result(out.post_right, post_count),
             # Sized from the ctypes fields themselves, the way the meter
             # telemetry conversion reads its fixed arrays: a literal repeating
             # SONARE_EQ_MAX_BANDS / SONARE_EQ_SPECTRUM_PROFILE_BANDS would keep
             # returning the old length after the C arrays grew.
-            band_gain_db=[float(value) for value in out.band_gain_db],
-            profile_db=[float(value) for value in out.profile_db],
+            band_gain_db=_float_array_result(out.band_gain_db, len(out.band_gain_db)),
+            profile_db=_float_array_result(out.profile_db, len(out.profile_db)),
             last_auto_gain_db=float(out.last_auto_gain_db),
             seq=int(out.seq),
         )
@@ -777,7 +778,7 @@ class StreamingEqualizer:
                 out,
             )
         )
-        return [float(out[i]) for i in range(count)]
+        return _float_array_result(out, count)
 
     @property
     def latency_samples(self) -> int:

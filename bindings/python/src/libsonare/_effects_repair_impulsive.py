@@ -31,6 +31,7 @@ from ._runtime import (
     SonareValueError,
     _as_float32_buffer,
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -295,8 +296,8 @@ def mastering_repair_declick_stereo(
         _check(rc)
         n = int(out.length)
         return DeclickStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             left_report=_extract_declick_report(out.left_report),
             right_report=_extract_declick_report(out.right_report),
@@ -391,8 +392,9 @@ def mastering_repair_detect_clipping(
     count runs of at least three consecutive bit-identical samples at or above
     -40 dBFS that sit within 1 dB of the flat level (the largest run level once
     the two highest runs are set aside, so louder unclipped audio cannot move
-    it), rather than samples at or past ``clip_threshold``. That lets them fire on material clipped in one
-    tool and attenuated in another, which leaves nothing at the threshold and
+    it), rather than samples at or past ``clip_threshold``. That lets them fire
+    on material clipped in one tool and attenuated in another, which leaves
+    nothing at the threshold and
     so reads as clean on the four fields above. They do NOT read
     ``clip_threshold`` at all, and a genuinely flat-topped waveform -- a
     square or pulse train, or a fully limited master -- counts as clipped
@@ -518,8 +520,8 @@ def mastering_repair_declip_stereo(
         _check(rc)
         n = int(out.length)
         return DeclipStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             left_report=_extract_declip_report(out.left_report),
             right_report=_extract_declip_report(out.right_report),
@@ -689,8 +691,8 @@ def mastering_repair_decrackle_stereo(
         _check(rc)
         n = int(out.length)
         return DecrackleStereoResult(
-            left=[float(out.left[i]) for i in range(n)],
-            right=[float(out.right[i]) for i in range(n)],
+            left=_float_array_result(out.left, n),
+            right=_float_array_result(out.right, n),
             length=n,
             left_report=_extract_decrackle_report(out.left_report),
             right_report=_extract_decrackle_report(out.right_report),

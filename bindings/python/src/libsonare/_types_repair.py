@@ -82,7 +82,8 @@ class ClipDetection:
     it was attenuated. The flat-top fields instead count runs of at least
     three consecutive bit-identical samples, at least -40 dBFS, within 1 dB of the
     channel's flat level, so they still fire on a clipped tone that was
-    attenuated afterward and a loud transient elsewhere does not hide them. A genuinely flat-topped waveform -- a square or
+    attenuated afterward and a loud transient elsewhere does not hide them. A genuinely
+    flat-topped waveform -- a square or
     pulse train, or a fully limited master -- counts as clipped here too and
     cannot be told apart from it in the time domain. ``flat_level`` is the
     magnitude the counted runs sit at -- the largest run level once the two

@@ -20,6 +20,7 @@ from ._mastering_offline import _assistant_params, _mastering_params
 from ._runtime import (
     SonareValueError,
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _guard_buffer,
@@ -82,7 +83,7 @@ def mastering_pair_process(
     _check(rc)
     try:
         return MasteringResult(
-            samples=[float(out.samples[i]) for i in range(out.length)],
+            samples=_float_array_result(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -148,8 +149,8 @@ def mastering_pair_process_stereo(
         )
         _check(rc)
         return MasteringStereoResult(
-            left=[float(out.left[i]) for i in range(out.length)],
-            right=[float(out.right[i]) for i in range(out.length)],
+            left=_float_array_result(out.left, out.length),
+            right=_float_array_result(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),

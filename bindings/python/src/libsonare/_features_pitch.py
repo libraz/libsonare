@@ -258,8 +258,8 @@ def pitch_yin(
         n = out.n_frames
         return PitchResult(
             n_frames=n,
-            f0=[float(out.f0[i]) for i in range(n)],
-            voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
+            f0=_float_array_result(out.f0, n),
+            voiced_prob=_float_array_result(out.voiced_prob, n),
             voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
             median_f0=float(out.median_f0),
             mean_f0=float(out.mean_f0),
@@ -315,8 +315,8 @@ def pitch_pyin(
         n = out.n_frames
         return PitchResult(
             n_frames=n,
-            f0=[float(out.f0[i]) for i in range(n)],
-            voiced_prob=[float(out.voiced_prob[i]) for i in range(n)],
+            f0=_float_array_result(out.f0, n),
+            voiced_prob=_float_array_result(out.voiced_prob, n),
             voiced_flag=[bool(out.voiced_flag[i]) for i in range(n)],
             median_f0=float(out.median_f0),
             mean_f0=float(out.mean_f0),

@@ -26,6 +26,7 @@ from ._runtime import (
     SonareValueError,
     _call_float_transform,
     _check,
+    _float_array_result,
     _from_c_float_array,
     _get_lib,
     _mode_value,
@@ -1050,7 +1051,7 @@ def metering_dynamic_range(
     )
     _check(rc)
     try:
-        windows = [float(out.window_rms_db[i]) for i in range(int(out.window_count))]
+        windows = _float_array_result(out.window_rms_db, int(out.window_count))
         return DynamicRangeReport(
             dynamic_range_db=float(out.dynamic_range_db),
             low_percentile_db=float(out.low_percentile_db),

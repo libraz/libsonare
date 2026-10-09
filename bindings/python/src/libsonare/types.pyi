@@ -139,7 +139,10 @@ class MasteringInsertSlot(TypedDict):
     minCrossoverCutoffs: int
 
 class MasteringInsertParamDependency(TypedDict):
-    """A sibling key whose value bounds this parameter's; ``relation`` reads from this parameter's side."""
+    """A sibling key whose value bounds this parameter's.
+
+    ``relation`` reads from this parameter's side.
+    """
 
     key: str
     relation: MasteringInsertParamRelation
@@ -2698,7 +2701,8 @@ class QuantizeConfig:
 
 class StreamConfig:
     sample_rate: int
-    n_fft: int  # window in samples at 44100 Hz; rescaled below that rate, never shorter than hop_length
+    # Window in samples at 44100 Hz; rescaled below that rate, never shorter than hop_length.
+    n_fft: int
     hop_length: int
     n_mels: int
     fmin: float

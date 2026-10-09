@@ -22,6 +22,7 @@ from ._ffi import (
 from ._runtime import (
     SonareValueError,
     _check,
+    _float_array_result,
     _get_lib,
     _guard_buffer,
     _last_error,
@@ -88,7 +89,7 @@ def mastering(
     )
     _check(rc)
     try:
-        processed = [float(out.samples[i]) for i in range(out.length)]
+        processed = _float_array_result(out.samples, out.length)
         return MasteringResult(
             samples=processed,
             sample_rate=int(out.sample_rate),
@@ -436,7 +437,7 @@ def mastering_process(
     _check(rc)
     try:
         return MasteringResult(
-            samples=[float(out.samples[i]) for i in range(out.length)],
+            samples=_float_array_result(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -480,8 +481,8 @@ def mastering_process_stereo(
     _check(rc)
     try:
         return MasteringStereoResult(
-            left=[float(out.left[i]) for i in range(out.length)],
-            right=[float(out.right[i]) for i in range(out.length)],
+            left=_float_array_result(out.left, out.length),
+            right=_float_array_result(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -549,14 +550,14 @@ def _extract_stage_gain_reductions(
     if not stages_ptr or not values_ptr or count == 0:
         return []
     raw_stages = cast(Any, stages_ptr)
-    raw_values = cast(Any, values_ptr)
+    values = _float_array_result(values_ptr, count)
     result: list[StageGainReduction] = []
     for i in range(count):
         raw = raw_stages[i]
         result.append(
             StageGainReduction(
                 stage=raw.decode("utf-8") if raw else "",
-                gain_reduction_db=float(raw_values[i]),
+                gain_reduction_db=values[i],
             )
         )
     return result
@@ -581,7 +582,9 @@ def _extract_mastering_report(raw: object) -> MasteringReport:
         applied_gain_db=float(report.applied_gain_db),
         max_gain_reduction_db=float(report.max_gain_reduction_db),
         loudness_target_limited=bool(report.loudness_target_limited),
-        band_energy_delta_db=[float(value) for value in report.band_energy_delta_db],
+        band_energy_delta_db=_float_array_result(
+            report.band_energy_delta_db, len(report.band_energy_delta_db)
+        ),
     )
 
 
@@ -697,7 +700,7 @@ def mastering_chain(
     _check(rc)
     try:
         return MasteringChainResult(
-            samples=[float(out.samples[i]) for i in range(out.length)],
+            samples=_float_array_result(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -796,8 +799,8 @@ def mastering_chain_stereo(
     _check(rc)
     try:
         return MasteringChainStereoResult(
-            left=[float(out.left[i]) for i in range(out.length)],
-            right=[float(out.right[i]) for i in range(out.length)],
+            left=_float_array_result(out.left, out.length),
+            right=_float_array_result(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -933,7 +936,7 @@ def master_audio(
     _check(rc)
     try:
         return MasteringChainResult(
-            samples=[float(out.samples[i]) for i in range(out.length)],
+            samples=_float_array_result(out.samples, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),
@@ -1035,8 +1038,8 @@ def master_audio_stereo(
     _check(rc)
     try:
         return MasteringChainStereoResult(
-            left=[float(out.left[i]) for i in range(out.length)],
-            right=[float(out.right[i]) for i in range(out.length)],
+            left=_float_array_result(out.left, out.length),
+            right=_float_array_result(out.right, out.length),
             sample_rate=int(out.sample_rate),
             input_lufs=float(out.input_lufs),
             output_lufs=float(out.output_lufs),

@@ -42,8 +42,8 @@ def _cqt_result_from_c(out: SonareCqtResult) -> CqtResult:
         n_frames=int(out.n_frames),
         hop_length=int(out.hop_length),
         sample_rate=int(out.sample_rate),
-        magnitude=[float(out.magnitude[i]) for i in range(total)],
-        frequencies=[float(out.frequencies[i]) for i in range(out.n_bins)],
+        magnitude=_float_array_result(out.magnitude, total),
+        frequencies=_float_array_result(out.frequencies, out.n_bins),
     )
 
 
@@ -259,7 +259,7 @@ def mel_to_stft(
         return InverseResult(
             rows=int(out.rows),
             n_frames=int(out.n_frames),
-            data=[float(out.data[i]) for i in range(total)],
+            data=_float_array_result(out.data, total),
         )
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
@@ -433,7 +433,7 @@ def mfcc_to_mel(
         return InverseResult(
             rows=int(out.rows),
             n_frames=int(out.n_frames),
-            data=[float(out.data[i]) for i in range(total)],
+            data=_float_array_result(out.data, total),
         )
     finally:
         lib.sonare_free_inverse_result(ctypes.byref(out))
@@ -519,7 +519,7 @@ def mfcc_to_audio(
     )
     _check(rc)
     try:
-        return [float(out[i]) for i in range(out_length.value)]
+        return _float_array_result(out, out_length.value)
     finally:
         lib.sonare_free_floats(out)
 
