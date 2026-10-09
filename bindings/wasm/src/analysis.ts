@@ -16,6 +16,7 @@ import {
 import type { SonareCapabilities } from './public_types.js';
 import type { SonareModule } from './sonare.js';
 
+export { EXPECTED_ABI_VERSION } from './abi.js';
 export { ErrorCode, isSonareError, SonareError } from './errors.js';
 export * from './feature_core.js';
 // Several modules here also hold functions the analysis-only embind source set

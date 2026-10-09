@@ -11,7 +11,7 @@ export { attachOpfsClipStream } from './clip_page_streamer.js';
 // With code-splitting disabled, the worklet bundle carries its own copy of the
 // module singleton. Re-export the lifecycle so that realm can initialize its
 // own wasm instance, independent of the main-thread `index` module.
-export { init, isInitialized } from './index.js';
+export { EXPECTED_ABI_VERSION, init, isInitialized } from './index.js';
 // Host-side mastering preview inside the worklet realm. Kept here rather than
 // left main-thread-only so a live preview does not have to round-trip audio to
 // the main thread; see the class doc for the prepare/loudness/latency contract.

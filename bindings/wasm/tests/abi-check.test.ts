@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as analysis from '../dist/analysis.js';
 import * as full from '../dist/index.js';
+import * as worklet from '../dist/worklet.js';
 
 type Entry = typeof full | typeof analysis;
 type Factory = NonNullable<Parameters<Entry['init']>[0]>['moduleFactory'];
@@ -29,5 +30,13 @@ describe.each([
 
     await expect(entry.init()).resolves.toBeUndefined();
     expect(entry.isInitialized()).toBe(true);
+  });
+});
+
+describe('EXPECTED_ABI_VERSION', () => {
+  it('is exported from every entry that takes a moduleFactory', () => {
+    expect(full.EXPECTED_ABI_VERSION).toBe(0x04030207);
+    expect(analysis.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
+    expect(worklet.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
   });
 });

@@ -38,6 +38,7 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 
+export { EXPECTED_ABI_VERSION } from './abi.js';
 export { alignTakeToReference } from './align_take.js';
 export type {
   BrowserAudioDecodeOptions,
