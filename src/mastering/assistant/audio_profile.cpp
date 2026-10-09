@@ -646,35 +646,34 @@ sonare::util::json::Object defects_to_json(const DefectProfile& defects) {
   // the config: a consumer reads one flag rather than having to tell an absent
   // block from a core too old to write one.
   json::Object out;
-  out.emplace("measured", json::Value(defects.measured));
-  out.emplace("clickCount", json::Value(static_cast<double>(defects.click_count)));
-  out.emplace("clickRejected", json::Value(static_cast<double>(defects.click_rejected)));
-  out.emplace("clickLongestRunSamples",
-              json::Value(static_cast<double>(defects.click_longest_run_samples)));
-  out.emplace("clickPerSecond", json::Value(defects.click_per_second));
-  out.emplace("crackleSampleCount", json::Value(static_cast<double>(defects.crackle_sample_count)));
-  out.emplace("crackleSampleFraction", json::Value(defects.crackle_sample_fraction));
-  out.emplace("cracklePerSecond", json::Value(defects.crackle_per_second));
-  out.emplace("clipSampleCount", json::Value(static_cast<double>(defects.clip_sample_count)));
-  out.emplace("clipRunCount", json::Value(static_cast<double>(defects.clip_run_count)));
-  out.emplace("clipLongestRunSamples",
-              json::Value(static_cast<double>(defects.clip_longest_run_samples)));
-  out.emplace("clipSampleFraction", json::Value(defects.clip_sample_fraction));
-  out.emplace("clipFlatRunCount", json::Value(static_cast<double>(defects.clip_flat_run_count)));
-  out.emplace("clipFlatSampleCount",
-              json::Value(static_cast<double>(defects.clip_flat_sample_count)));
-  out.emplace("clipLongestFlatRunSamples",
-              json::Value(static_cast<double>(defects.clip_longest_flat_run_samples)));
-  out.emplace("clipFlatLevel", json::Value(defects.clip_flat_level));
-  out.emplace("noiseFloorDbfs", json::Value(defects.noise_floor_dbfs));
-  out.emplace("noiseBandPeakDbfs", json::Value(defects.noise_band_peak_dbfs));
-  out.emplace("noiseBandPeakIndex", json::Value(defects.noise_band_peak_index));
-  out.emplace("humFundamentalHz", json::Value(defects.hum_fundamental_hz));
-  out.emplace("humFundamentalProminence", json::Value(defects.hum_fundamental_prominence));
-  out.emplace("humHarmonics", json::Value(defects.hum_harmonics));
-  out.emplace("humFundamentalDbfs", json::Value(defects.hum_fundamental_dbfs));
-  out.emplace("humPeakHarmonicDbfs", json::Value(defects.hum_peak_harmonic_dbfs));
-  out.emplace("lateDecayRatioDb", json::Value(defects.late_decay_ratio_db));
+  util::json::put(out, "measured", defects.measured);
+  util::json::put(out, "clickCount", static_cast<double>(defects.click_count));
+  util::json::put(out, "clickRejected", static_cast<double>(defects.click_rejected));
+  util::json::put(out, "clickLongestRunSamples",
+                  static_cast<double>(defects.click_longest_run_samples));
+  util::json::put(out, "clickPerSecond", defects.click_per_second);
+  util::json::put(out, "crackleSampleCount", static_cast<double>(defects.crackle_sample_count));
+  util::json::put(out, "crackleSampleFraction", defects.crackle_sample_fraction);
+  util::json::put(out, "cracklePerSecond", defects.crackle_per_second);
+  util::json::put(out, "clipSampleCount", static_cast<double>(defects.clip_sample_count));
+  util::json::put(out, "clipRunCount", static_cast<double>(defects.clip_run_count));
+  util::json::put(out, "clipLongestRunSamples",
+                  static_cast<double>(defects.clip_longest_run_samples));
+  util::json::put(out, "clipSampleFraction", defects.clip_sample_fraction);
+  util::json::put(out, "clipFlatRunCount", static_cast<double>(defects.clip_flat_run_count));
+  util::json::put(out, "clipFlatSampleCount", static_cast<double>(defects.clip_flat_sample_count));
+  util::json::put(out, "clipLongestFlatRunSamples",
+                  static_cast<double>(defects.clip_longest_flat_run_samples));
+  util::json::put(out, "clipFlatLevel", defects.clip_flat_level);
+  util::json::put(out, "noiseFloorDbfs", defects.noise_floor_dbfs);
+  util::json::put(out, "noiseBandPeakDbfs", defects.noise_band_peak_dbfs);
+  util::json::put(out, "noiseBandPeakIndex", defects.noise_band_peak_index);
+  util::json::put(out, "humFundamentalHz", defects.hum_fundamental_hz);
+  util::json::put(out, "humFundamentalProminence", defects.hum_fundamental_prominence);
+  util::json::put(out, "humHarmonics", defects.hum_harmonics);
+  util::json::put(out, "humFundamentalDbfs", defects.hum_fundamental_dbfs);
+  util::json::put(out, "humPeakHarmonicDbfs", defects.hum_peak_harmonic_dbfs);
+  util::json::put(out, "lateDecayRatioDb", defects.late_decay_ratio_db);
   return out;
 }
 
@@ -682,38 +681,38 @@ std::string audio_profile_to_json(const AudioProfile& profile) {
   namespace json = sonare::util::json;
 
   json::Object loudness;
-  loudness.emplace("integratedLufs", json::Value(profile.loudness.integrated_lufs));
-  loudness.emplace("lraLu", json::Value(profile.loudness.lra_lu));
-  loudness.emplace("truePeakDb", json::Value(profile.loudness.true_peak_db));
-  loudness.emplace("crestFactorDb", json::Value(profile.loudness.crest_factor_db));
+  util::json::put(loudness, "integratedLufs", profile.loudness.integrated_lufs);
+  util::json::put(loudness, "lraLu", profile.loudness.lra_lu);
+  util::json::put(loudness, "truePeakDb", profile.loudness.true_peak_db);
+  util::json::put(loudness, "crestFactorDb", profile.loudness.crest_factor_db);
 
   json::Object spectral;
-  spectral.emplace("subRmsDb", json::Value(profile.spectral.sub_rms_db));
-  spectral.emplace("lowRmsDb", json::Value(profile.spectral.low_rms_db));
-  spectral.emplace("lowMidRmsDb", json::Value(profile.spectral.low_mid_rms_db));
-  spectral.emplace("midRmsDb", json::Value(profile.spectral.mid_rms_db));
-  spectral.emplace("highMidRmsDb", json::Value(profile.spectral.high_mid_rms_db));
-  spectral.emplace("highRmsDb", json::Value(profile.spectral.high_rms_db));
-  spectral.emplace("airRmsDb", json::Value(profile.spectral.air_rms_db));
-  spectral.emplace("centroidHz", json::Value(profile.spectral.centroid_hz));
-  spectral.emplace("flatness", json::Value(profile.spectral.flatness));
-  spectral.emplace("rolloffHz", json::Value(profile.spectral.rolloff_hz));
+  util::json::put(spectral, "subRmsDb", profile.spectral.sub_rms_db);
+  util::json::put(spectral, "lowRmsDb", profile.spectral.low_rms_db);
+  util::json::put(spectral, "lowMidRmsDb", profile.spectral.low_mid_rms_db);
+  util::json::put(spectral, "midRmsDb", profile.spectral.mid_rms_db);
+  util::json::put(spectral, "highMidRmsDb", profile.spectral.high_mid_rms_db);
+  util::json::put(spectral, "highRmsDb", profile.spectral.high_rms_db);
+  util::json::put(spectral, "airRmsDb", profile.spectral.air_rms_db);
+  util::json::put(spectral, "centroidHz", profile.spectral.centroid_hz);
+  util::json::put(spectral, "flatness", profile.spectral.flatness);
+  util::json::put(spectral, "rolloffHz", profile.spectral.rolloff_hz);
 
   json::Object dynamics;
-  dynamics.emplace("shortTermLufsStd", json::Value(profile.dynamics.short_term_lufs_std));
-  dynamics.emplace("attackDensity", json::Value(profile.dynamics.attack_density));
-  dynamics.emplace("sustainRatio", json::Value(profile.dynamics.sustain_ratio));
+  util::json::put(dynamics, "shortTermLufsStd", profile.dynamics.short_term_lufs_std);
+  util::json::put(dynamics, "attackDensity", profile.dynamics.attack_density);
+  util::json::put(dynamics, "sustainRatio", profile.dynamics.sustain_ratio);
 
   json::Object defects = defects_to_json(profile.defects);
 
   json::Object root;
-  root.emplace("durationSec", json::Value(profile.duration_sec));
-  root.emplace("bpm", json::Value(profile.bpm));
-  root.emplace("bpmConfidence", json::Value(profile.bpm_confidence));
-  root.emplace("loudness", json::Value(std::move(loudness)));
-  root.emplace("spectral", json::Value(std::move(spectral)));
-  root.emplace("dynamics", json::Value(std::move(dynamics)));
-  root.emplace("defects", json::Value(std::move(defects)));
+  util::json::put(root, "durationSec", profile.duration_sec);
+  util::json::put(root, "bpm", profile.bpm);
+  util::json::put(root, "bpmConfidence", profile.bpm_confidence);
+  util::json::put(root, "loudness", std::move(loudness));
+  util::json::put(root, "spectral", std::move(spectral));
+  util::json::put(root, "dynamics", std::move(dynamics));
+  util::json::put(root, "defects", std::move(defects));
   return json::dump(json::Value(std::move(root)));
 }
 

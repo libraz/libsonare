@@ -546,14 +546,14 @@ JsonValue insert_params_to_value(const Insert& insert) {
 
 JsonValue insert_to_value(const Insert& insert) {
   sonare::util::json::Object object;
-  object.emplace("slot", JsonValue(to_string(insert.slot)));
-  object.emplace("processor", JsonValue(insert.processor_name));
-  object.emplace("params", insert_params_to_value(insert));
+  util::json::put(object, "slot", to_string(insert.slot));
+  util::json::put(object, "processor", insert.processor_name);
+  util::json::put(object, "params", insert_params_to_value(insert));
   // Omit `sidechainKey` when empty: the walker treats a missing field and an
   // empty string identically, but the legacy serializer also dropped the field
   // so existing snapshots can still byte-compare against new output.
   if (!insert.sidechain_key.empty()) {
-    object.emplace("sidechainKey", JsonValue(insert.sidechain_key));
+    util::json::put(object, "sidechainKey", insert.sidechain_key);
   }
   return JsonValue(std::move(object));
 }
@@ -567,10 +567,10 @@ JsonValue inserts_to_value(const std::vector<Insert>& inserts) {
 
 JsonValue send_to_value(const Send& send) {
   sonare::util::json::Object object;
-  object.emplace("id", JsonValue(send.id));
-  object.emplace("destinationBusId", JsonValue(send.destination_bus_id));
-  object.emplace("sendDb", JsonValue(send.send_db));
-  object.emplace("timing", JsonValue(to_string(send.timing)));
+  util::json::put(object, "id", send.id);
+  util::json::put(object, "destinationBusId", send.destination_bus_id);
+  util::json::put(object, "sendDb", send.send_db);
+  util::json::put(object, "timing", to_string(send.timing));
   return JsonValue(std::move(object));
 }
 
@@ -598,34 +598,34 @@ bool eq_to_value(const StripEq& eq, JsonValue* out) {
   bands.resize(kept);
   if (eq.enabled && bands.empty()) return false;
   sonare::util::json::Object object;
-  object.emplace("enabled", JsonValue(eq.enabled));
-  object.emplace("bands", JsonValue(std::move(bands)));
+  util::json::put(object, "enabled", eq.enabled);
+  util::json::put(object, "bands", std::move(bands));
   *out = JsonValue(std::move(object));
   return true;
 }
 
 JsonValue strip_to_value(const Strip& strip) {
   sonare::util::json::Object object;
-  object.emplace("id", JsonValue(strip.id));
-  object.emplace("inputTrimDb", JsonValue(strip.input_trim_db));
-  object.emplace("faderDb", JsonValue(strip.fader_db));
-  object.emplace("vcaOffsetDb", JsonValue(strip.vca_offset_db));
-  object.emplace("pan", JsonValue(strip.pan));
-  object.emplace("width", JsonValue(strip.width));
-  object.emplace("muted", JsonValue(strip.muted));
-  object.emplace("soloed", JsonValue(strip.soloed));
-  object.emplace("soloSafe", JsonValue(strip.solo_safe));
-  object.emplace("panMode", JsonValue(strip.pan_mode));
-  object.emplace("dualPanLeft", JsonValue(strip.dual_pan_left));
-  object.emplace("dualPanRight", JsonValue(strip.dual_pan_right));
-  object.emplace("polarityInvertLeft", JsonValue(strip.polarity_invert_left));
-  object.emplace("polarityInvertRight", JsonValue(strip.polarity_invert_right));
-  object.emplace("panLaw", JsonValue(strip.pan_law));
-  object.emplace("channelDelaySamples", JsonValue(strip.channel_delay_samples));
+  util::json::put(object, "id", strip.id);
+  util::json::put(object, "inputTrimDb", strip.input_trim_db);
+  util::json::put(object, "faderDb", strip.fader_db);
+  util::json::put(object, "vcaOffsetDb", strip.vca_offset_db);
+  util::json::put(object, "pan", strip.pan);
+  util::json::put(object, "width", strip.width);
+  util::json::put(object, "muted", strip.muted);
+  util::json::put(object, "soloed", strip.soloed);
+  util::json::put(object, "soloSafe", strip.solo_safe);
+  util::json::put(object, "panMode", strip.pan_mode);
+  util::json::put(object, "dualPanLeft", strip.dual_pan_left);
+  util::json::put(object, "dualPanRight", strip.dual_pan_right);
+  util::json::put(object, "polarityInvertLeft", strip.polarity_invert_left);
+  util::json::put(object, "polarityInvertRight", strip.polarity_invert_right);
+  util::json::put(object, "panLaw", strip.pan_law);
+  util::json::put(object, "channelDelaySamples", strip.channel_delay_samples);
   // Omit when stereo (the default) so existing stereo scenes serialize
   // byte-identically; only surround sources carry the field.
   if (strip.source_layout != ChannelLayout::Stereo) {
-    object.emplace("sourceLayout", JsonValue(channel_layout_to_string(strip.source_layout)));
+    util::json::put(object, "sourceLayout", channel_layout_to_string(strip.source_layout));
   }
   // Omit at the centered point-source default so existing scenes are unchanged;
   // only a moved surround pan carries the object.
@@ -633,82 +633,82 @@ JsonValue strip_to_value(const Strip& strip) {
   if (sp.azimuth != 0.0f || sp.elevation != 0.0f || sp.divergence != 0.0f || sp.lfe != 0.0f ||
       sp.distance != 1.0f) {
     sonare::util::json::Object pan;
-    pan.emplace("azimuth", JsonValue(sp.azimuth));
-    pan.emplace("elevation", JsonValue(sp.elevation));
-    pan.emplace("divergence", JsonValue(sp.divergence));
-    pan.emplace("lfe", JsonValue(sp.lfe));
-    pan.emplace("distance", JsonValue(sp.distance));
-    object.emplace("surroundPan", JsonValue(std::move(pan)));
+    util::json::put(pan, "azimuth", sp.azimuth);
+    util::json::put(pan, "elevation", sp.elevation);
+    util::json::put(pan, "divergence", sp.divergence);
+    util::json::put(pan, "lfe", sp.lfe);
+    util::json::put(pan, "distance", sp.distance);
+    util::json::put(object, "surroundPan", std::move(pan));
   }
   // Omit at the full-metering default, for the same byte-identity reason: only
   // a strip that has opted out of some of its metering carries the object.
   const StripMetering& m = strip.metering;
   if (!m.enabled || !m.lufs || !m.true_peak || m.true_peak_oversample != 4) {
     sonare::util::json::Object metering;
-    metering.emplace("enabled", JsonValue(m.enabled));
-    metering.emplace("lufs", JsonValue(m.lufs));
-    metering.emplace("truePeak", JsonValue(m.true_peak));
-    metering.emplace("truePeakOversample", JsonValue(m.true_peak_oversample));
-    object.emplace("metering", JsonValue(std::move(metering)));
+    util::json::put(metering, "enabled", m.enabled);
+    util::json::put(metering, "lufs", m.lufs);
+    util::json::put(metering, "truePeak", m.true_peak);
+    util::json::put(metering, "truePeakOversample", m.true_peak_oversample);
+    util::json::put(object, "metering", std::move(metering));
   }
-  object.emplace("inserts", inserts_to_value(strip.inserts));
-  object.emplace("sends", sends_to_value(strip.sends));
+  util::json::put(object, "inserts", inserts_to_value(strip.inserts));
+  util::json::put(object, "sends", sends_to_value(strip.sends));
   // Omitted at the identity default so an existing scene stays byte-identical.
   JsonValue eq_value;
-  if (eq_to_value(strip.eq, &eq_value)) object.emplace("eq", std::move(eq_value));
+  if (eq_to_value(strip.eq, &eq_value)) util::json::put(object, "eq", std::move(eq_value));
   return JsonValue(std::move(object));
 }
 
 JsonValue bus_to_value(const Bus& bus) {
   sonare::util::json::Object object;
-  object.emplace("id", JsonValue(bus.id));
-  object.emplace("role", JsonValue(bus.role));
+  util::json::put(object, "id", bus.id);
+  util::json::put(object, "role", bus.role);
   // Omit when stereo (the default) so existing stereo scenes serialize
   // byte-identically; only surround buses carry the field.
   if (bus.layout != ChannelLayout::Stereo) {
-    object.emplace("layout", JsonValue(channel_layout_to_string(bus.layout)));
+    util::json::put(object, "layout", channel_layout_to_string(bus.layout));
   }
   // Trim / width / polarity are likewise omitted at their defaults so a bus that
   // never engages them stays byte-identical to a pre-existing scene.
   if (bus.input_trim_db != 0.0f) {
-    object.emplace("inputTrimDb", JsonValue(bus.input_trim_db));
+    util::json::put(object, "inputTrimDb", bus.input_trim_db);
   }
   if (bus.width != 1.0f) {
-    object.emplace("width", JsonValue(bus.width));
+    util::json::put(object, "width", bus.width);
   }
   if (bus.polarity_invert_left) {
-    object.emplace("polarityInvertLeft", JsonValue(bus.polarity_invert_left));
+    util::json::put(object, "polarityInvertLeft", bus.polarity_invert_left);
   }
   if (bus.polarity_invert_right) {
-    object.emplace("polarityInvertRight", JsonValue(bus.polarity_invert_right));
+    util::json::put(object, "polarityInvertRight", bus.polarity_invert_right);
   }
   // Pan is likewise omitted at the default, for the same byte-identity reason.
-  if (bus.pan != 0.0f) object.emplace("pan", JsonValue(bus.pan));
-  if (bus.pan_mode != 0) object.emplace("panMode", JsonValue(bus.pan_mode));
-  if (bus.dual_pan_left != -1.0f) object.emplace("dualPanLeft", JsonValue(bus.dual_pan_left));
-  if (bus.dual_pan_right != 1.0f) object.emplace("dualPanRight", JsonValue(bus.dual_pan_right));
-  if (bus.pan_law != 0) object.emplace("panLaw", JsonValue(bus.pan_law));
-  object.emplace("inserts", inserts_to_value(bus.inserts));
+  if (bus.pan != 0.0f) util::json::put(object, "pan", bus.pan);
+  if (bus.pan_mode != 0) util::json::put(object, "panMode", bus.pan_mode);
+  if (bus.dual_pan_left != -1.0f) util::json::put(object, "dualPanLeft", bus.dual_pan_left);
+  if (bus.dual_pan_right != 1.0f) util::json::put(object, "dualPanRight", bus.dual_pan_right);
+  if (bus.pan_law != 0) util::json::put(object, "panLaw", bus.pan_law);
+  util::json::put(object, "inserts", inserts_to_value(bus.inserts));
   JsonValue eq_value;
-  if (eq_to_value(bus.eq, &eq_value)) object.emplace("eq", std::move(eq_value));
+  if (eq_to_value(bus.eq, &eq_value)) util::json::put(object, "eq", std::move(eq_value));
   return JsonValue(std::move(object));
 }
 
 JsonValue vca_group_to_value(const VcaGroup& group) {
   sonare::util::json::Object object;
-  object.emplace("id", JsonValue(group.id));
-  object.emplace("gainDb", JsonValue(group.gain_db));
+  util::json::put(object, "id", group.id);
+  util::json::put(object, "gainDb", group.gain_db);
   sonare::util::json::Array members;
   members.reserve(group.members.size());
   for (const auto& member : group.members) members.emplace_back(JsonValue(member));
-  object.emplace("members", JsonValue(std::move(members)));
+  util::json::put(object, "members", std::move(members));
   return JsonValue(std::move(object));
 }
 
 JsonValue connection_to_value(const Connection& connection) {
   sonare::util::json::Object object;
-  object.emplace("source", JsonValue(connection.source));
-  object.emplace("destination", JsonValue(connection.destination));
+  util::json::put(object, "source", connection.source);
+  util::json::put(object, "destination", connection.destination);
   return JsonValue(std::move(object));
 }
 
@@ -716,29 +716,29 @@ JsonValue connection_to_value(const Connection& connection) {
 
 std::string scene_to_json(const Scene& scene) {
   sonare::util::json::Object root;
-  root.emplace("version", JsonValue(scene.version));
+  util::json::put(root, "version", scene.version);
 
   sonare::util::json::Array strips;
   strips.reserve(scene.strips.size());
   for (const auto& strip : scene.strips) strips.emplace_back(strip_to_value(strip));
-  root.emplace("strips", JsonValue(std::move(strips)));
+  util::json::put(root, "strips", std::move(strips));
 
   sonare::util::json::Array buses;
   buses.reserve(scene.buses.size());
   for (const auto& bus : scene.buses) buses.emplace_back(bus_to_value(bus));
-  root.emplace("buses", JsonValue(std::move(buses)));
+  util::json::put(root, "buses", std::move(buses));
 
   sonare::util::json::Array groups;
   groups.reserve(scene.vca_groups.size());
   for (const auto& group : scene.vca_groups) groups.emplace_back(vca_group_to_value(group));
-  root.emplace("vcaGroups", JsonValue(std::move(groups)));
+  util::json::put(root, "vcaGroups", std::move(groups));
 
   sonare::util::json::Array connections;
   connections.reserve(scene.connections.size());
   for (const auto& connection : scene.connections) {
     connections.emplace_back(connection_to_value(connection));
   }
-  root.emplace("connections", JsonValue(std::move(connections)));
+  util::json::put(root, "connections", std::move(connections));
 
   return sonare::util::json::dump(JsonValue(std::move(root)));
 }

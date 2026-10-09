@@ -1032,9 +1032,9 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
   json_ns::Object root;
   if (name == "match.referenceLoudness") {
     auto result = ::sonare::mastering::match::reference_loudness(source_audio, reference_audio);
-    root.emplace("sourceLufs", json_ns::Value(result.source_lufs));
-    root.emplace("referenceLufs", json_ns::Value(result.reference_lufs));
-    root.emplace("gainToMatchDb", json_ns::Value(result.gain_to_match_db));
+    util::json::put(root, "sourceLufs", result.source_lufs);
+    util::json::put(root, "referenceLufs", result.reference_lufs);
+    util::json::put(root, "gainToMatchDb", result.gain_to_match_db);
   } else if (name == "match.tonalBalance" || name == "match.tonalBalanceLogBands") {
     auto source_spectrum = ::sonare::mastering::match::reference_spectrum(source_audio);
     auto reference_spectrum = ::sonare::mastering::match::reference_spectrum(reference_audio);
@@ -1048,14 +1048,14 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     band_values.reserve(bands.size());
     for (const auto& band : bands) {
       json_ns::Object entry;
-      entry.emplace("lowHz", json_ns::Value(band.low_hz));
-      entry.emplace("highHz", json_ns::Value(band.high_hz));
-      entry.emplace("sourceDb", json_ns::Value(band.source_db));
-      entry.emplace("referenceDb", json_ns::Value(band.reference_db));
-      entry.emplace("deviationDb", json_ns::Value(band.deviation_db));
+      util::json::put(entry, "lowHz", band.low_hz);
+      util::json::put(entry, "highHz", band.high_hz);
+      util::json::put(entry, "sourceDb", band.source_db);
+      util::json::put(entry, "referenceDb", band.reference_db);
+      util::json::put(entry, "deviationDb", band.deviation_db);
       band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
-    root.emplace("bands", json_ns::Value(std::move(band_values)));
+    util::json::put(root, "bands", std::move(band_values));
   } else if (name == "match.matchEqCurve") {
     const ::sonare::mastering::match::MatchEqConfig config = read_match_eq_config(map);
     ::sonare::mastering::match::validate_config(config);
@@ -1068,12 +1068,12 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
     json_ns::Array gain_db;
     gain_db.reserve(curve.gain_db.size());
     for (float gain : curve.gain_db) gain_db.emplace_back(json_ns::Value(gain));
-    root.emplace("frequencies", json_ns::Value(std::move(frequencies)));
-    root.emplace("gainDb", json_ns::Value(std::move(gain_db)));
+    util::json::put(root, "frequencies", std::move(frequencies));
+    util::json::put(root, "gainDb", std::move(gain_db));
   } else if (name == "match.estimateReferenceDelaySamples") {
     const float delay = ::sonare::mastering::match::estimate_reference_delay_samples(
         source_audio, reference_audio, i(map, "maxAbsDelay", 4096));
-    root.emplace("delaySamples", json_ns::Value(delay));
+    util::json::put(root, "delaySamples", delay);
   } else {
     throw SonareException(ErrorCode::InvalidParameter, "unknown mastering pair analysis: " + name);
   }
@@ -1101,11 +1101,11 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
   if (name == "stereo.monoCompatCheck") {
     auto result = ::sonare::mastering::stereo::mono_compat_check(
         left, right, length, f(map, "correlationThreshold", 0.0f));
-    root.emplace("correlation", json_ns::Value(result.correlation));
-    root.emplace("width", json_ns::Value(result.width));
-    root.emplace("monoPeak", json_ns::Value(result.mono_peak));
-    root.emplace("sideRms", json_ns::Value(result.side_rms));
-    root.emplace("likelyMonoCompatible", json_ns::Value(result.likely_mono_compatible));
+    util::json::put(root, "correlation", result.correlation);
+    util::json::put(root, "width", result.width);
+    util::json::put(root, "monoPeak", result.mono_peak);
+    util::json::put(root, "sideRms", result.side_rms);
+    util::json::put(root, "likelyMonoCompatible", result.likely_mono_compatible);
   } else if (name == "stereo.monoCompatCheckLogBands") {
     auto bands = ::sonare::mastering::stereo::mono_compat_check_log_bands(
         left, right, length, sample_rate, i(map, "bandsPerOctave", 3), f(map, "lowHz", 20.0f),
@@ -1114,13 +1114,13 @@ std::string analyze_named_stereo(const std::string& name, const float* left, con
     band_values.reserve(bands.size());
     for (const auto& band : bands) {
       json_ns::Object entry;
-      entry.emplace("lowHz", json_ns::Value(band.low_hz));
-      entry.emplace("highHz", json_ns::Value(band.high_hz));
-      entry.emplace("correlation", json_ns::Value(band.correlation));
-      entry.emplace("sideRms", json_ns::Value(band.side_rms));
+      util::json::put(entry, "lowHz", band.low_hz);
+      util::json::put(entry, "highHz", band.high_hz);
+      util::json::put(entry, "correlation", band.correlation);
+      util::json::put(entry, "sideRms", band.side_rms);
       band_values.emplace_back(json_ns::Value(std::move(entry)));
     }
-    root.emplace("bands", json_ns::Value(std::move(band_values)));
+    util::json::put(root, "bands", std::move(band_values));
   } else {
     throw SonareException(ErrorCode::InvalidParameter,
                           "unknown mastering stereo analysis: " + name);

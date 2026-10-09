@@ -181,28 +181,28 @@ util::json::Value band_array(const std::array<float, kBandCount>& values) {
 
 util::json::Value track_to_value(const TrackProfile& profile) {
   util::json::Object object;
-  object.emplace("stripId", util::json::Value(profile.strip_id));
-  object.emplace("name", util::json::Value(profile.name));
-  object.emplace("source", util::json::Value(source_class_to_string(profile.source)));
-  object.emplace("sourceConfidence", util::json::Value(profile.source_confidence));
-  object.emplace("usable", util::json::Value(profile.usable));
-  object.emplace("exclusionReason", util::json::Value(profile.exclusion_reason));
-  object.emplace("channelCount", util::json::Value(profile.channel_count));
-  object.emplace("durationSec", util::json::Value(profile.duration_sec));
-  object.emplace("integratedLufs", util::json::Value(profile.base.loudness.integrated_lufs));
-  object.emplace("truePeakDb", util::json::Value(profile.base.loudness.true_peak_db));
-  object.emplace("crestFactorDb", util::json::Value(profile.base.loudness.crest_factor_db));
-  object.emplace("spectralCentroidHz", util::json::Value(profile.base.spectral.centroid_hz));
-  object.emplace("spectralFlatness", util::json::Value(profile.base.spectral.flatness));
-  object.emplace("attackDensity", util::json::Value(profile.base.dynamics.attack_density));
-  object.emplace("sustainRatio", util::json::Value(profile.base.dynamics.sustain_ratio));
-  object.emplace("bandOccupancy", band_array(profile.band_occupancy));
+  util::json::put(object, "stripId", profile.strip_id);
+  util::json::put(object, "name", profile.name);
+  util::json::put(object, "source", source_class_to_string(profile.source));
+  util::json::put(object, "sourceConfidence", profile.source_confidence);
+  util::json::put(object, "usable", profile.usable);
+  util::json::put(object, "exclusionReason", profile.exclusion_reason);
+  util::json::put(object, "channelCount", profile.channel_count);
+  util::json::put(object, "durationSec", profile.duration_sec);
+  util::json::put(object, "integratedLufs", profile.base.loudness.integrated_lufs);
+  util::json::put(object, "truePeakDb", profile.base.loudness.true_peak_db);
+  util::json::put(object, "crestFactorDb", profile.base.loudness.crest_factor_db);
+  util::json::put(object, "spectralCentroidHz", profile.base.spectral.centroid_hz);
+  util::json::put(object, "spectralFlatness", profile.base.spectral.flatness);
+  util::json::put(object, "attackDensity", profile.base.dynamics.attack_density);
+  util::json::put(object, "sustainRatio", profile.base.dynamics.sustain_ratio);
+  util::json::put(object, "bandOccupancy", band_array(profile.band_occupancy));
   return util::json::Value(std::move(object));
 }
 
 util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackProfile>& profiles) {
   util::json::Object object;
-  object.emplace("trackCount", util::json::Value(mix.track_count));
+  util::json::put(object, "trackCount", mix.track_count);
 
   // The dominance matrix is emitted only where it is actually informative:
   // a full N^2 x 7 dump is mostly zeros and mostly noise for a reader.
@@ -217,18 +217,16 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
         const BandDominance entry = mix.dominance_at(masker, maskee, band);
         if (entry.valid_frames == 0) continue;
         util::json::Object row;
-        row.emplace("masker",
-                    util::json::Value(profiles[static_cast<std::size_t>(masker)].strip_id));
-        row.emplace("maskee",
-                    util::json::Value(profiles[static_cast<std::size_t>(maskee)].strip_id));
-        row.emplace("band", util::json::Value(kBandNames[static_cast<std::size_t>(band)]));
-        row.emplace("ratio", util::json::Value(entry.ratio));
-        row.emplace("validFrames", util::json::Value(entry.valid_frames));
+        util::json::put(row, "masker", profiles[static_cast<std::size_t>(masker)].strip_id);
+        util::json::put(row, "maskee", profiles[static_cast<std::size_t>(maskee)].strip_id);
+        util::json::put(row, "band", kBandNames[static_cast<std::size_t>(band)]);
+        util::json::put(row, "ratio", entry.ratio);
+        util::json::put(row, "validFrames", entry.valid_frames);
         dominance.emplace_back(util::json::Value(std::move(row)));
       }
     }
   }
-  object.emplace("bandDominance", util::json::Value(std::move(dominance)));
+  util::json::put(object, "bandDominance", std::move(dominance));
 
   util::json::Array alignment;
   for (const auto& pair : mix.alignment) {
@@ -242,36 +240,35 @@ util::json::Value mix_to_value(const MixProfile& mix, const std::vector<TrackPro
     row.emplace(
         "reference",
         util::json::Value(profiles[static_cast<std::size_t>(pair.reference_index)].strip_id));
-    row.emplace("target",
-                util::json::Value(profiles[static_cast<std::size_t>(pair.target_index)].strip_id));
-    row.emplace("lagSamples", util::json::Value(pair.lag_samples));
-    row.emplace("correlation", util::json::Value(pair.correlation));
-    row.emplace("polarityOpposed", util::json::Value(pair.polarity_opposed));
+    util::json::put(row, "target", profiles[static_cast<std::size_t>(pair.target_index)].strip_id);
+    util::json::put(row, "lagSamples", pair.lag_samples);
+    util::json::put(row, "correlation", pair.correlation);
+    util::json::put(row, "polarityOpposed", pair.polarity_opposed);
     alignment.emplace_back(util::json::Value(std::move(row)));
   }
-  object.emplace("alignment", util::json::Value(std::move(alignment)));
+  util::json::put(object, "alignment", std::move(alignment));
 
   util::json::Array crowded;
   for (int band = 0; band < kBandCount; ++band) {
     if (band >= static_cast<int>(mix.image.crowded.size())) break;
     if (!mix.image.crowded[static_cast<std::size_t>(band)]) continue;
     util::json::Object row;
-    row.emplace("band", util::json::Value(kBandNames[static_cast<std::size_t>(band)]));
-    row.emplace("crowding", util::json::Value(mix.image.crowding[static_cast<std::size_t>(band)]));
+    util::json::put(row, "band", kBandNames[static_cast<std::size_t>(band)]);
+    util::json::put(row, "crowding", mix.image.crowding[static_cast<std::size_t>(band)]);
     crowded.emplace_back(util::json::Value(std::move(row)));
   }
-  object.emplace("crowdedBands", util::json::Value(std::move(crowded)));
+  util::json::put(object, "crowdedBands", std::move(crowded));
 
   util::json::Array mono_risks;
   for (const auto& risk : mix.mono_risks) {
     util::json::Object row;
-    row.emplace("stripId", util::json::Value(risk.strip_id));
-    row.emplace("correlation", util::json::Value(risk.correlation));
-    row.emplace("width", util::json::Value(risk.width));
-    row.emplace("wideLowEnd", util::json::Value(risk.wide_low_end));
+    util::json::put(row, "stripId", risk.strip_id);
+    util::json::put(row, "correlation", risk.correlation);
+    util::json::put(row, "width", risk.width);
+    util::json::put(row, "wideLowEnd", risk.wide_low_end);
     mono_risks.emplace_back(util::json::Value(std::move(row)));
   }
-  object.emplace("monoRisks", util::json::Value(std::move(mono_risks)));
+  util::json::put(object, "monoRisks", std::move(mono_risks));
 
   return util::json::Value(std::move(object));
 }
@@ -479,10 +476,10 @@ std::string mix_assistant_result_to_json(const MixAssistantResult& result) {
   for (const auto& line : result.explanation) explanation.emplace_back(json::Value(line));
 
   json::Object root;
-  root.emplace("scene", std::move(scene));
-  root.emplace("tracks", json::Value(std::move(tracks)));
-  root.emplace("mix", mix_to_value(result.mix, result.tracks));
-  root.emplace("explanation", json::Value(std::move(explanation)));
+  util::json::put(root, "scene", std::move(scene));
+  util::json::put(root, "tracks", std::move(tracks));
+  util::json::put(root, "mix", mix_to_value(result.mix, result.tracks));
+  util::json::put(root, "explanation", std::move(explanation));
   return json::dump(json::Value(std::move(root)));
 }
 

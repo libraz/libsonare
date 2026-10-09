@@ -481,8 +481,8 @@ void append_mono_fold(const std::vector<TrackProfile>& profiles, const MixProfil
 
     if (risk.wide_low_end) {
       util::json::Object params;
-      params.emplace("amount", util::json::Value(kMonoMakerAmount));
-      params.emplace("frequencyHz", util::json::Value(kMonoMakerCrossoverHz));
+      util::json::put(params, "amount", kMonoMakerAmount);
+      util::json::put(params, "frequencyHz", kMonoMakerCrossoverHz);
 
       SceneDelta delta;
       delta.domain = DeltaDomain::Image;

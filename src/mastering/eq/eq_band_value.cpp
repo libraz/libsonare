@@ -312,59 +312,59 @@ JsonValue eq_band_to_value(const EqBand& band) {
   static const EqBand kDefault{};
   sonare::util::json::Object object;
   if (band.type != kDefault.type) {
-    object.emplace("type", JsonValue(band_type_to_string(band.type)));
+    util::json::put(object, "type", band_type_to_string(band.type));
   }
   if (band.frequency_hz != kDefault.frequency_hz) {
-    object.emplace("frequencyHz", JsonValue(band.frequency_hz));
+    util::json::put(object, "frequencyHz", band.frequency_hz);
   }
-  if (band.gain_db != kDefault.gain_db) object.emplace("gainDb", JsonValue(band.gain_db));
-  if (band.q != kDefault.q) object.emplace("q", JsonValue(band.q));
-  object.emplace("enabled", JsonValue(band.enabled));
+  if (band.gain_db != kDefault.gain_db) util::json::put(object, "gainDb", band.gain_db);
+  if (band.q != kDefault.q) util::json::put(object, "q", band.q);
+  util::json::put(object, "enabled", band.enabled);
   if (band.coeff_mode != kDefault.coeff_mode) {
-    object.emplace("coeffMode", JsonValue(coeff_mode_to_string(band.coeff_mode)));
+    util::json::put(object, "coeffMode", coeff_mode_to_string(band.coeff_mode));
   }
   if (band.slope_db_oct != kDefault.slope_db_oct) {
-    object.emplace("slopeDbOct", JsonValue(band.slope_db_oct));
+    util::json::put(object, "slopeDbOct", band.slope_db_oct);
   }
   if (band.placement != kDefault.placement) {
-    object.emplace("placement", JsonValue(placement_to_string(band.placement)));
+    util::json::put(object, "placement", placement_to_string(band.placement));
   }
   if (band.phase != kDefault.phase)
-    object.emplace("phase", JsonValue(phase_mode_to_string(band.phase)));
-  if (band.soloed != kDefault.soloed) object.emplace("soloed", JsonValue(band.soloed));
-  if (band.bypassed != kDefault.bypassed) object.emplace("bypassed", JsonValue(band.bypassed));
+    util::json::put(object, "phase", phase_mode_to_string(band.phase));
+  if (band.soloed != kDefault.soloed) util::json::put(object, "soloed", band.soloed);
+  if (band.bypassed != kDefault.bypassed) util::json::put(object, "bypassed", band.bypassed);
   if (band.proportional_q != kDefault.proportional_q) {
-    object.emplace("proportionalQ", JsonValue(band.proportional_q));
+    util::json::put(object, "proportionalQ", band.proportional_q);
   }
   if (band.proportional_q_strength != kDefault.proportional_q_strength) {
-    object.emplace("proportionalQStrength", JsonValue(band.proportional_q_strength));
+    util::json::put(object, "proportionalQStrength", band.proportional_q_strength);
   }
   const DynamicParams& dyn = band.dyn;
   const DynamicParams& dyn_default = kDefault.dyn;
-  if (dyn.enabled != dyn_default.enabled) object.emplace("dynamic", JsonValue(dyn.enabled));
+  if (dyn.enabled != dyn_default.enabled) util::json::put(object, "dynamic", dyn.enabled);
   if (dyn.threshold_db != dyn_default.threshold_db) {
-    object.emplace("thresholdDb", JsonValue(dyn.threshold_db));
+    util::json::put(object, "thresholdDb", dyn.threshold_db);
   }
   if (dyn.auto_threshold != dyn_default.auto_threshold) {
-    object.emplace("autoThreshold", JsonValue(dyn.auto_threshold));
+    util::json::put(object, "autoThreshold", dyn.auto_threshold);
   }
-  if (dyn.ratio != dyn_default.ratio) object.emplace("ratio", JsonValue(dyn.ratio));
-  if (dyn.range_db != dyn_default.range_db) object.emplace("rangeDb", JsonValue(dyn.range_db));
-  if (dyn.attack_ms != dyn_default.attack_ms) object.emplace("attackMs", JsonValue(dyn.attack_ms));
+  if (dyn.ratio != dyn_default.ratio) util::json::put(object, "ratio", dyn.ratio);
+  if (dyn.range_db != dyn_default.range_db) util::json::put(object, "rangeDb", dyn.range_db);
+  if (dyn.attack_ms != dyn_default.attack_ms) util::json::put(object, "attackMs", dyn.attack_ms);
   if (dyn.release_ms != dyn_default.release_ms) {
-    object.emplace("releaseMs", JsonValue(dyn.release_ms));
+    util::json::put(object, "releaseMs", dyn.release_ms);
   }
   if (dyn.detector_delay_ms != dyn_default.detector_delay_ms) {
-    object.emplace("detectorDelayMs", JsonValue(dyn.detector_delay_ms));
+    util::json::put(object, "detectorDelayMs", dyn.detector_delay_ms);
   }
   if (dyn.external_sidechain != dyn_default.external_sidechain) {
-    object.emplace("externalSidechain", JsonValue(dyn.external_sidechain));
+    util::json::put(object, "externalSidechain", dyn.external_sidechain);
   }
   if (dyn.sidechain_freq_hz != dyn_default.sidechain_freq_hz) {
-    object.emplace("sidechainFreqHz", JsonValue(dyn.sidechain_freq_hz));
+    util::json::put(object, "sidechainFreqHz", dyn.sidechain_freq_hz);
   }
   if (dyn.sidechain_q != dyn_default.sidechain_q) {
-    object.emplace("sidechainQ", JsonValue(dyn.sidechain_q));
+    util::json::put(object, "sidechainQ", dyn.sidechain_q);
   }
   return JsonValue(std::move(object));
 }

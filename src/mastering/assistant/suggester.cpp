@@ -235,22 +235,22 @@ std::string assistant_result_to_json(const AssistantResult& result) {
   // Flat "profile" object: mirrors the previous schema (no nested loudness /
   // spectral / dynamics groups — that nesting only exists in audio_profile_to_json).
   json::Object profile;
-  profile.emplace("durationSec", json::Value(result.profile.duration_sec));
-  profile.emplace("bpm", json::Value(result.profile.bpm));
-  profile.emplace("bpmConfidence", json::Value(result.profile.bpm_confidence));
-  profile.emplace("integratedLufs", json::Value(result.profile.loudness.integrated_lufs));
-  profile.emplace("lraLu", json::Value(result.profile.loudness.lra_lu));
-  profile.emplace("truePeakDb", json::Value(result.profile.loudness.true_peak_db));
-  profile.emplace("crestFactorDb", json::Value(result.profile.loudness.crest_factor_db));
-  profile.emplace("spectralCentroidHz", json::Value(result.profile.spectral.centroid_hz));
-  profile.emplace("spectralFlatness", json::Value(result.profile.spectral.flatness));
-  profile.emplace("attackDensity", json::Value(result.profile.dynamics.attack_density));
-  profile.emplace("sustainRatio", json::Value(result.profile.dynamics.sustain_ratio));
+  util::json::put(profile, "durationSec", result.profile.duration_sec);
+  util::json::put(profile, "bpm", result.profile.bpm);
+  util::json::put(profile, "bpmConfidence", result.profile.bpm_confidence);
+  util::json::put(profile, "integratedLufs", result.profile.loudness.integrated_lufs);
+  util::json::put(profile, "lraLu", result.profile.loudness.lra_lu);
+  util::json::put(profile, "truePeakDb", result.profile.loudness.true_peak_db);
+  util::json::put(profile, "crestFactorDb", result.profile.loudness.crest_factor_db);
+  util::json::put(profile, "spectralCentroidHz", result.profile.spectral.centroid_hz);
+  util::json::put(profile, "spectralFlatness", result.profile.spectral.flatness);
+  util::json::put(profile, "attackDensity", result.profile.dynamics.attack_density);
+  util::json::put(profile, "sustainRatio", result.profile.dynamics.sustain_ratio);
 
   json::Object root;
-  root.emplace("chainConfig", std::move(chain_config));
-  root.emplace("explanation", json::Value(std::move(explanation)));
-  root.emplace("profile", json::Value(std::move(profile)));
+  util::json::put(root, "chainConfig", std::move(chain_config));
+  util::json::put(root, "explanation", std::move(explanation));
+  util::json::put(root, "profile", std::move(profile));
   return json::dump(json::Value(std::move(root)));
 }
 

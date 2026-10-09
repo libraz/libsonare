@@ -65,12 +65,12 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
   for (const float cutoff : cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz) {
     cutoffs.emplace_back(static_cast<double>(cutoff));
   }
-  crossover.emplace("cutoffsHz", JsonValue(std::move(cutoffs)));
+  util::json::put(crossover, "cutoffsHz", std::move(cutoffs));
   add_field(crossover, "slope", cfg.dynamics.multiband_comp.config.crossover.slope);
   add_field(crossover, "mode", cfg.dynamics.multiband_comp.config.crossover.mode);
   add_field(crossover, "firKernelSize",
             cfg.dynamics.multiband_comp.config.crossover.fir_kernel_size);
-  multiband.emplace("crossover", JsonValue(std::move(crossover)));
+  util::json::put(multiband, "crossover", std::move(crossover));
 
   sonare::util::json::Array bands;
   bands.reserve(cfg.dynamics.multiband_comp.config.bands.size());
@@ -81,7 +81,7 @@ sonare::util::json::Object build_multiband_params(const MasteringChainConfig& cf
 #undef X
     bands.emplace_back(JsonValue(std::move(band)));
   }
-  multiband.emplace("bands", JsonValue(std::move(bands)));
+  util::json::put(multiband, "bands", std::move(bands));
   return multiband;
 }
 
@@ -659,12 +659,12 @@ std::string chain_config_to_json(const MasteringChainConfig& config) {
   validate_multiband_for_json(config);
   const bool use_v1 = is_v1_multiband_representable(config);
   sonare::util::json::Object root;
-  root.emplace("version", JsonValue(use_v1 ? 1 : 2));
+  util::json::put(root, "version", use_v1 ? 1 : 2);
   auto params = build_chain_params(config, use_v1);
   if (!use_v1) {
-    params.emplace("dynamics.multibandComp", JsonValue(build_multiband_params(config)));
+    util::json::put(params, "dynamics.multibandComp", build_multiband_params(config));
   }
-  root.emplace("params", JsonValue(std::move(params)));
+  util::json::put(root, "params", std::move(params));
   return sonare::util::json::dump(JsonValue(std::move(root)));
 }
 

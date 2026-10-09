@@ -429,6 +429,13 @@ class Parser {
   std::size_t string_bytes_ = 0;
 };
 
+/// Adds @p value under @p key unless the key is present, like Object::emplace. One out-of-line
+/// body per value type, so a writer's fields share it instead of each inlining an insertion.
+template <typename T>
+[[gnu::noinline]] void put(Object& object, const char* key, T value) {
+  object.emplace(key, Value(std::move(value)));
+}
+
 inline Value parse(const std::string& text, std::size_t max_depth = kDefaultMaxDepth) {
   return Parser(text, max_depth, /*reject_duplicate_keys=*/false).parse_document();
 }

@@ -557,11 +557,11 @@ std::string parametric_params_json(const std::vector<BandCut>& cuts) {
 
 std::string high_pass_params_json(float frequency_hz) {
   util::json::Object params;
-  params.emplace("highPassFrequencyHz", util::json::Value(frequency_hz));
-  params.emplace("highPassQ", util::json::Value(kButterworthQ));
-  params.emplace("highPassSlope",
-                 util::json::Value(static_cast<int>(mastering::eq::CutFilterSlope::Db12PerOct)));
-  params.emplace("highPassEnabled", util::json::Value(true));
+  util::json::put(params, "highPassFrequencyHz", frequency_hz);
+  util::json::put(params, "highPassQ", kButterworthQ);
+  util::json::put(params, "highPassSlope",
+                  static_cast<int>(mastering::eq::CutFilterSlope::Db12PerOct));
+  util::json::put(params, "highPassEnabled", true);
   // The low-pass half is deliberately left out rather than sent disabled: the
   // assistant has no opinion about the top end, and an explicit key would read
   // as one.

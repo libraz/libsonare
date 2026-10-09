@@ -266,7 +266,7 @@ StagePlan parse_stages(const std::string& stages_json) {
 // Reports, in the field names every surface already uses for them
 // ---------------------------------------------------------------------------
 
-json::Value count(std::size_t value) { return json::Value(static_cast<double>(value)); }
+double count(std::size_t value) { return static_cast<double>(value); }
 
 json::Array float_array(const float* values, std::size_t size) {
   json::Array out;
@@ -277,90 +277,90 @@ json::Array float_array(const float* values, std::size_t size) {
 
 json::Object report_of(const repair::DeclipReport& report) {
   json::Object detected;
-  detected.emplace("sampleCount", count(report.detected.sample_count));
-  detected.emplace("sampleFraction", json::Value(report.detected.sample_fraction));
-  detected.emplace("runCount", count(report.detected.run_count));
-  detected.emplace("longestRunSamples", count(report.detected.longest_run_samples));
-  detected.emplace("flatRunCount", count(report.detected.flat_run_count));
-  detected.emplace("longestFlatRunSamples", count(report.detected.longest_flat_run_samples));
-  detected.emplace("flatSampleCount", count(report.detected.flat_sample_count));
-  detected.emplace("flatLevel", json::Value(report.detected.flat_level));
+  json::put(detected, "sampleCount", count(report.detected.sample_count));
+  json::put(detected, "sampleFraction", report.detected.sample_fraction);
+  json::put(detected, "runCount", count(report.detected.run_count));
+  json::put(detected, "longestRunSamples", count(report.detected.longest_run_samples));
+  json::put(detected, "flatRunCount", count(report.detected.flat_run_count));
+  json::put(detected, "longestFlatRunSamples", count(report.detected.longest_flat_run_samples));
+  json::put(detected, "flatSampleCount", count(report.detected.flat_sample_count));
+  json::put(detected, "flatLevel", report.detected.flat_level);
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("lpcReconstructedRuns", count(report.lpc_reconstructed_runs));
-  out.emplace("interpolatedRuns", count(report.interpolated_runs));
-  out.emplace("repairedSamples", count(report.repaired_samples));
-  out.emplace("linkedRuns", count(report.linked_runs));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "lpcReconstructedRuns", count(report.lpc_reconstructed_runs));
+  json::put(out, "interpolatedRuns", count(report.interpolated_runs));
+  json::put(out, "repairedSamples", count(report.repaired_samples));
+  json::put(out, "linkedRuns", count(report.linked_runs));
   return out;
 }
 
 json::Object report_of(const repair::DeclickReport& report) {
   json::Object detected;
-  detected.emplace("count", count(report.detected.count));
-  detected.emplace("rejected", count(report.detected.rejected));
-  detected.emplace("longestRunSamples", count(report.detected.longest_run_samples));
-  detected.emplace("perSecond", json::Value(report.detected.per_second));
+  json::put(detected, "count", count(report.detected.count));
+  json::put(detected, "rejected", count(report.detected.rejected));
+  json::put(detected, "longestRunSamples", count(report.detected.longest_run_samples));
+  json::put(detected, "perSecond", report.detected.per_second);
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("repairedRuns", count(report.repaired_runs));
-  out.emplace("repairedSamples", count(report.repaired_samples));
-  out.emplace("linkedRuns", count(report.linked_runs));
-  out.emplace("lpcModelUsed", json::Value(report.lpc_model_used));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "repairedRuns", count(report.repaired_runs));
+  json::put(out, "repairedSamples", count(report.repaired_samples));
+  json::put(out, "linkedRuns", count(report.linked_runs));
+  json::put(out, "lpcModelUsed", report.lpc_model_used);
   return out;
 }
 
 json::Object report_of(const repair::DecrackleReport& report) {
   json::Object detected;
-  detected.emplace("sampleCount", count(report.detected.sample_count));
-  detected.emplace("sampleFraction", json::Value(report.detected.sample_fraction));
-  detected.emplace("perSecond", json::Value(report.detected.per_second));
+  json::put(detected, "sampleCount", count(report.detected.sample_count));
+  json::put(detected, "sampleFraction", report.detected.sample_fraction);
+  json::put(detected, "perSecond", report.detected.per_second);
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("replacedSamples", count(report.replaced_samples));
-  out.emplace("detailCoefficients", count(report.detail_coefficients));
-  out.emplace("shrunkCoefficients", count(report.shrunk_coefficients));
-  out.emplace("noiseSigma", json::Value(report.noise_sigma));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "replacedSamples", count(report.replaced_samples));
+  json::put(out, "detailCoefficients", count(report.detail_coefficients));
+  json::put(out, "shrunkCoefficients", count(report.shrunk_coefficients));
+  json::put(out, "noiseSigma", report.noise_sigma);
   return out;
 }
 
 json::Object report_of(const repair::DehumReport& report) {
   json::Object detected;
-  detected.emplace("fundamentalHz", json::Value(report.detected.fundamental_hz));
-  detected.emplace("fundamentalProminence", json::Value(report.detected.fundamental_prominence));
-  detected.emplace("harmonics", json::Value(report.detected.harmonics));
-  detected.emplace("harmonicDbfs",
-                   json::Value(float_array(report.detected.harmonic_dbfs,
-                                           static_cast<std::size_t>(repair::kDehumMaxHarmonics))));
+  json::put(detected, "fundamentalHz", report.detected.fundamental_hz);
+  json::put(detected, "fundamentalProminence", report.detected.fundamental_prominence);
+  json::put(detected, "harmonics", report.detected.harmonics);
+  json::put(detected, "harmonicDbfs",
+            float_array(report.detected.harmonic_dbfs,
+                        static_cast<std::size_t>(repair::kDehumMaxHarmonics)));
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("notchedHarmonics", json::Value(report.notched_harmonics));
-  out.emplace("appliedFundamentalHz", json::Value(report.applied_fundamental_hz));
-  out.emplace("fundamentalDriftHz", json::Value(report.fundamental_drift_hz));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "notchedHarmonics", report.notched_harmonics);
+  json::put(out, "appliedFundamentalHz", report.applied_fundamental_hz);
+  json::put(out, "fundamentalDriftHz", report.fundamental_drift_hz);
   return out;
 }
 
 json::Object report_of(const repair::DenoiseReport& report) {
   json::Object detected;
-  detected.emplace("floorDbfs", json::Value(report.detected.floor_dbfs));
-  detected.emplace("bandFloorDbfs", json::Value(float_array(report.detected.band_floor_dbfs,
-                                                            repair::kRepairNoiseBandCount)));
+  json::put(detected, "floorDbfs", report.detected.floor_dbfs);
+  json::put(detected, "bandFloorDbfs",
+            float_array(report.detected.band_floor_dbfs, repair::kRepairNoiseBandCount));
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("meanReductionDb", json::Value(report.mean_reduction_db));
-  out.emplace("maxReductionDb", json::Value(report.max_reduction_db));
-  out.emplace("floorLimitedFraction", json::Value(report.floor_limited_fraction));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "meanReductionDb", report.mean_reduction_db);
+  json::put(out, "maxReductionDb", report.max_reduction_db);
+  json::put(out, "floorLimitedFraction", report.floor_limited_fraction);
   return out;
 }
 
 json::Object report_of(const repair::DereverbReport& report) {
   json::Object detected;
-  detected.emplace("lateDecayRatioDb", json::Value(report.detected.late_decay_ratio_db));
-  detected.emplace("latePredictability", json::Value(report.detected.late_predictability));
+  json::put(detected, "lateDecayRatioDb", report.detected.late_decay_ratio_db);
+  json::put(detected, "latePredictability", report.detected.late_predictability);
   json::Object out;
-  out.emplace("detected", json::Value(std::move(detected)));
-  out.emplace("meanReductionDb", json::Value(report.mean_reduction_db));
-  out.emplace("suppressedFraction", json::Value(report.suppressed_fraction));
-  out.emplace("wpePredictorNorm", json::Value(report.wpe_predictor_norm));
+  json::put(out, "detected", std::move(detected));
+  json::put(out, "meanReductionDb", report.mean_reduction_db);
+  json::put(out, "suppressedFraction", report.suppressed_fraction);
+  json::put(out, "wpePredictorNorm", report.wpe_predictor_norm);
   return out;
 }
 
@@ -369,9 +369,9 @@ json::Value stage_entry(Stage stage, const std::vector<Report>& reports) {
   json::Array list;
   for (const Report& report : reports) list.emplace_back(report_of(report));
   json::Object out;
-  out.emplace("stage", json::Value(stage_name(stage)));
-  out.emplace("scope", json::Value(is_linked(stage) ? "linked" : "channel"));
-  out.emplace("reports", json::Value(std::move(list)));
+  json::put(out, "stage", stage_name(stage));
+  json::put(out, "scope", is_linked(stage) ? "linked" : "channel");
+  json::put(out, "reports", std::move(list));
   return json::Value(std::move(out));
 }
 
@@ -436,7 +436,7 @@ AssistantConfig read_analyze_request(const std::string& request_json) {
 }
 
 json::Value recommended_entry(Stage stage, json::Object settings) {
-  settings.emplace("stage", json::Value(stage_name(stage)));
+  json::put(settings, "stage", stage_name(stage));
   return json::Value(std::move(settings));
 }
 
@@ -510,12 +510,12 @@ std::string repair_analyze_json(const float* const* channels, std::size_t channe
   for (const std::string& reason : explanation) reasons.emplace_back(reason);
 
   json::Object root;
-  root.emplace("defects", json::Value(defects_to_json(defects.aggregate)));
-  root.emplace("channels", json::Value(std::move(per_channel)));
-  root.emplace("declipThresholdSafe", json::Value(defects.aggregate.declip_threshold_safe));
-  root.emplace("integratedLufs", json::Value(profile.loudness.integrated_lufs));
-  root.emplace("recommended", json::Value(recommended_stages(chain.repair)));
-  root.emplace("explanation", json::Value(std::move(reasons)));
+  json::put(root, "defects", defects_to_json(defects.aggregate));
+  json::put(root, "channels", std::move(per_channel));
+  json::put(root, "declipThresholdSafe", defects.aggregate.declip_threshold_safe);
+  json::put(root, "integratedLufs", profile.loudness.integrated_lufs);
+  json::put(root, "recommended", recommended_stages(chain.repair));
+  json::put(root, "explanation", std::move(reasons));
   return json::dump(json::Value(std::move(root)));
 }
 
