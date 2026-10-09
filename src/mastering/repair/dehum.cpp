@@ -22,6 +22,8 @@
 
 namespace sonare::mastering::repair {
 
+using sonare::constants::kDefaultDawSampleRate;
+
 using sonare::constants::kEpsilon;
 using sonare::constants::kFloorDb;
 using sonare::constants::kTwoPi;
@@ -917,7 +919,7 @@ void StreamingDehum::process(float* const* channels, int num_channels, int num_s
 }
 
 int StreamingDehum::tail_samples() const noexcept {
-  const double rate = state_->sample_rate > 0 ? state_->sample_rate : 48000.0;
+  const double rate = state_->sample_rate > 0 ? state_->sample_rate : kDefaultDawSampleRate;
   const double fundamental =
       config_.adaptive
           ? std::max(1.0, static_cast<double>(config_.fundamental_hz - config_.search_range_hz))

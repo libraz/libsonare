@@ -13,21 +13,6 @@ namespace sonare::mastering::common {
 
 using sonare::constants::kSpectrumEpsilon;
 
-namespace {
-
-/// @brief Window of @p win_length zero-padded to @p n_fft at (n_fft - win_length) / 2.
-/// @details The same construction Spectrogram::compute and Spectrogram::to_audio
-///          each inline; mirrored here rather than shared because spectrum.cpp's
-///          copy is file-local.
-std::vector<float> padded_window_of(WindowType window, int win_length, int n_fft, bool periodic) {
-  const auto handle = get_window_cached(window, win_length, periodic);
-  std::vector<float> padded(static_cast<std::size_t>(n_fft), 0.0f);
-  std::copy(handle->begin(), handle->end(), padded.begin() + (n_fft - win_length) / 2);
-  return padded;
-}
-
-}  // namespace
-
 bool has_reconstructible_hann_geometry(int n_fft, int hop_length) {
   if (n_fft <= 0 || hop_length <= 0 || hop_length > n_fft / 2) return false;
 
@@ -61,7 +46,7 @@ StftFrameReader::StftFrameReader(const float* samples, std::size_t size, int sam
       center_(checked.center),
       pad_mode_(checked.pad_mode),
       padded_window_(
-          padded_window_of(checked.window, checked.actual_win_length(), checked.n_fft, true)),
+          build_padded_window(checked.window, checked.actual_win_length(), checked.n_fft, true)),
       fft_(checked.n_fft),
       frame_(static_cast<std::size_t>(checked.n_fft), 0.0f),
       frame_spectrum_(static_cast<std::size_t>(checked.n_fft / 2 + 1)) {
@@ -134,9 +119,9 @@ IstftAccumulator::IstftAccumulator(int n_frames, int sample_rate, const StftConf
       trim_end_(0),
       ring_base_(0),
       synthesis_window_(
-          padded_window_of(checked.window, checked.actual_win_length(), checked.n_fft, false)),
+          build_padded_window(checked.window, checked.actual_win_length(), checked.n_fft, false)),
       window_product_(
-          padded_window_of(checked.window, checked.actual_win_length(), checked.n_fft, true)),
+          build_padded_window(checked.window, checked.actual_win_length(), checked.n_fft, true)),
       ring_output_(static_cast<std::size_t>(checked.n_fft), 0.0f),
       ring_window_sum_(static_cast<std::size_t>(checked.n_fft), 0.0f),
       frame_(static_cast<std::size_t>(checked.n_fft), 0.0f),

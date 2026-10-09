@@ -8,6 +8,7 @@
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -38,7 +39,7 @@ class TiltEq : public rt::ProcessorBase {
   void update_bands();
 
   ParametricEq eq_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   float tilt_db_ = 0.0f;
   float pivot_hz_ = 1000.0f;

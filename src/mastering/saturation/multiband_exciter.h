@@ -7,6 +7,7 @@
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -71,7 +72,7 @@ class MultibandExciter : public rt::ProcessorBase {
   void rebuild_band_compensation();
 
   MultibandExciterConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   bool prepared_ = false;

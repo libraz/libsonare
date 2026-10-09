@@ -13,6 +13,7 @@
 #include "rt/oversampler.h"
 #include "rt/polyphase_fir.h"
 #include "rt/sliding_max.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -210,6 +211,9 @@ class TruePeakLimiter : public rt::ProcessorBase {
   ///          limiting further, never loosens it.
   double smoother_sample_rate() const noexcept;
   float adaptive_release_coeff(float linked_peak);
+  int prepare_polyphase_input(float* const* channels, int num_channels, int num_samples,
+                              size_t oversampled_samples);
+  float process_gain_envelope_sample(float linked_peak, float ceiling, float& min_gain);
   void process_polyphase(float* const* channels, int num_channels, int num_samples);
   void process_polyphase_detect_only(float* const* channels, int num_channels, int num_samples);
   /// @brief Returns the gain smoothers and the crest detector to rest when a
@@ -229,7 +233,7 @@ class TruePeakLimiter : public rt::ProcessorBase {
   std::vector<float> input_rate_gain_;
   std::vector<float> downsampled_;
   sonare::rt::SlidingMax<float> oversampled_peak_window_{1};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   int lookahead_samples_ = 0;

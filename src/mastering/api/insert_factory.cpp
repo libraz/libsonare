@@ -619,29 +619,6 @@ SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::AirAbsorption, 2);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::ShoeboxRoom, 2);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::acoustic::SourceListener, 2);
 
-bool acoustic_material_preset_from_int(int selector, sonare::acoustic::MaterialPreset* out) {
-  using sonare::acoustic::MaterialPreset;
-  switch (selector) {
-    case 1:
-      *out = MaterialPreset::Concrete;
-      return true;
-    case 2:
-      *out = MaterialPreset::Wood;
-      return true;
-    case 3:
-      *out = MaterialPreset::Curtain;
-      return true;
-    case 4:
-      *out = MaterialPreset::Carpet;
-      return true;
-    case 5:
-      *out = MaterialPreset::Glass;
-      return true;
-    default:
-      return false;
-  }
-}
-
 // Reads one material-band array out of the insert's JSON side-channel. Only the
 // JSON shape is checked here; the coefficients themselves are validated by the
 // core builder, on the same rule as every other surface.
@@ -675,8 +652,8 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
   // — including rejecting an out-of-range scalar absorption rather than
   // clamping it, which is the one place these two used to disagree.
   WallMaterialRequest request;
-  request.has_preset = acoustic_material_preset_from_int(
-      detail::i(params, "materialPreset", 0, kNone), &request.preset);
+  request.has_preset =
+      material_preset_from_selector(detail::i(params, "materialPreset", 0, kNone), &request.preset);
   request.absorption = f(params, "absorption", 0.2f, kNone);
   if (json_root != nullptr) {
     request.absorption_bands =

@@ -27,6 +27,7 @@
 #include "mastering/repair/denoise_classical.h"
 #include "mastering/repair/denoise_internal.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::repair {
 
@@ -110,7 +111,7 @@ class StreamingDenoise : public rt::ProcessorBase {
   int hop_length_ = 0;
   int n_bins_ = 0;
   int mask_latency_frames_ = 0;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_channels_ = 0;
   int active_channels_ = 0;

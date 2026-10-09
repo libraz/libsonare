@@ -7,6 +7,7 @@
 
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::stereo {
 
@@ -44,7 +45,7 @@ class HaasEnhancer : public rt::ProcessorBase {
   float process_delay(float input);
 
   HaasEnhancerConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int delay_samples_ = 0;
   size_t delay_index_ = 0;
   std::vector<float> delay_;

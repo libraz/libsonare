@@ -7,6 +7,7 @@
 
 #include "mastering/eq/parametric.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -70,8 +71,7 @@ class PultecEq : public rt::ProcessorBase {
     float high_charge = 0.0f;
   };
   std::vector<ComponentState> component_state_;
-  static constexpr double kDefaultSampleRate = 48000.0;
-  double sample_rate_ = kDefaultSampleRate;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   float low_frequency_hz_ = 60.0f;
   float low_boost_ = 0.0f;
   float low_attenuation_ = 0.0f;

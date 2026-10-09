@@ -10,6 +10,7 @@
 #include "mastering/multiband/crossover.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::multiband {
 
@@ -89,7 +90,7 @@ class MultibandImager : public rt::ProcessorBase {
   static float allpass_coefficient(float frequency_hz, double sample_rate) noexcept;
 
   MultibandImagerConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   bool prepared_ = false;

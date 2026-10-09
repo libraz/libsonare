@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/stereo/constant_power_width.h"
 #include "mastering/stereo/mid_side.h"
 #include "rt/scoped_no_denormals.h"
@@ -33,12 +34,7 @@ void Imager::Allpass::reset() noexcept {
 Imager::Imager(ImagerConfig config) : config_(config) { validate_config(config_); }
 
 void Imager::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   // Decorrelator tuning. The four first-order allpass break frequencies are
   // anchored at the historical 48 kHz coefficients (0.63 / -0.51 / 0.42 /
   // -0.34) and re-derived for the prepared rate via

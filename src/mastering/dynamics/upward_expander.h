@@ -11,6 +11,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -68,7 +69,7 @@ class UpwardExpander : public rt::RtConfigLifecycle<UpwardExpander, UpwardExpand
   void update_coefficients(const UpwardExpanderConfig& config);
   void ensure_followers(int num_channels);
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
   float last_gain_db_ = 0.0f;

@@ -8,6 +8,7 @@
 
 #include "core/fft.h"
 #include "core/resample.h"
+#include "mastering/common/prepare_args.h"
 #include "rt/fractional_delay.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -94,12 +95,7 @@ void BinauralPanner::validate_config(const BinauralPannerConfig& config) {
 }
 
 void BinauralPanner::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   const int host_rate = static_cast<int>(std::lround(sample_rate));
   const double ratio = sample_rate / static_cast<double>(ring::kRingSampleRate);

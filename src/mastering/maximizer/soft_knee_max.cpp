@@ -5,6 +5,7 @@
 #include <cstdint>
 
 #include "mastering/common/parameter_domain.h"
+#include "mastering/common/prepare_args.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -15,10 +16,7 @@ namespace sonare::mastering::maximizer {
 SoftKneeMax::SoftKneeMax(SoftKneeMaxConfig config) : config_(config) { validate_config(config_); }
 
 void SoftKneeMax::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   maximizer_.set_config({0.0f, config_.ceiling_db, 1.0f, config_.release_ms});

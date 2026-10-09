@@ -4,6 +4,7 @@
 
 #include "rt/envelope_follower.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::spectral {
 
@@ -47,7 +48,7 @@ class SpectralShaper : public rt::ProcessorBase {
  private:
   static void validate_config(const SpectralShaperConfig& config);
   SpectralShaperConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   // prepare() fixes these at dynamics::kRealtimePreparedChannels so process()
   // never rebuilds filters/followers on the audio thread.

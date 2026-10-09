@@ -10,6 +10,7 @@
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -102,7 +103,7 @@ class Tape : public rt::ProcessorBase {
   TapeConfig config_{};
   common::JilesAtherton hysteresis_;
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   Biquad head_bump_coeffs_;
   float gap_loss_coeff_ = 0.0f;

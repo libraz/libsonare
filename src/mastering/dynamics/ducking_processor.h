@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "mastering/dynamics/sidechain_router.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -59,7 +60,7 @@ class DuckingProcessor : public rt::ProcessorBase {
 
   DuckingConfig config_{};
   rt::ChildProcessor<SidechainRouter> router_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
 };
 
 }  // namespace sonare::mastering::dynamics

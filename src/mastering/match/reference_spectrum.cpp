@@ -11,20 +11,11 @@
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/fractional_octave.h"
+#include "util/frequency_bins.h"
 
 namespace sonare::mastering::match {
 
 using sonare::constants::kEpsilon;
-namespace {
-
-std::vector<float> bin_frequencies(int n_bins, int sample_rate, int n_fft) {
-  std::vector<float> frequencies(static_cast<size_t>(n_bins));
-  const float bin_width = static_cast<float>(sample_rate) / static_cast<float>(n_fft);
-  for (int i = 0; i < n_bins; ++i) frequencies[static_cast<size_t>(i)] = i * bin_width;
-  return frequencies;
-}
-
-}  // namespace
 
 ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrumConfig& config) {
   if (audio.empty()) {
@@ -57,7 +48,7 @@ ReferenceSpectrum reference_spectrum(const Audio& audio, const ReferenceSpectrum
     if (start + copy_count == audio.size()) break;
   }
 
-  std::vector<float> frequencies = bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
+  std::vector<float> frequencies = util::bin_frequencies(n_bins, audio.sample_rate(), config.n_fft);
   std::vector<float> magnitude(static_cast<size_t>(n_bins), 0.0f);
   for (int bin = 0; bin < n_bins; ++bin) {
     const double mean_power =

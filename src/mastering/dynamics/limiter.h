@@ -11,6 +11,7 @@
 #include "rt/lookahead_buffer.h"
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -134,7 +135,7 @@ class Limiter : public rt::ProcessorBase {
   ///        from this, the audio thread re-runs @ref update_coefficients
   ///        before processing.
   const LimiterConfig* applied_snapshot_ = nullptr;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   std::vector<sonare::rt::LookaheadBuffer> lookahead_;

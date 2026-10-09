@@ -1,3 +1,4 @@
+#include "mastering/eq/cut_band.h"
 #include "mastering/eq/equalizer.h"
 #include "util/db.h"
 #include "util/exception.h"
@@ -7,26 +8,14 @@ namespace sonare::mastering::eq {
 
 namespace {
 
-bool is_cut_band(EqBandType type) noexcept {
-  return type == EqBandType::LowPass || type == EqBandType::HighPass;
-}
+using detail::cut_order;
+using detail::is_cut_band;
 
 // The shelf designs raise 10^(dB/20) in float; past roughly 770 dB that overflows
 // and the design no longer realizes the requested gain. Bound on that
 // realizability condition rather than on an invented dB ceiling.
 bool gain_db_is_realizable(float gain_db) noexcept {
   return numeric::finite(gain_db) && numeric::finite(db_to_linear(gain_db));
-}
-
-int cut_order(int slope_db_oct) {
-  if (slope_db_oct == 0) {
-    return 0;
-  }
-  if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
-  }
-  return slope_db_oct / 6;
 }
 
 size_t iir_cut_stage_count(const EqBand& band) {

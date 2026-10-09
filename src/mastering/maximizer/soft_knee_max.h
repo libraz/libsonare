@@ -5,6 +5,7 @@
 
 #include "mastering/maximizer/maximizer.h"
 #include "rt/overflow_counter.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -52,7 +53,7 @@ class SoftKneeMax : public rt::ProcessorBase {
 
   SoftKneeMaxConfig config_{};
   rt::ChildProcessor<Maximizer> maximizer_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
   rt::OverflowCounter non_finite_substitution_count_{};

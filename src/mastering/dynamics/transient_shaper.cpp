@@ -5,6 +5,7 @@
 #include <memory>
 #include <utility>
 
+#include "mastering/common/prepare_args.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
 #include "util/dsp_primitives.h"
@@ -26,12 +27,7 @@ constexpr float kEnvelopeFloor = 1.0e-6f;
 TransientShaper::TransientShaper(TransientShaperConfig config) : ConfigBase(std::move(config)) {}
 
 void TransientShaper::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
 
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;

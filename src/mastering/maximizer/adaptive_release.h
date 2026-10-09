@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "mastering/maximizer/true_peak_limiter.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -104,7 +105,7 @@ class AdaptiveRelease : public rt::ProcessorBase {
   float authored_crest_low_ = 2.0f;
   float authored_crest_high_ = 10.0f;
   rt::ChildProcessor<TruePeakLimiter> limiter_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
   float current_release_ms_ = 20.0f;

@@ -15,6 +15,7 @@
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_engine.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -199,7 +200,7 @@ class EqualizerProcessor : public rt::ProcessorBase {
 
   EqualizerProcessorConfig config_{};
   PhaseMode phase_mode_ = PhaseMode::ZeroLatency;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   // Detector-delay ring capacity (samples) preallocated in prepare().
   int max_detector_delay_samples_ = 0;

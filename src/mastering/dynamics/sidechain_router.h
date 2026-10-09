@@ -12,6 +12,7 @@
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -100,7 +101,7 @@ class SidechainRouter : public rt::RtConfigLifecycle<SidechainRouter, SidechainR
   ///          adopted between blocks.
   void update_coefficients(const SidechainRouterConfig& config);
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int lookahead_samples_ = 0;
   bool prepared_ = false;
   const float* const* sidechain_channels_ = nullptr;

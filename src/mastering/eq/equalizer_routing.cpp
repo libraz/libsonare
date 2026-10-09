@@ -2,6 +2,7 @@
 #include <array>
 #include <cmath>
 
+#include "mastering/eq/cut_band.h"
 #include "mastering/eq/equalizer.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
@@ -11,20 +12,8 @@ namespace sonare::mastering::eq {
 
 namespace {
 
-bool is_cut_band(EqBandType type) noexcept {
-  return type == EqBandType::LowPass || type == EqBandType::HighPass;
-}
-
-int cut_order(int slope_db_oct) {
-  if (slope_db_oct == 0) {
-    return 0;
-  }
-  if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
-  }
-  return slope_db_oct / 6;
-}
+using detail::cut_order;
+using detail::is_cut_band;
 
 template <typename Append>
 void append_iir_cut_cascade(const EqBand& band, Append&& append) {

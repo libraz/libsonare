@@ -12,6 +12,7 @@
 #include "rt/partitioned_convolver.h"
 #include "rt/processor_base.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -112,7 +113,7 @@ class LinearPhaseEq : public rt::ProcessorBase {
   static float band_magnitude(const EqBand& band, double frequency_hz, double sample_rate);
 
   LinearPhaseEqConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int latency_samples_ = 0;
   bool prepared_ = false;

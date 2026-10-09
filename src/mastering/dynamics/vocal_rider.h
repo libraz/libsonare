@@ -11,6 +11,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -72,7 +73,7 @@ class VocalRider : public rt::RtConfigLifecycle<VocalRider, VocalRiderConfig> {
   ///        allocation; the follower rewrites preserve envelope state.
   void update_coefficients(const VocalRiderConfig& config);
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   std::vector<rt::EnvelopeFollower> followers_;
   // Per-channel smoothed gain state shared by both detection modes: linked

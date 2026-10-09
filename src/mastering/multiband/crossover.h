@@ -170,7 +170,7 @@ class Crossover {
   };
 
   CrossoverConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int prepared_channel_capacity_ = 0;
   bool prepared_ = false;

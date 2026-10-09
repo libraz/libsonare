@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -75,7 +76,7 @@ class DeEsser : public rt::RtConfigLifecycle<DeEsser, DeEsserConfig> {
 
   using Biquad = rt::BiquadState;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   Biquad filter_coeffs_;
   std::vector<Biquad> bandpass_;

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iterator>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -11,6 +12,8 @@
 #include "util/non_finite_state.h"
 
 namespace sonare::mastering::saturation {
+
+using sonare::constants::kDefaultDawSampleRate;
 
 using sonare::discard_if_non_finite;
 using sonare::discard_run_if_non_finite;
@@ -60,10 +63,7 @@ bool valid_level(float level) noexcept {
 BitCrusher::BitCrusher(BitCrusherConfig config) : config_(config) { validate_config(config_); }
 
 void BitCrusher::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   prepared_ = true;
   sample_rate_ = sample_rate;
   update_hold_increment();
@@ -330,7 +330,7 @@ void BitCrusher::validate_config(const BitCrusherConfig& config) {
 void BitCrusher::update_hold_increment() noexcept {
   // A hold rate at or above the host's rate is no hold at all: a whole period
   // per sample latches every sample, which is what the increment is capped to.
-  const double rate = sample_rate_ > 0.0 ? sample_rate_ : 48000.0;
+  const double rate = sample_rate_ > 0.0 ? sample_rate_ : kDefaultDawSampleRate;
   const float hold_hz = config_.type_ladder > 0
                             ? kTypeLadderHoldHz[static_cast<size_t>(config_.type_ladder - 1)]
                             : config_.hold_hz;
@@ -353,7 +353,7 @@ float BitCrusher::lowpass_tick(double g, float x, float& state) noexcept {
 }
 
 void BitCrusher::update_coefficients() noexcept {
-  const double rate = sample_rate_ > 0.0 ? sample_rate_ : 48000.0;
+  const double rate = sample_rate_ > 0.0 ? sample_rate_ : kDefaultDawSampleRate;
   pre_gain_ = one_pole_gain(config_.pre_filter_hz);
   post_gain_ = config_.filter_type == BitCrusherFilterType::kOff
                    ? 0.0

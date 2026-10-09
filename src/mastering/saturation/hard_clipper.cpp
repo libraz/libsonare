@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -29,10 +30,7 @@ inline float clamp_to_ceiling(float value, float ceiling, std::uint32_t& substit
 HardClipper::HardClipper(HardClipperConfig config) : config_(config) { validate_config(config_); }
 
 void HardClipper::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   max_block_size_ = max_block_size;
   non_finite_substitution_count_.reset();
   prepared_ = true;

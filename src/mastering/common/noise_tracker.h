@@ -5,6 +5,8 @@
 
 #include <vector>
 
+#include "util/constants.h"
+
 namespace sonare::mastering::common {
 
 class NoiseTracker {
@@ -52,7 +54,7 @@ class NoiseTracker {
   bool tracks_minima() const noexcept { return mode_ != Mode::Spp; }
 
   int n_bins_ = 0;
-  int sample_rate_ = 48000;
+  int sample_rate_ = static_cast<int>(sonare::constants::kDefaultDawSampleRate);
   int hop_length_ = 512;
   Mode mode_ = Mode::Spp;
   int frame_index_ = 0;

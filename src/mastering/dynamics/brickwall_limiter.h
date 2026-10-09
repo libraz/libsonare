@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -108,7 +109,7 @@ class BrickwallLimiter : public rt::RtConfigLifecycle<BrickwallLimiter, Brickwal
 
   rt::ChildProcessor<Limiter> limiter_;
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   float last_gain_reduction_db_ = 0.0f;
   int hard_clip_count_ = 0;

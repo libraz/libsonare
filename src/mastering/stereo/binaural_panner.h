@@ -20,6 +20,7 @@
 
 #include "rt/biquad_design.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::stereo {
 
@@ -69,7 +70,7 @@ class BinauralPanner : public rt::ProcessorBase {
 
   BinauralPannerConfig config_{};
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
 
   /// Right-ear ring at the host rate, [azimuth][tap]; the left ear is mirrored.
   std::vector<float> ring_;

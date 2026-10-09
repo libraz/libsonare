@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/common/prepare_args.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -32,10 +33,7 @@ Tape::Tape(TapeConfig config) : config_(config), hysteresis_(make_ja_config(conf
 }
 
 void Tape::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   update_filters(sample_rate_);

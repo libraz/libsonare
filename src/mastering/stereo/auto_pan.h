@@ -7,6 +7,7 @@
 
 #include "effects/modulation/lfo.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::stereo {
 
@@ -47,7 +48,7 @@ class AutoPan : public rt::ProcessorBase {
   static void validate_config(const AutoPanConfig& config);
 
   AutoPanConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   double phase_ = 0.0;
   bool prepared_ = false;
 };

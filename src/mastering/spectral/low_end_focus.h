@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::spectral {
 
@@ -40,7 +41,7 @@ class LowEndFocus : public rt::ProcessorBase {
  private:
   static void validate_config(const LowEndFocusConfig& config);
   LowEndFocusConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   // prepare() fixes these at dynamics::kRealtimePreparedChannels so process()
   // never resizes per-channel state on the audio thread.

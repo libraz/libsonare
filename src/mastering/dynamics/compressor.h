@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -100,7 +101,7 @@ class Compressor : public rt::RtConfigLifecycle<Compressor, CompressorConfig> {
   void update_coefficients(const CompressorConfig& config);
   void update_release_table(const CompressorConfig& config) noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   // RMS pre-smoothing state (for Rms / LogRms detectors). Rms = 10 ms window,
   // LogRms = 50 ms window for sustained-level estimation.

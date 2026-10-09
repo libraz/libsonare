@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -47,12 +48,7 @@ std::vector<rt::ParamDescriptor> band_parameter_descriptors(size_t band_count) {
 }
 
 void ParametricEq::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
 
   // Every band is designed at the new rate before anything is committed. A band
   // accepted at an earlier rate, or installed through set_band_at_rate, is

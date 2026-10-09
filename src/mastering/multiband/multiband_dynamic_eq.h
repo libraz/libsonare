@@ -8,6 +8,7 @@
 #include "mastering/eq/dynamic_eq.h"
 #include "mastering/multiband/crossover.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::multiband {
 
@@ -71,7 +72,7 @@ class MultibandDynamicEq : public rt::ProcessorBase {
   void configure_processor(size_t band_index);
 
   MultibandDynamicEqConfig config_{};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   bool prepared_ = false;

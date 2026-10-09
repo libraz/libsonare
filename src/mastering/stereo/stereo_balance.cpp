@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "rt/pan_law.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/exception.h"
@@ -26,12 +27,7 @@ StereoBalance::StereoBalance(StereoBalanceConfig config) : config_(config) {
 }
 
 void StereoBalance::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   ramp_samples_ = std::max(1, static_cast<int>(std::lround(kRampSeconds * sample_rate)));
   prepared_ = true;
   reset();

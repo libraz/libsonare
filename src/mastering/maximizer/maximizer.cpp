@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "mastering/common/parameter_domain.h"
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/lookahead_validation.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/db.h"
@@ -15,10 +16,7 @@ namespace sonare::mastering::maximizer {
 Maximizer::Maximizer(MaximizerConfig config) : config_(config) { validate_config(config_); }
 
 void Maximizer::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   limiter_.set_config({config_.ceiling_db, config_.lookahead_ms, config_.release_ms});

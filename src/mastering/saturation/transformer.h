@@ -4,6 +4,7 @@
 
 #include "mastering/common/hysteresis_ja.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -41,7 +42,7 @@ class Transformer : public rt::ProcessorBase {
   TransformerConfig transformer_config_{};
   common::JilesAtherton hysteresis_;
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   std::vector<common::JilesAthertonState> states_;
 };
 

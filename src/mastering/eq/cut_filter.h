@@ -112,7 +112,7 @@ class CutFilter : public rt::ProcessorBase {
   EqBand low_pass_{EqBandType::LowPass, 20000.0f, 0.0f, sonare::constants::kButterworthQ, false};
   CutFilterSlope high_pass_slope_ = CutFilterSlope::Db12PerOct;
   CutFilterSlope low_pass_slope_ = CutFilterSlope::Db12PerOct;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   int num_channels_ = 0;
   LinearPhaseEq brickwall_{{8192, 2049, true, 0}};

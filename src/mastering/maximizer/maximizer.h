@@ -8,6 +8,7 @@
 
 #include "mastering/dynamics/brickwall_limiter.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::maximizer {
 
@@ -57,7 +58,7 @@ class Maximizer : public rt::ProcessorBase {
  private:
   MaximizerConfig config_{};
   rt::ChildProcessor<dynamics::BrickwallLimiter> limiter_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
 };

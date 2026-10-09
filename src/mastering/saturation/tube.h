@@ -5,6 +5,7 @@
 #include "rt/oversampler.h"
 #include "rt/parallel_paths.h"
 #include "rt/processor_base.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -56,7 +57,7 @@ class Tube : public rt::ProcessorBase {
 
   TubeConfig tube_config_{};
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int max_working_channels_ = 0;
   sonare::rt::Oversampler oversampler_{4};

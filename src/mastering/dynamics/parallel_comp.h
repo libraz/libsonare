@@ -11,6 +11,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -69,7 +70,7 @@ class ParallelComp : public rt::RtConfigLifecycle<ParallelComp, ParallelCompConf
   ///        allocation; the follower rewrites preserve envelope state.
   void update_coefficients(const ParallelCompConfig& config);
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   bool prepared_ = false;
   std::vector<sonare::rt::EnvelopeFollower> followers_;
   std::vector<float> limiter_gains_;

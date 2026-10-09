@@ -22,6 +22,7 @@
 #include "mastering/final/dither.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -175,7 +176,7 @@ class BitCrusher : public rt::ProcessorBase {
 
   BitCrusherConfig config_{};
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   double hold_increment_ = 0.0;
   double pre_gain_ = 0.0;
   double post_gain_ = 0.0;

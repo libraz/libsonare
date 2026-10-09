@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_config_lifecycle.h"
 #include "rt/rt_publisher.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::dynamics {
 
@@ -88,7 +89,7 @@ class TransientShaper : public rt::RtConfigLifecycle<TransientShaper, TransientS
   ///          adopted between blocks.
   void update_coefficients(const TransientShaperConfig& config);
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   bool prepared_ = false;
   // Gain-smoother coefficient, cached because it depends only on sample rate and

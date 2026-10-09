@@ -39,6 +39,7 @@
 #include "rt/oversampler.h"
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::saturation {
 
@@ -552,7 +553,7 @@ class AmpSim : public rt::ProcessorBase {
 
   AmpSimConfig config_{};
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   Tube tube_;
   std::vector<ChannelChain> chains_;

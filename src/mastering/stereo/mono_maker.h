@@ -8,6 +8,7 @@
 
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::stereo {
 
@@ -42,7 +43,7 @@ class MonoMaker : public rt::ProcessorBase {
 
   MonoMakerConfig config_{};
   bool prepared_ = false;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   std::array<float, 4> highpass_input_{};
   std::array<float, 4> highpass_output_{};
   float coefficient_ = 0.0f;

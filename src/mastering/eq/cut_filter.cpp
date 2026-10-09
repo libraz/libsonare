@@ -4,6 +4,7 @@
 #include <cmath>
 #include <initializer_list>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -69,12 +70,7 @@ int slope_db_oct(CutFilterSlope slope) {
 }  // namespace
 
 void CutFilter::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   brickwall_.prepare(sample_rate, max_block_size);
   prepared_ = true;

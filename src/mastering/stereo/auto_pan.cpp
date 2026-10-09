@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "mastering/common/prepare_args.h"
 #include "rt/pan_law.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -22,12 +23,7 @@ using sonare::rt::PanNormalization;
 AutoPan::AutoPan(AutoPanConfig config) : config_(config) { validate_config(config_); }
 
 void AutoPan::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0)) {
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  }
-  if (max_block_size < 0) {
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
-  }
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   prepared_ = true;
   reset();

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+#include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
 #include "rt/adaa.h"
 #include "rt/biquad_design.h"
@@ -34,10 +35,7 @@ Exciter::Exciter(ExciterConfig config) : config_(config) {
 }
 
 void Exciter::prepare(double sample_rate, int max_block_size) {
-  if (!(sample_rate > 0.0))
-    throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
-  if (max_block_size < 0)
-    throw SonareException(ErrorCode::InvalidParameter, "max_block_size must be non-negative");
+  validate_prepare_args(sample_rate, max_block_size);
   sample_rate_ = sample_rate;
   max_block_size_ = max_block_size;
   prepared_ = true;

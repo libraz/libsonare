@@ -12,6 +12,7 @@
 #include "rt/processor_base.h"
 #include "rt/stage_gate.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 
 namespace sonare::mastering::eq {
 
@@ -209,7 +210,7 @@ class DynamicEq : public rt::ProcessorBase {
   void validate_sidechain(int expected_samples) const;
 
   ParametricEq eq_;
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   // Detector-delay ring capacity (samples) preallocated in prepare() from
   // kMaxDetectorDelayMs.
   int max_detector_delay_samples_ = 0;

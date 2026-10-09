@@ -8,6 +8,7 @@
 #include "core/window.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/cut_band.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "util/constants.h"
@@ -16,6 +17,9 @@
 namespace sonare::mastering::eq {
 
 namespace {
+
+using detail::cut_order;
+using detail::is_cut_band;
 
 bool is_power_of_two(int value) { return value > 0 && (value & (value - 1)) == 0; }
 
@@ -123,21 +127,6 @@ sonare::rt::BiquadCoeffs design_band_biquad(const EqBand& band, double sample_ra
   }
 
   return {};
-}
-
-bool is_cut_band(EqBandType type) noexcept {
-  return type == EqBandType::LowPass || type == EqBandType::HighPass;
-}
-
-int cut_order(int slope_db_oct) {
-  if (slope_db_oct == 0) {
-    return 0;
-  }
-  if (slope_db_oct < 6 || slope_db_oct > 96 || (slope_db_oct % 6) != 0) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "cut slope must be 0 or 6..96 dB/oct in 6 dB steps");
-  }
-  return slope_db_oct / 6;
 }
 
 float cut_cascade_magnitude(const EqBand& band, double frequency_hz, double sample_rate) {
