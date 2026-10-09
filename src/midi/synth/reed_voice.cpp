@@ -251,6 +251,14 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   reed_z1_ = 0.0f;
   reed_z2_ = 0.0f;
   tongue_held_ = false;
+  // Table bias only: the lead is one sample at kLossVoicedSr, so a rate that is a multiple of
+  // it holds the lead by lagging the table the remaining whole samples (0 at the voiced rate).
+  table_lag_ = 0;
+  table_lag_pos_ = 0;
+  dp_lag_.fill(0.0f);
+  if (reed_dyn_ && closing_pressure_ == 0.0f) {
+    table_lag_ = std::clamp(static_cast<int>(std::lround(sr / kLossVoicedSr)) - 1, 0, kTableLagMax);
+  }
   float valve_tau = 0.0f;
   if (reed_dyn_ && closing_pressure_ > 0.0f) {
     const float f_reed = reed_natural_hz(params.reed_resonance, srf);
@@ -363,7 +371,7 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
     const float reed_r = loss_pole_at_rate(kReedResR, sr);
     reed_a1_ = 2.0f * reed_r * std::cos(w);
     reed_a2_ = -reed_r * reed_r;
-    reed_b0_ = 1.0f - reed_r;  // unity-ish peak so the bias stays bounded
+    reed_b0_ = resonator_gain_at_rate(reed_r, w, sr);  // centre response held across rates
     reed_couple_ = kReedCouple;
   }
 
@@ -481,12 +489,18 @@ float ReedVoiceCore::render_internal(float pitch_ratio) noexcept {
   // drives its opening. coeff = clamp(offset + slope*dp, -1, 1). As the bore
   // pressure rises the reed pinches shut, gating the breath into the pressure
   // pulses that sustain the oscillation.
-  const float dp = refl - breath;
+  const float dp_now = refl - breath;
+  float dp = dp_now;
+  if (table_lag_ > 0) {
+    dp = dp_lag_[static_cast<size_t>(table_lag_pos_)];
+    dp_lag_[static_cast<size_t>(table_lag_pos_)] = dp_now;
+    if (++table_lag_pos_ == table_lag_) table_lag_pos_ = 0;
+  }
   float reed = reed_offset_ + reed_slope_ * dp;
   // Dynamic (mass-spring) reed (gated): bias the sharp table's operating point by
   // the reed resonator's displacement, so the reed rings at its natural frequency
   // (a live beating and a "reed formant" edge) while the table stays sharp.
-  if (reed_dyn_ && closing_pressure_ == 0.0f) reed += reed_couple_ * reed_resonator(dp);
+  if (reed_dyn_ && closing_pressure_ == 0.0f) reed += reed_couple_ * reed_resonator(dp_now);
   if (reed > 1.0f) reed = 1.0f;
   if (reed < -1.0f) reed = -1.0f;
   float inj = breath + dp * reed;
@@ -615,6 +629,7 @@ void ReedVoiceCore::retune_loop_comp() noexcept {
   const float tau_lp = onepole_group_delay_samples(1.0f - lp_alpha_, comp_omega_);
   bore_.comp = 1.0f + tau_lp - comp_lead_scale_ * comp_lead_;
   if (comp_valve_ > 0.0f) bore_.comp += comp_valve_;
+  bore_.comp += static_cast<float>(table_lag_);
   comp_alpha_ = lp_alpha_;
 }
 
@@ -637,6 +652,8 @@ void ReedVoiceCore::kill() noexcept {
   chiff_level_ = 0.0f;
   reed_z1_ = 0.0f;
   reed_z2_ = 0.0f;
+  dp_lag_.fill(0.0f);
+  table_lag_pos_ = 0;
   reg_lp_state_ = 0.0f;
   throat_state_ = 0.0f;
   hole_refl_ = 0.0f;

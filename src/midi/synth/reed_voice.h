@@ -396,6 +396,13 @@ class ReedVoiceCore {
   float reed_z1_ = 0.0f;
   float reed_z2_ = 0.0f;
   float reed_couple_ = 0.0f;
+  // The resonator answers the drop in the sample the table reads it: a lead of one voiced-rate
+  // sample over the table. At a higher rate the table reads the drop this many samples late
+  // to keep that lead in seconds, and the bore delay is shortened by the same count.
+  static constexpr int kTableLagMax = 8;  // one voiced-rate sample at up to 432 kHz
+  int table_lag_ = 0;
+  int table_lag_pos_ = 0;
+  std::array<float, kTableLagMax> dp_lag_{};
 
   // 4b: register vent. reg_vent_ == 0 -> skipped (bit-identical). A one-pole
   // low-band follower whose output is subtracted from the loop reflection,

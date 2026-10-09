@@ -53,6 +53,23 @@ std::array<float, 3> reed_dynamic_reed_coefficients(double sample_rate) {
   return core.dynamic_reed_coefficients();
 }
 
+// Direct-core render of the table-path dynamic reed, textures off so only the
+// loop and the resonator shape the note.
+std::vector<float> render_dynamic_reed(double sample_rate, uint8_t note, int num_samples) {
+  ReedPatchParams params;
+  params.dynamic_reed = true;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  std::vector<float> bore(
+      static_cast<size_t>(sonare::midi::synth::reed_buffer_capacity(sample_rate)));
+  ReedVoiceCore core;
+  core.attach(bore.data(), static_cast<int>(bore.size()));
+  core.start(params, sample_rate, note, Velocity16::from7(100), 42ULL);
+  std::vector<float> out(static_cast<size_t>(num_samples));
+  for (float& x : out) x = core.render(1.0f);
+  return out;
+}
+
 std::vector<float> render_patch(const NativeSynthPatch& patch, uint8_t note, uint8_t velocity,
                                 int num_samples, int note_off_at = -1) {
   NativeSynthConfig cfg;
@@ -197,6 +214,14 @@ TEST_CASE("table-path dynamic reed keeps its radius and damping in hertz",
   constexpr double kReedHz = 2500.0;
   constexpr double kVoicedRadius = 0.985;
   const double expected_damping_hz = -48000.0 * std::log(kVoicedRadius);
+  // |H| at the centre: the gain in front of the poles is what holds it across rates.
+  const auto centre_response = [](const std::array<float, 3>& coeff, double sample_rate) {
+    const std::complex<double> z =
+        std::exp(std::complex<double>(0.0, -sonare::constants::kTwoPiD * kReedHz / sample_rate));
+    return std::abs(static_cast<double>(coeff[0]) / (1.0 - static_cast<double>(coeff[1]) * z -
+                                                     static_cast<double>(coeff[2]) * z * z));
+  };
+  const double voiced_centre = centre_response(reed_dynamic_reed_coefficients(48000.0), 48000.0);
 
   for (const double sample_rate : {24000.0, 44100.0, 48000.0, 96000.0}) {
     const std::array<float, 3> coeff = reed_dynamic_reed_coefficients(sample_rate);
@@ -212,10 +237,38 @@ TEST_CASE("table-path dynamic reed keeps its radius and damping in hertz",
     CAPTURE(sample_rate, radius, centre_hz, damping_hz);
     CHECK(std::fabs(centre_hz - kReedHz) < 1.0);
     CHECK(std::fabs(damping_hz - expected_damping_hz) < 2.0);
-    CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - radius)) < 1.0e-6);
+    CHECK(std::fabs(centre_response(coeff, sample_rate) / voiced_centre - 1.0) < 0.01);
     if (sample_rate == 48000.0) {
       CHECK(std::fabs(radius - kVoicedRadius) < 1.0e-6);
       CHECK(std::fabs(static_cast<double>(coeff[0]) - (1.0 - kVoicedRadius)) < 1.0e-6);
+    }
+  }
+}
+
+TEST_CASE("table-path dynamic reed keeps the played note at every sample rate",
+          "[midi][synth][reed][rate]") {
+  // The resonator's centre response and its one-sample lead over the table are
+  // both held in physical units, so at 96 kHz the reed formant biases the note
+  // the way it does at 48 kHz instead of replacing it with its own tone.
+  constexpr int kWindow = 1 << 16;
+  for (const int note : {46, 58}) {
+    const double f0 = 440.0 * std::pow(2.0, (note - 69) / 12.0);
+    for (const double sample_rate : {44100.0, 48000.0, 96000.0}) {
+      const int settle = static_cast<int>(sample_rate);
+      const std::vector<float> tone =
+          render_dynamic_reed(sample_rate, static_cast<uint8_t>(note), settle + kWindow);
+      const std::vector<double> ps = power_spectrum(tone, static_cast<size_t>(settle), kWindow);
+      double total = 0.0;
+      double in_band = 0.0;
+      for (size_t k = 1; k < ps.size(); ++k) {
+        const double hz = static_cast<double>(k) * sample_rate / kWindow;
+        total += ps[k];
+        if (hz > 0.9 * f0 && hz < 1.1 * f0) in_band += ps[k];
+      }
+      CAPTURE(note, sample_rate, in_band / std::max(total, 1.0e-30));
+      REQUIRE(total > 0.0);
+      REQUIRE(std::isfinite(tone.back()));
+      CHECK(in_band > 0.5 * total);
     }
   }
 }
