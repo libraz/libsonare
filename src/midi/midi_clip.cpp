@@ -58,10 +58,11 @@ int same_time_rank(const Ump& ump) noexcept {
   return kGeneralRank;
 }
 
-bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
-  if (a.render_frame != b.render_frame) return a.render_frame < b.render_frame;
-  const int ra = same_time_rank(a.ump);
-  const int rb = same_time_rank(b.ump);
+namespace {
+
+bool same_timestamp_ump_before(const Ump& a, const Ump& b) noexcept {
+  const int ra = same_time_rank(a);
+  const int rb = same_time_rank(b);
   if (ra != rb) return ra < rb;
   // Two events sharing kGeneralRank are a gesture, not a set: leave them in
   // stream order. See MidiClip::sort_stable for why.
@@ -69,13 +70,16 @@ bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
   // Deterministic tiebreak on note then channel then first word so identical
   // timestamps are fully ordered regardless of insertion order. Mirrors
   // MidiClip::sort_stable.
-  if (a.ump.note_number() != b.ump.note_number()) {
-    return a.ump.note_number() < b.ump.note_number();
-  }
-  if (a.ump.channel() != b.ump.channel()) {
-    return a.ump.channel() < b.ump.channel();
-  }
-  return a.ump.words[0] < b.ump.words[0];
+  if (a.note_number() != b.note_number()) return a.note_number() < b.note_number();
+  if (a.channel() != b.channel()) return a.channel() < b.channel();
+  return a.words[0] < b.words[0];
+}
+
+}  // namespace
+
+bool render_event_before(const MidiEvent& a, const MidiEvent& b) noexcept {
+  if (a.render_frame != b.render_frame) return a.render_frame < b.render_frame;
+  return same_timestamp_ump_before(a.ump, b.ump);
 }
 
 void sort_render_events_stable(std::vector<MidiEvent>& events) {
@@ -118,23 +122,7 @@ void MidiClip::sort_stable() {
   std::stable_sort(events_.begin(), events_.end(),
                    [](const MidiClipEvent& a, const MidiClipEvent& b) {
                      if (a.ppq != b.ppq) return a.ppq < b.ppq;
-                     const int ra = same_time_rank(a.ump);
-                     const int rb = same_time_rank(b.ump);
-                     if (ra != rb) return ra < rb;
-                     // Two events sharing kGeneralRank keep the order they
-                     // arrived in: a controller number is not a key to sort on,
-                     // it is a step in a gesture.
-                     if (ra == kGeneralRank) return false;
-                     // Stable tiebreak on note then channel then first word so
-                     // identical-timestamp ordering is fully deterministic
-                     // regardless of insertion order.
-                     if (a.ump.note_number() != b.ump.note_number()) {
-                       return a.ump.note_number() < b.ump.note_number();
-                     }
-                     if (a.ump.channel() != b.ump.channel()) {
-                       return a.ump.channel() < b.ump.channel();
-                     }
-                     return a.ump.words[0] < b.ump.words[0];
+                     return same_timestamp_ump_before(a.ump, b.ump);
                    });
 }
 

@@ -14,7 +14,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kCentsPerOctave;
 using sonare::constants::kPi;
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 using sonare::constants::kTwoPiD;
 
@@ -265,10 +267,10 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
   // Treble regulation: octaves the played note sits above the reference (0 at or
   // below C4). Combined per rank with the rank's footage below.
   const float keytrack = std::clamp(params.keytrack, 0.0f, 1.0f);
-  const float octaves_above =
-      std::max(0.0f, (static_cast<float>(note & 0x7Fu) - kKeytrackRefNote) * (1.0f / 12.0f));
-  const float octaves_below =
-      std::max(0.0f, (kKeytrackRefNote - static_cast<float>(note & 0x7Fu)) * (1.0f / 12.0f));
+  const float octaves_above = std::max(
+      0.0f, (static_cast<float>(note & 0x7Fu) - kKeytrackRefNote) * (1.0f / kSemitonesPerOctave));
+  const float octaves_below = std::max(
+      0.0f, (kKeytrackRefNote - static_cast<float>(note & 0x7Fu)) * (1.0f / kSemitonesPerOctave));
   const float vel01 = velocity.f7() / 127.0f;
   // Mouth pressure: the patch breath sets the dynamic, velocity opens it a touch.
   const float level =
@@ -327,7 +329,8 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // inter-rank beating of a real chorus.
     const float detune_span =
         kPipeDetuneCents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
-    const float detune = std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / 1200.0f));
+    const float detune =
+        std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / kCentsPerOctave));
     // No trim: with the DC-blocker lead compensated below, the jet locks the loop on its own
     // period (0.0 cents over notes 48..100 at 48 kHz with the detune off).
     pipe.bore.period = period / detune;
@@ -787,7 +790,7 @@ OrganWindSupply::State OrganWindSupply::process(int demand) noexcept {
   const float pitch_cents = trem_pitch_cents_ * trem;
   // Sag drops pitch a touch as pressure falls (a slack pipe speaks flat).
   const float sag_pitch_cents = (pressure_ - 1.0f) * 30.0f;
-  s.pitch_ratio = std::exp2((pitch_cents + sag_pitch_cents) * (1.0f / 1200.0f));
+  s.pitch_ratio = std::exp2((pitch_cents + sag_pitch_cents) * (1.0f / kCentsPerOctave));
   s.gain = pressure_ * (1.0f + trem_amp_ * trem);
   return s;
 }

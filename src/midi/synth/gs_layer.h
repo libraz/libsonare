@@ -228,6 +228,15 @@ constexpr std::array<uint8_t, 128> gs_default_cc_positions() noexcept {
   return p;
 }
 
+/// The GS power-on controller positions widened to the MIDI 2.0 controller
+/// representation used by the synth channel states.
+inline std::array<Control32, 128> gs_default_cc_positions_wide() noexcept {
+  std::array<Control32, 128> out{};
+  const std::array<uint8_t, 128> seven = gs_default_cc_positions();
+  for (size_t i = 0; i < out.size(); ++i) out[i] = Control32::from7(seven[i]);
+  return out;
+}
+
 /// Whether any source names a TVF destination, which is what a note-on has to
 /// settle: the offset and the swing both arrive per sample from a controller,
 /// so what the note-on decides is only whether there is a filter to reach.

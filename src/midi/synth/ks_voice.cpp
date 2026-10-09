@@ -14,7 +14,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kMidiA4;
 using sonare::constants::kPi;
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 /// Tension modulation: the attack pitch rise at full velocity / full knob
@@ -32,7 +34,7 @@ SONARE_TUNABLE(kBetaPerSemitone, 0.0578f);  // ~2x per octave
 
 float ks_steel_inharmonicity_b(uint8_t note) noexcept {
   const float n = static_cast<float>(note & 0x7Fu);
-  return std::max(1.0e-5f, kBAtA4 * std::exp(kBetaPerSemitone * (n - 69.0f)));
+  return std::max(1.0e-5f, kBAtA4 * std::exp(kBetaPerSemitone * (n - kMidiA4)));
 }
 
 /// Second (horizontal) polarization detune, and the fret-gap reflection left
@@ -120,7 +122,7 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
 
   // Decay: t60 stretched per octave below A4 (low strings ring longer).
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);
-  const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
+  const float octaves_below_a4 = (kMidiA4 - static_cast<float>(note & 0x7Fu)) / kSemitonesPerOctave;
   const float t60 = std::max(0.05f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
   const float damped_t60 = std::max(0.01f, params.release_damp_s);
 
@@ -295,7 +297,7 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   const float tension = std::clamp(params.tension_mod, 0.0f, 1.0f);
   if (tension > 0.0f) {
     const float rise_cents = std::min(kKsTensionMaxCents, tension * vel01 * kKsTensionCentsAtFull);
-    tension_ratio_peak_ = std::exp2(rise_cents / 1200.0f) - 1.0f;
+    tension_ratio_peak_ = cents_to_ratio(rise_cents) - 1.0f;
     tension_env_ = 1.0f;
     tension_decay_coeff_ =
         std::exp(-1.0f / std::max(1.0f, kKsTensionRelaxMs * 0.001f * static_cast<float>(sr)));
@@ -311,7 +313,7 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // planes beat and the faster line dies first (two-stage decay).
   const float polarization = std::clamp(params.polarization, 0.0f, 1.0f);
   if (polarization > 0.0f && slab_ != nullptr) {
-    const float pol_period = loop_period / std::exp2(kPolDetuneCents / 1200.0f);
+    const float pol_period = loop_period / cents_to_ratio(kPolDetuneCents);
     // The horizontal plane takes the same fraction off both its targets: it
     // decays faster than the primary and loses its highs faster still, which is
     // what gives the two-stage decay.
@@ -402,9 +404,8 @@ LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_
   // Every loop in use is read at one sample or more and long enough to hold its pitch.
   LoopBudget budget = loop_budget(loop_period, string_.loop_comp, 1.0f, sr);
   if (pol_couple_ > 0.0f) {
-    budget = worst_loop_budget(
-        budget,
-        loop_budget(loop_period / std::exp2(kPolDetuneCents / 1200.0f), pol_.loop_comp, 1.0f, sr));
+    budget = worst_loop_budget(budget, loop_budget(loop_period / cents_to_ratio(kPolDetuneCents),
+                                                   pol_.loop_comp, 1.0f, sr));
   }
   if (oct_couple_ > 0.0f) {
     budget = worst_loop_budget(budget, loop_budget(0.5f * loop_period, oct_.loop_comp, 1.0f, sr));

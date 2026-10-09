@@ -281,7 +281,7 @@ LoopBudget BowedStringVoiceCore::configure(const BowedStringPatchParams& params,
   pol_lp_state_ = 0.0f;
   pol_write_ = 0;
   if (pol_couple_ > 0.0f) {
-    pol_period_ = base_period_ * std::exp2(kPolDetuneCents / 1200.0f);
+    pol_period_ = base_period_ * cents_to_ratio(kPolDetuneCents);
     // Same mapping as the primary loop; with no patch field of its own,
     // kPolLpPole and kPolLoss are this loop's voiced (a, g).
     pol_lp_alpha_ = 1.0f - loss_pole_at_rate(kPolLpPole, sr);

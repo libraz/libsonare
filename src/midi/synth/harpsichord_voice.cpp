@@ -5,6 +5,7 @@
 
 #include "midi/synth/pitch.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 #include "util/numeric_validation.h"
 #include "util/tunable.h"
 
@@ -13,6 +14,8 @@ namespace sonare::midi::synth {
 namespace {
 
 using sonare::constants::kFloorDbD;
+using sonare::constants::kMidiA4;
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 /// How the plectrum's release displacement grows with key speed below its peak.
@@ -110,7 +113,7 @@ constexpr uint64_t kDiffuseNoiseBase = 1ull << 24;
 /// strings several metres long.
 float speaking_length_mm(const HarpsichordPatchParams& params, uint8_t note) noexcept {
   // Octaves below c'' (MIDI 72), the note the scale is quoted at.
-  const float octaves = (72.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
+  const float octaves = (72.0f - static_cast<float>(note & 0x7Fu)) / kSemitonesPerOctave;
   const float fore = std::clamp(params.bass_foreshortening, 0.0f, 0.9f);
   const float exponent = octaves <= 1.0f ? octaves : 1.0f + (octaves - 1.0f) * (1.0f - fore);
   return std::max(20.0f, params.scale_c5_mm) * std::exp2(exponent);
@@ -168,7 +171,9 @@ double harpsichord_t60_seconds(const HarpsichordPatchParams& params, uint8_t not
   const double stretch = std::isfinite(params.decay_stretch)
                              ? std::clamp(static_cast<double>(params.decay_stretch), 0.0, 2.0)
                              : 0.0;
-  const double octaves_below_a4 = (69.0 - static_cast<double>(note & 0x7Fu)) / 12.0;
+  const double octaves_below_a4 =
+      (static_cast<double>(kMidiA4) - static_cast<double>(note & 0x7Fu)) /
+      static_cast<double>(kSemitonesPerOctave);
   return decay_s * std::exp2(stretch * octaves_below_a4);
 }
 
@@ -239,9 +244,8 @@ LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params,
   const float ref_hz = harpsichord_damping_ref_hz(params.damping_ref_hz, f0, sr);
   const float omega_ref = kTwoPi * ref_hz / static_cast<float>(sr);
 
-  const float detune_8b =
-      std::exp2(std::clamp(params.unison_detune_cents, -50.0f, 50.0f) / 1200.0f);
-  const float detune_4 = std::exp2(std::clamp(params.octave_detune_cents, -50.0f, 50.0f) / 1200.0f);
+  const float detune_8b = cents_to_ratio(std::clamp(params.unison_detune_cents, -50.0f, 50.0f));
+  const float detune_4 = cents_to_ratio(std::clamp(params.octave_detune_cents, -50.0f, 50.0f));
 
   // Voice one choir: solve its loss filter against the two decay targets at ITS
   // period, then hand the solved (a, g) straight to the loop.

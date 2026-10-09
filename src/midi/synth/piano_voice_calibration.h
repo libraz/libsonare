@@ -103,6 +103,7 @@ float allpass_phase_delay(float a, float w) noexcept;
 float onepole_phase_delay(float a, float w) noexcept;
 float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
                            float phase_budget) noexcept;
+
 float partial_damp_gain(float natural, float damped, float strength) noexcept;
 
 }  // namespace sonare::midi::synth::piano_detail

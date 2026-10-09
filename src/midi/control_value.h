@@ -14,6 +14,7 @@
 /// reading a consumer takes. Truncation also reads structured RPN data back exactly whether the
 /// sender used Zero-Extension or min-center-max.
 
+#include <algorithm>
 #include <cstdint>
 
 #include "midi/ump.h"
@@ -110,6 +111,15 @@ struct Control32 {
     return static_cast<double>(raw) / static_cast<double>(uint32_t{1} << 25);
   }
 };
+
+/// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
+/// the 32-bit range rather than wrapping.
+inline Control32 add_saturating(Control32 current, Control32 delta) noexcept {
+  const int64_t sum =
+      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
+  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
+  return Control32::from_raw(static_cast<uint32_t>(clamped));
+}
 
 /// Pitch bend at MIDI 2.0 width (32 bits, center 0x80000000).
 struct Bend32 {

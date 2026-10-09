@@ -14,6 +14,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kCentsPerOctave;
+using sonare::constants::kSemitonesPerOctave;
+
 /// Hands @p base to whichever engine the voice is running, optionally snapping
 /// the smoothing to it. The accept set is engine_axis_capability()
 /// (excitation_axes.h); no `default:` here either, so an engine added without a
@@ -149,7 +152,7 @@ float sampler_velocity_gain(Velocity16 velocity, float exponent) noexcept {
 
 float unison_detune_ratio(float detune_cents, float spread) noexcept {
   const float detune = 0.5f * detune_cents * spread;
-  return std::exp2(detune / 1200.0f);
+  return cents_to_ratio(detune);
 }
 
 float static_cutoff_offset_cents(const NativeSynthPatch& p, float velocity01,
@@ -424,7 +427,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // A reused slot must not inherit the previous note's LFO rate.
   matrix_lfo1_rate_scale = 1.0f;
   poly_pressure01 = 0.0f;
-  key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / 12.0f;
+  key_track_octaves = (static_cast<float>(voiced_note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
   random_value = seq.bipolar_at(103);
 
   // Body/formant resonance + seeded stereo scatter (realism polish).
@@ -450,7 +453,7 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   glide_coeff = 0.0f;
   retune_cents = 0.0f;
   if (p.glide_ms > 0.0f && glide_from_hz > 0.0f && base_freq_hz > 0.0f) {
-    glide_cents = 1200.0f * std::log2(glide_from_hz / base_freq_hz);
+    glide_cents = kCentsPerOctave * std::log2(glide_from_hz / base_freq_hz);
     glide_coeff = glide_coefficient(p.glide_ms, sample_rate);
   }
 
@@ -637,7 +640,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
       lfo1_value * (vib_depth + mod.extra_vibrato_cents + offsets.vibrato_depth_cents);
   const float pitch_cents = patch->pitch_offset_cents + mod.pitch_cents + gs_scale_cents + vib +
                             drift + offsets.pitch_cents + glide_cents + retune_cents;
-  float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / 1200.0f)) : 1.0f;
+  float common = pitch_cents != 0.0f ? std::exp2(pitch_cents * (1.0f / kCentsPerOctave)) : 1.0f;
   // Shared organ wind: the tremulant / wind-sag pitch factor (1.0 for every
   // non-pipe voice, which the host always passes through).
   common *= wind_pitch;
@@ -748,7 +751,7 @@ float NativeSynthVoice::render(const Sf2ChannelMod& mod, float wind_pitch,
     const float fc_cents = fenv * patch->env_to_cutoff_cents * offsets.filter_env_depth +
                            static_cutoff_cents + offsets.cutoff_cents + mod.mod_cutoff_cents +
                            lfo1_value * mod.lfo_cutoff_cents;
-    const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / 1200.0f));
+    const float fc = patch->cutoff_hz * std::exp2(fc_cents * (1.0f / kCentsPerOctave));
     float q = patch->resonance_q;
     if (offsets.resonance_q != 0.0f) q = std::max(0.5f, q + offsets.resonance_q);
     if (gs_resonance_gain != 1.0f) q = std::max(0.5f, q * gs_resonance_gain);
@@ -804,7 +807,7 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
   retune_cents = target;
   note = new_note;
   note_offset_semitones = voiced_offset;
-  key_track_octaves = note_offset_semitones / 12.0f;
+  key_track_octaves = note_offset_semitones / kSemitonesPerOctave;
   static_cutoff_cents =
       static_cutoff_offset_cents(*patch, velocity01, note_offset_semitones, part_cutoff_cents);
   if (patch->body_mix > 0.0f) body.retune(patch->body, sample_rate, voiced_freq_hz());
@@ -812,7 +815,7 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
   // lip resonance is a filter tuned at note-on and has to be moved with it, or
   // it pulls the sounding pitch back toward the note that is over.
   if (patch->mode == SynthEngineMode::kBrass) {
-    brass.retune(std::exp2(voiced_shift_cents() * (1.0f / 1200.0f)));
+    brass.retune(std::exp2(voiced_shift_cents() * (1.0f / kCentsPerOctave)));
   }
   if (patch->glide_ms > 0.0f) {
     glide_cents = sounding - target - per_note_shift_cents;

@@ -49,15 +49,6 @@ constexpr uint8_t kRpncPitch725 = 3;
 constexpr uint8_t kRcPitchBendSensitivity = 0;
 constexpr uint8_t kRcPerNoteBendSensitivity = 7;
 
-// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
-// the 32-bit range rather than wrapping.
-Control32 add_saturating(Control32 current, Control32 delta) noexcept {
-  const int64_t sum =
-      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
-  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
-  return Control32::from_raw(static_cast<uint32_t>(clamped));
-}
-
 }  // namespace
 
 namespace {

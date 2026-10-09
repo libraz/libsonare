@@ -7,12 +7,14 @@
 #include "midi/synth/pitch.h"
 #include "midi/synth/string_loop.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 /// Gate floor with the dampers down: duplex/aliquot segments and the undamped top octaves keep a
@@ -154,9 +156,9 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
   if (kSympTopLevel != 0.0f) {
     for (int note = top_lo; note <= 108 && n < kResonanceModes; ++note) {
       const auto midi_note = static_cast<uint8_t>(note);
-      const float f = note_to_hz(midi_note) * std::exp2(piano_stretch_cents(midi_note) / 1200.0f);
+      const float f = note_to_hz(midi_note) * cents_to_ratio(piano_stretch_cents(midi_note));
       if (f >= 0.45f * sr) break;
-      const float oct = static_cast<float>(note - top_lo) / 12.0f;
+      const float oct = static_cast<float>(note - top_lo) / kSemitonesPerOctave;
       const float t60 = std::max(0.05f, kSympTopT60S * std::exp2(-kSympTopT60Oct * oct));
       const float w = kTwoPi * f / sr;
       const float r = std::exp(-6.907755279f / (sr * t60));
@@ -178,7 +180,7 @@ void PianoResonanceBank::prepare(double sample_rate) noexcept {
     for (int i = 0; i < 16 && n < kResonanceModes; ++i) {
       const auto note = static_cast<uint8_t>(28 + 4 * i);
       const float b = piano_inharmonicity_b(note);
-      const float f0 = note_to_hz(note) * std::exp2(piano_stretch_cents(note) / 1200.0f);
+      const float f0 = note_to_hz(note) * cents_to_ratio(piano_stretch_cents(note));
       // Stiff-string placement, as the played strings carry.
       const float f = f0 * kf * std::sqrt(1.0f + b * kf * kf);
       if (f >= 0.45f * sr) continue;
@@ -369,7 +371,7 @@ void PianoSoundboard::prepare(double sample_rate, float mix) noexcept {
     const uint32_t h = (static_cast<uint32_t>(slot) + 7u) * 2246822519u;
     const float jit = (static_cast<float>((h >> 9) & 0xFFFFu) / 65535.0f - 0.5f) * 0.10f;
     const float split =
-        paired ? std::exp2(((i % 2 == 0) ? -0.5f : 0.5f) * kFrameSplitCents / 1200.0f) : 1.0f;
+        paired ? cents_to_ratio(((i % 2 == 0) ? -0.5f : 0.5f) * kFrameSplitCents) : 1.0f;
     const float f = kFrameFLow * std::pow(frame_hi / kFrameFLow, u) * (1.0f + jit) * split;
     if (kFrameLevel <= 0.0f || f >= 0.45f * sr) continue;
     const float w = kTwoPi * f / sr;

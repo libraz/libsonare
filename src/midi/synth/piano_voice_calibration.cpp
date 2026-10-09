@@ -5,9 +5,13 @@
 
 #include "midi/synth/piano_voice.h"
 #include "midi/synth/pitch.h"
+#include "util/constants.h"
 #include "util/tunable.h"
 
 namespace sonare::midi::synth {
+
+using sonare::constants::kMidiA4;
+using sonare::constants::kSemitonesPerOctave;
 
 namespace piano_detail {
 
@@ -1047,11 +1051,11 @@ using namespace piano_detail;
 float piano_inharmonicity_b(uint8_t note) noexcept {
   const float n = std::clamp(static_cast<float>(note & 0x7Fu), kLowestPianoNote, kHighestPianoNote);
   // Plain-wire branch: B grows steadily toward the top of the keyboard.
-  const float treble = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (n - 69.0f));
+  const float treble = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (n - kMidiA4));
   if (n >= kInharmBreakNote) return treble;
   // Wound-string branch below the bass break, anchored on the plain-wire value
   // at the break so the two meet without a step.
-  const float at_break = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (kInharmBreakNote - 69.0f));
+  const float at_break = kInharmBAtA4 * std::exp(kInharmTrebleBeta * (kInharmBreakNote - kMidiA4));
   return at_break * std::exp(kInharmBassBeta * (kInharmBreakNote - n));
 }
 
@@ -1067,7 +1071,7 @@ float piano_stretch_cents(uint8_t note) noexcept {
   // asymmetric -- a real keyboard runs about ten cents flat at the bottom and
   // fifty sharp at the top -- so an odd function about A4 cannot fit it.
   const float n = std::clamp(static_cast<float>(note & 0x7Fu), kLowestPianoNote, kHighestPianoNote);
-  const float octaves = (n - 69.0f) / 12.0f;
+  const float octaves = (n - kMidiA4) / kSemitonesPerOctave;
   if (octaves > 0.0f) return kStretchTrebleCents * std::pow(octaves, kStretchTreblePower);
   if (octaves < 0.0f) return -kStretchBassCents * std::pow(-octaves, kStretchBassPower);
   return 0.0f;

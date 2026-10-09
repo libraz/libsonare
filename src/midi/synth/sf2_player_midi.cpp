@@ -21,6 +21,7 @@ namespace sonare::midi::synth {
 namespace {
 
 using ::sonare::constants::kCentsPerSemitone;
+using ::sonare::constants::kSemitonesPerOctave;
 
 /// Whether a part holding @p rx_switches receives @p u at all (GsRxSwitch).
 /// Control changes answer to their own switch as well as to the master one, and
@@ -109,15 +110,6 @@ constexpr uint8_t kRcPitchBendSensitivity = 0;
 constexpr uint8_t kRcFineTuning = 1;
 constexpr uint8_t kRcCoarseTuning = 2;
 constexpr uint8_t kRcPerNoteBendSensitivity = 7;
-
-/// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
-/// the 32-bit range rather than wrapping.
-Control32 add_saturating(Control32 current, Control32 delta) noexcept {
-  const int64_t sum =
-      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
-  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
-  return Control32::from_raw(static_cast<uint32_t>(clamped));
-}
 
 /// The pitch offset from the sample's zone key, in cents. Exactly 0 while the voice sounds at its
 /// zone key with no per-note pitch, so a MIDI 1.0 render is untouched.
@@ -626,7 +618,7 @@ void Sf2Player::fallback_note_on(uint8_t channel, uint8_t note, Velocity16 veloc
   DrumVoiceMod drum_mod;
   if (is_drum) {
     if ((gd.flags & GsDrumNoteParams::kPitch) != 0 && gd.pitch_coarse != 0) {
-      drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / 12.0f);
+      drum_mod.pitch_ratio = std::exp2(static_cast<float>(gd.pitch_coarse) / kSemitonesPerOctave);
     }
     if ((gd.flags & GsDrumNoteParams::kLevel) != 0) {
       const float v = static_cast<float>(gd.level & 0x7Fu) / 127.0f;

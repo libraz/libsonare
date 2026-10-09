@@ -11,7 +11,9 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kMidiA4;
 using sonare::constants::kPi;
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 /// Per-sample decay radius reaching -60 dB after @p t60_s.
@@ -34,7 +36,7 @@ void ModalVoiceCore::start(const ModalPatchParams& params, double sample_rate, u
 
   // Decay stretching: big bars (low notes) ring longer.
   const float stretch = std::clamp(params.decay_stretch, 0.0f, 1.0f);
-  const float octaves_below_a4 = (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f;
+  const float octaves_below_a4 = (kMidiA4 - static_cast<float>(note & 0x7Fu)) / kSemitonesPerOctave;
   const float t60 = std::max(0.01f, params.decay_s) * std::exp2(stretch * octaves_below_a4);
 
   VoiceRandomSequence scatter(seed);

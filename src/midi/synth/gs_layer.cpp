@@ -19,11 +19,13 @@
 #include "midi/sysex_framing.h"
 #include "rt/biquad_design.h"
 #include "util/constants.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
 using ::sonare::constants::kCentsPerOctave;
 using ::sonare::constants::kCentsPerSemitone;
+using ::sonare::constants::kSemitonesPerOctave;
 
 namespace {
 
@@ -106,11 +108,11 @@ float gs_resonance_gain(int8_t offset) noexcept {
 
 float gs_time_scale(int8_t offset) noexcept {
   // 75 timecents per step: scale = 2^(75*offset/1200).
-  return std::exp2(75.0f * static_cast<float>(clamp_offset(offset)) / 1200.0f);
+  return cents_to_ratio(75.0f * static_cast<float>(clamp_offset(offset)));
 }
 
 float gs_vib_rate_scale(int8_t offset) noexcept {
-  return std::exp2(kGsVibRateCentsPerStep * static_cast<float>(clamp_offset(offset)) / 1200.0f);
+  return cents_to_ratio(kGsVibRateCentsPerStep * static_cast<float>(clamp_offset(offset)));
 }
 
 float gs_vib_depth_cents(int8_t offset) noexcept {
@@ -320,7 +322,8 @@ GsDrumNoteParams gs_layer_drum_note_params(const GsDrumNoteParams& stored,
 void apply_gs_drum_params(Sf2VoiceParams& params, const GsDrumNoteParams& drum) noexcept {
   if (!drum.any()) return;
   if ((drum.flags & GsDrumNoteParams::kPitch) != 0 && drum.pitch_coarse != 0) {
-    params.pitch_increment *= std::exp2(static_cast<double>(drum.pitch_coarse) / 12.0);
+    params.pitch_increment *= std::exp2(static_cast<double>(drum.pitch_coarse) /
+                                        static_cast<double>(kSemitonesPerOctave));
   }
   if ((drum.flags & GsDrumNoteParams::kLevel) != 0) {
     const float v = static_cast<float>(drum.level & 0x7Fu) / 127.0f;

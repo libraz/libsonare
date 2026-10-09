@@ -732,28 +732,11 @@ void NativeSynth::on_control_sysex(const uint8_t* data, size_t size) noexcept {
 }
 
 bool NativeSynth::set_part_rig(uint8_t part, const PartRig& rig) noexcept {
-  if (!validate_part_rig(part, rig)) return false;
-  try {
-    PartFxStage::RigTable previous = part_fx_.rig_table();
-    if (!part_fx_.set_part_rig(part, rig)) return false;
-    if (prepared_) {
-      try {
-        part_fx_.publish();
-      } catch (...) {
-        part_fx_.restore_rig_table(std::move(previous));
-        throw;
-      }
-    }
-  } catch (...) {
-    return false;
-  }
-  return true;
+  return part_fx_.set_part_rig_and_publish(part, rig, prepared_);
 }
 
 std::vector<std::string> NativeSynth::part_rig_stage_names(uint8_t part) const {
-  const PartFxSnapshot* snapshot = part_fx_.control_current();
-  if (snapshot == nullptr || part >= 16) return {};
-  return snapshot->stage_names[part];
+  return part_fx_.part_rig_stage_names(part);
 }
 
 void NativeSynth::set_transport(const transport::TransportState& state) noexcept {

@@ -38,15 +38,6 @@ constexpr uint8_t kRpncPitch725 = 3;
 using native_synth_detail::excitation_axis_mask;
 using native_synth_detail::excitation_value;
 
-/// Adds a relative controller's two's-complement delta to @p current, saturating at the ends of
-/// the 32-bit range rather than wrapping.
-Control32 add_saturating(Control32 current, Control32 delta) noexcept {
-  const int64_t sum =
-      static_cast<int64_t>(current.raw) + static_cast<int64_t>(static_cast<int32_t>(delta.raw));
-  const int64_t clamped = std::min<int64_t>(std::max<int64_t>(sum, 0), int64_t{0xFFFFFFFF});
-  return Control32::from_raw(static_cast<uint32_t>(clamped));
-}
-
 /// The pitch offset from the key the engine was started on, in cents. Exactly 0 while the key
 /// carries no per-note pitch, so a MIDI 1.0 render is untouched.
 float per_note_cents(const Sf2PerNoteVoice& state, const ComposedPitch& pitch) noexcept {

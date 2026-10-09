@@ -14,6 +14,7 @@ namespace sonare::midi::synth {
 
 namespace {
 
+using sonare::constants::kCentsPerOctave;
 using sonare::constants::kEpsilon;
 using sonare::constants::kTwoPi;
 
@@ -277,7 +278,7 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
     const float v = std::sin(vib_phase_);
     vib_phase_ += vib_inc_;
     if (vib_phase_ >= kTwoPi) vib_phase_ -= kTwoPi;
-    ratio *= std::exp2(kVibPitchCents * vib_depth_ * v * (1.0f / 1200.0f));
+    ratio *= std::exp2(kVibPitchCents * vib_depth_ * v * (1.0f / kCentsPerOctave));
     vib_gain = 1.0f + kVibAmp * vib_depth_ * v;
   }
 

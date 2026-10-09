@@ -336,7 +336,7 @@ struct NativeSynthVoice : VoiceState {
   std::array<float, kMaxUnisonOscs> detune_ratio{};
   int unison = 1;
   float osc_norm = 1.0f;  // 1/sqrt(unison)
-  float base_freq_hz = 440.0f;
+  float base_freq_hz = constants::kA4Hz;
   float velocity_gain = 1.0f;
   /// The exclusive/mute group this voice was STARTED in, which a GS ASSIGN
   /// GROUP write moves away from the kit piece's own. Held per voice because
@@ -600,7 +600,7 @@ struct NativeSynthVoice : VoiceState {
               double sample_rate) noexcept;
   /// Frequency of the voiced key, which is what a note-tracked body follows.
   float voiced_freq_hz() const noexcept {
-    return base_freq_hz * std::exp2(voiced_shift_cents() * (1.0f / 1200.0f));
+    return base_freq_hz * std::exp2(voiced_shift_cents() * (1.0f / constants::kCentsPerOctave));
   }
   /// Cents between the key base_freq_hz was computed for and the voiced key now.
   float voiced_shift_cents() const noexcept {
@@ -843,14 +843,6 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   uint64_t skipped_event_count() const noexcept { return skipped_events_; }
 
  private:
-  /// gs_default_cc_positions() widened to the controller record's width.
-  static std::array<Control32, 128> default_cc_positions() noexcept {
-    std::array<Control32, 128> out{};
-    const std::array<uint8_t, 128> seven = gs_default_cc_positions();
-    for (size_t i = 0; i < out.size(); ++i) out[i] = Control32::from7(seven[i]);
-    return out;
-  }
-
   struct ChannelState {
     bool sustain = false;                           // CC64 >= 64 (dampers lifted)
     Control32 sustain_level = Control32::from7(0);  // CC64 (half-pedal damper position)
@@ -886,7 +878,7 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
     uint8_t bank_lsb = 0;
     Bend32 pitch_bend = Bend32::center();
     /// Every controller as last sent, which is what an EFX CONTROL SOURCE reads.
-    std::array<Control32, 128> cc_position = default_cc_positions();
+    std::array<Control32, 128> cc_position = gs_default_cc_positions_wide();
     /// Expression axes as the channel's ControllerProfile has resolved them.
     /// Which controller reaches which axis is the profile's to say, and which
     /// axis an engine reads is engine_axis_capability()'s; nothing between them

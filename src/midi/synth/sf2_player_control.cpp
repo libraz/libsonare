@@ -16,6 +16,7 @@
 #include "midi/synth/gs_efx_bindings.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/ump.h"
+#include "util/dsp_primitives.h"
 
 namespace sonare::midi::synth {
 
@@ -1255,28 +1256,11 @@ void Sf2Player::realize_gs_efx() {
 }
 
 bool Sf2Player::set_part_rig(uint8_t part, const PartRig& rig) noexcept {
-  if (!validate_part_rig(part, rig)) return false;
-  try {
-    PartFxStage::RigTable previous = part_fx_.rig_table();
-    if (!part_fx_.set_part_rig(part, rig)) return false;
-    if (prepared_) {
-      try {
-        part_fx_.publish();
-      } catch (...) {
-        part_fx_.restore_rig_table(std::move(previous));
-        throw;
-      }
-    }
-  } catch (...) {
-    return false;
-  }
-  return true;
+  return part_fx_.set_part_rig_and_publish(part, rig, prepared_);
 }
 
 std::vector<std::string> Sf2Player::part_rig_stage_names(uint8_t part) const {
-  const PartFxSnapshot* snapshot = part_fx_.control_current();
-  if (snapshot == nullptr || part >= 16) return {};
-  return snapshot->stage_names[part];
+  return part_fx_.part_rig_stage_names(part);
 }
 
 Sf2Player::DirectGsNode* Sf2Player::reserve_restart_node() {
@@ -1634,7 +1618,7 @@ void Sf2Player::refresh_channel_mod(uint8_t channel) noexcept {
       sf2_cc_gain(st.volume) * sf2_cc_gain(st.expression) * std::max(0.0f, 1.0f + amp_fraction);
   mod.extra_vibrato_cents = vib_cents;
   mod.mod_cutoff_cents = cutoff_cents;
-  mod.vib_rate_scale = lfo_rate_cents != 0.0f ? std::exp2(lfo_rate_cents / 1200.0f) : 1.0f;
+  mod.vib_rate_scale = lfo_rate_cents != 0.0f ? cents_to_ratio(lfo_rate_cents) : 1.0f;
   // Clamped at 1 for the reason the gain is floored at 0: past full depth the
   // trough would take the amplitude through zero and out the other side.
   mod.tremolo_depth01 = std::min(1.0f, tva_depth);

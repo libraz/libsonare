@@ -390,14 +390,6 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
   bool set_render_path_recorder(RenderPathRecorder* recorder) noexcept;
 
  private:
-  /// gs_default_cc_positions() widened to the controller record's width.
-  static std::array<Control32, 128> default_cc_positions() noexcept {
-    std::array<Control32, 128> out{};
-    const std::array<uint8_t, 128> seven = gs_default_cc_positions();
-    for (size_t i = 0; i < out.size(); ++i) out[i] = Control32::from7(seven[i]);
-    return out;
-  }
-
   struct ChannelState {
     uint8_t program = 0;
     uint8_t bank_msb = 0;  // CC0; GS variation bank select
@@ -424,7 +416,7 @@ class Sf2Player final : public MidiInstrument, private PartFxHost {
     /// The controllers that power on off zero are seeded from
     /// gs_default_cc_positions(), and the fields below take their defaults from
     /// it rather than restating them.
-    std::array<Control32, 128> cc_position = default_cc_positions();
+    std::array<Control32, 128> cc_position = gs_default_cc_positions_wide();
     // Default-modulator controller state.
     // Held at MIDI 2.0 width; a MIDI 1.0 value widens exactly and reads back as float(v).
     Control32 volume = Control32::from7(gs_default_cc_positions()[7]);       // CC7

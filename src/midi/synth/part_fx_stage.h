@@ -180,8 +180,16 @@ class PartFxStage {
   /// built chain stage exceeds 256 samples at the 48 kHz reference rate. A
   /// factory or processor prepare may throw. Does not publish.
   bool set_part_rig(uint8_t part, const PartRig& rig);
+  /// CONTROL thread: install @p rig and, when @p publish_now is true, publish
+  /// the rebuilt chains. A failed rebuild restores the prior rig table; all
+  /// validation and allocation failures are returned as false.
+  bool set_part_rig_and_publish(uint8_t part, const PartRig& rig, bool publish_now) noexcept;
   const RigTable& rig_table() const noexcept { return rigs_; }
   void restore_rig_table(RigTable table) noexcept;
+
+  /// CONTROL thread: the processor names of the chain last published for
+  /// @p part, in signal order (test/diagnostic).
+  std::vector<std::string> part_rig_stage_names(uint8_t part) const;
 
   /// AUDIO thread: record @p id as the bank rig @p part's program binds.
   /// Returns true when the change reaches a built chain, so a rebuild is owed.

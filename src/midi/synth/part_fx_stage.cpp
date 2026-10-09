@@ -224,9 +224,35 @@ bool PartFxStage::set_part_rig(uint8_t part, const PartRig& rig) {
   return true;
 }
 
+bool PartFxStage::set_part_rig_and_publish(uint8_t part, const PartRig& rig,
+                                           bool publish_now) noexcept {
+  if (!validate_part_rig(part, rig)) return false;
+  try {
+    RigTable previous = rig_table();
+    if (!set_part_rig(part, rig)) return false;
+    if (publish_now) {
+      try {
+        publish();
+      } catch (...) {
+        restore_rig_table(std::move(previous));
+        throw;
+      }
+    }
+  } catch (...) {
+    return false;
+  }
+  return true;
+}
+
 void PartFxStage::restore_rig_table(RigTable table) noexcept {
   rigs_ = std::move(table);
   refresh_bank_parts();
+}
+
+std::vector<std::string> PartFxStage::part_rig_stage_names(uint8_t part) const {
+  const PartFxSnapshot* snapshot = control_current();
+  if (snapshot == nullptr || part >= 16) return {};
+  return snapshot->stage_names[part];
 }
 
 PartRigMode PartFxStage::effective_mode(int part, const PartRig** entry) const noexcept {

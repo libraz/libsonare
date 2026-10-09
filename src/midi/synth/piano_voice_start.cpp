@@ -10,6 +10,7 @@
 #include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "rt/biquad_design.h"
+#include "rt/dispersion.h"
 #include "rt/fractional_delay.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
@@ -18,7 +19,9 @@ namespace sonare::midi::synth {
 
 using namespace piano_detail;
 using sonare::constants::kButterworthQ;
+using sonare::constants::kMidiA4;
 using sonare::constants::kPi;
+using sonare::constants::kSemitonesPerOctave;
 using sonare::constants::kTwoPi;
 
 namespace {
@@ -36,88 +39,20 @@ constexpr std::array<float, 2> kRadiationHpSectionQ = {0.54119610f, 1.30656296f}
 
 namespace piano_detail {
 
+float allpass_phase_delay(float a, float w) noexcept { return rt::allpass_phase_delay(a, w); }
+
+float onepole_phase_delay(float a, float w) noexcept { return rt::onepole_phase_delay(a, w); }
+
+float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
+                           float phase_budget) noexcept {
+  return rt::dispersion_allpass_a(b_coeff, w0, lp_a, stages, phase_budget);
+}
+
 /// Per-loop-traversal amplitude factor reaching -60 dB after @p t60_s.
 float loop_gain_for(float period_samples, double sample_rate, float t60_s) noexcept {
   const float loops_to_t60 =
       static_cast<float>(sample_rate) * std::max(0.01f, t60_s) / std::max(1.0f, period_samples);
   return std::exp(-6.907755279f / loops_to_t60);
-}
-
-/// Exact phase delay (samples) of the first-order allpass
-/// H(z) = (a + z^-1)/(1 + a z^-1) at normalized frequency @p w.
-float allpass_phase_delay(float a, float w) noexcept {
-  const float sinw = std::sin(w);
-  const float cosw = std::cos(w);
-  const float phi = std::atan2(-sinw, a + cosw) - std::atan2(-a * sinw, 1.0f + a * cosw);
-  return -phi / std::max(w, 1.0e-6f);
-}
-
-/// Phase delay (samples) of the one-pole loop lowpass y = (1-a)x + a*y^-1 at
-/// normalized frequency @p w.
-float onepole_phase_delay(float a, float w) noexcept { return onepole_group_delay_samples(a, w); }
-
-/// First-order allpass coefficient a (<= 0) for a cascade of @p stages that
-/// disperses the waveguide loop into the stiff-string law f_n =
-/// n*f0*sqrt(1 + B*n^2). The loop resonates where the total round-trip phase
-/// delay equals an integer number of periods, and only the lowpass and the
-/// allpass cascade vary the phase delay with frequency, so a is solved
-/// (bisection) to supply the stiff-string phase-delay differential between
-/// the fundamental and a high reference partial, then clamped so the
-/// per-stage delay still fits the loop budget. Endpoint-matched after Rauhala
-/// & Valimaki (2006); RT-safe (bounded, allocation-free, deterministic).
-float dispersion_allpass_a(float b_coeff, float w0, float lp_a, int stages,
-                           float phase_budget) noexcept {
-  if (b_coeff <= 0.0f || stages <= 0) return 0.0f;
-  // Reference partial: high enough for a measurable differential but shrunk
-  // until its stiff-string frequency sits safely below Nyquist (so the
-  // treble, where B is large, still gets dispersion instead of bailing out).
-  const float n_max = 0.8f * kPi / std::max(w0, 1.0e-6f);
-  int n_ref = std::clamp(static_cast<int>(n_max), 2, 12);
-  while (n_ref > 2 && w0 * static_cast<float>(n_ref) *
-                              std::sqrt(1.0f + b_coeff * static_cast<float>(n_ref) *
-                                                   static_cast<float>(n_ref)) >=
-                          0.9f * kPi)
-    --n_ref;
-  const float fr = static_cast<float>(n_ref);
-  const float w1 = w0 * std::sqrt(1.0f + b_coeff);
-  const float wr = w0 * fr * std::sqrt(1.0f + b_coeff * fr * fr);
-  if (wr >= 0.97f * kPi) return 0.0f;
-  const float period = kTwoPi / w0;
-  // Total phase-delay differential the dispersion must realize between the
-  // two partials, net of the (frequency-independent) delay line.
-  const float total_diff =
-      period * (1.0f / std::sqrt(1.0f + b_coeff) - 1.0f / std::sqrt(1.0f + b_coeff * fr * fr));
-  const float lp_diff = onepole_phase_delay(lp_a, w1) - onepole_phase_delay(lp_a, wr);
-  const float need = (total_diff - lp_diff) / static_cast<float>(stages);
-  if (need <= 0.0f) return 0.0f;
-  // p_ap(w1;a) - p_ap(wr;a) increases monotonically as a -> -1.
-  float lo = -0.999f;
-  float hi = 0.0f;
-  for (int it = 0; it < 40; ++it) {
-    const float a = 0.5f * (lo + hi);
-    const float diff = allpass_phase_delay(a, w1) - allpass_phase_delay(a, wr);
-    if (diff > need)
-      lo = a;
-    else
-      hi = a;
-  }
-  float a = 0.5f * (lo + hi);
-  // Clamp so the per-stage phase delay at the fundamental fits the loop
-  // budget (the delay line must keep a few samples).
-  const float max_pap = phase_budget / static_cast<float>(stages);
-  if (max_pap > 1.0f && allpass_phase_delay(a, w1) > max_pap) {
-    float blo = a;
-    float bhi = 0.0f;
-    for (int it = 0; it < 30; ++it) {
-      const float c = 0.5f * (blo + bhi);
-      if (allpass_phase_delay(c, w1) > max_pap)
-        blo = c;
-      else
-        bhi = c;
-    }
-    a = bhi;
-  }
-  return a;
 }
 
 /// Per-loop gain for a damper resting partially on the string: the decay time
@@ -150,7 +85,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
                                      Velocity16 velocity, uint64_t seed, bool una_corda) noexcept {
   // Stretch tuning widens the octaves so the inharmonic partials lock the way
   // a tuned grand's do (sharp treble, flat bass; A4 anchored).
-  const float f0 = note_to_hz(note) * std::exp2(piano_stretch_cents(note) / 1200.0f);
+  const float f0 = note_to_hz(note) * cents_to_ratio(piano_stretch_cents(note));
   const float period = static_cast<float>(sr) / f0;
   const float w0 = kTwoPi / period;
   VoiceRandomSequence jitter(seed);
@@ -166,7 +101,8 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // describe. It stacked with the taper below, and the two together took the
   // top of the keyboard to a fraction of the measured aftersound — a note
   // arriving as a click. Held at unity the taper alone sets the treble.
-  const float octaves_below_a4 = std::max(0.0f, (69.0f - static_cast<float>(note & 0x7Fu)) / 12.0f);
+  const float octaves_below_a4 =
+      std::max(0.0f, (kMidiA4 - static_cast<float>(note & 0x7Fu)) / kSemitonesPerOctave);
   const float bass_scale = std::exp2(stretch * octaves_below_a4);
   // The aftersound taper rides its own octave axis, not the shared
   // `octaves_above_c4`: that one is capped where the loop DARKENING stops
@@ -174,22 +110,24 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // std::max so a swept knee above the floor cannot invert the clamp.
   const float decay_knee_oct = kTrebleDecayKneeOct;
   const float decay_floor_oct = std::max(decay_knee_oct, kTrebleDecayFloorOct);
-  const float decay_taper_oct = std::clamp((static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f,
-                                           decay_knee_oct, decay_floor_oct) -
-                                decay_knee_oct;
+  const float decay_taper_oct =
+      std::clamp((static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave, decay_knee_oct,
+                 decay_floor_oct) -
+      decay_knee_oct;
   const float slow_scale = bass_scale * std::exp2(-kTrebleDecayOct * decay_taper_oct);
   const float t60_slow =
       std::max(0.05f, std::max(params.decay_fast_s, params.decay_slow_s) * slow_scale);
 
   // Loop lowpass (frequency-dependent damping), closing toward the treble.
-  const float octaves_above_c4 = std::min(
-      std::max(0.0f, (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f), kTrebleTaperOctCap);
+  const float octaves_above_c4 =
+      std::min(std::max(0.0f, (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave),
+               kTrebleTaperOctCap);
   // ...and closes into the bass as well: the wound strings' winding friction
   // damps the mid partials far faster than the plain-wire loop loss suggests.
   // Left open, the bass h4-h6 ring 3-4x longer than the reference — a bright
   // partial stack singing over the fundamental is a harpsichord register.
   const float octaves_below_c4 =
-      std::max(0.0f, -(static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f);
+      std::max(0.0f, -(static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave);
   const float bright_eff =
       std::clamp(std::clamp(params.brightness, 0.0f, 1.0f) -
                      kTrebleBrightPerOct * octaves_above_c4 - kBassDarkPerOct * octaves_below_c4,
@@ -242,7 +180,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
     }
   }
   loop_alpha_ = 1.0f - lp_a;
-  const float tau_lp = onepole_phase_delay(lp_a, w0);
+  const float tau_lp = rt::onepole_phase_delay(lp_a, w0);
 
   // Stiffness dispersion: the per-note inharmonicity coefficient B drives a
   // first-order allpass cascade that stretches the partials sharp to
@@ -259,9 +197,10 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
       std::clamp(params.dispersion, 0.0f, 1.0f) * (1.0f - fade_x * fade_x * (3.0f - 2.0f * fade_x));
   const float b_coeff = piano_inharmonicity_b(note) * dispersion;
   const float phase_budget = period - 4.0f - tau_lp;
-  const float ap_a = dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
+  const float ap_a =
+      rt::dispersion_allpass_a(b_coeff, w0, lp_a, kPianoDispersionStages, phase_budget);
 
-  const float oct_from_c4_signed = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
+  const float oct_from_c4_signed = (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
   const float contrast_x = oct_from_c4_signed - kTwoStageCenterOct;
   const float contrast =
       std::exp(-(contrast_x * contrast_x) / (kTwoStageWidthOct * kTwoStageWidthOct));
@@ -298,7 +237,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
       offset = spread * (static_cast<float>(i) / static_cast<float>(num_strings_ - 1) - 0.5f);
       offset *= 1.0f + 0.2f * jitter.bipolar_at(static_cast<uint64_t>(i));
     }
-    const float detune_ratio = std::exp2(offset / 1200.0f);
+    const float detune_ratio = cents_to_ratio(offset);
     s.base_period = period / detune_ratio;
     s.strike_weight = strike_w[static_cast<size_t>(i)] / strike_mean;
     // Uneven bridge coupling (seeded ramp, mean 1 so the note level is
@@ -318,7 +257,7 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
     s.ap_state.fill(0.0f);
     s.lp_state = 0.0f;
     s.write_index = 0;
-    const float tau_ap = allpass_phase_delay(s.ap_a, w0);
+    const float tau_ap = rt::allpass_phase_delay(s.ap_a, w0);
     s.comp = 1.0f + tau_lp + static_cast<float>(kPianoDispersionStages) * tau_ap;
     // Compensate the loop lowpass's own loss at the fundamental so the patch
     // t60s stay the FUNDAMENTAL's decay; the darkened loop then only shortens
@@ -496,9 +435,9 @@ LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, 
   // Reference contact time for the register (mf): the patch contact scaled by
   // register, floored in fundamental PERIODS (treble dwell ~ a full period).
   float contact_ms = std::clamp(params.hammer_contact_ms, 0.2f, 10.0f) *
-                     std::exp2(-(static_cast<float>(note & 0x7Fu) - 69.0f) /
+                     std::exp2(-(static_cast<float>(note & 0x7Fu) - kMidiA4) /
                                std::max(1.0f, kContactKeytrackSemis));
-  const float octaves_from_c4 = (static_cast<float>(note & 0x7Fu) - 60.0f) / 12.0f;
+  const float octaves_from_c4 = (static_cast<float>(note & 0x7Fu) - 60.0f) / kSemitonesPerOctave;
   const float contact_floor_periods = std::clamp(
       kContactPeriodsAtC4 + kContactPeriodsPerOct * octaves_from_c4, 0.0f, kContactPeriodsMax);
   contact_ms =
