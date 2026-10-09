@@ -1,10 +1,10 @@
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
 
+#include "bench_utils.h"
 #include "rt/sliding_max.h"
 #include "rt/true_peak_filter.h"
 #include "util/constants.h"
@@ -19,29 +19,7 @@ constexpr double kThresholdMs = 5.0;
 
 volatile float g_sink = 0.0f;
 
-double median_ms(std::vector<double> samples) {
-  std::sort(samples.begin(), samples.end());
-  const size_t n = samples.size();
-  if (n == 0) return 0.0;
-  if ((n % 2) == 1) return samples[n / 2];
-  return (samples[n / 2 - 1] + samples[n / 2]) * 0.5;
-}
-
-template <typename Fn>
-double bench(Fn&& fn, int runs, int iterations) {
-  std::vector<double> times;
-  times.reserve(static_cast<size_t>(runs));
-  for (int run = 0; run < runs; ++run) {
-    const auto t0 = std::chrono::steady_clock::now();
-    for (int i = 0; i < iterations; ++i) {
-      fn();
-    }
-    const auto t1 = std::chrono::steady_clock::now();
-    const double total_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
-    times.push_back(total_ms / static_cast<double>(iterations));
-  }
-  return median_ms(std::move(times));
-}
+using sonare::bench_utils::bench;
 
 }  // namespace
 

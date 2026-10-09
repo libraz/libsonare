@@ -4,8 +4,6 @@
 // numbers reflect raw native execution time. Output is JSON on stdout so the
 // driver script can stitch it together with the Python results.
 
-#include <algorithm>
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -14,10 +12,12 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include "analysis/beat_analyzer.h"
 #include "analysis/music_analyzer.h"
+#include "bench_utils.h"
 #include "core/audio.h"
 #include "core/resample.h"
 #include "core/spectrum.h"
@@ -34,25 +34,9 @@ namespace {
 constexpr int kResampledSr = 22050;
 constexpr int kRuns = 3;
 
-double median_ms(std::vector<double> samples) {
-  std::sort(samples.begin(), samples.end());
-  const size_t n = samples.size();
-  if (n == 0) return 0.0;
-  if (n % 2 == 1) return samples[n / 2];
-  return (samples[n / 2 - 1] + samples[n / 2]) * 0.5;
-}
-
 template <typename F>
 double bench(F&& fn, int runs = kRuns) {
-  std::vector<double> times;
-  times.reserve(runs);
-  for (int i = 0; i < runs; ++i) {
-    auto t0 = std::chrono::steady_clock::now();
-    fn();
-    auto t1 = std::chrono::steady_clock::now();
-    times.push_back(std::chrono::duration<double, std::milli>(t1 - t0).count());
-  }
-  return median_ms(std::move(times));
+  return sonare::bench_utils::bench(std::forward<F>(fn), runs, 1);
 }
 
 void print_row(const char* label, double ms) {
