@@ -263,11 +263,7 @@ class PipeOrganVoiceCore {
     WindBore bore{nullptr, 0, 0, 0, 0.0f, 1.0f, 0.0f};
     float* jet = nullptr;
     size_t jet_write = 0;
-    /// The same compensation as voiced at kLossVoicedSr, in samples at the
-    /// running rate: the jet delay is a fraction of the line THAT length
-    /// leaves, so its duration does not follow the rate.
-    float jet_comp = 1.0f;
-    /// Jet convection delay as a fraction of the bore LINE delay.
+    /// Jet convection delay as a fraction of the bore PERIOD, a duration.
     float jet_ratio = 0.5f;
     /// Open-end reflection: one-pole loss lowpass y += alpha*(x - y), its state,
     /// the loss gain, and the bore feedback sign (always +1 — the open topology).

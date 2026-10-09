@@ -64,13 +64,6 @@ inline float loss_pole_at_rate(float a_voiced, double sample_rate) noexcept {
   return static_cast<float>(std::pow(static_cast<double>(a_voiced), kLossVoicedSr / sample_rate));
 }
 
-/// The inverse of loss_pole_at_rate(): the pole at @ref kLossVoicedSr that
-/// @p a_at_rate re-expresses at @p sample_rate.
-inline float loss_pole_at_voiced_rate(float a_at_rate, double sample_rate) noexcept {
-  if (!(sample_rate > 0.0) || a_at_rate <= 0.0f) return a_at_rate;
-  return static_cast<float>(std::pow(static_cast<double>(a_at_rate), sample_rate / kLossVoicedSr));
-}
-
 /// loss_pole_at_rate() for a loss one-pole written `y += alpha*(x-y)`, taking
 /// and returning `alpha = 1 - a`. Computed in double so the voiced rate returns
 /// @p alpha_voiced bit for bit, which `1 - loss_pole_at_rate(1 - alpha)` in
@@ -304,18 +297,17 @@ struct LoopBudget {
   /// note read at kLossVoicedSr, so a voice calibrated at that rate keeps its sound there.
   float interp_gain = 1.0f;
   /// Integer factor the loop has to run at, per host sample: 1 whenever the period clears the
-  /// floor and is at least kMinHeldPeriod. A floored or shorter loop runs at the larger of the
-  /// smallest factor an estimate says clears the floor and the one that lifts its internal rate
-  /// to kLossVoicedSr, the rate the bank is voiced at, so it sounds the pitch the voicing gives
-  /// there (see settle_loop_oversample() for how a voice confirms it against its real
-  /// compensation). The rate term needs @p sample_rate.
+  /// floor and is above kMinHeldPeriod. A floored or shorter loop runs at the larger of the
+  /// smallest factor an estimate says clears the floor and the one reaching the note's held
+  /// rate: kLossVoicedSr, the rate the bank is voiced at, lifted until the period the note has
+  /// there clears kMinHeldPeriod (see settle_loop_oversample() for how a voice confirms it
+  /// against its real compensation). Without @p sample_rate the host rate is taken as voiced.
   int oversample = 1;
 };
 
-/// The shortest loop period, in samples at the rate it is requested at, whose three-point read is
-/// still repaid at the fundamental. Under it the read's loss exceeds what the sub-fundamental ring
-/// bound lets the loop make up, so the decay is short and the read's phase delay (which the
-/// loss-pole compensation does not carry) moves the pitch by tens of cents.
+/// The shortest loop period, in samples at the rate the loop runs at, that holds its pitch and
+/// repays its read: a cylindrical reed at 48 kHz holds within 6 cents down to a 3.2-sample line
+/// and sits 10 to 23 cents sharp from 2.7 down, where twice the rate holds the same notes within 4.
 inline constexpr float kMinHeldPeriod = 8.0f;
 
 /// The largest oversampling factor a loop is asked to run at. A note needing more than this is far
@@ -353,9 +345,16 @@ inline LoopBudget loop_budget(float period_samples, float comp_samples, float mi
                                  2, kMaxLoopOversample)
                     : kMaxLoopOversample;
   }
-  if ((out.floored || period_samples <= kMinHeldPeriod) && sample_rate > 0.0) {
-    const int to_voiced = static_cast<int>(std::ceil(kLossVoicedSr / sample_rate - 1.0e-9));
-    out.oversample = std::min(kMaxLoopOversample, std::max(out.oversample, to_voiced));
+  if (out.floored || period_samples <= kMinHeldPeriod) {
+    // The held rate is the note's alone, so every host rate dividing the voiced one draws it alike.
+    const double voiced_period =
+        sample_rate > 0.0 ? period_samples * kLossVoicedSr / sample_rate : period_samples;
+    const double held_rate_scale = std::ceil(
+        kMinHeldPeriod / std::max(voiced_period, static_cast<double>(kMinHeldPeriod) /
+                                                     static_cast<double>(kMaxLoopOversample)));
+    const double host_scale = sample_rate > 0.0 ? kLossVoicedSr / sample_rate : 1.0;
+    const int to_held = static_cast<int>(std::ceil(host_scale * held_rate_scale - 1.0e-9));
+    out.oversample = std::min(kMaxLoopOversample, std::max(out.oversample, to_held));
   }
   const double omega = constants::kTwoPiD / std::max(1.0f, out.achieved_period);
   // Past this the read has nothing left to repay and a boost would only amplify noise.

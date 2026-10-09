@@ -21,6 +21,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -483,24 +484,36 @@ TEST_CASE("loop_budget reports its floor and repays the read only off the voiced
   CHECK(repay_interpolation(0.99f, 4.0f) <= 0.9999f);
 }
 
-TEST_CASE("loop_budget asks for an oversampling factor only when the period is floored",
+TEST_CASE("loop_budget asks for an oversampling factor when the period is floored or short",
           "[midi][synth][wind]") {
   using sonare::midi::synth::kMaxLoopOversample;
+  using sonare::midi::synth::kMinHeldPeriod;
   using sonare::midi::synth::settle_loop_oversample;
 
   CHECK(loop_budget(100.0f, 2.0f, 1.0f).oversample == 1);
-  // Exactly at the floor still clears it.
-  CHECK(loop_budget(3.0f, 2.0f, 1.0f).oversample == 1);
+  // Above the held floor, clearing the read's floor exactly, the loop runs as it is.
+  CHECK(loop_budget(kMinHeldPeriod + 0.5f, kMinHeldPeriod - 0.5f, 1.0f).oversample == 1);
+  // At or under the held floor the loop is lifted until its period clears it, at the voiced
+  // rate as anywhere else: 3 samples take 3x, the floor itself 1x.
+  CHECK(loop_budget(3.0f, 2.0f, 1.0f).oversample == 3);
+  CHECK(loop_budget(kMinHeldPeriod, 2.0f, 1.0f).oversample == 1);
+  CHECK(loop_budget(6.0f, 1.0f, 1.0f, kLossVoicedSr).oversample == 2);
 
-  // 1.9 samples against a register and a one-sample read: doubling clears it, and the register
-  // does not stretch with the factor.
+  // 1.9 samples against a register and a one-sample read: the read's floor alone would take 2x
+  // (the register does not stretch with the factor), the held floor takes 5x.
   const auto floored = loop_budget(1.9f, 1.0f, 1.0f);
   CHECK(floored.floored);
-  CHECK(floored.oversample == 2);
-  // A floored loop also runs at the bank's voiced rate or above: 8 kHz needs 6, 44.1 kHz 2.
+  CHECK(floored.oversample == 5);
+  // The held rate is the note's alone. At 8 kHz the note's period is 11.4 samples at the voiced
+  // rate, so reaching that rate (6x) is all it takes; at 44.1 kHz the same 1.9 samples are 2.07
+  // there, lifted 4x, which the host reaches at 5x; at 96 kHz they are 0.95, lifted the most a
+  // loop is asked for (kMaxLoopOversample), which the host reaches at 4x.
   CHECK(loop_budget(1.9f, 1.0f, 1.0f, 8000.0).oversample == 6);
-  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 44100.0).oversample == 2);
-  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 96000.0).oversample == 2);
+  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 44100.0).oversample == 5);
+  CHECK(loop_budget(1.9f, 1.0f, 1.0f, 96000.0).oversample == 4);
+  // A 3-sample period at 24 kHz is 6 at the voiced rate and lifted 2x there: the 96 kHz loop a
+  // 48 kHz host renders for the same note, so the two rates draw the same thing.
+  CHECK(loop_budget(3.0f, 1.0f, 1.0f, 24000.0).oversample == 4);
   CHECK(loop_budget(100.0f, 2.0f, 1.0f, 8000.0).oversample == 1);
   // A period no factor can rescue is bounded rather than unbounded.
   CHECK(loop_budget(0.1f, 1.0f, 1.0f).oversample == kMaxLoopOversample);
@@ -508,7 +521,8 @@ TEST_CASE("loop_budget asks for an oversampling factor only when the period is f
   // The search confirms each candidate against the voice itself and keeps the smallest that
   // clears: a compensation that grows faster than the estimate takes one more step.
   const auto grown = [](int f) {
-    return loop_budget(1.9f * static_cast<float>(f), 1.0f + 1.2f * static_cast<float>(f), 1.0f);
+    return loop_budget(7.0f * static_cast<float>(f),
+                       f == 1 ? 6.7f : 1.0f + 6.05f * static_cast<float>(f), 1.0f);
   };
   int built_for = 0;
   const int factor = settle_loop_oversample([&](int f) {
@@ -516,7 +530,7 @@ TEST_CASE("loop_budget asks for an oversampling factor only when the period is f
     return grown(f);
   });
   CHECK(factor == built_for);
-  CHECK(factor > floored.oversample);
+  CHECK(factor > grown(1).oversample);
   CHECK_FALSE(grown(factor).floored);
   CHECK(grown(factor - 1).floored);
   CHECK(settle_loop_oversample([](int) { return loop_budget(50.0f, 2.0f, 1.0f); }) == 1);
@@ -715,8 +729,10 @@ namespace {
 using sonare::midi::Velocity16;
 
 /// The strongest tone of the last half of @p x within 6% of @p f0, found to 0.05%, as cents from
-/// @p f0. The Hann window is built once, so a scan of a few hundred bins stays cheap.
-double strongest_tone_cents(const std::vector<float>& x, double f0, double sr) {
+/// @p f0; its magnitude (a full-scale sine reads 1) through @p magnitude when asked for. The Hann
+/// window is built once, so a scan of a few hundred bins stays cheap.
+double strongest_tone_cents(const std::vector<float>& x, double f0, double sr,
+                            double* magnitude = nullptr) {
   const size_t from = x.size() / 2;
   const size_t count = x.size() - from;
   std::vector<double> hann(count);
@@ -739,6 +755,9 @@ double strongest_tone_cents(const std::vector<float>& x, double f0, double sr) {
       at = f0 * rel;
     }
   }
+  if (magnitude != nullptr) {
+    *magnitude = std::sqrt(std::max(0.0, best)) / (static_cast<double>(count) / 4.0);
+  }
   return 1200.0 * std::log2(at / f0);
 }
 
@@ -758,16 +777,27 @@ int highest_in_band_note(double sr) {
   return note;
 }
 
-/// 44.1 kHz is not asserted: a short or floored loop there runs at 88.2 kHz, which is not the
-/// rate the bank is voiced at, and the notes it applies to (above about 5.5 kHz) sit where the
-/// 48 kHz reference itself is unstable, so no deviation from it is a defect.
-constexpr double kLowRates[] = {8000.0, 16000.0, 24000.0};
+/// At 8, 16 and 24 kHz a short or floored loop runs at the very rate the 48 kHz host lifts the
+/// same note to, so those renders are the reference's own; 44.1 kHz reaches 88.2 kHz and above
+/// instead, and its tolerance carries the difference between the two discretisations.
+constexpr double kLowRates[] = {8000.0, 16000.0, 24000.0, 44100.0};
 constexpr double kReferenceRate = 48000.0;
 constexpr double kCoreSeconds = 1.6;
 /// A second, longer render of the 48 kHz reference: a note whose reference pitch moves by more
 /// than this between the two is in an unstable region and has no pitch to compare against.
 constexpr double kLongSeconds = 2.4;
 constexpr double kReferenceDriftCents = 3.0;
+/// Fundamental magnitude (a full-scale sine reads 1) under which a render is not sounding the
+/// note, whatever else it emits: a marginal oscillation under 1% of full scale reads no tuning.
+constexpr double kSoundingH1 = 1.0e-2;
+/// Fundamental magnitude under which a loop's last half is the numerical floor rather than its
+/// own ringing: a plucked string decayed to 1e-4 still reads its period to the scan step, a
+/// Karplus-Strong loop at 1e-10 reads anything.
+constexpr double kLoopFloorH1 = 1.0e-5;
+/// A render whose fundamental has fallen to this fraction of the reference's is a marginal
+/// oscillation at that rate, whose pitch is not the loop's: the flue pipe's note 126 at 44.1 kHz
+/// sits at 0.009 against 0.19 and 16 cents off.
+constexpr double kMarginalH1Ratio = 0.1;
 /// Smallest rise of the sounding pitch from one semitone to the next (a semitone is 100).
 constexpr double kMinStepCents = 20.0;
 
@@ -783,15 +813,17 @@ struct Rendered {
 /// its floor, which sounds several notes at one pitch.
 ///
 /// The reference is the voice at 48 kHz and not the nominal pitch because the voicing itself
-/// tunes tens of cents off at the top of the compass at every rate. Notes whose 48 kHz pitch
-/// differs by more than kReferenceDriftCents between a 1.6 s and a 2.4 s render are skipped:
-/// there is no reference pitch to agree with.
+/// tunes tens of cents off at the top of the compass at every rate. A note whose fundamental is
+/// at the numerical floor (kLoopFloorH1) at either rate or marginal at the tested one
+/// (kMarginalH1Ratio), or whose 48 kHz pitch differs by more than kReferenceDriftCents between
+/// a 1.6 s and a 2.4 s render, is skipped: there is no pitch to agree with.
 ///
 /// @p tolerance_cents holds one bound per entry of kLowRates: the largest deviation measured
 /// from the 48 kHz pitch plus the estimator's resolution, 0.87 cents of scan step plus one
 /// Hann bin of the 0.8 s analysis window (2164 / f0 cents) at the lowest note covered. A floored
-/// or short loop runs at 48 kHz or above, so at 8, 16 and 24 kHz it is the 48 kHz render and the
-/// measured deviation is 0.
+/// or short loop runs at the held rate of its note, so at 8, 16 and 24 kHz it is the 48 kHz
+/// render and the measured deviation is 0; at 44.1 kHz it is the same loop at 88.2 kHz or above.
+/// A rate at which no note of the voice reaches a comparison carries the resolution alone.
 /// @p render is (note, rate, seconds) -> Rendered; zero seconds only reports the factor.
 template <class Render>
 void require_floored_notes_hold_pitch(
@@ -805,16 +837,20 @@ void require_floored_notes_hold_pitch(
       const uint8_t n = static_cast<uint8_t>(note);
       if (render(n, sr, 0.0).factor == 1) continue;
       const double f0 = note_to_hz(n);
-      const double reference =
-          strongest_tone_cents(render(n, kReferenceRate, kCoreSeconds).x, f0, kReferenceRate);
+      double reference_h1 = 0.0;
+      const double reference = strongest_tone_cents(render(n, kReferenceRate, kCoreSeconds).x, f0,
+                                                    kReferenceRate, &reference_h1);
+      if (reference_h1 <= kLoopFloorH1) continue;
       const double drift = std::abs(
           strongest_tone_cents(render(n, kReferenceRate, kLongSeconds).x, f0, kReferenceRate) -
           reference);
       if (drift > kReferenceDriftCents) continue;
       const Rendered r = render(n, sr, kCoreSeconds);
-      const double cents = strongest_tone_cents(r.x, f0, sr);
-      CAPTURE(sr, note, r.factor, f0, cents, reference);
+      double h1 = 0.0;
+      const double cents = strongest_tone_cents(r.x, f0, sr, &h1);
+      CAPTURE(sr, note, r.factor, f0, cents, reference, h1);
       REQUIRE(finite_and_sounding(r.x));
+      if (h1 <= kLoopFloorH1 || h1 < kMarginalH1Ratio * reference_h1) continue;
       CHECK(std::abs(cents - reference) <= tolerance_cents[rate_index]);
       const double sounding = f0 * std::exp2(cents / 1200.0);
       CHECK(sounding > previous * std::exp2(kMinStepCents / 1200.0));
@@ -844,7 +880,7 @@ TEST_CASE("a cylindrical reed sounds each note whose loop is floored at a low ra
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({5.1, 3.0, 2.3}, 127, render);
+  require_floored_notes_hold_pitch({5.1, 3.0, 2.3, 1.8}, 127, render);
 }
 
 TEST_CASE("a bowed string sounds each note whose lines are floored at a low rate",
@@ -864,7 +900,7 @@ TEST_CASE("a bowed string sounds each note whose lines are floored at a low rate
     return out;
   };
   // Above note 106 the 48 kHz reference is not a bowed pitch.
-  require_floored_notes_hold_pitch({3.5, 2.4, 1.8}, 106, render);
+  require_floored_notes_hold_pitch({3.5, 2.4, 1.8, 0.9}, 106, render);
 }
 
 TEST_CASE("a flute sounds each note whose bore or jet is floored at a low rate",
@@ -884,7 +920,7 @@ TEST_CASE("a flute sounds each note whose bore or jet is floored at a low rate",
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6, 1.8}, 127, render);
 }
 
 TEST_CASE("a flue pipe sounds each note whose bore or jet is floored at a low rate",
@@ -901,7 +937,7 @@ TEST_CASE("a flue pipe sounds each note whose bore or jet is floored at a low ra
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6, 2.6}, 127, render);
 }
 
 TEST_CASE("a Karplus-Strong string sounds each note whose loop is short at a low rate",
@@ -918,7 +954,7 @@ TEST_CASE("a Karplus-Strong string sounds each note whose loop is short at a low
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.0, 2.0, 3.3}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 3.3, 0.9}, 127, render);
 }
 
 TEST_CASE("a plucked string sounds each note whose loop is short at a low rate",
@@ -936,7 +972,7 @@ TEST_CASE("a plucked string sounds each note whose loop is short at a low rate",
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6, 0.9}, 127, render);
 }
 
 TEST_CASE("a brass bore sounds each note whose loop is short at a low rate",
@@ -955,7 +991,7 @@ TEST_CASE("a brass bore sounds each note whose loop is short at a low rate",
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6, 0.9}, 127, render);
 }
 
 TEST_CASE("a harpsichord sounds each note whose strings are short at a low rate",
@@ -975,7 +1011,7 @@ TEST_CASE("a harpsichord sounds each note whose strings are short at a low rate"
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({5.1, 3.0, 2.3}, 127, render);
+  require_floored_notes_hold_pitch({5.1, 3.0, 2.3, 0.9}, 127, render);
 }
 
 TEST_CASE("a piano sounds each note whose strings are short at a low rate", "[midi][synth][wind]") {
@@ -991,5 +1027,106 @@ TEST_CASE("a piano sounds each note whose strings are short at a low rate", "[mi
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({3.9, 2.0, 1.6}, 127, render);
+  require_floored_notes_hold_pitch({3.9, 2.0, 1.6, 0.9}, 127, render);
+}
+
+namespace {
+
+/// The top two octaves of the 48 kHz band (highest_in_band_note(48000) is 127).
+constexpr int kTopOctavesFrom = 104;
+
+/// One wind voice at kReferenceRate: every note up to @p compass_top has to sound its
+/// fundamental, and every note that does has to sit within @p tolerance_cents of equal
+/// temperament.
+struct TopCompassVoice {
+  const char* name;
+  std::function<Rendered(uint8_t)> render;
+  int compass_top;
+  double tolerance_cents;
+};
+
+}  // namespace
+
+TEST_CASE(
+    "each wind voice sounds its equal-tempered fundamental across the top two octaves at 48 kHz",
+    "[midi][synth][wind]") {
+  // The tolerances are one scan step of the estimator (0.87 cents) over the largest residual
+  // the voicing itself leaves across the span, which is a constant per voice rather than a
+  // trend with the note: the cone's half-compensated highpass lead and the flute's
+  // kPitchCorrect. Before the loop compensation was read at the fundamental and the jet delay
+  // at the period, the cylinder read -23 to -46 cents over notes 104..109 and the flute +49 to
+  // +106 over 104..114, both growing with the note.
+  // The reeds take a bright bell as well as the shipped 0.5, which stops the cylinder speaking
+  // above note 108 and whose darker pole is where a compensation read at the wrong frequency
+  // shows (the brightest bell has no pole to misread); the cone at 1.0 skips note 118. The jet
+  // cannot drive a flute bore under seven samples at any rate (silent at 96 kHz too), so the
+  // flute's compass ends at note 116.
+  struct ReedSpecimen {
+    const char* name;
+    bool conical;
+    float brightness;
+    int compass_top;
+    double tolerance_cents;
+  };
+  const ReedSpecimen reeds[] = {{"cylindrical reed, shipped bell", false, 0.5f, 108, 4.4},
+                                {"cylindrical reed, bright bell", false, 1.0f, 127, 3.5},
+                                {"conical reed, bright bell", true, 0.9f, 125, 9.5}};
+  std::vector<TopCompassVoice> voices;
+  for (const ReedSpecimen& reed : reeds) {
+    sonare::midi::synth::ReedPatchParams params;
+    params.conical = reed.conical;
+    params.brightness = reed.brightness;
+    params.breath_noise = 0.0f;
+    params.chiff = 0.0f;
+    voices.push_back(
+        {reed.name,
+         [params](uint8_t note) {
+           std::vector<float> slab(
+               static_cast<size_t>(sonare::midi::synth::reed_slab_capacity(kReferenceRate)));
+           sonare::midi::synth::ReedVoiceCore core;
+           core.attach(slab.data(), sonare::midi::synth::reed_buffer_capacity(kReferenceRate));
+           core.start(params, kReferenceRate, note, Velocity16::from7(100), 0x5eedu);
+           Rendered out;
+           out.factor = core.oversample();
+           out.x.resize(static_cast<size_t>(kCoreSeconds * kReferenceRate));
+           for (float& v : out.x) v = core.render(1.0f);
+           return out;
+         },
+         reed.compass_top, reed.tolerance_cents});
+  }
+  {
+    sonare::midi::synth::FlutePatchParams params;
+    params.breath_noise = 0.0f;
+    params.chiff = 0.0f;
+    params.vibrato_depth = 0.0f;
+    voices.push_back(
+        {"flute",
+         [params](uint8_t note) {
+           std::vector<float> slab(
+               static_cast<size_t>(sonare::midi::synth::flute_slab_capacity(kReferenceRate)));
+           sonare::midi::synth::FluteVoiceCore core;
+           core.attach(slab.data(), sonare::midi::synth::flute_buffer_capacity(kReferenceRate));
+           core.start(params, kReferenceRate, note, Velocity16::from7(100), 0x5eedu);
+           Rendered out;
+           out.factor = core.oversample();
+           out.x.resize(static_cast<size_t>(kCoreSeconds * kReferenceRate));
+           for (float& v : out.x) v = core.render(1.0f);
+           return out;
+         },
+         116, 8.7});
+  }
+  for (const TopCompassVoice& voice : voices) {
+    for (int note = kTopOctavesFrom; note <= highest_in_band_note(kReferenceRate); ++note) {
+      const uint8_t n = static_cast<uint8_t>(note);
+      const Rendered r = voice.render(n);
+      REQUIRE(std::all_of(r.x.begin(), r.x.end(), [](float v) { return std::isfinite(v); }));
+      double h1 = 0.0;
+      const double cents = strongest_tone_cents(r.x, note_to_hz(n), kReferenceRate, &h1);
+      // Above its compass a voice may still emit something, but not the note.
+      const bool sounding = h1 > kSoundingH1;
+      CAPTURE(voice.name, note, r.factor, h1, cents);
+      if (note <= voice.compass_top) REQUIRE(sounding);
+      if (sounding) CHECK(std::abs(cents) <= voice.tolerance_cents);
+    }
+  }
 }

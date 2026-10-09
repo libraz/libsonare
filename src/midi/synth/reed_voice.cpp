@@ -309,8 +309,10 @@ LoopBudget ReedVoiceCore::configure(const ReedPatchParams& params, double sr, ui
   // pitch-tracking highpass — its phase LEAD at the resonant frequency (which
   // would otherwise sharpen the note). The lowpass lag lengthens the effective
   // loop and the highpass lead shortens it, so they enter comp with opposite
-  // signs. Subtract comp from the loop delay.
-  const float omega = kTwoPi / std::max(1.0f, bore_.period);
+  // signs. Subtract comp from the loop delay. Both are read at the sounding
+  // fundamental: the cylinder's line is half the period, but its negative
+  // feedback resonates at f0, not at the line's own 2*f0.
+  const float omega = kTwoPi / std::max(1.0f, period);
   const float sw = std::sin(omega);
   const float cw = std::cos(omega);
   const float phase_hp = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);

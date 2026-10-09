@@ -189,10 +189,10 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
 
   retune_loop_comp();
   // The jet line is read at one sample or more as well, and it is the shorter of the two: its
-  // delay is the jet ratio of the compensated period, all of it a duration.
+  // delay is the jet ratio of the period, all of it a duration.
   const LoopBudget budget = worst_loop_budget(
       loop_budget(bore_.period, bore_.comp, 1.0f, sr),
-      loop_budget(bore_.period, jet_comp_, std::max(1.0f, 1.0f / jet_ratio_), sr, 0.0f));
+      loop_budget(bore_.period, 0.0f, std::max(1.0f, 1.0f / jet_ratio_), sr, 0.0f));
 
   // Both lines span the whole slab, because the line length is what bounds a
   // downward bend and the clamp enforcing it saturates silently -- a glide
@@ -328,11 +328,9 @@ float FluteVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (vortex_ > 0.0f) {
     pd += vortex_ * 0.3f * breath_.level * breath_.level * noise_.bipolar_at(drive_index_ + 2u);
   }
-  // The jet rides the line as it was voiced, not the line at the running rate.
-  const float jet_line =
-      std::clamp(bore_.period / ratio - jet_comp_, 1.0f, static_cast<float>(capacity_ - 4));
+  // A fraction of the PERIOD, not of the line: the line is short by a fixed sample count.
   const float jet_delay =
-      std::clamp(jet_ratio_ * jet_line, 1.0f, static_cast<float>(capacity_ - 4));
+      std::clamp(jet_ratio_ * bore_.period / ratio, 1.0f, static_cast<float>(capacity_ - 4));
   const float pd_j = rt::lagrange3_fractional_delay(
       jet_, static_cast<size_t>(capacity_), jet_write_, static_cast<int>(jet_delay * 256.0f), pd);
   const float jet_out = jet_table(pd_j);
@@ -404,12 +402,6 @@ void FluteVoiceCore::retune_loop_comp() noexcept {
   // produced) plus the reflection lowpass's phase delay at f0.
   const float a = 1.0f - lp_alpha_;
   bore_.comp = 1.0f + onepole_group_delay_samples(a, kTwoPi * f0_ / srf_);
-  // The jet's compensation is taken at the voiced rate: a sample count's
-  // duration halves as the rate doubles, and the jet delay is a duration.
-  const float voiced_srf = static_cast<float>(kLossVoicedSr);
-  const float tau_voiced =
-      onepole_group_delay_samples(loss_pole_at_voiced_rate(a, srf_), kTwoPi * f0_ / voiced_srf);
-  jet_comp_ = (1.0f + tau_voiced) * (srf_ / voiced_srf);
   comp_alpha_ = lp_alpha_;
 }
 

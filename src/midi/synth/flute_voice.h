@@ -208,7 +208,7 @@ class FluteVoiceCore {
   float render_internal(float pitch_ratio) noexcept;
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
-  // Re-solves bore_.comp and jet_comp_ from the pole lp_alpha_ now holds.
+  // Re-solves bore_.comp from the pole lp_alpha_ now holds.
   void retune_loop_comp() noexcept;
 
   // Bore + jet delay lines (host-owned): the travelling-wave air column and the
@@ -220,15 +220,13 @@ class FluteVoiceCore {
 
   // Tuning: bore_'s period is the bore loop period (samples, ~one fundamental
   // period) and comp the delay not carried in the line (feedback register +
-  // loop-filter phase); jet_comp_ is that same compensation voiced at
-  // kLossVoicedSr, and jet_ratio_ the fraction of the bore LINE delay the jet
-  // convection spans (jet_delay = jet_ratio * (period - comp), the STK
-  // jet-convection length).
+  // loop-filter phase); jet_ratio_ is the fraction of the PERIOD the jet
+  // convection spans (jet_delay = jet_ratio * period), a duration at every
+  // note and rate.
   // The jet line is read at no less than one sample (the smallest delay the
   // passive Lagrange stencil supports); a period too short for that runs the
   // loop at an integer multiple of the host rate, so the ratio holds at every
   // note below Nyquist.
-  float jet_comp_ = 1.0f;
   float jet_ratio_ = 0.4f;
   /// The played fundamental (Hz) and the sample rate, held for the pole
   /// mapping and for retune_loop_comp(), which follows the smoothed pole on
@@ -238,7 +236,7 @@ class FluteVoiceCore {
   float srf_ = 48000.0f;
   /// Brings the oversampled loop back to the host rate; the identity at factor 1.
   LoopDecimator decimator_;
-  /// The lp_alpha_ bore_.comp and jet_comp_ were last solved for.
+  /// The lp_alpha_ bore_.comp was last solved for.
   float comp_alpha_ = -1.0f;
 
   // Open-end reflection: one-pole loss lowpass y += alpha*(x - y) (the frequency-

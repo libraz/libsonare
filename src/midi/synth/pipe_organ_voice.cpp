@@ -355,9 +355,11 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     // (corner = corner_mult * f0) so the harmonic damping is consistent across
     // the whole compass and a low pedal note does not overblow. A brighter end
     // (and a reed's harmonic-rich buzz) lifts the corner; a stopped rank is
-    // darkened toward the hollow gedackt tone.
+    // darkened toward the hollow gedackt tone. Its cap is where the reflection
+    // alone keeps the upperwork at 0.40 of the open rank's across the middle of
+    // the compass; at 0.35 that stood on a jet a quarter tone sharp.
     float bright = std::clamp(ranks[r].brightness + 0.3f * reed, 0.0f, 1.0f);
-    if (stopped) bright = std::min(bright, 0.35f);
+    if (stopped) bright = std::min(bright, 0.20f);
     const float corner = (kReflectCornerBase + kReflectCornerSpan * bright) * f0;
     // The floor is 392 Hz (alpha 0.05 at kLossVoicedSr), so the tracking above
     // stops at the bottom of the compass: a stopped 16' is pinned over its whole
@@ -389,27 +391,13 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
                            std::atan2(dc_r * std::sin(omega), 1.0f - dc_r * std::cos(omega));
     const float tau_dc = phase_dc / std::max(omega, 1.0e-6f);
     pipe.bore.comp = 1.0f + tau_lp - tau_dc;
-    // The jet's compensation is taken at the voiced rate: a sample count's
-    // duration halves as the rate doubles, and the jet delay is a duration.
-    {
-      const float voiced_srf = static_cast<float>(kLossVoicedSr);
-      const float omega_v = kTwoPi * f0 / voiced_srf;
-      const float alpha_v = std::clamp(1.0f - std::exp(-kTwoPi * corner / voiced_srf), 0.05f, 1.0f);
-      const float dc_r_v = 1.0f - static_cast<float>(kTwoPi * kDcCornerHz / kLossVoicedSr);
-      const float tau_lp_v = onepole_group_delay_samples(1.0f - alpha_v, omega_v);
-      const float phase_dc_v =
-          std::atan2(std::sin(omega_v), 1.0f - std::cos(omega_v)) -
-          std::atan2(dc_r_v * std::sin(omega_v), 1.0f - dc_r_v * std::cos(omega_v));
-      const float tau_dc_v = phase_dc_v / std::max(omega_v, 1.0e-6f);
-      pipe.jet_comp = (1.0f + tau_lp_v - tau_dc_v) * (srf / voiced_srf);
-    }
-    // Both lines are read at one sample or more; the jet's delay is a ratio of the compensated
-    // period, all of it a duration.
+    // Both lines are read at one sample or more; the jet's delay is a ratio of the period, all
+    // of it a duration.
     if (ranks[r].sounding()) {
       budget = worst_loop_budget(budget, loop_budget(pipe.bore.period, pipe.bore.comp, 1.0f, sr));
-      budget =
-          worst_loop_budget(budget, loop_budget(pipe.bore.period, pipe.jet_comp,
-                                                std::max(1.0f, 1.0f / pipe.jet_ratio), sr, 0.0f));
+      budget = worst_loop_budget(
+          budget,
+          loop_budget(pipe.bore.period, 0.0f, std::max(1.0f, 1.0f / pipe.jet_ratio), sr, 0.0f));
     }
 
     // The bore and jet reads lose magnitude at the fundamental that grows as the period shrinks
@@ -417,10 +405,9 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     {
       const float period_v = pipe.bore.period;
       const double voiced_scale = kLossVoicedSr / sr;
-      const float jet_delay = std::max(1.0f, pipe.jet_ratio * (period_v - pipe.jet_comp));
+      const float jet_delay = std::max(1.0f, pipe.jet_ratio * period_v);
       const double jet_voiced_delay =
-          std::max(1.0, static_cast<double>(pipe.jet_ratio) *
-                            (static_cast<double>(period_v - pipe.jet_comp) * voiced_scale));
+          std::max(1.0, static_cast<double>(pipe.jet_ratio) * period_v * voiced_scale);
       const double jet_gain =
           sr == kLossVoicedSr
               ? 1.0
@@ -654,11 +641,9 @@ float PipeOrganVoiceCore::render_internal(float pitch_ratio) noexcept {
         pipe.turb_alpha *
         (noise_.bipolar_at(kTurbIndexBase + pipe.noise_offset + drive_index_) - pipe.turb_state);
     const float pd = breath - pipe.jet_reflection * temp + turb_gain_ * breath * pipe.turb_state;
-    // The jet rides the line as it was voiced, not the line at the running rate.
-    const float jet_line = std::clamp(pipe.bore.period / ratio - pipe.jet_comp, 1.0f,
-                                      static_cast<float>(span_capacity_ - 4));
-    const float jet_delay =
-        std::clamp(pipe.jet_ratio * jet_line, 1.0f, static_cast<float>(span_capacity_ - 4));
+    // The jet convects for a fraction of the PERIOD, never of the line's length (see the flute).
+    const float jet_delay = std::clamp(pipe.jet_ratio * pipe.bore.period / ratio, 1.0f,
+                                       static_cast<float>(span_capacity_ - 4));
     const float pd_j =
         rt::lagrange3_fractional_delay(pipe.jet, static_cast<size_t>(span_capacity_),
                                        pipe.jet_write, static_cast<int>(jet_delay * 256.0f), pd);
