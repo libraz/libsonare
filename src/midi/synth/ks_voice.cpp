@@ -96,7 +96,16 @@ float loop_peak_gain(const StringLoop& loop) noexcept {
 
 void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t note,
                         Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // A loop too short to hold its pitch and decay at the host rate runs at a multiple of it;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget KsVoiceCore::configure(const KsPatchParams& params, double sr, uint8_t note,
+                                  Velocity16 velocity, uint64_t seed) noexcept {
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
 
@@ -389,9 +398,26 @@ void KsVoiceCore::start(const KsPatchParams& params, double sample_rate, uint8_t
   pick_alpha_ = std::clamp(1.0f - std::exp(-kTwoPi * kKsPickNoiseCutoffHz / static_cast<float>(sr)),
                            0.01f, 1.0f);
   pick_decay_ = std::exp(-4.0f / static_cast<float>(pick_len_));  // ~-35 dB over the burst
+
+  // Every loop in use is read at one sample or more and long enough to hold its pitch.
+  LoopBudget budget = loop_budget(loop_period, string_.loop_comp, 1.0f, sr);
+  if (pol_couple_ > 0.0f) {
+    budget = worst_loop_budget(
+        budget,
+        loop_budget(loop_period / std::exp2(kPolDetuneCents / 1200.0f), pol_.loop_comp, 1.0f, sr));
+  }
+  if (oct_couple_ > 0.0f) {
+    budget = worst_loop_budget(budget, loop_budget(0.5f * loop_period, oct_.loop_comp, 1.0f, sr));
+  }
+  return budget;
 }
 
 float KsVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float KsVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (string_.buffer == nullptr || string_.size < 8) return 0.0f;
 
@@ -549,6 +575,7 @@ void KsVoiceCore::release() noexcept {
 
 void KsVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   exc_pos_ = exc_total_;
   string_.kill();
   pol_.kill();

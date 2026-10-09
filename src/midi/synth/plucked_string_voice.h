@@ -29,6 +29,7 @@
 #include <cstdint>
 
 #include "midi/control_value.h"
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 
 namespace sonare::midi::synth {
@@ -104,8 +105,18 @@ class PluckedStringVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when it is not short.
+  int oversample() const noexcept { return decimator_.factor(); }
 
  private:
+  // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
+  // factor) and returns the loop's budget at that rate.
+  LoopBudget configure(const PluckedStringPatchParams& params, double sr, uint8_t note,
+                       Velocity16 velocity, uint64_t seed) noexcept;
+  // One sample of the loop at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  // Brings the oversampled loop back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   bool killed_ = true;
   float* buffer_ = nullptr;
   int capacity_ = 0;

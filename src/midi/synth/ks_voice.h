@@ -228,9 +228,19 @@ class KsVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loops run at per host sample, settled at start(); 1 when none is short.
+  int oversample() const noexcept { return decimator_.factor(); }
 
  private:
   bool killed_ = true;
+  // Builds the whole voice for loops running at @p sr (the host rate times the oversampling
+  // factor) and returns the worst budget of the loops in use at that rate.
+  LoopBudget configure(const KsPatchParams& params, double sr, uint8_t note, Velocity16 velocity,
+                       uint64_t seed) noexcept;
+  // One sample of the loops at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  // Brings the oversampled loops back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   /// The delay slab attach() handed over, and the span length each loop takes
   /// out of it. start() carves the three spans.
   float* slab_ = nullptr;

@@ -265,8 +265,18 @@ class HarpsichordVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the strings run at per host sample, settled at start(); 1 when none is short.
+  int oversample() const noexcept { return decimator_.factor(); }
 
  private:
+  // Builds the whole voice for strings running at @p sr (the host rate times the oversampling
+  // factor) and returns the worst budget of its loops at that rate.
+  LoopBudget configure(const HarpsichordPatchParams& params, double sr, uint8_t note,
+                       Velocity16 velocity, uint64_t seed) noexcept;
+  // One sample of the voice at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  // Brings the oversampled voice back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   bool killed_ = true;
   bool released_ = false;
   bool has_undamped_tail_ = false;

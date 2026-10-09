@@ -138,7 +138,16 @@ float partial_damp_gain(float natural, float damped, float strength) noexcept {
 
 void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed, bool una_corda) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // Strings too short to hold their pitch and decay at the host rate run at a multiple of it;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed, una_corda); });
+  decimator_.configure(factor);
+}
+
+LoopBudget PianoVoiceCore::configure(const PianoPatchParams& params, double sr, uint8_t note,
+                                     Velocity16 velocity, uint64_t seed, bool una_corda) noexcept {
   // Stretch tuning widens the octaves so the inharmonic partials lock the way
   // a tuned grand's do (sharp treble, flat bass; A4 anchored).
   const float f0 = note_to_hz(note) * std::exp2(piano_stretch_cents(note) / 1200.0f);
@@ -756,6 +765,15 @@ void PianoVoiceCore::start(const PianoPatchParams& params, double sample_rate, u
     bh_a2_ = c.a2;
     bh_x1_ = bh_x2_ = bh_y1_ = bh_y2_ = 0.0f;
   }
+
+  // Every string is read at one sample or more and long enough to hold its pitch, whether the
+  // loop or the modal bank is the one speaking: the bank is built from the same periods.
+  LoopBudget budget;
+  for (int i = 0; i < num_strings_; ++i) {
+    const String& s = strings_[static_cast<size_t>(i)];
+    budget = worst_loop_budget(budget, loop_budget(s.base_period, s.comp, 1.0f, sr));
+  }
+  return budget;
 }
 
 }  // namespace sonare::midi::synth

@@ -40,6 +40,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/excitation_axes.h"
+#include "midi/synth/string_loop.h"
 #include "midi/synth/voice_random.h"
 #include "midi/synth/wind_bore.h"
 #include "midi/synth/wind_breath.h"
@@ -242,6 +243,8 @@ class BrassVoiceCore {
   void release() noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the loop runs at per host sample, settled at start(); 1 when the bore is not short.
+  int oversample() const noexcept { return decimator_.factor(); }
 
   // --- live continuous control (brass is a continuous-control instrument; the
   // host drives these from MIDI CCs while the note sounds). Each sets a smoothing
@@ -287,6 +290,14 @@ class BrassVoiceCore {
   float radiation_scale() const noexcept { return rad_scale_; }
 
  private:
+  // Builds the whole voice for a loop running at @p sr (the host rate times the oversampling
+  // factor) and returns the bore's budget at that rate.
+  LoopBudget configure(const BrassPatchParams& params, double sr, uint8_t note, Velocity16 velocity,
+                       uint64_t seed) noexcept;
+  // One sample of the loop at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  // Brings the oversampled loop back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   // Recomposes the two smoothing targets from their bases and the offsets.
   void refresh_excitation_targets() noexcept;
   // Recomputes the fundamental makeup for the current radiation pole.

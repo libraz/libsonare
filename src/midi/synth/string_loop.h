@@ -304,12 +304,19 @@ struct LoopBudget {
   /// note read at kLossVoicedSr, so a voice calibrated at that rate keeps its sound there.
   float interp_gain = 1.0f;
   /// Integer factor the loop has to run at, per host sample: 1 whenever the period clears the
-  /// floor. A floored loop runs at the larger of the smallest factor an estimate says clears the
-  /// floor and the one that lifts its internal rate to kLossVoicedSr, the rate the bank is voiced
-  /// at, so it sounds the pitch the voicing gives there (see settle_loop_oversample() for how a
-  /// voice confirms it against its real compensation).
+  /// floor and is at least kMinHeldPeriod. A floored or shorter loop runs at the larger of the
+  /// smallest factor an estimate says clears the floor and the one that lifts its internal rate
+  /// to kLossVoicedSr, the rate the bank is voiced at, so it sounds the pitch the voicing gives
+  /// there (see settle_loop_oversample() for how a voice confirms it against its real
+  /// compensation). The rate term needs @p sample_rate.
   int oversample = 1;
 };
+
+/// The shortest loop period, in samples at the rate it is requested at, whose three-point read is
+/// still repaid at the fundamental. Under it the read's loss exceeds what the sub-fundamental ring
+/// bound lets the loop make up, so the decay is short and the read's phase delay (which the
+/// loss-pole compensation does not carry) moves the pitch by tens of cents.
+inline constexpr float kMinHeldPeriod = 8.0f;
 
 /// The largest oversampling factor a loop is asked to run at. A note needing more than this is far
 /// outside the band any supported rate carries and keeps sounding at its floor rather than costing
@@ -345,10 +352,10 @@ inline LoopBudget loop_budget(float period_samples, float comp_samples, float mi
         room > 0.0f ? std::clamp(static_cast<int>(std::ceil((min_delay + register_samples) / room)),
                                  2, kMaxLoopOversample)
                     : kMaxLoopOversample;
-    if (sample_rate > 0.0) {
-      const int to_voiced = static_cast<int>(std::ceil(kLossVoicedSr / sample_rate - 1.0e-9));
-      out.oversample = std::min(kMaxLoopOversample, std::max(out.oversample, to_voiced));
-    }
+  }
+  if ((out.floored || period_samples <= kMinHeldPeriod) && sample_rate > 0.0) {
+    const int to_voiced = static_cast<int>(std::ceil(kLossVoicedSr / sample_rate - 1.0e-9));
+    out.oversample = std::min(kMaxLoopOversample, std::max(out.oversample, to_voiced));
   }
   const double omega = constants::kTwoPiD / std::max(1.0f, out.achieved_period);
   // Past this the read has nothing left to repay and a boost would only amplify noise.
@@ -386,7 +393,7 @@ inline LoopBudget worst_loop_budget(LoopBudget primary, const LoopBudget& other)
 template <typename Build>
 inline int settle_loop_oversample(Build&& build) noexcept {
   LoopBudget budget = build(1);
-  if (!budget.floored) return 1;
+  if (budget.oversample <= 1) return 1;
   int factor = std::clamp(budget.oversample, 2, kMaxLoopOversample);
   for (;;) {
     budget = build(factor);

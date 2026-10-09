@@ -193,7 +193,16 @@ SONARE_TUNABLE(kLip2Couple, 1.5f);
 
 void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, uint8_t note,
                            Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // A bore too short to hold its pitch at the host rate runs its loop at a multiple of it;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget BrassVoiceCore::configure(const BrassPatchParams& params, double sr, uint8_t note,
+                                     Velocity16 velocity, uint64_t seed) noexcept {
   const float srf = static_cast<float>(sr);
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
@@ -392,6 +401,7 @@ void BrassVoiceCore::start(const BrassPatchParams& params, double sample_rate, u
   // 4f: amplitude-dependent propagation speed. Off (0) -> the bore delay is read
   // at the pitch ratio alone and the render is bit-identical.
   bore_nonlinearity_ = std::clamp(params.bore_nonlinearity, 0.0f, 1.0f);
+  return loop_budget(bore_.period, bore_.comp, 1.0f, sr);
 }
 
 void BrassVoiceCore::tune_lip(float f0) noexcept {
@@ -442,6 +452,11 @@ float BrassVoiceCore::played_dynamic() const noexcept {
 }
 
 float BrassVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float BrassVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (bore_.buffer == nullptr || bore_.capacity < 8) return 0.0f;
   const float ratio = pitch_ratio > 0.01f ? pitch_ratio : 0.01f;
@@ -720,6 +735,7 @@ void BrassVoiceCore::release() noexcept { breath_.release(); }
 
 void BrassVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   breath_.level = 0.0f;
   lp_state_ = 0.0f;
   rad_state_ = 0.0f;

@@ -111,6 +111,11 @@ void PianoVoiceCore::refresh_modal_coefficients(float pitch_ratio) noexcept {
 
 float PianoVoiceCore::render(float pitch_ratio) noexcept {
   if (num_strings_ <= 0 || slab_ == nullptr) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float PianoVoiceCore::render_internal(float pitch_ratio) noexcept {
+  if (num_strings_ <= 0 || slab_ == nullptr) return 0.0f;
 
   // Dynamic hammer: integrate the felt mass against the string's arrival at
   // the strike point, then comb the force by the strike position and pass the
@@ -399,6 +404,7 @@ void PianoVoiceCore::damp(float strength) noexcept {
 }
 
 void PianoVoiceCore::kill() noexcept {
+  decimator_.reset();
   for (String& s : strings_) s = String{};
   num_strings_ = 0;
   hammer_amp_ = 0.0f;

@@ -33,7 +33,17 @@ SONARE_TUNABLE(kPluckedOutputScale, 0.85f);
 
 void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, double sample_rate,
                                    uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // A loop too short to hold its pitch and decay at the host rate runs at a multiple of it;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget PluckedStringVoiceCore::configure(const PluckedStringPatchParams& params, double sr,
+                                             uint8_t note, Velocity16 velocity,
+                                             uint64_t seed) noexcept {
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
 
@@ -105,9 +115,15 @@ void PluckedStringVoiceCore::start(const PluckedStringPatchParams& params, doubl
   if (buffer_ != nullptr) {
     std::fill(buffer_, buffer_ + static_cast<size_t>(std::max(0, capacity_)), 0.0f);
   }
+  return loop_budget(base_period_, loop_comp_, 1.0f, sr);
 }
 
 float PluckedStringVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float PluckedStringVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (buffer_ == nullptr || capacity_ < 8) return 0.0f;
 
@@ -156,6 +172,7 @@ void PluckedStringVoiceCore::release() noexcept {
 
 void PluckedStringVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   exc_pos_ = exc_total_ + pick_delay_;
   loop_gain_ = 0.0f;
   lp_state_ = 0.0f;

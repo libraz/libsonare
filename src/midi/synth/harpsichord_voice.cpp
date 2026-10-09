@@ -209,7 +209,17 @@ double harpsichord_max_release_tail_seconds(const HarpsichordPatchParams& params
 
 void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sample_rate,
                                  uint8_t note, Velocity16 velocity, uint64_t seed) noexcept {
-  const double sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  const double host_sr = sample_rate > 0.0 ? sample_rate : 48000.0;
+  // Strings too short to hold their pitch and decay at the host rate run at a multiple of it;
+  // everything below is built for that internal rate.
+  const int factor = settle_loop_oversample(
+      [&](int f) { return configure(params, host_sr * f, note, velocity, seed); });
+  decimator_.configure(factor);
+}
+
+LoopBudget HarpsichordVoiceCore::configure(const HarpsichordPatchParams& params, double sr,
+                                           uint8_t note, Velocity16 velocity,
+                                           uint64_t seed) noexcept {
   noise_ = VoiceRandomSequence(seed);
   killed_ = false;
   released_ = false;
@@ -451,9 +461,26 @@ void HarpsichordVoiceCore::start(const HarpsichordPatchParams& params, double sa
   // 8' thickens the sound without making it twice as loud.
   const float drawn = eight_a_.level + eight_b_.level + four_.level;
   output_scale_ = kOutputTrim / std::max(1.0f, std::sqrt(std::max(1.0f, drawn)));
+
+  // Every loop in use is read at one sample or more and long enough to hold its pitch.
+  LoopBudget budget;
+  for (const Choir* c : {&eight_a_, &eight_b_, &four_}) {
+    if (c->level > 0.0f) {
+      budget = worst_loop_budget(budget, loop_budget(c->loop.period, c->loop.loop_comp, 1.0f, sr));
+    }
+  }
+  if (rear_level_ > 0.0f) {
+    budget = worst_loop_budget(budget, loop_budget(rear_.period, rear_.loop_comp, 1.0f, sr));
+  }
+  return budget;
 }
 
 float HarpsichordVoiceCore::render(float pitch_ratio) noexcept {
+  if (killed_) return 0.0f;
+  return decimator_.run([&] { return render_internal(pitch_ratio); });
+}
+
+float HarpsichordVoiceCore::render_internal(float pitch_ratio) noexcept {
   if (killed_) return 0.0f;
   if (slab_ == nullptr) return 0.0f;
 
@@ -601,6 +628,7 @@ void HarpsichordVoiceCore::release() noexcept {
 
 void HarpsichordVoiceCore::kill() noexcept {
   killed_ = true;
+  decimator_.reset();
   released_ = true;
   tail_active_ = false;
   tail_remaining_samples_ = 0;

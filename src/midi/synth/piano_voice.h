@@ -45,6 +45,7 @@
 
 #include "midi/control_value.h"
 #include "midi/synth/piano_resonance.h"
+#include "midi/synth/string_loop.h"
 #include "rt/biquad_design.h"
 
 namespace sonare::midi::synth {
@@ -165,6 +166,8 @@ class PianoVoiceCore {
   void damp(float strength) noexcept;
   /// Immediate silence.
   void kill() noexcept;
+  /// The factor the strings run at per host sample, settled at start(); 1 when none is short.
+  int oversample() const noexcept { return decimator_.factor(); }
   /// What this note's blow puts into the instrument's structure, as set by the
   /// last start(). The host hands it to the shared PianoSoundboard rather than
   /// mixing it into this voice's output, because a case network is struck once
@@ -175,6 +178,14 @@ class PianoVoiceCore {
   float board_strike() const noexcept { return board_strike_; }
 
  private:
+  /// Builds the whole voice for strings running at @p sr (the host rate times the oversampling
+  /// factor) and returns the worst budget of its strings at that rate.
+  LoopBudget configure(const PianoPatchParams& params, double sr, uint8_t note, Velocity16 velocity,
+                       uint64_t seed, bool una_corda) noexcept;
+  /// One sample of the voice at the internal rate.
+  float render_internal(float pitch_ratio) noexcept;
+  /// Brings the oversampled voice back to the host rate; the identity at factor 1.
+  LoopDecimator decimator_;
   void refresh_modal_coefficients(float pitch_ratio) noexcept;
 
   struct String {

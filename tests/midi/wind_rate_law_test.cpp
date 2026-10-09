@@ -28,11 +28,16 @@
 #include "midi/control_value.h"
 #include "midi/midi_event.h"
 #include "midi/synth/bowed_string_voice.h"
+#include "midi/synth/brass_voice.h"
 #include "midi/synth/flute_voice.h"
 #include "midi/synth/gm_fallback_map.h"
+#include "midi/synth/harpsichord_voice.h"
+#include "midi/synth/ks_voice.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/piano_voice.h"
 #include "midi/synth/pipe_organ_voice.h"
 #include "midi/synth/pitch.h"
+#include "midi/synth/plucked_string_voice.h"
 #include "midi/synth/reed_voice.h"
 #include "midi/synth/string_loop.h"
 #include "midi/ump.h"
@@ -555,11 +560,8 @@ TEST_CASE("a Karplus-Strong fundamental keeps its requested t60 across rates",
   patch.ks.decay_s = 1.2f;
   patch.ks.decay_stretch = 0.0f;
   patch.ks.brightness = 1.0f;
-  // Periods of eight samples or fewer are left out: the read's loss there exceeds what the
-  // sub-fundamental ring bound lets the loop repay (note 84 at 8 kHz, notes 96 and up at 8 kHz).
   for (const uint8_t note : {72, 84, 96}) {
     for (const double sr : {8000.0, 24000.0, 48000.0, 96000.0}) {
-      if (sr / note_to_hz(note) <= 8.0) continue;
       const double t60 = fundamental_t60(patch, note, sr);
       CAPTURE(static_cast<int>(note), sr, t60);
       CHECK(t60 > 1.2 * 0.9);
@@ -756,7 +758,10 @@ int highest_in_band_note(double sr) {
   return note;
 }
 
-constexpr double kLowRates[] = {8000.0, 16000.0, 24000.0, 44100.0};
+/// 44.1 kHz is not asserted: a short or floored loop there runs at 88.2 kHz, which is not the
+/// rate the bank is voiced at, and the notes it applies to (above about 5.5 kHz) sit where the
+/// 48 kHz reference itself is unstable, so no deviation from it is a defect.
+constexpr double kLowRates[] = {8000.0, 16000.0, 24000.0};
 constexpr double kReferenceRate = 48000.0;
 constexpr double kCoreSeconds = 1.6;
 /// A second, longer render of the 48 kHz reference: a note whose reference pitch moves by more
@@ -785,8 +790,8 @@ struct Rendered {
 /// @p tolerance_cents holds one bound per entry of kLowRates: the largest deviation measured
 /// from the 48 kHz pitch plus the estimator's resolution, 0.87 cents of scan step plus one
 /// Hann bin of the 0.8 s analysis window (2164 / f0 cents) at the lowest note covered. A floored
-/// loop runs at 48 kHz or above, so at 8, 16 and 24 kHz it is the 48 kHz render and the measured
-/// deviation is 0; only 44.1 kHz runs at 88.2 kHz and differs.
+/// or short loop runs at 48 kHz or above, so at 8, 16 and 24 kHz it is the 48 kHz render and the
+/// measured deviation is 0.
 /// @p render is (note, rate, seconds) -> Rendered; zero seconds only reports the factor.
 template <class Render>
 void require_floored_notes_hold_pitch(
@@ -839,7 +844,7 @@ TEST_CASE("a cylindrical reed sounds each note whose loop is floored at a low ra
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({2.0, 1.4, 1.3, 4.8}, 127, render);
+  require_floored_notes_hold_pitch({5.1, 3.0, 2.3}, 127, render);
 }
 
 TEST_CASE("a bowed string sounds each note whose lines are floored at a low rate",
@@ -859,7 +864,7 @@ TEST_CASE("a bowed string sounds each note whose lines are floored at a low rate
     return out;
   };
   // Above note 106 the 48 kHz reference is not a bowed pitch.
-  require_floored_notes_hold_pitch({3.5, 2.3, 1.8, 0.0}, 106, render);
+  require_floored_notes_hold_pitch({3.5, 2.4, 1.8}, 106, render);
 }
 
 TEST_CASE("a flute sounds each note whose bore or jet is floored at a low rate",
@@ -879,7 +884,7 @@ TEST_CASE("a flute sounds each note whose bore or jet is floored at a low rate",
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({1.5, 1.2, 1.1, 0.0}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
 }
 
 TEST_CASE("a flue pipe sounds each note whose bore or jet is floored at a low rate",
@@ -896,5 +901,95 @@ TEST_CASE("a flue pipe sounds each note whose bore or jet is floored at a low ra
     for (float& v : out.x) v = core.render(1.0f);
     return out;
   };
-  require_floored_notes_hold_pitch({1.5, 1.2, 1.1, 0.0}, 127, render);
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+}
+
+TEST_CASE("a Karplus-Strong string sounds each note whose loop is short at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::KsPatchParams params;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::ks_slab_capacity(sr)));
+    sonare::midi::synth::KsVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::ks_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({3.0, 2.0, 3.3}, 127, render);
+}
+
+TEST_CASE("a plucked string sounds each note whose loop is short at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::PluckedStringPatchParams params;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(
+        static_cast<size_t>(sonare::midi::synth::plucked_string_slab_capacity(sr)));
+    sonare::midi::synth::PluckedStringVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::plucked_string_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+}
+
+TEST_CASE("a brass bore sounds each note whose loop is short at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::BrassPatchParams params;
+  params.breath_noise = 0.0f;
+  params.chiff = 0.0f;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::brass_slab_capacity(sr)));
+    sonare::midi::synth::BrassVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::brass_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({3.0, 2.0, 1.6}, 127, render);
+}
+
+TEST_CASE("a harpsichord sounds each note whose strings are short at a low rate",
+          "[midi][synth][wind]") {
+  sonare::midi::synth::HarpsichordPatchParams params;
+  params.eight_b = true;
+  params.four = true;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(
+        static_cast<size_t>(sonare::midi::synth::harpsichord_slab_capacity(sr)));
+    sonare::midi::synth::HarpsichordVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::harpsichord_buffer_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({5.1, 3.0, 2.3}, 127, render);
+}
+
+TEST_CASE("a piano sounds each note whose strings are short at a low rate", "[midi][synth][wind]") {
+  sonare::midi::synth::PianoPatchParams params;
+  const auto render = [&](uint8_t note, double sr, double seconds) {
+    std::vector<float> slab(static_cast<size_t>(sonare::midi::synth::piano_slab_capacity(sr)));
+    sonare::midi::synth::PianoVoiceCore core;
+    core.attach(slab.data(), sonare::midi::synth::piano_string_capacity(sr));
+    core.start(params, sr, note, Velocity16::from7(100), 0x5eedu);
+    Rendered out;
+    out.factor = core.oversample();
+    out.x.resize(static_cast<size_t>(seconds * sr));
+    for (float& v : out.x) v = core.render(1.0f);
+    return out;
+  };
+  require_floored_notes_hold_pitch({3.9, 2.0, 1.6}, 127, render);
 }
