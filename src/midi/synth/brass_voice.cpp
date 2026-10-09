@@ -70,10 +70,9 @@ SONARE_TUNABLE(kLipTuneSpan, 0.04f);  // f_lip = f0 * (1 + span*(tension - 0.5))
 constexpr float kLipRetuneTolerance = 0.0006f;
 // Pitch correction: an outward-striking lip oscillates just ABOVE its resonance
 // (Fletcher 1979), so the played note lands a touch sharp of the bore/lip lock;
-// the loop delay is lengthened to bring it back onto pitch. Co-calibrated with
-// the DC-blocker phase compensation below so the sounding pitch stays within a
-// few cents across the whole keyboard (probe-measured).
-SONARE_TUNABLE(kPitchCorrect, 1.0063f);
+// the loop delay is lengthened to bring it back onto pitch. With no trim the
+// note reads +2.6 cents flat across notes 44..98 at 48 kHz; this is that 2.6.
+SONARE_TUNABLE(kPitchCorrect, 1.0015f);
 
 // Bell reflection loss from damping: < 1 so the loop is stable (the breath
 // replenishes it). Low damping = a purer, more sustained bore.

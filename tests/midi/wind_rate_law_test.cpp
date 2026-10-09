@@ -1032,46 +1032,47 @@ TEST_CASE("a piano sounds each note whose strings are short at a low rate", "[mi
 
 namespace {
 
-/// The top two octaves of the 48 kHz band (highest_in_band_note(48000) is 127).
-constexpr int kTopOctavesFrom = 104;
-
-/// One wind voice at kReferenceRate: every note up to @p compass_top has to sound its
-/// fundamental, and every note that does has to sit within @p tolerance_cents of equal
-/// temperament.
-struct TopCompassVoice {
+/// One wind voice at kReferenceRate: every note of its compass (@p compass_low to
+/// @p compass_top) has to sound its fundamental, and every note from the compass up to the top
+/// of the band that does has to sit within @p tolerance_cents of equal temperament.
+struct CompassVoice {
   const char* name;
   std::function<Rendered(uint8_t)> render;
+  int compass_low;
   int compass_top;
   double tolerance_cents;
 };
 
 }  // namespace
 
-TEST_CASE(
-    "each wind voice sounds its equal-tempered fundamental across the top two octaves at 48 kHz",
-    "[midi][synth][wind]") {
+TEST_CASE("each wind voice sounds its equal-tempered fundamental across its compass at 48 kHz",
+          "[midi][synth][wind]") {
   // The tolerances are one scan step of the estimator (0.87 cents) over the largest residual
-  // the voicing itself leaves across the span, which is a constant per voice rather than a
-  // trend with the note: the cone's half-compensated highpass lead and the flute's
-  // kPitchCorrect. Before the loop compensation was read at the fundamental and the jet delay
-  // at the period, the cylinder read -23 to -46 cents over notes 104..109 and the flute +49 to
-  // +106 over 104..114, both growing with the note.
+  // left across the compass once every term the loop compensation can name is in it: the
+  // cone's highpass lead enters by a regime-dependent share (within 5.2 cents at the shipped
+  // 0.75), the cylinder keeps the share its regimes allow (+12.1 at note 48, within 4.3 above
+  // 54), the flute's jet lock sits on the period (within 4.3), the brass lip's +2.6 is its
+  // named trim (within 2.6), and the organ carries its deliberate per-pipe detune of up to 4
+  // cents (within 8.7 at the bottom of a 16' rank). Before the compensations were complete
+  // the cone sat +8.6 across its top octave, the flute -5 to -8 and +11 at note 48, the brass
+  // -4.3.
   // The reeds take a bright bell as well as the shipped 0.5, which stops the cylinder speaking
-  // above note 108 and whose darker pole is where a compensation read at the wrong frequency
-  // shows (the brightest bell has no pole to misread); the cone at 1.0 skips note 118. The jet
-  // cannot drive a flute bore under seven samples at any rate (silent at 96 kHz too), so the
-  // flute's compass ends at note 116.
+  // above note 108; at 1.0 both drop notes, at 0.9 they reach 124 and 126. The jet cannot
+  // drive a flute bore under seven samples at any rate (silent at 96 kHz too), so the flute's
+  // compass ends at note 116.
   struct ReedSpecimen {
     const char* name;
     bool conical;
     float brightness;
+    int compass_low;
     int compass_top;
     double tolerance_cents;
   };
-  const ReedSpecimen reeds[] = {{"cylindrical reed, shipped bell", false, 0.5f, 108, 4.4},
-                                {"cylindrical reed, bright bell", false, 1.0f, 127, 3.5},
-                                {"conical reed, bright bell", true, 0.9f, 125, 9.5}};
-  std::vector<TopCompassVoice> voices;
+  const ReedSpecimen reeds[] = {{"cylindrical reed, shipped bell", false, 0.5f, 48, 108, 13.0},
+                                {"cylindrical reed, bright bell", false, 0.9f, 100, 124, 4.4},
+                                {"conical reed, shipped bell", true, 0.5f, 44, 109, 6.1},
+                                {"conical reed, bright bell", true, 0.9f, 100, 126, 6.1}};
+  std::vector<CompassVoice> voices;
   for (const ReedSpecimen& reed : reeds) {
     sonare::midi::synth::ReedPatchParams params;
     params.conical = reed.conical;
@@ -1092,7 +1093,7 @@ TEST_CASE(
            for (float& v : out.x) v = core.render(1.0f);
            return out;
          },
-         reed.compass_top, reed.tolerance_cents});
+         reed.compass_low, reed.compass_top, reed.tolerance_cents});
   }
   {
     sonare::midi::synth::FlutePatchParams params;
@@ -1113,10 +1114,48 @@ TEST_CASE(
            for (float& v : out.x) v = core.render(1.0f);
            return out;
          },
-         116, 8.7});
+         48, 116, 5.2});
   }
-  for (const TopCompassVoice& voice : voices) {
-    for (int note = kTopOctavesFrom; note <= highest_in_band_note(kReferenceRate); ++note) {
+  {
+    sonare::midi::synth::BrassPatchParams params;
+    params.breath_noise = 0.0f;
+    params.chiff = 0.0f;
+    voices.push_back(
+        {"brass",
+         [params](uint8_t note) {
+           std::vector<float> slab(
+               static_cast<size_t>(sonare::midi::synth::brass_slab_capacity(kReferenceRate)));
+           sonare::midi::synth::BrassVoiceCore core;
+           core.attach(slab.data(), sonare::midi::synth::brass_buffer_capacity(kReferenceRate));
+           core.start(params, kReferenceRate, note, Velocity16::from7(100), 0x5eedu);
+           Rendered out;
+           out.factor = core.oversample();
+           out.x.resize(static_cast<size_t>(kCoreSeconds * kReferenceRate));
+           for (float& v : out.x) v = core.render(1.0f);
+           return out;
+         },
+         36, 100, 3.5});
+  }
+  {
+    sonare::midi::synth::PipeOrganPatchParams params;
+    voices.push_back({"pipe organ",
+                      [params](uint8_t note) {
+                        std::vector<float> slab(static_cast<size_t>(
+                            sonare::midi::synth::pipe_organ_slab_capacity(kReferenceRate)));
+                        sonare::midi::synth::PipeOrganVoiceCore core;
+                        core.attach(slab.data(), sonare::midi::synth::pipe_organ_buffer_capacity(
+                                                     kReferenceRate));
+                        core.start(params, kReferenceRate, note, Velocity16::from7(100), 0x5eedu);
+                        Rendered out;
+                        out.factor = core.oversample();
+                        out.x.resize(static_cast<size_t>(kCoreSeconds * kReferenceRate));
+                        for (float& v : out.x) v = core.render(1.0f);
+                        return out;
+                      },
+                      36, 100, 9.6});
+  }
+  for (const CompassVoice& voice : voices) {
+    for (int note = voice.compass_low; note <= highest_in_band_note(kReferenceRate); ++note) {
       const uint8_t n = static_cast<uint8_t>(note);
       const Rendered r = voice.render(n);
       REQUIRE(std::all_of(r.x.begin(), r.x.end(), [](float v) { return std::isfinite(v); }));
@@ -1125,7 +1164,7 @@ TEST_CASE(
       // Above its compass a voice may still emit something, but not the note.
       const bool sounding = h1 > kSoundingH1;
       CAPTURE(voice.name, note, r.factor, h1, cents);
-      if (note <= voice.compass_top) REQUIRE(sounding);
+      if (note <= voice.compass_top) CHECK(sounding);
       if (sounding) CHECK(std::abs(cents) <= voice.tolerance_cents);
     }
   }

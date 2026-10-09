@@ -46,13 +46,6 @@ SONARE_TUNABLE(kReflectMax, 0.62f);
 // ocarina / blown bottle does not overblow.
 SONARE_TUNABLE(kLossSpan, 0.18f);
 
-// Pitch correction: the jet+bore lock lands a touch sharp of the naive full-
-// period loop, so the loop delay is lengthened to bring the sounding note onto
-// pitch. The earlier 1.0104 was set against a probe rather than a reference and
-// left all eight flute captures flat by 7 to 12 cents; this centres them inside
-// +-3, which is the spread between the voices and as close as one number gets.
-SONARE_TUNABLE(kPitchCorrect, 1.0045f);
-
 // Live-control smoothing time (ms).
 SONARE_TUNABLE(kControlSmoothMs, 8.0f);
 
@@ -144,8 +137,9 @@ LoopBudget FluteVoiceCore::configure(const FlutePatchParams& params, double sr, 
   // 3f0 …) the way an open flue pipe does. The jet buzzes the fundamental and
   // drives every harmonic; the asymmetric jet drive fills in the even harmonics
   // a stopped (odd-only) pipe would lack.
-  const float period = kFluteBoreLengthPeriods * srf / std::max(1.0f, f0);
-  bore_.period = period * kPitchCorrect;
+  // The jet locks the loop on its own period once the loop's phase is compensated: at 48 kHz
+  // the fundamental reads within a cent of equal temperament over notes 56..80 with no trim.
+  bore_.period = kFluteBoreLengthPeriods * srf / std::max(1.0f, f0);
   jet_ratio_ = std::clamp(params.jet_ratio, kJetRatioMin, kJetRatioMax);
 
   const float vel01 = velocity.f7() / 127.0f;
@@ -399,9 +393,15 @@ void FluteVoiceCore::refresh_excitation_targets() noexcept {
 
 void FluteVoiceCore::retune_loop_comp() noexcept {
   // One feedback register (bore_.out is consumed one sample after it is
-  // produced) plus the reflection lowpass's phase delay at f0.
+  // produced) plus the reflection lowpass's phase delay at f0, less the jet
+  // path's DC-blocker phase LEAD there, as the flue pipe takes it: left in, the
+  // lead read +20 cents at note 36 and +11 at 48.
   const float a = 1.0f - lp_alpha_;
-  bore_.comp = 1.0f + onepole_group_delay_samples(a, kTwoPi * f0_ / srf_);
+  const float omega = kTwoPi * f0_ / srf_;
+  const float sw = std::sin(omega);
+  const float cw = std::cos(omega);
+  const float phase_dc = std::atan2(sw, 1.0f - cw) - std::atan2(dc_r_ * sw, 1.0f - dc_r_ * cw);
+  bore_.comp = 1.0f + onepole_group_delay_samples(a, omega) - phase_dc / std::max(omega, 1.0e-6f);
   comp_alpha_ = lp_alpha_;
 }
 

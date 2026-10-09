@@ -52,11 +52,6 @@ SONARE_TUNABLE(kReflectMax, 0.62f);
 SONARE_TUNABLE(kReflectCornerBase, 1.6f);
 SONARE_TUNABLE(kReflectCornerSpan, 3.4f);
 
-// Pitch correction: the jet+bore lock lands a touch off the naive loop, so the
-// loop delay is trimmed to bring the sounding note onto pitch (probe-calibrated
-// across the compass; the DC-blocker phase is compensated separately below).
-SONARE_TUNABLE(kPitchCorrectOpen, 1.0012f);
-
 // In-loop DC-blocker corner (~10 Hz): the jet's rectified DC does not radiate and
 // would charge the bore.
 SONARE_TUNABLE(kDcCornerHz, 10.0f);
@@ -333,7 +328,9 @@ LoopBudget PipeOrganVoiceCore::configure(const PipeOrganPatchParams& params, dou
     const float detune_span =
         kPipeDetuneCents / (1.0f + std::max(0.0f, std::log2(f0 / kDetuneTaperRefHz)));
     const float detune = std::exp2(detune_span * pipe_tuning_error(note, r) * (1.0f / 1200.0f));
-    pipe.bore.period = period * kPitchCorrectOpen / detune;
+    // No trim: with the DC-blocker lead compensated below, the jet locks the loop on its own
+    // period (0.0 cents over notes 48..100 at 48 kHz with the detune off).
+    pipe.bore.period = period / detune;
     pipe.sign = 1.0f;
     pipe.jet_ratio = kJetRatioOpen;
 
