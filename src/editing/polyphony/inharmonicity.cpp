@@ -9,6 +9,7 @@
 #include "core/spectrum.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "editing/polyphony/private_helpers.h"
 #include "editing/polyphony/shared_bins.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -67,15 +68,6 @@ void check_config(const InharmonicityConfig& config) {
   SONARE_CHECK_MSG(std::isfinite(config.max_inharmonicity) && config.max_inharmonicity > 0.0f,
                    ErrorCode::InvalidParameter,
                    "InharmonicityConfig: maxInharmonicity must be finite and positive");
-}
-
-/// The ridge's f0 at @p frame, falling back to its median off the span.
-double ridge_f0_at(const F0Ridge& ridge, int frame) {
-  const int index = frame - ridge.frame_start;
-  if (index >= 0 && index < static_cast<int>(ridge.f0_hz.size())) {
-    return ridge.f0_hz[static_cast<size_t>(index)];
-  }
-  return sonare::median(ridge.f0_hz.data(), ridge.f0_hz.size());
 }
 
 StretchFit fit_stretch(const std::vector<double>& x, const std::vector<double>& y) {
@@ -168,7 +160,7 @@ void rival_partials(const Spectrogram& spec, const MultiF0Track& track, const No
     const F0Ridge& ridge = track.ridges[other];
     // A ridge sounding nowhere in the span puts nothing in the window.
     if (ridge.frame_end() <= first_frame || ridge.frame_start >= last_frame) continue;
-    const double built = ridge_f0_at(ridge, first_frame);
+    const double built = detail::ridge_f0_at(ridge, first_frame);
     if (!(built > 0.0)) continue;
     // A refined rival is placed to a fraction of a cent, and only an unrefined one
     // is widened by the track's declared error. Widening both puts every partial

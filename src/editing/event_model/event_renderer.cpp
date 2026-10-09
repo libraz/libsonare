@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <limits>
 #include <numeric>
 #include <utility>
 #include <vector>
@@ -15,21 +14,12 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::editing::event_model {
 namespace {
 
 using sonare::constants::kHalfPi;
-
-int64_t saturating_add(int64_t a, int64_t b) noexcept {
-  if (b > 0 && a > std::numeric_limits<int64_t>::max() - b) {
-    return std::numeric_limits<int64_t>::max();
-  }
-  if (b < 0 && a < std::numeric_limits<int64_t>::min() - b) {
-    return std::numeric_limits<int64_t>::min();
-  }
-  return a + b;
-}
 
 StftConfig stft_for(const PercussiveSeparationConfig& separation) {
   StftConfig stft;
@@ -124,9 +114,10 @@ Audio render_percussive_events(const Audio& audio, const std::vector<PercussiveE
 
     // A shift that runs off either end is truncated there rather than wrapped.
     const float gain = db_to_linear(event.edit.gain_db);
-    const int64_t dest = saturating_add(event.onset_sample, event.edit.time_offset_samples);
+    const int64_t dest =
+        numeric::saturating_add<int64_t>(event.onset_sample, event.edit.time_offset_samples);
     const int64_t begin = std::max<int64_t>(dest, 0);
-    const int64_t end = std::min(saturating_add(dest, length), n_samples);
+    const int64_t end = std::min(numeric::saturating_add<int64_t>(dest, length), n_samples);
     for (int64_t j = begin; j < end; ++j) {
       output[static_cast<size_t>(j)] += gain * segment[static_cast<size_t>(j - dest)];
     }

@@ -17,6 +17,7 @@
 #include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::editing::note_model {
 namespace {
@@ -24,16 +25,6 @@ namespace {
 using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kHalfPi;
 using sonare::constants::kSemitonesPerOctave;
-
-int64_t saturating_add(int64_t a, int64_t b) noexcept {
-  if (b > 0 && a > std::numeric_limits<int64_t>::max() - b) {
-    return std::numeric_limits<int64_t>::max();
-  }
-  if (b < 0 && a < std::numeric_limits<int64_t>::min() - b) {
-    return std::numeric_limits<int64_t>::min();
-  }
-  return a + b;
-}
 
 /// Same rule as NoteEditor::fade_samples: half the placed region at most, so
 /// the head and tail zones never consume the same samples.
@@ -330,7 +321,8 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
 
     const int64_t fade =
         fade_samples(config.fade_ms, sample_rate, static_cast<int64_t>(segment.size()));
-    overlay(output, segment, saturating_add(onset, note.edit.time_offset_samples), fade);
+    overlay(output, segment, numeric::saturating_add<int64_t>(onset, note.edit.time_offset_samples),
+            fade);
   }
 
   SONARE_CHECK(

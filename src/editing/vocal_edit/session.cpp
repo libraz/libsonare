@@ -15,6 +15,7 @@
 
 #include "editing/vocal_edit/pitch_plan.h"
 #include "editing/vocal_edit/state_codec.h"
+#include "util/db.h"
 #include "util/insertion_sort.h"
 #include "util/sha256.h"
 
@@ -159,7 +160,7 @@ void validate_pitch_edit(const VocalNoteEdit& edit, const SampleRange source_ran
   if (destination_end > output_length)
     invalid("destination", "destination range exceeds output length");
   if (!finite(edit.gain_db)) invalid("gain_db", "must be finite");
-  const double gain = std::pow(10.0, edit.gain_db / 20.0);
+  const double gain = db_to_linear(edit.gain_db);
   if (!std::isfinite(gain)) invalid("gain_db", "linear gain is not finite");
   if (edit.formant.mode == FormantMode::kPreserve) {
     if (!finite(edit.formant.shift_semitones) || edit.formant.shift_semitones != 0.0) {

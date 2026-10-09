@@ -11,6 +11,7 @@
 #include "core/spectrum.h"
 #include "editing/polyphony/multi_f0.h"
 #include "editing/polyphony/note_mask.h"
+#include "editing/polyphony/private_helpers.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/math_utils.h"
@@ -70,35 +71,6 @@ double refine_ceiling_hz(const SharedBinConfig& config, double sample_rate, doub
   return (sample_rate / hop) / 2.0 / spread;
 }
 
-/// The ridge's f0 at @p frame, falling back to its median where the ridge and
-/// the mask disagree on the span.
-double ridge_f0_at(const F0Ridge& ridge, int frame) {
-  const int index = frame - ridge.frame_start;
-  if (index >= 0 && index < static_cast<int>(ridge.f0_hz.size())) {
-    return ridge.f0_hz[static_cast<size_t>(index)];
-  }
-  return sonare::median(ridge.f0_hz.data(), ridge.f0_hz.size());
-}
-
-/// Every bin and frame a mask names lands inside the spectrum, and its own
-/// sparse indexing is consistent, before anything is allocated against it.
-void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
-  SONARE_CHECK(mask.n_frames >= 0 && mask.frame_start >= 0 && mask.frame_end() <= n_frames,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.size() == static_cast<size_t>(mask.n_frames) + 1,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.weights.size() == mask.bins.size(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.front() == 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(static_cast<size_t>(mask.frame_offset.back()) == mask.bins.size(),
-               ErrorCode::InvalidParameter);
-  for (size_t i = 1; i < mask.frame_offset.size(); ++i) {
-    SONARE_CHECK(mask.frame_offset[i] >= mask.frame_offset[i - 1], ErrorCode::InvalidParameter);
-  }
-  for (const int32_t bin : mask.bins) {
-    SONARE_CHECK(bin >= 0 && bin < n_bins, ErrorCode::InvalidParameter);
-  }
-}
-
 void check_config(const SharedBinConfig& config) {
   SONARE_CHECK(config.window_frames >= kMinWindowFrames && config.window_frames <= kMaxWindowFrames,
                ErrorCode::InvalidParameter);
@@ -154,7 +126,7 @@ void check_inputs(const Spectrogram& spec, const NoteMaskSet& masks, const Multi
     }
   }
   for (const NoteMask& mask : masks.notes) {
-    check_mask_shape(mask, masks.n_bins, masks.n_frames);
+    detail::check_mask_shape(mask, masks.n_bins, masks.n_frames);
   }
   check_config(config);
 }
@@ -419,7 +391,7 @@ bool partial_stands_alone(const Spectrogram& spec, const MultiF0Track& track,
     const F0Ridge& ridge = track.ridges[other];
     // A ridge sounding nowhere in the window puts nothing in the claim.
     if (ridge.frame_end() <= frame_start || ridge.frame_start >= frame_end) continue;
-    const double f0 = ridge_f0_at(ridge, frame_start);
+    const double f0 = detail::ridge_f0_at(ridge, frame_start);
     if (!(f0 > 0.0)) continue;
     // The rival's own geometry, not this note's: the set places each note's claims
     // at its own stretch, so a rival's partials stand where its stretch put them.
@@ -475,7 +447,8 @@ std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Trac
       // order-1 rate it yields usable as an f0 vote.
       if (span.n_notes != 1 || span.n_frames < window) continue;
       const int note = claims[span.group_lo].note;
-      const double f0 = ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
+      const double f0 =
+          detail::ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
       partials = partial_claims(spec, static_cast<float>(f0),
                                 note_geometry(masks, static_cast<size_t>(note)));
       const PartialClaim* partial = claim_over_bin(partials, bin);
@@ -621,7 +594,7 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
         // Which partial stands here comes from replaying the geometry the mask was
         // built with; guessing it back from the bin's frequency misses the stretch.
         const double f0_built =
-            ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
+            detail::ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
         partials = partial_claims(spec, static_cast<float>(f0_built),
                                   note_geometry(masks, static_cast<size_t>(note)));
         const PartialClaim* partial = claim_over_bin(partials, bin);

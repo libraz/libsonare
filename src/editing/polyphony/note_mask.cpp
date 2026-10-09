@@ -9,6 +9,7 @@
 
 #include "core/spectrum.h"
 #include "editing/polyphony/multi_f0.h"
+#include "editing/polyphony/private_helpers.h"
 #include "util/exception.h"
 
 namespace sonare::editing::polyphony {
@@ -79,20 +80,7 @@ void check_geometry(const Spectrogram& spec, const NoteMaskConfig& config) {
 /// Every bin and frame a mask names lands inside a @p n_bins x @p n_frames
 /// spectrum, and its own sparse indexing is consistent.
 void check_mask_shape(const NoteMask& mask, int n_bins, int n_frames) {
-  SONARE_CHECK(mask.n_frames >= 0 && mask.frame_start >= 0 && mask.frame_end() <= n_frames,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.size() == static_cast<size_t>(mask.n_frames) + 1,
-               ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.weights.size() == mask.bins.size(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(mask.frame_offset.front() == 0, ErrorCode::InvalidParameter);
-  SONARE_CHECK(static_cast<size_t>(mask.frame_offset.back()) == mask.bins.size(),
-               ErrorCode::InvalidParameter);
-  for (size_t i = 1; i < mask.frame_offset.size(); ++i) {
-    SONARE_CHECK(mask.frame_offset[i] >= mask.frame_offset[i - 1], ErrorCode::InvalidParameter);
-  }
-  for (const int32_t bin : mask.bins) {
-    SONARE_CHECK(bin >= 0 && bin < n_bins, ErrorCode::InvalidParameter);
-  }
+  detail::check_mask_shape(mask, n_bins, n_frames);
   // Zero or non-finite is not a shape error and would leave the total and the
   // residual wrong with no call having failed, which is worse than a rejection.
   // An estimated weight carries a phase and is not bounded above by one.

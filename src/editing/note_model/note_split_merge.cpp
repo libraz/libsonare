@@ -148,16 +148,6 @@ void split_envelope(const std::vector<float>& envelope, double position, int64_t
   tail = resample_envelope_piece(envelope, source_length, tail_begin_sample, tail_end_sample);
 }
 
-int64_t saturating_add(int64_t lhs, int64_t rhs) noexcept {
-  if (rhs > 0 && lhs > std::numeric_limits<int64_t>::max() - rhs) {
-    return std::numeric_limits<int64_t>::max();
-  }
-  if (rhs < 0 && lhs < std::numeric_limits<int64_t>::min() - rhs) {
-    return std::numeric_limits<int64_t>::min();
-  }
-  return lhs + rhs;
-}
-
 int64_t stretch_growth(int64_t source_length, float ratio) noexcept {
   if (source_length <= 0 || !std::isfinite(ratio) || ratio <= 0.0f || ratio == 1.0f) {
     return 0;
@@ -228,9 +218,9 @@ std::vector<NoteObject> split_note(const Audio& audio, const pitch_editor::F0Tra
   const bool tail_present = tail.length_samples() > 0;
   SONARE_CHECK(head_present || tail_present, ErrorCode::InvalidParameter);
   if (head_present && tail_present) {
-    tail.edit.time_offset_samples =
-        saturating_add(tail.edit.time_offset_samples,
-                       stretch_growth(head.length_samples(), source.edit.time_stretch_ratio));
+    tail.edit.time_offset_samples = numeric::saturating_add<int64_t>(
+        tail.edit.time_offset_samples,
+        stretch_growth(head.length_samples(), source.edit.time_stretch_ratio));
     const double position = static_cast<double>(frame - source.frame_start) /
                             static_cast<double>(source.frame_end - source.frame_start);
     const int64_t source_length = source.length_samples();

@@ -17,6 +17,7 @@
 #include "effects/formant_warp.h"
 #include "effects/time_stretch.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 #include "util/numeric_validation.h"
@@ -131,7 +132,7 @@ float envelope_at(const std::vector<float>& envelope, std::size_t index, std::si
 }
 
 void apply_gain_and_envelope(std::vector<float>& samples, const VocalNoteEdit& edit) {
-  const double gain = std::pow(10.0, edit.gain_db / 20.0);
+  const double gain = db_to_linear(edit.gain_db);
   if (!std::isfinite(gain)) invalid("gain_db", "linear gain is not finite");
   const double max_float = static_cast<double>(std::numeric_limits<float>::max());
   for (std::size_t i = 0; i < samples.size(); ++i) {
