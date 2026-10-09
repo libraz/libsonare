@@ -66,6 +66,7 @@ if str(HERE) not in sys.path:
 import libsonare
 import metrics_chain
 import metrics_repair
+from metric_common import rms_matched as _rms_matched
 from run import DOWNMIX, _as_stereo, load_item, mono_feeds, provenance
 
 SCHEMA = 1
@@ -173,14 +174,6 @@ def feeds(audio: np.ndarray) -> dict[str, np.ndarray]:
 
 def _channels(feed: np.ndarray) -> int:
     return 1 if feed.ndim == 1 else int(feed.shape[1])
-
-
-def _rms_matched(reference: np.ndarray, other: np.ndarray) -> np.ndarray:
-    """Scale `other` by one global factor so its RMS equals the reference's."""
-    rms = float(np.sqrt(np.mean(other**2)))
-    if rms <= 0.0:
-        return other
-    return other * (float(np.sqrt(np.mean(reference**2))) / rms)
 
 
 # ------------------------------------------------------------------ processors

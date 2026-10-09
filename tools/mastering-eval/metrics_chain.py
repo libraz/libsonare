@@ -75,6 +75,7 @@ from __future__ import annotations
 import libsonare
 import numpy as np
 import numpy.typing as npt
+from metric_common import rms_matched as _rms_matched
 
 BAND_COUNT = 32
 """Number of logarithmic band centres. Mirrors ``SONARE_MASTERING_REPORT_BAND_COUNT`` so a harness
@@ -115,16 +116,6 @@ def _as_feed(x: npt.ArrayLike, name: str) -> npt.NDArray[np.float64]:
 
 def _channel(feed: npt.NDArray[np.float64], index: int) -> npt.NDArray[np.float32]:
     return np.ascontiguousarray(feed[:, index], dtype=np.float32)
-
-
-def _rms_matched(
-    reference: npt.NDArray[np.float64], other: npt.NDArray[np.float64]
-) -> npt.NDArray[np.float64]:
-    """Scale `other` by one global factor so its RMS equals the reference's."""
-    rms = float(np.sqrt(np.mean(other**2)))
-    if rms <= 0.0:
-        return other
-    return other * (float(np.sqrt(np.mean(reference**2))) / rms)
 
 
 def band_center_frequencies(sample_rate: float) -> npt.NDArray[np.float64]:

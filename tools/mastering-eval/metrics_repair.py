@@ -60,6 +60,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
+from metric_common import rms_matched as _rms_matched
 
 FRAME_LENGTH = 1024
 """Default frame length in samples. 1024 at 48 kHz is 21 ms, inside the 15-30 ms convention
@@ -158,16 +159,6 @@ def _log_power_spectra(
     spectrum = np.fft.rfft(frames * _hann_periodic(frame_length)[None, :], axis=1)[:, 1:]
     power = spectrum.real**2 + spectrum.imag**2
     return 10.0 * np.log10(power + SPECTRUM_EPSILON)
-
-
-def _rms_matched(
-    reference: npt.NDArray[np.float64], other: npt.NDArray[np.float64]
-) -> npt.NDArray[np.float64]:
-    """Scale `other` by one global factor so its RMS equals the reference's."""
-    rms = float(np.sqrt(np.mean(other**2)))
-    if rms <= 0.0:
-        return other
-    return other * (float(np.sqrt(np.mean(reference**2))) / rms)
 
 
 def _kurtosis(values: npt.NDArray[np.float64]) -> float:
