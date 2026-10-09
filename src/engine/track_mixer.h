@@ -27,6 +27,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 #include "rt/seqlock_cell.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 
@@ -664,9 +665,9 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
     uint32_t track_id = 0;
     // Linear gain, even though the public parameter is dB. Converting once at
     // control rate matches ChannelStrip's gain ramp and avoids pow() per sample.
-    rt::ParamSmoother fader_gain{1.0f, 5.0f, 48000.0};
-    rt::ParamSmoother pan{0.0f, 5.0f, 48000.0};
-    rt::ParamSmoother gate{1.0f, 10.0f, 48000.0};
+    rt::ParamSmoother fader_gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother pan{0.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
+    rt::ParamSmoother gate{1.0f, 10.0f, sonare::constants::kDefaultDawSampleRate};
     bool solo = false;
     bool mute = false;
     TrackMonitorMode monitor_mode = TrackMonitorMode::kOff;
@@ -719,14 +720,14 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
 
   struct BusState {
     uint32_t bus_id = 0;
-    rt::ParamSmoother gain{1.0f, 5.0f, 48000.0};
+    rt::ParamSmoother gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
     // Bus output trim / width / polarity, mirroring a strip. Trim and polarity
     // run before the insert chain, width after it. At their defaults (0 dB /
     // width 1 / no invert) the per-block processing is skipped entirely, so a
     // bus that never engages them stays bit-identical. The trim smoother holds a
     // linear gain (not dB), smoothing in the linear domain exactly like the
     // strip's GainProcessor, so a bus and a strip ramp identically.
-    rt::ParamSmoother input_trim_gain{1.0f, 5.0f, 48000.0};
+    rt::ParamSmoother input_trim_gain{1.0f, 5.0f, sonare::constants::kDefaultDawSampleRate};
     mixing::StereoWidthProcessor width{1.0f, 5.0f};
     std::atomic<float> polarity_left{1.0f};
     std::atomic<float> polarity_right{1.0f};
@@ -1043,7 +1044,7 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   void apply_lane_to_mix_surround(size_t lane_index, float* const* dest, int lane_channels,
                                   int dest_channels, int num_samples) noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   std::vector<float> scratch_;
   std::vector<float> bus_scratch_;

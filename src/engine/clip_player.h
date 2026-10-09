@@ -19,6 +19,7 @@
 #include "rt/processor_base.h"
 #include "rt/rt_publisher.h"
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 
@@ -388,7 +389,7 @@ class ClipPlayer final : public rt::ProcessorBase {
   // counter — the requirement overflow_counter.h states for exactly this pair.
   rt::OverflowCounter stretch_overflow_count_{};
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   int64_t timeline_sample_ = 0;
   ClipPageRequestSink* page_request_sink_ = nullptr;

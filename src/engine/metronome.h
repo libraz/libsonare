@@ -8,6 +8,7 @@
 #include <cstdint>
 
 #include "transport/tempo_map.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 
@@ -67,7 +68,7 @@ class Metronome {
   int64_t count_in_end_sample(int64_t start_sample, int bars) const noexcept;
 
  private:
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   const transport::TempoMap* tempo_map_ = nullptr;
   MetronomeConfig config_{};
 };

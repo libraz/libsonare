@@ -9,11 +9,13 @@
 
 namespace sonare::engine {
 
+using constants::kDefaultDawSampleRate;
+
 using constants::kFloorDb;
 
 void ScopeTelemetryTap::prepare(double sample_rate, int max_block_size, size_t telemetry_capacity,
                                 int n_fft, uint32_t band_count) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   band_count_ =
       static_cast<uint32_t>(std::clamp<size_t>(band_count, 1, ScopeTelemetryRecord::kMaxBands));
   const int min_fft = std::max({n_fft, max_block_size, 64});

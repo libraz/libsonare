@@ -20,6 +20,8 @@
 
 namespace sonare::engine {
 
+using constants::kDefaultDawSampleRate;
+
 using sonare::constants::kFloorDb;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec) {
@@ -1132,7 +1134,7 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
 }
 
 void TrackMixerRuntime::prepare(double sample_rate, int max_block_size) {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   max_block_size_ = std::max(max_block_size, 1);
   scratch_.assign(kMaxTrackLanes * kMaxLaneChannels * static_cast<size_t>(max_block_size_), 0.0f);
   bus_scratch_.assign(kMaxBusLanes * kMaxBusChannels * static_cast<size_t>(max_block_size_), 0.0f);

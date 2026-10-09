@@ -8,6 +8,8 @@
 
 namespace sonare::engine {
 
+using constants::kDefaultDawSampleRate;
+
 using sonare::constants::kPiD;
 
 // Floating-point fuzz for the inclusive PPQ beat-boundary comparison.
@@ -15,7 +17,7 @@ constexpr double kPpqEpsilon = 1.0e-9;
 
 int maximum_click_samples(double sample_rate) noexcept {
   const double finite_rate =
-      std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate : 48000.0;
+      std::isfinite(sample_rate) && sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   return std::max(1, std::min(kMaxMetronomeClickSamples,
                               static_cast<int>(std::lround(
                                   std::min(finite_rate * kMaxMetronomeClickSeconds,
@@ -48,7 +50,7 @@ bool MetronomeEventList::add(MetronomeEvent event) noexcept {
 }
 
 void Metronome::prepare(double sample_rate, const transport::TempoMap* tempo_map) noexcept {
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   tempo_map_ = tempo_map;
   config_ = normalized_config(config_, sample_rate_);
 }

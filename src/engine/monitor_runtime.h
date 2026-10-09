@@ -10,6 +10,7 @@
 
 #include "mixing/channel_strip.h"
 #include "rt/param_smoother.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 
@@ -103,7 +104,7 @@ class MonitorRuntime {
   // process_strip() that sees the new count is guaranteed to see the fully
   // initialized slot. Consistent with the StripState flag atomics above.
   std::atomic<size_t> size_{0};
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int max_block_size_ = 0;
   float smoothing_ms_ = 5.0f;
 };

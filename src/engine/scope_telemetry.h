@@ -15,6 +15,7 @@
 #include "core/fft.h"
 #include "mixing/goniometer_buffer.h"
 #include "rt/spsc_queue.h"
+#include "util/constants.h"
 
 namespace sonare::engine {
 
@@ -87,7 +88,7 @@ class ScopeTelemetryTap {
   void publish(ScopeTelemetryRecord record) noexcept;
   void stage(ScopeTelemetryRecord record) noexcept;
 
-  double sample_rate_ = 48000.0;
+  double sample_rate_ = sonare::constants::kDefaultDawSampleRate;
   int n_fft_ = 2048;
   uint32_t band_count_ = 48;
   bool capture_due_ = false;

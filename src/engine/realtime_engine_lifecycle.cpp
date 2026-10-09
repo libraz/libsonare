@@ -12,6 +12,8 @@
 
 namespace sonare::engine {
 
+using constants::kDefaultDawSampleRate;
+
 void RealtimeEngine::prepare(double sample_rate, int max_block_size, size_t command_capacity,
                              size_t telemetry_capacity, int max_channels) {
   // Installed timeline clips are frame-addressed; refuse a new rate before any teardown.
@@ -108,7 +110,7 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
   telemetry_capacity = std::min(telemetry_capacity, kMaxTelemetryCapacity);
   max_block_size_ = std::max(max_block_size, 1);
   prepared_channels_ = std::clamp(max_channels, 1, static_cast<int>(kMaxAudioChannels));
-  sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
+  sample_rate_ = sample_rate > 0.0 ? sample_rate : kDefaultDawSampleRate;
   tempo_map_.prepare(sample_rate);
   publish_tempo_map_snapshot();
   tempo_map_snapshot_.acquire();
