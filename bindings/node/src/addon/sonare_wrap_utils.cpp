@@ -429,6 +429,16 @@ std::vector<sonare::mastering::api::Param> ParamsFromObject(
   return params;
 }
 
+std::vector<SonareMasteringParam> MasteringCParams(
+    const std::vector<sonare::mastering::api::Param>& params) {
+  std::vector<SonareMasteringParam> out;
+  out.reserve(params.size());
+  for (const auto& param : params) {
+    out.push_back({param.key.c_str(), param.value});
+  }
+  return out;
+}
+
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis) {
   Napi::Object result = Napi::Object::New(env);
   result.Set("bpm", Napi::Number::New(env, static_cast<double>(analysis.bpm)));

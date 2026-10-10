@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "core/audio.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "mastering/assistant/config_from_params.h"
@@ -22,16 +23,6 @@
 using namespace sonare_node;
 
 namespace {
-
-std::vector<SonareMasteringParam> CParamsFromNode(
-    const std::vector<sonare::mastering::api::Param>& params) {
-  std::vector<SonareMasteringParam> out;
-  out.reserve(params.size());
-  for (const auto& param : params) {
-    out.push_back({param.key.c_str(), param.value});
-  }
-  return out;
-}
 
 struct StereoResultGuard {
   SonareMasteringStereoResult* result;
@@ -182,54 +173,17 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
   return config;
 }
 
-// Writes one params entry into `result` under its dotted path. A nested object
-// or array (the v2 structured multiband stage) flattens into the array spelling
-// the input side accepts: object members as `.<key>`, array elements as
-// `.<index>`. Throws by path if a leaf is neither a number nor a boolean, so a
-// silent drop can never let a caller apply a partial suggestion as the whole.
-void SetChainParamEntry(Napi::Object& result, const std::string& path,
-                        const sonare::util::json::Value& value) {
-  Napi::Env env = result.Env();
-  if (value.is_number()) {
-    result.Set(path, Napi::Number::New(env, value.as_number()));
-  } else if (value.is_bool()) {
-    result.Set(path, Napi::Boolean::New(env, value.as_bool()));
-  } else if (value.is_object()) {
-    for (const auto& [key, member] : value.as_object()) {
-      SetChainParamEntry(result, path + "." + key, member);
-    }
-  } else if (value.is_array()) {
-    const auto& elements = value.as_array();
-    if (elements.empty()) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidParameter,
-          "chain config param '" + path + "' is an empty list, which has no flat spelling");
-    }
-    for (size_t index = 0; index < elements.size(); ++index) {
-      SetChainParamEntry(result, path + "." + std::to_string(index), elements[index]);
-    }
-  } else {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "chain config param '" + path + "' is not a number or boolean");
-  }
-}
-
 // Converts the "params" object of a chain_config_to_json() string into a flat
-// JS object. A v2 structured multiband stage flattens into dotted array-spelling
-// keys; a leaf that is not a number or boolean is refused by path. An absent or
-// empty params block is refused: an empty overrides object applies the preset
-// unchanged, which a caller would take for the whole suggestion.
+// JS object keyed by the dotted spelling the input side accepts; the core
+// flattener owns the walk and refuses what has no flat spelling.
 Napi::Object ChainConfigParamsToObject(Napi::Env env, const std::string& chain_config_json) {
-  namespace json = sonare::util::json;
-  const json::Value root = json::parse(chain_config_json);
   Napi::Object result = Napi::Object::New(env);
-  const json::Value* params = root.find("params");
-  if (!params || !params->is_object() || params->as_object().empty()) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "chain config carries no params block");
-  }
-  for (const auto& [key, value] : params->as_object()) {
-    SetChainParamEntry(result, key, value);
+  for (const auto& param : sonare::mastering::api::chain_config_flat_params(chain_config_json)) {
+    if (param.is_bool) {
+      result.Set(param.key, Napi::Boolean::New(env, param.value != 0.0));
+    } else {
+      result.Set(param.key, Napi::Number::New(env, param.value));
+    }
   }
   return result;
 }
@@ -371,7 +325,7 @@ Napi::Value SonareWrap::MasteringPairProcessStereo(const Napi::CallbackInfo& inf
     params = ParamsFromObject(info[7].As<Napi::Object>());
     if (env.IsExceptionPending()) return env.Undefined();
   }
-  const auto c_params = CParamsFromNode(params);
+  const auto c_params = MasteringCParams(params);
   SonareMasteringStereoResult result{};
   StereoResultGuard result_guard{&result};
   const SonareError err = sonare_mastering_apply_pair_processor_stereo_ex(

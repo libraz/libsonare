@@ -100,16 +100,6 @@ int CancellationRequested(void* user_data) {
   return result.IsBoolean() && result.As<Napi::Boolean>().Value() ? 1 : 0;
 }
 
-std::vector<SonareMasteringParam> CParamsFromNode(
-    const std::vector<sonare::mastering::api::Param>& params) {
-  std::vector<SonareMasteringParam> out;
-  out.reserve(params.size());
-  for (const auto& param : params) {
-    out.push_back({param.key.c_str(), param.value});
-  }
-  return out;
-}
-
 template <typename Result>
 void SetCChainMetrics(Napi::Env env, Napi::Object out, const Result& result) {
   out.Set("outputTruePeakDbtp", Napi::Number::New(env, result.output_true_peak_dbtp));
@@ -798,7 +788,7 @@ Napi::Value SonareWrap::MasteringChainWithProgress(const Napi::CallbackInfo& inf
   auto typed = info[0].As<Napi::Float32Array>();
   auto params = ParamsFromObject(info[2].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
-  const auto c_params = CParamsFromNode(params);
+  const auto c_params = MasteringCParams(params);
   Napi::Function js_cb = info[3].As<Napi::Function>();
   ProgressContext progress{env, js_cb,
                            info.Length() > 4
@@ -848,7 +838,7 @@ Napi::Value SonareWrap::MasteringChainStereoWithProgress(const Napi::CallbackInf
   // process_stereo_impl copies both channels before any progress callback runs.
   auto params = ParamsFromObject(info[3].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
-  const auto c_params = CParamsFromNode(params);
+  const auto c_params = MasteringCParams(params);
   Napi::Function js_cb = info[4].As<Napi::Function>();
   ProgressContext progress{env, js_cb,
                            info.Length() > 5
@@ -893,7 +883,7 @@ Napi::Value SonareWrap::MasterAudioWithProgress(const Napi::CallbackInfo& info) 
   auto typed = info[1].As<Napi::Float32Array>();
   auto overrides = ParamsFromObject(info[3].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
-  const auto c_overrides = CParamsFromNode(overrides);
+  const auto c_overrides = MasteringCParams(overrides);
   Napi::Function js_cb = info[4].As<Napi::Function>();
   ProgressContext progress{env, js_cb,
                            info.Length() > 5
@@ -945,7 +935,7 @@ Napi::Value SonareWrap::MasterAudioStereoWithProgress(const Napi::CallbackInfo& 
   // Pointers lent across the callbacks for the same reason as the chain variants.
   auto overrides = ParamsFromObject(info[4].As<Napi::Object>());
   if (env.IsExceptionPending()) return env.Undefined();
-  const auto c_overrides = CParamsFromNode(overrides);
+  const auto c_overrides = MasteringCParams(overrides);
   Napi::Function js_cb = info[5].As<Napi::Function>();
   ProgressContext progress{env, js_cb,
                            info.Length() > 6

@@ -285,6 +285,11 @@ Napi::Value FullAnalysisJsonToObject(Napi::Env env, const float* data, size_t le
 std::vector<sonare::mastering::api::Param> ParamsFromObject(
     const Napi::Object& object, const std::vector<std::string>& skip_keys = {});
 
+/// @brief Build the C-ABI parameter array for `params`.
+/// @note The returned keys borrow `params`' strings; `params` must outlive the result.
+std::vector<SonareMasteringParam> MasteringCParams(
+    const std::vector<sonare::mastering::api::Param>& params);
+
 }  // namespace sonare_node
 
 #define SONARE_NODE_TRY try {
