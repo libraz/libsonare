@@ -410,6 +410,26 @@ describe('Project.transcribeToClip', () => {
     return (payload.midi_content[String(clipId)] ?? []).map(decode);
   }
 
+  it('accepts minNoteDivision and refuses it beside minNoteMs', () => {
+    withProject((project, clipId) => {
+      expect(
+        project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, minNoteDivision: 32 }),
+      ).toBe(3);
+      expect(() =>
+        project.transcribeToClip({
+          clipId,
+          samples: audio,
+          sampleRate: SR,
+          minNoteDivision: 32,
+          minNoteMs: 50,
+        }),
+      ).toThrow(/min_note_division/);
+      expect(() =>
+        project.transcribeToClip({ clipId, samples: audio, sampleRate: SR, minNoteDivision: 0 }),
+      ).toThrow(/minNoteDivision/);
+    });
+  });
+
   it('writes the transcribed notes into the clip', () => {
     withProject((project, clipId) => {
       const noteCount = project.transcribeToClip({
@@ -593,5 +613,40 @@ describe('transcribe polyphonic tuning', () => {
     expect(() =>
       transcribe({ samples: audio, sampleRate: SR, tempoBpm: 120, maxPolyphony: 3 }),
     ).toThrow(/max_polyphony/);
+  });
+});
+
+describe('transcribe minNoteDivision', () => {
+  const run = (extra: Record<string, unknown>, samples = audio) =>
+    transcribe({ samples, sampleRate: SR, tempoBpm: 120, ...extra });
+
+  it('a 1/16 note at 120 bpm equals minNoteMs 125, for both trackers', () => {
+    for (const polyphonic of [false, true]) {
+      expect(run({ polyphonic, minNoteDivision: 16 }).events).toEqual(
+        run({ polyphonic, minNoteMs: 125 }).events,
+      );
+    }
+  });
+
+  it('a coarser division drops a note a finer one keeps', () => {
+    const fine = run({ minNoteDivision: 128 }).noteCount;
+    const coarse = run({ minNoteDivision: 1 }).noteCount;
+    expect(fine).toBeGreaterThan(0);
+    expect(coarse).toBeLessThan(fine);
+  });
+
+  it('refuses a value outside the domain, naming the field', () => {
+    for (const value of [0, -1, 129, 1.5]) {
+      expect(() => run({ minNoteDivision: value })).toThrow(/minNoteDivision/);
+    }
+  });
+
+  it('refuses a wrong type as a TypeError naming the field', () => {
+    expect(() => run({ minNoteDivision: '16' })).toThrow(TypeError);
+    expect(() => run({ minNoteDivision: '16' })).toThrow(/minNoteDivision/);
+  });
+
+  it('surfaces the C refusal of both spellings together', () => {
+    expect(() => run({ minNoteDivision: 16, minNoteMs: 100 })).toThrow(/min_note_division/);
   });
 });

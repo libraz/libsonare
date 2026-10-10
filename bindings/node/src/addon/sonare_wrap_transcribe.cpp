@@ -100,13 +100,17 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value fixed_velocity = request.Get("fixedVelocity");
   const bool wrote_fixed_velocity = !fixed_velocity.IsUndefined() && !fixed_velocity.IsNull();
   out->fixed_velocity = IntProperty(request, "fixedVelocity", 0);
-  // maxPolyphony and the three ratios carry presence for the same reason as
+  // maxPolyphony, minNoteDivision and the three ratios carry presence for the same reason as
   // fixedVelocity: the C ABI's 0 means "default", so an omitted key stays 0 while
   // a written 0 is either refused (maxPolyphony) or mapped to the C ABI's spelling
   // of a real zero (the ratios, where a negative value means 0 / no split).
   const Napi::Value max_polyphony = request.Get("maxPolyphony");
   const bool wrote_max_polyphony = !max_polyphony.IsUndefined() && !max_polyphony.IsNull();
   out->max_polyphony = IntProperty(request, "maxPolyphony", 0);
+  const Napi::Value min_note_division = request.Get("minNoteDivision");
+  const bool wrote_min_note_division =
+      !min_note_division.IsUndefined() && !min_note_division.IsNull();
+  out->min_note_division = IntProperty(request, "minNoteDivision", 0);
   const Napi::Value frame_ratio = request.Get("minFramePeakRatio");
   const bool wrote_frame_ratio = !frame_ratio.IsUndefined() && !frame_ratio.IsNull();
   out->min_frame_peak_ratio = FiniteFloatProperty(request, "minFramePeakRatio", 0.0f);
@@ -129,6 +133,11 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   if (wrote_max_polyphony && (out->max_polyphony < 1 || out->max_polyphony > 64)) {
     ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
                             "maxPolyphony must be an integer in [1, 64]");
+    return false;
+  }
+  if (wrote_min_note_division && (out->min_note_division < 1 || out->min_note_division > 128)) {
+    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                            "minNoteDivision must be an integer in [1, 128]");
     return false;
   }
   const struct {

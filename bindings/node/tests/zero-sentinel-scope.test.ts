@@ -102,6 +102,10 @@ const ZERO_FALLBACK_REASONS: ReadonlyMap<string, string> = new Map([
     'Same as fixedVelocity: the 0 an omitted key sends reads as "default" in the C ABI, and a WRITTEN 0 is refused (1..64) after the presence check.',
   ],
   [
+    'sonare_wrap_transcribe.cpp:minNoteDivision',
+    'Same as maxPolyphony: the 0 an omitted key sends reads as "unset" in the C ABI, and a WRITTEN 0 is refused (1..128) after the presence check.',
+  ],
+  [
     'engine/graph_offline.cpp:type',
     'Graph node kind ordinal, where 0 is pass-through — a named member rather than an absent value.',
   ],
