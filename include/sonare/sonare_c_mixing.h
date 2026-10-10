@@ -264,6 +264,27 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
 // Removes a bus by id. Returns @c SONARE_ERROR_INVALID_PARAMETER if mixer or id
 // is NULL or no bus with that id exists.
 SonareError sonare_mixer_remove_bus(SonareMixer* mixer, const char* id);
+/// @brief Routes a strip or bus into a destination bus.
+/// @details Removes every connection whose source is @p source_id -- including a
+///   strip-to-strip edge authored in scene JSON -- and appends
+///   {@p source_id, @p bus_id}; the routing graph is marked dirty and no compile
+///   runs in the call. An explicit connection suppresses the default route to
+///   the master, so a strip sent to a submix is silent on the master until the
+///   submix is routed on. To feed a strip into a submix that goes to the master:
+///   @code
+///   sonare_mixer_set_output_bus(mixer, "a", "sub");
+///   sonare_mixer_set_output_bus(mixer, "sub", "master");
+///   @endcode
+///   @p source_id is a strip or a non-master bus; @p bus_id is a declared bus or
+///   the master (the id resolved the way the compile resolves it). Everything is
+///   validated before anything changes, so a refused call leaves the topology
+///   untouched. Returns @c SONARE_ERROR_INVALID_PARAMETER, with the ids (and, for
+///   a cycle, the path) in @ref sonare_last_error_message, if an argument is NULL,
+///   the source or destination is unknown, the source is the master, the
+///   destination is not a bus, the route is a self-route, or the edit would
+///   close a cycle through connections or sends.
+SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_id,
+                                        const char* bus_id);
 // Number of buses in the mixer topology. Returns
 // @c SONARE_ERROR_INVALID_PARAMETER if mixer or out_count is NULL.
 SonareError sonare_mixer_bus_count(const SonareMixer* mixer, size_t* out_count);

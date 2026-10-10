@@ -233,6 +233,12 @@ inline void copy_meter_snapshot(const sonare::mixing::MeterSnapshot& snapshot,
 
 void apply_solo_mutes(SonareMixer* mixer);
 void build_and_compile(SonareMixer* mixer);
+
+/// @brief The master bus id of @p buses: the bus with role "master", else the one
+///        with id "master", else the implicit "master" a compile synthesizes.
+/// @param implicit When non-null, set true only for the synthesized fallback.
+std::string resolve_master_bus_id(const std::vector<sonare::mixing::api::Bus>& buses,
+                                  bool* implicit = nullptr);
 /// @brief Longest audible tail to the master over the live graph, compiling
 ///        first when the topology is dirty.
 int tail_samples(SonareMixer* mixer);

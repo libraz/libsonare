@@ -361,6 +361,20 @@ SonareBusDsp& bus_dsp_for(SonareMixer* mixer, const std::string& bus_id) {
   return dsp;
 }
 
+// Prefers role == "master", else id == "master", else the implicit "master".
+std::string resolve_master_bus_id(const std::vector<sonare::mixing::api::Bus>& buses,
+                                  bool* implicit) {
+  if (implicit != nullptr) *implicit = false;
+  for (const auto& bus : buses) {
+    if (bus.role == "master") return bus.id;
+  }
+  for (const auto& bus : buses) {
+    if (bus.id == "master") return bus.id;
+  }
+  if (implicit != nullptr) *implicit = true;
+  return "master";
+}
+
 // Rebuilds the routing graph from the mixer's stored strips/buses/connections,
 // wiring main edges, send taps, and default master routing, then compiles and
 // prepares it. Throws sonare::SonareException on invalid topology.
@@ -381,26 +395,12 @@ void build_and_compile(SonareMixer* mixer) {
   // implicit aux bus. mixer->buses is left untouched.
   std::vector<sonare::mixing::api::Bus> buses = mixer->buses;
 
-  // Resolve the master bus id: prefer role == "master", else id == "master";
-  // synthesize one if neither exists (e.g. the manual create/add_strip path).
-  std::string master_id;
-  for (const auto& bus : buses) {
-    if (bus.role == "master") {
-      master_id = bus.id;
-      break;
-    }
-  }
-  if (master_id.empty()) {
-    for (const auto& bus : buses) {
-      if (bus.id == "master") {
-        master_id = bus.id;
-        break;
-      }
-    }
-  }
-  if (master_id.empty()) {
-    buses.push_back({"master", "master"});
-    master_id = "master";
+  // Resolve the master bus id; synthesize one if none is declared (e.g. the
+  // manual create/add_strip path).
+  bool master_implicit = false;
+  std::string master_id = resolve_master_bus_id(buses, &master_implicit);
+  if (master_implicit) {
+    buses.push_back({master_id, "master"});
   }
 
   // Any send destination that isn't already a bus becomes an implicit aux bus

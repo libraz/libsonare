@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <functional>
+#include <unordered_map>
 
 #include "c_api/mixing_internal.h"
 #include "mastering/api/insert_factory.h"
@@ -120,6 +122,96 @@ SonareError sonare_mixer_add_bus(SonareMixer* mixer, const char* id, const char*
     }
   }
   mixer->buses.emplace_back(bus_id, role != nullptr ? std::string(role) : std::string("aux"));
+  mixer->compiled_dirty = true;
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
+SonareError sonare_mixer_set_output_bus(SonareMixer* mixer, const char* source_id,
+                                        const char* bus_id) {
+  SONARE_C_API_ENTRY;
+  if (!mixer || !source_id || !bus_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const std::string source = source_id;
+  const std::string destination = bus_id;
+  const auto refuse = [](const std::string& message) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter, message);
+  };
+
+  const std::string master = resolve_master_bus_id(mixer->buses);
+  const auto is_declared_bus = [&](const std::string& id) {
+    return std::any_of(mixer->buses.begin(), mixer->buses.end(),
+                       [&](const sonare::mixing::api::Bus& bus) { return bus.id == id; });
+  };
+  const bool source_is_strip =
+      std::any_of(mixer->strips.begin(), mixer->strips.end(),
+                  [&](const std::unique_ptr<SonareStrip>& strip) { return strip->id == source; });
+  if (source == master) {
+    refuse("set_output_bus: the master '" + source + "' cannot be a source");
+  }
+  if (!source_is_strip && !is_declared_bus(source)) {
+    refuse("set_output_bus: unknown source '" + source + "'");
+  }
+  if (destination != master && !is_declared_bus(destination)) {
+    const bool destination_is_strip = std::any_of(
+        mixer->strips.begin(), mixer->strips.end(),
+        [&](const std::unique_ptr<SonareStrip>& strip) { return strip->id == destination; });
+    refuse(destination_is_strip
+               ? "set_output_bus: destination '" + destination + "' is a strip, not a bus"
+               : "set_output_bus: unknown destination '" + destination + "'");
+  }
+  if (source == destination) {
+    refuse("set_output_bus: '" + source + "' cannot route to itself");
+  }
+
+  // Edge set after the edit: every other main connection, the new one, and every
+  // send tap (a send is an edge for cycle purposes).
+  std::unordered_map<std::string, std::vector<std::string>> edges;
+  for (const auto& connection : mixer->connections) {
+    if (connection.source != source) {
+      edges[connection.source].push_back(connection.destination);
+    }
+  }
+  edges[source].push_back(destination);
+  for (const auto& strip : mixer->strips) {
+    for (const auto& send : strip->scene_strip.sends) {
+      edges[strip->id].push_back(send.destination_bus_id);
+    }
+  }
+  // Any new cycle runs through the new edge, so search for a path back to the
+  // source from the destination.
+  std::vector<std::string> path{source, destination};
+  std::unordered_map<std::string, bool> visited;
+  const std::function<bool(const std::string&)> reaches_source = [&](const std::string& node) {
+    if (node == source) return true;
+    if (visited[node]) return false;
+    visited[node] = true;
+    const auto it = edges.find(node);
+    if (it == edges.end()) return false;
+    for (const auto& next : it->second) {
+      path.push_back(next);
+      if (reaches_source(next)) return true;
+      path.pop_back();
+    }
+    return false;
+  };
+  if (reaches_source(destination)) {
+    std::string text;
+    for (const auto& node : path) {
+      text += (text.empty() ? "" : " -> ") + node;
+    }
+    refuse("set_output_bus: routing '" + source + "' to '" + destination +
+           "' closes a cycle: " + text);
+  }
+
+  mixer->connections.erase(std::remove_if(mixer->connections.begin(), mixer->connections.end(),
+                                          [&](const sonare::mixing::api::Connection& connection) {
+                                            return connection.source == source;
+                                          }),
+                           mixer->connections.end());
+  mixer->connections.push_back({source, destination});
   mixer->compiled_dirty = true;
   return SONARE_OK;
   SONARE_C_CATCH

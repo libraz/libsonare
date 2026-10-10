@@ -1214,4 +1214,145 @@ TEST_CASE("C-API scene mixer bounds a strip equalizer insert by the mixer rate's
               .find("must be below 24000 Hz (Nyquist at 48000 Hz)") != std::string::npos);
 }
 
+namespace {
+
+std::string mixer_scene_json(const SonareMixer* mixer) {
+  char* text = nullptr;
+  REQUIRE(sonare_mixer_to_scene_json(mixer, &text) == SONARE_OK);
+  std::string json = text;
+  sonare_free_string(text);
+  return json;
+}
+
+}  // namespace
+
+TEST_CASE("C-API set output bus routes a strip into a submix and on to the master",
+          "[mixing][capi][routing]") {
+  constexpr int kBlock = 64;
+  SonareMixer* mixer = sonare_mixer_create(48000, kBlock);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
+
+  std::vector<float> input(kBlock, 0.5f);
+  const float* inputs[] = {input.data()};
+  std::vector<float> out_l(kBlock);
+  std::vector<float> out_r(kBlock);
+  const auto render_peak = [&](const char* bus, float* master_peak) {
+    for (int block = 0; block < 4; ++block) {
+      REQUIRE(sonare_mixer_process_stereo(mixer, inputs, inputs, 1, out_l.data(), out_r.data(),
+                                          kBlock) == SONARE_OK);
+    }
+    *master_peak = 0.0f;
+    for (int i = 0; i < kBlock; ++i) {
+      *master_peak = std::max({*master_peak, std::fabs(out_l[static_cast<size_t>(i)]),
+                               std::fabs(out_r[static_cast<size_t>(i)])});
+    }
+    SonareMixMeterSnapshot meter{};
+    REQUIRE(sonare_mixer_bus_meter(mixer, bus, &meter) == SONARE_OK);
+    return meter.peak_db[0];
+  };
+
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "a", "sub") == SONARE_OK);
+  float master_peak = 0.0f;
+  REQUIRE(render_peak("sub", &master_peak) > -30.0f);
+  REQUIRE(master_peak == 0.0f);
+
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "sub", "master") == SONARE_OK);
+  REQUIRE(render_peak("sub", &master_peak) > -30.0f);
+  REQUIRE(master_peak > 0.1f);
+
+  const std::string json = mixer_scene_json(mixer);
+  const sonare::mixing::api::Scene scene = sonare::mixing::api::scene_from_json(json);
+  REQUIRE(scene.connections.size() == 2);
+  REQUIRE(scene.connections[0].source == "a");
+  REQUIRE(scene.connections[0].destination == "sub");
+  REQUIRE(scene.connections[1].source == "sub");
+  REQUIRE(scene.connections[1].destination == "master");
+
+  // Re-routing replaces the source's main edge rather than adding a second.
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "a", "master") == SONARE_OK);
+  const sonare::mixing::api::Scene rerouted =
+      sonare::mixing::api::scene_from_json(mixer_scene_json(mixer));
+  REQUIRE(rerouted.connections.size() == 2);
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API set output bus refuses every invalid edit without touching the topology",
+          "[mixing][capi][routing]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_strip(mixer, "a") != nullptr);
+  SonareStrip* b = sonare_mixer_add_strip(mixer, "b");
+  REQUIRE(b != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub2", "submix") == SONARE_OK);
+  REQUIRE(sonare_mixer_add_bus(mixer, "fx", "aux") == SONARE_OK);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "sub", "sub2") == SONARE_OK);
+  size_t send_index = 0;
+  REQUIRE(sonare_strip_add_send(b, "send", "fx", -6.0f, 0, &send_index) == SONARE_OK);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "fx", "sub") == SONARE_OK);
+
+  const std::string before = mixer_scene_json(mixer);
+  const auto refused = [&](const char* source, const char* bus, const char* needle) {
+    REQUIRE(sonare_mixer_set_output_bus(mixer, source, bus) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(std::string(sonare_last_error_message()).find(needle) != std::string::npos);
+    REQUIRE(mixer_scene_json(mixer) == before);
+  };
+  refused("nope", "sub", "nope");
+  refused("a", "nope", "nope");
+  refused("a", "b", "'b'");
+  refused("master", "sub", "master");
+  refused("a", "a", "'a'");
+  refused("sub", "sub", "'sub'");
+  // sub -> sub2 exists, so sub2 -> sub closes a loop; likewise through fx -> sub.
+  refused("sub2", "sub", "sub2 -> sub -> sub2");
+  refused("sub2", "fx", "sub2 -> fx -> sub -> sub2");
+  REQUIRE(sonare_mixer_set_output_bus(nullptr, "a", "sub") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, nullptr, "sub") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "a", nullptr) == SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API set output bus refuses a cycle that closes through a send",
+          "[mixing][capi][routing]") {
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip strip;
+  strip.id = "a";
+  strip.sends.push_back({"to-sub2", "sub2", -6.0f});
+  scene.strips.push_back(strip);
+  scene.buses.push_back({"master", "master"});
+  scene.buses.push_back({"sub", "submix"});
+  scene.buses.push_back({"sub2", "submix"});
+  scene.connections.push_back({"sub", "a"});
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+  SonareMixer* mixer = sonare_mixer_from_scene_json(json.c_str(), 48000, 64);
+  REQUIRE(mixer != nullptr);
+
+  // sub -> a (connection), a -> sub2 (send): sub2 -> sub would close the loop.
+  const std::string before = mixer_scene_json(mixer);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "sub2", "sub") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(std::string(sonare_last_error_message()).find("sub2 -> sub -> a -> sub2") !=
+          std::string::npos);
+  REQUIRE(mixer_scene_json(mixer) == before);
+  sonare_mixer_destroy(mixer);
+}
+
+TEST_CASE("C-API set output bus does not compile the graph", "[mixing][capi][routing]") {
+  SonareMixer* mixer = sonare_mixer_create(48000, 64);
+  REQUIRE(mixer != nullptr);
+  REQUIRE(sonare_mixer_add_bus(mixer, "sub", "submix") == SONARE_OK);
+  uint32_t count = 0;
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "sub", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "sub", "sub") == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "sub", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  // A successful edit is lazy as well.
+  REQUIRE(sonare_mixer_set_output_bus(mixer, "sub", "master") == SONARE_OK);
+  REQUIRE(sonare_mixer_bus_non_finite_discard_count(mixer, "sub", &count) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  sonare_mixer_destroy(mixer);
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH
