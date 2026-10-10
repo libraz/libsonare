@@ -202,7 +202,8 @@ SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uin
 #if defined(SONARE_WITH_ARRANGEMENT)
   return emit_midi_pod(out,
                        !valid_midi_head(ppq, group, channel) || !valid_u7(program) ||
-                           !valid_u7(bank_msb) || !valid_u7(bank_lsb),
+                           !valid_u7(bank_msb) || !valid_u7(bank_lsb) ||
+                           (bank_valid == 0 && (bank_msb != 0 || bank_lsb != 0)),
                        ppq,
                        sonare::midi::make_midi2_program_change(group, channel, program, bank_msb,
                                                                bank_lsb, bank_valid != 0));

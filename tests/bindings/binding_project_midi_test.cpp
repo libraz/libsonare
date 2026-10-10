@@ -1871,9 +1871,9 @@ TEST_CASE("project C surface MIDI 2.0 builders pack the core UMP words", "[proje
           [](SonareMidiEventPod* o) { return sonare_midi2_program(1.5, 2, 3, 40, 1, 121, 5, o); },
           m::make_midi2_program_change(2, 3, 40, 121, 5, true)),
       run(
-          "program without bank",
-          [](SonareMidiEventPod* o) { return sonare_midi2_program(1.5, 2, 3, 40, 0, 121, 5, o); },
-          m::make_midi2_program_change(2, 3, 40, 121, 5, false)),
+          "program with bank-valid false and a zero bank",
+          [](SonareMidiEventPod* o) { return sonare_midi2_program(1.5, 2, 3, 40, 0, 0, 0, o); },
+          m::make_midi2_program_change(2, 3, 40, 0, 0, false)),
       run(
           "registered_controller",
           [](SonareMidiEventPod* o) {
@@ -1959,6 +1959,10 @@ TEST_CASE("project C surface MIDI 2.0 builders refuse out-of-range fields", "[pr
   REQUIRE(sonare_midi2_program(0.0, 0, 0, 128, 0, 0, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 1, 128, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 1, 0, 128, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  // A bank with bank-valid false is a typed value the receiver would ignore.
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 0, 1, 0, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 0, 0, 1, &pod) == SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_midi2_program(0.0, 0, 0, 0, 0, 0, 0, &pod) == SONARE_OK);
   REQUIRE(sonare_midi2_registered_controller(0.0, 0, 0, 128, 0, 0, &pod) ==
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_midi2_assignable_controller(0.0, 0, 0, 0, 128, 0, &pod) ==

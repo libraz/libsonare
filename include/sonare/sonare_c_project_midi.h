@@ -201,8 +201,8 @@ SonareError sonare_midi2_pitch_bend(double ppq, uint8_t group, uint8_t channel, 
 ///          only when @p bank_valid is non-zero.
 /// @param program Program number (0..127).
 /// @param bank_valid Non-zero to select @p bank_msb / @p bank_lsb with the program.
-/// @param bank_msb Bank select MSB (0..127).
-/// @param bank_lsb Bank select LSB (0..127).
+/// @param bank_msb Bank select MSB (0..127); must be 0 when @p bank_valid is zero.
+/// @param bank_lsb Bank select LSB (0..127); must be 0 when @p bank_valid is zero.
 SonareError sonare_midi2_program(double ppq, uint8_t group, uint8_t channel, uint8_t program,
                                  int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
                                  SonareMidiEventPod* out);
