@@ -1,6 +1,8 @@
 /// @file sonare_c_engine_midi_test.cpp
 /// @brief Engine C ABI MIDI input, built-in instrument and per-note dimensions.
 
+#include <functional>
+
 #include "midi/ump.h"
 #include "sonare_c_engine_test_helpers.h"
 
@@ -594,7 +596,7 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
 
 #if defined(SONARE_WITH_ARRANGEMENT)
   REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
 
   SonareEngineBuiltinSynthConfig synth{};
   synth.gain = 0.5f;
@@ -616,7 +618,7 @@ TEST_CASE("sonare_engine owned MIDI input source drains into instruments", "[c_a
 
   REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_input_note_off(engine, 0, 0, 64, 0, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
 #else
   REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_ERROR_NOT_SUPPORTED);
   REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 64, 100, 4) ==
@@ -730,6 +732,10 @@ TEST_CASE("sonare_engine refuses a per-note dimension outside its domain", "[c_a
   REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
   REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
 
+  REQUIRE(sonare_engine_push_midi_input_pitch_bend(nullptr, 0, 0, 8192, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
   // A bend is 14-bit, so the one value a 7-bit range check would let through is
   // exactly the one that has to be refused here.
   REQUIRE(sonare_engine_push_midi_pitch_bend(engine, 3, 0, 0, 16384, -1) ==
@@ -740,18 +746,21 @@ TEST_CASE("sonare_engine refuses a per-note dimension outside its domain", "[c_a
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_push_midi_poly_pressure(engine, 3, 0, 0, 60, 128, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
-  REQUIRE(sonare_engine_push_midi_input_pitch_bend(nullptr, 0, 0, 8192, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
 
-#if defined(SONARE_WITH_ARRANGEMENT)
   // An input-source push before the source is enabled is refused rather than
   // queued into a drain nothing reads.
   REQUIRE(sonare_engine_push_midi_input_pitch_bend(engine, 0, 0, 8192, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_engine_push_midi_input_channel_pressure(engine, 0, 0, 64, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
   REQUIRE(sonare_engine_push_midi_input_poly_pressure(engine, 0, 0, 60, 64, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
+#else
+  // A build without the engine says so before it judges an argument.
+  REQUIRE(sonare_engine_push_midi_pitch_bend(engine, 3, 0, 0, 16384, -1) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_input_pitch_bend(engine, 0, 0, 16384, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
 #endif
 
   sonare_engine_destroy(engine);
@@ -1008,12 +1017,15 @@ TEST_CASE("sonare_engine raw UMP push refuses data messages and mismatched word 
       {"SysEx7 (MT 0x3)", sysex7, 2},
       {"128-bit data (MT 0x5)", data128, 4},
   };
+#if defined(SONARE_WITH_ARRANGEMENT)
+  constexpr SonareError kRefusedShape = SONARE_ERROR_INVALID_PARAMETER;
+#else
+  constexpr SonareError kRefusedShape = SONARE_ERROR_NOT_SUPPORTED;
+#endif
   for (const Refused& r : refused) {
     INFO(r.what);
-    REQUIRE(sonare_engine_push_midi_ump(engine, 3, r.words, r.count, -1) ==
-            SONARE_ERROR_INVALID_PARAMETER);
-    REQUIRE(sonare_engine_push_midi_input_ump(engine, r.words, r.count, 0) ==
-            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_push_midi_ump(engine, 3, r.words, r.count, -1) == kRefusedShape);
+    REQUIRE(sonare_engine_push_midi_input_ump(engine, r.words, r.count, 0) == kRefusedShape);
   }
   REQUIRE(sonare_engine_push_midi_ump(nullptr, 3, note.words, 2, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -1032,7 +1044,7 @@ TEST_CASE("sonare_engine raw UMP push refuses data messages and mismatched word 
   // scalar siblings.
   REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_input_ump(engine, note.words, 2, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
 #endif
 
   sonare_engine_destroy(engine);
@@ -1173,13 +1185,17 @@ TEST_CASE("sonare_engine typed program change refuses out-of-domain arguments",
       {"MSB with bank-valid false", 0, 0, 0, 0, 1, 0},
       {"LSB with bank-valid false", 0, 0, 0, 0, 0, 1},
   };
+#if defined(SONARE_WITH_ARRANGEMENT)
+  constexpr SonareError kRefusedArg = SONARE_ERROR_INVALID_PARAMETER;
+#else
+  constexpr SonareError kRefusedArg = SONARE_ERROR_NOT_SUPPORTED;
+#endif
   for (const Args& a : refused) {
     INFO(a.what);
     REQUIRE(sonare_engine_push_midi_program(engine, 3, a.group, a.channel, a.program, a.bank_valid,
-                                            a.msb, a.lsb, -1) == SONARE_ERROR_INVALID_PARAMETER);
+                                            a.msb, a.lsb, -1) == kRefusedArg);
     REQUIRE(sonare_engine_push_midi_input_program(engine, a.group, a.channel, a.program,
-                                                  a.bank_valid, a.msb, a.lsb,
-                                                  0) == SONARE_ERROR_INVALID_PARAMETER);
+                                                  a.bank_valid, a.msb, a.lsb, 0) == kRefusedArg);
   }
   REQUIRE(sonare_engine_push_midi_program(nullptr, 3, 0, 0, 0, 1, 8, 0, -1) ==
           SONARE_ERROR_INVALID_PARAMETER);
@@ -1193,7 +1209,7 @@ TEST_CASE("sonare_engine typed program change refuses out-of-domain arguments",
   // A cleared input source refuses, like its siblings.
   REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
   REQUIRE(sonare_engine_push_midi_input_program(engine, 0, 0, 5, 1, 8, 0, 0) ==
-          SONARE_ERROR_INVALID_PARAMETER);
+          SONARE_ERROR_INVALID_STATE);
 #endif
   sonare_engine_destroy(engine);
 }
@@ -1255,5 +1271,217 @@ TEST_CASE("sonare_engine program change bank follows the live GS RX BANK SELECT 
     push_typed_program(e, true, 8);
   });
   CHECK(rx_on == bank8);
+}
+#endif
+
+namespace {
+
+// One call on the live push family, with the C function it names in a refusal.
+struct LivePush {
+  const char* function;
+  std::function<SonareError(SonareRealtimeEngine*)> push;
+};
+
+const sonare::midi::Ump kLiveNote2 = sonare::midi::make_midi2_note_on(0, 0, 60, 0x8000u);
+
+// The eight input-source pushes with in-domain arguments.
+[[maybe_unused]] std::vector<LivePush> valid_input_pushes() {
+  return {
+      {"sonare_engine_push_midi_input_note_on",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_note_on(e, 0, 0, 60, 100, 0);
+       }},
+      {"sonare_engine_push_midi_input_note_off",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_note_off(e, 0, 0, 60, 0, 0);
+       }},
+      {"sonare_engine_push_midi_input_cc",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_cc(e, 0, 0, 7, 100, 0);
+       }},
+      {"sonare_engine_push_midi_input_pitch_bend",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_pitch_bend(e, 0, 0, 8192, 0);
+       }},
+      {"sonare_engine_push_midi_input_channel_pressure",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_channel_pressure(e, 0, 0, 64, 0);
+       }},
+      {"sonare_engine_push_midi_input_poly_pressure",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_poly_pressure(e, 0, 0, 60, 64, 0);
+       }},
+      {"sonare_engine_push_midi_input_ump",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_ump(e, kLiveNote2.words, 2, 0);
+       }},
+      {"sonare_engine_push_midi_input_program",
+       [](SonareRealtimeEngine* e) {
+         return sonare_engine_push_midi_input_program(e, 0, 0, 5, 1, 8, 0, 0);
+       }},
+  };
+}
+
+}  // namespace
+
+TEST_CASE("sonare_engine live push family names the refused argument", "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+
+  // Each value fits its C type and lies outside the MIDI domain, so only the
+  // range rule can refuse it. The input source stays disabled: an argument is
+  // judged before the source state.
+  const uint32_t sysex7[2] = {0x30000000u, 0u};
+  struct Refusal {
+    LivePush call;
+    const char* message;
+  };
+  const Refusal refusals[] = {
+      {{"sonare_engine_push_midi_note_on",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_note_on(e, 3, 0, 16, 60, 100, -1);
+        }},
+       "channel must be in [0, 15]"},
+      {{"sonare_engine_push_midi_note_off",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_note_off(e, 3, 0, 0, 60, 128, -1);
+        }},
+       "velocity must be in [0, 127]"},
+      {{"sonare_engine_push_midi_cc",
+        [](SonareRealtimeEngine* e) { return sonare_engine_push_midi_cc(e, 3, 0, 0, 7, 128, -1); }},
+       "value must be in [0, 127]"},
+      {{"sonare_engine_push_midi_pitch_bend",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_pitch_bend(e, 3, 0, 0, 16384, -1);
+        }},
+       "bend14 must be in [0, 16383]"},
+      {{"sonare_engine_push_midi_channel_pressure",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_channel_pressure(e, 3, 0, 0, 128, -1);
+        }},
+       "pressure must be in [0, 127]"},
+      {{"sonare_engine_push_midi_poly_pressure",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_poly_pressure(e, 3, 0, 0, 128, 64, -1);
+        }},
+       "note must be in [0, 127]"},
+      {{"sonare_engine_push_midi_program",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_program(e, 3, 0, 0, 0, 1, 128, 0, -1);
+        }},
+       "bank_msb must be in [0, 127]"},
+      {{"sonare_engine_push_midi_program",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_program(e, 3, 0, 0, 0, 0, 0, 1, -1);
+        }},
+       "bank MSB and LSB must be 0 when bank-valid is false"},
+      {{"sonare_engine_push_midi_ump",
+        [&sysex7](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_ump(e, 3, sysex7, 2, -1);
+        }},
+       "words do not form a pushable UMP message"},
+      {{"sonare_engine_push_midi_input_note_on",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_note_on(e, 16, 0, 60, 100, 0);
+        }},
+       "group must be in [0, 15]"},
+      {{"sonare_engine_push_midi_input_note_off",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_note_off(e, 0, 0, 128, 0, 0);
+        }},
+       "note must be in [0, 127]"},
+      {{"sonare_engine_push_midi_input_cc",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_cc(e, 0, 0, 128, 0, 0);
+        }},
+       "controller must be in [0, 127]"},
+      {{"sonare_engine_push_midi_input_pitch_bend",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_pitch_bend(e, 0, 0, 16384, 0);
+        }},
+       "bend14 must be in [0, 16383]"},
+      {{"sonare_engine_push_midi_input_channel_pressure",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_channel_pressure(e, 0, 16, 64, 0);
+        }},
+       "channel must be in [0, 15]"},
+      {{"sonare_engine_push_midi_input_poly_pressure",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_poly_pressure(e, 0, 0, 60, 128, 0);
+        }},
+       "pressure must be in [0, 127]"},
+      {{"sonare_engine_push_midi_input_program",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_program(e, 0, 0, 128, 0, 0, 0, 0);
+        }},
+       "program must be in [0, 127]"},
+      {{"sonare_engine_push_midi_input_program",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_program(e, 0, 0, 0, 1, 0, 128, 0);
+        }},
+       "bank_lsb must be in [0, 127]"},
+      {{"sonare_engine_push_midi_input_ump",
+        [](SonareRealtimeEngine* e) {
+          return sonare_engine_push_midi_input_ump(e, kLiveNote2.words, 1, 0);
+        }},
+       "words do not form a pushable UMP message"},
+  };
+  for (const Refusal& r : refusals) {
+    INFO(r.call.function << " / " << r.message);
+#if defined(SONARE_WITH_ARRANGEMENT)
+    REQUIRE(r.call.push(engine) == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(std::string(sonare_last_error_message()) ==
+          std::string(r.call.function) + ": " + r.message);
+#else
+    // A build without the engine says so before it judges an argument.
+    REQUIRE(r.call.push(engine) == SONARE_ERROR_NOT_SUPPORTED);
+#endif
+  }
+  sonare_engine_destroy(engine);
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine input-source pushes refuse a disabled source as invalid state",
+          "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+  for (const bool was_enabled : {false, true}) {
+    if (was_enabled) {
+      REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
+      REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
+    }
+    for (const LivePush& p : valid_input_pushes()) {
+      INFO(p.function << (was_enabled ? " after clear" : " never enabled"));
+      REQUIRE(p.push(engine) == SONARE_ERROR_INVALID_STATE);
+      CHECK(sonare_last_error_code() == SONARE_ERROR_INVALID_STATE);
+      CHECK(std::string(sonare_last_error_message()) ==
+            std::string(p.function) + ": the MIDI input source is not enabled");
+    }
+  }
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine input-source pushes report a full queue as out of memory",
+          "[c_api][engine][midi]") {
+  // Nothing drains without a process call, so the bounded input queue fills.
+  for (const LivePush& p : valid_input_pushes()) {
+    INFO(p.function);
+    SonareRealtimeEngine* engine = nullptr;
+    REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+    REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+    REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
+    size_t accepted = 0;
+    SonareError refused = SONARE_OK;
+    for (size_t i = 0; i < 4096 && refused == SONARE_OK; ++i) {
+      refused = p.push(engine);
+      if (refused == SONARE_OK) ++accepted;
+    }
+    CHECK(accepted > 0);
+    CHECK(refused == SONARE_ERROR_OUT_OF_MEMORY);
+    sonare_engine_destroy(engine);
+  }
 }
 #endif

@@ -1622,22 +1622,64 @@ SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
 SonareError sonare_engine_clear_midi_input_source(SonareRealtimeEngine* engine);
 /// @brief Number of queued events in the engine-owned live MIDI input source.
 SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine, size_t* out_count);
+/// @brief Pushes a live MIDI note-on to the engine-owned MIDI input source.
+/// @param note Key (0..127).
+/// @param velocity 7-bit velocity (0..127).
+/// @param port_time_samples Port timestamp in samples.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t note, uint8_t velocity,
                                                   int64_t port_time_samples);
+/// @brief Pushes a live MIDI note-off to the engine-owned MIDI input source.
+/// @param note Key (0..127).
+/// @param velocity 7-bit release velocity (0..127).
+/// @param port_time_samples Port timestamp in samples.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
                                                    uint8_t channel, uint8_t note, uint8_t velocity,
                                                    int64_t port_time_samples);
+/// @brief Pushes a live MIDI control change to the engine-owned MIDI input source.
+/// @param controller Controller number (0..127).
+/// @param value 7-bit controller value (0..127).
+/// @param port_time_samples Port timestamp in samples.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
                                              uint8_t channel, uint8_t controller, uint8_t value,
                                              int64_t port_time_samples);
 /// @brief Pushes a live MIDI pitch bend to the engine-owned MIDI input source.
 /// @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383).
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engine, uint8_t group,
                                                      uint8_t channel, uint16_t bend14,
                                                      int64_t port_time_samples);
 /// @brief Pushes a live MIDI channel pressure to the engine-owned MIDI input source.
 /// @param pressure 7-bit channel pressure (0..127).
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine* engine,
                                                            uint8_t group, uint8_t channel,
                                                            uint8_t pressure,
@@ -1645,6 +1687,12 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine*
 /// @brief Pushes a live MIDI polyphonic key pressure to the engine-owned MIDI input source.
 /// @param note Key the pressure belongs to (0..127).
 /// @param pressure 7-bit key pressure (0..127).
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
+///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
+///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
+///         SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full (retry after a
+///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* engine, uint8_t group,
                                                         uint8_t channel, uint8_t note,
                                                         uint8_t pressure,
@@ -1752,9 +1800,12 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
 /// @param word_count Must equal the word count the message type of `words[0]`
 ///        fixes (1, 2, 3 or 4).
 /// @param port_time_samples Port timestamp in samples.
-/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL pointer, a malformed or
-///         refused message, or when the input source is not enabled;
-///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a malformed or
+///         refused message (last error "<function>: words do not form a pushable
+///         UMP message"); SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI
+///         engine; SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full. Words are
+///         judged before the source state.
 SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
                                               size_t word_count, int64_t port_time_samples);
 /// @brief Queues a live MIDI 2.0 program change, with an optional bank, to a MIDI destination.
@@ -1788,9 +1839,12 @@ SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32
 /// @details The input-source counterpart of @ref sonare_engine_push_midi_program;
 ///          the receiver rules and argument domains are the same.
 /// @param port_time_samples Port timestamp in samples.
-/// @return SONARE_ERROR_INVALID_PARAMETER for an out-of-range argument, a
-///         non-zero bank with @p bank_valid zero, or when the input source is
-///         not enabled; SONARE_ERROR_OUT_OF_MEMORY when the input queue is full.
+/// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine, an out-of-range
+///         argument or a non-zero bank with @p bank_valid zero (last error names
+///         the argument); SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI
+///         engine; SONARE_ERROR_INVALID_STATE when the input source is not enabled;
+///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full. Arguments are
+///         judged before the source state.
 SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t program, int bank_valid,
                                                   uint8_t bank_msb, uint8_t bank_lsb,
