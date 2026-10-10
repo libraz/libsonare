@@ -33,6 +33,12 @@ if TYPE_CHECKING:
 
 from ._errors import ErrorCode, SonareError, _not_supported
 from ._ffi_types_mastering_project import (
+    SONARE_SYNTH_FIELD2_AMP_DELAY_MS,
+    SONARE_SYNTH_FIELD2_AMP_HOLD_MS,
+    SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ,
+    SONARE_SYNTH_FIELD2_FILTER_DELAY_MS,
+    SONARE_SYNTH_FIELD2_FILTER_HOLD_MS,
+    SONARE_SYNTH_FIELD2_ONE_SHOT,
     SONARE_SYNTH_FIELD_AMP_ATTACK_MS,
     SONARE_SYNTH_FIELD_AMP_DECAY_MS,
     SONARE_SYNTH_FIELD_AMP_RELEASE_MS,
@@ -705,11 +711,27 @@ class SynthPatch:
     engine, else the engine's base preset's, so the bare ``"fm"``, ``"modal"``,
     ``"percussion"`` and ``"karplus-strong"`` modes voice their base preset
     (``"percussion"`` is the GM drum kit) and follow that preset's bank version.
-    ``"sample"`` without a bank stays silent. The struct exposes the wrapper
-    sections most engines share; ``waveform`` is read by the subtractive engine
-    only, and on a percussion channel the whole section is discarded in favor of
-    the per-note drum-kit patch -- only ``gain``, ``bus_drive`` and
-    ``polyphony`` still act.
+    ``"sample"`` without a bank stays silent. The fields are the wrapper
+    sections; which engines honour each one:
+
+    - subtractive only: ``waveform``, ``unison``, ``detune_cents``.
+    - sample only: the ``sample_*`` fields.
+    - every engine: ``pitch_offset_cents``, the LFOs, ``drift_cents`` /
+      ``drift_rate_hz``, ``glide_ms``, the filter and its envelope, the
+      amplitude envelope (an undamped harpsichord tail outlasts it),
+      ``one_shot``, ``body`` / ``body_mix``, ``drive``, ``hp_cutoff_hz``,
+      ``sample_hold_hz`` / ``bit_depth``, ``stereo_spread``.
+    - every engine and a percussion channel: ``gain``, ``polyphony``,
+      ``bus_drive``. On a percussion channel (a percussion patch voicing a GM
+      kit, as the ``"drum-kit"`` preset does) each note runs its per-note kit
+      patch and every other field is discarded.
+
+    ``drift_rate_hz`` is the per-voice drift rate in Hz, ``[0.01, 20]``;
+    ``amp_delay_ms`` / ``filter_delay_ms`` wait before each envelope's attack
+    and ``amp_hold_ms`` / ``filter_hold_ms`` hold its peak, each ``[0, 5000]``
+    ms. ``one_shot=True`` ignores note-off, so the voice ends with its
+    envelope's decay or its engine's own end, as a drum hit does; it must be a
+    ``bool``.
 
     ``engine_params`` sets fields of the selected engine's own section by public
     key (``"bowForce"``, ``"ops1.level"``; the keys and their ranges, units and
@@ -822,12 +844,18 @@ class SynthPatch:
     # `auto_select_gm` reachable as the fallback.
     use_gm_programs: bool | None = None
     engine_params: Mapping[str, float] | None = None
+    drift_rate_hz: float | None = None
+    amp_delay_ms: float | None = None
+    amp_hold_ms: float | None = None
+    filter_delay_ms: float | None = None
+    filter_hold_ms: float | None = None
+    one_shot: bool | None = None
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 8
+        c.struct_version = 9
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -844,6 +872,12 @@ class SynthPatch:
             # caller's value; int() would truncate a fraction past it.
             setattr(c, name, value)
             c.present_fields |= bit
+
+        def _set_float2(name: str, bit: int, value: float | None) -> None:
+            if value is None:
+                return
+            setattr(c, name, float(value))
+            c.present_fields2 |= bit
 
         c.preset = _utf8_arg(_strip_va_prefix(self.preset), "preset")[
             : SONARE_SYNTH_PRESET_NAME_MAX - 1
@@ -916,6 +950,16 @@ class SynthPatch:
         _set_float("gain", SONARE_SYNTH_FIELD_GAIN, self.gain)
         _set_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, self.polyphony)
         _set_float("bus_drive", SONARE_SYNTH_FIELD_BUS_DRIVE, self.bus_drive)
+        _set_float2("drift_rate_hz", SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, self.drift_rate_hz)
+        _set_float2("amp_delay_ms", SONARE_SYNTH_FIELD2_AMP_DELAY_MS, self.amp_delay_ms)
+        _set_float2("amp_hold_ms", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, self.amp_hold_ms)
+        _set_float2("filter_delay_ms", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, self.filter_delay_ms)
+        _set_float2("filter_hold_ms", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, self.filter_hold_ms)
+        if self.one_shot is not None:
+            if not isinstance(self.one_shot, bool):
+                raise TypeError("synth patch one_shot must be a bool")
+            c.one_shot = 1 if self.one_shot else 0
+            c.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT
         # Sample engine: no presence bits, because only a sample patch reads the
         # block at all. That is what keeps set 0 addressable without one.
         c.sample_set = 0 if self.sample_set is None else self.sample_set
@@ -999,6 +1043,12 @@ class SynthPatch:
             sample_loop=_synth_enum_name(int(c.sample_loop), _SAMPLE_LOOP_MODES),
             sample_start_offset=float(c.sample_start_offset),
             sample_key_track=_synth_enum_name(int(c.sample_key_track), _SAMPLE_KEY_TRACKS),
+            drift_rate_hz=float(c.drift_rate_hz),
+            amp_delay_ms=float(c.amp_delay_ms),
+            amp_hold_ms=float(c.amp_hold_ms),
+            filter_delay_ms=float(c.filter_delay_ms),
+            filter_hold_ms=float(c.filter_hold_ms),
+            one_shot=bool(c.one_shot),
         )
 
 

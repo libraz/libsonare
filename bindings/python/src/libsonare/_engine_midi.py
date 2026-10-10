@@ -384,7 +384,8 @@ class _EngineMidiMixin:
         ``filterReleaseMs``, ``lfoRateHz``, ``lfoToPitchCents``, ``lfo2RateHz``,
         ``glideMs``, ``bodyMix``, ``stereoSpread``, ``detuneCents``,
         ``driftCents``, ``pitchOffsetCents``, ``hpCutoffHz``, ``sampleHoldHz``,
-        ``bitDepth``.
+        ``bitDepth``, ``driftRateHz``, ``ampDelayMs``, ``ampHoldMs``,
+        ``filterDelayMs``, ``filterHoldMs``.
 
         Structural fields (preset, engine mode, waveform, filter model, unison,
         polyphony, body type, mod routings) are not automatable: they resize

@@ -3,7 +3,10 @@ Project.bounce_with_synth_instrument and RealtimeEngine.set_synth_instrument."""
 
 from __future__ import annotations
 
+import dataclasses
 import gc
+import re
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -231,6 +234,75 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         assert by_ordinal.mod_routings[0].destination == name
 
 
+def _header_struct_version() -> int:
+    header = Path(__file__).resolve().parents[3] / "include/sonare/sonare_c_types_analysis.h"
+    match = re.search(r"#define SONARE_SYNTH_PATCH_STRUCT_VERSION (\d+)", header.read_text())
+    assert match is not None
+    return int(match.group(1))
+
+
+def test_synth_patch_struct_version_is_the_header_macro() -> None:
+    # Nothing else holds the literal: a stale one still passes the layout check
+    # and silently never sends the fields appended after it.
+    assert SynthPatch()._to_c().struct_version == _header_struct_version()
+
+
+def test_synth_patch_second_presence_word_fields() -> None:
+    preset = synth_preset_patch("saw-lead")
+    assert preset.drift_rate_hz is not None and preset.drift_rate_hz > 0.0
+    for name in ("amp_delay_ms", "amp_hold_ms", "filter_delay_ms", "filter_hold_ms"):
+        assert isinstance(getattr(preset, name), float)
+    assert preset.one_shot is False
+    echoed = SynthPatch._from_c(
+        SynthPatch(amp_hold_ms=12.0, filter_delay_ms=34.0, one_shot=True)._to_c()
+    )
+    assert echoed.amp_hold_ms == 12.0
+    assert echoed.filter_delay_ms == 34.0
+    assert echoed.one_shot is True
+
+    base = SynthPatch(
+        preset="saw-lead",
+        drift_cents=40.0,
+        amp_decay_ms=200.0,
+        amp_sustain=0.5,
+        cutoff_hz=1500.0,
+        env_to_cutoff_cents=2400.0,
+        filter_decay_ms=200.0,
+        filter_sustain=0.3,
+    )
+    project = _build_midi_only_project()
+    try:
+        # Long enough to pass the note-off, so a one-shot that ignores it differs.
+        reference = project.bounce_with_synth_instrument(base, total_frames=72000)
+        assert float(np.max(np.abs(reference))) > 0.0
+        for edit in (
+            {"drift_rate_hz": 7.0},
+            {"amp_delay_ms": 80.0},
+            {"amp_hold_ms": 80.0},
+            {"filter_delay_ms": 80.0},
+            {"filter_hold_ms": 80.0},
+            {"one_shot": True},
+            # An explicit zero is a value, not "keep the base".
+            {"drift_rate_hz": 0.0},
+        ):
+            edited = project.bounce_with_synth_instrument(
+                dataclasses.replace(base, **edit), total_frames=72000
+            )
+            assert not np.array_equal(edited, reference), edit
+        with pytest.raises(TypeError, match="one_shot"):
+            project.bounce_with_synth_instrument(
+                dataclasses.replace(base, one_shot=1),  # type: ignore[arg-type]
+                total_frames=72000,
+            )
+    finally:
+        project.close()
+
+    names = {row["name"]: row for row in synth_patch_param_info()}
+    for name in ("driftRateHz", "ampDelayMs", "ampHoldMs", "filterDelayMs", "filterHoldMs"):
+        assert name in names
+    assert names["oneShot"]["type"] == "boolean"
+
+
 def test_synth_patch_rejects_non_string_preset() -> None:
     with pytest.raises(TypeError, match="synth patch preset must be a string"):
         SynthPatch(preset=123)._to_c()  # type: ignore[arg-type]
@@ -240,7 +312,7 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
     for ordinal, name in enumerate(("default", "free", "note")):
         assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
         assert SynthPatch._from_c(SynthPatch(retrigger=ordinal)._to_c()).retrigger == name
-    assert SynthPatch()._to_c().struct_version == 8
+    assert SynthPatch()._to_c().struct_version == _header_struct_version()
     assert synth_preset_patch("saw-lead").retrigger == "free"
     with pytest.raises(ValueError):
         SynthPatch(retrigger="phase")._to_c()

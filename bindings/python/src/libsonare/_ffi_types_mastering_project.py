@@ -682,6 +682,14 @@ SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ = 1 << 28
 SONARE_SYNTH_FIELD_BIT_DEPTH = 1 << 29
 SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS = 1 << 30
 
+# Bit positions for SonareSynthPatch.present_fields2 (struct_version 9).
+SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ = 1 << 0
+SONARE_SYNTH_FIELD2_AMP_DELAY_MS = 1 << 1
+SONARE_SYNTH_FIELD2_AMP_HOLD_MS = 1 << 2
+SONARE_SYNTH_FIELD2_FILTER_DELAY_MS = 1 << 3
+SONARE_SYNTH_FIELD2_FILTER_HOLD_MS = 1 << 4
+SONARE_SYNTH_FIELD2_ONE_SHOT = 1 << 5
+
 
 class SonareSynthEngineParam(CStruct):
     """Maps to SonareSynthEngineParam in sonare_c_types.h.
@@ -696,7 +704,7 @@ class SonareSynthEngineParam(CStruct):
 
 
 class SonareSynthPatch(CStruct):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 8).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 9).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
@@ -707,7 +715,9 @@ class SonareSynthPatch(CStruct):
     the series highpass past it; version 5 adds the voice's own converter;
     version 6 adds the pitch offset at the tail; version 7 adds the
     retrigger mode past it; version 8 adds the engine params, a borrowed
-    array of ``SonareSynthEngineParam`` the caller keeps alive for the call.
+    array of ``SonareSynthEngineParam`` the caller keeps alive for the call;
+    version 9 adds ``present_fields2`` and the drift rate, envelope delay /
+    hold and one-shot fields it marks.
     """
 
     _fields_ = [
@@ -759,6 +769,13 @@ class SonareSynthPatch(CStruct):
         ("retrigger", ctypes.c_int),
         ("engine_params", ctypes.POINTER(SonareSynthEngineParam)),
         ("engine_param_count", ctypes.c_size_t),
+        ("present_fields2", ctypes.c_uint32),
+        ("drift_rate_hz", ctypes.c_float),
+        ("amp_delay_ms", ctypes.c_float),
+        ("amp_hold_ms", ctypes.c_float),
+        ("filter_delay_ms", ctypes.c_float),
+        ("filter_hold_ms", ctypes.c_float),
+        ("one_shot", ctypes.c_int),
     ]
 
 
