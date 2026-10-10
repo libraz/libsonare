@@ -56,6 +56,7 @@
 
 #### Renamed and removed
 
+- The worklet `SonareEngine.setSends` is now `setTrackSends`, the name the raw engine uses for the same edit; the arguments are unchanged, and the worklet still creates the lane when the track has none.
 - "Not given" is absence, never `-1`: Python `SpectralRegionOp.end_sample`, `fix_frames(x_max)`, `set_program(bank)` / `set_program_on_channel(bank)`, the `metering_dynamic_range` / `Audio.dynamic_range` percentiles, `vqt` / `vqt_to_audio` `gamma`, and the engine `render_frame` on every transport, parameter and MIDI call (Python `None`, Node and WASM omitted) replace the `-1` spelling, which is refused. On WASM a `NaN` `gamma` is no longer the automatic value; omit it.
 - Python `NoteObject` and `PercussiveEvent` no longer require `onset_sample` / `offset_sample`: either the sample or the seconds spelling is accepted, and a note with neither is refused when rendered.
 - Track fader and pan automation ids come from `resolveTrackLaneAutomationId` / `resolve_track_lane_automation_id` / `sonare_engine_resolve_track_lane_automation_id` and name the track, not its lane position: they keep driving it across `setTrackLanes` reorders and fail as an unknown target once the track is removed. The positional track-lane encoding is no longer accepted, and track insert id numbers shift because lanes now take entries.
@@ -140,6 +141,9 @@
 - Push a live program change with an optional bank in one call, timed like note and CC and packed as one MIDI 2.0 Program Change so the receiver's own gates apply (C: `sonare_engine_push_midi_program`, `sonare_engine_push_midi_input_program`; Node and WASM: `pushMidiProgram`, `pushMidiInputProgram`, and `pushMidiProgram` on the worklet `SonareEngine`; Python: `push_midi_program`, `push_midi_input_program`). A receiver that selects nothing (the built-in synth, a part with RX PROGRAM CHANGE off) accepts it and ignores it.
 
 #### Mixing
+
+- Route an offline mixer strip or bus into a submix after construction without rewriting scene JSON (C: `sonare_mixer_set_output_bus`; Node and WASM: `Mixer.setOutputBus(sourceId, busId)`; Python: `set_output_bus`). It replaces the source's main connection and refuses an unknown id, a non-bus destination, the master as source, a self-route or a cycle through connections or sends by name before changing anything; an added submix reaches the master only once it is routed there too.
+- Change one realtime track lane's sends or output bus without restating the lane list (C: `sonare_engine_set_track_sends`, `sonare_engine_set_track_output_bus`; Node and WASM: `setTrackSends`, `setTrackOutputBus`; Python: `set_track_sends`, `set_track_output_bus`). `setTrackLanes` keeps replacing every lane, so omitting `sends` there still clears them.
 
 - Ask whether a lane, bus or master sidechain binding would be accepted, and why not, without changing anything (C: `sonare_engine_can_set_lane_sidechain`, `sonare_engine_can_set_bus_sidechain`, `sonare_engine_can_set_master_sidechain`, `SonareSidechainRefusal`; Node, WASM and the worklet engine: `canSetLaneSidechain`, `canSetBusSidechain`, `canSetMasterSidechain` returning `SidechainCheck`; Python: `can_set_lane_sidechain`, `can_set_bus_sidechain`, `can_set_master_sidechain` returning `SidechainCheck`).
 
