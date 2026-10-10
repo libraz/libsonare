@@ -649,6 +649,14 @@ def _validate_case_payload(
             )
         if case_id == "explicit_output" and not isinstance(payload.get("output"), str):
             report.append(("fail", f"{label}.output: explicit output must serialize as a path"))
+        # Every eq fixture is a mono file, which stays on the mono path.
+        if payload.get("stereo") is not False:
+            report.append(
+                (
+                    "fail",
+                    f"{label}.stereo: expected False for a mono input, got {payload.get('stereo')!r}",
+                )
+            )
     if path == "mastering-processor":
         expected_stereo = case_id == "stereo"
         if payload.get("stereo") is not expected_stereo:

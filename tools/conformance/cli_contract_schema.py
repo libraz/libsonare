@@ -138,6 +138,7 @@ _PITCH_PAYLOAD_SCHEMA = {
 _EQ_PAYLOAD_SCHEMA = {
     "keys": {
         "processor": "string",
+        "stereo": "boolean",
         "input_lufs": "number",
         "output_lufs": "number",
         "applied_gain_db": "number",

@@ -7797,6 +7797,7 @@
         "success": {
           "keys": {
             "processor": "string",
+            "stereo": "boolean",
             "input_lufs": "number",
             "output_lufs": "number",
             "applied_gain_db": "number",
@@ -7808,6 +7809,7 @@
         "non_finite_output": {
           "keys": {
             "processor": "string",
+            "stereo": "boolean",
             "input_lufs": "number",
             "output_lufs": "null",
             "applied_gain_db": "number",
