@@ -3,7 +3,6 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
-from ._acoustic import room_morph_stereo
 from ._effects_polyphony import PolyphonicAnalysis
 from ._playback import (
     HrtfSet,
@@ -280,6 +279,7 @@ from .analyzer import (
     rms_energy,
     room_geometry_from_estimate,
     room_morph,
+    room_morph_stereo,
     samples_to_frames,
     scale_correction_semitones,
     scale_mask_for_mode,

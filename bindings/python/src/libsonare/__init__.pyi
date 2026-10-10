@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from ._acoustic import (
-    room_morph_stereo as room_morph_stereo,
-)
 from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
@@ -684,6 +681,9 @@ from .analyzer import (
 )
 from .analyzer import (
     room_morph as room_morph,
+)
+from .analyzer import (
+    room_morph_stereo as room_morph_stereo,
 )
 from .analyzer import (
     samples_to_frames as samples_to_frames,

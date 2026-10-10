@@ -6,6 +6,7 @@ from ._acoustic import (
     estimate_room,
     room_geometry_from_estimate,
     room_morph,
+    room_morph_stereo,
     synthesize_rir,
 )
 from ._analysis import (
@@ -307,6 +308,7 @@ __all__ = [
     "estimate_room",
     "room_geometry_from_estimate",
     "room_morph",
+    "room_morph_stereo",
     "synthesize_rir",
     "analyze_dynamics",
     "analyze_impulse_response",
