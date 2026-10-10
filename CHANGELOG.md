@@ -6,6 +6,8 @@
 
 #### Rebuild
 
+- Within the same `SONARE_FEATURE_ABI_VERSION` 7, `SonareSynthPatch` moves to struct version 8 and appends `engine_params` / `engine_param_count` (a borrowed list of `SonareSynthEngineParam {key, value}`), so C callers rebuild; the bindings fill it from `engineParams` / `engine_params`.
+
 - Every binding checks the loaded native module's ABI version when it loads and refuses a mismatch with the new error code `AbiMismatch` (10): Node when the addon is required, WASM in `init()`, Python on first library use (the Python CLI exits with 13). The code is binding-only; the core never reports it.
 
 - `SONARE_FEATURE_ABI_VERSION` is 7 and `SonareBoundaryOptions` grows from 40 to 44 bytes with the new `reference_window` field, so C callers rebuild; a caller that starts from `sonare_boundary_options_default()` gets the field's default.
@@ -154,6 +156,11 @@
 
 - Fold the true-peak meter's pending window in at the end of a signal (C: `sonare_mixer_flush_meters`; Node and WASM: `Mixer.flushMeters()`; Python: `flush_meters()`). The function is additive. Offline engine renders and the one-shot mix flush every meter themselves.
 
+#### MIDI and synthesizer
+
+- Set a synth engine's own model fields on a patch by key — bow force, breath pressure, lip tension, strike position, FM operator levels, mode ratios — with `engineParams` (Node, WASM) / `engine_params` (Python, C). Keys are the engine section's fields in lowerCamelCase (`bowForce`, `ranks2.level`); an unknown key, another engine's key or a value outside the field's range is refused by name rather than clamped.
+- Describe every engine field and every `SynthPatch` field with its range, default and unit in the insert descriptor shape (C: `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`; Node and WASM: `synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; Python: `synth_engine_param_info`, `synth_patch_param_info`). The parameter unit vocabulary gains `mm`.
+
 #### Editing and voice
 
 - `transcribe` and `transcribeToClip` take the polyphonic tracker's limits: `maxPolyphony` (voices per frame, 1..64, default 10), `minFramePeakRatio` (default 0.20), `minRidgePeakRatio` (default 0.10) and `reattackRatio` (default 2.0), as snake_case keywords in Python, fields of `SonareTranscribeConfig` version 3 in C, and `--max-polyphony`, `--min-frame-peak-ratio`, `--min-ridge-peak-ratio` and `--reattack-ratio` on both CLIs. A written `0` is a real zero for the two peak ratios and turns re-strike splitting off for `reattackRatio`.
@@ -168,6 +175,7 @@
 
 ### Behaviour changes
 
+- A patch that sets only an engine mode voices that engine's base preset (fm the e-piano, modal the bell, percussion the GM drum kit, and so on) instead of zero-initialised model sections: `fm`, `modal` and `percussion` are no longer silent, the other engines sound like their base preset, and a preset combined with another engine mode voices that engine. Bare renders follow the base preset when the bank is re-tuned; `sample` without a bank stays silent.
 - `project align-takes` on both CLIs accepts a take whose source rate differs from the reference and scales the written anchors to the project rate; before, it refused the take, and a project whose rate differed from its sources' got anchors at the source rate.
 - Preset and assistant chain params return a version 2 multiband stage as flat keys instead of raising; a chain config whose multiband stage is structurally invalid is refused even when the stage is disabled, and two spellings of one multiband field in one call are refused.
 - Polyphonic `transcribe` keeps more of a dense recording by default: up to 10 voices per frame instead of 4, notes from a thirty-second note at the tempo instead of 140 ms, and a same-pitch re-strike as a new note instead of an extension of the sounding one. On rendered piano scores this raised onset recall on 5-8 voice chords, 16th notes at 128 BPM and repeated notes, at the cost of more spurious notes in thick chords. `minNoteMs` now applies to the polyphonic tracker as its shortest note, and its default depends on the tracker: 30 ms monophonic, and polyphonic a thirty-second note at the transcription tempo held within 30-60 ms. Known limits: the upper note of an octave doubling is usually lost, a re-strike much softer than the note it interrupts is not split, and broadband noise yields short notes (about 25 a second from white noise at -20 dBFS with a 60 ms shortest note).
