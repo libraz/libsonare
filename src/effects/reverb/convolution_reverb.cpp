@@ -88,6 +88,25 @@ void ConvolutionReverb::rebuild_convolvers() {
     }
     convolver->set_impulse_response(ir_);
   }
+  if (ir_left_.empty()) {
+    pair_convolvers_.clear();
+    pair_input_.clear();
+    pair_output_.clear();
+    pair_fill_.clear();
+    return;
+  }
+  const size_t part = static_cast<size_t>(partition_size_);
+  pair_convolvers_.resize(2);
+  for (size_t i = 0; i < 2; ++i) {
+    if (!pair_convolvers_[i]) {
+      pair_convolvers_[i] = std::make_unique<rt::PartitionedConvolver>(
+          rt::PartitionedConvolverConfig{partition_size_});
+    }
+    pair_convolvers_[i]->set_impulse_response(i == 0 ? ir_left_ : ir_right_);
+  }
+  pair_input_.assign(2, std::vector<float>(part, 0.0f));
+  pair_output_.assign(2, std::vector<float>(part, 0.0f));
+  pair_fill_.assign(2, 0);
 }
 
 void ConvolutionReverb::process(float* const* channels, int num_channels, int num_samples) {
@@ -101,37 +120,47 @@ void ConvolutionReverb::process(float* const* channels, int num_channels, int nu
   }
   // Convolvers/buffers are preallocated for the maximum supported channel count;
   // clamp here so the audio thread never allocates.
-  const int channels_to_process = std::min(num_channels, static_cast<int>(convolvers_.size()));
+  const int channels_to_process = std::min(num_channels, kMaxChannels);
   // Block-rate dry/wet: smoothed across blocks by the engine parameter slot
   // smoother, not per-sample (see Chorus::process for the rationale).
   const float wet = std::clamp(dry_wet_, 0.0f, 1.0f);
   const float dry = 1.0f - wet;
+  // A loaded pair serves stereo; one channel always runs the mono IR.
+  const bool use_pair = !pair_convolvers_.empty() && channels_to_process >= 2;
   for (int ch = 0; ch < channels_to_process; ++ch) {
-    auto& convolver = convolvers_[static_cast<size_t>(ch)];
-    if (channels[ch] == nullptr || !convolver) {
-      continue;
+    const size_t idx = static_cast<size_t>(ch);
+    if (use_pair) {
+      if (channels[ch] == nullptr || !pair_convolvers_[idx]) continue;
+      process_channel(*pair_convolvers_[idx], pair_input_[idx], pair_output_[idx], pair_fill_[idx],
+                      channels[ch], num_samples, dry, wet);
+    } else {
+      if (idx >= convolvers_.size()) break;
+      if (channels[ch] == nullptr || !convolvers_[idx]) continue;
+      process_channel(*convolvers_[idx], block_input_[idx], block_output_[idx], fill_count_[idx],
+                      channels[ch], num_samples, dry, wet);
     }
-    float* data = channels[ch];
-    auto& in_block = block_input_[static_cast<size_t>(ch)];
-    auto& out_block = block_output_[static_cast<size_t>(ch)];
-    int fill = fill_count_[static_cast<size_t>(ch)];
-    for (int i = 0; i < num_samples; ++i) {
-      // Emit the convolution output produced one partition ago, then stage the
-      // incoming sample. This introduces partition_size_ samples of latency.
-      // The dry path is delayed by the same amount so the dry/wet mix stays
-      // time-aligned.
-      const float input_sample = data[i];
-      const float wet_sample = out_block[static_cast<size_t>(fill)];
-      const float dry_sample = in_block[static_cast<size_t>(fill)];
-      data[i] = dry * dry_sample + wet * wet_sample;
-      in_block[static_cast<size_t>(fill)] = input_sample;
-      if (++fill == partition_size_) {
-        convolver->process_block(in_block.data(), out_block.data());
-        fill = 0;
-      }
-    }
-    fill_count_[static_cast<size_t>(ch)] = fill;
   }
+}
+
+void ConvolutionReverb::process_channel(rt::PartitionedConvolver& convolver,
+                                        std::vector<float>& in_block, std::vector<float>& out_block,
+                                        int& fill_ref, float* data, int num_samples, float dry,
+                                        float wet) {
+  int fill = fill_ref;
+  for (int i = 0; i < num_samples; ++i) {
+    // Emit the output produced one partition ago, then stage the incoming sample; the dry path
+    // is delayed by the same partition so the mix stays time-aligned.
+    const float input_sample = data[i];
+    const float wet_sample = out_block[static_cast<size_t>(fill)];
+    const float dry_sample = in_block[static_cast<size_t>(fill)];
+    data[i] = dry * dry_sample + wet * wet_sample;
+    in_block[static_cast<size_t>(fill)] = input_sample;
+    if (++fill == partition_size_) {
+      convolver.process_block(in_block.data(), out_block.data());
+      fill = 0;
+    }
+  }
+  fill_ref = fill;
 }
 
 void ConvolutionReverb::reset() {
@@ -147,6 +176,12 @@ void ConvolutionReverb::reset() {
     std::fill(block.begin(), block.end(), 0.0f);
   }
   std::fill(fill_count_.begin(), fill_count_.end(), 0);
+  for (auto& convolver : pair_convolvers_) {
+    if (convolver) convolver->reset();
+  }
+  for (auto& block : pair_input_) std::fill(block.begin(), block.end(), 0.0f);
+  for (auto& block : pair_output_) std::fill(block.begin(), block.end(), 0.0f);
+  std::fill(pair_fill_.begin(), pair_fill_.end(), 0);
 }
 
 void ConvolutionReverb::store_ir(const float* impulse_response, int num_samples) {
@@ -154,6 +189,8 @@ void ConvolutionReverb::store_ir(const float* impulse_response, int num_samples)
     throw SonareException(ErrorCode::InvalidParameter, "invalid impulse response");
   }
   ir_.assign(impulse_response, impulse_response + num_samples);
+  ir_left_.clear();
+  ir_right_.clear();
   // An explicit IR overrides the algorithmic default synthesis in prepare().
   explicit_ir_ = true;
 }
@@ -184,6 +221,31 @@ void ConvolutionReverb::load_ir_unit_energy(const float* impulse_response, int n
     throw SonareException(ErrorCode::InvalidParameter,
                           "impulse response carries no energy; nothing to normalize");
   }
+  rebuild_convolvers();
+}
+
+void ConvolutionReverb::load_ir_set_unit_energy(const std::vector<float>& mono,
+                                                const std::vector<float>& left,
+                                                const std::vector<float>& right) {
+  auto energy_of = [](const std::vector<float>& v) {
+    double e = 0.0;
+    for (float x : v) e += static_cast<double>(x) * static_cast<double>(x);
+    return e;
+  };
+  const double e_left = energy_of(left);
+  const double e_right = energy_of(right);
+  if (mono.empty() || left.empty() || right.empty() || !(energy_of(mono) > 0.0) ||
+      !(e_left > 0.0) || !(e_right > 0.0)) {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "impulse response set needs three non-empty IRs with energy");
+  }
+  store_ir(mono.data(), static_cast<int>(mono.size()));
+  normalize_ir_unit_energy();
+  const float scale = 1.0f / static_cast<float>(std::sqrt(0.5 * (e_left + e_right)));
+  ir_left_ = left;
+  ir_right_ = right;
+  for (float& x : ir_left_) x *= scale;
+  for (float& x : ir_right_) x *= scale;
   rebuild_convolvers();
 }
 

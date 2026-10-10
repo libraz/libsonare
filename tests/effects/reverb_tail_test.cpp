@@ -800,3 +800,143 @@ TEST_CASE("Dynamic EQ and the streaming repair stages report the ring they leave
     }
   }
 }
+
+namespace {
+
+std::vector<float> make_test_ir(int length, float seed) {
+  std::vector<float> ir(static_cast<size_t>(length));
+  for (int i = 0; i < length; ++i) {
+    ir[static_cast<size_t>(i)] =
+        std::sin(seed * static_cast<float>(i + 1)) * std::exp(-0.01f * static_cast<float>(i));
+  }
+  return ir;
+}
+
+ConvolutionReverb make_wet_reverb() {
+  ConvolutionReverbConfig config;
+  config.dry_wet = 1.0f;
+  ConvolutionReverb reverb(config);
+  reverb.suppress_default_ir_synthesis();
+  return reverb;
+}
+
+std::vector<std::vector<float>> run_reverb(ConvolutionReverb& reverb, int num_channels,
+                                           const std::vector<float>& input) {
+  std::vector<std::vector<float>> data(static_cast<size_t>(num_channels), input);
+  std::vector<float*> ptrs;
+  for (auto& ch : data) ptrs.push_back(ch.data());
+  reverb.process(ptrs.data(), num_channels, static_cast<int>(input.size()));
+  return data;
+}
+
+std::vector<float> noise_input(int n) {
+  std::vector<float> in(static_cast<size_t>(n));
+  for (int i = 0; i < n; ++i) in[static_cast<size_t>(i)] = std::sin(0.37f * static_cast<float>(i));
+  return in;
+}
+
+double ir_energy(const std::vector<float>& v) {
+  double e = 0.0;
+  for (float x : v) e += static_cast<double>(x) * static_cast<double>(x);
+  return e;
+}
+
+}  // namespace
+
+TEST_CASE("ConvolutionReverb IR set: no pair keeps the mono path unchanged",
+          "[effects][reverb][convolution]") {
+  const auto mono = make_test_ir(700, 0.21f);
+  const auto left = make_test_ir(500, 0.33f);
+  const auto right = make_test_ir(900, 0.47f);
+  const auto input = noise_input(4096);
+
+  auto reference = make_wet_reverb();
+  reference.load_ir_unit_energy(mono.data(), static_cast<int>(mono.size()));
+  reference.prepare(48000.0, 512);
+
+  auto discarded = make_wet_reverb();
+  discarded.load_ir_set_unit_energy(mono, left, right);
+  discarded.load_ir_unit_energy(mono.data(), static_cast<int>(mono.size()));
+  discarded.prepare(48000.0, 512);
+
+  for (int channels : {1, 2}) {
+    reference.reset();
+    discarded.reset();
+    CHECK(run_reverb(reference, channels, input) == run_reverb(discarded, channels, input));
+  }
+  CHECK(discarded.ir_size() == static_cast<int>(mono.size()));
+}
+
+TEST_CASE("ConvolutionReverb IR set: one channel runs the mono IR",
+          "[effects][reverb][convolution]") {
+  const auto mono = make_test_ir(700, 0.21f);
+  const auto input = noise_input(4096);
+
+  auto reference = make_wet_reverb();
+  reference.load_ir_unit_energy(mono.data(), static_cast<int>(mono.size()));
+  reference.prepare(48000.0, 512);
+
+  auto paired = make_wet_reverb();
+  paired.load_ir_set_unit_energy(mono, make_test_ir(500, 0.33f), make_test_ir(900, 0.47f));
+  paired.prepare(48000.0, 512);
+
+  CHECK(run_reverb(reference, 1, input) == run_reverb(paired, 1, input));
+}
+
+TEST_CASE("ConvolutionReverb IR set: two channels run left and right with a common scale",
+          "[effects][reverb][convolution]") {
+  const auto mono = make_test_ir(700, 0.21f);
+  const auto left = make_test_ir(500, 0.33f);
+  auto right = make_test_ir(900, 0.47f);
+  for (float& x : right) x *= 0.5f;
+
+  auto reverb = make_wet_reverb();
+  reverb.load_ir_set_unit_energy(mono, left, right);
+  reverb.prepare(48000.0, 512);
+
+  const double scale = 1.0 / std::sqrt(0.5 * (ir_energy(left) + ir_energy(right)));
+  std::vector<float> impulse(2048, 0.0f);
+  impulse[0] = 1.0f;
+  const auto out = run_reverb(reverb, 2, impulse);
+  const size_t latency = static_cast<size_t>(reverb.latency_samples());
+  double e_left = 0.0;
+  double e_right = 0.0;
+  for (size_t i = 0; i < left.size(); ++i) {
+    CHECK(out[0][latency + i] == Catch::Approx(left[i] * scale).margin(1e-4));
+    e_left += static_cast<double>(left[i] * scale) * (left[i] * scale);
+  }
+  for (size_t i = 0; i < right.size(); ++i) {
+    CHECK(out[1][latency + i] == Catch::Approx(right[i] * scale).margin(1e-4));
+    e_right += static_cast<double>(right[i] * scale) * (right[i] * scale);
+  }
+  CHECK(0.5 * (e_left + e_right) == Catch::Approx(1.0).epsilon(1e-4));
+}
+
+TEST_CASE("ConvolutionReverb IR set: tail is the longest IR and latency follows the mono IR",
+          "[effects][reverb][convolution]") {
+  const auto mono = make_test_ir(700, 0.21f);
+  auto with_pair = make_wet_reverb();
+  with_pair.load_ir_set_unit_energy(mono, make_test_ir(500, 0.33f), make_test_ir(900, 0.47f));
+  with_pair.prepare(48000.0, 512);
+  CHECK(with_pair.tail_samples() == 900);
+  CHECK(with_pair.ir_size() == 900);
+
+  auto mono_only = make_wet_reverb();
+  mono_only.load_ir_unit_energy(mono.data(), static_cast<int>(mono.size()));
+  mono_only.prepare(48000.0, 512);
+  CHECK(with_pair.latency_samples() == mono_only.latency_samples());
+}
+
+TEST_CASE("ConvolutionReverb IR set: empty or silent members are rejected",
+          "[effects][reverb][convolution]") {
+  const auto ir = make_test_ir(300, 0.3f);
+  const std::vector<float> empty;
+  const std::vector<float> silent(300, 0.0f);
+  ConvolutionReverb reverb;
+  const std::vector<std::vector<float>> bad = {empty, silent};
+  for (const auto& b : bad) {
+    CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(b, ir, ir), sonare::SonareException);
+    CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(ir, b, ir), sonare::SonareException);
+    CHECK_THROWS_AS(reverb.load_ir_set_unit_energy(ir, ir, b), sonare::SonareException);
+  }
+}

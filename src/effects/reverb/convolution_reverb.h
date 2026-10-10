@@ -79,6 +79,17 @@ class ConvolutionReverb : public rt::ProcessorBase {
   /// render as digital silence rather than as an audible room.
   void load_ir_unit_energy(const float* impulse_response, int num_samples);
 
+  /// @brief Load a mono IR plus a left/right IR pair.
+  ///
+  /// The mono IR is normalized exactly as load_ir_unit_energy() does. The pair is scaled by
+  /// one common factor so (E_left + E_right) / 2 == 1. process() with one channel runs the
+  /// mono IR; with two or more channels the first two run left/right. Each path keeps its own
+  /// state, so changing the channel count mid-stream switches path and cuts the tail.
+  /// load_ir() / load_ir_unit_energy() discard the pair. Throws ErrorCode::InvalidParameter
+  /// when any of the three is empty or silent.
+  void load_ir_set_unit_energy(const std::vector<float>& mono, const std::vector<float>& left,
+                               const std::vector<float>& right);
+
   // Automatable parameters (RT-safe, no allocation, no state reset):
   //   0 = dry_wet (clamped to [0, 1] in process())
   bool set_parameter_impl(unsigned int param_id, float value) override;
@@ -95,10 +106,10 @@ class ConvolutionReverb : public rt::ProcessorBase {
   /// dry-only configuration has processing latency but no audible decay tail.
   int tail_samples() const noexcept override {
     rt::TailBudget tail;
-    if (std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f) tail.delay(static_cast<double>(ir_.size()));
+    if (std::clamp(dry_wet_, 0.0f, 1.0f) > 0.0f) tail.delay(static_cast<double>(max_ir_length()));
     return tail.samples();
   }
-  int ir_size() const noexcept { return static_cast<int>(ir_.size()); }
+  int ir_size() const noexcept { return static_cast<int>(max_ir_length()); }
 
   /// Skips implicit noise-IR construction in prepare() when a caller will
   /// synchronously provide an explicit IR with load_ir().
@@ -106,6 +117,13 @@ class ConvolutionReverb : public rt::ProcessorBase {
 
  private:
   void rebuild_convolvers();
+  std::size_t max_ir_length() const noexcept {
+    return std::max({ir_.size(), ir_left_.size(), ir_right_.size()});
+  }
+  // Run one channel through its convolver and staging buffers.
+  void process_channel(rt::PartitionedConvolver& convolver, std::vector<float>& in_block,
+                       std::vector<float>& out_block, int& fill, float* data, int num_samples,
+                       float dry, float wet);
   // Synthesize a decaying-noise IR from config_ at the prepared sample rate.
   // Used only when no explicit IR was supplied via load_ir().
   void synthesize_default_ir(double sample_rate);
@@ -136,6 +154,14 @@ class ConvolutionReverb : public rt::ProcessorBase {
   std::vector<std::vector<float>> block_input_;
   std::vector<std::vector<float>> block_output_;
   std::vector<int> fill_count_;
+
+  // Left/right IR pair and its dedicated convolvers/buffers (empty when no pair is loaded).
+  std::vector<float> ir_left_;
+  std::vector<float> ir_right_;
+  std::vector<std::unique_ptr<rt::PartitionedConvolver>> pair_convolvers_;
+  std::vector<std::vector<float>> pair_input_;
+  std::vector<std::vector<float>> pair_output_;
+  std::vector<int> pair_fill_;
   rt::StageGate stage_;
 };
 
