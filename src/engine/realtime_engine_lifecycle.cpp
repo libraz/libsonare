@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <new>
 #include <utility>
@@ -77,6 +78,8 @@ void RealtimeEngine::reset_to_unprepared() noexcept {
     source.fill(nullptr);
   }
 #endif
+  instrument_swap_tails_.release_storage();
+  instrument_swap_fade_frames_ = 0;
   clip_scratch_storage_.clear();
   clip_scratch_channels_.fill(nullptr);
   // configure(0, 0) swaps in an empty bank, which is how the delay lines give
@@ -161,6 +164,10 @@ bool RealtimeEngine::prepare_impl(double sample_rate, int max_block_size, size_t
     }
   }
 #endif
+  // A fade rendered at the previous rate or channel layout no longer fits.
+  instrument_swap_tails_.discard_tails();
+  instrument_swap_fade_frames_ =
+      std::max(1, static_cast<int>(std::lround(kInstrumentSwapFadeMs * sample_rate_ / 1000.0)));
   // PDC clip-bus scratch: the clip player renders here first when an instrument
   // reports latency, so the clip bus can be delayed (phase-aligned with the
   // instruments) before being summed into the source layer.
@@ -511,6 +518,8 @@ void RealtimeEngine::finish_offline_render() noexcept {
 #if defined(SONARE_WITH_ARRANGEMENT)
   midi_sequencer_.all_notes_off(midi::DeviceFrame{transport_.render_frame()});
   flush_pdc_delays();
+  // The render has ended, so a later swap has no output left to fade into.
+  instrument_swap_tails_.end_stream();
 #endif
 #if defined(SONARE_WITH_MIXING)
   // Reached on its own when arrangement is compiled out; flush_pdc_delays()
@@ -698,6 +707,7 @@ void RealtimeEngine::reset_processing_now() noexcept {
 #endif
 #if defined(SONARE_WITH_ARRANGEMENT)
   flush_pdc_delays();
+  instrument_swap_tails_.discard_tails();
 #endif
 }
 

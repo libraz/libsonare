@@ -32,6 +32,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT)
 #include "engine/channel_delay.h"
 #include "engine/instrument_rack.h"
+#include "engine/instrument_swap_tail.h"
 #include "host/midi_io.h"
 #include "midi/cc_map.h"
 #include "midi/clock_sync.h"
@@ -252,10 +253,10 @@ class RealtimeEngine : private ClipPageRequestSink {
     applied_timeline_sample_rate_ = sample_rate;
   }
   int prepared_channels() const noexcept { return prepared_channels_; }
-  /// Bytes in the channel-planar scratch buffers and active PDC delay storage
-  /// allocated by prepare()/instrument binding. This intentionally excludes
-  /// fixed engine state and queue capacity, so hosts can account for the memory
-  /// saved by declaring their actual channel count.
+  /// Bytes in the channel-planar scratch buffers, active PDC delay storage and
+  /// instrument-swap fade tails allocated by prepare()/instrument binding. This
+  /// intentionally excludes fixed engine state and queue capacity, so hosts can
+  /// account for the memory saved by declaring their actual channel count.
   size_t prepared_scratch_bytes() const noexcept {
     size_t samples = input_capture_storage_.size();
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -265,6 +266,7 @@ class RealtimeEngine : private ClipPageRequestSink {
     for (size_t i = 0; i < pdc_instrument_count_; ++i) {
       samples += instrument_pdc_delays_[i].reserved_samples();
     }
+    samples += instrument_swap_tails_.reserved_samples();
 #endif
 #if defined(SONARE_WITH_MIXING)
     samples += monitor_bus_storage_.size();
@@ -642,10 +644,17 @@ class RealtimeEngine : private ClipPageRequestSink {
   // the rack is full, or instrument/token/PDC preparation fails;
   // @ref last_midi_instrument_bind_status() reports which. Failure preserves the
   // previous destination binding and any binding of the incoming instance at
-  // another destination. Control-thread only, with process() stopped;
-  // swapping/clearing first releases notes sounding on that destination so the
-  // outgoing instrument does not hang. May prepare() the instrument (allocates)
-  // when the engine is already prepared.
+  // another destination. Control-thread only, with process() stopped; may
+  // prepare() the instrument and allocate. Swapping or clearing releases the
+  // notes sounding on that destination, then renders the outgoing instrument's
+  // next 10 ms with a fade to silence, which the following blocks mix into the
+  // destination's output, so a swap during playback does not click. The engine
+  // never touches the outgoing instrument after this returns, so the caller may
+  // destroy it at once. The fade is rendered only when the outgoing instrument
+  // has rendered since it was bound and the output stream has not ended
+  // (finish_offline_render ends it). The incoming instrument starts from its own
+  // default channel state: the engine does not replay program, bank or
+  // controller state, so a host that needs it resends it.
   bool set_midi_instrument(uint32_t destination_id, midi::MidiInstrument* instrument);
   MidiInstrumentBindStatus last_midi_instrument_bind_status() const noexcept {
     return last_midi_instrument_bind_status_.load(std::memory_order_relaxed);
@@ -1196,6 +1205,11 @@ class RealtimeEngine : private ClipPageRequestSink {
   midi::MidiSysExPreparer rack_sysex_preparer() const;
   // AUDIO thread: hands the current transport snapshot to every bound instrument.
   void publish_instrument_transport() noexcept;
+  // CONTROL thread, process() stopped: renders @p outgoing's faded tail for
+  // @p destination_id after its notes were released, summing in any tail still
+  // pending there. Renders nothing unless @p outgoing rendered since its bind.
+  void render_instrument_swap_tail(uint32_t destination_id,
+                                   midi::MidiInstrument* outgoing) noexcept;
   void emit_midi_transport_command(uint8_t status, int64_t render_frame) noexcept;
   void emit_midi_clock_block(int64_t timeline_start_sample, int64_t render_start_frame,
                              int num_frames) noexcept;
@@ -1522,6 +1536,12 @@ class RealtimeEngine : private ClipPageRequestSink {
       midi_instrument_source_channels_{};
 #endif
   InstrumentSourceRenderSink* instrument_source_render_sink_ = nullptr;
+  // Fade an instrument swap renders for the outgoing instrument, held as time
+  // and converted to frames in prepare().
+  static constexpr double kInstrumentSwapFadeMs = 10.0;
+  int instrument_swap_fade_frames_ = 0;
+  // Pending fade-out tails of swapped or cleared instruments, per destination.
+  InstrumentSwapTails instrument_swap_tails_{};
   // Automated instrument parameters. Each destination table entry pins one
   // destination_id (never reused for a different destination while the engine
   // lives), so a reserved instrument id keeps pointing at its destination even

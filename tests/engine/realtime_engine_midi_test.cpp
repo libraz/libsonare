@@ -3534,3 +3534,227 @@ TEST_CASE("RealtimeEngine freeze withdraws the MIDI it baked so it plays once",
     REQUIRE(replay[static_cast<size_t>(i)] == Catch::Approx(live[static_cast<size_t>(i)]));
   }
 }
+
+namespace {
+
+// Tracks an instrument from outside it, so a test can tell whether the engine
+// rendered it, including after the instance itself has been destroyed.
+struct DroneProbe {
+  int process_calls = 0;
+  bool destroyed = false;
+};
+
+// Emits a steady level that ignores note-offs, standing in for a voice whose
+// release outlasts the swap. When source-aware it renders into the output of
+// @p source_track_id (falling back to output 0), as a per-voice instrument does.
+class DroneInstrument final : public MidiInstrument {
+ public:
+  DroneInstrument(float level, DroneProbe* probe, bool source_aware = false,
+                  uint32_t source_track_id = 0)
+      : level_(level), probe_(probe), source_aware_(source_aware), track_id_(source_track_id) {}
+  ~DroneInstrument() override {
+    if (probe_ != nullptr) probe_->destroyed = true;
+  }
+  void prepare(double, int) override {}
+  void process(float* const* channels, int num_channels, int num_samples) override {
+    if (probe_ != nullptr) ++probe_->process_calls;
+    for (int c = 0; c < num_channels; ++c) {
+      for (int i = 0; i < num_samples; ++i) channels[c][i] += level_;
+    }
+  }
+  bool process_source_tracks(const sonare::midi::MidiInstrumentSourceOutput* outputs,
+                             size_t output_count, int num_channels,
+                             int num_samples) noexcept override {
+    if (!source_aware_) return false;
+    if (probe_ != nullptr) ++probe_->process_calls;
+    size_t target = 0;
+    for (size_t i = 0; i < output_count; ++i) {
+      if (outputs[i].source_track_id == track_id_) target = i;
+    }
+    for (int c = 0; c < num_channels; ++c) {
+      for (int i = 0; i < num_samples; ++i) outputs[target].channels[c][i] += level_;
+    }
+    return true;
+  }
+  bool supports_source_track_rendering() const noexcept override { return source_aware_; }
+  void reset() override {}
+  void on_event(uint32_t, const MidiEvent&) noexcept override {}
+
+ private:
+  float level_;
+  DroneProbe* probe_;
+  bool source_aware_;
+  uint32_t track_id_;
+};
+
+constexpr double kSwapRate = 48000.0;
+constexpr int kSwapBlock = 64;
+// 10 ms at 48 kHz.
+constexpr int kSwapFadeFrames = 480;
+
+// Renders @p frames in kSwapBlock blocks and returns the left channel.
+std::vector<float> render_left(RealtimeEngine& engine, int frames) {
+  std::vector<float> out;
+  std::vector<float> left(kSwapBlock, 0.0f);
+  std::vector<float> right(kSwapBlock, 0.0f);
+  float* io[] = {left.data(), right.data()};
+  for (int done = 0; done < frames; done += kSwapBlock) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    engine.process(io, 2, kSwapBlock);
+    out.insert(out.end(), left.begin(), left.end());
+  }
+  return out;
+}
+
+// The output must fall from @p from to @p to across the fade window without a
+// step: starting near @p from, never rising, and settling on @p to after it.
+void require_faded(const std::vector<float>& after, float from, float to) {
+  REQUIRE(after.size() > static_cast<size_t>(kSwapFadeFrames));
+  CHECK(std::abs(after[0] - from) < 0.01f * std::abs(from - to));
+  for (size_t i = 1; i < static_cast<size_t>(kSwapFadeFrames); ++i) {
+    REQUIRE(after[i] <= after[i - 1] + 1e-6f);
+  }
+  CHECK(std::abs(after[kSwapFadeFrames / 2] - (from + to) * 0.5f) < 0.02f * std::abs(from - to));
+  for (size_t i = kSwapFadeFrames; i < after.size(); ++i) {
+    REQUIRE(after[i] == Catch::Approx(to).margin(1e-6));
+  }
+}
+
+}  // namespace
+
+TEST_CASE("an instrument swap fades the outgoing output instead of cutting it",
+          "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  DroneProbe outgoing_probe;
+  DroneInstrument outgoing(0.8f, &outgoing_probe);
+  DroneInstrument silent(0.0f, nullptr);
+  REQUIRE(engine.set_midi_instrument(3, &outgoing));
+  const std::vector<float> before = render_left(engine, 4 * kSwapBlock);
+  REQUIRE(before.back() == Catch::Approx(0.8f));
+
+  REQUIRE(engine.set_midi_instrument(3, &silent));
+  require_faded(render_left(engine, 2 * kSwapFadeFrames), before.back(), 0.0f);
+}
+
+TEST_CASE("clearing an instrument fades its output instead of cutting it", "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  DroneInstrument outgoing(0.6f, nullptr);
+  REQUIRE(engine.set_midi_instrument(5, &outgoing));
+  const std::vector<float> before = render_left(engine, 4 * kSwapBlock);
+
+  REQUIRE(engine.set_midi_instrument(5, nullptr));
+  REQUIRE(engine.midi_instrument_count() == 0);
+  require_faded(render_left(engine, 2 * kSwapFadeFrames), before.back(), 0.0f);
+}
+
+TEST_CASE("a swap fade ends in exactly what the incoming instrument renders",
+          "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  DroneInstrument outgoing(0.9f, nullptr);
+  DroneInstrument incoming(0.25f, nullptr);
+  REQUIRE(engine.set_midi_instrument(0, &outgoing));
+  render_left(engine, 2 * kSwapBlock);
+
+  REQUIRE(engine.set_midi_instrument(0, &incoming));
+  const std::vector<float> after = render_left(engine, 3 * kSwapFadeFrames);
+  // The incoming instrument plays from the first frame, with the fade on top.
+  CHECK(after[0] == Catch::Approx(0.9f + 0.25f).margin(0.01));
+  for (size_t i = kSwapFadeFrames; i < after.size(); ++i) {
+    REQUIRE(after[i] == Catch::Approx(0.25f).margin(1e-6));
+  }
+
+  SECTION("a second swap inside the fade carries the first tail on") {
+    DroneInstrument third(0.0f, nullptr);
+    RealtimeEngine again;
+    again.prepare(kSwapRate, kSwapBlock);
+    DroneInstrument first(0.5f, nullptr);
+    DroneInstrument second(0.3f, nullptr);
+    REQUIRE(again.set_midi_instrument(0, &first));
+    render_left(again, 2 * kSwapBlock);
+    REQUIRE(again.set_midi_instrument(0, &second));
+    const std::vector<float> mid = render_left(again, kSwapBlock);
+    REQUIRE(again.set_midi_instrument(0, &third));
+    const std::vector<float> tail = render_left(again, 2 * kSwapFadeFrames);
+    // Both tails sound at the boundary, so the output does not step down.
+    CHECK(std::abs(tail[0] - mid.back()) < 0.02f);
+    for (size_t i = kSwapFadeFrames; i < tail.size(); ++i) REQUIRE(tail[i] == 0.0f);
+  }
+}
+
+TEST_CASE("an instrument that never rendered is swapped without a fade or a render",
+          "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  // The destination has rendered before, through an earlier instrument.
+  DroneInstrument earlier(0.4f, nullptr);
+  REQUIRE(engine.set_midi_instrument(2, &earlier));
+  render_left(engine, 2 * kSwapBlock);
+  DroneProbe probe;
+  DroneInstrument outgoing(0.7f, &probe);
+  DroneInstrument incoming(0.2f, nullptr);
+  REQUIRE(engine.set_midi_instrument(2, &outgoing));
+  REQUIRE(engine.set_midi_instrument(2, &incoming));
+  CHECK(probe.process_calls == 0);
+  const std::vector<float> after = render_left(engine, 2 * kSwapFadeFrames);
+  // Only the earlier instrument's fade sounds over the incoming one.
+  CHECK(after[0] == Catch::Approx(0.4f + 0.2f).margin(0.01));
+  for (size_t i = kSwapFadeFrames; i < after.size(); ++i) {
+    REQUIRE(after[i] == Catch::Approx(0.2f).margin(1e-6));
+  }
+  CHECK(probe.process_calls == 0);
+
+  SECTION("a finished offline render leaves nothing to fade") {
+    DroneProbe rendered_probe;
+    DroneInstrument rendered(0.7f, &rendered_probe);
+    REQUIRE(engine.set_midi_instrument(4, &rendered));
+    std::vector<float> left(kSwapBlock, 0.0f);
+    std::vector<float> right(kSwapBlock, 0.0f);
+    float* io[] = {left.data(), right.data()};
+    engine.render_offline(io, 2, kSwapBlock, kSwapBlock);
+    const int calls = rendered_probe.process_calls;
+    REQUIRE(calls > 0);
+    REQUIRE(engine.set_midi_instrument(4, nullptr));
+    CHECK(rendered_probe.process_calls == calls);
+    const std::vector<float> rest = render_left(engine, kSwapBlock);
+    for (float sample : rest) REQUIRE(sample == Catch::Approx(0.2f).margin(1e-6));
+  }
+}
+
+TEST_CASE("the caller may destroy the outgoing instrument as soon as the swap returns",
+          "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  DroneProbe probe;
+  auto outgoing = std::make_unique<DroneInstrument>(0.8f, &probe);
+  DroneInstrument incoming(0.0f, nullptr);
+  REQUIRE(engine.set_midi_instrument(1, outgoing.get()));
+  const std::vector<float> before = render_left(engine, 2 * kSwapBlock);
+
+  REQUIRE(engine.set_midi_instrument(1, &incoming));
+  const int calls_at_swap = probe.process_calls;
+  outgoing.reset();
+  REQUIRE(probe.destroyed);
+  require_faded(render_left(engine, 2 * kSwapFadeFrames), before.back(), 0.0f);
+  CHECK(probe.process_calls == calls_at_swap);
+}
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("a source-aware instrument's fade reaches the lane its voice played on",
+          "[engine][midi][swap]") {
+  RealtimeEngine engine;
+  engine.prepare(kSwapRate, kSwapBlock);
+  REQUIRE(engine.set_track_lanes({{10}}));
+  DroneInstrument outgoing(0.5f, nullptr, true, 10);
+  DroneInstrument silent(0.0f, nullptr, true, 10);
+  REQUIRE(engine.set_midi_instrument(7, &outgoing));
+  const std::vector<float> before = render_left(engine, 8 * kSwapBlock);
+  REQUIRE(before.back() > 0.1f);
+
+  REQUIRE(engine.set_midi_instrument(7, &silent));
+  require_faded(render_left(engine, 2 * kSwapFadeFrames), before.back(), 0.0f);
+}
+#endif

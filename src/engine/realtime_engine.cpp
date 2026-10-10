@@ -539,7 +539,9 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
     // is sized in prepare(); the audio thread only zero-fills and sums it.
     // Instruments render whenever bound, rolling or not: a release, a held pedal or
     // a reverb tail outlives the last note-off and the transport alike.
-    if (!instrument_rack_.empty()) {
+    // A swapped-out or cleared instrument's fade tail keeps its destination rendering.
+    const bool swap_tails_pending = instrument_swap_tails_.any_pending();
+    if (!instrument_rack_.empty() || swap_tails_pending) {
       // A tempo-synced delay / arpeggiator / LFO follows the transport snapshot
       // published above instead of free-running. Each instrument renders into the
       // shared scratch (zero, process) and is summed into the sub-block, so
@@ -560,8 +562,13 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                                                   source_track_ids.data(), source_track_ids.size())
                                             : 0;
 #endif
-      instrument_rack_.for_each([&](uint32_t destination_id,
-                                    midi::MidiInstrument* instrument) noexcept {
+      // Renders one destination; a null instrument renders only its fade tail.
+      const auto render_destination = [&](uint32_t destination_id,
+                                          midi::MidiInstrument* instrument) noexcept {
+        InstrumentSwapTails::Entry* swap_entry = instrument_swap_tails_.find(destination_id);
+        InstrumentSwapTails::Entry* tail =
+            swap_tails_pending && swap_entry != nullptr && swap_entry->tail_pending() ? swap_entry
+                                                                                      : nullptr;
         // MIDI clip gain/fade, resolved once and applied to every buffer this
         // destination writes in either branch below.
         const std::vector<midi::MidiClipSchedule>* clip_schedule = midi_sequencer_.current_clips();
@@ -577,7 +584,8 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
         // one legacy delay line, while each source needs independent delay
         // history. Latency-bearing instruments keep the established
         // destination path until the source-PDC bank is configured.
-        if (lane_mix_ready && pdc_total_q8_ == 0) {
+        if (lane_mix_ready && pdc_total_q8_ == 0 &&
+            (instrument != nullptr || (tail != nullptr && tail->tail_source_aware))) {
           std::array<midi::MidiInstrumentSourceOutput, kMaxInstrumentSourceOutputs> outputs{};
           for (size_t source = 0; source <= source_track_count; ++source) {
             const uint32_t track_id = source == 0 ? 0 : source_track_ids[source - 1];
@@ -589,8 +597,28 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                   0.0f);
             }
           }
-          if (instrument->process_source_tracks(outputs.data(), source_track_count + 1, channels,
+          if (instrument == nullptr ||
+              instrument->process_source_tracks(outputs.data(), source_track_count + 1, channels,
                                                 num_frames)) {
+            if (instrument != nullptr) {
+              InstrumentSwapTails::mark_rendered(swap_entry, true, channels);
+            }
+            if (tail != nullptr) {
+              if (tail->tail_source_aware) {
+                // Each plane joins the output of the same source track; others are dropped.
+                for (size_t plane = 0; plane < tail->tail_planes(); ++plane) {
+                  for (size_t source = 0; source <= source_track_count; ++source) {
+                    if (outputs[source].source_track_id != tail->tail_track_ids[plane]) continue;
+                    InstrumentSwapTails::add_plane(*tail, plane, outputs[source].channels, channels,
+                                                   num_frames);
+                    break;
+                  }
+                }
+                InstrumentSwapTails::advance(*tail, num_frames);
+              } else {
+                tail->drop_tail();
+              }
+            }
             if (has_clip_envelope) {
               for (size_t source = 0; source <= source_track_count; ++source) {
                 midi::apply_midi_clip_envelope(envelope_block, *clip_schedule, destination_id,
@@ -630,7 +658,19 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
           std::fill(midi_instrument_channels_[static_cast<size_t>(ch)],
                     midi_instrument_channels_[static_cast<size_t>(ch)] + num_frames, 0.0f);
         }
-        instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+        if (instrument != nullptr) {
+          instrument->process(midi_instrument_channels_.data(), channels, num_frames);
+          InstrumentSwapTails::mark_rendered(swap_entry, false, channels);
+        }
+        if (tail != nullptr) {
+          if (!tail->tail_source_aware) {
+            InstrumentSwapTails::add_plane(*tail, 0, midi_instrument_channels_.data(), channels,
+                                           num_frames);
+            InstrumentSwapTails::advance(*tail, num_frames);
+          } else {
+            tail->drop_tail();
+          }
+        }
         if (has_clip_envelope) {
           midi::apply_midi_clip_envelope(envelope_block, *clip_schedule, destination_id,
                                          transport_.sample_position(),
@@ -668,7 +708,12 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
             out[i] += inst[i];
           }
         }
-      });
+      };
+      instrument_rack_.for_each(render_destination);
+      if (swap_tails_pending) {
+        instrument_swap_tails_.for_each_unbound_pending(
+            [&](uint32_t destination_id) noexcept { render_destination(destination_id, nullptr); });
+      }
 #if defined(SONARE_WITH_MIXING)
       if (!block_open && lane_mix_ready && any_lane_routed) {
         // No block pass opened, so the rack-only source mix is closed here.

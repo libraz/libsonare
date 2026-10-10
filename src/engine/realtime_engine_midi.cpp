@@ -1,5 +1,8 @@
 #include <algorithm>
+#include <array>
 #include <atomic>
+#include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <new>
@@ -11,11 +14,14 @@
 #include "engine/realtime_engine.h"
 #include "engine/realtime_engine_internal.h"
 #include "rt/tail_budget.h"
+#include "util/constants.h"
 #include "util/exception.h"
 #include "util/insertion_sort.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 namespace sonare::engine {
+
+using constants::kPiD;
 
 bool RealtimeEngine::bind_midi_cc(uint8_t controller, uint8_t channel, uint32_t param_id,
                                   float min_value, float max_value) noexcept {
@@ -618,9 +624,15 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   if (previous != nullptr) {
     midi_sequencer_.all_notes_off_for_destination(destination_id,
                                                   midi::DeviceFrame{transport_.render_frame()});
+    render_instrument_swap_tail(destination_id, previous);
   }
   if (!instrument_rack_.set(destination_id, instrument)) {
     return report(MidiInstrumentBindStatus::kRackFull);
+  }
+  if (instrument != nullptr) {
+    instrument_swap_tails_.on_bound(destination_id);
+  } else {
+    instrument_swap_tails_.on_unbound(destination_id);
   }
   commit_pdc(next_pdc);
   // Adopt now so a full hand-off ring cannot strand the prepared bank as pending.
@@ -651,6 +663,116 @@ bool RealtimeEngine::set_midi_instrument(uint32_t destination_id,
   }
   release_instrument_automations(destination_id);
   return report(MidiInstrumentBindStatus::kBound);
+}
+
+void RealtimeEngine::render_instrument_swap_tail(uint32_t destination_id,
+                                                 midi::MidiInstrument* outgoing) noexcept {
+  InstrumentSwapTails::Entry* entry = instrument_swap_tails_.find(destination_id);
+  if (entry == nullptr || outgoing == nullptr || !entry->rendered_since_bind) return;
+  const int frames = instrument_swap_fade_frames_;
+  const int channels = std::min(entry->last_render_channels, prepared_channels_);
+  if (max_block_size_ <= 0 || frames <= 0 || channels <= 0) return;
+
+  // The planes follow the branch the outgoing instrument last rendered through.
+  bool source_aware = false;
+  std::vector<uint32_t> track_ids;
+  std::vector<float> samples;
+  size_t planes = 1;
+  const size_t plane_stride = static_cast<size_t>(channels) * static_cast<size_t>(frames);
+  try {
+#if defined(SONARE_WITH_MIXING)
+    if (entry->last_render_source_aware) {
+      std::array<uint32_t, TrackMixerRuntime::kMaxTrackLanes> lane_ids{};
+      const size_t lanes =
+          track_mixer_runtime_.copy_lane_track_ids(lane_ids.data(), lane_ids.size());
+      track_ids.reserve(lanes + 1);
+      track_ids.push_back(0);
+      track_ids.insert(track_ids.end(), lane_ids.begin(),
+                       lane_ids.begin() + static_cast<std::ptrdiff_t>(lanes));
+      source_aware = true;
+      planes = track_ids.size();
+    }
+#endif
+    samples.assign(planes * plane_stride, 0.0f);
+  } catch (...) {
+    return;  // No storage: the swap cuts as it would without a fade.
+  }
+
+  const auto store = [&](size_t plane, float* const* rendered, int offset, int chunk) {
+    for (int ch = 0; ch < channels; ++ch) {
+      const float* src = rendered[static_cast<size_t>(ch)];
+      std::copy(src, src + chunk,
+                samples.data() + plane * plane_stride +
+                    static_cast<size_t>(ch) * static_cast<size_t>(frames) +
+                    static_cast<size_t>(offset));
+    }
+  };
+  outgoing->set_transport(transport_.snapshot());
+  for (int done = 0; done < frames;) {
+    const int chunk = std::min(max_block_size_, frames - done);
+#if defined(SONARE_WITH_MIXING)
+    if (source_aware) {
+      std::array<midi::MidiInstrumentSourceOutput, kMaxInstrumentSourceOutputs> outputs{};
+      for (size_t plane = 0; plane < planes; ++plane) {
+        outputs[plane] = {track_ids[plane], midi_instrument_source_channels_[plane].data()};
+        for (int ch = 0; ch < channels; ++ch) {
+          float* channel = midi_instrument_source_channels_[plane][static_cast<size_t>(ch)];
+          std::fill(channel, channel + chunk, 0.0f);
+        }
+      }
+      if (!outgoing->process_source_tracks(outputs.data(), planes, channels, chunk)) return;
+      for (size_t plane = 0; plane < planes; ++plane) {
+        store(plane, midi_instrument_source_channels_[plane].data(), done, chunk);
+      }
+      done += chunk;
+      continue;
+    }
+#endif
+    for (int ch = 0; ch < channels; ++ch) {
+      float* channel = midi_instrument_channels_[static_cast<size_t>(ch)];
+      std::fill(channel, channel + chunk, 0.0f);
+    }
+    outgoing->process(midi_instrument_channels_.data(), channels, chunk);
+    store(0, midi_instrument_channels_.data(), done, chunk);
+    done += chunk;
+  }
+
+  // Raised-cosine fade whose last frame is exactly zero.
+  for (int n = 0; n < frames; ++n) {
+    const double phase = static_cast<double>(n + 1) / static_cast<double>(frames);
+    const float gain = static_cast<float>(0.5 * (1.0 + std::cos(kPiD * phase)));
+    for (size_t row = 0; row < planes * static_cast<size_t>(channels); ++row) {
+      samples[row * static_cast<size_t>(frames) + static_cast<size_t>(n)] *= gain;
+    }
+  }
+
+  // A tail still fading from an earlier swap carries on inside the new one.
+  if (entry->tail_pending() && entry->tail_source_aware == source_aware) {
+    const int remaining = std::min(entry->tail_frames - entry->tail_cursor, frames);
+    const int shared = std::min(channels, entry->tail_channels);
+    for (size_t old_plane = 0; old_plane < entry->tail_planes(); ++old_plane) {
+      size_t plane = 0;
+      if (source_aware) {
+        const auto match =
+            std::find(track_ids.begin(), track_ids.end(), entry->tail_track_ids[old_plane]);
+        if (match == track_ids.end()) continue;
+        plane = static_cast<size_t>(match - track_ids.begin());
+      }
+      for (int ch = 0; ch < shared; ++ch) {
+        const float* src = entry->tail_at(old_plane, ch);
+        float* dst = samples.data() + plane * plane_stride +
+                     static_cast<size_t>(ch) * static_cast<size_t>(frames);
+        for (int i = 0; i < remaining; ++i) dst[i] += src[i];
+      }
+    }
+  }
+
+  entry->tail_samples = std::move(samples);
+  entry->tail_track_ids = std::move(track_ids);
+  entry->tail_source_aware = source_aware;
+  entry->tail_channels = channels;
+  entry->tail_frames = frames;
+  entry->tail_cursor = 0;
 }
 
 bool RealtimeEngine::prepare_pdc_for(bool replace_destination, uint32_t destination_id,

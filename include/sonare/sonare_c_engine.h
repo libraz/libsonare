@@ -1174,6 +1174,11 @@ typedef struct {
 ///          note/CC commands and scheduled MIDI clips routed to @p destination_id
 ///          render through this instrument. This is a control-thread structural
 ///          mutation; do not call concurrently with @ref sonare_engine_process.
+///          Replacing an instrument releases the destination's sounding notes
+///          and fades the outgoing instrument out over 10 ms in the following
+///          blocks, so a swap during playback does not click; the replacement
+///          starts from its own default channel state (program, bank and
+///          controller state are not carried over).
 /// @return SONARE_ERROR_INVALID_PARAMETER if the instrument cannot prepare a
 ///         SysEx already scheduled or queued for @p destination_id;
 ///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
@@ -1193,7 +1198,11 @@ SonareError sonare_engine_set_builtin_instrument(SonareRealtimeEngine* engine,
 ///        the synth. Live MIDI input and scheduled MIDI clips routed to
 ///        @p destination_id render through it. This is a control-thread
 ///        structural mutation; do not call concurrently with
-///        @ref sonare_engine_process.
+///        @ref sonare_engine_process. Replacing an instrument releases the
+///        destination's sounding notes and fades the outgoing instrument out
+///        over 10 ms in the following blocks, so a swap during playback does
+///        not click; the replacement starts from its own default channel state
+///        (program, bank and controller state are not carried over).
 /// @return SONARE_ERROR_INVALID_PARAMETER if the synth cannot prepare a SysEx
 ///         already scheduled or queued for @p destination_id;
 ///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
@@ -1319,7 +1328,12 @@ typedef struct {
 ///        the player (16 MIDI channels; channel 10 and GM2 CC0=120 rhythm
 ///        parts as drums; GS NRPN part edits,
 ///        GS/GM SysEx resets). This is a control-thread structural mutation;
-///        do not call concurrently with @ref sonare_engine_process.
+///        do not call concurrently with @ref sonare_engine_process. Replacing
+///        an instrument releases the destination's sounding notes and fades the
+///        outgoing instrument out over 10 ms in the following blocks, so a swap
+///        during playback does not click; the replacement starts from its own
+///        default channel state (program, bank and controller state are not
+///        carried over).
 /// @return SONARE_ERROR_INVALID_PARAMETER if the player cannot prepare a SysEx
 ///         already scheduled or queued for @p destination_id;
 ///         SONARE_ERROR_OUT_OF_MEMORY if the rack is full or allocation fails.
@@ -1329,7 +1343,9 @@ SonareError sonare_engine_set_sf2_instrument(SonareRealtimeEngine* engine, uint3
 
 /// @brief Clears any realtime instrument bound to @p destination_id.
 /// @details This is a control-thread structural mutation; do not call
-///          concurrently with @ref sonare_engine_process.
+///          concurrently with @ref sonare_engine_process. The destination's
+///          sounding notes are released and the instrument's output fades out
+///          over 10 ms in the following blocks rather than stopping dead.
 ///          If preparation of the replacement state fails, the existing
 ///          instrument remains bound and owned by the engine.
 /// @return SONARE_ERROR_OUT_OF_MEMORY if restaging the clip schedule fails to
