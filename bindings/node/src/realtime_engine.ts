@@ -915,7 +915,8 @@ export class RealtimeEngine {
    * `filterAttackMs`, `filterDecayMs`, `filterSustain`, `filterReleaseMs`,
    * `lfoRateHz`, `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`,
    * `stereoSpread`, `detuneCents`, `driftCents`, `pitchOffsetCents`,
-   * `hpCutoffHz`, `sampleHoldHz`, `bitDepth`.
+   * `hpCutoffHz`, `sampleHoldHz`, `bitDepth`, `driftRateHz`, `ampDelayMs`,
+   * `ampHoldMs`, `filterDelayMs`, `filterHoldMs`.
    *
    * Structural fields (`preset`, `engineMode`, `waveform`, `filterModel`,
    * `unison`, `polyphony`, `body`, `modRoutings`) are not automatable and

@@ -240,6 +240,19 @@ inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareS
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch->polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch->bus_drive);
 
+  // Second presence word (struct_version 9).
+  auto read_float2 = [&](const char* key, uint32_t bit, float* out) {
+    *out = FloatProperty(obj, key, 0.0f);
+    if (SynthFieldPresent(obj, key)) patch->present_fields2 |= bit;
+  };
+  read_float2("driftRateHz", SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, &patch->drift_rate_hz);
+  read_float2("ampDelayMs", SONARE_SYNTH_FIELD2_AMP_DELAY_MS, &patch->amp_delay_ms);
+  read_float2("ampHoldMs", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, &patch->amp_hold_ms);
+  read_float2("filterDelayMs", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, &patch->filter_delay_ms);
+  read_float2("filterHoldMs", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, &patch->filter_hold_ms);
+  patch->one_shot = BoolProperty(obj, "oneShot", false) ? 1 : 0;
+  if (SynthFieldPresent(obj, "oneShot")) patch->present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
+
   // Sample engine (struct_version 3). No presence bits: only a sample patch
   // reads this block, which is what keeps keymap set 0 addressable as a plain
   // zero, and the other three keep the usual "0 => base".
@@ -367,6 +380,12 @@ inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& pa
   out.Set("bodyMix", patch.body_mix);
   out.Set("stereoSpread", patch.stereo_spread);
   out.Set("retrigger", enum_name(patch.retrigger, kSynthRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
+  out.Set("driftRateHz", patch.drift_rate_hz);
+  out.Set("ampDelayMs", patch.amp_delay_ms);
+  out.Set("ampHoldMs", patch.amp_hold_ms);
+  out.Set("filterDelayMs", patch.filter_delay_ms);
+  out.Set("filterHoldMs", patch.filter_hold_ms);
+  out.Set("oneShot", Napi::Boolean::New(env, patch.one_shot != 0));
   Napi::Array routings = Napi::Array::New(
       env, static_cast<size_t>(patch.num_mod_routings > 0 ? patch.num_mod_routings : 0));
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {

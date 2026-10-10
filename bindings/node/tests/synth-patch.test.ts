@@ -301,6 +301,58 @@ describe('Project.bounceWithSynthInstrument', () => {
     }
   });
 
+  it('sets drift rate, envelope delay and hold and one-shot, and reads them back', () => {
+    const preset = synthPresetPatch('saw-lead');
+    expect(preset.driftRateHz).toBeGreaterThan(0);
+    for (const key of ['ampDelayMs', 'ampHoldMs', 'filterDelayMs', 'filterHoldMs'] as const) {
+      expect(typeof preset[key]).toBe('number');
+    }
+    expect(preset.oneShot).toBe(false);
+    const echoed = synthPatchRoundTripForTest({ ampHoldMs: 12, filterDelayMs: 34, oneShot: true });
+    expect(echoed.ampHoldMs).toBe(12);
+    expect(echoed.filterDelayMs).toBe(34);
+    expect(echoed.oneShot).toBe(true);
+
+    const project = buildMidiOnlyProject();
+    try {
+      // Long enough to pass the note-off, so a one-shot that ignores it differs.
+      const frames = { totalFrames: 72000 };
+      const base: SynthPatch = {
+        preset: 'saw-lead',
+        driftCents: 40,
+        ampDecayMs: 200,
+        ampSustain: 0.5,
+        cutoffHz: 1500,
+        envToCutoffCents: 2400,
+        filterDecayMs: 200,
+        filterSustain: 0.3,
+      };
+      const reference = project.bounceWithSynthInstrument(base, frames);
+      expect(peak(reference)).toBeGreaterThan(0);
+      for (const edit of [
+        { driftRateHz: 7 },
+        { ampDelayMs: 80 },
+        { ampHoldMs: 80 },
+        { filterDelayMs: 80 },
+        { filterHoldMs: 80 },
+        { oneShot: true },
+        // An explicit zero is a value, not "keep the base".
+        { driftRateHz: 0 },
+      ]) {
+        const edited = project.bounceWithSynthInstrument({ ...base, ...edit }, frames);
+        expect(edited, JSON.stringify(edit)).not.toEqual(reference);
+      }
+      expect(project.bounceWithSynthInstrument({ ...base, oneShot: undefined }, frames)).toEqual(
+        reference,
+      );
+      expect(() =>
+        project.bounceWithSynthInstrument({ ...base, oneShot: 1 as never }, frames),
+      ).toThrow(TypeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('takes gain: 0 as silence, not the base level', () => {
     const project = buildMidiOnlyProject();
     try {
@@ -719,5 +771,15 @@ describe('synth parameter descriptors', () => {
     }
     expect(fields.find((field) => field.name === 'resonanceQ')?.unit).toBe('ratio');
     expect(new Set(names).size).toBe(names.length);
+    for (const expected of [
+      'driftRateHz',
+      'ampDelayMs',
+      'ampHoldMs',
+      'filterDelayMs',
+      'filterHoldMs',
+    ]) {
+      expect(names).toContain(expected);
+    }
+    expect(fields.find((field) => field.name === 'oneShot')?.type).toBe('boolean');
   });
 });
