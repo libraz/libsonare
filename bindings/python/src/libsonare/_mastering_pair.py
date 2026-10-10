@@ -57,8 +57,15 @@ def mastering_pair_process(
     reference: Sequence[float] | list[float],
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> MasteringResult:
-    """Apply a named two-input mastering processor."""
+    """Apply a named two-input mastering processor.
+
+    ``reference`` may be at its own ``reference_sample_rate`` (default: ``sample_rate``);
+    the library resamples it onto ``sample_rate`` first, so the output is at
+    ``sample_rate``.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_pair_processor"):
         raise _not_supported("libsonare was built without mastering support")
@@ -75,6 +82,10 @@ def mastering_pair_process(
         _to_c_size_t(source_length, "source_length"),
         reference_array,
         _to_c_size_t(reference_length, "reference_length"),
+        _to_c_int(
+            sample_rate if reference_sample_rate is None else reference_sample_rate,
+            "reference_sample_rate",
+        ),
         _to_c_int(sample_rate, "sample_rate"),
         param_array,
         _to_c_size_t(param_count, "param_count"),
@@ -104,12 +115,16 @@ def mastering_pair_process_stereo(
     reference_right: Sequence[float] | list[float],
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> MasteringStereoResult:
     """Apply the stereo ``match.abCrossfade`` pair processor.
 
-    Source and reference may have different lengths; the left/right planes in
-    each pair must have the same length. The native processor returns the
-    shorter pair length and applies one mix to both channels.
+    Source and reference may have different lengths and rates; the left/right
+    planes in each pair must have the same length. A reference at
+    ``reference_sample_rate`` (default: ``sample_rate``) is resampled onto
+    ``sample_rate`` first. The native processor returns the shorter pair length
+    and applies one mix to both channels.
     """
     if not isinstance(processor_name, str):
         raise SonareValueError("processor_name must be a string")
@@ -142,6 +157,10 @@ def mastering_pair_process_stereo(
             reference_left_array,
             reference_right_array,
             _to_c_size_t(reference_left_length, "reference_length"),
+            _to_c_int(
+                sample_rate if reference_sample_rate is None else reference_sample_rate,
+                "reference_sample_rate",
+            ),
             _to_c_int(sample_rate, "sample_rate"),
             param_array,
             _to_c_size_t(param_count, "param_count"),
@@ -170,8 +189,14 @@ def mastering_pair_analyze(
     reference: Sequence[float] | list[float],
     sample_rate: int = 22050,
     params: dict[str, float | int | bool] | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> str:
     """Run a named two-input mastering analysis and return shared JSON.
+
+    ``reference`` may be at its own ``reference_sample_rate`` (default:
+    ``sample_rate``); it is resampled onto ``sample_rate`` first, so a delay
+    estimate is in source-rate samples.
 
     The document's shape depends on ``analysis_name``; parse it with
     :func:`json.loads` and read it as the matching ``TypedDict``:
@@ -196,6 +221,10 @@ def mastering_pair_analyze(
         _to_c_size_t(source_length, "source_length"),
         reference_array,
         _to_c_size_t(reference_length, "reference_length"),
+        _to_c_int(
+            sample_rate if reference_sample_rate is None else reference_sample_rate,
+            "reference_sample_rate",
+        ),
         _to_c_int(sample_rate, "sample_rate"),
         param_array,
         _to_c_size_t(param_count, "param_count"),
@@ -216,6 +245,7 @@ def mastering_ab_match_loudness(
     sample_rate: int = 22050,
     *,
     with_match: bool = True,
+    reference_sample_rate: int | None = None,
 ) -> tuple[np.ndarray, LoudnessMatch | None]:
     """Gain-match ``source`` to ``reference``'s integrated loudness.
 
@@ -227,16 +257,20 @@ def mastering_ab_match_loudness(
     match must not do. Clamp afterwards if the result has to stay under a
     ceiling.
 
-    The two takes need not be the same length; each is measured over its own
-    buffer. Only ``source`` is returned -- ``reference`` is read as the loudness
-    target and is not itself modified.
+    The two takes need not be the same length or rate; each is measured over its
+    own buffer, a reference at another rate after it is resampled onto
+    ``sample_rate``. Only ``source`` is returned -- ``reference`` is read as the
+    loudness target and is not itself modified.
 
     Args:
         source: Mono take to be matched (any sequence convertible to float32).
         reference: Mono take whose loudness ``source`` is brought to.
-        sample_rate: Sample rate of both takes, in Hz (default 22050).
+        sample_rate: Sample rate of ``source`` and of the result, in Hz
+            (default 22050).
         with_match: Whether to measure the match alongside the audio
             (default True). Pass False to take only the matched samples.
+        reference_sample_rate: Sample rate of ``reference``, in Hz; omitted
+            means ``sample_rate``.
 
     Returns:
         Tuple of ``(matched ndarray, match)``. The audio is a
@@ -260,6 +294,10 @@ def mastering_ab_match_loudness(
             _to_c_size_t(source_length, "source_length"),
             reference_array,
             _to_c_size_t(reference_length, "reference_length"),
+            _to_c_int(
+                sample_rate if reference_sample_rate is None else reference_sample_rate,
+                "reference_sample_rate",
+            ),
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out),
             ctypes.byref(out_length),
@@ -286,11 +324,14 @@ def mastering_ab_match_loudness_stereo(
     sample_rate: int = 22050,
     *,
     with_match: bool = True,
+    reference_sample_rate: int | None = None,
 ) -> tuple[tuple[np.ndarray, np.ndarray], LoudnessMatch | None]:
     """Gain-match a stereo source to a stereo reference with one shared gain.
 
     Each source/reference pair must have equal left/right lengths, while the
-    source and reference may have different lengths. The returned tuple is
+    source and reference may have different lengths and rates; a reference at
+    ``reference_sample_rate`` (default: ``sample_rate``) is resampled onto
+    ``sample_rate`` before it is measured. The returned tuple is
     ``((matched_left, matched_right), match)``; both planes are ``float32``
     arrays and ``match`` is ``None`` when ``with_match`` is false.
     """
@@ -321,6 +362,10 @@ def mastering_ab_match_loudness_stereo(
             reference_left_array,
             reference_right_array,
             _to_c_size_t(reference_left_length, "reference_length"),
+            _to_c_int(
+                sample_rate if reference_sample_rate is None else reference_sample_rate,
+                "reference_sample_rate",
+            ),
             _to_c_int(sample_rate, "sample_rate"),
             ctypes.byref(out),
             ctypes.byref(match) if match is not None else None,

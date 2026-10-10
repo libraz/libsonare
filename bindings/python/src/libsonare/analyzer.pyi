@@ -1511,7 +1511,15 @@ class StreamingEqualizer:
     def set_sidechain_mono(self, samples: FloatSamples) -> None: ...
     def set_sidechain_stereo(self, left: FloatSamples, right: FloatSamples) -> None: ...
     def clear_sidechain(self) -> None: ...
-    def match(self, source: FloatSamples, reference: FloatSamples, max_bands: int = 8) -> None: ...
+    def match(
+        self,
+        source: FloatSamples,
+        reference: FloatSamples,
+        max_bands: int = 8,
+        *,
+        sample_rate: int | None = None,
+        reference_sample_rate: int | None = None,
+    ) -> None: ...
     def process_mono(self, samples: FloatSamples) -> list[float]: ...
     def process_stereo(
         self, left: FloatSamples, right: FloatSamples
@@ -1535,6 +1543,8 @@ def mastering_pair_process(
     reference: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> MasteringResult: ...
 def mastering_pair_process_stereo(
     processor_name: StereoPairProcessor,
@@ -1544,6 +1554,8 @@ def mastering_pair_process_stereo(
     reference_right: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> MasteringStereoResult: ...
 def mastering_pair_analyze(
     analysis_name: PairAnalysis,
@@ -1551,6 +1563,8 @@ def mastering_pair_analyze(
     reference: FloatSamples,
     sample_rate: int = 22050,
     params: MasteringParams | None = None,
+    *,
+    reference_sample_rate: int | None = None,
 ) -> str: ...
 def mastering_ab_match_loudness(
     source: FloatSamples,
@@ -1558,6 +1572,7 @@ def mastering_ab_match_loudness(
     sample_rate: int = 22050,
     *,
     with_match: bool = True,
+    reference_sample_rate: int | None = None,
 ) -> tuple[np.ndarray[Any, Any], LoudnessMatch | None]: ...
 def mastering_ab_match_loudness_stereo(
     source_left: FloatSamples,
@@ -1567,6 +1582,7 @@ def mastering_ab_match_loudness_stereo(
     sample_rate: int = 22050,
     *,
     with_match: bool = True,
+    reference_sample_rate: int | None = None,
 ) -> tuple[tuple[np.ndarray[Any, Any], np.ndarray[Any, Any]], LoudnessMatch | None]: ...
 def mastering_stereo_analyze(
     analysis_name: StereoAnalysis,

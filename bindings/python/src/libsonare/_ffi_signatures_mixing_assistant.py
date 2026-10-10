@@ -9,7 +9,7 @@ from typing import Any
 from ._ffi_types import *  # noqa: F403,F405
 
 # The two suggest entry points share one signature: parallel per-track channel
-# pointer arrays, per-track ids/names/lengths, a flat param list, and a
+# pointer arrays, per-track ids/names/lengths/rates, a flat param list, and a
 # caller-freed JSON string. Declared once so the pair cannot drift apart.
 _SUGGEST_ARGTYPES: list[Any] = [
     ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
@@ -17,6 +17,7 @@ _SUGGEST_ARGTYPES: list[Any] = [
     ctypes.POINTER(ctypes.c_char_p),
     ctypes.POINTER(ctypes.c_char_p),
     ctypes.POINTER(ctypes.c_size_t),
+    ctypes.POINTER(ctypes.c_int),
     ctypes.c_size_t,
     ctypes.c_int,
     ctypes.POINTER(SonareMasteringParam),

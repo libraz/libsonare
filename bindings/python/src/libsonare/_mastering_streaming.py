@@ -639,8 +639,16 @@ class StreamingEqualizer:
         source: Sequence[float] | list[float],
         reference: Sequence[float] | list[float],
         max_bands: int = 8,
+        *,
+        sample_rate: int | None = None,
+        reference_sample_rate: int | None = None,
     ) -> None:
         """Configure live EQ bands by matching ``source`` to ``reference``.
+
+        The buffers may differ in length and rate. ``sample_rate`` is the rate of
+        ``source`` (omitted: the equalizer's own rate) and ``reference_sample_rate``
+        the rate of ``reference`` (omitted: ``sample_rate``); a reference at
+        another rate is resampled onto the source's before its spectrum is taken.
 
         Raises:
             SonareValueError: If either buffer is empty or holds a NaN or Inf sample.
@@ -648,14 +656,18 @@ class StreamingEqualizer:
         self._ensure_open()
         source_array, source_length = _to_c_float_array(source)
         reference_array, reference_length = _to_c_float_array(reference)
-        if source_length != reference_length:
-            raise SonareValueError("source and reference lengths must match")
-        rc = self._lib.sonare_eq_match(
+        source_rate = self.sample_rate if sample_rate is None else sample_rate
+        rc = self._lib.sonare_eq_match_ex(
             self._handle,
             source_array,
-            reference_array,
             _to_c_size_t(source_length, "source_length"),
-            _to_c_int(self.sample_rate, "sample_rate"),
+            _to_c_int(source_rate, "sample_rate"),
+            reference_array,
+            _to_c_size_t(reference_length, "reference_length"),
+            _to_c_int(
+                source_rate if reference_sample_rate is None else reference_sample_rate,
+                "reference_sample_rate",
+            ),
             _to_c_int(max_bands, "max_bands"),
         )
         _check(rc)

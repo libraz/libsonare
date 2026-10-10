@@ -82,6 +82,9 @@ class MixTrackInput(NamedTuple):
             unnamed voice, pad or lead line comes back ``unknown``. A compound
             name states its last hint word (``"Lead Vox"`` is ``vocal``);
             hint words joined by anything else state none.
+        sample_rate: Rate of this track, in Hz, or ``None`` for the call's
+            ``sample_rate``. A track at another rate is resampled onto the
+            call's rate before analysis.
 
     Tracks may differ in length: truncating every track to the shortest would
     delete a part that only enters late in the song.
@@ -91,6 +94,7 @@ class MixTrackInput(NamedTuple):
     left: Sequence[float] | np.ndarray
     right: Sequence[float] | np.ndarray | None = None
     name: str | None = None
+    sample_rate: int | None = None
 
 
 class _TrackArrays(NamedTuple):
@@ -101,11 +105,14 @@ class _TrackArrays(NamedTuple):
     ids: Any
     names: Any
     lengths: Any
+    sample_rates: Any
     count: int
     pins: list[Any]
 
 
-def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _TrackArrays:
+def _build_track_arrays(
+    fn_name: str, tracks: Sequence[MixTrackInput], sample_rate: int
+) -> _TrackArrays:
     """Validate ``tracks`` and marshal them into the parallel C arrays.
 
     Every allocated buffer is pinned in the returned tuple, so the caller keeps
@@ -113,7 +120,7 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
     """
     count = len(tracks)
     if count == 0:
-        return _TrackArrays(None, None, None, None, None, 0, [])
+        return _TrackArrays(None, None, None, None, None, None, 0, [])
 
     seen: set[str] = set()
     left_arrays: list[Any] = []
@@ -121,6 +128,8 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
     lengths: list[int] = []
     id_buffers: list[bytes] = []
     name_buffers: list[bytes | None] = []
+    sample_rates: list[int] = []
+    any_rate = False
     any_right = False
 
     for index, track in enumerate(tracks):
@@ -132,6 +141,21 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
         if track_id in seen:
             raise SonareValueError(f"{fn_name}: duplicate track_id {track_id!r}")
         seen.add(track_id)
+
+        if track.sample_rate is None:
+            sample_rates.append(sample_rate)
+        else:
+            # Refused like the call's own rate: narrowed first, then the sign.
+            track_rate = _narrow_int(
+                track.sample_rate,
+                f"{fn_name}: tracks[{index}].sample_rate",
+                _C_INT_MIN,
+                _C_INT_MAX,
+            )
+            if track_rate <= 0:
+                raise SonareValueError(f"{fn_name}: tracks[{index}].sample_rate must be positive")
+            sample_rates.append(track_rate)
+            any_rate = True
 
         # Coerce only: a non-finite sample is degenerate audio here, not a
         # malformed call. The core classifies it per track and returns
@@ -178,9 +202,13 @@ def _build_track_arrays(fn_name: str, tracks: Sequence[MixTrackInput]) -> _Track
         else None
     )
     length_array = (ctypes.c_size_t * count)(*lengths)
+    # NULL when no track names its own rate: every track is at the call's rate.
+    rate_array = (ctypes.c_int * count)(*sample_rates) if any_rate else None
 
     pins: list[Any] = [left_arrays, right_arrays, id_buffers, name_buffers]
-    return _TrackArrays(left_ptrs, right_ptrs, id_array, name_array, length_array, count, pins)
+    return _TrackArrays(
+        left_ptrs, right_ptrs, id_array, name_array, length_array, rate_array, count, pins
+    )
 
 
 def _assistant_params(
@@ -228,7 +256,7 @@ def _suggest(
     sample_rate_value = _narrow_int(sample_rate, f"{fn_name}: sample_rate", _C_INT_MIN, _C_INT_MAX)
     if sample_rate_value <= 0:
         raise SonareValueError(f"{fn_name}: sample_rate must be positive")
-    arrays = _build_track_arrays(fn_name, tracks)
+    arrays = _build_track_arrays(fn_name, tracks, sample_rate_value)
     param_array, param_count = _assistant_params(fn_name, options)
     json_ptr = ctypes.c_char_p()
     rc = getattr(lib, symbol)(
@@ -237,6 +265,7 @@ def _suggest(
         arrays.ids,
         arrays.names,
         arrays.lengths,
+        arrays.sample_rates,
         ctypes.c_size_t(arrays.count),
         _to_c_int(sample_rate_value, "sample_rate"),
         param_array,
@@ -282,7 +311,8 @@ def suggest_mix_scene(
             naming which, rather than failing the call. A non-finite sample is
             reported as itself rather than as silence, so the reason describes
             the buffer instead of the material.
-        sample_rate: Shared sample rate of every track, in Hz.
+        sample_rate: Analysis rate, in Hz, and the rate of every track that
+            does not state its own; a track at another rate is resampled onto it.
         target_track_lufs: Absolute integrated-loudness target each track is
             staged towards, in LUFS.
         suggestion_strength: Overall strength in ``[0, 1]``, scaling every

@@ -16,6 +16,7 @@ class MixTrackInput(NamedTuple):
     left: FloatSamples
     right: FloatSamples | None = None
     name: str | None = None
+    sample_rate: int | None = None
 
 def suggest_mix_scene(
     tracks: Sequence[MixTrackInput],
