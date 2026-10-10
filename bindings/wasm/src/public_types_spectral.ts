@@ -421,6 +421,12 @@ export interface PolyphonicAnalysisOptions {
   minRidgePeakRatio?: number;
   /** Shorter ridges are dropped. Default 140 ms; **negative selects 0**. */
   minRidgeDurationMs?: number;
+  /**
+   * Splits a ridge where its salience climbs past this multiple of the level
+   * just before, the same pitch struck again while it sounds. Must be above `1`.
+   * Default off (`0` or omitted); a value in `(0, 1]` or a negative is refused.
+   */
+  reattackRatio?: number;
   /** Partials claimed per note. Default 20, at most 128. */
   maskHarmonics?: number;
   /** Claim half-width in Hann main lobes. Default 1. */

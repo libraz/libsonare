@@ -425,6 +425,44 @@ describe('PolyphonicAnalysis config', () => {
   });
 });
 
+describe('PolyphonicAnalysis reattackRatio', () => {
+  /** One 220 Hz tone struck twice, each strike decaying to a third over 0.4 s. */
+  function restruck(): Float32Array {
+    const strike = Math.round(sampleRate * 0.4);
+    const out = new Float32Array(2 * strike);
+    const tone = richTone(220, 0.3, 5, strike);
+    for (let s = 0; s < 2; s++) {
+      const attack = Math.round(sampleRate * 0.01);
+      for (let i = 0; i < strike; i++) {
+        out[s * strike + i] = tone[i] * (i < attack ? i / attack : 1) * 3 ** (-i / strike);
+      }
+    }
+    return out;
+  }
+
+  it('splits a re-struck tone when set, and leaves it whole when omitted', () => {
+    const struck = restruck();
+    const whole = analyzePolyphonic({ samples: struck, sampleRate });
+    const split = analyzePolyphonic({ samples: struck, sampleRate, reattackRatio: 2 });
+    try {
+      expect(whole.noteCount).toBe(1);
+      expect(split.noteCount).toBe(2);
+    } finally {
+      whole.destroy();
+      split.destroy();
+    }
+  });
+
+  it('refuses a value the ridge tracker refuses', () => {
+    for (const bad of [-1, 0.5, 1]) {
+      expectSonareError(
+        () => analyzePolyphonic({ samples, sampleRate, reattackRatio: bad }),
+        ErrorCode.InvalidParameter,
+      );
+    }
+  });
+});
+
 describe('PolyphonicAnalysis disposal', () => {
   it('accepts both delete() and destroy(), and refuses use afterwards', () => {
     const handle = analyzePolyphonic({ samples, sampleRate });

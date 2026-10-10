@@ -27,6 +27,17 @@
 
 namespace {
 
+// What a written value of a float field must be. Omission is always the C ABI's
+// 0 ("default"), so a written 0 is a value the caller chose and is either out of
+// domain or, for the ratio kinds, a real "none" that the C ABI spells as a
+// negative.
+enum class FloatDomain {
+  kPositive,    // > 0
+  kNegative,    // < 0
+  kUnitRatio,   // [0, 1]; a written 0 is the real 0, sent as -1
+  kSplitRatio,  // 0 (never split, sent as -1) or > 1
+};
+
 // A field whose domain excludes 0 spells "use the documented default" as 0 in
 // the C ABI, which has no way to tell that from a caller who wrote it. Omission
 // already spells the default here, so a present 0 is a value the caller chose
@@ -34,35 +45,53 @@ namespace {
 // number they did not ask for, indistinguishable downstream from one they did.
 // A present value is otherwise forwarded as given and range-checked once, by
 // the C ABI.
-float signedField(val config, const char* key, bool want_positive) {
+float signedField(val config, const char* key, FloatDomain domain) {
   const float value = floatProperty(config, key, 0.0f);
-  if (hasProperty(config, key) && (want_positive ? !(value > 0.0f) : !(value < 0.0f))) {
-    throw WasmRangeError(std::string(key) +
-                         (want_positive ? " must be a positive number" : " must be negative"));
+  if (!hasProperty(config, key)) return value;
+  const std::string name(key);
+  switch (domain) {
+    case FloatDomain::kPositive:
+      if (!(value > 0.0f)) throw WasmRangeError(name + " must be a positive number");
+      return value;
+    case FloatDomain::kNegative:
+      if (!(value < 0.0f)) throw WasmRangeError(name + " must be negative");
+      return value;
+    case FloatDomain::kUnitRatio:
+      if (!(value >= 0.0f && value <= 1.0f)) {
+        throw WasmRangeError(name + " must be a number in [0, 1]");
+      }
+      return value == 0.0f ? -1.0f : value;
+    case FloatDomain::kSplitRatio:
+      if (!(value == 0.0f || value > 1.0f)) {
+        throw WasmRangeError(name + " must be 0 or a number greater than 1");
+      }
+      return value == 0.0f ? -1.0f : value;
   }
   return value;
 }
 
-// The same rule on the one field whose domain is a range rather than a sign.
-// 0 is the C ABI's "measure the level instead", and omitting the field already
-// says that here, so a written 0 is a value -- and 0 is not a MIDI velocity.
+// The same rule on the fields whose domain is an integer range rather than a
+// sign. 0 is the C ABI's default (fixedVelocity: "measure the level instead"),
+// and omitting the field already says that here, so a written 0 is a value --
+// and 0 is in neither [1, 127] nor [1, 64].
 //
-// Presence is the only thing that can decide this one. The other six have an
-// out-of-domain sentinel, so their written 0 is separable by value; this
-// field's sentinel IS its default, and an omitted key still has to reach the C
+// Presence is the only thing that can decide this one. The other fields have an
+// out-of-domain sentinel, so their written 0 is separable by value; these
+// fields' sentinel IS the default, and an omitted key still has to reach the C
 // ABI as 0, so a value check would either refuse omission or accept a written
 // zero. Wording is Node's verbatim, so one domain reports one way everywhere.
-int velocityField(val config, const char* key) {
+int rangeField(val config, const char* key, int lo, int hi) {
   const int value = intProperty(config, key, 0);
-  if (hasProperty(config, key) && (value < 1 || value > 127)) {
-    throw WasmRangeError(std::string(key) + " must be an integer in [1, 127]");
+  if (hasProperty(config, key) && (value < lo || value > hi)) {
+    throw WasmRangeError(std::string(key) + " must be an integer in [" + std::to_string(lo) + ", " +
+                         std::to_string(hi) + "]");
   }
   return value;
 }
 
 SonareTranscribeConfig transcribeConfigFromVal(val config) {
   SonareTranscribeConfig out = {};
-  out.struct_version = 2;
+  out.struct_version = 3;
   if (config.isUndefined() || config.isNull()) return out;
   out.polyphonic = boolProperty(config, "polyphonic", false) ? 1 : 0;
   // `referenceHz` is a positive number in Hz, or "auto" to measure it from the audio.
@@ -73,14 +102,20 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
     }
     out.reference_auto = 1;
   } else {
-    out.reference_hz = signedField(config, "referenceHz", true);
+    out.reference_hz = signedField(config, "referenceHz", FloatDomain::kPositive);
   }
-  out.fmin = signedField(config, "fmin", true);
-  out.fmax = signedField(config, "fmax", true);
-  out.min_note_ms = signedField(config, "minNoteMs", true);
-  out.segmentation_threshold_cents = signedField(config, "segmentationThresholdCents", true);
-  out.velocity_floor_db = signedField(config, "velocityFloorDb", false);
-  out.fixed_velocity = velocityField(config, "fixedVelocity");
+  out.fmin = signedField(config, "fmin", FloatDomain::kPositive);
+  out.fmax = signedField(config, "fmax", FloatDomain::kPositive);
+  out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive);
+  out.segmentation_threshold_cents =
+      signedField(config, "segmentationThresholdCents", FloatDomain::kPositive);
+  out.velocity_floor_db = signedField(config, "velocityFloorDb", FloatDomain::kNegative);
+  out.fixed_velocity = rangeField(config, "fixedVelocity", 1, 127);
+  // Polyphonic only; a monophonic call with any of these written is refused by the C ABI.
+  out.max_polyphony = rangeField(config, "maxPolyphony", 1, 64);
+  out.min_frame_peak_ratio = signedField(config, "minFramePeakRatio", FloatDomain::kUnitRatio);
+  out.min_ridge_peak_ratio = signedField(config, "minRidgePeakRatio", FloatDomain::kUnitRatio);
+  out.reattack_ratio = signedField(config, "reattackRatio", FloatDomain::kSplitRatio);
   // Not the same family: 0 is IN domain on these two -- group 0 and channel 0
   // are values a caller can mean -- so there is no sentinel to separate.
   out.group = intProperty(config, "group", 0);

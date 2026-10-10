@@ -623,9 +623,15 @@ export interface ProjectMidiFxPreviewRequest {
  *
  * That includes `0` on the fields whose domain excludes it (`referenceHz`,
  * `fmin`, `fmax`, `minNoteMs`, `segmentationThresholdCents`,
- * `velocityFloorDb`, `fixedVelocity`): omitting the field is how you ask for
- * the default, so a `0` you wrote is a value, and it is out of domain. Only
- * `group` and `channel` accept `0` — there it is a value you can mean.
+ * `velocityFloorDb`, `fixedVelocity`, `maxPolyphony`): omitting the field is how
+ * you ask for the default, so a `0` you wrote is a value, and it is out of
+ * domain. Only `group` and `channel` accept `0` — there it is a value you can
+ * mean. On `minFramePeakRatio`, `minRidgePeakRatio` and `reattackRatio` a
+ * written `0` is accepted and means "none" (a real 0, or no split), not the default.
+ *
+ * `maxPolyphony`, `minFramePeakRatio`, `minRidgePeakRatio` and `reattackRatio`
+ * apply to the polyphonic path only; with `polyphonic` off, writing any of them
+ * is refused.
  */
 export interface TranscribeOptions {
   /**
@@ -652,7 +658,10 @@ export interface TranscribeOptions {
   fmin?: number;
   /** Upper end of the F0 tracker range in Hz; omitted defaults to `2093` mono or `1760` poly. */
   fmax?: number;
-  /** Shortest span kept as a note, in milliseconds. Default `30`; must be positive. */
+  /**
+   * Shortest span kept as a note, in milliseconds. Default `30` monophonic and
+   * `100` polyphonic, where it is the shortest ridge the tracker keeps; must be positive.
+   */
   minNoteMs?: number;
   /**
    * Pitch movement, in cents, that ends one note and starts the next.
@@ -672,6 +681,27 @@ export interface TranscribeOptions {
    * not a MIDI velocity and omission already says "measure".
    */
   fixedVelocity?: number;
+  /**
+   * Polyphonic only. Voices one frame may hold: an integer in `[1, 64]`.
+   * Default `10`; `0` is refused.
+   */
+  maxPolyphony?: number;
+  /**
+   * Polyphonic only. Stops a frame's search below this share of its first peak,
+   * in `[0, 1]`. Default `0.20`; `0` is a real 0 (no cut).
+   */
+  minFramePeakRatio?: number;
+  /**
+   * Polyphonic only. Ends a ridge below this share of its own running peak, in
+   * `[0, 1]`. Default `0.10`; `0` is a real 0 (no cut).
+   */
+  minRidgePeakRatio?: number;
+  /**
+   * Polyphonic only. Splits a ridge where its salience climbs past this
+   * multiple of the level just before, i.e. the same pitch struck again while
+   * it sounds. Must be above `1`. Default `2.0`; `0` turns the split off.
+   */
+  reattackRatio?: number;
   /** UMP group the events are emitted on, `0..15`. Default `0`. */
   group?: number;
   /** MIDI channel the events are emitted on, `0..15`. Default `0`. */

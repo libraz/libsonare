@@ -102,6 +102,8 @@ editing::polyphony::PolyphonicEditConfig configFromVal(const val& config) {
   set_positive("maxJumpCents", ridges.max_jump_cents);
   set_floor("minRidgePeakRatio", ridges.min_ridge_peak_ratio);
   set_floor("minRidgeDurationMs", ridges.min_duration_ms);
+  // 0 is off here and the core refuses a negative or a value in (0, 1].
+  set_positive("reattackRatio", ridges.reattack_ratio);
 
   set_count("maskHarmonics", out.masks.n_harmonics);
   set_positive("claimLobes", out.masks.claim_lobes);

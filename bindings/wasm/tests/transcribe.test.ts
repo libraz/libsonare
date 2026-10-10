@@ -45,6 +45,48 @@ function richTone(f0Hz: number, seconds: number): Float32Array {
   return out;
 }
 
+/** C4, E4 and G4 sounding together for one second. */
+function triad(): Float32Array {
+  const parts = toneHz.map((hz) => richTone(hz, 1.0));
+  const out = new Float32Array(parts[0].length);
+  for (const part of parts) {
+    for (let i = 0; i < out.length; i++) {
+      out[i] += part[i] / parts.length;
+    }
+  }
+  return out;
+}
+
+/**
+ * One pitch struck twice: each strike decays to a third of its peak over 0.4 s,
+ * the first with a 5 ms attack and the second with a 20 ms ramp.
+ */
+function restruck(): Float32Array {
+  const strikeSamples = Math.round(sampleRate * 0.4);
+  const out = new Float32Array(2 * strikeSamples);
+  const tone = richTone(toneHz[0], 0.8);
+  for (let strike = 0; strike < 2; strike++) {
+    const attack = Math.round(sampleRate * (strike === 0 ? 0.005 : 0.02));
+    for (let i = 0; i < strikeSamples; i++) {
+      const rise = i < attack ? i / attack : 1;
+      const fall = 3 ** (-i / strikeSamples);
+      out[strike * strikeSamples + i] = tone[i] * rise * fall;
+    }
+  }
+  return out;
+}
+
+/** The most notes sounding at once, from a result's note-on / note-off order. */
+function maxSimultaneous(result: ReturnType<typeof transcribe>): number {
+  let open = 0;
+  let most = 0;
+  for (const event of result.events.map(decode)) {
+    open += event.status === NOTE_ON ? 1 : -1;
+    most = Math.max(most, open);
+  }
+  return most;
+}
+
 function melody(): Float32Array {
   const parts = toneHz.map((hz) => richTone(hz, noteSeconds));
   const out = new Float32Array(parts.reduce((total, part) => total + part.length, 0));
@@ -221,6 +263,10 @@ describe('WASM transcribe', () => {
       'segmentationThresholdCents',
       'velocityFloorDb',
       'fixedVelocity',
+      'maxPolyphony',
+      'minFramePeakRatio',
+      'minRidgePeakRatio',
+      'reattackRatio',
     ] as const;
     for (const key of guarded) {
       for (const absent of [undefined, null]) {
@@ -313,6 +359,16 @@ describe('WASM transcribe', () => {
       ['velocityFloorDb positive', { velocityFloorDb: 6 }, 'range'],
       ['referenceHz 0', { referenceHz: 0 }, 'range'],
       ['minNoteMs 0', { minNoteMs: 0 }, 'range'],
+      ['maxPolyphony 0', { polyphonic: true, maxPolyphony: 0 }, 'range'],
+      ['maxPolyphony 65', { polyphonic: true, maxPolyphony: 65 }, 'range'],
+      ['maxPolyphony fractional', { polyphonic: true, maxPolyphony: 2.5 }, 'range'],
+      ['minFramePeakRatio negative', { polyphonic: true, minFramePeakRatio: -0.1 }, 'range'],
+      ['minFramePeakRatio above 1', { polyphonic: true, minFramePeakRatio: 1.5 }, 'range'],
+      ['minRidgePeakRatio negative', { polyphonic: true, minRidgePeakRatio: -0.1 }, 'range'],
+      ['minRidgePeakRatio above 1', { polyphonic: true, minRidgePeakRatio: 1.5 }, 'range'],
+      ['reattackRatio negative', { polyphonic: true, reattackRatio: -1 }, 'range'],
+      ['reattackRatio 1', { polyphonic: true, reattackRatio: 1 }, 'range'],
+      ['reattackRatio 0.5', { polyphonic: true, reattackRatio: 0.5 }, 'range'],
       ['segmentationThresholdCents 0', { segmentationThresholdCents: 0 }, 'range'],
       ['fmax below fmin', { fmin: 500, fmax: 400 }, 'coded'],
       ['channel above 15', { channel: 16 }, 'coded'],
@@ -399,6 +455,74 @@ describe('WASM transcribe', () => {
     // And a success after a failure is still a success -- the slot is not
     // consulted when there is nothing to report.
     expect(transcribe({ samples, sampleRate, tempoBpm: 120 }).noteCount).toBe(baseline.noteCount);
+  });
+
+  it('lets maxPolyphony bound the voices of a chord', () => {
+    const chordSamples = triad();
+    const open = transcribe({ samples: chordSamples, sampleRate, tempoBpm: 120, polyphonic: true });
+    const single = transcribe({
+      samples: chordSamples,
+      sampleRate,
+      tempoBpm: 120,
+      polyphonic: true,
+      maxPolyphony: 1,
+    });
+    expect(maxSimultaneous(open)).toBeGreaterThanOrEqual(3);
+    expect(maxSimultaneous(single)).toBeLessThan(maxSimultaneous(open));
+  });
+
+  it('reads reattackRatio: omitted splits a re-struck tone, 0 does not', () => {
+    const struck = restruck();
+    const run = (extra: TranscribeOptions) =>
+      transcribe({ samples: struck, sampleRate, tempoBpm: 120, polyphonic: true, ...extra });
+    const omitted = run({});
+    const off = run({ reattackRatio: 0 });
+    expect(omitted.noteCount).toBe(2);
+    expect(off.noteCount).toBe(1);
+    // A larger ratio than the second strike's rise also leaves the tone whole.
+    expect(run({ reattackRatio: 50 }).noteCount).toBe(1);
+  });
+
+  it('reads minFramePeakRatio and minRidgePeakRatio, and takes 0 as a real 0', () => {
+    const chordSamples = triad();
+    const key = (result: typeof baseline) =>
+      JSON.stringify(result.events.map((event) => [event.ppq, event.data0]));
+    const run = (extra: TranscribeOptions) =>
+      transcribe({
+        samples: chordSamples,
+        sampleRate,
+        tempoBpm: 120,
+        polyphonic: true,
+        ...extra,
+      });
+    const omitted = key(run({}));
+    expect(key(run({ minFramePeakRatio: 1 }))).not.toBe(omitted);
+    expect(key(run({ minRidgePeakRatio: 1 }))).not.toBe(omitted);
+    // 0 is accepted, and is the C ABI's negative (a real 0), not its default.
+    expect(() => run({ minFramePeakRatio: 0 })).not.toThrow();
+    expect(() => run({ minRidgePeakRatio: 0 })).not.toThrow();
+    expect(key(run({ minFramePeakRatio: 0.2 }))).toBe(omitted);
+    expect(key(run({ minRidgePeakRatio: 0.1 }))).toBe(omitted);
+  });
+
+  it('surfaces the C refusal of a polyphonic-only option on the monophonic path', () => {
+    for (const options of [
+      { maxPolyphony: 3 },
+      { minFramePeakRatio: 0.5 },
+      { minRidgePeakRatio: 0.5 },
+      { reattackRatio: 2 },
+    ] as TranscribeOptions[]) {
+      let thrown: unknown;
+      try {
+        transcribe({ samples, sampleRate, tempoBpm: 120, ...options });
+      } catch (error) {
+        thrown = error;
+      }
+      const name = Object.keys(options)[0];
+      expect(isSonareError(thrown) && thrown.code, name).toBe(ErrorCode.InvalidParameter);
+      const field = name.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+      expect((thrown as Error).message, name).toContain(field);
+    }
   });
 
   it('accepts the zeros that are values rather than sentinels', () => {
