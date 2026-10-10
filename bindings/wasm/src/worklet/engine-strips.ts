@@ -1,7 +1,7 @@
+import { packMidi2Program } from '../_midi_program_pack.js';
 import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
-import { packMidi2Program } from '../midi_program_pack.js';
 import type { SurroundPan } from '../public_types.js';
 import { resolveRenderFrame } from '../validation.js';
 import { commitSync } from './engine-commit.js';

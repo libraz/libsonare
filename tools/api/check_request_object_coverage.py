@@ -73,6 +73,10 @@ SCALAR_HELPERS = {
     "scaleCorrectionSemitones",
     "scalePitchClassEnabled",
     "scaleMaskForMode",
+    # Analysis-to-annotation vocabulary conversions: one chord or one mode in,
+    # its annotation fields out, no audio and no options to name.
+    "chordSymbolFromAnalysis",
+    "keyModeFromAnalysis",
 }
 # Do not add a zero-argument accessor here: the zero-argument clause in
 # exemption() already covers every one of them structurally, and it is the rule

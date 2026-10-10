@@ -1,3 +1,4 @@
+import { packMidi2Program } from './_midi_program_pack.js';
 import { ErrorCode, SonareError } from './errors.js';
 import type {
   BuiltinSynthBinding,
@@ -12,7 +13,6 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
-import { packMidi2Program } from './midi_program_pack.js';
 import {
   assertProjectMidiEvents,
   normalizeInstrumentBindings,

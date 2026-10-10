@@ -61,6 +61,7 @@ from ._runtime import (
     _narrow_int,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int32,
     _to_c_int64,
     _to_c_size_t,
     _to_c_uint8,
@@ -319,7 +320,7 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
 
     Raises:
         TypeError: If ``chord`` is not a :class:`Chord`.
-        SonareValueError: Naming the field, for a root or bass outside 0..11 or a
+        SonareValueError: Naming the field, for a root or bass not in 0..11 or a
             quality that is not a chord quality name.
     """
     if not isinstance(chord, Chord):
@@ -342,13 +343,13 @@ def chord_symbol_from_analysis(chord: Chord) -> dict[str, object]:
     extensions = (ctypes.c_uint8 * _CHORD_EXTENSION_CAPACITY)()
     _check(
         lib.sonare_chord_symbol_from_analysis(
-            root,
-            ordinal,
-            bass,
+            _to_c_int32(root, "chord.root"),
+            _to_c_int32(ordinal, "chord.quality"),
+            _to_c_int32(bass, "chord.bass"),
             ctypes.byref(out_root),
             ctypes.byref(out_quality),
             extensions,
-            _CHORD_EXTENSION_CAPACITY,
+            _to_c_size_t(_CHORD_EXTENSION_CAPACITY, "extension_capacity"),
             ctypes.byref(out_count),
             ctypes.byref(out_slash),
         )
@@ -370,7 +371,7 @@ def key_mode_from_analysis(mode: Mode | int) -> int:
 
     Raises:
         TypeError: If ``mode`` is not a :class:`Mode` or an integer.
-        SonareValueError: If ``mode`` is outside 0..6.
+        SonareValueError: If ``mode`` is not in 0..6.
     """
     if isinstance(mode, bool) or not isinstance(mode, int):
         raise TypeError(f"mode must be a Mode, got {type(mode).__name__}")
@@ -383,7 +384,7 @@ def key_mode_from_analysis(mode: Mode | int) -> int:
             "rebuild or upgrade the shared library before calling key_mode_from_analysis"
         )
     out_mode = ctypes.c_uint32()
-    _check(lib.sonare_key_mode_from_analysis(int(mode), ctypes.byref(out_mode)))
+    _check(lib.sonare_key_mode_from_analysis(_to_c_int32(mode, "mode"), ctypes.byref(out_mode)))
     return int(out_mode.value)
 
 

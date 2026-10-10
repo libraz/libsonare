@@ -306,7 +306,7 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
 ///        undoable command. @p chords may be NULL only when @p count is 0.
 /// @return ::SONARE_ERROR_INVALID_PARAMETER when a span does not start at a
 ///   finite, non-negative PPQ and end after it, a pitch class is neither 0..11
-///   nor 255, a quality is outside 0..7, or a chord carries more than 32
+///   nor 255, a quality is not in 0..7, or a chord carries more than 32
 ///   extension scale degrees (or a NULL @c extensions with a non-zero count);
 ///   nothing is applied in that case.
 SonareError sonare_project_annotate_chords(SonareProject* project,
@@ -333,7 +333,7 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
 /// @param out_extension_count Receives the number of degrees the chord carries,
 ///   written on every return, including when @p extension_capacity is too small.
 /// @param out_slash_bass_pc Receives the slash bass (0..11), or 255 for none.
-/// @return ::SONARE_ERROR_INVALID_PARAMETER when a pitch class is outside 0..11,
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a pitch class is not in 0..11,
 ///   @p quality is not a ::SonareChordQuality, a required out-parameter is NULL,
 ///   or @p extension_capacity is below the count, which is then already written.
 ///   Every input is checked before it is read as an enumerator.
@@ -351,7 +351,7 @@ SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChord
 ///   uses itself.
 /// @param mode Analysis mode, 0..6.
 /// @param out_mode Receives the annotation KeyMode ordinal (1..7).
-/// @return ::SONARE_ERROR_INVALID_PARAMETER when @p mode is outside 0..6 or
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when @p mode is not in 0..6 or
 ///   @p out_mode is NULL.
 SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode);
 
