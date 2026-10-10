@@ -7106,7 +7106,7 @@
           "placeholder": "rir_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "1119b8526d67f55d1e58ee5b83b91067ce5009d587ff37cf67b136fb44d06d4a"
+          "sha256": "8548c2666ae2630b452d47fbdc4a77a962ef7b161a74db08ab0b5ed50a464ae2"
         }
       }
     },
@@ -7852,19 +7852,19 @@
           "placeholder": "eq_non_finite_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "e80443b9fe3487b57d3e9f083daab151c9ef982bf82b39eb36770bd64377a19e"
+          "sha256": "432fc3613a366c9003ec703283fc18f55fe7618199d61204d43df1a7e5bc4686"
         },
         "non_finite_wav_24bit": {
           "placeholder": "eq_non_finite_output_24bit",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "70555c1bdc9199430f657e5420c745b97836911f6d39bb0fe086d5a8287a43cc"
+          "sha256": "c82dcb977844e36e1cfdc477788e37ed12f3f8f2ae41996a2fb2740274295e72"
         },
         "saturating_wav": {
           "placeholder": "eq_saturating_output",
           "kind": "wav",
           "sample_rate_key": "sample_rate",
-          "sha256": "1d71bc7678b8a74d308c430a95cfaf86337000b4555700b8cfbdfe03f618d7d3"
+          "sha256": "8bf8e752144973eb33ea5e79a255d07aacf2ccabe6123ee11a3e80d7bcd167ab"
         }
       }
     },
