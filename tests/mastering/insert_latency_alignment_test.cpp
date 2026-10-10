@@ -24,6 +24,7 @@
 #include "mastering/multiband/multiband_saturation.h"
 #include "mastering/saturation/tube.h"
 #include "rt/processor_base.h"
+#include "support/depends_on_probe.h"
 #include "util/json.h"
 
 namespace {
@@ -253,6 +254,9 @@ Configuration ProbeConfiguration(const std::string& name, const std::string& key
   json::Object object;
   for (const auto& param : insert_probe_params(name, key, value)) {
     object[param.key] = json::Value(param.value);
+  }
+  for (const auto& [sibling, sibling_value] : sonare::test::depends_on_siblings(name, key, value)) {
+    object[sibling] = json::Value(sibling_value);
   }
   return {name, key, std::to_string(std::llround(value)), json::dump(json::Value(object))};
 }

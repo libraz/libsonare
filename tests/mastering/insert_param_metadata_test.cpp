@@ -34,6 +34,7 @@
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
 #include "rt/processor_base.h"
+#include "support/depends_on_probe.h"
 #include "support/schema_paths.h"
 #include "util/constants.h"
 #include "util/exception.h"
@@ -96,10 +97,19 @@ const json::Value* find_param(const json::Array& params, const std::string& name
 // the way a host would. Going through the JSON writer rather than std::to_string
 // keeps a default that needs full float precision from being rounded on its way
 // back in.
-std::string probe_json(const std::string& name, const std::string& key, const json::Value& value) {
+std::string probe_json(const std::string& name, const std::string& key, const json::Value& value,
+                       bool coupled = false) {
   json::Object params;
   for (const auto& param : insert_probe_params(name, key, 0.0)) {
     if (param.key != key) params.emplace(param.key, json::Value(param.value));
+  }
+  // With @p coupled, the siblings a `dependsOn` relation couples to @p key move with it, so a
+  // value legal at some setting of them is not refused for a sibling left at its default.
+  if (coupled && value.is_number()) {
+    for (const auto& [sibling, sibling_value] :
+         sonare::test::depends_on_siblings(name, key, value.as_number())) {
+      params[sibling] = json::Value(sibling_value);
+    }
   }
   params.emplace(key, value);
   return json::dump(json::Value(std::move(params)));
@@ -115,10 +125,11 @@ bool builds_with(const std::string& name, const std::string& key, const json::Va
 
 // Build, then prepare at the catalog's probe rate: some processors refuse a
 // setting only once they know the rate they run at.
-bool prepares_with(const std::string& name, const std::string& key, double value) {
+bool prepares_with(const std::string& name, const std::string& key, double value,
+                   bool coupled = false) {
   try {
     const std::unique_ptr<sonare::rt::ProcessorBase> processor =
-        make_insert(name, probe_json(name, key, json::Value(value)));
+        make_insert(name, probe_json(name, key, json::Value(value), coupled));
     if (processor == nullptr) return false;
     processor->prepare(sonare::mastering::api::kInsertProbeSampleRate,
                        sonare::mastering::api::kInsertProbeBlockSize);
@@ -273,7 +284,7 @@ TEST_CASE("choices list exactly the values construction accepts", "[mastering][c
       }
       for (const double value : values) {
         INFO("choice " << value);
-        REQUIRE(prepares_with(name, key, value));
+        REQUIRE(prepares_with(name, key, value, /*coupled=*/true));
       }
       // Every other value up to one past the largest listed must be refused: a
       // declared value the processor rejects is left out rather than listed.
