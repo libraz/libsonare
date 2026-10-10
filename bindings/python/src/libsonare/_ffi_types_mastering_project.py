@@ -349,7 +349,7 @@ class SonareMidiEventPod(CStruct):
 
 
 class SonareTranscribeConfig(CStruct):
-    """Maps to SonareTranscribeConfig in sonare_c_transcribe.h (struct_version 2).
+    """Maps to SonareTranscribeConfig in sonare_c_transcribe.h (struct_version 3).
 
     Every numeric field spells its own default as 0, so a zero-filled struct
     carrying ``struct_version`` is the defaults. A value outside a field's
@@ -369,6 +369,10 @@ class SonareTranscribeConfig(CStruct):
         ("group", ctypes.c_int32),
         ("channel", ctypes.c_int32),
         ("reference_auto", ctypes.c_int32),
+        ("max_polyphony", ctypes.c_int32),
+        ("min_frame_peak_ratio", ctypes.c_float),
+        ("min_ridge_peak_ratio", ctypes.c_float),
+        ("reattack_ratio", ctypes.c_float),
     ]
 
 

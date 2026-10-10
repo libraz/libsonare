@@ -21,14 +21,14 @@ namespace {
 // for -- indistinguishable downstream from a deliberate one. hasProperty-class
 // knowledge is what makes this reachable here and not there.
 //
-// fmin and fmax are the one pair whose C defaults are themselves 0 sentinels: an
-// omitted key must stay 0 so the C layer can resolve it from the selected source.
-// Their presence is therefore carried separately and only present values are
+// fmin, fmax and minNoteMs are the fields whose C defaults are themselves 0
+// sentinels: an omitted key must stay 0 so the C layer can resolve it from the
+// selected source. Their presence is therefore carried separately and only present values are
 // checked here. fixedVelocity is handled at its read for the same reason. group
 // and channel are absent on purpose -- there 0 is a value a caller can mean, and
 // that is the distinction deciding the whole set.
 bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool has_fmin,
-                       bool has_fmax) {
+                       bool has_fmax, bool has_min_note_ms) {
   struct PositiveField {
     const char* key;
     float value;
@@ -38,7 +38,7 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
       {"referenceHz", config.reference_hz, true},
       {"fmin", config.fmin, has_fmin},
       {"fmax", config.fmax, has_fmax},
-      {"minNoteMs", config.min_note_ms, true},
+      {"minNoteMs", config.min_note_ms, has_min_note_ms},
       {"segmentationThresholdCents", config.segmentation_threshold_cents, true},
   };
   for (const PositiveField& field : positive) {
@@ -61,7 +61,8 @@ bool RefuseOutOfDomain(Napi::Env env, const SonareTranscribeConfig& config, bool
 // Seeding rather than zeroing keeps the documented default of every field in one
 // place — sonare_transcribe_config_default() — so this file cannot drift from
 // the header a caller reads. fmin/fmax intentionally remain zero when omitted:
-// the C layer resolves those sentinels against the selected tracker source.
+// the C layer resolves those sentinels against the selected tracker source, and
+// so does minNoteMs, whose default is the source's.
 //
 // The floats take the finite reader: none of these fields documents an infinity
 // or a NaN as selecting anything, so a non-finite value is refused by name here
@@ -86,6 +87,8 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value fmax = request.Get("fmax");
   const bool wrote_fmax = !fmax.IsUndefined() && !fmax.IsNull();
   out->fmax = FiniteFloatProperty(request, "fmax", out->fmax);
+  const Napi::Value min_note_ms = request.Get("minNoteMs");
+  const bool wrote_min_note_ms = !min_note_ms.IsUndefined() && !min_note_ms.IsNull();
   out->min_note_ms = FiniteFloatProperty(request, "minNoteMs", out->min_note_ms);
   out->segmentation_threshold_cents =
       FiniteFloatProperty(request, "segmentationThresholdCents", out->segmentation_threshold_cents);
@@ -107,7 +110,7 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
                             "fixedVelocity must be an integer in [1, 127]");
     return false;
   }
-  return RefuseOutOfDomain(env, *out, wrote_fmin, wrote_fmax);
+  return RefuseOutOfDomain(env, *out, wrote_fmin, wrote_fmax, wrote_min_note_ms);
 }
 
 // The request shape both entry points share: mono audio plus its rate. Returns

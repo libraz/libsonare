@@ -18,6 +18,7 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -658,4 +659,198 @@ TEST_CASE("transcribe_notes refuses audio and config it cannot read", "[note_tra
   // The defaults are accepted, so every refusal above is attributable to the one
   // field it changed.
   REQUIRE_NOTHROW(transcribe_notes(audio));
+}
+
+// --- The polyphonic limits ------------------------------------------------
+
+namespace {
+
+constexpr int kPolyRate = 44100;
+constexpr int kPolyPartials = 10;
+
+/// @brief Adds a harmonic tone at @p f0_hz to @p into from @p start for @p length samples,
+///        scaled per sample by @p gain.
+template <typename Gain>
+void add_harmonic(std::vector<float>& into, double f0_hz, size_t start, size_t length, Gain gain) {
+  const double nyquist = 0.5 * kPolyRate;
+  for (size_t i = 0; i < length && start + i < into.size(); ++i) {
+    const double t = static_cast<double>(i) / kPolyRate;
+    double sample = 0.0;
+    for (int h = 1; h <= kPolyPartials; ++h) {
+      const double hz = f0_hz * h;
+      if (hz >= nyquist) break;
+      sample += 0.25 / h * std::sin(sonare::constants::kTwoPiD * hz * t + 0.37 * h * h);
+    }
+    into[start + i] += static_cast<float>(sample * gain(t));
+  }
+}
+
+/// @brief One pitch struck at 0 s and again at 3x the level at 0.45 s while the first
+///        still sounds. The second strike rises over 20 ms: a hard step breaks the ridge
+///        on its own, which would leave reattack_ratio nothing to decide.
+sonare::Audio restruck_tone() {
+  constexpr double kRestrikeSec = 0.45;
+  constexpr double kDecayPerSec = 1.5;
+  constexpr double kAttackSec = 0.02;
+  std::vector<float> samples(static_cast<size_t>(0.9 * kPolyRate), 0.0f);
+  add_harmonic(samples, hz_for_midi(64), 0, samples.size(), [&](double t) {
+    double gain = std::exp(-kDecayPerSec * t);
+    if (t >= kRestrikeSec) {
+      const double since = t - kRestrikeSec;
+      gain += 3.0 * std::min(1.0, since / kAttackSec) * std::exp(-kDecayPerSec * since);
+    }
+    return gain;
+  });
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), kPolyRate);
+}
+
+/// @brief A held tone and, apart from it, one 100 ms tone with short raised edges.
+sonare::Audio held_and_short() {
+  constexpr double kEdgeSec = 0.005;
+  constexpr double kShortSec = 0.1;
+  std::vector<float> samples(static_cast<size_t>(1.0 * kPolyRate), 0.0f);
+  add_harmonic(samples, hz_for_midi(64), 0, samples.size(), [](double) { return 1.0; });
+  const auto edged = [](double t) {
+    const double edge = std::min(1.0, std::min(t, kShortSec - t) / kEdgeSec);
+    return std::max(0.0, edge);
+  };
+  add_harmonic(samples, hz_for_midi(71), static_cast<size_t>(0.4 * kPolyRate),
+               static_cast<size_t>(kShortSec * kPolyRate), edged);
+  return sonare::Audio::from_buffer(samples.data(), samples.size(), kPolyRate);
+}
+
+size_t count_of(const std::vector<TranscribedNote>& notes, int midi_note) {
+  return static_cast<size_t>(std::count_if(
+      notes.begin(), notes.end(), [&](const TranscribedNote& n) { return n.note == midi_note; }));
+}
+
+}  // namespace
+
+TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
+  TranscribeConfig monophonic;
+  const TranscribePolyphonyLimits mono = resolve_transcribe_polyphony_limits(monophonic);
+  CHECK(mono.min_note_ms == 30.0f);
+
+  TranscribeConfig polyphonic;
+  polyphonic.source = TranscribeSource::kPolyphonic;
+  const TranscribePolyphonyLimits poly = resolve_transcribe_polyphony_limits(polyphonic);
+  CHECK(poly.min_note_ms == 60.0f);
+  CHECK(poly.max_polyphony == 10);
+  CHECK(poly.min_frame_peak_ratio == 0.20f);
+  CHECK(poly.min_ridge_peak_ratio == 0.10f);
+  CHECK(poly.reattack_ratio == 2.5f);
+
+  SECTION("a negative ratio is a real 0 and a negative reattack is off") {
+    polyphonic.min_frame_peak_ratio = -1.0f;
+    polyphonic.min_ridge_peak_ratio = -0.5f;
+    polyphonic.reattack_ratio = -1.0f;
+    const TranscribePolyphonyLimits floored = resolve_transcribe_polyphony_limits(polyphonic);
+    CHECK(floored.min_frame_peak_ratio == 0.0f);
+    CHECK(floored.min_ridge_peak_ratio == 0.0f);
+    CHECK(floored.reattack_ratio == 0.0f);
+  }
+
+  SECTION("a given value is copied") {
+    polyphonic.min_note_ms = 45.0f;
+    polyphonic.max_polyphony = 3;
+    polyphonic.min_frame_peak_ratio = 0.3f;
+    polyphonic.min_ridge_peak_ratio = 0.4f;
+    polyphonic.reattack_ratio = 1.5f;
+    const TranscribePolyphonyLimits given = resolve_transcribe_polyphony_limits(polyphonic);
+    CHECK(given.min_note_ms == 45.0f);
+    CHECK(given.max_polyphony == 3);
+    CHECK(given.min_frame_peak_ratio == 0.3f);
+    CHECK(given.min_ridge_peak_ratio == 0.4f);
+    CHECK(given.reattack_ratio == 1.5f);
+  }
+}
+
+TEST_CASE("min_note_ms is the shortest polyphonic note kept", "[note_transcriber]") {
+  const sonare::Audio audio = held_and_short();
+  constexpr int kShortNote = 71;
+
+  TranscribeConfig config;
+  config.source = TranscribeSource::kPolyphonic;
+  config.min_note_ms = 40.0f;
+  const std::vector<TranscribedNote> kept = transcribe_notes(audio, config);
+  INFO("kept " << kept.size() << " notes");
+  REQUIRE(count_of(kept, 64) >= 1);
+  REQUIRE(count_of(kept, kShortNote) == 1);
+
+  config.min_note_ms = 300.0f;
+  const std::vector<TranscribedNote> dropped = transcribe_notes(audio, config);
+  CHECK(count_of(dropped, 64) >= 1);
+  CHECK(count_of(dropped, kShortNote) == 0);
+}
+
+TEST_CASE("a re-struck pitch is two notes by default and one with the split off",
+          "[note_transcriber]") {
+  const sonare::Audio audio = restruck_tone();
+  TranscribeConfig config;
+  config.source = TranscribeSource::kPolyphonic;
+  const std::vector<TranscribedNote> split = transcribe_notes(audio, config);
+  INFO("default notes " << split.size());
+  CHECK(count_of(split, 64) == 2);
+
+  config.reattack_ratio = -1.0f;
+  const std::vector<TranscribedNote> whole = transcribe_notes(audio, config);
+  INFO("split-off notes " << whole.size());
+  CHECK(count_of(whole, 64) == 1);
+}
+
+TEST_CASE("the polyphonic limits refuse what they cannot read", "[note_transcriber]") {
+  const sonare::Audio audio = sustained(69);
+
+  auto refused_naming = [&](const TranscribeConfig& config, const std::string& field) {
+    try {
+      (void)transcribe_notes(audio, config);
+      FAIL("accepted a config naming " << field);
+    } catch (const sonare::SonareException& error) {
+      CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+      CHECK(std::string(error.what()).find(field) != std::string::npos);
+    }
+  };
+
+  SECTION("a monophonic config carrying any of them, negative included") {
+    for (const float value : {-1.0f, 0.3f}) {
+      INFO("value " << value);
+      TranscribeConfig frame;
+      frame.min_frame_peak_ratio = value;
+      refused_naming(frame, "min_frame_peak_ratio");
+      TranscribeConfig ridge;
+      ridge.min_ridge_peak_ratio = value;
+      refused_naming(ridge, "min_ridge_peak_ratio");
+    }
+    for (const float value : {-1.0f, 2.5f}) {
+      TranscribeConfig reattack;
+      reattack.reattack_ratio = value;
+      refused_naming(reattack, "reattack_ratio");
+    }
+    TranscribeConfig voices;
+    voices.max_polyphony = 4;
+    refused_naming(voices, "max_polyphony");
+  }
+
+  SECTION("a polyphonic value outside its domain") {
+    TranscribeConfig base;
+    base.source = TranscribeSource::kPolyphonic;
+    for (const int voices : {-1, 65}) {
+      TranscribeConfig config = base;
+      config.max_polyphony = voices;
+      refused_naming(config, "max_polyphony");
+    }
+    for (const float ratio : {1.5f, kNaN, kInf, -kInf}) {
+      TranscribeConfig frame = base;
+      frame.min_frame_peak_ratio = ratio;
+      refused_naming(frame, "min_frame_peak_ratio");
+      TranscribeConfig ridge = base;
+      ridge.min_ridge_peak_ratio = ratio;
+      refused_naming(ridge, "min_ridge_peak_ratio");
+    }
+    for (const float ratio : {0.5f, 1.0f, kNaN, kInf, -kInf}) {
+      TranscribeConfig reattack = base;
+      reattack.reattack_ratio = ratio;
+      refused_naming(reattack, "reattack_ratio");
+    }
+  }
 }

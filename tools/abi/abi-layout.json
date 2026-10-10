@@ -10219,9 +10219,33 @@
         "name": "reference_auto",
         "offset": 44,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "max_polyphony",
+        "offset": 48,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_frame_peak_ratio",
+        "offset": 52,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "min_ridge_peak_ratio",
+        "offset": 56,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reattack_ratio",
+        "offset": 60,
+        "size": 4
       }
     ],
-    "size": 48
+    "size": 64
   },
   "SonareTranscribeResult": {
     "align": 8,

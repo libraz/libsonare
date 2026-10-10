@@ -286,13 +286,14 @@ CLAIMS: tuple[Claim, ...] = (
         groups={"max": ("max_note_mask_harmonics", 0)},
         floor=4,
     ),
+    # The three facades plus the transcription C header, which shares their wording.
     Claim(
         key="polyphony voice ceiling",
         pattern=r"[Vv]oices (?:a|one) frame (?:is allowed|may hold).{0,40}?at most\s+(?P<max>\d+)",
         groups={"max": ("max_polyphony_voices", 0)},
-        floor=3,
+        floor=4,
     ),
-    # The C header states the same ceiling as a bare sentinel-and-limit pair,
+    # The polyphony C header states the same ceiling as a bare sentinel-and-limit pair,
     # sharing no wording with the three facades, so it reads the constant
     # through a claim of its own rather than widening theirs to reach it.
     Claim(

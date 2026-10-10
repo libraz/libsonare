@@ -42,7 +42,8 @@ extern "C" {
 /// @details Every numeric field takes its documented default at 0, so a
 ///          zero-filled struct with @c struct_version set is the defaults.
 ///          @ref sonare_transcribe_config_default initializes the configuration
-///          and keeps @c fmin and @c fmax at 0 to select the source's range.
+///          and keeps @c fmin, @c fmax, @c min_note_ms and the version-3 fields
+///          at 0, so each resolves from the selected source.
 ///
 ///          **A struct field has no way to spell "absent", which is why 0 means
 ///          "default" here and does NOT mean that on the bindings.** Python,
@@ -56,8 +57,9 @@ extern "C" {
 ///          a caller can mean. The divergence is deliberate and is the reason
 ///          the bindings do not simply forward this struct.
 typedef struct {
-  /// 1 or 2; any other value is rejected. Version 2 adds @c reference_auto,
-  /// which is read only from a version-2 struct.
+  /// 1, 2 or 3; any other value is rejected. Version 2 adds @c reference_auto
+  /// and version 3 the four polyphonic limits; each is read only from a struct
+  /// of its version or later.
   int32_t struct_version;
   /// Non-zero reads the multi-F0 chain, which finds overlapping notes at the
   /// cost of a full STFT and a mask per tracked ridge. 0 reads pYIN cut into
@@ -72,7 +74,9 @@ typedef struct {
   /// independent.
   float fmin;
   float fmax;
-  /// Shortest span kept as a note, in milliseconds; 0 => 30.
+  /// Shortest span kept as a note, in milliseconds; 0 => the source's default:
+  /// 30 for the monophonic path, and the transcription default (60) for the
+  /// polyphonic path, where it is the shortest ridge the tracker keeps.
   float min_note_ms;
   /// Pitch movement, in cents, that ends one note and starts the next;
   /// 0 => 50.
@@ -91,6 +95,25 @@ typedef struct {
   /// Non-zero measures the tuning reference from the audio and ignores
   /// @c reference_hz. 0 keeps @c reference_hz.
   int32_t reference_auto;
+  /* --- struct_version 3 --- */
+  /// The four fields below are polyphonic only: with @c polyphonic at 0, any
+  /// of them non-zero, negative included, is refused as INVALID_PARAMETER
+  /// naming the field. Each 0 selects the transcription default, which is not
+  /// the editing chain's (@ref SonarePolyphonicConfig).
+  ///
+  /// Voices one frame may hold, at most 64; 0 => the transcription default (10).
+  int32_t max_polyphony;
+  /// Stops a frame's search below this share of its first peak, at most 1;
+  /// 0 => 0.20, negative => 0.
+  float min_frame_peak_ratio;
+  /// Ends a ridge below this share of its own running peak, at most 1;
+  /// 0 => 0.10, negative => 0.
+  float min_ridge_peak_ratio;
+  /// Splits a ridge where its salience climbs past this multiple of the level
+  /// just before, the same pitch struck again while it sounds. 0 => the
+  /// transcription default (2.5); negative => no split; otherwise finite and
+  /// above 1.
+  float reattack_ratio;
 } SonareTranscribeConfig;
 
 /// @brief Heap-owned transcription output. Release with

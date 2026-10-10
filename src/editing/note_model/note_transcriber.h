@@ -54,9 +54,10 @@ struct TranscribeConfig {
   float fmin = 0.0f;
   float fmax = 0.0f;
 
-  /// Shortest span kept as a note. Monophonic only: the polyphonic chain
-  /// builds exactly one note per tracked ridge and never reads this field.
-  float min_note_ms = 30.0f;
+  /// Shortest span kept as a note, in milliseconds. 0 => the source's default:
+  /// the segmenter's 30 ms for monophonic notes, the transcription default for
+  /// polyphonic ones, where it is the shortest ridge the tracker keeps.
+  float min_note_ms = 0.0f;
   /// Monophonic: pitch movement, in cents, that ends one note and starts the
   /// next. Polyphonic: scales the reported f0 stability figure only -- a
   /// mid-ridge pitch jump is never split into two notes.
@@ -70,6 +71,21 @@ struct TranscribeConfig {
   /// 1..127 gives every note that velocity and skips the measurement entirely;
   /// 0 measures. Anything else is rejected.
   int fixed_velocity = 0;
+
+  // The four fields below are polyphonic only: a monophonic config carrying any
+  // of them non-zero, negative included, is refused by name.
+
+  /// Voices one frame may hold, 1..64; 0 => transcription default.
+  int max_polyphony = 0;
+  /// @ref polyphony::MultiF0Config::min_frame_peak_ratio. 0 => transcription
+  /// default; unlike RidgeConfig's 0, a real 0 is negative. Otherwise at most 1.
+  float min_frame_peak_ratio = 0.0f;
+  /// @ref polyphony::RidgeConfig::min_ridge_peak_ratio. 0 => transcription
+  /// default; unlike RidgeConfig's 0, a real 0 is negative. Otherwise at most 1.
+  float min_ridge_peak_ratio = 0.0f;
+  /// @ref polyphony::RidgeConfig::reattack_ratio. 0 => transcription default;
+  /// unlike RidgeConfig's 0 (off), off is negative. Otherwise finite and above 1.
+  float reattack_ratio = 0.0f;
 };
 
 /// @brief Effective F0 tracker bounds for one transcription source.
@@ -82,6 +98,28 @@ struct TranscribeF0Range {
 /// @details Nonzero endpoints are copied as-is. Validation belongs to
 ///          @ref transcribe_notes and callers that need an ordering check.
 [[nodiscard]] TranscribeF0Range resolve_transcribe_f0_range(
+    const TranscribeConfig& config) noexcept;
+
+/// @brief The limits the selected source applies once each 0 is resolved.
+struct TranscribePolyphonyLimits {
+  /// Positive: the source's default where the config left 0.
+  float min_note_ms;
+  /// 1..64.
+  int max_polyphony;
+  /// [0, 1]; a negative config value has become 0.
+  float min_frame_peak_ratio;
+  float min_ridge_peak_ratio;
+  /// 0 is off here, as in @ref polyphony::RidgeConfig; otherwise above 1.
+  float reattack_ratio;
+};
+
+/// @brief Resolves the zero sentinels against the selected source's defaults.
+/// @details @c min_note_ms resolves per source. The four polyphonic-only
+///          fields resolve to the transcription defaults whatever the source,
+///          since the monophonic chain never reads them. Nonzero values are
+///          copied, a negative ratio as 0 and a negative @c reattack_ratio as
+///          0 (off). Validation belongs to @ref transcribe_notes.
+[[nodiscard]] TranscribePolyphonyLimits resolve_transcribe_polyphony_limits(
     const TranscribeConfig& config) noexcept;
 
 /// @brief One transcribed note.
@@ -121,7 +159,10 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 ///         or out-of-range config field, on a @c fixed_velocity outside {0} U
 ///         [1, 127], on a @c velocity_floor_db that is not finite and negative,
 ///         or on a resolved @c fmin >= @c fmax. A zero range endpoint selects
-///         the source-specific default before that ordering check.
+///         the source-specific default before that ordering check. Also on a
+///         @c max_polyphony outside {0} U [1, 64], a non-finite or above-1
+///         peak ratio, a @c reattack_ratio in (0, 1] or non-finite, and on a
+///         monophonic config with any of those four fields non-zero.
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio,
                                               const TranscribeConfig& config = {});
 

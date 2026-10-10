@@ -5,6 +5,7 @@
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
 #include "analysis/bpm_analyzer.h"
 #include "editing/note_model/note_transcriber.h"
+#include "editing/polyphony/multi_f0.h"
 #include "feature/chroma.h"
 #include "feature/pitch.h"
 #include "util/insertion_sort.h"
@@ -20,7 +21,7 @@ namespace {
 namespace ntm = sonare::editing::note_model;
 
 constexpr int32_t kTranscribeConfigVersionMin = 1;
-constexpr int32_t kTranscribeConfigVersion = 2;
+constexpr int32_t kTranscribeConfigVersion = 3;
 constexpr int32_t kTranscribeResultVersion = 2;
 
 /// Records which field was refused and why, so a caller reading
@@ -45,7 +46,7 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   if (in == nullptr) return SONARE_OK;
   if (in->struct_version < kTranscribeConfigVersionMin ||
       in->struct_version > kTranscribeConfigVersion) {
-    return refuse("struct_version must be 1 or 2");
+    return refuse("struct_version must be 1, 2 or 3");
   }
   if (in->struct_version >= 2) *out_reference_auto = in->reference_auto != 0;
 
@@ -95,6 +96,39 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
   }
   *out_group = static_cast<uint8_t>(in->group);
   *out_channel = static_cast<uint8_t>(in->channel);
+  if (in->struct_version < 3) return SONARE_OK;
+
+  // The core shares these sentinels (0 => default, negative => 0 / off), so they are copied as-is.
+  if (in->max_polyphony < 0 ||
+      in->max_polyphony > sonare::editing::polyphony::kMaxPolyphonyVoices) {
+    return refuse("max_polyphony must be 0 or an integer in [1, 64]");
+  }
+  if (!std::isfinite(in->min_frame_peak_ratio) || in->min_frame_peak_ratio > 1.0f) {
+    return refuse("min_frame_peak_ratio must be a finite number no greater than 1");
+  }
+  if (!std::isfinite(in->min_ridge_peak_ratio) || in->min_ridge_peak_ratio > 1.0f) {
+    return refuse("min_ridge_peak_ratio must be a finite number no greater than 1");
+  }
+  if (!std::isfinite(in->reattack_ratio) ||
+      (in->reattack_ratio > 0.0f && in->reattack_ratio <= 1.0f)) {
+    return refuse("reattack_ratio must be 0, negative, or a finite number above 1");
+  }
+  if (out->source == ntm::TranscribeSource::kMonophonic) {
+    if (in->max_polyphony != 0) return refuse("max_polyphony requires polyphonic transcription");
+    if (in->min_frame_peak_ratio != 0.0f) {
+      return refuse("min_frame_peak_ratio requires polyphonic transcription");
+    }
+    if (in->min_ridge_peak_ratio != 0.0f) {
+      return refuse("min_ridge_peak_ratio requires polyphonic transcription");
+    }
+    if (in->reattack_ratio != 0.0f) {
+      return refuse("reattack_ratio requires polyphonic transcription");
+    }
+  }
+  out->max_polyphony = in->max_polyphony;
+  out->min_frame_peak_ratio = in->min_frame_peak_ratio;
+  out->min_ridge_peak_ratio = in->min_ridge_peak_ratio;
+  out->reattack_ratio = in->reattack_ratio;
   return SONARE_OK;
 }
 
@@ -175,15 +209,15 @@ float resolve_tempo(float requested, const sonare::Audio& audio) {
 
 SonareTranscribeConfig sonare_transcribe_config_default(void) {
   SonareTranscribeConfig config = {};
-  config.struct_version = 2;
+  config.struct_version = 3;
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
   // Seeded from the core defaults so the two cannot drift apart.
   const ntm::TranscribeConfig defaults;
   config.polyphonic = defaults.source == ntm::TranscribeSource::kPolyphonic ? 1 : 0;
   config.reference_hz = defaults.reference_hz;
-  // fmin/fmax intentionally remain 0: the selected source resolves each
-  // omitted endpoint, so flipping polyphonic must not pin the monophonic range.
-  config.min_note_ms = defaults.min_note_ms;
+  // fmin/fmax, min_note_ms and the four polyphonic-only fields stay 0: the
+  // selected source resolves each, so flipping polyphonic must not pin the
+  // monophonic values.
   config.segmentation_threshold_cents = defaults.segmentation_threshold_cents;
   config.velocity_floor_db = defaults.velocity_floor_db;
   config.fixed_velocity = defaults.fixed_velocity;
