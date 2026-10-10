@@ -481,20 +481,34 @@ def mastering_assistant_suggest(
 def _unwrap_chain_params(json_text: str) -> dict[str, float | bool]:
     """Strip the ``{"version": ..., "params": {...}}`` envelope from a chain config.
 
-    Raises rather than silently dropping a non-scalar value: a schema v2 chain
-    config nests some keys (``dynamics.multibandComp``) as objects, and a
-    mapping that quietly lost one would read as "applied as suggested" when
-    it was not. An absent or empty ``params`` block is refused for the same
-    reason: an empty overrides mapping applies the preset unchanged.
+    A schema v2 chain config nests ``dynamics.multibandComp`` as an object with
+    lists; it is flattened into the array spelling the input side accepts
+    (``...crossover.cutoffsHz.<i>``, ``...bands.<i>.<field>``). A leaf that is
+    neither a number nor a boolean is refused by name rather than dropped, and
+    an absent or empty ``params`` block is refused: an empty overrides mapping
+    applies the preset unchanged.
     """
     raw: Any = json.loads(json_text).get("params")
     if not raw:
         raise SonareValueError("chain config carries no params block")
     unwrapped: dict[str, float | bool] = {}
-    for key, value in raw.items():
-        if not isinstance(value, (int, float, bool)):
+
+    def flatten(key: str, value: Any) -> None:
+        if isinstance(value, dict):
+            for child, item in value.items():
+                flatten(f"{key}.{child}", item)
+        elif isinstance(value, list):
+            if not value:
+                raise SonareValueError(f"{key} is an empty list, which has no flat spelling")
+            for index, item in enumerate(value):
+                flatten(f"{key}.{index}", item)
+        elif isinstance(value, (int, float, bool)):
+            unwrapped[key] = value
+        else:
             raise SonareValueError(f"chain config param {key!r} is not a scalar value")
-        unwrapped[str(key)] = value
+
+    for key, value in raw.items():
+        flatten(str(key), value)
     return unwrapped
 
 

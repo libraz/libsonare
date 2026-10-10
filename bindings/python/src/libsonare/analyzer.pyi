@@ -1216,7 +1216,18 @@ def mastering_chain(
     on_progress: ProgressCallback | None = None,
     *,
     cancel: CancelCallback | None = None,
-) -> MasteringChainResult: ...
+) -> MasteringChainResult:
+    """Run the mastering chain with a nested or dotted-key ``config``.
+
+    A list value flattens as ``<path>.<index>``, so
+    ``{"dynamics": {"multibandComp": {"crossover": {"cutoffsHz": [200, 2000, 8000]},
+    "bands": [{"ratio": 2.0}, ...]}}}`` carries an arbitrary-band multiband
+    compressor: ``cutoffsHz`` replaces the cutoff list (band count is its length
+    plus one) and a band field left out keeps the base or default value. Do not
+    combine it with the ``lowCutoffHz`` / ``cutoff<i>Hz`` spellings in one call.
+    An empty list has no flat spelling and raises ``SonareValueError``.
+    """
+
 def mastering_chain_stereo(
     left: FloatSamples,
     right: FloatSamples,

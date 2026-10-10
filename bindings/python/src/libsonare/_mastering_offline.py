@@ -587,22 +587,33 @@ def _flatten_chain_config(
     Booleans are coerced to 0.0/1.0 and other values via ``float``. A string
     for an enum-valued key (``"repair.denoise.noiseEstimator": "mcra"``) is
     resolved by the core to the number every flat parameter list carries; an
-    unknown name raises with the key and the valid names.
+    unknown name raises with the key and the valid names. A list recurses as
+    ``<path>.<index>`` (``crossover.cutoffsHz`` -> ``crossover.cutoffsHz.0``);
+    an empty list has no flat spelling and is refused by path.
     """
     flat: dict[str, float] = {}
     if not config:
         return flat
     for key, value in config.items():
         full_key = f"{prefix}{key}" if not prefix else f"{prefix}.{key}"
-        if isinstance(value, dict):
-            flat.update(_flatten_chain_config(value, full_key))
-        elif isinstance(value, bool):
-            flat[full_key] = 1.0 if value else 0.0
-        elif isinstance(value, str):
-            flat[full_key] = _enum_value(None, full_key, value)
-        else:
-            flat[full_key] = float(value)
+        _flatten_chain_value(value, full_key, flat)
     return flat
+
+
+def _flatten_chain_value(value: Any, full_key: str, flat: dict[str, float]) -> None:
+    if isinstance(value, dict):
+        flat.update(_flatten_chain_config(value, full_key))
+    elif isinstance(value, (list, tuple)):
+        if not value:
+            raise SonareValueError(f"{full_key} is an empty list, which has no flat spelling")
+        for index, item in enumerate(value):
+            _flatten_chain_value(item, f"{full_key}.{index}", flat)
+    elif isinstance(value, bool):
+        flat[full_key] = 1.0 if value else 0.0
+    elif isinstance(value, str):
+        flat[full_key] = _enum_value(None, full_key, value)
+    else:
+        flat[full_key] = float(value)
 
 
 def _chain_params(config: dict[str, Any] | None) -> tuple[Any, int]:

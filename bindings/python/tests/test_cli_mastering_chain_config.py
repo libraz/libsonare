@@ -444,3 +444,80 @@ def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -
                 "repair.denoise.noiseEstimator=nope",
             ]
         )
+
+
+@pytest.mark.parametrize("channels", [1, 2])
+def test_chain_config_takes_a_v2_multiband_document(tmp_path, capsys, channels) -> None:
+    """A v2 document's nested multiband block renders as its flattened keys do.
+
+    The referent is ``mastering_chain`` on the same config flattened to ordinal
+    keys, run in the same build over the same decoded source, written by the
+    CLI's own writer.
+    """
+    import libsonare
+    from libsonare._cli_common import (
+        _load_channels_or_downmix,
+        _write_channel_output,
+    )
+    from libsonare._mastering_offline import _enum_value
+
+    prefix = "dynamics.multibandComp"
+    params = {
+        prefix: {
+            "enabled": True,
+            "crossover": {
+                "cutoffsHz": [200.0, 1200.0, 5000.0],
+                "slope": int(_enum_value(None, f"{prefix}.crossover.slope", "lr8")),
+                "mode": 0,
+                "firKernelSize": 1024,
+            },
+            "bands": [
+                {"thresholdDb": -40.0 + 4 * i, "ratio": 2.0 + i, "makeupGainDb": 0.5 * i}
+                for i in range(4)
+            ],
+        }
+    }
+    source = tmp_path / "input.wav"
+    _write_source(source, channels)
+    document = tmp_path / "v2.json"
+    document.write_text(json.dumps({"version": 2, "params": params}), encoding="utf-8")
+
+    output = tmp_path / "cli.wav"
+    assert (
+        _run(["mastering", str(source), "--chain-config", str(document), "--output", str(output)])
+        == 0
+    )
+    capsys.readouterr()
+
+    planes, rate = _load_channels_or_downmix(str(source))
+    flat = {
+        f"{prefix}.enabled": True,
+        **{f"{prefix}.crossover.cutoffsHz.{i}": v for i, v in enumerate((200.0, 1200.0, 5000.0))},
+        f"{prefix}.crossover.slope": params[prefix]["crossover"]["slope"],
+        f"{prefix}.crossover.mode": 0,
+        f"{prefix}.crossover.firKernelSize": 1024,
+        **{
+            f"{prefix}.bands.{i}.{field}": value
+            for i, band in enumerate(params[prefix]["bands"])
+            for field, value in band.items()
+        },
+    }
+    if channels == 2:
+        result = libsonare.mastering_chain_stereo(planes[0], planes[1], rate, flat)
+        rendered = [result.left, result.right]
+    else:
+        rendered = [libsonare.mastering_chain(planes[0], rate, flat).samples]
+    expected = tmp_path / "facade.wav"
+    _write_channel_output(str(expected), rendered, rate)
+    assert output.read_bytes() == expected.read_bytes()
+
+    # The multiband block is read, not skipped: without it the render differs.
+    plain = tmp_path / "plain.wav"
+    plain_doc = tmp_path / "plain.json"
+    plain_doc.write_text(json.dumps({"version": 2, "params": {"loudness.targetLufs": -14.0}}))
+    assert (
+        _run(["mastering", str(source), "--chain-config", str(plain_doc), "--output", str(plain)])
+        == 0
+    )
+    capsys.readouterr()
+    assert plain.read_bytes() != output.read_bytes()

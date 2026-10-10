@@ -63,8 +63,8 @@ def test_chain_stereo_overrides_master_audio_stereo() -> None:
     assert result.report is not None
 
 
-def test_non_scalar_chain_param_is_rejected_by_name() -> None:
-    """A nested object value is named in the error rather than dropped silently.
+def test_nested_chain_param_is_flattened_into_the_array_spelling() -> None:
+    """A schema v2 nested block comes back as flat keys, lists as ``.<index>``.
 
     The assistant cannot emit schema v2 today, so there is no C entry point
     that produces a nested value to exercise this through; the unwrap helper
@@ -73,10 +73,29 @@ def test_non_scalar_chain_param_is_rejected_by_name() -> None:
     document = json.dumps(
         {
             "version": 2,
-            "params": {"dynamics.multibandComp": {"bands": 3}, "loudness.targetLufs": -14.0},
+            "params": {
+                "dynamics.multibandComp": {
+                    "crossover": {"cutoffsHz": [200.0, 2000.0]},
+                    "bands": [{"ratio": 2.0}, {"ratio": 3.0}, {"ratio": 4.0}],
+                },
+                "loudness.targetLufs": -14.0,
+            },
         }
     )
-    with pytest.raises(SonareValueError, match="dynamics.multibandComp"):
+    assert _unwrap_chain_params(document) == {
+        "dynamics.multibandComp.crossover.cutoffsHz.0": 200.0,
+        "dynamics.multibandComp.crossover.cutoffsHz.1": 2000.0,
+        "dynamics.multibandComp.bands.0.ratio": 2.0,
+        "dynamics.multibandComp.bands.1.ratio": 3.0,
+        "dynamics.multibandComp.bands.2.ratio": 4.0,
+        "loudness.targetLufs": -14.0,
+    }
+
+
+def test_non_numeric_chain_param_leaf_is_rejected_by_name() -> None:
+    """A leaf that is neither a number nor a boolean is named rather than dropped."""
+    document = json.dumps({"version": 2, "params": {"dynamics.multibandComp": {"slope": None}}})
+    with pytest.raises(SonareValueError, match="dynamics.multibandComp.slope"):
         _unwrap_chain_params(document)
 
 
