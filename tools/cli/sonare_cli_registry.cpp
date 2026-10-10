@@ -758,7 +758,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          with_domain(int_value("resolution", 0), enum_index(0, 5, CliOptionDomainStage::Parameter)),
          number_value("gain-scale", 1.0), number_value("output-gain-db", 0.0),
          number_value("output-pan", 0.0), bits_value(), output_value(), flag("proportional-q"),
-         flag("dynamic"), flag("auto-threshold"), flag("auto-gain")});
+         flag("dynamic"), flag("auto-threshold"), flag("auto-gain")},
+        {}, nullptr, 0, /*preserves_stereo_input=*/true);
     add_command(commands, "mastering-pair-processor", true,
                 {required_string("processor"), required_path("reference"), string_value("params"),
                  bits_value(), output_value()});

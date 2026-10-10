@@ -765,35 +765,55 @@ int cmd_eq(const CliArgs& args, const Audio& audio) {
     params.push_back({"outputGainDb", args.get_float("output-gain-db", 0.0f)});
     params.push_back({"outputPan", args.get_float("output-pan", 0.0f)});
   }
+  // A two-channel source is equalized as a pair, as mastering-processor does,
+  // so --placement and --output-pan act on the image the file carries.
+  const bool stereo = args.source_channels == 2;
+  const int bits = args.get_int("bits", 16);
+  const auto report = [&](const auto& result) {
+    if (args.json_output) {
+      JsonBuilder()
+          .begin_object()
+          .kv("processor", "eq.equalizer")
+          .kv("input_lufs", result.input_lufs)
+          .kv("output_lufs", result.output_lufs)
+          .kv("applied_gain_db", result.applied_gain_db)
+          .kv("latency_samples", result.latency_samples)
+          .kv("sample_rate", result.sample_rate)
+          .kv("output", args.output_file)
+          .kv("stereo", stereo)
+          .end_object()
+          .print();
+    } else {
+      std::cout << "\n"
+                << color::cyan << color::bold << "Equalizer" << color::reset << "\n"
+                << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
+                << "\n"
+                << "  Output LUFS:     " << result.output_lufs << "\n"
+                << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
+      if (!args.output_file.empty()) {
+        std::cout << "  Output:          " << args.output_file << "\n";
+      }
+      std::cout << "\n";
+    }
+  };
+  if (stereo) {
+    const StereoPlanes planes = load_stereo_planes(args, audio);
+    const auto result = mastering::api::apply_named_processor_stereo(
+        "eq.equalizer", planes.left.data(), planes.right.data(), planes.left.size(),
+        audio.sample_rate(), params);
+    if (!args.output_file.empty()) {
+      save_stereo_wav(args.output_file, result.left, result.right, result.sample_rate, bits);
+    }
+    report(result);
+    return 0;
+  }
   const auto result = mastering::api::apply_named_processor(
       "eq.equalizer", audio.data(), audio.size(), audio.sample_rate(), params);
   if (!args.output_file.empty()) {
     save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
-             args.get_int("bits", 16));
+             bits);
   }
-
-  if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
-        .kv("processor", "eq.equalizer")
-        .kv("input_lufs", result.input_lufs)
-        .kv("output_lufs", result.output_lufs)
-        .kv("applied_gain_db", result.applied_gain_db)
-        .kv("latency_samples", result.latency_samples)
-        .kv("sample_rate", result.sample_rate)
-        .kv("output", args.output_file)
-        .end_object()
-        .print();
-  } else {
-    std::cout << "\n"
-              << color::cyan << color::bold << "Equalizer" << color::reset << "\n"
-              << "  Input LUFS:      " << std::fixed << std::setprecision(2) << result.input_lufs
-              << "\n"
-              << "  Output LUFS:     " << result.output_lufs << "\n"
-              << "  Applied Gain:    " << result.applied_gain_db << " dB\n";
-    if (!args.output_file.empty()) std::cout << "  Output:          " << args.output_file << "\n";
-    std::cout << "\n";
-  }
+  report(result);
   return 0;
 }
 

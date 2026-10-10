@@ -129,8 +129,10 @@ def test_eq_json_has_canonical_output_and_sample_rate(monkeypatch, capsys) -> No
         "latency_samples",
         "sample_rate",
         "output",
+        "stereo",
     }
     assert payload["processor"] == "eq.equalizer"
+    assert payload["stereo"] is False
     assert payload["sample_rate"] == 48000
     assert payload["output"] == ""
     assert payload["input_lufs"] == -18.123456

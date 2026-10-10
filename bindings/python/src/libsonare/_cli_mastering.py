@@ -553,13 +553,13 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
 
 
 def cmd_eq(args: argparse.Namespace) -> int:
-    from . import mastering_process
+    from . import mastering_process, mastering_process_stereo
 
     # Ahead of the audio load and the --params conflict check, matching the
     # native CLI, which enforces every declared option domain from its registry
     # before dispatching the handler.
     _check_eq_enum_options(args)
-    samples, sr = _load_audio(args.file)
+    planes, sr = _load_channels_or_downmix(args.file)
     params_raw = getattr(args, "params", "") or ""
     bits = _wav_bits(args)
     if params_raw:
@@ -597,11 +597,24 @@ def cmd_eq(args: argparse.Namespace) -> int:
             "outputGainDb": float(getattr(args, "output_gain_db", 0.0)),
             "outputPan": float(getattr(args, "output_pan", 0.0)),
         }
-    result = mastering_process("eq.equalizer", samples, sample_rate=sr, params=params)
+    # A two-channel source is equalized as a pair, as mastering-processor does,
+    # so --placement and --output-pan act on the image the file carries.
+    use_stereo = len(planes) == 2
+    result: Any
+    channels: list[list[float]]
+    if use_stereo:
+        stereo = mastering_process_stereo(
+            "eq.equalizer", planes[0], planes[1], sample_rate=sr, params=params
+        )
+        channels = [list(stereo.left), list(stereo.right)]
+        result = stereo
+    else:
+        result = mastering_process("eq.equalizer", planes[0], sample_rate=sr, params=params)
+        channels = [list(result.samples)]
 
     output = getattr(args, "output", "") or ""
     if output:
-        _write_wav(output, result.samples, result.sample_rate, bits)
+        _write_channel_output(output, channels, result.sample_rate, bits)
 
     if getattr(args, "json", False):
         payload = {
@@ -612,6 +625,7 @@ def cmd_eq(args: argparse.Namespace) -> int:
             "latency_samples": result.latency_samples,
             "sample_rate": result.sample_rate,
             "output": output,
+            "stereo": use_stereo,
         }
         print(_strict_json_dumps(payload))
     else:

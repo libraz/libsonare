@@ -237,12 +237,13 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
     REQUIRE_THAT(dynamic_output, ContainsSubstring("\"processor\": \"eq.equalizer\""));
 
     const auto eq_payload = sonare::util::json::parse_strict(dynamic_output);
-    REQUIRE(eq_payload.size() == 7);
+    REQUIRE(eq_payload.size() == 8);
     for (const char* key : {"processor", "input_lufs", "output_lufs", "applied_gain_db",
-                            "latency_samples", "sample_rate", "output"}) {
+                            "latency_samples", "sample_rate", "output", "stereo"}) {
       REQUIRE(eq_payload.contains(key));
     }
     REQUIRE(eq_payload["processor"].as_string() == "eq.equalizer");
+    REQUIRE_FALSE(eq_payload["stereo"].as_bool());
     REQUIRE(eq_payload["sample_rate"].as_int() == 22050);
     REQUIRE(eq_payload["output"].as_string().empty());
 
@@ -521,6 +522,55 @@ TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[c
   }
   std::remove(input_a.c_str());
   std::remove(input_b.c_str());
+}
+
+TEST_CASE("CLI eq equalizes a stereo file as a pair", "[cli][mastering]") {
+  // Left and right carry different tones, and the band is placed on the left
+  // only: a handler working on the downmix would move both channels or neither.
+  constexpr size_t kFrames = 11025;
+  constexpr int kRate = 22050;
+  const float two_pi = 2.0f * static_cast<float>(sonare::constants::kPiD);
+  std::vector<float> interleaved(2 * kFrames);
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    const float t = static_cast<float>(frame) / kRate;
+    interleaved[2 * frame] = 0.1f * std::sin(two_pi * 440.0f * t);
+    interleaved[2 * frame + 1] = 0.1f * std::sin(two_pi * 277.0f * t);
+  }
+  const std::string input = unique_temp_path("_eq_stereo.wav");
+  const std::string out = unique_temp_path("_eq_stereo_out.wav");
+  save_wav_multichannel(input, interleaved.data(), kFrames, 2, ChannelLayout::Stereo, kRate);
+
+  auto [code, output] = exec_command(CLI + " eq " + input +
+                                     " --type 0 --frequency-hz 440 --gain-db 12 --q 1 "
+                                     "--placement 1 -o " +
+                                     out + " --json -q");
+  REQUIRE(code == 0);
+  REQUIRE_THAT(output, !ContainsSubstring("downmixed to mono"));
+  REQUIRE(sonare::util::json::parse_strict(output)["stereo"].as_bool());
+
+  auto [samples, rate, channels] = load_audio_interleaved(out);
+  REQUIRE(channels == 2);
+  std::vector<float> left;
+  std::vector<float> right;
+  for (size_t i = 0; i + 1 < samples.size(); i += 2) {
+    left.push_back(samples[i]);
+    right.push_back(samples[i + 1]);
+  }
+  std::vector<float> in_left;
+  std::vector<float> in_right;
+  for (size_t frame = 0; frame < kFrames; ++frame) {
+    in_left.push_back(interleaved[2 * frame]);
+    in_right.push_back(interleaved[2 * frame + 1]);
+  }
+  const float left_gain =
+      tone_magnitude(left, rate, 440.0f) / tone_magnitude(in_left, kRate, 440.0f);
+  const float right_gain =
+      tone_magnitude(right, rate, 277.0f) / tone_magnitude(in_right, kRate, 277.0f);
+  // +12 dB is a factor of about 4; the untouched channel stays near unity.
+  CHECK(left_gain > 3.0f);
+  CHECK(std::abs(right_gain - 1.0f) < 0.1f);
+  std::remove(input.c_str());
+  std::remove(out.c_str());
 }
 
 TEST_CASE("CLI normalize carries a stereo input through on one gain", "[cli][effects]") {

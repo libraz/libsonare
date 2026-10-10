@@ -169,6 +169,60 @@ def test_mix_cli_keeps_a_stereo_stem_stereo(tmp_path) -> None:
     assert renders["stereo"] > 0
 
 
+def test_eq_cli_equalizes_a_stereo_input_as_a_pair(tmp_path) -> None:
+    """A band placed on the left channel moves the left channel only.
+
+    The two channels carry different tones, so an EQ run on the downmix would
+    move both channels or neither and could not produce this result.
+    """
+    source = tmp_path / "pair.wav"
+    output = tmp_path / "eq.wav"
+    length = 22050
+    left = [0.1 * math.sin(2.0 * math.pi * 440.0 * i / 22050) for i in range(length)]
+    right = [0.1 * math.sin(2.0 * math.pi * 277.0 * i / 22050) for i in range(length)]
+    _write_stereo_wav(str(source), left, right, 22050)
+
+    result = _run_cli(
+        [
+            "eq",
+            str(source),
+            "-o",
+            str(output),
+            "--type",
+            "0",
+            "--frequency-hz",
+            "440",
+            "--gain-db",
+            "12",
+            "--q",
+            "1",
+            "--placement",
+            "1",
+            "--json",
+        ]
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "downmixed to mono" not in result.stderr
+    assert json.loads(result.stdout)["stereo"] is True
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+        frames = wav.readframes(wav.getnframes())
+    values = struct.unpack(f"<{len(frames) // 2}h", frames)
+    out_left = [v / 32767.0 for v in values[0::2]]
+    out_right = [v / 32767.0 for v in values[1::2]]
+
+    def tone(samples: list[float], frequency: float) -> float:
+        omega = 2.0 * math.pi * frequency / 22050
+        re = sum(x * math.cos(omega * i) for i, x in enumerate(samples))
+        im = sum(x * math.sin(omega * i) for i, x in enumerate(samples))
+        return math.hypot(re, im)
+
+    # +12 dB is a factor of about 4; the untouched channel stays near unity.
+    assert tone(out_left, 440.0) / tone(left, 440.0) > 3.0
+    assert tone(out_right, 277.0) / tone(right, 277.0) == pytest.approx(1.0, abs=0.1)
+
+
 def test_cli_warns_once_when_it_downmixes_a_stereo_input(tmp_path) -> None:
     """A command that is mono by nature says what it did to the channels.
 
