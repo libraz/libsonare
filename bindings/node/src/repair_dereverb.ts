@@ -10,7 +10,7 @@ import type {
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import { assertAudioChannels, assertAudioInput } from './validation.js';
+import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
 
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
@@ -53,7 +53,10 @@ export function masteringRepairDereverbClassical(
   sampleRate = 22050,
   options: DereverbClassicalOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDereverbClassical', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringRepairDereverbClassical',
@@ -110,6 +113,7 @@ export interface MasteringRepairDereverbClassicalStereoRequest extends DereverbC
 export function masteringRepairDereverbClassicalStereo(
   request: MasteringRepairDereverbClassicalStereoRequest,
 ): DereverbStereoResult {
+  requestObject('masteringRepairDereverbClassicalStereo', request, 'left');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringRepairDereverbClassicalStereo',
@@ -186,6 +190,7 @@ export interface MasteringRepairDereverbClassicalLinkedRequest extends DereverbC
 export function masteringRepairDereverbClassicalLinked(
   request: MasteringRepairDereverbClassicalLinkedRequest,
 ): DereverbLinkedResult {
+  requestObject('masteringRepairDereverbClassicalLinked', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioChannels(
     'masteringRepairDereverbClassicalLinked',
@@ -291,6 +296,7 @@ export interface MasteringRepairDetectReverbRequest
 export function masteringRepairDetectReverb(
   request: MasteringRepairDetectReverbRequest,
 ): ReverbDetection {
+  requestObject('masteringRepairDetectReverb', request, 'samples');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDetectReverb', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDetectReverb', request);

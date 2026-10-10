@@ -8,6 +8,7 @@ import {
   assertAudioInput,
   assertHpssKernels,
   assertInt32,
+  requestObject,
 } from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
@@ -144,6 +145,7 @@ export interface HpssWithResidualRequest extends FeatureSamplesRequest {
 
 /** Column-wise cross-similarity matrix (librosa.segment.cross_similarity). */
 export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): SegmentMatrix {
+  requestObject('segmentCrossSimilarity', request, 'request', true);
   const { x, xRows, xCols, y, yRows, yCols } = request;
   if (x.length !== xRows * xCols || y.length !== yRows * yCols || xRows !== yRows) {
     throw new RangeError('segmentCrossSimilarity: invalid matrix dimensions');
@@ -163,6 +165,7 @@ export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): 
 
 /** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). */
 export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): SegmentMatrix {
+  requestObject('segmentRecurrenceMatrix', request, 'request', true);
   if (request.data.length !== request.rows * request.cols) {
     throw new RangeError('segmentRecurrenceMatrix: invalid matrix dimensions');
   }
@@ -180,6 +183,7 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
 
 /** Convert an `n × n` recurrence matrix to its lag representation. */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
+  requestObject('segmentRecurrenceToLag', request, 'request', true);
   if (request.recurrence.length !== request.n * request.n) {
     throw new RangeError('segmentRecurrenceToLag: invalid matrix dimensions');
   }
@@ -188,6 +192,7 @@ export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): 
 
 /** Convert a lag matrix back to an `n × n` recurrence matrix. */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
+  requestObject('segmentLagToRecurrence', request, 'request', true);
   if (request.lag.length !== request.rows * request.lags) {
     throw new RangeError('segmentLagToRecurrence: invalid matrix dimensions');
   }
@@ -196,6 +201,7 @@ export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): 
 
 /** Refine frame boundaries by clustering within each parent segment. */
 export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array {
+  requestObject('segmentSubsegment', request, 'request', true);
   if (request.data.length !== request.rows * request.cols) {
     throw new RangeError('segmentSubsegment: invalid matrix dimensions');
   }
@@ -210,6 +216,7 @@ export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array
 
 /** Cluster feature columns and return one label per column. */
 export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array {
+  requestObject('segmentAgglomerative', request, 'request', true);
   if (request.data.length !== request.rows * request.cols) {
     throw new RangeError('segmentAgglomerative: invalid matrix dimensions');
   }
@@ -224,6 +231,7 @@ export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int3
 
 /** Enhance diagonal paths in an `n × n` recurrence matrix. */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): SegmentMatrix {
+  requestObject('segmentPathEnhance', request, 'request', true);
   if (request.recurrence.length !== request.n * request.n) {
     throw new RangeError('segmentPathEnhance: invalid matrix dimensions');
   }
@@ -263,7 +271,9 @@ export function decompose(
   init: 'random' | 'nndsvd' = 'random',
 ): { w: Matrix2D; h: Matrix2D } {
   const request =
-    s instanceof Float32Array ? { s, nFeatures, nFrames, nComponents, nIter, beta, init } : s;
+    s instanceof Float32Array
+      ? { s, nFeatures, nFrames, nComponents, nIter, beta, init }
+      : requestObject('decompose', s, 's');
   // Positivity only: 0 iterations returns the raw init matrices, which the C ABI
   // refuses for that reason and bounds no further.
   const resolvedNIter = resolvePositiveIntegerOption('decompose', 'nIter', request.nIter, 50);
@@ -291,6 +301,7 @@ export function decompose(
  * to the input.
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
+  requestObject('decomposeStems', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('decomposeStems', request.samples, resolvedSampleRate, {});
   // Each of the four is its own "0 => the documented default" on the C side, and
@@ -359,6 +370,7 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
+  requestObject('decomposeStemsLinked', request, 'request', true);
   if (!Array.isArray(request.channels) || request.channels.length === 0) {
     throw new RangeError('decomposeStemsLinked: channels must be a non-empty array');
   }
@@ -405,7 +417,10 @@ export function nnFilter(
   k = 7,
   width = 1,
 ): Matrix2D {
-  const request = s instanceof Float32Array ? { s, nFeatures, nFrames, aggregate, k, width } : s;
+  const request =
+    s instanceof Float32Array
+      ? { s, nFeatures, nFrames, aggregate, k, width }
+      : requestObject('nnFilter', s, 's');
   return addon.nnFilter(
     request.s,
     request.nFeatures,
@@ -443,7 +458,9 @@ export function remix(
   alignZeros = false,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
+    samples instanceof Float32Array
+      ? { samples, intervals, sampleRate, alignZeros }
+      : requestObject('remix', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('remix', request.samples, resolvedSampleRate, request);
   return addon.remix(
@@ -478,7 +495,9 @@ export function remixAlignedIntervals(
   alignZeros = true,
 ): Int32Array {
   const request =
-    samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
+    samples instanceof Float32Array
+      ? { samples, intervals, sampleRate, alignZeros }
+      : requestObject('remixAlignedIntervals', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('remixAlignedIntervals', request.samples, resolvedSampleRate, request);
   return addon.remixAlignedIntervals(
@@ -544,7 +563,7 @@ export function hpssWithResidual(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
-      : samples;
+      : requestObject('hpssWithResidual', samples);
   const fftOptions = resolveEffectFftOptions('hpssWithResidual', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMaskOption('hpssWithResidual', request.hardMask);
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;

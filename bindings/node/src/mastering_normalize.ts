@@ -1,5 +1,5 @@
 import { addon } from './native.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 export type NormalizeMode = 'peak' | 'rms';
 
@@ -29,7 +29,9 @@ export function normalize(
   mode?: NormalizeMode,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, targetDb, mode } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, targetDb, mode }
+      : requestObject('normalize', samples);
   const resolvedMode = resolveNormalizeMode('normalize', request.mode);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('normalize', request.samples, resolvedSampleRate, request);
@@ -119,6 +121,7 @@ export interface NormalizeStereoResult {
  * ```
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
+  requestObject('normalizeStereo', request, 'request', true);
   const resolvedMode = resolveNormalizeMode('normalizeStereo', request.mode);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('normalizeStereo', request.left, resolvedSampleRate, request, 'left');

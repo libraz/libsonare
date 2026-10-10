@@ -6,6 +6,7 @@ import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult 
 import {
   assertAudioInput,
   assertPositiveInteger,
+  requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
 
@@ -142,7 +143,9 @@ export function chroma(
   hopLength = 512,
 ): ChromaResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, nFft, hopLength }
+      : requestObject('chroma', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('chroma', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('chroma', request.nFft, request.hopLength);
@@ -167,7 +170,7 @@ export function chromaCens(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
-      : samples;
+      : requestObject('chromaCens', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('chromaCens', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('chromaCens', request.hopLength ?? 512, 'hopLength');
@@ -200,7 +203,7 @@ export function chromaCqt(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, nChroma, binsPerOctave }
-      : samples;
+      : requestObject('chromaCqt', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('chromaCqt', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('chromaCqt', request.hopLength ?? 512, 'hopLength');
@@ -229,7 +232,9 @@ export function bassChroma(
   nChroma = 12,
 ): ChromaResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, hopLength, nChroma } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, hopLength, nChroma }
+      : requestObject('bassChroma', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('bassChroma', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('bassChroma', request.hopLength ?? 512, 'hopLength');
@@ -263,7 +268,7 @@ export function cqt(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : samples;
+      : requestObject('cqt', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('cqt', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('cqt', request.hopLength ?? 512, 'hopLength');
@@ -300,7 +305,7 @@ export function pseudoCqt(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : samples;
+      : requestObject('pseudoCqt', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('pseudoCqt', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('pseudoCqt', request.hopLength ?? 512, 'hopLength');
@@ -337,7 +342,7 @@ export function hybridCqt(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave }
-      : samples;
+      : requestObject('hybridCqt', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('hybridCqt', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('hybridCqt', request.hopLength ?? 512, 'hopLength');
@@ -379,7 +384,7 @@ export function vqt(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, hopLength, fmin, nBins, binsPerOctave, gamma }
-      : samples;
+      : requestObject('vqt', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('vqt', request.samples, resolvedSampleRate, request);
   assertPositiveInteger('vqt', request.hopLength ?? 512, 'hopLength');
@@ -409,7 +414,9 @@ export function pitchTuning(
   binsPerOctave = 12,
 ): number {
   const request =
-    frequencies instanceof Float32Array ? { frequencies, resolution, binsPerOctave } : frequencies;
+    frequencies instanceof Float32Array
+      ? { frequencies, resolution, binsPerOctave }
+      : requestObject('pitchTuning', frequencies, 'frequencies');
   assertPositiveInteger('pitchTuning', request.binsPerOctave ?? 12, 'binsPerOctave');
   return addon.pitchTuning(
     request.frequencies,
@@ -446,7 +453,7 @@ export function estimateTuning(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, resolution, binsPerOctave }
-      : samples;
+      : requestObject('estimateTuning', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('estimateTuning', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('estimateTuning', request.nFft, request.hopLength);
@@ -510,7 +517,7 @@ export function piptrack(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, fmin, fmax, threshold }
-      : samples;
+      : requestObject('piptrack', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('piptrack', request.samples, resolvedSampleRate, {});
   const fft = resolveFftOptions('piptrack', request.nFft, request.hopLength);
@@ -549,7 +556,7 @@ export function pitchYin(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
-      : samples;
+      : requestObject('pitchYin', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('pitchYin', request.samples, resolvedSampleRate, {});
   // frameLength is a framing window, not a transform size, so it carries no evenness rule.
@@ -591,7 +598,7 @@ export function pitchPyin(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, frameLength, hopLength, fmin, fmax, threshold, fillNa }
-      : samples;
+      : requestObject('pitchPyin', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('pitchPyin', request.samples, resolvedSampleRate, {});
   assertPositiveInteger('pitchPyin', request.frameLength ?? 2048, 'frameLength');
@@ -610,6 +617,7 @@ export function pitchPyin(
 
 /** Segment a host-supplied monophonic F0 track into stable note regions. */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
+  requestObject('noteSegments', request, 'request', true);
   const { config, segmentationThresholdCents, minNoteMs, referenceHz, voicedThreshold } = request;
   const hasFlatTuningOptions =
     segmentationThresholdCents !== undefined ||
@@ -651,7 +659,9 @@ export function tonnetz(
   nFrames = 0,
 ): Float32Array {
   const request =
-    chromagram instanceof Float32Array ? { chromagram, nChroma, nFrames } : chromagram;
+    chromagram instanceof Float32Array
+      ? { chromagram, nChroma, nFrames }
+      : requestObject('tonnetz', chromagram, 'chromagram');
   assertPositiveInteger('tonnetz', request.nChroma, 'nChroma');
   assertPositiveInteger('tonnetz', request.nFrames, 'nFrames');
   return addon.tonnetz(request.chromagram, request.nChroma, request.nFrames);
@@ -672,7 +682,10 @@ export function nnlsChroma(
   sampleRate = 22050,
   options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
 ): { nChroma: number; nFrames: number; data: Float32Array } {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('nnlsChroma', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('nnlsChroma', request.samples, resolvedSampleRate, request);
   // stftBlendNFft defaults to 4096, not the 2048/512 pair resolveFftOptions assumes.

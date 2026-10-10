@@ -1,5 +1,6 @@
 import { resolveIntegerOption, resolvePositiveIntegerOption } from './_feature_options.js';
 import { addon } from './native.js';
+import { requestObject } from './validation.js';
 
 export interface ValuesRequest {
   values: Float32Array;
@@ -75,7 +76,10 @@ export function framesToTime(
   sr = 22050,
   hopLength = 512,
 ): number {
-  const request = typeof frames === 'number' ? { frames, sr, hopLength } : frames;
+  const request =
+    typeof frames === 'number'
+      ? { frames, sr, hopLength }
+      : requestObject('framesToTime', frames, 'request', true);
   // The conversion requires a positive hop, so positivity is the domain; a
   // fraction has to be refused here because the addon narrowing truncates it.
   const resolvedHopLength = resolvePositiveIntegerOption(
@@ -101,7 +105,10 @@ export function timeToFrames(
   sr = 22050,
   hopLength = 512,
 ): number {
-  const request = typeof time === 'number' ? { time, sr, hopLength } : time;
+  const request =
+    typeof time === 'number'
+      ? { time, sr, hopLength }
+      : requestObject('timeToFrames', time, 'request', true);
   // Positive hop, as framesToTime: the same conversion in the other direction.
   const resolvedHopLength = resolvePositiveIntegerOption(
     'timeToFrames',
@@ -123,7 +130,10 @@ export function framesToSamples(
   hopLength = 512,
   nFft = 0,
 ): number {
-  const request = typeof frames === 'number' ? { frames, hopLength, nFft } : frames;
+  const request =
+    typeof frames === 'number'
+      ? { frames, hopLength, nFft }
+      : requestObject('framesToSamples', frames, 'request', true);
   // Integrality only: this conversion saturates rather than refusing, and `nFft`
   // at or below 0 is the documented "no centering offset" spelling, so a domain
   // here would reject values the core answers.
@@ -148,7 +158,10 @@ export function samplesToFrames(
   hopLength = 512,
   nFft = 0,
 ): number {
-  const request = typeof samples === 'number' ? { samples, hopLength, nFft } : samples;
+  const request =
+    typeof samples === 'number'
+      ? { samples, hopLength, nFft }
+      : requestObject('samplesToFrames', samples, 'request', true);
   // Integrality only, as framesToSamples: a non-positive hop answers 0 frames
   // rather than failing, so positivity is not this conversion's domain.
   const resolvedHopLength = resolveIntegerOption(
@@ -176,7 +189,10 @@ export function powerToDb(
   amin = 1e-10,
   topDb = 80.0,
 ): Float32Array {
-  const request = values instanceof Float32Array ? { values, ref, amin, topDb } : values;
+  const request =
+    values instanceof Float32Array
+      ? { values, ref, amin, topDb }
+      : requestObject('powerToDb', values, 'values');
   return addon.powerToDb(
     request.values,
     request.ref ?? 1,
@@ -200,7 +216,10 @@ export function amplitudeToDb(
   amin = 1e-5,
   topDb = 80.0,
 ): Float32Array {
-  const request = values instanceof Float32Array ? { values, ref, amin, topDb } : values;
+  const request =
+    values instanceof Float32Array
+      ? { values, ref, amin, topDb }
+      : requestObject('amplitudeToDb', values, 'values');
   return addon.amplitudeToDb(
     request.values,
     request.ref ?? 1,

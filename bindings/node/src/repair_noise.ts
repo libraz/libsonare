@@ -11,7 +11,12 @@ import type {
   HumDetection,
   NoiseDetection,
 } from './types.js';
-import { assertAudioChannels, assertAudioInput, assertPositiveInteger } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  assertPositiveInteger,
+  requestObject,
+} from './validation.js';
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
@@ -53,7 +58,10 @@ export function masteringRepairDenoiseClassical(
   sampleRate = 22050,
   options: DenoiseClassicalOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDenoiseClassical', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDenoiseClassical', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDenoiseClassical', request);
@@ -105,6 +113,7 @@ export interface MasteringRepairDenoiseClassicalStereoRequest extends DenoiseCla
 export function masteringRepairDenoiseClassicalStereo(
   request: MasteringRepairDenoiseClassicalStereoRequest,
 ): DenoiseStereoResult {
+  requestObject('masteringRepairDenoiseClassicalStereo', request, 'left');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringRepairDenoiseClassicalStereo',
@@ -180,6 +189,7 @@ export interface MasteringRepairDenoiseClassicalLinkedRequest extends DenoiseCla
 export function masteringRepairDenoiseClassicalLinked(
   request: MasteringRepairDenoiseClassicalLinkedRequest,
 ): DenoiseLinkedResult {
+  requestObject('masteringRepairDenoiseClassicalLinked', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioChannels(
     'masteringRepairDenoiseClassicalLinked',
@@ -229,7 +239,10 @@ export function masteringRepairDehum(
   sampleRate = 22050,
   options: DehumOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDehum', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDehum', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDehum(request.samples, resolvedSampleRate, request);
@@ -260,6 +273,7 @@ export interface MasteringRepairDehumStereoRequest extends DehumOptions {
 export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
 ): DehumStereoResult {
+  requestObject('masteringRepairDehumStereo', request, 'left');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDehumStereo', request.left, resolvedSampleRate, request, 'left');
   assertAudioInput(
@@ -299,6 +313,7 @@ export interface MasteringRepairDetectNoiseFloorRequest
 export function masteringRepairDetectNoiseFloor(
   request: MasteringRepairDetectNoiseFloorRequest,
 ): NoiseDetection {
+  requestObject('masteringRepairDetectNoiseFloor', request, 'samples');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDetectNoiseFloor', request);
@@ -354,6 +369,7 @@ export interface MasteringRepairNoiseBandBinsRequest {
 export function masteringRepairNoiseBandBins(
   request: MasteringRepairNoiseBandBinsRequest,
 ): Int32Array {
+  requestObject('masteringRepairNoiseBandBins', request, 'request', true);
   // Geometry only, no audio read: the core requires sample_rate > 0, not the
   // [8000, 384000] audio-analysis bound the other repair entries carry. Only
   // what the caller supplied, because the whole request travels to the addon's
@@ -387,6 +403,7 @@ export interface MasteringRepairDetectHumRequest
  * ```
  */
 export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection {
+  requestObject('masteringRepairDetectHum', request, 'samples');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDetectHum', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectHum(request.samples, resolvedSampleRate, request);

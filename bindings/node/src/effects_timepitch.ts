@@ -15,7 +15,7 @@ import type {
   PitchCorrectOptions,
   VoicedFlags,
 } from './types.js';
-import { assertAudioInput, assertFiniteScalar } from './validation.js';
+import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
   /**
@@ -89,7 +89,9 @@ export function timeStretch(
   hopLength?: number,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, rate, nFft, hopLength }
+      : requestObject('timeStretch', samples);
   assertAudioInput('timeStretch', request.samples, request.sampleRate ?? 22050, request);
   assertFiniteScalar('timeStretch', request.rate as number, 'rate');
   const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
@@ -129,7 +131,9 @@ export function pitchShift(
   hopLength?: number,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, semitones, nFft, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, semitones, nFft, hopLength }
+      : requestObject('pitchShift', samples);
   assertAudioInput('pitchShift', request.samples, request.sampleRate ?? 22050, request);
   assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
   const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
@@ -166,7 +170,9 @@ export function pitchCorrectToMidi(
   targetMidi = 69.0,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, currentMidi, targetMidi } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, currentMidi, targetMidi }
+      : requestObject('pitchCorrectToMidi', samples);
   assertAudioInput('pitchCorrectToMidi', request.samples, request.sampleRate ?? 22050, request);
   return addon.pitchCorrectToMidi(
     request.samples,
@@ -237,7 +243,7 @@ export function pitchCorrectToMidiTimevarying(
           voiced,
           voicedProb,
         }
-      : samples;
+      : requestObject('pitchCorrectToMidiTimevarying', samples);
   assertAudioInput(
     'pitchCorrectToMidiTimevarying',
     request.samples,
@@ -316,7 +322,7 @@ export function pitchCorrectTimevarying(
   const request =
     samples instanceof Float32Array
       ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
-      : samples;
+      : requestObject('pitchCorrectTimevarying', samples);
   const {
     samples: input,
     sampleRate: requestSampleRate,
@@ -371,6 +377,7 @@ export function pitchCorrectTimevarying(
  * @returns The corrected audio and the key it was tuned to
  */
 export function autoTune(request: AutoTuneRequest): AutoTuneResult {
+  requestObject('autoTune', request, 'request', true);
   const { samples, sampleRate, key = 'detect', ...options } = request;
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");

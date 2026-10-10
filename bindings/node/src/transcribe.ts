@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { TranscribeRequest, TranscribeResult } from './types.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 /**
  * Transcribe mono audio into MIDI note events on a constant-tempo grid.
@@ -36,6 +36,7 @@ import { assertAudioInput } from './validation.js';
  *         `SonareError` when the library was built without the pitch editor.
  */
 export function transcribe(request: TranscribeRequest): TranscribeResult {
+  requestObject('transcribe', request, 'request', true);
   assertAudioInput('transcribe', request.samples, request.sampleRate, {});
   return addon.transcribe(request);
 }

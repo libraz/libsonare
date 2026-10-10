@@ -6,7 +6,7 @@ import type {
   RenderPlaybackRequest,
   RenderPlaybackResult,
 } from './types_playback.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
@@ -244,6 +244,7 @@ export class PlaybackLoudnessMeter {
  * An empty or non-finite `samples` is refused with an `InvalidParameter` error.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
+  requestObject('renderPlayback', request, 'request', true);
   assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
   return addon.renderPlayback(
     request.samples,

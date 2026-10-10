@@ -5,7 +5,13 @@ import type {
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
 } from './types.js';
-import { assertAudioInput, assertInt32, assertInt64, resolveSampleBound } from './validation.js';
+import {
+  assertAudioInput,
+  assertInt32,
+  assertInt64,
+  requestObject,
+  resolveSampleBound,
+} from './validation.js';
 
 /** Audio, its sample rate, and the analysis tuning, flat in one request. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
@@ -327,5 +333,6 @@ export class PolyphonicAnalysis {
  * ```
  */
 export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis {
+  requestObject('analyzePolyphonic', request, 'request', true);
   return new PolyphonicAnalysis(request);
 }

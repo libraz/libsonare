@@ -5,7 +5,7 @@
 import type { MasteringRepairSamplesRequest } from './_repair_common.js';
 import { addon } from './native.js';
 import type { TrimRange, TrimSilenceStereoResult } from './types.js';
-import { assertAudioInput, resolveSampleBound } from './validation.js';
+import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
 
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
@@ -58,7 +58,10 @@ export function masteringRepairTrimSilence(
   sampleRate = 22050,
   options: TrimSilenceOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairTrimSilence', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairTrimSilence', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairTrimSilence(
@@ -125,6 +128,7 @@ export interface MasteringRepairTrimSilenceStereoRequest extends TrimSilenceOpti
 export function masteringRepairTrimSilenceStereo(
   request: MasteringRepairTrimSilenceStereoRequest,
 ): TrimSilenceStereoResult {
+  requestObject('masteringRepairTrimSilenceStereo', request, 'left');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringRepairTrimSilenceStereo',
@@ -170,6 +174,7 @@ export interface MasteringRepairDetectTrimRangeRequest
 export function masteringRepairDetectTrimRange(
   request: MasteringRepairDetectTrimRangeRequest,
 ): TrimRange {
+  requestObject('masteringRepairDetectTrimRange', request, 'samples');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDetectTrimRange', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectTrimRange(
@@ -208,6 +213,7 @@ export interface MasteringRepairDetectTrimRangeStereoRequest extends TrimSilence
 export function masteringRepairDetectTrimRangeStereo(
   request: MasteringRepairDetectTrimRangeStereoRequest,
 ): TrimRange {
+  requestObject('masteringRepairDetectTrimRangeStereo', request, 'left');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringRepairDetectTrimRangeStereo',

@@ -8,6 +8,7 @@ import {
   assertNonNegativeSafeInteger,
   assertPositiveInteger,
   assertSampleRate,
+  requestObject,
 } from './validation.js';
 
 export interface OnsetBacktrackRequest {
@@ -66,7 +67,9 @@ export function onsetBacktrack(
   energy?: Float32Array,
 ): Int32Array {
   const request =
-    events instanceof Int32Array || Array.isArray(events) ? { events, energy } : events;
+    events instanceof Int32Array || Array.isArray(events)
+      ? { events, energy }
+      : requestObject('onsetBacktrack', events, 'request', true);
   return addon.onsetBacktrack(request.events, request.energy);
 }
 
@@ -146,7 +149,7 @@ export function peakPick(
   const request =
     values instanceof Float32Array
       ? { values, preMax, postMax, preAvg, postAvg, delta, wait }
-      : values;
+      : requestObject('peakPick', values, 'values');
   // Each is a frame count that may legitimately be zero (see the defaults above).
   assertNonNegativeSafeInteger('peakPick', request.preMax, 'preMax');
   assertNonNegativeSafeInteger('peakPick', request.postMax, 'postMax');
@@ -190,7 +193,7 @@ export function tempogram(
   const request =
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, mode, center, norm }
-      : onsetEnvelope;
+      : requestObject('tempogram', onsetEnvelope, 'onsetEnvelope');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('tempogram', resolvedSampleRate);
   assertPositiveInteger('tempogram', request.hopLength ?? 512, 'hopLength');
@@ -230,7 +233,7 @@ export function cyclicTempogram(
   const request =
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, bpmMin, nBins }
-      : onsetEnvelope;
+      : requestObject('cyclicTempogram', onsetEnvelope, 'onsetEnvelope');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('cyclicTempogram', resolvedSampleRate);
   assertPositiveInteger('cyclicTempogram', request.hopLength ?? 512, 'hopLength');
@@ -266,7 +269,7 @@ export function plp(
   const request =
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, tempoMin, tempoMax, winLength }
-      : onsetEnvelope;
+      : requestObject('plp', onsetEnvelope, 'onsetEnvelope');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('plp', resolvedSampleRate);
   assertPositiveInteger('plp', request.hopLength ?? 512, 'hopLength');
@@ -297,7 +300,9 @@ export function onsetEnvelope(
   nMels = 128,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, nMels } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, nFft, hopLength, nMels }
+      : requestObject('onsetEnvelope', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('onsetEnvelope', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('onsetEnvelope', request.nFft, request.hopLength);
@@ -335,7 +340,7 @@ export function onsetStrengthMulti(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, nFft, hopLength, nMels, nBands }
-      : samples;
+      : requestObject('onsetStrengthMulti', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('onsetStrengthMulti', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('onsetStrengthMulti', request.nFft, request.hopLength);
@@ -375,7 +380,7 @@ export function fourierTempogram(
   const request =
     onsetEnvelope instanceof Float32Array
       ? { onsetEnvelope, sampleRate, hopLength, winLength, center, norm }
-      : onsetEnvelope;
+      : requestObject('fourierTempogram', onsetEnvelope, 'onsetEnvelope');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('fourierTempogram', resolvedSampleRate);
   assertPositiveInteger('fourierTempogram', request.hopLength ?? 512, 'hopLength');
@@ -408,7 +413,7 @@ export function tempogramRatio(
   const request =
     tempogramData instanceof Float32Array
       ? { tempogramData, winLength, sampleRate, hopLength, factors }
-      : tempogramData;
+      : requestObject('tempogramRatio', tempogramData, 'tempogramData');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('tempogramRatio', resolvedSampleRate);
   assertPositiveInteger('tempogramRatio', request.winLength ?? 384, 'winLength');

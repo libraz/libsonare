@@ -5,7 +5,7 @@ import type {
   StreamingPlatform,
   TypedJson,
 } from './types.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 /**
  * Params accepted by the assistant entry points. Every key is numeric except
@@ -160,7 +160,10 @@ export function masteringAssistantSuggest(
   sampleRate = 22050,
   params: MasteringAssistantParams = {},
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, params }
+      : requestObject('masteringAssistantSuggest', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringAssistantSuggest', request.samples, resolvedSampleRate, request);
   return addon.masteringAssistantSuggest(request.samples, resolvedSampleRate, request.params ?? {});
@@ -180,6 +183,7 @@ export function masteringAssistantSuggest(
 export function masteringAssistantSuggestChain(
   request: MasteringAssistantSuggestRequest,
 ): Record<string, number | boolean> {
+  requestObject('masteringAssistantSuggestChain', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringAssistantSuggestChain', request.samples, resolvedSampleRate, request);
   return addon.masteringAssistantSuggestChain(
@@ -202,7 +206,10 @@ export function masteringAudioProfile(
   sampleRate = 22050,
   params: Record<string, number | boolean> = {},
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, params }
+      : requestObject('masteringAudioProfile', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringAudioProfile', request.samples, resolvedSampleRate, request);
   return addon.masteringAudioProfile(request.samples, resolvedSampleRate, request.params ?? {});
@@ -221,7 +228,10 @@ export function masteringStreamingPreview(
   sampleRate = 22050,
   platforms: StreamingPlatform[] = [],
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, platforms }
+      : requestObject('masteringStreamingPreview', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringStreamingPreview', request.samples, resolvedSampleRate, request);
   return addon.masteringStreamingPreview(

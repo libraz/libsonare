@@ -29,7 +29,7 @@ import type {
   StreamingLoudnessGainResult,
   TypedJson,
 } from './types.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 export * from './mastering_assistant.js';
 export * from './mastering_catalog.js';
@@ -136,7 +136,10 @@ export function mastering(
   sampleRate = 22050,
   options: MasteringOptions = {},
 ): MasteringResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('mastering', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('mastering', request.samples, resolvedSampleRate, request);
   return addon.mastering(
@@ -166,7 +169,7 @@ export function masteringProcess(
   const request =
     typeof processorName === 'string'
       ? { processorName, samples: samples as Float32Array, sampleRate, params }
-      : processorName;
+      : requestObject('masteringProcess', processorName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringProcess', request.samples, resolvedSampleRate, request);
   return addon.masteringProcess(
@@ -203,7 +206,7 @@ export function masteringProcessStereo(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringProcessStereo', processorName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringProcessStereo', request.left, resolvedSampleRate, request, 'left');
   assertAudioInput('masteringProcessStereo', request.right, resolvedSampleRate, request, 'right');
@@ -230,7 +233,9 @@ export function masteringChain(
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, config, onProgress }
+      : requestObject('masteringChain', samples);
   const flat = flattenChainConfig(request.config ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringChain', request.samples, resolvedSampleRate, request);
@@ -266,7 +271,7 @@ export function masteringChainStereo(
   const request =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
-      : left;
+      : requestObject('masteringChainStereo', left, 'left');
   const flat = flattenChainConfig(request.config ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringChainStereo', request.left, resolvedSampleRate, request, 'left');
@@ -320,6 +325,7 @@ export interface StreamingLoudnessGainStereoRequest {
 export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,
 ): StreamingLoudnessGainResult {
+  requestObject('streamingLoudnessGain', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('streamingLoudnessGain', request.samples, resolvedSampleRate, request);
   return addon.masteringStreamingLoudnessGain(
@@ -333,6 +339,7 @@ export function streamingLoudnessGain(
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
+  requestObject('streamingLoudnessGainStereo', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'streamingLoudnessGainStereo',
@@ -378,6 +385,7 @@ export interface MasterAudioStereoRequest {
 }
 
 function masterAudioRequest(
+  fnName: string,
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
@@ -387,10 +395,11 @@ function masterAudioRequest(
   if (requestOrSamples instanceof Float32Array) {
     return { samples: requestOrSamples, sampleRate, preset, overrides, onProgress };
   }
-  return requestOrSamples;
+  return requestObject(fnName, requestOrSamples);
 }
 
 function masterAudioStereoRequest(
+  fnName: string,
   requestOrLeft: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined,
   sampleRate: number,
@@ -408,7 +417,7 @@ function masterAudioStereoRequest(
       onProgress,
     };
   }
-  return requestOrLeft;
+  return requestObject(fnName, requestOrLeft, 'left');
 }
 
 export function masterAudio(request: MasterAudioRequest): MasteringChainResult;
@@ -426,7 +435,14 @@ export function masterAudio(
   overrides: MasteringChainConfig = {},
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
-  const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  const request = masterAudioRequest(
+    'masterAudio',
+    samples,
+    sampleRate,
+    presetName,
+    overrides,
+    onProgress,
+  );
   const flat = flattenChainConfig(request.overrides ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masterAudio', request.samples, resolvedSampleRate, request);
@@ -476,7 +492,13 @@ export function masterAudioAsync(
   // non-numeric override leaf); route that through the same rejected-Promise
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
-    const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
+    const request = masterAudioRequest(
+      'masterAudioAsync',
+      samples,
+      sampleRate,
+      presetName,
+      overrides,
+    );
     const resolvedSampleRate = request.sampleRate ?? 22050;
     assertAudioInput('masterAudioAsync', request.samples, resolvedSampleRate, request);
     return addon.masterAudioAsync(
@@ -508,6 +530,7 @@ export function masterAudioStereo(
   onProgress?: ProgressCallback,
 ): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
+    'masterAudioStereo',
     left,
     right,
     sampleRate,
@@ -575,7 +598,14 @@ export function masterAudioStereoAsync(
   // non-numeric override leaf); route that through the same rejected-Promise
   // contract so `fn(...).catch(h)` sees every validation failure.
   try {
-    const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
+    const request = masterAudioStereoRequest(
+      'masterAudioStereoAsync',
+      left,
+      right,
+      sampleRate,
+      presetName,
+      overrides,
+    );
     const resolvedSampleRate = request.sampleRate ?? 22050;
     assertAudioInput('masterAudioStereoAsync', request.left, resolvedSampleRate, request, 'left');
     assertAudioInput('masterAudioStereoAsync', request.right, resolvedSampleRate, request, 'right');
@@ -620,7 +650,7 @@ export function masteringPairProcess(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringPairProcess', processorName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringPairProcess', request.source, resolvedSampleRate, request, 'source');
   assertAudioInput(
@@ -675,7 +705,7 @@ export function masteringPairProcessStereo(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringPairProcessStereo', processorName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringPairProcessStereo',
@@ -735,6 +765,7 @@ export function masteringPairProcessStereo(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
+  requestObject('masteringAbMatchLoudness', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringAbMatchLoudness',
@@ -761,6 +792,7 @@ export function masteringAbMatchLoudness(
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
+  requestObject('masteringAbMatchLoudnessStereo', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringAbMatchLoudnessStereo',
@@ -883,7 +915,7 @@ export function masteringPairAnalyze(
           sampleRate,
           params,
         }
-      : analysisName;
+      : requestObject('masteringPairAnalyze', analysisName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringPairAnalyze', request.source, resolvedSampleRate, request, 'source');
   assertAudioInput(
@@ -953,7 +985,7 @@ export function masteringStereoAnalyze(
           sampleRate,
           params,
         }
-      : analysisName;
+      : requestObject('masteringStereoAnalyze', analysisName, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringStereoAnalyze', request.left, resolvedSampleRate, request, 'left');
   assertAudioInput('masteringStereoAnalyze', request.right, resolvedSampleRate, request, 'right');

@@ -5,7 +5,7 @@ import type {
   MixAssistantTrack,
   SuggestMixSceneRequest,
 } from './types.js';
-import { assertPositiveInteger, assertSampleRate } from './validation.js';
+import { assertPositiveInteger, assertSampleRate, requestObject } from './validation.js';
 
 /** Planar parallel arrays in the shape the addon entry points take. */
 interface NativeTrackArrays {
@@ -117,6 +117,7 @@ function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boo
  * every track pair. Tracks may differ in length.
  */
 export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantResult {
+  requestObject('suggestMixScene', request, 'request', true);
   return JSON.parse(suggest('suggestMixScene', request, false)) as MixAssistantResult;
 }
 
@@ -127,6 +128,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
  * document and re-serialise it.
  */
 export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {
+  requestObject('suggestMixSceneJson', request, 'request', true);
   return suggest('suggestMixSceneJson', request, true);
 }
 

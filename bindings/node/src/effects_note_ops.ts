@@ -24,6 +24,7 @@ import {
   assertFiniteScalar,
   assertIntegerValue,
   assertSampleRate,
+  requestObject,
   resolveSampleBound,
 } from './validation.js';
 
@@ -216,7 +217,10 @@ export function noteStretch(
   sampleRate = 22050,
   options: NoteStretchOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('noteStretch', samples);
   const rate = request.sampleRate ?? 22050;
   assertAudioInput('noteStretch', request.samples, rate, request);
   return addon.noteStretch(
@@ -254,7 +258,10 @@ export function noteMove(
   sampleRate = 22050,
   options: NoteMoveOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('noteMove', samples);
   const rate = request.sampleRate ?? 22050;
   assertAudioInput('noteMove', request.samples, rate, request);
   return addon.noteMove(
@@ -333,6 +340,7 @@ export function noteMove(
  * ```
  */
 export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
+  requestObject('extractNotes', request, 'request', true);
   const { samples, sampleRate, f0Hz, frameRate, voicedProb, ...options } = request;
   const nativeVoiced = assertNoteTrackRequest('extractNotes', request);
   return addon.extractNotes(samples, sampleRate, f0Hz, frameRate, {
@@ -388,6 +396,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * ```
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
+  requestObject('renderNotes', request, 'request', true);
   const { samples, sampleRate, notes, voiced, ...options } = request;
   assertAudioInput('renderNotes', samples, sampleRate, options);
   if (!Array.isArray(notes)) {
@@ -453,6 +462,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
+  requestObject('decomposeNotePitch', request, 'request', true);
   const { f0Hz, frameRate, medianHz, vibratoCutoffHz = 0, voiced } = request;
   if (!(f0Hz instanceof Float32Array)) {
     throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
@@ -515,6 +525,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * ```
  */
 export function splitNote(request: SplitNoteRequest): NoteObject[] {
+  requestObject('splitNote', request, 'request', true);
   const {
     samples,
     sampleRate,
@@ -582,6 +593,7 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  * ```
  */
 export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
+  requestObject('mergeNotes', request, 'request', true);
   const {
     samples,
     sampleRate,
@@ -636,6 +648,7 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * ```
  */
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
+  requestObject('noteTargetsFromSmf', request, 'request', true);
   return addon.noteTargetsFromSmf(request.data, request.trackIndex ?? 0);
 }
 
@@ -682,6 +695,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * ```
  */
 export function assignNoteTargets(request: AssignNoteTargetsRequest): AssignNoteTargetsResult {
+  requestObject('assignNoteTargets', request, 'request', true);
   const { notes, sampleRate, targets, ...options } = request;
   assertSampleRate('assignNoteTargets', sampleRate);
   if (!Array.isArray(notes)) {

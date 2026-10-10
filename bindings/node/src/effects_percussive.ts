@@ -6,7 +6,13 @@
 import { resolveEntryTimes, toSamples } from './_effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
-import { assertAudioInput, assertInt32, C_INT_MAX, C_INT_MIN } from './validation.js';
+import {
+  assertAudioInput,
+  assertInt32,
+  C_INT_MAX,
+  C_INT_MIN,
+  requestObject,
+} from './validation.js';
 
 /**
  * Check the separation an extracted or rendered event set is measured against
@@ -174,6 +180,7 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
 export function extractPercussiveEvents(
   request: ExtractPercussiveEventsRequest,
 ): PercussiveEvent[] {
+  requestObject('extractPercussiveEvents', request, 'request', true);
   const { samples: input, sampleRate, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
   assertAudioInput('extractPercussiveEvents', samples, sampleRate, options);
@@ -236,6 +243,7 @@ export function extractPercussiveEvents(
  * ```
  */
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
+  requestObject('renderPercussiveEvents', request, 'request', true);
   const { samples: input, sampleRate, events, ...options } = request;
   const samples = Array.isArray(input) ? toSamples(input) : input;
   assertAudioInput('renderPercussiveEvents', samples, sampleRate, options);

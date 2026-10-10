@@ -584,3 +584,30 @@ export function resolveOptionalNonNegative(
   assertNonNegativeScalar(fnName, value, argName);
   return value;
 }
+
+/**
+ * The request-object form of a positional entry point: its first argument is
+ * either the audio buffer or a request, so anything else (null, a number, an
+ * array, another typed array) is a wrong-typed buffer and is reported as one,
+ * naming the field, instead of failing on a property read. An entry point that
+ * takes only a request (`requestOnly`) reports the request itself instead.
+ */
+export function requestObject<T>(
+  fnName: string,
+  value: T,
+  argName = 'samples',
+  requestOnly = false,
+): T {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    ArrayBuffer.isView(value)
+  ) {
+    if (requestOnly) {
+      throw new TypeError(`${fnName}: request must be an object`);
+    }
+    assertAudioSamples(fnName, value, {}, argName);
+  }
+  return value;
+}

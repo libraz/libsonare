@@ -13,6 +13,7 @@ import {
   assertIntegralSampleRate,
   assertPositiveInteger,
   assertSampleRate,
+  requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
 
@@ -324,7 +325,7 @@ export function cqtToAudio(
   const request =
     magnitude instanceof Float32Array
       ? { magnitude, nBins, nFrames, sampleRate, hopLength, fmin, binsPerOctave, nIter }
-      : magnitude;
+      : requestObject('cqtToAudio', magnitude, 'magnitude');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('cqtToAudio', resolvedSampleRate);
   // Positivity only: the core takes any positive hop and any positive iteration
@@ -376,6 +377,7 @@ export function vqtToAudio(
   // exactly one place: an omitted `gamma` must reach the core as the
   // automatic-VQT value (-1), not as the constant-Q value (0).
   if (!(magnitude instanceof Float32Array)) {
+    requestObject('vqtToAudio', magnitude, 'magnitude');
     return vqtToAudio(
       magnitude.magnitude,
       magnitude.nBins,
@@ -544,7 +546,7 @@ export function griffinLim(
   const request =
     magnitude instanceof Float32Array
       ? { magnitude, nBins, nFrames, sampleRate, nFft, hopLength, nIter, momentum }
-      : magnitude;
+      : requestObject('griffinLim', magnitude, 'magnitude');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertSampleRate('griffinLim', resolvedSampleRate);
   // Positivity only: the core pairs the size with `nBins` (`nBins === nFft / 2 + 1`)
@@ -705,7 +707,9 @@ export function phaseVocoder(
   hopLength = 512,
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, rate, nFft, hopLength }
+      : requestObject('phaseVocoder', samples);
   assertFiniteScalar('phaseVocoder', request.rate, 'rate');
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('phaseVocoder', request.samples, resolvedSampleRate, request);
@@ -746,7 +750,7 @@ export function tone(
   const request =
     typeof frequency === 'number'
       ? { frequency, sampleRate, duration, phase, amplitude }
-      : frequency;
+      : requestObject('tone', frequency, 'request', true);
   // Integrality only: a generator's rate has no domain in the core, so the
   // audio-analysis bound would refuse rates it renders correctly today.
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -776,7 +780,10 @@ export function chirp(
   duration = 1,
   linear = true,
 ): Float32Array {
-  const request = typeof fmin === 'number' ? { fmin, fmax, sampleRate, duration, linear } : fmin;
+  const request =
+    typeof fmin === 'number'
+      ? { fmin, fmax, sampleRate, duration, linear }
+      : requestObject('chirp', fmin, 'request', true);
   // Integrality only, as `tone`: a generator's rate has no domain in the core.
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertIntegralSampleRate('chirp', resolvedSampleRate);
@@ -806,7 +813,9 @@ export function clicks(
   clickDuration = 0.1,
 ): Float32Array {
   const request =
-    times instanceof Float32Array ? { times, sampleRate, length, frequency, clickDuration } : times;
+    times instanceof Float32Array
+      ? { times, sampleRate, length, frequency, clickDuration }
+      : requestObject('clicks', times, 'times');
   // Integrality only, as `tone`: a generator's rate has no domain in the core.
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertIntegralSampleRate('clicks', resolvedSampleRate);

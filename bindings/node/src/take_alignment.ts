@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './types.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 /**
  * Align one take to a reference timeline, producing the warp anchors that place
@@ -48,6 +48,7 @@ import { assertAudioInput } from './validation.js';
 export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
 ): AlignTakeToReferenceResult {
+  requestObject('alignTakeToReference', request, 'request', true);
   assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
   assertAudioInput('alignTakeToReference', request.take, request.sampleRate, {}, 'take');
   // The config keys are forwarded unvalidated on purpose: both default at 0,

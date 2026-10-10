@@ -7,6 +7,7 @@ import {
   assertAudioInput,
   assertAudioSamples,
   assertPositiveInteger,
+  requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
 
@@ -75,7 +76,7 @@ export function trim(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, thresholdDb, frameLength, hopLength }
-      : samples;
+      : requestObject('trim', samples);
   assertAudioInput('trim', request.samples, request.sampleRate ?? 22050, request);
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'trim',
@@ -105,7 +106,11 @@ export function preemphasis(
   coef = 0.97,
   zi?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, coef, zi } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, coef, zi } : requestObject('preemphasis', samples);
+  if (!(request.samples instanceof Float32Array)) {
+    throw new TypeError('preemphasis: samples must be a Float32Array');
+  }
   return request.zi === undefined
     ? addon.preemphasis(request.samples, request.coef ?? 0.97)
     : addon.preemphasis(request.samples, request.coef ?? 0.97, request.zi);
@@ -118,7 +123,11 @@ export function deemphasis(
   coef = 0.97,
   zi?: number,
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, coef, zi } : samples;
+  const request =
+    samples instanceof Float32Array ? { samples, coef, zi } : requestObject('deemphasis', samples);
+  if (!(request.samples instanceof Float32Array)) {
+    throw new TypeError('deemphasis: samples must be a Float32Array');
+  }
   return request.zi === undefined
     ? addon.deemphasis(request.samples, request.coef ?? 0.97)
     : addon.deemphasis(request.samples, request.coef ?? 0.97, request.zi);
@@ -142,7 +151,9 @@ export function trimSilence(
   hopLength = 512,
 ): { audio: Float32Array; startSample: number; endSample: number } {
   const request =
-    samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, topDb, frameLength, hopLength }
+      : requestObject('trimSilence', samples);
   assertAudioSamples('trimSilence', request.samples, request);
   // The framing rule `trim` itself enforces: both positive, no other domain.
   const resolvedFrameLength = resolvePositiveIntegerOption(
@@ -179,7 +190,9 @@ export function splitSilence(
   hopLength = 512,
 ): Int32Array {
   const request =
-    samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+    samples instanceof Float32Array
+      ? { samples, topDb, frameLength, hopLength }
+      : requestObject('splitSilence', samples);
   assertAudioSamples('splitSilence', request.samples, request);
   // Both positive, as trimSilence: `split` applies the same framing rule.
   const resolvedFrameLength = resolvePositiveIntegerOption(
@@ -220,6 +233,7 @@ export function splitSilence(
  *   not a `Float32Array`.
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  requestObject('splitSilenceCommon', request, 'request', true);
   assertSilenceSignals('splitSilenceCommon', request);
   // Both positive, as splitSilence: `split_silence_common` applies the same
   // framing rule to every signal.
@@ -269,6 +283,7 @@ export function splitSilenceCommonWithReport(request: SplitSilenceCommonRequest)
   intervals: Int32Array;
   report: SilenceCommonReport;
 } {
+  requestObject('splitSilenceCommonWithReport', request, 'request', true);
   assertSilenceSignals('splitSilenceCommonWithReport', request);
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'splitSilenceCommonWithReport',
@@ -301,7 +316,10 @@ export function frameSignal(
   frameLength = 0,
   hopLength = 0,
 ): { nFrames: number; frames: Float32Array } {
-  const request = samples instanceof Float32Array ? { samples, frameLength, hopLength } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, frameLength, hopLength }
+      : requestObject('frameSignal', samples);
   // Both positive, as the sibling framing entries. The positional form's 0 is
   // not a default the core has -- it refuses one -- so it is refused by name here.
   assertPositiveInteger('frameSignal', request.frameLength, 'frameLength');
@@ -338,7 +356,10 @@ export function padCenter(
   targetSize = 0,
   padValue = 0,
 ): Float32Array {
-  const request = values instanceof Float32Array ? { values, targetSize, padValue } : values;
+  const request =
+    values instanceof Float32Array
+      ? { values, targetSize, padValue }
+      : requestObject('padCenter', values, 'values');
   return addon.padCenter(request.values, request.targetSize, request.padValue ?? 0);
 }
 
@@ -370,7 +391,10 @@ export function fixLength(
   targetSize = 0,
   padValue = 0,
 ): Float32Array {
-  const request = values instanceof Float32Array ? { values, targetSize, padValue } : values;
+  const request =
+    values instanceof Float32Array
+      ? { values, targetSize, padValue }
+      : requestObject('fixLength', values, 'values');
   return addon.fixLength(request.values, request.targetSize, request.padValue ?? 0);
 }
 
@@ -397,7 +421,9 @@ export function fixFrames(
   pad = true,
 ): Int32Array {
   const request =
-    frames instanceof Int32Array || Array.isArray(frames) ? { frames, xMin, xMax, pad } : frames;
+    frames instanceof Int32Array || Array.isArray(frames)
+      ? { frames, xMin, xMax, pad }
+      : requestObject('fixFrames', frames, 'request', true);
   return addon.fixFrames(
     request.frames,
     request.xMin ?? 0,
@@ -419,6 +445,9 @@ export function vectorNormalize(
   normType = 0,
   threshold = 0,
 ): Float32Array {
-  const request = values instanceof Float32Array ? { values, normType, threshold } : values;
+  const request =
+    values instanceof Float32Array
+      ? { values, normType, threshold }
+      : requestObject('vectorNormalize', values, 'values');
   return addon.vectorNormalize(request.values, request.normType ?? 0, request.threshold ?? 0);
 }

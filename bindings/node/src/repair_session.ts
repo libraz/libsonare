@@ -13,7 +13,7 @@ import type {
   DereverbReport,
   ProgressCallback,
 } from './types.js';
-import { assertAudioChannels } from './validation.js';
+import { assertAudioChannels, requestObject } from './validation.js';
 
 /** The repair stages, in the order {@link masteringRepairApply} runs them. */
 export type MasteringRepairStageName =
@@ -121,6 +121,7 @@ export interface MasteringRepairApplyRequest {
 export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
 ): MasteringRepairAnalysis {
+  requestObject('masteringRepairAnalyze', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioChannels('masteringRepairAnalyze', request.channels, resolvedSampleRate, request);
   const options =
@@ -154,6 +155,7 @@ export function masteringRepairAnalyze(
 export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
 ): MasteringRepairApplyResult {
+  requestObject('masteringRepairApply', request, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioChannels('masteringRepairApply', request.channels, resolvedSampleRate, request);
   if (!Array.isArray(request.stages)) {
