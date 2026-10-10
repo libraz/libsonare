@@ -706,6 +706,7 @@ node = [
   "strip_meter",
   "midi_cc_learn",
   "downmix",
+  "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]
 wasm = [
   "scale_quantize_midi",
@@ -714,6 +715,7 @@ wasm = [
   "strip_non_finite_discard_count",
   "midi_cc_learn",
   "downmix",
+  "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
 ]
 
 # detect_key_candidates (python): exposes `modes, profile, genre_hint` extras
@@ -764,6 +766,7 @@ python = [
   "align_take_to_reference", # Python derives both C lengths from array length and folds the SonareTakeAlignConfig fields into keyword args
   "downmix", # Python derives frames and channel_count from the channel arrays
   "mastering_repair_analyze", # Python folds the C request JSON into the prefer_streaming_safe keyword
+  "chord_symbol_from_analysis", # the facade folds root/quality/bass into one analysis chord object and sizes the extensions array itself
   "mastering_repair_apply", # Python serializes the `stages` mappings into stages_json and folds the cancel callback pair into `cancel`
 ]
 

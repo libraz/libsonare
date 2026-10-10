@@ -94,6 +94,19 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     take_path = directory / "contract-take.wav"
     _write_wav(take_path, {**fixtures["audio"], "frames": fixtures["audio"]["take_frames"]})
     paths["audio_take"] = str(take_path)
+    # The same tone at another rate, for the alignment whose take and reference
+    # were recorded at different rates.
+    other_rate = fixtures["audio"]["other_rate_take"]
+    other_rate_path = directory / "contract-take-other-rate.wav"
+    _write_wav(
+        other_rate_path,
+        {
+            **fixtures["audio"],
+            "sample_rate": other_rate["sample_rate"],
+            "frames": other_rate["frames"],
+        },
+    )
+    paths["audio_take_other_rate"] = str(other_rate_path)
     for name, text in fixtures["projects"].items():
         project_path = directory / f"project_{name}.json"
         project_path.write_text(text, encoding="utf-8")
@@ -134,6 +147,7 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
     # overwrite the document whose bytes the case above pins.
     paths["align_takes_finer_output"] = str(directory / "aligned-takes-finer.json")
     paths["align_takes_many_output"] = str(directory / "aligned-takes-many.json")
+    paths["align_takes_other_rate_output"] = str(directory / "aligned-takes-other-rate.json")
     # The import paths read what the export paths write, so the export contracts
     # are ordered ahead of them in the manifest.
     paths["smf_output"] = str(directory / "export.mid")

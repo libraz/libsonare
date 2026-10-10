@@ -482,7 +482,14 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         audio = fixtures["audio"]
         if _exact(
             audio,
-            {"sample_rate", "frames", "frequency_hz", "amplitude", "take_frames"},
+            {
+                "sample_rate",
+                "frames",
+                "frequency_hz",
+                "amplitude",
+                "take_frames",
+                "other_rate_take",
+            },
             "manifest.fixtures.audio",
             errors,
         ):
@@ -505,6 +512,26 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
             for key in ("frequency_hz", "amplitude"):
                 if not _is_number(audio[key]):
                     errors.append(f"manifest.fixtures.audio.{key}: expected a finite number")
+            # A take at another rate than the reference; an equal rate would leave
+            # the two-rate alignment path unexercised.
+            other_rate = audio["other_rate_take"]
+            if _exact(
+                other_rate,
+                {"sample_rate", "frames"},
+                "manifest.fixtures.audio.other_rate_take",
+                errors,
+            ):
+                for key in ("sample_rate", "frames"):
+                    if not _is_int(other_rate[key]) or other_rate[key] <= 0:
+                        errors.append(
+                            f"manifest.fixtures.audio.other_rate_take.{key}: "
+                            "expected a positive integer"
+                        )
+                if other_rate["sample_rate"] == audio["sample_rate"]:
+                    errors.append(
+                        "manifest.fixtures.audio.other_rate_take.sample_rate: "
+                        "expected a rate other than sample_rate"
+                    )
         melodies = fixtures["melodies"]
         if not isinstance(melodies, dict) or not melodies:
             errors.append("manifest.fixtures.melodies: expected a non-empty object")
@@ -514,14 +541,37 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
         projects = fixtures["projects"]
         if _exact(
             projects,
-            {"clean", "warning", "malformed", "takes", "takes_many", "takes_single"},
+            {
+                "clean",
+                "warning",
+                "malformed",
+                "takes",
+                "takes_many",
+                "takes_single",
+                "takes_other_rate",
+            },
             "manifest.fixtures.projects",
             errors,
         ):
-            for key in ("clean", "warning", "malformed", "takes", "takes_many", "takes_single"):
+            for key in (
+                "clean",
+                "warning",
+                "malformed",
+                "takes",
+                "takes_many",
+                "takes_single",
+                "takes_other_rate",
+            ):
                 if not isinstance(projects[key], str):
                     errors.append(f"manifest.fixtures.projects.{key}: expected a string")
-            for key in ("clean", "warning", "takes", "takes_many", "takes_single"):
+            for key in (
+                "clean",
+                "warning",
+                "takes",
+                "takes_many",
+                "takes_single",
+                "takes_other_rate",
+            ):
                 if isinstance(projects.get(key), str):
                     try:
                         json.loads(projects[key])

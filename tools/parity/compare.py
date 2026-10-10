@@ -305,6 +305,9 @@ _ALIAS_COVERAGE = {
     # explicit Mel range needed to round-trip with mel_to_stft / mel_to_audio).
     "mel_spectrogram_ex": ("mel_spectrogram",),
     "mfcc_ex": ("mfcc",),
+    # Two-rate take alignment -> the base facade, whose take-rate argument
+    # routes to the _ex C entry point.
+    "align_take_to_reference_ex": ("align_take_to_reference",),
     # The insert descriptor query takes an optional sample rate on every facade and
     # routes to the _at_rate C entry point when one is given.
     "mastering_insert_param_info_at_rate": ("mastering_insert_param_info",),

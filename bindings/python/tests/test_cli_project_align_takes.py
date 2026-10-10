@@ -335,15 +335,27 @@ def test_a_document_with_no_take_is_a_refused_request_not_an_empty_success(
     assert not output.exists()
 
 
-def test_a_take_at_another_rate_is_refused_naming_both_rates(takes: SimpleNamespace) -> None:
-    """One chroma frame grid cannot span two rates, so the pair is refused before the call."""
-    other_rate = takes.root / "take-16k.wav"
-    _write_wav(other_rate, _glide(0.75, 16000), 16000)
-    variant = _variant(
-        takes,
-        "rate-mismatch.json",
-        lambda doc: doc["sources"][1].__setitem__("uri", other_rate.as_uri()),
-    )
+def test_a_take_at_another_rate_is_aligned_and_scaled_to_the_project_rate(
+    takes: SimpleNamespace,
+) -> None:
+    """Each written anchor is the facade's reference-rate anchor times project / reference rate.
+
+    The project rate differs from the reference rate, so a missed or inverted
+    ratio moves every anchor off the derived value.
+    """
+    from libsonare import align_take_to_reference
+    from libsonare.cli import _load_audio
+
+    project_rate = 48000
+    take_rate = 32000
+    other_rate = takes.root / "take-32k.wav"
+    _write_wav(other_rate, _glide(0.75, take_rate), take_rate)
+
+    def mutate(doc: dict) -> None:
+        doc["sample_rate"] = project_rate
+        doc["sources"][1]["uri"] = other_rate.as_uri()
+
+    variant = _variant(takes, "rate-mismatch.json", mutate)
     output = takes.root / "rate-mismatch-out.json"
 
     result = _run_console(
@@ -357,10 +369,21 @@ def test_a_take_at_another_rate_is_refused_naming_both_rates(takes: SimpleNamesp
         "1",
         "--resolve-audio",
     )
+    assert result.returncode == 0, result.stderr
 
-    assert result.returncode == EXIT_INVALID_PARAMETER, result.stderr
-    assert "16000" in result.stderr and str(SAMPLE_RATE) in result.stderr
-    assert not output.exists()
+    reference_samples, reference_rate = _load_audio(str(takes.reference))
+    take_samples, decoded_take_rate = _load_audio(str(other_rate))
+    assert (reference_rate, decoded_take_rate) == (SAMPLE_RATE, take_rate)
+    expected, _ = align_take_to_reference(
+        reference_samples, take_samples, reference_rate, take_sample_rate=decoded_take_rate
+    )
+    scale = project_rate / reference_rate
+
+    (warp_map,) = json.loads(output.read_bytes())["warp_maps"]
+    assert len(warp_map["anchors"]) == len(expected)
+    for written, (warp, source) in zip(warp_map["anchors"], expected, strict=True):
+        assert written["warp_sample"] == pytest.approx(warp * scale, abs=1e-6)
+        assert written["source_sample"] == pytest.approx(source * scale, abs=1e-6)
 
 
 def test_a_reference_that_is_not_an_audio_source_is_refused_under_its_id(

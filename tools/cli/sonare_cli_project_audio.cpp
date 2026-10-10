@@ -544,33 +544,37 @@ int cmd_project_align_takes(const CliArgs& args) {
   config.hop_length = args.get_int("hop-length", 0);
   config.bins_per_octave = args.get_int("bins-per-octave", 0);
 
+  double project_sample_rate = 0.0;
+  if (const SonareError sr_err = sonare_project_get_sample_rate(handle.ptr, &project_sample_rate);
+      sr_err != SONARE_OK) {
+    project_report_error("read project sample rate", sr_err);
+    return project_exit_code(sr_err);
+  }
+
   const auto [reference_samples, reference_rate] = load_audio(paths.at(reference_source));
+  // The alignment returns both anchor axes in reference-rate samples; the warp
+  // map reads both at the project rate.
+  const double anchor_scale = project_sample_rate / static_cast<double>(reference_rate);
   uint32_t next_warp_id = facts.max_warp_map_id + 1;
   std::vector<AlignedTake> aligned;
   for (const uint32_t source_id : take_ids) {
     const auto [take_samples, take_rate] = load_audio(paths.at(source_id));
-    // Refused before the call rather than after: one chroma frame grid cannot
-    // span two rates, and the alignment does no rate conversion.
-    if (take_rate != reference_rate) {
-      std::cerr << color::red << "Error: source " << source_id << " is " << take_rate
-                << " Hz and reference source " << reference_source << " is " << reference_rate
-                << " Hz; align-takes reads both at one rate and does not resample" << color::reset
-                << "\n";
-      return kExitInvalidParameter;
-    }
     SonareProjectWarpAnchor* anchors = nullptr;
     size_t anchor_count = 0;
     SonareTakeAlignment alignment{};
-    SonareError err = sonare_align_take_to_reference(
-        reference_samples.data(), reference_samples.size(), take_samples.data(),
-        take_samples.size(), reference_rate, &config, &anchors, &anchor_count, &alignment);
+    SonareError err = sonare_align_take_to_reference_ex(
+        reference_samples.data(), reference_samples.size(), reference_rate, take_samples.data(),
+        take_samples.size(), take_rate, &config, &anchors, &anchor_count, &alignment);
     if (err != SONARE_OK) {
       project_report_error("align source " + std::to_string(source_id), err);
       return project_exit_code(err);
     }
-    // The anchors go in exactly as returned: they are already oriented for a clip
-    // whose source is the take, so reordering or rescaling them here would invert
-    // the map with nothing to report it.
+    // Both axes are scaled by one factor and never reordered: the anchors are
+    // already oriented for a clip whose source is the take.
+    for (size_t i = 0; i < anchor_count; ++i) {
+      anchors[i].warp_sample *= anchor_scale;
+      anchors[i].source_sample *= anchor_scale;
+    }
     const std::string name = "take-" + std::to_string(source_id);
     SonareProjectWarpMapDesc desc{};
     desc.id = next_warp_id;

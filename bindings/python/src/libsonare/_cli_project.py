@@ -362,26 +362,28 @@ def _project_align_takes(args: argparse.Namespace) -> int:
         paths = _align_source_paths(args, uris, [reference_source, *take_ids])
 
         reference_samples, reference_rate = _load_audio(paths[reference_source])
+        # The alignment returns both anchor axes in reference-rate samples; the
+        # warp map reads both at the project rate.
+        anchor_scale = cast(Any, project).get_sample_rate() / float(reference_rate)
         # Ids already in the document are never reused and never renumbered.
         next_warp_id = max([int(entry.get("id", 0)) for entry in shape.get("warp_maps", [])] + [0])
         aligned: list[_AlignedTake] = []
         for source_id in take_ids:
             take_samples, take_rate = _load_audio(paths[source_id])
-            if take_rate != reference_rate:
-                raise ValueError(
-                    f"source {source_id} is {take_rate} Hz and reference source "
-                    f"{reference_source} is {reference_rate} Hz; one chroma frame grid cannot "
-                    "span two rates"
-                )
             anchors, alignment = align_take_to_reference(
                 reference_samples,
                 take_samples,
                 reference_rate,
+                take_sample_rate=take_rate,
                 hop_length=args.hop_length,
                 bins_per_octave=args.bins_per_octave,
             )
             next_warp_id += 1
-            cast(Any, project).set_warp_map(next_warp_id, anchors, name=f"take-{source_id}")
+            cast(Any, project).set_warp_map(
+                next_warp_id,
+                [(warp * anchor_scale, source * anchor_scale) for warp, source in anchors],
+                name=f"take-{source_id}",
+            )
             clip_ids = sorted(clips_by_source[source_id])
             for clip_id in clip_ids:
                 cast(Any, project).set_clip_warp_ref(clip_id, next_warp_id)
