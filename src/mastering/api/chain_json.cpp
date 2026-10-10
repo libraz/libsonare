@@ -274,71 +274,8 @@ constexpr sonare::resource::ProjectImportResourceLimits kChainJsonLimits{
     sonare::resource::kDefaultProjectImportResourceLimits.max_decoded_payload_bytes,
 };
 
-constexpr std::size_t kMaxMultibandBands = 64u;
-constexpr int kMaxFirKernelSize = 65'535;
-
 [[noreturn]] void throw_invalid_json(const std::string& message) {
   throw SonareException(ErrorCode::InvalidParameter, message);
-}
-
-void validate_multiband_for_json(const MasteringChainConfig& cfg) {
-  const auto& multiband = cfg.dynamics.multiband_comp.config;
-  const auto& crossover = multiband.crossover;
-  const auto& bands = multiband.bands;
-
-  if (bands.empty() || bands.size() > kMaxMultibandBands) {
-    throw_invalid_json("multiband bands count must be between 1 and 64");
-  }
-  if (crossover.cutoffs_hz.size() > kMaxMultibandBands - 1u) {
-    throw_invalid_json("crossover cutoff count exceeds the 64-band limit");
-  }
-  if (bands.size() != crossover.cutoffs_hz.size() + 1u) {
-    throw_invalid_json("multiband band count must equal cutoff count plus one");
-  }
-
-  for (std::size_t index = 0; index < crossover.cutoffs_hz.size(); ++index) {
-    const float cutoff = crossover.cutoffs_hz[index];
-    if (!std::isfinite(cutoff) || !(cutoff > 0.0f)) {
-      throw_invalid_json("crossover cutoffs must be finite and positive");
-    }
-    if (index > 0 && !(cutoff > crossover.cutoffs_hz[index - 1])) {
-      throw_invalid_json("crossover cutoffs must be strictly ascending");
-    }
-  }
-
-  const int slope = static_cast<int>(crossover.slope);
-  if (slope < 0 || slope > 2) {
-    throw_invalid_json("crossover slope is out of range");
-  }
-  const int mode = static_cast<int>(crossover.mode);
-  if (mode < 0 || mode > 3) {
-    throw_invalid_json("crossover mode is out of range");
-  }
-  if (crossover.fir_kernel_size < 1 || crossover.fir_kernel_size > kMaxFirKernelSize) {
-    throw_invalid_json("crossover FIR kernel size is out of range");
-  }
-  if (mode == 3 && (crossover.fir_kernel_size < 3 || crossover.fir_kernel_size % 2 == 0)) {
-    throw_invalid_json("linear-phase crossover FIR kernel size must be odd and >= 3");
-  }
-
-  for (const auto& band : bands) {
-    if (!std::isfinite(band.threshold_db) || !std::isfinite(band.ratio) ||
-        !std::isfinite(band.attack_ms) || !std::isfinite(band.release_ms) ||
-        !std::isfinite(band.knee_db) || !std::isfinite(band.makeup_gain_db) ||
-        !std::isfinite(band.sidechain_hpf_hz) || !std::isfinite(band.pdr_time_ms) ||
-        !std::isfinite(band.pdr_release_scale)) {
-      throw_invalid_json("multiband compressor fields must be finite");
-    }
-    if (!(band.ratio >= 1.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
-        band.knee_db < 0.0f || !(band.sidechain_hpf_hz > 0.0f) || band.pdr_time_ms < 0.0f ||
-        band.pdr_release_scale < 1.0f) {
-      throw_invalid_json("multiband compressor field is out of range");
-    }
-    const int detector = static_cast<int>(band.detector);
-    if (detector < 0 || detector > 2) {
-      throw_invalid_json("multiband compressor detector is out of range");
-    }
-  }
 }
 
 const sonare::util::json::Object& require_object(const JsonValue& value, std::string_view path) {
@@ -646,9 +583,15 @@ class JsonParamParser {
 
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
                                                    const std::string& key) {
-  // Shares the writer's flat table, but skips document validation so it works past JSON's limits.
+  std::string canonical_storage;
+  const std::string& canonical = canonical_chain_param_key(key, &canonical_storage);
+  // Multiband fields are read from the struct, so every band and cutoff index is reachable.
+  if (canonical.rfind("dynamics.multibandComp.", 0) == 0) {
+    return multiband_parameter_value(config.dynamics.multiband_comp, canonical);
+  }
+  // Shares the writer's flat table, but skips document validation.
   const auto params = build_chain_params(config, true);
-  const auto it = params.find(key);
+  const auto it = params.find(canonical);
   if (it == params.end()) return std::nullopt;
   if (it->second.is_bool()) return it->second.as_bool() ? 1.0 : 0.0;
   if (!it->second.is_number()) return std::nullopt;
@@ -661,7 +604,7 @@ std::string chain_config_to_json(const MasteringChainConfig& config) {
   // v2 schema (for example 65 bands or a six-digit FIR kernel) would produce
   // JSON that chain_config_from_json must reject, breaking writer->parser
   // round-trips.
-  validate_multiband_for_json(config);
+  validate_chain_multiband_config(config.dynamics.multiband_comp.config);
   const bool use_v1 = is_v1_multiband_representable(config);
   sonare::util::json::Object root;
   util::json::put(root, "version", use_v1 ? 1 : 2);

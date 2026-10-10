@@ -235,6 +235,18 @@ SonareError sonare_mastering_apply_processor_stereo(const char* processor_name, 
 ///   @c MasteringChainConfig hierarchy using dot-notation keys (see
 ///   @c parse_chain_config_params). Unknown keys cause
 ///   @c SONARE_ERROR_INVALID_PARAMETER.
+///   The multiband compressor takes three spellings. The array spelling
+///   `dynamics.multibandComp.crossover.cutoffsHz.<i>` (indices exactly 0..n-1)
+///   replaces the cutoff list and sets the band count to n + 1, keeping existing
+///   bands by index; `dynamics.multibandComp.bands.<i>.<field>` and
+///   `dynamics.multibandComp.crossover.{slope,mode,firKernelSize}` name a band's
+///   compressor field (the `dynamics.compressor.<field>` names) and the crossover
+///   settings. The scalar spelling `cutoff<i>Hz`, `band<i>.<field>`,
+///   `{slope,mode,firKernelSize}` edits in place, and the shorthand `lowCutoffHz`,
+///   `highCutoffHz` and `low|mid|high{ThresholdDb,Ratio,AttackMs,ReleaseMs}` names
+///   cutoffs 0..1 and bands 0..2. Key order does not matter. Two spellings of one
+///   field in one call, or the cutoff list beside a scalar cutoff, are refused; at
+///   most 64 bands. The stage's structure is checked whether or not it is enabled.
 SonareError sonare_mastering_chain(const float* samples, size_t length, int sample_rate,
                                    const SonareMasteringParam* params, size_t param_count,
                                    SonareMasteringChainResult* out);
@@ -628,7 +640,9 @@ SonareError sonare_mastering_insert_timing(const char* name, const char* params,
 ///   offline stage takes and the realtime insert refuses (`quantile`).
 /// @param processor Processor id (an insert or a repair stage) whose parameter @p key is, or
 ///   NULL or "" when @p key is a flat mastering chain key (`repair.denoise.noiseEstimator`,
-///   `repair.dehum.mode`).
+///   `repair.dehum.mode`, `dynamics.compressor.detector`,
+///   `dynamics.multibandComp.crossover.slope`, `dynamics.multibandComp.bands.<i>.detector`,
+///   in any spelling the chain accepts).
 /// @param key Parameter key, as published by the parameter info or the chain schema.
 /// @param name The choice name, matched exactly.
 /// @param out_is_enum Receives 1 when @p key is an enum parameter and 0 when it is not, which
@@ -1136,7 +1150,10 @@ SonareError sonare_streaming_mastering_chain_reset(SonareStreamingMasteringChain
 /// flushing, reset and prepare, at a block boundary. Existing DSP instances and
 /// audio history are retained. Structural, disabled-stage and unknown parameters
 /// are rejected before mutation. Realtime-safe does not guarantee a click-free
-/// transition for every processor parameter.
+/// transition for every processor parameter. The multiband stage takes
+/// "dynamics.multibandComp.band<i>.{thresholdDb,ratio,attackMs,releaseMs,makeupGainDb}"
+/// for every band, and the low/mid/high shorthand for bands 0..2; its cutoffs,
+/// slope, mode, kernel and band count are structural.
 SonareError sonare_streaming_mastering_chain_set_parameter(SonareStreamingMasteringChain* handle,
                                                            const char* key, double value);
 

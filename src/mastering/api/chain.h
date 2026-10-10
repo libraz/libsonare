@@ -221,6 +221,21 @@ void validate_chain_config_for_rate(const MasteringChainConfig& config, int samp
 ///         not positive, or the configuration is outside its Nyquist bounds.
 void validate_chain_config_for_rate(const MasteringChainConfig& config, double sample_rate);
 
+/// Most bands the chain's multiband stage carries. The multiband insert's own limit is lower
+/// (nine bands); the two are different processors and keep different limits.
+inline constexpr std::size_t kMaxMultibandBands = 64u;
+/// Largest crossover FIR kernel the chain's multiband stage carries.
+inline constexpr int kMaxFirKernelSize = 65'535;
+
+/// @brief Structural check of the chain's multiband stage: band count against the cutoff
+///        count and @ref kMaxMultibandBands, ascending positive cutoffs, slope / mode / FIR
+///        kernel ranges, and each band's finite in-range fields.
+/// @details The one validator the flat parameters, the JSON reader and the JSON writer
+///          share, run whether or not the stage is enabled. Its messages carry no stage
+///          path, so every caller reports the same text.
+/// @throws SonareException (InvalidParameter) naming the violated rule.
+void validate_chain_multiband_config(const mastering::multiband::MultibandCompressorConfig& config);
+
 // ---------------------------------------------------------------------------
 // Chain results
 // ---------------------------------------------------------------------------
@@ -539,7 +554,11 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 //   "dynamics.transientShaper.attackGainDb"
 //   "dynamics.compressor.thresholdDb"
 //   "dynamics.multibandComp.enabled"
-//   "dynamics.multibandComp.lowCutoffHz"
+//   "dynamics.multibandComp.lowCutoffHz"          (shorthand for cutoff0Hz)
+//   "dynamics.multibandComp.cutoff<i>Hz"          (edits one cutoff in place)
+//   "dynamics.multibandComp.band<i>.<field>"      (field of dynamics.compressor)
+//   "dynamics.multibandComp.crossover.cutoffsHz.<i>" (replaces the list; bands = n + 1)
+//   "dynamics.multibandComp.bands.<i>.<field>"    (same field as band<i>.<field>)
 //   "saturation.tape.driveDb"
 //   "saturation.exciter.amount"
 //   "spectral.airBand.amount"
@@ -556,7 +575,31 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 // override preserves a preset's existing enabled state, and only an explicit
 // `enabled` override changes it. Unknown keys throw
 // SonareException(InvalidParameter).
+// Multiband keys are applied in two phases so key order never matters: a
+// `crossover.cutoffsHz.<i>` set (indices exactly 0..n-1, never beside a scalar
+// cutoff spelling) first replaces the cutoff list and resizes the bands to
+// n + 1, keeping existing bands by index and starting new ones from
+// CompressorConfig{}; every other key then applies in order. Two different
+// spellings of one multiband field in one call are refused.
 // ---------------------------------------------------------------------------
+
+/// @brief The canonical spelling of a flat chain key.
+/// @details Folds the short aliases (`repair.nFft`, `eq.tiltDb`, the multiband
+///          low/mid/high shorthand) and the multiband array spellings onto one
+///          key per field: `crossover.{slope,mode,firKernelSize}` become
+///          `dynamics.multibandComp.{slope,mode,firKernelSize}`,
+///          `bands.<i>.<field>` becomes `band<i>.<field>`, `lowCutoffHz` /
+///          `highCutoffHz` become `cutoff0Hz` / `cutoff1Hz`. A
+///          `crossover.cutoffsHz.<i>` list element stays its own canonical form.
+///          Whether the result names a field is decided where it is applied.
+/// @param storage Holds a rewritten key; the return refers to it or to @p key.
+const std::string& canonical_chain_param_key(const std::string& key, std::string* storage);
+
+/// @brief Reads one field of the multiband stage named by a canonical key.
+/// @return The value, or @c std::nullopt when @p canonical_key names no multiband field
+///         or indexes past the stage's cutoff or band list.
+std::optional<double> multiband_parameter_value(const MultibandCompStage& stage,
+                                                const std::string& canonical_key);
 
 MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count);
 
@@ -574,7 +617,9 @@ MasteringChainConfig parse_streaming_chain_config_params(const Param* params, st
 /// also set to 0. Parameter-only overrides for the tape and exciter color
 /// stages intentionally preserve the existing enabled state; only an explicit
 /// `enabled` override changes it. Unknown keys throw
-/// SonareException(InvalidParameter).
+/// SonareException(InvalidParameter), and so does a multiband stage the result
+/// leaves structurally invalid (@ref validate_chain_multiband_config); no other
+/// stage is validated here.
 void apply_chain_config_overrides(MasteringChainConfig& config, const Param* params,
                                   std::size_t count);
 
@@ -589,7 +634,8 @@ std::string chain_config_to_json(const MasteringChainConfig& config);
 /// @details This control-side helper intentionally does not serialize JSON or
 ///          apply document-size limits. Streaming automation uses it to detect
 ///          a repeated value before asking a realtime-safe processor to refresh
-///          coefficients, including configurations larger than the JSON format.
+///          coefficients. @p key may be any spelling canonical_chain_param_key
+///          accepts, so every multiband band and cutoff is readable.
 /// @return The field value, or @c std::nullopt when the key is not a numeric
 ///         flat field.
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,

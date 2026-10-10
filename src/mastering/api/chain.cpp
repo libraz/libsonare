@@ -205,7 +205,70 @@ int count_enabled_stereo_stages(const MasteringChainConfig& cfg) {
   return n;
 }
 
+[[noreturn]] void throw_invalid_multiband(const char* message) {
+  throw SonareException(ErrorCode::InvalidParameter, message);
+}
+
 }  // namespace
+
+void validate_chain_multiband_config(const multiband::MultibandCompressorConfig& config) {
+  const auto& crossover = config.crossover;
+  const auto& bands = config.bands;
+
+  if (bands.empty() || bands.size() > kMaxMultibandBands) {
+    throw_invalid_multiband("multiband bands count must be between 1 and 64");
+  }
+  if (crossover.cutoffs_hz.size() > kMaxMultibandBands - 1u) {
+    throw_invalid_multiband("crossover cutoff count exceeds the 64-band limit");
+  }
+  if (bands.size() != crossover.cutoffs_hz.size() + 1u) {
+    throw_invalid_multiband("multiband band count must equal cutoff count plus one");
+  }
+
+  for (std::size_t index = 0; index < crossover.cutoffs_hz.size(); ++index) {
+    const float cutoff = crossover.cutoffs_hz[index];
+    if (!std::isfinite(cutoff) || !(cutoff > 0.0f)) {
+      throw_invalid_multiband("crossover cutoffs must be finite and positive");
+    }
+    if (index > 0 && !(cutoff > crossover.cutoffs_hz[index - 1])) {
+      throw_invalid_multiband("crossover cutoffs must be strictly ascending");
+    }
+  }
+
+  const int slope = static_cast<int>(crossover.slope);
+  if (slope < 0 || slope > 2) {
+    throw_invalid_multiband("crossover slope is out of range");
+  }
+  const int mode = static_cast<int>(crossover.mode);
+  if (mode < 0 || mode > 3) {
+    throw_invalid_multiband("crossover mode is out of range");
+  }
+  if (crossover.fir_kernel_size < 1 || crossover.fir_kernel_size > kMaxFirKernelSize) {
+    throw_invalid_multiband("crossover FIR kernel size is out of range");
+  }
+  if (mode == 3 && (crossover.fir_kernel_size < 3 || crossover.fir_kernel_size % 2 == 0)) {
+    throw_invalid_multiband("linear-phase crossover FIR kernel size must be odd and >= 3");
+  }
+
+  for (const auto& band : bands) {
+    if (!std::isfinite(band.threshold_db) || !std::isfinite(band.ratio) ||
+        !std::isfinite(band.attack_ms) || !std::isfinite(band.release_ms) ||
+        !std::isfinite(band.knee_db) || !std::isfinite(band.makeup_gain_db) ||
+        !std::isfinite(band.sidechain_hpf_hz) || !std::isfinite(band.pdr_time_ms) ||
+        !std::isfinite(band.pdr_release_scale)) {
+      throw_invalid_multiband("multiband compressor fields must be finite");
+    }
+    if (!(band.ratio >= 1.0f) || band.attack_ms < 0.0f || band.release_ms < 0.0f ||
+        band.knee_db < 0.0f || !(band.sidechain_hpf_hz > 0.0f) || band.pdr_time_ms < 0.0f ||
+        band.pdr_release_scale < 1.0f) {
+      throw_invalid_multiband("multiband compressor field is out of range");
+    }
+    const int detector = static_cast<int>(band.detector);
+    if (detector < 0 || detector > 2) {
+      throw_invalid_multiband("multiband compressor detector is out of range");
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // MasteringChain
@@ -265,6 +328,9 @@ void validate_mastering_chain_config(const MasteringChainConfig& config) {
     check_stage("dynamics.compressor",
                 [&] { dynamics::Compressor::validate_config(config.dynamics.compressor.config); });
   }
+  // Structural rules hold for a disabled stage too: the JSON writer refuses one that breaks
+  // them, so accepting it here would only defer the failure.
+  validate_chain_multiband_config(config.dynamics.multiband_comp.config);
   if (config.dynamics.multiband_comp.enabled) {
     check_stage("dynamics.multibandComp", [&] {
       const auto& multiband_config = config.dynamics.multiband_comp.config;

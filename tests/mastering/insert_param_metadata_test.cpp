@@ -1658,6 +1658,33 @@ TEST_CASE("an enum parameter's name resolves to the number the flat lists carry"
   CHECK(mastering_enum_value("", "repair.dehum.mode", "notch") ==
         static_cast<double>(sonare::mastering::repair::DehumMode::Notch));
 
+  // The compressor and multiband chain keys, in every spelling and at every band index.
+  CHECK(mastering_enum_value("", "dynamics.compressor.detector", "logRms") == 2.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.slope", "lr8") == 2.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.slope", "lr2") == 0.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.mode", "bessel") == 2.0);
+  CHECK(mastering_enum_value("", "dynamics.multibandComp.crossover.mode", "firLinearPhase") == 3.0);
+  for (const int band : {0, 2, 9, 63}) {
+    CAPTURE(band);
+    const std::string index = std::to_string(band);
+    CHECK(mastering_enum_value("", "dynamics.multibandComp.band" + index + ".detector", "peak") ==
+          0.0);
+    CHECK(mastering_enum_value("", "dynamics.multibandComp.bands." + index + ".detector",
+                               "logRms") == 2.0);
+  }
+  CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.band3.ratio", "x").has_value());
+  CHECK_FALSE(mastering_enum_value("", "dynamics.multibandComp.cutoff0Hz", "x").has_value());
+  CHECK_FALSE(mastering_enum_value("", "dynamics.compressor.ratio", "x").has_value());
+  std::string band_message;
+  try {
+    (void)mastering_enum_value("", "dynamics.multibandComp.bands.12.detector", "loud");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    band_message = error.what();
+  }
+  CHECK(band_message.find("dynamics.multibandComp.bands.12.detector") != std::string::npos);
+  CHECK(band_message.find("logRms") != std::string::npos);
+
   // Every published choice resolves back to its value.
   const json::Array denoise = param_info("repair.denoiseClassical");
   for (const char* key : {"mode", "noiseEstimator"}) {

@@ -152,7 +152,10 @@ std::string insert_slot_info_json(const std::string& name);
 /// @brief The wire value of the enum parameter @p key named @p choice; empty when @p key is not
 ///        an enum parameter.
 /// @param processor Processor id (an insert or a repair stage), or empty when @p key is a flat
-///        mastering chain key such as `repair.denoise.noiseEstimator`.
+///        mastering chain key such as `repair.denoise.noiseEstimator`. A chain key is read in
+///        any spelling canonical_chain_param_key accepts: `dynamics.compressor.detector`,
+///        `dynamics.multibandComp.{crossover.,}slope|mode` (the multiband insert's names) and
+///        `dynamics.multibandComp.{bands.<i>.,band<i>.}detector` for every band index.
 /// @details Reads the names the key declares where its processor reads it, which are the
 ///          `choices` names of the parameter catalog, plus `quantile` and any other value the
 ///          streaming insert refuses but the offline stage takes.

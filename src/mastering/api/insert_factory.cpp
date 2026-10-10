@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
@@ -2216,21 +2217,46 @@ std::string repair_param_info_json(const std::string& name) {
 namespace {
 
 // The processor and key a flat chain key is read as. The chain's enum keys are those of the
-// stage's own processor.
+// stage's own processor. Every spelling is canonicalized first, so `crossover.slope`,
+// `bands.<i>.detector` and the scalar spellings resolve alike.
 bool chain_key_processor(const std::string& chain_key, std::string* processor, std::string* key) {
+  std::string canonical_storage;
+  const std::string& canonical = canonical_chain_param_key(chain_key, &canonical_storage);
   static const std::pair<const char*, const char*> kStages[] = {
       {"repair.denoise.", "repair.denoiseClassical"},
       {"repair.decrackle.", "repair.decrackle"},
       {"repair.dehum.", "repair.dehum"},
+      {"dynamics.compressor.", "dynamics.compressor"},
   };
   for (const auto& [prefix, id] : kStages) {
     const std::string stage_prefix = prefix;
-    if (chain_key.compare(0, stage_prefix.size(), stage_prefix) != 0) continue;
+    if (canonical.compare(0, stage_prefix.size(), stage_prefix) != 0) continue;
     *processor = id;
-    *key = chain_key.substr(stage_prefix.size());
+    *key = canonical.substr(stage_prefix.size());
     return true;
   }
-  return false;
+  // The crossover enums are the multiband insert's; a band is the chain compressor's fields at
+  // any index, including past the insert's nine bands.
+  const std::string multiband_prefix = "dynamics.multibandComp.";
+  if (canonical.compare(0, multiband_prefix.size(), multiband_prefix) != 0) return false;
+  const std::string leaf = canonical.substr(multiband_prefix.size());
+  if (leaf == "slope" || leaf == "mode") {
+    *processor = "multiband.compressor";
+    *key = leaf;
+    return true;
+  }
+  const std::string band_prefix = "band";
+  const std::size_t dot = leaf.find('.');
+  // The chain's index spelling: decimal digits, no leading zero.
+  if (leaf.compare(0, band_prefix.size(), band_prefix) != 0 || dot == std::string::npos ||
+      dot == band_prefix.size() ||
+      leaf.find_first_not_of("0123456789", band_prefix.size()) != dot ||
+      (leaf[band_prefix.size()] == '0' && dot > band_prefix.size() + 1)) {
+    return false;
+  }
+  *processor = "dynamics.compressor";
+  *key = leaf.substr(dot + 1);
+  return true;
 }
 
 }  // namespace

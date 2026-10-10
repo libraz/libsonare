@@ -652,6 +652,7 @@ TEST_CASE("multiband override rejects an out-of-range band index", "[mastering][
   // On a config shrunk below the indexed band, a per-band override used to be
   // silently dropped while still reporting success; it must now throw.
   MasteringChainConfig cfg;
+  cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz = {1200.0f};
   cfg.dynamics.multiband_comp.config.bands.resize(2);  // no band index 2
   Param high[] = {{"dynamics.multibandComp.highRatio", 4.0}};
   REQUIRE_THROWS_AS(apply_chain_config_overrides(cfg, high, 1), sonare::SonareException);
@@ -1703,16 +1704,16 @@ TEST_CASE("StreamingMasteringChain repeats an existing clamped processor value s
   REQUIRE(max_abs_difference(next, control_next) == 0.0f);
 }
 
-TEST_CASE("StreamingMasteringChain repeats values in configs beyond JSON limits",
+TEST_CASE("StreamingMasteringChain repeats values at the multiband kernel limit",
           "[mastering][chain][streaming]") {
   constexpr double kSampleRate = 48000.0;
   constexpr int kBlockSize = 64;
   MasteringChainConfig config;
   config.dynamics.multiband_comp.enabled = true;
-  // IIR crossover mode does not use the kernel size, so this remains a valid
-  // native chain configuration while intentionally exceeding JSON's bounded
-  // FIR field. A repeated automation value must not route through JSON.
-  config.dynamics.multiband_comp.config.crossover.fir_kernel_size = 65536;
+  // The kernel limit is the chain's own, so it holds even in an IIR mode that ignores the kernel.
+  config.dynamics.multiband_comp.config.crossover.fir_kernel_size = kMaxFirKernelSize + 1;
+  REQUIRE_THROWS_AS(StreamingMasteringChain(config), SonareException);
+  config.dynamics.multiband_comp.config.crossover.fir_kernel_size = kMaxFirKernelSize;
 
   StreamingMasteringChain repeated(config);
   StreamingMasteringChain control(config);
@@ -2950,6 +2951,401 @@ TEST_CASE("StreamingMasteringChain rejects non-finite rates without losing prepa
     REQUIRE_NOTHROW(chain.process_block(channels, 1, 64));
     reference.process_block(expected_channels, 1, 64);
     CHECK(block == expected);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Typed multiband over the flat chain params
+// ---------------------------------------------------------------------------
+
+namespace {
+
+using sonare::mastering::dynamics::CompressorConfig;
+
+constexpr const char* kMb = "dynamics.multibandComp.";
+
+std::string mb_key(const std::string& rest) { return kMb + rest; }
+
+void require_same_band(const CompressorConfig& actual, const CompressorConfig& expected) {
+  CHECK(actual.threshold_db == expected.threshold_db);
+  CHECK(actual.ratio == expected.ratio);
+  CHECK(actual.attack_ms == expected.attack_ms);
+  CHECK(actual.release_ms == expected.release_ms);
+  CHECK(actual.knee_db == expected.knee_db);
+  CHECK(actual.makeup_gain_db == expected.makeup_gain_db);
+  CHECK(actual.auto_makeup == expected.auto_makeup);
+  CHECK(actual.detector == expected.detector);
+  CHECK(actual.sidechain_hpf_enabled == expected.sidechain_hpf_enabled);
+  CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
+  CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
+  CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
+}
+
+void require_same_multiband(const MultibandCompStage& actual, const MultibandCompStage& expected) {
+  REQUIRE(actual.enabled == expected.enabled);
+  REQUIRE(actual.config.crossover == expected.config.crossover);
+  REQUIRE(actual.config.bands.size() == expected.config.bands.size());
+  for (size_t index = 0; index < expected.config.bands.size(); ++index) {
+    CAPTURE(index);
+    require_same_band(actual.config.bands[index], expected.config.bands[index]);
+  }
+}
+
+// A four-band stage whose every field differs from its default.
+MultibandCompStage four_band_stage() {
+  using sonare::mastering::dynamics::DetectorMode;
+  using sonare::mastering::multiband::CrossoverMode;
+  using sonare::mastering::multiband::CrossoverSlope;
+  MultibandCompStage stage;
+  stage.enabled = true;
+  stage.config.crossover.cutoffs_hz = {150.0f, 1500.0f, 6000.0f};
+  stage.config.crossover.slope = CrossoverSlope::LR8;
+  stage.config.crossover.mode = CrossoverMode::Bessel;
+  stage.config.crossover.fir_kernel_size = 257;
+  stage.config.bands.assign(4, CompressorConfig{});
+  for (size_t index = 0; index < 4; ++index) {
+    auto& band = stage.config.bands[index];
+    const auto step = static_cast<float>(index);
+    band.threshold_db = -30.0f + step;
+    band.ratio = 1.5f + 0.5f * step;
+    band.attack_ms = 3.0f + step;
+    band.release_ms = 60.0f + 10.0f * step;
+    band.knee_db = 1.0f + step;
+    band.makeup_gain_db = 0.5f * step;
+    band.auto_makeup = index % 2 == 1;
+    band.detector = static_cast<DetectorMode>(index % 3);
+    band.sidechain_hpf_enabled = index % 2 == 0;
+    band.sidechain_hpf_hz = 70.0f + 5.0f * step;
+    band.pdr_time_ms = 2.0f * step;
+    band.pdr_release_scale = 1.0f + 0.25f * step;
+  }
+  return stage;
+}
+
+// The same stage as flat keys in the array spelling.
+std::vector<Param> array_spelling(const MultibandCompStage& stage) {
+  std::vector<Param> params;
+  params.push_back({mb_key("enabled"), stage.enabled ? 1.0 : 0.0});
+  const auto& crossover = stage.config.crossover;
+  for (size_t index = 0; index < crossover.cutoffs_hz.size(); ++index) {
+    params.push_back({mb_key("crossover.cutoffsHz." + std::to_string(index)),
+                      static_cast<double>(crossover.cutoffs_hz[index])});
+  }
+  params.push_back({mb_key("crossover.slope"), static_cast<double>(crossover.slope)});
+  params.push_back({mb_key("crossover.mode"), static_cast<double>(crossover.mode)});
+  params.push_back(
+      {mb_key("crossover.firKernelSize"), static_cast<double>(crossover.fir_kernel_size)});
+  for (size_t index = 0; index < stage.config.bands.size(); ++index) {
+    const auto& band = stage.config.bands[index];
+    const std::string prefix = "bands." + std::to_string(index) + ".";
+    params.push_back({mb_key(prefix + "thresholdDb"), band.threshold_db});
+    params.push_back({mb_key(prefix + "ratio"), band.ratio});
+    params.push_back({mb_key(prefix + "attackMs"), band.attack_ms});
+    params.push_back({mb_key(prefix + "releaseMs"), band.release_ms});
+    params.push_back({mb_key(prefix + "kneeDb"), band.knee_db});
+    params.push_back({mb_key(prefix + "makeupGainDb"), band.makeup_gain_db});
+    params.push_back({mb_key(prefix + "autoMakeup"), band.auto_makeup ? 1.0 : 0.0});
+    params.push_back({mb_key(prefix + "detector"), static_cast<double>(band.detector)});
+    params.push_back(
+        {mb_key(prefix + "sidechainHpfEnabled"), band.sidechain_hpf_enabled ? 1.0 : 0.0});
+    params.push_back({mb_key(prefix + "sidechainHpfHz"), band.sidechain_hpf_hz});
+    params.push_back({mb_key(prefix + "pdrTimeMs"), band.pdr_time_ms});
+    params.push_back({mb_key(prefix + "pdrReleaseScale"), band.pdr_release_scale});
+  }
+  return params;
+}
+
+MasteringChainConfig parse(const std::vector<Param>& params) {
+  return parse_chain_config_params(params.data(), params.size());
+}
+
+// The refusal is InvalidParameter and its message carries every one of @p needles.
+template <typename Fn>
+void require_refused(Fn&& call, std::initializer_list<const char*> needles) {
+  try {
+    call();
+    FAIL("expected an InvalidParameter refusal");
+  } catch (const SonareException& error) {
+    CHECK(error.code() == ErrorCode::InvalidParameter);
+    const std::string message = error.what();
+    CAPTURE(message);
+    for (const char* needle : needles) {
+      CHECK(message.find(needle) != std::string::npos);
+    }
+  }
+}
+
+}  // namespace
+
+TEST_CASE("flat multiband array keys parse to the v2 JSON document's stage",
+          "[mastering][chain][multiband]") {
+  const MultibandCompStage stage = four_band_stage();
+  MasteringChainConfig document_config;
+  document_config.dynamics.multiband_comp = stage;
+  const std::string json = chain_config_to_json(document_config);
+  REQUIRE(json.find("\"version\":2") != std::string::npos);
+  const MasteringChainConfig from_document = chain_config_from_json(json);
+
+  const MasteringChainConfig from_flat = parse(array_spelling(stage));
+  require_same_multiband(from_flat.dynamics.multiband_comp, from_document.dynamics.multiband_comp);
+  require_same_multiband(from_flat.dynamics.multiband_comp, stage);
+}
+
+TEST_CASE("flat multiband scalar spellings and shorthand edit in place",
+          "[mastering][chain][multiband]") {
+  SECTION("shorthand and scalar keys keep the three-band split") {
+    const auto config = parse({{mb_key("lowCutoffHz"), 200.0},
+                               {mb_key("cutoff1Hz"), 5000.0},
+                               {mb_key("midThresholdDb"), -22.0},
+                               {mb_key("band2.kneeDb"), 3.0},
+                               {mb_key("slope"), 2.0}});
+    const auto& multiband = config.dynamics.multiband_comp;
+    REQUIRE(multiband.enabled);
+    REQUIRE(multiband.config.crossover.cutoffs_hz == std::vector<float>{200.0f, 5000.0f});
+    REQUIRE(multiband.config.bands.size() == 3);
+    CHECK(multiband.config.bands[1].threshold_db == -22.0f);
+    CHECK(multiband.config.bands[2].knee_db == 3.0f);
+    CHECK(multiband.config.crossover.slope == multiband::CrossoverSlope::LR8);
+  }
+
+  SECTION("bands.<i>.<field> is band<i>.<field>") {
+    const auto array = parse({{mb_key("bands.1.ratio"), 4.0}, {mb_key("crossover.mode"), 1.0}});
+    const auto scalar = parse({{mb_key("band1.ratio"), 4.0}, {mb_key("mode"), 1.0}});
+    require_same_multiband(array.dynamics.multiband_comp, scalar.dynamics.multiband_comp);
+    CHECK(array.dynamics.multiband_comp.config.bands[1].ratio == 4.0f);
+  }
+
+  SECTION("two spellings of one field in one call are refused by name") {
+    require_refused([] { parse({{mb_key("lowRatio"), 2.0}, {mb_key("bands.0.ratio"), 3.0}}); },
+                    {"dynamics.multibandComp.lowRatio", "dynamics.multibandComp.bands.0.ratio"});
+    require_refused([] { parse({{mb_key("band0.ratio"), 2.0}, {mb_key("lowRatio"), 3.0}}); },
+                    {"dynamics.multibandComp.band0.ratio", "dynamics.multibandComp.lowRatio"});
+    require_refused([] { parse({{mb_key("crossover.slope"), 1.0}, {mb_key("slope"), 2.0}}); },
+                    {"dynamics.multibandComp.crossover.slope", "dynamics.multibandComp.slope"});
+    require_refused([] { parse({{mb_key("lowCutoffHz"), 100.0}, {mb_key("cutoff0Hz"), 90.0}}); },
+                    {"dynamics.multibandComp.lowCutoffHz", "dynamics.multibandComp.cutoff0Hz"});
+  }
+
+  SECTION("the same spelling twice stays last-wins") {
+    const auto config = parse({{mb_key("bands.0.ratio"), 2.0}, {mb_key("bands.0.ratio"), 3.0}});
+    CHECK(config.dynamics.multiband_comp.config.bands[0].ratio == 3.0f);
+  }
+
+  SECTION("the cutoff list is refused beside any scalar cutoff spelling") {
+    for (const char* scalar : {"lowCutoffHz", "highCutoffHz", "cutoff0Hz", "cutoff1Hz"}) {
+      CAPTURE(scalar);
+      const std::string scalar_key = mb_key(scalar);
+      require_refused(
+          [&] {
+            parse({{mb_key("crossover.cutoffsHz.0"), 100.0},
+                   {scalar_key, 1000.0},
+                   {mb_key("crossover.cutoffsHz.1"), 2000.0}});
+          },
+          {scalar_key.c_str(), "crossover.cutoffsHz"});
+    }
+  }
+}
+
+TEST_CASE("flat multiband list rules hold in any key order", "[mastering][chain][multiband]") {
+  SECTION("bands before or after the cutoff list give one config") {
+    const std::vector<Param> bands = {{mb_key("bands.3.ratio"), 6.0},
+                                      {mb_key("bands.0.thresholdDb"), -24.0}};
+    const std::vector<Param> crossover = {{mb_key("crossover.cutoffsHz.2"), 8000.0},
+                                          {mb_key("crossover.cutoffsHz.0"), 200.0},
+                                          {mb_key("crossover.cutoffsHz.1"), 2000.0}};
+    std::vector<Param> bands_first = bands;
+    bands_first.insert(bands_first.end(), crossover.begin(), crossover.end());
+    std::vector<Param> crossover_first = crossover;
+    crossover_first.insert(crossover_first.end(), bands.begin(), bands.end());
+
+    const auto first = parse(bands_first);
+    const auto second = parse(crossover_first);
+    require_same_multiband(first.dynamics.multiband_comp, second.dynamics.multiband_comp);
+    const auto& config = first.dynamics.multiband_comp.config;
+    REQUIRE(config.crossover.cutoffs_hz == std::vector<float>{200.0f, 2000.0f, 8000.0f});
+    REQUIRE(config.bands.size() == 4);
+    CHECK(config.bands[3].ratio == 6.0f);
+    CHECK(config.bands[0].threshold_db == -24.0f);
+  }
+
+  SECTION("cutoff indices must run from 0 without a gap") {
+    require_refused(
+        [] {
+          parse(
+              {{mb_key("crossover.cutoffsHz.0"), 100.0}, {mb_key("crossover.cutoffsHz.2"), 300.0}});
+        },
+        {"crossover cutoff indices must be contiguous from 0: "
+         "dynamics.multibandComp.crossover.cutoffsHz.2"});
+    require_refused([] { parse({{mb_key("crossover.cutoffsHz.1"), 100.0}}); },
+                    {"crossover cutoff indices must be contiguous from 0: "
+                     "dynamics.multibandComp.crossover.cutoffsHz.1"});
+  }
+
+  SECTION("a band index past the resulting count is refused in either order") {
+    const std::vector<Param> band = {{mb_key("bands.2.ratio"), 2.0}};
+    const std::vector<Param> list = {{mb_key("crossover.cutoffsHz.0"), 1000.0}};
+    std::vector<Param> band_first = band;
+    band_first.insert(band_first.end(), list.begin(), list.end());
+    std::vector<Param> list_first = list;
+    list_first.insert(list_first.end(), band.begin(), band.end());
+    for (const auto* params : {&band_first, &list_first}) {
+      require_refused([&] { parse(*params); },
+                      {"multiband band index out of range: dynamics.multibandComp.bands.2.ratio"});
+    }
+  }
+
+  SECTION("structural limits are refused whether or not the stage is enabled") {
+    for (const double enabled : {1.0, 0.0}) {
+      CAPTURE(enabled);
+      const Param on{mb_key("enabled"), enabled};
+      std::vector<Param> too_many = {on};
+      for (int index = 0; index < 64; ++index) {
+        too_many.push_back({mb_key("crossover.cutoffsHz." + std::to_string(index)),
+                            20.0 + 10.0 * static_cast<double>(index)});
+      }
+      require_refused([&] { parse(too_many); }, {"multiband bands count must be between 1 and 64"});
+      require_refused(
+          [&] {
+            parse({on,
+                   {mb_key("crossover.cutoffsHz.0"), 2000.0},
+                   {mb_key("crossover.cutoffsHz.1"), 200.0}});
+          },
+          {"crossover cutoffs must be strictly ascending"});
+      require_refused([&] { parse({on, {mb_key("crossover.cutoffsHz.0"), -5.0}}); },
+                      {"crossover cutoffs must be finite and positive"});
+      require_refused([&] { parse({on, {mb_key("cutoff0Hz"), 0.0}}); },
+                      {"crossover cutoffs must be finite and positive"});
+      require_refused([&] { parse({on, {mb_key("crossover.slope"), 3.0}}); },
+                      {"crossover slope is out of range"});
+      require_refused([&] { parse({on, {mb_key("mode"), 4.0}}); },
+                      {"crossover mode is out of range"});
+      require_refused([&] { parse({on, {mb_key("crossover.firKernelSize"), 70000.0}}); },
+                      {"crossover FIR kernel size is out of range"});
+    }
+  }
+
+  SECTION("64 bands is the limit, not past it") {
+    std::vector<Param> params;
+    for (int index = 0; index < 63; ++index) {
+      params.push_back({mb_key("crossover.cutoffsHz." + std::to_string(index)),
+                        20.0 + 10.0 * static_cast<double>(index)});
+    }
+    params.push_back({mb_key("bands.63.ratio"), 3.0});
+    const auto config = parse(params);
+    REQUIRE(config.dynamics.multiband_comp.config.bands.size() == 64);
+    CHECK(config.dynamics.multiband_comp.config.bands[63].ratio == 3.0f);
+  }
+}
+
+TEST_CASE("a typed crossover alone enables the multiband stage", "[mastering][chain][multiband]") {
+  const std::vector<Param> list = {{mb_key("crossover.cutoffsHz.0"), 200.0},
+                                   {mb_key("crossover.cutoffsHz.1"), 2000.0},
+                                   {mb_key("crossover.cutoffsHz.2"), 8000.0}};
+  const auto parsed = parse(list);
+  CHECK(parsed.dynamics.multiband_comp.enabled);
+  CHECK(parsed.dynamics.multiband_comp.config.bands.size() == 4);
+  // The same rule the shorthand follows.
+  CHECK(parse({{mb_key("lowCutoffHz"), 200.0}}).dynamics.multiband_comp.enabled);
+
+  MasteringChainConfig base;
+  REQUIRE_FALSE(base.dynamics.multiband_comp.enabled);
+  apply_chain_config_overrides(base, list.data(), list.size());
+  CHECK(base.dynamics.multiband_comp.enabled);
+
+  std::vector<Param> switched_off = list;
+  switched_off.push_back({mb_key("enabled"), 0.0});
+  CHECK_FALSE(parse(switched_off).dynamics.multiband_comp.enabled);
+}
+
+TEST_CASE("StreamingMasteringChain retargets every multiband band live",
+          "[mastering][chain][streaming][multiband]") {
+  constexpr double kSampleRate = 48000.0;
+  constexpr int kBlockSize = 256;
+  MasteringChainConfig config;
+  config.dynamics.multiband_comp.enabled = true;
+  config.dynamics.multiband_comp.config.crossover.cutoffs_hz = {200.0f, 1000.0f, 4000.0f, 10000.0f};
+  config.dynamics.multiband_comp.config.bands.assign(5, CompressorConfig{});
+
+  // 6 kHz sits in band 3 (4..10 kHz).
+  const auto block = [&](int offset) {
+    std::vector<float> samples(kBlockSize);
+    for (int index = 0; index < kBlockSize; ++index) {
+      samples[static_cast<size_t>(index)] =
+          0.5f * std::sin(sonare::constants::kTwoPi * 6000.0f * static_cast<float>(offset + index) /
+                          static_cast<float>(kSampleRate));
+    }
+    return samples;
+  };
+  const auto run = [&](StreamingMasteringChain& chain) {
+    std::vector<float> out;
+    for (int offset = 0; offset < 8 * kBlockSize; offset += kBlockSize) {
+      auto samples = block(offset);
+      float* channels[] = {samples.data()};
+      chain.process_block(channels, 1, kBlockSize);
+      out.insert(out.end(), samples.begin(), samples.end());
+    }
+    return out;
+  };
+
+  SECTION("band3 thresholdDb and band4 makeupGainDb") {
+    MasteringChainConfig target = config;
+    target.dynamics.multiband_comp.config.bands[3].threshold_db = -30.0f;
+    target.dynamics.multiband_comp.config.bands[4].makeup_gain_db = 2.0f;
+    StreamingMasteringChain changed(config);
+    StreamingMasteringChain expected(target);
+    StreamingMasteringChain control(config);
+    changed.prepare(kSampleRate, kBlockSize, 1);
+    expected.prepare(kSampleRate, kBlockSize, 1);
+    control.prepare(kSampleRate, kBlockSize, 1);
+    REQUIRE_NOTHROW(changed.set_parameter(mb_key("band3.thresholdDb"), -30.0));
+    REQUIRE_NOTHROW(changed.set_parameter(mb_key("band4.makeupGainDb"), 2.0));
+    const auto& bands = changed.config().dynamics.multiband_comp.config.bands;
+    CHECK(bands[3].threshold_db == -30.0f);
+    CHECK(bands[4].makeup_gain_db == 2.0f);
+
+    const auto changed_out = run(changed);
+    const auto expected_out = run(expected);
+    const auto control_out = run(control);
+    CHECK(max_abs_difference(changed_out, expected_out) < 1.0e-6f);
+    // The edit is audible, so the agreement above is not two untouched chains.
+    CHECK(max_abs_difference(changed_out, control_out) > 1.0e-3f);
+  }
+
+  SECTION("makeupGainDb is live on the shorthand bands too, beside the aliases") {
+    StreamingMasteringChain chain(config);
+    chain.prepare(kSampleRate, kBlockSize, 1);
+    REQUIRE_NOTHROW(chain.set_parameter(mb_key("band0.makeupGainDb"), 1.5));
+    REQUIRE_NOTHROW(chain.set_parameter(mb_key("lowThresholdDb"), -21.0));
+    REQUIRE_NOTHROW(chain.set_parameter(mb_key("highRatio"), 3.0));
+    const auto& bands = chain.config().dynamics.multiband_comp.config.bands;
+    CHECK(bands[0].makeup_gain_db == 1.5f);
+    CHECK(bands[0].threshold_db == -21.0f);
+    CHECK(bands[2].ratio == 3.0f);
+    // Structural keys stay off the live surface.
+    CHECK_THROWS_AS(chain.set_parameter(mb_key("cutoff0Hz"), 250.0), SonareException);
+    CHECK_THROWS_AS(chain.set_parameter(mb_key("band5.thresholdDb"), -20.0), SonareException);
+  }
+
+  SECTION("a repeated value is a no-op") {
+    StreamingMasteringChain repeated(config);
+    StreamingMasteringChain control(config);
+    repeated.prepare(kSampleRate, kBlockSize, 1);
+    control.prepare(kSampleRate, kBlockSize, 1);
+    auto first = block(0);
+    auto control_first = first;
+    float* first_channels[] = {first.data()};
+    float* control_channels[] = {control_first.data()};
+    repeated.process_block(first_channels, 1, kBlockSize);
+    control.process_block(control_channels, 1, kBlockSize);
+    const double current = config.dynamics.multiband_comp.config.bands[3].threshold_db;
+    REQUIRE_NOTHROW(repeated.set_parameter(mb_key("band3.thresholdDb"), current));
+    auto next = block(kBlockSize);
+    auto control_next = next;
+    float* next_channels[] = {next.data()};
+    float* control_next_channels[] = {control_next.data()};
+    repeated.process_block(next_channels, 1, kBlockSize);
+    control.process_block(control_next_channels, 1, kBlockSize);
+    CHECK(max_abs_difference(next, control_next) == 0.0f);
   }
 }
 

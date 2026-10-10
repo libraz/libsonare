@@ -142,30 +142,18 @@ void add_parameter_targets(std::vector<StreamingParameterTarget>& targets,
       full_key = "loudness." + descriptor.key;
       config_key = full_key;
     } else if (stage_name == "dynamics.multibandComp") {
-      // Only band0..2 alias to the chain's low/mid/high keys; the rest is structural.
-      const std::string prefix = "band";
-      if (descriptor.key.size() <= prefix.size() ||
-          descriptor.key.compare(0, prefix.size(), prefix) != 0) {
-        continue;
-      }
-      const char band = descriptor.key[prefix.size()];
-      const char* band_name = band == '0'   ? "low"
-                              : band == '1' ? "mid"
-                              : band == '2' ? "high"
-                                            : nullptr;
-      if (band_name == nullptr || descriptor.key.size() <= prefix.size() + 2 ||
-          descriptor.key[prefix.size() + 1] != '.') {
-        continue;
-      }
-      const std::string field = descriptor.key.substr(prefix.size() + 2);
-      const char* field_name = nullptr;
-      if (field == "thresholdDb") field_name = "ThresholdDb";
-      if (field == "ratio") field_name = "Ratio";
-      if (field == "attackMs") field_name = "AttackMs";
-      if (field == "releaseMs") field_name = "ReleaseMs";
-      if (field_name == nullptr) continue;
-      full_key = "dynamics.multibandComp." + std::string(band_name) + field_name;
+      // Every band descriptor is a target under the chain's band<i>.<field> key. Bands 0..2 also
+      // answer to the low/mid/high shorthand the canonicalizer folds onto that key.
+      full_key = stage_name + "." + descriptor.key;
       config_key = full_key;
+      for (const char* band : {"low", "mid", "high"}) {
+        for (const char* field : {"ThresholdDb", "Ratio", "AttackMs", "ReleaseMs"}) {
+          const std::string alias = stage_name + "." + band + field;
+          std::string storage;
+          if (canonical_chain_param_key(alias, &storage) != config_key) continue;
+          targets.push_back({alias, config_key, processor, descriptor.id});
+        }
+      }
     } else {
       full_key = stage_name + "." + descriptor.key;
       config_key = full_key;

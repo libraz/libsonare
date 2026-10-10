@@ -2,6 +2,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -714,6 +715,77 @@ TEST_CASE("apply_chain_config_overrides updates fields in-place", "[mastering][p
   // Pop preset's compressor was already enabled; it should still be enabled
   // since we didn't touch the dynamics module.
   REQUIRE(config.dynamics.compressor.enabled);
+}
+
+TEST_CASE("a cutoff list override resizes a preset's multiband bands by index",
+          "[mastering][preset][multiband]") {
+  using sonare::mastering::dynamics::CompressorConfig;
+  auto base = preset_config(Preset::Pop);
+  auto& base_bands = base.dynamics.multiband_comp.config.bands;
+  REQUIRE(base_bands.size() == 3);
+  // Distinct per-band values, so "kept by index" cannot pass by every band being the default.
+  base_bands[0].ratio = 3.0f;
+  base_bands[1].knee_db = 2.0f;
+  base_bands[2].threshold_db = -25.0f;
+  const auto preset_bands = base_bands;
+
+  const auto require_band = [](const CompressorConfig& actual, const CompressorConfig& expected) {
+    CHECK(actual.threshold_db == expected.threshold_db);
+    CHECK(actual.ratio == expected.ratio);
+    CHECK(actual.attack_ms == expected.attack_ms);
+    CHECK(actual.release_ms == expected.release_ms);
+    CHECK(actual.knee_db == expected.knee_db);
+    CHECK(actual.makeup_gain_db == expected.makeup_gain_db);
+    CHECK(actual.auto_makeup == expected.auto_makeup);
+    CHECK(actual.detector == expected.detector);
+    CHECK(actual.sidechain_hpf_enabled == expected.sidechain_hpf_enabled);
+    CHECK(actual.sidechain_hpf_hz == expected.sidechain_hpf_hz);
+    CHECK(actual.pdr_time_ms == expected.pdr_time_ms);
+    CHECK(actual.pdr_release_scale == expected.pdr_release_scale);
+  };
+
+  SECTION("four cutoffs grow three bands to five") {
+    auto config = base;
+    const Param overrides[] = {
+        {"dynamics.multibandComp.bands.1.ratio", 5.0},
+        {"dynamics.multibandComp.crossover.cutoffsHz.0", 100.0},
+        {"dynamics.multibandComp.crossover.cutoffsHz.1", 800.0},
+        {"dynamics.multibandComp.crossover.cutoffsHz.2", 3000.0},
+        {"dynamics.multibandComp.crossover.cutoffsHz.3", 9000.0},
+    };
+    apply_chain_config_overrides(config, overrides, std::size(overrides));
+    const auto& multiband = config.dynamics.multiband_comp;
+    CHECK(multiband.enabled);
+    REQUIRE(multiband.config.crossover.cutoffs_hz ==
+            std::vector<float>{100.0f, 800.0f, 3000.0f, 9000.0f});
+    REQUIRE(multiband.config.bands.size() == 5);
+    require_band(multiband.config.bands[0], preset_bands[0]);
+    auto edited = preset_bands[1];
+    edited.ratio = 5.0f;
+    require_band(multiband.config.bands[1], edited);
+    require_band(multiband.config.bands[2], preset_bands[2]);
+    require_band(multiband.config.bands[3], CompressorConfig{});
+    require_band(multiband.config.bands[4], CompressorConfig{});
+
+    // The masterAudio path takes the same overrides and runs the five-band stage.
+    const auto fixture = create_preset_fixture(44100, 0.25f);
+    const auto result = master_audio_mono(Preset::Pop, fixture.data(), fixture.size(), 44100,
+                                          overrides, std::size(overrides));
+    CHECK(std::find(result.stages.begin(), result.stages.end(), "dynamics.multibandComp") !=
+          result.stages.end());
+  }
+
+  SECTION("one cutoff shrinks three bands to two") {
+    auto config = base;
+    const Param overrides[] = {{"dynamics.multibandComp.crossover.cutoffsHz.0", 500.0}};
+    apply_chain_config_overrides(config, overrides, 1);
+    const auto& bands = config.dynamics.multiband_comp.config.bands;
+    REQUIRE(config.dynamics.multiband_comp.config.crossover.cutoffs_hz ==
+            std::vector<float>{500.0f});
+    REQUIRE(bands.size() == 2);
+    require_band(bands[0], preset_bands[0]);
+    require_band(bands[1], preset_bands[1]);
+  }
 }
 
 TEST_CASE("apply_chain_config_overrides can disable a module via enabled=0",

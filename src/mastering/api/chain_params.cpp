@@ -1,7 +1,14 @@
 /// @file chain_params.cpp
 /// @brief Flat-parameter bridge for the high-level mastering chain.
 
+#include <algorithm>
+#include <cstdint>
+#include <map>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <unordered_map>
+#include <vector>
 
 #include "mastering/api/chain.h"
 #include "mastering/api/param_field_tables.h"
@@ -82,6 +89,93 @@ struct StageFlagsSet {
   StageFlags loudness;
 };
 
+// ---------------------------------------------------------------------------
+// Multiband vocabulary. Indices are plain decimal with no leading zero, so one
+// field has exactly one canonical spelling; anything else is an unknown key.
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kMultibandPrefix = "dynamics.multibandComp.";
+constexpr std::string_view kCutoffListPrefix = "crossover.cutoffsHz.";
+// Beyond any list length the chain accepts; a longer index saturates here and is refused as out
+// of range rather than wrapping.
+constexpr std::uint64_t kIndexSaturation = 1'000'000'000u;
+
+bool parse_index(std::string_view digits, std::size_t* index) {
+  if (digits.empty() || (digits.size() > 1 && digits.front() == '0')) return false;
+  std::uint64_t value = 0;
+  for (const char c : digits) {
+    if (c < '0' || c > '9') return false;
+    value = std::min(value * 10u + static_cast<std::uint64_t>(c - '0'), kIndexSaturation);
+  }
+  *index = static_cast<std::size_t>(value);
+  return true;
+}
+
+// `<head><i><tail>`, e.g. `cutoff3Hz`.
+bool parse_indexed(std::string_view text, std::string_view head, std::string_view tail,
+                   std::size_t* index) {
+  if (text.size() <= head.size() + tail.size() || text.substr(0, head.size()) != head ||
+      text.substr(text.size() - tail.size()) != tail) {
+    return false;
+  }
+  return parse_index(text.substr(head.size(), text.size() - head.size() - tail.size()), index);
+}
+
+// `<head><i>.<field>`, e.g. `band3.ratio`.
+bool parse_band_field(std::string_view text, std::string_view head, std::size_t* index,
+                      std::string_view* field) {
+  if (text.substr(0, head.size()) != head) return false;
+  const std::size_t dot = text.find('.', head.size());
+  if (dot == std::string_view::npos || dot + 1 >= text.size()) return false;
+  if (!parse_index(text.substr(head.size(), dot - head.size()), index)) return false;
+  *field = text.substr(dot + 1);
+  return true;
+}
+
+// The part of @p key after the multiband prefix, or false when @p key is not a multiband key.
+bool multiband_rest(std::string_view key, std::string_view* rest) {
+  if (key.substr(0, kMultibandPrefix.size()) != kMultibandPrefix) return false;
+  *rest = key.substr(kMultibandPrefix.size());
+  return true;
+}
+
+bool is_cutoff_list_key(std::string_view canonical, std::size_t* index) {
+  std::string_view rest;
+  return multiband_rest(canonical, &rest) &&
+         rest.substr(0, kCutoffListPrefix.size()) == kCutoffListPrefix &&
+         parse_index(rest.substr(kCutoffListPrefix.size()), index);
+}
+
+bool is_scalar_cutoff_key(std::string_view canonical) {
+  std::string_view rest;
+  std::size_t index = 0;
+  return multiband_rest(canonical, &rest) && parse_indexed(rest, "cutoff", "Hz", &index);
+}
+
+// Rewrites the multiband array spellings onto the scalar ones; false when nothing changes.
+bool canonical_multiband_key(std::string_view key, std::string* storage) {
+  std::string_view rest;
+  if (!multiband_rest(key, &rest)) return false;
+  constexpr std::string_view kCrossoverPrefix = "crossover.";
+  if (rest.substr(0, kCrossoverPrefix.size()) == kCrossoverPrefix) {
+    const std::string_view leaf = rest.substr(kCrossoverPrefix.size());
+    if (leaf == "slope" || leaf == "mode" || leaf == "firKernelSize") {
+      *storage = std::string(kMultibandPrefix) + std::string(leaf);
+      return true;
+    }
+  }
+  std::size_t index = 0;
+  std::string_view field;
+  if (parse_band_field(rest, "bands.", &index, &field)) {
+    *storage =
+        std::string(kMultibandPrefix) + "band" + std::to_string(index) + "." + std::string(field);
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 const std::string& canonical_chain_param_key(const std::string& key, std::string* storage) {
   const char* canonical = nullptr;
   if (key == "repair.denoise") canonical = "repair.denoise.enabled";
@@ -92,10 +186,74 @@ const std::string& canonical_chain_param_key(const std::string& key, std::string
   if (key == "repair.gainFloor") canonical = "repair.denoise.gainFloor";
   if (key == "eq.tiltDb") canonical = "eq.tilt.tiltDb";
   if (key == "eq.pivotHz") canonical = "eq.tilt.pivotHz";
-  if (canonical == nullptr) return key;
-  *storage = canonical;
-  return *storage;
+  // The multiband shorthand: the default split's two cutoffs and bands 0..2.
+  if (key == "dynamics.multibandComp.lowCutoffHz") canonical = "dynamics.multibandComp.cutoff0Hz";
+  if (key == "dynamics.multibandComp.highCutoffHz") canonical = "dynamics.multibandComp.cutoff1Hz";
+  if (key == "dynamics.multibandComp.lowThresholdDb") {
+    canonical = "dynamics.multibandComp.band0.thresholdDb";
+  }
+  if (key == "dynamics.multibandComp.lowRatio") canonical = "dynamics.multibandComp.band0.ratio";
+  if (key == "dynamics.multibandComp.lowAttackMs") {
+    canonical = "dynamics.multibandComp.band0.attackMs";
+  }
+  if (key == "dynamics.multibandComp.lowReleaseMs") {
+    canonical = "dynamics.multibandComp.band0.releaseMs";
+  }
+  if (key == "dynamics.multibandComp.midThresholdDb") {
+    canonical = "dynamics.multibandComp.band1.thresholdDb";
+  }
+  if (key == "dynamics.multibandComp.midRatio") canonical = "dynamics.multibandComp.band1.ratio";
+  if (key == "dynamics.multibandComp.midAttackMs") {
+    canonical = "dynamics.multibandComp.band1.attackMs";
+  }
+  if (key == "dynamics.multibandComp.midReleaseMs") {
+    canonical = "dynamics.multibandComp.band1.releaseMs";
+  }
+  if (key == "dynamics.multibandComp.highThresholdDb") {
+    canonical = "dynamics.multibandComp.band2.thresholdDb";
+  }
+  if (key == "dynamics.multibandComp.highRatio") canonical = "dynamics.multibandComp.band2.ratio";
+  if (key == "dynamics.multibandComp.highAttackMs") {
+    canonical = "dynamics.multibandComp.band2.attackMs";
+  }
+  if (key == "dynamics.multibandComp.highReleaseMs") {
+    canonical = "dynamics.multibandComp.band2.releaseMs";
+  }
+  if (canonical != nullptr) {
+    *storage = canonical;
+    return *storage;
+  }
+  if (canonical_multiband_key(key, storage)) return *storage;
+  return key;
 }
+
+std::optional<double> multiband_parameter_value(const MultibandCompStage& stage,
+                                                const std::string& canonical_key) {
+  std::string_view rest;
+  if (!multiband_rest(canonical_key, &rest)) return std::nullopt;
+  const auto& config = stage.config;
+  if (rest == "enabled") return detail::field_as_double(stage.enabled);
+  if (rest == "slope") return detail::field_as_double(config.crossover.slope);
+  if (rest == "mode") return detail::field_as_double(config.crossover.mode);
+  if (rest == "firKernelSize") return detail::field_as_double(config.crossover.fir_kernel_size);
+  std::size_t index = 0;
+  if (parse_indexed(rest, "cutoff", "Hz", &index) || is_cutoff_list_key(canonical_key, &index)) {
+    if (index >= config.crossover.cutoffs_hz.size()) return std::nullopt;
+    return detail::field_as_double(config.crossover.cutoffs_hz[index]);
+  }
+  std::string_view field;
+  if (!parse_band_field(rest, "band", &index, &field) || index >= config.bands.size()) {
+    return std::nullopt;
+  }
+  const auto& band = config.bands[index];
+#define X(jkey, member, meta) \
+  if (field == jkey) return detail::field_as_double(band.member);
+  SONARE_FIELDS_COMPRESSOR(X)
+#undef X
+  return std::nullopt;
+}
+
+namespace {
 
 // Each per-stage helper handles one cluster of keys and returns true if the key
 // was recognized (and applied). A flat sequence of independent early-return
@@ -402,7 +560,7 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
   return false;
 }
 
-// ---- eq.tilt + dynamics.* (deesser, transientShaper, compressor, multibandComp) ----
+// ---- eq.tilt + dynamics.* (deesser, transientShaper, compressor) ----
 bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, double v,
                              StageFlagsSet& flags) {
   // ---- eq.tilt ----
@@ -463,104 +621,68 @@ bool apply_eq_dynamics_param(MasteringChainConfig& cfg, const std::string& key, 
   SONARE_FIELDS_COMPRESSOR(X)
 #undef X
 
-  // ---- dynamics.multibandComp ----
-  // Bespoke: per-band fields write into bounds-checked crossover/bands vectors.
-  const float vf = static_cast<float>(v);
+  return false;
+}
+
+// ---- dynamics.multibandComp ----
+// @p key is canonical (see canonical_chain_param_key); @p spelled is the caller's own key, which
+// is what an out-of-range refusal names. A `crossover.cutoffsHz.<i>` element never reaches here:
+// the pre-pass in apply_chain_params consumes it.
+bool apply_multiband_param(MasteringChainConfig& cfg, const std::string& key,
+                           const std::string& spelled, double v, StageFlagsSet& flags) {
   if (key == "dynamics.multibandComp.enabled") {
     mark_enabled(flags.multiband_comp, v);
     return true;
   }
-  // Per-band/per-cutoff writes used to silently no-op (while still returning
-  // true) when the indexed band/cutoff did not exist on a shrunk config, so a
-  // caller's value was dropped without any error. Route them through helpers
-  // that throw InvalidParameter for an out-of-range index instead.
-  auto band_at = [&](size_t index) -> auto& {
-    auto& bands = cfg.dynamics.multiband_comp.config.bands;
-    if (index >= bands.size()) {
+  std::string_view rest;
+  if (!multiband_rest(key, &rest)) return false;
+  auto& config = cfg.dynamics.multiband_comp.config;
+  // Read as an integer so an out-of-range ordinal reaches validate_chain_multiband_config, whose
+  // message names the crossover field.
+  if (rest == "slope") {
+    int slope = 0;
+    detail::assign_field(slope, v);
+    config.crossover.slope = static_cast<multiband::CrossoverSlope>(slope);
+    mark_field(flags.multiband_comp);
+    return true;
+  }
+  if (rest == "mode") {
+    int mode = 0;
+    detail::assign_field(mode, v);
+    config.crossover.mode = static_cast<multiband::CrossoverMode>(mode);
+    mark_field(flags.multiband_comp);
+    return true;
+  }
+  if (rest == "firKernelSize") {
+    detail::assign_field(config.crossover.fir_kernel_size, v);
+    mark_field(flags.multiband_comp);
+    return true;
+  }
+  // An index past the list is refused rather than dropped while reporting success.
+  std::size_t index = 0;
+  if (parse_indexed(rest, "cutoff", "Hz", &index)) {
+    if (index >= config.crossover.cutoffs_hz.size()) {
       throw SonareException(ErrorCode::InvalidParameter,
-                            "multiband band index out of range: " + key);
+                            "multiband cutoff index out of range: " + spelled);
     }
-    return bands[index];
-  };
-  auto cutoff_at = [&](size_t index) -> auto& {
-    auto& cutoffs = cfg.dynamics.multiband_comp.config.crossover.cutoffs_hz;
-    if (index >= cutoffs.size()) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "multiband cutoff index out of range: " + key);
-    }
-    return cutoffs[index];
-  };
-  if (key == "dynamics.multibandComp.lowCutoffHz") {
-    cutoff_at(0) = vf;
+    detail::assign_field(config.crossover.cutoffs_hz[index], v);
     mark_field(flags.multiband_comp);
     return true;
   }
-  if (key == "dynamics.multibandComp.highCutoffHz") {
-    cutoff_at(1) = vf;
-    mark_field(flags.multiband_comp);
-    return true;
+  std::string_view field;
+  if (!parse_band_field(rest, "band", &index, &field)) return false;
+#define X(jkey, member, meta)                                                 \
+  if (field == jkey) {                                                        \
+    if (index >= config.bands.size()) {                                       \
+      throw SonareException(ErrorCode::InvalidParameter,                      \
+                            "multiband band index out of range: " + spelled); \
+    }                                                                         \
+    detail::assign_field(config.bands[index].member, v);                      \
+    mark_field(flags.multiband_comp);                                         \
+    return true;                                                              \
   }
-  if (key == "dynamics.multibandComp.lowThresholdDb") {
-    band_at(0).threshold_db = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.lowRatio") {
-    band_at(0).ratio = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.lowAttackMs") {
-    band_at(0).attack_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.lowReleaseMs") {
-    band_at(0).release_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.midThresholdDb") {
-    band_at(1).threshold_db = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.midRatio") {
-    band_at(1).ratio = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.midAttackMs") {
-    band_at(1).attack_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.midReleaseMs") {
-    band_at(1).release_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.highThresholdDb") {
-    band_at(2).threshold_db = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.highRatio") {
-    band_at(2).ratio = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.highAttackMs") {
-    band_at(2).attack_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-  if (key == "dynamics.multibandComp.highReleaseMs") {
-    band_at(2).release_ms = vf;
-    mark_field(flags.multiband_comp);
-    return true;
-  }
-
+  SONARE_FIELDS_COMPRESSOR(X)
+#undef X
   return false;
 }
 
@@ -680,22 +802,83 @@ bool apply_maximizer_loudness_param(MasteringChainConfig& cfg, const std::string
   return false;
 }
 
-void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key, double v,
-                               StageFlagsSet& flags) {
+void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key,
+                               const std::string& canonical, double v, StageFlagsSet& flags) {
   // Every chain parameter is ultimately stored as float, int, bool, or enum.
   // Reject non-finite and non-float-representable values before bespoke parsing
   // can narrow them. Integer fields add a lazy checked conversion above.
   float validated = 0.0f;
   detail::assign_field(validated, v);
   (void)validated;
-  std::string canonical_storage;
-  const std::string& canonical = canonical_chain_param_key(key, &canonical_storage);
   if (apply_repair_param(cfg, canonical, v, flags)) return;
   if (apply_eq_dynamics_param(cfg, canonical, v, flags)) return;
+  if (apply_multiband_param(cfg, canonical, key, v, flags)) return;
   if (apply_saturation_param(cfg, canonical, v, flags)) return;
   if (apply_spectral_stereo_param(cfg, canonical, v, flags)) return;
   if (apply_maximizer_loudness_param(cfg, canonical, v, flags)) return;
   throw SonareException(ErrorCode::InvalidParameter, "unknown chain config key: " + key);
+}
+
+// Two phases so the result never depends on key order: a `crossover.cutoffsHz.<i>` set first
+// replaces the cutoff list and resizes the bands to match, then every other key applies in order
+// against the resized list. Shared by both entry points.
+void apply_chain_params(MasteringChainConfig& cfg, const Param* params, std::size_t count,
+                        StageFlagsSet& flags) {
+  std::vector<std::string> canonical(count);
+  std::vector<bool> consumed(count, false);
+  std::unordered_map<std::string, std::size_t> multiband_spellings;
+  std::map<std::size_t, std::size_t> cutoff_list;  // list index -> param position, last wins
+  const std::string* scalar_cutoff = nullptr;
+  for (std::size_t i = 0; i < count; ++i) {
+    std::string storage;
+    canonical[i] = canonical_chain_param_key(params[i].key, &storage);
+    std::string_view rest;
+    if (!multiband_rest(canonical[i], &rest)) continue;
+    const auto [seen, inserted] = multiband_spellings.emplace(canonical[i], i);
+    if (!inserted && params[seen->second].key != params[i].key) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          params[seen->second].key + " and " + params[i].key + " name the same multiband field");
+    }
+    std::size_t index = 0;
+    if (is_cutoff_list_key(canonical[i], &index)) {
+      cutoff_list[index] = i;
+      consumed[i] = true;
+    } else if (scalar_cutoff == nullptr && is_scalar_cutoff_key(canonical[i])) {
+      scalar_cutoff = &params[i].key;
+    }
+  }
+
+  if (!cutoff_list.empty()) {
+    if (scalar_cutoff != nullptr) {
+      throw SonareException(ErrorCode::InvalidParameter,
+                            *scalar_cutoff +
+                                " cannot be combined with dynamics.multibandComp.crossover."
+                                "cutoffsHz, which replaces the cutoff list");
+    }
+    std::vector<float> cutoffs;
+    cutoffs.reserve(cutoff_list.size());
+    for (const auto& [index, position] : cutoff_list) {
+      if (index != cutoffs.size()) {
+        throw SonareException(
+            ErrorCode::InvalidParameter,
+            "crossover cutoff indices must be contiguous from 0: " + params[position].key);
+      }
+      float cutoff = 0.0f;
+      detail::assign_field(cutoff, params[position].value);
+      cutoffs.push_back(cutoff);
+    }
+    // Existing bands keep their index; a band the list adds starts from CompressorConfig{}.
+    auto& config = cfg.dynamics.multiband_comp.config;
+    config.crossover.cutoffs_hz = std::move(cutoffs);
+    config.bands.resize(config.crossover.cutoffs_hz.size() + 1);
+    mark_field(flags.multiband_comp);
+  }
+
+  for (std::size_t i = 0; i < count; ++i) {
+    if (consumed[i]) continue;
+    apply_one_param_to_config(cfg, params[i].key, canonical[i], params[i].value, flags);
+  }
 }
 
 }  // namespace
@@ -711,9 +894,7 @@ MasteringChainConfig parse_chain_config_params_over(MasteringChainConfig cfg, co
   validate_params(params, count);
   StageFlagsSet flags;
 
-  for (std::size_t i = 0; i < count; ++i) {
-    apply_one_param_to_config(cfg, params[i].key, params[i].value, flags);
-  }
+  apply_chain_params(cfg, params, count, flags);
 
   cfg.repair.declick.enabled = resolve_enabled(flags.declick);
   cfg.repair.declip.enabled = resolve_enabled(flags.declip);
@@ -764,9 +945,7 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
   validate_params(params, count);
   StageFlagsSet flags;
 
-  for (std::size_t i = 0; i < count; ++i) {
-    apply_one_param_to_config(cfg, params[i].key, params[i].value, flags);
-  }
+  apply_chain_params(cfg, params, count, flags);
 
   if (flags.declick.any_key_seen) {
     cfg.repair.declick.enabled = resolve_enabled(flags.declick);
@@ -829,6 +1008,9 @@ void apply_chain_config_overrides(MasteringChainConfig& cfg, const Param* params
   if (flags.loudness.any_key_seen) {
     cfg.loudness.enabled = resolve_enabled(flags.loudness);
   }
+  // Only the multiband stage is validated here, since its list edits can leave a shape no stage
+  // accepts; the message matches the one parse_chain_config_params gives.
+  validate_chain_multiband_config(cfg.dynamics.multiband_comp.config);
 }
 
 // ---------------------------------------------------------------------------
