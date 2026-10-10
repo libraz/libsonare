@@ -306,6 +306,32 @@ describe('wrong-typed string argument', () => {
   });
 });
 
+describe('wrong-typed chord or key mode of the analysis-to-annotation conversions', () => {
+  beforeAll(async () => {
+    await sonare.init();
+  });
+
+  it.each([
+    ['null', null],
+    ['a number', 42],
+    ['an array', [1, 2, 3]],
+  ])('chordSymbolFromAnalysis refuses %s as a TypeError naming chord', (_label, value) => {
+    expect(() => fn('chordSymbolFromAnalysis')(value)).toThrow(TypeError);
+    expect(() => fn('chordSymbolFromAnalysis')(value)).toThrow(
+      'chordSymbolFromAnalysis: chord must be an object',
+    );
+  });
+
+  it.each([
+    ['null', null],
+    ['an object', {}],
+    ['a boolean', true],
+  ])('keyModeFromAnalysis refuses %s as a TypeError naming mode', (_label, value) => {
+    expect(() => fn('keyModeFromAnalysis')(value)).toThrow(TypeError);
+    expect(() => fn('keyModeFromAnalysis')(value)).toThrow(/mode/);
+  });
+});
+
 describe('wrong-typed request of a request entry point', () => {
   beforeAll(async () => {
     await sonare.init();

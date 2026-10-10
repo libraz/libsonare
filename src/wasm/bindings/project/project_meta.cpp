@@ -479,6 +479,47 @@ void registerProjectMeta(class_<ProjectWasm>& cls) {
       .function("lastBounceCompileResult", &ProjectWasm::lastBounceCompileResult);
 }
 
+namespace {
+
+// Analysis chord -> annotation fields (root, quality, bass as ordinals the
+// facade already resolved). Domain errors are the C ABI's.
+val js_chord_symbol_from_analysis(const val& root_val, const val& quality_val,
+                                  const val& bass_val) {
+  const int root = checkedIntFromVal(root_val, "root");
+  const int quality = checkedIntFromVal(quality_val, "quality");
+  const int bass = checkedIntFromVal(bass_val, "bass");
+  uint32_t root_pc = 0;
+  uint32_t out_quality = 0;
+  uint32_t slash_bass_pc = 0;
+  uint8_t extensions[32] = {};
+  size_t extension_count = 0;
+  checkCError(sonare_chord_symbol_from_analysis(
+                  static_cast<SonarePitchClass>(root), static_cast<SonareChordQuality>(quality),
+                  static_cast<SonarePitchClass>(bass), &root_pc, &out_quality, extensions,
+                  sizeof(extensions), &extension_count, &slash_bass_pc),
+              "failed to convert analysis chord");
+  val list = val::array();
+  for (size_t i = 0; i < extension_count && i < sizeof(extensions); ++i) {
+    list.set(static_cast<unsigned>(i), static_cast<unsigned>(extensions[i]));
+  }
+  val out = val::object();
+  out.set("rootPc", root_pc);
+  out.set("quality", out_quality);
+  out.set("extensions", list);
+  out.set("slashBassPc", slash_bass_pc);
+  return out;
+}
+
+unsigned js_key_mode_from_analysis(const val& mode_val) {
+  const int mode = checkedIntFromVal(mode_val, "mode");
+  uint32_t out_mode = 0;
+  checkCError(sonare_key_mode_from_analysis(static_cast<SonareMode>(mode), &out_mode),
+              "failed to convert analysis key mode");
+  return out_mode;
+}
+
+}  // namespace
+
 void registerProjectFreeFunctions() {
   function("projectAbiVersion", &js_project_abi_version);
   function("midiGmInstrumentName", &js_midi_gm_instrument_name);
@@ -500,6 +541,8 @@ void registerProjectFreeFunctions() {
   function("midiRouteEvents", &js_midi_route_events);
   function("transcribe", &js_transcribe);
   function("alignTakeToReference", &js_align_take_to_reference);
+  function("chordSymbolFromAnalysis", &js_chord_symbol_from_analysis);
+  function("keyModeFromAnalysis", &js_key_mode_from_analysis);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
   function("synthGsDrumKitName", &js_synth_gs_drum_kit_name);

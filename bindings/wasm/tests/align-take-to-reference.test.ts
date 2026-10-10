@@ -252,6 +252,90 @@ describe('WASM alignTakeToReference', () => {
     }
   });
 
+  describe('a take recorded at another rate', () => {
+    const referenceRate = 22050;
+    const takeRate = 32000;
+    const hop = 512;
+    const lead = 0.5;
+
+    /** A 2 s semitone glide from 261.63 Hz over 11 semitones, five partials at `1/h`. */
+    function semitoneGlide(rate: number, seconds: number, leadSeconds: number): Float32Array {
+      const lead = Math.round(leadSeconds * rate);
+      const body = Math.round(seconds * rate);
+      const out = new Float32Array(lead + body);
+      let phase = 0;
+      for (let i = 0; i < body; i++) {
+        const f0 = 261.63 * 2 ** ((11 / 12) * (i / (body - 1)));
+        phase += (2 * Math.PI * f0) / rate;
+        let sum = 0;
+        for (let h = 1; h <= 5; h++) {
+          sum += (0.3 / h) * Math.sin(h * phase);
+        }
+        out[lead + i] = sum;
+      }
+      return out;
+    }
+
+    const ref2 = semitoneGlide(referenceRate, 2, 0);
+    const take2 = semitoneGlide(takeRate, 2, lead);
+
+    it('measures the take on the reference grid and returns anchors in reference-rate samples', () => {
+      const result = alignTakeToReference({
+        reference: ref2,
+        take: take2,
+        sampleRate: referenceRate,
+        takeSampleRate: takeRate,
+      });
+      // Primary proof the rate is used: the frame count of the take resampled to
+      // the reference rate, not of the take as recorded.
+      const expectedFrames = Math.ceil((take2.length * referenceRate) / takeRate / hop);
+      expect(Math.abs(result.alignment.takeFrames - expectedFrames)).toBeLessThanOrEqual(1);
+
+      // The first anchor is the boundary of the collapsed silence run.
+      expect(result.anchors.length).toBeGreaterThan(2);
+      for (const a of result.anchors.slice(1)) {
+        expect(Math.abs(a.sourceSample - a.warpSample - lead * referenceRate)).toBeLessThanOrEqual(
+          hop,
+        );
+      }
+    });
+
+    it('does not satisfy the same relation when the take is declared at the reference rate', () => {
+      const wrong = alignTakeToReference({
+        reference: ref2,
+        take: take2,
+        sampleRate: referenceRate,
+        takeSampleRate: referenceRate,
+      });
+      const off = wrong.anchors
+        .slice(1)
+        .filter((a) => Math.abs(a.sourceSample - a.warpSample - lead * referenceRate) > hop);
+      expect(off.length / (wrong.anchors.length - 1)).toBeGreaterThan(0.5);
+    });
+
+    it('reads an omitted, undefined or equal takeSampleRate as sampleRate', () => {
+      const expected = shape(baseline);
+      expect(
+        shape(alignTakeToReference({ reference, take, sampleRate, takeSampleRate: undefined })),
+      ).toBe(expected);
+      expect(
+        shape(alignTakeToReference({ reference, take, sampleRate, takeSampleRate: sampleRate })),
+      ).toBe(expected);
+    });
+
+    it('refuses a takeSampleRate it cannot use, the way sampleRate is refused', () => {
+      for (const takeSampleRate of [0, -22050, 7999, 384001, 22050.5, Number.NaN]) {
+        expect(
+          () => alignTakeToReference({ reference, take, sampleRate, takeSampleRate }),
+          String(takeSampleRate),
+        ).toThrow(RangeError);
+      }
+      expect(() =>
+        alignTakeToReference({ reference, take, sampleRate, takeSampleRate: '22050' as never }),
+      ).toThrow(TypeError);
+    });
+  });
+
   it('refuses a pair it cannot produce two distinct anchors from', () => {
     // Shorter than one chroma hop, so neither signal yields the two frames an
     // alignment needs. Reported rather than answered with a map the caller cannot

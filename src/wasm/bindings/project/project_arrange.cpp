@@ -236,8 +236,10 @@ val warpAnchorToVal(const SonareProjectWarpAnchor& anchor) {
 
 }  // namespace
 
-val js_align_take_to_reference(val reference, val take, const val& sample_rate_val, val config) {
+val js_align_take_to_reference(val reference, val take, const val& sample_rate_val,
+                               const val& take_sample_rate_val, val config) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int take_sample_rate = checkedIntFromVal(take_sample_rate_val, "takeSampleRate");
   // Both fields default to 0, which the C ABI reads as "use the library value",
   // so an omitted key and a written 0 are one request -- as they are on the other
   // two surfaces. A value outside the domain is refused by the measurement rather
@@ -255,11 +257,12 @@ val js_align_take_to_reference(val reference, val take, const val& sample_rate_v
   SonareProjectWarpAnchor* rows = nullptr;
   size_t count = 0;
   SonareTakeAlignment alignment{};
-  checkCError(sonare_align_take_to_reference(
-                  reference_buffer.empty() ? nullptr : reference_buffer.data(),
-                  reference_buffer.size(), take_buffer.empty() ? nullptr : take_buffer.data(),
-                  take_buffer.size(), sample_rate, &resolved, &rows, &count, &alignment),
-              "failed to align take to reference");
+  checkCError(
+      sonare_align_take_to_reference_ex(
+          reference_buffer.empty() ? nullptr : reference_buffer.data(), reference_buffer.size(),
+          sample_rate, take_buffer.empty() ? nullptr : take_buffer.data(), take_buffer.size(),
+          take_sample_rate, &resolved, &rows, &count, &alignment),
+      "failed to align take to reference");
   // Copied out and released before anything JS-facing is built, so a throw while
   // marshalling cannot leak the heap block.
   std::vector<SonareProjectWarpAnchor> anchors;

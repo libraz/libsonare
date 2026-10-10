@@ -535,8 +535,16 @@ export interface ProjectModule {
     reference: Float32Array,
     take: Float32Array,
     sampleRate: number,
+    takeSampleRate: number,
     config: AlignTakeToReferenceRequest,
   ) => AlignTakeToReferenceResult;
+  // Numeric analysis ordinals in; the facade has already resolved names.
+  chordSymbolFromAnalysis: (
+    root: number,
+    quality: number,
+    bass: number,
+  ) => { rootPc: number; quality: number; extensions: number[]; slashBassPc: number };
+  keyModeFromAnalysis: (mode: number) => number;
 }
 
 export function projectModule(): ProjectModule {

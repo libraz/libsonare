@@ -46,6 +46,8 @@ export type {
   DecodedChannels,
 } from './audio.js';
 export { Audio, decodeChannels, decodeChannelsWithBrowserFallback, downmix } from './audio.js';
+export type { ChordAnnotationFields } from './chord_annotation.js';
+export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
 export type {
   ClipPageStreamerEngine,
   ClipPageStreamerOptions,

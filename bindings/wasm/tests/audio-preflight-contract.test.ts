@@ -376,6 +376,8 @@ const NOT_AUDIO: string[] = [
     'isSonareError',
     'streamAnalyzerConfigDefaults',
   ],
+  // Analysis-to-annotation conversions over a chord or a key mode.
+  ...['chordSymbolFromAnalysis', 'keyModeFromAnalysis'],
   // Name, catalog, preset and enum lookups.
   ...[
     'controllerProfileNames',

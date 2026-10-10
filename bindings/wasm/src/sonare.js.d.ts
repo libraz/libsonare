@@ -2016,8 +2016,11 @@ export interface SonareModule {
     reference: Float32Array,
     take: Float32Array,
     sampleRate: number,
+    takeSampleRate: number,
     config: unknown,
   ) => unknown;
+  chordSymbolFromAnalysis: (root: number, quality: number, bass: number) => unknown;
+  keyModeFromAnalysis: (mode: number) => number;
   _analysisResultSchemaPaths: () => string[];
   _analysisResultSchemaFixture: () => WasmAnalysisResult;
   analyzeImpulseResponse: (

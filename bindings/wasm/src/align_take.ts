@@ -21,18 +21,25 @@ import { assertAudioInput, requestObject } from './validation.js';
  * round, so passing the reference as its reference yields the inverse map and
  * nothing reports it.
  *
- * Both signals are read at `sampleRate`; resample first if they differ, since
- * the alignment does no I/O and no rate conversion.
+ * The reference is read at `sampleRate` and the take at `takeSampleRate`
+ * (default: `sampleRate`). When they differ the take is resampled to the
+ * reference rate before measuring, so both are on one chroma grid.
+ *
+ * **Units.** Both anchor axes are in samples at the REFERENCE rate, and
+ * `hopLength` and the alignment's frame counts are at that rate too. A project
+ * consumes warp anchors in samples at the project rate: multiply both
+ * `warpSample` and `sourceSample` by `projectRate / referenceRate` before
+ * {@link Project.setWarpMap}.
  *
  * {@link AlignTakeToReferenceResult.alignment} is descriptive only — it says how
  * far the path strayed from a constant rate, so a caller can tell a take the
  * reference genuinely fits from one it does not, and supplies its own threshold.
  *
- * @param request - The two signals, their shared sample rate, and the chroma
+ * @param request - The two signals, their sample rates, and the chroma
  *   resolution
  * @returns The anchors and how well the alignment was conditioned
  * @throws {RangeError} on an empty buffer, a non-finite sample, or a `sampleRate`
- *   outside `[8000, 384000]`
+ *   or `takeSampleRate` outside `[8000, 384000]`
  * @throws {SonareError} `InvalidParameter` on a non-positive `hopLength` or
  *   `binsPerOctave`, on a `binsPerOctave` that is not a multiple of 12, on a
  *   signal too short to measure two chroma frames, or when the two signals produce
@@ -53,12 +60,14 @@ export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
 ): AlignTakeToReferenceResult {
   requestObject('alignTakeToReference', request, 'request', true);
+  const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
   assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
-  assertAudioInput('alignTakeToReference', request.take, request.sampleRate, {}, 'take');
+  assertAudioInput('alignTakeToReference', request.take, takeSampleRate, {}, 'take');
   return projectModule().alignTakeToReference(
     request.reference,
     request.take,
     request.sampleRate,
+    takeSampleRate,
     request,
   );
 }
