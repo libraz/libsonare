@@ -6,7 +6,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, RealtimeEngine } from '../dist/index.js';
+import { ErrorCode, init, RealtimeEngine } from '../dist/index.js';
 import { setSonareModule } from '../src/module_state.js';
 
 const DESTINATION = 0;
@@ -130,19 +130,28 @@ describe('Sonare WASM live per-note expression', () => {
       engine.setMidiInputSource(DESTINATION);
       // A bend is 14-bit, so 16384 is the first value a 7-bit-shaped check would
       // let through and the one that has to be refused.
-      expect(() => engine.pushMidiInputPitchBend(0, 0, 16384)).toThrow();
-      expect(() => engine.pushMidiPitchBend(DESTINATION, 0, 0, 16384)).toThrow();
-      expect(() => engine.pushMidiInputChannelPressure(0, 16, 64)).toThrow();
-      expect(() => engine.pushMidiPolyPressure(DESTINATION, 0, 0, 128, 64)).toThrow();
+      expect(() => engine.pushMidiInputPitchBend(0, 0, 16384)).toThrow(
+        new RangeError('pushMidiInputPitchBend: bend14 must be in [0, 16383]'),
+      );
+      expect(() => engine.pushMidiPitchBend(DESTINATION, 0, 0, 16384)).toThrow(
+        new RangeError('pushMidiPitchBend: bend14 must be in [0, 16383]'),
+      );
+      expect(() => engine.pushMidiInputChannelPressure(0, 16, 64)).toThrow(
+        new RangeError('pushMidiInputChannelPressure: channel must be in [0, 15]'),
+      );
+      expect(() => engine.pushMidiPolyPressure(DESTINATION, 0, 0, 128, 64)).toThrow(
+        new RangeError('pushMidiPolyPressure: note must be in [0, 127]'),
+      );
     });
   });
 
   it('refuses an input-source push before the source is enabled', () => {
     withEngine((engine) => {
       engine.setBuiltinInstrument({}, DESTINATION);
-      expect(() => engine.pushMidiInputPitchBend(0, 0, CENTRE_BEND)).toThrow();
-      expect(() => engine.pushMidiInputChannelPressure(0, 0, 64)).toThrow();
-      expect(() => engine.pushMidiInputPolyPressure(0, 0, 60, 64)).toThrow();
+      const disabled = expect.objectContaining({ code: ErrorCode.InvalidState });
+      expect(() => engine.pushMidiInputPitchBend(0, 0, CENTRE_BEND)).toThrow(disabled);
+      expect(() => engine.pushMidiInputChannelPressure(0, 0, 64)).toThrow(disabled);
+      expect(() => engine.pushMidiInputPolyPressure(0, 0, 60, 64)).toThrow(disabled);
     });
   });
 });

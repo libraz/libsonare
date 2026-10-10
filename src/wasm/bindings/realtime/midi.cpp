@@ -16,6 +16,7 @@
 #include "mastering/api/insert_factory.h"
 #include "midi/articulation_mode.h"
 #include "midi/controller_profile.h"
+#include "midi/live_push_args.h"
 #include "midi/midi_fx.h"
 #include "midi/part_rig.h"
 #include "realtime_engine_wasm.h"
@@ -28,6 +29,12 @@
 #endif
 
 namespace {
+
+// Throws the live push argument refusal of midi/live_push_args.h as a RangeError
+// naming the JS function.
+void refuseLivePushArg(const char* what, const char* error) {
+  if (error != nullptr) throw WasmRangeError(std::string(what) + ": " + error);
+}
 
 void wasmMidiFxChainFromJson(const std::string& config_json, sonare::midi::MidiFxChain* chain) {
   const SonareError error =
@@ -1080,19 +1087,12 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int controller = checkedIntFromVal(controller_val, "controller");
   const int value = checkedIntFromVal(value_val, "value");
-  if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
-      controller < 0 || controller > 127 || value < 0 || value > 127) {
-    throw WasmRangeError(
-        "pushMidiInputCc: source enabled, group/channel in [0,15], controller/value in [0,127]");
-  }
-  if (!midi_input_source_.push_event(
-          sonare::midi::make_midi1_control_change(
-              static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
-              static_cast<uint8_t>(controller), static_cast<uint8_t>(value)),
-          port_time_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to enqueue MIDI input CC");
-  }
+  refuseLivePushArg("pushMidiInputCc",
+                    sonare::midi::live_push_cc_error(group, channel, controller, value));
+  pushMidiInputUmpInternal(sonare::midi::make_midi1_control_change(
+                               static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
+                               static_cast<uint8_t>(controller), static_cast<uint8_t>(value)),
+                           port_time_samples, "pushMidiInputCc");
 #else
   (void)group_val;
   (void)channel_val;
@@ -1108,12 +1108,12 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
 void RealtimeEngineWasm::pushMidiInputUmpInternal(const sonare::midi::Ump& ump,
                                                   int64_t port_time_samples, const char* what) {
   if (!midi_input_source_enabled_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   std::string(what) + ": the MIDI input source is not enabled");
   }
   if (!midi_input_source_.push_event(ump, port_time_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  std::string("failed to enqueue ") + what);
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  std::string(what) + ": the MIDI input queue is full");
   }
 }
 #endif
@@ -1125,10 +1125,9 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
   // 14-bit, so the 7-bit check every sibling here uses would refuse most of the
   // range rather than narrow it.
   const int bend14 = checkedIntFromVal(bend_val, "bend14");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || bend14 < 0 || bend14 > 16383) {
-    throw WasmRangeError("pushMidiInputPitchBend: group/channel in [0,15], bend14 in [0,16383]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiInputPitchBend",
+                    sonare::midi::live_push_pitch_bend_error(group, channel, bend14));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
                                                                static_cast<uint8_t>(channel),
                                                                static_cast<uint16_t>(bend14)),
@@ -1149,11 +1148,9 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || pressure < 0 || pressure > 127) {
-    throw WasmRangeError(
-        "pushMidiInputChannelPressure: group/channel in [0,15], pressure in [0,127]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiInputChannelPressure",
+                    sonare::midi::live_push_channel_pressure_error(group, channel, pressure));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_channel_pressure(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(pressure)),
@@ -1175,12 +1172,9 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
-      pressure < 0 || pressure > 127) {
-    throw WasmRangeError(
-        "pushMidiInputPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiInputPolyPressure",
+                    sonare::midi::live_push_poly_pressure_error(group, channel, note, pressure));
   pushMidiInputUmpInternal(sonare::midi::make_midi1_poly_pressure(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(note), static_cast<uint8_t>(pressure)),
@@ -1233,10 +1227,8 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int controller = checkedIntFromVal(controller_val, "controller");
   const int value = checkedIntFromVal(value_val, "value");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || controller < 0 ||
-      controller > 127 || value < 0 || value > 127) {
-    throw WasmRangeError("pushMidiCc: group/channel in [0,15], controller/value in [0,127]");
-  }
+  refuseLivePushArg("pushMidiCc",
+                    sonare::midi::live_push_cc_error(group, channel, controller, value));
   const uint64_t packed = static_cast<uint64_t>(value) | (static_cast<uint64_t>(controller) << 8) |
                           (static_cast<uint64_t>(channel) << 16) |
                           (static_cast<uint64_t>(group) << 24);
@@ -1285,8 +1277,7 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
     case sonare::engine::MidiUmpPushResult::kQueued:
       return;
     case sonare::engine::MidiUmpPushResult::kInvalidMessage:
-      throw WasmRangeError(
-          "pushMidiUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
+      throw WasmRangeError(std::string("pushMidiUmp: ") + sonare::midi::kLivePushUmpShapeError);
     case sonare::engine::MidiUmpPushResult::kSlotsFull:
     case sonare::engine::MidiUmpPushResult::kQueueFull:
       break;
@@ -1299,23 +1290,15 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
 void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_time_samples) {
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words, "pushMidiInputUmp");
-  if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
-    throw WasmRangeError(
-        "pushMidiInputUmp: word count must match the message type and MT 0x3 / 0x5 are refused");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!midi_input_source_enabled_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "pushMidiInputUmp: the MIDI input source is not enabled");
+  if (!sonare::engine::RealtimeEngine::is_pushable_midi_ump(words, count)) {
+    throw WasmRangeError(std::string("pushMidiInputUmp: ") + sonare::midi::kLivePushUmpShapeError);
   }
   sonare::midi::Ump ump{};
   for (size_t i = 0; i < count; ++i) ump.words[i] = words[i];
   ump.word_count = static_cast<uint8_t>(count);
   ump.group = sonare::midi::ump_group_from_word0(words[0]);
-  if (!midi_input_source_.push_event(ump, port_time_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to enqueue MIDI input UMP");
-  }
+  pushMidiInputUmpInternal(ump, port_time_samples, "pushMidiInputUmp");
 #else
   (void)port_time_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -1333,11 +1316,11 @@ struct ProgramArgs {
   int bank_lsb;
 };
 
-// Reads and validates the typed program-change arguments shared by the
-// destination and input pushes; @p what names the entry point in the refusal.
+// Reads the typed program-change arguments shared by the destination and input
+// pushes; the range rule runs at the call site, after the build check.
 ProgramArgs programArgsFromVal(const val& group_val, const val& channel_val, const val& program_val,
                                const val& bank_valid_val, const val& bank_msb_val,
-                               const val& bank_lsb_val, const char* what) {
+                               const val& bank_lsb_val) {
   ProgramArgs args{};
   args.group = checkedIntFromVal(group_val, "group");
   args.channel = checkedIntFromVal(channel_val, "channel");
@@ -1345,18 +1328,15 @@ ProgramArgs programArgsFromVal(const val& group_val, const val& channel_val, con
   args.bank_valid = optionalBool(bank_valid_val, "bankValid").value_or(false);
   args.bank_msb = bank_msb_val.isUndefined() ? 0 : checkedIntFromVal(bank_msb_val, "bankMsb");
   args.bank_lsb = bank_lsb_val.isUndefined() ? 0 : checkedIntFromVal(bank_lsb_val, "bankLsb");
-  if (args.group < 0 || args.group > 15 || args.channel < 0 || args.channel > 15 ||
-      args.program < 0 || args.program > 127 || args.bank_msb < 0 || args.bank_msb > 127 ||
-      args.bank_lsb < 0 || args.bank_lsb > 127) {
-    throw WasmRangeError(std::string(what) +
-                         ": group/channel in [0,15], program/bankMsb/bankLsb in [0,127]");
-  }
-  if (!args.bank_valid && (args.bank_msb != 0 || args.bank_lsb != 0)) {
-    throw WasmRangeError(std::string(what) +
-                         ": bank MSB and LSB must be 0 when bank-valid is false");
-  }
   return args;
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+const char* programArgError(const ProgramArgs& args) {
+  return sonare::midi::live_push_program_error(args.group, args.channel, args.program,
+                                               args.bank_valid, args.bank_msb, args.bank_lsb);
+}
+#endif
 }  // namespace
 
 // Queues one typed live MIDI 2.0 Program Change (with optional bank) to a MIDI
@@ -1369,9 +1349,10 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
                                          const val& bank_lsb_val, const val& render_frame_val) {
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
   const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
-                                              bank_msb_val, bank_lsb_val, "pushMidiProgram");
+                                              bank_msb_val, bank_lsb_val);
   const int64_t render_frame = renderFrameFromVal(render_frame_val);
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiProgram", programArgError(args));
   const sonare::midi::Ump ump = sonare::midi::make_midi2_program_change(
       static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
       static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
@@ -1382,6 +1363,7 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
   throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                 "failed to queue MIDI program command");
 #else
+  (void)args;
   (void)destination_id;
   (void)render_frame;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
@@ -1396,21 +1378,15 @@ void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& c
                                               const val& bank_msb_val, const val& bank_lsb_val,
                                               int64_t port_time_samples) {
   const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
-                                              bank_msb_val, bank_lsb_val, "pushMidiInputProgram");
+                                              bank_msb_val, bank_lsb_val);
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!midi_input_source_enabled_) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                  "pushMidiInputProgram: the MIDI input source is not enabled");
-  }
-  if (!midi_input_source_.push_event(
-          sonare::midi::make_midi2_program_change(
-              static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
-              static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
-              static_cast<uint8_t>(args.bank_lsb), args.bank_valid),
-          port_time_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
-                                  "failed to enqueue MIDI input program change");
-  }
+  refuseLivePushArg("pushMidiInputProgram", programArgError(args));
+  pushMidiInputUmpInternal(
+      sonare::midi::make_midi2_program_change(
+          static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
+          static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
+          static_cast<uint8_t>(args.bank_lsb), args.bank_valid),
+      port_time_samples, "pushMidiInputProgram");
 #else
   (void)args;
   (void)port_time_samples;
@@ -1442,10 +1418,9 @@ void RealtimeEngineWasm::pushMidiPitchBend(const val& destination_id_val, const 
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int bend14 = checkedIntFromVal(bend_val, "bend14");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || bend14 < 0 || bend14 > 16383) {
-    throw WasmRangeError("pushMidiPitchBend: group/channel in [0,15], bend14 in [0,16383]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiPitchBend",
+                    sonare::midi::live_push_pitch_bend_error(group, channel, bend14));
   queueMidiUmp(
       destination_id,
       sonare::midi::make_midi1_pitch_bend(
@@ -1471,10 +1446,9 @@ void RealtimeEngineWasm::pushMidiChannelPressure(const val& destination_id_val,
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || pressure < 0 || pressure > 127) {
-    throw WasmRangeError("pushMidiChannelPressure: group/channel in [0,15], pressure in [0,127]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiChannelPressure",
+                    sonare::midi::live_push_channel_pressure_error(group, channel, pressure));
   queueMidiUmp(destination_id,
                sonare::midi::make_midi1_channel_pressure(static_cast<uint8_t>(group),
                                                          static_cast<uint8_t>(channel),
@@ -1501,11 +1475,9 @@ void RealtimeEngineWasm::pushMidiPolyPressure(const val& destination_id_val, con
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
-      pressure < 0 || pressure > 127) {
-    throw WasmRangeError("pushMidiPolyPressure: group/channel in [0,15], note/pressure in [0,127]");
-  }
 #if defined(SONARE_WITH_ARRANGEMENT)
+  refuseLivePushArg("pushMidiPolyPressure",
+                    sonare::midi::live_push_poly_pressure_error(group, channel, note, pressure));
   queueMidiUmp(destination_id,
                sonare::midi::make_midi1_poly_pressure(
                    static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
@@ -1576,10 +1548,9 @@ void RealtimeEngineWasm::pushMidiPanic(const val& render_frame_val) {
 void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int channel, int note,
                                       int velocity, int64_t render_frame,
                                       sonare::rt::CommandType type) {
-  if (group < 0 || group > 15 || channel < 0 || channel > 15 || note < 0 || note > 127 ||
-      velocity < 0 || velocity > 127) {
-    throw WasmRangeError("pushMidiNote: group/channel in [0,15], note/velocity in [0,127]");
-  }
+  refuseLivePushArg(
+      type == sonare::rt::CommandType::kMidiNoteOnImmediate ? "pushMidiNoteOn" : "pushMidiNoteOff",
+      sonare::midi::live_push_note_error(group, channel, note, velocity));
   const uint64_t packed = static_cast<uint64_t>(velocity) | (static_cast<uint64_t>(note) << 8) |
                           (static_cast<uint64_t>(channel) << 16) |
                           (static_cast<uint64_t>(group) << 24);
@@ -1597,11 +1568,8 @@ void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int ch
 void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, int velocity,
                                             int64_t port_time_samples, bool note_on) {
 #if defined(SONARE_WITH_ARRANGEMENT)
-  if (!midi_input_source_enabled_ || group < 0 || group > 15 || channel < 0 || channel > 15 ||
-      note < 0 || note > 127 || velocity < 0 || velocity > 127) {
-    throw WasmRangeError(
-        "pushMidiInputNote: source enabled, group/channel in [0,15], note/velocity in [0,127]");
-  }
+  const char* what = note_on ? "pushMidiInputNoteOn" : "pushMidiInputNoteOff";
+  refuseLivePushArg(what, sonare::midi::live_push_note_error(group, channel, note, velocity));
   const sonare::midi::Ump ump =
       note_on ? sonare::midi::make_midi1_note_on(
                     static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
@@ -1609,10 +1577,7 @@ void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, in
               : sonare::midi::make_midi1_note_off(
                     static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                     static_cast<uint8_t>(note), static_cast<uint8_t>(velocity));
-  if (!midi_input_source_.push_event(ump, port_time_samples)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
-                                  "failed to enqueue MIDI input note");
-  }
+  pushMidiInputUmpInternal(ump, port_time_samples, what);
 #else
   (void)group;
   (void)channel;

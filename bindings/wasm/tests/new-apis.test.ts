@@ -14,6 +14,7 @@ import {
   chromaCqt,
   cqt,
   cqtToAudio,
+  ErrorCode,
   fourierTempogram,
   hybridCqt,
   init,
@@ -1035,7 +1036,9 @@ describe('v1.2 feature additions (WASM)', () => {
       engine.process([new Float32Array(128), new Float32Array(128)]);
       expect(engine.midiInputPendingCount()).toBe(0);
       engine.clearMidiInputSource();
-      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow();
+      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
 
       const state = engine.getTransportState();
       expect(state.playing).toBe(true);

@@ -75,17 +75,16 @@ describe('RealtimeEngine.pushMidiProgram', () => {
   it('refuses out-of-range arguments with a range error naming the function', () => {
     const engine = new RealtimeEngine(48000, BLOCK);
     try {
-      const calls: Array<() => void> = [
-        () => engine.pushMidiProgram(DEST, 16, 0, 0),
-        () => engine.pushMidiProgram(DEST, -1, 0, 0),
-        () => engine.pushMidiProgram(DEST, 0, 16, 0),
-        () => engine.pushMidiProgram(DEST, 0, 0, 128),
-        () => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0),
-        () => engine.pushMidiProgram(DEST, 0, 0, 0, true, 0, 128),
+      const calls: Array<[() => void, string]> = [
+        [() => engine.pushMidiProgram(DEST, 16, 0, 0), 'group must be in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, -1, 0, 0), 'group must be in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, 0, 16, 0), 'channel must be in [0, 15]'],
+        [() => engine.pushMidiProgram(DEST, 0, 0, 128), 'program must be in [0, 127]'],
+        [() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0), 'bank_msb must be in [0, 127]'],
+        [() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 0, 128), 'bank_lsb must be in [0, 127]'],
       ];
-      for (const call of calls) {
-        expect(call).toThrow(RangeError);
-        expect(call).toThrow(/pushMidiProgram/);
+      for (const [call, message] of calls) {
+        expect(call).toThrow(new RangeError(`pushMidiProgram: ${message}`));
       }
     } finally {
       engine.destroy();
@@ -111,15 +110,19 @@ describe('RealtimeEngine.pushMidiInputProgram', () => {
     const engine = new RealtimeEngine(48000, BLOCK);
     try {
       expect(errorCode(() => engine.pushMidiInputProgram(0, 0, 0, true, 8, 0))).toBe(
-        ErrorCode.InvalidParameter,
+        ErrorCode.InvalidState,
       );
       engine.setMidiInputSource(DEST);
       expect(() => engine.pushMidiInputProgram(0, 0, 5, true, 1, 2, 64)).not.toThrow();
       expect(() => engine.pushMidiInputProgram(0, 0, 5, false, 1, 0)).toThrow(
         /pushMidiInputProgram: .*bank MSB and LSB must be 0 when bank-valid is false/,
       );
-      expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(RangeError);
-      expect(() => engine.pushMidiInputProgram(0, 0, 128)).toThrow(/pushMidiInputProgram/);
+      expect(() => engine.pushMidiInputProgram(0, 16, 0)).toThrow(
+        new RangeError('pushMidiInputProgram: channel must be in [0, 15]'),
+      );
+      expect(() => engine.pushMidiInputProgram(0, 0, 128)).toThrow(
+        new RangeError('pushMidiInputProgram: program must be in [0, 127]'),
+      );
     } finally {
       engine.destroy();
     }
