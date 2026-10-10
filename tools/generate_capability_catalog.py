@@ -19,6 +19,7 @@ PARAMETER_UNITS = {
     "samples",
     "m",
     "cm",
+    "mm",
     "deg",
     "percent",
     "degC",

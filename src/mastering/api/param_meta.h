@@ -27,6 +27,7 @@ enum class Unit : std::uint8_t {
   Samples,
   Meters,
   Centimeters,
+  Millimeters,
   Degrees,
   Percent,
   DegreesCelsius,
@@ -69,6 +70,8 @@ constexpr const char* unit_name(Unit unit) {
       return "m";
     case Unit::Centimeters:
       return "cm";
+    case Unit::Millimeters:
+      return "mm";
     case Unit::Degrees:
       return "deg";
     case Unit::Percent:
@@ -196,6 +199,7 @@ inline constexpr ParamMeta kSecondsLog{Unit::Seconds, Scale::Log};
 inline constexpr ParamMeta kSamples{Unit::Samples};
 inline constexpr ParamMeta kMeters{Unit::Meters};
 inline constexpr ParamMeta kCentimeters{Unit::Centimeters};
+inline constexpr ParamMeta kMillimeters{Unit::Millimeters};
 inline constexpr ParamMeta kDegrees{Unit::Degrees};
 inline constexpr ParamMeta kPercent{Unit::Percent};
 inline constexpr ParamMeta kDegreesCelsius{Unit::DegreesCelsius};

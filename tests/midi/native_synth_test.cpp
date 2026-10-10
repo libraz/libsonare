@@ -15,6 +15,8 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <set>
@@ -35,6 +37,7 @@
 #include "midi/synth/oscillator.h"
 #include "midi/synth/patch_tuning.h"
 #include "midi/synth/sf2_player.h"
+#include "midi/synth/synth_presets.h"
 #include "midi/ump.h"
 #include "support/alloc_guard.h"
 #include "support/audio_fixtures.h"
@@ -1587,6 +1590,367 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
 }
 
 #endif  // SONARE_TUNING
+
+namespace {
+
+using sonare::midi::synth::apply_engine_params;
+using sonare::midi::synth::engine_param_descriptors;
+using sonare::midi::synth::EngineParam;
+using sonare::midi::synth::EngineParamDescriptor;
+using EngineUnit = sonare::mastering::api::detail::Unit;
+
+// A default patch on each engine mode, in ordinal order.
+std::vector<NativeSynthPatch> one_patch_per_engine_mode() {
+  std::vector<NativeSynthPatch> out;
+  for (int m = 0; m <= sonare::midi::synth::kSynthEngineModeMax; ++m) {
+    NativeSynthPatch p;
+    p.mode = static_cast<SynthEngineMode>(m);
+    out.push_back(sonare::midi::synth::clamp_synth_patch(p));
+  }
+  return out;
+}
+
+// The message's number spelling: whole numbers exactly, the rest in %g.
+std::string printed(double value) {
+  char buffer[32];
+  std::snprintf(buffer, sizeof(buffer), value == std::floor(value) ? "%.0f" : "%g", value);
+  return buffer;
+}
+
+// The bytes of @p patch, padding included, for a bit-identity comparison.
+std::vector<unsigned char> patch_bytes(const NativeSynthPatch& patch) {
+  std::vector<unsigned char> bytes(sizeof(NativeSynthPatch));
+  std::memcpy(bytes.data(), &patch, sizeof(NativeSynthPatch));
+  return bytes;
+}
+
+const EngineParamDescriptor* descriptor_named(const std::vector<EngineParamDescriptor>& ds,
+                                              const std::string& key) {
+  for (const EngineParamDescriptor& d : ds) {
+    if (d.key == key) return &d;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+TEST_CASE("engine params reach every engine-section field and read back through the walker",
+          "[midi][synth]") {
+  for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
+    INFO("engine mode " << static_cast<int>(base.mode));
+    const std::vector<EngineParamDescriptor> before = engine_param_descriptors(base);
+    if (base.mode == SynthEngineMode::kSubtractive || base.mode == SynthEngineMode::kSample) {
+      REQUIRE(before.empty());
+      continue;
+    }
+    REQUIRE_FALSE(before.empty());
+
+    // A distinct in-bound value per field, different from the field's current one,
+    // so a key landing on the wrong member reads back wrong.
+    std::vector<double> wanted;
+    for (size_t i = 0; i < before.size(); ++i) {
+      const EngineParamDescriptor& d = before[i];
+      double v = 0.0;
+      if (d.boolean) {
+        v = d.value == 0.0f ? 1.0 : 0.0;
+      } else if (d.integer) {
+        v = !d.bounded || d.value + 1.0f <= d.hi ? d.value + 1.0 : d.value - 1.0;
+      } else if (d.bounded) {
+        double t = 0.1 + 0.8 * std::fmod(0.6180339887 * static_cast<double>(i + 1), 1.0);
+        v = d.lo + (d.hi - d.lo) * t;
+        if (static_cast<float>(v) == d.value)
+          v = d.lo + (d.hi - d.lo) * (t < 0.5 ? t + 0.25 : t - 0.25);
+      } else {
+        v = d.value + 0.25 + 0.001 * static_cast<double>(i);
+      }
+      wanted.push_back(v);
+    }
+    std::vector<EngineParam> params;
+    for (size_t i = 0; i < before.size(); ++i) params.push_back({before[i].key.c_str(), wanted[i]});
+
+    NativeSynthPatch patch = base;
+    std::string error;
+    const bool applied = apply_engine_params(patch, params.data(), params.size(), &error);
+    INFO(error);
+    REQUIRE(applied);
+    REQUIRE(error.empty());
+
+    const std::vector<EngineParamDescriptor> after = engine_param_descriptors(patch);
+    // In bounds means the clamp a render applies leaves the value where it was set.
+    const std::vector<EngineParamDescriptor> clamped =
+        engine_param_descriptors(sonare::midi::synth::clamp_synth_patch(patch));
+    REQUIRE(after.size() == before.size());
+    REQUIRE(clamped.size() == before.size());
+    for (size_t i = 0; i < before.size(); ++i) {
+      INFO(before[i].key << " = " << wanted[i]);
+      REQUIRE(after[i].key == before[i].key);
+      REQUIRE(after[i].value == static_cast<float>(wanted[i]));
+      REQUIRE(after[i].value != before[i].value);
+      REQUIRE(clamped[i].value == after[i].value);
+    }
+  }
+}
+
+TEST_CASE("engine param keys drop the section and camelCase each segment", "[midi][synth]") {
+  for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
+    INFO("engine mode " << static_cast<int>(base.mode));
+    std::set<std::string> keys;
+    const std::vector<EngineParamDescriptor> ds = engine_param_descriptors(base);
+    for (const EngineParamDescriptor& d : ds) {
+      INFO(d.key);
+      REQUIRE_FALSE(d.key.empty());
+      REQUIRE(d.key.find('_') == std::string::npos);
+      REQUIRE(keys.insert(d.key).second);
+    }
+  }
+
+  const auto keys_of = [](SynthEngineMode mode) {
+    NativeSynthPatch p;
+    p.mode = mode;
+    std::set<std::string> keys;
+    for (const EngineParamDescriptor& d : engine_param_descriptors(p)) keys.insert(d.key);
+    return keys;
+  };
+  // Karplus-Strong's section is `ks`, not the mode's name, and is stripped all the same.
+  const std::set<std::string> ks = keys_of(SynthEngineMode::kKarplusStrong);
+  REQUIRE(ks.count("decayS") == 1);
+  REQUIRE(ks.count("hfDecayS") == 1);
+  for (const std::string& key : ks) REQUIRE(key.rfind("ks", 0) != 0);
+  REQUIRE(keys_of(SynthEngineMode::kBowedString).count("bowForce") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kPipeOrgan).count("ranks2.level") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kFm).count("ops1.level") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kFm).count("ops0.env.attackMs") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kHarpsichord).count("pluck4") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kHarpsichord).count("eightA") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kPercussion).count("shellFreqHz3") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kPercussion).count("shellT60S1") == 1);
+  REQUIRE(keys_of(SynthEngineMode::kAdditive).count("drawbarsB3") == 1);
+
+  // Each key lands on the member its path names.
+  struct Probe {
+    SynthEngineMode mode;
+    const char* key;
+    double value;
+    float (*member)(const NativeSynthPatch&);
+  };
+  static const Probe kProbes[] = {
+      {SynthEngineMode::kBowedString, "bowForce", 0.33,
+       [](const NativeSynthPatch& p) { return p.bowed_string.bow_force; }},
+      {SynthEngineMode::kKarplusStrong, "decayS", 7.5,
+       [](const NativeSynthPatch& p) { return p.ks.decay_s; }},
+      {SynthEngineMode::kPipeOrgan, "ranks2.level", 0.41,
+       [](const NativeSynthPatch& p) { return p.pipe_organ.ranks[2].level; }},
+      {SynthEngineMode::kFm, "ops1.env.attackMs", 37.0,
+       [](const NativeSynthPatch& p) { return p.fm.ops[1].env.attack_ms; }},
+      {SynthEngineMode::kHarpsichord, "pluck4", 0.21,
+       [](const NativeSynthPatch& p) { return p.harpsichord.pluck_4; }},
+      {SynthEngineMode::kPercussion, "shellFreqHz3", 432.0,
+       [](const NativeSynthPatch& p) { return p.percussion.shell_freq_hz[3]; }},
+      {SynthEngineMode::kAdditive, "drawbarsB3", 5.0,
+       [](const NativeSynthPatch& p) { return p.additive.drawbars_b[3]; }},
+  };
+  for (const Probe& probe : kProbes) {
+    INFO(probe.key);
+    NativeSynthPatch p;
+    p.mode = probe.mode;
+    const EngineParam param{probe.key, probe.value};
+    std::string error;
+    REQUIRE(apply_engine_params(p, &param, 1, &error));
+    REQUIRE(probe.member(p) == static_cast<float>(probe.value));
+  }
+}
+
+TEST_CASE("engine params refuse what they cannot set and leave the patch untouched",
+          "[midi][synth]") {
+  NativeSynthPatch piano;
+  piano.mode = SynthEngineMode::kPiano;
+  piano = sonare::midi::synth::clamp_synth_patch(piano);
+  const std::vector<EngineParamDescriptor> ds = engine_param_descriptors(piano);
+  const EngineParamDescriptor* brightness = descriptor_named(ds, "brightness");
+  const EngineParamDescriptor* strings = descriptor_named(ds, "strings");
+  REQUIRE(brightness != nullptr);
+  REQUIRE(brightness->bounded);
+  REQUIRE(strings != nullptr);
+  REQUIRE(strings->integer);
+  REQUIRE(strings->bounded);
+  const std::string brightness_range =
+      " [" + printed(brightness->lo) + ", " + printed(brightness->hi) + "]";
+  const std::string strings_range = " [" + printed(strings->lo) + ", " + printed(strings->hi) + "]";
+
+  const auto refused = [](NativeSynthPatch patch, std::vector<EngineParam> params,
+                          const std::string& message) {
+    INFO(message);
+    const std::vector<unsigned char> before = patch_bytes(patch);
+    std::string error;
+    REQUIRE_FALSE(apply_engine_params(patch, params.data(), params.size(), &error));
+    REQUIRE(error == message);
+    REQUIRE(patch_bytes(patch) == before);
+  };
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+
+  refused(piano, {{"notAField", 0.5}}, "engine param 'notAField': not a field of the piano engine");
+  // Another engine's field and a common-section field are both outside the section.
+  refused(piano, {{"bowForce", 0.5}}, "engine param 'bowForce': not a field of the piano engine");
+  refused(piano, {{"cutoffHz", 1000.0}},
+          "engine param 'cutoffHz': not a field of the piano engine");
+  // The tuning path spelling is not a public key: the mapping runs forward only.
+  refused(piano, {{"piano.brightness", 0.5}},
+          "engine param 'piano.brightness': not a field of the piano engine");
+  refused(piano, {{"brightness", nan}},
+          "engine param 'brightness': not a finite number" + brightness_range);
+  refused(piano, {{"brightness", inf}},
+          "engine param 'brightness': not a finite number" + brightness_range);
+  refused(piano, {{"brightness", brightness->hi + 0.5}},
+          "engine param 'brightness': out of range" + brightness_range);
+  refused(piano, {{"brightness", brightness->lo - 0.5}},
+          "engine param 'brightness': out of range" + brightness_range);
+  refused(piano, {{"strings", 2.5}}, "engine param 'strings': not an integer" + strings_range);
+  refused(piano, {{"strings", strings->hi + 1.0}},
+          "engine param 'strings': out of range" + strings_range);
+  refused(piano, {{"brightness", 0.5}, {"brightness", 0.6}},
+          "engine param 'brightness': given more than once");
+  refused(piano, {{nullptr, 0.5}}, "engine param '': key is null");
+  // All or nothing: a valid field before a refused one is not written either.
+  refused(piano, {{"brightness", 0.5}, {"nope", 1.0}},
+          "engine param 'nope': not a field of the piano engine");
+  refused(piano, {{"brightness", 0.5}, {"strings", 0.5}},
+          "engine param 'strings': not an integer" + strings_range);
+
+  NativeSynthPatch harpsichord;
+  harpsichord.mode = SynthEngineMode::kHarpsichord;
+  refused(harpsichord, {{"eightA", 2.0}}, "engine param 'eightA': out of range [0, 1]");
+  refused(harpsichord, {{"eightA", 0.5}}, "engine param 'eightA': not an integer [0, 1]");
+
+  // An unbounded field still refuses what a float cannot hold, and an integer
+  // what lies past its range, however far.
+  NativeSynthPatch ks;
+  ks.mode = SynthEngineMode::kKarplusStrong;
+  const std::vector<EngineParamDescriptor> ks_descriptors = engine_param_descriptors(ks);
+  const EngineParamDescriptor* coupling = descriptor_named(ks_descriptors, "bodyCoupling");
+  REQUIRE(coupling != nullptr);
+  REQUIRE_FALSE(coupling->bounded);
+  refused(ks, {{"bodyCoupling", 1e300}},
+          "engine param 'bodyCoupling': outside the 32-bit float range");
+  NativeSynthPatch vocal;
+  vocal.mode = SynthEngineMode::kVocal;
+  const std::vector<EngineParamDescriptor> vocal_descriptors = engine_param_descriptors(vocal);
+  const EngineParamDescriptor* vowel = descriptor_named(vocal_descriptors, "vowel");
+  REQUIRE(vowel != nullptr);
+  REQUIRE(vowel->integer);
+  REQUIRE(vowel->bounded);
+  refused(vocal, {{"vowel", 1e12}},
+          "engine param 'vowel': out of range [" + printed(vowel->lo) + ", " + printed(vowel->hi) +
+              "]");
+
+  NativeSynthPatch subtractive;
+  refused(subtractive, {{"brightness", 0.5}},
+          "engine param 'brightness': not a field of the subtractive engine");
+
+  // The control: an accepted value is written, with no message.
+  NativeSynthPatch accepted = piano;
+  const EngineParam ok{"brightness", (brightness->lo + brightness->hi) / 2.0};
+  std::string error;
+  REQUIRE(apply_engine_params(accepted, &ok, 1, &error));
+  REQUIRE(error.empty());
+  REQUIRE(accepted.piano.brightness == static_cast<float>(ok.value));
+}
+
+TEST_CASE("engine params with none given leave every preset bit-identical", "[midi][synth]") {
+  for (size_t i = 0; i < sonare::midi::synth::synth_preset_count(); ++i) {
+    const auto* preset = sonare::midi::synth::synth_preset_at(i);
+    INFO(preset->name);
+    NativeSynthPatch patch = preset->config.patch;
+    const std::vector<unsigned char> before = patch_bytes(patch);
+    std::string error;
+    REQUIRE(apply_engine_params(patch, nullptr, 0, &error));
+    REQUIRE(apply_engine_params(patch, nullptr, 0, nullptr));
+    REQUIRE(error.empty());
+    REQUIRE(patch_bytes(patch) == before);
+  }
+}
+
+TEST_CASE("every engine-section field carries a unit its member name agrees with",
+          "[midi][synth]") {
+  using sonare::midi::synth::patch_tuning_detail::engine_field_sites;
+  const auto ends_with = [](const std::string& s, const char* suffix) {
+    const size_t n = std::strlen(suffix);
+    return s.size() >= n && s.compare(s.size() - n, n, suffix) == 0;
+  };
+  struct SuffixUnit {
+    const char* suffix;
+    EngineUnit unit;
+  };
+  static const SuffixUnit kSuffixes[] = {
+      {"_hz", EngineUnit::Hz}, {"_ms", EngineUnit::Ms},       {"_s", EngineUnit::Seconds},
+      {"_db", EngineUnit::Db}, {"_cents", EngineUnit::Cents}, {"_mm", EngineUnit::Millimeters},
+  };
+  size_t suffixed = 0;
+  for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
+    const auto sites = engine_field_sites(base);
+    const auto ds = engine_param_descriptors(base);
+    REQUIRE(sites.size() == ds.size());
+    for (size_t i = 0; i < sites.size(); ++i) {
+      const auto& site = sites[i];
+      INFO(site.path << " (member path " << site.member_path << ")");
+      REQUIRE(site.has_unit);
+      REQUIRE(sonare::mastering::api::detail::unit_name(ds[i].unit) != nullptr);
+      // Only a site the walker marked has an index removed.
+      REQUIRE(site.indexed == (site.member_path != site.path));
+      const std::string member = site.member_path.substr(site.member_path.rfind('.') + 1);
+      for (const SuffixUnit& rule : kSuffixes) {
+        if (ends_with(member, rule.suffix)) {
+          ++suffixed;
+          REQUIRE(ds[i].unit == rule.unit);
+          break;
+        }
+      }
+    }
+  }
+  REQUIRE(suffixed > 0);
+
+  // A member whose own name ends in a digit keeps it; an indexed one loses only the index.
+  NativeSynthPatch harpsichord;
+  harpsichord.mode = SynthEngineMode::kHarpsichord;
+  NativeSynthPatch percussion;
+  percussion.mode = SynthEngineMode::kPercussion;
+  const auto site_at = [](const NativeSynthPatch& p, const char* path) {
+    for (const auto& site : engine_field_sites(p)) {
+      if (site.path == path) return site;
+    }
+    FAIL("no site " << path);
+    return engine_field_sites(p).front();
+  };
+  const auto pluck = site_at(harpsichord, "harpsichord.pluck_4");
+  REQUIRE_FALSE(pluck.indexed);
+  REQUIRE(pluck.member_path == "harpsichord.pluck_4");
+  const auto shell = site_at(percussion, "percussion.shell_freq_hz3");
+  REQUIRE(shell.indexed);
+  REQUIRE(shell.member_path == "percussion.shell_freq_hz");
+  const auto t60 = site_at(percussion, "percussion.shell_t60_s2");
+  REQUIRE(t60.member_path == "percussion.shell_t60_s");
+  const std::vector<EngineParamDescriptor> harpsichord_descriptors =
+      engine_param_descriptors(harpsichord);
+  const EngineParamDescriptor* rear = descriptor_named(harpsichord_descriptors, "rearSegmentMm");
+  REQUIRE(rear != nullptr);
+  REQUIRE(std::string(sonare::mastering::api::detail::unit_name(rear->unit)) == "mm");
+}
+
+TEST_CASE("every engine with a section has a base preset of that engine", "[midi][synth]") {
+  using sonare::midi::synth::base_preset_name;
+  using sonare::midi::synth::find_synth_preset;
+  for (const NativeSynthPatch& p : one_patch_per_engine_mode()) {
+    INFO("engine mode " << static_cast<int>(p.mode));
+    const bool has_section = !engine_param_descriptors(p).empty();
+    const char* name = base_preset_name(p.mode);
+    REQUIRE((name != nullptr) == has_section);
+    if (name == nullptr) continue;
+    INFO(name);
+    const auto* preset = find_synth_preset(name);
+    REQUIRE(preset != nullptr);
+    REQUIRE(preset->config.patch.mode == p.mode);
+  }
+}
 
 TEST_CASE("gm_fallback_max_tail_samples bounds every fallback patch table", "[midi][synth]") {
   const int64_t bound =

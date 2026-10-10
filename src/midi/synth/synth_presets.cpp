@@ -554,4 +554,43 @@ const SynthPreset* find_synth_preset(const char* name) noexcept {
   return nullptr;
 }
 
+const char* base_preset_name(SynthEngineMode mode) noexcept {
+  switch (mode) {
+    case SynthEngineMode::kFm:
+      return "e-piano";
+    case SynthEngineMode::kModal:
+      return "bell";
+    case SynthEngineMode::kPercussion:
+      return "drum-kit";
+    case SynthEngineMode::kKarplusStrong:
+      return "classical-guitar";
+    case SynthEngineMode::kAdditive:
+      return "organ";
+    case SynthEngineMode::kPiano:
+      return "acoustic-piano";
+    case SynthEngineMode::kPipeOrgan:
+      return "church-organ";
+    case SynthEngineMode::kBowedString:
+      return "violin";
+    case SynthEngineMode::kReed:
+      return "clarinet";
+    case SynthEngineMode::kBrass:
+      return "brass";
+    case SynthEngineMode::kFlute:
+      return "concert-flute";
+    case SynthEngineMode::kPluckedString:
+      return "pluck";
+    case SynthEngineMode::kVocal:
+      return "choir-aah";
+    case SynthEngineMode::kFreeReed:
+      return "accordion";
+    case SynthEngineMode::kHarpsichord:
+      return "harpsichord";
+    case SynthEngineMode::kSubtractive:
+    case SynthEngineMode::kSample:
+      return nullptr;
+  }
+  return nullptr;
+}
+
 }  // namespace sonare::midi::synth

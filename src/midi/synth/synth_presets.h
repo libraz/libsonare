@@ -36,4 +36,9 @@ const SynthPreset* synth_preset_at(size_t index) noexcept;
 /// catalog name ("saw-lead") — hosts strip any "va:" routing prefix first.
 const SynthPreset* find_synth_preset(const char* name) noexcept;
 
+/// The catalog preset whose engine section stands for @p mode when a patch
+/// selects that engine without supplying its section; nullptr for an engine
+/// without a section of its own (subtractive, sample).
+const char* base_preset_name(SynthEngineMode mode) noexcept;
+
 }  // namespace sonare::midi::synth
