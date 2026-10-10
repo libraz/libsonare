@@ -33,6 +33,7 @@ from ._project_synth import (
     _note_tracking_value,
 )
 from ._runtime import (
+    ErrorCode,
     SonareValueError,
     _check,
     _get_lib,
@@ -52,6 +53,53 @@ def _ump_words_to_c(words: Iterable[int]) -> tuple[ctypes.Array[ctypes.c_uint32]
     """Narrow ``words`` onto a ``uint32_t`` array; the C side validates the count."""
     values = [_to_c_uint32(word, f"words[{i}]").value for i, word in enumerate(words)]
     return (ctypes.c_uint32 * len(values))(*values), len(values)
+
+
+# The live push argument rule of src/midi/live_push_args.h: same ranges, order and wording.
+_MAX_NIBBLE = 15
+_MAX_7 = 127
+_MAX_14 = 16383
+_UMP_SHAPE_ERROR = "words do not form a pushable UMP message"
+
+
+def _refuse_live_push_args(method: str, *args: tuple[str, int, int]) -> None:
+    """Raise :class:`SonareValueError` naming the first ``(name, value, max)`` out of range."""
+    for name, value, maximum in args:
+        if not 0 <= value <= maximum:
+            raise SonareValueError(f"{method}: {name} must be in [0, {maximum}]")
+
+
+def _refuse_live_program_args(
+    method: str,
+    group: ctypes.c_uint8,
+    channel: ctypes.c_uint8,
+    program: ctypes.c_uint8,
+    bank_valid: bool,
+    bank_msb: ctypes.c_uint8,
+    bank_lsb: ctypes.c_uint8,
+) -> None:
+    """Apply the program-change half of the live push argument rule."""
+    _refuse_live_push_args(
+        method,
+        ("group", group.value, _MAX_NIBBLE),
+        ("channel", channel.value, _MAX_NIBBLE),
+        ("program", program.value, _MAX_7),
+        ("bank_msb", bank_msb.value, _MAX_7),
+        ("bank_lsb", bank_lsb.value, _MAX_7),
+    )
+    if not bank_valid and (bank_msb.value != 0 or bank_lsb.value != 0):
+        raise SonareValueError(f"{method}: bank MSB and LSB must be 0 when bank-valid is false")
+
+
+def _check_ump_push(method: str, rc: int) -> None:
+    """Raise a refused UMP shape as an argument error, every other code through ``_check``.
+
+    The shape rule is the engine's own, so the C call is its single judge; a live UMP push
+    returns ``INVALID_PARAMETER`` for nothing else once the handle is valid.
+    """
+    if rc == int(ErrorCode.INVALID_PARAMETER):
+        raise SonareValueError(f"{method}: {_UMP_SHAPE_ERROR}")
+    _check(rc)
 
 
 class _EngineMidiMixin:
@@ -79,15 +127,29 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_cc"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_controller = _to_c_uint8(controller, "controller")
+        c_value = _to_c_uint8(value, "value")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_cc",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("controller", c_controller.value, _MAX_7),
+            ("value", c_value.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_cc(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(controller, "controller"),
-                _to_c_uint8(value, "value"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_controller,
+                c_value,
+                c_render_frame,
             )
         )
 
@@ -136,22 +198,26 @@ class _EngineMidiMixin:
         must match the word count the message type of ``words[0]`` fixes. A MIDI
         2.0 channel-voice message (MT 0x4) travels at full width. Data messages
         (MT 0x3 / 0x5) are refused: use :meth:`push_midi_sysex`. Raises
-        :class:`SonareError` for a malformed or refused message, or when the
-        engine queue is full. ``render_frame`` is the render-frame time to
-        apply (``None`` for immediate).
+        :class:`SonareValueError` for a malformed or refused message and
+        :class:`SonareError` with code ``OUT_OF_MEMORY`` when the engine queue
+        is full. ``render_frame`` is the render-frame time to apply (``None``
+        for immediate).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_ump"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
         c_words, count = _ump_words_to_c(words)
-        _check(
+        _check_ump_push(
+            "push_midi_ump",
             lib.sonare_engine_push_midi_ump(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
+                handle,
+                c_destination,
                 c_words,
                 _to_c_size_t(count, "word_count"),
                 _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
-            )
+            ),
         )
 
     def push_midi_program(
@@ -172,8 +238,8 @@ class _EngineMidiMixin:
         and ``bank_lsb`` are 0..127; ``channel`` and ``group`` 0..15. A non-zero
         bank with ``bank_valid`` false is refused. ``render_frame`` is the
         render-frame time to apply (``None`` for immediate). Raises
-        :class:`SonareError` with code ``INVALID_PARAMETER`` for a refused
-        argument and ``OUT_OF_MEMORY`` if the queue is full.
+        :class:`SonareValueError` naming a refused argument and
+        :class:`SonareError` with code ``OUT_OF_MEMORY`` if the queue is full.
 
         A receiver that does not select programs (the built-in synth,
         a native synth without GM programs, a part with RX PROGRAM CHANGE off,
@@ -183,17 +249,28 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_program"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_program = _to_c_uint8(program, "program")
+        c_bank_msb = _to_c_uint8(bank_msb, "bank_msb")
+        c_bank_lsb = _to_c_uint8(bank_lsb, "bank_lsb")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_program_args(
+            "push_midi_program", c_group, c_channel, c_program, bank_valid, c_bank_msb, c_bank_lsb
+        )
         _check(
             lib.sonare_engine_push_midi_program(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(program, "program"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_program,
                 _to_c_int(1 if bank_valid else 0, "bank_valid"),
-                _to_c_uint8(bank_msb, "bank_msb"),
-                _to_c_uint8(bank_lsb, "bank_lsb"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                c_bank_msb,
+                c_bank_lsb,
+                c_render_frame,
             )
         )
 
@@ -863,14 +940,27 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_note_on"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_velocity = _to_c_uint8(velocity, "velocity")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_note_on",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("velocity", c_velocity.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_input_note_on(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_note,
+                c_velocity,
+                c_port_time,
             )
         )
 
@@ -886,14 +976,27 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_note_off"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_velocity = _to_c_uint8(velocity, "velocity")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_note_off",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("velocity", c_velocity.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_input_note_off(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_note,
+                c_velocity,
+                c_port_time,
             )
         )
 
@@ -909,14 +1012,27 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_cc"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_controller = _to_c_uint8(controller, "controller")
+        c_value = _to_c_uint8(value, "value")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_cc",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("controller", c_controller.value, _MAX_7),
+            ("value", c_value.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_input_cc(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(controller, "controller"),
-                _to_c_uint8(value, "value"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_controller,
+                c_value,
+                c_port_time,
             )
         )
 
@@ -931,18 +1047,30 @@ class _EngineMidiMixin:
 
         ``bend14`` is the unsigned 14-bit bend with centre ``8192`` (0..16383);
         a value above the range is refused rather than clamped. Requires
-        :meth:`set_midi_input_source`; without it the call is refused.
+        :meth:`set_midi_input_source`; without it the call raises
+        :class:`SonareError` with code ``INVALID_STATE``.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_pitch_bend"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_bend14 = _to_c_uint16(bend14, "bend14")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_pitch_bend",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("bend14", c_bend14.value, _MAX_14),
+        )
         _check(
             lib.sonare_engine_push_midi_input_pitch_bend(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint16(bend14, "bend14"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_bend14,
+                c_port_time,
             )
         )
 
@@ -956,18 +1084,29 @@ class _EngineMidiMixin:
         """Queue a channel pressure into the engine-owned live MIDI input source.
 
         ``pressure`` is 7-bit (0..127). Requires :meth:`set_midi_input_source`;
-        without it the call is refused.
+        without it the call raises :class:`SonareError` with code ``INVALID_STATE``.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_channel_pressure"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_pressure = _to_c_uint8(pressure, "pressure")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_channel_pressure",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("pressure", c_pressure.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_input_channel_pressure(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_pressure,
+                c_port_time,
             )
         )
 
@@ -983,19 +1122,32 @@ class _EngineMidiMixin:
 
         ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
         (both 0..127). Requires :meth:`set_midi_input_source`; without it the
-        call is refused.
+        call raises :class:`SonareError` with code ``INVALID_STATE``.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_poly_pressure"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_pressure = _to_c_uint8(pressure, "pressure")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_push_args(
+            "push_midi_input_poly_pressure",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("pressure", c_pressure.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_input_poly_pressure(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                handle,
+                c_group,
+                c_channel,
+                c_note,
+                c_pressure,
+                c_port_time,
             )
         )
 
@@ -1003,19 +1155,22 @@ class _EngineMidiMixin:
         """Queue a raw UMP message into the live MIDI input source.
 
         ``words`` follows the rules of :meth:`push_midi_ump`. Requires
-        :meth:`set_midi_input_source`; without it the call is refused.
+        :meth:`set_midi_input_source`; without it the call raises
+        :class:`SonareError` with code ``INVALID_STATE``.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_ump"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
         c_words, count = _ump_words_to_c(words)
-        _check(
+        _check_ump_push(
+            "push_midi_input_ump",
             lib.sonare_engine_push_midi_input_ump(
-                self._require_handle(),
+                handle,
                 c_words,
                 _to_c_size_t(count, "word_count"),
                 _to_c_int64(port_time_samples, "port_time_samples"),
-            )
+            ),
         )
 
     def push_midi_input_program(
@@ -1031,7 +1186,8 @@ class _EngineMidiMixin:
         """Queue a MIDI 2.0 program change into the live MIDI input source.
 
         Arguments follow :meth:`push_midi_program`. Requires
-        :meth:`set_midi_input_source`; without it the call is refused.
+        :meth:`set_midi_input_source`; without it the call raises
+        :class:`SonareError` with code ``INVALID_STATE``.
 
         A receiver that does not select programs (the built-in synth,
         a native synth without GM programs, a part with RX PROGRAM CHANGE off,
@@ -1041,16 +1197,32 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_program"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_program = _to_c_uint8(program, "program")
+        c_bank_msb = _to_c_uint8(bank_msb, "bank_msb")
+        c_bank_lsb = _to_c_uint8(bank_lsb, "bank_lsb")
+        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        _refuse_live_program_args(
+            "push_midi_input_program",
+            c_group,
+            c_channel,
+            c_program,
+            bank_valid,
+            c_bank_msb,
+            c_bank_lsb,
+        )
         _check(
             lib.sonare_engine_push_midi_input_program(
-                self._require_handle(),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(program, "program"),
+                handle,
+                c_group,
+                c_channel,
+                c_program,
                 _to_c_int(1 if bank_valid else 0, "bank_valid"),
-                _to_c_uint8(bank_msb, "bank_msb"),
-                _to_c_uint8(bank_lsb, "bank_lsb"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                c_bank_msb,
+                c_bank_lsb,
+                c_port_time,
             )
         )
 
@@ -1070,15 +1242,29 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_note_on"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_velocity = _to_c_uint8(velocity, "velocity")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_note_on",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("velocity", c_velocity.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_note_on(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_note,
+                c_velocity,
+                c_render_frame,
             )
         )
 
@@ -1098,15 +1284,29 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_note_off"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_velocity = _to_c_uint8(velocity, "velocity")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_note_off",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("velocity", c_velocity.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_note_off(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(velocity, "velocity"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_note,
+                c_velocity,
+                c_render_frame,
             )
         )
 
@@ -1128,14 +1328,26 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_pitch_bend"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_bend14 = _to_c_uint16(bend14, "bend14")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_pitch_bend",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("bend14", c_bend14.value, _MAX_14),
+        )
         _check(
             lib.sonare_engine_push_midi_pitch_bend(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint16(bend14, "bend14"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_bend14,
+                c_render_frame,
             )
         )
 
@@ -1155,14 +1367,26 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_channel_pressure"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_pressure = _to_c_uint8(pressure, "pressure")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_channel_pressure",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("pressure", c_pressure.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_channel_pressure(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_pressure,
+                c_render_frame,
             )
         )
 
@@ -1184,14 +1408,28 @@ class _EngineMidiMixin:
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_poly_pressure"):
             raise _not_supported("libsonare was built without live-MIDI support")
+        handle = self._require_handle()
+        c_destination = _to_c_uint32(destination_id, "destination_id")
+        c_group = _to_c_uint8(group, "group")
+        c_channel = _to_c_uint8(channel, "channel")
+        c_note = _to_c_uint8(note, "note")
+        c_pressure = _to_c_uint8(pressure, "pressure")
+        c_render_frame = _to_c_int64(_resolve_render_frame(render_frame), "render_frame")
+        _refuse_live_push_args(
+            "push_midi_poly_pressure",
+            ("group", c_group.value, _MAX_NIBBLE),
+            ("channel", c_channel.value, _MAX_NIBBLE),
+            ("note", c_note.value, _MAX_7),
+            ("pressure", c_pressure.value, _MAX_7),
+        )
         _check(
             lib.sonare_engine_push_midi_poly_pressure(
-                self._require_handle(),
-                _to_c_uint32(destination_id, "destination_id"),
-                _to_c_uint8(group, "group"),
-                _to_c_uint8(channel, "channel"),
-                _to_c_uint8(note, "note"),
-                _to_c_uint8(pressure, "pressure"),
-                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+                handle,
+                c_destination,
+                c_group,
+                c_channel,
+                c_note,
+                c_pressure,
+                c_render_frame,
             )
         )

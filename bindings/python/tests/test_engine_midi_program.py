@@ -76,12 +76,11 @@ def test_bank_without_bank_valid_is_refused(bank_msb: int, bank_lsb: int) -> Non
     with RealtimeEngine(48000.0, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         engine.set_midi_input_source(DESTINATION)
-        with pytest.raises(SonareError) as push:
+        bank_rule = "bank MSB and LSB must be 0 when bank-valid is false"
+        with pytest.raises(SonareValueError, match=f"push_midi_program: {bank_rule}"):
             engine.push_midi_program(DESTINATION, 0, 0, 0, False, bank_msb, bank_lsb)
-        assert push.value.code == int(ErrorCode.INVALID_PARAMETER)
-        with pytest.raises(SonareError) as live:
+        with pytest.raises(SonareValueError, match=f"push_midi_input_program: {bank_rule}"):
             engine.push_midi_input_program(0, 0, 0, False, bank_msb, bank_lsb)
-        assert live.value.code == int(ErrorCode.INVALID_PARAMETER)
         assert engine.midi_input_pending_count() == 0
     with pytest.raises(SonareError) as builder:
         Project.midi2_program(0.0, 0, 0, 0, False, bank_msb, bank_lsb)
@@ -108,14 +107,13 @@ def test_out_of_range_is_refused_like_push_midi_cc(kwargs) -> None:
     with RealtimeEngine(48000.0, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
         engine.set_midi_input_source(DESTINATION)
-        with pytest.raises(SonareError) as push:
+        refused = next(name for name in kwargs if name != "bank_valid")
+        with pytest.raises(SonareValueError, match=f"push_midi_program: {refused} must be in"):
             engine.push_midi_program(DESTINATION, **args)
-        assert push.value.code == int(ErrorCode.INVALID_PARAMETER)
-        with pytest.raises(SonareError) as live:
+        with pytest.raises(SonareValueError, match=f"push_midi_input_program: {refused} must be"):
             engine.push_midi_input_program(**args)
-        assert live.value.code == int(ErrorCode.INVALID_PARAMETER)
-        # The sibling shape: the same out-of-range group is a C refusal for a CC too.
-        with pytest.raises(SonareError):
+        # The sibling shape: the same out-of-range group is refused for a CC too.
+        with pytest.raises(SonareValueError, match="push_midi_cc: group must be in"):
             engine.push_midi_cc(DESTINATION, 16, 0, 1, 0)
 
 
@@ -131,5 +129,6 @@ def test_values_beyond_uint8_are_narrowing_errors() -> None:
 def test_input_program_requires_the_input_source() -> None:
     with RealtimeEngine(48000.0, BLOCK) as engine:
         engine.set_sf2_instrument(destination_id=DESTINATION)
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareError) as refused:
             engine.push_midi_input_program(0, 0, 0)
+        assert refused.value.code == int(ErrorCode.INVALID_STATE)

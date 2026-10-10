@@ -9,6 +9,7 @@ from libsonare import (
     BuiltinSynthConfig,
     EngineMidiClipSchedule,
     EngineMidiEvent,
+    ErrorCode,
     ExternalMidiEvent,
     MidiCcBinding,
     RealtimeEngine,
@@ -67,8 +68,9 @@ def test_engine_live_midi_input_source_queue() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         # The input family is refused until the input source is enabled.
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareError) as disabled:
             engine.push_midi_input_pitch_bend(0, 0, 16383, 0)
+        assert disabled.value.code == int(ErrorCode.INVALID_STATE)
         engine.set_midi_input_source(0)
         engine.push_midi_input_note_on(0, 0, 60, 100, 0)
         engine.push_midi_input_cc(0, 0, 1, 64, 0)
@@ -144,14 +146,13 @@ def test_engine_push_midi_bend_rejects_out_of_range_value() -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(BuiltinSynthConfig(), 0)
         engine.push_midi_pitch_bend(0, 0, 0, 16383)
-        with pytest.raises(SonareError) as bend_error:
+        with pytest.raises(SonareValueError, match=r"bend14 must be in \[0, 16383\]"):
             engine.push_midi_pitch_bend(0, 0, 0, 16384)
-        assert bend_error.value.code == 4
         engine.set_midi_input_source(0)
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareValueError, match=r"bend14 must be in \[0, 16383\]"):
             engine.push_midi_input_pitch_bend(0, 0, 16384, 0)
         for pressure in (128, 255):
-            with pytest.raises(SonareError):
+            with pytest.raises(SonareValueError, match="pressure must be in"):
                 engine.push_midi_channel_pressure(0, 0, 0, pressure)
 
 
@@ -209,9 +210,8 @@ def test_engine_scheduled_midi_clips_render_builtin_instrument() -> None:
                 ]
             )
         assert bad_group_error.value.code == 4
-        with pytest.raises(SonareError) as bad_channel_error:
+        with pytest.raises(SonareValueError, match=r"channel must be in \[0, 15\]"):
             engine.push_midi_note_on(6, 0, 16, 60, 100)
-        assert bad_channel_error.value.code == 4
         with pytest.raises(SonareError) as bad_soundfont_error:
             engine.load_soundfont(b"not sf2")
         assert bad_soundfont_error.value.code == 2
@@ -528,3 +528,65 @@ def test_engine_drain_external_midi_delivers_a_midi2_rpn_as_four_cc_messages() -
             [0xB1, 6, 12],
             [0xB1, 38, 0],
         ]
+
+
+# Each call holds a value that fits its C type and lies outside the MIDI domain, so only the
+# live push argument rule can refuse it; the input source stays disabled because an argument
+# is judged before the source state.
+_LIVE_PUSH_REFUSALS = [
+    ("push_midi_note_on", (0, 0, 16, 60, 100), "channel must be in [0, 15]"),
+    ("push_midi_note_off", (0, 0, 0, 60, 128), "velocity must be in [0, 127]"),
+    ("push_midi_cc", (0, 0, 0, 7, 128), "value must be in [0, 127]"),
+    ("push_midi_pitch_bend", (0, 0, 0, 16384), "bend14 must be in [0, 16383]"),
+    ("push_midi_channel_pressure", (0, 0, 0, 128), "pressure must be in [0, 127]"),
+    ("push_midi_poly_pressure", (0, 0, 0, 128, 64), "note must be in [0, 127]"),
+    ("push_midi_program", (0, 0, 0, 0, True, 128, 0), "bank_msb must be in [0, 127]"),
+    (
+        "push_midi_program",
+        (0, 0, 0, 0, False, 0, 1),
+        "bank MSB and LSB must be 0 when bank-valid is false",
+    ),
+    ("push_midi_ump", (0, [0x30000000, 0]), "words do not form a pushable UMP message"),
+    ("push_midi_input_note_on", (16, 0, 60, 100), "group must be in [0, 15]"),
+    ("push_midi_input_note_off", (0, 0, 128, 0), "note must be in [0, 127]"),
+    ("push_midi_input_cc", (0, 0, 128, 0), "controller must be in [0, 127]"),
+    ("push_midi_input_pitch_bend", (0, 0, 16384), "bend14 must be in [0, 16383]"),
+    ("push_midi_input_channel_pressure", (0, 16, 64), "channel must be in [0, 15]"),
+    ("push_midi_input_poly_pressure", (0, 0, 60, 128), "pressure must be in [0, 127]"),
+    ("push_midi_input_program", (0, 0, 128), "program must be in [0, 127]"),
+    ("push_midi_input_program", (0, 0, 0, True, 0, 128), "bank_lsb must be in [0, 127]"),
+    ("push_midi_input_ump", ([0x40903C00],), "words do not form a pushable UMP message"),
+]
+
+
+@pytest.mark.parametrize("method,args,message", _LIVE_PUSH_REFUSALS)
+def test_live_push_names_the_refused_argument(method: str, args: tuple, message: str) -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with pytest.raises(SonareValueError) as refused:
+            getattr(engine, method)(*args)
+        assert str(refused.value) == f"{method}: {message}"
+        assert refused.value.code == int(ErrorCode.INVALID_PARAMETER)
+
+
+_LIVE_INPUT_PUSHES = [
+    ("push_midi_input_note_on", (0, 0, 60, 100)),
+    ("push_midi_input_note_off", (0, 0, 60, 0)),
+    ("push_midi_input_cc", (0, 0, 7, 100)),
+    ("push_midi_input_pitch_bend", (0, 0, 8192)),
+    ("push_midi_input_channel_pressure", (0, 0, 64)),
+    ("push_midi_input_poly_pressure", (0, 0, 60, 64)),
+    ("push_midi_input_ump", ([0x40903C00, 0x80000000],)),
+    ("push_midi_input_program", (0, 0, 5, True, 8, 0)),
+]
+
+
+@pytest.mark.parametrize("method,args", _LIVE_INPUT_PUSHES)
+def test_live_input_push_refuses_a_disabled_source_as_invalid_state(
+    method: str, args: tuple
+) -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
+        with pytest.raises(SonareError) as refused:
+            getattr(engine, method)(*args)
+        assert refused.value.code == int(ErrorCode.INVALID_STATE)
+        c_function = f"sonare_engine_{method}"
+        assert f"{c_function}: the MIDI input source is not enabled" in str(refused.value)

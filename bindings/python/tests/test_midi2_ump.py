@@ -165,9 +165,9 @@ def test_push_midi_ump_accepts_two_word_channel_voice() -> None:
 def test_push_midi_ump_rejects_bad_messages(words) -> None:
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
-        with pytest.raises(SonareError) as excinfo:
+        with pytest.raises(SonareValueError) as excinfo:
             engine.push_midi_ump(0, words)
-        assert excinfo.value.code == int(ErrorCode.INVALID_PARAMETER)
+        assert str(excinfo.value) == "push_midi_ump: words do not form a pushable UMP message"
 
 
 def test_push_midi_ump_rejects_word_out_of_range() -> None:
@@ -182,13 +182,14 @@ def test_push_midi_input_ump_queues_messages() -> None:
     _, w0, w1 = Project.midi2_cc(0.0, 0, 0, 1, 0x80000000)
     with RealtimeEngine(sample_rate=48000.0, max_block_size=128) as engine:
         engine.set_builtin_instrument(destination_id=0)
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareError) as disabled:
             engine.push_midi_input_ump([w0, w1], 0)
+        assert disabled.value.code == int(ErrorCode.INVALID_STATE)
         engine.set_midi_input_source(0)
         engine.push_midi_input_ump([w0, w1], 0)
         engine.push_midi_input_ump([0x20903C64], port_time_samples=16)
         assert engine.midi_input_pending_count() == 2
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareValueError, match="words do not form a pushable UMP message"):
             engine.push_midi_input_ump([0x30160000, 0], 0)
-        with pytest.raises(SonareError):
+        with pytest.raises(SonareValueError, match="words do not form a pushable UMP message"):
             engine.push_midi_input_ump([w0], 0)
