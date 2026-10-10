@@ -770,13 +770,12 @@ TEST_CASE("the shortest note resolves from the tempo", "[note_transcriber]") {
   TranscribeConfig polyphonic;
   polyphonic.source = TranscribeSource::kPolyphonic;
 
-  SECTION("the polyphonic default is a thirty-second note held within [30, 60] ms") {
-    polyphonic.tempo_bpm = 160.0f;
-    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == Catch::Approx(46.875f));
-    polyphonic.tempo_bpm = 60.0f;
-    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 60.0f);
-    polyphonic.tempo_bpm = 300.0f;
-    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 30.0f);
+  SECTION("the polyphonic default is 60 ms whatever the tempo") {
+    for (const float tempo : {0.0f, 60.0f, 160.0f, 300.0f}) {
+      INFO("tempo " << tempo);
+      polyphonic.tempo_bpm = tempo;
+      CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 60.0f);
+    }
   }
 
   SECTION("a division is a note value at the tempo, unbounded") {

@@ -673,9 +673,9 @@ export interface TranscribeOptions {
   /** Upper end of the F0 tracker range in Hz; omitted defaults to `2093` mono or `1760` poly. */
   fmax?: number;
   /**
-   * Shortest span kept as a note, in milliseconds. Default `30` monophonic;
-   * polyphonic, where it is the shortest ridge the tracker keeps, a
-   * thirty-second note at the transcription tempo held within `[30, 60]` ms.
+   * Shortest span kept as a note, in milliseconds. Default `30` monophonic and
+   * `60` polyphonic, where it is the shortest ridge the tracker keeps; neither
+   * default depends on the tempo.
    * Must be positive, and cannot be written together with `minNoteDivision`.
    */
   minNoteMs?: number;

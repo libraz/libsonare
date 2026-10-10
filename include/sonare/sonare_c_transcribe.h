@@ -77,8 +77,8 @@ typedef struct {
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
   /// if set, else the source's default: 30 for the monophonic path, and for the
-  /// polyphonic path, where it is the shortest ridge the tracker keeps, a
-  /// thirty-second note at the transcription tempo held within [30, 60].
+  /// polyphonic path, where it is the shortest ridge the tracker keeps, 60
+  /// whatever the tempo.
   float min_note_ms;
   /// Pitch movement, in cents, that ends one note and starts the next;
   /// 0 => 50.
@@ -156,6 +156,8 @@ SonareTranscribeConfig sonare_transcribe_config_default(void);
 /// @param samples Mono source; @p length must be non-zero.
 /// @param tempo_bpm The tempo the PPQ grid is built on. Pass a value <= 0 to
 ///        have it detected from @p samples, which costs an onset/tempo pass.
+///        It is also the tempo @c min_note_division is read at, so a grid tempo
+///        that is not the music's wants @c min_note_ms instead.
 /// @param config Optional; NULL selects the defaults.
 /// @param out Receives a heap-owned result, cleared before validation.
 /// @note SONARE_ERROR_NOT_SUPPORTED when the library was built without the

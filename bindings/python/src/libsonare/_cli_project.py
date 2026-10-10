@@ -949,8 +949,7 @@ def register_project_parsers(
         "--min-note-ms",
         type=_finite_float,
         default=None,
-        help="Shortest span kept as a note, in ms (default: 30 monophonic; polyphonic a "
-        "thirty-second note at the tempo, held within 30-60)",
+        help="Shortest span kept as a note, in ms (default: 30 monophonic, 60 polyphonic)",
     )
     transcribe_p.add_argument(
         "--min-note-division",

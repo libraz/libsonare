@@ -149,9 +149,8 @@ class _ProjectMidiMixin:
                 paths use this bound, with the same polyphonic salience-axis
                 behavior as ``fmin``.
             min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms
-                (monophonic) or a thirty-second note at the project's tempo at
-                the clip start, held within 30..60 ms (polyphonic). Not given
-                together with ``min_note_division``.
+                (monophonic) or 60 ms (polyphonic), whatever the tempo. Not
+                given together with ``min_note_division``.
             min_note_division: Shortest note kept, as a note value: ``n`` is a
                 1/n note at the project's tempo at the clip start (32 is a
                 thirty-second note), 1..128. Applies to both paths.

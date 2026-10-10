@@ -38,14 +38,10 @@ namespace {
 // piano scores ([transcribe_eval_sweep]): chords without octave doublings scored
 // onset F 0.32 / 0.36 / 0.42 at 6 / 8 / 10 voices.
 constexpr int kTranscribeMaxPolyphony = 10;
-// The polyphonic default is a thirty-second note at the tempo, held within these bounds.
-constexpr int kTranscribePolyphonicMinNoteDivision = 32;
 // A recorded piano solo breaks real notes into 60-99 ms ridges that 100 ms dropped by
 // ear; 60 ms keeps them. On rendered scores 60-100 ms scored alike, and broadband
 // noise at -20 dBFS yields about 25 short notes a second at 60 ms (5.8 at 100).
-constexpr float kTranscribePolyphonicMaxMinNoteMs = 60.0f;
-// The segmenter's own shortest note; below it a ridge is a few analysis frames.
-constexpr float kTranscribePolyphonicMinMinNoteMs = 30.0f;
+constexpr float kTranscribePolyphonicMinNoteMs = 60.0f;
 // A whole note is four beats of 60000 ms / BPM.
 constexpr float kWholeNoteMsAtOneBpm = 4.0f * 60000.0f;
 // Unchanged from the editing chain: the sweep never moved it.
@@ -65,9 +61,8 @@ float default_min_note_ms(const TranscribeConfig& config) noexcept {
   if (config.source != TranscribeSource::kPolyphonic) {
     return pitch_editor::NoteSegmenterConfig{}.min_note_ms;
   }
-  if (!(config.tempo_bpm > 0.0f)) return kTranscribePolyphonicMaxMinNoteMs;
-  return std::clamp(note_value_ms(kTranscribePolyphonicMinNoteDivision, config.tempo_bpm),
-                    kTranscribePolyphonicMinMinNoteMs, kTranscribePolyphonicMaxMinNoteMs);
+  // A duration, not a note value: the tempo may be only the caller's grid.
+  return kTranscribePolyphonicMinNoteMs;
 }
 
 /// A sentinel-coded ratio: 0 => @p fallback, negative => a real 0.

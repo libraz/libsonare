@@ -57,14 +57,13 @@ struct TranscribeConfig {
   /// Shortest span kept as a note, in milliseconds. 0 => @c min_note_division
   /// if set, else the source's default: the segmenter's 30 ms for monophonic
   /// notes; for polyphonic ones, where it is the shortest ridge the tracker
-  /// keeps, a thirty-second note at @c tempo_bpm held within [30, 60] ms, or
-  /// 60 ms with no tempo.
+  /// keeps, 60 ms whatever the tempo.
   float min_note_ms = 0.0f;
   /// Shortest span kept as a note, as a note value: n is a 1/n note at
   /// @c tempo_bpm (32 => a thirty-second note), 1..128. 0 => unset. Needs a
   /// tempo and cannot be combined with a non-zero @c min_note_ms.
   int min_note_division = 0;
-  /// Tempo note values are read at, in BPM. 0 => none.
+  /// Tempo @c min_note_division is read at, in BPM. 0 => none. No default reads it.
   float tempo_bpm = 0.0f;
   /// Monophonic: pitch movement, in cents, that ends one note and starts the
   /// next. Polyphonic: scales the reported f0 stability figure only -- a

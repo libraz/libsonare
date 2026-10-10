@@ -28,7 +28,9 @@ export interface TranscribeRequest extends TranscribeOptions {
    *
    * Supplying a tempo is not a claim about the audio — it is the coordinate
    * system the events come back in. Twice the tempo is twice as many beats per
-   * second, so the same audio lands on twice the ppq.
+   * second, so the same audio lands on twice the ppq. The one setting that
+   * reads it is `minNoteDivision`; with a grid tempo that is not the music's,
+   * give `minNoteMs` instead.
    */
   tempoBpm?: number;
 }

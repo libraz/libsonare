@@ -752,9 +752,8 @@ export interface TranscribeOptions {
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
    * positive. Refused together with {@link minNoteDivision}. When neither is
-   * given the default is `30` for the monophonic tracker and, for the
-   * polyphonic one, a thirty-second note at the transcription tempo held
-   * within `[30, 60]` ms.
+   * given the default is `30` for the monophonic tracker and `60` for the
+   * polyphonic one; neither depends on the tempo.
    */
   minNoteMs?: number;
   /**
@@ -823,6 +822,8 @@ export interface TranscribeRequest extends TranscribeOptions {
   /**
    * The tempo the PPQ grid is built on. Omit it — or pass a value `<= 0` — to
    * have it detected from {@link samples}, which costs an onset/tempo pass.
+   * The one setting that reads it is {@link TranscribeOptions.minNoteDivision};
+   * with a grid tempo that is not the music's, give `minNoteMs` instead.
    */
   tempoBpm?: number;
 }

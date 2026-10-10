@@ -1017,7 +1017,9 @@ def transcribe(
             ``samples``, which costs an onset/tempo pass; a non-positive value is
             refused rather than read as a request to detect. Note that the
             coordinates scale WITH it -- the same audio on twice the tempo is
-            twice as many beats long.
+            twice as many beats long. The one setting that reads it is
+            ``min_note_division``; with a grid tempo that is not the music's,
+            give ``min_note_ms`` instead.
         polyphonic: Read the multi-F0 chain, which finds overlapping notes at
             the cost of a full STFT and a mask per tracked ridge. The default
             reads pYIN cut into notes, which follows one line at a time.
@@ -1033,9 +1035,8 @@ def transcribe(
             this bound, with the same polyphonic salience-axis behavior as
             ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
-            (30 ms monophonic; polyphonic a thirty-second note at the
-            transcription tempo, held within 30..60 ms). Not given together with
-            ``min_note_division``.
+            (30 ms monophonic, 60 ms polyphonic, whatever the tempo). Not given
+            together with ``min_note_division``.
         min_note_division: Shortest note kept, as a note value: ``n`` is a 1/n
             note at the transcription tempo (32 is a thirty-second note), 1..128.
             Applies to both paths; ``None`` keeps the ``min_note_ms`` rule.

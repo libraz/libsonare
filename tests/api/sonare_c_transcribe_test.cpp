@@ -997,14 +997,14 @@ TEST_CASE("the shortest note is read at the transcription tempo", "[c_api][trans
     require_same_events(dropped.events(), oracle.events());
   }
 
-  SECTION("the polyphonic default is a thirty-second note at that tempo") {
+  SECTION("the polyphonic default is 60 ms at any grid tempo") {
     for (const float tempo : {200.0f, 60.0f}) {
       INFO("tempo " << tempo);
       const SonareTranscribeConfig defaults = polyphonic_config();
       Result by_default;
       transcribe_into(&by_default, samples, tempo, &defaults);
       SonareTranscribeConfig spelled = polyphonic_config();
-      spelled.min_note_ms = std::clamp(4.0f * 60000.0f / (tempo * 32.0f), 30.0f, 60.0f);
+      spelled.min_note_ms = 60.0f;
       Result oracle;
       transcribe_into(&oracle, samples, tempo, &spelled);
       require_same_events(by_default.events(), oracle.events());
