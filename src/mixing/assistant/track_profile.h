@@ -127,6 +127,13 @@ struct TrackInput {
   int sample_rate = 0;
 };
 
+/// @brief Puts every track on @p sample_rate, the clock the assistant analyses on.
+/// @details A track whose own @ref TrackInput::sample_rate differs is resampled; its planes then
+///          point into @p storage, which must outlive the returned tracks. A track already at
+///          @p sample_rate is passed through untouched.
+std::vector<TrackInput> tracks_at_rate(std::vector<TrackInput> tracks, int sample_rate,
+                                       std::vector<std::vector<float>>& storage);
+
 /// @brief Per-band energy over time for one track.
 /// @details This is the cache the cross-track phase reads. It exists so the
 ///          STFT is computed once per track rather than once per track *pair*.

@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "analysis/analysis_rate.h"
+#include "core/resample.h"
 #include "core/spectrum.h"
 #include "mastering/assistant/audio_profile.h"
 #include "mixing/assistant/source_classifier.h"
@@ -391,6 +392,28 @@ std::vector<TrackProfile> analyze_track_profiles(const std::vector<TrackInput>& 
     profiles.push_back(analyze_track_profile(track, config));
   }
   return profiles;
+}
+
+std::vector<TrackInput> tracks_at_rate(std::vector<TrackInput> tracks, int sample_rate,
+                                       std::vector<std::vector<float>>& storage) {
+  // Reserved up front so no later push_back moves a plane a track already points into.
+  storage.reserve(storage.size() + 2 * tracks.size());
+  for (TrackInput& track : tracks) {
+    if (track.sample_rate == sample_rate || track.frame_count == 0) {
+      track.sample_rate = sample_rate;
+      continue;
+    }
+    const std::size_t frames = track.frame_count;
+    storage.push_back(sonare::resample(track.left, frames, track.sample_rate, sample_rate));
+    track.left = storage.back().data();
+    track.frame_count = storage.back().size();
+    if (track.right != nullptr) {
+      storage.push_back(sonare::resample(track.right, frames, track.sample_rate, sample_rate));
+      track.right = storage.back().data();
+    }
+    track.sample_rate = sample_rate;
+  }
+  return tracks;
 }
 
 }  // namespace sonare::mixing::assistant

@@ -15,7 +15,6 @@
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-#include "core/resample.h"
 #include "mixing/api/scene.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
@@ -70,23 +69,10 @@ std::vector<assistant::TrackInput> build_tracks(
     track.left = input_left[index];
     track.right = input_right != nullptr ? input_right[index] : nullptr;
     track.frame_count = track_lengths[index];
-    track.sample_rate = sample_rate;
-    const int track_rate = track_sample_rates != nullptr ? track_sample_rates[index] : sample_rate;
-    // A track at another rate is analysed from a copy on the analysis clock; moving a
-    // plane between vectors keeps its buffer, so the pointers stay valid.
-    if (track_rate != sample_rate && track.frame_count > 0) {
-      const size_t frames = track.frame_count;
-      resampled.push_back(sonare::resample(track.left, frames, track_rate, sample_rate));
-      track.left = resampled.back().data();
-      track.frame_count = resampled.back().size();
-      if (track.right != nullptr) {
-        resampled.push_back(sonare::resample(track.right, frames, track_rate, sample_rate));
-        track.right = resampled.back().data();
-      }
-    }
+    track.sample_rate = track_sample_rates != nullptr ? track_sample_rates[index] : sample_rate;
     tracks.push_back(std::move(track));
   }
-  return tracks;
+  return assistant::tracks_at_rate(std::move(tracks), sample_rate, resampled);
 }
 
 #endif  // SONARE_WITH_MIXING_ASSISTANT

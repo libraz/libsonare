@@ -1,6 +1,5 @@
 #include <utility>
 
-#include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 
 #ifdef SONARE_WITH_MIXING
@@ -97,8 +96,8 @@ namespace {
 
 /// One `--input` entry, decoded and held for the duration of the suggestion.
 ///
-/// The C call borrows these buffers rather than owning them, so they have to
-/// outlive it.
+/// TrackInput points into these buffers rather than owning them, so the tracks
+/// and their storage have to outlive the call together.
 struct AssistantTrack {
   std::string id;
   std::vector<float> left;
@@ -216,9 +215,8 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
     }
     params.push_back({"tempoBpm", resolve_assistant_tempo(tempo_text, entries.front())});
   }
-  std::vector<SonareMasteringParam> c_params;
-  c_params.reserve(params.size());
-  for (const auto& param : params) c_params.push_back({param.key.c_str(), param.value});
+  const auto config =
+      mixing::assistant::mix_assistant_config_from_params(params.data(), params.size());
 
   std::vector<AssistantTrack> storage;
   storage.reserve(entries.size());
@@ -226,46 +224,36 @@ int cmd_suggest_mix(const CliArgs& args, const Audio&) {
     storage.push_back(load_assistant_track(entry));
   }
 
-  // Each track goes in at its own rate; the C entry resamples it onto --sample-rate.
-  std::vector<const float*> lefts;
-  std::vector<const float*> rights;
-  std::vector<const char*> ids;
-  std::vector<size_t> lengths;
-  std::vector<int> rates;
+  std::vector<mixing::assistant::TrackInput> inputs;
+  inputs.reserve(storage.size());
   for (const AssistantTrack& track : storage) {
-    lefts.push_back(track.left.data());
-    rights.push_back(track.right.empty() ? nullptr : track.right.data());
-    ids.push_back(track.id.c_str());
-    lengths.push_back(track.left.size());
-    rates.push_back(track.sample_rate);
+    mixing::assistant::TrackInput input;
+    input.id = track.id;
+    input.name = track.id;
+    input.left = track.left.data();
+    input.right = track.right.empty() ? nullptr : track.right.data();
+    input.frame_count = track.left.size();
+    input.sample_rate = track.sample_rate;
+    inputs.push_back(input);
   }
-
-  char* json = nullptr;
-  const SonareError err = sonare_mixing_assistant_suggest(
-      lefts.data(), rights.data(), ids.data(), ids.data(), lengths.data(), rates.data(),
-      storage.size(), sample_rate, c_params.data(), c_params.size(), &json);
-  if (err != SONARE_OK || json == nullptr) {
-    sonare_free_string(json);
-    const char* message = sonare_last_error_message();
-    throw SonareException(sonare_c_detail::error_code_from_c_error(err),
-                          message != nullptr && *message != '\0' ? message : "suggest-mix failed");
-  }
-  const std::string document(json);
-  sonare_free_string(json);
+  // Each track goes in at its own rate and is resampled onto --sample-rate, as the C ABI does.
+  std::vector<std::vector<float>> resampled;
+  const auto tracks = mixing::assistant::tracks_at_rate(std::move(inputs), sample_rate, resampled);
+  const auto result = mixing::assistant::suggest_scene(tracks, config);
 
   const std::string scene_out = args.get_string("scene-out");
   if (!scene_out.empty()) {
     // Written from the result already in hand rather than through the
     // scene-only entry point, which would re-measure every track to reach the
-    // same scene. The document nests the scene as scene_to_json wrote it.
+    // same scene.
     std::ofstream file(scene_out, std::ios::binary);
-    file << util::json::dump(*util::json::parse(document).find("scene")) << "\n";
+    file << mixing::api::scene_to_json(result.scene) << "\n";
     // The class save_wav gives a failed render, as the report writer above uses.
     if (!file) {
       throw SonareException(ErrorCode::EncodeFailed, "cannot write scene: " + scene_out);
     }
   }
-  std::cout << document << "\n";
+  std::cout << mixing::assistant::mix_assistant_result_to_json(result) << "\n";
   return 0;
 }
 #endif
