@@ -71,6 +71,11 @@ struct ChannelStripConfig {
   /// the whole strip from ~1.4 MB to ~145 KB.
   MeterConfig meter{/*measure_lufs=*/true, /*measure_true_peak=*/true,
                     /*true_peak_oversample=*/4};
+  /// Mono pan gain measured against the law's centre energy, so a centred mono
+  /// strip is unity under every law (PannerProcessor::set_mono_pan_centre_unity).
+  /// The engine sets it on the strips it creates; a host-built strip keeps the
+  /// law's raw mono energy.
+  bool mono_pan_centre_unity = false;
 };
 
 enum class InsertAutomationScheduleResult {

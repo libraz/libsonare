@@ -26,9 +26,15 @@ using sonare::constants::kFloorDb;
 
 std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec,
                                                                    double build_sample_rate) {
-  auto strip = std::make_unique<mixing::ChannelStrip>(
-      mixing::ChannelStripConfig{spec.fader_db, spec.pan, mixing::pan_law_from_index(spec.pan_law),
-                                 5.0f, mixing::EqPosition::PreFader, spec.input_trim_db, false});
+  mixing::ChannelStripConfig config{spec.fader_db,
+                                    spec.pan,
+                                    mixing::pan_law_from_index(spec.pan_law),
+                                    5.0f,
+                                    mixing::EqPosition::PreFader,
+                                    spec.input_trim_db,
+                                    false};
+  config.mono_pan_centre_unity = true;
+  auto strip = std::make_unique<mixing::ChannelStrip>(config);
   strip->set_vca_offset_db(spec.vca_offset_db);
   strip->set_width(spec.width);
   strip->set_muted(spec.muted);
@@ -264,10 +270,7 @@ bool TrackMixerRuntime::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
       }
       if (candidate_strips[lane_index] == nullptr && !config.sends.empty()) {
         if (retained_owned_count + staged_owned_count >= kMaxTrackLanes) return false;
-        auto strip = std::make_unique<mixing::ChannelStrip>(
-            mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f,
-                                       mixing::EqPosition::PreFader, 0.0f, false});
-        if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
+        auto strip = make_seed_strip();
         candidate_strips[lane_index] = strip.get();
         staged_owned[lane_index] = std::move(strip);
         ++staged_owned_count;
@@ -480,10 +483,7 @@ bool TrackMixerRuntime::set_buses(std::vector<TrackBusConfig> buses) {
       }
       if (strip == nullptr && !config.sends.empty()) {
         if (owned_strips_.size() + staged_lane_owned_count >= kMaxTrackLanes) return false;
-        auto owned = std::make_unique<mixing::ChannelStrip>(
-            mixing::ChannelStripConfig{0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f,
-                                       mixing::EqPosition::PreFader, 0.0f, false});
-        if (max_block_size_ > 0) owned->prepare(sample_rate_, max_block_size_);
+        auto owned = make_seed_strip();
         strip = owned.get();
         staged_lane_owned[lane_index] = std::move(owned);
         ++staged_lane_owned_count;
@@ -1616,8 +1616,10 @@ void TrackMixerRuntime::record_track_strip_binding(uint32_t track_id, mixing::Ch
 }
 
 std::unique_ptr<mixing::ChannelStrip> TrackMixerRuntime::make_seed_strip() const {
-  auto strip = std::make_unique<mixing::ChannelStrip>(mixing::ChannelStripConfig{
-      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false});
+  mixing::ChannelStripConfig config{
+      0.0f, 0.0f, mixing::PanLaw::Linear0dB, 5.0f, mixing::EqPosition::PreFader, 0.0f, false};
+  config.mono_pan_centre_unity = true;
+  auto strip = std::make_unique<mixing::ChannelStrip>(config);
   if (max_block_size_ > 0) {
     strip->prepare(sample_rate_, max_block_size_);
   }

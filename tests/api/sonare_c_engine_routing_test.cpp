@@ -885,9 +885,7 @@ TEST_CASE("sonare_engine_set_track_sends with no sends clears the lane's sends",
       {10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO},
       {20, kSendBus1Track20, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
   SonareRealtimeEngine* edited = make_lane_edit_rig(kRigLanes);
-  // The lane keeps the strip its earlier sends created, so the reference takes the same history.
-  SonareRealtimeEngine* replaced = make_lane_edit_rig(kRigLanes);
-  REQUIRE(sonare_engine_set_track_lanes(replaced, final_lanes, 2) == SONARE_OK);
+  SonareRealtimeEngine* replaced = make_lane_edit_rig(final_lanes);
   SonareRealtimeEngine* before = make_lane_edit_rig(kRigLanes);
   REQUIRE(std::abs(settled(before) - settled(replaced)) > 1e-2f);
 
@@ -896,6 +894,35 @@ TEST_CASE("sonare_engine_set_track_sends with no sends clears the lane's sends",
   sonare_engine_destroy(before);
   sonare_engine_destroy(replaced);
   sonare_engine_destroy(edited);
+}
+
+TEST_CASE("a send-seeded lane strip is transparent at centre and still pans a mono render",
+          "[c_engine_routing]") {
+  // A disabled send still seeds the lane's strip but feeds the bus nothing.
+  constexpr SonareEngineTrackSend kDisabledSend[] = {{1, 0.0f, 0, SONARE_SEND_TIMING_POST_FADER}};
+  const SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  const SonareEngineTrackLane seeded_lane[] = {
+      {10, kDisabledSend, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  const SonareEngineTrackLane plain_lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  SonareRealtimeEngine* seeded = make_routing_engine({{10, 1.0f}});
+  SonareRealtimeEngine* plain = make_routing_engine({{10, 1.0f}});
+  for (SonareRealtimeEngine* engine : {seeded, plain}) {
+    REQUIRE(sonare_engine_set_track_buses(engine, buses, 1) == SONARE_OK);
+  }
+  REQUIRE(sonare_engine_set_track_lanes(seeded, seeded_lane, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_lanes(plain, plain_lane, 1) == SONARE_OK);
+  // Only the seeded lane has a strip for the pan setter to reach.
+  REQUIRE(sonare_engine_set_track_strip_pan(plain, 10, 0.0f) == SONARE_ERROR_INVALID_PARAMETER);
+
+  const std::vector<float> reference = render_all(plain);
+  REQUIRE(std::abs(reference.back()) > 1e-3f);
+  REQUIRE(render_all(seeded) == reference);
+
+  REQUIRE(sonare_engine_set_track_strip_pan(seeded, 10, -1.0f) == SONARE_OK);
+  const std::vector<float> panned = render_all(seeded);
+  REQUIRE(std::abs(panned.back() - reference.back()) > 1e-2f);
+  sonare_engine_destroy(plain);
+  sonare_engine_destroy(seeded);
 }
 
 TEST_CASE("sonare_engine_set_track_output_bus moves only one lane's output", "[c_engine_routing]") {

@@ -177,7 +177,11 @@ TEST_CASE("TrackMixerRuntime engine-owned strips omit embedded metering", "[engi
 
   // Externally bound strips keep the standalone ChannelStrip default so their
   // snapshots remain available to callers that own and inspect the strip.
-  sonare::mixing::ChannelStrip external_strip;
+  // The engine's strips take mono pan relative to the law's centre energy, so the
+  // external strip opts in as well and the comparison stays about metering.
+  sonare::mixing::ChannelStripConfig external_config;
+  external_config.mono_pan_centre_unity = true;
+  sonare::mixing::ChannelStrip external_strip(external_config);
   REQUIRE(external_strip.metering_enabled());
 
   std::array<float, kFrames> source{};
@@ -1017,22 +1021,24 @@ TEST_CASE("TrackMixerRuntime mixes post-fader sends into buses", "[engine][track
   std::array<float, 16> out_l{};
   float* out[] = {out_l.data()};
   REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
-  REQUIRE(out_l.back() > 2.82f);
-  REQUIRE(out_l.back() < 2.84f);
+  // Unit source, direct 1 + post-fader send 1; a centred mono strip is unity.
+  REQUIRE(out_l.back() > 1.99f);
+  REQUIRE(out_l.back() < 2.01f);
 
   lane.sends[0].level_db = -6.0206f;
   REQUIRE(mixer.set_track_lanes({lane}));
   out_l.fill(0.0f);
   REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
-  REQUIRE(out_l.back() > 2.11f);
-  REQUIRE(out_l.back() < 2.13f);
+  // 1 + 10^(-6.0206/20) = 1.5.
+  REQUIRE(out_l.back() > 1.49f);
+  REQUIRE(out_l.back() < 1.51f);
 
   lane.sends[0].enabled = false;
   REQUIRE(mixer.set_track_lanes({lane}));
   out_l.fill(0.0f);
   REQUIRE(mixer.render_clips(player, out, 1, 16, 0));
-  REQUIRE(out_l.back() > 1.41f);
-  REQUIRE(out_l.back() < 1.42f);
+  REQUIRE(out_l.back() > 0.99f);
+  REQUIRE(out_l.back() < 1.01f);
 }
 
 TEST_CASE("TrackMixerRuntime disabled lane and bus sends add exactly nothing",
@@ -2734,8 +2740,8 @@ TEST_CASE("TrackMixerRuntime delivers a lane's send on the lane's own timebase",
   }
   // Direct and send coincide there, so the sample carries both contributions
   // (the same figure a lane with a unity send produces with no PDC in play).
-  REQUIRE(out[kLatency] > 2.82f);
-  REQUIRE(out[kLatency] < 2.84f);
+  REQUIRE(out[kLatency] > 1.99f);
+  REQUIRE(out[kLatency] < 2.01f);
 }
 
 TEST_CASE("TrackMixerRuntime keeps lane send automation across an unchanged resend",
@@ -2929,7 +2935,9 @@ TEST_CASE("TrackMixerRuntime gates a post-fader send with the lane's fader and m
 
   render();
   const float audible = out[kFrames - 1];
-  REQUIRE(audible > 1.4f);
+  // Direct 0.5 + send 0.5 at unity; the direct path alone would be 0.5.
+  REQUIRE(audible > 0.99f);
+  REQUIRE(audible < 1.01f);
 
   REQUIRE(mixer.set_lane_solo_mute(0, false, true));
   require_silent("muted");

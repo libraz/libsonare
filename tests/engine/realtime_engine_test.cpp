@@ -609,7 +609,7 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
       REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
     } else if (record.target_id == 1) {
       found_lane_1 = true;
-      REQUIRE(record.peak_db[0] == Catch::Approx(-3.0103f).margin(0.05f));
+      REQUIRE(record.peak_db[0] == Catch::Approx(-6.0206f).margin(0.05f));
       REQUIRE(std::isfinite(record.integrated_lufs));
       REQUIRE(record.integrated_lufs == Catch::Approx(sonare::constants::kFloorDb));
     } else if (record.target_id == 2) {
@@ -617,7 +617,7 @@ TEST_CASE("RealtimeEngine publishes lane bus input and master meter targets",
       REQUIRE(record.peak_db[0] == Catch::Approx(-12.0412f).margin(0.05f));
     } else if (record.target_id == 33) {
       found_bus = true;
-      REQUIRE(record.peak_db[0] == Catch::Approx(-3.0103f).margin(0.05f));
+      REQUIRE(record.peak_db[0] == Catch::Approx(-6.0206f).margin(0.05f));
     } else if (record.target_id == 0) {
       found_master = true;
       REQUIRE(record.peak_db[0] > -1.0f);
@@ -3393,8 +3393,9 @@ TEST_CASE("RealtimeEngine processes owned master strip specs after lane mix",
     engine.process(io, 1, kBlock);
   }
 
-  REQUIRE(left.back() > 0.65f);
-  REQUIRE(left.back() < 0.80f);
+  // Two unit clips summed (2) through the master's -12 dB fader; the centred mono
+  // master is unity under the Linear0dB law.
+  REQUIRE(left.back() == Catch::Approx(2.0f * std::pow(10.0f, -12.0f / 20.0f)).margin(1.0e-3f));
 }
 
 TEST_CASE("RealtimeEngine routes reserved master mixer parameters", "[engine][realtime]") {

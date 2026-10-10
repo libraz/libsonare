@@ -159,8 +159,9 @@ describe('RealtimeEngine native binding', () => {
     let [out] = engine.process([new Float32Array(256)]);
     // A 5.1 bus feeding a narrower (mono) output downmixes rather than
     // truncating to the front channels, so the unity send adds half the direct level.
-    expect(out.at(-1)).toBeGreaterThan(2.12);
-    expect(out.at(-1)).toBeLessThan(2.13);
+    // Direct 1 + half of the unity send (1.5).
+    expect(out.at(-1)).toBeGreaterThan(1.49);
+    expect(out.at(-1)).toBeLessThan(1.51);
     const meterTargets = new Set(engine.drainMeterTelemetry().map((record) => record.targetId));
     expect(meterTargets.has(1)).toBe(true);
     expect(meterTargets.has(33)).toBe(true);
@@ -169,14 +170,15 @@ describe('RealtimeEngine native binding', () => {
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: -6.0206 }] }]);
     engine.seekSample(0);
     [out] = engine.process([new Float32Array(256)]);
-    expect(out.at(-1)).toBeGreaterThan(1.76);
-    expect(out.at(-1)).toBeLessThan(1.78);
+    // 1 + 0.5 * 10^(-6.0206/20) = 1.25.
+    expect(out.at(-1)).toBeGreaterThan(1.24);
+    expect(out.at(-1)).toBeLessThan(1.26);
 
     engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 1, levelDb: 0, enabled: false }] }]);
     engine.seekSample(0);
     [out] = engine.process([new Float32Array(256)]);
-    expect(out.at(-1)).toBeGreaterThan(1.41);
-    expect(out.at(-1)).toBeLessThan(1.42);
+    expect(out.at(-1)).toBeGreaterThan(0.99);
+    expect(out.at(-1)).toBeLessThan(1.01);
 
     let badJsonError: unknown;
     try {
@@ -757,16 +759,16 @@ describe('RealtimeEngine native binding', () => {
 
     engine.play();
     const processed = engine.process([new Float32Array(256)]);
-    expect(processed[0].at(-1)).toBeGreaterThan(0.65);
-    expect(processed[0].at(-1)).toBeLessThan(0.8);
+    // Two unit clips (2) through the -12 dB master fader; a centred mono master is unity.
+    expect(processed[0].at(-1)).toBeCloseTo(2 * 10 ** (-12 / 20), 3);
     engine.setParameterSmoothed(0x4d58ff01, -24);
     engine.setParameter(0x4d58ff02, 0.25);
     let attenuated = processed;
     for (let block = 0; block < 8; block += 1) {
       attenuated = engine.process([new Float32Array(256)]);
     }
-    expect(attenuated[0].at(-1)).toBeGreaterThan(0.05);
-    expect(attenuated[0].at(-1)).toBeLessThan(0.25);
+    // 2 * 10^(-24/20) * sqrt((0.75^2 + 1) / 2): the linear law at pan 0.25 against its centre.
+    expect(attenuated[0].at(-1)).toBeCloseTo(2 * 10 ** (-24 / 20) * Math.sqrt(1.5625 / 2), 3);
     engine.destroy();
   });
 

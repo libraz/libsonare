@@ -9,6 +9,13 @@ namespace sonare::mixing {
 
 using constants::kDefaultDawSampleRate;
 
+namespace {
+
+// One spelling for both sides of the centre ratio, so pan 0 divides a value by itself.
+inline float mono_energy(PanGains g) noexcept { return g.left * g.left + g.right * g.right; }
+
+}  // namespace
+
 PannerProcessor::PannerProcessor(PannerConfig config)
     : smoothing_ms_(std::isfinite(config.smoothing_ms) && config.smoothing_ms >= 0.0f
                         ? config.smoothing_ms
@@ -56,9 +63,23 @@ void PannerProcessor::process(float* const* channels, int num_channels, int num_
     // centered stereo strip agree only under the constant-power default. That
     // difference is intentional: a mono strip conveys the pan law's energy
     // directly rather than re-balancing a stereo image it does not have.
+    // With mono_pan_centre_unity the energy is taken relative to the law's
+    // centre energy instead, so a centred block is exactly unity for every law.
+    if (mono_pan_centre_unity_.load(std::memory_order_relaxed)) {
+      if (!mono_centre_valid_ || mono_centre_law_ != law) {
+        mono_centre_energy_ = mono_energy(compute_pan_gains(0.0f, law, PanNormalization::Raw));
+        mono_centre_law_ = law;
+        mono_centre_valid_ = true;
+      }
+      for (int i = 0; i < num_samples; ++i) {
+        const PanGains g = pan_cache_.get(pan_smoother_.process(), law, PanNormalization::Raw);
+        channels[0][i] *= std::sqrt(mono_energy(g) / mono_centre_energy_);
+      }
+      return;
+    }
     for (int i = 0; i < num_samples; ++i) {
       const PanGains g = pan_cache_.get(pan_smoother_.process(), law, PanNormalization::Raw);
-      channels[0][i] *= std::sqrt(g.left * g.left + g.right * g.right);
+      channels[0][i] *= std::sqrt(mono_energy(g));
     }
     return;
   }
@@ -139,6 +160,8 @@ void PannerProcessor::copy_state_from(const PannerProcessor& other) noexcept {
                         std::memory_order_relaxed);
   pan_law_.store(other.pan_law_.load(std::memory_order_relaxed), std::memory_order_relaxed);
   pan_mode_.store(other.pan_mode_.load(std::memory_order_relaxed), std::memory_order_relaxed);
+  mono_pan_centre_unity_.store(other.mono_pan_centre_unity_.load(std::memory_order_relaxed),
+                               std::memory_order_relaxed);
 }
 
 bool PannerProcessor::at_rest_identity() const noexcept {

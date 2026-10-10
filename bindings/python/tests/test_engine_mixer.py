@@ -204,21 +204,23 @@ def test_engine_track_buses_route_lane_sends() -> None:
         # A 5.1 bus feeding a narrower (mono) output downmixes rather than
         # truncating to the front channels, so the unity-level send adds half
         # the direct level instead of doubling it.
-        assert 2.12 < out[-1] < 2.13
+        # Direct 1 + half of the unity send.
+        assert 1.49 < out[-1] < 1.51
         meter_targets = {record.target_id for record in engine.drain_meter_telemetry()}
         assert {0, 1, 33}.issubset(meter_targets)
 
         engine.set_track_lanes([{"track_id": 10, "sends": [{"bus_id": 1, "level_db": -6.0206}]}])
         engine.seek_sample(0)
         out = engine.process([[0.0] * 256])[0]
-        assert 1.76 < out[-1] < 1.78
+        # 1 + 0.5 * 10^(-6.0206/20).
+        assert 1.24 < out[-1] < 1.26
 
         engine.set_track_lanes(
             [{"track_id": 10, "sends": [{"bus_id": 1, "level_db": 0.0, "enabled": False}]}]
         )
         engine.seek_sample(0)
         out = engine.process([[0.0] * 256])[0]
-        assert 1.41 < out[-1] < 1.42
+        assert 0.99 < out[-1] < 1.01
 
         with pytest.raises(SonareError) as bad_json_error:
             engine.set_bus_strip_json(1, "{bad json")
@@ -426,13 +428,17 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
 
         engine.play()
         processed = engine.process([[0.0] * 256])
-        assert 0.65 < processed[0][-1] < 0.80
+        # Two unit clips (2) through the -12 dB master fader; a centred mono master is unity.
+        assert processed[0][-1] == pytest.approx(2 * 10 ** (-12 / 20), abs=1e-3)
         engine.set_parameter_smoothed(0x4D58FF01, -24.0)
         engine.set_parameter(0x4D58FF02, 0.25)
         attenuated = processed
         for _ in range(8):
             attenuated = engine.process([[0.0] * 256])
-        assert 0.05 < attenuated[0][-1] < 0.25
+        # 2 * 10^(-24/20) * sqrt((0.75^2 + 1) / 2): the linear law at pan 0.25 against its centre.
+        assert attenuated[0][-1] == pytest.approx(
+            2 * 10 ** (-24 / 20) * (1.5625 / 2) ** 0.5, abs=1e-3
+        )
 
 
 def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:

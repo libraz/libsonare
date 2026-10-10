@@ -126,6 +126,7 @@ ChannelStrip::ChannelStrip(ChannelStripConfig config)
       metering_enabled_(config.enable_metering),
       meter_config_(config.meter),
       eq_position_(config.eq_position) {
+  panner_.set_mono_pan_centre_unity(config.mono_pan_centre_unity);
   // Pre-reserve the vectors that the audio thread iterates while the control
   // thread may concurrently push_back into. The audio thread iterates
   // insert_automation_ in process_at() and insert_sidechains_ in
@@ -510,7 +511,8 @@ void ChannelStrip::process_unsegmented(float* const* channels, int num_channels,
 
   fader_.process(channels, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
-  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law.
+  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law,
+  // relative to its centre energy when the strip asked for mono_pan_centre_unity.
   if (num_channels == 1 || (num_channels == 2 && !panner_.at_rest_identity())) {
     panner_.process(channels, num_channels, num_samples);
   }
@@ -604,7 +606,8 @@ void ChannelStrip::process_segment(float* const* channels, int num_channels, int
 
   fader_.process(segment, num_channels, num_samples);
   // Stereo pan and width are undefined on a surround bed, so wider blocks skip them.
-  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law.
+  // The at-rest skip is exact only on a stereo pair; a mono block still takes the pan law,
+  // relative to its centre energy when the strip asked for mono_pan_centre_unity.
   if (num_channels == 1 || (num_channels == 2 && !panner_.at_rest_identity())) {
     panner_.process(segment, num_channels, num_samples);
   }

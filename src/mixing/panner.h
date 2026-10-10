@@ -54,6 +54,18 @@ class PannerProcessor : public rt::ProcessorBase {
   float dual_pan_left() const noexcept { return dual_pan_left_.load(std::memory_order_relaxed); }
   float dual_pan_right() const noexcept { return dual_pan_right_.load(std::memory_order_relaxed); }
 
+  /// @brief Measures a mono block's pan gain against the law's centre energy.
+  /// @details When enabled, the mono gain is sqrt((l^2 + r^2) / (lc^2 + rc^2)) with
+  ///          lc, rc the law's raw gains at pan 0, so a centred mono signal is
+  ///          exactly unity under every law while an off-centre pan stays audible.
+  ///          Off (the default), the mono gain is the law's raw sqrt(l^2 + r^2).
+  void set_mono_pan_centre_unity(bool enabled) noexcept {
+    mono_pan_centre_unity_.store(enabled, std::memory_order_relaxed);
+  }
+  bool mono_pan_centre_unity() const noexcept {
+    return mono_pan_centre_unity_.load(std::memory_order_relaxed);
+  }
+
   /// @brief Copies the in-flight DSP state from another panner.
   /// @details The source and destination must be control-quiescent: neither may
   ///          be processed or mutated concurrently. This is an allocation-free
@@ -101,11 +113,16 @@ class PannerProcessor : public rt::ProcessorBase {
   GainCache pan_cache_;
   GainCache dual_left_cache_;
   GainCache dual_right_cache_;
+  // Audio-thread copy of the active law's raw centre energy, re-evaluated only when the law moves.
+  PanLaw mono_centre_law_ = PanLaw::Const3dB;
+  float mono_centre_energy_ = 0.0f;
+  bool mono_centre_valid_ = false;
   std::atomic<float> pan_{0.0f};
   std::atomic<float> dual_pan_left_{-1.0f};
   std::atomic<float> dual_pan_right_{1.0f};
   std::atomic<PanLaw> pan_law_{PanLaw::Const3dB};
   std::atomic<PanMode> pan_mode_{PanMode::Balance};
+  std::atomic<bool> mono_pan_centre_unity_{false};
 };
 
 }  // namespace sonare::mixing

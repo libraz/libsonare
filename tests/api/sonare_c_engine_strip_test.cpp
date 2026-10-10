@@ -647,9 +647,9 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   float* io[] = {out.data()};
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   // Direct lane x plus the 0 dB send into the 5.1 bus's front-left plane, which
-  // folds to the mono output at 0.5x (stereo fold, then average): 1.5x.
-  REQUIRE(out.back() > 2.11f);
-  REQUIRE(out.back() < 2.13f);
+  // folds to the mono output at 0.5x (stereo fold, then average): 1.5x. The
+  // send-seeded lane strip is unity at centre on a mono render.
+  REQUIRE(out.back() == Catch::Approx(1.5f).margin(1e-4f));
   // max_records == 0 is documented as a safe no-op, NOT a way to probe the
   // pending backlog without draining: it must report 0 here even though the
   // real drain immediately below finds records.
@@ -680,16 +680,14 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
   out.fill(0.0f);
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   // The -6 dB send halves the folded 0.5x contribution: x + 0.25x.
-  REQUIRE(out.back() > 1.76f);
-  REQUIRE(out.back() < 1.78f);
+  REQUIRE(out.back() == Catch::Approx(1.25f).margin(1e-4f));
 
   send[0].enabled = 0;
   REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
   REQUIRE(sonare_engine_seek_sample(engine, 0, -1) == SONARE_OK);
   out.fill(0.0f);
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
-  REQUIRE(out.back() > 1.41f);
-  REQUIRE(out.back() < 1.42f);
+  REQUIRE(out.back() == Catch::Approx(1.0f).margin(1e-4f));
 
   send[0].enabled = 1;
   send[0].level_db = 0.0f;
@@ -702,8 +700,7 @@ TEST_CASE("sonare_engine track buses route lane sends", "[c_api][engine]") {
     REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   }
   // A -6 dB bus gain halves the folded contribution the same way: x + 0.25x.
-  REQUIRE(out.back() > 1.76f);
-  REQUIRE(out.back() < 1.78f);
+  REQUIRE(out.back() == Catch::Approx(1.25f).margin(1e-3f));
 
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 1, "{bad json") == SONARE_ERROR_INVALID_FORMAT);
   const char* bus_strip_json =
@@ -1474,8 +1471,9 @@ TEST_CASE("sonare_engine_set_track_strip_json processes lane strip", "[c_api][en
   std::array<float, kBlock> left{};
   float* io[] = {left.data()};
   REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
-  REQUIRE(left.back() > 1.20f);
-  REQUIRE(left.back() < 1.40f);
+  // Track 10's -12 dB spec strip is unity at centre under its Linear0dB law on a
+  // mono render; track 20 has no strip and arrives at unity.
+  REQUIRE(left.back() == Catch::Approx(1.0f + std::pow(10.0f, -12.0f / 20.0f)).margin(1e-3f));
 #else
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, "{}") == SONARE_ERROR_NOT_SUPPORTED);
 #endif
@@ -1654,8 +1652,9 @@ TEST_CASE("sonare_engine_set_master_strip_json processes master strip", "[c_api]
     left.fill(0.0f);
     REQUIRE(sonare_engine_process(engine, io, 1, kBlock) == SONARE_OK);
   }
-  REQUIRE(left.back() > 0.65f);
-  REQUIRE(left.back() < 0.80f);
+  // Two unity tracks through the -12 dB master, whose Linear0dB law is unity at
+  // centre on a mono render.
+  REQUIRE(left.back() == Catch::Approx(2.0f * std::pow(10.0f, -12.0f / 20.0f)).margin(1e-3f));
   REQUIRE(sonare_engine_set_parameter_smoothed(engine, engine_master_param_target(1), -24.0f, -1) ==
           SONARE_OK);
   REQUIRE(sonare_engine_set_parameter(engine, engine_master_param_target(2), 0.25f, -1) ==
