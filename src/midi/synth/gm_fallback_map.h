@@ -218,4 +218,9 @@ std::vector<GsEfxStage> gm_rig_chain(uint8_t id);
 int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
                                      float release_scale) noexcept;
 
+/// The same bound over the drum table alone, every GS kit included: what a
+/// percussion kit patch can ring, since a program change on it only selects kits.
+int64_t gm_drum_kit_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
+                                     float release_scale) noexcept;
+
 }  // namespace sonare::midi::synth

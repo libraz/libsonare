@@ -70,11 +70,15 @@ NativeSynth::NativeSynth(const NativeSynthConfig& config) : config_(config) {
 }
 
 int64_t NativeSynth::recompute_tail() const noexcept {
-  // GM mode resolves the patch per program at note-on, so the fallback tables bound it.
-  const bool gm_tables =
-      config_.use_gm_programs ||
-      (config_.patch.mode == SynthEngineMode::kPercussion && config_.patch.percussion.gm_kit);
   const EnvelopeTimeScales scales = gs_tail_scales();
+  // A kit patch resolves each note against the drum table and a program change only selects
+  // kits, so neither the melodic programs nor the piano and guitar halos are reachable.
+  if (!config_.use_gm_programs && config_.patch.mode == SynthEngineMode::kPercussion &&
+      config_.patch.percussion.gm_kit) {
+    return gm_drum_kit_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release);
+  }
+  // GM mode resolves the patch per program at note-on, so the fallback tables bound it.
+  const bool gm_tables = config_.use_gm_programs;
   int64_t tail =
       gm_tables
           ? gm_fallback_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release)

@@ -54,6 +54,7 @@
 #include "mastering/stereo/imager.h"
 #include "mastering/stereo/mono_maker.h"
 #include "rt/processor_base.h"
+#include "rt/tail_budget.h"
 #include "util/constants.h"
 
 using sonare::effects::delay::StereoDelay;
@@ -276,6 +277,66 @@ TEST_CASE("FdnReverb reports a non-zero decay tail", "[effects][reverb][fdn]") {
   reverb.prepare(48000.0, 512);
   // decay 0.6 -> T60_lf = 6 s -> ~288000 samples at 48 kHz.
   REQUIRE(reverb.tail_samples() > 48000);
+}
+
+TEST_CASE("FdnReverb tail bounds the measured unit-impulse decay without overshooting",
+          "[effects][reverb][fdn]") {
+  // Pairwise cover of decay x damping x rate x wet (see rt/tail_budget.h: a tail ends where a
+  // unit impulse's residual falls below kTailFloor).
+  struct Row {
+    float decay;
+    float damping;
+    double rate;
+    float wet;
+  };
+  const std::vector<Row> rows = {
+      {1.5f, 0.5f, 48000, 0.35f},   {0.55f, 0.5f, 44100, 1.0f},  {1.5f, 1.0f, 96000, 1.0f},
+      {0.02f, 0.25f, 44100, 0.35f}, {0.1f, 0.0f, 96000, 0.35f},  {1.5f, 1.0f, 44100, 0.35f},
+      {0.02f, 0.0f, 48000, 1.0f},   {0.02f, 0.5f, 96000, 0.35f}, {0.55f, 0.0f, 48000, 0.35f},
+      {1.0f, 0.25f, 96000, 1.0f},   {0.1f, 0.5f, 48000, 1.0f},   {0.55f, 1.0f, 48000, 1.0f},
+      {1.0f, 0.0f, 48000, 1.0f},    {0.1f, 0.0f, 44100, 1.0f},   {1.0f, 0.5f, 44100, 0.35f},
+      {1.0f, 1.0f, 96000, 1.0f},    {0.02f, 1.0f, 44100, 0.35f}, {1.5f, 0.0f, 48000, 1.0f},
+      {0.55f, 0.25f, 96000, 1.0f},  {1.0f, 0.25f, 48000, 1.0f},  {0.1f, 1.0f, 96000, 1.0f},
+      {0.1f, 0.25f, 96000, 1.0f},   {1.5f, 0.25f, 96000, 1.0f},
+  };
+  double max_ratio = 0.0;
+  for (const Row& row : rows) {
+    FdnReverbConfig config;
+    config.decay = row.decay;
+    config.hf_damping = row.damping;
+    config.dry_wet = row.wet;
+    FdnReverb reverb(config);
+    reverb.prepare(row.rate, 512);
+    const int tail = reverb.tail_samples();
+    constexpr int kBlock = 512;
+    const int total = tail + static_cast<int>(row.rate);
+    std::vector<float> left(static_cast<size_t>(total), 0.0f);
+    std::vector<float> right(static_cast<size_t>(total), 0.0f);
+    left[0] = right[0] = 1.0f;
+    for (int pos = 0; pos < total; pos += kBlock) {
+      float* block[2] = {left.data() + pos, right.data() + pos};
+      reverb.process(block, 2, std::min(kBlock, total - pos));
+    }
+    int measured = 0;
+    for (int i = 1; i < total; ++i) {
+      const size_t k = static_cast<size_t>(i);
+      if (std::fabs(left[k]) > sonare::rt::kTailFloor ||
+          std::fabs(right[k]) > sonare::rt::kTailFloor) {
+        measured = i;
+      }
+    }
+    INFO("decay=" << row.decay << " damping=" << row.damping << " rate=" << row.rate
+                  << " wet=" << row.wet << " tail=" << tail << " measured=" << measured);
+    REQUIRE(measured > 0);
+    CHECK(tail >= measured);
+    const double ratio = static_cast<double>(tail) / measured;
+    max_ratio = std::max(max_ratio, ratio);
+    // A decay of a fraction of a second is mostly the line delay and the blocker's ring, which
+    // the bound adds rather than overlaps.
+    CHECK(ratio <= (row.decay >= 0.1f ? 1.3 : 2.0));
+  }
+  INFO("max reported/measured ratio = " << max_ratio);
+  CHECK(max_ratio > 1.0);
 }
 
 TEST_CASE("VelvetReverb reports a non-zero decay tail", "[effects][reverb][velvet]") {

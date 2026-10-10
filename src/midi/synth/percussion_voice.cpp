@@ -71,6 +71,12 @@ float radius_for(double sample_rate, float t60_s) noexcept {
 /// number, and without this a low enough ratio reaches a radius of exactly 1.
 constexpr float kMaxModeDecayS = 30.0f;
 
+/// Highest start frequency, as a fraction of pi, the strike-level normalization reads.
+constexpr float kStrikeBandEdge = 0.95f;
+
+/// Floor under sin(w) so a start frequency at the band edge cannot divide by zero.
+constexpr float kMinSinW = 1.0e-6f;
+
 /// Magnitude spectrum of a raised-cosine contact force of duration tau, read at
 /// x = f * tau and normalised to unity at DC: |sinc(x) / (1 - x^2)|.
 float contact_spectrum(float x) noexcept {
@@ -179,7 +185,10 @@ void PercussionVoiceCore::start(const PercussionPatchParams& params, double samp
       radiation = std::min(1.0f, wavenumber * params.shell_depth_m * kDipolePerKl);
     }
     // render() rebuilds the impulse gain from the bent frequency, so a bend keeps the level.
-    mode.peak_gain = strike * strike_pos * radiation;
+    // The strike starts on the dropped frequency; the factor keeps its level at the resting one's.
+    const float start_w = std::min(mode.omega * start_ratio, kStrikeBandEdge * kPi);
+    const float drop_norm = std::sin(mode.omega) / std::max(kMinSinW, std::sin(start_w));
+    mode.peak_gain = strike * strike_pos * radiation * drop_norm;
     mode.gain = 0.0f;
     mode.audible = false;
     // The head's own peak swing at unit excitation. Every mode is impulse-

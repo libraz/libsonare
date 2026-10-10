@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -113,16 +114,75 @@ void FdnReverb::discard_non_finite() noexcept {
   for (auto& delay : delays_) delay.reset();
 }
 
+double FdnReverb::decay_to_floor_seconds() const noexcept {
+  // Past the first few passes the response is a dense field: the energy left in the lines is
+  // spread over their storage, so one output sample has about E/(4 d) per line, and its peak is
+  // a crest factor above that rms. The energy is the unit input's (one per line) taken through
+  // the output filter and each tone's slowest line, summed over a log-spaced frequency grid.
+  constexpr int kGridPoints = 96;
+  constexpr double kLowestRad = 1.0e-4;
+  constexpr double kCrestFactor = 8.0;
+  constexpr int kBisections = 60;
+  const double pole = dc_blocker_.pole();
+  const double step = std::pow(constants::kPiD / kLowestRad, 1.0 / (kGridPoints - 1));
+  const double log_step = std::log(step);
+  std::array<double, kGridPoints> weight{};
+  std::array<double, kGridPoints> rate_db_s{};
+  double w = kLowestRad;
+  for (int k = 0; k < kGridPoints; ++k, w *= step) {
+    const double cos_w = std::cos(std::min(w, constants::kPiD));
+    const double blocker_power = (2.0 - 2.0 * cos_w) / (1.0 - 2.0 * pole * cos_w + pole * pole);
+    weight[static_cast<size_t>(k)] = blocker_power * w * log_step / constants::kPiD;
+    double slowest = std::numeric_limits<double>::infinity();
+    for (size_t i = 0; i < delays_.size(); ++i) {
+      const double a1 = a1_[i];
+      const double gain_db =
+          20.0 * std::log10(b0_[i]) - 10.0 * std::log10(1.0 - 2.0 * a1 * cos_w + a1 * a1);
+      if (!(gain_db < 0.0)) return -1.0;
+      slowest = std::min(slowest, -gain_db * sample_rate_ / lengths_[i]);
+    }
+    rate_db_s[static_cast<size_t>(k)] = slowest;
+  }
+  // One output sample differences two lines; the shorter pair holds the most energy per sample.
+  const double per_sample =
+      std::max(1.0 / lengths_[0] + 1.0 / lengths_[2], 1.0 / lengths_[1] + 1.0 / lengths_[3]);
+  const double floor_power = rt::kTailFloor * rt::kTailFloor / (kCrestFactor * kCrestFactor);
+  const auto peak_power = [&](double t) {
+    double sum = 0.0;
+    for (size_t k = 0; k < weight.size(); ++k) {
+      sum += weight[k] * std::pow(10.0, -rate_db_s[k] * t / 10.0);
+    }
+    return per_sample * sum;
+  };
+  double high = 1.0;
+  while (peak_power(high) > floor_power && high < 1.0e4) high *= 2.0;
+  double low = 0.0;
+  for (int i = 0; i < kBisections; ++i) {
+    const double mid = 0.5 * (low + high);
+    (peak_power(mid) > floor_power ? low : high) = mid;
+  }
+  return high;
+}
+
 int FdnReverb::tail_samples() const noexcept {
   if (std::clamp(config_.dry_wet, 0.0f, 1.0f) <= 0.0f) return 0;
-  // The first reflection leaves the longest line before any decay is heard; the low band has the
-  // longest T60 in the network (see update_absorption()), then the DC blocker rings out.
-  const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
+  // The first reflection leaves the longest line before any decay is heard. The DC blocker then
+  // rings on the net area of the echoes (at most one unit per line), its step response (1 - pole)
+  // p^n, which a short loop leaves standing after the field itself has gone.
+  constexpr double kBlockerArea = 4.0;
+  const double pole = dc_blocker_.pole();
   rt::TailBudget tail;
-  tail.delay(*std::max_element(lengths_.begin(), lengths_.end()))
-      .t60(t60_lf, sample_rate_)
-      .decay(dc_blocker_.pole());
-  return tail.samples();
+  tail.delay(*std::max_element(lengths_.begin(), lengths_.end()));
+  const double decay_s = prepared_ ? decay_to_floor_seconds() : -1.0;
+  if (decay_s >= 0.0) {
+    tail.seconds(decay_s, sample_rate_);
+  } else {
+    // Unprepared (no absorption yet) or a loop that does not decay: the DC T60 bounds either.
+    const float t60_lf = std::max(0.01f, std::clamp(config_.decay, 0.0f, 1.5f) * 10.0f);
+    tail.t60(t60_lf, sample_rate_);
+  }
+  const double ring = std::log(rt::kTailFloor / (kBlockerArea * (1.0 - pole))) / std::log(pole);
+  return tail.delay(ring).samples();
 }
 
 bool FdnReverb::set_parameter_impl(unsigned int param_id, float value) {

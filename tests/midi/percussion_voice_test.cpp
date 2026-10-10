@@ -12,6 +12,7 @@
 
 #include "midi/midi_event.h"
 #include "midi/synth/bessel.h"
+#include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/native_synth.h"
 #include "midi/ump.h"
 #include "support/midi_render.h"
@@ -1407,4 +1408,56 @@ TEST_CASE("a particle voice is not silent between collisions that are still to c
     // The gap between grains is not the end: the voice outlives its first quiet stretch.
     CHECK(first_silent > static_cast<size_t>(2.0 * rate));
   }
+}
+
+TEST_CASE("percussion strike level is the resting one's whatever the pitch_drop",
+          "[midi][synth][percussion]") {
+  // The two-pole impulse gain is sin(w) and its swing gain / sin(w). A strike starting on the
+  // dropped frequency must carry the gain of the resting one, so its swing is sin(omega) /
+  // sin(omega * (1 + drop)) of an undropped mode's; without the start normalization the swing
+  // would equal the undropped one and a drop of 1.5 would be 8 dB louder than the calibration.
+  constexpr float kBaseHz = 400.0f;
+  constexpr float kDrop = 1.5f;
+  const PercussionPatchParams plain = single_modal_percussion(kBaseHz);
+  PercussionPatchParams dropped = plain;
+  dropped.pitch_drop = kDrop;
+  dropped.pitch_drop_ms = 5000.0f;  // the pitch is still near its start for the whole window
+  const float reference = percussion_ratio_peak(plain, 1.0f, 0, 256);
+  const float strike = percussion_ratio_peak(dropped, 1.0f, 0, 256);
+  REQUIRE(reference > 0.01f);
+  const float omega = 2.0f * 3.14159265f * kBaseHz / static_cast<float>(kRate);
+  const float expected = reference * std::sin(omega) / std::sin(omega * (1.0f + kDrop));
+  INFO("reference peak = " << reference << ", dropped strike peak = " << strike
+                           << ", expected = " << expected);
+  CHECK(strike > 0.85f * expected);
+  CHECK(strike < 1.15f * expected);
+}
+
+TEST_CASE("a drum-kit patch bounds its tail by the drum table alone",
+          "[midi][synth][percussion][gs-tail]") {
+  NativeSynthConfig cfg;
+  cfg.patch = drum_kit_patch();
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 512);
+  const int64_t tail = synth.tail_samples();
+  CHECK(tail == sonare::midi::synth::gm_drum_kit_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f));
+  CHECK(tail < sonare::midi::synth::gm_fallback_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f));
+
+  // The longest-ringing key must still be inside the bound.
+  constexpr int kBlock = 512;
+  const int total = static_cast<int>(tail) + kBlock;
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 54, 127)));
+  std::vector<float> left(kBlock), right(kBlock);
+  int last_audible = 0;
+  for (int pos = 0; pos < total; pos += kBlock) {
+    std::fill(left.begin(), left.end(), 0.0f);
+    std::fill(right.begin(), right.end(), 0.0f);
+    float* chans[2] = {left.data(), right.data()};
+    synth.process(chans, 2, kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      if (std::fabs(left[static_cast<size_t>(i)]) > 1.0e-5f) last_audible = pos + i;
+    }
+  }
+  INFO("last audible sample = " << last_audible << ", tail = " << tail);
+  CHECK(last_audible <= tail);
 }

@@ -1305,20 +1305,25 @@ void observe_fallback_tail(FallbackTailBounds& bounds, const NativeSynthPatch& p
   }
 }
 
+/// Folds every kit of every note into \p bounds.
+void observe_drum_kit_tails(FallbackTailBounds& bounds) noexcept {
+  // Every kit of every note: open triangle, belltree and TR-808 outring the Standard kit.
+  for (const NativeSynthPatch& piece : drum_note_table()) {
+    const uint8_t note = static_cast<uint8_t>(&piece - drum_note_table().data());
+    for (size_t kit = 0; kit < kGsDrumKits.size(); ++kit) {
+      NativeSynthPatch varied = piece;
+      apply_gs_drum_kit(varied.percussion, varied.amp_env, static_cast<uint8_t>(kit), note);
+      observe_fallback_tail(bounds, varied, &piece);
+    }
+  }
+}
+
 const FallbackTailBounds& fallback_tail_bounds() noexcept {
   static const FallbackTailBounds kBounds = [] {
     FallbackTailBounds bounds;
     const auto& families = family_patches();
     for (size_t i : detail::kLiveBases) observe_fallback_tail(bounds, families[i], &families[i]);
-    // Every kit of every note: open triangle, belltree and TR-808 outring the Standard kit.
-    for (const NativeSynthPatch& piece : drum_note_table()) {
-      const uint8_t note = static_cast<uint8_t>(&piece - drum_note_table().data());
-      for (size_t kit = 0; kit < kGsDrumKits.size(); ++kit) {
-        NativeSynthPatch varied = piece;
-        apply_gs_drum_kit(varied.percussion, varied.amp_env, static_cast<uint8_t>(kit), note);
-        observe_fallback_tail(bounds, varied, &piece);
-      }
-    }
+    observe_drum_kit_tails(bounds);
     const NativeSynthPatch* overrides = detail::program_override_patches(program_overrides());
     for (std::size_t i = 0; i < detail::kProgramOverrideCount; ++i) {
       observe_fallback_tail(bounds, overrides[i], &overrides[i]);
@@ -1328,11 +1333,17 @@ const FallbackTailBounds& fallback_tail_bounds() noexcept {
   return kBounds;
 }
 
-}  // namespace
+const FallbackTailBounds& drum_kit_tail_bounds() noexcept {
+  static const FallbackTailBounds kBounds = [] {
+    FallbackTailBounds bounds;
+    observe_drum_kit_tails(bounds);
+    return bounds;
+  }();
+  return kBounds;
+}
 
-int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
-                                     float release_scale) noexcept {
-  const FallbackTailBounds& bounds = fallback_tail_bounds();
+int64_t tail_samples_for(const FallbackTailBounds& bounds, double sample_rate, float attack_scale,
+                         float decay_scale, float release_scale) noexcept {
   if (bounds.unbounded) return std::numeric_limits<int64_t>::max();
   const float stage_ms = std::max(bounds.max_release_ms * std::max(0.0f, release_scale),
                                   bounds.max_zero_sustain_decay_ms * std::max(0.0f, decay_scale));
@@ -1348,6 +1359,20 @@ int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, flo
     tail = std::max(tail, fm_one_shot_tail_samples(*bounds.sustained_fm[i], sample_rate));
   }
   return tail;
+}
+
+}  // namespace
+
+int64_t gm_fallback_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
+                                     float release_scale) noexcept {
+  return tail_samples_for(fallback_tail_bounds(), sample_rate, attack_scale, decay_scale,
+                          release_scale);
+}
+
+int64_t gm_drum_kit_max_tail_samples(double sample_rate, float attack_scale, float decay_scale,
+                                     float release_scale) noexcept {
+  return tail_samples_for(drum_kit_tail_bounds(), sample_rate, attack_scale, decay_scale,
+                          release_scale);
 }
 
 }  // namespace sonare::midi::synth

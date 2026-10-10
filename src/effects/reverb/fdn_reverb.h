@@ -40,6 +40,10 @@ class FdnReverb : public rt::ProcessorBase {
   // decay / hf_damping config, the prepared delay lengths, and the sample rate.
   void update_absorption();
 
+  // Seconds after the first reflection until the output's peak falls to the tail floor;
+  // negative when a line does not decay.
+  double decay_to_floor_seconds() const noexcept;
+
   // Returns the network to rest once a non-finite value has reached it, once
   // per block (see util/non_finite_state.h).
   void discard_non_finite() noexcept;
