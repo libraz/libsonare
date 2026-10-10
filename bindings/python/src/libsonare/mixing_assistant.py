@@ -31,6 +31,7 @@ from ._runtime import (
     _narrow_int,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int_array,
     _to_c_size_t,
     _utf8_arg,
     _validate_c_int_field,
@@ -203,7 +204,7 @@ def _build_track_arrays(
     )
     length_array = (ctypes.c_size_t * count)(*lengths)
     # NULL when no track names its own rate: every track is at the call's rate.
-    rate_array = (ctypes.c_int * count)(*sample_rates) if any_rate else None
+    rate_array = _to_c_int_array(sample_rates, f"{fn_name}: sample_rates")[0] if any_rate else None
 
     pins: list[Any] = [left_arrays, right_arrays, id_buffers, name_buffers]
     return _TrackArrays(
