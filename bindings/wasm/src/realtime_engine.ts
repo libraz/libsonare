@@ -1012,6 +1012,63 @@ export class RealtimeEngine {
   }
 
   /**
+   * Queue a live MIDI 2.0 Program Change, with an optional bank, to a MIDI
+   * destination. The bank is applied only when `bankValid` is true; a non-zero
+   * `bankMsb`/`bankLsb` with `bankValid` false is refused. `group`/`channel` are
+   * 0..15, `program`/`bankMsb`/`bankLsb` 0..127. The message takes the same
+   * receive path as {@link pushMidiUmp}, so a receiver that selects no programs
+   * (builtin synth, a part with RX PROGRAM CHANGE off, an MPE member channel)
+   * accepts and ignores it. Throws when the slot ring or command queue is full.
+   * `renderFrame` is the frame to fire at (omit for immediate).
+   */
+  pushMidiProgram(
+    destinationId: number,
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+    renderFrame?: number,
+  ): void {
+    this.native.pushMidiProgram(
+      destinationId,
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+      resolveRenderFrame('pushMidiProgram', renderFrame),
+    );
+  }
+
+  /**
+   * Push a live MIDI 2.0 Program Change to the engine-owned MIDI input source.
+   * The arguments and refusals match {@link pushMidiProgram}; `portTimeSamples`
+   * is the port timestamp in samples.
+   */
+  pushMidiInputProgram(
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputProgram(
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+      portTimeSamples,
+    );
+  }
+
+  /**
    * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
    * source. The message rules match {@link pushMidiUmp}. `portTimeSamples` is
    * the port timestamp in samples.

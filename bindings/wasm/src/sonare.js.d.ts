@@ -1735,6 +1735,25 @@ export interface WasmRealtimeEngine {
     renderFrame?: number,
   ) => void;
   pushMidiInputUmp: (words: Uint32Array | readonly number[], portTimeSamples: number) => void;
+  pushMidiProgram: (
+    destinationId: number,
+    group: number,
+    channel: number,
+    program: number,
+    bankValid: boolean,
+    bankMsb: number,
+    bankLsb: number,
+    renderFrame?: number,
+  ) => void;
+  pushMidiInputProgram: (
+    group: number,
+    channel: number,
+    program: number,
+    bankValid: boolean,
+    bankMsb: number,
+    bankLsb: number,
+    portTimeSamples: number,
+  ) => void;
   pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame?: number) => void;
   pushMidiPanic: (renderFrame?: number) => void;
   setMidiDestinationExternal: (destinationId: number, external: boolean) => void;

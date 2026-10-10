@@ -1167,6 +1167,29 @@ export class SonareEngine {
     strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
   }
 
+  pushMidiProgram(
+    trackId: string | number,
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+    renderFrame?: number,
+  ): void {
+    strips.pushMidiProgram(
+      this.stripContext,
+      trackId,
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+      renderFrame,
+    );
+  }
+
   pushMidiSysex(trackId: string | number, data: Uint8Array, renderFrame?: number): void {
     strips.pushMidiSysex(this.stripContext, trackId, data, renderFrame);
   }

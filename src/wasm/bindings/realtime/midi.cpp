@@ -1320,6 +1320,102 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_tim
 #endif
 }
 
+namespace {
+struct ProgramArgs {
+  int group;
+  int channel;
+  int program;
+  bool bank_valid;
+  int bank_msb;
+  int bank_lsb;
+};
+
+// Reads and validates the typed program-change arguments shared by the
+// destination and input pushes; @p what names the entry point in the refusal.
+ProgramArgs programArgsFromVal(const val& group_val, const val& channel_val, const val& program_val,
+                               const val& bank_valid_val, const val& bank_msb_val,
+                               const val& bank_lsb_val, const char* what) {
+  ProgramArgs args{};
+  args.group = checkedIntFromVal(group_val, "group");
+  args.channel = checkedIntFromVal(channel_val, "channel");
+  args.program = checkedIntFromVal(program_val, "program");
+  args.bank_valid = optionalBool(bank_valid_val, "bankValid").value_or(false);
+  args.bank_msb = bank_msb_val.isUndefined() ? 0 : checkedIntFromVal(bank_msb_val, "bankMsb");
+  args.bank_lsb = bank_lsb_val.isUndefined() ? 0 : checkedIntFromVal(bank_lsb_val, "bankLsb");
+  if (args.group < 0 || args.group > 15 || args.channel < 0 || args.channel > 15 ||
+      args.program < 0 || args.program > 127 || args.bank_msb < 0 || args.bank_msb > 127 ||
+      args.bank_lsb < 0 || args.bank_lsb > 127) {
+    throw WasmRangeError(std::string(what) +
+                         ": group/channel in [0,15], program/bankMsb/bankLsb in [0,127]");
+  }
+  if (!args.bank_valid && (args.bank_msb != 0 || args.bank_lsb != 0)) {
+    throw WasmRangeError(std::string(what) +
+                         ": bank MSB and LSB must be 0 when bank-valid is false");
+  }
+  return args;
+}
+}  // namespace
+
+// Queues one typed live MIDI 2.0 Program Change (with optional bank) to a MIDI
+// destination at @p render_frame (-1 = immediate). The words go through the
+// same enqueue as pushMidiUmp, so the receiver's own Rx gates apply. Arguments
+// are validated here because this path inherits no C-ABI guard.
+void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const val& group_val,
+                                         const val& channel_val, const val& program_val,
+                                         const val& bank_valid_val, const val& bank_msb_val,
+                                         const val& bank_lsb_val, const val& render_frame_val) {
+  const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
+  const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
+                                              bank_msb_val, bank_lsb_val, "pushMidiProgram");
+  const int64_t render_frame = renderFrameFromVal(render_frame_val);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const sonare::midi::Ump ump = sonare::midi::make_midi2_program_change(
+      static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
+      static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
+      static_cast<uint8_t>(args.bank_lsb), args.bank_valid);
+  const auto result =
+      engine_.push_midi_ump(destination_id, ump.words, ump.word_count, render_frame);
+  if (result == sonare::engine::MidiUmpPushResult::kQueued) return;
+  throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                "failed to queue MIDI program command");
+#else
+  (void)destination_id;
+  (void)render_frame;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
+// Pushes one typed MIDI 2.0 Program Change to the engine-owned MIDI input
+// source. Mirrors the C ABI sonare_engine_push_midi_input_program.
+void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& channel_val,
+                                              const val& program_val, const val& bank_valid_val,
+                                              const val& bank_msb_val, const val& bank_lsb_val,
+                                              int64_t port_time_samples) {
+  const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
+                                              bank_msb_val, bank_lsb_val, "pushMidiInputProgram");
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (!midi_input_source_enabled_) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "pushMidiInputProgram: the MIDI input source is not enabled");
+  }
+  if (!midi_input_source_.push_event(
+          sonare::midi::make_midi2_program_change(
+              static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
+              static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
+              static_cast<uint8_t>(args.bank_lsb), args.bank_valid),
+          port_time_samples)) {
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
+                                  "failed to enqueue MIDI input program change");
+  }
+#else
+  (void)args;
+  (void)port_time_samples;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "arrangement/MIDI engine is not available in this build");
+#endif
+}
+
 void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
                                       int64_t render_frame) {
   sonare::rt::Command command{};
@@ -1585,6 +1681,8 @@ void registerRealtimeEngineMidi(class_<RealtimeEngineWasm>& cls) {
       .function("pushMidiPolyPressure", &RealtimeEngineWasm::pushMidiPolyPressure)
       .function("pushMidiUmp", &RealtimeEngineWasm::pushMidiUmp)
       .function("pushMidiInputUmp", &RealtimeEngineWasm::pushMidiInputUmp)
+      .function("pushMidiProgram", &RealtimeEngineWasm::pushMidiProgram)
+      .function("pushMidiInputProgram", &RealtimeEngineWasm::pushMidiInputProgram)
       .function("pushMidiSysex", &RealtimeEngineWasm::pushMidiSysex)
       .function("pushMidiPanic", &RealtimeEngineWasm::pushMidiPanic)
       .function("setMidiDestinationExternal", &RealtimeEngineWasm::setMidiDestinationExternal)

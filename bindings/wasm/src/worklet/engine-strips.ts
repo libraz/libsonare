@@ -1,6 +1,7 @@
 import { panLawCode, panModeCode } from '../codes.js';
 import { ErrorCode, SonareError } from '../errors.js';
 import type { EqBand, PanLawInput, PanMode, RealtimeEngine, UmpWords } from '../index.js';
+import { packMidi2Program } from '../midi_program_pack.js';
 import type { SurroundPan } from '../public_types.js';
 import { resolveRenderFrame } from '../validation.js';
 import { commitSync } from './engine-commit.js';
@@ -631,6 +632,29 @@ export function pushMidiUmp(
     words,
     renderFrame: resolveRenderFrame('pushMidiUmp', renderFrame),
   });
+}
+
+export function pushMidiProgram(
+  ctx: EngineStripContext,
+  trackId: string | number,
+  group: number,
+  channel: number,
+  program: number,
+  bankValid: boolean,
+  bankMsb: number,
+  bankLsb: number,
+  renderFrame: number | undefined,
+): void {
+  const words = packMidi2Program(
+    'pushMidiProgram',
+    group,
+    channel,
+    program,
+    bankValid,
+    bankMsb,
+    bankLsb,
+  );
+  pushMidiUmp(ctx, trackId, Uint32Array.from(words), renderFrame);
 }
 
 export function setBuiltinInstrument(

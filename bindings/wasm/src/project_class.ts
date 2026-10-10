@@ -12,6 +12,7 @@ import type {
   Sf2ProgramStatus,
   SynthPatch,
 } from './instrument_types.js';
+import { packMidi2Program } from './midi_program_pack.js';
 import {
   assertProjectMidiEvents,
   normalizeInstrumentBindings,
@@ -506,7 +507,8 @@ export class Project {
 
   /**
    * Pack a MIDI 2.0 program-change event. The bank travels in the same message
-   * and is applied only when `bankValid` is true.
+   * and is applied only when `bankValid` is true; a non-zero bank with
+   * `bankValid` false is refused.
    */
   static midi2Program(
     ppq: number,
@@ -518,11 +520,19 @@ export class Project {
     bankLsb = 0,
   ): ProjectMidiEvent {
     const fn = 'Project.midi2Program';
-    const p = assertU7(fn, program, 'program');
-    const msb = assertU7(fn, bankMsb, 'bankMsb');
-    const lsb = assertU7(fn, bankLsb, 'bankLsb');
-    const word1 = ((p << 24) | (msb << 8) | lsb) >>> 0;
-    return midi2Event(fn, ppq, group, 0xc, channel, 0, bankValid ? 1 : 0, word1);
+    if (!Number.isFinite(ppq) || ppq < 0) {
+      throw new RangeError(`${fn}: ppq must be a non-negative finite number`);
+    }
+    const [data0, data1] = packMidi2Program(
+      fn,
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+    );
+    return { ppq, data0, data1 };
   }
 
   /** Pack a MIDI 2.0 registered controller (RPN) event. */

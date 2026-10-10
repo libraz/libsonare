@@ -208,6 +208,16 @@ class RealtimeEngineWasm {
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& words_val,
                    const emscripten::val& render_frame_val);
   void pushMidiInputUmp(const emscripten::val& words_val, int64_t port_time_samples);
+  void pushMidiProgram(const emscripten::val& destination_id_val, const emscripten::val& group_val,
+                       const emscripten::val& channel_val, const emscripten::val& program_val,
+                       const emscripten::val& bank_valid_val, const emscripten::val& bank_msb_val,
+                       const emscripten::val& bank_lsb_val,
+                       const emscripten::val& render_frame_val);
+  void pushMidiInputProgram(const emscripten::val& group_val, const emscripten::val& channel_val,
+                            const emscripten::val& program_val,
+                            const emscripten::val& bank_valid_val,
+                            const emscripten::val& bank_msb_val,
+                            const emscripten::val& bank_lsb_val, int64_t port_time_samples);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
                      const emscripten::val& render_frame_val);
   void pushMidiPanic(const emscripten::val& render_frame_val);
