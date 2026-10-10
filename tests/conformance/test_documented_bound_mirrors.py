@@ -75,7 +75,8 @@ HPSS_DOC = "include/sonare/sonare_c_effects.h"
 SECOND_DECLARATION = "inline constexpr int kSpectralEditMaxNFft = 4096;\n"
 
 # The shared-number case: two ceilings of 128 on two stages of one pipeline,
-# documented in the same four files. Everything below drives all four polyphony
+# documented in the same four files; the transcription C header states only the
+# voice ceiling. Everything below drives all four polyphony
 # claims over one tree holding all three cores, because what has to be shown is
 # that a move in one core reaches its own documents and stops there.
 SALIENCE = CLAIMS["polyphony salience harmonic ceiling"]
@@ -90,8 +91,10 @@ VOICES_CORE = "src/editing/polyphony/multi_f0.h"
 POLYPHONY_CORES = (SALIENCE_CORE, MASK_CORE, VOICES_CORE)
 
 POLYPHONY_C_HEADER = "include/sonare/sonare_c_polyphony.h"
+TRANSCRIBE_C_HEADER = "include/sonare/sonare_c_transcribe.h"
 POLYPHONY_DOCS = documents_for(*POLYPHONY_CLAIMS)
-POLYPHONY_FACADE_DOCS = tuple(p for p in POLYPHONY_DOCS if p != POLYPHONY_C_HEADER)
+HARMONIC_DOCS = tuple(p for p in POLYPHONY_DOCS if p != TRANSCRIBE_C_HEADER)
+VOICE_FACADE_DOCS = tuple(p for p in POLYPHONY_DOCS if p != POLYPHONY_C_HEADER)
 
 
 class _CopiedTree(unittest.TestCase):
@@ -287,7 +290,7 @@ class UnreadConstantTest(unittest.TestCase):
 
 
 class PolyphonyCeilingTest(_CopiedTree):
-    """Two ceilings holding 128 and one holding 64, across the same four documents."""
+    """Two ceilings holding 128 in four documents, and one holding 64 in five."""
 
     def polyphony(self, edits=None) -> list[str]:
         root = self.tree((*POLYPHONY_CORES, *POLYPHONY_DOCS), edits)
@@ -298,9 +301,9 @@ class PolyphonyCeilingTest(_CopiedTree):
 
     def test_each_claim_reaches_exactly_the_documents_it_was_written_for(self) -> None:
         expected = {
-            SALIENCE.key: set(POLYPHONY_DOCS),
-            MASK.key: set(POLYPHONY_DOCS),
-            VOICES.key: set(POLYPHONY_FACADE_DOCS),
+            SALIENCE.key: set(HARMONIC_DOCS),
+            MASK.key: set(HARMONIC_DOCS),
+            VOICES.key: set(VOICE_FACADE_DOCS),
             VOICES_HEADER.key: {POLYPHONY_C_HEADER},
         }
         sites = self.sites()
@@ -325,8 +328,9 @@ class PolyphonyCeilingTest(_CopiedTree):
             "kMaxSalienceHarmonics is 96",
             "4 document(s)",
         )
-        for document in POLYPHONY_DOCS:
+        for document in HARMONIC_DOCS:
             self.assertIn(document, failure)
+        self.assertNotIn(TRANSCRIBE_C_HEADER, failure)
         self.assertNotIn(MASK.key, failure)
         self.assertNotIn(MASK_CORE, failure)
 
@@ -336,8 +340,9 @@ class PolyphonyCeilingTest(_CopiedTree):
             "kMaxNoteMaskHarmonics is 96",
             "4 document(s)",
         )
-        for document in POLYPHONY_DOCS:
+        for document in HARMONIC_DOCS:
             self.assertIn(document, failure)
+        self.assertNotIn(TRANSCRIBE_C_HEADER, failure)
         self.assertNotIn(SALIENCE.key, failure)
         self.assertNotIn(SALIENCE_CORE, failure)
 
@@ -346,7 +351,7 @@ class PolyphonyCeilingTest(_CopiedTree):
         failure = self.only(
             self.polyphony({VOICES_CORE: ("kMaxPolyphonyVoices = 64", "kMaxPolyphonyVoices = 32")}),
             "kMaxPolyphonyVoices is 32",
-            "4 document(s)",
+            "5 document(s)",
         )
         for document in POLYPHONY_DOCS:
             self.assertIn(document, failure)
