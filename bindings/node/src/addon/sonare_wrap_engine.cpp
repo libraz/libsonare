@@ -368,6 +368,8 @@ Napi::Object RealtimeEngineWrap::Init(Napi::Env env, Napi::Object exports) {
           InstanceMethod<&RealtimeEngineWrap::PushMidiSysex>("pushMidiSysex"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiUmp>("pushMidiUmp"),
           InstanceMethod<&RealtimeEngineWrap::PushMidiInputUmp>("pushMidiInputUmp"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiProgram>("pushMidiProgram"),
+          InstanceMethod<&RealtimeEngineWrap::PushMidiInputProgram>("pushMidiInputProgram"),
           InstanceMethod<&RealtimeEngineWrap::SetMidiDestinationExternal>(
               "setMidiDestinationExternal"),
           InstanceMethod<&RealtimeEngineWrap::SetExternalMidiClockEnabled>(
@@ -1910,6 +1912,60 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
     return env.Undefined();
   }
   ThrowIfError(env, sonare_engine_push_midi_input_ump(engine_, words.data(), count, port_time));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiProgram(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t destination_id = 0;
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t program = 0;
+  bool bank_valid = false;
+  uint8_t bank_msb = 0;
+  uint8_t bank_lsb = 0;
+  int64_t deadline = -1;
+  if (!RequiredUint32Arg(env, info, 0, "destinationId", &destination_id) ||
+      !OptionalMidiByteArg(env, info, 1, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 2, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 3, "program", 0, &program) ||
+      !OptionalBoolArg(env, info, 4, "bankValid", false, &bank_valid) ||
+      !OptionalMidiByteArg(env, info, 5, "bankMsb", 0, &bank_msb) ||
+      !OptionalMidiByteArg(env, info, 6, "bankLsb", 0, &bank_lsb) ||
+      !OptionalInt64Arg(env, info, 7, "renderFrame", -1, &deadline)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env,
+               sonare_engine_push_midi_program(engine_, destination_id, group, channel, program,
+                                               bank_valid ? 1 : 0, bank_msb, bank_lsb, deadline));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint8_t group = 0;
+  uint8_t channel = 0;
+  uint8_t program = 0;
+  bool bank_valid = false;
+  uint8_t bank_msb = 0;
+  uint8_t bank_lsb = 0;
+  int64_t port_time = 0;
+  if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
+      !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
+      !OptionalMidiByteArg(env, info, 2, "program", 0, &program) ||
+      !OptionalBoolArg(env, info, 3, "bankValid", false, &bank_valid) ||
+      !OptionalMidiByteArg(env, info, 4, "bankMsb", 0, &bank_msb) ||
+      !OptionalMidiByteArg(env, info, 5, "bankLsb", 0, &bank_lsb) ||
+      !OptionalInt64Arg(env, info, 6, "portTimeSamples", 0, &port_time)) {
+    return env.Undefined();
+  }
+  ThrowIfError(env, sonare_engine_push_midi_input_program(engine_, group, channel, program,
+                                                          bank_valid ? 1 : 0, bank_msb, bank_lsb,
+                                                          port_time));
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

@@ -1955,6 +1955,66 @@ export class RealtimeEngine {
   }
 
   /**
+   * Queue a live MIDI 2.0 Program Change to a MIDI destination. The bank
+   * travels in the same message and is applied only when `bankValid` is true;
+   * a non-zero `bankMsb` or `bankLsb` with `bankValid` false is refused.
+   * Program, bank MSB and LSB are 7-bit; group and channel 0..15. The message
+   * takes the receive path a wire Program Change takes, so a receiver that does
+   * not select programs (the built-in synth, a native synth without GM
+   * programs, a part with RX PROGRAM CHANGE off, an MPE member channel)
+   * accepts and ignores it. Throws when the slot ring or command queue is full
+   * (retry after a process block). `renderFrame` is the render-frame time to
+   * apply (omit for immediate); a future-dated op can be evicted by the
+   * pending-command bank like any future command.
+   */
+  pushMidiProgram(
+    destinationId: number,
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+    renderFrame?: number,
+  ): void {
+    this.native.pushMidiProgram(
+      destinationId,
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+      resolveRenderFrame('pushMidiProgram', renderFrame),
+    );
+  }
+
+  /**
+   * Push a live MIDI 2.0 Program Change to the engine-owned MIDI input source.
+   * The rules match {@link pushMidiProgram}. `portTimeSamples` is the port
+   * timestamp in samples.
+   */
+  pushMidiInputProgram(
+    group: number,
+    channel: number,
+    program: number,
+    bankValid = false,
+    bankMsb = 0,
+    bankLsb = 0,
+    portTimeSamples = 0,
+  ): void {
+    this.native.pushMidiInputProgram(
+      group,
+      channel,
+      program,
+      bankValid,
+      bankMsb,
+      bankLsb,
+      portTimeSamples,
+    );
+  }
+
+  /**
    * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
    * source. The message rules match {@link pushMidiUmp}. `portTimeSamples` is
    * the port timestamp in samples.

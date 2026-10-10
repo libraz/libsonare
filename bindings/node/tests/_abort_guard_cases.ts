@@ -1546,6 +1546,46 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'RealtimeEngine.pushMidiProgram',
+    missingRequired: [],
+    badTransportArguments: [
+      { argument: 'destinationId', call: (e) => e.pushMidiProgram('x', 0, 0, 5) },
+      {
+        argument: 'group, channel and program out of byte range',
+        call: (e) => e.pushMidiProgram(0, 300, 300, 300),
+        error: RangeError,
+      },
+      { argument: 'bankValid', call: (e) => e.pushMidiProgram(0, 0, 0, 5, 'yes') },
+      {
+        argument: 'bankMsb and bankLsb out of byte range',
+        call: (e) => e.pushMidiProgram(0, 0, 0, 5, true, 300, 300),
+        error: RangeError,
+      },
+      { argument: 'renderFrame', call: (e) => e.pushMidiProgram(0, 0, 0, 5, true, 8, 0, 'now') },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.pushMidiInputProgram',
+    missingRequired: [],
+    badTransportArguments: [
+      {
+        argument: 'group, channel and program out of byte range',
+        call: (e) => e.pushMidiInputProgram(300, 300, 300),
+        error: RangeError,
+      },
+      { argument: 'bankValid', call: (e) => e.pushMidiInputProgram(0, 0, 5, 'yes') },
+      {
+        argument: 'bankMsb and bankLsb out of byte range',
+        call: (e) => e.pushMidiInputProgram(0, 0, 5, true, 300, 300),
+        error: RangeError,
+      },
+      {
+        argument: 'portTimeSamples',
+        call: (e) => e.pushMidiInputProgram(0, 0, 5, true, 8, 0, 'now'),
+      },
+    ],
+  },
+  {
     name: 'RealtimeEngine.renderOffline',
     missingRequired: [],
     badTransportArguments: [

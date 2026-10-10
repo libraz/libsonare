@@ -188,6 +188,8 @@ class RealtimeEngineWrap : public Napi::ObjectWrap<RealtimeEngineWrap> {
   Napi::Value PushMidiSysex(const Napi::CallbackInfo& info);
   Napi::Value PushMidiUmp(const Napi::CallbackInfo& info);
   Napi::Value PushMidiInputUmp(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiProgram(const Napi::CallbackInfo& info);
+  Napi::Value PushMidiInputProgram(const Napi::CallbackInfo& info);
   Napi::Value SetMidiDestinationExternal(const Napi::CallbackInfo& info);
   Napi::Value SetExternalMidiClockEnabled(const Napi::CallbackInfo& info);
   Napi::Value ExternalMidiDroppedCount(const Napi::CallbackInfo& info);

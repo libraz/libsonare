@@ -185,6 +185,25 @@ export interface NativeEngine {
   pushMidiSysex(destinationId: unknown, bytes: unknown, renderFrame?: unknown): void;
   pushMidiUmp(destinationId: unknown, words: unknown, renderFrame?: unknown): void;
   pushMidiInputUmp(words: unknown, portTimeSamples?: unknown): void;
+  pushMidiProgram(
+    destinationId: unknown,
+    group: unknown,
+    channel: unknown,
+    program: unknown,
+    bankValid?: unknown,
+    bankMsb?: unknown,
+    bankLsb?: unknown,
+    renderFrame?: unknown,
+  ): void;
+  pushMidiInputProgram(
+    group: unknown,
+    channel: unknown,
+    program: unknown,
+    bankValid?: unknown,
+    bankMsb?: unknown,
+    bankLsb?: unknown,
+    portTimeSamples?: unknown,
+  ): void;
   renderOffline(channels: unknown, blockSize?: unknown, finalize?: unknown): Float32Array[];
   setGraph(spec: unknown): void;
   setClips(clips: unknown): void;

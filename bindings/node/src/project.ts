@@ -476,7 +476,8 @@ export class Project {
 
   /**
    * Pack a MIDI 2.0 program-change event. The bank travels in the same message
-   * and is applied only when `bankValid` is true.
+   * and is applied only when `bankValid` is true; a non-zero `bankMsb` or
+   * `bankLsb` with `bankValid` false is refused.
    */
   static midi2Program(
     ppq: number,
@@ -491,6 +492,9 @@ export class Project {
     const p = assertU7(fn, program, 'program');
     const msb = assertU7(fn, bankMsb, 'bankMsb');
     const lsb = assertU7(fn, bankLsb, 'bankLsb');
+    if (!bankValid && (msb !== 0 || lsb !== 0)) {
+      throw new RangeError(`${fn}: bank MSB and LSB must be 0 when bank-valid is false`);
+    }
     const word1 = ((p << 24) | (msb << 8) | lsb) >>> 0;
     return midi2Event(fn, ppq, group, 0xc, channel, 0, bankValid ? 1 : 0, word1);
   }
