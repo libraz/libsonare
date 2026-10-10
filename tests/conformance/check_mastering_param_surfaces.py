@@ -28,21 +28,47 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ts_surface_walk import camel, declares_leaf, property_bodies
+from ts_surface_walk import camel, declares_array_leaf, declares_leaf, resolve_blocks
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PARAM_SOURCE = REPO_ROOT / "src/mastering/api/chain_params.cpp"
+FIELD_TABLES = REPO_ROOT / "src/mastering/api/param_field_tables.h"
 TS_SURFACES = {
     "node": REPO_ROOT / "bindings/node/src/types_mastering.ts",
     "wasm": REPO_ROOT / "bindings/wasm/src/public_types_mastering.ts",
 }
 
 _KEY_RE = re.compile(r'key\s*==\s*"([^"]+)"')
+_COMPRESSOR_MACRO_RE = re.compile(
+    r"#define\s+SONARE_FIELDS_COMPRESSOR\(X\)((?:[^\n]*\\\n)*[^\n]*)"
+)
+_FIELD_RE = re.compile(r'X\(\s*"([^"]+)"')
+
+MULTIBAND = "dynamics.multibandComp"
+# The array spelling the TS types declare: element 0 stands for every index.
+CROSSOVER_KEYS = [
+    f"{MULTIBAND}.crossover.cutoffsHz.0",
+    f"{MULTIBAND}.crossover.slope",
+    f"{MULTIBAND}.crossover.mode",
+    f"{MULTIBAND}.crossover.firKernelSize",
+]
 
 
 def parameter_keys(source: str) -> list[str]:
     """Every dotted key the setter compares against, deduplicated and ordered."""
     return sorted(set(_KEY_RE.findall(source)))
+
+
+def band_field_keys(tables: str) -> list[str]:
+    """`bands.0.<field>` for every field of the chain's compressor X-macro."""
+    macro = _COMPRESSOR_MACRO_RE.search(tables)
+    fields = _FIELD_RE.findall(macro.group(1)) if macro else []
+    return [f"{MULTIBAND}.bands.0.{field}" for field in fields]
+
+
+def indexed_keys(tables: str) -> list[str]:
+    """The indexed multiband families, which no `key == "..."` literal spells."""
+    return sorted(set(CROSSOVER_KEYS + band_field_keys(tables)))
 
 
 def scan(keys: list[str], surfaces: dict[str, str]) -> tuple[list, list, int]:
@@ -52,33 +78,33 @@ def scan(keys: list[str], surfaces: dict[str, str]) -> tuple[list, list, int]:
     comparisons = 0
     for key in keys:
         segments = key.split(".")
-        leaf = camel(segments[-1])
+        indexed_leaf = segments[-1].isdigit()
+        leaf = camel(segments[-2] if indexed_leaf else segments[-1])
         for side, text in surfaces.items():
-            bodies = [text]
-            reached = True
-            for segment in segments[:-1]:
-                nxt: list[str] = []
-                for body in bodies:
-                    nxt += property_bodies(body, camel(segment), text)
-                if not nxt:
-                    reached = False
-                    break
-                bodies = nxt
-            if not reached:
+            bodies = resolve_blocks(text, segments[: -2 if indexed_leaf else -1])
+            if not bodies:
                 unreached.append((key, side))
                 continue
             comparisons += 1
-            if not any(declares_leaf(body, leaf) for body in bodies):
+            declares = declares_array_leaf if indexed_leaf else declares_leaf
+            if not any(declares(body, leaf) for body in bodies):
                 missing.append((key, side))
     return missing, unreached, comparisons
 
 
 def main() -> int:
-    keys = parameter_keys(PARAM_SOURCE.read_text())
+    literal_keys = parameter_keys(PARAM_SOURCE.read_text())
+    indexed = indexed_keys(FIELD_TABLES.read_text())
+    keys = sorted(set(literal_keys + indexed))
+    if not band_field_keys(FIELD_TABLES.read_text()):
+        print("no band fields were read -- SONARE_FIELDS_COMPRESSOR moved")
+        return 1
     surfaces = {side: path.read_text() for side, path in TS_SURFACES.items()}
     missing, unreached, comparisons = scan(keys, surfaces)
 
-    print(f"keys: {len(keys)} | comparisons: {comparisons} | surfaces: {len(surfaces)}")
+    print(
+        f"keys: {len(keys)} (indexed: {len(indexed)}) | comparisons: {comparisons} | surfaces: {len(surfaces)}"
+    )
     if not keys or comparisons == 0:
         print("nothing was compared -- the key source or the type files moved")
         return 1

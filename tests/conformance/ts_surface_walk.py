@@ -213,3 +213,41 @@ def declares_leaf(body: str, leaf: str) -> bool:
         re.search(r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:", body)
         is not None
     )
+
+
+def declares_array_leaf(body: str, leaf: str) -> bool:
+    """Whether `body` declares `leaf` with an array type (`T[]` or `Array<T>`)."""
+    match = re.search(
+        r"(?<![A-Za-z0-9_])" + re.escape(leaf) + r"\s*\??\s*:([^;]*)", body
+    )
+    return match is not None and re.search(r"\[\]|\bArray\s*<", match.group(1)) is not None
+
+
+def resolve_blocks(whole: str, segments: list[str]) -> list[str]:
+    """Bodies of the block `segments` names, starting at the top of `whole`.
+
+    A numeric segment is an array index: it is valid only directly under a
+    property declared as an array, and it names that property's element type,
+    which `property_bodies` already resolves the property to. Anything else
+    under a numeric segment is a path no declaration backs, and yields nothing.
+    """
+    bodies = [whole]
+    previous: list[str] | None = None
+    for position, segment in enumerate(segments):
+        if segment.isdigit():
+            if position == 0 or previous is None:
+                return []
+            if not any(
+                declares_array_leaf(body, camel(segments[position - 1]))
+                for body in previous
+            ):
+                return []
+            continue
+        previous = bodies
+        nxt: list[str] = []
+        for body in bodies:
+            nxt += property_bodies(body, camel(segment), whole)
+        if not nxt:
+            return []
+        bodies = nxt
+    return bodies

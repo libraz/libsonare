@@ -78,6 +78,29 @@ class NamedTypes(unittest.TestCase):
         self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
 
 
+class IndexedPaths(unittest.TestCase):
+    def test_a_numeric_segment_under_an_array_property_is_the_element(self):
+        bodies = walk.resolve_blocks(SURFACE, ["items", "0"])
+        self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
+
+    def test_a_numeric_segment_under_a_non_array_property_is_unreached(self):
+        self.assertEqual(walk.resolve_blocks(SURFACE, ["inner", "0"]), [])
+
+    def test_a_leading_numeric_segment_is_unreached(self):
+        self.assertEqual(walk.resolve_blocks(SURFACE, ["0", "items"]), [])
+
+    def test_array_typed_leaves_are_told_from_scalars(self):
+        body = "{ list?: number[]; other?: Array<string>; one?: number }"
+        self.assertTrue(walk.declares_array_leaf(body, "list"))
+        self.assertTrue(walk.declares_array_leaf(body, "other"))
+        self.assertFalse(walk.declares_array_leaf(body, "one"))
+        self.assertFalse(walk.declares_array_leaf(body, "absent"))
+
+    def test_a_path_without_indices_resolves_as_before(self):
+        bodies = walk.resolve_blocks(SURFACE, ["inner"])
+        self.assertTrue(any(walk.declares_leaf(body, "value") for body in bodies))
+
+
 class MappedTypes(unittest.TestCase):
     def test_a_literal_keyed_record_expands_to_its_keys(self):
         bodies = walk.property_bodies(_root(), "occupancy", SURFACE)

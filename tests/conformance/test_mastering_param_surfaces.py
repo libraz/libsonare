@@ -29,7 +29,12 @@ SPEC.loader.exec_module(check)
 
 class MasteringParamSurfaces(unittest.TestCase):
     def test_the_repository_declares_every_parameter_key_on_both_surfaces(self):
-        keys = check.parameter_keys(check.PARAM_SOURCE.read_text())
+        keys = sorted(
+            set(
+                check.parameter_keys(check.PARAM_SOURCE.read_text())
+                + check.indexed_keys(check.FIELD_TABLES.read_text())
+            )
+        )
         surfaces = {side: path.read_text() for side, path in check.TS_SURFACES.items()}
         missing, unreached, comparisons = check.scan(keys, surfaces)
         self.assertEqual(
@@ -102,6 +107,83 @@ class MasteringParamSurfaces(unittest.TestCase):
         self.assertEqual(
             check.parameter_keys(source), ["eq.tilt.tiltDb", "repair.dehum.mode"]
         )
+
+    def test_the_indexed_families_are_populated_from_their_sources(self):
+        """Twelve compressor band fields plus the four crossover entries."""
+        indexed = check.indexed_keys(check.FIELD_TABLES.read_text())
+        bands = [k for k in indexed if ".bands.0." in k]
+        self.assertEqual(len(bands), 12)
+        self.assertIn("dynamics.multibandComp.bands.0.thresholdDb", bands)
+        self.assertIn("dynamics.multibandComp.bands.0.pdrReleaseScale", bands)
+        self.assertEqual(len(indexed), 16)
+        for key in check.CROSSOVER_KEYS:
+            self.assertIn(key, indexed)
+
+    def test_the_band_field_reader_follows_the_x_macro(self):
+        tables = (
+            "#define SONARE_FIELDS_COMPRESSOR(X) \\\n"
+            '  X("thresholdDb", threshold_db, kDb) \\\n'
+            '  X("ratio", ratio, kRatio)\n\n'
+            '#define SONARE_FIELDS_LIMITER(X) X("ceilingDb", c, kDb)\n'
+        )
+        self.assertEqual(
+            check.band_field_keys(tables),
+            ["dynamics.multibandComp.bands.0.thresholdDb",
+             "dynamics.multibandComp.bands.0.ratio"],
+        )
+
+    def test_the_indexed_families_are_compared_not_skipped(self):
+        keys = check.indexed_keys(check.FIELD_TABLES.read_text())
+        surfaces = {side: path.read_text() for side, path in check.TS_SURFACES.items()}
+        missing, unreached, comparisons = check.scan(keys, surfaces)
+        self.assertEqual((missing, unreached), ([], []))
+        self.assertEqual(comparisons, len(keys) * len(surfaces))
+
+    SYNTHETIC = """
+    export interface Band { thresholdDb?: number }
+    export interface Config {
+      dynamics?: {
+        multibandComp?: {
+          crossover?: { cutoffsHz?: number[]; slope?: number };
+          bands?: Band[];
+        };
+      };
+    }
+    """
+
+    def test_a_band_field_missing_from_the_element_type_fails(self):
+        missing, unreached, comparisons = check.scan(
+            [
+                "dynamics.multibandComp.bands.0.thresholdDb",
+                "dynamics.multibandComp.bands.0.ratio",
+            ],
+            {"s": self.SYNTHETIC},
+        )
+        self.assertEqual(unreached, [])
+        self.assertEqual(comparisons, 2)
+        self.assertEqual(missing, [("dynamics.multibandComp.bands.0.ratio", "s")])
+
+    def test_a_cutoff_list_declared_as_a_scalar_fails(self):
+        """`crossover.cutoffsHz.0` needs an array, not any property of that name."""
+        surface = self.SYNTHETIC.replace("number[]", "number")
+        missing, _, _ = check.scan(
+            ["dynamics.multibandComp.crossover.cutoffsHz.0"], {"s": surface}
+        )
+        self.assertEqual(
+            missing, [("dynamics.multibandComp.crossover.cutoffsHz.0", "s")]
+        )
+        missing, _, _ = check.scan(
+            ["dynamics.multibandComp.crossover.cutoffsHz.0"], {"s": self.SYNTHETIC}
+        )
+        self.assertEqual(missing, [])
+
+    def test_bands_declared_without_an_array_are_not_reached(self):
+        surface = self.SYNTHETIC.replace("Band[]", "Band")
+        _, unreached, comparisons = check.scan(
+            ["dynamics.multibandComp.bands.0.thresholdDb"], {"s": surface}
+        )
+        self.assertEqual(comparisons, 0)
+        self.assertEqual(len(unreached), 1)
 
 
 if __name__ == "__main__":
