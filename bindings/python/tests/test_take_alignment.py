@@ -230,3 +230,78 @@ def test_a_config_value_the_c_field_would_fold_is_refused(
     reference, take = pair
     with pytest.raises(SonareValueError, match="hop_length"):
         align_take_to_reference(reference, take, SR, hop_length=hop_length)  # type: ignore[arg-type]
+
+
+# --- Two-rate alignment -----------------------------------------------------
+
+TAKE_SR = 32000
+HOP = 512
+LEAD_SEC = 0.4
+
+
+@pytest.fixture(scope="module")
+def two_rate_pair() -> tuple[np.ndarray, np.ndarray]:
+    """A 1 s reference at 22050 Hz and the same glide at 32000 Hz after 0.4 s of silence.
+
+    32000/22050 is 6.44 semitones, not an octave, so a take read at the wrong rate
+    cannot be absorbed by the chroma fold. The take is generated at 32 kHz
+    directly: the resampler is not part of the oracle.
+    """
+    lead = np.zeros(int(TAKE_SR * LEAD_SEC), dtype=np.float32)
+    return glide(1.0), np.concatenate([lead, glide(1.0, sr=TAKE_SR)])
+
+
+def test_a_take_at_another_rate_is_measured_on_the_reference_grid(
+    two_rate_pair: tuple[np.ndarray, np.ndarray],
+) -> None:
+    reference, take = two_rate_pair
+    anchors, alignment = align_take_to_reference(
+        reference, take, SR, take_sample_rate=TAKE_SR, hop_length=HOP
+    )
+
+    # Primary proof the take rate is used: the frame count follows the take
+    # resampled to the reference rate, not its raw length. This does not go
+    # through the alignment path.
+    resampled = len(take) * SR / TAKE_SR
+    assert abs(alignment.take_frames - resampled / HOP) <= 3
+    assert alignment.take_frames < 1.2 * len(take) * SR / TAKE_SR / HOP
+
+    # Every anchor after the first (the silent lead collapses to one boundary
+    # anchor) is offset by the lead, with both axes in reference-rate samples.
+    lead = LEAD_SEC * SR
+    assert len(anchors) >= 3
+    for warp, source in anchors[1:]:
+        assert abs((source - warp) - lead) <= HOP, (warp, source)
+
+
+def test_declaring_the_take_at_the_reference_rate_does_not_find_the_lead(
+    two_rate_pair: tuple[np.ndarray, np.ndarray],
+) -> None:
+    """The control for the case above: the same buffers at one rate fail it."""
+    reference, take = two_rate_pair
+    right, right_alignment = align_take_to_reference(
+        reference, take, SR, take_sample_rate=TAKE_SR, hop_length=HOP
+    )
+    wrong, wrong_alignment = align_take_to_reference(reference, take, SR, hop_length=HOP)
+
+    assert wrong_alignment.take_frames > 1.2 * right_alignment.take_frames
+    lead = LEAD_SEC * SR
+    off = sum(1 for warp, source in wrong[1:] if abs((source - warp) - lead) > HOP)
+    assert off > len(wrong[1:]) // 2
+    assert len(right) >= 3
+
+
+def test_an_omitted_take_rate_is_the_reference_rate(pair: tuple[np.ndarray, np.ndarray]) -> None:
+    reference, take = pair
+    omitted = align_take_to_reference(reference, take, SR)
+    explicit = align_take_to_reference(reference, take, SR, take_sample_rate=SR)
+    assert explicit == omitted
+
+
+@pytest.mark.parametrize("take_sample_rate", [0, -1])
+def test_a_non_positive_take_sample_rate_is_refused(
+    pair: tuple[np.ndarray, np.ndarray], take_sample_rate: int
+) -> None:
+    reference, take = pair
+    with pytest.raises(SonareError):
+        align_take_to_reference(reference, take, SR, take_sample_rate=take_sample_rate)

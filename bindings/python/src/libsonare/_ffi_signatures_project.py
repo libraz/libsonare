@@ -327,6 +327,41 @@ def configure_project_signatures(lib: ctypes.CDLL) -> None:
             lib.sonare_free_warp_anchors.restype = None
             lib.sonare_free_warp_anchors.argtypes = [ctypes.POINTER(SonareProjectWarpAnchor)]
 
+        if hasattr(lib, "sonare_align_take_to_reference_ex"):
+            lib.sonare_align_take_to_reference_ex.restype = ctypes.c_int32
+            lib.sonare_align_take_to_reference_ex.argtypes = [
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.c_float),
+                ctypes.c_size_t,
+                ctypes.c_int,
+                ctypes.POINTER(SonareTakeAlignConfig),
+                ctypes.POINTER(ctypes.POINTER(SonareProjectWarpAnchor)),
+                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(SonareTakeAlignment),
+            ]
+
+        if hasattr(lib, "sonare_chord_symbol_from_analysis"):
+            lib.sonare_chord_symbol_from_analysis.restype = ctypes.c_int32
+            lib.sonare_chord_symbol_from_analysis.argtypes = [
+                ctypes.c_int32,
+                ctypes.c_int32,
+                ctypes.c_int32,
+                ctypes.POINTER(ctypes.c_uint32),
+                ctypes.POINTER(ctypes.c_uint32),
+                ctypes.POINTER(ctypes.c_uint8),
+                ctypes.c_size_t,
+                ctypes.POINTER(ctypes.c_size_t),
+                ctypes.POINTER(ctypes.c_uint32),
+            ]
+        if hasattr(lib, "sonare_key_mode_from_analysis"):
+            lib.sonare_key_mode_from_analysis.restype = ctypes.c_int32
+            lib.sonare_key_mode_from_analysis.argtypes = [
+                ctypes.c_int32,
+                ctypes.POINTER(ctypes.c_uint32),
+            ]
+
         lib.sonare_project_set_track_midi_destination.restype = ctypes.c_int32
         lib.sonare_project_set_track_midi_destination.argtypes = [
             ctypes.c_void_p,

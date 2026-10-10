@@ -251,7 +251,7 @@ class _ProjectInspectionMixin:
 
         Each chord is a mapping with keys ``start_ppq``, ``end_ppq``, ``root_pc``
         (0..11 / 255), ``quality`` (ChordQuality ordinal), optional
-        ``extensions`` (iterable of semitone ints, up to 8), ``slash_bass_pc``
+        ``extensions`` (iterable of scale degrees such as 7, 9, 13, up to 32), ``slash_bass_pc``
         (default 255), ``roman_numeral`` (optional str) and ``modulation_boundary``
         (bool). Pass an empty sequence to clear.
         """
