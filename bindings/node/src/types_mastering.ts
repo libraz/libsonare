@@ -666,15 +666,17 @@ export interface MasteringChainConfig {
        * `enabled` says otherwise.
        */
       crossover?: {
+        /** Ascending split frequencies in Hz; N values give N + 1 bands. */
         cutoffsHz?: number[];
         slope?: 'lr2' | 'lr4' | 'lr8' | number;
         mode?: 'linkwitzRiley' | 'butterworth' | 'bessel' | 'firLinearPhase' | number;
         firKernelSize?: number;
       };
       /**
-       * Per-band compressor settings, indexed by band. An omitted band keeps the
-       * base config's band, or the compressor default for a band the crossover
-       * adds; an omitted field of a given band keeps that band's value.
+       * Per-band compressor settings by band index. An omitted band or field
+       * keeps the base (preset) value, or the compressor default for a band the
+       * base does not have. Do not combine with the `low*` / `mid*` / `high*`
+       * shorthand for the same field in one call.
        */
       bands?: MultibandCompressorBand[];
     };
