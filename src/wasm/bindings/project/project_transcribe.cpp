@@ -73,7 +73,7 @@ float signedField(val config, const char* key, FloatDomain domain) {
 // The same rule on the fields whose domain is an integer range rather than a
 // sign. 0 is the C ABI's default (fixedVelocity: "measure the level instead"),
 // and omitting the field already says that here, so a written 0 is a value --
-// and 0 is in neither [1, 127] nor [1, 64].
+// and 0 is in none of [1, 127], [1, 64] and [1, 128].
 //
 // Presence is the only thing that can decide this one. The other fields have an
 // out-of-domain sentinel, so their written 0 is separable by value; these
@@ -107,6 +107,8 @@ SonareTranscribeConfig transcribeConfigFromVal(val config) {
   out.fmin = signedField(config, "fmin", FloatDomain::kPositive);
   out.fmax = signedField(config, "fmax", FloatDomain::kPositive);
   out.min_note_ms = signedField(config, "minNoteMs", FloatDomain::kPositive);
+  // Both spellings written is forwarded; the C ABI refuses it naming min_note_division.
+  out.min_note_division = rangeField(config, "minNoteDivision", 1, 128);
   out.segmentation_threshold_cents =
       signedField(config, "segmentationThresholdCents", FloatDomain::kPositive);
   out.velocity_floor_db = signedField(config, "velocityFloorDb", FloatDomain::kNegative);

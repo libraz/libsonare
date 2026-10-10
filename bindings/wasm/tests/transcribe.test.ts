@@ -260,6 +260,7 @@ describe('WASM transcribe', () => {
       'fmin',
       'fmax',
       'minNoteMs',
+      'minNoteDivision',
       'segmentationThresholdCents',
       'velocityFloorDb',
       'fixedVelocity',
@@ -359,6 +360,10 @@ describe('WASM transcribe', () => {
       ['velocityFloorDb positive', { velocityFloorDb: 6 }, 'range'],
       ['referenceHz 0', { referenceHz: 0 }, 'range'],
       ['minNoteMs 0', { minNoteMs: 0 }, 'range'],
+      ['minNoteDivision 0', { minNoteDivision: 0 }, 'range'],
+      ['minNoteDivision negative', { minNoteDivision: -1 }, 'range'],
+      ['minNoteDivision 129', { minNoteDivision: 129 }, 'range'],
+      ['minNoteDivision fractional', { minNoteDivision: 1.5 }, 'range'],
       ['maxPolyphony 0', { polyphonic: true, maxPolyphony: 0 }, 'range'],
       ['maxPolyphony 65', { polyphonic: true, maxPolyphony: 65 }, 'range'],
       ['maxPolyphony fractional', { polyphonic: true, maxPolyphony: 2.5 }, 'range'],
@@ -505,6 +510,42 @@ describe('WASM transcribe', () => {
     expect(key(run({ minRidgePeakRatio: 0.1 }))).toBe(omitted);
   });
 
+  it('reads minNoteDivision as a note value at the transcription tempo', () => {
+    // A sixteenth note at 120 bpm is 125 ms.
+    for (const polyphonic of [false, true]) {
+      const key = (result: ReturnType<typeof transcribe>) =>
+        JSON.stringify([result.noteCount, result.events.map((event) => [event.ppq, event.data0])]);
+      const byDivision = transcribe({
+        samples,
+        sampleRate,
+        tempoBpm: 120,
+        polyphonic,
+        minNoteDivision: 16,
+      });
+      const byMs = transcribe({ samples, sampleRate, tempoBpm: 120, polyphonic, minNoteMs: 125 });
+      expect(key(byDivision), `polyphonic ${polyphonic}`).toBe(key(byMs));
+    }
+  });
+
+  it('refuses a wrong-typed minNoteDivision and both spellings at once', () => {
+    expect(() =>
+      transcribe({
+        samples,
+        sampleRate,
+        tempoBpm: 120,
+        minNoteDivision: '16' as unknown as number,
+      }),
+    ).toThrow(TypeError);
+    let thrown: unknown;
+    try {
+      transcribe({ samples, sampleRate, tempoBpm: 120, minNoteDivision: 16, minNoteMs: 125 });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(isSonareError(thrown) && thrown.code).toBe(ErrorCode.InvalidParameter);
+    expect((thrown as Error).message).toContain('min_note_division');
+  });
+
   it('surfaces the C refusal of a polyphonic-only option on the monophonic path', () => {
     for (const options of [
       { maxPolyphony: 3 },
@@ -596,6 +637,7 @@ describe('WASM Project.transcribeToClip', () => {
       ['velocityFloorDb 0', { velocityFloorDb: 0 }],
       ['fixedVelocity 0', { fixedVelocity: 0 }],
       ['minNoteMs 0', { minNoteMs: 0 }],
+      ['minNoteDivision 0', { minNoteDivision: 0 }],
     ];
     for (const [name, options] of rejected) {
       let thrown: unknown;
@@ -606,5 +648,12 @@ describe('WASM Project.transcribeToClip', () => {
       }
       expectArgumentRefusal(thrown, RangeError, name);
     }
+  });
+
+  it('accepts minNoteDivision on a project clip', () => {
+    const { project, clipId } = projectWithSeededClip();
+    expect(() =>
+      project.transcribeToClip({ clipId, samples, sampleRate, minNoteDivision: 32 }),
+    ).not.toThrow();
   });
 });

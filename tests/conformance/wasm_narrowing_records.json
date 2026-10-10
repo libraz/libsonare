@@ -74,7 +74,7 @@
     {
       "file": "bindings/project/project_transcribe.cpp",
       "symbol": "rangeField",
-      "reason": "signedField's standing, over the shared intProperty, for the transcription fields whose domain is an integer range rather than a sign (fixedVelocity in [1, 127], maxPolyphony in [1, 64]). The same presence gate applies for the same reason, and 0 is additionally outside both ranges. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
+      "reason": "signedField's standing, over the shared intProperty, for the transcription fields whose domain is an integer range rather than a sign (fixedVelocity in [1, 127], maxPolyphony in [1, 64], minNoteDivision in [1, 128]). The same presence gate applies for the same reason, and 0 is additionally outside every range. Measured: 0 and 128 are refused with InvalidParameter, omission reproduces the baseline exactly, and a fixedVelocity of 77 is observed on every emitted note-on, so the field is read rather than merely accepted. The message wording is the Node facade's verbatim, so one domain reports one way on both surfaces."
     },
     {
       "file": "bindings/realtime/midi.cpp",
