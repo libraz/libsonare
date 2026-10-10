@@ -738,7 +738,8 @@ export interface TranscribeOptions {
   fmax?: number;
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
-   * positive. Default `30`.
+   * positive. Default `30` for the monophonic tracker and `100` for the
+   * polyphonic one.
    */
   minNoteMs?: number;
   /**
@@ -759,6 +760,30 @@ export interface TranscribeOptions {
    * than read as "measure". Omit the field to measure, which is the default.
    */
   fixedVelocity?: number;
+  /**
+   * Voices a frame may carry, an integer in `[1, 64]`. Polyphonic only; a
+   * monophonic request that sets it is refused. A written `0` is refused rather
+   * than read as the default. Default `10`.
+   */
+  maxPolyphony?: number;
+  /**
+   * Share of a frame's peak salience below which voice extraction stops, in
+   * `[0, 1]`. Polyphonic only. `0` is a real zero (no cutoff), not the default.
+   * Default `0.20`.
+   */
+  minFramePeakRatio?: number;
+  /**
+   * A fade below this share of a ridge's own peak ends the note, in `[0, 1]`.
+   * Polyphonic only. `0` is a real zero (never ends on a fade), not the default.
+   * Default `0.10`.
+   */
+  minRidgePeakRatio?: number;
+  /**
+   * A re-strike whose level rises to this multiple of the preceding trough
+   * splits the note. Polyphonic only. Greater than `1`; `0` turns splitting off,
+   * and a value in `(0, 1]` or a negative one is refused. Default `2.0`.
+   */
+  reattackRatio?: number;
   /** UMP group the events are emitted on, `0`..`15`. Default `0`. */
   group?: number;
   /** MIDI channel the events are emitted on, `0`..`15`. Default `0`. */

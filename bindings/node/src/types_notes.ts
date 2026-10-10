@@ -467,6 +467,12 @@ export interface PolyphonicAnalysisOptions {
    * here. Use `minRidgeDurationMs` to drop short ridges instead. Default 30.
    */
   minNoteMs?: number;
+  /**
+   * A re-strike whose level rises to this multiple of the preceding trough
+   * splits a ridge into two notes. Must be greater than 1; `0` or omitted turns
+   * splitting off (the default).
+   */
+  reattackRatio?: number;
   /** Reference pitch each note's `medianCents` is measured against. Default 440. */
   referenceHz?: number;
 }

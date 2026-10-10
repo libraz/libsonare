@@ -100,6 +100,22 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
   const Napi::Value fixed_velocity = request.Get("fixedVelocity");
   const bool wrote_fixed_velocity = !fixed_velocity.IsUndefined() && !fixed_velocity.IsNull();
   out->fixed_velocity = IntProperty(request, "fixedVelocity", 0);
+  // maxPolyphony and the three ratios carry presence for the same reason as
+  // fixedVelocity: the C ABI's 0 means "default", so an omitted key stays 0 while
+  // a written 0 is either refused (maxPolyphony) or mapped to the C ABI's spelling
+  // of a real zero (the ratios, where a negative value means 0 / no split).
+  const Napi::Value max_polyphony = request.Get("maxPolyphony");
+  const bool wrote_max_polyphony = !max_polyphony.IsUndefined() && !max_polyphony.IsNull();
+  out->max_polyphony = IntProperty(request, "maxPolyphony", 0);
+  const Napi::Value frame_ratio = request.Get("minFramePeakRatio");
+  const bool wrote_frame_ratio = !frame_ratio.IsUndefined() && !frame_ratio.IsNull();
+  out->min_frame_peak_ratio = FiniteFloatProperty(request, "minFramePeakRatio", 0.0f);
+  const Napi::Value ridge_ratio = request.Get("minRidgePeakRatio");
+  const bool wrote_ridge_ratio = !ridge_ratio.IsUndefined() && !ridge_ratio.IsNull();
+  out->min_ridge_peak_ratio = FiniteFloatProperty(request, "minRidgePeakRatio", 0.0f);
+  const Napi::Value reattack = request.Get("reattackRatio");
+  const bool wrote_reattack = !reattack.IsUndefined() && !reattack.IsNull();
+  out->reattack_ratio = FiniteFloatProperty(request, "reattackRatio", 0.0f);
   out->group = IntProperty(request, "group", out->group);
   out->channel = IntProperty(request, "channel", out->channel);
   // Short-circuited: a reader that already refused a key left an exception
@@ -109,6 +125,38 @@ bool ReadTranscribeConfig(Napi::Env env, const Napi::Object& request, SonareTran
     ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
                             "fixedVelocity must be an integer in [1, 127]");
     return false;
+  }
+  if (wrote_max_polyphony && (out->max_polyphony < 1 || out->max_polyphony > 64)) {
+    ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                            "maxPolyphony must be an integer in [1, 64]");
+    return false;
+  }
+  const struct {
+    const char* key;
+    float* value;
+    bool present;
+  } peak_ratios[] = {
+      {"minFramePeakRatio", &out->min_frame_peak_ratio, wrote_frame_ratio},
+      {"minRidgePeakRatio", &out->min_ridge_peak_ratio, wrote_ridge_ratio},
+  };
+  for (const auto& ratio : peak_ratios) {
+    if (!ratio.present) continue;
+    if (!(*ratio.value >= 0.0f && *ratio.value <= 1.0f)) {
+      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              std::string(ratio.key) + " must be a number in [0, 1]");
+      return false;
+    }
+    // A written 0 is a real zero; the C ABI spells that as a negative value.
+    if (*ratio.value == 0.0f) *ratio.value = -1.0f;
+  }
+  if (wrote_reattack) {
+    if (out->reattack_ratio == 0.0f) {
+      out->reattack_ratio = -1.0f;
+    } else if (!(out->reattack_ratio > 1.0f)) {
+      ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_PARAMETER,
+                              "reattackRatio must be 0 (no split) or greater than 1");
+      return false;
+    }
   }
   return RefuseOutOfDomain(env, *out, wrote_fmin, wrote_fmax, wrote_min_note_ms);
 }

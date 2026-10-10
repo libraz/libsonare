@@ -25,7 +25,7 @@ namespace {
 /// @return false with one pending JS exception; the caller must return before any
 ///         further N-API call.
 bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolyphonicConfig* out) {
-  out->struct_version = 1;
+  out->struct_version = 2;
   if (value.IsUndefined() || value.IsNull()) {
     return true;
   }
@@ -79,6 +79,8 @@ bool ReadPolyphonicConfig(Napi::Env env, const Napi::Value& value, SonarePolypho
   out->segmentation_threshold_cents = FloatProperty(opts, "segmentationThresholdCents", 0.0f);
   out->min_note_ms = FloatProperty(opts, "minNoteMs", 0.0f);
   out->reference_hz = FloatProperty(opts, "referenceHz", 0.0f);
+  // 0 is off; any other value is range-checked by the core (> 1).
+  out->reattack_ratio = FloatProperty(opts, "reattackRatio", 0.0f);
   return !env.IsExceptionPending();
 }
 

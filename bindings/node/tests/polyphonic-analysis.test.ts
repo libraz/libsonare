@@ -474,3 +474,39 @@ describe('the polyphonic surface refuses what it cannot do', () => {
     expect(() => captured?.notes()).toThrow('PolyphonicAnalysis has been destroyed');
   });
 });
+
+describe('reattackRatio', () => {
+  /** 440 Hz struck twice; the second strike ramps in over 20 ms after a decay. */
+  const RESTRUCK = (() => {
+    const strike = Math.round(SR * 0.5);
+    const out = new Float32Array(strike * 2);
+    const ramp = Math.round(0.02 * SR);
+    for (let i = 0; i < out.length; i += 1) {
+      const local = i % strike;
+      const rise = i < strike ? Math.min(1, i / 110) : Math.min(1, local / ramp);
+      out[i] =
+        0.5 * rise * Math.exp(-2 * (local / strike)) * Math.sin((2 * Math.PI * 440 * i) / SR);
+    }
+    return out;
+  })();
+  const notes = (options: PolyphonicAnalysisOptions = {}) => {
+    const analysis = analyzePolyphonic({ samples: RESTRUCK, sampleRate: SR, ...options });
+    try {
+      return analysis.noteCount;
+    } finally {
+      analysis.destroy();
+    }
+  };
+
+  it('splits a re-struck tone when set and leaves it whole when omitted', () => {
+    expect(notes()).toBe(1);
+    expect(notes({ reattackRatio: 0 })).toBe(1);
+    expect(notes({ reattackRatio: 2 })).toBe(2);
+  });
+
+  it('refuses a ratio outside 0 or above 1', () => {
+    for (const reattackRatio of [0.5, 1, -1]) {
+      expect(() => notes({ reattackRatio })).toThrow();
+    }
+  });
+});

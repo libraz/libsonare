@@ -495,3 +495,103 @@ describe('Project.transcribeToClip', () => {
     });
   });
 });
+
+/** Sum of sines at `hzs`, held for `seconds` with 5 ms edges. */
+function chordTone(hzs: number[], seconds = 0.8): Float32Array {
+  const out = new Float32Array(Math.round(SR * seconds));
+  const edge = 0.005 * SR;
+  for (let i = 0; i < out.length; i++) {
+    const envelope = Math.min(1, i / edge, (out.length - 1 - i) / edge);
+    let sum = 0;
+    for (const hz of hzs) {
+      sum += Math.sin((2 * Math.PI * hz * i) / SR);
+    }
+    out[i] = (0.4 / hzs.length) * envelope * sum;
+  }
+  return out;
+}
+
+/** One pitch struck twice: the second strike ramps in over `attackMs`. */
+function restruck(hz = 440, attackMs = 20): Float32Array {
+  const strike = Math.round(SR * 0.5);
+  const out = new Float32Array(strike * 2);
+  const ramp = Math.round((attackMs / 1000) * SR);
+  for (let i = 0; i < out.length; i++) {
+    const local = i % strike;
+    const rise = i < strike ? Math.min(1, i / 110) : Math.min(1, local / ramp);
+    out[i] = 0.5 * rise * Math.exp(-2 * (local / strike)) * Math.sin((2 * Math.PI * hz * i) / SR);
+  }
+  return out;
+}
+
+function maxSimultaneous(result: TranscribeResult): number {
+  let active = 0;
+  let peakActive = 0;
+  for (const event of result.events) {
+    const status = decode(event).status;
+    if (status === NOTE_ON) {
+      active++;
+    }
+    if (status === NOTE_OFF) {
+      active--;
+    }
+    peakActive = Math.max(peakActive, active);
+  }
+  return peakActive;
+}
+
+describe('transcribe polyphonic tuning', () => {
+  const chord = chordTone([261.626, 329.628, 391.995, 523.251]);
+  const poly = (extra: Record<string, number> = {}) =>
+    transcribe({ samples: chord, sampleRate: SR, tempoBpm: 120, polyphonic: true, ...extra });
+
+  it('maxPolyphony caps the simultaneous notes', () => {
+    expect(maxSimultaneous(poly())).toBeGreaterThan(1);
+    expect(maxSimultaneous(poly({ maxPolyphony: 1 }))).toBe(1);
+  });
+
+  it('minFramePeakRatio and minRidgePeakRatio reach the core', () => {
+    const base = poly();
+    // A frame floor of 1 keeps only the strongest voice per frame.
+    expect(noteNumbers(poly({ minFramePeakRatio: 1 })).length).toBeLessThan(
+      noteNumbers(base).length,
+    );
+    // A ridge floor of 1 ends a ridge at its first frame below its own peak.
+    expect(poly({ minRidgePeakRatio: 1 }).events).not.toEqual(base.events);
+  });
+
+  it('reattackRatio 0 stops splitting a re-struck tone', () => {
+    const tone = restruck();
+    const run = (extra: Record<string, number> = {}) =>
+      transcribe({ samples: tone, sampleRate: SR, tempoBpm: 120, polyphonic: true, ...extra });
+    const split = run();
+    const whole = run({ reattackRatio: 0 });
+    expect(split.noteCount).toBeGreaterThan(whole.noteCount);
+    expect(whole.noteCount).toBe(1);
+  });
+
+  it('accepts a written 0 for the two peak ratios as a real zero', () => {
+    expect(() => poly({ minFramePeakRatio: 0 })).not.toThrow();
+    expect(() => poly({ minRidgePeakRatio: 0 })).not.toThrow();
+    expect(poly({ minFramePeakRatio: 0 }).events).not.toEqual(poly().events);
+  });
+
+  it('refuses a written value outside the domain', () => {
+    const bad = (extra: Record<string, number>) => () => poly(extra);
+    expect(bad({ maxPolyphony: 0 })).toThrow(/maxPolyphony must be an integer in \[1, 64\]/);
+    expect(bad({ maxPolyphony: 65 })).toThrow(/maxPolyphony must be an integer in \[1, 64\]/);
+    expect(bad({ minFramePeakRatio: -0.1 })).toThrow(/minFramePeakRatio must be a number/);
+    expect(bad({ minFramePeakRatio: 1.5 })).toThrow(/minFramePeakRatio must be a number/);
+    expect(bad({ minRidgePeakRatio: -1 })).toThrow(/minRidgePeakRatio must be a number/);
+    expect(bad({ minRidgePeakRatio: 2 })).toThrow(/minRidgePeakRatio must be a number/);
+    expect(bad({ reattackRatio: 1 })).toThrow(/reattackRatio must be 0/);
+    expect(bad({ reattackRatio: 0.5 })).toThrow(/reattackRatio must be 0/);
+    expect(bad({ reattackRatio: -1 })).toThrow(/reattackRatio must be 0/);
+  });
+
+  it('surfaces the C refusal of a polyphonic field on the monophonic tracker', () => {
+    expect(() =>
+      transcribe({ samples: audio, sampleRate: SR, tempoBpm: 120, maxPolyphony: 3 }),
+    ).toThrow(/max_polyphony/);
+  });
+});
