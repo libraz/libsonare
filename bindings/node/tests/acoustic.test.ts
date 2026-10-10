@@ -4,6 +4,7 @@ import {
   estimateRoom,
   roomGeometryFromEstimate,
   roomMorph,
+  roomMorphStereo,
   synthesizeRir,
 } from '../src/index.js';
 
@@ -513,5 +514,69 @@ describe('named selectors and estimate-to-geometry', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
     expect(() => roomGeometryFromEstimate(silent)).toThrow();
+  });
+});
+
+describe('roomMorphStereo', () => {
+  const room = { lengthM: 8, widthM: 6, heightM: 3, absorption: 0.3, wet: 1.0, maxSeconds: 0.3 };
+  const impulse = () => {
+    const x = new Float32Array(2000);
+    x[0] = 1.0;
+    return x;
+  };
+
+  it('returns two equal-length channels longer than the input', () => {
+    const out = roomMorphStereo({ left: impulse(), right: impulse(), sampleRate: 48000, ...room });
+    expect(out.left.length).toBe(out.right.length);
+    expect(out.left.length).toBeGreaterThan(2000);
+    expect(out.sampleRate).toBe(48000);
+  });
+
+  it('decorrelates the channels of an identical stereo input', () => {
+    const out = roomMorphStereo({ left: impulse(), right: impulse(), ...room });
+    expect(Array.from(out.left)).not.toEqual(Array.from(out.right));
+  });
+
+  it('treats an omitted receiverSpacingM as 0.5', () => {
+    const a = roomMorphStereo({ left: impulse(), right: impulse(), ...room });
+    const b = roomMorphStereo({
+      left: impulse(),
+      right: impulse(),
+      ...room,
+      receiverSpacingM: 0.5,
+    });
+    expect(Array.from(a.left)).toEqual(Array.from(b.left));
+    expect(Array.from(a.right)).toEqual(Array.from(b.right));
+  });
+
+  it.each([0, -1, 4.5, Number.NaN])('rejects receiverSpacingM %s', (receiverSpacingM) => {
+    const attempt = () =>
+      roomMorphStereo({ left: impulse(), right: impulse(), ...room, receiverSpacingM });
+    expect(attempt).toThrow(RangeError);
+    expect(attempt).toThrow(/receiverSpacingM/);
+  });
+
+  it('rejects mismatched channel lengths', () => {
+    expect(() =>
+      roomMorphStereo({ left: impulse(), right: new Float32Array(1000), ...room }),
+    ).toThrow(RangeError);
+  });
+
+  it('publishes the synthesis diagnostics', () => {
+    const out = roomMorphStereo({ left: impulse(), right: impulse(), ...room, maxSeconds: 0.05 });
+    expect(out.diagnostics.map((d) => d.code)).toContain('acoustic.rir_length_clamped');
+  });
+
+  it('refuses a listener too close to a wall for the receiver pair', () => {
+    const attempt = () =>
+      roomMorphStereo({
+        left: impulse(),
+        right: impulse(),
+        ...room,
+        listenerX: 0.1,
+        listenerY: 3,
+        listenerZ: 1.5,
+      });
+    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
   });
 });

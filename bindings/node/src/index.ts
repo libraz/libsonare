@@ -331,6 +331,7 @@ export type {
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
+  RoomMorphStereoResult,
   RoomPlacement,
   SampleDesc,
   SampleDescLoopMode,

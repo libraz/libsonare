@@ -105,6 +105,7 @@ const TABLE: Entry[] = [
   ].map((name) => mono(name, name === 'analyzeWithProgress' ? { onProgress: () => {} } : {})),
   mono('chordFunctionalAnalysis', { keyRoot: 0 }),
   mono('roomMorph', { targetRt60: 0.4 }),
+  stereo('roomMorphStereo'),
   // Spectral and pitch features
   ...[
     'trim',

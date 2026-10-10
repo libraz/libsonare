@@ -834,6 +834,39 @@ export interface RoomMorphResult {
   diagnostics: RirDiagnostic[];
 }
 
+/**
+ * Stereo morph result: each channel convolved with the target room's impulse
+ * response for its own receiver of a spaced pair.
+ *
+ * Shaped like {@link RoomMorphResult} with `left` / `right` in place of `audio`;
+ * both channels have the input length plus the target room's reverb tail. An
+ * unusable morph throws, so every entry in {@link RoomMorphStereoResult.diagnostics}
+ * is a warning.
+ */
+export interface RoomMorphStereoResult {
+  /** Left channel: input length plus the target room's reverb tail. */
+  left: Float32Array;
+  /** Right channel, the same length as `left`. */
+  right: Float32Array;
+  sampleRate: number;
+  /**
+   * Every diagnostic the target-room synthesis reported, in order. Each says the
+   * morph went through a room other than the one requested — an image-source
+   * order reduced to the safe maximum (`acoustic.ism_order_clamped`), a tail cut
+   * against `maxSeconds` (`acoustic.rir_length_clamped`), a `maxSeconds` shorter
+   * than the direct sound's flight time and extended to fit it
+   * (`acoustic.rir_length_floored`), a `maxSeconds` shorter than the longest
+   * band's RT60, which cuts that band before it decays by 60 dB so its
+   * reverberation time cannot be measured from the RIR
+   * (`acoustic.rir_tail_truncated`), a request that produced no diffuse tail
+   * (`acoustic.no_late_tail`) — and is otherwise invisible.
+   *
+   * These are the five codes the synthesis can emit here, so a `switch` over
+   * them needs no fall-through case.
+   */
+  diagnostics: RirDiagnostic[];
+}
+
 /** Row-major dense matrix returned by feature/decompose helpers. */
 export interface Matrix2D {
   /** Number of rows. */

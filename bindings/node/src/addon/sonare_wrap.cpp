@@ -118,6 +118,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, &SonareWrap::SynthesizeRir, "synthesizeRir"));
   exports.Set("estimateRoom", Napi::Function::New(env, &SonareWrap::EstimateRoom, "estimateRoom"));
   exports.Set("roomMorph", Napi::Function::New(env, &SonareWrap::RoomMorph, "roomMorph"));
+  exports.Set("roomMorphStereo",
+              Napi::Function::New(env, &SonareWrap::RoomMorphStereo, "roomMorphStereo"));
   exports.Set(
       "roomGeometryFromEstimate",
       Napi::Function::New(env, &SonareWrap::RoomGeometryFromEstimate, "roomGeometryFromEstimate"));

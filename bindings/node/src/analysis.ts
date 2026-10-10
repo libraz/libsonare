@@ -38,6 +38,7 @@ import type {
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
+  RoomMorphStereoResult,
   Section,
   TimbreResult,
 } from './types.js';
@@ -100,6 +101,14 @@ export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, Samples
 
 export interface RoomEstimateRequest extends RoomEstimateOptions, SamplesRequest {}
 export interface RoomMorphRequest extends RoomMorphOptions, SamplesRequest {}
+/** Request for {@link roomMorphStereo}. */
+export interface RoomMorphStereoRequest extends RoomMorphOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  /** Receiver spacing in metres, in (0, 4]; omitted = 0.5. */
+  receiverSpacingM?: number;
+}
 /** The room fields of an estimate that {@link roomGeometryFromEstimate} reads. */
 export type RoomGeometryEstimate = Pick<RoomEstimateResult, 'lengthM' | 'widthM' | 'heightM'> & {
   bandAbsorption?: Float32Array | number[];
@@ -568,6 +577,36 @@ export function roomMorph(
   const resolvedSampleRate = request.sampleRate ?? 48000;
   assertSampleRate('roomMorph', resolvedSampleRate);
   return addon.roomMorph(request.samples, resolvedSampleRate, request);
+}
+
+/**
+ * Stereo {@link roomMorph}: `left` and `right` are each convolved with the target
+ * room's impulse response for its own omnidirectional receiver, the pair spaced
+ * `receiverSpacingM` apart and centred on the listener, so the added room is not
+ * a single centred mono reverb.
+ *
+ * `left` and `right` must have the same length. The result carries both channels
+ * (input length plus the reverb tail) and the synthesis `diagnostics`.
+ */
+export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
+  const req = requestObject('roomMorphStereo', request, 'left', true);
+  assertRoomOptions('roomMorphStereo', req);
+  const sampleRate = req.sampleRate ?? 48000;
+  assertAudioInput('roomMorphStereo', req.left, sampleRate, req, 'left');
+  assertAudioInput('roomMorphStereo', req.right, sampleRate, req, 'right');
+  if (req.left.length !== req.right.length) {
+    throw new RangeError('roomMorphStereo: left and right must have the same length');
+  }
+  const spacing = req.receiverSpacingM;
+  if (spacing !== undefined) {
+    if (typeof spacing !== 'number') {
+      throw new TypeError('roomMorphStereo: receiverSpacingM must be a number');
+    }
+    if (!Number.isFinite(spacing) || spacing <= 0 || spacing > 4) {
+      throw new RangeError('roomMorphStereo: receiverSpacingM must be finite and in (0, 4]');
+    }
+  }
+  return addon.roomMorphStereo(req.left, req.right, sampleRate, req);
 }
 
 /**

@@ -19,6 +19,7 @@ import {
   plp,
   powerToDb,
   roomMorph,
+  roomMorphStereo,
   splitSilence,
   synthesizeRir,
   tempogram,
@@ -34,6 +35,7 @@ import type {
   RirResult,
   RoomEstimateResult,
   RoomMorphResult,
+  RoomMorphStereoResult,
 } from '../../bindings/node/src/types.js';
 
 const samples = new Float32Array([0.0, 0.1, -0.1, 0.0]);
@@ -57,6 +59,15 @@ const morphed: RoomMorphResult = roomMorph(samples, 22050, {
   widthM: 5.0,
   heightM: 3.0,
   wet: 0.4,
+});
+const morphedStereo: RoomMorphStereoResult = roomMorphStereo({
+  left: samples,
+  right: samples,
+  sampleRate: 22050,
+  lengthM: 6.0,
+  widthM: 5.0,
+  heightM: 3.0,
+  receiverSpacingM: 0.5,
 });
 const downbeats: Float32Array = detectDownbeats(samples, 22050);
 const chords: ChordAnalysisResult = detectChords(

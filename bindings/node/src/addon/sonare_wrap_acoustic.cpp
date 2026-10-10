@@ -358,22 +358,8 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   SONARE_NODE_CATCH(env)
 }
 
-Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsObject()) {
-    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options)")
-        .ThrowAsJavaScriptException();
-    return env.Undefined();
-  }
-
-  SONARE_NODE_TRY
-  auto typed = info[0].As<Napi::Float32Array>();
-  const int sr = node_narrow_int(env, info[1], "sr");
-  if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
-  if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength())) return env.Undefined();
-  const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
-  Napi::Object opts = info[2].As<Napi::Object>();
-
+// Options shared by roomMorph and roomMorphStereo.
+sonare::effects::acoustic::RoomMorphConfig RoomMorphConfigFromOptions(const Napi::Object& opts) {
   sonare::effects::acoustic::RoomMorphConfig cfg;
   cfg.target = RoomFromOptions(opts, 0.2f);
   cfg.placement = PlacementFromOptions(opts);
@@ -399,6 +385,26 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
                               .or_default(cfg.air.temperature_c);
   cfg.air.humidity_percent = sonare::ZeroIsDefault(FloatProperty(opts, "airHumidityPercent", 0.0f))
                                  .or_default(cfg.air.humidity_percent);
+  return cfg;
+}
+
+Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !info[1].IsNumber() || !info[2].IsObject()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, sampleRate, options)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto typed = info[0].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[1], "sr");
+  if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
+  if (!ValidateAcousticInput(env, typed.Data(), typed.ElementLength())) return env.Undefined();
+  const sonare::Audio audio = sonare::Audio::from_buffer(typed.Data(), typed.ElementLength(), sr);
+  Napi::Object opts = info[2].As<Napi::Object>();
+
+  const sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
 
   const auto result = sonare::effects::acoustic::room_morph(audio, cfg);
   std::vector<float> morphed = AudioToVector(result.audio);
@@ -409,6 +415,47 @@ Napi::Value SonareWrap::RoomMorph(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("audio", VecToFloat32(env, morphed));
   out.Set("sampleRate", Napi::Number::New(env, result.audio.sample_rate()));
+  out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
+  return out;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value SonareWrap::RoomMorphStereo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1]) ||
+      !info[2].IsNumber() || !info[3].IsObject()) {
+    Napi::TypeError::New(env, "Expected (Float32Array, Float32Array, sampleRate, options)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+
+  SONARE_NODE_TRY
+  auto left = info[0].As<Napi::Float32Array>();
+  auto right = info[1].As<Napi::Float32Array>();
+  const int sr = node_narrow_int(env, info[2], "sr");
+  if (!ValidateAcousticSampleRate(env, sr)) return env.Undefined();
+  if (!ValidateAcousticInput(env, left.Data(), left.ElementLength())) return env.Undefined();
+  if (!ValidateAcousticInput(env, right.Data(), right.ElementLength())) return env.Undefined();
+  if (left.ElementLength() != right.ElementLength()) {
+    Napi::RangeError::New(env, "left and right must have the same length")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const sonare::Audio left_audio =
+      sonare::Audio::from_buffer(left.Data(), left.ElementLength(), sr);
+  const sonare::Audio right_audio =
+      sonare::Audio::from_buffer(right.Data(), right.ElementLength(), sr);
+  Napi::Object opts = info[3].As<Napi::Object>();
+
+  sonare::effects::acoustic::RoomMorphConfig cfg = RoomMorphConfigFromOptions(opts);
+  cfg.receiver_spacing_m = FiniteFloatProperty(opts, "receiverSpacingM", cfg.receiver_spacing_m);
+
+  const auto result = sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, cfg);
+
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("left", VecToFloat32(env, AudioToVector(result.left)));
+  out.Set("right", VecToFloat32(env, AudioToVector(result.right)));
+  out.Set("sampleRate", Napi::Number::New(env, result.left.sample_rate()));
   out.Set("diagnostics", DiagnosticsArray(env, result.diagnostics));
   return out;
   SONARE_NODE_CATCH(env)
