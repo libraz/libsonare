@@ -57,16 +57,24 @@ void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const Ridg
     while (t + window - 1 <= end - 1) {
       // Clipped at the fragment start so a cut never reads its pre-attack valley back.
       const int valley_from = std::max(frag_start, t - window - 1);
-      const float valley = *std::min_element(s.begin() + valley_from, s.begin() + t - 1);
+      const auto valley_at = std::min_element(s.begin() + valley_from, s.begin() + t - 1);
+      const auto summit_at = std::max_element(s.begin() + frag_start, s.begin() + t - 1);
+      const float valley = *valley_at;
       const float crest = *std::max_element(s.begin() + t, s.begin() + t + window);
-      if (valley > 0.0f && crest > config.reattack_ratio * valley) {
-        int cut = std::max(frag_start + 1, t - 2);
+      // Only a valley after the fragment's summit: the note's own rising attack is not a re-attack.
+      if (valley > 0.0f && crest > config.reattack_ratio * valley && summit_at < valley_at) {
+        const int first = std::max(frag_start + 1, t - 2);
+        int cut = first;
         const int last = std::min(end - 1, t + 2);
         for (int k = cut + 1; k <= last; ++k) {
           if (s[static_cast<size_t>(k)] - s[static_cast<size_t>(k - 1)] >
               s[static_cast<size_t>(cut)] - s[static_cast<size_t>(cut - 1)]) {
             cut = k;
           }
+        }
+        // Back from the largest rise to where the rise began, which sits nearer the strike.
+        while (cut > first && s[static_cast<size_t>(cut - 2)] < s[static_cast<size_t>(cut - 1)]) {
+          --cut;
         }
         if (long_enough(cut - frag_start) && long_enough(end - cut)) {
           cuts.push_back(cut);

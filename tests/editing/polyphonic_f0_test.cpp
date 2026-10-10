@@ -1937,6 +1937,34 @@ TEST_CASE("a re-attack is cut once even when a one-frame fragment would be kept"
   REQUIRE(ridges[1].f0_hz.size() == kStrike);
 }
 
+TEST_CASE("reattack_ratio does not cut a note's own rising attack", "[polyphonic_f0]") {
+  // Six frames climbing geometrically from 0.05 to 1, then a decay to a third.
+  constexpr int kRamp = 6;
+  constexpr float kFloor = 0.05f;
+  std::vector<float> salience;
+  for (int f = 0; f < kRamp; ++f) {
+    salience.push_back(kFloor * std::pow(1.0f / kFloor, static_cast<float>(f) / (kRamp - 1)));
+  }
+  const std::vector<float> decay = decay_to_third(30);
+  salience.insert(salience.end(), decay.begin() + 1, decay.end());
+  const std::vector<std::vector<F0Candidate>> frames = salience_frames(220.0f, salience);
+
+  for (const float ratio : {1.5f, 2.5f}) {
+    INFO("reattack_ratio " << ratio);
+    // Frame 2 over frame 0 alone passes the ratio, so the climb read from the
+    // ridge's first frame is a re-attack by level; only its position rules it out.
+    REQUIRE(salience[2] > ratio * salience[0]);
+    RidgeConfig config;
+    config.reattack_ratio = ratio;
+    // No length floor, so a cut on the ramp would not be discarded as too short.
+    config.min_duration_ms = 0.0f;
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].frame_start == 0);
+    REQUIRE(ridges[0].f0_hz.size() == salience.size());
+  }
+}
+
 TEST_CASE("track_f0_ridges accepts reattack_ratio of 0 or finite above 1 only", "[polyphonic_f0]") {
   const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
   const std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40);
