@@ -197,6 +197,58 @@ describe('Sonare WASM NativeSynth', () => {
     ).toThrow();
   });
 
+  it('sets drift rate, envelope delay and hold and one-shot, and reads them back', () => {
+    const preset = synthPresetPatch('saw-lead');
+    expect(preset.driftRateHz).toBeGreaterThan(0);
+    for (const key of ['ampDelayMs', 'ampHoldMs', 'filterDelayMs', 'filterHoldMs'] as const) {
+      expect(typeof preset[key]).toBe('number');
+    }
+    expect(preset.oneShot).toBe(false);
+    const echoed = synthPatchRoundTripForTest({ ampHoldMs: 12, filterDelayMs: 34, oneShot: true });
+    expect(echoed.ampHoldMs).toBe(12);
+    expect(echoed.filterDelayMs).toBe(34);
+    expect(echoed.oneShot).toBe(true);
+
+    const project = buildMidiOnlyProject();
+    try {
+      // Long enough to pass the note-off, so a one-shot that ignores it differs.
+      const frames = { totalFrames: 72000 };
+      const base: SynthPatch = {
+        preset: 'saw-lead',
+        driftCents: 40,
+        ampDecayMs: 200,
+        ampSustain: 0.5,
+        cutoffHz: 1500,
+        envToCutoffCents: 2400,
+        filterDecayMs: 200,
+        filterSustain: 0.3,
+      };
+      const reference = project.bounceWithSynthInstrument(base, frames);
+      expect(peak(reference)).toBeGreaterThan(0);
+      for (const edit of [
+        { driftRateHz: 7 },
+        { ampDelayMs: 80 },
+        { ampHoldMs: 80 },
+        { filterDelayMs: 80 },
+        { filterHoldMs: 80 },
+        { oneShot: true },
+        // An explicit zero is a value, not "keep the base".
+        { driftRateHz: 0 },
+      ]) {
+        const edited = project.bounceWithSynthInstrument({ ...base, ...edit }, frames);
+        expect(edited, JSON.stringify(edit)).not.toEqual(reference);
+      }
+      expect(project.bounceWithSynthInstrument({ ...base, oneShot: undefined }, frames)).toEqual(
+        reference,
+      );
+      expect(() =>
+        project.bounceWithSynthInstrument({ ...base, oneShot: 1 as never }, frames),
+      ).toThrow(TypeError);
+    } finally {
+      project.destroy();
+    }
+  });
+
   it('treats explicit empty preset values as absent', () => {
     expect(synthPatchRoundTripForTest({ preset: undefined }).preset).toBe('');
     expect(synthPatchRoundTripForTest({ preset: null } as unknown as SynthPatch).preset).toBe('');
@@ -445,6 +497,16 @@ describe('Sonare WASM NativeSynth', () => {
     }
     expect(wrapper.find((info) => info.name === 'resonanceQ')?.unit).toBe('ratio');
     expect(wrapper.find((info) => info.name === 'cutoffHz')?.unit).toBe('Hz');
+    for (const expected of [
+      'driftRateHz',
+      'ampDelayMs',
+      'ampHoldMs',
+      'filterDelayMs',
+      'filterHoldMs',
+    ]) {
+      expect(names).toContain(expected);
+    }
+    expect(wrapper.find((info) => info.name === 'oneShot')?.type).toBe('boolean');
   });
 
   it('lets engineParams change a render and keeps absent keys at the base', () => {

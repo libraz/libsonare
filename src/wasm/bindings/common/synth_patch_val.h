@@ -327,6 +327,19 @@ inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
   read_int("polyphony", SONARE_SYNTH_FIELD_POLYPHONY, &patch.polyphony);
   read_float("busDrive", SONARE_SYNTH_FIELD_BUS_DRIVE, &patch.bus_drive);
 
+  // Second presence word (struct_version 9).
+  auto read_float2 = [&desc, &patch](const char* key, uint32_t bit, float* out) {
+    *out = floatProperty(desc, key, 0.0f);
+    if (hasProperty(desc, key)) patch.present_fields2 |= bit;
+  };
+  read_float2("driftRateHz", SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ, &patch.drift_rate_hz);
+  read_float2("ampDelayMs", SONARE_SYNTH_FIELD2_AMP_DELAY_MS, &patch.amp_delay_ms);
+  read_float2("ampHoldMs", SONARE_SYNTH_FIELD2_AMP_HOLD_MS, &patch.amp_hold_ms);
+  read_float2("filterDelayMs", SONARE_SYNTH_FIELD2_FILTER_DELAY_MS, &patch.filter_delay_ms);
+  read_float2("filterHoldMs", SONARE_SYNTH_FIELD2_FILTER_HOLD_MS, &patch.filter_hold_ms);
+  patch.one_shot = boolProperty(desc, "oneShot", false) ? 1 : 0;
+  if (hasProperty(desc, "oneShot")) patch.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
+
   // Sample engine. No presence bits: only a sample patch reads this block, so
   // set 0 stays addressable without one.
   patch.sample_set = intProperty(desc, "sampleSet", 0);
@@ -406,6 +419,12 @@ inline emscripten::val synthPatchToVal(const SonareSynthPatch& patch) {
   out.set("bodyMix", patch.body_mix);
   out.set("stereoSpread", patch.stereo_spread);
   out.set("retrigger", enumNameVal(patch.retrigger, kRetriggers, SONARE_SYNTH_RETRIGGER_COUNT));
+  out.set("driftRateHz", patch.drift_rate_hz);
+  out.set("ampDelayMs", patch.amp_delay_ms);
+  out.set("ampHoldMs", patch.amp_hold_ms);
+  out.set("filterDelayMs", patch.filter_delay_ms);
+  out.set("filterHoldMs", patch.filter_hold_ms);
+  out.set("oneShot", patch.one_shot != 0);
   val routings = val::array();
   for (int i = 0; i < patch.num_mod_routings && i < SONARE_SYNTH_PATCH_MOD_ROUTINGS; ++i) {
     val routing = val::object();

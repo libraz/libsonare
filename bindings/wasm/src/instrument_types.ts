@@ -603,12 +603,20 @@ export interface SynthModRouting {
  * reserve `'default'` as keep. A `modRoutings` array REPLACES the base mod
  * matrix, and an empty array clears it, while omitting the key keeps it.
  *
- * Mode-specific deep parameters (FM operator stacks, modal mode tables, bow
- * force, breath pressure, kit pieces, piano strings, ...) are set by key through
- * `engineParams`; the patch's own fields are the wrapper sections most engines
- * share. Two exceptions: `waveform` is read by the subtractive engine only, and
- * on a percussion channel the whole section below is discarded in favor of the
- * per-note drum-kit patch — only `gain`, `busDrive` and `polyphony` still act.
+ * The selected engine's own model fields (bow force, breath pressure, FM
+ * operator levels, mode ratios, ...) are set through {@link engineParams}; the
+ * fields below are the wrapper sections. Which engines honour each one:
+ *
+ * - subtractive only: `waveform`, `unison`, `detuneCents`.
+ * - sample only: the `sample*` fields.
+ * - every engine: `pitchOffsetCents`, the LFOs, `driftCents` / `driftRateHz`,
+ *   `glideMs`, the filter and its envelope, the amplitude envelope (an
+ *   undamped harpsichord tail outlasts it), `oneShot`, `body` / `bodyMix`,
+ *   `drive`, `hpCutoffHz`, `sampleHoldHz` / `bitDepth`, `stereoSpread`.
+ * - every engine and a percussion channel: `gain`, `polyphony`, `busDrive`. On
+ *   a percussion channel (a percussion patch voicing a GM kit, as the
+ *   `'drum-kit'` preset does) each note runs its per-note kit patch and every
+ *   other field is discarded.
  */
 export interface SynthPatch {
   /**
@@ -641,6 +649,8 @@ export interface SynthPatch {
   detuneCents?: number;
   /** Per-voice slow pitch drift depth (cents). */
   driftCents?: number;
+  /** Per-voice drift rate (Hz), [0.01, 20]. */
+  driftRateHz?: number;
   /** Pre-filter drive [0, 1]. */
   drive?: number;
   filterModel?: SynthFilterModel | number;
@@ -707,14 +717,27 @@ export interface SynthPatch {
    * already-sounding voices from the next processed block.
    */
   pitchOffsetCents?: number;
+  /** Amplitude envelope delay before the attack (ms), [0, 5000]. */
+  ampDelayMs?: number;
   ampAttackMs?: number;
+  /** Amplitude envelope hold at the peak (ms), [0, 5000]. */
+  ampHoldMs?: number;
   ampDecayMs?: number;
   ampSustain?: number;
   ampReleaseMs?: number;
+  /** Filter envelope delay before the attack (ms), [0, 5000]. */
+  filterDelayMs?: number;
   filterAttackMs?: number;
+  /** Filter envelope hold at the peak (ms), [0, 5000]. */
+  filterHoldMs?: number;
   filterDecayMs?: number;
   filterSustain?: number;
   filterReleaseMs?: number;
+  /**
+   * Ignore note-off: the voice ends with its envelope's decay or its engine's
+   * own end, as a drum hit does.
+   */
+  oneShot?: boolean;
   lfoRateHz?: number;
   lfoToPitchCents?: number;
   lfo2RateHz?: number;
