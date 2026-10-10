@@ -482,6 +482,7 @@ export {
   zeroCrossingRate,
   zeroCrossings,
 } from './features.js';
+export type { SynthParamInfo } from './instrument_types.js';
 export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio.js';
 export { bindMicrophoneInput } from './live_audio.js';
 export type {
@@ -694,6 +695,7 @@ export {
   synthPresetNames,
   synthPresetPatch,
 } from './project.js';
+export { synthEngineParamInfo, synthPatchParamInfo } from './project_synth.js';
 export type {
   AcousticModeName,
   AcousticOptions,

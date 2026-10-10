@@ -10,7 +10,9 @@ import {
   BUILTIN_SYNTH_WAVEFORMS,
   CONTROLLER_AXES,
   CONTROLLER_INPUTS,
+  ErrorCode,
   init,
+  isSonareError,
   MPE_DIMENSIONS,
   NOTE_TRACKINGS,
   Project,
@@ -25,7 +27,9 @@ import {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   SYNTH_RETRIGGERS,
+  synthEngineParamInfo,
   synthEnumTables,
+  synthPatchParamInfo,
   synthPresetNames,
   synthPresetPatch,
 } from '../dist/index.js';
@@ -380,6 +384,161 @@ describe('Sonare WASM NativeSynth', () => {
     } finally {
       project.destroy();
     }
+  });
+
+  // Bounces a one-note project and returns the interleaved render.
+  function bounce(patch: SynthPatch | string): Float32Array {
+    const project = buildMidiOnlyProject();
+    try {
+      return project.bounceWithSynthInstrument(patch, { totalFrames: 24000 });
+    } finally {
+      project.destroy();
+    }
+  }
+
+  function thrownBy(fn: () => unknown): unknown {
+    try {
+      fn();
+    } catch (error) {
+      return error;
+    }
+    return undefined;
+  }
+
+  it('voices every engine mode except sample from a patch that sets only the mode', () => {
+    for (const mode of SYNTH_ENGINE_MODES) {
+      if (mode === 'default' || mode === 'sample') {
+        continue;
+      }
+      // -60 dBFS on middle C.
+      expect(peak(bounce({ engineMode: mode })), mode).toBeGreaterThan(0.001);
+    }
+    expect(peak(bounce({ engineMode: 'sample' }))).toBe(0);
+  });
+
+  it('seeds a mismatched engine from its base preset', () => {
+    expect(peak(bounce({ preset: 'violin', engineMode: 'fm' }))).toBeGreaterThan(0.001);
+  });
+
+  it('describes engine sections and wrapper fields', () => {
+    for (const mode of ['default', 'subtractive', 'sample'] as const) {
+      expect(synthEngineParamInfo(mode)).toEqual([]);
+    }
+    const bowed = synthEngineParamInfo('bowed-string');
+    expect(bowed).toEqual(synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string')));
+    const force = bowed.find((info) => info.name === 'bowForce');
+    expect(force).toBeDefined();
+    expect(force?.type).toBe('number');
+    expect(typeof force?.default).toBe('number');
+    expect(typeof force?.unit).toBe('string');
+    for (const mode of SYNTH_ENGINE_MODES) {
+      const names = synthEngineParamInfo(mode).map((info) => info.name);
+      expect(new Set(names).size, mode).toBe(names.length);
+    }
+    expect(() => synthEngineParamInfo('no-such-engine')).toThrow(RangeError);
+    expect(() => synthEngineParamInfo(99)).toThrow(RangeError);
+
+    const wrapper = synthPatchParamInfo();
+    const names = wrapper.map((info) => info.name);
+    for (const expected of ['cutoffHz', 'resonanceQ', 'ampAttackMs', 'gain', 'polyphony']) {
+      expect(names).toContain(expected);
+    }
+    expect(wrapper.find((info) => info.name === 'resonanceQ')?.unit).toBe('ratio');
+    expect(wrapper.find((info) => info.name === 'cutoffHz')?.unit).toBe('Hz');
+  });
+
+  it('lets engineParams change a render and keeps absent keys at the base', () => {
+    const bowed = synthEngineParamInfo('bowed-string');
+    const force = bowed.find((info) => info.name === 'bowForce');
+    expect(force?.min).toBeDefined();
+    expect(force?.max).toBeDefined();
+    const lo = force?.min ?? 0;
+    const hi = force?.max ?? 1;
+    const changed =
+      Math.abs((force?.default ?? 0) - lo) > Math.abs((force?.default ?? 0) - hi) ? lo : hi;
+    const base = bounce({ engineMode: 'bowed-string' });
+    const edited = bounce({ engineMode: 'bowed-string', engineParams: { bowForce: changed } });
+    expect(edited).not.toEqual(base);
+    expect(bounce({ engineMode: 'bowed-string', engineParams: {} })).toEqual(base);
+    // Setting a field to its own base value is the base render.
+    expect(
+      bounce({ engineMode: 'bowed-string', engineParams: { bowForce: force?.default ?? 0 } }),
+    ).toEqual(base);
+  });
+
+  it('applies engineParams on the realtime engine path too', () => {
+    const engine = new RealtimeEngine(48000, 128);
+    try {
+      engine.setSynthInstrument({ engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } }, 7);
+      engine.pushMidiNoteOn(7, 0, 0, 60, 100);
+      const out = engine.process([new Float32Array(128), new Float32Array(128)]);
+      expect(Math.max(...out.map((channel) => peak(channel)))).toBeGreaterThan(0);
+      const error = thrownBy(() =>
+        engine.setSynthInstrument(
+          { engineMode: 'bowed-string', engineParams: { noSuchKey: 1 } },
+          8,
+        ),
+      );
+      expect(isSonareError(error) && error.code).toBe(ErrorCode.InvalidParameter);
+      expect((error as Error).message).toContain('noSuchKey');
+    } finally {
+      engine.destroy();
+    }
+  });
+
+  it('refuses a bad engine param as a coded error naming the key', () => {
+    const bowed = synthEngineParamInfo('bowed-string');
+    const force = bowed.find((info) => info.name === 'bowForce');
+    const reedKey = synthEngineParamInfo('reed')[0].name;
+    expect(bowed.map((info) => info.name)).not.toContain(reedKey);
+    const bad: [string, Record<string, number>][] = [
+      ['noSuchKey', { noSuchKey: 1 }],
+      [reedKey, { [reedKey]: 0.5 }],
+      ['bowForce', { bowForce: Number.NaN }],
+      ['bowForce', { bowForce: Number.POSITIVE_INFINITY }],
+      ['bowForce', { bowForce: (force?.max ?? 1) + 1000 }],
+      ['bowForce', { bowForce: (force?.min ?? 0) - 1000 }],
+    ];
+    for (const [key, engineParams] of bad) {
+      const error = thrownBy(() => bounce({ engineMode: 'bowed-string', engineParams }));
+      expect(isSonareError(error) && error.code, key).toBe(ErrorCode.InvalidParameter);
+      expect((error as Error).message, key).toContain(key);
+    }
+
+    // A whole-number field refuses a fraction.
+    let integerKey: string | undefined;
+    let integerMode: SynthPatch['engineMode'];
+    for (const mode of SYNTH_ENGINE_MODES) {
+      const found = synthEngineParamInfo(mode).find((info) => info.integer === true);
+      if (found !== undefined) {
+        integerKey = found.name;
+        integerMode = mode;
+        break;
+      }
+    }
+    expect(integerKey).toBeDefined();
+    const fraction = thrownBy(() =>
+      bounce({ engineMode: integerMode, engineParams: { [integerKey as string]: 1.5 } }),
+    );
+    expect(isSonareError(fraction) && fraction.code).toBe(ErrorCode.InvalidParameter);
+    expect((fraction as Error).message).toContain(integerKey as string);
+  });
+
+  it('refuses a malformed engineParams value before the C call', () => {
+    for (const engineParams of [[1], 'x', 3, { bowForce: '0.5' }, { bowForce: true }]) {
+      expect(() =>
+        bounce({ engineMode: 'bowed-string', engineParams: engineParams as never }),
+      ).toThrow(TypeError);
+    }
+  });
+
+  it('returns patches without engineParams from the read direction', () => {
+    const viaRoundTrip = synthPatchRoundTripForTest({
+      engineMode: 'bowed-string',
+      engineParams: { bowForce: 0.5 },
+    });
+    expect('engineParams' in viaRoundTrip).toBe(false);
+    expect('engineParams' in synthPresetPatch('violin')).toBe(false);
   });
 
   it('renders live MIDI through the engine synth instrument', () => {

@@ -1,5 +1,12 @@
-import type { SynthEnumTables, SynthPatch } from './instrument_types.js';
-import { projectModule } from './project_internal.js';
+import { resolveEnumOrdinal } from './codes.js';
+import {
+  SYNTH_ENGINE_MODES,
+  type SynthEngineMode,
+  type SynthEnumTables,
+  type SynthParamInfo,
+  type SynthPatch,
+} from './instrument_types.js';
+import { type ProjectModule, projectModule } from './project_internal.js';
 import { assertString } from './validation.js';
 
 /**
@@ -100,6 +107,40 @@ export function synthPresetPatch(name: string): SynthPatch {
   // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is
   // already a plain member array.
   return { ...projectModule().synthPresetPatch(name) };
+}
+
+/** The descriptor entries of the raw module, which return the C ABI's JSON text. */
+interface SynthInfoModule {
+  synthEngineParamInfo: (engineMode: number) => string;
+  synthPatchParamInfo: () => string;
+}
+
+function synthInfoModule(): SynthInfoModule {
+  return projectModule() as ProjectModule & SynthInfoModule;
+}
+
+/**
+ * Describe the engine-section fields {@link SynthPatch.engineParams} accepts
+ * for an engine mode: key, type, range, unit and the engine's base preset's
+ * value. `[]` for modes with no section (`'default'`, `'subtractive'`,
+ * `'sample'`). Throws for an unknown mode.
+ */
+export function synthEngineParamInfo(engineMode: SynthEngineMode | number): SynthParamInfo[] {
+  const ordinal = resolveEnumOrdinal(
+    engineMode,
+    Object.fromEntries(SYNTH_ENGINE_MODES.map((name, index) => [name, index])),
+    'synth engine mode',
+  );
+  return JSON.parse(synthInfoModule().synthEngineParamInfo(ordinal)) as SynthParamInfo[];
+}
+
+/**
+ * Describe every numeric {@link SynthPatch} wrapper field: range it is clamped
+ * to, unit and the init patch's default. Enum fields, the preset name and the
+ * mod matrix are not listed.
+ */
+export function synthPatchParamInfo(): SynthParamInfo[] {
+  return JSON.parse(synthInfoModule().synthPatchParamInfo()) as SynthParamInfo[];
 }
 
 export function synthEnumTables(): SynthEnumTables {

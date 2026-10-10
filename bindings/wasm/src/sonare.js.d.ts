@@ -1968,6 +1968,8 @@ export interface SonareModule {
   projectAbiVersion: () => number;
   synthPresetNames: () => string[];
   synthPresetPatch: (name: string) => unknown;
+  synthEngineParamInfo: (engineMode: number) => string;
+  synthPatchParamInfo: () => string;
   synthGsDrumKitName: (program: number) => string | null;
   synthGsDrumKitIsVoicedApart: (program: number) => number;
   synthGsVariationIsVoicedApart: (bank: number, program: number) => number;

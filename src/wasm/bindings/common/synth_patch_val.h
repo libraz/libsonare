@@ -15,6 +15,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <vector>
 
 #include "wasm/bindings/common/common.h"
 
@@ -200,19 +201,69 @@ inline void setPresetName(SonareSynthPatch* patch, const std::string& name) {
   std::strncpy(patch->preset, wasmCString(bare, "preset"), SONARE_SYNTH_PRESET_NAME_MAX - 1);
 }
 
+/// A parsed patch together with the memory its @c engine_params pointer
+/// borrows. The keys are NUL-terminated @c std::vector<char> buffers rather than
+/// strings: a moved vector keeps its heap buffer, whereas a short string keeps
+/// its bytes inline and would dangle when the storage is moved into a caller's
+/// container. The pointers are fixed once at construction, so a move is safe and
+/// a copy (which would alias them) is not offered. Keep the storage alive across
+/// the C call that reads @c patch.
+struct SynthPatchStorage {
+  SonareSynthPatch patch{};
+  std::vector<std::vector<char>> keys;
+  std::vector<SonareSynthEngineParam> params;
+
+  SynthPatchStorage() = default;
+  SynthPatchStorage(const SynthPatchStorage&) = delete;
+  SynthPatchStorage& operator=(const SynthPatchStorage&) = delete;
+  SynthPatchStorage(SynthPatchStorage&&) noexcept = default;
+  SynthPatchStorage& operator=(SynthPatchStorage&&) noexcept = default;
+};
+
+/// Reads `engineParams` (a plain key -> number object) into @p storage. The
+/// value type is checked here; range, integrality and key validity are the C
+/// ABI's to refuse, so the message and bounds have one source.
+inline void readEngineParams(emscripten::val desc, SynthPatchStorage* storage) {
+  using emscripten::val;
+  if (!hasProperty(desc, "engineParams")) return;
+  val map = desc["engineParams"];
+  if (map.typeOf().as<std::string>() != "object" ||
+      val::global("Array").call<bool>("isArray", map)) {
+    throw WasmTypeError("synth patch engineParams must be an object of key -> number");
+  }
+  val names = val::global("Object").call<val>("keys", map);
+  const size_t count = names["length"].as<size_t>();
+  storage->keys.reserve(count);
+  storage->params.reserve(count);
+  for (size_t i = 0; i < count; ++i) {
+    const std::string key = names[i].as<std::string>();
+    wasmRefuseEmbeddedNul(key, "engineParams key");
+    const std::string subject = "engineParams '" + key + "'";
+    const double value = numberFromVal(map[key], subject.c_str());
+    storage->keys.emplace_back(key.begin(), key.end());
+    storage->keys.back().push_back('\0');
+    storage->params.push_back({nullptr, value});
+  }
+  for (size_t i = 0; i < count; ++i) storage->params[i].key = storage->keys[i].data();
+  storage->patch.engine_params = storage->params.empty() ? nullptr : storage->params.data();
+  storage->patch.engine_param_count = storage->params.size();
+}
+
 /// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
 /// prefix is accepted — or an object of wrapper-section overrides) into the
 /// versioned C struct. A key the caller actually supplied also sets its
 /// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit
 /// zero rather than the "keep base" sentinel a bare zero would be. Throws on
-/// unknown enum names; unknown PRESET names are validated downstream.
-inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
-  SonareSynthPatch patch{};
+/// unknown enum names; unknown PRESET names and refused `engineParams` keys or
+/// values are validated downstream by the C ABI.
+inline SynthPatchStorage synthPatchFromVal(emscripten::val desc) {
+  SynthPatchStorage storage;
+  SonareSynthPatch& patch = storage.patch;
   patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
-  if (desc.isUndefined() || desc.isNull()) return patch;
+  if (desc.isUndefined() || desc.isNull()) return storage;
   if (desc.typeOf().as<std::string>() == "string") {
     setPresetName(&patch, desc.as<std::string>());
-    return patch;
+    return storage;
   }
   if (desc.typeOf().as<std::string>() != "object") {
     throw WasmTypeError("synth patch must be a preset-name string or an object");
@@ -308,7 +359,8 @@ inline SonareSynthPatch synthPatchFromVal(emscripten::val desc) {
       }
     }
   }
-  return patch;
+  readEngineParams(desc, &storage);
+  return storage;
 }
 
 /// Converts a versioned C synth patch into the JS SynthPatch object shape

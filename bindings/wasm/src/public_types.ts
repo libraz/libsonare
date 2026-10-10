@@ -65,6 +65,7 @@ export type MasteringInsertParamUnit =
   | 'samples'
   | 'm'
   | 'cm'
+  | 'mm'
   | 'deg'
   | 'percent'
   | 'degC'

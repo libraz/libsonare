@@ -3,6 +3,7 @@
  * patch, the SoundFont player, and the sample bank's descriptors.
  */
 
+import type { MasteringInsertParamUnit } from './public_types.js';
 import type { SampleBank } from './sample_bank.js';
 
 /** Names accepted by the minimal built-in oscillator synth. */
@@ -145,14 +146,14 @@ export interface Sf2ProgramStatus {
  * Every NativeSynth engine selector, by ordinal.
  *
  * @remarks
- * Not seventeen interchangeable choices. Selecting a mode blanks every engine
- * section but its own, and four engines have nothing to voice until a section
- * is supplied: `'fm'` needs operators, `'modal'` a mode table, `'percussion'` a
- * kit and `'sample'` a {@link SampleBank}. Each renders exact silence from an
- * otherwise default patch (measured: peak 0), while the other thirteen sound
- * and differ from one another. A host offering this array as a control offers
- * those four as dead entries unless it also supplies the section, which a
- * preset does.
+ * Selecting a mode blanks every engine section but its own. From a patch that
+ * sets only `engineMode`, every mode sounds except `'sample'`, which has
+ * nothing to voice until a {@link SampleBank} is supplied: the engine section
+ * is the named preset's when that preset uses the selected engine, otherwise
+ * the engine's base preset's (`'fm'` the e-piano's, `'percussion'` the GM drum
+ * kit, ...). A bare mode therefore follows that preset's bank version. The
+ * fields of the section are set through {@link SynthPatch.engineParams} and
+ * described by {@link synthEngineParamInfo}.
  */
 export const SYNTH_ENGINE_MODES = [
   'default',
@@ -313,6 +314,28 @@ export interface SynthEnumTables {
 
 /** NativeSynth engine selector ({@link SynthPatch}; `'default'` keeps the base patch's). */
 export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
+
+/**
+ * One field a synth descriptor call reports: an engine-section key from
+ * {@link synthEngineParamInfo} or a {@link SynthPatch} wrapper field from
+ * {@link synthPatchParamInfo}. The insert descriptor's shape, without the
+ * automation columns.
+ */
+export interface SynthParamInfo {
+  /** The key {@link SynthPatch.engineParams} (or the patch field) is spelled with. */
+  name: string;
+  /** `'boolean'` is a switch given as 0 or 1. */
+  type: 'number' | 'boolean';
+  /** True for a field taking whole numbers only. */
+  integer?: boolean;
+  /** Smallest accepted value; absent for a field with no closed range. */
+  min?: number;
+  /** Largest accepted value; absent for a field with no closed range. */
+  max?: number;
+  /** The engine's base preset's value (engine fields) or the "keep base" default (patch fields). */
+  default: number;
+  unit: MasteringInsertParamUnit;
+}
 
 /**
  * Per-patch loop override for the sample engine (`'default'` keeps what the
@@ -580,11 +603,11 @@ export interface SynthModRouting {
  * reserve `'default'` as keep. A `modRoutings` array REPLACES the base mod
  * matrix, and an empty array clears it, while omitting the key keeps it.
  *
- * Mode-specific deep parameters (FM operator stacks, modal mode tables,
- * drawbar registrations, kit pieces, piano strings) travel inside the named
- * presets; the patch exposes the wrapper sections most engines share. Two
- * exceptions: `waveform` is read by the subtractive engine only, and on a
- * percussion channel the whole section below is discarded in favor of the
+ * Mode-specific deep parameters (FM operator stacks, modal mode tables, bow
+ * force, breath pressure, kit pieces, piano strings, ...) are set by key through
+ * `engineParams`; the patch's own fields are the wrapper sections most engines
+ * share. Two exceptions: `waveform` is read by the subtractive engine only, and
+ * on a percussion channel the whole section below is discarded in favor of the
  * per-note drum-kit patch — only `gain`, `busDrive` and `polyphony` still act.
  */
 export interface SynthPatch {
@@ -599,6 +622,18 @@ export interface SynthPatch {
   /** Base preset name (see {@link synthPresetNames}); omit for the init patch. */
   preset?: string;
   engineMode?: SynthEngineMode | number;
+  /**
+   * Fields of the selected engine's own model section, by key (for example
+   * `{ bowForce: 0.6 }` on `'bowed-string'`). {@link synthEngineParamInfo} lists
+   * the keys an engine accepts with their ranges, units and defaults. Unlike
+   * the wrapper fields, nothing is clamped or ignored: an unknown key, a key of
+   * another engine's section, a non-finite value, a fractional value for a
+   * whole-number field or a value outside a bounded field's range throws a
+   * `SonareError` (`InvalidParameter`) naming the key. Absent keys keep the
+   * engine section's base (the named preset's, or the engine's base preset's).
+   * Not returned by {@link synthPresetPatch}.
+   */
+  engineParams?: Record<string, number>;
   /** Oscillator waveform. Read by the subtractive engine only; every other engine ignores it. */
   waveform?: SynthOscWaveform | number;
   /** Detuned-stack width [1, 7]. */

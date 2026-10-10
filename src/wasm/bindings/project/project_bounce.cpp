@@ -517,8 +517,10 @@ val ProjectWasm::bounceWithInstruments(val bindings, val options) {
 
 val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
   std::vector<SonareSynthInstrumentBinding> synths;
+  // Owns the keys behind each binding's engine_params; alive across the C call.
+  std::vector<sonare_wasm_synth::SynthPatchStorage> patch_storage;
   if (!bindings.isUndefined() && !bindings.isNull()) {
-    auto bindingFromVal = [](val desc) {
+    auto bindingFromVal = [&patch_storage](val desc) {
       SonareSynthInstrumentBinding binding{};
       if (desc.typeOf().as<std::string>() == "object") {
         binding.destination_id = uintProperty(desc, "destinationId", binding.destination_id);
@@ -528,7 +530,8 @@ val ProjectWasm::bounceWithSynthInstrument(val bindings, val options) {
         }
         binding.sample_bank = SampleBankWasm::fromDescriptor(desc);
       }
-      binding.patch = sonare_wasm_synth::synthPatchFromVal(desc);
+      patch_storage.push_back(sonare_wasm_synth::synthPatchFromVal(desc));
+      binding.patch = patch_storage.back().patch;
       return binding;
     };
     if (val::global("Array").call<bool>("isArray", bindings)) {
@@ -728,7 +731,7 @@ val js_controller_profile_names() {
 val js_synth_enum_tables() { return sonare_wasm_synth::synthEnumTablesToVal(); }
 
 val js_synth_patch_round_trip(val desc) {
-  return sonare_wasm_synth::synthPatchToVal(sonare_wasm_synth::synthPatchFromVal(desc));
+  return sonare_wasm_synth::synthPatchToVal(sonare_wasm_synth::synthPatchFromVal(desc).patch);
 }
 
 void registerProjectBounce(class_<ProjectWasm>& cls) {

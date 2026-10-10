@@ -518,6 +518,20 @@ unsigned js_key_mode_from_analysis(const val& mode_val) {
   return out_mode;
 }
 
+// The C ABI's descriptor JSON for an engine's section / the wrapper fields; the
+// facade parses it. A refusal (out-of-range mode) carries the C message.
+std::string js_synth_engine_param_info(const val& engine_mode) {
+  const char* json = sonare_synth_engine_param_info(checkedIntFromVal(engine_mode, "engineMode"));
+  if (json == nullptr) throwCError(SONARE_ERROR_INVALID_PARAMETER, "failed to describe engine");
+  return json;
+}
+
+std::string js_synth_patch_param_info() {
+  const char* json = sonare_synth_patch_param_info();
+  if (json == nullptr) throwCError(SONARE_ERROR_NOT_SUPPORTED, "failed to describe synth patch");
+  return json;
+}
+
 }  // namespace
 
 void registerProjectFreeFunctions() {
@@ -545,6 +559,8 @@ void registerProjectFreeFunctions() {
   function("keyModeFromAnalysis", &js_key_mode_from_analysis);
   function("synthPresetNames", &js_synth_preset_names);
   function("synthPresetPatch", &js_synth_preset_patch);
+  function("synthEngineParamInfo", &js_synth_engine_param_info);
+  function("synthPatchParamInfo", &js_synth_patch_param_info);
   function("synthGsDrumKitName", &js_synth_gs_drum_kit_name);
   function("synthGsDrumKitIsVoicedApart", &js_synth_gs_drum_kit_is_voiced_apart);
   function("synthGsVariationIsVoicedApart", &js_synth_gs_variation_is_voiced_apart);

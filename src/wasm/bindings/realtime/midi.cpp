@@ -247,7 +247,10 @@ void RealtimeEngineWasm::setMidiClips(val clips_val) {
 void RealtimeEngineWasm::setSynthInstrument(const val& destination_id_val, val patch) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const uint32_t destination_id = checkedUintFromVal(destination_id_val, "destinationId");
-  const SonareSynthPatch c_patch = sonare_wasm_synth::synthPatchFromVal(patch);
+  // Owns the keys behind c_patch.engine_params; alive across the config call.
+  const sonare_wasm_synth::SynthPatchStorage patch_storage =
+      sonare_wasm_synth::synthPatchFromVal(patch);
+  const SonareSynthPatch& c_patch = patch_storage.patch;
   sonare::midi::synth::NativeSynthConfig cfg;
   const char* error = nullptr;
   if (!sonare_c_detail::synth_config_from_patch_c(c_patch, &cfg, &error)) {
