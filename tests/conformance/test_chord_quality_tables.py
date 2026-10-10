@@ -297,16 +297,16 @@ class MissingTableTest(_CopiedTree):
 
     def test_a_renamed_table_symbol_is_reported(self) -> None:
         missing = self.lines(
-            check.evaluate(self.tree({PY_MUSIC: ("    quality_names = {", "    names = {")})),
+            check.evaluate(self.tree({PY_MUSIC: ("_CHORD_QUALITY_NAMES = {", "_NAMES = {")})),
             "could not be located",
         )
         self.assertEqual(len(missing), 1, missing)
-        self.assertIn("quality_names", missing[0])
+        self.assertIn("_CHORD_QUALITY_NAMES", missing[0])
 
     def test_a_second_table_of_the_same_name_is_ambiguous_rather_than_guessed(self) -> None:
         missing = self.lines(
             check.evaluate(
-                self.tree({PY_MUSIC: ("    quality_names = {", "    quality_names = {}\n    quality_names = {")})
+                self.tree({PY_MUSIC: ("_CHORD_QUALITY_NAMES = {", "_CHORD_QUALITY_NAMES = {}\n_CHORD_QUALITY_NAMES = {")})
             ),
             "could not be located",
         )

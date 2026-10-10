@@ -208,7 +208,7 @@ ORDINAL_TABLES = (
     ),
     Table(
         "bindings/python/src/libsonare/_analysis_music.py",
-        "quality_names",
+        "_CHORD_QUALITY_NAMES",
         "python_dict",
         "camel",
         "python",

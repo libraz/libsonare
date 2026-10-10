@@ -187,6 +187,10 @@ node = [
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
+  # Resolves the string form of an enum-valued mastering override
+  # (`noiseEstimator: 'mcra'`) to the number the flat parameter lists carry; the
+  # chain-config flattening calls it, so it is not a public operation of its own.
+  "mastering_enum_value",
   "acoustic_mode_name",
   # The C thread-local detail is consumed by the Node exception bridge; it is
   # not a second public operation beside the VocalEdit methods.
@@ -328,6 +332,10 @@ wasm = [
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
+  # Resolves the string form of an enum-valued mastering override
+  # (`noiseEstimator: 'mcra'`) to the number the flat parameter lists carry; the
+  # chain-config flattening calls it, so it is not a public operation of its own.
+  "mastering_enum_value",
   "acoustic_mode_name",
   # The WASM module reads this thread-local detail to attach the matching
   # structured payload to the thrown exception.
@@ -445,6 +453,10 @@ python = [
   # resolve a name against the core's list and refuse an integer, so
   # the getter itself is not a public operation beside synthesizeRir/estimateRoom.
   "material_preset_name",
+  # Resolves the string form of an enum-valued mastering override
+  # (`noiseEstimator: 'mcra'`) to the number the flat parameter lists carry; the
+  # chain-config flattening calls it, so it is not a public operation of its own.
+  "mastering_enum_value",
   "acoustic_mode_name",
   # ctypes reads the thread-local detail after a failed call and folds it into
   # VocalEditError; callers do not invoke the ABI helper directly.

@@ -180,7 +180,7 @@ class PerturbationTest(_CopiedTree):
     def test_moving_one_document_alone_is_reported(self) -> None:
         stale = "bindings/python/src/libsonare/_effects_spectral.py"
         self.only(
-            self.spectral({stale: ("a power of two in ``[2, 262144]``", "a power of two in ``[2, 65536]``")}),
+            self.spectral({stale: ("a power of two in ``[4, 262144]``", "a power of two in ``[4, 65536]``")}),
             stale,
             "says 65536",
             "1 document(s)",
@@ -190,7 +190,7 @@ class PerturbationTest(_CopiedTree):
         """Each document is broken on its own: a guard that sees one is a quarter of a guard."""
         stale = "include/sonare/sonare_c_effects.h"
         self.only(
-            self.spectral({stale: ("a power of two in [2, 262144]", "a power of two in [2, 1024]")}),
+            self.spectral({stale: ("a power of two in [4, 262144]", "a power of two in [4, 1024]")}),
             stale,
             "says 1024",
         )
@@ -198,7 +198,7 @@ class PerturbationTest(_CopiedTree):
     def test_a_widened_document_is_reported_as_readily_as_a_narrowed_one(self) -> None:
         stale = "bindings/wasm/src/public_types_spectral.ts"
         self.only(
-            self.spectral({stale: ("`[2, 262144]`", "`[2, 1048576]`")}),
+            self.spectral({stale: ("`[4, 262144]`", "`[4, 1048576]`")}),
             stale,
             "says 1048576",
         )
@@ -262,7 +262,7 @@ class UnreachedClaimTest(_CopiedTree):
             self.spectral(
                 {
                     node_document: (
-                        "a power of two in `[2, 262144]`",
+                        "a power of two in `[4, 262144]`",
                         "a power of two, no larger than 262144",
                     )
                 }

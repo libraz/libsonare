@@ -41,7 +41,7 @@ HEADER_DIR = ROOT / "include" / "sonare"
 # string whose doc states both what invalidates it and that NULL is possible.
 BREAK_HEADER = "sonare_c_features.h"
 BREAK_DECLARATION = "sonare_hz_to_note"
-BREAK_FIRST_LINE = "/// @details Thread-local storage"
+BREAK_FIRST_LINE = "///   Thread-local storage"
 BREAK_LAST_MARKER = "never free it."
 
 # Floors, not targets.  Raise only alongside a real widening of the scan.

@@ -127,7 +127,7 @@ _CLOSE = r"\s*\]"
 CLAIMS: tuple[Claim, ...] = (
     Claim(
         key="spectral edit n_fft ceiling",
-        pattern=r"power of two in" + _OPEN + r"2" + _MID + r"(?P<max>\d+)" + _CLOSE,
+        pattern=r"power of two in" + _OPEN + r"4" + _MID + r"(?P<max>\d+)" + _CLOSE,
         groups={"max": ("spectral_edit_max_n_fft", 0)},
         floor=4,
     ),
