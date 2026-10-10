@@ -4,12 +4,19 @@
 ///        patch-driven bounce (sonare_project_bounce_with_synth_instruments)
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
+#include <cctype>
+#include <cmath>
 #include <cstring>
+#include <limits>
 #include <set>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
+#include "support/midi_render.h"
+#include "util/json.h"
 
 namespace {
 
@@ -59,6 +66,100 @@ float peak_of(const std::vector<float>& samples) {
   for (float s : samples) peak = std::max(peak, std::abs(s));
   return peak;
 }
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+/// Middle C held for 0.5 s at 48 kHz on a NativeSynth built straight from @p cfg.
+sonare::test::StereoRender render_config(const sonare::midi::synth::NativeSynthConfig& cfg) {
+  constexpr int kBlock = 256;
+  constexpr int kBlocks = 24000 / kBlock;
+  sonare::midi::synth::NativeSynth synth(cfg);
+  synth.prepare(48000.0, kBlock);
+  synth.on_event(0, sonare::test::event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  sonare::test::StereoRender out;
+  for (int b = 0; b < kBlocks; ++b) {
+    const sonare::test::StereoRender block = sonare::test::render_stereo(synth, kBlock);
+    out.left.insert(out.left.end(), block.left.begin(), block.left.end());
+    out.right.insert(out.right.end(), block.right.begin(), block.right.end());
+  }
+  return out;
+}
+
+/// @p cfg with engine @p mode selected and preset @p donor's section of it.
+sonare::midi::synth::NativeSynthConfig with_section_of(sonare::midi::synth::NativeSynthConfig cfg,
+                                                       sonare::midi::synth::SynthEngineMode mode,
+                                                       const char* donor) {
+  const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(donor);
+  REQUIRE(preset != nullptr);
+  REQUIRE(preset->config.patch.mode == mode);
+  cfg.patch.mode = mode;
+  sonare_c_detail::copy_engine_section(preset->config.patch, mode, &cfg.patch);
+  return cfg;
+}
+
+/// Every engine-section field of @p converted reads back as @p donor's, through
+/// the walker rather than the section copy, so a mode copied from the wrong
+/// member shows up here.
+void require_section_read_back(const sonare::midi::synth::NativeSynthPatch& converted,
+                               const char* donor) {
+  const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::find_synth_preset(donor);
+  REQUIRE(preset != nullptr);
+  const auto got = sonare::midi::synth::engine_param_descriptors(converted);
+  const auto want = sonare::midi::synth::engine_param_descriptors(preset->config.patch);
+  REQUIRE(got.size() == want.size());
+  REQUIRE_FALSE(got.empty());
+  for (size_t i = 0; i < got.size(); ++i) {
+    CAPTURE(got[i].key);
+    REQUIRE(got[i].key == want[i].key);
+    REQUIRE(got[i].value == want[i].value);
+  }
+}
+
+/// The walker's engine-section path as a public key: the first segment
+/// dropped, each remaining one snake_case -> lowerCamelCase.
+std::string public_key_of(const std::string& path) {
+  std::string key;
+  bool upper = false;
+  for (char ch : path.substr(path.find('.') + 1)) {
+    if (ch == '_') {
+      upper = true;
+      continue;
+    }
+    key += upper ? static_cast<char>(std::toupper(static_cast<unsigned char>(ch))) : ch;
+    upper = false;
+  }
+  return key;
+}
+
+sonare::util::json::Value parse_info(const char* info) {
+  REQUIRE(info != nullptr);
+  const sonare::util::json::Value parsed = sonare::util::json::parse(info);
+  REQUIRE(parsed.is_array());
+  return parsed;
+}
+
+/// Shape every descriptor shares: a known type, a unit, and a default inside
+/// the range where one is given.
+void require_descriptor_shape(const sonare::util::json::Value& d) {
+  REQUIRE(d["name"].is_string());
+  INFO(d["name"].as_string());
+  const std::string& type = d["type"].as_string();
+  REQUIRE((type == "number" || type == "boolean"));
+  REQUIRE(d["unit"].is_string());
+  REQUIRE_FALSE(d["unit"].as_string().empty());
+  REQUIRE(d.contains("min") == d.contains("max"));
+  if (type == "boolean") {
+    REQUIRE(d["default"].is_bool());
+    REQUIRE_FALSE(d.contains("min"));
+  } else {
+    REQUIRE(d["default"].is_number());
+  }
+  if (d.contains("integer")) REQUIRE(d["integer"].as_bool());
+  if (d.contains("min")) {
+    REQUIRE(d["min"].as_number() <= d["default"].as_number());
+    REQUIRE(d["default"].as_number() <= d["max"].as_number());
+  }
+}
+#endif
 
 }  // namespace
 
@@ -130,35 +231,279 @@ TEST_CASE("synth patch enum counts match the public C ordinals", "[project][synt
   REQUIRE(SONARE_SYNTH_MOD_DESTINATION_COUNT == 13);
 }
 
-TEST_CASE("four engine modes need a section supplied before they can sound",
-          "[project][synth_patch]") {
-  // Selecting a mode blanks every engine section but its own, so an engine
-  // whose section a default patch leaves empty has nothing to voice. Four are
-  // in that position and the bindings document them by name, which is a claim
-  // that goes stale silently -- this is what stops it. The list is pinned from
-  // both sides: exactly these four render nothing, and every other mode
-  // renders something, so a fifth engine falling silent fails here rather than
-  // reaching a host as a dead entry in a seventeen-value control.
+TEST_CASE("every engine mode but sample sounds from engine_mode alone", "[project][synth_patch]") {
+  // A bare engine_mode takes its engine section from the engine's base preset,
+  // so the one mode left with nothing to voice is sample, whose bank is bound
+  // beside the patch. Pinned from both sides: sample stays silent, and every
+  // other mode clears -60 dBFS on a held middle C.
   SonareProject* project = make_synth_project(3);
 
-  const std::set<int> needs_a_section = {
-      SONARE_SYNTH_ENGINE_FM,          // operators
-      SONARE_SYNTH_ENGINE_MODAL,       // a mode table
-      SONARE_SYNTH_ENGINE_PERCUSSION,  // a kit
-      SONARE_SYNTH_ENGINE_SAMPLE,      // a sample bank
-  };
-
-  std::set<int> silent;
+  std::set<int> inaudible;
   for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
     SonareSynthPatch patch{};
     patch.engine_mode = mode;
-    patch.gain = 0.5f;
     CAPTURE(mode);
-    if (peak_of(bounce_synth(project, patch)) == 0.0f) silent.insert(mode);
+    const float peak = peak_of(bounce_synth(project, patch));
+    if (!(peak > 1.0e-3f)) inaudible.insert(mode);
+    if (mode == SONARE_SYNTH_ENGINE_SAMPLE) REQUIRE(peak == 0.0f);
   }
-  REQUIRE(silent == needs_a_section);
+  REQUIRE(inaudible == std::set<int>{SONARE_SYNTH_ENGINE_SAMPLE});
 
   sonare_project_destroy(project);
+}
+
+TEST_CASE("every named synth patch renders as its catalog preset", "[project][synth_patch]") {
+  // A patch naming a preset of the engine it selects must reach the voice as
+  // that preset, whatever else the conversion seeds or overlays.
+  for (size_t i = 0; i < sonare::midi::synth::synth_preset_count(); ++i) {
+    const sonare::midi::synth::SynthPreset* preset = sonare::midi::synth::synth_preset_at(i);
+    REQUIRE(preset != nullptr);
+    INFO(preset->name);
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    std::strncpy(patch.preset, preset->name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    const sonare::test::StereoRender direct = render_config(preset->config);
+    const sonare::test::StereoRender converted = render_config(cfg);
+    REQUIRE(converted.left == direct.left);
+    REQUIRE(converted.right == direct.right);
+  }
+}
+
+TEST_CASE("a synth patch takes a missing engine section from the base preset",
+          "[project][synth_patch]") {
+  using sonare::midi::synth::SynthEngineMode;
+  // Bare engine_mode: the init patch's wrapper with the base preset's section.
+  for (int mode = SONARE_SYNTH_ENGINE_DEFAULT + 1; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
+    const auto engine = static_cast<SynthEngineMode>(mode - 1);
+    const char* base = sonare::midi::synth::base_preset_name(engine);
+    if (base == nullptr) continue;
+    CAPTURE(mode, base);
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    patch.engine_mode = mode;
+    sonare::midi::synth::NativeSynthConfig cfg;
+    const char* error = nullptr;
+    REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
+    require_section_read_back(cfg.patch, base);
+    const sonare::test::StereoRender expected =
+        render_config(with_section_of(sonare::midi::synth::NativeSynthConfig{}, engine, base));
+    const sonare::test::StereoRender converted = render_config(cfg);
+    REQUIRE(converted.left == expected.left);
+    REQUIRE(converted.right == expected.right);
+  }
+
+  // A preset of another engine keeps its wrapper and takes the selected
+  // engine's base section: the violin's wrapper over the e-piano's operators.
+  REQUIRE(std::string(sonare::midi::synth::base_preset_name(SynthEngineMode::kFm)) == "e-piano");
+  SonareSynthPatch violin_fm{};
+  violin_fm.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(violin_fm.preset, "violin");
+  violin_fm.engine_mode = SONARE_SYNTH_ENGINE_FM;
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(violin_fm, &cfg, &error));
+  require_section_read_back(cfg.patch, "e-piano");
+  const sonare::midi::synth::SynthPreset* violin = sonare::midi::synth::find_synth_preset("violin");
+  REQUIRE(violin != nullptr);
+  const sonare::test::StereoRender expected =
+      render_config(with_section_of(violin->config, SynthEngineMode::kFm, "e-piano"));
+  const sonare::test::StereoRender converted = render_config(cfg);
+  REQUIRE(converted.left == expected.left);
+  REQUIRE(converted.right == expected.right);
+  REQUIRE(peak_of(converted.left) > 1.0e-3f);
+}
+
+TEST_CASE("synth patch engine params are refused through the C ABI with the key named",
+          "[project][synth_patch]") {
+  SonareProject* project = make_synth_project(3);
+  SonareProjectBounceOptions options{};
+  options.total_frames = 1024;
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = 3;
+  float* out = nullptr;
+  size_t out_len = 0;
+
+  // bowForce: a bounded number of the bowed-string section.
+  const sonare::util::json::Value bowed =
+      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_BOWED_STRING));
+  const sonare::util::json::Value* bow_force = nullptr;
+  for (const auto& d : bowed.as_array()) {
+    if (d["name"].as_string() == "bowForce") bow_force = &d;
+  }
+  REQUIRE(bow_force != nullptr);
+  REQUIRE(bow_force->contains("max"));
+  const double max = (*bow_force)["max"].as_number();
+  const double mid = 0.5 * ((*bow_force)["min"].as_number() + max);
+
+  // An integer field of whichever engine has one first.
+  int integer_mode = -1;
+  std::string integer_key;
+  for (int mode = 1; mode < SONARE_SYNTH_ENGINE_MODE_COUNT && integer_mode < 0; ++mode) {
+    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    for (const auto& d : info.as_array()) {
+      if (d.contains("integer")) {
+        integer_mode = mode;
+        integer_key = d["name"].as_string();
+        break;
+      }
+    }
+  }
+  REQUIRE(integer_mode > 0);
+
+  const auto bounce_with = [&](int mode, const char* key, double value) {
+    SonareSynthEngineParam param{key, value};
+    SonareSynthPatch patch{};
+    patch.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    patch.engine_mode = mode;
+    patch.engine_params = &param;
+    patch.engine_param_count = 1;
+    binding.patch = patch;
+    out = nullptr;
+    const SonareError status = sonare_project_bounce_with_synth_instruments(
+        project, &options, &binding, 1, &out, &out_len);
+    sonare_free_floats(out);
+    return status;
+  };
+  const auto refused = [&](int mode, const char* key, double value, const char* fragment) {
+    CAPTURE(key, value);
+    REQUIRE(bounce_with(mode, key, value) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+    const std::string message = sonare_last_error_message();
+    CAPTURE(message);
+    REQUIRE(message.find(std::string("'") + key + "'") != std::string::npos);
+    REQUIRE(message.find(fragment) != std::string::npos);
+  };
+  const int bowed_mode = SONARE_SYNTH_ENGINE_BOWED_STRING;
+  refused(bowed_mode, "noSuchField", 1.0, "engine param");
+  refused(bowed_mode, "ops1.level", 0.5, "engine param");   // the FM section's
+  refused(bowed_mode, "cutoffHz", 1000.0, "engine param");  // a wrapper field
+  refused(bowed_mode, "bowForce", std::numeric_limits<double>::quiet_NaN(), "engine param");
+  refused(bowed_mode, "bowForce", max + 1.0, "[");
+  refused(integer_mode, integer_key.c_str(), 1.5, "engine param");
+  // Not vacuous: an in-range value of the same field is accepted.
+  REQUIRE(bounce_with(bowed_mode, "bowForce", mid) == SONARE_OK);
+
+  // A count with no array is refused rather than read.
+  SonareSynthPatch dangling{};
+  dangling.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  dangling.engine_param_count = 1;
+  binding.patch = dangling;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_ERROR_INVALID_PARAMETER);
+  // A version-7 caller's struct ends before the params, so whatever sits there is not read.
+  SonareSynthPatch older = dangling;
+  older.struct_version = 7;
+  binding.patch = older;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+  sonare_free_floats(out);
+
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("an engine param reaches the render", "[project][synth_patch]") {
+  SonareProject* project = make_synth_project(3);
+  SonareSynthPatch base{};
+  base.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(base.preset, "violin");
+  const std::vector<float> reference = bounce_synth(project, base);
+  REQUIRE(peak_of(reference) > 0.0f);
+  // The middle of bowForce's range, which the violin does not sit on.
+  double mid = 0.0;
+  const sonare::util::json::Value bowed =
+      parse_info(sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_BOWED_STRING));
+  for (const auto& d : bowed.as_array()) {
+    if (d["name"].as_string() == "bowForce") {
+      mid = 0.5 * (d["min"].as_number() + d["max"].as_number());
+      REQUIRE(mid != d["default"].as_number());
+    }
+  }
+  const SonareSynthEngineParam param{"bowForce", mid};
+  SonareSynthPatch lighter = base;
+  lighter.engine_params = &param;
+  lighter.engine_param_count = 1;
+  REQUIRE(bounce_synth(project, lighter) != reference);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("synth engine param info lists exactly the walker's engine section",
+          "[project][synth_patch]") {
+  for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
+    CAPTURE(mode);
+    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    std::set<std::string> names;
+    for (const auto& d : info.as_array()) {
+      require_descriptor_shape(d);
+      names.insert(d["name"].as_string());
+    }
+    REQUIRE(names.size() == info.size());
+    const char* base = mode == SONARE_SYNTH_ENGINE_DEFAULT
+                           ? nullptr
+                           : sonare::midi::synth::base_preset_name(
+                                 static_cast<sonare::midi::synth::SynthEngineMode>(mode - 1));
+    if (base == nullptr) {
+      REQUIRE(info.size() == 0);
+      continue;
+    }
+    std::set<std::string> walked;
+    for (const auto& site : sonare::midi::synth::patch_tuning_detail::engine_field_sites(
+             sonare::midi::synth::find_synth_preset(base)->config.patch)) {
+      walked.insert(public_key_of(site.path));
+    }
+    REQUIRE(names == walked);
+  }
+  // Exactly these three have no section of their own.
+  for (int mode :
+       {SONARE_SYNTH_ENGINE_DEFAULT, SONARE_SYNTH_ENGINE_SUBTRACTIVE, SONARE_SYNTH_ENGINE_SAMPLE}) {
+    REQUIRE(std::string(sonare_synth_engine_param_info(mode)) == "[]");
+  }
+  for (int mode : {-1, SONARE_SYNTH_ENGINE_MODE_COUNT}) {
+    CAPTURE(mode);
+    REQUIRE(sonare_synth_engine_param_info(mode) == nullptr);
+    REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
+  }
+}
+
+TEST_CASE("synth patch param info describes every numeric patch field", "[project][synth_patch]") {
+  // The numeric SonareSynthPatch fields under their binding names; enums, the
+  // preset name, the mod matrix, the presence mask and the engine params are not
+  // numeric parameters.
+  const std::set<std::string> fields = {"unison",          "detuneCents",       "driftCents",
+                                        "drive",           "cutoffHz",          "resonanceQ",
+                                        "keyTrack",        "envToCutoffCents",  "velToCutoffCents",
+                                        "ampAttackMs",     "ampDecayMs",        "ampSustain",
+                                        "ampReleaseMs",    "filterAttackMs",    "filterDecayMs",
+                                        "filterSustain",   "filterReleaseMs",   "lfoRateHz",
+                                        "lfoToPitchCents", "lfo2RateHz",        "glideMs",
+                                        "bodyMix",         "stereoSpread",      "gain",
+                                        "polyphony",       "busDrive",          "sampleSet",
+                                        "sampleLevel",     "sampleStartOffset", "hpCutoffHz",
+                                        "sampleHoldHz",    "bitDepth",          "pitchOffsetCents"};
+  const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
+  std::set<std::string> names;
+  const auto ends_with = [](const std::string& name, const std::string& suffix) {
+    return name.size() > suffix.size() &&
+           name.compare(name.size() - suffix.size(), suffix.size(), suffix) == 0;
+  };
+  for (const auto& d : info.as_array()) {
+    require_descriptor_shape(d);
+    const std::string& name = d["name"].as_string();
+    const std::string& unit = d["unit"].as_string();
+    CAPTURE(name, unit);
+    names.insert(name);
+    if (ends_with(name, "Hz")) REQUIRE(unit == "Hz");
+    if (ends_with(name, "Ms")) REQUIRE(unit == "ms");
+    if (ends_with(name, "Cents")) REQUIRE(unit == "cents");
+  }
+  REQUIRE(names.size() == info.size());
+  REQUIRE(names == fields);
+  // The automation table's names are this table's names.
+  for (size_t i = 0; i < sonare::midi::synth::native_synth_param_count(); ++i) {
+    REQUIRE(fields.count(sonare::midi::synth::native_synth_param_name_at(i)) == 1);
+  }
 }
 
 TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][synth_patch]") {
@@ -452,7 +797,7 @@ TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
   REQUIRE(read.patch.retrigger == SynthRetrigger::kFree);
 
   SonareSynthPatch newer = asked;
-  newer.struct_version = 8;
+  newer.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
   REQUIRE_FALSE(sonare_c_detail::synth_config_from_patch_c(newer, &read, &error));
   REQUIRE(error != nullptr);
 

@@ -683,8 +683,20 @@ SONARE_SYNTH_FIELD_BIT_DEPTH = 1 << 29
 SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS = 1 << 30
 
 
+class SonareSynthEngineParam(CStruct):
+    """Maps to SonareSynthEngineParam in sonare_c_types.h.
+
+    One field of the selected engine's own section, set by public key.
+    """
+
+    _fields_ = [
+        ("key", ctypes.c_char_p),
+        ("value", ctypes.c_double),
+    ]
+
+
 class SonareSynthPatch(CStruct):
-    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 7).
+    """Maps to SonareSynthPatch in sonare_c_types.h (struct_version 8).
 
     Versioned NativeSynth patch: the base is the named ``preset`` (or the
     default subtractive patch when empty) and every non-zero field overrides
@@ -694,7 +706,8 @@ class SonareSynthPatch(CStruct):
     adds the sample-engine block, read only by a sample patch; version 4 adds
     the series highpass past it; version 5 adds the voice's own converter;
     version 6 adds the pitch offset at the tail; version 7 adds the
-    retrigger mode past it.
+    retrigger mode past it; version 8 adds the engine params, a borrowed
+    array of ``SonareSynthEngineParam`` the caller keeps alive for the call.
     """
 
     _fields_ = [
@@ -744,6 +757,8 @@ class SonareSynthPatch(CStruct):
         ("bit_depth", ctypes.c_float),
         ("pitch_offset_cents", ctypes.c_float),
         ("retrigger", ctypes.c_int),
+        ("engine_params", ctypes.POINTER(SonareSynthEngineParam)),
+        ("engine_param_count", ctypes.c_size_t),
     ]
 
 

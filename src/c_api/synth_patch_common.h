@@ -9,9 +9,12 @@
 
 #include <algorithm>
 #include <cstring>
+#include <string>
+#include <vector>
 
 #include "midi/builtin_synth.h"
 #include "midi/synth/native_synth.h"
+#include "midi/synth/patch_tuning.h"
 #include "midi/synth/sf2_player.h"
 #include "midi/synth/synth_presets.h"
 #include "util/zero_is_default.h"
@@ -187,17 +190,86 @@ inline bool valid_builtin_waveform(int value) noexcept {
   return valid_c_enum(value, SONARE_SYNTH_WAVEFORM_COUNT);
 }
 
-/// Resolves a versioned C synth patch onto a NativeSynthConfig: the base is
+/// Storage for a refusal message composed from the caller's values; valid
+/// until the next refusal on the same thread.
+inline std::string& synth_patch_error_message() {
+  static thread_local std::string message;
+  return message;
+}
+
+/// Copies the engine section @p mode reads from @p from into @p to, leaving
+/// every other section of @p to as it was. Modes without a section copy nothing.
+inline void copy_engine_section(const sonare::midi::synth::NativeSynthPatch& from,
+                                sonare::midi::synth::SynthEngineMode mode,
+                                sonare::midi::synth::NativeSynthPatch* to) {
+  using sonare::midi::synth::SynthEngineMode;
+  switch (mode) {
+    case SynthEngineMode::kFm:
+      to->fm = from.fm;
+      break;
+    case SynthEngineMode::kKarplusStrong:
+      to->ks = from.ks;
+      break;
+    case SynthEngineMode::kModal:
+      to->modal = from.modal;
+      break;
+    case SynthEngineMode::kAdditive:
+      to->additive = from.additive;
+      break;
+    case SynthEngineMode::kPercussion:
+      to->percussion = from.percussion;
+      break;
+    case SynthEngineMode::kPiano:
+      to->piano = from.piano;
+      break;
+    case SynthEngineMode::kPipeOrgan:
+      to->pipe_organ = from.pipe_organ;
+      break;
+    case SynthEngineMode::kBowedString:
+      to->bowed_string = from.bowed_string;
+      break;
+    case SynthEngineMode::kReed:
+      to->reed = from.reed;
+      break;
+    case SynthEngineMode::kBrass:
+      to->brass = from.brass;
+      break;
+    case SynthEngineMode::kFlute:
+      to->flute = from.flute;
+      break;
+    case SynthEngineMode::kPluckedString:
+      to->plucked_string = from.plucked_string;
+      break;
+    case SynthEngineMode::kVocal:
+      to->vocal = from.vocal;
+      break;
+    case SynthEngineMode::kFreeReed:
+      to->free_reed = from.free_reed;
+      break;
+    case SynthEngineMode::kHarpsichord:
+      to->harpsichord = from.harpsichord;
+      break;
+    case SynthEngineMode::kSubtractive:
+    case SynthEngineMode::kSample:
+      break;
+  }
+}
+
+/// Resolves a versioned C synth patch onto a NativeSynthConfig. The base is
 /// the named preset (or the default subtractive patch when @p c.preset is
-/// empty), then every non-zero struct field overrides the base ("0 => keep").
+/// empty). The engine section is the named preset's when the preset uses the
+/// selected engine, else that engine's base preset's (@ref base_preset_name).
+/// Every non-zero struct field then overrides the base ("0 => keep"), and the
+/// engine params assign fields of the selected engine's section by key.
 /// Struct version 2 adds @c present_fields, so a caller can also override with
 /// an explicit zero; version 1 has no presence bits and cannot express one.
 /// Version 3 adds the sample-engine block, which only a sample patch reads.
-/// Version 4 adds the series highpass, 5 the converter, 6 the pitch offset and
-/// 7 the retrigger mode; an older caller's tail is never read.
-/// Returns false (and sets @p out_error) for an unsupported struct_version or
-/// an unknown preset name. The result still passes through NativeSynth's own
-/// constructor clamping.
+/// Version 4 adds the series highpass, 5 the converter, 6 the pitch offset, 7
+/// the retrigger mode and 8 the engine params; an older caller's tail is never
+/// read. Returns false (and sets @p out_error, valid until the next refusal on
+/// this thread) for an unsupported struct_version, an unknown preset name or a
+/// refused engine param; nothing is clamped silently at that step. The result
+/// still passes through NativeSynth's own constructor clamping.
 inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
                                       sonare::midi::synth::NativeSynthConfig* out,
                                       const char** out_error) {
@@ -248,21 +320,36 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     if (out_error) *out_error = "invalid synth retrigger";
     return false;
   }
+  // A pre-8 struct ends before the engine params, so its tail is not read.
+  const size_t engine_param_count = c.struct_version >= 8 ? c.engine_param_count : 0u;
+  if (engine_param_count > 0 && c.engine_params == nullptr) {
+    if (out_error) *out_error = "engine_params is NULL with a non-zero engine_param_count";
+    return false;
+  }
   NativeSynthConfig cfg;
+  const sonare::midi::synth::SynthPreset* named = nullptr;
   if (c.preset[0] != '\0') {
     // Defensive copy: the fixed field may legally lack a terminator.
     char name[SONARE_SYNTH_PRESET_NAME_MAX + 1] = {};
     std::memcpy(name, c.preset, SONARE_SYNTH_PRESET_NAME_MAX);
-    const sonare::midi::synth::SynthPreset* preset = find_synth_preset(name);
-    if (preset == nullptr) {
+    named = find_synth_preset(name);
+    if (named == nullptr) {
       if (out_error) *out_error = "unknown synth preset name";
       return false;
     }
-    cfg = preset->config;
+    cfg = named->config;
   }
   sonare::midi::synth::NativeSynthPatch& p = cfg.patch;
 
   if (c.engine_mode > 0) p.mode = static_cast<SynthEngineMode>(c.engine_mode - 1);
+  // An engine whose section the named preset does not carry takes its base
+  // preset's; the wrapper fields stay the named preset's (or the init patch's).
+  if (named == nullptr || named->config.patch.mode != p.mode) {
+    if (const char* base_name = sonare::midi::synth::base_preset_name(p.mode)) {
+      const sonare::midi::synth::SynthPreset* base = find_synth_preset(base_name);
+      if (base != nullptr) copy_engine_section(base->config.patch, p.mode, &p);
+    }
+  }
   // Oscillator section.
   if (c.waveform > 0) p.waveform = static_cast<VaWaveform>(c.waveform - 1);
   if (set(SONARE_SYNTH_FIELD_UNISON) || c.unison != 0) p.unison = c.unison;
@@ -349,6 +436,18 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     p.pitch_offset_cents = c.pitch_offset_cents;
   }
   if (retrigger > 0) p.retrigger = static_cast<SynthRetrigger>(retrigger - 1);
+  if (engine_param_count > 0) {
+    std::vector<sonare::midi::synth::EngineParam> params(engine_param_count);
+    for (size_t i = 0; i < engine_param_count; ++i) {
+      params[i] = {c.engine_params[i].key, c.engine_params[i].value};
+    }
+    std::string& message = synth_patch_error_message();
+    message.clear();
+    if (!sonare::midi::synth::apply_engine_params(p, params.data(), params.size(), &message)) {
+      if (out_error) *out_error = message.c_str();
+      return false;
+    }
+  }
   if (c.struct_version >= 3 && p.mode == SynthEngineMode::kSample) {
     p.sample.set_index = c.sample_set;
     if (c.sample_level != 0.0f) p.sample.level = c.sample_level;

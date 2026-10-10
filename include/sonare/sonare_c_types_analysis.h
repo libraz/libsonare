@@ -573,13 +573,26 @@ typedef struct {
 #define SONARE_SYNTH_PATCH_MOD_ROUTINGS 8
 #define SONARE_SYNTH_PRESET_NAME_MAX 32
 
+/* One field of the selected engine's own model section, set by public key
+   (see @ref sonare_synth_engine_param_info for the keys an engine accepts). */
+typedef struct {
+  const char* key; /* public key, e.g. "bowForce" or "ranks2.level" */
+  double value;    /* integer and switch fields take a whole number */
+} SonareSynthEngineParam;
+
 /* Versioned NativeSynth patch for
    @ref sonare_project_bounce_with_synth_instruments and
    @ref sonare_engine_set_synth_instrument.
 
    Zero-initialize then override. The patch starts from a BASE: the named
    preset in @c preset (see @ref sonare_synth_preset_names) or, when @c preset
-   is empty, the default subtractive patch. Every numeric field then uses
+   is empty, the default subtractive patch. Its engine section (the selected
+   engine's own model: FM operator stacks, modal mode tables, drawbar
+   registrations, kit pieces, piano strings, bow / reed / lip / jet fields) is
+   the named preset's when that preset uses the selected engine, and otherwise
+   the engine's base preset's, so every engine but sample sounds from
+   @c engine_mode alone. Base presets alias the GM bank, so such a render
+   follows the bank's version. Every numeric field then uses
    "0 => keep the base value"; non-zero values override (and are clamped to
    their audible ranges). Enum fields reserve 0 as "keep" (see the enums
    above). Because struct_version 1 has no per-field presence bits, explicit
@@ -588,11 +601,10 @@ typedef struct {
    that already contains the desired zero. A non-empty @c num_mod_routings
    REPLACES the base mod matrix.
 
-   Mode-specific deep parameters (FM operator stacks, modal mode tables,
-   drawbar registrations, kit pieces, piano strings) travel inside the named
-   presets — struct_version 1 deliberately exposes the wrapper sections most
-   engines share (oscillator / filter / envelopes / LFO / glide / realism /
-   mod matrix / bus). Two exceptions: waveform is read by the subtractive
+   The struct fields are the wrapper sections most engines share (oscillator /
+   filter / envelopes / LFO / glide / realism / mod matrix / bus); a field of
+   the engine section is set by key through @c engine_params (struct_version
+   8). Two exceptions: waveform is read by the subtractive
    engine only, and on a percussion channel the whole section is discarded in
    favor of the per-note drum-kit patch — only gain, polyphony and bus_drive
    still act. */
@@ -602,7 +614,8 @@ typedef struct {
                                                 4 => the series highpass at the tail is read too;
                                                 5 => the converter block at the tail is read too;
                                                 6 => the pitch offset at the tail is read too;
-                                                7 => the retrigger mode at the tail is read too */
+                                                7 => the retrigger mode at the tail is read too;
+                                                8 => the engine params at the tail are read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -731,13 +744,28 @@ typedef struct {
      piano's shared soundboard, a plucked string's sympathetic halo, an organ's
      wind chest, and effect tails. A GM kit's per-note pieces keep their own. */
   int retrigger;
+
+  /* --- engine params (struct_version 8) --- */
+  /* Fields of the selected engine's section, applied after the base and the
+     struct fields above; @ref sonare_synth_engine_param_info lists each
+     engine's keys, ranges and units. Borrowed for the call: the array and its
+     key strings are read before the call returns and never kept.
+     engine_param_count 0 => none (engine_params may then be NULL). Unlike a
+     SonareMasteringParam list, nothing here is ignored or clamped: an unknown
+     key, a key outside the selected engine's section, a key given twice, a
+     non-finite value, a fractional value for an integer or switch field, or a
+     value outside the field's range fails the call with
+     SONARE_ERROR_INVALID_PARAMETER and a last-error message naming the key and
+     the range. */
+  const SonareSynthEngineParam* engine_params;
+  size_t engine_param_count;
 } SonareSynthPatch;
 
 /* Newest SonareSynthPatch layout. Named rather than written out at each site,
    because every one of them — the reader's upper bound, the writer's stamp, and
    the tests that pin "one past the newest is refused" — has to move together,
    and a literal in any of them goes stale silently. */
-#define SONARE_SYNTH_PATCH_STRUCT_VERSION 7
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 8
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every

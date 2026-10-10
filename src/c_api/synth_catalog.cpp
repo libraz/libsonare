@@ -1,11 +1,16 @@
 /// @file synth_catalog.cpp
 /// @brief The synth-catalogue C ABI: which presets, enum values and built-in
-///        waveforms exist, and the patch behind a preset name.
+///        waveforms exist, the patch behind a preset name, and what each
+///        engine-section and patch field accepts.
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "c_api/project_internal.h"
 
@@ -13,7 +18,9 @@
 #include "c_api/synth_patch_common.h"
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/patch_tuning.h"
 #include "midi/synth/synth_presets.h"
+#include "util/number_format.h"
 
 namespace {
 
@@ -166,6 +173,208 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out) {
   SONARE_C_CATCH
 #else
   SONARE_C_STUB_NOT_SUPPORTED(name, out);
+#endif
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+namespace {
+
+using sonare::mastering::api::detail::Unit;
+using sonare::mastering::api::detail::unit_name;
+
+/// Shortest text that reads back as the same float; a value with an integer
+/// part keeps every integer digit rather than switching to exponent form.
+std::string descriptor_number(float value) {
+  const double magnitude = std::fabs(static_cast<double>(value));
+  const int integer_digits =
+      magnitude >= 1.0 ? static_cast<int>(std::floor(std::log10(magnitude))) + 1 : 1;
+  std::string text;
+  for (int precision = 1; precision <= std::numeric_limits<float>::max_digits10; ++precision) {
+    text = sonare::util::format_general(value, std::max(precision, integer_digits));
+    double read = 0.0;
+    if (sonare::util::parse_double(text.data(), text.data() + text.size(), &read) &&
+        static_cast<float>(read) == value) {
+      break;
+    }
+  }
+  return text;
+}
+
+/// One descriptor in the insert descriptor field names: `min` / `max` only
+/// where the field is bounded, `integer` only where it is set.
+struct DescriptorRow {
+  std::string name;
+  bool integer;
+  bool boolean;
+  bool bounded;
+  float lo, hi;
+  float value;
+  Unit unit;
+};
+
+void append_descriptor(const DescriptorRow& row, std::string* out) {
+  *out += "{\"name\":\"";
+  *out += row.name;
+  *out += "\",\"type\":\"";
+  *out += row.boolean ? "boolean" : "number";
+  *out += '"';
+  if (row.integer) *out += ",\"integer\":true";
+  if (row.bounded && !row.boolean) {
+    *out += ",\"min\":";
+    *out += descriptor_number(row.lo);
+    *out += ",\"max\":";
+    *out += descriptor_number(row.hi);
+  }
+  *out += ",\"default\":";
+  if (row.boolean) {
+    *out += row.value != 0.0f ? "true" : "false";
+  } else {
+    *out += descriptor_number(row.value);
+  }
+  *out += ",\"unit\":\"";
+  *out += unit_name(row.unit);
+  *out += "\"}";
+}
+
+std::string descriptor_array(const std::vector<DescriptorRow>& rows) {
+  std::string json = "[";
+  for (size_t i = 0; i < rows.size(); ++i) {
+    if (i > 0) json += ',';
+    append_descriptor(rows[i], &json);
+  }
+  json += ']';
+  return json;
+}
+
+/// The SonareSynthPatch numeric fields the instrument automation table names,
+/// with the unit each carries in the param_meta vocabulary.
+struct AutomatedWrapperField {
+  sonare::midi::synth::NativeSynthParamId id;
+  Unit unit;
+};
+
+constexpr AutomatedWrapperField kAutomatedWrapperFields[] = {
+    {sonare::midi::synth::NativeSynthParamId::kGain, Unit::Ratio},
+    {sonare::midi::synth::NativeSynthParamId::kBusDrive, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kCutoffHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kResonanceQ, Unit::Ratio},
+    {sonare::midi::synth::NativeSynthParamId::kDrive, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kKeyTrack, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kEnvToCutoffCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kVelToCutoffCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kAmpAttackMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kAmpDecayMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kAmpSustain, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kAmpReleaseMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kFilterAttackMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kFilterDecayMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kFilterSustain, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kFilterReleaseMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kLfoRateHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kLfoToPitchCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kLfo2RateHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kGlideMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kBodyMix, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kStereoSpread, Unit::None},
+    {sonare::midi::synth::NativeSynthParamId::kDetuneCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kDriftCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kPitchOffsetCents, Unit::Cents},
+    {sonare::midi::synth::NativeSynthParamId::kHpCutoffHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kSampleHoldHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kBitDepth, Unit::Bits},
+};
+
+/// Every numeric SonareSynthPatch field: the automated ones with the automation
+/// table's name and range, the rest under their facade names with the range the
+/// conversion's clamps apply. Defaults are the init patch's.
+std::string synth_patch_param_info_json() {
+  using sonare::midi::synth::NativeSynth;
+  using sonare::midi::synth::NativeSynthConfig;
+  using sonare::midi::synth::NativeSynthPatch;
+  std::vector<DescriptorRow> rows;
+  const NativeSynth describer;
+  for (const AutomatedWrapperField& field : kAutomatedWrapperFields) {
+    sonare::automation::ParameterDescription description;
+    if (!describer.describe_parameter(static_cast<unsigned int>(field.id), &description)) {
+      throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                    "synth automation table lost a SonareSynthPatch field");
+    }
+    rows.push_back({description.name, false, false, true, description.min_value,
+                    description.max_value, description.default_value, field.unit});
+  }
+  const NativeSynthConfig init{};
+  // The sample block's ranges are the patch clamp's, read back from its extremes.
+  NativeSynthPatch low = init.patch;
+  low.sample.level = -std::numeric_limits<float>::max();
+  low.sample.start_offset01 = -std::numeric_limits<float>::max();
+  low = sonare::midi::synth::clamp_synth_patch(low);
+  NativeSynthPatch high = init.patch;
+  high.sample.level = std::numeric_limits<float>::max();
+  high.sample.start_offset01 = std::numeric_limits<float>::max();
+  high = sonare::midi::synth::clamp_synth_patch(high);
+  rows.push_back({"unison", true, false, true, 1.0f,
+                  static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
+                  static_cast<float>(init.patch.unison), Unit::Count});
+  rows.push_back({"polyphony", true, false, true, 1.0f,
+                  static_cast<float>(sonare::midi::kMaxSynthVoices),
+                  static_cast<float>(init.polyphony), Unit::Count});
+  // Negative selects no keymap; the upper end is whatever the bound bank holds.
+  rows.push_back({"sampleSet", true, false, false, 0.0f, 0.0f,
+                  static_cast<float>(init.patch.sample.set_index), Unit::None});
+  rows.push_back({"sampleLevel", false, false, true, low.sample.level, high.sample.level,
+                  init.patch.sample.level, Unit::Ratio});
+  rows.push_back({"sampleStartOffset", false, false, true, low.sample.start_offset01,
+                  high.sample.start_offset01, init.patch.sample.start_offset01, Unit::None});
+  return descriptor_array(rows);
+}
+
+}  // namespace
+#endif
+
+const char* sonare_synth_engine_param_info(int engine_mode) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  // Argument-dependent: recomputed into a thread-local on every call.
+  static thread_local std::string info;
+  if (!sonare_c_detail::valid_c_enum(engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   ("engine_mode " + std::to_string(engine_mode) + " is out of range").c_str());
+    return nullptr;
+  }
+  info = "[]";
+  if (engine_mode == SONARE_SYNTH_ENGINE_DEFAULT) return info.c_str();
+  const auto mode = static_cast<sonare::midi::synth::SynthEngineMode>(engine_mode - 1);
+  const char* base_name = sonare::midi::synth::base_preset_name(mode);
+  if (base_name == nullptr) return info.c_str();
+  const sonare::midi::synth::SynthPreset* base = sonare::midi::synth::find_synth_preset(base_name);
+  if (base == nullptr) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+                                  "synth engine base preset is missing from the catalog");
+  }
+  std::vector<DescriptorRow> rows;
+  for (const sonare::midi::synth::EngineParamDescriptor& d :
+       sonare::midi::synth::engine_param_descriptors(base->config.patch)) {
+    rows.push_back({d.key, d.integer, d.boolean, d.bounded, d.lo, d.hi, d.value, d.unit});
+  }
+  info = descriptor_array(rows);
+  return info.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
+#else
+  (void)engine_mode;
+  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED, "built without arrangement support");
+  return nullptr;
+#endif
+}
+
+const char* sonare_synth_patch_param_info(void) {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  SONARE_C_TRY
+  static const std::string kInfo = synth_patch_param_info_json();
+  return kInfo.c_str();
+  SONARE_C_CATCH_RETURN(nullptr)
+#else
+  sonare_c_detail::set_last_error(SONARE_ERROR_NOT_SUPPORTED, "built without arrangement support");
+  return nullptr;
 #endif
 }
 

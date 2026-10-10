@@ -221,8 +221,41 @@ int sonare_synth_builtin_waveform_from_name(const char* name);
 ///        wrapper-section values (oscillator / filter / envelopes / LFO /
 ///        realism / bus), so hosts can inspect a preset and tweak fields
 ///        before binding it. Passing the result back unchanged selects the
-///        exact preset. Unknown names return SONARE_ERROR_INVALID_PARAMETER.
+///        exact preset. The engine section stays inside the preset, so
+///        @c engine_param_count is 0. Unknown names return
+///        SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
+
+/// @brief Describes the engine-section fields @ref SonareSynthPatch
+///        @c engine_params accepts for @p engine_mode (a SonareSynthEngineMode).
+/// @details A JSON array in the field names of
+///          @ref sonare_mastering_insert_param_info:
+///          `[{"name","type","integer","min","max","default","unit"}, ...]`.
+///          `name` is the key; `type` is `"number"` or `"boolean"` (a switch,
+///          given as 0 or 1); `integer` is present and true only for a field
+///          taking whole numbers; `min` / `max` are present only for a field
+///          with a closed range, and a value outside it is refused rather than
+///          clamped; `default` is the engine's base preset's value; `unit` is
+///          always present, from the vocabulary listed there. The default,
+///          subtractive and sample modes have no engine section and answer
+///          `[]`. Valid until the next call on the same thread; the caller must
+///          NOT free it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as
+///          the last error for an out-of-range @p engine_mode, and with
+///          SONARE_ERROR_NOT_SUPPORTED in a build without arrangement support.
+const char* sonare_synth_engine_param_info(int engine_mode);
+
+/// @brief Describes every numeric @ref SonareSynthPatch field, one descriptor
+///        per field in the layout of @ref sonare_synth_engine_param_info.
+/// @details `name` is the field's binding spelling (the name
+///          @ref sonare_engine_resolve_instrument_automation_id takes where the
+///          field is automatable); `min` / `max` are the range the field is
+///          clamped to, and `default` is the init patch's value, which a zero
+///          left in the field keeps when no preset is named. Enum fields, the
+///          preset name and the mod matrix are not described here. Owned by
+///          libsonare and valid for the program lifetime; the caller must NOT
+///          free it. Returns NULL with SONARE_ERROR_NOT_SUPPORTED in a build
+///          without arrangement support.
+const char* sonare_synth_patch_param_info(void);
 
 /// @brief Returns the GS rhythm-set name a rhythm part's @p program selects
 ///        ("Standard", "Room", "Jazz", ...), or NULL when the module's own
@@ -282,7 +315,8 @@ typedef struct {
 ///        SONARE_SYNTH_ENUM_ENGINE_MODE lists them at runtime).
 ///        Each binding resolves its @ref SonareSynthPatch via
 ///        the preset catalog + field overrides; an invalid struct_version or
-///        unknown preset name fails with SONARE_ERROR_INVALID_PARAMETER.
+///        unknown preset name or a refused engine param fails with
+///        SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames <= 0 the render length is auto-derived
 ///        from the arrangement (musical end + the patch's release tail);
 ///        an instrument reporting an unbounded tail makes that fail with
