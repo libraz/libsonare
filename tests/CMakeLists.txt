@@ -470,6 +470,7 @@ if(BUILD_ACOUSTIC_SIM)
     # sonare_fx but need the acoustic module.
     target_sources(sonare_tests PRIVATE
       effects/room_morph_test.cpp
+      effects/room_mono_regression_test.cpp
       effects/room_reverb_test.cpp
     )
     target_sources(sonare_tests PRIVATE
