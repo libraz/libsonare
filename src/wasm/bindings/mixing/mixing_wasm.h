@@ -204,6 +204,10 @@ class MixerWasm {
 
   void removeBus(std::string id);
 
+  // Re-routes the strip or non-master bus source_id into the bus (or master) bus_id,
+  // replacing its main connections. Lazy: call compile (or process) to rebuild.
+  void setOutputBus(std::string source_id, std::string bus_id);
+
   size_t busCount() const;
 
   // Adds a VCA group with the given gain offset. members is an array of strip-id

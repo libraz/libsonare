@@ -6,13 +6,15 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 import {
+  ErrorCode,
   init,
+  isSonareError,
   Mixer,
   meteringTruePeakDb,
   mixingScenePresetJson,
   mixStereo,
 } from '../dist/index.js';
-import { assertStripIndex } from './_helpers';
+import { assertStripIndex, sine } from './_helpers';
 
 const SR = 48000;
 const BLOCK = 512;
@@ -528,6 +530,86 @@ describe('Mixer runtime controls (WASM)', () => {
           truePeakOversample: 8,
         });
         expect(strips.find((entry) => entry.id === 'plain')?.metering).toBeUndefined();
+      } finally {
+        mixer.delete();
+      }
+    });
+  });
+
+  describe('setOutputBus', () => {
+    const emptyScene = JSON.stringify({ version: 1, strips: [], buses: [], connections: [] });
+    const tone = sine(440, BLOCK / SR, { amp: 0.5, sampleRate: SR });
+
+    function connections(mixer: Mixer): Array<{ source: string; destination: string }> {
+      return (JSON.parse(mixer.toSceneJson()) as { connections: never[] }).connections;
+    }
+
+    function refusal(call: () => void): { code: number; message: string } {
+      try {
+        call();
+      } catch (error) {
+        expect(isSonareError(error)).toBe(true);
+        const coded = error as { code: number; message: string };
+        return { code: coded.code, message: coded.message };
+      }
+      throw new Error('expected the call to throw');
+    }
+
+    // Runs a few blocks so the bus meter and master output have settled.
+    function run(mixer: Mixer): number {
+      let energy = 0;
+      for (let block = 0; block < 4; block++) {
+        energy += blockEnergy(mixer.processStereo([tone], [tone]));
+      }
+      return energy;
+    }
+
+    it('sends a strip into a submix and the submix on to the master', () => {
+      const mixer = Mixer.fromSceneJson(emptyScene, SR, BLOCK);
+      try {
+        mixer.addStrip('a');
+        mixer.addBus('sub', 'submix');
+        mixer.setOutputBus('a', 'sub');
+        mixer.compile();
+        // An explicit bus is not default-routed, so the master stays silent.
+        expect(run(mixer)).toBe(0);
+        expect(mixer.busMeter('sub').peakDbL).toBeGreaterThan(-60);
+
+        mixer.setOutputBus('sub', 'master');
+        mixer.compile();
+        expect(run(mixer)).toBeGreaterThan(0);
+        expect(connections(mixer)).toEqual([
+          { source: 'a', destination: 'sub' },
+          { source: 'sub', destination: 'master' },
+        ]);
+      } finally {
+        mixer.delete();
+      }
+    });
+
+    it('refuses an invalid edit with InvalidParameter naming the ids and changes nothing', () => {
+      const mixer = Mixer.fromSceneJson(emptyScene, SR, BLOCK);
+      try {
+        mixer.addStrip('a');
+        mixer.addBus('sub', 'submix');
+        mixer.addBus('sub2', 'submix');
+        mixer.setOutputBus('sub', 'sub2');
+        const before = mixer.toSceneJson();
+        const cases: Array<[string, string, RegExp]> = [
+          ['nope', 'sub', /nope/],
+          ['a', 'nope', /nope/],
+          ['master', 'sub', /master/],
+          ['a', 'a', /a/],
+          ['sub2', 'sub', /sub2.*sub|sub.*sub2/],
+        ];
+        for (const [source, bus, pattern] of cases) {
+          const { code, message } = refusal(() => mixer.setOutputBus(source, bus));
+          expect(code, `${source} -> ${bus}`).toBe(ErrorCode.InvalidParameter);
+          expect(message, `${source} -> ${bus}`).toMatch(pattern);
+          expect(mixer.toSceneJson()).toBe(before);
+        }
+        // No compile ran in any refused call: the buses were never compiled.
+        expect(() => mixer.busNonFiniteDiscardCount('sub')).toThrow();
       } finally {
         mixer.delete();
       }

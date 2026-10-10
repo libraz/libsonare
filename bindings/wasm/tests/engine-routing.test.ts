@@ -135,6 +135,124 @@ describe('engine bus routing, sidechain and MIDI clip gain (WASM)', () => {
     });
   });
 
+  describe('per-lane sends and output bus', () => {
+    const send = (busId: number, levelDb = -6) => ({ busId, levelDb, enabled: true });
+    const buses = [
+      { busId: 1, gainDb: -3 },
+      { busId: 2, gainDb: 0 },
+    ];
+
+    function rig(): RealtimeEngine {
+      const engine = makeRoutingEngine([
+        { trackId: 10, gain: 1 },
+        { trackId: 20, gain: 0.5 },
+      ]);
+      engine.setTrackBuses(buses);
+      return engine;
+    }
+
+    // Every sample of a mono render, so two engines compare block by block.
+    function render(engine: RealtimeEngine, blocks = 8): Float32Array {
+      engine.seekSample(0);
+      engine.play();
+      const out = new Float32Array(blocks * kBlock);
+      for (let block = 0; block < blocks; block += 1) {
+        const [chunk] = engine.process([new Float32Array(kBlock)]);
+        out.set(chunk, block * kBlock);
+      }
+      return out;
+    }
+
+    function expectSame(actual: Float32Array, expected: Float32Array): void {
+      expect(actual.length).toBe(expected.length);
+      let peak = 0;
+      for (let i = 0; i < actual.length; i += 1) {
+        expect(Math.abs(actual[i] - expected[i])).toBeLessThanOrEqual(1e-6);
+        peak = Math.max(peak, Math.abs(actual[i]));
+      }
+      // A comparison of two silences proves nothing.
+      expect(peak).toBeGreaterThan(0.1);
+    }
+
+    it('setTrackSends equals setTrackLanes with the same final lanes', () => {
+      const edited = rig();
+      edited.setTrackLanes([{ trackId: 10, outputBusId: 1 }, { trackId: 20 }]);
+      edited.setTrackSends(10, [send(2)]);
+      const replaced = rig();
+      replaced.setTrackLanes([{ trackId: 10, outputBusId: 1, sends: [send(2)] }, { trackId: 20 }]);
+      expectSame(render(edited), render(replaced));
+      edited.destroy();
+      replaced.destroy();
+    });
+
+    it('setTrackOutputBus equals setTrackLanes with the same final lanes', () => {
+      const edited = rig();
+      edited.setTrackLanes([{ trackId: 10, sends: [send(2)] }, { trackId: 20 }]);
+      edited.setTrackOutputBus(10, 1);
+      const replaced = rig();
+      replaced.setTrackLanes([{ trackId: 10, outputBusId: 1, sends: [send(2)] }, { trackId: 20 }]);
+      expectSame(render(edited), render(replaced));
+      // Output 0 returns the lane to the master mix.
+      edited.setTrackOutputBus(10, 0);
+      const master = rig();
+      master.setTrackLanes([{ trackId: 10, sends: [send(2)] }, { trackId: 20 }]);
+      expectSame(render(edited), render(master));
+      edited.destroy();
+      replaced.destroy();
+      master.destroy();
+    });
+
+    it('clears a lane sends with an empty array', () => {
+      const edited = rig();
+      edited.setTrackLanes([{ trackId: 10, sends: [send(2, 0)] }, { trackId: 20 }]);
+      const withSend = render(edited);
+      edited.setTrackSends(10, []);
+      const cleared = render(edited);
+      expect(Math.abs(cleared[cleared.length - 1])).toBeLessThan(
+        Math.abs(withSend[withSend.length - 1]),
+      );
+      expect(Math.abs(cleared[cleared.length - 1])).toBeGreaterThan(0.1);
+      edited.destroy();
+    });
+
+    it('refuses an invalid edit and the lane renders as before', () => {
+      const engine = rig();
+      engine.setTrackLanes([{ trackId: 10, sends: [send(2)] }, { trackId: 20 }]);
+      const baseline = render(engine);
+      expect(() => engine.setTrackSends(99, [send(2)])).toThrow();
+      expect(() => engine.setTrackOutputBus(99, 1)).toThrow();
+      expect(() => engine.setTrackSends(10, [send(77)])).toThrow();
+      expect(() => engine.setTrackOutputBus(10, 77)).toThrow();
+      expect(() => engine.setTrackSends(10, [send(2), send(2)])).toThrow();
+      expect(() => engine.setTrackSends(10, [send(2, 25)])).toThrow();
+      expectSame(render(engine), baseline);
+      engine.destroy();
+    });
+
+    it('refuses the positional ops on an engine with no lanes and on a missing argument', () => {
+      const engine = rig();
+      expect(() => engine.setTrackSends(10, [send(2)])).toThrow();
+      engine.setTrackLanes([10]);
+      // @ts-expect-error sends is required; undefined is not "clear"
+      expect(() => engine.setTrackSends(10)).toThrow();
+      engine.destroy();
+    });
+
+    it('setTrackLanes omitting sends replaces them (the send bus goes silent)', () => {
+      const engine = rig();
+      engine.setTrackLanes([{ trackId: 10, sends: [send(2, 0)] }, { trackId: 20 }]);
+      const withSend = render(engine);
+      engine.setTrackLanes([{ trackId: 10 }, { trackId: 20 }]);
+      const omitted = render(engine);
+      // The send adds a second copy of the lane; omitting it leaves the bare level.
+      expect(Math.abs(withSend[withSend.length - 1])).toBeGreaterThan(
+        Math.abs(omitted[omitted.length - 1]) + 0.1,
+      );
+      expect(Math.abs(omitted[omitted.length - 1])).toBeGreaterThan(0.1);
+      engine.destroy();
+    });
+  });
+
   describe('bus and master sidechain', () => {
     // Track 10 is quiet program (-26 dB, under the duckers' -20 dB threshold)
     // into bus 2, which carries a ducker keyed from bus 1. Track 30 is a loud

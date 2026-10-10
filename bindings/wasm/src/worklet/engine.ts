@@ -565,8 +565,8 @@ export class SonareEngine {
     mixer.setLaneSidechain(this.mixerContext, target, insertIndex, sourceTarget);
   }
 
-  setSends(target: string | number, sends: EngineTrackSend[]): void {
-    mixer.setSends(this.mixerContext, target, sends);
+  setTrackSends(target: string | number, sends: EngineTrackSend[]): void {
+    mixer.setTrackSends(this.mixerContext, target, sends);
   }
 
   setTrackBuses(buses: EngineBus[]): void {

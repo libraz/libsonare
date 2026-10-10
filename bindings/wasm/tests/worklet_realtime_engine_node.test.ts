@@ -1006,7 +1006,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setStripInserts(3, trackStripJson);
         engine.setMasterChain(masterStripJson);
         engine.setTrackBuses([{ busId: 100, gainDb: -3 }]);
-        engine.setSends(3, [{ busId: 100, levelDb: -6, enabled: true }]);
+        engine.setTrackSends(3, [{ busId: 100, levelDb: -6, enabled: true }]);
         expect(engine.setBusGain(100, -9)).toBe(true);
         // Realtime strip panner / channel-delay controls (R5).
         engine.setTrackStripPan(3, -1);
@@ -1476,7 +1476,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackLanes([{ trackId: 1, sourceChannelLayout: 1 }]);
         expect(latestSync().lanes[0]).toMatchObject({ trackId: 1, sourceChannelLayout: 1 });
 
-        engine.setSends(1, [{ busId: 100, levelDb: -6, enabled: true }]);
+        engine.setTrackSends(1, [{ busId: 100, levelDb: -6, enabled: true }]);
         expect(latestSync().lanes[0]).toMatchObject({
           trackId: 1,
           sourceChannelLayout: 1,
@@ -1540,7 +1540,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(posted).toHaveLength(beforeRejectedRoute);
 
         // A valid no-op topology sync must still use the prior route.
-        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(() => engine.setTrackSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
           { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
         ]);
@@ -1567,7 +1567,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setTrackBuses([{ busId: 100 }]);
         engine.setTrackLanes([{ trackId: 1, outputBusId: 100 }]);
         const beforeRejectedSend = posted.length;
-        expect(() => engine.setSends(1, [{ busId: 999, levelDb: -6 }])).toThrow();
+        expect(() => engine.setTrackSends(1, [{ busId: 999, levelDb: -6 }])).toThrow();
         expect(posted).toHaveLength(beforeRejectedSend);
 
         expect(() => engine.setTrackLanes([1])).not.toThrow();
@@ -1607,7 +1607,7 @@ describe('SonareRealtimeEngineNode', () => {
         ).toThrow();
         expect(posted).toHaveLength(beforeRejectedLanes);
 
-        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(() => engine.setTrackSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toEqual([
           { trackId: 1, outputBusId: 100, sourceChannelLayout: 1 },
         ]);
@@ -1634,10 +1634,10 @@ describe('SonareRealtimeEngineNode', () => {
         const lanes = Array.from({ length: 32 }, (_, index) => index + 1);
         engine.setTrackLanes(lanes);
         const beforeRejectedLane = posted.length;
-        expect(() => engine.setSends(33, [])).toThrow();
+        expect(() => engine.setTrackSends(33, [])).toThrow();
         expect(posted).toHaveLength(beforeRejectedLane);
 
-        expect(() => engine.setSends(1, [])).not.toThrow();
+        expect(() => engine.setTrackSends(1, [])).not.toThrow();
         expect(latestSync().lanes).toHaveLength(32);
         expect(latestSync().lanes.some((lane) => lane.trackId === 33)).toBe(false);
       } finally {
@@ -1928,7 +1928,7 @@ describe('SonareRealtimeEngineNode', () => {
         const beforeRejectedRemoval = posted.length;
         expect(() => engine.setTrackBuses([])).toThrow();
         expect(posted).toHaveLength(beforeRejectedRemoval);
-        engine.setSends(7, []);
+        engine.setTrackSends(7, []);
         const retained = posted.at(-1) as {
           type: string;
           buses: Array<{ busId: number }>;
@@ -2190,7 +2190,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(exactFallback).toHaveBeenCalledTimes(1);
         expect(exactFallback).toHaveBeenCalledWith(0, 'band16.gainDb', 2.6);
         const beforeRouting = posted.length;
-        engine.setSends(7, []);
+        engine.setTrackSends(7, []);
         const sync = posted.at(-1) as { insertParamOverrides?: unknown[] };
         expect(sync.insertParamOverrides).toHaveLength(17);
         replay(posted.slice(beforeRouting));
@@ -2343,7 +2343,7 @@ describe('SonareRealtimeEngineNode', () => {
           { busId: 200, gainDb: 0 },
         ]);
         engine.setTrackOutputBus(7, 100);
-        engine.setSends(7, [{ busId: 200, levelDb: -3, enabled: true }]);
+        engine.setTrackSends(7, [{ busId: 200, levelDb: -3, enabled: true }]);
         const eqParams = (gainDb: number) => ({
           'band0.type': 1,
           'band0.frequencyHz': 800,
@@ -2470,7 +2470,7 @@ describe('SonareRealtimeEngineNode', () => {
         engine.setBusStripDualPan(200, -0.7, -0.2);
         engine.setBusStripPanMode(200, 'dualPan');
         // Any routing change re-posts every cached strip.
-        engine.setSends(7, [{ busId: 200, levelDb: -6, enabled: true }]);
+        engine.setTrackSends(7, [{ busId: 200, levelDb: -6, enabled: true }]);
 
         expect(posted).toEqual(
           expect.arrayContaining([
@@ -2766,7 +2766,7 @@ describe('SonareRealtimeEngineNode', () => {
         expect(releasedEnergy / afterResetEnergy).toBeGreaterThan(0.9);
         expect(releasedEnergy / afterResetEnergy).toBeLessThan(1.1);
         const beforeOneShotCheck = posted.length;
-        engine.setSends(7, []);
+        engine.setTrackSends(7, []);
         expect(
           (posted.at(-1) as { insertParamOverrides?: unknown[] }).insertParamOverrides ?? [],
         ).toEqual([]);
@@ -2917,7 +2917,7 @@ describe('SonareRealtimeEngineNode', () => {
         ).toBe(true);
         const beforeRepost = posted.length;
         // Any routing change re-posts every cached strip.
-        engine.setSends(7, []);
+        engine.setTrackSends(7, []);
         replay(posted.slice(beforeRepost));
         expect(
           livePosted.filter((message) => (message as { type?: string }).type === 'syncError'),

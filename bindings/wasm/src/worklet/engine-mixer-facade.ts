@@ -862,7 +862,7 @@ function ensureSidechainSource(
   }
 }
 
-export function setSends(
+export function setTrackSends(
   ctx: EngineMixerContext,
   target: string | number,
   sends: EngineTrackSend[],

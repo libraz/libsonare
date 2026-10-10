@@ -387,6 +387,22 @@ export class Mixer {
     this.mixer.removeBus(id);
   }
 
+  /**
+   * Re-route the strip or non-master bus `sourceId` into the bus `busId` (a
+   * declared bus id or the master's resolved id; `"master"` is not an alias for
+   * a master bus with another id). Every existing connection out of `sourceId`
+   * is replaced, including a scene-authored strip-to-strip edge. Takes ids, not
+   * the strip index the other strip methods take, because the source may be a
+   * bus. Lazy like {@link addBus}: call {@link compile} (or
+   * {@link processStereo}) to rebuild. An unknown id, a destination that is not
+   * a bus, the master as source, a self-route or an edit that would close a
+   * cycle throws a coded `SonareError` (`InvalidParameter`) naming the ids and
+   * leaves the topology unchanged.
+   */
+  setOutputBus(sourceId: string, busId: string): void {
+    this.mixer.setOutputBus(sourceId, busId);
+  }
+
   /** Number of buses in the mixer topology. */
   busCount(): number {
     return this.mixer.busCount();

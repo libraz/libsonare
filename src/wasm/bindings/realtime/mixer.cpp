@@ -22,13 +22,11 @@ namespace {
 #if defined(SONARE_WITH_MIXING)
 namespace {
 
-// Reads an optional `sends` array off a track lane or bus object, in the one
-// shape both share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
+// Reads a `sends` array (a lane's, a bus's or the positional ops'), in the one
+// shape all share. sendTiming mirrors SonareSendTiming (0 post, 1 pre) and
 // defaults to post-fader.
-std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
+std::vector<sonare::engine::TrackLaneConfig::Send> readSends(const val& sends) {
   std::vector<sonare::engine::TrackLaneConfig::Send> out;
-  if (owner["sends"].isUndefined() || owner["sends"].isNull()) return out;
-  val sends = owner["sends"];
   const int send_count = static_cast<int>(wasmArrayLikeLength(sends, "sends"));
   out.reserve(static_cast<size_t>(send_count));
   for (int send_index = 0; send_index < send_count; ++send_index) {
@@ -44,6 +42,11 @@ std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& 
                    boolProperty(send, "enabled", true), timing});
   }
   return out;
+}
+
+std::vector<sonare::engine::TrackLaneConfig::Send> readOptionalSends(const val& owner) {
+  if (owner["sends"].isUndefined() || owner["sends"].isNull()) return {};
+  return readSends(owner["sends"]);
 }
 
 sonare::engine::SidechainSourceKind sidechainSourceKind(int source_kind) {
@@ -105,6 +108,40 @@ void RealtimeEngineWasm::setTrackLanes(val lanes) {
                       "invalid track lane configuration");
 #else
   (void)lanes;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Replaces one lane's sends, leaving its output bus and every other lane alone.
+/// An empty array clears them. Matches sonare_engine_set_track_sends.
+void RealtimeEngineWasm::setTrackSends(const val& track_id_val, const val& sends_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+#if defined(SONARE_WITH_MIXING)
+  auto sends = readSends(sends_val);
+  requireMixingTarget(engine_.set_track_sends(track_id, std::move(sends)) ==
+                          sonare::engine::TrackLaneEditResult::kApplied,
+                      "invalid track lane configuration");
+#else
+  (void)track_id;
+  (void)sends_val;
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "mixing support is not compiled in");
+#endif
+}
+
+/// Sets one lane's output bus (0 = master mix), leaving its sends and every other
+/// lane alone. Matches sonare_engine_set_track_output_bus.
+void RealtimeEngineWasm::setTrackOutputBus(const val& track_id_val, const val& bus_id_val) {
+  const uint32_t track_id = checkedUintFromVal(track_id_val, "trackId");
+  const uint32_t bus_id = checkedUintFromVal(bus_id_val, "busId");
+#if defined(SONARE_WITH_MIXING)
+  requireMixingTarget(engine_.set_track_output_bus(track_id, bus_id) ==
+                          sonare::engine::TrackLaneEditResult::kApplied,
+                      "invalid track lane configuration");
+#else
+  (void)track_id;
+  (void)bus_id;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "mixing support is not compiled in");
 #endif
@@ -939,6 +976,8 @@ float RealtimeEngineWasm::insertParameterConstructedValue(const val& param_id_va
 
 void registerRealtimeEngineMixer(class_<RealtimeEngineWasm>& cls) {
   cls.function("setTrackLanes", &RealtimeEngineWasm::setTrackLanes)
+      .function("setTrackSends", &RealtimeEngineWasm::setTrackSends)
+      .function("setTrackOutputBus", &RealtimeEngineWasm::setTrackOutputBus)
       .function("insertParameterConstructedValue",
                 &RealtimeEngineWasm::insertParameterConstructedValue)
       .function("setLaneSidechain", &RealtimeEngineWasm::setLaneSidechain)

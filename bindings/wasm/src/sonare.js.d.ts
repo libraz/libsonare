@@ -1453,6 +1453,8 @@ export interface WasmRealtimeEngine {
   prebakedClipChannels: (clipId: number) => Float32Array[] | null;
   clipCount: () => number;
   setTrackLanes: (lanes: Array<number | WasmEngineTrackLane>) => void;
+  setTrackSends: (trackId: number, sends: WasmEngineTrackSend[]) => void;
+  setTrackOutputBus: (trackId: number, busId: number) => void;
   setLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => void;
   canSetLaneSidechain: (trackId: number, insertIndex: number, sourceTrackId: number) => number;
   canSetBusSidechain: (
@@ -3970,6 +3972,7 @@ export interface WasmMixer {
   addStrip: (id: string, metering: StripMeteringOptions) => void;
   addBus: (id: string, role: string) => void;
   removeBus: (id: string) => void;
+  setOutputBus: (sourceId: string, busId: string) => void;
   busCount: () => number;
   addVcaGroup: (id: string, gainDb: number, members: string[]) => void;
   setVcaGroupGainDb: (id: string, gainDb: number) => void;

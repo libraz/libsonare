@@ -57,6 +57,14 @@ void MixerWasm::removeBus(std::string id) {
   }
 }
 
+// Re-routes a strip or non-master bus into a bus or the master. Validation is the
+// core's, so a refusal carries its code and the ids it names; nothing changes then.
+void MixerWasm::setOutputBus(std::string source_id, std::string bus_id) {
+  const SonareError err = sonare_mixer_set_output_bus(mixer_, wasmCString(source_id, "sourceId"),
+                                                      wasmCString(bus_id, "busId"));
+  if (err != SONARE_OK) throwLastCError("failed to set output bus: ");
+}
+
 size_t MixerWasm::busCount() const {
   size_t count = 0;
   SonareError err = sonare_mixer_bus_count(mixer_, &count);
@@ -160,6 +168,7 @@ void registerMixerTopology(class_<MixerWasm>& cls) {
   cls.function("addStrip", &MixerWasm::addStrip)
       .function("addBus", &MixerWasm::addBus)
       .function("removeBus", &MixerWasm::removeBus)
+      .function("setOutputBus", &MixerWasm::setOutputBus)
       .function("busCount", &MixerWasm::busCount)
       .function("addVcaGroup", &MixerWasm::addVcaGroup)
       .function("setVcaGroupGainDb", &MixerWasm::setVcaGroupGainDb)

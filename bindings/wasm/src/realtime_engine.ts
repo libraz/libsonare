@@ -1402,6 +1402,27 @@ export class RealtimeEngine {
   }
 
   /**
+   * Replaces the sends of one lane, leaving its output bus, layout and every
+   * other lane unchanged; an empty array clears them. An unchanged send list
+   * keeps its in-flight level ramps. Throws for an unknown track id, an
+   * undeclared bus, a duplicate send bus or a level outside the send range.
+   * Unlike the worklet engine's `setTrackSends`, the lane must already be
+   * declared through {@link setTrackLanes}.
+   */
+  setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
+    this.native.setTrackSends(trackId, RealtimeEngine.normalizeSends(sends));
+  }
+
+  /**
+   * Sets the output bus of one lane (`0` = master mix), leaving its sends,
+   * layout and every other lane unchanged. Throws for an unknown track id or an
+   * undeclared bus; the lane must already be declared through {@link setTrackLanes}.
+   */
+  setTrackOutputBus(trackId: number, busId: number): void {
+    this.native.setTrackOutputBus(trackId, busId);
+  }
+
+  /**
    * Keys one insert of a lane strip from another lane's post-strip audio
    * (ducking/sidechainRouter inserts). sourceTrackId 0 removes the binding.
    * Lanes are processed in key order and the key is delay-compensated to the

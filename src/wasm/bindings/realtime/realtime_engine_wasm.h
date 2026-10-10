@@ -224,6 +224,10 @@ class RealtimeEngineWasm {
 
   // ---- Mixer: tracks, buses, strips (realtime_engine_mixer.cpp) --------
   void setTrackLanes(emscripten::val lanes);
+  /// Replaces one lane's sends / sets its output bus, leaving the rest of the lane
+  /// list unchanged. Match sonare_engine_set_track_sends / _set_track_output_bus.
+  void setTrackSends(const emscripten::val& track_id_val, const emscripten::val& sends_val);
+  void setTrackOutputBus(const emscripten::val& track_id_val, const emscripten::val& bus_id_val);
 #if defined(SONARE_WITH_ARRANGEMENT)
   /// Installs the compiled timeline registered under @p timeline_id (a
   /// ProjectTimeline handle's id) into the stopped engine, all or nothing.
