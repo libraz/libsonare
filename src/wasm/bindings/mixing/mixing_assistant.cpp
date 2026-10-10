@@ -16,15 +16,18 @@
 ///          be here; anything the core checks itself must not be.
 ///
 /// @details Argument order mirrors the C entry point
-///          (left / right / ids / names / sample rate / params). The per-track
-///          frame counts and the track count that entry point takes as separate
-///          arguments are derived from the JS array lengths instead.
+///          (left / right / ids / names / track rates / sample rate / params).
+///          The per-track frame counts and the track count that entry point
+///          takes as separate arguments are derived from the JS array lengths
+///          instead. A track at another rate is resampled onto the sample rate
+///          here, as the C layer does, before the core sees it.
 
 #ifdef __EMSCRIPTEN__
 
 #include "mixing_wasm.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+#include "core/resample.h"
 #include "mixing/api/scene.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
@@ -84,11 +87,12 @@ std::string optionalTrackName(const val& names, std::size_t index) {
 }
 
 AssistantInput buildAssistantInput(val left_channels, val right_channels, val track_ids,
-                                   val track_names, int sample_rate) {
+                                   val track_names, val track_sample_rates, int sample_rate) {
   requireJsArray(left_channels, "leftChannels");
   requireJsArray(track_ids, "trackIds");
   if (!isAbsent(right_channels)) requireJsArray(right_channels, "rightChannels");
   if (!isAbsent(track_names)) requireJsArray(track_names, "trackNames");
+  if (!isAbsent(track_sample_rates)) requireJsArray(track_sample_rates, "trackSampleRates");
 
   const std::size_t count = wasmArrayLikeLength(left_channels, "leftChannels");
   if (wasmArrayLikeLength(track_ids, "trackIds") != count) {
@@ -99,6 +103,10 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
   }
   if (!isAbsent(track_names) && wasmArrayLikeLength(track_names, "trackNames") != count) {
     throw WasmRangeError("trackNames must have one entry per track");
+  }
+  if (!isAbsent(track_sample_rates) &&
+      wasmArrayLikeLength(track_sample_rates, "trackSampleRates") != count) {
+    throw WasmRangeError("trackSampleRates must have one entry per track");
   }
 
   AssistantInput input;
@@ -138,6 +146,22 @@ AssistantInput buildAssistantInput(val left_channels, val right_channels, val tr
                              " left and right lengths must match");
       }
       input.right[index] = float32ArrayToVector(right);
+    }
+
+    if (!isAbsent(track_sample_rates)) {
+      const std::string subject = "trackSampleRates[" + std::to_string(index) + "]";
+      const int track_rate = checkedIntFromVal(track_sample_rates[index], subject.c_str());
+      if (track_rate <= 0) {
+        throw WasmRangeError(subject + " must be positive");
+      }
+      if (track_rate != sample_rate && !input.left[index].empty()) {
+        input.left[index] = sonare::resample(input.left[index].data(), input.left[index].size(),
+                                             track_rate, sample_rate);
+        if (!input.right[index].empty()) {
+          input.right[index] = sonare::resample(input.right[index].data(),
+                                                input.right[index].size(), track_rate, sample_rate);
+        }
+      }
     }
   }
 
@@ -183,11 +207,12 @@ assistant::MixAssistantConfig assistantConfigFromParams(val params_obj) {
 // assistant only suggests: applying the scene is the caller's separate step
 // through Mixer.fromSceneJson.
 std::string js_mixing_assistant_suggest(val left_channels, val right_channels, val track_ids,
-                                        val track_names, const val& sample_rate, val params_obj) {
+                                        val track_names, val track_sample_rates,
+                                        const val& sample_rate, val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
   const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names,
+      buildAssistantInput(left_channels, right_channels, track_ids, track_names, track_sample_rates,
                           checkedIntFromVal(sample_rate, "sampleRate"));
   return assistant::mix_assistant_result_to_json(assistant::suggest_scene(input.tracks, config));
 #else
@@ -195,6 +220,7 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
   (void)right_channels;
   (void)track_ids;
   (void)track_names;
+  (void)track_sample_rates;
   (void)sample_rate;
   (void)params_obj;
   throwUnavailable();
@@ -205,11 +231,12 @@ std::string js_mixing_assistant_suggest(val left_channels, val right_channels, v
 // schema Mixer.fromSceneJson reads.
 std::string js_mixing_assistant_suggest_scene_json(val left_channels, val right_channels,
                                                    val track_ids, val track_names,
-                                                   const val& sample_rate, val params_obj) {
+                                                   val track_sample_rates, const val& sample_rate,
+                                                   val params_obj) {
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
   const assistant::MixAssistantConfig config = assistantConfigFromParams(params_obj);
   const AssistantInput input =
-      buildAssistantInput(left_channels, right_channels, track_ids, track_names,
+      buildAssistantInput(left_channels, right_channels, track_ids, track_names, track_sample_rates,
                           checkedIntFromVal(sample_rate, "sampleRate"));
   const auto result = assistant::suggest_scene(input.tracks, config);
   return mixing::api::scene_to_json(result.scene);
@@ -218,6 +245,7 @@ std::string js_mixing_assistant_suggest_scene_json(val left_channels, val right_
   (void)right_channels;
   (void)track_ids;
   (void)track_names;
+  (void)track_sample_rates;
   (void)sample_rate;
   (void)params_obj;
   throwUnavailable();

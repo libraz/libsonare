@@ -34,7 +34,7 @@ import type {
   StreamingPlatform,
   TypedJson,
 } from './public_types.js';
-import { assertAudioInput, assertString, requestObject } from './validation.js';
+import { assertAudioInput, assertSampleRate, assertString, requestObject } from './validation.js';
 
 export type { MasteringInsertParamChoice, MasteringInsertSlot };
 
@@ -69,6 +69,11 @@ export interface MasteringPairProcessRequest {
   source: Float32Array;
   reference: Float32Array;
   sampleRate?: number;
+  /**
+   * Rate of the reference, in Hz. Omitted: `sampleRate`. A reference at another
+   * rate is resampled onto `sampleRate` first.
+   */
+  referenceSampleRate?: number;
   params?: MasteringProcessorParams;
 }
 
@@ -80,6 +85,11 @@ export interface MasteringPairProcessStereoRequest {
   referenceLeft: Float32Array;
   referenceRight: Float32Array;
   sampleRate?: number;
+  /**
+   * Rate of the reference, in Hz. Omitted: `sampleRate`. A reference at another
+   * rate is resampled onto `sampleRate` first.
+   */
+  referenceSampleRate?: number;
   params?: MasteringProcessorParams;
 }
 
@@ -90,6 +100,11 @@ export interface MasteringAbMatchLoudnessRequest {
   /** The take whose loudness `source` is matched to; returned untouched. */
   reference: Float32Array;
   sampleRate?: number;
+  /**
+   * Rate of the reference, in Hz. Omitted: `sampleRate`. A reference at another
+   * rate is resampled onto `sampleRate` and measured there.
+   */
+  referenceSampleRate?: number;
 }
 
 /** Canonical request form for stereo AB loudness matching. */
@@ -99,6 +114,11 @@ export interface MasteringAbMatchLoudnessStereoRequest {
   referenceLeft: Float32Array;
   referenceRight: Float32Array;
   sampleRate?: number;
+  /**
+   * Rate of the reference, in Hz. Omitted: `sampleRate`. A reference at another
+   * rate is resampled onto `sampleRate` and measured there.
+   */
+  referenceSampleRate?: number;
 }
 
 /** Canonical request form for a two-input match analysis. */
@@ -107,6 +127,11 @@ export interface MasteringPairAnalyzeRequest<N extends PairAnalysis = PairAnalys
   source: Float32Array;
   reference: Float32Array;
   sampleRate?: number;
+  /**
+   * Rate of the reference, in Hz. Omitted: `sampleRate`. A reference at another
+   * rate is resampled onto `sampleRate` first, so a delay estimate is in source-rate samples.
+   */
+  referenceSampleRate?: number;
   params?: MasteringProcessorParams;
 }
 
@@ -593,7 +618,8 @@ export function masteringProcessStereo(
 /**
  * Apply a two-input `match.*` processor. `source` and `reference` may have
  * independent lengths — the match primitives consume each buffer at its own
- * length.
+ * length — and, in the request form, independent rates: a reference at
+ * `referenceSampleRate` is resampled onto `sampleRate` first.
  */
 export function masteringPairProcess(request: MasteringPairProcessRequest): MasteringResult;
 export function masteringPairProcess(
@@ -628,10 +654,15 @@ export function masteringPairProcess(
     {},
     'source',
   );
+  assertSampleRate(
+    'masteringPairProcess',
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
+    'referenceSampleRate',
+  );
   assertAudioInput(
     'masteringPairProcess',
     request.reference,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'reference',
   );
@@ -640,6 +671,7 @@ export function masteringPairProcess(
     request.source,
     request.reference,
     request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     request.params ?? {},
   );
 }
@@ -696,17 +728,22 @@ export function masteringPairProcessStereo(
     {},
     'sourceRight',
   );
+  assertSampleRate(
+    'masteringPairProcessStereo',
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
+    'referenceSampleRate',
+  );
   assertAudioInput(
     'masteringPairProcessStereo',
     request.referenceLeft,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'referenceLeft',
   );
   assertAudioInput(
     'masteringPairProcessStereo',
     request.referenceRight,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'referenceRight',
   );
@@ -723,13 +760,15 @@ export function masteringPairProcessStereo(
     request.referenceLeft,
     request.referenceRight,
     request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     request.params ?? {},
   );
 }
 
 /**
  * Analyze a `source` against a `reference` with a two-input analysis. The two
- * buffers may have independent lengths.
+ * buffers may have independent lengths and, in the request form, rates; a
+ * delay estimate is in samples at `sampleRate`.
  *
  * Returns JSON whose shape depends on the analysis name; the overload for
  * each analysis name carries its entry of {@link PairAnalysisResultMap}, which
@@ -820,10 +859,15 @@ export function masteringPairAnalyze(
     {},
     'source',
   );
+  assertSampleRate(
+    'masteringPairAnalyze',
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
+    'referenceSampleRate',
+  );
   assertAudioInput(
     'masteringPairAnalyze',
     request.reference,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'reference',
   );
@@ -832,6 +876,7 @@ export function masteringPairAnalyze(
     request.source,
     request.reference,
     request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     request.params ?? {},
   );
 }
@@ -839,7 +884,8 @@ export function masteringPairAnalyze(
 /**
  * Gain-match `source` to `reference`'s integrated loudness, so an A/B between
  * the two is not decided by level. `source` and `reference` may have
- * independent lengths.
+ * independent lengths and rates; a reference at `referenceSampleRate` is
+ * resampled onto `sampleRate` before it is measured.
  *
  * The gain is applied with no upper bound and `matchedTruePeakDbtp` reports
  * where that left the peak, rather than the call capping it: a headroom clamp
@@ -867,10 +913,15 @@ export function masteringAbMatchLoudness(
     {},
     'source',
   );
+  assertSampleRate(
+    'masteringAbMatchLoudness',
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
+    'referenceSampleRate',
+  );
   assertAudioInput(
     'masteringAbMatchLoudness',
     request.reference,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'reference',
   );
@@ -878,6 +929,7 @@ export function masteringAbMatchLoudness(
     request.source,
     request.reference,
     request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
   );
 }
 
@@ -900,17 +952,22 @@ export function masteringAbMatchLoudnessStereo(
     {},
     'sourceRight',
   );
+  assertSampleRate(
+    'masteringAbMatchLoudnessStereo',
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
+    'referenceSampleRate',
+  );
   assertAudioInput(
     'masteringAbMatchLoudnessStereo',
     request.referenceLeft,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'referenceLeft',
   );
   assertAudioInput(
     'masteringAbMatchLoudnessStereo',
     request.referenceRight,
-    request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
     {},
     'referenceRight',
   );
@@ -926,6 +983,7 @@ export function masteringAbMatchLoudnessStereo(
     request.referenceLeft,
     request.referenceRight,
     request.sampleRate ?? 22050,
+    request.referenceSampleRate ?? request.sampleRate ?? 22050,
   );
 }
 

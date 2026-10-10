@@ -276,19 +276,19 @@ class EqualizerWrapper {
     std::vector<float> ref = float32ArrayToVector(reference);
     const int sample_rate =
         intProperty(options, "sampleRate", static_cast<int>(std::lround(sample_rate_)));
+    // An omitted reference rate is the source's.
+    const int reference_sample_rate = intProperty(options, "referenceSampleRate", sample_rate);
     const int max_bands = intProperty(options, "maxBands", 8);
     validate_offline_audio_input(src.data(), src.size(), sample_rate);
-    validate_offline_audio_input(ref.data(), ref.size(), sample_rate);
+    validate_offline_audio_input(ref.data(), ref.size(), reference_sample_rate);
     if (max_bands <= 0) {
       throw WasmRangeError("StreamingEqualizer.match: maxBands must be positive");
     }
-    Audio src_audio = Audio::from_buffer(src.data(), src.size(), sample_rate);
-    Audio ref_audio = Audio::from_buffer(ref.data(), ref.size(), sample_rate);
     mastering::match::MatchEqConfig match_config;
     match_config.max_bands = static_cast<size_t>(max_bands);
-    mastering::match::configure_equalizer_from_match(
-        processor_, mastering::match::reference_spectrum(src_audio),
-        mastering::match::reference_spectrum(ref_audio), match_config);
+    mastering::match::configure_equalizer_from_audio(
+        processor_, Audio::from_buffer(src.data(), src.size(), sample_rate),
+        Audio::from_buffer(ref.data(), ref.size(), reference_sample_rate), match_config);
   }
 
  private:

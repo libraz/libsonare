@@ -474,7 +474,9 @@ export class StreamingEqualizer {
    *
    * @param source - Source audio (mono samples)
    * @param reference - Reference audio (mono samples)
-   * @param options - `sampleRate` (default 48000) and `maxBands` (default 8)
+   * @param options - `sampleRate` (default 48000), `referenceSampleRate` (default
+   *   `sampleRate`; a reference at another rate is resampled onto the source's)
+   *   and `maxBands` (default 8)
    */
   match(source: Float32Array, reference: Float32Array, options: EqMatchOptions = {}): void {
     this.eq.match(source, reference, options as Record<string, unknown>);

@@ -11,7 +11,8 @@ export interface SuggestMixSceneRequest {
   /** Tracks to mix, in the order their profiles are reported. */
   tracks: MixAssistantTrack[];
   /**
-   * Shared sample rate in Hz for every track. Required: every band edge,
+   * Analysis rate in Hz, and the rate of every track that does not state its
+   * own; a track at another rate is resampled onto it. Required: every band edge,
    * high-pass corner, sibilance band and alignment lag is derived from it, so a
    * guessed rate would silently misread 44.1 kHz material by 8.8% and report
    * `channelDelaySamples` and `durationSec` wrong with it.
@@ -27,6 +28,7 @@ interface PlanarTracks {
   right: (Float32Array | null)[];
   ids: string[];
   names: (string | null)[];
+  sampleRates: number[] | null;
 }
 
 /**
@@ -40,7 +42,11 @@ function assertTrackBuffer(fnName: string, value: unknown, argName: string): voi
   }
 }
 
-function planarTracks(fnName: string, tracks: MixAssistantTrack[]): PlanarTracks {
+function planarTracks(
+  fnName: string,
+  tracks: MixAssistantTrack[],
+  sampleRate: number,
+): PlanarTracks {
   if (!Array.isArray(tracks)) {
     throw new TypeError(`${fnName}: tracks must be an array`);
   }
@@ -48,6 +54,8 @@ function planarTracks(fnName: string, tracks: MixAssistantTrack[]): PlanarTracks
   const right: (Float32Array | null)[] = [];
   const ids: string[] = [];
   const names: (string | null)[] = [];
+  const sampleRates: number[] = [];
+  let anySampleRate = false;
   for (let index = 0; index < tracks.length; index++) {
     const track = tracks[index];
     if (track === null || typeof track !== 'object') {
@@ -62,12 +70,18 @@ function planarTracks(fnName: string, tracks: MixAssistantTrack[]): PlanarTracks
     if (track.right !== undefined) {
       assertTrackBuffer(fnName, track.right, `tracks[${index}].right`);
     }
+    if (track.sampleRate !== undefined) {
+      assertSampleRate(fnName, track.sampleRate, `tracks[${index}].sampleRate`);
+    }
     left.push(track.left);
     right.push(track.right ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
+    sampleRates.push(track.sampleRate ?? sampleRate);
+    anySampleRate ||= track.sampleRate !== undefined;
   }
-  return { left, right, ids, names };
+  // null when no track states its own rate: every track is at `sampleRate`.
+  return { left, right, ids, names, sampleRates: anySampleRate ? sampleRates : null };
 }
 
 function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boolean): string {
@@ -80,12 +94,20 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
     throw new TypeError(`${fnName}: sampleRate must be a number`);
   }
   assertSampleRate(fnName, sampleRate);
-  const { left, right, ids, names } = planarTracks(fnName, request.tracks);
+  const { left, right, ids, names, sampleRates } = planarTracks(fnName, request.tracks, sampleRate);
   const params = (request.options ?? {}) as Record<string, number | boolean>;
   const module = requireModule();
   return sceneOnly
-    ? module.mixingAssistantSuggestSceneJson(left, right, ids, names, sampleRate, params)
-    : module.mixingAssistantSuggest(left, right, ids, names, sampleRate, params);
+    ? module.mixingAssistantSuggestSceneJson(
+        left,
+        right,
+        ids,
+        names,
+        sampleRates,
+        sampleRate,
+        params,
+      )
+    : module.mixingAssistantSuggest(left, right, ids, names, sampleRates, sampleRate, params);
 }
 
 /**
@@ -103,7 +125,7 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
  * Degenerate input is not an error: no tracks, all-silent tracks or tracks too
  * short to measure yield an empty scene and an empty `explanation`.
  *
- * @param request - Tracks, shared sample rate and assistant options
+ * @param request - Tracks, analysis sample rate and assistant options
  * @returns The suggested scene, per-track profiles, cross-track measurements
  *   and the explanation behind each change
  */
@@ -120,7 +142,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
  * suggestion neither digs the scene out of the fuller result nor re-serializes
  * it.
  *
- * @param request - Tracks, shared sample rate and assistant options
+ * @param request - Tracks, analysis sample rate and assistant options
  * @returns Scene JSON string
  */
 export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {

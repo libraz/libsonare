@@ -2680,6 +2680,7 @@ export interface SonareModule {
     source: Float32Array,
     reference: Float32Array,
     sampleRate: number,
+    referenceSampleRate: number,
     params: Record<string, number | boolean>,
   ) => WasmMasteringResult;
   masteringPairAnalyze: (
@@ -2687,6 +2688,7 @@ export interface SonareModule {
     source: Float32Array,
     reference: Float32Array,
     sampleRate: number,
+    referenceSampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
   masteringPairProcessStereo: (
@@ -2696,12 +2698,14 @@ export interface SonareModule {
     referenceLeft: Float32Array,
     referenceRight: Float32Array,
     sampleRate: number,
+    referenceSampleRate: number,
     params: Record<string, number | boolean>,
   ) => WasmMasteringStereoResult;
   masteringAbMatchLoudness: (
     source: Float32Array,
     reference: Float32Array,
     sampleRate: number,
+    referenceSampleRate: number,
   ) => WasmLoudnessMatchResult;
   masteringAbMatchLoudnessStereo: (
     sourceLeft: Float32Array,
@@ -2709,6 +2713,7 @@ export interface SonareModule {
     referenceLeft: Float32Array,
     referenceRight: Float32Array,
     sampleRate: number,
+    referenceSampleRate: number,
   ) => WasmLoudnessMatchStereoResult;
   masteringStereoAnalyze: (
     analysisName: string,
@@ -3004,6 +3009,7 @@ export interface SonareModule {
     rightChannels: (Float32Array | null)[] | null,
     trackIds: string[],
     trackNames: (string | null)[] | null,
+    trackSampleRates: number[] | null,
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;
@@ -3012,6 +3018,7 @@ export interface SonareModule {
     rightChannels: (Float32Array | null)[] | null,
     trackIds: string[],
     trackNames: (string | null)[] | null,
+    trackSampleRates: number[] | null,
     sampleRate: number,
     params: Record<string, number | boolean>,
   ) => string;

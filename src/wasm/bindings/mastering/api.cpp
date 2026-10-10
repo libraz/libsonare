@@ -365,19 +365,22 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
 }
 
 val js_mastering_pair_process(std::string processor_name, val source_samples, val reference_samples,
-                              const val& sample_rate_val, val params) {
+                              const val& sample_rate_val, const val& reference_sample_rate_val,
+                              val params) {
   wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairProcess input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
-  // source and reference may have independent lengths.
+  // source and reference may have independent lengths and rates.
   validate_offline_audio_input(source.data(), source.size(), sample_rate);
-  validate_offline_audio_input(reference.data(), reference.size(), sample_rate);
+  validate_offline_audio_input(reference.data(), reference.size(), reference_sample_rate);
   auto result = mastering::api::apply_named_pair_processor(
       processor_name, source.data(), reference.data(), source.size(), reference.size(), sample_rate,
-      masteringParamsFromObject(params));
+      reference_sample_rate, masteringParamsFromObject(params));
   val out = val::object();
   out.set("samples", vectorToFloat32Array(result.samples));
   out.set("sampleRate", result.sample_rate);
@@ -392,9 +395,11 @@ val js_mastering_pair_process(std::string processor_name, val source_samples, va
 val js_mastering_pair_process_stereo(std::string processor_name, val source_left_samples,
                                      val source_right_samples, val reference_left_samples,
                                      val reference_right_samples, const val& sample_rate_val,
-                                     val params) {
+                                     const val& reference_sample_rate_val, val params) {
   wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
   validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
                                "source right samples", "masteringPairProcessStereo source input",
                                true);
@@ -412,12 +417,13 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
   std::vector<float> reference_right = float32ArrayToVector(reference_right_samples);
   validate_offline_audio_input(source_left.data(), source_left.size(), sample_rate);
   validate_offline_audio_input(source_right.data(), source_right.size(), sample_rate);
-  validate_offline_audio_input(reference_left.data(), reference_left.size(), sample_rate);
-  validate_offline_audio_input(reference_right.data(), reference_right.size(), sample_rate);
+  validate_offline_audio_input(reference_left.data(), reference_left.size(), reference_sample_rate);
+  validate_offline_audio_input(reference_right.data(), reference_right.size(),
+                               reference_sample_rate);
   auto result = mastering::api::apply_named_pair_processor_stereo(
       processor_name, source_left.data(), source_right.data(), source_left.size(),
       reference_left.data(), reference_right.data(), reference_left.size(), sample_rate,
-      masteringParamsFromObject(params));
+      reference_sample_rate, masteringParamsFromObject(params));
   val out = val::object();
   out.set("left", vectorToFloat32Array(result.left));
   out.set("right", vectorToFloat32Array(result.right));
@@ -433,32 +439,38 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
 
 std::string js_mastering_pair_analyze(std::string analysis_name, val source_samples,
                                       val reference_samples, const val& sample_rate_val,
-                                      val params) {
+                                      const val& reference_sample_rate_val, val params) {
   wasmRefuseEmbeddedNul(analysis_name, "analysisName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairAnalyze input", false);
   std::vector<float> source = float32ArrayToVector(source_samples);
   std::vector<float> reference = float32ArrayToVector(reference_samples);
-  // source and reference may have independent lengths.
+  // source and reference may have independent lengths and rates.
   validate_offline_audio_input(source.data(), source.size(), sample_rate);
-  validate_offline_audio_input(reference.data(), reference.size(), sample_rate);
-  return mastering::api::analyze_named_pair(analysis_name, source.data(), reference.data(),
-                                            source.size(), reference.size(), sample_rate,
-                                            masteringParamsFromObject(params));
+  validate_offline_audio_input(reference.data(), reference.size(), reference_sample_rate);
+  return mastering::api::analyze_named_pair(
+      analysis_name, source.data(), reference.data(), source.size(), reference.size(), sample_rate,
+      reference_sample_rate, masteringParamsFromObject(params));
 }
 
 // Gain-matches `source` to `reference`'s integrated loudness. The core takes the
 // reference first; the C ABI and every facade take (source, reference), so the
 // two arguments are swapped here rather than at the call site.
 val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
-                                   const val& sample_rate_val) {
+                                   const val& sample_rate_val,
+                                   const val& reference_sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringAbMatchLoudness input", false);
-  // source and reference may have independent lengths.
+  // source and reference may have independent lengths and rates; the core
+  // resamples the reference onto the source rate.
   const Audio source = loadValidatedAudio(source_samples, sample_rate);
-  const Audio reference = loadValidatedAudio(reference_samples, sample_rate);
+  const Audio reference = loadValidatedAudio(reference_samples, reference_sample_rate);
   const auto matched = mastering::match::ab_match_loudness(reference, source);
 
   val out = val::object();
@@ -473,8 +485,11 @@ val js_mastering_ab_match_loudness(val source_samples, val reference_samples,
 
 val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_right_samples,
                                           val reference_left_samples, val reference_right_samples,
-                                          const val& sample_rate_val) {
+                                          const val& sample_rate_val,
+                                          const val& reference_sample_rate_val) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  const int reference_sample_rate =
+      checkedIntFromVal(reference_sample_rate_val, "referenceSampleRate");
   validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
                                "source right samples",
                                "masteringAbMatchLoudnessStereo source input", true);
@@ -488,8 +503,8 @@ val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_ri
       "masteringAbMatchLoudnessStereo input");
   const auto source_left = loadValidatedAudio(source_left_samples, sample_rate);
   const auto source_right = loadValidatedAudio(source_right_samples, sample_rate);
-  const auto reference_left = loadValidatedAudio(reference_left_samples, sample_rate);
-  const auto reference_right = loadValidatedAudio(reference_right_samples, sample_rate);
+  const auto reference_left = loadValidatedAudio(reference_left_samples, reference_sample_rate);
+  const auto reference_right = loadValidatedAudio(reference_right_samples, reference_sample_rate);
   const mastering::match::StereoAudioPair source{source_left, source_right};
   const mastering::match::StereoAudioPair reference{reference_left, reference_right};
   const auto matched = mastering::match::ab_match_loudness_stereo(reference, source);
