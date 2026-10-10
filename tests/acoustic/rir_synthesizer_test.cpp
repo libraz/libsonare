@@ -5,7 +5,10 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <limits>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "acoustic/image_source.h"
 #include "acoustic/late_reverb.h"
@@ -724,4 +727,140 @@ TEST_CASE("a max_seconds cut inside the longest RT60 is warned and not measured"
   const MeasuredRir full = measure_rir(preset_room(6.5f, 4.8f, 3.0f, MaterialPreset::Curtain),
                                        {{1.0f, 1.0f, 1.2f}, {4.5f, 3.2f, 1.2f}}, 48000, 4.0f);
   REQUIRE_FALSE(has_code(full.diagnostics, "acoustic.rir_tail_truncated"));
+}
+
+namespace {
+
+// Reference room of the receiver-pair cases: 8 x 6 x 3.5 m, uniform absorption.
+ShoeboxRoom pair_reference_room(float absorption) {
+  return uniform_room(8.0f, 6.0f, 3.5f, absorption);
+}
+
+std::vector<float> samples_of(const Audio& audio) {
+  return std::vector<float>(audio.data(), audio.data() + audio.size());
+}
+
+// Last sample before the crossover ramp: max(mixing time, direct + half fade) - half fade.
+int crossover_start(const SourceListener& pl, float mixing_ms, int sr) {
+  const int half_xfade = static_cast<int>(std::lround(0.005f * static_cast<float>(sr) * 0.5f));
+  const int direct = static_cast<int>(
+      std::lround(length(pl.listener - pl.source) / kSoundSpeed * static_cast<float>(sr)));
+  const int t_mix = static_cast<int>(std::lround(mixing_ms * 0.001f * static_cast<float>(sr)));
+  return std::max(t_mix, direct + half_xfade) - half_xfade;
+}
+
+}  // namespace
+
+TEST_CASE("receiver pair straddles the listener across the source direction", "[acoustic][rir]") {
+  const SourceListener pl{{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+  // Facing the source (-x), the listener's left is -y.
+  const ReceiverPair pair = receiver_pair(pl, 0.5f);
+  REQUIRE(pair.left.x == 6.0f);
+  REQUIRE(pair.left.y == 2.75f);
+  REQUIRE(pair.left.z == 1.5f);
+  REQUIRE(pair.right.x == 6.0f);
+  REQUIRE(pair.right.y == 3.25f);
+  REQUIRE(pair.right.z == 1.5f);
+
+  // A source straight above the listener falls back to f = +x, so left is +y.
+  const ReceiverPair above = receiver_pair({{6.0f, 3.0f, 3.0f}, {6.0f, 3.0f, 1.5f}}, 0.5f);
+  REQUIRE(above.left.y == 3.25f);
+  REQUIRE(above.right.y == 2.75f);
+
+  // Off-axis placements keep both receivers equidistant from the source.
+  const SourceListener diag{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+  const ReceiverPair d = receiver_pair(diag, 1.0f);
+  REQUIRE_THAT(length(d.left - diag.source), WithinRel(length(d.right - diag.source), 1e-5f));
+  REQUIRE_THAT(length(d.left - d.right), WithinRel(1.0f, 1e-5f));
+}
+
+TEST_CASE("receiver pair validation refuses bad spacing and receivers outside the room",
+          "[acoustic][rir]") {
+  const ShoeboxRoom room = pair_reference_room(0.15f);
+  const SourceListener pl{{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+  REQUIRE(validate_receiver_pair(room, pl, 0.5f).empty());
+  REQUIRE(validate_receiver_pair(room, pl, 4.0f).empty());
+  for (const float spacing : {0.0f, -0.5f, 4.5f, std::numeric_limits<float>::quiet_NaN(),
+                              std::numeric_limits<float>::infinity()}) {
+    INFO("spacing " << spacing);
+    const std::vector<Diagnostic> diags = validate_receiver_pair(room, pl, spacing);
+    REQUIRE(has_error(diags));
+    REQUIRE(has_code(diags, "acoustic.receiver_spacing_out_of_range"));
+  }
+
+  // Listener 0.1 m from the y = 0 wall, facing -x: the left receiver lands at y = -0.15.
+  const SourceListener wall{{2.0f, 0.1f, 1.2f}, {6.0f, 0.1f, 1.5f}};
+  const std::vector<Diagnostic> diags = validate_receiver_pair(room, wall, 0.5f);
+  REQUIRE(diags.size() == 1);
+  REQUIRE(diags[0].severity == Diagnostic::Severity::Error);
+  REQUIRE(diags[0].code == "acoustic.receiver_outside_room");
+  REQUIRE(diags[0].message.find("left") != std::string::npos);
+  REQUIRE(diags[0].message.find("-0.150") != std::string::npos);
+
+  const RirPairResult res = synthesize_rir_pair(room, wall, 0.5f, 48000);
+  REQUIRE(has_code(res.diagnostics, "acoustic.receiver_outside_room"));
+  REQUIRE(res.left.size() == 0);
+  REQUIRE(res.right.size() == 0);
+}
+
+TEST_CASE("receiver-pair RIRs match each receiver's mono RIR before the crossover",
+          "[acoustic][rir]") {
+  const int sr = 48000;
+  const ShoeboxRoom room = pair_reference_room(0.15f);
+  // The on-axis listener mirrors the two receivers in the room; the off-axis one does not.
+  const float listener_y = GENERATE(3.0f, 2.0f);
+  const SourceListener pl{{2.0f, 3.0f, 1.2f}, {6.0f, listener_y, 1.5f}};
+  const float mixing_ms = GENERATE(0.0f, 40.0f);
+  RirSynthConfig cfg;
+  cfg.mixing_time_ms = mixing_ms;
+  const float effective_mixing_ms = mixing_ms > 0.0f ? mixing_ms : std::sqrt(8.0f * 6.0f * 3.5f);
+
+  const RirPairResult pair = synthesize_rir_pair(room, pl, 0.5f, sr, cfg);
+  REQUIRE_FALSE(has_error(pair.diagnostics));
+  REQUIRE(pair.left.size() == pair.right.size());
+  const ReceiverPair receivers = receiver_pair(pl, 0.5f);
+  const std::vector<float> left = samples_of(pair.left);
+  const std::vector<float> right = samples_of(pair.right);
+
+  const SourceListener left_pl{pl.source, receivers.left};
+  const SourceListener right_pl{pl.source, receivers.right};
+  const std::vector<float> mono_l = samples_of(synthesize_rir(room, left_pl, sr, cfg).rir);
+  const std::vector<float> mono_r = samples_of(synthesize_rir(room, right_pl, sr, cfg).rir);
+  const int t0_l = crossover_start(left_pl, effective_mixing_ms, sr);
+  const int t0_r = crossover_start(right_pl, effective_mixing_ms, sr);
+  REQUIRE(static_cast<size_t>(t0_l) < std::min(left.size(), mono_l.size()));
+  REQUIRE(static_cast<size_t>(t0_r) < std::min(right.size(), mono_r.size()));
+  REQUIRE(std::equal(left.begin(), left.begin() + t0_l + 1, mono_l.begin()));
+  REQUIRE(std::equal(right.begin(), right.begin() + t0_r + 1, mono_r.begin()));
+
+  // Past the crossover the right tail is not the left one.
+  REQUIRE_FALSE(std::equal(left.begin() + t0_l + sr / 10, left.begin() + t0_l + sr / 5,
+                           right.begin() + t0_l + sr / 10));
+}
+
+TEST_CASE("receiver-pair RIRs without a late tail are each receiver's mono RIR",
+          "[acoustic][rir]") {
+  const int sr = 48000;
+  const ShoeboxRoom room = pair_reference_room(0.99f);
+  const SourceListener pl{{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+  RirSynthConfig cfg;
+  cfg.mixing_time_ms = 65.0f;
+
+  const RirPairResult pair = synthesize_rir_pair(room, pl, 0.5f, sr, cfg);
+  REQUIRE_FALSE(has_error(pair.diagnostics));
+  REQUIRE(has_code(pair.diagnostics, "acoustic.no_late_tail"));
+  const ReceiverPair receivers = receiver_pair(pl, 0.5f);
+  const std::vector<float> left = samples_of(pair.left);
+  const std::vector<float> right = samples_of(pair.right);
+  REQUIRE(left.size() == right.size());
+
+  for (const auto& [channel, receiver] :
+       {std::make_pair(&left, receivers.left), std::make_pair(&right, receivers.right)}) {
+    const std::vector<float> mono =
+        samples_of(synthesize_rir(room, {pl.source, receiver}, sr, cfg).rir);
+    REQUIRE(mono.size() <= channel->size());
+    REQUIRE(std::equal(mono.begin(), mono.end(), channel->begin()));
+    REQUIRE(std::all_of(channel->begin() + static_cast<std::ptrdiff_t>(mono.size()), channel->end(),
+                        [](float v) { return v == 0.0f; }));
+  }
 }

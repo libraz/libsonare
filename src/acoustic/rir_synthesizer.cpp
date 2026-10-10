@@ -2,13 +2,16 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "acoustic/image_source.h"
 #include "acoustic/late_reverb.h"
 #include "util/constants.h"
 #include "util/dsp_primitives.h"
+#include "util/exception.h"
 #include "util/numeric_validation.h"
 #include "util/resource_limits.h"
 
@@ -95,71 +98,68 @@ Audio color_early_ir(const std::vector<ImageSource>& images, int sample_rate,
   return Audio::from_vector(std::move(out), sample_rate);
 }
 
-}  // namespace
+// Everything the RIR needs from one receiver before the late tail is synthesized.
+struct RirPlan {
+  float sr = 0.0f;
+  int direct_sample = 0;
+  int cap = 0;
+  bool length_floored = false;
+  std::vector<ImageSource> images;
+  Audio early_audio;
+  ReverbTime rt;
+  int early_natural_len = 0;
+  LateTailResolution late_resolution;
+  std::size_t natural_tail_samples = 0;
+  std::size_t natural_len = 0;
+  float mean_scattering = 0.0f;
+  int half_xfade = 0;
+  int t_mix = 0;
+  int level_half = 0;
+  int early_lo = 0;
+};
 
-std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config) {
-  std::vector<Diagnostic> diagnostics;
-  if (config.ism_order < 0 ||
-      !numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds) ||
-      !numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs) ||
-      !numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
-    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
-                           "RIR timing values must be finite and within safe bounds"});
-  }
-  if (config.air_absorption_enabled &&
-      (!numeric::finite(config.air.temperature_c) ||
-       config.air.temperature_c <= kAbsoluteZeroCelsius ||
-       !numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f))) {
-    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
-                           "air absorption temperature/humidity is outside the physical range"});
+constexpr int kWorkingSetCap = static_cast<int>(resource::kMaxAcousticRirSamples);
+
+// Geometry, configuration and sample-rate validation shared by the mono and pair entries.
+std::vector<Diagnostic> validate_rir_request(const ShoeboxRoom& room,
+                                             const SourceListener& placement, int sample_rate,
+                                             const RirSynthConfig& config) {
+  std::vector<Diagnostic> diagnostics = validate_shoebox(room, placement);
+  const std::vector<Diagnostic> config_diagnostics = validate_rir_synth_config(config);
+  diagnostics.insert(diagnostics.end(), config_diagnostics.begin(), config_diagnostics.end());
+  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
+                           "sample rate is outside supported bounds"});
   }
   return diagnostics;
 }
 
-std::string first_error_text(const std::vector<Diagnostic>& diagnostics) {
-  for (const Diagnostic& diagnostic : diagnostics) {
-    if (diagnostic.severity == Diagnostic::Severity::Error) {
-      return diagnostic.code + ": " + diagnostic.message;
-    }
-  }
-  return {};
+// Sample rate an empty RIR reports when the request was refused.
+int diagnostic_sample_rate(int sample_rate) noexcept {
+  return sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate ? sample_rate
+                                                                                  : 48000;
 }
 
-RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
-                              int sample_rate, const RirSynthConfig& config) {
-  RirSynthResult result;
-  result.diagnostics = validate_shoebox(room, placement);
-  const std::vector<Diagnostic> config_diagnostics = validate_rir_synth_config(config);
-  result.diagnostics.insert(result.diagnostics.end(), config_diagnostics.begin(),
-                            config_diagnostics.end());
-  if (sample_rate < kMinAudioSampleRate || sample_rate > kMaxAudioSampleRate) {
-    result.diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_sample_rate",
-                                  "sample rate is outside supported bounds"});
-  }
-  if (has_error(result.diagnostics)) {
-    const int diagnostic_sample_rate =
-        sample_rate >= kMinAudioSampleRate && sample_rate <= kMaxAudioSampleRate ? sample_rate
-                                                                                 : 48000;
-    result.rir = Audio::from_vector(std::vector<float>{}, diagnostic_sample_rate);
-    return result;
-  }
-
+RirPlan plan_rir(const ShoeboxRoom& room, const SourceListener& placement, int sample_rate,
+                 const RirSynthConfig& config, std::vector<Diagnostic>& diagnostics) {
+  RirPlan plan;
   const float sr = static_cast<float>(sample_rate);
+  plan.sr = sr;
 
   // Bound the image-source order: cost grows ~ order^3, so an unbounded value is
   // a memory/CPU exhaustion vector. shoebox_image_sources clamps internally; we
   // mirror the clamp here only to inform the caller via a diagnostic.
   const int ism_order = std::min(config.ism_order, kMaxImageSourceOrder);
   if (config.ism_order > kMaxImageSourceOrder) {
-    result.diagnostics.push_back({Diagnostic::Severity::Warning, "acoustic.ism_order_clamped",
-                                  "ism_order exceeded the safe maximum and was clamped"});
+    diagnostics.push_back({Diagnostic::Severity::Warning, "acoustic.ism_order_clamped",
+                           "ism_order exceeded the safe maximum and was clamped"});
   }
 
   // Flight time of the direct sound. Needed twice: to floor the length cap below
   // so the first tap is always inside the RIR, and to keep the crossover from
   // fading the direct impulse further down.
   const float direct_dist = length(placement.listener - placement.source);
-  const int direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
+  plan.direct_sample = static_cast<int>(std::lround(direct_dist / kSoundSpeed * sr));
 
   EarlyIrConfig early_cfg;
   // Half-width of the fractional-delay kernel each image is rendered through;
@@ -169,7 +169,6 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // A max_seconds cap bounds every synthesized buffer. The shared acoustic
   // working-set cap also applies when max_seconds is omitted, so the early,
   // late, colouring, and final RIR buffers remain bounded together.
-  constexpr int kWorkingSetCap = static_cast<int>(resource::kMaxAcousticRirSamples);
   const int requested_cap = config.max_seconds > 0.0f
                                 ? std::max(1, static_cast<int>(std::ceil(config.max_seconds * sr)))
                                 : kWorkingSetCap;
@@ -180,58 +179,46 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // arrival plus the kernel half-width (the whole direct tap, sized exactly as
   // synthesize_early_ir would) and tell the caller its request was widened. The
   // working-set cap still wins: it is a memory bound, not a length preference.
-  const int direct_floor = std::min(direct_sample + early_half + 2, kWorkingSetCap);
-  const bool length_floored = requested_cap < direct_floor;
-  const int cap = std::min(std::max(requested_cap, direct_floor), kWorkingSetCap);
+  const int direct_floor = std::min(plan.direct_sample + early_half + 2, kWorkingSetCap);
+  plan.length_floored = requested_cap < direct_floor;
+  plan.cap = std::min(std::max(requested_cap, direct_floor), kWorkingSetCap);
 
   // Early reflections (image-source) and the per-band reverberation time.
-  const std::vector<ImageSource> images = shoebox_image_sources(room, placement, ism_order);
-  early_cfg.max_samples = cap;  // upper bound only; a shorter natural IR is not padded to it
-  Audio early_audio = synthesize_early_ir(images, sample_rate, early_cfg);
+  plan.images = shoebox_image_sources(room, placement, ism_order);
+  early_cfg.max_samples = plan.cap;  // upper bound only; a shorter natural IR is not padded to it
+  plan.early_audio = synthesize_early_ir(plan.images, sample_rate, early_cfg);
   // Frequency-dependent walls colour early reflections per octave band; a
   // spectrally flat room already carries all its colour in the broadband IR, so
   // the coloured path is skipped and the result is unchanged bit-for-bit.
-  if (early_reflections_are_colored(images)) {
-    early_audio = color_early_ir(images, sample_rate, early_audio, early_cfg);
+  if (early_reflections_are_colored(plan.images)) {
+    plan.early_audio = color_early_ir(plan.images, sample_rate, plan.early_audio, early_cfg);
   }
-  const ReverbTime rt = shoebox_reverb_time(room, config.late_model,
-                                            config.air_absorption_enabled ? &config.air : nullptr);
+  plan.rt = shoebox_reverb_time(room, config.late_model,
+                                config.air_absorption_enabled ? &config.air : nullptr);
 
   // The early IR is now capped to the cap, so early_audio.size() no longer reveals
   // the natural (uncapped) early length. Mirror synthesize_early_ir's own auto-size
   // formula here so the rir_length_clamped diagnostic below fires when the cap
   // truncates the early reflections, not just the late tail.
   float early_max_delay = 0.0f;
-  for (const auto& im : images) {
+  for (const auto& im : plan.images) {
     if (im.distance > 1e-6f) {
       early_max_delay = std::max(early_max_delay, im.distance / kSoundSpeed * sr);
     }
   }
   const double early_raw =
       std::ceil(static_cast<double>(early_max_delay)) + static_cast<double>(early_half) + 2.0;
-  const int early_natural_len =
+  plan.early_natural_len =
       std::max(1, static_cast<int>(std::min(early_raw, static_cast<double>(kMaxAutoSamples))));
 
   // Keep clamp telemetry aligned with synthesize_late_tail() through the shared
   // allocation-free resolver: above-Nyquist bands and the 60-second sizing
   // policy are applied exactly once in the common helper.
   LateReverbConfig natural_late_cfg;
-  const LateTailResolution late_resolution = resolve_late_tail(rt, sample_rate, natural_late_cfg);
-  const std::size_t natural_tail_samples = late_resolution.samples;
-  const std::size_t natural_len =
-      std::max(static_cast<std::size_t>(early_natural_len), natural_tail_samples);
-
-  LateReverbConfig late_cfg;
-  late_cfg.seed = config.seed;
-  late_cfg.max_samples = cap;  // avoid synthesizing tail past the cap
-  const Audio late_audio = synthesize_late_tail(rt, sample_rate, late_cfg);
-
-  // Read the synthesized buffers in place: a full std::vector copy of each would
-  // transiently double the (already large) RIR working set for no benefit.
-  const float* early = early_audio.data();
-  const float* late = late_audio.data();
-  const int early_n = static_cast<int>(early_audio.size());
-  const int late_n = static_cast<int>(late_audio.size());
+  plan.late_resolution = resolve_late_tail(plan.rt, sample_rate, natural_late_cfg);
+  plan.natural_tail_samples = plan.late_resolution.samples;
+  plan.natural_len =
+      std::max(static_cast<std::size_t>(plan.early_natural_len), plan.natural_tail_samples);
 
   // Mean wall scattering (rough surfaces) biases the early/late split: rougher
   // walls diffuse specular energy into the diffuse late field both *sooner* (an
@@ -239,7 +226,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // Both uses are bounded and monotonic in mean_scattering; an explicit
   // config.mixing_time_ms override skips the timing shift but keeps the energy
   // bias (the diffusion is a material property, not a crossover choice).
-  const float mean_scattering = shoebox_mean_scattering(room);  // [0,1]
+  plan.mean_scattering = shoebox_mean_scattering(room);  // [0,1]
 
   // Mixing time: the early/late crossover. Auto estimate ~ sqrt(V) ms (physical
   // mixing time grows with room volume), pulled earlier by scattering, clamped
@@ -252,36 +239,49 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     // smaller auto-estimate range.
     mixing_ms = config.mixing_time_ms;
   } else {
-    const float scatter_factor = 1.0f - kScatterMixingShift * mean_scattering;
+    const float scatter_factor = 1.0f - kScatterMixingShift * plan.mean_scattering;
     mixing_ms = std::sqrt(std::max(volume, 0.0f)) * scatter_factor;
     mixing_ms = std::clamp(mixing_ms, kMinMixingMs, kMaxMixingMs);
   }
-  const int half_xfade = std::max(
+  plan.half_xfade = std::max(
       1, static_cast<int>(std::lround(std::max(0.0f, config.crossfade_ms) * 0.001f * sr * 0.5f)));
 
   // The direct sound (and the crossfade head) must never be faded: push the
   // crossover so its start t0 = t_mix - half_xfade lands at or after the direct
   // arrival. sqrt(V) alone ignores the source->listener delay and can otherwise
   // attenuate the direct impulse.
-  int t_mix = static_cast<int>(std::lround(mixing_ms * 0.001f * sr));
-  t_mix = std::max(t_mix, direct_sample + half_xfade);
+  plan.t_mix = static_cast<int>(std::lround(mixing_ms * 0.001f * sr));
+  plan.t_mix = std::max(plan.t_mix, plan.direct_sample + plan.half_xfade);
 
-  // Level-match the late tail to the early reflections across the crossover so
-  // the splice has no energy discontinuity. A wider window than the crossfade
-  // gives a stable estimate of the (sparse, decaying) early-reflection level.
-  // The early window must start strictly AFTER the direct tap: t_mix is clamped
-  // to direct_sample + half_xfade, so a symmetric window would otherwise capture
-  // the (loudest) direct impulse and inflate the early level, over-scaling the
-  // tail in small rooms.
-  const int level_half = std::max(half_xfade, static_cast<int>(std::lround(0.005f * sr)));
-  const int early_lo = std::max(t_mix - level_half, direct_sample + 1);
+  // A wider window than the crossfade gives a stable estimate of the (sparse,
+  // decaying) early-reflection level. The early window must start strictly AFTER
+  // the direct tap: t_mix is clamped to direct_sample + half_xfade, so a symmetric
+  // window would otherwise capture the (loudest) direct impulse and inflate the
+  // early level, over-scaling the tail in small rooms.
+  plan.level_half = std::max(plan.half_xfade, static_cast<int>(std::lround(0.005f * sr)));
+  plan.early_lo = std::max(plan.t_mix - plan.level_half, plan.direct_sample + 1);
+  return plan;
+}
+
+// Level-match the late tail to @p plan's early reflections across its crossover so the splice
+// has no energy discontinuity.
+float level_match_scale(const RirPlan& plan, const Audio& late_audio) {
+  const float sr = plan.sr;
+  const float* early = plan.early_audio.data();
+  const float* late = late_audio.data();
+  const int early_n = static_cast<int>(plan.early_audio.size());
+  const int late_n = static_cast<int>(late_audio.size());
+  const int t_mix = plan.t_mix;
+  const int level_half = plan.level_half;
+  const int early_lo = plan.early_lo;
+
   const float early_ref = rms_range(early, early_n, early_lo, t_mix + level_half + 1);
   const int late_center = late_n == 0 ? 0 : std::min(t_mix, late_n - 1);
   const float late_ref =
       rms_range(late, late_n, late_center - level_half, late_center + level_half + 1);
   // No image arrival in the window: its sidelobes alone would set the tail ~90 dB low.
   bool window_has_arrival = false;
-  for (const auto& im : images) {
+  for (const auto& im : plan.images) {
     const float arrival = im.distance / kSoundSpeed * sr;
     if (arrival >= static_cast<float>(early_lo) &&
         arrival < static_cast<float>(t_mix + level_half + 1)) {
@@ -305,44 +305,62 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // kScatterLateBoost at mean_scattering == 1 (1 + kScatterLateBoost * s). This
   // is the part of the scattering effect that survives an explicit/clamped
   // mixing time, keeping the early/late balance monotonic in mean_scattering.
-  scale *= 1.0f + kScatterLateBoost * mean_scattering;
+  scale *= 1.0f + kScatterLateBoost * plan.mean_scattering;
+  return scale;
+}
+
+// Splice @p plan's early reflections onto @p late_audio scaled by @p scale, appending the
+// length and tail warnings to @p diagnostics.
+Audio assemble_rir(const RirPlan& plan, const Audio& late_audio, float scale,
+                   const RirSynthConfig& config, int sample_rate,
+                   std::vector<Diagnostic>& diagnostics) {
+  const float sr = plan.sr;
+  const int cap = plan.cap;
+  const int t_mix = plan.t_mix;
+  const int half_xfade = plan.half_xfade;
+  // Read the synthesized buffers in place: a full std::vector copy of each would
+  // transiently double the (already large) RIR working set for no benefit.
+  const float* early = plan.early_audio.data();
+  const float* late = late_audio.data();
+  const int early_n = static_cast<int>(plan.early_audio.size());
+  const int late_n = static_cast<int>(late_audio.size());
 
   int length = std::max(early_n, late_n);
   const bool resource_clamped =
-      late_resolution.resource_clamped || early_natural_len > kWorkingSetCap;
+      plan.late_resolution.resource_clamped || plan.early_natural_len > kWorkingSetCap;
   // Measured against the effective cap, not the raw request: when the request
   // was floored to fit the direct sound the RIR is longer than max_seconds, and
   // reporting that as "exceeded max_seconds and was clamped" would contradict
   // the rir_length_floored warning standing next to it.
   const bool max_seconds_clamped =
       config.max_seconds > 0.0f && cap < kWorkingSetCap &&
-      (static_cast<std::size_t>(early_natural_len) > static_cast<std::size_t>(cap) ||
-       natural_tail_samples > static_cast<std::size_t>(cap));
-  if (natural_len > static_cast<std::size_t>(cap) || resource_clamped || max_seconds_clamped) {
+      (static_cast<std::size_t>(plan.early_natural_len) > static_cast<std::size_t>(cap) ||
+       plan.natural_tail_samples > static_cast<std::size_t>(cap));
+  if (plan.natural_len > static_cast<std::size_t>(cap) || resource_clamped || max_seconds_clamped) {
     const char* clamp_message =
         max_seconds_clamped ? "synthesized RIR length exceeded max_seconds and was clamped"
                             : "synthesized RIR length exceeded its resource limit and was clamped";
-    result.diagnostics.push_back(
+    diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_length_clamped", clamp_message});
   }
   // Ordered after the clamp: a floored length is also a length the caller did
   // not get, and surfaces that publish a single warning string (the C ABI's
   // sonare_last_warning_message) should keep leading with the general one. The
   // specific code travels in the full diagnostics list.
-  if (length_floored) {
-    result.diagnostics.push_back(
+  if (plan.length_floored) {
+    diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_length_floored",
          "max_seconds was shorter than the direct-sound arrival and was extended to fit it"});
   }
   // A cap inside the longest band's RT60 cuts it before a 60 dB decay can be read back.
   float longest_rt60 = 0.0f;
-  const int split_bands = octave_split_band_count(rt.rt60_bands.size(), sample_rate);
+  const int split_bands = octave_split_band_count(plan.rt.rt60_bands.size(), sample_rate);
   for (int b = 0; b < split_bands; ++b) {
-    const float band_rt60 = rt.rt60_bands[static_cast<size_t>(b)];
+    const float band_rt60 = plan.rt.rt60_bands[static_cast<size_t>(b)];
     if (band_rt60 > 0.0f) longest_rt60 = std::max(longest_rt60, band_rt60);
   }
   if (config.max_seconds > 0.0f && static_cast<double>(cap) < longest_rt60 * sr) {
-    result.diagnostics.push_back(
+    diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.rir_tail_truncated",
          "max_seconds is shorter than the longest band RT60; that band is cut before it decays "
          "by 60 dB and its reverberation time cannot be measured from the RIR"});
@@ -359,7 +377,7 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
   // preserved.
   const bool no_late_tail = late_n == 0 || late_n < t_mix + half_xfade;
   if (no_late_tail) {
-    result.diagnostics.push_back(
+    diagnostics.push_back(
         {Diagnostic::Severity::Warning, "acoustic.no_late_tail",
          "no usable late-reverberation tail at the mixing time; RIR is early reflections only"});
   }
@@ -396,8 +414,164 @@ RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& pla
     }
     rir[static_cast<size_t>(i)] = sonare::equal_power_crossfade(e, l, x);
   }
+  return Audio::from_vector(std::move(rir), sample_rate);
+}
 
-  result.rir = Audio::from_vector(std::move(rir), sample_rate);
+// Late-tail request for a plan: the configured seed, capped at the plan's buffer bound.
+LateReverbConfig late_config_for(const RirPlan& plan, const RirSynthConfig& config) {
+  LateReverbConfig late_cfg;
+  late_cfg.seed = config.seed;
+  late_cfg.max_samples = plan.cap;  // avoid synthesizing tail past the cap
+  return late_cfg;
+}
+
+// Appends each diagnostic of @p from whose code @p into does not already carry.
+void append_new_codes(std::vector<Diagnostic>& into, const std::vector<Diagnostic>& from) {
+  for (const Diagnostic& d : from) {
+    const bool seen = std::any_of(into.begin(), into.end(),
+                                  [&](const Diagnostic& e) { return e.code == d.code; });
+    if (!seen) into.push_back(d);
+  }
+}
+
+// Fixed-point coordinates for a receiver diagnostic message.
+std::string format_point(const Vec3& p) {
+  char buffer[96];
+  std::snprintf(buffer, sizeof(buffer), "(%.3f, %.3f, %.3f)", static_cast<double>(p.x),
+                static_cast<double>(p.y), static_cast<double>(p.z));
+  return buffer;
+}
+
+}  // namespace
+
+std::vector<Diagnostic> validate_rir_synth_config(const RirSynthConfig& config) {
+  std::vector<Diagnostic> diagnostics;
+  if (config.ism_order < 0 ||
+      !numeric::finite_in_closed_range(config.max_seconds, 0.0f, kMaxRirSeconds) ||
+      !numeric::finite_in_closed_range(config.mixing_time_ms, 0.0f, kMaxRirMixingTimeMs) ||
+      !numeric::finite_in_closed_range(config.crossfade_ms, 0.0f, kMaxRirCrossfadeMs)) {
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_rir_config",
+                           "RIR timing values must be finite and within safe bounds"});
+  }
+  if (config.air_absorption_enabled &&
+      (!numeric::finite(config.air.temperature_c) ||
+       config.air.temperature_c <= kAbsoluteZeroCelsius ||
+       !numeric::finite_in_closed_range(config.air.humidity_percent, 0.0f, 100.0f))) {
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.invalid_air_absorption",
+                           "air absorption temperature/humidity is outside the physical range"});
+  }
+  return diagnostics;
+}
+
+std::string first_error_text(const std::vector<Diagnostic>& diagnostics) {
+  for (const Diagnostic& diagnostic : diagnostics) {
+    if (diagnostic.severity == Diagnostic::Severity::Error) {
+      return diagnostic.code + ": " + diagnostic.message;
+    }
+  }
+  return {};
+}
+
+RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
+                              int sample_rate, const RirSynthConfig& config) {
+  RirSynthResult result;
+  result.diagnostics = validate_rir_request(room, placement, sample_rate, config);
+  if (has_error(result.diagnostics)) {
+    result.rir = Audio::from_vector(std::vector<float>{}, diagnostic_sample_rate(sample_rate));
+    return result;
+  }
+
+  const RirPlan plan = plan_rir(room, placement, sample_rate, config, result.diagnostics);
+  const Audio late_audio =
+      synthesize_late_tail(plan.rt, sample_rate, late_config_for(plan, config));
+  const float scale = level_match_scale(plan, late_audio);
+  result.rir = assemble_rir(plan, late_audio, scale, config, sample_rate, result.diagnostics);
+  return result;
+}
+
+ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noexcept {
+  const Vec3 d = placement.source - placement.listener;
+  const float horizontal = std::sqrt(d.x * d.x + d.y * d.y);
+  const Vec3 f =
+      horizontal < 1e-6f ? Vec3{1.0f, 0.0f, 0.0f} : Vec3{d.x / horizontal, d.y / horizontal, 0.0f};
+  const Vec3 axis{-f.y, f.x, 0.0f};
+  const Vec3 offset = axis * (0.5f * spacing_m);
+  return {placement.listener + offset, placement.listener - offset};
+}
+
+std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
+                                               const SourceListener& placement, float spacing_m) {
+  std::vector<Diagnostic> diagnostics;
+  if (!numeric::finite(spacing_m) || !(spacing_m > 0.0f) || spacing_m > kMaxReceiverSpacingM) {
+    diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.receiver_spacing_out_of_range",
+                           "receiver spacing must be finite and in (0, 4] m"});
+    return diagnostics;
+  }
+  const ReceiverPair pair = receiver_pair(placement, spacing_m);
+  const std::pair<const char*, Vec3> receivers[] = {{"left", pair.left}, {"right", pair.right}};
+  for (const auto& [name, position] : receivers) {
+    if (!point_inside_shoebox(room, position)) {
+      diagnostics.push_back({Diagnostic::Severity::Error, "acoustic.receiver_outside_room",
+                             std::string(name) + " receiver at " + format_point(position) +
+                                 " lies outside the room"});
+    }
+  }
+  return diagnostics;
+}
+
+RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener& placement,
+                                  float spacing_m, int sample_rate, const RirSynthConfig& config) {
+  RirPairResult result;
+  std::vector<Diagnostic> centre_diagnostics =
+      validate_rir_request(room, placement, sample_rate, config);
+  if (!has_error(centre_diagnostics)) {
+    const std::vector<Diagnostic> pair_diagnostics =
+        validate_receiver_pair(room, placement, spacing_m);
+    centre_diagnostics.insert(centre_diagnostics.end(), pair_diagnostics.begin(),
+                              pair_diagnostics.end());
+  }
+  if (has_error(centre_diagnostics)) {
+    const int empty_rate = diagnostic_sample_rate(sample_rate);
+    result.left = Audio::from_vector(std::vector<float>{}, empty_rate);
+    result.right = Audio::from_vector(std::vector<float>{}, empty_rate);
+    result.diagnostics = std::move(centre_diagnostics);
+    return result;
+  }
+
+  const ReceiverPair receivers = receiver_pair(placement, spacing_m);
+  const SourceListener left_placement{placement.source, receivers.left};
+  const SourceListener right_placement{placement.source, receivers.right};
+  std::vector<Diagnostic> left_diagnostics =
+      validate_rir_request(room, left_placement, sample_rate, config);
+  std::vector<Diagnostic> right_diagnostics =
+      validate_rir_request(room, right_placement, sample_rate, config);
+
+  std::vector<Diagnostic> unused;
+  const RirPlan centre = plan_rir(room, placement, sample_rate, config, unused);
+  const RirPlan left = plan_rir(room, left_placement, sample_rate, config, left_diagnostics);
+  const RirPlan right = plan_rir(room, right_placement, sample_rate, config, right_diagnostics);
+  SONARE_CHECK_MSG(left.cap == right.cap, ErrorCode::InvalidState,
+                   "receiver pair resolved different RIR length caps");
+
+  const LateTailPair late =
+      synthesize_late_tail_pair(left.rt, sample_rate, late_config_for(left, config), spacing_m);
+  // One scale for both channels, taken at the centre listener against the mono-stream tail.
+  const float scale = level_match_scale(centre, late.left);
+  const Audio left_rir =
+      assemble_rir(left, late.left, scale, config, sample_rate, left_diagnostics);
+  const Audio right_rir =
+      assemble_rir(right, late.right, scale, config, sample_rate, right_diagnostics);
+
+  const std::size_t length = std::max(left_rir.size(), right_rir.size());
+  std::vector<float> left_out(left_rir.data(), left_rir.data() + left_rir.size());
+  std::vector<float> right_out(right_rir.data(), right_rir.data() + right_rir.size());
+  left_out.resize(length, 0.0f);
+  right_out.resize(length, 0.0f);
+  result.left = Audio::from_vector(std::move(left_out), sample_rate);
+  result.right = Audio::from_vector(std::move(right_out), sample_rate);
+
+  append_new_codes(result.diagnostics, left_diagnostics);
+  append_new_codes(result.diagnostics, right_diagnostics);
   return result;
 }
 

@@ -23,6 +23,8 @@ namespace sonare::acoustic {
 inline constexpr float kMaxRirSeconds = 600.0f;
 inline constexpr float kMaxRirMixingTimeMs = 10000.0f;
 inline constexpr float kMaxRirCrossfadeMs = 1000.0f;
+/// Largest receiver-pair spacing (m) `validate_receiver_pair` accepts.
+inline constexpr float kMaxReceiverSpacingM = 4.0f;
 
 /// @brief Configuration for room-impulse-response synthesis.
 struct RirSynthConfig {
@@ -95,5 +97,49 @@ std::string first_error_text(const std::vector<Diagnostic>& diagnostics);
 /// also pulled slightly earlier for rooms with high mean wall scattering.
 RirSynthResult synthesize_rir(const ShoeboxRoom& room, const SourceListener& placement,
                               int sample_rate, const RirSynthConfig& config = {});
+
+/// @brief Which receivers an engine synthesizes: the mono listener alone, or the mono
+///        listener plus a spaced omnidirectional pair around it.
+enum class ReceiverLayout { Mono, MonoAndPair };
+
+/// @brief Positions of a spaced omnidirectional receiver pair.
+struct ReceiverPair {
+  Vec3 left;
+  Vec3 right;
+};
+
+/// @brief Receiver pair centred on the listener, @p spacing_m apart.
+///
+/// The axis is horizontal and perpendicular to the horizontal listener->source direction f
+/// (f = (1, 0, 0) when the source is within 1e-6 m horizontally): a = (-f.y, f.x, 0), the
+/// listener's left in a z-up right-handed frame. left = listener + (s/2) a and
+/// right = listener - (s/2) a, so both receivers are equidistant from the source.
+ReceiverPair receiver_pair(const SourceListener& placement, float spacing_m) noexcept;
+
+/// @brief Validate a receiver pair: `acoustic.receiver_spacing_out_of_range` when the spacing
+///        is not finite or outside (0, 4] m, `acoustic.receiver_outside_room` naming the
+///        receiver (left/right) and its coordinates when it leaves the room. Empty when usable.
+std::vector<Diagnostic> validate_receiver_pair(const ShoeboxRoom& room,
+                                               const SourceListener& placement, float spacing_m);
+
+/// @brief A synthesized receiver-pair RIR plus the diagnostics gathered producing it.
+struct RirPairResult {
+  Audio left;
+  Audio right;
+  std::vector<Diagnostic> diagnostics;
+};
+
+/// @brief Synthesize the RIRs of a spaced omnidirectional receiver pair (see `receiver_pair`).
+///
+/// Validation follows `synthesize_rir` plus `validate_receiver_pair`; on any Error both RIRs
+/// are empty. Each receiver gets its own image-source early reflections, mixing time and
+/// crossfade; the late tails come from `synthesize_late_tail_pair`, so the left tail is the
+/// mono stream and the right one carries the diffuse-field coherence per third-octave band.
+/// One level-match scale, taken at the centre listener against the left tail, serves both
+/// channels. Both RIRs are zero-padded to the longer length; diagnostics are the union of the
+/// two receivers' lists, deduplicated by code in the left receiver's order.
+RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener& placement,
+                                  float spacing_m, int sample_rate,
+                                  const RirSynthConfig& config = {});
 
 }  // namespace sonare::acoustic

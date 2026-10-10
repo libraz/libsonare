@@ -4,6 +4,7 @@
 #include <catch2/generators/catch_generators.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <vector>
 
@@ -11,6 +12,7 @@
 #include "acoustic/room_model.h"
 #include "acoustic/room_types.h"
 #include "analysis/acoustic_analyzer.h"
+#include "filters/iir.h"
 #include "util/resource_limits.h"
 
 using Catch::Matchers::WithinRel;
@@ -331,4 +333,92 @@ TEST_CASE("synthesized RT60 is sample-rate independent", "[acoustic][late_reverb
   const AcousticParameters params = AcousticAnalyzer::from_impulse_response(tail).parameters();
   REQUIRE(std::isfinite(params.rt60));
   REQUIRE_THAT(params.rt60, WithinRel(target, 0.10f));
+}
+
+TEST_CASE("late-tail pair coherence follows the band-averaged diffuse-field sinc",
+          "[acoustic][late_reverb]") {
+  const int sr = 48000;
+  const int bands = late_tail_band_count(6, sr);
+  REQUIRE(bands == 16);
+
+  // Coincident receivers are fully coherent in every band, Nyquist band included.
+  for (int k = 0; k < bands; ++k) {
+    REQUIRE(late_tail_pair_coherence(k, 1e-4f, sr) > 0.999f);
+  }
+
+  // Hand values for 0.5 m, c = 343 m/s, from the Si(x) series: band 0 spans 0..140.3 Hz
+  // (x 0..1.2851, Si/x = 0.9127); band 1 spans 140.3..176.8 Hz (x 1.2851..1.6191,
+  // (Si(1.6191) - Si(1.2851)) / 0.3340 = 0.6846); the top band 3564 Hz..Nyquist averages ~0.
+  REQUIRE_THAT(late_tail_pair_coherence(0, 0.5f, sr), Catch::Matchers::WithinAbs(0.9127, 0.02));
+  REQUIRE_THAT(late_tail_pair_coherence(1, 0.5f, sr), Catch::Matchers::WithinAbs(0.6846, 0.02));
+  REQUIRE_THAT(late_tail_pair_coherence(bands - 1, 0.5f, sr),
+               Catch::Matchers::WithinAbs(0.0, 0.02));
+  REQUIRE(late_tail_pair_coherence(bands, 0.5f, sr) == 0.0f);
+}
+
+TEST_CASE("late-tail pair seed never collides with a 32-bit left seed", "[acoustic][late_reverb]") {
+  constexpr std::uint64_t kTwoPow32 = std::uint64_t(1) << 32;
+  for (const unsigned seed : {0u, 1u, 0xFFFFFFFFu}) {
+    REQUIRE(late_tail_pair_seed(seed) >= kTwoPow32);
+  }
+}
+
+TEST_CASE("late-tail pair keeps the mono tail on the left", "[acoustic][late_reverb]") {
+  const ShoeboxRoom room = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  const ReverbTime rt = shoebox_reverb_time(room, ReverbModel::Eyring);
+  LateReverbConfig cfg;
+  cfg.seed = 7u;
+  const Audio mono = synthesize_late_tail(rt, 48000, cfg);
+  const LateTailPair pair = synthesize_late_tail_pair(rt, 48000, cfg, 0.5f);
+
+  const std::vector<float> mono_v(mono.data(), mono.data() + mono.size());
+  const std::vector<float> left_v(pair.left.data(), pair.left.data() + pair.left.size());
+  const std::vector<float> right_v(pair.right.data(), pair.right.data() + pair.right.size());
+  REQUIRE(left_v == mono_v);
+  REQUIRE(right_v.size() == mono_v.size());
+  REQUIRE(right_v != left_v);
+}
+
+TEST_CASE("late-tail pair band correlation matches the published coherence",
+          "[acoustic][late_reverb][.][slow]") {
+  const int sr = 48000;
+  ReverbTime rt;
+  rt.rt60_bands.assign(6, 60.0f);
+  LateReverbConfig cfg;
+  cfg.max_samples = 10 * sr;
+  const float spacing = 0.5f;
+  const LateTailPair pair = synthesize_late_tail_pair(rt, sr, cfg, spacing);
+  REQUIRE(pair.left.size() == static_cast<size_t>(cfg.max_samples));
+
+  std::vector<float> residual_l(pair.left.data(), pair.left.data() + pair.left.size());
+  std::vector<float> residual_r(pair.right.data(), pair.right.data() + pair.right.size());
+  const int bands = late_tail_band_count(rt.rt60_bands.size(), sr);
+  std::vector<float> band_l;
+  std::vector<float> band_r;
+  for (int k = 0; k < bands; ++k) {
+    if (k + 1 == bands) {
+      band_l.swap(residual_l);
+      band_r.swap(residual_r);
+    } else {
+      // Third-octave crossover above band k, centres at 125 * 2^(k/3) Hz.
+      const float edge = 125.0f * std::pow(2.0f, (static_cast<float>(k) + 0.5f) / 3.0f);
+      band_l = residual_l;
+      band_r = residual_r;
+      butterworth_zero_phase(band_l, edge, sr, 8, false);
+      butterworth_zero_phase(band_r, edge, sr, 8, false);
+      for (size_t i = 0; i < band_l.size(); ++i) {
+        residual_l[i] -= band_l[i];
+        residual_r[i] -= band_r[i];
+      }
+    }
+    double lr = 0.0, ll = 0.0, rr = 0.0;
+    for (size_t i = 0; i < band_l.size(); ++i) {
+      lr += static_cast<double>(band_l[i]) * band_r[i];
+      ll += static_cast<double>(band_l[i]) * band_l[i];
+      rr += static_cast<double>(band_r[i]) * band_r[i];
+    }
+    const double rho = lr / std::sqrt(ll * rr);
+    INFO("band " << k);
+    REQUIRE_THAT(rho, Catch::Matchers::WithinAbs(late_tail_pair_coherence(k, spacing, sr), 0.1));
+  }
 }

@@ -14,6 +14,7 @@
 /// decay is set directly by the design reverberation times.
 
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
 #include "acoustic/room_model.h"
@@ -169,15 +170,50 @@ std::size_t resolve_late_tail_samples(const ReverbTime& rt, int sample_rate,
 
 /// @brief Synthesize the mono statistical late-reverberation tail.
 ///
-/// For each band with RT60 > 0: deterministic white Gaussian noise (seeded from
-/// @p config.seed mixed with the band index, so bands are decorrelated and
-/// reproducible) is octave-band filtered and multiplied by the amplitude
-/// envelope exp(-ln(1000) * t / RT60_band) (which is -60 dB of *energy* at
-/// t = RT60_band), then the bands are summed. The result starts at t = 0 and is
-/// left at its natural noise level; the RIR synthesizer scales it to meet the
-/// early reflections at the early/late crossover. Returns empty audio when no
-/// band has a finite decay.
+/// One deterministic white Gaussian stream (SplitMix64 seeded from @p config.seed) is split
+/// into complementary third-octave bands; each band with RT60 > 0 (log-log interpolated
+/// between its octave neighbours) is multiplied by the amplitude envelope
+/// exp(-ln(1000) * t / RT60_band) (-60 dB of *energy* at t = RT60_band), and the bands are
+/// summed. The result starts at t = 0 and is left at its natural noise level; the RIR
+/// synthesizer scales it to meet the early reflections at the early/late crossover. Returns
+/// empty audio when no band has a finite decay.
 Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate,
                            const LateReverbConfig& config = {});
+
+/// @brief Number of third-octave bands the late tail splits into for @p octave_bands
+///        octave RT60 entries at @p sample_rate (0 when no octave band fits below Nyquist).
+int late_tail_band_count(std::size_t octave_bands, int sample_rate) noexcept;
+
+/// @brief Seed of the second (right-receiver) noise stream of a late-tail pair.
+///
+/// At or above 2^32, so it never equals any 32-bit seed's left stream.
+inline std::uint64_t late_tail_pair_seed(unsigned seed) noexcept {
+  return static_cast<std::uint64_t>(seed) | (std::uint64_t(1) << 32);
+}
+
+/// @brief Diffuse-field coherence imposed on third-octave band @p band of a late-tail pair
+///        whose omnidirectional receivers are @p spacing_m apart.
+///
+/// sinc(2 pi f d / c) averaged linearly over the band's frequency range, with band 0
+/// extended down to 0 Hz and the top band of the @p octave_bands split up to Nyquist
+/// (composite Simpson rule, 64 intervals). Returns 0 for a band outside the split.
+float late_tail_pair_coherence(
+    int band, float spacing_m, int sample_rate,
+    std::size_t octave_bands = static_cast<std::size_t>(kDefaultOctaveBands)) noexcept;
+
+/// @brief Left/right late tails for a spaced omnidirectional receiver pair.
+struct LateTailPair {
+  Audio left;
+  Audio right;
+};
+
+/// @brief Synthesize a late-tail pair for receivers @p spacing_m apart.
+///
+/// `left` is bit-identical to `synthesize_late_tail(rt, sample_rate, config)`. `right` splits
+/// a second stream seeded by `late_tail_pair_seed(config.seed)` the same way and mixes each
+/// band as gamma * left_band + sqrt(1 - gamma^2) * right_band, gamma from
+/// `late_tail_pair_coherence`, before the shared band envelope.
+LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
+                                       const LateReverbConfig& config, float spacing_m);
 
 }  // namespace sonare::acoustic

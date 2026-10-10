@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <limits>
 
+#include "acoustic/image_source.h"
 #include "filters/iir.h"
 #include "util/constants.h"
 
@@ -94,6 +95,44 @@ float gaussian(SplitMix64& rng) noexcept {
   if (u1 < 1e-12) u1 = 1e-12;  // guard log(0)
   return static_cast<float>(std::sqrt(-2.0 * std::log(u1)) * std::cos(kTwoPiD * u2));
 }
+
+// One white Gaussian stream of @p length samples.
+std::vector<float> white_stream(std::uint64_t seed, int length) {
+  std::vector<float> stream(static_cast<size_t>(length));
+  SplitMix64 rng(seed);
+  for (float& s : stream) s = gaussian(rng);
+  return stream;
+}
+
+// Moves third-octave band @p k of @p thirds out of @p residual into @p band (complementary).
+void take_third_octave_band(std::vector<float>& residual, std::vector<float>& band, int k,
+                            int thirds, int sample_rate) {
+  if (k + 1 == thirds) {
+    band.swap(residual);
+    return;
+  }
+  band = residual;
+  butterworth_zero_phase(band, third_octave_upper_edge_hz(k), sample_rate, kOctaveSplitOrder,
+                         false);
+  for (std::size_t i = 0; i < band.size(); ++i) residual[i] -= band[i];
+}
+
+// Accumulates @p band under the exp(-ln(1000) t / rt60) envelope into @p out.
+void add_enveloped_band(std::vector<float>& out, const std::vector<float>& band, float rt60,
+                        float sr) {
+  const int length = static_cast<int>(out.size());
+  const double decay_rate = kLn1000 / static_cast<double>(rt60);
+  for (int i = 0; i < length; ++i) {
+    const double t = static_cast<double>(i) / sr;
+    const float env = static_cast<float>(std::exp(-decay_rate * t));
+    out[static_cast<size_t>(i)] += band[static_cast<size_t>(i)] * env;
+  }
+}
+
+// Intervals of the composite Simpson rule averaging sinc over a band.
+constexpr int kCoherenceSimpsonIntervals = 64;
+
+double sinc(double x) noexcept { return x == 0.0 ? 1.0 : std::sin(x) / x; }
 
 }  // namespace
 
@@ -255,36 +294,87 @@ Audio synthesize_late_tail(const ReverbTime& rt, int sample_rate, const LateReve
   const int length = static_cast<int>(resolution.samples);
 
   // Complementary bands of one white stream: no band's decay leaks into another through a skirt.
-  std::vector<float> residual(static_cast<size_t>(length));
-  SplitMix64 rng(static_cast<std::uint64_t>(config.seed));
-  for (float& s : residual) s = gaussian(rng);
+  std::vector<float> residual = white_stream(static_cast<std::uint64_t>(config.seed), length);
 
   // Third-octave bands, RT60 interpolated log-log, so the decay does not step at an octave edge.
   std::vector<float> out(static_cast<size_t>(length), 0.0f);
   std::vector<float> band;
-  const int octaves = octave_split_band_count(rt.rt60_bands.size(), sample_rate);
-  const int thirds = octaves > 0 ? kThirdsPerOctave * (octaves - 1) + 1 : 0;
+  const int thirds = late_tail_band_count(rt.rt60_bands.size(), sample_rate);
   for (int k = 0; k < thirds; ++k) {
-    if (k + 1 == thirds) {
-      band.swap(residual);
-    } else {
-      band = residual;
-      butterworth_zero_phase(band, third_octave_upper_edge_hz(k), sample_rate, kOctaveSplitOrder,
-                             false);
-      for (std::size_t i = 0; i < band.size(); ++i) residual[i] -= band[i];
-    }
-
+    take_third_octave_band(residual, band, k, thirds, sample_rate);
     const float rt60 = third_octave_rt60(rt.rt60_bands, k);
     if (!(rt60 > 0.0f)) continue;
-    const double decay_rate = kLn1000 / static_cast<double>(rt60);
-    for (int i = 0; i < length; ++i) {
-      const double t = static_cast<double>(i) / sr;
-      const float env = static_cast<float>(std::exp(-decay_rate * t));
-      out[static_cast<size_t>(i)] += band[static_cast<size_t>(i)] * env;
-    }
+    add_enveloped_band(out, band, rt60, sr);
   }
 
   return Audio::from_vector(std::move(out), sample_rate);
+}
+
+int late_tail_band_count(std::size_t octave_bands, int sample_rate) noexcept {
+  const int octaves = octave_split_band_count(octave_bands, sample_rate);
+  return octaves > 0 ? kThirdsPerOctave * (octaves - 1) + 1 : 0;
+}
+
+float late_tail_pair_coherence(int band, float spacing_m, int sample_rate,
+                               std::size_t octave_bands) noexcept {
+  const int thirds = late_tail_band_count(octave_bands, sample_rate);
+  if (band < 0 || band >= thirds) return 0.0f;
+  const double nyquist = static_cast<double>(sample_rate) * 0.5;
+  const double lo_hz = band == 0 ? 0.0 : static_cast<double>(third_octave_upper_edge_hz(band - 1));
+  const double hi_hz =
+      band + 1 == thirds ? nyquist : static_cast<double>(third_octave_upper_edge_hz(band));
+  const double hz_to_x =
+      kTwoPiD * std::fabs(static_cast<double>(spacing_m)) / static_cast<double>(kSoundSpeed);
+  const double x_lo = lo_hz * hz_to_x;
+  const double x_hi = hi_hz * hz_to_x;
+  // Coincident receivers (or a non-finite spacing) leave no interval to average over.
+  if (!(x_hi > x_lo) || !std::isfinite(x_hi)) return 1.0f;
+  const double h = (x_hi - x_lo) / kCoherenceSimpsonIntervals;
+  double sum = sinc(x_lo) + sinc(x_hi);
+  for (int i = 1; i < kCoherenceSimpsonIntervals; ++i) {
+    sum += (i % 2 == 1 ? 4.0 : 2.0) * sinc(x_lo + h * i);
+  }
+  return static_cast<float>(sum * h / 3.0 / (x_hi - x_lo));
+}
+
+LateTailPair synthesize_late_tail_pair(const ReverbTime& rt, int sample_rate,
+                                       const LateReverbConfig& config, float spacing_m) {
+  LateTailPair pair;
+  const LateTailResolution resolution = resolve_late_tail(rt, sample_rate, config);
+  if (resolution.samples == 0u) {
+    pair.left = Audio::from_vector(std::vector<float>{}, sample_rate);
+    pair.right = Audio::from_vector(std::vector<float>{}, sample_rate);
+    return pair;
+  }
+
+  const float sr = static_cast<float>(sample_rate);
+  const int length = static_cast<int>(resolution.samples);
+  std::vector<float> residual_l = white_stream(static_cast<std::uint64_t>(config.seed), length);
+  std::vector<float> residual_r = white_stream(late_tail_pair_seed(config.seed), length);
+
+  std::vector<float> out_l(static_cast<size_t>(length), 0.0f);
+  std::vector<float> out_r(static_cast<size_t>(length), 0.0f);
+  std::vector<float> band_l;
+  std::vector<float> band_r;
+  const int thirds = late_tail_band_count(rt.rt60_bands.size(), sample_rate);
+  for (int k = 0; k < thirds; ++k) {
+    take_third_octave_band(residual_l, band_l, k, thirds, sample_rate);
+    take_third_octave_band(residual_r, band_r, k, thirds, sample_rate);
+    const float rt60 = third_octave_rt60(rt.rt60_bands, k);
+    if (!(rt60 > 0.0f)) continue;
+    add_enveloped_band(out_l, band_l, rt60, sr);
+    // Only the right band is mixed, so the left channel stays the mono tail.
+    const float gamma = late_tail_pair_coherence(k, spacing_m, sample_rate, rt.rt60_bands.size());
+    const float ortho = std::sqrt(std::max(0.0f, 1.0f - gamma * gamma));
+    for (std::size_t i = 0; i < band_r.size(); ++i) {
+      band_r[i] = gamma * band_l[i] + ortho * band_r[i];
+    }
+    add_enveloped_band(out_r, band_r, rt60, sr);
+  }
+
+  pair.left = Audio::from_vector(std::move(out_l), sample_rate);
+  pair.right = Audio::from_vector(std::move(out_r), sample_rate);
+  return pair;
 }
 
 LateTailResolution resolve_late_tail(const ReverbTime& rt, int sample_rate,
