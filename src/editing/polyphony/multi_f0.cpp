@@ -31,6 +31,72 @@ struct LiveRidge {
   float peak = 0.0f;
 };
 
+/// Re-attack rise window: holds a struck attack but too little of a 1-2 Hz
+/// beat's climb to reach the ratio.
+constexpr float kReattackWindowMs = 35.0f;
+
+/// @brief Cuts each ridge where its salience re-attacks, per
+///        RidgeConfig::reattack_ratio; a ratio of 0 returns at once.
+void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const RidgeConfig& config) {
+  if (config.reattack_ratio == 0.0f) return;
+  const int window =
+      std::max(2, static_cast<int>(std::lround(static_cast<double>(kReattackWindowMs) / frame_ms)));
+  // The min_duration_ms filter's own comparison, so no cut leaves a fragment it drops.
+  const auto long_enough = [&](int frames) {
+    return !(static_cast<double>(frames) * frame_ms < config.min_duration_ms);
+  };
+
+  std::vector<LiveRidge> split;
+  split.reserve(ridges.size());
+  for (LiveRidge& ridge : ridges) {
+    const std::vector<float>& s = ridge.salience;
+    const int end = static_cast<int>(s.size());
+    std::vector<int> cuts;
+    int frag_start = 0;
+    int t = frag_start + 2;
+    while (t + window - 1 <= end - 1) {
+      // Clipped at the fragment start so a cut never reads its pre-attack valley back.
+      const int valley_from = std::max(frag_start, t - window - 1);
+      const float valley = *std::min_element(s.begin() + valley_from, s.begin() + t - 1);
+      const float crest = *std::max_element(s.begin() + t, s.begin() + t + window);
+      if (valley > 0.0f && crest > config.reattack_ratio * valley) {
+        int cut = std::max(frag_start + 1, t - 2);
+        const int last = std::min(end - 1, t + 2);
+        for (int k = cut + 1; k <= last; ++k) {
+          if (s[static_cast<size_t>(k)] - s[static_cast<size_t>(k - 1)] >
+              s[static_cast<size_t>(cut)] - s[static_cast<size_t>(cut - 1)]) {
+            cut = k;
+          }
+        }
+        if (long_enough(cut - frag_start) && long_enough(end - cut)) {
+          cuts.push_back(cut);
+          frag_start = cut;
+          t = cut + 2;
+          continue;
+        }
+      }
+      ++t;
+    }
+
+    if (cuts.empty()) {
+      split.push_back(std::move(ridge));
+      continue;
+    }
+    cuts.push_back(end);
+    int from = 0;
+    for (const int to : cuts) {
+      LiveRidge fragment;
+      fragment.frame_start = ridge.frame_start + from;
+      fragment.f0_hz.assign(ridge.f0_hz.begin() + from, ridge.f0_hz.begin() + to);
+      fragment.salience.assign(s.begin() + from, s.begin() + to);
+      fragment.peak = *std::max_element(fragment.salience.begin(), fragment.salience.end());
+      split.push_back(std::move(fragment));
+      from = to;
+    }
+  }
+  ridges = std::move(split);
+}
+
 }  // namespace
 
 MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0Config& config)
@@ -126,6 +192,9 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.min_duration_ms) && config.min_duration_ms >= 0.0f,
                ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.reattack_ratio) &&
+                   (config.reattack_ratio == 0.0f || config.reattack_ratio > 1.0f),
+               ErrorCode::InvalidParameter);
   for (const std::vector<F0Candidate>& frame : frames) {
     for (const F0Candidate& candidate : frame) {
       // The salience too: a NaN would make the candidate ordering below
@@ -191,6 +260,7 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
 
   const double frame_ms =
       1000.0 * static_cast<double>(hop_length) / static_cast<double>(sample_rate);
+  split_reattacks(finished, frame_ms, config);
   std::vector<F0Ridge> ridges;
   ridges.reserve(finished.size());
   for (LiveRidge& live : finished) {

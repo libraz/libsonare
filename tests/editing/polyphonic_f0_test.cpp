@@ -15,6 +15,7 @@
 #include "editing/polyphony/f0_salience.h"
 #include "editing/polyphony/multi_f0.h"
 #include "util/constants.h"
+#include "util/db.h"
 #include "util/exception.h"
 #include "util/types.h"
 
@@ -276,6 +277,25 @@ std::vector<std::vector<F0Candidate>> steady_frames(float hz, int count, float s
 void append_frames(std::vector<std::vector<F0Candidate>>& into,
                    const std::vector<std::vector<F0Candidate>>& more) {
   into.insert(into.end(), more.begin(), more.end());
+}
+
+/// @brief One candidate per frame at @p hz, with the given salience per frame.
+std::vector<std::vector<F0Candidate>> salience_frames(float hz,
+                                                      const std::vector<float>& salience) {
+  std::vector<std::vector<F0Candidate>> frames;
+  frames.reserve(salience.size());
+  for (const float value : salience) frames.push_back({candidate(hz, value)});
+  return frames;
+}
+
+/// @brief @p count frames falling geometrically from 1 to 1/3, so the next
+///        strike back to 1 is a threefold jump.
+std::vector<float> decay_to_third(int count) {
+  std::vector<float> values;
+  for (int f = 0; f < count; ++f) {
+    values.push_back(std::pow(3.0f, -static_cast<float>(f) / static_cast<float>(count - 1)));
+  }
+  return values;
 }
 
 /// @brief Per-frame cent move of a @p depth_cents vibrato at @p rate_hz.
@@ -1833,6 +1853,105 @@ TEST_CASE("track_f0_ridges rejects malformed framing, configuration and candidat
   RidgeConfig no_minimum;
   no_minimum.min_duration_ms = 0.0f;
   REQUIRE_NOTHROW(track_f0_ridges(frames, kHopLength, kSampleRate, no_minimum));
+}
+
+TEST_CASE("reattack_ratio cuts a held pitch where it is struck again", "[polyphonic_f0]") {
+  // Four strikes of twenty-five frames, each decaying to a third of its attack.
+  constexpr int kStrike = 25;
+  std::vector<float> salience;
+  for (int strike = 0; strike < 4; ++strike) {
+    const std::vector<float> one = decay_to_third(kStrike);
+    salience.insert(salience.end(), one.begin(), one.end());
+  }
+  const std::vector<std::vector<F0Candidate>> frames = salience_frames(220.0f, salience);
+
+  RidgeConfig off;
+  REQUIRE(off.reattack_ratio == 0.0f);
+  const std::vector<F0Ridge> held = track_f0_ridges(frames, kHopLength, kSampleRate, off);
+  REQUIRE(held.size() == 1);
+  REQUIRE(held[0].f0_hz.size() == 4 * kStrike);
+
+  RidgeConfig on;
+  on.reattack_ratio = 2.5f;
+  const std::vector<F0Ridge> struck = track_f0_ridges(frames, kHopLength, kSampleRate, on);
+  REQUIRE(struck.size() == 4);
+  for (int strike = 0; strike < 4; ++strike) {
+    INFO("strike " << strike);
+    const F0Ridge& ridge = struck[static_cast<size_t>(strike)];
+    REQUIRE(ridge.frame_start == strike * kStrike);
+    REQUIRE(ridge.f0_hz.size() == kStrike);
+    REQUIRE(ridge.onset_sample == static_cast<int64_t>(strike * kStrike) * kHopLength);
+    REQUIRE_THAT(ridge.median_hz, WithinRel(220.0f, 1e-5f));
+    REQUIRE_THAT(ridge.salience.front(), WithinAbs(1.0, 1e-5));
+  }
+}
+
+TEST_CASE("reattack_ratio does not cut a 1.5 Hz beat of +-6 dB", "[polyphonic_f0]") {
+  // Two seconds whose level swings sinusoidally in decibels.
+  constexpr float kBeatHz = 1.5f;
+  constexpr float kDepthDb = 6.0f;
+  const int count = kSampleRate * 2 / kHopLength;
+  std::vector<float> salience;
+  for (int f = 0; f < count; ++f) {
+    const float t =
+        static_cast<float>(f) * static_cast<float>(kHopLength) / static_cast<float>(kSampleRate);
+    const float db = kDepthDb * std::sin(sonare::constants::kTwoPi * kBeatHz * t);
+    salience.push_back(sonare::db_to_linear(db));
+  }
+  const std::vector<std::vector<F0Candidate>> frames = salience_frames(220.0f, salience);
+
+  RidgeConfig config;
+  config.reattack_ratio = 2.5f;
+  const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+  REQUIRE(ridges.size() == 1);
+  REQUIRE(ridges[0].f0_hz.size() == static_cast<size_t>(count));
+
+  // The beat does rise inside the window, so a ratio just above 1 cuts it.
+  config.reattack_ratio = 1.05f;
+  REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate, config).size() > 1);
+}
+
+TEST_CASE("a re-attack is cut once even when a one-frame fragment would be kept",
+          "[polyphonic_f0]") {
+  // An attack over two frames, 1/3 to 0.8 to 1: after the cut at the first
+  // step, the second step must not be read against the valley before it.
+  constexpr int kStrike = 25;
+  std::vector<float> salience = decay_to_third(kStrike);
+  salience.push_back(0.8f);
+  const std::vector<float> second = decay_to_third(kStrike - 1);
+  salience.insert(salience.end(), second.begin(), second.end());
+  const std::vector<std::vector<F0Candidate>> frames = salience_frames(220.0f, salience);
+
+  const float ms_per_frame =
+      static_cast<float>(kHopLength) * 1000.0f / static_cast<float>(kSampleRate);
+  RidgeConfig config;
+  config.reattack_ratio = 2.5f;
+  config.min_duration_ms = 11.0f;
+  REQUIRE(config.min_duration_ms < ms_per_frame);
+
+  const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+  REQUIRE(ridges.size() == 2);
+  REQUIRE(ridges[0].frame_start == 0);
+  REQUIRE(ridges[0].f0_hz.size() == kStrike);
+  REQUIRE(ridges[1].frame_start == kStrike);
+  REQUIRE(ridges[1].f0_hz.size() == kStrike);
+}
+
+TEST_CASE("track_f0_ridges accepts reattack_ratio of 0 or finite above 1 only", "[polyphonic_f0]") {
+  const sonare::ErrorCode kInvalid = sonare::ErrorCode::InvalidParameter;
+  const std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40);
+  for (const float bad : {-1.0f, -0.01f, 0.5f, 1.0f, kNaN, kInf}) {
+    INFO("reattack_ratio " << bad);
+    RidgeConfig config;
+    config.reattack_ratio = bad;
+    REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate, config); }) == kInvalid);
+  }
+  for (const float good : {0.0f, 1.01f}) {
+    INFO("reattack_ratio " << good);
+    RidgeConfig config;
+    config.reattack_ratio = good;
+    REQUIRE_NOTHROW(track_f0_ridges(frames, kHopLength, kSampleRate, config));
+  }
 }
 
 // --- extract_multi_f0 ------------------------------------------------------

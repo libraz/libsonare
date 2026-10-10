@@ -183,6 +183,13 @@ struct RidgeConfig {
   /// noise survives, and over it a fragmented low-register voice starts being
   /// dropped.
   float min_duration_ms = 140.0f;
+
+  /// Splits a ridge where its own salience climbs past this multiple of the
+  /// level just before, the same pitch struck again while it still sounds.
+  /// 0 turns the split off; any other value has to be finite and above 1. The
+  /// climb is read over about 35 ms, which holds an attack but too little of a
+  /// 1-2 Hz beat's rise to reach the ratio.
+  float reattack_ratio = 0.0f;
 };
 
 /// @brief Follows per-frame candidates across time.
@@ -199,7 +206,8 @@ struct RidgeConfig {
 /// @throws SonareException(InvalidParameter) on a non-positive @p hop_length or
 ///         @p sample_rate, a non-positive @c max_jump_cents, a
 ///         @c min_ridge_peak_ratio outside [0, 1], a negative @c min_duration_ms,
-///         a candidate whose @c f0_hz is not positive and finite, or one whose
+///         a @c reattack_ratio that is neither 0 nor finite above 1, a candidate
+///         whose @c f0_hz is not positive and finite, or one whose
 ///         @c salience is not finite -- the ordering is by salience, so a NaN
 ///         there makes the comparison intransitive rather than merely odd.
 std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>& frames,
