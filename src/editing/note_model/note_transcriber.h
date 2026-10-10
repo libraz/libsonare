@@ -54,10 +54,18 @@ struct TranscribeConfig {
   float fmin = 0.0f;
   float fmax = 0.0f;
 
-  /// Shortest span kept as a note, in milliseconds. 0 => the source's default:
-  /// the segmenter's 30 ms for monophonic notes, the transcription default for
-  /// polyphonic ones, where it is the shortest ridge the tracker keeps.
+  /// Shortest span kept as a note, in milliseconds. 0 => @c min_note_division
+  /// if set, else the source's default: the segmenter's 30 ms for monophonic
+  /// notes; for polyphonic ones, where it is the shortest ridge the tracker
+  /// keeps, a thirty-second note at @c tempo_bpm held within [30, 60] ms, or
+  /// 60 ms with no tempo.
   float min_note_ms = 0.0f;
+  /// Shortest span kept as a note, as a note value: n is a 1/n note at
+  /// @c tempo_bpm (32 => a thirty-second note), 1..128. 0 => unset. Needs a
+  /// tempo and cannot be combined with a non-zero @c min_note_ms.
+  int min_note_division = 0;
+  /// Tempo note values are read at, in BPM. 0 => none.
+  float tempo_bpm = 0.0f;
   /// Monophonic: pitch movement, in cents, that ends one note and starts the
   /// next. Polyphonic: scales the reported f0 stability figure only -- a
   /// mid-ridge pitch jump is never split into two notes.
@@ -102,7 +110,8 @@ struct TranscribeF0Range {
 
 /// @brief The limits the selected source applies once each 0 is resolved.
 struct TranscribePolyphonyLimits {
-  /// Positive: the source's default where the config left 0.
+  /// Positive: @c min_note_ms, else the division at the tempo, else the
+  /// source's default.
   float min_note_ms;
   /// 1..64.
   int max_polyphony;
@@ -114,7 +123,7 @@ struct TranscribePolyphonyLimits {
 };
 
 /// @brief Resolves the zero sentinels against the selected source's defaults.
-/// @details @c min_note_ms resolves per source. The four polyphonic-only
+/// @details @c min_note_ms resolves per source and tempo. The four polyphonic-only
 ///          fields resolve to the transcription defaults whatever the source,
 ///          since the monophonic chain never reads them. Nonzero values are
 ///          copied, a negative ratio as 0 and a negative @c reattack_ratio as

@@ -13,6 +13,7 @@
 #include "editing/note_model/note_transcriber.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -734,7 +735,7 @@ TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
   TranscribeConfig polyphonic;
   polyphonic.source = TranscribeSource::kPolyphonic;
   const TranscribePolyphonyLimits poly = resolve_transcribe_polyphony_limits(polyphonic);
-  CHECK(poly.min_note_ms == 100.0f);
+  CHECK(poly.min_note_ms == 60.0f);
   CHECK(poly.max_polyphony == 10);
   CHECK(poly.min_frame_peak_ratio == 0.20f);
   CHECK(poly.min_ridge_peak_ratio == 0.10f);
@@ -763,6 +764,61 @@ TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
     CHECK(given.min_ridge_peak_ratio == 0.4f);
     CHECK(given.reattack_ratio == 1.5f);
   }
+}
+
+TEST_CASE("the shortest note resolves from the tempo", "[note_transcriber]") {
+  TranscribeConfig polyphonic;
+  polyphonic.source = TranscribeSource::kPolyphonic;
+
+  SECTION("the polyphonic default is a thirty-second note held within [30, 60] ms") {
+    polyphonic.tempo_bpm = 160.0f;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == Catch::Approx(46.875f));
+    polyphonic.tempo_bpm = 60.0f;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 60.0f);
+    polyphonic.tempo_bpm = 300.0f;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 30.0f);
+  }
+
+  SECTION("a division is a note value at the tempo, unbounded") {
+    polyphonic.tempo_bpm = 120.0f;
+    polyphonic.min_note_division = 16;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == Catch::Approx(125.0f));
+    polyphonic.min_note_division = 128;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == Catch::Approx(15.625f));
+  }
+
+  SECTION("milliseconds outrank the tempo") {
+    polyphonic.tempo_bpm = 300.0f;
+    polyphonic.min_note_ms = 80.0f;
+    CHECK(resolve_transcribe_polyphony_limits(polyphonic).min_note_ms == 80.0f);
+  }
+
+  SECTION("the monophonic default does not move with the tempo, a division does") {
+    TranscribeConfig monophonic;
+    monophonic.tempo_bpm = 300.0f;
+    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == 30.0f);
+    monophonic.min_note_division = 8;
+    CHECK(resolve_transcribe_polyphony_limits(monophonic).min_note_ms == Catch::Approx(100.0f));
+  }
+}
+
+TEST_CASE("min_note_division is the shortest note kept, read at the tempo", "[note_transcriber]") {
+  const sonare::Audio audio = held_and_short();
+  constexpr int kShortNote = 71;
+
+  TranscribeConfig config;
+  config.source = TranscribeSource::kPolyphonic;
+  config.tempo_bpm = 120.0f;
+  config.min_note_division = 32;
+  REQUIRE(count_of(transcribe_notes(audio, config), kShortNote) == 1);
+
+  // An eighth note at 120 BPM is 250 ms, longer than the 100 ms note.
+  config.min_note_division = 8;
+  CHECK(count_of(transcribe_notes(audio, config), kShortNote) == 0);
+  // A sixteenth note at 300 BPM is 50 ms.
+  config.tempo_bpm = 300.0f;
+  config.min_note_division = 16;
+  CHECK(count_of(transcribe_notes(audio, config), kShortNote) == 1);
 }
 
 TEST_CASE("min_note_ms is the shortest polyphonic note kept", "[note_transcriber]") {
@@ -829,6 +885,33 @@ TEST_CASE("the polyphonic limits refuse what they cannot read", "[note_transcrib
     TranscribeConfig voices;
     voices.max_polyphony = 4;
     refused_naming(voices, "max_polyphony");
+  }
+
+  SECTION("a note value it cannot read, on either source") {
+    for (const TranscribeSource source :
+         {TranscribeSource::kMonophonic, TranscribeSource::kPolyphonic}) {
+      TranscribeConfig base;
+      base.source = source;
+      base.tempo_bpm = 120.0f;
+      for (const int division : {-1, 129}) {
+        TranscribeConfig config = base;
+        config.min_note_division = division;
+        refused_naming(config, "min_note_division");
+      }
+      TranscribeConfig both = base;
+      both.min_note_division = 32;
+      both.min_note_ms = 40.0f;
+      refused_naming(both, "min_note_division");
+      TranscribeConfig untimed = base;
+      untimed.tempo_bpm = 0.0f;
+      untimed.min_note_division = 32;
+      refused_naming(untimed, "tempo_bpm");
+      for (const float tempo : {-120.0f, kNaN, kInf}) {
+        TranscribeConfig config = base;
+        config.tempo_bpm = tempo;
+        refused_naming(config, "tempo_bpm");
+      }
+    }
   }
 
   SECTION("a polyphonic value outside its domain") {

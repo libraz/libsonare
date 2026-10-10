@@ -51,15 +51,16 @@ extern "C" {
 ///          or an omitted request field -- so a 0 written there carries no
 ///          meaning except a value the field's domain excludes, and all three
 ///          refuse it by name for @c reference_hz, @c fmin, @c fmax,
-///          @c min_note_ms, @c segmentation_threshold_cents,
-///          @c velocity_floor_db and @c fixed_velocity. @c group and
+///          @c min_note_ms, @c min_note_division,
+///          @c segmentation_threshold_cents, @c velocity_floor_db and
+///          @c fixed_velocity. @c group and
 ///          @c channel keep accepting 0 everywhere, because there 0 is a value
 ///          a caller can mean. The divergence is deliberate and is the reason
 ///          the bindings do not simply forward this struct.
 typedef struct {
   /// 1, 2 or 3; any other value is rejected. Version 2 adds @c reference_auto
-  /// and version 3 the four polyphonic limits; each is read only from a struct
-  /// of its version or later.
+  /// and version 3 the four polyphonic limits and @c min_note_division; each
+  /// is read only from a struct of its version or later.
   int32_t struct_version;
   /// Non-zero reads the multi-F0 chain, which finds overlapping notes at the
   /// cost of a full STFT and a mask per tracked ridge. 0 reads pYIN cut into
@@ -74,9 +75,10 @@ typedef struct {
   /// independent.
   float fmin;
   float fmax;
-  /// Shortest span kept as a note, in milliseconds; 0 => the source's default:
-  /// 30 for the monophonic path, and the transcription default (100) for the
-  /// polyphonic path, where it is the shortest ridge the tracker keeps.
+  /// Shortest span kept as a note, in milliseconds; 0 => @c min_note_division
+  /// if set, else the source's default: 30 for the monophonic path, and for the
+  /// polyphonic path, where it is the shortest ridge the tracker keeps, a
+  /// thirty-second note at the transcription tempo held within [30, 60].
   float min_note_ms;
   /// Pitch movement, in cents, that ends one note and starts the next;
   /// 0 => 50.
@@ -114,6 +116,12 @@ typedef struct {
   /// transcription default (2.0); negative => no split; otherwise finite and
   /// above 1.
   float reattack_ratio;
+  /// Shortest span kept as a note, as a note value on either path: n is a 1/n
+  /// note at the transcription tempo (32 => a thirty-second note), 1..128.
+  /// 0 => unset. Refused together with a non-zero @c min_note_ms. The tempo
+  /// is the one the events are placed on: the given or detected one for
+  /// @ref sonare_transcribe, the project's at its start for a clip.
+  int32_t min_note_division;
 } SonareTranscribeConfig;
 
 /// @brief Heap-owned transcription output. Release with

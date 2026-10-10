@@ -213,6 +213,7 @@ TEST_CASE("sonare_transcribe_config_default is the core's defaults, spelled out"
   CHECK(config.max_polyphony == core.max_polyphony);
   CHECK(config.min_frame_peak_ratio == core.min_frame_peak_ratio);
   CHECK(config.min_ridge_peak_ratio == core.min_ridge_peak_ratio);
+  CHECK(config.min_note_division == core.min_note_division);
   CHECK(config.reattack_ratio == core.reattack_ratio);
 
   // Every one of those is a value, not a zero the struct happened to arrive
@@ -919,6 +920,7 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
     // since the struct has no other spelling of a real 0 or of "no split".
     ntm::TranscribeConfig source;
     source.source = ntm::TranscribeSource::kPolyphonic;
+    source.tempo_bpm = 120.0f;
     const ntm::TranscribePolyphonyLimits defaults =
         ntm::resolve_transcribe_polyphony_limits(source);
     SonareTranscribeConfig spelled = config;
@@ -939,6 +941,133 @@ TEST_CASE("the polyphonic limits refuse out of domain and resolve 0 as the expli
   // Both outcomes are reached, so neither half of the table is vacuous.
   CHECK(accepted == 5);
   CHECK(refused == 21);
+}
+
+namespace {
+
+constexpr int kShortNote = 64;
+
+/// @brief Two quarter-second notes around a 50 ms one, so a shortest-note
+///        length between them decides whether the middle note survives.
+std::vector<float> long_short_long() {
+  std::vector<float> samples(static_cast<size_t>(kGapSamples), 0.0f);
+  for (const auto& [note, length] :
+       {std::pair{60, kToneSamples}, std::pair{kShortNote, kSampleRate / 20},
+        std::pair{67, kToneSamples}}) {
+    append_tone(samples, hz_for_midi(note), 0.5f, length);
+    samples.insert(samples.end(), static_cast<size_t>(kGapSamples), 0.0f);
+  }
+  return samples;
+}
+
+size_t note_ons_of(const std::vector<SonareMidiEventPod>& events, int note) {
+  return static_cast<size_t>(std::count_if(events.begin(), events.end(), [&](const auto& pod) {
+    const Decoded event = decode(pod);
+    return event.status == kNoteOn && event.note == note;
+  }));
+}
+
+SonareTranscribeConfig polyphonic_config() {
+  SonareTranscribeConfig config = sonare_transcribe_config_default();
+  config.polyphonic = 1;
+  return config;
+}
+
+}  // namespace
+
+TEST_CASE("the shortest note is read at the transcription tempo", "[c_api][transcribe]") {
+  const std::vector<float> samples = long_short_long();
+
+  SECTION("a division is the note value at the given tempo") {
+    SonareTranscribeConfig division = polyphonic_config();
+    division.min_note_division = 32;
+    Result kept;
+    transcribe_into(&kept, samples, 120.0f, &division);
+    REQUIRE(note_ons_of(kept.events(), kShortNote) == 1);
+
+    // A sixteenth at 120 BPM is 125 ms: the 50 ms note goes, exactly as 125 ms would.
+    division.min_note_division = 16;
+    Result dropped;
+    transcribe_into(&dropped, samples, 120.0f, &division);
+    CHECK(note_ons_of(dropped.events(), kShortNote) == 0);
+    SonareTranscribeConfig milliseconds = polyphonic_config();
+    milliseconds.min_note_ms = 125.0f;
+    Result oracle;
+    transcribe_into(&oracle, samples, 120.0f, &milliseconds);
+    require_same_events(dropped.events(), oracle.events());
+  }
+
+  SECTION("the polyphonic default is a thirty-second note at that tempo") {
+    for (const float tempo : {200.0f, 60.0f}) {
+      INFO("tempo " << tempo);
+      const SonareTranscribeConfig defaults = polyphonic_config();
+      Result by_default;
+      transcribe_into(&by_default, samples, tempo, &defaults);
+      SonareTranscribeConfig spelled = polyphonic_config();
+      spelled.min_note_ms = std::clamp(4.0f * 60000.0f / (tempo * 32.0f), 30.0f, 60.0f);
+      Result oracle;
+      transcribe_into(&oracle, samples, tempo, &spelled);
+      require_same_events(by_default.events(), oracle.events());
+    }
+  }
+
+  SECTION("a clip reads it at the project's tempo") {
+    const MidiFixture fixture;
+    const float tempo = static_cast<float>(project_tempo_of(fixture.project()));
+    SonareTranscribeConfig division = polyphonic_config();
+    division.min_note_division = 16;
+    size_t note_count = 0;
+    REQUIRE(sonare_project_transcribe_to_clip(fixture.project(), fixture.clip(), samples.data(),
+                                              samples.size(), kSampleRate, &division,
+                                              &note_count) == SONARE_OK);
+    SonareTranscribeConfig milliseconds = polyphonic_config();
+    milliseconds.min_note_ms = 4.0f * 60000.0f / (tempo * 16.0f);
+    Result oracle;
+    transcribe_into(&oracle, samples, tempo, &milliseconds);
+    CHECK(note_count == oracle.get().note_count);
+    CHECK(note_ons_of(clip_events_of(fixture), kShortNote) ==
+          note_ons_of(oracle.events(), kShortNote));
+  }
+
+  SECTION("a division applies to the monophonic path too") {
+    SonareTranscribeConfig division = sonare_transcribe_config_default();
+    division.min_note_division = 8;
+    Result dropped;
+    transcribe_into(&dropped, samples, 120.0f, &division);
+    CHECK(note_ons_of(dropped.events(), kShortNote) == 0);
+  }
+}
+
+TEST_CASE("min_note_division is refused by name and read only from version 3",
+          "[c_api][transcribe]") {
+  const std::vector<float> samples = separated_notes({60, 64});
+  for (const int32_t polyphonic : {0, 1}) {
+    INFO("polyphonic " << polyphonic);
+    SonareTranscribeConfig base = sonare_transcribe_config_default();
+    base.polyphonic = polyphonic;
+    std::vector<SonareTranscribeConfig> refused;
+    for (const int32_t division : {-1, 129}) {
+      refused.push_back(base);
+      refused.back().min_note_division = division;
+    }
+    refused.push_back(base);
+    refused.back().min_note_division = 32;
+    refused.back().min_note_ms = 40.0f;
+    for (const SonareTranscribeConfig& config : refused) {
+      Result result;
+      CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &config,
+                              result.out()) == SONARE_ERROR_INVALID_PARAMETER);
+      CHECK(std::string(sonare_last_error_message()).find("min_note_division") !=
+            std::string::npos);
+    }
+
+    SonareTranscribeConfig older = base;
+    older.struct_version = 2;
+    older.min_note_division = 999;
+    Result result;
+    CHECK(sonare_transcribe(samples.data(), samples.size(), kSampleRate, 120.0f, &older,
+                            result.out()) == SONARE_OK);
+  }
 }
 
 #endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR

@@ -373,6 +373,7 @@ class SonareTranscribeConfig(CStruct):
         ("min_frame_peak_ratio", ctypes.c_float),
         ("min_ridge_peak_ratio", ctypes.c_float),
         ("reattack_ratio", ctypes.c_float),
+        ("min_note_division", ctypes.c_int32),
     ]
 
 

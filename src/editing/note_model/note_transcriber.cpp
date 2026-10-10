@@ -38,9 +38,16 @@ namespace {
 // piano scores ([transcribe_eval_sweep]): chords without octave doublings scored
 // onset F 0.32 / 0.36 / 0.42 at 6 / 8 / 10 voices.
 constexpr int kTranscribeMaxPolyphony = 10;
-// Piano onset F was 0.660 / 0.671 / 0.676 at 60 / 80 / 100 ms while noise notes
-// fell from 24.8 to 5.8 per second; 140 ms (the editing chain's) dropped 16ths.
-constexpr float kTranscribePolyphonicMinNoteMs = 100.0f;
+// The polyphonic default is a thirty-second note at the tempo, held within these bounds.
+constexpr int kTranscribePolyphonicMinNoteDivision = 32;
+// A recorded piano solo breaks real notes into 60-99 ms ridges that 100 ms dropped by
+// ear; 60 ms keeps them. On rendered scores 60-100 ms scored alike, and broadband
+// noise at -20 dBFS yields about 25 short notes a second at 60 ms (5.8 at 100).
+constexpr float kTranscribePolyphonicMaxMinNoteMs = 60.0f;
+// The segmenter's own shortest note; below it a ridge is a few analysis frames.
+constexpr float kTranscribePolyphonicMinMinNoteMs = 30.0f;
+// A whole note is four beats of 60000 ms / BPM.
+constexpr float kWholeNoteMsAtOneBpm = 4.0f * 60000.0f;
 // Unchanged from the editing chain: the sweep never moved it.
 constexpr float kTranscribeMinFramePeakRatio = 0.20f;
 // Unchanged from the editing chain: the sweep never moved it.
@@ -48,6 +55,20 @@ constexpr float kTranscribeMinRidgePeakRatio = 0.10f;
 // Re-strikes scored F 1.0 at 1.5 and 2.0 and 0.86 at 2.5, none splitting a held
 // note; 2.0 had the higher mean piano F (0.717 against 0.678).
 constexpr float kTranscribeReattackRatio = 2.0f;
+
+/// Length of a 1/@p division note at @p tempo_bpm, in milliseconds.
+float note_value_ms(int division, float tempo_bpm) noexcept {
+  return kWholeNoteMsAtOneBpm / (tempo_bpm * static_cast<float>(division));
+}
+
+float default_min_note_ms(const TranscribeConfig& config) noexcept {
+  if (config.source != TranscribeSource::kPolyphonic) {
+    return pitch_editor::NoteSegmenterConfig{}.min_note_ms;
+  }
+  if (!(config.tempo_bpm > 0.0f)) return kTranscribePolyphonicMaxMinNoteMs;
+  return std::clamp(note_value_ms(kTranscribePolyphonicMinNoteDivision, config.tempo_bpm),
+                    kTranscribePolyphonicMinMinNoteMs, kTranscribePolyphonicMaxMinNoteMs);
+}
 
 /// A sentinel-coded ratio: 0 => @p fallback, negative => a real 0.
 float resolve_ratio(float value, float fallback) noexcept {
@@ -59,11 +80,14 @@ float resolve_ratio(float value, float fallback) noexcept {
 
 TranscribePolyphonyLimits resolve_transcribe_polyphony_limits(
     const TranscribeConfig& config) noexcept {
-  const float source_min_note_ms = config.source == TranscribeSource::kPolyphonic
-                                       ? kTranscribePolyphonicMinNoteMs
-                                       : pitch_editor::NoteSegmenterConfig{}.min_note_ms;
   TranscribePolyphonyLimits limits;
-  limits.min_note_ms = config.min_note_ms == 0.0f ? source_min_note_ms : config.min_note_ms;
+  if (config.min_note_ms != 0.0f) {
+    limits.min_note_ms = config.min_note_ms;
+  } else if (config.min_note_division != 0) {
+    limits.min_note_ms = note_value_ms(config.min_note_division, config.tempo_bpm);
+  } else {
+    limits.min_note_ms = default_min_note_ms(config);
+  }
   limits.max_polyphony = config.max_polyphony == 0 ? kTranscribeMaxPolyphony : config.max_polyphony;
   limits.min_frame_peak_ratio =
       resolve_ratio(config.min_frame_peak_ratio, kTranscribeMinFramePeakRatio);
@@ -76,6 +100,7 @@ TranscribePolyphonyLimits resolve_transcribe_polyphony_limits(
 namespace {
 
 constexpr int kMaxMidiNote = 127;
+constexpr int kMaxMinNoteDivision = 128;
 constexpr uint8_t kMinVelocity = 1;
 constexpr uint8_t kMaxVelocity = 127;
 
@@ -93,6 +118,14 @@ TranscribeConfig validate_and_resolve(const Audio& audio, const TranscribeConfig
           "transcribe_notes: reference_hz must be finite and positive");
   require(std::isfinite(config.min_note_ms) && config.min_note_ms >= 0.0f,
           "transcribe_notes: min_note_ms must be finite and non-negative");
+  require(std::isfinite(config.tempo_bpm) && config.tempo_bpm >= 0.0f,
+          "transcribe_notes: tempo_bpm must be finite and non-negative");
+  require(config.min_note_division >= 0 && config.min_note_division <= kMaxMinNoteDivision,
+          "transcribe_notes: min_note_division must be 0 or within [1, 128]");
+  require(config.min_note_division == 0 || config.min_note_ms == 0.0f,
+          "transcribe_notes: min_note_division and min_note_ms cannot both be set");
+  require(config.min_note_division == 0 || config.tempo_bpm > 0.0f,
+          "transcribe_notes: min_note_division needs a positive tempo_bpm");
   require(std::isfinite(config.segmentation_threshold_cents) &&
               config.segmentation_threshold_cents > 0.0f,
           "transcribe_notes: segmentation_threshold_cents must be finite and positive");

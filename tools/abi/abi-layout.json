@@ -10243,9 +10243,15 @@
         "name": "reattack_ratio",
         "offset": 60,
         "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "min_note_division",
+        "offset": 64,
+        "size": 4
       }
     ],
-    "size": 64
+    "size": 68
   },
   "SonareTranscribeResult": {
     "align": 8,

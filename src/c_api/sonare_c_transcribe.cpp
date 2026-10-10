@@ -23,6 +23,7 @@ namespace ntm = sonare::editing::note_model;
 constexpr int32_t kTranscribeConfigVersionMin = 1;
 constexpr int32_t kTranscribeConfigVersion = 3;
 constexpr int32_t kTranscribeResultVersion = 2;
+constexpr int32_t kMaxMinNoteDivision = 128;
 
 /// Records which field was refused and why, so a caller reading
 /// sonare_last_error_message is told the field rather than left with a bare
@@ -113,6 +114,13 @@ SonareError read_config(const SonareTranscribeConfig* in, ntm::TranscribeConfig*
       (in->reattack_ratio > 0.0f && in->reattack_ratio <= 1.0f)) {
     return refuse("reattack_ratio must be 0, negative, or a finite number above 1");
   }
+  if (in->min_note_division < 0 || in->min_note_division > kMaxMinNoteDivision) {
+    return refuse("min_note_division must be 0 or an integer in [1, 128]");
+  }
+  if (in->min_note_division != 0 && in->min_note_ms != 0.0f) {
+    return refuse("min_note_division and min_note_ms cannot both be set");
+  }
+  out->min_note_division = in->min_note_division;
   if (out->source == ntm::TranscribeSource::kMonophonic) {
     if (in->max_polyphony != 0) return refuse("max_polyphony requires polyphonic transcription");
     if (in->min_frame_peak_ratio != 0.0f) {
@@ -260,6 +268,7 @@ SonareError sonare_transcribe(const float* samples, size_t length, int sample_ra
   const sonare::Audio audio = sonare::Audio::from_buffer(samples, length, sample_rate);
   const float tuning = resolve_reference(audio, reference_auto, &core_config);
   const float tempo = resolve_tempo(tempo_bpm, audio);
+  core_config.tempo_bpm = tempo;
 
   sonare::transport::TempoMap map;
   map.prepare(sample_rate);
@@ -311,6 +320,8 @@ SonareError sonare_project_transcribe_to_clip(SonareProject* project, uint32_t c
   // installed by sonare_project_auto_tempo transcribes onto that grid.
   sonare::transport::TempoMap map;
   fill_project_tempo_map(project->history.project(), &map);
+  // Note values are read at the tempo the clip starts on.
+  core_config.tempo_bpm = static_cast<float>(map.bpm_at_sample(0));
   resolve_reference(audio, reference_auto, &core_config);
   events =
       build_events(ntm::transcribe_notes(audio, core_config), map, sample_rate, group, channel);
