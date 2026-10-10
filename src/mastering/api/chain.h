@@ -318,8 +318,9 @@ class MasteringChain {
 // repair.dehum, repair.dereverb), and for loudness unless a precomputed static
 // gain is supplied (see StreamingMasteringChainOptions).
 // repair.denoise runs here, but only with a noise estimator that is recursive in
-// time. Its default ranks every frame of the whole signal by energy and is
-// refused by name; mcra, imcra and spp are accepted. The two minimum-tracking
+// time. A config parsed with parse_streaming_chain_config_params() defaults to spp;
+// quantile, which ranks every frame of the whole signal by energy, is refused by
+// name; mcra, imcra and spp are accepted. The two minimum-tracking
 // estimators seed their floor from the first frame they see and hold it for the
 // half second their minimum window spans, so a stream opened mid-programme is
 // over-suppressed until it turns over; spp tracks no minimum and is unaffected.
@@ -558,6 +559,14 @@ StreamingLoudnessGain streaming_loudness_gain_stereo(const MasteringChainConfig&
 // ---------------------------------------------------------------------------
 
 MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count);
+
+/// @brief parse_chain_config_params() for a config that will run in a StreamingMasteringChain
+///        (or have its streaming loudness gain measured).
+/// @details Starts from the defaults a stream can run: `repair.denoise.noiseEstimator` is the
+///          causal one the realtime denoise insert defaults to (spp, ordinal 3) instead of the
+///          offline quantile estimator, so `repair.denoise.enabled` alone prepares. An
+///          explicit `noiseEstimator` still wins, and quantile is still refused by name.
+MasteringChainConfig parse_streaming_chain_config_params(const Param* params, std::size_t count);
 
 /// @brief Apply flat-params on top of an existing config (in-place).
 /// Same key schema as parse_chain_config_params. Setting any field under a

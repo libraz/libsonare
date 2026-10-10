@@ -704,9 +704,11 @@ void apply_one_param_to_config(MasteringChainConfig& cfg, const std::string& key
 // parse_chain_config_params
 // ---------------------------------------------------------------------------
 
-MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count) {
+namespace {
+
+MasteringChainConfig parse_chain_config_params_over(MasteringChainConfig cfg, const Param* params,
+                                                    std::size_t count) {
   validate_params(params, count);
-  MasteringChainConfig cfg;
   StageFlagsSet flags;
 
   for (std::size_t i = 0; i < count; ++i) {
@@ -736,6 +738,18 @@ MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t 
 
   validate_mastering_chain_config(cfg);
   return cfg;
+}
+
+}  // namespace
+
+MasteringChainConfig parse_chain_config_params(const Param* params, std::size_t count) {
+  return parse_chain_config_params_over(MasteringChainConfig{}, params, count);
+}
+
+MasteringChainConfig parse_streaming_chain_config_params(const Param* params, std::size_t count) {
+  MasteringChainConfig defaults;
+  defaults.repair.denoise.config.noise_estimator = repair::DenoiseNoiseEstimator::Spp;
+  return parse_chain_config_params_over(std::move(defaults), params, count);
 }
 
 // ---------------------------------------------------------------------------

@@ -34,7 +34,10 @@ namespace sonare::engine {
 class MeterTelemetryTap;
 class ScopeTelemetryTap;
 
-std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec);
+/// @param build_sample_rate Rate the strip runs at, or 0 when unknown. An equalizer insert built
+///        for a known rate accepts band frequencies up to that rate's Nyquist.
+std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec,
+                                                                   double build_sample_rate = 0.0);
 
 /// True when two insert chains have the same effective processors and semantic
 /// parameters, so a strip or bus can be updated in place instead of rebuilt.
@@ -132,8 +135,7 @@ enum class SidechainSourceKind : uint8_t {
 
 /// Why a sidechain setter would refuse a binding. Values mirror
 /// SonareSidechainRefusal. kPlanRefused covers every way the delay plan can
-/// fail: an alignment past the ceiling, an overflow, or a key on an insert the
-/// target strip does not have.
+/// fail: an alignment past the ceiling or an overflow.
 enum class SidechainRefusal : uint8_t {
   kNone = 0,
   kInvalidTarget = 1,

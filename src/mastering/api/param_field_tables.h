@@ -868,8 +868,8 @@ inline double field_as_double(Enum value) {
 #define SONARE_FIELDS_COMPRESSOR(X)                              \
   X("thresholdDb", threshold_db, display_range(kDb, -60, 0))     \
   X("ratio", ratio, display_range(kRatio, 1, 20))                \
-  X("attackMs", attack_ms, display_range(kMsLog, 0, 200))        \
-  X("releaseMs", release_ms, display_range(kMsLog, 0, 2000))     \
+  X("attackMs", attack_ms, display_range(kMsLog, 0.1, 200))      \
+  X("releaseMs", release_ms, display_range(kMsLog, 0.1, 2000))   \
   X("kneeDb", knee_db, display_range(kDb, 0, 24))                \
   X("makeupGainDb", makeup_gain_db, display_range(kDb, -12, 24)) \
   X("autoMakeup", auto_makeup, kNone)                            \
@@ -879,17 +879,17 @@ inline double field_as_double(Enum value) {
   X("pdrTimeMs", pdr_time_ms, kMs)                               \
   X("pdrReleaseScale", pdr_release_scale, kNone)
 
-#define SONARE_FIELDS_LIMITER(X)                             \
-  X("thresholdDb", threshold_db, display_range(kDb, -60, 0)) \
-  X("lookaheadMs", lookahead_ms, display_range(kMs, 0, 20))  \
-  X("releaseMs", release_ms, display_range(kMsLog, 0, 1000)) \
-  X("ratio", ratio, kRatio)                                  \
+#define SONARE_FIELDS_LIMITER(X)                               \
+  X("thresholdDb", threshold_db, display_range(kDb, -60, 0))   \
+  X("lookaheadMs", lookahead_ms, display_range(kMs, 0, 20))    \
+  X("releaseMs", release_ms, display_range(kMsLog, 0.1, 1000)) \
+  X("ratio", ratio, kRatio)                                    \
   X("postGainDb", post_gain_db, kDb)
 
 #define SONARE_FIELDS_BRICKWALL_LIMITER(X)                  \
   X("ceilingDb", ceiling_db, display_range(kDbfs, -24, 0))  \
   X("lookaheadMs", lookahead_ms, display_range(kMs, 0, 20)) \
-  X("releaseMs", release_ms, display_range(kMsLog, 0, 1000))
+  X("releaseMs", release_ms, display_range(kMsLog, 0.1, 1000))
 
 #define SONARE_FIELDS_DEESSER(X)                                     \
   X("frequencyHz", frequency_hz, display_range(kHzLog, 1000, 16000)) \
@@ -907,13 +907,13 @@ inline double field_as_double(Enum value) {
   X("releaseMs", release_ms, kMsLog)  \
   X("rangeDb", range_db, kDb)
 
-#define SONARE_FIELDS_GATE(X)                                \
-  X("thresholdDb", threshold_db, display_range(kDb, -50, 0)) \
-  X("attackMs", attack_ms, display_range(kMsLog, 0, 100))    \
-  X("releaseMs", release_ms, display_range(kMsLog, 0, 2000)) \
-  X("rangeDb", range_db, display_range(kDb, -80, 0))         \
-  X("holdMs", hold_ms, display_range(kMs, 0, 1000))          \
-  X("closeThresholdDb", close_threshold_db, kDb)             \
+#define SONARE_FIELDS_GATE(X)                                  \
+  X("thresholdDb", threshold_db, display_range(kDb, -50, 0))   \
+  X("attackMs", attack_ms, display_range(kMsLog, 0.1, 100))    \
+  X("releaseMs", release_ms, display_range(kMsLog, 0.1, 2000)) \
+  X("rangeDb", range_db, display_range(kDb, -80, 0))           \
+  X("holdMs", hold_ms, display_range(kMs, 0, 1000))            \
+  X("closeThresholdDb", close_threshold_db, kDb)               \
   X("keyHpfHz", key_hpf_hz, kHz)
 
 #define SONARE_FIELDS_PARALLEL_COMP(X)          \
@@ -1147,7 +1147,7 @@ inline double field_as_double(Enum value) {
   X("inputGainDb", input_gain_db, display_range(kDb, 0, 24)) \
   X("ceilingDb", ceiling_db, display_range(kDbfs, -24, 0))   \
   X("lookaheadMs", lookahead_ms, kMs)                        \
-  X("releaseMs", release_ms, display_range(kMsLog, 0, 1000))
+  X("releaseMs", release_ms, display_range(kMsLog, 0.1, 1000))
 
 #define SONARE_FIELDS_TRUE_PEAK_LIMITER(X)         \
   X("ceilingDb", ceiling_db, kDbfs)                \

@@ -38,7 +38,7 @@ mastering::api::StreamingMasteringChainOptions streamingOptionsFromVal(val confi
 class StreamingMasteringChainWrapper {
  public:
   explicit StreamingMasteringChainWrapper(val config)
-      : chain_(masteringChainConfigFromVal(config), streamingOptionsFromVal(config)) {}
+      : chain_(masteringChainConfigFromVal(config, true), streamingOptionsFromVal(config)) {}
 
   // The two block dimensions arrive as val rather than as int: embind's integer
   // glue wraps, so 2^32 + n reaches a narrow parameter as n and asks for a block

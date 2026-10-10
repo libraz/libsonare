@@ -140,6 +140,39 @@ constexpr ParamMeta logarithmic(ParamMeta meta) {
   return meta;
 }
 
+/// @brief Lowest display value of a logarithmic axis in @p unit: a log axis cannot start at zero.
+constexpr double log_axis_floor(Unit unit) {
+  switch (unit) {
+    case Unit::Hz:
+      return 20.0;
+    case Unit::Ms:
+      return 0.1;
+    case Unit::Seconds:
+      return 0.01;
+    case Unit::Samples:
+      return 1.0;
+    default:
+      return 1e-3;
+  }
+}
+
+/// @brief Highest display value of a logarithmic axis in @p unit whose accepted range is open
+/// above.
+constexpr double log_axis_ceiling(Unit unit) {
+  switch (unit) {
+    case Unit::Hz:
+      return 20000.0;
+    case Unit::Ms:
+      return 10000.0;
+    case Unit::Seconds:
+      return 60.0;
+    case Unit::Samples:
+      return 1048576.0;
+    default:
+      return 1e3;
+  }
+}
+
 /// @brief A display bound that defers to the accepted bound (needed where that bound is exclusive).
 inline constexpr double kAcceptedBound = std::numeric_limits<double>::quiet_NaN();
 

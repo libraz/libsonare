@@ -1252,3 +1252,20 @@ TEST_CASE("Re-applying a saturation config keeps its running state", "[mastering
   CHECK(reapply_divergence<Exciter>(exciter) == 0.0f);
   CHECK(reapply_divergence<MultibandExciter>(MultibandExciterConfig{}) == 0.0f);
 }
+
+TEST_CASE("the reported latency of each hard clipper aliasing mode is the one documented",
+          "[mastering][saturation]") {
+  // The 4x path's number is stated beside the rule in hard_clipper.h; a change to the
+  // oversampler's filter length moves it, and the comment has to move with it.
+  const auto latency = [](sonare::rt::AliasingControl aliasing, double sample_rate) {
+    HardClipper clipper({0.5f, aliasing});
+    clipper.prepare(sample_rate, 512);
+    return clipper.latency_samples();
+  };
+  CHECK(latency(sonare::rt::AliasingControl::None, 48000.0) == 0);
+  CHECK(latency(sonare::rt::AliasingControl::Adaa1, 48000.0) == 0);
+  CHECK(latency(sonare::rt::AliasingControl::Adaa2, 48000.0) == 1);
+  for (const double sample_rate : {44100.0, 48000.0, 96000.0}) {
+    CHECK(latency(sonare::rt::AliasingControl::Oversample4x, sample_rate) == 48);
+  }
+}

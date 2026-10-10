@@ -495,6 +495,27 @@ SonareError sonare_mastering_insert_timing(const char* name, const char* params,
   SONARE_C_CATCH
 }
 
+SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
+                                        int* out_is_enum, double* out_value) {
+  SONARE_C_API_ENTRY;
+  if (out_is_enum == nullptr || out_value == nullptr || key == nullptr || name == nullptr) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "key, name, out_is_enum and out_value are required");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_is_enum = 0;
+  *out_value = 0.0;
+  SONARE_C_TRY
+  const auto value = sonare::mastering::api::mastering_enum_value(
+      processor != nullptr ? processor : "", key, name);
+  if (value.has_value()) {
+    *out_is_enum = 1;
+    *out_value = *value;
+  }
+  return SONARE_OK;
+  SONARE_C_CATCH
+}
+
 SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,
     size_t reference_length, int sample_rate, const SonareMasteringParam* params,

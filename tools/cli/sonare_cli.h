@@ -245,7 +245,9 @@ int cmd_mastering_profile(const CliArgs& args, const Audio& audio);
 int cmd_mastering_streaming(const CliArgs& args, const Audio& audio);
 int cmd_repair(const CliArgs& args, const Audio& audio);
 /// Parses a `--params` list of `key=value` pairs; defined in sonare_cli_mastering.cpp.
-std::vector<mastering::api::Param> parse_mastering_params(const std::string& text);
+std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
+                                                          bool resolve_names = false,
+                                                          const std::string& processor = {});
 #endif
 
 #ifdef SONARE_WITH_MIXING

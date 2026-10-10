@@ -220,7 +220,7 @@ Fixture make_fixture() {
   c1.start_ppq = 0.0;
   c1.end_ppq = 480.0;
   c1.root_pc = 9;
-  c1.quality = ChordQuality::kMinor;
+  c1.quality = arrangement::ChordQuality::kMinor;
   c1.extensions = {7, 9, 11};
   c1.slash_bass_pc = 4;  // /E
   c1.roman_numeral = "i9";
@@ -231,7 +231,7 @@ Fixture make_fixture() {
   c2.start_ppq = 480.0;
   c2.end_ppq = 960.0;
   c2.root_pc = 4;
-  c2.quality = ChordQuality::kDominant;
+  c2.quality = arrangement::ChordQuality::kDominant;
   c2.extensions = {7, 13};
   c2.roman_numeral = "V7/iv";
   p.annotation().chords.push_back(c2);

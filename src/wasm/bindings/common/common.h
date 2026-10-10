@@ -408,6 +408,7 @@ uint64_t checkedDecimalUint64FromVal(const val& value, const char* key);
 uint64_t decimalUint64Property(val object, const char* key, uint64_t default_value);
 /// @brief Reads a trailing render-frame argument; undefined is -1 ("now").
 /// @throws WasmArgumentError for anything checkedInt64FromVal refuses.
+/// @throws WasmRangeError for a negative frame.
 int64_t renderFrameFromVal(const val& value);
 /// @brief Narrows a JS number to float, rejecting what float cannot hold.
 /// @details The integer readers' counterpart for the other overflow: a value
@@ -555,7 +556,8 @@ T requireProperty(const val& object, const char* key, const char* subject) {
 ///        as an unsupported type.
 std::vector<mastering::api::Param> masteringParamsFromObject(
     val object, const std::vector<std::string>& skip_keys = {});
-mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config);
+mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config,
+                                                                 bool streaming = false);
 
 void registerProjectBindings();
 void registerStreamAnalyzerBindings();

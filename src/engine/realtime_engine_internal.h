@@ -22,5 +22,6 @@ constexpr uint32_t kEngineParamNamespaceMask = 0xFFFF0000u;
 constexpr uint32_t kEngineParamLaneMask = 0x0000FF00u;
 constexpr uint32_t kEngineParamKindMask = 0x000000FFu;
 constexpr uint32_t kEngineParamLaneShift = 8u;
+constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
 
 }  // namespace sonare::engine

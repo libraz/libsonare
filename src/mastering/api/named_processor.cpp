@@ -380,6 +380,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.parametric") {
     eq::ParametricEq p;
+    prepare_for_build_rate(p, sample_rate);
     configure_parametric(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.equalizer") {
@@ -390,6 +391,7 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.minimumPhase") {
     eq::MinimumPhaseEq p;
+    prepare_for_build_rate(p, sample_rate);
     detail::configure_minimum_phase(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.linearPhase") {
@@ -410,10 +412,12 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.bandPass") {
     eq::BandPassEq p;
+    prepare_for_build_rate(p, sample_rate);
     detail::configure_band_pass(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.shelving") {
     eq::ShelvingEq p;
+    prepare_for_build_rate(p, sample_rate);
     detail::configure_shelving(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.graphic") {
@@ -813,6 +817,7 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
     run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "eq.midSide") {
     eq::MidSideEq p;
+    prepare_for_build_rate(p, sample_rate);
     detail::configure_mid_side(p, map);
     run_processor_stereo(p, result.left, result.right, sample_rate, outcome);
   } else if (name == "multiband.imager") {

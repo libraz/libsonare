@@ -6,6 +6,7 @@
 #include "util/json.h"
 
 #ifdef SONARE_WITH_MASTERING
+#include "mastering/api/insert_factory.h"
 #include "mastering/assistant/config_from_params.h"
 
 namespace {
@@ -81,7 +82,9 @@ std::string suggestion_json_for_cli(const std::string& core_json) {
 
 }  // namespace
 
-std::vector<mastering::api::Param> parse_mastering_params(const std::string& text) {
+std::vector<mastering::api::Param> parse_mastering_params(const std::string& text,
+                                                          bool resolve_names,
+                                                          const std::string& processor) {
   std::vector<mastering::api::Param> params;
   std::stringstream stream(text);
   std::string item;
@@ -100,6 +103,14 @@ std::vector<mastering::api::Param> parse_mastering_params(const std::string& tex
     double value = 0.0;
     ss >> value;
     if (!ss || ss.peek() != std::char_traits<char>::eof()) {
+      // An enum-valued key may be given by its name; the resolver also refuses an unknown one.
+      if (resolve_names) {
+        if (const auto named =
+                mastering::api::mastering_enum_value(processor, item.substr(0, eq), value_text)) {
+          params.push_back({item.substr(0, eq), *named});
+          continue;
+        }
+      }
       throw std::invalid_argument("invalid numeric value for parameter '" + item.substr(0, eq) +
                                   "': " + value_text);
     }
@@ -461,7 +472,7 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       }
     }
 
-    auto overrides = parse_mastering_params(params_text);
+    auto overrides = parse_mastering_params(params_text, true);
     if (has_assistant && args.has("true-peak-oversample")) {
       overrides.push_back({"loudness.truePeakOversample",
                            static_cast<double>(args.get_int("true-peak-oversample", 4))});
@@ -658,7 +669,7 @@ int cmd_mastering_processor(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --processor is required" << color::reset << "\n";
     return 1;
   }
-  const auto params = parse_mastering_params(args.get_string("params"));
+  const auto params = parse_mastering_params(args.get_string("params"), true, processor);
   reject_unknown_processor_params(processor, params);
   // The file's own channel count and the library's own stereo-only set decide
   // this, with nothing in between. A two-channel source takes the stereo entry

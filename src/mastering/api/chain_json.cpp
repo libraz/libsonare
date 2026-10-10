@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/param_field_tables.h"
 #include "util/exception.h"
 #include "util/json_budget.h"
@@ -618,6 +619,10 @@ class JsonParamParser {
           parsed.flat_params.push_back(Param{key, value.as_bool() ? 1.0 : 0.0});
         } else if (value.is_number()) {
           parsed.flat_params.push_back(Param{key, value.as_number()});
+        } else if (const auto named = value.is_string()
+                                          ? mastering_enum_value("", key, value.as_string())
+                                          : std::nullopt) {
+          parsed.flat_params.push_back(Param{key, *named});
         } else {
           throw SonareException(ErrorCode::InvalidParameter,
                                 "params values must be numbers or booleans");

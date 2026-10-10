@@ -33,7 +33,7 @@ std::vector<std::string> unique_vca_members(const std::vector<std::string>& memb
 // the bag would shadow a written value, the one alias whose removal lets the bag
 // reproduce every live value is dropped.
 std::string live_insert_params(const sonare::mixing::api::Insert& insert,
-                               const sonare::rt::ProcessorBase& live) {
+                               const sonare::rt::ProcessorBase& live, double build_sample_rate) {
   namespace json = sonare::util::json;
   const std::vector<sonare::rt::ParamDescriptor> descriptors = live.parameter_descriptors();
   std::vector<std::string> moved_keys;
@@ -52,8 +52,9 @@ std::string live_insert_params(const sonare::mixing::api::Insert& insert,
   if (moved_keys.empty()) return insert.params_json;
 
   const auto reproduces = [&](const json::Value& candidate) {
-    const auto rebuilt =
-        sonare::mastering::api::make_insert(insert.processor_name, json::dump(candidate));
+    const auto rebuilt = sonare::mastering::api::make_insert(
+        insert.processor_name, json::dump(candidate), nullptr,
+        sonare::resource::kDefaultProjectImportResourceLimits, build_sample_rate);
     if (!rebuilt) return false;
     for (const auto& descriptor : descriptors) {
       float want = 0.0f;
@@ -429,8 +430,10 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       sonare::mixing::apply_strip_eq(strip->strip, scene_strip.eq, nullptr);
       for (const auto& insert : scene_strip.inserts) {
         std::vector<std::string> unknown_keys;
-        auto processor = sonare::mastering::api::make_insert(insert.processor_name,
-                                                             insert.params_json, &unknown_keys);
+        auto processor = sonare::mastering::api::make_insert(
+            insert.processor_name, insert.params_json, &unknown_keys,
+            sonare::resource::kDefaultProjectImportResourceLimits,
+            static_cast<double>(mixer->sample_rate));
         if (!processor) {
           throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                         "unknown insert processor: " + insert.processor_name +
@@ -507,8 +510,10 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
       sonare::mixing::apply_eq(dsp->eq, dsp->eq_enabled, bus.eq, nullptr);
       for (const auto& insert : bus.inserts) {
         std::vector<std::string> unknown_keys;
-        auto processor = sonare::mastering::api::make_insert(insert.processor_name,
-                                                             insert.params_json, &unknown_keys);
+        auto processor = sonare::mastering::api::make_insert(
+            insert.processor_name, insert.params_json, &unknown_keys,
+            sonare::resource::kDefaultProjectImportResourceLimits,
+            static_cast<double>(mixer->sample_rate));
         if (!processor) {
           throw sonare::SonareException(
               sonare::ErrorCode::InvalidParameter,
@@ -579,7 +584,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
         for (size_t i = 0; i < bus.inserts.size(); ++i) {
           const auto* live = dsp->fx.insert_processor(static_cast<unsigned int>(i));
           if (live != nullptr)
-            bus.inserts[i].params_json = live_insert_params(bus.inserts[i], *live);
+            bus.inserts[i].params_json =
+                live_insert_params(bus.inserts[i], *live, mixer->sample_rate);
         }
       }
     }
@@ -625,7 +631,8 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
                                     ? pre_index++
                                     : pre_count + post_index++;
         const auto* live = strip->strip.insert_processor(static_cast<unsigned int>(combined));
-        if (live != nullptr) insert.params_json = live_insert_params(insert, *live);
+        if (live != nullptr)
+          insert.params_json = live_insert_params(insert, *live, mixer->sample_rate);
       }
       scene.strips.push_back(std::move(scene_strip));
     }

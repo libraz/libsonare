@@ -70,6 +70,13 @@ bool registered_parameter_rejects_realtime(const SonareRealtimeEngine* engine, u
   return engine->parameters.parameter_info(param_id, &info) && !info.rt_safe;
 }
 
+// A reserved mixer id that names no strip (the retired positional track/bus
+// encoding) is refused at the control-thread entry.
+bool parameter_id_refused(const SonareRealtimeEngine* engine, uint32_t param_id) {
+  return engine::RealtimeEngine::mixer_parameter_names_no_strip(param_id) ||
+         registered_parameter_rejects_realtime(engine, param_id);
+}
+
 void fill_c_marker(const transport::Marker& marker, SonareEngineMarker* out) {
   out->id = marker.id;
   out->ppq = marker.ppq;
@@ -442,7 +449,7 @@ SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint
                                               size_t point_count) {
   SONARE_C_API_ENTRY;
   if (!engine || (point_count > 0 && !points)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (registered_parameter_rejects_realtime(engine, param_id)) {
+  if (parameter_id_refused(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   SONARE_C_TRY
@@ -627,7 +634,7 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
                                         float value, int64_t render_frame) {
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (registered_parameter_rejects_realtime(engine, param_id)) {
+  if (parameter_id_refused(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   rt::Command command{};
@@ -642,7 +649,7 @@ SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, u
                                                  float value, int64_t render_frame) {
   SONARE_C_API_ENTRY;
   if (!engine || !std::isfinite(value)) return SONARE_ERROR_INVALID_PARAMETER;
-  if (registered_parameter_rejects_realtime(engine, param_id)) {
+  if (parameter_id_refused(engine, param_id)) {
     return SONARE_ERROR_INVALID_PARAMETER;
   }
   rt::Command command{};

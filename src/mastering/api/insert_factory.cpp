@@ -327,7 +327,8 @@ std::unique_ptr<Processor> build_dynamics(const std::string& name, const ParamMa
   return nullptr;
 }
 
-std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& params) {
+std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& params,
+                                    double sample_rate) {
   if (name == "eq.tilt") {
     auto p = std::make_unique<eq::TiltEq>();
     detail::configure_tilt(*p, params);
@@ -340,6 +341,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   }
   if (name == "eq.parametric") {
     auto p = std::make_unique<eq::ParametricEq>();
+    prepare_for_build_rate(*p, sample_rate);
     detail::configure_parametric(*p, params);
     return p;
   }
@@ -350,6 +352,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   }
   if (name == "eq.minimumPhase") {
     auto p = std::make_unique<eq::MinimumPhaseEq>();
+    prepare_for_build_rate(*p, sample_rate);
     detail::configure_minimum_phase(*p, params);
     return p;
   }
@@ -375,11 +378,13 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   }
   if (name == "eq.bandPass") {
     auto p = std::make_unique<eq::BandPassEq>();
+    prepare_for_build_rate(*p, sample_rate);
     detail::configure_band_pass(*p, params);
     return p;
   }
   if (name == "eq.shelving") {
     auto p = std::make_unique<eq::ShelvingEq>();
+    prepare_for_build_rate(*p, sample_rate);
     detail::configure_shelving(*p, params);
     return p;
   }
@@ -391,6 +396,7 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
   }
   if (name == "eq.midSide") {
     auto p = std::make_unique<eq::MidSideEq>();
+    prepare_for_build_rate(*p, sample_rate);
     detail::configure_mid_side(*p, params);
     return p;
   }
@@ -1190,9 +1196,10 @@ std::unique_ptr<Processor> build_repair(const std::string& name, const ParamMap&
 }
 
 std::unique_ptr<Processor> build_insert(const std::string& name, const ParamMap& params,
-                                        const Value* json_root = nullptr) {
+                                        const Value* json_root = nullptr,
+                                        double sample_rate = 0.0) {
   if (auto p = build_dynamics(name, params)) return p;
-  if (auto p = build_eq(name, params)) return p;
+  if (auto p = build_eq(name, params, sample_rate)) return p;
   if (auto p = build_saturation(name, params, json_root)) return p;
   if (auto p = build_spectral(name, params)) return p;
   if (auto p = build_stereo(name, params)) return p;
@@ -1226,17 +1233,21 @@ void attach_constructed_parameter_values(Processor* processor, const ParamMap& p
 
 }  // namespace
 
+void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_rate) {
+  if (sample_rate > 0.0) processor.prepare(sample_rate, kInsertProbeBlockSize);
+}
+
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
     const std::string& name, const std::string& json_params,
     std::vector<std::string>* out_unknown_keys,
-    const sonare::resource::ProjectImportResourceLimits& limits) {
+    const sonare::resource::ProjectImportResourceLimits& limits, double build_sample_rate) {
   // One admission, one document: every reader below works off the same parsed
   // value, so the call's parse cost is the cost of this admission.
   Value root;
   const Value* json_root = admit_insert_params(json_params, limits, &root);
   const std::vector<Param> param_list = insert_params_from_root(json_root, name);
   const ParamMap params = detail::make_map(param_list);
-  auto processor = build_insert(name, params, json_root);
+  auto processor = build_insert(name, params, json_root, build_sample_rate);
   attach_constructed_parameter_values(processor.get(), params);
   // Only report ignored keys for a recognized processor: build_insert() probes
   // every key the processor reads (even absent ones), so any supplied key it
@@ -1602,8 +1613,11 @@ const std::vector<double>& bound_probe_points() {
   return points;
 }
 
-ParamMap probe_map(const std::string& name, const std::string& key, double value) {
-  ParamMap probe = detail::make_map(insert_probe_params(name, key, value));
+ParamMap probe_map(const std::string& name, const std::string& key, double value,
+                   const std::vector<Param>& released = {}) {
+  std::vector<Param> list = insert_probe_params(name, key, value);
+  list.insert(list.end(), released.begin(), released.end());
+  ParamMap probe = detail::make_map(list);
   probe.stop_recording_declarations();
   return probe;
 }
@@ -1615,9 +1629,10 @@ using AcceptFn = std::function<bool(double)>;
 // at its default. An unknown name yields no processor and so accepts nothing,
 // which keeps a caller from measuring bounds against a processor that does not
 // exist in this build configuration.
-bool insert_accepts(const std::string& name, const std::string& key, double value) {
+bool insert_accepts(const std::string& name, const std::string& key, double value,
+                    const std::vector<Param>& released = {}) {
   try {
-    return constructs(name, probe_map(name, key, value));
+    return constructs(name, probe_map(name, key, value, released));
   } catch (...) {
     return false;
   }
@@ -1630,7 +1645,7 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
   try {
     const ParamMap probe = probe_map(name, key, value);
     if (measuring_offline_repair) return read_repair_config(name, probe);
-    auto processor = build_insert(name, probe);
+    auto processor = build_insert(name, probe, nullptr, sample_rate);
     if (processor == nullptr) return read_repair_config(name, probe);
     processor->prepare(sample_rate, kInsertProbeBlockSize);
     return true;
@@ -1800,15 +1815,16 @@ bool max_follows_nyquist(const std::string& name, const std::string& key,
 }
 
 // Replaces the ceiling of a Nyquist-following key with the one accepted when the
-// insert is built and prepared at @p sample_rate, which includes any cap fixed
-// when it was built.
+// insert is built and prepared at @p sample_rate.
 void measure_ceiling_at_rate(const std::string& name, const std::string& key, double sample_rate,
                              MeasuredBounds* bounds) {
   const AcceptFn accepts = [&](double value) {
     return insert_accepts_at_rate(name, key, value, sample_rate);
   };
-  const double ceiling = std::min(bounds->max, 0.5 * sample_rate);
-  const double rejected = std::max(bounds->max, 0.5 * sample_rate) * (1.0 + 1.0e-3);
+  // The insert is built at @p sample_rate, so its ceiling is that rate's Nyquist, not the
+  // rate-less probe cap in `bounds->max`.
+  const double ceiling = 0.5 * sample_rate;
+  const double rejected = std::max(bounds->max, ceiling) * (1.0 + 1.0e-3);
   const double accepted = bounds->has_min ? 0.5 * (bounds->min + ceiling) : 0.5 * ceiling;
   if (accepts(rejected) || !accepts(accepted)) return;
   bounds->max =
@@ -1861,6 +1877,53 @@ bool measure_integer_choices(const std::string& name, const std::string& key, do
   return true;
 }
 
+// Largest power of two scanned for a size-like key. A set that still accepts it has no closed
+// top to list, and is left to its bounds.
+constexpr int kMaxPowerOfTwoExponent = 20;
+
+// The accepted powers of two of a whole-number key whose default is one and whose
+// neighbours are all refused. Every accepted power of two is checked against the
+// integers beside it, so a key that merely accepts a range containing powers of two
+// is left to its bounds. @p released puts the siblings that bound the key from below at 1, so
+// the list holds every size the stage takes at some valid sibling value.
+bool measure_power_of_two_choices(const std::string& name, const std::string& key, double fallback,
+                                  const std::vector<Param>& released,
+                                  std::vector<detail::EnumChoice>* out) {
+  const auto accepts = [&](double value) { return insert_accepts(name, key, value, released); };
+  const long long start = std::llround(fallback);
+  if (start < 2 || (start & (start - 1)) != 0) return false;
+  if (accepts(static_cast<double>(start + 1)) || accepts(static_cast<double>(start - 1))) {
+    return false;
+  }
+  out->clear();
+  for (int exponent = 0; exponent <= kMaxPowerOfTwoExponent; ++exponent) {
+    const long long value = 1LL << exponent;
+    if (!accepts(static_cast<double>(value))) continue;
+    if (exponent == kMaxPowerOfTwoExponent) return false;
+    if (value > 2 &&
+        (accepts(static_cast<double>(value + 1)) || accepts(static_cast<double>(value - 1)) ||
+         accepts(static_cast<double>(value + value / 2)))) {
+      return false;
+    }
+    out->push_back(detail::EnumChoice{std::to_string(value), static_cast<int>(value)});
+  }
+  return out->size() > 1;
+}
+
+// The siblings that bound @p key from below (`key ge/gt factor * sibling`), each at 1.
+std::vector<Param> lower_bounding_siblings_at_one(const ParamMap& params, const std::string& key) {
+  std::vector<Param> released;
+  const auto depends = params.probed_depends().find(key);
+  if (depends == params.probed_depends().end()) return released;
+  for (const auto& dependency : depends->second) {
+    if (dependency.relation == detail::Relation::Ge ||
+        dependency.relation == detail::Relation::Gt) {
+      released.push_back(Param{dependency.key, 1.0});
+    }
+  }
+  return released;
+}
+
 // Renders a catalog number as JSON text. The precision is the shortest that
 // round-trips through `float` — the storage nearly every mastering config field
 // uses — widened so a value with an integer part never comes out in exponent
@@ -1898,6 +1961,45 @@ const char* catalog_type(ParamKind kind, bool is_enum) {
       break;
   }
   return is_enum ? "enum" : "number";
+}
+
+// A bound that is the sibling's default scaled by the declared factor is that dependency read at
+// the sibling's default, not a limit of the key's own; dependsOn carries it live, so it is not
+// published.
+void drop_dependency_bounds(const ParamMap& params, const std::string& key,
+                            MeasuredBounds* bounds) {
+  const auto depends = params.probed_depends().find(key);
+  if (depends == params.probed_depends().end()) return;
+  constexpr double kRestatesTolerance = 1.0e-9;
+  for (const auto& dependency : depends->second) {
+    const auto sibling = params.probed_defaults().find(dependency.key);
+    if (sibling == params.probed_defaults().end() || sibling->second.ambiguous) continue;
+    const double at_default = dependency.factor * sibling->second.value;
+    const bool upper =
+        dependency.relation == detail::Relation::Le || dependency.relation == detail::Relation::Lt;
+    if (upper && bounds->has_max && std::fabs(bounds->max - at_default) <= kRestatesTolerance) {
+      bounds->has_max = false;
+      bounds->max_exclusive = false;
+    } else if (!upper && bounds->has_min &&
+               std::fabs(bounds->min - at_default) <= kRestatesTolerance) {
+      bounds->has_min = false;
+      bounds->min_exclusive = false;
+    }
+  }
+}
+
+// A logarithmic axis needs a positive lower end and a finite top: the unit's floor and ceiling
+// fill what the reader left undeclared, and a positive accepted minimum is already the floor.
+void resolve_log_axis(detail::Unit unit, const MeasuredBounds& bounds, double* ui_min,
+                      double* ui_max) {
+  const bool minimum_is_floor = bounds.has_min && bounds.min > 0.0;
+  if (std::isnan(*ui_min) && !minimum_is_floor) *ui_min = detail::log_axis_floor(unit);
+  const double low = std::isnan(*ui_min) ? bounds.min : *ui_min;
+  if (std::isnan(*ui_max) && !bounds.has_max) {
+    *ui_max = std::max(detail::log_axis_ceiling(unit), low * 10.0);
+  }
+  const double top = std::isnan(*ui_max) ? bounds.max : *ui_max;
+  if (!std::isnan(*ui_min) && *ui_min >= top) *ui_min = top / 1000.0;
 }
 
 // Appends one entry. @p id_json is the automation id, or "null" for a key only
@@ -1948,6 +2050,14 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
           bounds.max_exclusive = false;
         }
       }
+      const auto fallback = defaults.find(key);
+      if (param_kind == ParamKind::Integer && !has_choices && !bounds.has_min && !bounds.has_max &&
+          fallback != defaults.end() && !fallback->second.ambiguous) {
+        has_choices =
+            measure_power_of_two_choices(name, key, fallback->second.value,
+                                         lower_bounding_siblings_at_one(params, key), &choices);
+      }
+      if (!has_choices) drop_dependency_bounds(params, key, &bounds);
       if (unit_is_hz) bounds.max_follows_nyquist = max_follows_nyquist(name, key, bounds);
       if (bounds.max_follows_nyquist && sample_rate > 0.0) {
         measure_ceiling_at_rate(name, key, sample_rate, &bounds);
@@ -1997,10 +2107,15 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
   } else {
     out += "null";
   }
+  double ui_min = meta.ui_min;
+  double ui_max = meta.ui_max;
+  if (numeric_param && meta.scale == detail::Scale::Log) {
+    resolve_log_axis(meta.unit, bounds, &ui_min, &ui_max);
+  }
   out += ",\"uiMin\":";
-  out += std::isnan(meta.ui_min) ? "null" : format_catalog_number(meta.ui_min);
+  out += std::isnan(ui_min) ? "null" : format_catalog_number(ui_min);
   out += ",\"uiMax\":";
-  out += std::isnan(meta.ui_max) ? "null" : format_catalog_number(meta.ui_max);
+  out += std::isnan(ui_max) ? "null" : format_catalog_number(ui_max);
   out += ",\"scale\":\"";
   out += meta.scale == detail::Scale::Log ? "log" : "linear";
   out += '"';
@@ -2098,6 +2213,45 @@ std::string repair_param_info_json(const std::string& name) {
   return memo.emplace(name, std::move(out)).first->second;
 }
 
+namespace {
+
+// The processor and key a flat chain key is read as. The chain's enum keys are those of the
+// stage's own processor.
+bool chain_key_processor(const std::string& chain_key, std::string* processor, std::string* key) {
+  static const std::pair<const char*, const char*> kStages[] = {
+      {"repair.denoise.", "repair.denoiseClassical"},
+      {"repair.decrackle.", "repair.decrackle"},
+      {"repair.dehum.", "repair.dehum"},
+  };
+  for (const auto& [prefix, id] : kStages) {
+    const std::string stage_prefix = prefix;
+    if (chain_key.compare(0, stage_prefix.size(), stage_prefix) != 0) continue;
+    *processor = id;
+    *key = chain_key.substr(stage_prefix.size());
+    return true;
+  }
+  return false;
+}
+
+}  // namespace
+
+std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
+                                           const std::string& choice) {
+  std::string id = processor;
+  std::string leaf = key;
+  if (processor.empty() && !chain_key_processor(key, &id, &leaf)) return std::nullopt;
+  const auto declared = empty_build(id).probed_choices().find(leaf);
+  if (declared == empty_build(id).probed_choices().end()) return std::nullopt;
+  std::string valid;
+  for (const detail::EnumChoice& entry : declared->second) {
+    if (entry.name == choice) return static_cast<double>(entry.value);
+    if (!valid.empty()) valid += ", ";
+    valid += entry.name;
+  }
+  throw SonareException(ErrorCode::InvalidParameter,
+                        key + ": unknown name '" + choice + "' (valid names: " + valid + ")");
+}
+
 std::string insert_slot_info_json(const std::string& name) {
   // Same declarations the param entries' `slot` field is read from.
   std::string out = "[";
@@ -2132,7 +2286,10 @@ std::string insert_param_info_json(const std::string& name) {
   static thread_local std::unordered_map<std::string, std::string> memo;
   const auto cached = memo.find(name);
   if (cached != memo.end()) return cached->second;
-  return memo.emplace(name, build_insert_param_info_json(name, 0.0)).first->second;
+  std::string info = build_insert_param_info_json(name, 0.0);
+  // An id that builds no insert may still be a repair stage, which has descriptors of its own.
+  if (info == "[]") info = repair_param_info_json(name);
+  return memo.emplace(name, std::move(info)).first->second;
 }
 
 std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
@@ -2142,7 +2299,9 @@ std::string insert_param_info_json_at_rate(const std::string& name, double sampl
   const std::string memo_key = name + '@' + std::to_string(sample_rate);
   const auto cached = memo.find(memo_key);
   if (cached != memo.end()) return cached->second;
-  return memo.emplace(memo_key, build_insert_param_info_json(name, sample_rate)).first->second;
+  std::string info = build_insert_param_info_json(name, sample_rate);
+  if (info == "[]") info = repair_param_info_json(name);
+  return memo.emplace(memo_key, std::move(info)).first->second;
 }
 
 const std::vector<std::string>& insert_param_info_schema_paths() {

@@ -124,9 +124,11 @@ constexpr const char* kDuckerMasterJson =
     R"({"version":1,"strips":[{"id":"master","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":"{\"thresholdDb\":-20,\"ratio\":20,\"attackMs\":0.05,\"releaseMs\":80,\"rangeDb\":30}"}]}],"buses":[],"connections":[]})";
 constexpr const char* kDuckerTrackJson =
     R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
+constexpr const char* kDuckerTrack30Json =
+    R"({"version":1,"strips":[{"id":"track-30","inserts":[{"slot":"pre","processor":"dynamics.duckingProcessor","params":{"thresholdDb":-20,"ratio":20,"attackMs":0.05,"releaseMs":80,"rangeDb":30}}]}],"buses":[],"connections":[]})";
 
 // Tracks 10 and 30 into buses 2 and 1; bus 1 has a limiter, bus 2 a ducker,
-// the master a ducker, and track 10 a ducker insert.
+// the master a ducker, and tracks 10 and 30 a ducker insert each.
 SonareRealtimeEngine* make_keyed_rig() {
   SonareRealtimeEngine* engine = make_dc_engine({10, 30});
   SonareEngineBus buses[] = {{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
@@ -139,6 +141,7 @@ SonareRealtimeEngine* make_keyed_rig() {
   REQUIRE(sonare_engine_set_bus_strip_json(engine, 2, kDuckerBusJson) == SONARE_OK);
   REQUIRE(sonare_engine_set_master_strip_json(engine, kDuckerMasterJson) == SONARE_OK);
   REQUIRE(sonare_engine_set_track_strip_json(engine, 10, kDuckerTrackJson) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_strip_json(engine, 30, kDuckerTrack30Json) == SONARE_OK);
   return engine;
 }
 
@@ -191,9 +194,13 @@ TEST_CASE("sonare_engine can_set_*_sidechain agree with the setters and cover th
 
   // Lane keys.
   CHECK(lane(0, 0, 30) == SONARE_SIDECHAIN_REFUSAL_INVALID_TARGET);
+  CHECK(lane(10, 0, 99) == SONARE_SIDECHAIN_REFUSAL_UNDECLARED_SOURCE);
+  CHECK(lane(10, 1, 30) == SONARE_SIDECHAIN_REFUSAL_INSERT_OUT_OF_RANGE);
   CHECK(lane(10, 0, 10) == SONARE_SIDECHAIN_REFUSAL_SELF_KEY);
   CHECK(lane(10, 0, 30) == SONARE_SIDECHAIN_REFUSAL_NONE);
   CHECK(ok(sonare_engine_set_lane_sidechain(engine, 0, 0, 30)) == false);
+  CHECK(ok(sonare_engine_set_lane_sidechain(engine, 10, 0, 99)) == false);
+  CHECK(ok(sonare_engine_set_lane_sidechain(engine, 10, 1, 30)) == false);
   CHECK(ok(sonare_engine_set_lane_sidechain(engine, 10, 0, 10)) == false);
   CHECK(ok(sonare_engine_set_lane_sidechain(engine, 10, 0, 30)));
   // Track 10 is now keyed from track 30, so the reverse key closes a cycle.
@@ -284,4 +291,32 @@ TEST_CASE("sonare_engine lane transient shaper reports negative gain reduction",
   CHECK(deepest < -0.5f);
   sonare_engine_destroy(engine);
 }
+
+TEST_CASE("sonare_engine refuses a reserved mixer id that names no strip",
+          "[c_api][engine][feedback]") {
+  SonareRealtimeEngine* engine = make_prepared();
+  SonareEngineTrackLane lanes[] = {{5, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO},
+                                   {7, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  const SonareAutomationPoint point{0.0, -6.0f, 0};
+
+  // The retired positional encoding: lane byte below the master's 0xFF.
+  for (uint32_t positional : {0x4D580101u, 0x4D580001u, 0x4D580100u, 0x4D58FE00u}) {
+    INFO("id " << positional);
+    CHECK(sonare_engine_set_parameter_smoothed(engine, positional, -6.0f, -1) == kInvalid);
+    CHECK(sonare_engine_set_parameter(engine, positional, -6.0f, -1) == kInvalid);
+    CHECK(sonare_engine_set_automation_lane(engine, positional, &point, 1) == kInvalid);
+  }
+
+  // The master ids and the ids issued per strip stay valid.
+  CHECK(sonare_engine_set_parameter_smoothed(engine, 0x4D58FF01u, -6.0f, -1) == SONARE_OK);
+  CHECK(sonare_engine_set_automation_lane(engine, 0x4D58FF01u, &point, 1) == SONARE_OK);
+  uint32_t track_id = 0;
+  REQUIRE(sonare_engine_resolve_track_lane_automation_id(engine, 7, "faderDb", &track_id) ==
+          SONARE_OK);
+  CHECK(sonare_engine_set_parameter_smoothed(engine, track_id, -6.0f, -1) == SONARE_OK);
+  CHECK(sonare_engine_set_automation_lane(engine, track_id, &point, 1) == SONARE_OK);
+  sonare_engine_destroy(engine);
+}
+
 #endif  // defined(SONARE_WITH_MIXING)

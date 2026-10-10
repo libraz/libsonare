@@ -30,6 +30,7 @@
 #include "mastering/api/processor_params.h"
 #include "mastering/dynamics/compressor.h"
 #include "mastering/multiband/multiband_dynamic_eq.h"
+#include "mastering/repair/dehum.h"
 #include "mastering/saturation/tape.h"
 #include "mastering/stereo/imager.h"
 #include "rt/processor_base.h"
@@ -137,6 +138,20 @@ bool prepares_at(const std::string& name, const std::string& key, double value,
     processor->prepare(sample_rate, sonare::mastering::api::kInsertProbeBlockSize);
     return true;
   } catch (...) {
+    return false;
+  }
+}
+
+// Whether one-shot processing at @p sample_rate accepts @p key = @p value: the build knows the
+// rate, so an equalizer band is bounded by that rate's Nyquist frequency.
+bool processes_at(const std::string& name, const std::string& key, double value, int sample_rate) {
+  const std::vector<float> samples(1024, 0.1f);
+  try {
+    (void)sonare::mastering::api::apply_named_processor(
+        name, samples.data(), samples.size(), sample_rate,
+        std::vector<sonare::mastering::api::Param>{{key, value}});
+    return true;
+  } catch (const sonare::SonareException&) {
     return false;
   }
 }
@@ -536,18 +551,19 @@ TEST_CASE("a rate-specific descriptor publishes the ceiling accepted at that rat
   CHECK_FALSE(prepares_at("eq.parametric", key, 22050.0, 44100.0));
   CHECK(prepares_at("eq.parametric", key, 22049.0, 44100.0));
 
-  // Above the build rate the insert's own cap holds, so the published ceiling
-  // is what builds and prepares there, not the host's Nyquist.
+  // A build that knows its rate reaches that rate's Nyquist frequency, so the published
+  // ceiling is what one-shot processing accepts there; the rate-less build keeps 24000.
   const json::Array at_96000 = param_info_at("eq.parametric", 96000.0);
   const json::Value* wide = find_param(at_96000, key);
   REQUIRE(wide != nullptr);
   const double ceiling = field(*wide, "max").as_number();
   INFO("eq.parametric band0.frequencyHz max at 96000 = " << ceiling);
-  CHECK(ceiling == 24000.0);
+  CHECK(ceiling == 48000.0);
   CHECK(field(*wide, "maxExclusive").as_bool() ==
-        !prepares_at("eq.parametric", key, ceiling, 96000.0));
-  CHECK(prepares_at("eq.parametric", key, ceiling * (1.0 - 1.0e-4), 96000.0));
-  CHECK_FALSE(prepares_at("eq.parametric", key, ceiling * (1.0 + 1.0e-4), 96000.0));
+        !processes_at("eq.parametric", key, ceiling, 96000));
+  CHECK(processes_at("eq.parametric", key, ceiling * (1.0 - 1.0e-4), 96000));
+  CHECK_FALSE(processes_at("eq.parametric", key, ceiling * (1.0 + 1.0e-4), 96000));
+  CHECK(field(*find_param(param_info("eq.parametric"), key), "max").as_number() == 24000.0);
 
   // Only the rate-following ceilings move; the rest of the descriptor is the
   // rate-less one.
@@ -1302,8 +1318,8 @@ bool repair_accepts(const std::string& id, const std::string& key, double value)
 
 TEST_CASE("every repair stage publishes declared, finite-ranged parameters",
           "[mastering][catalog]") {
-  // Power-of-two sizes and the hop that follows them are accepted on a set with gaps, which a
-  // bisection cannot bound: they publish no limit, as eq.linearPhase's fftSize does.
+  // The transform size is accepted on a set of powers of two, which publishes as choices rather
+  // than as a range; the hop is bounded only by that size and publishes no maximum.
   const std::set<std::string> gapped = {"nFft", "hopLength"};
   std::vector<std::string> defects;
   size_t numeric = 0;
@@ -1414,4 +1430,282 @@ TEST_CASE("the catalog marks which repair stages can run causally", "[mastering]
                          "repair.dereverbClassical", "dynamics.compressor"}) {
     CHECK(causal.count(id) == 1);
   }
+}
+
+namespace {
+
+// The catalog rows of every id the processor catalog lists: the realtime inserts, then the
+// offline repair stages.
+std::vector<std::string> catalog_ids() {
+  std::vector<std::string> ids;
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  for (const json::Value& entry : catalog.as_array()) ids.push_back(field(entry, "id").as_string());
+  return ids;
+}
+
+}  // namespace
+
+TEST_CASE("a logarithmic parameter publishes a positive floor and a finite top",
+          "[mastering][catalog]") {
+  size_t logarithmic = 0;
+  std::vector<std::string> defects;
+  for (const std::string& id : catalog_ids()) {
+    for (const json::Value& parameter : param_info(id)) {
+      if (field(parameter, "scale").as_string() != "log") continue;
+      ++logarithmic;
+      const std::string label = id + "." + field(parameter, "name").as_string();
+      const json::Value& ui_min = field(parameter, "uiMin");
+      const json::Value& ui_max = field(parameter, "uiMax");
+      const json::Value& max = field(parameter, "max");
+      const json::Value& min = field(parameter, "min");
+      const json::Value& low = ui_min.is_null() ? min : ui_min;
+      const json::Value& high = ui_max.is_null() ? max : ui_max;
+      if (!low.is_number() || !(low.as_number() > 0.0)) {
+        defects.push_back(label + " has no positive lower end");
+      } else if (!high.is_number()) {
+        defects.push_back(label + " has no finite upper end");
+      } else if (!(low.as_number() < high.as_number())) {
+        defects.push_back(label + " has an empty display range");
+      } else if (min.is_number() && low.as_number() < min.as_number()) {
+        defects.push_back(label + " starts below its minimum");
+      } else if (max.is_number() && high.as_number() > max.as_number()) {
+        defects.push_back(label + " ends above its maximum");
+      }
+    }
+  }
+  CHECK(logarithmic > 800);
+  INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
+  CHECK(defects.empty());
+}
+
+TEST_CASE("the parameter info of any catalog id is the catalog's params", "[mastering][catalog]") {
+  const json::Value catalog = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  for (const json::Value& entry : catalog.as_array()) {
+    const std::string id = field(entry, "id").as_string();
+    INFO(id);
+    CHECK(json::dump(field(entry, "params")) == json::dump(json::Value(param_info(id))));
+  }
+  for (const char* id : {"repair.declick", "repair.declip", "repair.trimSilence"}) {
+    INFO(id);
+    CHECK_FALSE(param_info(id).empty());
+    CHECK(json::dump(json::Value(param_info(id))) ==
+          json::dump(json::Value(repair_param_info(id))));
+  }
+  CHECK(param_info("repair.noSuchStage").empty());
+}
+
+TEST_CASE("an equalizer band is bounded by the Nyquist frequency of the rate it is built for",
+          "[mastering][catalog]") {
+  for (const char* id : {"eq.parametric", "eq.minimumPhase", "eq.bandPass", "eq.shelving"}) {
+    const std::string key = std::string(id) == "eq.bandPass"   ? "bandPassFrequencyHz"
+                            : std::string(id) == "eq.shelving" ? "highFrequencyHz"
+                                                               : "band0.frequencyHz";
+    INFO(id << " " << key);
+    CHECK(processes_at(id, key, 30000.0, 96000));
+    CHECK_FALSE(processes_at(id, key, 50000.0, 96000));
+    CHECK_FALSE(processes_at(id, key, 30000.0, 48000));
+    CHECK(processes_at(id, key, 20000.0, 48000));
+  }
+}
+
+TEST_CASE("the refusal of an equalizer band frequency names the ceiling", "[mastering][catalog]") {
+  const std::vector<float> samples(1024, 0.1f);
+  const auto message = [&](double frequency, int sample_rate) {
+    try {
+      (void)sonare::mastering::api::apply_named_processor(
+          "eq.parametric", samples.data(), samples.size(), sample_rate,
+          std::vector<sonare::mastering::api::Param>{{"band0.frequencyHz", frequency}});
+    } catch (const sonare::SonareException& error) {
+      return std::string(error.what());
+    }
+    return std::string();
+  };
+  CHECK(message(60000.0, 96000).find("must be below 48000 Hz (Nyquist at 96000 Hz)") !=
+        std::string::npos);
+  CHECK(message(30000.0, 48000).find("must be below 24000 Hz (Nyquist at 48000 Hz)") !=
+        std::string::npos);
+  CHECK(message(30000.0, 44100).find("must be below 22050 Hz (Nyquist at 44100 Hz)") !=
+        std::string::npos);
+}
+
+namespace {
+
+// Whether the offline path accepts every key in @p params on stage @p id together.
+bool repair_accepts_all(const std::string& id,
+                        const std::vector<sonare::mastering::api::Param>& params) {
+  static const std::vector<float> samples = repair_probe_signal();
+  try {
+    (void)sonare::mastering::api::apply_named_processor(id, samples.data(), samples.size(), 48000,
+                                                        params);
+    return true;
+  } catch (const sonare::SonareException&) {
+    return false;
+  }
+}
+
+}  // namespace
+
+TEST_CASE("the classical repair sizes publish exactly what the stage accepts",
+          "[mastering][catalog]") {
+  for (const char* id : {"repair.denoiseClassical", "repair.dereverbClassical"}) {
+    for (const bool offline : {false, true}) {
+      INFO(id << (offline ? " offline" : " insert"));
+      const json::Array params = offline ? repair_param_info(id) : param_info(id);
+      const json::Value* n_fft = find_param(params, "nFft");
+      const json::Value* hop = find_param(params, "hopLength");
+      REQUIRE(n_fft != nullptr);
+      REQUIRE(hop != nullptr);
+
+      // nFft: a closed set of powers of two, named by their decimal text, and no range.
+      CHECK(field(*n_fft, "min").is_null());
+      CHECK(field(*n_fft, "max").is_null());
+      REQUIRE(field(*n_fft, "choices").is_array());
+      const std::vector<double> sizes = choice_values(*n_fft);
+      REQUIRE(sizes.size() >= 2);
+      for (size_t index = 0; index < sizes.size(); ++index) {
+        const long long size = std::llround(sizes[index]);
+        CHECK((size & (size - 1)) == 0);
+        CHECK(choice_names(*n_fft)[index] == std::to_string(size));
+      }
+      CHECK(std::is_sorted(sizes.begin(), sizes.end()));
+      CHECK(sizes.back() == 524288.0);
+      // The hop dependency is released: the list starts below the default hop's own floor.
+      CHECK(sizes.front() < 2.0 * field(*hop, "default").as_number());
+
+      // hopLength: not restricted to powers of two, and bounded above by nFft / 2 alone.
+      CHECK(field(*hop, "choices").is_null());
+      CHECK(field(*hop, "min").as_number() == 1.0);
+      CHECK(field(*hop, "max").is_null());
+      const double n_fft_default = field(*n_fft, "default").as_number();
+      if (!offline) {
+        // Each listed size builds at the smallest hop, and the neighbours of the list do not.
+        for (const double size : {sizes[0], sizes[1], sizes[3], 16384.0}) {
+          CHECK(repair_accepts_all(id, {{"nFft", size}, {"hopLength", 1.0}}));
+        }
+        CHECK_FALSE(repair_accepts_all(id, {{"nFft", 2.0 * sizes.back()}, {"hopLength", 1.0}}));
+        CHECK_FALSE(repair_accepts_all(id, {{"nFft", sizes.front() / 2.0}, {"hopLength", 1.0}}));
+        for (const double size : {sizes[1], sizes[3]}) {
+          CHECK_FALSE(repair_accepts_all(id, {{"nFft", size + 1.0}, {"hopLength", 1.0}}));
+          CHECK_FALSE(repair_accepts_all(id, {{"nFft", size * 1.5}, {"hopLength", 1.0}}));
+        }
+        for (const double length : {1.0, 3.0, 100.0, 255.0, 257.0, 300.0, 511.0, 512.0}) {
+          INFO("hop " << length);
+          CHECK(repair_accepts(id, "hopLength", length));
+        }
+        CHECK_FALSE(repair_accepts(id, "hopLength", n_fft_default / 2.0 + 1.0));
+      }
+      REQUIRE(field(*hop, "dependsOn").as_array().size() == 1);
+      const json::Value& dependency = field(*hop, "dependsOn").as_array()[0];
+      CHECK(field(dependency, "key").as_string() == "nFft");
+      CHECK(field(dependency, "relation").as_string() == "le");
+      CHECK(field(dependency, "factor").as_number() == 0.5);
+    }
+  }
+}
+
+TEST_CASE("a bound that only restates a dependency at the sibling's default is not published",
+          "[mastering][catalog]") {
+  size_t dependent_rows = 0;
+  std::vector<std::string> defects;
+  for (const std::string& id : catalog_ids()) {
+    const json::Array params = param_info(id);
+    for (const json::Value& parameter : params) {
+      for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
+        const json::Value* sibling = find_param(params, field(dependency, "key").as_string());
+        if (sibling == nullptr || !field(*sibling, "default").is_number()) continue;
+        ++dependent_rows;
+        const std::string relation = field(dependency, "relation").as_string();
+        const bool upper = relation == "le" || relation == "lt";
+        const double implied =
+            field(dependency, "factor").as_number() * field(*sibling, "default").as_number();
+        const json::Value& bound = field(parameter, upper ? "max" : "min");
+        if (bound.is_number() && std::fabs(bound.as_number() - implied) < 1.0e-6) {
+          defects.push_back(id + "." + field(parameter, "name").as_string() + " publishes " +
+                            (upper ? "max " : "min ") + std::to_string(bound.as_number()) +
+                            ", the dependency on " + field(dependency, "key").as_string() +
+                            " at its default");
+        }
+      }
+    }
+  }
+  CHECK(dependent_rows > 40);
+  INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
+  CHECK(defects.empty());
+}
+
+TEST_CASE("an enum parameter's name resolves to the number the flat lists carry",
+          "[mastering][catalog]") {
+  using sonare::mastering::api::mastering_enum_value;
+  // The chain schema's keys and the processor's own keys name the same values.
+  CHECK(mastering_enum_value("", "repair.denoise.noiseEstimator", "quantile") == 0.0);
+  CHECK(mastering_enum_value("", "repair.denoise.noiseEstimator", "mcra") == 1.0);
+  CHECK(mastering_enum_value("", "repair.denoise.noiseEstimator", "imcra") == 2.0);
+  CHECK(mastering_enum_value("", "repair.denoise.noiseEstimator", "spp") == 3.0);
+  CHECK(mastering_enum_value("repair.denoiseClassical", "noiseEstimator", "spp") == 3.0);
+  CHECK(mastering_enum_value("repair.trimSilence", "mode", "lufsGated") == 1.0);
+  CHECK(mastering_enum_value("", "repair.decrackle.mode", "waveletShrinkage") == 1.0);
+  CHECK(mastering_enum_value("", "repair.dehum.mode", "notch") ==
+        static_cast<double>(sonare::mastering::repair::DehumMode::Notch));
+
+  // Every published choice resolves back to its value.
+  const json::Array denoise = param_info("repair.denoiseClassical");
+  for (const char* key : {"mode", "noiseEstimator"}) {
+    const json::Value* parameter = find_param(denoise, key);
+    REQUIRE(parameter != nullptr);
+    const std::vector<double> values = choice_values(*parameter);
+    const std::vector<std::string> names = choice_names(*parameter);
+    REQUIRE_FALSE(values.empty());
+    for (size_t index = 0; index < names.size(); ++index) {
+      CHECK(mastering_enum_value("repair.denoiseClassical", key, names[index]) == values[index]);
+    }
+  }
+
+  // A key that is not an enum has no value for any name; the caller owns that refusal.
+  CHECK_FALSE(mastering_enum_value("", "repair.denoise.nFft", "1024").has_value());
+  CHECK_FALSE(mastering_enum_value("dynamics.compressor", "ratio", "high").has_value());
+  CHECK_FALSE(mastering_enum_value("", "loudness.targetLufs", "x").has_value());
+  CHECK_FALSE(mastering_enum_value("no.such.processor", "mode", "x").has_value());
+
+  std::string message;
+  try {
+    (void)mastering_enum_value("", "repair.denoise.noiseEstimator", "nope");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    message = error.what();
+  }
+  CHECK(message.find("repair.denoise.noiseEstimator") != std::string::npos);
+  CHECK(message.find("'nope'") != std::string::npos);
+  CHECK(message.find("quantile, mcra, imcra, spp") != std::string::npos);
+
+  int is_enum = -1;
+  double value = -1.0;
+  CHECK(sonare_mastering_enum_value(nullptr, "repair.denoise.noiseEstimator", "mcra", &is_enum,
+                                    &value) == SONARE_OK);
+  CHECK(is_enum == 1);
+  CHECK(value == 1.0);
+  CHECK(sonare_mastering_enum_value("", "loudness.targetLufs", "x", &is_enum, &value) == SONARE_OK);
+  CHECK(is_enum == 0);
+  CHECK(value == 0.0);
+  CHECK(sonare_mastering_enum_value("", "repair.denoise.noiseEstimator", "nope", &is_enum,
+                                    &value) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(is_enum == 0);
+  CHECK(sonare_mastering_enum_value(nullptr, nullptr, "mcra", &is_enum, &value) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE(
+    "an insert built for a known rate takes that rate's Nyquist frequency as its band ceiling",
+    "[mastering][catalog]") {
+  const std::string wide = R"({"band0.frequencyHz":30000,"band0.gainDb":3})";
+  // Rate-less, the band is checked against the 48 kHz probe rate as it is set.
+  CHECK_THROWS_AS(make_insert("eq.parametric", wide), sonare::SonareException);
+  const auto limits = sonare::resource::kDefaultProjectImportResourceLimits;
+  auto insert = make_insert("eq.parametric", wide, nullptr, limits, 96000.0);
+  REQUIRE(insert != nullptr);
+  CHECK_NOTHROW(insert->prepare(96000.0, sonare::mastering::api::kInsertProbeBlockSize));
+  // Prepared later at a lower rate, a band that no longer fits is lowered to that rate's ceiling.
+  CHECK_NOTHROW(insert->prepare(48000.0, sonare::mastering::api::kInsertProbeBlockSize));
+  // The same band is refused by a build for a rate that cannot carry it.
+  CHECK_THROWS_AS(make_insert("eq.parametric", wide, nullptr, limits, 48000.0),
+                  sonare::SonareException);
 }

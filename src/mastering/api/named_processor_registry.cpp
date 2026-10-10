@@ -336,7 +336,7 @@ std::string build_processor_catalog_json() {
     out += "\",\"causal\":";
     out += catalog_causal(id, realtime_insertable) ? "true" : "false";
     out += ",\"params\":";
-    out += realtime_insertable ? insert_param_info_json(id) : repair_param_info_json(id);
+    out += insert_param_info_json(id);
     out += ",\"slots\":";
     out += realtime_insertable ? insert_slot_info_json(id) : "[]";
     out += '}';

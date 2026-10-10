@@ -222,7 +222,7 @@ int cmd_repair(const CliArgs& args, const Audio& audio) {
   }
 
   auto repair_config = repair_only_config(source_config);
-  const auto overrides = parse_mastering_params(args.get_string("params"));
+  const auto overrides = parse_mastering_params(args.get_string("params"), true);
   if (!overrides.empty()) {
     reject_non_repair_overrides(overrides);
     mastering::api::apply_chain_config_overrides(repair_config, overrides.data(), overrides.size());

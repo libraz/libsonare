@@ -503,6 +503,15 @@ TEST_CASE("Track mixer caps the sidechain binding table at 32", "[track_mixer_ro
   REQUIRE(mixer.set_buses({bus_config(1), bus_config(2)}));
   REQUIRE(mixer.set_track_lanes({TrackLaneConfig{10}, lane_to(20, 2)}));
   REQUIRE(mixer.set_bus_strip(2, ducker_bus(2)));
+  // Lane 10 needs an insert for every binding it takes.
+  struct PassThrough final : sonare::rt::ProcessorBase {
+    void prepare(double, int) override {}
+    void process(float* const*, int, int) override {}
+    void reset() override {}
+  };
+  sonare::mixing::ChannelStrip lane_strip;
+  for (unsigned int i = 0; i < 32; ++i) lane_strip.add_pre_insert(std::make_unique<PassThrough>());
+  REQUIRE(mixer.bind_track_strip(10, &lane_strip));
   for (unsigned int i = 0; i < 31; ++i) REQUIRE(mixer.set_lane_sidechain(10, i, 20));
   REQUIRE(mixer.set_bus_sidechain(2, 0, SidechainSourceKind::Bus, 1));
   CHECK_FALSE(mixer.set_lane_sidechain(10, 31, 20));
@@ -1252,10 +1261,10 @@ TEST_CASE("Track mixer refuses a self-keyed or cyclic lane sidechain",
   CHECK(std::abs(after[1] - 0.3f) < 1.0e-3f);
   CHECK(after[2] == -1.0f);
 
-  // Cycles are judged on track ids, whether or not the lanes exist.
-  REQUIRE(m.set_lane_sidechain(40, 0, 50));
-  CHECK_FALSE(m.set_lane_sidechain(50, 0, 40));
-  CHECK_FALSE(m.set_lane_sidechain(40, 1, 40));
+  // A source that is not a declared lane, and an insert the strip lacks, are refused.
+  CHECK_FALSE(m.set_lane_sidechain(10, 0, 50));
+  CHECK_FALSE(m.set_lane_sidechain(10, 1, 30));
+  CHECK_FALSE(m.set_lane_sidechain(40, 0, 10));
 }
 
 namespace {

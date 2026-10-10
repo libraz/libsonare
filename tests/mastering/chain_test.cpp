@@ -1278,6 +1278,64 @@ TEST_CASE("StreamingMasteringChain takes repair.denoise only with a causal noise
   }
 }
 
+TEST_CASE("a streaming chain config defaults repair.denoise to a causal estimator",
+          "[mastering][chain][streaming]") {
+  const std::vector<Param> enabled_only{{"repair.denoise.enabled", 1.0}};
+
+  // The offline parse keeps the quantile default, which a stream refuses by name.
+  const MasteringChainConfig offline =
+      parse_chain_config_params(enabled_only.data(), enabled_only.size());
+  CHECK(offline.repair.denoise.config.noise_estimator ==
+        sonare::mastering::repair::DenoiseNoiseEstimator::Quantile);
+  REQUIRE_THROWS_AS(StreamingMasteringChain(offline), sonare::SonareException);
+
+  // The streaming parse starts on the estimator the realtime denoise insert defaults to, so
+  // enabling the stage alone prepares.
+  const MasteringChainConfig streaming =
+      parse_streaming_chain_config_params(enabled_only.data(), enabled_only.size());
+  CHECK(streaming.repair.denoise.config.noise_estimator ==
+        sonare::mastering::repair::DenoiseNoiseEstimator::Spp);
+  StreamingMasteringChain chain(streaming);
+  chain.prepare(48000.0, 512, 2);
+  CHECK(chain.stage_names() == std::vector<std::string>{"repair.denoise"});
+
+  // An explicit estimator still wins, and the whole-signal one is still refused by name.
+  const std::vector<Param> explicit_quantile{{"repair.denoise.enabled", 1.0},
+                                             {"repair.denoise.noiseEstimator", 0.0}};
+  REQUIRE_THROWS_AS(StreamingMasteringChain(parse_streaming_chain_config_params(
+                        explicit_quantile.data(), explicit_quantile.size())),
+                    sonare::SonareException);
+  const std::vector<Param> explicit_mcra{{"repair.denoise.enabled", 1.0},
+                                         {"repair.denoise.noiseEstimator", 1.0}};
+  CHECK(parse_streaming_chain_config_params(explicit_mcra.data(), explicit_mcra.size())
+            .repair.denoise.config.noise_estimator ==
+        sonare::mastering::repair::DenoiseNoiseEstimator::Mcra);
+}
+
+TEST_CASE("a chain config document takes an enum-valued key by its name", "[mastering][chain]") {
+  const auto by_name = chain_config_from_json(
+      R"({"version":1,"params":{"repair.denoise.enabled":true,)"
+      R"("repair.denoise.noiseEstimator":"imcra","repair.denoise.mode":"mmseStsa"}})");
+  const auto by_number =
+      chain_config_from_json(R"({"version":1,"params":{"repair.denoise.enabled":true,)"
+                             R"("repair.denoise.noiseEstimator":2,"repair.denoise.mode":1}})");
+  CHECK(by_name.repair.denoise.config.noise_estimator ==
+        sonare::mastering::repair::DenoiseNoiseEstimator::Imcra);
+  CHECK(by_name.repair.denoise.config.mode == sonare::mastering::repair::DenoiseMode::MmseStsa);
+  CHECK(chain_config_to_json(by_name) == chain_config_to_json(by_number));
+
+  // An unknown name names the key and the valid ones; a string for a number key is a wrong type.
+  try {
+    (void)chain_config_from_json(
+        R"({"version":1,"params":{"repair.denoise.noiseEstimator":"nope"}})");
+    FAIL("an unknown enum name was accepted");
+  } catch (const sonare::SonareException& error) {
+    CHECK(std::string(error.what()).find("quantile, mcra, imcra, spp") != std::string::npos);
+  }
+  CHECK_THROWS_AS(chain_config_from_json(R"({"version":1,"params":{"loudness.targetLufs":"x"}})"),
+                  sonare::SonareException);
+}
+
 TEST_CASE("StreamingMasteringChain throws if loudness enabled", "[mastering][chain][streaming]") {
   MasteringChainConfig config;
   config.loudness.enabled = true;

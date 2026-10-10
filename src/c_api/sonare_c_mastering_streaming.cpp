@@ -71,8 +71,8 @@ SonareError sonare_streaming_loudness_gain(const float* samples, size_t length, 
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
-  const auto config =
-      sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+  const auto config = sonare::mastering::api::parse_streaming_chain_config_params(
+      cpp_params.data(), cpp_params.size());
   *out = to_c_streaming_loudness_gain(
       sonare::mastering::api::streaming_loudness_gain_mono(config, samples, length, sample_rate));
   return SONARE_OK;
@@ -93,8 +93,8 @@ SonareError sonare_streaming_loudness_gain_stereo(const float* left, const float
 
   SONARE_C_TRY
   auto cpp_params = to_params(params, param_count);
-  const auto config =
-      sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+  const auto config = sonare::mastering::api::parse_streaming_chain_config_params(
+      cpp_params.data(), cpp_params.size());
   *out = to_c_streaming_loudness_gain(sonare::mastering::api::streaming_loudness_gain_stereo(
       config, left, right, length, sample_rate));
   return SONARE_OK;
@@ -302,8 +302,8 @@ SonareStreamingMasteringChain* sonare_streaming_mastering_chain_create_ex(
   }
   try {
     auto cpp_params = to_params(params, param_count);
-    auto config =
-        sonare::mastering::api::parse_chain_config_params(cpp_params.data(), cpp_params.size());
+    auto config = sonare::mastering::api::parse_streaming_chain_config_params(cpp_params.data(),
+                                                                              cpp_params.size());
     std::unique_ptr<sonare::mastering::api::StreamingMasteringChain> chain;
     if (std::isnan(loudness_static_gain_db)) {
       // Reproduce the throw-on-loudness behaviour of the non-_ex create.

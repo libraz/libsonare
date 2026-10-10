@@ -145,6 +145,8 @@ struct Rig {
   std::unique_ptr<RealtimeEngine> engine = std::make_unique<RealtimeEngine>();
   sonare::mixing::ChannelStrip huge;
   sonare::mixing::ChannelStrip latent_target;
+  // Default rig: a strip per lane, with as many inserts as the table has slots.
+  std::array<sonare::mixing::ChannelStrip, 3> lane_strips;
 
   Rig(const Row& row, const Sources& sources) {
     RealtimeEngine& e = *engine;
@@ -181,6 +183,12 @@ struct Rig {
     } else {
       REQUIRE(e.set_track_buses({bus_config(1, 2), bus_config(2), bus_config(3)}));
       REQUIRE(e.set_track_lanes({TrackLaneConfig{10}, lane_to(20, 1), TrackLaneConfig{30}}));
+      for (size_t t = 0; t < track_ids.size(); ++t) {
+        for (unsigned int i = 0; i < kTableCapacity; ++i) {
+          lane_strips[t].add_pre_insert(std::make_unique<ReportedLatencyProcessor>(0));
+        }
+        REQUIRE(e.bind_track_strip(track_ids[t], &lane_strips[t]));
+      }
       REQUIRE(e.set_bus_strip(1, ducker_bus(1, false)));
       REQUIRE(e.set_bus_strip(2, ducker_bus(2, false)));
       REQUIRE(e.set_master_strip(ducker_master(false)));
@@ -273,7 +281,7 @@ struct Rig {
 
 // The seed-182 pairwise rows over (target, existing, condition). Each verdict
 // follows the setter's checks in order; an unbind of a missing binding is kNone.
-const std::array<Row, 25> kRows{{
+const std::array<Row, 27> kRows{{
     {1, Target::kBus, Existing::kUnbind, "invalid_target", 9, 0, kTrack, 0,
      SidechainRefusal::kInvalidTarget},
     {2, Target::kLane, Existing::kReplace, "cycle", 30, 0, kTrack, 20, SidechainRefusal::kCycle},
@@ -317,6 +325,10 @@ const std::array<Row, 25> kRows{{
      SidechainRefusal::kPlanRefused},
     {25, Target::kMaster, Existing::kNone, "table_full", 0, 0, kTrack, 20,
      SidechainRefusal::kTableFull},
+    {26, Target::kLane, Existing::kNone, "undeclared_source", 30, 0, kTrack, 99,
+     SidechainRefusal::kUndeclaredSource},
+    {27, Target::kLane, Existing::kReplace, "insert_out_of_range", 30, kTableCapacity, kTrack, 20,
+     SidechainRefusal::kInsertOutOfRange},
 }};
 
 }  // namespace

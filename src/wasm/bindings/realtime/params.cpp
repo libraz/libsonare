@@ -89,6 +89,11 @@ val RealtimeEngineWasm::parameterInfo(double id) const {
 }
 
 void RealtimeEngineWasm::setAutomationLane(double param_id, val points) {
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
+          static_cast<uint32_t>(param_id))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter id names no mixer strip");
+  }
   // NOTE: a registered, explicitly non-RT-safe parameter surfaces
   // synchronously (a throw), whereas setParameter/setParameterSmoothed and
   // the canonical C API (sonare_engine_set_automation_lane) report the same
@@ -153,6 +158,11 @@ int RealtimeEngineWasm::automationLaneCount() const {
 void RealtimeEngineWasm::setParameter(double param_id, const val& value_val,
                                       const val& render_frame_val) {
   const float value = checkedFloatFromVal(value_val, "value");
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
+          static_cast<uint32_t>(param_id))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter id names no mixer strip");
+  }
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");
@@ -171,6 +181,11 @@ void RealtimeEngineWasm::setParameter(double param_id, const val& value_val,
 void RealtimeEngineWasm::setParameterSmoothed(double param_id, const val& value_val,
                                               const val& render_frame_val) {
   const float value = checkedFloatFromVal(value_val, "value");
+  if (sonare::engine::RealtimeEngine::mixer_parameter_names_no_strip(
+          static_cast<uint32_t>(param_id))) {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "parameter id names no mixer strip");
+  }
   if (registeredParameterRejectsRealtime(static_cast<uint32_t>(param_id))) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "parameter is not realtime safe");

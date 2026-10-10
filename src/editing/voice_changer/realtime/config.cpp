@@ -577,17 +577,22 @@ bool formant_warp_is_reachable(const RealtimeVoiceChangerConfig& config, std::st
   const double named_lo = std::max(lo, static_cast<double>(kFormantFactorMin));
   const double named_hi = std::min(hi, static_cast<double>(kFormantFactorMax));
   if (error) {
-    char text[200];
+    char text[360];
+    const double semitones = static_cast<double>(config.retune.semitones);
     if (named_lo > named_hi) {
       std::snprintf(text, sizeof(text),
                     "absolute formant mode: no formant factor is reachable at a pitch shift of "
-                    "%.4g semitones",
-                    static_cast<double>(config.retune.semitones));
+                    "%.4g semitones (the warp reaches [%.4g, %.4g] there, outside formantFactor's "
+                    "[%.4g, %.4g])",
+                    semitones, lo, hi, static_cast<double>(kFormantFactorMin),
+                    static_cast<double>(kFormantFactorMax));
     } else {
       std::snprintf(text, sizeof(text),
                     "absolute formant mode: formant factor must be in [%.4g, %.4g] at a pitch "
-                    "shift of %.4g semitones, got %.4g",
-                    named_lo, named_hi, static_cast<double>(config.retune.semitones), factor);
+                    "shift of %.4g semitones (the warp reaches [%.4g, %.4g] there, limited by "
+                    "formantFactor's [%.4g, %.4g]), got %.4g",
+                    named_lo, named_hi, semitones, lo, hi, static_cast<double>(kFormantFactorMin),
+                    static_cast<double>(kFormantFactorMax), factor);
     }
     *error = text;
   }

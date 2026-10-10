@@ -563,7 +563,12 @@ uint64_t decimalUint64Property(val object, const char* key, uint64_t default_val
 }
 
 int64_t renderFrameFromVal(const val& value) {
-  return value.isUndefined() ? -1 : checkedInt64FromVal(value, "renderFrame");
+  if (value.isUndefined()) return -1;
+  const int64_t frame = checkedInt64FromVal(value, "renderFrame");
+  if (frame < 0) {
+    throw WasmRangeError("renderFrame must not be negative (omit it to apply immediately)");
+  }
+  return frame;
 }
 
 int64_t int64Property(val object, const char* key, int64_t default_value) {

@@ -24,7 +24,8 @@ using constants::kDefaultDawSampleRate;
 
 using sonare::constants::kFloorDb;
 
-std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec) {
+std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing::api::Strip& spec,
+                                                                   double build_sample_rate) {
   auto strip = std::make_unique<mixing::ChannelStrip>(
       mixing::ChannelStripConfig{spec.fader_db, spec.pan, mixing::pan_law_from_index(spec.pan_law),
                                  5.0f, mixing::EqPosition::PreFader, spec.input_trim_db, false});
@@ -42,8 +43,9 @@ std::unique_ptr<mixing::ChannelStrip> make_channel_strip_from_spec(const mixing:
                                   spec.surround_pan.distance});
   mixing::apply_strip_eq(*strip, spec.eq, nullptr);
   for (const auto& insert : spec.inserts) {
-    auto processor =
-        mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
+    auto processor = mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr,
+                                                 resource::kDefaultProjectImportResourceLimits,
+                                                 build_sample_rate);
     if (!processor) {
       return nullptr;
     }
@@ -1003,7 +1005,7 @@ bool TrackMixerRuntime::set_track_strip(uint32_t track_id, const mixing::api::St
 
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
-    strip = make_channel_strip_from_spec(spec);
+    strip = make_channel_strip_from_spec(spec, sample_rate_);
   } catch (...) {
     return false;
   }
@@ -1067,8 +1069,9 @@ bool TrackMixerRuntime::set_bus_strip(uint32_t bus_id, const mixing::api::Bus& b
     fx->set_channel_layout(bus_configs_[bus_index].layout);
     try {
       for (const auto& insert : bus.inserts) {
-        auto processor =
-            mastering::api::make_insert(insert.processor_name, insert.params_json, nullptr);
+        auto processor = mastering::api::make_insert(
+            insert.processor_name, insert.params_json, nullptr,
+            resource::kDefaultProjectImportResourceLimits, sample_rate_);
         if (!processor) return false;
         const bool spo = mastering::api::channel_policy(insert.processor_name) ==
                          mastering::api::ChannelPolicy::StereoPairOnly;

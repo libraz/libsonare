@@ -163,7 +163,9 @@ SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
 /// @brief Reports the longest audible tail after the last input, in samples.
 /// @details An upper bound: the longest instrument tail plus the longest route
 ///   through lane strips (channel delay included), buses, sends, the graph and
-///   the master strip. 2147483647 means the tail is unbounded. Control-thread
+///   the master strip. Insert terms end where a unit impulse stays below 1e-5;
+///   instrument terms where the voice envelope falls below 1e-4.
+///   2147483647 means the tail is unbounded. Control-thread
 ///   only; must not run concurrently with process().
 SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples);
 /// @brief Applies commands queued on an offline/control-only engine immediately.
@@ -255,7 +257,10 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
 ///   @ref sonare_engine_set_parameter_smoothed, or is left unchanged if no
 ///   such value was ever sent for @p param_id. This holds regardless of
 ///   whether the manual value or the lane clear reaches the audio thread
-///   first.
+///   first. A mixer-namespace id (0x4D58xxxx) other than a master id names no
+///   strip and is refused with @c SONARE_ERROR_INVALID_PARAMETER, as by
+///   @ref sonare_engine_set_parameter; resolve per-strip ids with the
+///   `sonare_engine_resolve_*_automation_id` functions.
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
                                               const SonareAutomationPoint* points,
                                               size_t point_count);
@@ -322,8 +327,9 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 ///   processed in key order and the key is delay-compensated to the
 ///   destination strip input, so the result depends on neither the lane order
 ///   nor the block size. @p source_track_id 0 removes the binding. Rejects
-///   (SONARE_ERROR_INVALID_PARAMETER, bindings unchanged) a lane keying itself,
-///   a binding that would close a cycle over the lane bindings, a full binding
+///   (SONARE_ERROR_INVALID_PARAMETER, bindings unchanged) a source track that is
+///   not declared, an @p insert_index the target strip does not have, a lane
+///   keying itself, a binding that would close a cycle over the lane bindings, a full binding
 ///   table and an alignment past the delay ceiling. Control-thread only; must
 ///   not be called concurrently with @ref sonare_engine_process.
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
@@ -1007,6 +1013,10 @@ SonareError sonare_engine_drain_scope_telemetry(SonareRealtimeEngine* engine,
 /// @param param_id Target parameter id.
 /// @param value New value.
 /// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @return @c SONARE_ERROR_INVALID_PARAMETER for a reserved mixer id
+///   (0x4D58xxxx) that is not a master id: the retired positional track and bus
+///   encoding names no strip. Ids resolved for a strip that was later removed
+///   are still accepted and apply nothing.
 /// @details This value also becomes @p param_id's base value: if an
 ///   automation lane later starts (and stops) driving @p param_id, the target
 ///   reverts to this value once that lane empties -- see

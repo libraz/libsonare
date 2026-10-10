@@ -396,6 +396,61 @@ TEST_CASE("CLI mastering command", "[cli][mastering]") {
   }
 }
 
+TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const std::string by_name_out = unique_temp_path("_enum_by_name.wav");
+  const std::string by_number_out = unique_temp_path("_enum_by_number.wav");
+  const std::string run = CLI + " mastering " + TEST_WAV;
+
+  // --params: the name and the number select the same estimator, so the audio is identical.
+  auto [name_code, name_output] =
+      exec_command(run + " --preset pop -o " + by_name_out +
+                   " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra -q");
+  INFO(name_output);
+  REQUIRE(name_code == 0);
+  auto [number_code, number_output] =
+      exec_command(run + " --preset pop -o " + by_number_out +
+                   " --params repair.denoise.enabled=1,repair.denoise.noiseEstimator=1 -q");
+  INFO(number_output);
+  REQUIRE(number_code == 0);
+  std::ifstream by_name(by_name_out, std::ios::binary);
+  std::ifstream by_number(by_number_out, std::ios::binary);
+  const std::string name_bytes((std::istreambuf_iterator<char>(by_name)), {});
+  const std::string number_bytes((std::istreambuf_iterator<char>(by_number)), {});
+  REQUIRE_FALSE(name_bytes.empty());
+  CHECK(name_bytes == number_bytes);
+
+  // --chain-config: the same name inside the JSON file.
+  const std::string config_path = unique_temp_path("_enum_chain.json");
+  {
+    std::ofstream config(config_path);
+    config << R"({"version":1,"params":{"repair.denoise.enabled":true,)"
+           << R"("repair.denoise.noiseEstimator":"mcra"}})";
+  }
+  const std::string config_out = unique_temp_path("_enum_chain.wav");
+  auto [config_code, config_output] =
+      exec_command(run + " --chain-config " + config_path + " -o " + config_out + " -q");
+  INFO(config_output);
+  CHECK(config_code == 0);
+
+  // An unknown name is refused with the key and the valid names.
+  auto [bad_code, bad_output] =
+      exec_command(run + " --preset pop --params repair.denoise.noiseEstimator=nope -q 2>&1");
+  CHECK(bad_code != 0);
+  CHECK_THAT(bad_output, ContainsSubstring("repair.denoise.noiseEstimator"));
+  CHECK_THAT(bad_output, ContainsSubstring("quantile, mcra, imcra, spp"));
+
+  // A name for a number-valued key stays the numeric-value error.
+  auto [number_key_code, number_key_output] =
+      exec_command(run + " --preset pop --params loudness.targetLufs=loud -q 2>&1");
+  CHECK(number_key_code != 0);
+  CHECK_THAT(number_key_output, ContainsSubstring("invalid numeric value"));
+  std::remove(by_name_out.c_str());
+  std::remove(by_number_out.c_str());
+  std::remove(config_path.c_str());
+  std::remove(config_out.c_str());
+}
+
 TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[cli][mastering]") {
   // Two files that are mirror images of each other: A = (L, R), B = (R, L).
   // Their mono downmixes are bit-identical, because 0.5*(L+R) is symmetric, so a

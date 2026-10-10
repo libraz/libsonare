@@ -1193,4 +1193,25 @@ TEST_CASE("C-API default bus output is bit-identical to the summed strip inputs"
   REQUIRE(any_differs);
 }
 
+TEST_CASE("C-API scene mixer bounds a strip equalizer insert by the mixer rate's Nyquist",
+          "[mixing][capi][scene][eq]") {
+  constexpr int kBlock = 16;
+  sonare::mixing::api::Scene scene;
+  sonare::mixing::api::Strip source;
+  source.id = "source";
+  source.inserts.emplace_back(sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+                              "{\"band0.frequencyHz\":30000}");
+  scene.strips.push_back(source);
+  const std::string json = sonare::mixing::api::scene_to_json(scene);
+
+  SonareMixer* wide = sonare_mixer_from_scene_json(json.c_str(), 96000, kBlock);
+  REQUIRE(wide != nullptr);
+  sonare_mixer_destroy(wide);
+
+  SonareMixer* narrow = sonare_mixer_from_scene_json(json.c_str(), 48000, kBlock);
+  REQUIRE(narrow == nullptr);
+  REQUIRE(std::string(sonare_last_error_message())
+              .find("must be below 24000 Hz (Nyquist at 48000 Hz)") != std::string::npos);
+}
+
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

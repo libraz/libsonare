@@ -723,6 +723,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   }
 #endif
   static bool parameter_target_reserved(uint32_t target_id) noexcept;
+  /// @brief True when @p target_id lies in the reserved mixer namespace
+  /// (0x4D58xxxx) but names no strip: only the master ids are live there, since
+  /// track and bus controls are issued per strip from the insert namespace. A
+  /// control-thread setter refuses such an id instead of queueing a command the
+  /// audio thread can only count as an unknown target.
+  static bool mixer_parameter_names_no_strip(uint32_t target_id) noexcept;
   automation::AutomationEngine& automation() noexcept { return automation_; }
   const automation::AutomationEngine& automation() const noexcept { return automation_; }
 

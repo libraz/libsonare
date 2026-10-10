@@ -51,7 +51,7 @@ val js_mastering(val samples, const val& sample_rate_val, const val& target_lufs
 // TypeScript facade sends.
 // ---------------------------------------------------------------------------
 
-mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
+mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config, bool streaming) {
   // The facade flattens its nested config to canonical dotted parameters and
   // sends them in this private envelope. Parsing them with the core parser is
   // what keeps WASM in lockstep with the C ABI, Node and Python: a second
@@ -59,7 +59,9 @@ mastering::api::MasteringChainConfig masteringChainConfigFromVal(val config) {
   val flat_params = objectProperty(config, "__flatParams");
   if (!flat_params.isUndefined()) {
     const std::vector<mastering::api::Param> params = masteringParamsFromObject(flat_params);
-    return mastering::api::parse_chain_config_params(params.data(), params.size());
+    return streaming
+               ? mastering::api::parse_streaming_chain_config_params(params.data(), params.size())
+               : mastering::api::parse_chain_config_params(params.data(), params.size());
   }
   throw WasmRangeError(
       "mastering chain config must be the flattened parameter map the facade "
@@ -105,7 +107,7 @@ val js_mastering_streaming_loudness_gain(val samples, const val& sample_rate_val
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_mono(
-      masteringChainConfigFromVal(config), data.data(), data.size(), sample_rate));
+      masteringChainConfigFromVal(config, true), data.data(), data.size(), sample_rate));
 }
 
 val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samples,
@@ -118,7 +120,8 @@ val js_mastering_streaming_loudness_gain_stereo(val left_samples, val right_samp
   validate_offline_audio_input(left.data(), left.size(), sample_rate);
   validate_offline_audio_input(right.data(), right.size(), sample_rate);
   return streamingLoudnessGainToVal(mastering::api::streaming_loudness_gain_stereo(
-      masteringChainConfigFromVal(config), left.data(), right.data(), left.size(), sample_rate));
+      masteringChainConfigFromVal(config, true), left.data(), right.data(), left.size(),
+      sample_rate));
 }
 
 // Mastering chain (mono) with progress callback

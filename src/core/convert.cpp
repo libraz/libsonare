@@ -16,6 +16,7 @@
 namespace sonare {
 
 namespace {
+
 /// @brief Slaney mel scale constants.
 /// @details Uses exact runtime calculation for stable numeric behavior.
 constexpr float kMelFMin = 0.0f;
@@ -28,6 +29,10 @@ inline float log_step() {
   static const float value = std::log(6.4f) / 27.0f;
   return value;
 }
+
+/// Octaves spanned by the MIDI note range: C-1 (0) through G9 (127).
+constexpr int kMinNoteOctave = -1;
+constexpr int kMaxNoteOctave = 9;
 }  // namespace
 
 float hz_to_mel(float hz) {
@@ -134,27 +139,17 @@ float note_to_hz(const std::string& note) {
     } catch (const std::logic_error&) {
       throw invalid();  // std::invalid_argument / std::out_of_range from stoll
     }
-    // Keep the historical int-sized octave contract, but perform the range
-    // check before narrowing so an extreme textual octave cannot overflow.
-    if (parsed_octave < std::numeric_limits<int>::min() ||
-        parsed_octave > std::numeric_limits<int>::max()) {
-      throw invalid();
+    if (parsed_octave < kMinNoteOctave || parsed_octave > kMaxNoteOctave) {
+      throw SonareException(ErrorCode::InvalidParameter, "note_to_hz: octave of \"" + note +
+                                                             "\" must be in [" +
+                                                             std::to_string(kMinNoteOctave) + ", " +
+                                                             std::to_string(kMaxNoteOctave) + "]");
     }
     octave = static_cast<int>(parsed_octave);
   }
 
-  // Widen before adding the octave offset.  The previous int expression could
-  // overflow for INT_MAX even though the parser had accepted the octave.
-  const std::int64_t semitones_per_octave =
-      static_cast<std::int64_t>(constants::kSemitonesPerOctave);
-  const std::int64_t midi = (static_cast<std::int64_t>(octave) + 1) * semitones_per_octave + offset;
-  if (midi < std::numeric_limits<int>::min() || midi > std::numeric_limits<int>::max()) {
-    throw invalid();
-  }
-
-  const float hz = midi_to_hz(static_cast<float>(midi));
-  if (!std::isfinite(hz)) throw invalid();
-  return hz;
+  const int midi = (octave + 1) * static_cast<int>(constants::kSemitonesPerOctave) + offset;
+  return midi_to_hz(static_cast<float>(midi));
 }
 
 float frames_to_time(int frames, int sr, int hop_length) {

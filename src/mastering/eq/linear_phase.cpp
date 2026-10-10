@@ -8,6 +8,7 @@
 #include "core/window.h"
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/band_frequency.h"
 #include "mastering/eq/cut_band.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
@@ -254,8 +255,7 @@ void LinearPhaseEq::set_band(size_t index, const EqBand& band) {
   if (band.enabled) {
     if (!(band.frequency_hz > 0.0f) ||
         !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
-      throw SonareException(ErrorCode::InvalidParameter,
-                            "EQ band frequency must be between 0 Hz and Nyquist");
+      refuse_band_frequency(band.frequency_hz, sample_rate_);
     }
     if (!(band.q > 0.0f)) {
       throw SonareException(ErrorCode::InvalidParameter, "EQ band Q must be positive");

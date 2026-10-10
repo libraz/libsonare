@@ -495,7 +495,10 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   are not automation targets: their `id` is null and `rtSafe` false, so they
 ///   take effect only when the insert is built. The names are the same set @ref
 ///   sonare_mastering_insert_param_names returns, plus any automation target
-///   construction does not read.
+///   construction does not read. An offline repair stage with no insert form
+///   (`repair.declick`, `repair.declip`, `repair.trimSilence`) is served too: every
+///   id of @ref sonare_mastering_processor_catalog answers with that entry's `params`,
+///   and every row of a repair stage has a null `id` and a false `rtSafe`.
 ///
 ///   `type` is `"number"`, `"boolean"`, `"enum"`, `"string"` or `"array"`, taken
 ///   from the C++ type the processor's config builder reads the key as. An
@@ -522,9 +525,14 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   meaning "this catalog states no limit" rather than "unknown". Properties a
 ///   host should plan for:
 ///     - bounds and choices are measured with every OTHER parameter at its
-///       default, so two parameters that constrain each other each report the
-///       other's default (`saturation.waveshaper` refuses `aliasing` adaa1 once
-///       `curve` is asymmetric);
+///       default, so a constraint between two parameters that is not one of
+///       `dependsOn` shows up as the other's default (`saturation.waveshaper`
+///       refuses `aliasing` adaa1 once `curve` is asymmetric). A bound that is
+///       only a `dependsOn` entry read at the sibling's default (`hopLength` at
+///       most half of `nFft`) is not published: `min` or `max` is null and the
+///       dependency carries it. The choices of a size that a sibling bounds from
+///       below (`nFft`) are measured with that sibling at 1, so every value the
+///       stage takes at some valid sibling value is listed;
 ///     - a sample-rate-derived bound reflects the un-prepared processor and
 ///       rises once the insert is prepared at a higher rate;
 ///     - an exclusive bound is reported as its limit value and flagged: a
@@ -560,7 +568,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   key (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> factor * sibling`,
 ///   `factor` a positive multiplier, 1 for a plain ordering) and is
 ///   empty for an independent key; it is how a control narrows `min` and `max`,
-///   which are measured with every sibling at its default. All of these describe
+///   and a bound that merely restates it is left null (see above). All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
@@ -570,10 +578,11 @@ const char* sonare_mastering_insert_param_info(const char* name);
 /// @details Identical to the rate-less query except that every key whose
 ///   `maxRelativeTo` is `"nyquist"` reports, as `max` and `maxExclusive`, the
 ///   bound actually accepted when the insert is built and prepared at
-///   @p sample_rate. That is the lower of the host's Nyquist frequency and any
-///   cap fixed when the insert is built, so a rate above the build rate does not
-///   raise it (an EQ band frequency stays at 24000 for a 96000 Hz host). The
-///   rate-less query is unchanged and does not depend on earlier calls here.
+///   @p sample_rate. An insert built for a known rate (one-shot processing, a
+///   strip built in a prepared engine) takes that rate's Nyquist frequency, so
+///   an EQ band frequency reaches 48000 for a 96000 Hz host; the rate-less query
+///   keeps the 24000 cap of the 48 kHz probe and does not depend on earlier
+///   calls here.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).
 /// @param sample_rate Host rate in Hz, within the range the other sample-rate
 ///   arguments of this header accept.
@@ -603,12 +612,35 @@ const char* sonare_mastering_insert_param_info_at_rate(const char* name, int sam
 ///   sonare_mastering_insert_param_info. NULL is the empty object.
 /// @param sample_rate Rate the insert is prepared at.
 /// @param out_latency_samples Receives the latency in samples at @p sample_rate.
-/// @param out_tail_samples Receives the tail in samples at @p sample_rate.
+/// @param out_tail_samples Receives the tail in samples at @p sample_rate: an upper bound on
+///   the time after the last input until the insert's response to a unit impulse stays
+///   below 1e-5 (-100 dB re the unit input). It may exceed the measured time, never fall short.
 /// @return SONARE_ERROR_INVALID_PARAMETER for an unknown @p name, a key the
 ///   insert does not read, a value its construction refuses, a sample rate
 ///   outside the supported range, or a NULL output pointer.
 SonareError sonare_mastering_insert_timing(const char* name, const char* params, int sample_rate,
                                            int* out_latency_samples, int* out_tail_samples);
+
+/// @brief The number an enum-valued mastering parameter carries for one of its names.
+/// @details Every flat parameter list is numbers, so a facade that lets a caller write
+///   `noiseEstimator: 'mcra'` resolves the name here and sends the ordinal. The names
+///   are the `choices` names of @ref sonare_mastering_insert_param_info, plus any value the
+///   offline stage takes and the realtime insert refuses (`quantile`).
+/// @param processor Processor id (an insert or a repair stage) whose parameter @p key is, or
+///   NULL or "" when @p key is a flat mastering chain key (`repair.denoise.noiseEstimator`,
+///   `repair.dehum.mode`).
+/// @param key Parameter key, as published by the parameter info or the chain schema.
+/// @param name The choice name, matched exactly.
+/// @param out_is_enum Receives 1 when @p key is an enum parameter and 0 when it is not, which
+///   is not an error here: a caller that was handed a name for a number-valued key owns the
+///   refusal (a wrong type, not an unknown name). Zeroed on entry.
+/// @param out_value Receives the value of @p name when @p out_is_enum is 1. Zeroed on entry.
+/// @return SONARE_OK for a resolved name and for a key that is not an enum;
+///   SONARE_ERROR_INVALID_PARAMETER when @p key is an enum and @p name is none of its choices
+///   (the message names the key and every valid name), or when @p key, @p name, @p out_is_enum
+///   or @p out_value is NULL.
+SonareError sonare_mastering_enum_value(const char* processor, const char* key, const char* name,
+                                        int* out_is_enum, double* out_value);
 
 /// @details @ref SonareMasteringResult::non_finite_substitution_count here:
 ///   whether this can be non-zero depends on which processor was named. One

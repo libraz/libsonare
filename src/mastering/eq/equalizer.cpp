@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include "mastering/eq/band_frequency.h"
 #include "mastering/eq/parametric.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "rt/biquad_design.h"
@@ -62,8 +63,7 @@ void EqualizerProcessor::prepare(double sample_rate, int max_block_size) {
   if (!prepared_) {
     for (const EqBand& band : bands_) {
       if (band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
-        throw SonareException(ErrorCode::InvalidParameter,
-                              "EQ band frequency must be between 0 Hz and Nyquist");
+        refuse_band_frequency(band.frequency_hz, sample_rate);
       }
     }
   }
@@ -421,8 +421,7 @@ void EqualizerProcessor::validate_band(const EqBand& band) const {
   // A band requested at a known rate is refused if the rate cannot carry it; one
   // stored before prepare() is resolved to that rate instead.
   if (prepared_ && band.enabled && !(band.frequency_hz < static_cast<float>(sample_rate_ * 0.5))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EQ band frequency must be between 0 Hz and Nyquist");
+    refuse_band_frequency(band.frequency_hz, sample_rate_);
   }
 }
 

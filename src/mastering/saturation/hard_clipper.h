@@ -50,8 +50,9 @@ class HardClipper : public rt::ProcessorBase {
 
   /// @brief Returns the processing latency for the active mode.
   /// @details Adaa1 adds half a sample (Q8 128), Adaa2 one sample, Oversample4x
-  ///   the oversampler's streaming round-trip latency. The clipper is fully wet,
-  ///   so there is no parallel path to align.
+  ///   the oversampler's streaming round-trip latency: 48 samples, two FIR group
+  ///   delays of 24, whatever the host rate. The clipper is fully wet, so there is
+  ///   no parallel path to align.
   int latency_samples() const noexcept override;
   int tail_samples() const noexcept override;
   int latency_samples_q8() const noexcept override;

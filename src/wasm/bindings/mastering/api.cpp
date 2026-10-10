@@ -13,6 +13,7 @@
 #include "mastering/match/ab_switcher.h"
 #include "midi/synth/synth_presets.h"
 #include "mixing/api/presets.h"
+#include "playback/config.h"
 #include "sonare.h"
 #include "util/json.h"
 #include "wasm/bindings/common/common.h"
@@ -38,6 +39,7 @@ val js_mastering_insert_names() {
 // Any key not in this list is silently ignored; for scene loads those ignored
 // keys are reported via Mixer.sceneWarnings(). Empty array for an unknown name.
 val js_mastering_insert_param_names(std::string name) {
+  wasmRefuseEmbeddedNul(name, "name");
   val out = val::array();
   auto names = mastering::api::insert_param_names(name);
   for (size_t index = 0; index < names.size(); ++index) {
@@ -55,6 +57,7 @@ val js_mastering_insert_param_names(std::string name) {
 // "id" null and "rtSafe" false. See sonare_mastering_insert_param_info (the C
 // ABI oracle for this JSON's semantics) for the full field contract.
 std::string js_mastering_insert_param_info(std::string name) {
+  wasmRefuseEmbeddedNul(name, "name");
   return mastering::api::insert_param_info_json(name);
 }
 
@@ -62,6 +65,7 @@ std::string js_mastering_insert_param_info(std::string name) {
 // `sample_rate` (see sonare_mastering_insert_param_info_at_rate). Throws for a
 // rate outside the supported range.
 std::string js_mastering_insert_param_info_at_rate(std::string name, double sample_rate) {
+  wasmRefuseEmbeddedNul(name, "name");
   if (!(sample_rate >= sonare::kMinAudioSampleRate && sample_rate <= sonare::kMaxAudioSampleRate)) {
     throw WasmRangeError("sample_rate " + std::to_string(sample_rate) + " is out of range");
   }
@@ -74,12 +78,21 @@ std::string js_mastering_insert_param_info_at_rate(std::string name, double samp
 // insert does not read, or a value its construction or prepare refuses; see
 // sonare_mastering_insert_timing for the exact error text.
 val js_mastering_insert_timing(std::string name, std::string json_params, double sample_rate) {
+  wasmRefuseEmbeddedNul(name, "name");
   const mastering::api::InsertTiming timing =
       mastering::api::insert_timing(name, json_params, sample_rate);
   val out = val::object();
   out.set("latencySamples", timing.latency_samples);
   out.set("tailSamples", timing.tail_samples);
   return out;
+}
+
+// The number the enum-valued mastering parameter `key` carries for `choice`, or null when `key`
+// is not an enum (the facade refuses that as a wrong type). `processor` is empty for a flat chain
+// key. Throws for an unknown choice; see sonare_mastering_enum_value.
+val js_mastering_enum_value(std::string processor, std::string key, std::string choice) {
+  const std::optional<double> value = mastering::api::mastering_enum_value(processor, key, choice);
+  return value.has_value() ? val(*value) : val::null();
 }
 
 // Machine-readable classification catalog for every named processor id, as a JSON
@@ -146,6 +159,16 @@ std::string build_capability_catalog() {
   presets["mixingScene"] = json::Array{};
 #endif
   presets["voiceChanger"] = catalog_voice_changer_preset_names();
+#if defined(SONARE_WITH_PLAYBACK)
+  json::Array playback_room_presets;
+  for (auto preset : {playback::RoomPreset::None, playback::RoomPreset::LivingRoom,
+                      playback::RoomPreset::HomeTheater, playback::RoomPreset::ScreeningRoom}) {
+    playback_room_presets.emplace_back(playback::room_preset_name(preset));
+  }
+  presets["playbackRoom"] = std::move(playback_room_presets);
+#else
+  presets["playbackRoom"] = json::Array{};
+#endif
   catalog["presets"] = std::move(presets);
 
   // Mirrors sonare_c_mastering_apply.cpp's masteringPresets entries field for
@@ -206,6 +229,7 @@ val js_master_audio(std::string preset_name, val samples, const val& sample_rate
                     val overrides) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   auto preset = mastering::api::preset_from_string(preset_name);
   auto overrides_vec = masteringParamsFromObject(overrides);
   auto result = mastering::api::master_audio_mono(
@@ -222,6 +246,7 @@ val js_master_audio_stereo(std::string preset_name, val left_samples, val right_
                                "masterAudioStereo input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   auto preset = mastering::api::preset_from_string(preset_name);
   auto overrides_vec = masteringParamsFromObject(overrides);
   auto result = mastering::api::master_audio_stereo(
@@ -235,6 +260,7 @@ val js_master_audio_with_progress(std::string preset_name, val samples, const va
                                   val overrides, val progress_callback, val cancel_callback) {
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
   auto overrides_vec = masteringParamsFromObject(overrides);
@@ -261,6 +287,7 @@ val js_master_audio_stereo_with_progress(std::string preset_name, val left_sampl
                                "masterAudioStereoWithProgress input", true);
   std::vector<float> left = float32ArrayToVector(left_samples);
   std::vector<float> right = float32ArrayToVector(right_samples);
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   auto preset = mastering::api::preset_from_string(preset_name);
   auto config = mastering::api::preset_config(preset);
   auto overrides_vec = masteringParamsFromObject(overrides);
@@ -293,6 +320,7 @@ val js_mastering_stereo_analysis_names() {
 
 val js_mastering_process(std::string processor_name, val samples, const val& sample_rate_val,
                          val params) {
+  wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   std::vector<float> data = float32ArrayToVector(samples);
   validate_offline_audio_input(data.data(), data.size(), sample_rate);
@@ -312,6 +340,7 @@ val js_mastering_process(std::string processor_name, val samples, const val& sam
 
 val js_mastering_process_stereo(std::string processor_name, val left_samples, val right_samples,
                                 const val& sample_rate_val, val params) {
+  wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringProcessStereo input", true);
@@ -337,6 +366,7 @@ val js_mastering_process_stereo(std::string processor_name, val left_samples, va
 
 val js_mastering_pair_process(std::string processor_name, val source_samples, val reference_samples,
                               const val& sample_rate_val, val params) {
+  wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairProcess input", false);
@@ -363,6 +393,7 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
                                      val source_right_samples, val reference_left_samples,
                                      val reference_right_samples, const val& sample_rate_val,
                                      val params) {
+  wasmRefuseEmbeddedNul(processor_name, "processorName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(source_left_samples, "source left samples", source_right_samples,
                                "source right samples", "masteringPairProcessStereo source input",
@@ -403,6 +434,7 @@ val js_mastering_pair_process_stereo(std::string processor_name, val source_left
 std::string js_mastering_pair_analyze(std::string analysis_name, val source_samples,
                                       val reference_samples, const val& sample_rate_val,
                                       val params) {
+  wasmRefuseEmbeddedNul(analysis_name, "analysisName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(source_samples, "source samples", reference_samples,
                                "reference samples", "masteringPairAnalyze input", false);
@@ -475,6 +507,7 @@ val js_mastering_ab_match_loudness_stereo(val source_left_samples, val source_ri
 
 std::string js_mastering_stereo_analyze(std::string analysis_name, val left_samples,
                                         val right_samples, const val& sample_rate_val, val params) {
+  wasmRefuseEmbeddedNul(analysis_name, "analysisName");
   const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
   validateWasmFloat32ArrayPair(left_samples, "left samples", right_samples, "right samples",
                                "masteringStereoAnalyze input", true);
@@ -526,6 +559,7 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
                              mastering::assistant::platform_names_joined());
       }
       platform = value.as<std::string>();
+      wasmRefuseEmbeddedNul(platform, "targetPlatform");
       has_platform = true;
     }
     if (hasProperty(params_obj, "preset")) {
@@ -534,6 +568,7 @@ mastering::assistant::AssistantConfig assistantConfigFromParams(val params_obj) 
         throw WasmRangeError("'preset' must be a mastering preset name");
       }
       preset = value.as<std::string>();
+      wasmRefuseEmbeddedNul(preset, "preset");
       has_preset = true;
     }
   }
@@ -599,6 +634,7 @@ val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
 // long held note -- for noise and pull it down by the configured reduction
 // depth. Check for musical sustained tones before applying one.
 val js_mastering_preset_params(std::string preset_name) {
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   const auto preset = mastering::api::preset_from_string(preset_name);
   return chainConfigParamsToVal(mastering::api::preset_config(preset));
 }
@@ -713,6 +749,7 @@ void registerMasteringApiBindings() {
   function("masteringInsertParamInfo", &js_mastering_insert_param_info);
   function("masteringInsertParamInfoAtRate", &js_mastering_insert_param_info_at_rate);
   function("masteringInsertTiming", &js_mastering_insert_timing);
+  function("masteringEnumValue", &js_mastering_enum_value);
   function("masteringProcessorCatalog", &js_mastering_processor_catalog);
   function("capabilityCatalog", &js_capability_catalog);
   function("masteringPairProcessorNames", &js_mastering_pair_processor_names);

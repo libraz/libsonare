@@ -347,7 +347,7 @@ typedef struct {
 /* Zeroing this struct is NOT equivalent to the defaults and changes what is
  * detected: `absolute_threshold` 0 disables the floor that asks whether the
  * features changed at all, and without it a stationary input segments anyway,
- * because the relative threshold is applied to a curve scaled by its own
+ * because the relative threshold is applied to a curve scaled by its local
  * maximum. Start from sonare_boundary_options_default(). */
 typedef struct {
   int n_fft;

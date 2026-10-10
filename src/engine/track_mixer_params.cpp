@@ -1033,9 +1033,13 @@ void TrackMixerRuntime::snapshot_sidechain_key(size_t lane_index, int num_channe
 SidechainRefusal TrackMixerRuntime::can_set_lane_sidechain(
     uint32_t track_id, unsigned int insert_index, uint32_t source_track_id) const noexcept {
   if (track_id == 0) return SidechainRefusal::kInvalidTarget;
+  if (insert_index >= track_insert_count(track_id)) return SidechainRefusal::kInsertOutOfRange;
   const int found = find_sidechain_binding(SidechainTargetKind::Lane, track_id, insert_index);
   if (source_track_id == 0 && found < 0) return SidechainRefusal::kNone;
   if (source_track_id != 0) {
+    if (!sidechain_source_declared(SidechainSourceKind::Track, source_track_id)) {
+      return SidechainRefusal::kUndeclaredSource;
+    }
     if (source_track_id == track_id) return SidechainRefusal::kSelfKey;
     if (lane_key_closes_cycle(track_id, source_track_id,
                               found >= 0 ? static_cast<size_t>(found) : kMaxSidechainBindings)) {

@@ -5,6 +5,7 @@
 
 #include "mastering/common/prepare_args.h"
 #include "mastering/dynamics/channel_limits.h"
+#include "mastering/eq/band_frequency.h"
 #include "rt/biquad_design.h"
 #include "rt/scoped_no_denormals.h"
 #include "rt/tail_budget.h"
@@ -220,8 +221,7 @@ BiquadCoefficients design_eq_biquad(const EqBand& band, double sample_rate) {
     throw SonareException(ErrorCode::InvalidParameter, "sample_rate must be positive");
   }
   if (!(band.frequency_hz > 0.0f) || !(band.frequency_hz < static_cast<float>(sample_rate * 0.5))) {
-    throw SonareException(ErrorCode::InvalidParameter,
-                          "EQ band frequency must be between 0 Hz and Nyquist");
+    refuse_band_frequency(band.frequency_hz, sample_rate);
   }
 
   const double q = safe_q(band.q);

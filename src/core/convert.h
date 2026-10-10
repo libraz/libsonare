@@ -54,7 +54,7 @@ std::string hz_to_note(float hz);
 /// @param note Note name (e.g., "A4", "C#5", "Db4")
 /// @return Frequency in Hz.
 /// @throws SonareException (InvalidParameter) for a name that does not parse
-///         or whose octave is outside the representable range.
+///         or whose octave is outside -1..9 (the MIDI note range's octaves).
 float note_to_hz(const std::string& note);
 
 /// @brief Converts frame index to time in seconds.

@@ -63,6 +63,11 @@ bool RealtimeEngine::parameter_target_reserved(uint32_t target_id) noexcept {
          is_insert_param_id(target_id) || is_instrument_param_id(target_id);
 }
 
+bool RealtimeEngine::mixer_parameter_names_no_strip(uint32_t target_id) noexcept {
+  return (target_id & kEngineParamNamespaceMask) == kEngineParamNamespace &&
+         ((target_id & kEngineParamLaneMask) >> kEngineParamLaneShift) != kEngineParamLaneMaster;
+}
+
 void RealtimeEngine::record_parameter_base(uint32_t target_id, float value) noexcept {
   // ParameterBaseTable::record() itself refuses target_id == 0 (the reserved
   // invalid/none id, see automation_engine.h) and an unprepared table, so

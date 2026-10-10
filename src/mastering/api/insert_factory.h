@@ -10,6 +10,7 @@
 /// uses to instantiate channel-strip inserts from a scene.
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -35,6 +36,10 @@ namespace sonare::mastering::api {
 ///             are a string lifted out of one. Overridable so the exact boundary
 ///             can be exercised without building a document of the production
 ///             size.
+/// @param build_sample_rate Host rate the insert is built for, or 0 when the build does not
+///             know one. An equalizer insert built for a rate takes that rate's Nyquist
+///             frequency as its band ceiling (see prepare_for_build_rate()); a rate-less
+///             build keeps the probe-rate ceiling, which a later prepare() can only lower.
 /// @return A heap-allocated processor, or nullptr if @p name is not a known
 ///         block-processor insert.
 /// @throws sonare::SonareException (InvalidParameter) when @p json_params is
@@ -44,7 +49,16 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
     const std::string& name, const std::string& json_params,
     std::vector<std::string>* out_unknown_keys = nullptr,
     const resource::ProjectImportResourceLimits& limits =
-        resource::kDefaultProjectImportResourceLimits);
+        resource::kDefaultProjectImportResourceLimits,
+    double build_sample_rate = 0.0);
+
+/// @brief Tells an equalizer built for a known host rate that rate, before its bands are set.
+/// @details An EQ prepared before configuration refuses a band at or above that rate's
+///          Nyquist frequency and accepts one up to it; one built without a rate keeps the
+///          probe-rate ceiling (kInsertProbeSampleRate / 2). A later prepare() at another rate
+///          lowers a band that no longer fits, as for any prepared EQ. A @p sample_rate that is
+///          not positive leaves @p processor as built.
+void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_rate);
 
 /// @brief Same as make_insert() but takes an already-parsed Param list instead
 ///        of a JSON string. Used by the offline named-processor path so it can
@@ -103,7 +117,9 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         builder that reads the key rather than measured. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be
-///         measured. Returns `[]` for an unknown @p name.
+///         measured. A repair stage with no insert form is served by repair_param_info_json(), so
+///         the answer is the catalog's `params` for every catalog id. Returns `[]` for an
+///         unknown @p name.
 std::string insert_param_info_json(const std::string& name);
 
 /// @brief Parameter descriptors for a repair stage, in the shape of insert_param_info_json().
@@ -132,6 +148,18 @@ std::string insert_param_info_json_at_rate(const std::string& name, double sampl
 ///         slot to exist; 0 when it needs none). `[]` for an unknown @p name or
 ///         an insert with no slots.
 std::string insert_slot_info_json(const std::string& name);
+
+/// @brief The wire value of the enum parameter @p key named @p choice; empty when @p key is not
+///        an enum parameter.
+/// @param processor Processor id (an insert or a repair stage), or empty when @p key is a flat
+///        mastering chain key such as `repair.denoise.noiseEstimator`.
+/// @details Reads the names the key declares where its processor reads it, which are the
+///          `choices` names of the parameter catalog, plus `quantile` and any other value the
+///          streaming insert refuses but the offline stage takes.
+/// @throws sonare::SonareException (InvalidParameter) naming @p key and every valid name when
+///         @p key is an enum parameter and @p choice is none of them.
+std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
+                                           const std::string& choice);
 
 /// Rate and block size an insert is prepared at when the catalog measures it.
 inline constexpr double kInsertProbeSampleRate = 48000.0;

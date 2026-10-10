@@ -4351,3 +4351,63 @@ TEST_CASE("RealtimeEngine advances a silent lane strip tail while stopped",
   REQUIRE(output[0] > 0.1f);
 }
 #endif
+
+TEST_CASE("A track strip equalizer insert is bounded by the Nyquist frequency of the engine rate",
+          "[engine][track_mixer][eq]") {
+  const auto strip_with_band = [](double frequency_hz) {
+    sonare::mixing::api::Strip strip;
+    strip.inserts.emplace_back(sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+                               "{\"band0.frequencyHz\":" + std::to_string(frequency_hz) + "}");
+    return strip;
+  };
+  const auto accepts = [&](double frequency_hz, double sample_rate) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(sample_rate, 256);
+    REQUIRE(engine.set_track_lanes({sonare::engine::TrackLaneConfig{1}}));
+    return engine.set_track_strip(1, strip_with_band(frequency_hz));
+  };
+  CHECK(accepts(30000.0, 96000.0));
+  CHECK_FALSE(accepts(48000.0, 96000.0));
+  CHECK_FALSE(accepts(30000.0, 48000.0));
+  CHECK(accepts(20000.0, 48000.0));
+
+  // The same ceiling holds for the factory-built strip a host validates with.
+  CHECK(sonare::engine::make_channel_strip_from_spec(strip_with_band(30000.0), 96000.0) != nullptr);
+  CHECK_THROWS_AS(sonare::engine::make_channel_strip_from_spec(strip_with_band(30000.0), 48000.0),
+                  sonare::SonareException);
+}
+
+TEST_CASE(
+    "A strip equalizer band built at 96 kHz stays finite after the engine is re-prepared at 48 kHz",
+    "[engine][track_mixer][eq]") {
+  constexpr int kBlock = 256;
+  sonare::mixing::api::Strip master;
+  master.inserts.emplace_back(sonare::mixing::api::InsertSlot::PreFader, "eq.parametric",
+                              "{\"band0.frequencyHz\":30000,\"band0.gainDb\":12,\"band0.q\":1}");
+  sonare::engine::RealtimeEngine engine;
+  engine.prepare(96000.0, kBlock);
+  REQUIRE(engine.set_master_strip(master));
+  // The documented behaviour: a prepare at another rate lowers a band that no longer fits.
+  engine.prepare(48000.0, kBlock);
+
+  std::array<float, kBlock> left{};
+  std::array<float, kBlock> right{};
+  float* io[] = {left.data(), right.data()};
+  uint32_t seed = 12345u;
+  double energy = 0.0;
+  for (int block = 0; block < 8; ++block) {
+    for (int i = 0; i < kBlock; ++i) {
+      seed = seed * 1664525u + 1013904223u;
+      left[static_cast<size_t>(i)] = right[static_cast<size_t>(i)] =
+          static_cast<float>(seed >> 8) / 8388608.0f - 1.0f;
+    }
+    engine.process(io, 2, kBlock);
+    for (int i = 0; i < kBlock; ++i) {
+      REQUIRE(std::isfinite(left[static_cast<size_t>(i)]));
+      REQUIRE(std::isfinite(right[static_cast<size_t>(i)]));
+      energy += static_cast<double>(left[static_cast<size_t>(i)]) * left[static_cast<size_t>(i)];
+    }
+  }
+  CAPTURE(energy);
+  CHECK(energy > 0.0);
+}

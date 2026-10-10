@@ -50,8 +50,6 @@ bool RealtimeEngine::read_meter_target_insert_gain_reduction(uint32_t target_id,
 
 namespace {
 
-constexpr uint32_t kEngineParamLaneMaster = 0xFFu;
-
 // A non-finite insert-parameter value has no meaning for any processor and is
 // actively dangerous for the delay-based ones: std::clamp propagates NaN (every
 // comparison is false, so it returns the value unchanged), and the result
@@ -264,7 +262,7 @@ bool RealtimeEngine::set_master_strip(const mixing::api::Strip& strip_spec) {
   }
   std::unique_ptr<mixing::ChannelStrip> strip;
   try {
-    strip = make_channel_strip_from_spec(next_spec);
+    strip = make_channel_strip_from_spec(next_spec, sample_rate_);
     if (strip == nullptr) return false;
     if (max_block_size_ > 0) strip->prepare(sample_rate_, max_block_size_);
   } catch (...) {
@@ -301,7 +299,7 @@ bool RealtimeEngine::validate_track_lanes(const std::vector<TrackLaneConfig>& la
 bool RealtimeEngine::validate_track_strip(const mixing::api::Strip& strip) const {
   if (!strip_eq_acceptable(strip.eq, sample_rate_)) return false;
   try {
-    return make_channel_strip_from_spec(strip) != nullptr;
+    return make_channel_strip_from_spec(strip, sample_rate_) != nullptr;
   } catch (...) {
     return false;
   }

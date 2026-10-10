@@ -191,6 +191,15 @@ TEST_CASE("note_to_hz refuses octaves outside its representable MIDI range", "[c
   require_invalid_parameter([] { note_to_hz("H9999999999999999999999"); });
 }
 
+TEST_CASE("note_to_hz accepts the MIDI note range's octaves and refuses the rest",
+          "[convert][edge]") {
+  REQUIRE_THAT(note_to_hz("C-1"), WithinAbs(8.1758f, 1e-3f));
+  REQUIRE_THAT(note_to_hz("G9"), WithinAbs(12543.85f, 0.1f));
+  require_invalid_parameter([] { note_to_hz("C10"); });
+  require_invalid_parameter([] { note_to_hz("A-2"); });
+  require_invalid_parameter([] { note_to_hz("Db100"); });
+}
+
 TEST_CASE("note_to_hz keeps its parsing rules for valid names", "[convert]") {
   REQUIRE_THAT(note_to_hz("A4"), WithinAbs(440.0f, 0.01f));
   REQUIRE_THAT(note_to_hz("a4"), WithinAbs(440.0f, 0.01f));

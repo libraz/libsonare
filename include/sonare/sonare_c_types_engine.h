@@ -416,8 +416,7 @@ typedef enum SONARE_ENUM_BASE {
   SONARE_SIDECHAIN_REFUSAL_SELF_KEY = 5,
   SONARE_SIDECHAIN_REFUSAL_CYCLE = 6,
   SONARE_SIDECHAIN_REFUSAL_TABLE_FULL = 7,
-  /* No delay plan exists: an alignment past the ceiling, an overflow, or a key
-     on an insert the target strip does not have. */
+  /* No delay plan exists: an alignment past the ceiling or an overflow. */
   SONARE_SIDECHAIN_REFUSAL_PLAN_REFUSED = 8,
 } SonareSidechainRefusal;
 

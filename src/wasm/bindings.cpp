@@ -464,7 +464,8 @@ val js_decode_channels(val bytes) {
   return out;
 }
 
-val js_downmix(val channels, int target_layout) {
+val js_downmix(val channels, val target_layout_value) {
+  const int target_layout = checkedIntFromVal(target_layout_value, "targetLayout");
   if (channels.isUndefined() || channels.isNull()) {
     throw WasmTypeError("downmix: channels must be an array of Float32Array");
   }
