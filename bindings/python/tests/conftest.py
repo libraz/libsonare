@@ -48,9 +48,7 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     """Refuse to run against an in-tree library older than the core sources."""
     if _dev_lib_path is None:
         return
-    # The tests directory joins sys.path only once collection starts.
-    sys.path.insert(0, str(Path(__file__).parent))
-    from _lib_freshness import stale_library_message
+    from ._lib_freshness import stale_library_message
 
     message = stale_library_message(_dev_lib_path, Path(__file__).parent.parent.parent.parent)
     if message is not None:

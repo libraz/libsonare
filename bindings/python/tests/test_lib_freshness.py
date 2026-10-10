@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 import pytest
-from _lib_freshness import ALLOW_STALE_ENV, stale_library_message
+
+from ._lib_freshness import ALLOW_STALE_ENV, stale_library_message
 
 
 def _touch(path: Path, mtime: float) -> None:
