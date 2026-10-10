@@ -34,6 +34,9 @@ from ._types_acoustic import (
 from ._types_acoustic import (
     RoomMorphResult as RoomMorphResult,
 )
+from ._types_acoustic import (
+    RoomMorphStereoResult as RoomMorphStereoResult,
+)
 from ._types_analysis import (
     AnalysisBeatObservations as AnalysisBeatObservations,
 )

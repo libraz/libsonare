@@ -12,6 +12,7 @@ API by name ("effects.reverb.room", "effects.acoustic.roomMorph").
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 
 from ._errors import ErrorCode, SonareError, SonareValueError, _not_supported
@@ -21,6 +22,7 @@ from ._runtime import (
     SonareRoomEstimate,
     SonareRoomEstimateConfig,
     SonareRoomMorphConfig,
+    SonareRoomMorphStereoResult,
     _check,
     _float_array_result,
     _get_lib,
@@ -38,6 +40,7 @@ from .types import (
     RoomEstimate,
     RoomGeometry,
     RoomMorphResult,
+    RoomMorphStereoResult,
 )
 
 # SONARE_REVERB_MODEL_* selectors (sonare_c_acoustic.h). DEFAULT (0) resolves to
@@ -424,6 +427,73 @@ def room_geometry_from_estimate(
     return geometry
 
 
+def _room_morph_config(
+    length_m: float,
+    width_m: float,
+    height_m: float,
+    *,
+    source: tuple[float, float, float],
+    listener: tuple[float, float, float],
+    absorption: float,
+    band_absorption: Sequence[float] | None,
+    band_scattering: Sequence[float] | None,
+    material_preset: MaterialPresetName,
+    source_tail_suppression: float,
+    wet: float,
+    ism_order: int,
+    prefer_eyring: bool,
+    seed: int,
+    max_seconds: float,
+    mixing_time_ms: float,
+    crossfade_ms: float,
+    air_absorption_enabled: bool,
+    air_temperature_c: float,
+    air_humidity_percent: float,
+    receiver_spacing_m: float = 0.0,
+) -> tuple[SonareRoomMorphConfig, tuple[object, object]]:
+    """Builds the morph config shared by the mono and stereo entry points.
+
+    Returns the config with the band-array owners its pointers borrow from; the
+    caller keeps them alive across the C call.
+    """
+    bands_ptr, bands_count, bands_owner = _band_array_args(
+        band_absorption, arg_name="band_absorption"
+    )
+    scatter_ptr, scatter_count, scatter_owner = _band_array_args(
+        band_scattering, arg_name="band_scattering"
+    )
+    config = SonareRoomMorphConfig(
+        length_m=length_m,
+        width_m=width_m,
+        height_m=height_m,
+        source_x=source[0],
+        source_y=source[1],
+        source_z=source[2],
+        listener_x=listener[0],
+        listener_y=listener[1],
+        listener_z=listener[2],
+        absorption=absorption,
+        source_tail_suppression=source_tail_suppression,
+        wet=wet,
+        max_seconds=max_seconds,
+        mixing_time_ms=mixing_time_ms,
+        crossfade_ms=crossfade_ms,
+        ism_order=ism_order,
+        late_model=_late_model(prefer_eyring),
+        seed=_checked_seed(seed),
+        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_temperature_c=air_temperature_c,
+        air_humidity_percent=air_humidity_percent,
+        absorption_bands=bands_ptr,
+        absorption_band_count=bands_count,
+        scattering_bands=scatter_ptr,
+        scattering_band_count=scatter_count,
+        material_preset=_material_preset(material_preset),
+        receiver_spacing_m=receiver_spacing_m,
+    )
+    return config, (bands_owner, scatter_owner)
+
+
 @_guard_buffer("samples")
 def room_morph(
     samples: Sequence[float] | list[float],
@@ -484,39 +554,27 @@ def room_morph(
     if not hasattr(lib, "sonare_room_morph"):
         raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
-    bands_ptr, bands_count, _bands_owner = _band_array_args(
-        band_absorption, arg_name="band_absorption"
-    )
-    scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
-        band_scattering, arg_name="band_scattering"
-    )
-    config = SonareRoomMorphConfig(
-        length_m=length_m,
-        width_m=width_m,
-        height_m=height_m,
-        source_x=source[0],
-        source_y=source[1],
-        source_z=source[2],
-        listener_x=listener[0],
-        listener_y=listener[1],
-        listener_z=listener[2],
+    config, _owners = _room_morph_config(
+        length_m,
+        width_m,
+        height_m,
+        source=source,
+        listener=listener,
         absorption=absorption,
+        band_absorption=band_absorption,
+        band_scattering=band_scattering,
+        material_preset=material_preset,
         source_tail_suppression=source_tail_suppression,
         wet=wet,
+        ism_order=ism_order,
+        prefer_eyring=prefer_eyring,
+        seed=seed,
         max_seconds=max_seconds,
         mixing_time_ms=mixing_time_ms,
         crossfade_ms=crossfade_ms,
-        ism_order=ism_order,
-        late_model=_late_model(prefer_eyring),
-        seed=_checked_seed(seed),
-        air_absorption_enabled=1 if air_absorption_enabled else 0,
+        air_absorption_enabled=air_absorption_enabled,
         air_temperature_c=air_temperature_c,
         air_humidity_percent=air_humidity_percent,
-        absorption_bands=bands_ptr,
-        absorption_band_count=bands_count,
-        scattering_bands=scatter_ptr,
-        scattering_band_count=scatter_count,
-        material_preset=_material_preset(material_preset),
     )
     out = ctypes.POINTER(ctypes.c_float)()
     out_length = ctypes.c_size_t()
@@ -541,3 +599,112 @@ def room_morph(
     finally:
         if out and out_length.value > 0:
             lib.sonare_free_floats(out)
+
+
+@_guard_buffer("left", "right")
+def room_morph_stereo(
+    left: Sequence[float] | list[float],
+    right: Sequence[float] | list[float],
+    sample_rate: int,
+    length_m: float,
+    width_m: float,
+    height_m: float,
+    *,
+    receiver_spacing_m: float | None = None,
+    source: tuple[float, float, float] = (1.0, 1.0, 1.2),
+    listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
+    absorption: float = 0.2,
+    band_absorption: Sequence[float] | None = None,
+    band_scattering: Sequence[float] | None = None,
+    material_preset: MaterialPresetName = "none",
+    source_tail_suppression: float = 0.5,
+    wet: float = 0.5,
+    ism_order: int = 3,
+    prefer_eyring: bool = True,
+    seed: int = 1,
+    max_seconds: float = 0.0,
+    mixing_time_ms: float = 0.0,
+    crossfade_ms: float = 0.0,
+    air_absorption_enabled: bool = False,
+    air_temperature_c: float = 0.0,
+    air_humidity_percent: float = 0.0,
+) -> RoomMorphStereoResult:
+    """Morph a stereo recording toward a target room heard by two receivers.
+
+    Like :func:`room_morph`, but the target room is heard by two omnidirectional
+    receivers placed ``receiver_spacing_m`` apart about ``listener``, so the two
+    channels carry different reverberation rather than one centred tail. The
+    source-reverb suppression gain is shared across the channels so the image
+    does not move. Returns the left and right channels (each the input length
+    plus the target room's tail) with the target-RIR synthesis warnings.
+
+    Args:
+        left: Left channel samples.
+        right: Right channel samples, same length as ``left``.
+        receiver_spacing_m: Receiver spacing in metres, in (0, 4]; None = 0.5.
+            Both receivers must lie inside the room, so a ``listener`` closer to
+            a wall than half the spacing raises :class:`SonareError`.
+
+    The remaining keywords are those of :func:`room_morph`.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_room_morph_stereo"):
+        raise _not_supported("libsonare was built without acoustic-simulation support")
+    if receiver_spacing_m is None:
+        spacing = 0.0
+    else:
+        spacing = float(receiver_spacing_m)
+        if not math.isfinite(spacing) or not 0.0 < spacing <= 4.0:
+            raise SonareValueError(
+                f"receiver_spacing_m must be finite and in (0, 4], got {receiver_spacing_m!r}"
+            )
+    c_left, length = _to_c_float_array(left)
+    c_right, right_length = _to_c_float_array(right)
+    if right_length != length:
+        raise SonareValueError(
+            f"left and right must have the same length, got {length} and {right_length}"
+        )
+    config, _owners = _room_morph_config(
+        length_m,
+        width_m,
+        height_m,
+        source=source,
+        listener=listener,
+        absorption=absorption,
+        band_absorption=band_absorption,
+        band_scattering=band_scattering,
+        material_preset=material_preset,
+        source_tail_suppression=source_tail_suppression,
+        wet=wet,
+        ism_order=ism_order,
+        prefer_eyring=prefer_eyring,
+        seed=seed,
+        max_seconds=max_seconds,
+        mixing_time_ms=mixing_time_ms,
+        crossfade_ms=crossfade_ms,
+        air_absorption_enabled=air_absorption_enabled,
+        air_temperature_c=air_temperature_c,
+        air_humidity_percent=air_humidity_percent,
+        receiver_spacing_m=spacing,
+    )
+    out = SonareRoomMorphStereoResult()
+    rc = lib.sonare_room_morph_stereo(
+        c_left,
+        c_right,
+        _to_c_size_t(length, "length"),
+        _to_c_int(sample_rate, "sample_rate"),
+        ctypes.byref(config),
+        ctypes.byref(out),
+    )
+    _check(rc)
+    try:
+        # Read before any later C ABI call can overwrite the thread-local list.
+        diagnostics = _read_diagnostics()
+        return RoomMorphStereoResult(
+            left=_float_array_result(out.left, out.length),
+            right=_float_array_result(out.right, out.length),
+            sample_rate=sample_rate,
+            diagnostics=diagnostics,
+        )
+    finally:
+        lib.sonare_free_room_morph_stereo_result(ctypes.byref(out))

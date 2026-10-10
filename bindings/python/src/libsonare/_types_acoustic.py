@@ -135,6 +135,24 @@ class RoomMorphResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RoomMorphStereoResult:
+    """Morphed stereo audio and the target-room synthesis warnings.
+
+    ``left`` and ``right`` have equal length. ``diagnostics`` carries the same
+    codes as :class:`RoomMorphResult`.
+    """
+
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    diagnostics: list[RirDiagnostic] = field(default_factory=list)
+
+    @property
+    def sampleRate(self) -> int:  # noqa: N802
+        return self.sample_rate
+
+
+@dataclass(frozen=True, slots=True)
 class RoomEstimate:
     """Blind equivalent-room estimate (volume/dimensions/absorption/DRR).
 

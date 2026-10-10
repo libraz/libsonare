@@ -736,6 +736,21 @@ class RoomMorphResult:
     @property
     def sampleRate(self) -> int: ...
 
+class RoomMorphStereoResult:
+    left: list[float]
+    right: list[float]
+    sample_rate: int
+    diagnostics: list[RirDiagnostic]
+    def __init__(
+        self,
+        left: list[float],
+        right: list[float],
+        sample_rate: int,
+        diagnostics: list[RirDiagnostic] = ...,
+    ) -> None: ...
+    @property
+    def sampleRate(self) -> int: ...
+
 class RirResult:
     rir: list[float]
     sample_rate: int

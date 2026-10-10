@@ -520,3 +520,62 @@ def test_room_geometry_from_estimate_refuses_an_unmeasured_room() -> None:
         libsonare.room_geometry_from_estimate(
             libsonare.RoomEstimate(100.0, 6.0, 5.0, 3.0, 1.0, 0.5, [], []), source=(1.0, 2.0)
         )
+
+
+_STEREO_ROOM = dict(
+    sample_rate=48000, length_m=12.0, width_m=9.0, height_m=5.0, max_seconds=0.5, ism_order=2
+)
+
+
+def _impulse(n: int = 2000) -> list[float]:
+    samples = [0.0] * n
+    samples[0] = 1.0
+    return samples
+
+
+@acoustic
+def test_room_morph_stereo_returns_two_different_longer_channels() -> None:
+    samples = _impulse()
+    result = libsonare.room_morph_stereo(samples, samples, **_STEREO_ROOM)
+    assert len(result.left) == len(result.right) > len(samples)
+    assert result.sample_rate == result.sampleRate == 48000
+    assert result.left != result.right
+    assert all(math.isfinite(s) for s in result.left + result.right)
+
+
+@acoustic
+def test_room_morph_stereo_default_spacing_equals_explicit_half_metre() -> None:
+    samples = _impulse()
+    default = libsonare.room_morph_stereo(samples, samples, **_STEREO_ROOM)
+    explicit = libsonare.room_morph_stereo(samples, samples, receiver_spacing_m=0.5, **_STEREO_ROOM)
+    assert default.left == explicit.left
+    assert default.right == explicit.right
+
+
+@acoustic
+@pytest.mark.parametrize("spacing", [0.0, -1.0, 4.5, float("nan"), float("inf")])
+def test_room_morph_stereo_refuses_an_out_of_range_spacing(spacing: float) -> None:
+    samples = _impulse(100)
+    with pytest.raises(libsonare.SonareValueError, match="receiver_spacing_m"):
+        libsonare.room_morph_stereo(samples, samples, receiver_spacing_m=spacing, **_STEREO_ROOM)
+
+
+@acoustic
+def test_room_morph_stereo_refuses_mismatched_channel_lengths() -> None:
+    with pytest.raises(libsonare.SonareValueError, match="same length"):
+        libsonare.room_morph_stereo(_impulse(100), _impulse(99), **_STEREO_ROOM)
+
+
+@acoustic
+def test_room_morph_stereo_reports_the_target_synthesis_warnings() -> None:
+    samples = _impulse()
+    room = {**_STEREO_ROOM, "max_seconds": 0.05}
+    result = libsonare.room_morph_stereo(samples, samples, **room)
+    assert "acoustic.rir_length_clamped" in [d.code for d in result.diagnostics]
+
+
+@acoustic
+def test_room_morph_stereo_refuses_a_listener_too_close_to_a_wall() -> None:
+    samples = _impulse(100)
+    with pytest.raises(libsonare.SonareError):
+        libsonare.room_morph_stereo(samples, samples, listener=(0.1, 4.0, 1.7), **_STEREO_ROOM)

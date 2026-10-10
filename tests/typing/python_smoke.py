@@ -28,6 +28,9 @@ room_estimate: libsonare.RoomEstimate = libsonare.estimate_room(
 morphed: libsonare.RoomMorphResult = libsonare.room_morph(
     samples, 22050, 6.0, 5.0, 3.0, wet=0.4
 )
+morphed_stereo: libsonare.RoomMorphStereoResult = libsonare.room_morph_stereo(
+    samples, samples, 22050, 6.0, 5.0, 3.0, receiver_spacing_m=0.5, wet=0.4
+)
 chords: libsonare.ChordAnalysisResult = libsonare.detect_chords(
     samples,
     use_hmm=True,

@@ -3,6 +3,7 @@
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
+from ._acoustic import room_morph_stereo
 from ._effects_polyphony import PolyphonicAnalysis
 from ._playback import (
     HrtfSet,
@@ -492,6 +493,7 @@ from .types import (
     RoomEstimate,
     RoomGeometry,
     RoomMorphResult,
+    RoomMorphStereoResult,
     ScopeTelemetryRecord,
     Section,
     SectionResult,
@@ -628,10 +630,12 @@ __all__ = [
     "RirDiagnostic",
     "RirResult",
     "RoomMorphResult",
+    "RoomMorphStereoResult",
     "RoomEstimate",
     "estimate_room",
     "room_geometry_from_estimate",
     "room_morph",
+    "room_morph_stereo",
     "synthesize_rir",
     "AutomationPoint",
     "AutomationCurve",

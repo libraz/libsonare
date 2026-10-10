@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from ._acoustic import (
+    room_morph_stereo as room_morph_stereo,
+)
 from ._effects_polyphony import PolyphonicAnalysis as PolyphonicAnalysis
 from ._playback import HrtfSet as HrtfSet
 from ._playback import PlaybackLoudnessMeter as PlaybackLoudnessMeter
@@ -1202,6 +1205,9 @@ from .types import (
 )
 from .types import (
     RoomMorphResult as RoomMorphResult,
+)
+from .types import (
+    RoomMorphStereoResult as RoomMorphStereoResult,
 )
 from .types import (
     ScopeTelemetryRecord as ScopeTelemetryRecord,
