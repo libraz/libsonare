@@ -182,6 +182,8 @@ const BUFFER_FIRST: Array<[string, string]> = [
 
 /** Exports whose first argument is not a request, or that need a browser. */
 const NOT_A_REQUEST_ENTRY = new Set([
+  'chordSymbolFromAnalysis',
+  'keyModeFromAnalysis',
   'init',
   'createOpfsClipPageProvider',
   'createOpfsClipPageWorker',

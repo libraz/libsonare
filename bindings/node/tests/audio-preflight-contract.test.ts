@@ -363,6 +363,8 @@ const NOT_AUDIO: string[] = [
     'hasFfmpegSupport',
     'isSonareError',
   ],
+  // Analysis-to-annotation conversions over a chord or a mode name.
+  ...['chordSymbolFromAnalysis', 'keyModeFromAnalysis'],
   // Name, catalog, preset and enum lookups.
   ...[
     'controllerProfileNames',

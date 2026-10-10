@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './types.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, assertSampleRate, requestObject } from './validation.js';
 
 /**
  * Align one take to a reference timeline, producing the warp anchors that place
@@ -20,6 +20,13 @@ import { assertAudioInput, requestObject } from './validation.js';
  * exposed directly: that one names its arguments the other way round, so passing
  * the reference as its reference yields the inverse map and nothing reports it.
  *
+ * **Units.** When {@link AlignTakeToReferenceRequest.takeSampleRate} differs
+ * from `sampleRate` the take is resampled to the reference rate before
+ * measuring, so both anchor axes are in samples at the REFERENCE rate (`sampleRate`),
+ * `hopLength` is in reference-rate samples, and `alignment` frame counts are hop
+ * frames at the reference rate. To use the anchors in a project, scale both axes
+ * by `projectRate / referenceRate` before {@link Project.setWarpMap}.
+ *
  * `alignment` reports how well the alignment was conditioned, so a take the
  * reference genuinely fits can be told from one it does not. It is descriptive
  * only: no field makes the call fail.
@@ -37,7 +44,7 @@ import { assertAudioInput, requestObject } from './validation.js';
  * ```
  *
  * @throws `RangeError` when either buffer is empty or carries a non-finite
- *         sample, or when `sampleRate` is out of range; `TypeError` when
+ *         sample, or when `sampleRate` or `takeSampleRate` is out of range; `TypeError` when
  *         `hopLength` or `binsPerOctave` carries the wrong type; and a
  *         `SonareError` with `InvalidParameter` for a `binsPerOctave` that is not
  *         a multiple of 12 or that `sampleRate` cannot carry, and when the two
@@ -50,12 +57,21 @@ export function alignTakeToReference(
 ): AlignTakeToReferenceResult {
   requestObject('alignTakeToReference', request, 'request', true);
   assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
-  assertAudioInput('alignTakeToReference', request.take, request.sampleRate, {}, 'take');
+  // Resolved before any reader runs, so the addon always receives two rates.
+  const takeSampleRate = request.takeSampleRate ?? request.sampleRate;
+  assertSampleRate('alignTakeToReference', takeSampleRate, 'takeSampleRate');
+  assertAudioInput('alignTakeToReference', request.take, takeSampleRate, {}, 'take');
   // The config keys are forwarded unvalidated on purpose: both default at 0,
   // which the library reads as "keep the default", so the addon's property
   // readers are the layer that refuses a wrong type by name.
-  return addon.alignTakeToReference(request.reference, request.take, request.sampleRate, {
-    hopLength: request.hopLength,
-    binsPerOctave: request.binsPerOctave,
-  });
+  return addon.alignTakeToReference(
+    request.reference,
+    request.take,
+    request.sampleRate,
+    takeSampleRate,
+    {
+      hopLength: request.hopLength,
+      binsPerOctave: request.binsPerOctave,
+    },
+  );
 }

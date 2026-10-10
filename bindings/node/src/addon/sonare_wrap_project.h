@@ -180,13 +180,27 @@ class ProjectWrap : public Napi::ObjectWrap<ProjectWrap> {
 
 namespace sonare_node {
 
-/// @brief `alignTakeToReference(reference, take, sampleRate, config?)` — the
-///        handle-free take alignment (@ref sonare_align_take_to_reference).
+/// @brief `alignTakeToReference(reference, take, sampleRate, takeSampleRate, config?)` —
+///        the handle-free take alignment (@ref sonare_align_take_to_reference_ex).
 /// @details Positional like the other MIR bridges on this surface; the facade's
-///   request object is folded before the call. Answers `{ anchors, alignment }`,
-///   the anchors in the `{ warpSample, sourceSample }` shape `setWarpMap` takes.
+///   request object is folded and `takeSampleRate` resolved before the call.
+///   Answers `{ anchors, alignment }`, the anchors in the
+///   `{ warpSample, sourceSample }` shape `setWarpMap` takes, both axes in
+///   samples at `sampleRate` (the reference rate).
 ///   Defined in project/midi_mir.cpp beside them.
 Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info);
+
+/// @brief `chordSymbolFromAnalysis(chord)` — an analysis chord as the fields of a
+///        chord annotation (@ref sonare_chord_symbol_from_analysis).
+/// @details Accepts a `Chord` (string root, bass and quality) or an
+///   `AnalysisChord` (ordinals). Answers `{ rootPc, quality, extensions,
+///   slashBassPc }`. A non-object is a `TypeError`; an unrecognised pitch class or
+///   quality is a `RangeError` naming the field.
+Napi::Value ChordSymbolFromAnalysis(const Napi::CallbackInfo& info);
+
+/// @brief `keyModeFromAnalysis(mode)` — an analysis key-mode name as the
+///        annotation KeyMode ordinal (@ref sonare_key_mode_from_analysis).
+Napi::Value KeyModeFromAnalysis(const Napi::CallbackInfo& info);
 
 }  // namespace sonare_node
 

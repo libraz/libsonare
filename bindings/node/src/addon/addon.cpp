@@ -651,6 +651,11 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
   exports.Set("transcribe", Napi::Function::New(env, &sonare_node::Transcribe, "transcribe"));
   exports.Set("alignTakeToReference",
               Napi::Function::New(env, &sonare_node::AlignTakeToReference, "alignTakeToReference"));
+  exports.Set(
+      "chordSymbolFromAnalysis",
+      Napi::Function::New(env, &sonare_node::ChordSymbolFromAnalysis, "chordSymbolFromAnalysis"));
+  exports.Set("keyModeFromAnalysis",
+              Napi::Function::New(env, &sonare_node::KeyModeFromAnalysis, "keyModeFromAnalysis"));
   return exports;
 }
 

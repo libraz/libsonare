@@ -79,7 +79,12 @@ export interface ProjectSource {
   externalStemRole: string;
 }
 
-/** One first-class warp-map anchor. Sample positions must be finite and monotonic. */
+/**
+ * One first-class warp-map anchor. Sample positions must be finite and monotonic.
+ * Both axes are in samples at the project sample rate; anchors from
+ * {@link alignTakeToReference} are in reference-rate samples, so scale both axes
+ * by `projectRate / referenceRate` first.
+ */
 export interface ProjectWarpAnchor {
   warpSample: number;
   sourceSample: number;
@@ -109,9 +114,10 @@ export type WarpMode = 'off' | 'repitch' | 'tempo-sync' | 'time-stretch';
 /**
  * Request form of {@link alignTakeToReference}.
  *
- * Both signals are read at {@link sampleRate}: the alignment does no I/O and no
- * rate conversion, so resample first if the two were recorded at different
- * rates.
+ * The reference is read at {@link sampleRate} and the take at
+ * {@link takeSampleRate}; a take at another rate is resampled to the reference
+ * rate before measuring, so the anchors and the alignment frame counts are in
+ * reference-rate units.
  */
 export interface AlignTakeToReferenceRequest {
   /**
@@ -121,10 +127,15 @@ export interface AlignTakeToReferenceRequest {
   reference: Float32Array;
   /** The mono take to be placed under {@link reference}. Must not be empty. */
   take: Float32Array;
-  /** Sample rate of both buffers, in Hz. */
+  /** Sample rate of {@link reference}, in Hz; also the rate of {@link take} unless {@link takeSampleRate} is given. */
   sampleRate: number;
   /**
-   * Chroma hop in samples, which sets the time resolution of the anchors: a
+   * Sample rate of {@link take}, in Hz, validated like {@link sampleRate}. Omit
+   * when the take was recorded at the reference rate.
+   */
+  takeSampleRate?: number;
+  /**
+   * Chroma hop in reference-rate samples, which sets the time resolution of the anchors: a
    * finer hop yields more of them. Omit for the library value — 0 is not a
    * meaningful hop, so the library reads it as "keep the default" and a
    * fractional value is refused rather than truncated onto one.
@@ -159,10 +170,11 @@ export interface TakeAlignment {
    * rate, not an error bound.
    */
   meanResidualFrames: number;
-  /** Chroma frames the reference produced. */
+  /** Chroma hop frames the reference produced, at the reference rate. */
   referenceFrames: number;
   /**
-   * Chroma frames the take produced. Its ratio to {@link referenceFrames} is the
+   * Chroma hop frames the take produced, counted after any resampling to the
+   * reference rate. Its ratio to {@link referenceFrames} is the
    * overall rate difference the anchors encode.
    */
   takeFrames: number;
@@ -171,8 +183,9 @@ export interface TakeAlignment {
 /** Result of {@link alignTakeToReference}. */
 export interface AlignTakeToReferenceResult {
   /**
-   * At least two finite, strictly increasing anchors, ready to hand to
-   * {@link Project.setWarpMap} as a {@link ProjectWarpMapDesc}.
+   * At least two finite, strictly increasing anchors, both axes in samples at
+   * the reference rate. Scale both by `projectRate / referenceRate`, then hand
+   * them to {@link Project.setWarpMap} as a {@link ProjectWarpMapDesc}.
    */
   anchors: ProjectWarpAnchor[];
   /** How well the alignment was conditioned. */
@@ -608,7 +621,7 @@ export interface ProjectChordSymbol {
    * 4 augmented, 5 dominant, 6 half-diminished, 7 suspended. Default 0.
    */
   quality?: number;
-  /** Extension semitone offsets (up to 8). */
+  /** Extension scale degrees (for example 7, 9, 13; 2 or 4 for a suspension), up to 32. */
   extensions?: number[];
   /** Slash-bass pitch class 0..11 or 255 for none. Default 255. */
   slashBassPc?: number;
@@ -738,10 +751,21 @@ export interface TranscribeOptions {
   fmax?: number;
   /**
    * Shortest span kept as a note, in milliseconds. Must be finite and
-   * positive. Default `30` for the monophonic tracker and `100` for the
-   * polyphonic one.
+   * positive. Refused together with {@link minNoteDivision}. When neither is
+   * given the default is `30` for the monophonic tracker and, for the
+   * polyphonic one, a thirty-second note at the transcription tempo held
+   * within `[30, 60]` ms.
    */
   minNoteMs?: number;
+  /**
+   * Shortest note kept, as a note value: `n` is a 1/n note at the transcription
+   * tempo (`32` is a thirty-second note). An integer in `[1, 128]`; a written
+   * `0` is refused. The tempo is the one given (or detected) for
+   * {@link transcribe} and the project's tempo at its start for
+   * {@link Project.transcribeToClip}. Applies to both the monophonic and the
+   * polyphonic tracker. Refused together with {@link minNoteMs}.
+   */
+  minNoteDivision?: number;
   /**
    * Pitch movement, in cents, that ends one note and starts the next. Must be
    * finite and positive. Default `50`.

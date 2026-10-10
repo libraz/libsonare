@@ -165,4 +165,62 @@ describe('alignTakeToReference', () => {
     expect(isSonareError(caught)).toBe(true);
     expect((caught as { code: number }).code).toBe(ErrorCode.InvalidParameter);
   });
+
+  describe('a take recorded at another rate', () => {
+    const REF_RATE = 22050;
+    const TAKE_RATE = 32000;
+    const HOP = 512;
+    const LEAD_SEC = 0.5;
+    // The take is generated directly at its own rate (no resampler in the
+    // oracle). 32000/22050 is 6.44 semitones, not an octave, so a wrong rate
+    // cannot be absorbed by the chroma fold.
+    const ref = glide(261.63, 1.0, { sampleRate: REF_RATE });
+    const body = glide(261.63, 1.0, { sampleRate: TAKE_RATE });
+    const lead = Math.round(LEAD_SEC * TAKE_RATE);
+    const longTake = new Float32Array(lead + body.length);
+    longTake.set(body, lead);
+    const at = (takeSampleRate?: number) =>
+      alignTakeToReference({
+        reference: ref,
+        take: longTake,
+        sampleRate: REF_RATE,
+        takeSampleRate,
+      });
+
+    it('counts take frames at the reference rate', () => {
+      const { alignment } = at(TAKE_RATE);
+      const expected = Math.ceil((longTake.length * REF_RATE) / TAKE_RATE / HOP);
+      expect(Math.abs(alignment.takeFrames - expected)).toBeLessThanOrEqual(1);
+      // Declared at the reference rate instead, the take is read as 1.45x longer.
+      expect(at(REF_RATE).alignment.takeFrames).toBeGreaterThan(expected * 1.3);
+    });
+
+    it('puts both anchor axes in reference-rate samples', () => {
+      const { anchors } = at(TAKE_RATE);
+      const offset = LEAD_SEC * REF_RATE;
+      // The silence run collapses to one boundary anchor at the reference start.
+      const rest = anchors.slice(1);
+      expect(rest.length).toBeGreaterThan(2);
+      for (const a of rest) {
+        expect(Math.abs(a.sourceSample - a.warpSample - offset)).toBeLessThanOrEqual(HOP);
+      }
+      const wrong = at(REF_RATE).anchors.slice(1);
+      const off = wrong.filter((a) => Math.abs(a.sourceSample - a.warpSample - offset) > HOP);
+      expect(off.length).toBeGreaterThan(wrong.length / 2);
+    });
+
+    it('equals the reference rate when takeSampleRate is omitted', () => {
+      const omitted = at(undefined);
+      const explicit = at(REF_RATE);
+      expect(omitted).toEqual(explicit);
+    });
+
+    it('refuses a take rate the way it refuses sampleRate, naming the field', () => {
+      for (const bad of [0, -TAKE_RATE, 7999, 384001]) {
+        expect(() => at(bad)).toThrowError(/takeSampleRate out of supported range/);
+      }
+      expect(() => at(TAKE_RATE + 0.5)).toThrowError(/takeSampleRate must be an integer/);
+      expect(() => at('x' as unknown as number)).toThrowError(/takeSampleRate must be a number/);
+    });
+  });
 });

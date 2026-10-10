@@ -560,6 +560,32 @@ struct WarpAnchorArrayDeleter {
   void operator()(SonareProjectWarpAnchor* anchors) const { sonare_free_warp_anchors(anchors); }
 };
 
+// Resolves a chord quality given as an ordinal or as the name a detected chord
+// carries, by reverse lookup over the addon's ordinal-to-name table.
+SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what) {
+  const Napi::Env env = value.Env();
+  if (value.IsNumber()) {
+    const int ordinal = node_narrow_int(env, value, what);
+    if (ordinal < 0 || ordinal >= SONARE_CHORD_QUALITY_COUNT) {
+      throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality");
+    }
+    return static_cast<SonareChordQuality>(ordinal);
+  }
+  if (!value.IsString()) {
+    throw Napi::TypeError::New(env, std::string(what) + " must be a chord quality name or number");
+  }
+  const std::string name = sonare_node::node_narrow_string(env, value, what);
+  for (int quality = 0; quality < SONARE_CHORD_QUALITY_COUNT; ++quality) {
+    if (name == sonare_node::ChordQualityName(static_cast<SonareChordQuality>(quality))) {
+      return static_cast<SonareChordQuality>(quality);
+    }
+  }
+  throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality: '" + name + "'");
+}
+
+// Capacity for the extension scale degrees; the library emits at most three.
+constexpr size_t kChordExtensionCapacity = 32;
+
 }  // namespace
 
 namespace sonare_node {
@@ -567,9 +593,11 @@ namespace sonare_node {
 Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  if (info.Length() < 3 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
+  if (info.Length() < 4 || !IsFloat32Array(info[0]) || !IsFloat32Array(info[1])) {
     Napi::TypeError::New(
-        env, "alignTakeToReference expects (reference, take, sampleRate) with two Float32Arrays")
+        env,
+        "alignTakeToReference expects (reference, take, sampleRate, takeSampleRate, config?) with "
+        "two Float32Arrays")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -577,12 +605,14 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   Napi::Float32Array take = info[1].As<Napi::Float32Array>();
   int sample_rate = 0;
   if (!Int32Arg(env, info, 2, "sampleRate", 0, &sample_rate)) return env.Undefined();
+  int take_sample_rate = 0;
+  if (!Int32Arg(env, info, 3, "takeSampleRate", 0, &take_sample_rate)) return env.Undefined();
   // Zeroed rather than seeded: the C entry reads 0 on either field as "library
   // value", so a key the caller left out must stay 0 instead of carrying a
   // default this surface spelled.
   SonareTakeAlignConfig config{};
-  if (info.Length() > 3 && info[3].IsObject()) {
-    Napi::Object options = info[3].As<Napi::Object>();
+  if (info.Length() > 4 && info[4].IsObject()) {
+    Napi::Object options = info[4].As<Napi::Object>();
     config.hop_length = IntProperty(options, "hopLength", kZeroIsSentinel);
     config.bins_per_octave = IntProperty(options, "binsPerOctave", kZeroIsSentinel);
   }
@@ -590,9 +620,9 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   SonareProjectWarpAnchor* raw_anchors = nullptr;
   size_t count = 0;
   SonareTakeAlignment alignment{};
-  const SonareError code = sonare_align_take_to_reference(
-      reference.Data(), reference.ElementLength(), take.Data(), take.ElementLength(), sample_rate,
-      &config, &raw_anchors, &count, &alignment);
+  const SonareError code = sonare_align_take_to_reference_ex(
+      reference.Data(), reference.ElementLength(), sample_rate, take.Data(), take.ElementLength(),
+      take_sample_rate, &config, &raw_anchors, &count, &alignment);
   std::unique_ptr<SonareProjectWarpAnchor, WarpAnchorArrayDeleter> anchors(raw_anchors);
   ThrowIfError(env, code);
   if (env.IsExceptionPending()) return env.Undefined();
@@ -612,6 +642,63 @@ Napi::Value AlignTakeToReference(const Napi::CallbackInfo& info) {
   result.Set("anchors", out_anchors);
   result.Set("alignment", conditioning);
   return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value ChordSymbolFromAnalysis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1 || !info[0].IsObject() || info[0].IsArray()) {
+    Napi::TypeError::New(env, "chordSymbolFromAnalysis: chord must be an object")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const Napi::Object chord = info[0].As<Napi::Object>();
+  const SonarePitchClass root = PitchClassFromValue(chord.Get("root"), "chord.root");
+  const SonarePitchClass bass = PitchClassFromValue(chord.Get("bass"), "chord.bass");
+  const SonareChordQuality quality = ChordQualityFromValue(chord.Get("quality"), "chord.quality");
+
+  uint32_t root_pc = 0;
+  uint32_t out_quality = 0;
+  uint32_t slash_bass_pc = 0;
+  uint8_t extensions[kChordExtensionCapacity] = {};
+  size_t extension_count = 0;
+  ThrowIfError(env, sonare_chord_symbol_from_analysis(root, quality, bass, &root_pc, &out_quality,
+                                                      extensions, kChordExtensionCapacity,
+                                                      &extension_count, &slash_bass_pc));
+  if (env.IsExceptionPending()) return env.Undefined();
+
+  Napi::Array out_extensions = Napi::Array::New(env, extension_count);
+  for (size_t i = 0; i < extension_count; ++i) {
+    out_extensions.Set(static_cast<uint32_t>(i), Napi::Number::New(env, extensions[i]));
+  }
+  Napi::Object result = Napi::Object::New(env);
+  result.Set("rootPc", Napi::Number::New(env, root_pc));
+  result.Set("quality", Napi::Number::New(env, out_quality));
+  result.Set("extensions", out_extensions);
+  result.Set("slashBassPc", Napi::Number::New(env, slash_bass_pc));
+  return result;
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value KeyModeFromAnalysis(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (info.Length() < 1 || !info[0].IsString()) {
+    Napi::TypeError::New(env, "keyModeFromAnalysis: mode must be a mode name")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string name = node_narrow_string(env, info[0], "mode");
+  for (int mode = SONARE_MODE_MAJOR; mode <= SONARE_MODE_LOCRIAN; ++mode) {
+    if (name == ModeNameLocal(static_cast<SonareMode>(mode))) {
+      uint32_t out_mode = 0;
+      ThrowIfError(env, sonare_key_mode_from_analysis(static_cast<SonareMode>(mode), &out_mode));
+      if (env.IsExceptionPending()) return env.Undefined();
+      return Napi::Number::New(env, out_mode);
+    }
+  }
+  throw Napi::RangeError::New(env, "mode is not a key mode name: '" + name + "'");
   SONARE_NODE_CATCH(env)
 }
 

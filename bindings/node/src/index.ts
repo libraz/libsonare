@@ -1,6 +1,9 @@
 export * from './analysis.js';
 export * from './audio.js';
 export * from './audio_channels.js';
+export type { ChordSymbolFields } from './chord_annotation.js';
+// Named for the same reason: a helper added beside these two cannot follow without an edit.
+export { chordSymbolFromAnalysis, keyModeFromAnalysis } from './chord_annotation.js';
 export * from './effects_mastering.js';
 export * from './effects_polyphony.js';
 export * from './errors.js';
