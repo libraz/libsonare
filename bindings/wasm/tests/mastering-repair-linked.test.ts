@@ -181,13 +181,13 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
 
     // channels[0] is valid in both sets, so a wrapper that validated only the
     // first channel would let these through: the core guards channels[0] alone
-    // and scans no channel for a non-finite sample.
+    // and scans no channel for a non-finite sample. The facade names the channel.
     expect(() =>
       masteringRepairDenoiseClassicalLinked({ channels: [clean, withNan, clean], sampleRate: SR }),
-    ).toThrow(/non-finite/);
+    ).toThrow(RangeError);
     expect(() =>
       masteringRepairDenoiseClassicalLinked({ channels: [clean, clean, withInf], sampleRate: SR }),
-    ).toThrow(/non-finite/);
+    ).toThrow(RangeError);
     // The positive control: the same three-channel shape with finite samples
     // throughout succeeds, so the refusals above are about the values.
     expect(() =>
@@ -216,7 +216,7 @@ describe('masteringRepairDenoiseClassicalLinked (WASM)', () => {
 
   it('rejects an empty channel array', () => {
     expect(() => masteringRepairDenoiseClassicalLinked({ channels: [], sampleRate: SR })).toThrow(
-      /at least one channel/,
+      RangeError,
     );
   });
 
@@ -351,10 +351,10 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
 
     expect(() =>
       masteringRepairDereverbClassicalLinked({ channels: [clean, withNan, clean], sampleRate: SR }),
-    ).toThrow(/non-finite/);
+    ).toThrow(RangeError);
     expect(() =>
       masteringRepairDereverbClassicalLinked({ channels: [clean, clean, withInf], sampleRate: SR }),
-    ).toThrow(/non-finite/);
+    ).toThrow(RangeError);
     expect(() =>
       masteringRepairDereverbClassicalLinked({ channels: [clean, clean, clean], sampleRate: SR }),
     ).not.toThrow();
@@ -381,7 +381,7 @@ describe('masteringRepairDereverbClassicalLinked (WASM)', () => {
 
   it('rejects an empty channel array', () => {
     expect(() => masteringRepairDereverbClassicalLinked({ channels: [], sampleRate: SR })).toThrow(
-      /at least one channel/,
+      RangeError,
     );
   });
 

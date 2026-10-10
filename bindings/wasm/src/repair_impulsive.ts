@@ -11,6 +11,7 @@ import type {
   MasteringRepairDeclipStereoResult,
   MasteringRepairDecrackleStereoResult,
 } from './public_types_repair.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -66,7 +67,21 @@ export function masteringRepairDeclickStereo(
   const request: MasteringRepairDeclickStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDeclickStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDeclickStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDeclickStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDeclickStereo(
     leftSamples,
@@ -88,7 +103,11 @@ export function masteringRepairDeclick(
   sampleRate?: number,
   options: DeclickOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDeclick', samples);
+  assertAudioInput('masteringRepairDeclick', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDeclick(
     request.samples,
     request.sampleRate ?? 22050,
@@ -160,7 +179,11 @@ export function masteringRepairDeclip(
   sampleRate?: number,
   options: DeclipOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDeclip', samples);
+  assertAudioInput('masteringRepairDeclip', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDeclip(
     request.samples,
     request.sampleRate ?? 22050,
@@ -197,7 +220,21 @@ export function masteringRepairDeclipStereo(
   const request: MasteringRepairDeclipStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDeclipStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDeclipStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDeclipStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDeclipStereo(
     leftSamples,
@@ -219,7 +256,11 @@ export function masteringRepairDecrackle(
   sampleRate?: number,
   options: DecrackleOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDecrackle', samples);
+  assertAudioInput('masteringRepairDecrackle', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDecrackle(
     request.samples,
     request.sampleRate ?? 22050,
@@ -254,7 +295,21 @@ export function masteringRepairDecrackleStereo(
   const request: MasteringRepairDecrackleStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDecrackleStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDecrackleStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDecrackleStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDecrackleStereo(
     leftSamples,
@@ -310,7 +365,11 @@ export function masteringRepairDetectClicks(
   sampleRate?: number,
   options: DeclickOptions = {},
 ): ClickDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectClicks', samples);
+  assertAudioInput('masteringRepairDetectClicks', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectClicks(
     request.samples,
     request.sampleRate ?? 22050,
@@ -361,7 +420,11 @@ export function masteringRepairDetectClipping(
   sampleRate?: number,
   options: DeclipOptions = {},
 ): ClipDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectClipping', samples);
+  assertAudioInput('masteringRepairDetectClipping', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectClipping(
     request.samples,
     request.sampleRate ?? 22050,
@@ -390,7 +453,11 @@ export function masteringRepairDetectCrackle(
   sampleRate?: number,
   options: DecrackleOptions = {},
 ): CrackleDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectCrackle', samples);
+  assertAudioInput('masteringRepairDetectCrackle', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectCrackle(
     request.samples,
     request.sampleRate ?? 22050,

@@ -106,6 +106,9 @@ export function assertFiniteScalar(fnName: string, value: number, argName: strin
 }
 
 export function assertSampleRate(fnName: string, sampleRate: number, argName = 'sampleRate'): void {
+  if (typeof sampleRate !== 'number') {
+    throw new TypeError(`${fnName}: ${argName} must be a number`);
+  }
   // Two refusals, not one: 22050.7 sits inside the range, so reporting it as
   // out of range names an argument that is not the one at fault. `argName` is
   // the same point for a rate the caller spelled something else, such as a
@@ -117,6 +120,73 @@ export function assertSampleRate(fnName: string, sampleRate: number, argName = '
     throw new RangeError(
       `${fnName}: ${argName} out of supported range [${MIN_AUDIO_SAMPLE_RATE}, ${MAX_AUDIO_SAMPLE_RATE}]`,
     );
+  }
+}
+
+/**
+ * The preflight every one-shot taking samples and a sample rate runs before it
+ * touches the native layer: a wrong-typed argument is a `TypeError` naming it,
+ * and empty or non-finite audio and an out-of-range rate are a `RangeError`.
+ *
+ * `options.validate === false` skips only the O(n) finiteness scan. A stereo or
+ * paired entry point calls this once per buffer, naming each through `argName`.
+ */
+export function assertAudioInput(
+  fnName: string,
+  samples: unknown,
+  sampleRate: unknown,
+  options: object = {},
+  argName = 'samples',
+): void {
+  assertFloat32Array(fnName, samples, argName);
+  assertSampleRate(fnName, sampleRate as number);
+  assertSamples(fnName, samples, (options as ValidateOptions).validate !== false, argName);
+}
+
+/** {@link assertAudioInput} for an entry point that takes no sample rate. */
+export function assertAudioSamples(
+  fnName: string,
+  samples: unknown,
+  options: object = {},
+  argName = 'samples',
+): void {
+  assertFloat32Array(fnName, samples, argName);
+  assertSamples(fnName, samples, (options as ValidateOptions).validate !== false, argName);
+}
+
+function assertFloat32Array(
+  fnName: string,
+  value: unknown,
+  argName: string,
+): asserts value is Float32Array {
+  if (!(value instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: ${argName} must be a Float32Array`);
+  }
+}
+
+/** {@link assertAudioInput} over a list of equal-rate channel planes. */
+export function assertAudioChannels(
+  fnName: string,
+  channels: unknown,
+  sampleRate: unknown,
+  options: object = {},
+  argName = 'channels',
+): void {
+  if (!Array.isArray(channels)) {
+    throw new TypeError(`${fnName}: ${argName} must be an array of Float32Array`);
+  }
+  if (channels.length === 0) {
+    throw new RangeError(`${fnName}: ${argName} must not be empty`);
+  }
+  channels.forEach((channel, i) => {
+    assertAudioInput(fnName, channel, sampleRate, options, `${argName}[${i}]`);
+  });
+}
+
+/** A string argument the native layer reads through embind; anything else is a `TypeError`, never a raw `BindingError`. */
+export function assertString(fnName: string, value: unknown, argName: string): void {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${fnName}: ${argName} must be a string`);
   }
 }
 
@@ -483,4 +553,22 @@ export function resolveRenderFrame(fnName: string, renderFrame: number | null | 
     );
   }
   return renderFrame;
+}
+
+/**
+ * The request-object form of a positional entry point: its first argument is
+ * either the audio buffer or a request, so anything else (null, a number, an
+ * array, another typed array) is a wrong-typed buffer and is reported as one,
+ * naming the field, instead of failing on a property read.
+ */
+export function requestObject<T>(fnName: string, value: T, argName = 'samples'): T {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    ArrayBuffer.isView(value)
+  ) {
+    assertAudioSamples(fnName, value, {}, argName);
+  }
+  return value;
 }

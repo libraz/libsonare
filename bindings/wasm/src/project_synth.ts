@@ -1,5 +1,6 @@
 import type { SynthEnumTables, SynthPatch } from './instrument_types.js';
 import { projectModule } from './project_internal.js';
+import { assertString } from './validation.js';
 
 /**
  * Runtime ABI version of the flat project POD layout exposed by this WASM
@@ -93,6 +94,7 @@ export function controllerProfileNames(): string[] {
  * throw.
  */
 export function synthPresetPatch(name: string): SynthPatch {
+  assertString('synthPresetPatch', name, 'name');
   // embind returns a val::object whose constructor is not this realm's Object, so a
   // direct return is not structured-cloneable (breaks postMessage to a Worker).
   // Spreading into a fresh literal re-roots it as a plain Object; modRoutings is

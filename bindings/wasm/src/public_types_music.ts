@@ -20,6 +20,21 @@ export const PitchClass = {
 
 export type PitchClass = (typeof PitchClass)[keyof typeof PitchClass];
 
+/** A pitch class by name, as `Chord.rootName` spells it. */
+export type PitchClassName =
+  | 'C'
+  | 'C#'
+  | 'D'
+  | 'D#'
+  | 'E'
+  | 'F'
+  | 'F#'
+  | 'G'
+  | 'G#'
+  | 'A'
+  | 'A#'
+  | 'B';
+
 /**
  * Musical mode
  */
@@ -206,8 +221,10 @@ export interface ChordDetectionOptions extends ValidateOptions {
   useHmm?: boolean;
   hmmBeamWidth?: number;
   useKeyContext?: boolean;
-  keyRoot?: PitchClass;
-  keyMode?: Mode;
+  /** Pitch class ordinal or name, e.g. `detectKey`'s `root`. */
+  keyRoot?: PitchClass | PitchClassName;
+  /** Mode ordinal or name, e.g. `detectKey`'s `mode`. */
+  keyMode?: Mode | KeyMode;
   detectInversions?: boolean;
   chromaMethod?: 'stft' | 'nnls';
   /**
@@ -376,7 +393,8 @@ export interface ChordFunctionsInput {
 
 /** A key given as `detectKey` reports it. */
 export interface ChordFunctionsKey {
-  root: PitchClass;
+  /** Pitch class ordinal or name. */
+  root: PitchClass | PitchClassName;
   /** Mode name as `detectKey` reports it, or its `Mode` ordinal. */
   mode: KeyMode | Mode;
 }

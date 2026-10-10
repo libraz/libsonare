@@ -45,7 +45,7 @@ export type {
   ChannelLayout,
   DecodedChannels,
 } from './audio.js';
-export { Audio, decodeChannels, downmix } from './audio.js';
+export { Audio, decodeChannels, decodeChannelsWithBrowserFallback, downmix } from './audio.js';
 export type {
   ClipPageStreamerEngine,
   ClipPageStreamerOptions,
@@ -784,6 +784,7 @@ export type {
   MasteringRepairTrimSilenceStereoResult,
   MasteringReport,
   MasteringResult,
+  MasteringSoloProcessorParams,
   MasteringStereoChainResult,
   MasteringStereoResult,
   MasteringStreamingPreviewPlatform,
@@ -846,6 +847,7 @@ export type {
   PercussiveEventEdit,
   PercussiveEventEditInput,
   PercussiveEventInput,
+  PitchClassName,
   PitchCorrectOptions,
   PitchDecompositionResult,
   PitchResult,

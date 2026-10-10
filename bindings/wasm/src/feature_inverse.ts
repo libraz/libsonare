@@ -14,10 +14,34 @@ import type {
   MfccResult,
   StftPowerResult,
 } from './public_types.js';
-import { assertFiniteScalar, assertSampleRate, assertSamples } from './validation.js';
+import {
+  assertAudioInput,
+  assertFiniteScalar,
+  assertSampleRate,
+  assertSamples,
+  requestObject,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
+}
+
+/** True for a `{ result }` request; a request with neither `result` nor `field` is refused by name. */
+function isResultRequest(
+  fn: string,
+  request: unknown,
+  field: string,
+): request is { result: unknown } {
+  if (typeof request !== 'object' || request === null) {
+    throw new TypeError(`${fn}: expected a Float32Array or a request object`);
+  }
+  if ('result' in request) {
+    return true;
+  }
+  if ((request as Record<string, unknown>)[field] === undefined) {
+    throw new TypeError(`${fn}: ${field} is required (or pass result)`);
+  }
+  return false;
 }
 
 export interface MfccToMelRequest extends GuardedOptions {
@@ -307,8 +331,9 @@ export function melToStft(
   options: GuardedOptions = {},
 ): StftPowerResult {
   if (!(power instanceof Float32Array)) {
-    const request =
-      'result' in power ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED) : power;
+    const request = isResultRequest('melToStft', power, 'power')
+      ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED)
+      : power;
     return melToStft(
       request.power,
       request.nMels,
@@ -375,8 +400,9 @@ export function melToAudio(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(power instanceof Float32Array)) {
-    const request =
-      'result' in power ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED) : power;
+    const request = isResultRequest('melToAudio', power, 'power')
+      ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED)
+      : power;
     return melToAudio(
       request.power,
       request.nMels,
@@ -435,6 +461,7 @@ export function griffinLim(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(magnitude instanceof Float32Array)) {
+    requestObject('griffinLim', magnitude, 'magnitude');
     const request = magnitude;
     return griffinLim(
       request.magnitude,
@@ -492,10 +519,9 @@ export function mfccToMel(
   options: GuardedOptions = {},
 ): MelPowerResult {
   if (!(coefficients instanceof Float32Array)) {
-    const request =
-      'result' in coefficients
-        ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
-        : coefficients;
+    const request = isResultRequest('mfccToMel', coefficients, 'coefficients')
+      ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
+      : coefficients;
     return mfccToMel(
       request.coefficients,
       request.nMfcc,
@@ -559,10 +585,9 @@ export function mfccToAudio(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(coefficients instanceof Float32Array)) {
-    const request =
-      'result' in coefficients
-        ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
-        : coefficients;
+    const request = isResultRequest('mfccToAudio', coefficients, 'coefficients')
+      ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
+      : coefficients;
     return mfccToAudio(
       request.coefficients,
       request.nMfcc,
@@ -624,9 +649,11 @@ export function phaseVocoder(
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('phaseVocoder', samples);
     const r = samples;
     return phaseVocoder(r.samples, r.sampleRate ?? 22050, r.rate, r.nFft, r.hopLength);
   }
+  assertAudioInput('phaseVocoder', samples, sampleRate);
   // Matches the addon. A finite value too wide for a float is not covered here
   // and cannot be — it is still finite to Number.isFinite; the core's own guard
   // refuses the infinity it becomes.

@@ -21,9 +21,9 @@ import type {
 } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
 import {
+  assertAudioInput,
   assertFiniteScalar,
-  assertSampleRate,
-  assertSamples,
+  requestObject,
   resolveSampleBound,
 } from './validation.js';
 
@@ -39,8 +39,7 @@ function assertNoteTrack(
   fnName: string,
   request: ExtractNotesRequest | NoteSetRequest,
 ): Float32Array | undefined {
-  assertSamples(fnName, request.samples, request.validate !== false);
-  assertSampleRate(fnName, request.sampleRate);
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
   const voicedF32 = request.voiced == null ? undefined : toVoicedFloat32(fnName, request.voiced);
   assertPitchTrackLengths(fnName, request.f0Hz, request.voiced, request.voicedProb);
   return voicedF32;
@@ -245,8 +244,11 @@ export function noteStretch(
   sampleRate = 22050,
   options: NoteStretchOptions & ValidateOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('noteStretch', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('noteStretch', samples);
+  assertAudioInput('noteStretch', request.samples, request.sampleRate ?? 22050, request);
   const rate = request.sampleRate ?? 22050;
   return requireModule().noteStretch(
     request.samples,
@@ -283,8 +285,11 @@ export function noteMove(
   sampleRate = 22050,
   options: NoteMoveOptions & ValidateOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('noteMove', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('noteMove', samples);
+  assertAudioInput('noteMove', request.samples, request.sampleRate ?? 22050, request);
   const rate = request.sampleRate ?? 22050;
   return requireModule().noteMove(
     request.samples,
@@ -436,7 +441,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * ```
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
-  assertSampleRate('renderNotes', request.sampleRate);
+  assertAudioInput('renderNotes', request.samples, request.sampleRate, request);
   if (!Array.isArray(request.notes)) {
     throw new TypeError('renderNotes: notes must be an array');
   }
@@ -455,7 +460,6 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
   if (f0Hz !== undefined) {
     assertPitchTrackLengths('renderNotes', f0Hz, publicVoiced);
   }
-  assertSamples('renderNotes', request.samples, request.validate !== false);
   const options = { ...withoutVoiced, voiced };
   const notes = resolveEntryTimes('renderNotes', request.notes, 'notes', request.sampleRate, true);
   return requireModule().renderNotes(request.samples, request.sampleRate, notes, options);

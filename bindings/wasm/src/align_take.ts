@@ -1,6 +1,6 @@
 import { projectModule } from './project_internal.js';
 import type { AlignTakeToReferenceRequest, AlignTakeToReferenceResult } from './project_types.js';
-import { assertSampleRate, assertSamples } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /**
  * Aligns one take to a reference timeline and returns the warp anchors that place
@@ -52,9 +52,8 @@ import { assertSampleRate, assertSamples } from './validation.js';
 export function alignTakeToReference(
   request: AlignTakeToReferenceRequest,
 ): AlignTakeToReferenceResult {
-  assertSamples('alignTakeToReference', request.reference, true, 'reference');
-  assertSamples('alignTakeToReference', request.take, true, 'take');
-  assertSampleRate('alignTakeToReference', request.sampleRate);
+  assertAudioInput('alignTakeToReference', request.reference, request.sampleRate, {}, 'reference');
+  assertAudioInput('alignTakeToReference', request.take, request.sampleRate, {}, 'take');
   return projectModule().alignTakeToReference(
     request.reference,
     request.take,

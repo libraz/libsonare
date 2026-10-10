@@ -28,8 +28,13 @@ import {
   type VocalWorkerResponseMessage,
 } from './vocal_edit_worker_protocol.js';
 
+/**
+ * A browser Worker or a Node `worker_threads.Worker`. The transfer list is
+ * `readonly unknown[]` because the DOM and Node `Transferable` unions are not
+ * subsets of each other, so neither Worker type would otherwise be assignable.
+ */
 export interface VocalEditWorker {
-  postMessage(message: unknown, transfer?: Transferable[]): void;
+  postMessage(message: unknown, transfer?: readonly unknown[]): void;
   terminate(): unknown;
   addEventListener?(type: string, listener: EventListener): void;
   removeEventListener?(type: string, listener: EventListener): void;
@@ -243,7 +248,9 @@ export class VocalEditWorkerClient {
       this.worker = options.worker;
     } else {
       if (!options.workerFactory && typeof Worker === 'undefined') {
-        throw new Error('VocalEditWorkerClient requires a Worker implementation');
+        throw new Error(
+          'VocalEditWorkerClient requires a Worker implementation: pass `worker` or `workerFactory` outside a browser (for example a node:worker_threads Worker)',
+        );
       }
       const url =
         options.workerUrl === undefined

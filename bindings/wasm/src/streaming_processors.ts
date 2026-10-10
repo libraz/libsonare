@@ -59,10 +59,12 @@ const EQ_PHASE_MODES: Record<string, number> = {
  * `repair.decrackle`, `repair.dehum`, `repair.dereverb`) throw at construction.
  *
  * `repair.denoise` runs here, but only with a noise estimator that is recursive
- * in time. Its default ranks every frame of the whole signal by energy, which a
- * stream never reaches the end of, so it is refused by name rather than
- * substituted; set `repair.denoise.noiseEstimator` to `1` (MCRA), `2` (IMCRA)
- * or `3` (speech-presence probability). The two minimum-tracking estimators
+ * in time. A stream defaults it to `'spp'` (`3`, speech-presence probability),
+ * so `{ repair: { denoise: { enabled: true } } }` prepares. The offline
+ * default, `'quantile'` (`0`), ranks every frame of the whole signal by energy,
+ * which a stream never reaches the end of, so it is refused by name rather than
+ * substituted; `'mcra'` (`1`) and `'imcra'` (`2`) are accepted too. The two
+ * minimum-tracking estimators
  * (`1` and `2`) seed their noise floor from the first frame they see and hold it
  * for the half second their minimum window spans, so a stream opened in the
  * middle of the programme is over-suppressed until it turns over; `3` tracks no

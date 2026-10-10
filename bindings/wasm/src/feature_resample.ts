@@ -1,4 +1,5 @@
 import { getSonareModule } from './module_state.js';
+import { requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -30,6 +31,7 @@ export function resample(
   targetSr?: number,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('resample', samples);
     return resample(samples.samples, samples.srcSr, samples.targetSr);
   }
   return requireModule().resample(samples, srcSr as number, targetSr as number);

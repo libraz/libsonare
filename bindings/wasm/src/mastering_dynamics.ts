@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -111,8 +111,16 @@ export function masteringDynamicsCompressor(
   sampleRate?: number,
   options: CompressorOptions = {},
 ): DynamicsProcessorResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsCompressor', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringDynamicsCompressor', samples);
+  assertAudioInput(
+    'masteringDynamicsCompressor',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   const detector =
     typeof request.detector === 'string'
       ? COMPRESSOR_DETECTOR_MAP[request.detector]
@@ -148,8 +156,11 @@ export function masteringDynamicsGate(
   sampleRate?: number,
   options: GateOptions = {},
 ): DynamicsProcessorResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsGate', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringDynamicsGate', samples);
+  assertAudioInput('masteringDynamicsGate', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().masteringDynamicsGate(
     request.samples,
     request.sampleRate ?? 22050,
@@ -171,8 +182,16 @@ export function masteringDynamicsTransientShaper(
   sampleRate?: number,
   options: TransientShaperOptions = {},
 ): DynamicsProcessorResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsTransientShaper', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringDynamicsTransientShaper', samples);
+  assertAudioInput(
+    'masteringDynamicsTransientShaper',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   return requireModule().masteringDynamicsTransientShaper(
     request.samples,
     request.sampleRate ?? 22050,

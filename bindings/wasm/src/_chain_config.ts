@@ -1,6 +1,10 @@
+import { getSonareModule } from './module_state.js';
 import type { MasteringChainConfig } from './public_types.js';
 
-type ChainSection = { [key: string]: number | boolean | ChainSection | undefined };
+type ChainSection = { [key: string]: number | boolean | string | ChainSection | undefined };
+
+const notAValue = (path: string): string =>
+  `Mastering override '${path}' must be a number or boolean.`;
 
 /**
  * Flattens a nested {@link MasteringChainConfig} into the dot-notation
@@ -12,6 +16,10 @@ type ChainSection = { [key: string]: number | boolean | ChainSection | undefined
  * both spellings a {@link MasteringChainConfig} accepts reach the core as the
  * same parameter — matching what the Python binding documents. An unknown key
  * in either spelling is rejected by the core, not here.
+ *
+ * An enum-valued key may be given by its name (`noiseEstimator: 'mcra'`); the
+ * core resolves the name to the number every flat parameter list carries and
+ * refuses an unknown one with the key and the valid names.
  */
 export function flattenChainConfig(config: MasteringChainConfig): Record<string, number | boolean> {
   const out: Record<string, number | boolean> = {};
@@ -20,10 +28,16 @@ export function flattenChainConfig(config: MasteringChainConfig): Record<string,
       const path = prefix ? `${prefix}.${key}` : key;
       if (typeof value === 'number' || typeof value === 'boolean') {
         out[path] = value;
+      } else if (typeof value === 'string') {
+        const resolved = getSonareModule().masteringEnumValue('', path, value);
+        if (resolved === null) {
+          throw new TypeError(notAValue(path));
+        }
+        out[path] = resolved;
       } else if (value !== null && typeof value === 'object') {
         walk(value, path);
       } else if (value !== undefined) {
-        throw new TypeError(`Mastering override '${path}' must be a number or boolean.`);
+        throw new TypeError(notAValue(path));
       }
     }
   };

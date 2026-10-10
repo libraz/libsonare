@@ -122,6 +122,13 @@ describe('downmix', () => {
     expect(() => downmix([], 0)).toThrow();
     expect(() => downmix([plane(0.1), new Float32Array(3)], 0)).toThrow();
   });
+
+  it('refuses a layout that would wrap into a valid one rather than folding to it', () => {
+    // 2^32 + 1 wraps to 1 (stereo) under embind's int conversion.
+    expect(() => downmix([plane(0.1), plane(0.1)], (2 ** 32 + 1) as never)).toThrow(RangeError);
+    expect(() => downmix([plane(0.1), plane(0.1)], 1.5 as never)).toThrow(RangeError);
+    expect(() => downmix([plane(0.1), plane(0.1)], '1' as never)).toThrow(TypeError);
+  });
 });
 
 describe('browser decoder fallback fold', () => {

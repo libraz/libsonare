@@ -6,7 +6,12 @@ import type {
   WasmTempogramResult,
   WasmTrimResult,
 } from './sonare.js';
-import { resolveOptionalNonNegative } from './validation.js';
+import {
+  assertAudioSamples,
+  assertString,
+  requestObject,
+  resolveOptionalNonNegative,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -81,7 +86,9 @@ export function clicks(
   clickDuration = 0.1,
 ): Float32Array {
   const request =
-    times instanceof Float32Array ? { times, sampleRate, length, frequency, clickDuration } : times;
+    times instanceof Float32Array
+      ? { times, sampleRate, length, frequency, clickDuration }
+      : requestObject('clicks', times, 'times');
   return requireModule().clicks(
     request.times,
     request.sampleRate ?? 22050,
@@ -370,6 +377,7 @@ export function hzToNote(hz: number): string {
  * parse or whose octave is out of range.
  */
 export function noteToHz(note: string): number {
+  assertString('noteToHz', note, 'note');
   return requireModule().noteToHz(note);
 }
 
@@ -419,6 +427,7 @@ export function powerToDb(
   topDb = 80.0,
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('powerToDb', values, 'values');
     return powerToDb(values.values, values.ref, values.amin, values.topDb);
   }
   return requireModule().powerToDb(values, ref, amin, topDb);
@@ -438,6 +447,7 @@ export function amplitudeToDb(
   topDb = 80.0,
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('amplitudeToDb', values, 'values');
     return amplitudeToDb(values.values, values.ref, values.amin, values.topDb);
   }
   return requireModule().amplitudeToDb(values, ref, amin, topDb);
@@ -459,6 +469,7 @@ export function preemphasis(
   zi?: number,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('preemphasis', samples);
     return preemphasis(samples.samples, samples.coef, samples.zi);
   }
   return requireModule().preemphasis(samples, coef, zi ?? null);
@@ -472,6 +483,7 @@ export function deemphasis(
   zi?: number,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('deemphasis', samples);
     return deemphasis(samples.samples, samples.coef, samples.zi);
   }
   return requireModule().deemphasis(samples, coef, zi ?? null);
@@ -491,8 +503,10 @@ export function trimSilence(
   hopLength = 512,
 ): WasmTrimResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('trimSilence', samples);
     return trimSilence(samples.samples, samples.topDb, samples.frameLength, samples.hopLength);
   }
+  assertAudioSamples('trimSilence', samples);
   return requireModule().trimSilence(samples, topDb, frameLength, hopLength);
 }
 
@@ -510,9 +524,20 @@ export function splitSilence(
   hopLength = 512,
 ): Int32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('splitSilence', samples);
     return splitSilence(samples.samples, samples.topDb, samples.frameLength, samples.hopLength);
   }
+  assertAudioSamples('splitSilence', samples);
   return requireModule().splitSilence(samples, topDb, frameLength, hopLength);
+}
+
+/** Preflight each signal; an empty or non-array `signals` is left to the native refusal. */
+function assertCommonSignals(fnName: string, signals: unknown): void {
+  if (Array.isArray(signals)) {
+    signals.forEach((signal, i) => {
+      assertAudioSamples(fnName, signal, {}, `signals[${i}]`);
+    });
+  }
 }
 
 /**
@@ -525,6 +550,7 @@ export function splitSilence(
  *   does for it.
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  assertCommonSignals('splitSilenceCommon', request.signals);
   return requireModule().splitSilenceCommon(
     request.signals,
     request.topDb ?? 60.0,
@@ -548,6 +574,7 @@ export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Arr
 export function splitSilenceCommonWithReport(
   request: SplitSilenceCommonRequest,
 ): SplitSilenceCommonWithReportResult {
+  assertCommonSignals('splitSilenceCommonWithReport', request.signals);
   return requireModule().splitSilenceCommonWithReport(
     request.signals,
     request.topDb ?? 60.0,
@@ -568,6 +595,7 @@ export function frameSignal(
   hopLength?: number,
 ): WasmFrameResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('frameSignal', samples);
     return frameSignal(samples.samples, samples.frameLength, samples.hopLength);
   }
   return requireModule().frameSignal(samples, frameLength as number, hopLength as number);
@@ -585,6 +613,7 @@ export function padCenter(
   padValue = 0.0,
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('padCenter', values, 'values');
     return padCenter(values.values, values.targetSize, values.padValue);
   }
   return requireModule().padCenter(values, targetSize as number, padValue);
@@ -602,6 +631,7 @@ export function fixLength(
   padValue = 0.0,
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('fixLength', values, 'values');
     return fixLength(values.values, values.targetSize, values.padValue);
   }
   return requireModule().fixLength(values, targetSize as number, padValue);
@@ -663,6 +693,7 @@ export function peakPick(
   wait?: number,
 ): Int32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('peakPick', values, 'values');
     const r = values;
     return peakPick(r.values, r.preMax, r.postMax, r.preAvg, r.postAvg, r.delta, r.wait);
   }
@@ -689,6 +720,7 @@ export function vectorNormalize(
   threshold = 0.0,
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('vectorNormalize', values, 'values');
     return vectorNormalize(values.values, values.normType, values.threshold);
   }
   return requireModule().vectorNormalize(values, normType, threshold);
@@ -708,6 +740,7 @@ export function pcen(
   options: Record<string, number> = {},
 ): Float32Array {
   if (!(values instanceof Float32Array)) {
+    requestObject('pcen', values, 'values');
     const r = values;
     const {
       values: requestValues,
@@ -732,6 +765,7 @@ export function tonnetz(
   nFrames?: number,
 ): Float32Array {
   if (!(chromagram instanceof Float32Array)) {
+    requestObject('tonnetz', chromagram, 'chromagram');
     return tonnetz(chromagram.chromagram, chromagram.nChroma, chromagram.nFrames);
   }
   return requireModule().tonnetz(chromagram, nChroma as number, nFrames as number);
@@ -757,6 +791,7 @@ export function tempogram(
   norm = true,
 ): WasmTempogramResult {
   if (!(onsetEnvelope instanceof Float32Array)) {
+    requestObject('tempogram', onsetEnvelope, 'onsetEnvelope');
     const r = onsetEnvelope;
     return tempogram(
       r.onsetEnvelope,
@@ -797,6 +832,7 @@ export function cyclicTempogram(
   nBins = 60,
 ): WasmCyclicTempogramResult {
   if (!(onsetEnvelope instanceof Float32Array)) {
+    requestObject('cyclicTempogram', onsetEnvelope, 'onsetEnvelope');
     const r = onsetEnvelope;
     return cyclicTempogram(
       r.onsetEnvelope,
@@ -835,6 +871,7 @@ export function plp(
   winLength = 384,
 ): Float32Array {
   if (!(onsetEnvelope instanceof Float32Array)) {
+    requestObject('plp', onsetEnvelope, 'onsetEnvelope');
     const r = onsetEnvelope;
     return plp(r.onsetEnvelope, r.sampleRate, r.hopLength, r.tempoMin, r.tempoMax, r.winLength);
   }

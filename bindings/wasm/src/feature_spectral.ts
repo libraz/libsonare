@@ -5,6 +5,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { WasmMatrix2dResult } from './sonare.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -74,8 +75,10 @@ export function spectralCentroid(
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralCentroid', samples);
     return spectralCentroid(samples.samples, samples.sampleRate, samples.nFft, samples.hopLength);
   }
+  assertAudioInput('spectralCentroid', samples, sampleRate);
   return requireModule().spectralCentroid(samples, sampleRate, nFft, hopLength);
 }
 
@@ -112,6 +115,7 @@ export function spectralContrast(
   quantile = 0.02,
 ): WasmMatrix2dResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralContrast', samples);
     const r = samples;
     return spectralContrast(
       r.samples,
@@ -123,6 +127,7 @@ export function spectralContrast(
       r.quantile,
     );
   }
+  assertAudioInput('spectralContrast', samples, sampleRate);
   return requireModule().spectralContrast(
     samples,
     sampleRate,
@@ -155,9 +160,11 @@ export function polyFeatures(
   order = 1,
 ): WasmMatrix2dResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('polyFeatures', samples);
     const r = samples;
     return polyFeatures(r.samples, r.sampleRate, r.nFft, r.hopLength, r.order);
   }
+  assertAudioInput('polyFeatures', samples, sampleRate);
   return requireModule().polyFeatures(samples, sampleRate, nFft, hopLength, order);
 }
 
@@ -180,6 +187,7 @@ export function zeroCrossings(
   zeroPos = true,
 ): Int32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('zeroCrossings', samples);
     const r = samples;
     return zeroCrossings(r.samples, r.threshold, r.refMagnitude, r.pad, r.zeroPos);
   }
@@ -211,6 +219,7 @@ export function spectralBandwidth(
   p = 2,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralBandwidth', samples);
     return spectralBandwidth(
       samples.samples,
       samples.sampleRate,
@@ -219,6 +228,7 @@ export function spectralBandwidth(
       samples.p,
     );
   }
+  assertAudioInput('spectralBandwidth', samples, sampleRate);
   return requireModule().spectralBandwidth(samples, sampleRate, nFft, hopLength, p);
 }
 
@@ -248,6 +258,7 @@ export function spectralRolloff(
   rollPercent = 0.85,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralRolloff', samples);
     return spectralRolloff(
       samples.samples,
       samples.sampleRate,
@@ -256,6 +267,7 @@ export function spectralRolloff(
       samples.rollPercent,
     );
   }
+  assertAudioInput('spectralRolloff', samples, sampleRate);
   return requireModule().spectralRolloff(samples, sampleRate, nFft, hopLength, rollPercent);
 }
 
@@ -282,8 +294,10 @@ export function spectralFlatness(
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralFlatness', samples);
     return spectralFlatness(samples.samples, samples.sampleRate, samples.nFft, samples.hopLength);
   }
+  assertAudioInput('spectralFlatness', samples, sampleRate);
   return requireModule().spectralFlatness(samples, sampleRate, nFft, hopLength);
 }
 
@@ -303,6 +317,7 @@ export function spectralFlux(
   lag = 1,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('spectralFlux', samples);
     return spectralFlux(
       samples.samples,
       samples.sampleRate,
@@ -311,6 +326,7 @@ export function spectralFlux(
       samples.lag,
     );
   }
+  assertAudioInput('spectralFlux', samples, sampleRate);
   return requireModule().spectralFlux(samples, sampleRate, nFft, hopLength, lag);
 }
 
@@ -337,6 +353,7 @@ export function zeroCrossingRate(
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('zeroCrossingRate', samples);
     return zeroCrossingRate(
       samples.samples,
       samples.sampleRate,
@@ -344,6 +361,7 @@ export function zeroCrossingRate(
       samples.hopLength,
     );
   }
+  assertAudioInput('zeroCrossingRate', samples, sampleRate);
   return requireModule().zeroCrossingRate(samples, sampleRate, frameLength, hopLength);
 }
 
@@ -370,7 +388,9 @@ export function rmsEnergy(
   hopLength = 512,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('rmsEnergy', samples);
     return rmsEnergy(samples.samples, samples.sampleRate, samples.frameLength, samples.hopLength);
   }
+  assertAudioInput('rmsEnergy', samples, sampleRate);
   return requireModule().rmsEnergy(samples, sampleRate, frameLength, hopLength);
 }

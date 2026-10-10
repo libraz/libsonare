@@ -2,7 +2,7 @@ import { ErrorCode } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type { RealtimeVoiceChangerConfigInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertAudioInput, assertString, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -56,9 +56,13 @@ export function voiceChange(
   sampleRate = 22050,
   options: VoiceChangeOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('voiceChange', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('voiceChange', samples);
+  assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
   const formantMode = request.formantMode ?? 'relative';
+  assertString('voiceChange', formantMode, 'formantMode');
   try {
     return requireModule().voiceChange(
       request.samples,
@@ -122,8 +126,10 @@ export function voiceChangeRealtime(
   options: VoiceChangeRealtimeOptions = {},
 ): Float32Array {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, preset, ...options } : samples;
-  assertSamples('voiceChangeRealtime', request.samples, request.validate !== false);
+    samples instanceof Float32Array
+      ? { samples, sampleRate, preset, ...options }
+      : requestObject('voiceChangeRealtime', samples);
+  assertAudioInput('voiceChangeRealtime', request.samples, request.sampleRate ?? 48000, request);
   const channels = request.channels ?? 1;
   if (channels !== 1 && channels !== 2) {
     throw new Error('voiceChangeRealtime: channels must be 1 or 2.');

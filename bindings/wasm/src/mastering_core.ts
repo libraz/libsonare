@@ -1,3 +1,4 @@
+import { resolveProcessorParams } from './_processor_params.js';
 import { ErrorCode, SonareError } from './errors.js';
 import { getSonareModule } from './module_state.js';
 import type {
@@ -13,6 +14,7 @@ import type {
   MasteringOptions,
   MasteringProcessorParams,
   MasteringResult,
+  MasteringSoloProcessorParams,
   MasteringStereoResult,
   MasteringStreamingPreviewResult,
   MatchEqCurveResult,
@@ -32,6 +34,7 @@ import type {
   StreamingPlatform,
   TypedJson,
 } from './public_types.js';
+import { assertAudioInput, assertString, requestObject } from './validation.js';
 
 export type { MasteringInsertParamChoice, MasteringInsertSlot };
 
@@ -49,7 +52,7 @@ export interface MasteringProcessRequest {
   processorName: SoloProcessor;
   samples: Float32Array;
   sampleRate?: number;
-  params?: MasteringProcessorParams;
+  params?: MasteringSoloProcessorParams;
 }
 
 export interface MasteringProcessStereoRequest {
@@ -57,7 +60,7 @@ export interface MasteringProcessStereoRequest {
   left: Float32Array;
   right: Float32Array;
   sampleRate?: number;
-  params?: MasteringProcessorParams;
+  params?: MasteringSoloProcessorParams;
 }
 
 /** Canonical request form for a two-input match processor. */
@@ -180,7 +183,11 @@ export function mastering(
   sampleRate = 22050,
   options: MasteringOptions = {},
 ): MasteringResult {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('mastering', samples);
+  assertAudioInput('mastering', request.samples, request.sampleRate ?? 22050);
   return requireModule().mastering(
     request.samples,
     request.sampleRate ?? 22050,
@@ -219,6 +226,7 @@ export function masteringInsertNames(): string[] {
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  */
 export function masteringInsertParamNames(name: string): string[] {
+  assertString('masteringInsertParamNames', name, 'name');
   return Array.from(requireModule().masteringInsertParamNames(name));
 }
 
@@ -291,7 +299,7 @@ export interface MasteringInsertParamInfo {
   slot: string | null;
   /**
    * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
-   * empty for an independent key. `min` and `max` are measured with every sibling at its default.
+   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
   dependsOn: MasteringInsertParamDependency[];
 }
@@ -304,21 +312,25 @@ export interface MasteringInsertParamInfo {
  * {@link RealtimeEngine.setTrackStripInsertParamByName}, `id` non-null); then,
  * sorted by name, every other construction key with `id` null and `rtSafe`
  * false. The name set matches {@link masteringInsertParamNames} plus any
- * automation target construction does not read. Returns an empty array for an
- * unknown name.
+ * automation target construction does not read. Any id of the processor
+ * catalog is served, an offline repair stage (`repair.declick`,
+ * `repair.declip`, `repair.trimSilence`) included, with the rows its catalog
+ * entry's `params` carries; those rows have a null `id`. Returns an empty array
+ * for an unknown name.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  * @param sampleRate - Optional host rate in Hz. A key whose `maxRelativeTo` is
  *   `"nyquist"` then reports, as `max` and `maxExclusive`, the bound accepted
- *   when the insert is built and prepared at that rate, which includes any cap
- *   fixed at build time (an EQ band frequency stays at 24000 for a 96000 Hz
- *   host). Omitted, the rate-less answer is returned. Throws for a rate outside
+ *   when the insert is built and prepared at that rate (an EQ band frequency
+ *   reaches 48000 for a 96000 Hz host). Omitted, the rate-less answer is
+ *   returned, with the 24000 cap of the 48 kHz probe. Throws for a rate outside
  *   the supported range.
  */
 export function masteringInsertParamInfo(
   name: string,
   sampleRate?: number,
 ): MasteringInsertParamInfo[] {
+  assertString('masteringInsertParamInfo', name, 'name');
   const module = requireModule();
   const json =
     sampleRate === undefined
@@ -363,9 +375,13 @@ export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
  * Booleans serialize as JSON booleans, not 0/1, since the C++ reader accepts
  * `is_bool` alongside a number.
  */
-function insertTimingParamsToJson(fnName: string, params: Record<string, number | boolean>) {
+function insertTimingParamsToJson(
+  fnName: string,
+  processor: string,
+  params: MasteringSoloProcessorParams,
+) {
   const out: Record<string, number | boolean> = {};
-  for (const [key, value] of Object.entries(params)) {
+  for (const [key, value] of Object.entries(resolveProcessorParams(processor, params))) {
     if (typeof value === 'boolean') {
       out[key] = value;
       continue;
@@ -397,7 +413,8 @@ function insertTimingParamsToJson(fnName: string, params: Record<string, number 
  * ask for.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
- * @param params - Flat parameter values, keyed as in {@link masteringInsertParamInfo}.
+ * @param params - Flat parameter values, keyed as in {@link masteringInsertParamInfo};
+ *   an enum-valued key also takes its `choices` name.
  * @param sampleRate - Rate the insert is prepared at.
  * @throws For an unknown `name`, a key the insert does not read, a value its
  *   construction or `prepare` refuses, or a `params` value that is not a
@@ -405,10 +422,11 @@ function insertTimingParamsToJson(fnName: string, params: Record<string, number 
  */
 export function masteringInsertTiming(
   name: string,
-  params: Record<string, number | boolean>,
+  params: MasteringSoloProcessorParams,
   sampleRate: number,
 ): MasteringInsertTiming {
-  const json = insertTimingParamsToJson('masteringInsertTiming', params);
+  assertString('masteringInsertTiming', name, 'name');
+  const json = insertTimingParamsToJson('masteringInsertTiming', name, params);
   return requireModule().masteringInsertTiming(name, json, sampleRate);
 }
 
@@ -528,23 +546,25 @@ export function masteringProcess(
   processorName: SoloProcessor,
   samples: Float32Array,
   sampleRate?: number,
-  params?: MasteringProcessorParams,
+  params?: MasteringSoloProcessorParams,
 ): MasteringResult;
 export function masteringProcess(
   processorName: SoloProcessor | MasteringProcessRequest,
   samples?: Float32Array,
   sampleRate = 22050,
-  params: MasteringProcessorParams = {},
+  params: MasteringSoloProcessorParams = {},
 ): MasteringResult {
   const request =
     typeof processorName === 'string'
       ? { processorName, samples: samples as Float32Array, sampleRate, params }
       : processorName;
+  assertString('masteringProcess', request.processorName, 'processorName');
+  assertAudioInput('masteringProcess', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringProcess(
     request.processorName,
     request.samples,
     request.sampleRate ?? 22050,
-    request.params ?? {},
+    resolveProcessorParams(request.processorName, request.params ?? {}),
   );
 }
 
@@ -556,14 +576,14 @@ export function masteringProcessStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
-  params?: MasteringProcessorParams,
+  params?: MasteringSoloProcessorParams,
 ): MasteringStereoResult;
 export function masteringProcessStereo(
   processorName: SoloProcessor | MasteringProcessStereoRequest,
   left?: Float32Array,
   right?: Float32Array,
   sampleRate = 22050,
-  params: MasteringProcessorParams = {},
+  params: MasteringSoloProcessorParams = {},
 ): MasteringStereoResult {
   const request =
     typeof processorName === 'string'
@@ -575,6 +595,15 @@ export function masteringProcessStereo(
           params,
         }
       : processorName;
+  assertString('masteringProcessStereo', request.processorName, 'processorName');
+  assertAudioInput('masteringProcessStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
+  assertAudioInput(
+    'masteringProcessStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -583,7 +612,7 @@ export function masteringProcessStereo(
     request.left,
     request.right,
     request.sampleRate ?? 22050,
-    request.params ?? {},
+    resolveProcessorParams(request.processorName, request.params ?? {}),
   );
 }
 
@@ -617,6 +646,21 @@ export function masteringPairProcess(
           params,
         }
       : processorName;
+  assertString('masteringPairProcess', request.processorName, 'processorName');
+  assertAudioInput(
+    'masteringPairProcess',
+    request.source,
+    request.sampleRate ?? 22050,
+    {},
+    'source',
+  );
+  assertAudioInput(
+    'masteringPairProcess',
+    request.reference,
+    request.sampleRate ?? 22050,
+    {},
+    'reference',
+  );
   return requireModule().masteringPairProcess(
     request.processorName,
     request.source,
@@ -663,6 +707,35 @@ export function masteringPairProcessStereo(
           params,
         }
       : processorName;
+  assertString('masteringPairProcessStereo', request.processorName, 'processorName');
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.sourceLeft,
+    request.sampleRate ?? 22050,
+    {},
+    'sourceLeft',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.sourceRight,
+    request.sampleRate ?? 22050,
+    {},
+    'sourceRight',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.referenceLeft,
+    request.sampleRate ?? 22050,
+    {},
+    'referenceLeft',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.referenceRight,
+    request.sampleRate ?? 22050,
+    {},
+    'referenceRight',
+  );
   if (request.sourceLeft.length !== request.sourceRight.length) {
     throw new RangeError('Source left and right channel lengths must match.');
   }
@@ -765,6 +838,21 @@ export function masteringPairAnalyze(
           params,
         }
       : analysisName;
+  assertString('masteringPairAnalyze', request.analysisName, 'analysisName');
+  assertAudioInput(
+    'masteringPairAnalyze',
+    request.source,
+    request.sampleRate ?? 22050,
+    {},
+    'source',
+  );
+  assertAudioInput(
+    'masteringPairAnalyze',
+    request.reference,
+    request.sampleRate ?? 22050,
+    {},
+    'reference',
+  );
   return requireModule().masteringPairAnalyze(
     request.analysisName,
     request.source,
@@ -797,6 +885,20 @@ export function masteringPairAnalyze(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
+  assertAudioInput(
+    'masteringAbMatchLoudness',
+    request.source,
+    request.sampleRate ?? 22050,
+    {},
+    'source',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudness',
+    request.reference,
+    request.sampleRate ?? 22050,
+    {},
+    'reference',
+  );
   return requireModule().masteringAbMatchLoudness(
     request.source,
     request.reference,
@@ -808,6 +910,34 @@ export function masteringAbMatchLoudness(
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.sourceLeft,
+    request.sampleRate ?? 22050,
+    {},
+    'sourceLeft',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.sourceRight,
+    request.sampleRate ?? 22050,
+    {},
+    'sourceRight',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.referenceLeft,
+    request.sampleRate ?? 22050,
+    {},
+    'referenceLeft',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.referenceRight,
+    request.sampleRate ?? 22050,
+    {},
+    'referenceRight',
+  );
   if (request.sourceLeft.length !== request.sourceRight.length) {
     throw new RangeError('Source left and right channel lengths must match.');
   }
@@ -875,6 +1005,15 @@ export function masteringStereoAnalyze(
           params,
         }
       : analysisName;
+  assertString('masteringStereoAnalyze', request.analysisName, 'analysisName');
+  assertAudioInput('masteringStereoAnalyze', request.left, request.sampleRate ?? 22050, {}, 'left');
+  assertAudioInput(
+    'masteringStereoAnalyze',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   return requireModule().masteringStereoAnalyze(
     request.analysisName,
     request.left,
@@ -897,7 +1036,11 @@ export function masteringAssistantSuggest(
   sampleRate = 22050,
   params: MasteringAssistantParams = {},
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, params }
+      : requestObject('masteringAssistantSuggest', samples);
+  assertAudioInput('masteringAssistantSuggest', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringAssistantSuggest(
     request.samples,
     request.sampleRate ?? 22050,
@@ -914,6 +1057,7 @@ export function masteringAssistantSuggest(
 export function masteringAssistantSuggestChain(
   request: MasteringAssistantParamsRequest,
 ): Record<string, number | boolean> {
+  assertAudioInput('masteringAssistantSuggestChain', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringAssistantSuggestChain(
     request.samples,
     request.sampleRate ?? 22050,
@@ -1007,7 +1151,11 @@ export function masteringAudioProfile(
   sampleRate = 22050,
   params: MasteringProcessorParams = {},
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, params }
+      : requestObject('masteringAudioProfile', samples);
+  assertAudioInput('masteringAudioProfile', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringAudioProfile(
     request.samples,
     request.sampleRate ?? 22050,
@@ -1028,12 +1176,27 @@ export function masteringStreamingPreview(
   sampleRate = 22050,
   platforms: StreamingPlatform[] = [],
 ): string {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, platforms }
+      : requestObject('masteringStreamingPreview', samples);
+  assertAudioInput('masteringStreamingPreview', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringStreamingPreview(
     request.samples,
     request.sampleRate ?? 22050,
     request.platforms ?? [],
   );
+}
+
+/**
+ * The stereo helpers below take a request object only. A `Float32Array` in the
+ * first position is the positional spelling of the mono helpers, and would
+ * otherwise surface as an unrelated complaint about `left`.
+ */
+function assertStereoRequest(fnName: string, request: unknown): void {
+  if (request === null || typeof request !== 'object' || ArrayBuffer.isView(request)) {
+    throw new TypeError(`${fnName} takes a request object { left, right, sampleRate }`);
+  }
 }
 
 /**
@@ -1046,6 +1209,21 @@ export function masteringStreamingPreview(
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantStereoParamsRequest,
 ): TypedJson<MasteringAssistantResult> {
+  assertStereoRequest('masteringAssistantSuggestStereo', request);
+  assertAudioInput(
+    'masteringAssistantSuggestStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringAssistantSuggestStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   return requireModule().masteringAssistantSuggestStereo(
     request.left,
     request.right,
@@ -1062,6 +1240,21 @@ export function masteringAssistantSuggestStereo(
 export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantStereoParamsRequest,
 ): Record<string, number | boolean> {
+  assertStereoRequest('masteringAssistantSuggestChainStereo', request);
+  assertAudioInput(
+    'masteringAssistantSuggestChainStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringAssistantSuggestChainStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   return requireModule().masteringAssistantSuggestChainStereo(
     request.left,
     request.right,
@@ -1083,6 +1276,21 @@ export function masteringAssistantSuggestChainStereo(
 export function masteringAudioProfileStereo(
   request: MasteringStereoParamsRequest,
 ): TypedJson<MasteringAudioProfile> {
+  assertStereoRequest('masteringAudioProfileStereo', request);
+  assertAudioInput(
+    'masteringAudioProfileStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringAudioProfileStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   return requireModule().masteringAudioProfileStereo(
     request.left,
     request.right,
@@ -1103,6 +1311,21 @@ export function masteringAudioProfileStereo(
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): TypedJson<MasteringStreamingPreviewResult> {
+  assertStereoRequest('masteringStreamingPreviewStereo', request);
+  assertAudioInput(
+    'masteringStreamingPreviewStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringStreamingPreviewStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   return requireModule().masteringStreamingPreviewStereo(
     request.left,
     request.right,

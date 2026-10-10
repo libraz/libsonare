@@ -10,6 +10,7 @@ import type {
   MasteringRepairDenoiseClassicalStereoResult,
   NoiseDetection,
 } from './public_types_repair.js';
+import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -70,7 +71,11 @@ export function masteringRepairDenoiseClassical(
   sampleRate?: number,
   options: DenoiseClassicalOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDenoiseClassical', samples);
+  assertAudioInput('masteringRepairDenoiseClassical', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDenoiseClassical(
     request.samples,
     request.sampleRate ?? 22050,
@@ -129,7 +134,21 @@ export function masteringRepairDenoiseClassicalStereo(
   const request: MasteringRepairDenoiseClassicalStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDenoiseClassicalStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDenoiseClassicalStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDenoiseClassicalStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDenoiseClassicalStereo(
     leftSamples,
@@ -187,6 +206,11 @@ export function masteringRepairDenoiseClassicalLinked(
   const request: MasteringRepairDenoiseClassicalLinkedRequest = Array.isArray(channels)
     ? { channels, sampleRate, ...config }
     : channels;
+  assertAudioChannels(
+    'masteringRepairDenoiseClassicalLinked',
+    request.channels,
+    request.sampleRate ?? 22050,
+  );
   const { channels: input, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDenoiseClassicalLinked(input, rate ?? 22050, options);
 }
@@ -239,7 +263,11 @@ export function masteringRepairDehum(
   sampleRate?: number,
   options: DehumOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDehum', samples);
+  assertAudioInput('masteringRepairDehum', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDehum(
     request.samples,
     request.sampleRate ?? 22050,
@@ -276,7 +304,21 @@ export function masteringRepairDehumStereo(
   const request: MasteringRepairDehumStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDehumStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDehumStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDehumStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDehumStereo(
     leftSamples,
@@ -330,7 +372,11 @@ export function masteringRepairDetectNoiseFloor(
   sampleRate?: number,
   options: DenoiseClassicalOptions = {},
 ): NoiseDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectNoiseFloor', samples);
+  assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectNoiseFloor(
     request.samples,
     request.sampleRate ?? 22050,
@@ -413,7 +459,11 @@ export function masteringRepairDetectHum(
   sampleRate?: number,
   options: DehumOptions = {},
 ): HumDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectHum', samples);
+  assertAudioInput('masteringRepairDetectHum', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectHum(
     request.samples,
     request.sampleRate ?? 22050,

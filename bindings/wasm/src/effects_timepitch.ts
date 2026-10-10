@@ -15,7 +15,7 @@ import type {
   VoicedFlags,
 } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertFiniteScalar, assertSamples } from './validation.js';
+import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -135,8 +135,8 @@ export function timeStretch(
           hopLength,
           ...positionalOptions,
         }
-      : samples;
-  assertSamples('timeStretch', request.samples, request.validate !== false);
+      : requestObject('timeStretch', samples);
+  assertAudioInput('timeStretch', request.samples, request.sampleRate ?? 22050, request);
   // Matches the addon, which refuses a non-finite rate here rather than letting
   // the core answer it. Does NOT cover a finite value too wide for a float:
   // Number.isFinite(1e39) is true and the demotion to the f32 parameter makes it
@@ -210,8 +210,8 @@ export function pitchShift(
           hopLength,
           ...positionalOptions,
         }
-      : samples;
-  assertSamples('pitchShift', request.samples, request.validate !== false);
+      : requestObject('pitchShift', samples);
+  assertAudioInput('pitchShift', request.samples, request.sampleRate ?? 22050, request);
   // See timeStretch above for what this does and does not cover.
   assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
   const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
@@ -257,8 +257,8 @@ export function pitchCorrectToMidi(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, currentMidi, targetMidi, ...options }
-      : samples;
-  assertSamples('pitchCorrectToMidi', request.samples, request.validate !== false);
+      : requestObject('pitchCorrectToMidi', samples);
+  assertAudioInput('pitchCorrectToMidi', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().pitchCorrectToMidi(
     request.samples,
     request.sampleRate ?? 22050,
@@ -327,8 +327,13 @@ export function pitchCorrectToMidiTimevarying(
           voicedProb,
           ...options,
         }
-      : samples;
-  assertSamples('pitchCorrectToMidiTimevarying', request.samples, request.validate !== false);
+      : requestObject('pitchCorrectToMidiTimevarying', samples);
+  assertAudioInput(
+    'pitchCorrectToMidiTimevarying',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   const voicedF32 =
     request.voiced == null
       ? undefined
@@ -386,8 +391,13 @@ export function pitchCorrectTimevarying(
   const request: PitchCorrectTimevaryingRequest =
     samples instanceof Float32Array
       ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
-      : samples;
-  assertSamples('pitchCorrectTimevarying', request.samples, request.validate !== false);
+      : requestObject('pitchCorrectTimevarying', samples);
+  assertAudioInput(
+    'pitchCorrectTimevarying',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   const voicedF32 =
     request.voiced == null ? undefined : toVoicedFloat32('pitchCorrectTimevarying', request.voiced);
   assertPitchTrackLengths(
@@ -426,7 +436,7 @@ export function pitchCorrectTimevarying(
  * @returns The corrected audio and the key it was tuned to
  */
 export function autoTune(request: AutoTuneRequest): AutoTuneResult {
-  assertSamples('autoTune', request.samples, request.validate !== false);
+  assertAudioInput('autoTune', request.samples, request.sampleRate ?? 22050, request);
   const { samples, sampleRate, key = 'detect', validate: _validate, ...options } = request;
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");

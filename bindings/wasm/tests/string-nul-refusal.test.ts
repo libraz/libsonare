@@ -11,7 +11,18 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
-import { init, Mixer, mixingScenePresetJson, RealtimeEngine } from '../dist/index.js';
+import {
+  init,
+  type MasteringPreset,
+  Mixer,
+  masterAudio,
+  masterAudioStereo,
+  masteringAssistantSuggest,
+  masteringPresetParams,
+  masteringProcess,
+  mixingScenePresetJson,
+  RealtimeEngine,
+} from '../dist/index.js';
 import { getSonareModule, setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
 import { wasmBindingSources } from './_wasm_binding_sources';
@@ -195,6 +206,50 @@ describe('embedded NUL refusal, by handoff kind', () => {
       expectNulRefusal(() => engine.setGraph(graph(`a${NUL}b`)), 'inputNode');
       expect(engine.graphNodeCount()).toBe(1);
     });
+  });
+});
+
+describe('embedded NUL refusal, mastering names', () => {
+  const samples = new Float32Array(4096).fill(0.1);
+  const base = { samples, sampleRate: 44100 };
+
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('a preset name is refused by name in every spelling', () => {
+    expect(() => masteringPresetParams('pop')).not.toThrow();
+    expectNulRefusal(() => masteringPresetParams(`pop${NUL}x` as MasteringPreset), 'preset');
+    expectNulRefusal(
+      () => masterAudio({ ...base, preset: `pop${NUL}x` as MasteringPreset }),
+      'preset',
+    );
+    expectNulRefusal(() => masterAudio(samples, 44100, `pop${NUL}x` as MasteringPreset), 'preset');
+    expectNulRefusal(
+      () =>
+        masterAudioStereo({
+          left: samples,
+          right: samples,
+          sampleRate: 44100,
+          preset: `pop${NUL}x` as MasteringPreset,
+        }),
+      'preset',
+    );
+    expectNulRefusal(
+      () => masteringAssistantSuggest({ ...base, params: { preset: `pop${NUL}x` } }),
+      'preset',
+    );
+  });
+
+  it('a processor, analysis or platform name is refused by name', () => {
+    expectNulRefusal(
+      () => masteringProcess({ ...base, processorName: `dynamics.compressor${NUL}x` as never }),
+      'processorName',
+    );
+    expectNulRefusal(
+      () => masteringAssistantSuggest({ ...base, params: { targetPlatform: `spotify${NUL}x` } }),
+      'targetPlatform',
+    );
   });
 });
 

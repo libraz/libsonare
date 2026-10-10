@@ -1,6 +1,7 @@
 import type { SpectralFrameRequest } from './feature_spectral.js';
 import { getSonareModule } from './module_state.js';
 import type { NoteSegment, PiptrackResult, PitchResult } from './public_types.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -65,6 +66,7 @@ export function piptrack(
   threshold = 0.1,
 ): PiptrackResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('piptrack', samples);
     const request = samples;
     return piptrack(
       request.samples,
@@ -76,6 +78,7 @@ export function piptrack(
       request.threshold,
     );
   }
+  assertAudioInput('piptrack', samples, sampleRate);
   return requireModule().piptrack(samples, sampleRate, nFft, hopLength, fmin, fmax, threshold);
 }
 
@@ -101,6 +104,7 @@ export function pitchYin(
   fillNa = false,
 ): PitchResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('pitchYin', samples);
     const request = samples;
     return pitchYin(
       request.samples,
@@ -113,6 +117,7 @@ export function pitchYin(
       request.fillNa,
     );
   }
+  assertAudioInput('pitchYin', samples, sampleRate);
   return requireModule().pitchYin(
     samples,
     sampleRate,
@@ -162,6 +167,7 @@ export function pitchPyin(
   fillNa = false,
 ): PitchResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('pitchPyin', samples);
     const request = samples;
     return pitchPyin(
       request.samples,
@@ -174,6 +180,7 @@ export function pitchPyin(
       request.fillNa,
     );
   }
+  assertAudioInput('pitchPyin', samples, sampleRate);
   return requireModule().pitchPyin(
     samples,
     sampleRate,
@@ -257,6 +264,7 @@ export function pitchTuning(
   binsPerOctave = 12,
 ): number {
   if (!(frequencies instanceof Float32Array)) {
+    requestObject('pitchTuning', frequencies, 'frequencies');
     const r = frequencies;
     return pitchTuning(r.frequencies, r.resolution, r.binsPerOctave);
   }
@@ -315,6 +323,7 @@ export function estimateTuning(
   binsPerOctave = 12,
 ): number {
   if (!(samples instanceof Float32Array)) {
+    requestObject('estimateTuning', samples);
     const r = samples;
     return estimateTuning(
       r.samples,
@@ -325,6 +334,7 @@ export function estimateTuning(
       r.binsPerOctave,
     );
   }
+  assertAudioInput('estimateTuning', samples, sampleRate);
   return requireModule().estimateTuning(
     samples,
     sampleRate,

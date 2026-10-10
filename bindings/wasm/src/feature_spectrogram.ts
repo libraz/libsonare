@@ -15,10 +15,10 @@ import type {
   StftResult,
 } from './public_types.js';
 import {
+  assertAudioInput,
   assertFiniteScalar,
   assertPositiveInteger,
-  assertSampleRate,
-  assertSamples,
+  requestObject,
 } from './validation.js';
 
 function requireModule() {
@@ -108,16 +108,6 @@ export interface TrimRequest extends GuardedOptions {
   hopLength?: number;
 }
 
-function validateSpectrogramSamples(
-  fnName: string,
-  samples: Float32Array,
-  sampleRate: number,
-  options: GuardedOptions = {},
-): void {
-  assertSampleRate(fnName, sampleRate);
-  assertSamples(fnName, samples, options.validate !== false);
-}
-
 /**
  * Trim silence from beginning and end of audio.
  *
@@ -150,6 +140,7 @@ export function trim(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('trim', samples);
     const r = samples;
     return trim(r.samples, r.sampleRate, r.thresholdDb, r.frameLength, r.hopLength, r);
   }
@@ -171,7 +162,7 @@ export function trim(
     typeof frameLengthOrOptions === 'number' ? frameLengthOrOptions : undefined;
   const resolvedFrameLength = positionalFrameLength ?? 2048;
   const resolvedHopLength = hopLength === undefined ? 512 : hopLength;
-  validateSpectrogramSamples('trim', samples, sampleRate, positionalOptions);
+  assertAudioInput('trim', samples, sampleRate, positionalOptions);
   assertFiniteScalar('trim', thresholdDb, 'thresholdDb');
   assertPositiveInteger('trim', resolvedFrameLength, 'frameLength');
   assertPositiveInteger('trim', resolvedHopLength, 'hopLength');
@@ -216,10 +207,11 @@ export function stft(
   options: GuardedOptions = {},
 ): StftResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('stft', samples);
     const request = samples;
     return stft(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
-  validateSpectrogramSamples('stft', samples, sampleRate, options);
+  assertAudioInput('stft', samples, sampleRate, options);
   const fft = resolveFftOptions('stft', nFft, hopLength);
   return requireModule().stft(samples, sampleRate, fft.nFft, fft.hopLength);
 }
@@ -253,10 +245,11 @@ export function stftDb(
   options: GuardedOptions = {},
 ): { nBins: number; nFrames: number; db: Float32Array } {
   if (!(samples instanceof Float32Array)) {
+    requestObject('stftDb', samples);
     const request = samples;
     return stftDb(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
-  validateSpectrogramSamples('stftDb', samples, sampleRate, options);
+  assertAudioInput('stftDb', samples, sampleRate, options);
   const fft = resolveFftOptions('stftDb', nFft, hopLength);
   return requireModule().stftDb(samples, sampleRate, fft.nFft, fft.hopLength);
 }
@@ -288,6 +281,7 @@ export function chromaCens(
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('chromaCens', samples);
     const request = samples;
     return chromaCens(
       request.samples,
@@ -298,7 +292,7 @@ export function chromaCens(
       request,
     );
   }
-  validateSpectrogramSamples('chromaCens', samples, sampleRate, options);
+  assertAudioInput('chromaCens', samples, sampleRate, options);
   validatePositiveIntegers('chromaCens', { hopLength, nChroma, binsPerOctave });
   if (binsPerOctave % nChroma !== 0) {
     throw new RangeError('chromaCens: binsPerOctave must be a multiple of nChroma');
@@ -333,6 +327,7 @@ export function chromaCqt(
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('chromaCqt', samples);
     const request = samples;
     return chromaCqt(
       request.samples,
@@ -343,7 +338,7 @@ export function chromaCqt(
       request,
     );
   }
-  validateSpectrogramSamples('chromaCqt', samples, sampleRate, options);
+  assertAudioInput('chromaCqt', samples, sampleRate, options);
   validatePositiveIntegers('chromaCqt', { hopLength, nChroma, binsPerOctave });
   if (binsPerOctave % nChroma !== 0) {
     throw new RangeError('chromaCqt: binsPerOctave must be a multiple of nChroma');
@@ -376,6 +371,7 @@ export function bassChroma(
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('bassChroma', samples);
     const request = samples;
     return bassChroma(
       request.samples,
@@ -385,7 +381,7 @@ export function bassChroma(
       request,
     );
   }
-  validateSpectrogramSamples('bassChroma', samples, sampleRate, options);
+  assertAudioInput('bassChroma', samples, sampleRate, options);
   validatePositiveIntegers('bassChroma', { hopLength, nChroma });
   return requireModule().bassChroma(samples, sampleRate, hopLength, nChroma);
 }
@@ -432,6 +428,7 @@ export function melSpectrogram(
   options: GuardedOptions = {},
 ): MelSpectrogramResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('melSpectrogram', samples);
     const request = samples;
     return melSpectrogram(
       request.samples,
@@ -445,7 +442,7 @@ export function melSpectrogram(
       request,
     );
   }
-  validateSpectrogramSamples('melSpectrogram', samples, sampleRate, options);
+  assertAudioInput('melSpectrogram', samples, sampleRate, options);
   const fft = resolveFftOptions('melSpectrogram', nFft, hopLength);
   validatePositiveIntegers('melSpectrogram', { nMels });
   validateMelFrequencyRange('melSpectrogram', fmin, fmax, sampleRate);
@@ -504,6 +501,7 @@ export function mfcc(
   options: GuardedOptions = {},
 ): MfccResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('mfcc', samples);
     const request = samples;
     return mfcc(
       request.samples,
@@ -519,7 +517,7 @@ export function mfcc(
       request,
     );
   }
-  validateSpectrogramSamples('mfcc', samples, sampleRate, options);
+  assertAudioInput('mfcc', samples, sampleRate, options);
   const fft = resolveFftOptions('mfcc', nFft, hopLength);
   validatePositiveIntegers('mfcc', { nMels, nMfcc });
   validateMelFrequencyRange('mfcc', fmin, fmax, sampleRate);
@@ -554,7 +552,7 @@ export function melDelta(
   const request: MelDeltaRequest =
     features instanceof Float32Array
       ? { features, nFeatures: nFeatures ?? 0, nFrames: nFrames ?? 0, width }
-      : features;
+      : requestObject('melDelta', features, 'features');
   assertPositiveInteger('melDelta', request.nFeatures, 'nFeatures');
   assertPositiveInteger('melDelta', request.nFrames, 'nFrames');
   assertPositiveInteger('melDelta', request.width ?? 9, 'width');
@@ -593,6 +591,7 @@ export function reassignedSpectrogram(
   fillNan = false,
 ): ReassignedSpectrogramResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('reassignedSpectrogram', samples);
     const request = samples;
     return reassignedSpectrogram(
       request.samples,
@@ -603,8 +602,7 @@ export function reassignedSpectrogram(
       request.fillNan,
     );
   }
-  assertSamples('reassignedSpectrogram', samples, true);
-  assertSampleRate('reassignedSpectrogram', sampleRate);
+  assertAudioInput('reassignedSpectrogram', samples, sampleRate);
   assertPositiveInteger('reassignedSpectrogram', nFft, 'nFft');
   assertPositiveInteger('reassignedSpectrogram', hopLength, 'hopLength');
   assertFiniteScalar('reassignedSpectrogram', refPower, 'refPower');
@@ -658,10 +656,11 @@ export function chroma(
   options: GuardedOptions = {},
 ): ChromaResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('chroma', samples);
     const request = samples;
     return chroma(request.samples, request.sampleRate, request.nFft, request.hopLength, request);
   }
-  validateSpectrogramSamples('chroma', samples, sampleRate, options);
+  assertAudioInput('chroma', samples, sampleRate, options);
   const fft = resolveFftOptions('chroma', nFft, hopLength);
   return requireModule().chroma(samples, sampleRate, fft.nFft, fft.hopLength);
 }

@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types.js';
-import { assertSampleRate } from './validation.js';
+import { assertSampleRate, assertString } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -34,9 +34,15 @@ interface PlanarTracks {
  * takes, rejecting the shapes that would otherwise reach the analysis as a
  * missing buffer or a nameless strip.
  */
-function planarTracks(tracks: MixAssistantTrack[]): PlanarTracks {
+function assertTrackBuffer(fnName: string, value: unknown, argName: string): void {
+  if (!(value instanceof Float32Array)) {
+    throw new TypeError(`${fnName}: ${argName} must be a Float32Array`);
+  }
+}
+
+function planarTracks(fnName: string, tracks: MixAssistantTrack[]): PlanarTracks {
   if (!Array.isArray(tracks)) {
-    throw new Error('tracks must be an array.');
+    throw new TypeError(`${fnName}: tracks must be an array`);
   }
   const left: Float32Array[] = [];
   const right: (Float32Array | null)[] = [];
@@ -45,16 +51,16 @@ function planarTracks(tracks: MixAssistantTrack[]): PlanarTracks {
   for (let index = 0; index < tracks.length; index++) {
     const track = tracks[index];
     if (track === null || typeof track !== 'object') {
-      throw new Error(`tracks[${index}] must be an object.`);
+      throw new TypeError(`${fnName}: tracks[${index}] must be an object`);
     }
     if (typeof track.id !== 'string' || track.id.length === 0) {
-      throw new Error(`tracks[${index}].id must be a non-empty string.`);
+      throw new TypeError(`${fnName}: tracks[${index}].id must be a non-empty string`);
     }
-    if (!(track.left instanceof Float32Array)) {
-      throw new Error(`tracks[${index}].left must be a Float32Array.`);
-    }
-    if (track.right !== undefined && !(track.right instanceof Float32Array)) {
-      throw new Error(`tracks[${index}].right must be a Float32Array when present.`);
+    // An empty or non-finite track is not refused: the core reports it as an excluded track so a
+    // batch needs no per-track error handling.
+    assertTrackBuffer(fnName, track.left, `tracks[${index}].left`);
+    if (track.right !== undefined) {
+      assertTrackBuffer(fnName, track.right, `tracks[${index}].right`);
     }
     left.push(track.left);
     right.push(track.right ?? null);
@@ -69,9 +75,12 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
   // 44.1 kHz material 8.8% off across every band edge and every lag without
   // saying so. Node and Python both demand it, and a request ported from either
   // must not change behaviour by arriving here.
-  assertSampleRate(fnName, request.sampleRate);
-  const { left, right, ids, names } = planarTracks(request.tracks);
   const sampleRate = request.sampleRate;
+  if (typeof sampleRate !== 'number') {
+    throw new TypeError(`${fnName}: sampleRate must be a number`);
+  }
+  assertSampleRate(fnName, sampleRate);
+  const { left, right, ids, names } = planarTracks(fnName, request.tracks);
   const params = (request.options ?? {}) as Record<string, number | boolean>;
   const module = requireModule();
   return sceneOnly
@@ -134,5 +143,6 @@ export function mixSourceClassNames(): string[] {
  * @returns The index, or -1 when the name is unknown
  */
 export function mixSourceClassFromName(name: string): number {
+  assertString('mixSourceClassFromName', name, 'name');
   return requireModule().mixingAssistantSourceClassFromName(name);
 }

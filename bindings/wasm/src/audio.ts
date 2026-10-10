@@ -70,18 +70,20 @@ import type {
   KeyCandidate,
   KeyDetection,
   KeyDetectionOptions,
+  KeyMode,
   LufsResult,
   MasteringChainConfig,
   MasteringChainResult,
   MasteringOptions,
   MasteringPreset,
-  MasteringProcessorParams,
   MasteringResult,
+  MasteringSoloProcessorParams,
   MelSpectrogramResult,
   MfccResult,
   Mode,
   NoteStretchOptions,
   PitchClass,
+  PitchClassName,
   PitchResult,
   SoloProcessor,
   StftResult,
@@ -413,8 +415,8 @@ export class Audio {
   }
 
   chordFunctionalAnalysis(
-    keyRoot: PitchClass,
-    keyMode: Mode,
+    keyRoot: PitchClass | PitchClassName,
+    keyMode: Mode | KeyMode,
     options: ChordDetectionOptions = {},
   ): FunctionalChord[] {
     return chordFunctionalAnalysis(this._samples, keyRoot, keyMode, this._sampleRate, options);
@@ -509,7 +511,7 @@ export class Audio {
 
   masteringProcess(
     processorName: SoloProcessor,
-    params: MasteringProcessorParams = {},
+    params: MasteringSoloProcessorParams = {},
   ): MasteringResult {
     return masteringProcess(processorName, this._samples, this._sampleRate, params);
   }

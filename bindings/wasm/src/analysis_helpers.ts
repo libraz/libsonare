@@ -100,9 +100,26 @@ const KEY_PROFILE_VALUES: Readonly<Record<KeyProfileName, number>> = {
   bellman: KeyProfileValues.BellmanBudge,
 };
 
+const PITCH_CLASS_VALUES: Readonly<Record<string, number>> = Object.fromEntries(
+  PITCH_CLASS_NAMES.map((name, ordinal) => [name, ordinal]),
+);
+
+function assertNameOrOrdinal(value: unknown, field: string, what: string): void {
+  if (typeof value !== 'number' && typeof value !== 'string') {
+    throw new TypeError(`${field} must be ${what} name or ordinal`);
+  }
+}
+
 /** Ordinal of a key mode given by name or ordinal; anything else is refused. */
-export function keyModeOrdinal(mode: unknown): number {
-  return resolveEnumOrdinal(mode, KEY_MODE_VALUES, 'key mode');
+export function keyModeOrdinal(mode: unknown, field = 'key mode'): number {
+  assertNameOrOrdinal(mode, field, 'a mode');
+  return resolveEnumOrdinal(mode, KEY_MODE_VALUES, field);
+}
+
+/** Ordinal of a pitch class given by name (`'C'`, `'C#'`, ...) or ordinal; anything else is refused. */
+export function pitchClassOrdinal(root: unknown, field = 'pitch class'): number {
+  assertNameOrOrdinal(root, field, 'a pitch class');
+  return resolveEnumOrdinal(root, PITCH_CLASS_VALUES, field);
 }
 
 export function keyModeValues(modes: KeyDetectionOptions['modes'] | undefined): number[] {

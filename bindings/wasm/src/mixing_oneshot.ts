@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { MixOptions, MixResult } from './public_types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioChannels, assertString } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -19,6 +19,7 @@ export function mixingScenePresetNames(): string[] {
  * @returns Scene JSON string
  */
 export function mixingScenePresetJson(presetName: string): string {
+  assertString('mixingScenePresetJson', presetName, 'presetName');
   return requireModule().mixingScenePresetJson(presetName);
 }
 
@@ -75,7 +76,8 @@ export function mixStereo(
     throw new RangeError('leftChannels and rightChannels must have the same non-zero length.');
   }
   const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertSampleRate('mixStereo', resolvedSampleRate);
+  assertAudioChannels('mixStereo', request.leftChannels, resolvedSampleRate, {}, 'leftChannels');
+  assertAudioChannels('mixStereo', request.rightChannels, resolvedSampleRate, {}, 'rightChannels');
   return requireModule().mixStereo(
     request.leftChannels,
     request.rightChannels,

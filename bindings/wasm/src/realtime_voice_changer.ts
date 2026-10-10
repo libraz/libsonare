@@ -4,6 +4,7 @@ import type {
   RealtimeVoiceChangerPodConfig,
   VoicePresetId,
 } from './public_types.js';
+import { assertString } from './validation.js';
 
 /**
  * Zero-copy realtime buffer pair for {@link RealtimeVoiceChanger} mono
@@ -46,6 +47,24 @@ export interface RealtimeVoiceChangerPlanarBuffer {
 // RealtimeVoiceChanger Class
 // ============================================================================
 
+/**
+ * The flat POD shape (recognised by its `retuneSemitones` key) must carry `formantMode`,
+ * exactly as {@link RealtimeVoiceChanger.setPodConfig} requires; a preset id or a nested
+ * preset document keeps its own defaults.
+ */
+function requirePodFormantMode(config: unknown): void {
+  if (config === null || typeof config !== 'object' || !('retuneSemitones' in config)) {
+    return;
+  }
+  const pod = config as { formantMode?: unknown };
+  if (!('formantMode' in pod)) {
+    throw new TypeError('voice changer POD config.formantMode is required');
+  }
+  if (typeof pod.formantMode !== 'string') {
+    throw new TypeError('voice changer POD config.formantMode must be a string');
+  }
+}
+
 export class RealtimeVoiceChanger {
   private changer: import('./sonare.js').WasmRealtimeVoiceChanger;
   private released = false;
@@ -61,6 +80,7 @@ export class RealtimeVoiceChanger {
     maxBlockSize = 128,
     channels = 1,
   ) {
+    requirePodFormantMode(config);
     const module = getSonareModule();
     this.changer = module.createRealtimeVoiceChanger(config as Record<string, unknown> | string);
     if (sampleRate !== undefined) {
@@ -93,6 +113,7 @@ export class RealtimeVoiceChanger {
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerPodConfig): void {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 36-field mapping.
+    requirePodFormantMode(config);
     this.changer.setConfig(config as Record<string, unknown> | string);
   }
 
@@ -373,6 +394,7 @@ export function realtimeVoiceChangerPresetNames(): VoicePresetId[] {
 }
 
 export function realtimeVoiceChangerPresetJson(name: VoicePresetId): string {
+  assertString('realtimeVoiceChangerPresetJson', name, 'name');
   return getSonareModule().realtimeVoiceChangerPresetJson(name);
 }
 
@@ -381,5 +403,6 @@ export function validateRealtimeVoiceChangerPresetJson(json: string): {
   normalizedJson?: string;
   error?: string;
 } {
+  assertString('validateRealtimeVoiceChangerPresetJson', json, 'json');
   return getSonareModule().validateRealtimeVoiceChangerPresetJson(json);
 }

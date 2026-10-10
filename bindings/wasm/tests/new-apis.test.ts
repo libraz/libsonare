@@ -1125,15 +1125,15 @@ describe('v1.2 feature additions (WASM)', () => {
     it('rejects non-finite automation breakpoints like the C ABI oracle', () => {
       const engine = new RealtimeEngine(48000, 128);
       // Seed a valid lane so failed replacements must leave published state intact.
-      engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 0 }]);
+      engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 0 }]);
       expect(engine.automationLaneCount()).toBe(1);
       // Non-finite ppq is rejected.
       expect(() =>
-        engine.setAutomationLane(0x4d580001, [{ ppq: Number.NaN, value: -6, curveToNext: 0 }]),
+        engine.setAutomationLane(0x4d58ff01, [{ ppq: Number.NaN, value: -6, curveToNext: 0 }]),
       ).toThrow();
       // Non-finite value is rejected.
       expect(() =>
-        engine.setAutomationLane(0x4d580001, [
+        engine.setAutomationLane(0x4d58ff01, [
           { ppq: 0, value: Number.POSITIVE_INFINITY, curveToNext: 0 },
         ]),
       ).toThrow();
@@ -1146,7 +1146,7 @@ describe('v1.2 feature additions (WASM)', () => {
       // curveToNext outside the AutomationCurve enum (0..3) is rejected, not
       // silently clamped to Linear.
       expect(() =>
-        engine.setAutomationLane(0x4d580001, [{ ppq: 0, value: -6, curveToNext: 4 }]),
+        engine.setAutomationLane(0x4d58ff01, [{ ppq: 0, value: -6, curveToNext: 4 }]),
       ).toThrow();
       // A defaultCurve outside the enum is rejected at addParameter.
       expect(() =>

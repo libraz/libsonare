@@ -16,10 +16,12 @@ import type {
 import type { WasmFourierTempogramResult, WasmNnlsChromaResult } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
 import {
+  assertAudioInput,
   assertFiniteScalar,
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
+  requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
 
@@ -117,16 +119,6 @@ export interface NnlsChromaRequest extends GuardedOptions {
   hopLength?: number;
 }
 
-function validateMusicSamples(
-  fnName: string,
-  samples: Float32Array,
-  sampleRate: number,
-  options: GuardedOptions = {},
-): void {
-  assertSampleRate(fnName, sampleRate);
-  assertSamples(fnName, samples, options.validate !== false);
-}
-
 function validateFrequencyBounds(fnName: string, fmin: number, fmax?: number): void {
   assertFiniteScalar(fnName, fmin, 'fmin');
   if (fmin < 0) {
@@ -159,9 +151,10 @@ export function nnlsChroma(
   options: Omit<NnlsChromaRequest, 'samples' | 'sampleRate'> = {},
 ): WasmNnlsChromaResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('nnlsChroma', samples);
     return nnlsChroma(samples.samples, samples.sampleRate, samples);
   }
-  validateMusicSamples('nnlsChroma', samples, sampleRate, options);
+  assertAudioInput('nnlsChroma', samples, sampleRate, options);
   const hopLength = options.hopLength === undefined ? 512 : options.hopLength;
   assertPositiveInteger('nnlsChroma', hopLength, 'hopLength');
   if (hopLength > 2 ** 31 - 1) {
@@ -208,6 +201,7 @@ export function cqt(
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('cqt', samples);
     const request = samples;
     return cqt(
       request.samples,
@@ -219,7 +213,7 @@ export function cqt(
       request,
     );
   }
-  validateMusicSamples('cqt', samples, sampleRate, options);
+  assertAudioInput('cqt', samples, sampleRate, options);
   validatePositiveIntegers('cqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('cqt', fmin);
   return requireModule().cqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
@@ -256,6 +250,7 @@ export function pseudoCqt(
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('pseudoCqt', samples);
     const request = samples;
     return pseudoCqt(
       request.samples,
@@ -267,7 +262,7 @@ export function pseudoCqt(
       request,
     );
   }
-  validateMusicSamples('pseudoCqt', samples, sampleRate, options);
+  assertAudioInput('pseudoCqt', samples, sampleRate, options);
   validatePositiveIntegers('pseudoCqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('pseudoCqt', fmin);
   return requireModule().pseudoCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
@@ -304,6 +299,7 @@ export function hybridCqt(
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('hybridCqt', samples);
     const request = samples;
     return hybridCqt(
       request.samples,
@@ -315,7 +311,7 @@ export function hybridCqt(
       request,
     );
   }
-  validateMusicSamples('hybridCqt', samples, sampleRate, options);
+  assertAudioInput('hybridCqt', samples, sampleRate, options);
   validatePositiveIntegers('hybridCqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('hybridCqt', fmin);
   return requireModule().hybridCqt(samples, sampleRate, hopLength, fmin, nBins, binsPerOctave);
@@ -356,6 +352,7 @@ export function vqt(
   options: GuardedOptions = {},
 ): CqtResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('vqt', samples);
     const request = samples;
     return vqt(
       request.samples,
@@ -368,7 +365,7 @@ export function vqt(
       request,
     );
   }
-  validateMusicSamples('vqt', samples, sampleRate, options);
+  assertAudioInput('vqt', samples, sampleRate, options);
   validatePositiveIntegers('vqt', { hopLength, nBins, binsPerOctave });
   validateFrequencyBounds('vqt', fmin);
   return requireModule().vqt(
@@ -434,6 +431,7 @@ export function cqtToAudio(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(magnitude instanceof Float32Array)) {
+    requestObject('cqtToAudio', magnitude, 'magnitude');
     const request = magnitude;
     return cqtToAudio(
       request.magnitude,
@@ -498,6 +496,7 @@ export function vqtToAudio(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(magnitude instanceof Float32Array)) {
+    requestObject('vqtToAudio', magnitude, 'magnitude');
     const request = magnitude;
     return vqtToAudio(
       request.magnitude,
@@ -559,10 +558,11 @@ export function analyzeSections(
   options: AnalyzeSectionsGuardedOptions = {},
 ): Section[] {
   if (!(samples instanceof Float32Array)) {
+    requestObject('analyzeSections', samples);
     const r = samples;
     return analyzeSections(r.samples, r.sampleRate, r);
   }
-  validateMusicSamples('analyzeSections', samples, sampleRate, options);
+  assertAudioInput('analyzeSections', samples, sampleRate, options);
   validatePositiveIntegers('analyzeSections', {
     nFft: options.nFft ?? 2048,
     hopLength: options.hopLength ?? 512,
@@ -614,7 +614,7 @@ export function analyzeSections(
  */
 export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
   const { samples, sampleRate = 22050 } = request;
-  validateMusicSamples('detectBoundaries', samples, sampleRate, request);
+  assertAudioInput('detectBoundaries', samples, sampleRate, request);
   // The request IS the options bag: every field is read straight off it, so an
   // omitted one reaches the embind wrapper absent and takes BoundaryConfig's own
   // default. Restating the ten defaults here would make them the effective ones
@@ -715,10 +715,11 @@ export function analyzeMelody(
   options: MelodyGuardedOptions = {},
 ): MelodyResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('analyzeMelody', samples);
     const r = samples;
     return analyzeMelody(r.samples, r.sampleRate, r);
   }
-  validateMusicSamples('analyzeMelody', samples, sampleRate, options);
+  assertAudioInput('analyzeMelody', samples, sampleRate, options);
   const fmin = options.fmin ?? 65.0;
   const fmax = options.fmax ?? 2093.0;
   validateFrequencyBounds('analyzeMelody', fmin, fmax);
@@ -787,6 +788,7 @@ export function onsetEnvelope(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('onsetEnvelope', samples);
     const request = samples;
     return onsetEnvelope(
       request.samples,
@@ -797,7 +799,7 @@ export function onsetEnvelope(
       request,
     );
   }
-  validateMusicSamples('onsetEnvelope', samples, sampleRate, options);
+  assertAudioInput('onsetEnvelope', samples, sampleRate, options);
   const fft = resolveFftOptions('onsetEnvelope', nFft, hopLength);
   validatePositiveIntegers('onsetEnvelope', { nMels });
   return requireModule().onsetEnvelope(samples, sampleRate, fft.nFft, fft.hopLength, nMels);
@@ -834,6 +836,7 @@ export function onsetStrengthMulti(
   options: GuardedOptions = {},
 ): OnsetStrengthMultiResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('onsetStrengthMulti', samples);
     const request = samples;
     return onsetStrengthMulti(
       request.samples,
@@ -845,7 +848,7 @@ export function onsetStrengthMulti(
       request,
     );
   }
-  validateMusicSamples('onsetStrengthMulti', samples, sampleRate, options);
+  assertAudioInput('onsetStrengthMulti', samples, sampleRate, options);
   const fft = resolveFftOptions('onsetStrengthMulti', nFft, hopLength);
   validatePositiveIntegers('onsetStrengthMulti', { nMels, nBands });
   return requireModule().onsetStrengthMulti(
@@ -887,6 +890,7 @@ export function fourierTempogram(
   options: GuardedOptions = {},
 ): WasmFourierTempogramResult {
   if (!(onsetEnvelope instanceof Float32Array)) {
+    requestObject('fourierTempogram', onsetEnvelope, 'onsetEnvelope');
     const request = onsetEnvelope;
     return fourierTempogram(
       request.onsetEnvelope,
@@ -940,6 +944,7 @@ export function tempogramRatio(
   options: GuardedOptions = {},
 ): Float32Array {
   if (!(tempogramData instanceof Float32Array)) {
+    requestObject('tempogramRatio', tempogramData, 'tempogramData');
     const request = tempogramData;
     return tempogramRatio(
       request.tempogramData,
@@ -977,11 +982,11 @@ export function lufs(
   options: ValidateOptions = {},
 ): LufsResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('lufs', samples);
     const r = samples;
     return lufs(r.samples, r.sampleRate, r);
   }
-  assertSampleRate('lufs', sampleRate);
-  assertSamples('lufs', samples, options.validate !== false);
+  assertAudioInput('lufs', samples, sampleRate, options);
   return requireModule().lufs(samples, sampleRate);
 }
 
@@ -1005,11 +1010,11 @@ export function momentaryLufs(
   options: ValidateOptions = {},
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('momentaryLufs', samples);
     const r = samples;
     return momentaryLufs(r.samples, r.sampleRate, r);
   }
-  assertSampleRate('momentaryLufs', sampleRate);
-  assertSamples('momentaryLufs', samples, options.validate !== false);
+  assertAudioInput('momentaryLufs', samples, sampleRate, options);
   return requireModule().momentaryLufs(samples, sampleRate);
 }
 
@@ -1033,10 +1038,10 @@ export function shortTermLufs(
   options: ValidateOptions = {},
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('shortTermLufs', samples);
     const r = samples;
     return shortTermLufs(r.samples, r.sampleRate, r);
   }
-  assertSampleRate('shortTermLufs', sampleRate);
-  assertSamples('shortTermLufs', samples, options.validate !== false);
+  assertAudioInput('shortTermLufs', samples, sampleRate, options);
   return requireModule().shortTermLufs(samples, sampleRate);
 }

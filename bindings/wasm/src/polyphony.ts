@@ -8,7 +8,7 @@ import type {
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSampleRate, assertSamples, resolveSampleBound } from './validation.js';
+import { assertAudioInput, resolveSampleBound } from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
@@ -46,8 +46,7 @@ export class PolyphonicAnalysis {
 
   /** Analyses the request's audio. {@link analyzePolyphonic} is the same call. */
   constructor(request: AnalyzePolyphonicRequest) {
-    assertSamples('analyzePolyphonic', request.samples, request.validate !== false);
-    assertSampleRate('analyzePolyphonic', request.sampleRate);
+    assertAudioInput('analyzePolyphonic', request.samples, request.sampleRate, request);
     this.sampleRate = request.sampleRate;
     const module = getSonareModule();
     this.native = module.createPolyphonicAnalysis(

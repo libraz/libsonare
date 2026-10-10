@@ -121,6 +121,9 @@ export class Mixer {
    * @param blockSize - Maximum block size per {@link processStereo} call (default: 512)
    */
   static fromSceneJson(json: string, sampleRate = 48000, blockSize = 512): Mixer {
+    if (typeof json !== 'string') {
+      throw new TypeError('Mixer.fromSceneJson: json must be a string');
+    }
     assertSampleRate('Mixer.fromSceneJson', sampleRate);
     const module = getSonareModule();
     return new Mixer(module.createMixerFromSceneJson(json, sampleRate, blockSize), blockSize);

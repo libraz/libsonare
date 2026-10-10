@@ -7,7 +7,7 @@ import { resolveEntryTimes } from './_effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertPercussiveSeparation, assertSampleRate, assertSamples } from './validation.js';
+import { assertAudioInput, assertPercussiveSeparation } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -18,6 +18,11 @@ function requireModule() {
  * measures events against it and rendering has to repeat it, so both calls take
  * the same four fields and a render must be given what the extraction was.
  */
+/** A plain numeric array is read as the Float32Array it stands for; anything else is left to the preflight. */
+function asFloat32(samples: Float32Array | readonly number[]): Float32Array | readonly number[] {
+  return Array.isArray(samples) ? Float32Array.from(samples) : samples;
+}
+
 export interface PercussiveSeparationOptions {
   /**
    * FFT size and hop the separation and the onset detector share. They cannot be
@@ -154,10 +159,10 @@ export interface RenderPercussiveEventsRequest
 export function extractPercussiveEvents(
   request: ExtractPercussiveEventsRequest,
 ): PercussiveEvent[] {
-  assertSamples('extractPercussiveEvents', request.samples, request.validate !== false);
-  assertSampleRate('extractPercussiveEvents', request.sampleRate);
+  const samples = asFloat32(request.samples);
+  assertAudioInput('extractPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('extractPercussiveEvents', request);
-  return requireModule().extractPercussiveEvents(request.samples, request.sampleRate, request);
+  return requireModule().extractPercussiveEvents(samples, request.sampleRate, request);
 }
 
 /**
@@ -207,8 +212,8 @@ export function extractPercussiveEvents(
  * ```
  */
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
-  assertSamples('renderPercussiveEvents', request.samples, request.validate !== false);
-  assertSampleRate('renderPercussiveEvents', request.sampleRate);
+  const samples = asFloat32(request.samples);
+  assertAudioInput('renderPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('renderPercussiveEvents', request);
   const events = Array.isArray(request.events)
     ? resolveEntryTimes(
@@ -219,10 +224,5 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
         true,
       )
     : request.events;
-  return requireModule().renderPercussiveEvents(
-    request.samples,
-    request.sampleRate,
-    events,
-    request,
-  );
+  return requireModule().renderPercussiveEvents(samples, request.sampleRate, events, request);
 }

@@ -4,7 +4,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { MasteringRepairTrimSilenceStereoResult, TrimRange } from './public_types_repair.js';
-import { resolveSampleBound } from './validation.js';
+import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -69,7 +69,11 @@ export function masteringRepairTrimSilence(
   sampleRate?: number,
   options: TrimSilenceOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairTrimSilence', samples);
+  assertAudioInput('masteringRepairTrimSilence', request.samples, request.sampleRate ?? 22050);
   const rate = request.sampleRate ?? 22050;
   return requireModule().masteringRepairTrimSilence(
     request.samples,
@@ -145,7 +149,21 @@ export function masteringRepairTrimSilenceStereo(
   const request: MasteringRepairTrimSilenceStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairTrimSilenceStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairTrimSilenceStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairTrimSilenceStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairTrimSilenceStereo(
     leftSamples,
@@ -194,7 +212,11 @@ export function masteringRepairDetectTrimRange(
   sampleRate?: number,
   options: TrimSilenceOptions = {},
 ): TrimRange {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectTrimRange', samples);
+  assertAudioInput('masteringRepairDetectTrimRange', request.samples, request.sampleRate ?? 22050);
   const rate = request.sampleRate ?? 22050;
   return requireModule().masteringRepairDetectTrimRange(
     request.samples,
@@ -239,7 +261,21 @@ export function masteringRepairDetectTrimRangeStereo(
   const request: MasteringRepairDetectTrimRangeStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDetectTrimRangeStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDetectTrimRangeStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDetectTrimRangeStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDetectTrimRangeStereo(
     leftSamples,

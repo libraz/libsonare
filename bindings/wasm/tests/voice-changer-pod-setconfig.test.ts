@@ -189,6 +189,31 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
     expect(
       () => new RealtimeVoiceChanger({ ...pod, formantMode: 'absolute', retuneSemitones: -9 }),
     ).toThrow(/\[0\.55, 0\.9811\]/);
+    expect(
+      () => new RealtimeVoiceChanger({ ...pod, formantMode: 'absolute', retuneSemitones: -9 }),
+    ).toThrow(/limited by formantFactor's \[0\.55, 1\.65\]/);
+  });
+
+  it('requires formantMode on a flat POD in the constructor and in setConfig', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    if (!pod) {
+      return;
+    }
+    const { formantMode: _omitted, ...partial } = pod;
+    const podWithoutMode = partial as unknown as RealtimeVoiceChangerPodConfig;
+    expect(() => new RealtimeVoiceChanger(podWithoutMode)).toThrow(TypeError);
+    expect(() => new RealtimeVoiceChanger(podWithoutMode)).toThrow(/formantMode is required/);
+    const changer = new RealtimeVoiceChanger(pod);
+    try {
+      expect(() => changer.setConfig(podWithoutMode)).toThrow(TypeError);
+      expect(() =>
+        changer.setConfig({ ...pod, formantMode: 3 } as unknown as RealtimeVoiceChangerPodConfig),
+      ).toThrow(/formantMode must be a string/);
+      // A preset id and a nested preset document keep their own defaults.
+      expect(() => changer.setConfig('neutral-monitor')).not.toThrow();
+    } finally {
+      changer.delete();
+    }
   });
 
   it('refuses a POD without formantMode, as it refuses any partial POD', () => {

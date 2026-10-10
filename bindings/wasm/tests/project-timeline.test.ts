@@ -17,6 +17,27 @@ const SYNTH = { waveform: 'saw', gain: 0.3, attackMs: 1, releaseMs: 20, polyphon
 const DANGLING_SOURCE_JSON =
   '{"version":1,"sample_rate":48000,"tracks":[{"id":1,"name":"audio","kind":0,"channel_strip_ref":"","output_target":"","midi_destination_id":0,"automation_lanes":[]}],"clips":[{"id":1,"track_id":1,"source_id":99,"start_ppq":0,"length_ppq":1,"source_offset_ppq":0,"gain":1,"fade_in":{"length_ppq":0,"curve":0},"fade_out":{"length_ppq":0,"curve":0},"loop_mode":0,"loop_length_ppq":0,"warp_ref_id":0,"warp_mode":0}]}';
 
+/** A strip with one ducker insert, the insert a lane sidechain binding keys. */
+function duckerStripJson(trackId: number): string {
+  return JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: `track-${trackId}`,
+        inserts: [
+          {
+            slot: 'pre',
+            processor: 'dynamics.duckingProcessor',
+            params: { thresholdDb: -20, ratio: 20, attackMs: 0.05, releaseMs: 80, rangeDb: 30 },
+          },
+        ],
+      },
+    ],
+    buses: [],
+    connections: [],
+  });
+}
+
 interface Built {
   project: Project;
   audioClip: number;
@@ -215,6 +236,8 @@ describe('RealtimeEngine lane sidechain refusals', () => {
     const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
     try {
       engine.setTrackLanes([1, 2]);
+      engine.setTrackStripJson(1, duckerStripJson(1));
+      engine.setTrackStripJson(2, duckerStripJson(2));
       expect(() => engine.setLaneSidechain(1, 0, 1)).toThrow();
       engine.setLaneSidechain(1, 0, 2);
       // 2 keyed by 1 would close a cycle with the binding above.

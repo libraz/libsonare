@@ -1,10 +1,9 @@
 /**
  * The native RealtimeEngine embind object has no default for the trailing
  * render-frame argument on the transport/parameter/MIDI methods that take
- * one -- the "-1 = now" default lives only in the TS wrapper. These tests
- * exercise the raw `.native` object directly (bypassing the wrapper's own
- * `renderFrame = -1` default) to guard the omitted-argument path the
- * wrapper never reaches.
+ * one -- omission means immediate, and a negative frame is refused. These
+ * tests exercise the raw `.native` object directly to guard the paths the
+ * TS wrapper's own resolution never reaches.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -27,62 +26,51 @@ describe('RealtimeEngine native render-frame default', () => {
     await init();
   });
 
-  it('play() with an omitted frame does not throw and matches passing -1', () => {
-    const withDefault = new RealtimeEngine(48000, 256);
-    const withExplicit = new RealtimeEngine(48000, 256);
+  it('play() with an omitted frame applies immediately', () => {
+    const engine = new RealtimeEngine(48000, 256);
     try {
-      expect(() => nativeOf(withDefault).play()).not.toThrow();
-      expect(() => nativeOf(withExplicit).play(-1)).not.toThrow();
-      withDefault.process([new Float32Array(256)]);
-      withExplicit.process([new Float32Array(256)]);
-      expect(nativeOf(withDefault).getTransportState().playing).toBe(true);
-      expect(nativeOf(withDefault).getTransportState().playing).toBe(
-        nativeOf(withExplicit).getTransportState().playing,
-      );
+      expect(() => nativeOf(engine).play()).not.toThrow();
+      engine.process([new Float32Array(256)]);
+      expect(nativeOf(engine).getTransportState().playing).toBe(true);
     } finally {
-      withDefault.destroy();
-      withExplicit.destroy();
+      engine.destroy();
     }
   });
 
-  it('stop() with an omitted frame does not throw and matches passing -1', () => {
-    const withDefault = new RealtimeEngine(48000, 256);
-    const withExplicit = new RealtimeEngine(48000, 256);
+  it('stop() with an omitted frame applies immediately', () => {
+    const engine = new RealtimeEngine(48000, 256);
     try {
-      nativeOf(withDefault).play();
-      nativeOf(withExplicit).play(-1);
-      withDefault.process([new Float32Array(256)]);
-      withExplicit.process([new Float32Array(256)]);
-
-      expect(() => nativeOf(withDefault).stop()).not.toThrow();
-      expect(() => nativeOf(withExplicit).stop(-1)).not.toThrow();
-      withDefault.process([new Float32Array(256)]);
-      withExplicit.process([new Float32Array(256)]);
-      expect(nativeOf(withDefault).getTransportState().playing).toBe(false);
-      expect(nativeOf(withDefault).getTransportState().playing).toBe(
-        nativeOf(withExplicit).getTransportState().playing,
-      );
+      nativeOf(engine).play();
+      engine.process([new Float32Array(256)]);
+      expect(() => nativeOf(engine).stop()).not.toThrow();
+      engine.process([new Float32Array(256)]);
+      expect(nativeOf(engine).getTransportState().playing).toBe(false);
     } finally {
-      withDefault.destroy();
-      withExplicit.destroy();
+      engine.destroy();
     }
   });
 
-  it('seekSample() with an omitted frame does not throw and matches passing -1', () => {
-    const withDefault = new RealtimeEngine(48000, 256);
-    const withExplicit = new RealtimeEngine(48000, 256);
+  it('seekSample() with an omitted frame applies immediately', () => {
+    const engine = new RealtimeEngine(48000, 256);
     try {
-      expect(() => nativeOf(withDefault).seekSample(100)).not.toThrow();
-      expect(() => nativeOf(withExplicit).seekSample(100, -1)).not.toThrow();
-      withDefault.process([new Float32Array(256)]);
-      withExplicit.process([new Float32Array(256)]);
-      expect(nativeOf(withDefault).getTransportState().samplePosition).toBe(100);
-      expect(nativeOf(withDefault).getTransportState().samplePosition).toBe(
-        nativeOf(withExplicit).getTransportState().samplePosition,
-      );
+      expect(() => nativeOf(engine).seekSample(100)).not.toThrow();
+      engine.process([new Float32Array(256)]);
+      expect(nativeOf(engine).getTransportState().samplePosition).toBe(100);
     } finally {
-      withDefault.destroy();
-      withExplicit.destroy();
+      engine.destroy();
+    }
+  });
+
+  it('refuses a negative frame instead of reading it as immediate', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    try {
+      expect(() => nativeOf(engine).play(-1)).toThrow(RangeError);
+      expect(() => nativeOf(engine).stop(-1)).toThrow(/renderFrame/);
+      expect(() => nativeOf(engine).seekSample(0, -1)).toThrow(/renderFrame/);
+      engine.process([new Float32Array(256)]);
+      expect(nativeOf(engine).getTransportState().playing).toBe(false);
+    } finally {
+      engine.destroy();
     }
   });
 

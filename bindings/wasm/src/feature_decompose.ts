@@ -12,10 +12,13 @@ import type {
   WasmMatrix2dResult,
 } from './sonare.js';
 import {
+  assertAudioChannels,
+  assertAudioInput,
   assertHpssKernels,
   assertNonNegativeInteger,
   assertPositiveInteger,
   assertSamples,
+  requestObject,
   toInt32Array,
 } from './validation.js';
 
@@ -176,6 +179,7 @@ export function decompose(
   beta = 2.0,
 ): WasmDecomposeResult {
   if (!(s instanceof Float32Array)) {
+    requestObject('decompose', s, 's');
     const request = s;
     return decompose(
       request.s,
@@ -216,6 +220,7 @@ export function decomposeWithInit(
   init: 'random' | 'nndsvd' = 'random',
 ): WasmDecomposeResult {
   if (!(s instanceof Float32Array)) {
+    requestObject('decomposeWithInit', s, 's');
     const request = s;
     return decomposeWithInit(
       request.s,
@@ -278,6 +283,7 @@ export interface DecomposeStemsResult {
  * to the input.
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
+  assertAudioInput('decomposeStems', request.samples, request.sampleRate ?? 22050);
   return requireModule().decomposeStems(request.samples, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
     nFft: request.nFft,
@@ -337,6 +343,7 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
+  assertAudioChannels('decomposeStemsLinked', request.channels, request.sampleRate ?? 22050);
   return requireModule().decomposeStemsLinked(request.channels, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
     nFft: request.nFft,
@@ -370,6 +377,7 @@ export function nnFilter(
   width = 1,
 ): WasmMatrix2dResult {
   if (!(s instanceof Float32Array)) {
+    requestObject('nnFilter', s, 's');
     const r = s;
     return nnFilter(r.s, r.nFeatures, r.nFrames, r.aggregate, r.k, r.width);
   }
@@ -400,9 +408,11 @@ export function remix(
   alignZeros = false,
 ): Float32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('remix', samples);
     const r = samples;
     return remix(r.samples, r.intervals, r.sampleRate, r.alignZeros);
   }
+  assertAudioInput('remix', samples, sampleRate);
   // Sample indices must reach the native side as exact 32-bit integers, and a
   // boundary the conversion changed would cut the slice somewhere the caller
   // never named.
@@ -439,9 +449,11 @@ export function remixAlignedIntervals(
   alignZeros = true,
 ): Int32Array {
   if (!(samples instanceof Float32Array)) {
+    requestObject('remixAlignedIntervals', samples);
     const r = samples;
     return remixAlignedIntervals(r.samples, r.intervals, r.sampleRate, r.alignZeros ?? true);
   }
+  assertAudioInput('remixAlignedIntervals', samples, sampleRate);
   const intervalsI32 = toInt32Array(
     'remixAlignedIntervals',
     intervals as ArrayLike<number>,
@@ -492,6 +504,7 @@ export function hpssWithResidual(
   hardMask?: boolean,
 ): WasmHpssWithResidualResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('hpssWithResidual', samples);
     const r = samples;
     return hpssWithResidual(
       r.samples,
@@ -503,6 +516,7 @@ export function hpssWithResidual(
       r.hardMask,
     );
   }
+  assertAudioInput('hpssWithResidual', samples, sampleRate);
   const fftOptions = resolveEffectFftOptions('hpssWithResidual', nFft, hopLength);
   const resolvedHardMask = resolveHardMask('hpssWithResidual', hardMask);
   assertHpssKernels('hpssWithResidual', kernelHarmonic, kernelPercussive);

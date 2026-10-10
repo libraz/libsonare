@@ -9,7 +9,7 @@ import type {
 } from './public_types.js';
 import type { ProgressCallback } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertAudioInput, assertString, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -93,8 +93,8 @@ export function normalize(
   const request: NormalizeRequest =
     samples instanceof Float32Array
       ? { samples, sampleRate, targetDb, mode: positionalMode, ...positionalOptions }
-      : samples;
-  assertSamples('normalize', request.samples, request.validate !== false);
+      : requestObject('normalize', samples);
+  assertAudioInput('normalize', request.samples, request.sampleRate ?? 22050, request);
   const mode = resolveNormalizeMode(request.mode);
   return requireModule().normalizeEx(
     request.samples,
@@ -156,8 +156,8 @@ export interface NormalizeStereoResult {
  * ```
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
-  assertSamples('normalizeStereo', request.left, request.validate !== false);
-  assertSamples('normalizeStereo', request.right, request.validate !== false);
+  assertAudioInput('normalizeStereo', request.left, request.sampleRate ?? 22050, request, 'left');
+  assertAudioInput('normalizeStereo', request.right, request.sampleRate ?? 22050, request, 'right');
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -232,6 +232,7 @@ export interface StreamingLoudnessGainStereoRequest {
 export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,
 ): StreamingLoudnessGainResult {
+  assertAudioInput('streamingLoudnessGain', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringStreamingLoudnessGain(
     request.samples,
     request.sampleRate ?? 22050,
@@ -243,6 +244,20 @@ export function streamingLoudnessGain(
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
+  assertAudioInput(
+    'streamingLoudnessGainStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'streamingLoudnessGainStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -337,7 +352,10 @@ export function masteringChain(
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, config, onProgress }
+      : requestObject('masteringChain', samples);
+  assertAudioInput('masteringChain', request.samples, request.sampleRate ?? 22050);
   if (request.onProgress || request.cancel) {
     return requireModule().masteringChainWithProgress(
       request.samples,
@@ -383,7 +401,9 @@ export function masteringChainStereo(
   const request =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
-      : left;
+      : requestObject('masteringChainStereo', left, 'left');
+  assertAudioInput('masteringChainStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
+  assertAudioInput('masteringChainStereo', request.right, request.sampleRate ?? 22050, {}, 'right');
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
   }
@@ -430,7 +450,10 @@ export function masteringChainWithProgress(
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request =
-    samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
+    samples instanceof Float32Array
+      ? { samples, sampleRate, config, onProgress }
+      : requestObject('masteringChainWithProgress', samples);
+  assertAudioInput('masteringChainWithProgress', request.samples, request.sampleRate ?? 22050);
   if (!request.onProgress) {
     throw new TypeError('masteringChainWithProgress: onProgress is required');
   }
@@ -473,7 +496,21 @@ export function masteringChainStereoWithProgress(
   const request =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, config, onProgress }
-      : left;
+      : requestObject('masteringChainStereoWithProgress', left, 'left');
+  assertAudioInput(
+    'masteringChainStereoWithProgress',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringChainStereoWithProgress',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   if (!request.onProgress) {
     throw new TypeError('masteringChainStereoWithProgress: onProgress is required');
   }
@@ -509,6 +546,7 @@ export function masteringPresetNames(): MasteringPreset[] {
  * @throws For an unknown `preset`.
  */
 export function masteringPresetParams(preset: MasteringPreset): Record<string, number | boolean> {
+  assertString('masteringPresetParams', preset, 'preset');
   return requireModule().masteringPresetParams(preset);
 }
 
@@ -550,6 +588,8 @@ export function masterAudio(
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  assertString('masterAudio', request.preset ?? 'pop', 'preset');
+  assertAudioInput('masterAudio', request.samples, request.sampleRate ?? 22050);
   const flat = flattenChainConfig(request.overrides ?? {});
   if (request.onProgress || request.cancel) {
     return requireModule().masterAudioWithProgress(
@@ -605,6 +645,9 @@ export function masterAudioStereo(
     overrides,
     onProgress,
   );
+  assertString('masterAudioStereo', request.preset ?? 'pop', 'preset');
+  assertAudioInput('masterAudioStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
+  assertAudioInput('masterAudioStereo', request.right, request.sampleRate ?? 22050, {}, 'right');
   const flat = flattenChainConfig(request.overrides ?? {});
   if (request.left.length !== request.right.length) {
     throw new RangeError('Stereo channel lengths must match.');
@@ -651,6 +694,8 @@ export function masterAudioWithProgress(
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  assertString('masterAudioWithProgress', request.preset ?? 'pop', 'preset');
+  assertAudioInput('masterAudioWithProgress', request.samples, request.sampleRate ?? 22050);
   if (!request.onProgress) {
     throw new TypeError('masterAudioWithProgress: onProgress is required');
   }
@@ -693,6 +738,21 @@ export function masterAudioStereoWithProgress(
     presetName,
     overrides,
     onProgress,
+  );
+  assertString('masterAudioStereoWithProgress', request.preset ?? 'pop', 'preset');
+  assertAudioInput(
+    'masterAudioStereoWithProgress',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masterAudioStereoWithProgress',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
   );
   if (!request.onProgress) {
     throw new TypeError('masterAudioStereoWithProgress: onProgress is required');

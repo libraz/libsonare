@@ -670,6 +670,10 @@ describe('Sonare WASM Module', () => {
       expect(engine.canSetLaneSidechain(10, 0, 10)).toEqual(no('selfKey'));
       expect(engine.canSetLaneSidechain(10, 0, 11)).toEqual(ok);
       expect(engine.canSetLaneSidechain(10, 0, 0)).toEqual(ok);
+      expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual(no('undeclaredSource'));
+      expect(engine.canSetLaneSidechain(10, 1, 11)).toEqual(no('insertOutOfRange'));
+      expectInvalidParameter(() => engine.setLaneSidechain(10, 0, 99));
+      expectInvalidParameter(() => engine.setLaneSidechain(10, 1, 11));
       engine.setLaneSidechain(10, 0, 11);
       expect(engine.canSetLaneSidechain(11, 0, 10)).toEqual(no('cycle'));
       expectInvalidParameter(() => engine.setLaneSidechain(11, 0, 10));
@@ -692,6 +696,58 @@ describe('Sonare WASM Module', () => {
 
       expect(() => engine.canSetLaneSidechain('10' as unknown as number, 0, 11)).toThrow(/trackId/);
       expect(() => engine.canSetBusSidechain(1, 0, 'bus', '2' as unknown as number)).toThrow();
+      engine.destroy();
+    });
+
+    it('refuses a reserved mixer id that names no strip and keeps the live ids', () => {
+      const engine = new RealtimeEngine(SR, BLOCK);
+      engine.setTrackLanes([{ trackId: 5 }, { trackId: 7 }]);
+      const point = [{ ppq: 0, value: -6, curveToNext: 0 }];
+      for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
+        expectInvalidParameter(() => engine.setParameterSmoothed(positional, -6));
+        expectInvalidParameter(() => engine.setParameter(positional, -6));
+        expectInvalidParameter(() => engine.setAutomationLane(positional, point));
+      }
+      const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
+      expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
+      expect(() => engine.setAutomationLane(laneFader, point)).not.toThrow();
+      expect(() => engine.setParameterSmoothed(0x4d58ff01, -6)).not.toThrow();
+      expect(() => engine.setAutomationLane(0x4d58ff01, point)).not.toThrow();
+      engine.destroy();
+    });
+
+    it('refuses a negative render frame on the raw embind class', () => {
+      const engine = new RealtimeEngine(SR, BLOCK);
+      const native = (
+        engine as unknown as {
+          native: {
+            setParameter(id: number, value: number, frame?: number): void;
+            setParameterSmoothed(id: number, value: number, frame?: number): void;
+            pushMidiNoteOn(
+              destination: number,
+              group: number,
+              channel: number,
+              note: number,
+              velocity: number,
+              frame?: number,
+            ): void;
+            resetProcessorState(frame?: number): void;
+          };
+        }
+      ).native;
+      const calls = [
+        () => native.setParameter(0x4d58ff01, -6, -1),
+        () => native.setParameterSmoothed(0x4d58ff01, -6, -1),
+        () => native.pushMidiNoteOn(1, 0, 0, 60, 100, -1),
+        () => native.resetProcessorState(-1),
+      ];
+      for (const call of calls) {
+        expect(call).toThrow(RangeError);
+        expect(call).toThrow(/renderFrame must not be negative/);
+      }
+      // Omitted means immediate, as does a frame of 0.
+      expect(() => native.setParameter(0x4d58ff01, -6)).not.toThrow();
+      expect(() => native.setParameter(0x4d58ff01, -6, 0)).not.toThrow();
       engine.destroy();
     });
 

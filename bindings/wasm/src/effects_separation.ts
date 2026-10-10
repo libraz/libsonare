@@ -7,7 +7,7 @@ import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertHpssKernels, assertSamples } from './validation.js';
+import { assertAudioInput, assertHpssKernels, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -86,7 +86,8 @@ export function hpss(
   const request =
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
-      : samples;
+      : requestObject('hpss', samples);
+  assertAudioInput('hpss', request.samples, request.sampleRate ?? 22050);
   const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask(request.hardMask, 'hpss');
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
@@ -121,8 +122,11 @@ export function harmonic(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('harmonic', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('harmonic', samples);
+  assertAudioInput('harmonic', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().harmonic(request.samples, request.sampleRate ?? 22050);
 }
 
@@ -144,7 +148,10 @@ export function percussive(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('percussive', request.samples, request.validate !== false);
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('percussive', samples);
+  assertAudioInput('percussive', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().percussive(request.samples, request.sampleRate ?? 22050);
 }

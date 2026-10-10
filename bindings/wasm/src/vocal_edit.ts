@@ -23,7 +23,7 @@ import type {
   VocalUint64,
 } from './public_types_vocal_edit.js';
 import type { SonareModule } from './sonare.js';
-import { resolveSampleBound } from './validation.js';
+import { assertAudioInput, resolveSampleBound } from './validation.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
@@ -213,14 +213,6 @@ function requireUint32(value: number, field: string): number {
   requireSample(value, field);
   if (value > 0xffffffff) {
     throw new RangeError(`${field} must fit uint32`);
-  }
-  return value;
-}
-
-function requireSampleRate(value: number): number {
-  requireSample(value, 'sampleRate');
-  if (value < 8000 || value > 384000) {
-    throw new RangeError('sampleRate must be an integer in [8000, 384000]');
   }
   return value;
 }
@@ -464,13 +456,7 @@ function validateCreate(request: VocalCreateRequest): void {
   if (!request || typeof request !== 'object') {
     throw new TypeError('request must be an object');
   }
-  if (!(request.samples instanceof Float32Array) || request.samples.length === 0) {
-    throw new TypeError('samples must be a non-empty Float32Array');
-  }
-  for (const sample of request.samples) {
-    requireFinite(sample, 'samples');
-  }
-  requireSampleRate(request.sampleRate);
+  assertAudioInput('createVocalEditSession', request.samples, request.sampleRate);
   if (request.outputLengthSamples !== undefined) {
     requireSample(request.outputLengthSamples, 'outputLengthSamples');
   }
@@ -553,16 +539,10 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 
 /** Open a new session from an exported state blob and the same source PCM. */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
-  if (!(request.samples instanceof Float32Array) || request.samples.length === 0) {
-    throw new TypeError('samples must be a non-empty Float32Array');
-  }
+  assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate);
   if (!(request.state instanceof Uint8Array)) {
     throw new TypeError('state must be a Uint8Array');
   }
-  for (const sample of request.samples) {
-    requireFinite(sample, 'samples');
-  }
-  requireSampleRate(request.sampleRate);
   validateSessionLimits(request.limits);
   if (!vocalEditAvailable()) {
     throw new SonareError(

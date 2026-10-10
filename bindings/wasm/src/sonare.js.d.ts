@@ -2612,6 +2612,7 @@ export interface SonareModule {
   masteringInsertParamInfoAtRate: (name: string, sampleRate: number) => string;
   masteringProcessorCatalog: () => string;
   masteringAmpPresetCatalog: () => string;
+  masteringEnumValue: (processor: string, key: string, choice: string) => number | null;
   masteringInsertTiming: (
     name: string,
     paramsJson: string,

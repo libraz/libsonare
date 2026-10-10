@@ -249,8 +249,7 @@ describe('playback renderer (WASM)', () => {
     } catch (error) {
       caught = error;
     }
-    expect(caught).toBeInstanceOf(SonareError);
-    expect((caught as SonareError).codeName).toBe('InvalidParameter');
+    expect(caught).toBeInstanceOf(RangeError);
   });
 
   it('follows the input channel count under "auto" and reports it as plain data', () => {

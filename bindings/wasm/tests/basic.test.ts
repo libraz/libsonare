@@ -111,6 +111,15 @@ describe('Sonare WASM Module', () => {
       expect(catalog.abi.project).toBeGreaterThan(0);
       expect(catalog.processors.length).toBeGreaterThan(0);
       expect(catalog.presets.mastering).toContain('pop');
+      // Every group is present, an empty list rather than a missing key when its subsystem is out.
+      expect(Object.keys(catalog.presets).sort()).toEqual([
+        'mastering',
+        'mixingScene',
+        'playbackRoom',
+        'synth',
+        'voiceChanger',
+      ]);
+      expect(catalog.presets.playbackRoom).toContain('none');
       const compressor = catalog.processors.find(({ id }) => id === 'dynamics.compressor');
       expect(compressor).toMatchObject({ category: 'dynamics', realtimeInsertable: true });
     });

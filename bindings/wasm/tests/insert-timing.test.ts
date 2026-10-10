@@ -69,10 +69,10 @@ describe('insert timing and construction-key catalog (WASM)', () => {
     expect(() =>
       masteringInsertTiming(
         'saturation.softClipper',
-        { aliasing: 'oversample4x' as unknown as number },
+        { ceiling: 'loud' as unknown as number },
         48000,
       ),
-    ).toThrow(/aliasing/);
+    ).toThrow(/ceiling/);
   });
 });
 

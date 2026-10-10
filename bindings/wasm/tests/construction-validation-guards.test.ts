@@ -241,7 +241,7 @@ describe('drainExternalMidi reports a budget it can never make progress on', () 
 });
 
 describe('caller-supplied JS lengths cannot drive an allocation', () => {
-  const paramId = 0x4d580001;
+  const paramId = 0x4d58ff01;
 
   const rejectedPoints: Array<[string, unknown, typeof RangeError | typeof TypeError]> = [
     ['undefined', undefined, TypeError],

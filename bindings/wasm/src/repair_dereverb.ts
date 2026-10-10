@@ -9,6 +9,7 @@ import type {
   MasteringRepairDereverbClassicalStereoResult,
   ReverbDetection,
 } from './public_types_repair.js';
+import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -70,7 +71,15 @@ export function masteringRepairDereverbClassical(
   sampleRate?: number,
   options: DereverbClassicalOptions = {},
 ): Float32Array {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDereverbClassical', samples);
+  assertAudioInput(
+    'masteringRepairDereverbClassical',
+    request.samples,
+    request.sampleRate ?? 22050,
+  );
   return requireModule().masteringRepairDereverbClassical(
     request.samples,
     request.sampleRate ?? 22050,
@@ -131,7 +140,21 @@ export function masteringRepairDereverbClassicalStereo(
   const request: MasteringRepairDereverbClassicalStereoRequest =
     left instanceof Float32Array
       ? { left, right: right as Float32Array, sampleRate, ...config }
-      : left;
+      : requestObject('masteringRepairDereverbClassicalStereo', left, 'left');
+  assertAudioInput(
+    'masteringRepairDereverbClassicalStereo',
+    request.left,
+    request.sampleRate ?? 22050,
+    {},
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDereverbClassicalStereo',
+    request.right,
+    request.sampleRate ?? 22050,
+    {},
+    'right',
+  );
   const { left: leftSamples, right: rightSamples, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDereverbClassicalStereo(
     leftSamples,
@@ -193,6 +216,11 @@ export function masteringRepairDereverbClassicalLinked(
   const request: MasteringRepairDereverbClassicalLinkedRequest = Array.isArray(channels)
     ? { channels, sampleRate, ...config }
     : channels;
+  assertAudioChannels(
+    'masteringRepairDereverbClassicalLinked',
+    request.channels,
+    request.sampleRate ?? 22050,
+  );
   const { channels: input, sampleRate: rate, ...options } = request;
   return requireModule().masteringRepairDereverbClassicalLinked(input, rate ?? 22050, options);
 }
@@ -295,7 +323,11 @@ export function masteringRepairDetectReverb(
   sampleRate?: number,
   options: DereverbClassicalOptions = {},
 ): ReverbDetection {
-  const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
+  const request =
+    samples instanceof Float32Array
+      ? { samples, sampleRate, ...options }
+      : requestObject('masteringRepairDetectReverb', samples);
+  assertAudioInput('masteringRepairDetectReverb', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectReverb(
     request.samples,
     request.sampleRate ?? 22050,

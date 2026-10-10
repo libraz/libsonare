@@ -6,7 +6,7 @@
 import { getSonareModule } from './module_state.js';
 import type { WasmLufsResult, WasmLufsSeriesResult } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertInterleavedSamples, assertSampleRate } from './validation.js';
+import { assertAudioInput, assertInterleavedSamples, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -52,11 +52,13 @@ export function lufsInterleaved(
   options: ValidateOptions = {},
 ): WasmLufsResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('lufsInterleaved', samples);
     const r = samples;
     return lufsInterleaved(r.samples, r.channels, r.sampleRate, r);
   }
-  assertSampleRate('lufsInterleaved', sampleRate);
-  assertInterleavedSamples('lufsInterleaved', samples, channels, options.validate !== false);
+  assertAudioInput('lufsInterleaved', samples, sampleRate, options);
+  // The preflight above already scanned the samples.
+  assertInterleavedSamples('lufsInterleaved', samples, channels, false);
   return requireModule().lufsInterleaved(samples, channels, sampleRate);
 }
 
@@ -99,11 +101,13 @@ export function lufsSeriesInterleaved(
   options: ValidateOptions = {},
 ): WasmLufsSeriesResult {
   if (!(samples instanceof Float32Array)) {
+    requestObject('lufsSeriesInterleaved', samples);
     const r = samples;
     return lufsSeriesInterleaved(r.samples, r.channels, r.sampleRate, r);
   }
-  assertSampleRate('lufsSeriesInterleaved', sampleRate);
-  assertInterleavedSamples('lufsSeriesInterleaved', samples, channels, options.validate !== false);
+  assertAudioInput('lufsSeriesInterleaved', samples, sampleRate, options);
+  // The preflight above already scanned the samples.
+  assertInterleavedSamples('lufsSeriesInterleaved', samples, channels, false);
   return requireModule().lufsSeriesInterleaved(samples, channels, sampleRate);
 }
 
@@ -119,7 +123,9 @@ export function ebur128LoudnessRange(
   sampleRate = 22050,
 ): number {
   if (!(samples instanceof Float32Array)) {
+    requestObject('ebur128LoudnessRange', samples);
     return ebur128LoudnessRange(samples.samples, samples.sampleRate);
   }
+  assertAudioInput('ebur128LoudnessRange', samples, sampleRate);
   return requireModule().ebur128LoudnessRange(samples, sampleRate);
 }

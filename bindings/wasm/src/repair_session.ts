@@ -13,6 +13,7 @@ import type {
   DenoiseReport,
   DereverbReport,
 } from './public_types_repair.js';
+import { assertAudioChannels } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -139,6 +140,12 @@ function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
 export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
 ): MasteringRepairAnalysis {
+  assertAudioChannels(
+    'masteringRepairAnalyze',
+    request.channels,
+    request.sampleRate ?? 22050,
+    request,
+  );
   const options =
     request.preferStreamingSafe === undefined
       ? {}
@@ -174,6 +181,12 @@ export function masteringRepairAnalyze(
 export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
 ): MasteringRepairApplyResult {
+  assertAudioChannels(
+    'masteringRepairApply',
+    request.channels,
+    request.sampleRate ?? 22050,
+    request,
+  );
   if (!Array.isArray(request.stages)) {
     throw new TypeError('masteringRepairApply: stages must be an array');
   }

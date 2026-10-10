@@ -61,7 +61,16 @@ import type {
   WasmExternalMidiEvent,
   WasmRealtimeEngine,
 } from './sonare.js';
-import { resolveRenderFrame, resolveSampleBound } from './validation.js';
+import { resolveSampleBound, resolveRenderFrame as resolveWireRenderFrame } from './validation.js';
+
+/** The native layer takes an absent frame as `undefined`; the shared resolver spells it -1. */
+function resolveRenderFrame(
+  fnName: string,
+  renderFrame: number | null | undefined,
+): number | undefined {
+  const frame = resolveWireRenderFrame(fnName, renderFrame);
+  return frame < 0 ? undefined : frame;
+}
 
 export type ExternalMidiEvent = WasmExternalMidiEvent;
 
@@ -383,7 +392,12 @@ export class RealtimeEngine {
     this.sampleRate = sampleRate;
   }
 
-  /** Queue a sample-accurate parameter change (engine kSetParam). */
+  /**
+   * Queue a sample-accurate parameter change (engine kSetParam).
+   * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
+   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
+   * methods.
+   */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
     this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
   }
@@ -1057,11 +1071,14 @@ export class RealtimeEngine {
     return this.native.insertParameterConstructedValue(paramId);
   }
 
+  /** Starts transport playback, at `renderFrame` when given. */
   play(renderFrame?: number): void {
     this.native.play(resolveRenderFrame('play', renderFrame));
   }
 
   /**
+   * Stops transport playback, at `renderFrame` when given.
+   *
    * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
@@ -1070,11 +1087,7 @@ export class RealtimeEngine {
     this.native.stop(resolveRenderFrame('stop', renderFrame));
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Moves the transport to `timelineSample`, a position in timeline samples. */
   seekSample(timelineSample: number, renderFrame?: number): void {
     this.native.seekSample(timelineSample, resolveRenderFrame('seekSample', renderFrame));
   }
@@ -1158,11 +1171,7 @@ export class RealtimeEngine {
     this.native.applyCommandsDueNowPreservingFuture();
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Moves the transport to `ppq`, a position in quarter notes. */
   seekPpq(ppq: number, renderFrame?: number): void {
     this.native.seekPpq(ppq, resolveRenderFrame('seekPpq', renderFrame));
   }
@@ -1188,11 +1197,7 @@ export class RealtimeEngine {
     return Number(this.native.sampleAtPpq(ppq));
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Sets the loop region between two quarter-note positions and enables or disables it. */
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
     this.native.setLoop(startPpq, endPpq, enabled);
   }
@@ -1213,6 +1218,12 @@ export class RealtimeEngine {
     return this.native.parameterInfo(id);
   }
 
+  /**
+   * Replaces the automation lane driving `paramId`.
+   * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
+   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
+   * methods.
+   */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(paramId, points);
   }

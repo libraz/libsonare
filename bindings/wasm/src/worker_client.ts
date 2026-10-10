@@ -43,7 +43,7 @@ export interface OfflineWorkerClientOptions {
 
 /** Browser Worker or Node `worker_threads.Worker` used by the client. */
 export interface OfflineWorker {
-  postMessage(message: unknown, transfer?: Transferable[]): void;
+  postMessage(message: unknown, transfer?: readonly unknown[]): void;
   terminate(): unknown;
   addEventListener?(type: string, listener: EventListener): void;
   removeEventListener?(type: string, listener: EventListener): void;
