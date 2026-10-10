@@ -828,6 +828,7 @@ export type {
   MixSceneStrip,
   MixSceneVcaGroup,
   MixTrackAlignment,
+  MultibandCompressorBand,
   NoiseDetection,
   NoteEdit,
   NoteEditInput,

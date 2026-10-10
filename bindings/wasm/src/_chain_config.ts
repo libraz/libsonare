@@ -3,6 +3,9 @@ import type { MasteringChainConfig } from './public_types.js';
 
 type ChainSection = { [key: string]: number | boolean | string | ChainSection | undefined };
 
+const emptyList = (path: string): string =>
+  `Mastering override '${path}' is an empty list, which has no flat spelling.`;
+
 const notAValue = (path: string): string =>
   `Mastering override '${path}' must be a number or boolean.`;
 
@@ -16,6 +19,10 @@ const notAValue = (path: string): string =>
  * both spellings a {@link MasteringChainConfig} accepts reach the core as the
  * same parameter — matching what the Python binding documents. An unknown key
  * in either spelling is rejected by the core, not here.
+ *
+ * An array recurses as `<path>.<index>` (`crossover.cutoffsHz.0`,
+ * `bands.2.thresholdDb`). An empty array is refused by its path, since it has
+ * no flat key and dropping it would silently edit nothing.
  *
  * An enum-valued key may be given by its name (`noiseEstimator: 'mcra'`); the
  * core resolves the name to the number every flat parameter list carries and
@@ -35,6 +42,9 @@ export function flattenChainConfig(config: MasteringChainConfig): Record<string,
         }
         out[path] = resolved;
       } else if (value !== null && typeof value === 'object') {
+        if (Array.isArray(value) && value.length === 0) {
+          throw new TypeError(emptyList(path));
+        }
         walk(value, path);
       } else if (value !== undefined) {
         throw new TypeError(notAValue(path));

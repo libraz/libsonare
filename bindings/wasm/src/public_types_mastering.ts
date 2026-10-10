@@ -474,6 +474,27 @@ export type MasteringInsertParams = Record<string, MasteringInsertParamValue>;
 export type MasteringAssistantParams = Record<string, number | boolean | string>;
 
 /**
+ * One band of the multiband compressor, addressed by index in
+ * `dynamics.multibandComp.bands`. Every field is optional: an omitted field
+ * keeps the base (preset) value, or the compressor default for a band the base
+ * does not have.
+ */
+export interface MultibandCompressorBand {
+  thresholdDb?: number;
+  ratio?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  kneeDb?: number;
+  makeupGainDb?: number;
+  autoMakeup?: boolean;
+  detector?: 'peak' | 'rms' | 'logRms' | number;
+  sidechainHpfEnabled?: boolean;
+  sidechainHpfHz?: number;
+  pdrTimeMs?: number;
+  pdrReleaseScale?: number;
+}
+
+/**
  * Nested mastering-chain configuration. A boolean toggles a module/processor's
  * `enabled` flag; setting any field implicitly enables its module unless
  * `enabled: false` is also given.
@@ -626,6 +647,25 @@ export interface MasteringChainConfig {
       highRatio?: number;
       highAttackMs?: number;
       highReleaseMs?: number;
+      /**
+       * Crossover structure. `cutoffsHz` replaces the cutoff list and sets the
+       * band count to `length + 1`; do not combine it with `lowCutoffHz` /
+       * `highCutoffHz` in one call. An empty list is refused.
+       */
+      crossover?: {
+        /** Ascending split frequencies in Hz; N values give N + 1 bands. */
+        cutoffsHz?: number[];
+        slope?: 'lr2' | 'lr4' | 'lr8' | number;
+        mode?: 'linkwitzRiley' | 'butterworth' | 'bessel' | 'firLinearPhase' | number;
+        firKernelSize?: number;
+      };
+      /**
+       * Per-band compressor settings by band index. An omitted band or field
+       * keeps the base (preset) value, or the compressor default for a band the
+       * base does not have. Do not combine with the `low*` / `mid*` / `high*`
+       * shorthand for the same field in one call.
+       */
+      bands?: MultibandCompressorBand[];
     };
   };
   saturation?: {

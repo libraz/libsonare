@@ -592,13 +592,38 @@ std::string js_mastering_assistant_suggest(val samples, const val& sample_rate_v
   return mastering::assistant::assistant_result_to_json(result);
 }
 
+// Writes `value` under `path`, flattening a schema v2 nested object or array
+// into dotted keys (`<path>.<key>`, `<path>.<index>`) -- the array spelling the
+// input side accepts. A leaf that is neither number nor boolean is refused by
+// path.
+void setFlatChainParam(val& out, const std::string& path, const sonare::util::json::Value& value) {
+  if (value.is_number()) {
+    out.set(path, value.as_number());
+  } else if (value.is_bool()) {
+    out.set(path, value.as_bool());
+  } else if (value.is_object()) {
+    for (const auto& [key, child] : value.as_object()) {
+      setFlatChainParam(out, path + "." + key, child);
+    }
+  } else if (value.is_array()) {
+    const auto& items = value.as_array();
+    for (size_t index = 0; index < items.size(); ++index) {
+      setFlatChainParam(out, path + "." + std::to_string(index), items[index]);
+    }
+  } else {
+    throw WasmTypeError("chain config param '" + path +
+                        "' is not a number or boolean (schema v2 nested value)");
+  }
+}
+
 // Flattens a suggested chain config to the {key: number|boolean} map the JS
 // facade hands straight to `overrides`, unwrapping the {"version","params"}
-// envelope chain_config_to_json writes. Throws by key name rather than
-// dropping silently if a param is a schema v2 nested object (e.g. a structured
-// multibandComp), since a silently dropped override reads as "applied" when it
-// was not. An empty params block is refused for the same reason: an empty
-// overrides map applies the preset unchanged.
+// envelope chain_config_to_json writes. A schema v2 nested block (e.g. a
+// structured multibandComp) is flattened into the array spelling; a leaf that
+// is neither number nor boolean throws by key name rather than dropping
+// silently, since a silently dropped override reads as "applied" when it was
+// not. An empty params block is refused for the same reason: an empty overrides
+// map applies the preset unchanged.
 val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
   namespace json = sonare::util::json;
   const json::Value parsed = json::parse_strict(mastering::api::chain_config_to_json(config));
@@ -608,14 +633,7 @@ val chainConfigParamsToVal(const mastering::api::MasteringChainConfig& config) {
   }
   val out = val::object();
   for (const auto& [key, value] : params) {
-    if (value.is_number()) {
-      out.set(key, value.as_number());
-    } else if (value.is_bool()) {
-      out.set(key, value.as_bool());
-    } else {
-      throw WasmTypeError("chain config param '" + key +
-                          "' is not a number or boolean (schema v2 nested value)");
-    }
+    setFlatChainParam(out, key, value);
   }
   return out;
 }
