@@ -61,12 +61,11 @@ struct BoundaryConfig {
   int kernel_size = 64;  ///< Checkerboard kernel size in frames
   /// Relative novelty threshold: a peak must reach this fraction of the largest
   /// raw novelty event within @ref reference_window of it, a lone dominant event
-  /// set aside. An event is lone when no other event in the window reaches this
-  /// same fraction of it; peaks within one kernel span or one @ref peak_distance
-  /// count as one event. Selects how prominent a peak is *among its neighbours*;
-  /// it says nothing about how much the features actually changed. Because the
-  /// reference is local, a returned boundary's `strength` (scaled by the
-  /// whole-track maximum) can sit below this value.
+  /// set aside. An event is lone when no other event in the window reaches 30% of
+  /// it, a fixed ratio this threshold does not move; peaks within one kernel span or one @ref
+  /// peak_distance count as one event. Selects how prominent a peak is *among its neighbours*; it
+  /// says nothing about how much the features actually changed. Because the reference is local, a
+  /// returned boundary's `strength` (scaled by the whole-track maximum) can sit below this value.
   float threshold = 0.3f;
   /// One-sided span in seconds of the neighbourhood @ref threshold is measured
   /// against, so a dominant change further away than this cannot gate a weaker

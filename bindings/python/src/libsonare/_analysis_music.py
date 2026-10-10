@@ -434,7 +434,7 @@ def detect_boundaries(
         threshold: Relative novelty threshold: a peak must reach this fraction of
             the largest raw novelty event within ``reference_window`` of it, a
             lone dominant event (one no other event in the window comes within
-            ``threshold`` of) set aside. Selects how prominent a peak is *among
+            30% of) set aside. Selects how prominent a peak is *among
             its neighbours*; it says nothing about how much the features actually
             changed.
         absolute_threshold: Novelty floor applied to the raw response before that

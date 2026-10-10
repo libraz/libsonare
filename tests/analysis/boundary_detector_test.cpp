@@ -897,15 +897,16 @@ namespace {
 /// @param transitions First frame of segments 1..3.
 /// @param n_frames Total frame count.
 /// @param reversed Emit the frames in reverse order.
-/// @details Segment k puts power cos(a_k) on {C4, E4, G4} and sin(a_k) on {D4, F#4, A4}; the angle
-///          steps grow (25, 30, 35 degrees), so each chroma change outgrows the one before.
-Spectrogram chain_spectrogram(const std::vector<int>& transitions, int n_frames, bool reversed) {
+/// @param angle_deg Angle of each of the four segments, in degrees within [0, 90].
+/// @details Segment k puts power cos(a_k) on {C4, E4, G4} and sin(a_k) on {D4, F#4, A4}, so each
+///          transition's chroma change grows with its angle step.
+Spectrogram chain_spectrogram(const std::vector<int>& transitions, int n_frames, bool reversed,
+                              const std::vector<float>& angle_deg) {
   constexpr int kSr = 22050;
   constexpr int kNFft = 2048;
   constexpr int kHop = 512;
   constexpr int kBins = kNFft / 2 + 1;
   constexpr float kFloor = 1e-3f;
-  const float angle_deg[4] = {0.0f, 25.0f, 55.0f, 90.0f};
   const float triad_x[3] = {261.63f, 329.63f, 392.0f};
   const float triad_y[3] = {293.66f, 369.99f, 440.0f};
   const auto bin_of = [](float hz) {
@@ -916,7 +917,7 @@ Spectrogram chain_spectrogram(const std::vector<int>& transitions, int n_frames,
   for (int f = 0; f < n_frames; ++f) {
     int segment = 0;
     while (segment < 3 && f >= transitions[static_cast<size_t>(segment)]) ++segment;
-    const float angle = angle_deg[segment] * constants::kPi / 180.0f;
+    const float angle = angle_deg[static_cast<size_t>(segment)] * constants::kPi / 180.0f;
     const size_t out = static_cast<size_t>(reversed ? n_frames - 1 - f : f);
     for (int n = 0; n < 3; ++n) {
       data[bin_of(triad_x[n]) * n_frames + out] = {
@@ -947,7 +948,9 @@ TEST_CASE("peak spacing keeps the same boundaries when the input is time-reverse
   const int n_frames = kMargin + 2 * spacing + kMargin;
 
   const auto detect = [&](bool reversed) {
-    const Spectrogram spec = chain_spectrogram(transitions, n_frames, reversed);
+    // Steps of 25, 30 and 35 degrees: each chroma change outgrows the one before.
+    const Spectrogram spec =
+        chain_spectrogram(transitions, n_frames, reversed, {0.0f, 25.0f, 55.0f, 90.0f});
     const BoundaryDetector detector(MelSpectrogram(), Chroma::from_spectrogram(spec, kSr), kSr,
                                     config);
     return boundary_frames(detector);
@@ -1042,4 +1045,30 @@ TEST_CASE(
   }
   CHECK(std::fabs(base.boundary_times()[0] - 8.0f) <= 2.0f * hop_sec);
   CHECK(std::fabs(base.boundary_times()[1] - 16.0f) <= 2.0f * hop_sec);
+}
+
+TEST_CASE("raising the relative threshold never adds a boundary", "[boundary_detector]") {
+  // Steps of 36, 30 and 24 degrees: three events of falling height inside one reference window.
+  constexpr int kSr = 22050;
+  constexpr int kSpacing = 150;
+  const std::vector<int> transitions = {kSpacing, 2 * kSpacing, 3 * kSpacing};
+  const Spectrogram spec =
+      chain_spectrogram(transitions, 4 * kSpacing, false, {0.0f, 36.0f, 66.0f, 90.0f});
+  const Chroma chroma = Chroma::from_spectrogram(spec, kSr);
+
+  // One-frame spacing, so every candidate the relative gate admits is returned.
+  BoundaryConfig config;
+  config.use_mfcc = false;
+  config.peak_distance = 0.0f;
+  std::vector<int> looser;
+  for (int step = 1; step <= 19; ++step) {
+    config.threshold = 0.05f * static_cast<float>(step);
+    const std::vector<int> frames =
+        boundary_frames(BoundaryDetector(MelSpectrogram(), chroma, kSr, config));
+    CAPTURE(config.threshold, frames, looser);
+    if (step > 1) {
+      CHECK(std::includes(looser.begin(), looser.end(), frames.begin(), frames.end()));
+    }
+    looser = frames;
+  }
 }

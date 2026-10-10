@@ -436,7 +436,7 @@ export interface BoundaryOptions {
   /**
    * Relative novelty threshold: a peak must reach this fraction of the largest raw
    * novelty event within {@link referenceWindow} of it, a lone dominant event (one
-   * no other event in the window comes within `threshold` of) set aside. Selects
+   * no other event in the window comes within 30% of) set aside. Selects
    * how prominent a peak is *among its neighbours*; it says nothing about how much
    * the features actually changed. Default 0.3.
    */

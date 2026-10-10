@@ -466,7 +466,7 @@ export interface BoundaryOptions {
   /**
    * Relative threshold: a peak must reach this fraction of the largest raw novelty
    * event within `referenceWindow` of it, a lone dominant event (one no other event
-   * in the window comes within `threshold` of) set aside. Default 0.3.
+   * in the window comes within 30% of) set aside. Default 0.3.
    */
   threshold?: number;
   /**

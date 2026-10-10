@@ -21,6 +21,11 @@ using sonare::constants::kEpsilon;
 
 namespace {
 
+/// An event is lone when no other event in the reference window reaches this fraction of it.
+/// Held apart from the relative threshold so raising that threshold can never lower the
+/// reference; equal to the threshold's default, so default results are unchanged.
+constexpr float kLoneEventRatio = 0.3f;
+
 /// @brief Normalizes a feature vector (L2 normalization).
 void normalize_feature(float* feature, int n) {
   float norm = 0.0f;
@@ -426,7 +431,7 @@ void BoundaryDetector::detect_boundaries() {
   const std::vector<int> events = select_peaks_min_distance(
       positive_peaks, raw.data(), std::max(config_.kernel_size, min_peak_distance));
   const std::vector<float> reference = sliding_max_without_lone_peaks(
-      raw.data(), raw.size(), static_cast<size_t>(window_frames), events, config_.threshold);
+      raw.data(), raw.size(), static_cast<size_t>(window_frames), events, kLoneEventRatio);
 
   // The relative gate asks whether a peak stands out among its neighbours, a lone
   // dominant event set aside; the absolute one asks whether the features changed at all.
