@@ -32,6 +32,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "core/audio.h"
 #include "core/spectrum.h"
 #include "editing/polyphony/multi_f0.h"
 
@@ -319,6 +320,23 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
 /// @throws SonareException(InvalidParameter) when @p mask reaches outside
 ///         @p spec.
 Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask);
+
+/// @brief One note's inverse, over the samples it can reach.
+/// @details @ref audio holds positions @ref first_sample onward of
+///          `apply_note_mask(spec, mask).to_audio(length)`; every position
+///          outside it is zero there. Each sample comes from the same frames
+///          summed in the same order, so the cost of a note follows its own
+///          length rather than the input's.
+struct NoteSegment {
+  Audio audio;
+  int64_t first_sample = 0;
+};
+
+/// @brief @ref apply_note_mask followed by `to_audio(length)`, inverting only
+///        the frames whose windows overlap the mask's.
+/// @throws SonareException(InvalidParameter) when @p mask reaches outside
+///         @p spec, or @p length is negative.
+NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length);
 
 /// @brief What no note claimed: @p spec weighted by one minus every mask.
 /// @details It holds noise, reverb tails and anything at no partial position,

@@ -35,11 +35,15 @@ int64_t frame_to_sample(int frame, double samples_per_frame, int64_t n_samples) 
   return static_cast<int64_t>(samples);
 }
 
-float rms_over(const Audio& audio, int64_t begin, int64_t end) {
+/// @p begin and @p end are positions in the whole input; @p audio holds the
+/// part of it starting at @p audio_start.
+float rms_over(const Audio& audio, int64_t audio_start, int64_t begin, int64_t end) {
   if (end <= begin) return 0.0f;
+  SONARE_CHECK(begin >= audio_start && end <= audio_start + static_cast<int64_t>(audio.size()),
+               ErrorCode::InvalidParameter);
   double sum = 0.0;
   for (int64_t i = begin; i < end; ++i) {
-    const double value = static_cast<double>(audio[static_cast<size_t>(i)]);
+    const double value = static_cast<double>(audio[static_cast<size_t>(i - audio_start)]);
     sum += value * value;
   }
   return static_cast<float>(std::sqrt(sum / static_cast<double>(end - begin)));
@@ -58,9 +62,10 @@ float median_absolute_deviation(const std::vector<float>& values) {
 
 /// Checks the shared inputs and fills the cadence and voicing fields both the
 /// segmenter and the per-note derivation read.
-pitch_editor::F0Track resolve_track(const Audio& audio, const pitch_editor::F0Track& track,
+pitch_editor::F0Track resolve_track(int sample_rate, int64_t n_samples,
+                                    const pitch_editor::F0Track& track,
                                     const NoteExtractorConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(n_samples > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(track.n_frames() > 0, ErrorCode::InvalidParameter);
   SONARE_CHECK(track.frame_rate() > 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.voiced_threshold) &&
@@ -80,8 +85,8 @@ pitch_editor::F0Track resolve_track(const Audio& audio, const pitch_editor::F0Tr
   // NoteSegmenter guards on hop_length / sample_rate even for a track carrying
   // an explicit cadence, so fill both from the cadence: leaving them unset
   // segments to nothing instead of failing.
-  if (resolved.sample_rate <= 0) resolved.sample_rate = audio.sample_rate();
-  SONARE_CHECK(resolved.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
+  if (resolved.sample_rate <= 0) resolved.sample_rate = sample_rate;
+  SONARE_CHECK(resolved.sample_rate == sample_rate, ErrorCode::InvalidParameter);
   const double per_frame = resolved.samples_per_frame();
   SONARE_CHECK(std::isfinite(per_frame) && per_frame >= 1.0 &&
                    per_frame <= static_cast<double>(std::numeric_limits<int>::max()),
@@ -101,12 +106,12 @@ pitch_editor::F0Track resolve_track(const Audio& audio, const pitch_editor::F0Tr
 
 /// Derives one note over [@p frame_start, @p frame_end), clamped to the track.
 /// The only place a note's measured fields are computed.
-NoteObject build_note(const Audio& audio, const pitch_editor::F0Track& resolved, int frame_start,
-                      int frame_end, const NoteExtractorConfig& config) {
+NoteObject build_note(const Audio& audio, int64_t audio_start, int64_t n_samples,
+                      const pitch_editor::F0Track& resolved, int frame_start, int frame_end,
+                      const NoteExtractorConfig& config) {
   const int n_frames = resolved.n_frames();
   const float frame_rate = resolved.frame_rate();
   const double samples_per_frame = resolved.samples_per_frame();
-  const int64_t n_samples = static_cast<int64_t>(audio.size());
   const float threshold_cents = config.segmenter.segmentation_threshold_cents;
 
   const int start = std::clamp(frame_start, 0, n_frames);
@@ -156,7 +161,8 @@ NoteObject build_note(const Audio& audio, const pitch_editor::F0Track& resolved,
   for (int frame = start; frame < end; ++frame) {
     const int64_t begin = frame_to_sample(frame, samples_per_frame, n_samples);
     const int64_t stop = std::max(begin, frame_to_sample(frame + 1, samples_per_frame, n_samples));
-    note.amplitude.values[static_cast<size_t>(frame - start)] = rms_over(audio, begin, stop);
+    note.amplitude.values[static_cast<size_t>(frame - start)] =
+        rms_over(audio, audio_start, begin, stop);
   }
 
   // One voiced set feeds both pitch statistics, so the median and the stability
@@ -251,32 +257,45 @@ void repair_terminal_nudge_overlap(std::vector<NoteObject>& notes,
 
 std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0Track& track,
                                       const NoteExtractorConfig& config) {
-  const pitch_editor::F0Track resolved = resolve_track(audio, track, config);
+  const int64_t n_samples = static_cast<int64_t>(audio.size());
+  const pitch_editor::F0Track resolved =
+      resolve_track(audio.sample_rate(), n_samples, track, config);
   const std::vector<pitch_editor::NoteRegion> regions =
       pitch_editor::NoteSegmenter(config.segmenter).segment(resolved);
 
   std::vector<NoteObject> notes;
   notes.reserve(regions.size());
   for (const pitch_editor::NoteRegion& region : regions) {
-    notes.push_back(build_note(audio, resolved, region.frame_start, region.frame_end, config));
+    notes.push_back(
+        build_note(audio, 0, n_samples, resolved, region.frame_start, region.frame_end, config));
   }
-  repair_terminal_nudge_overlap(notes, resolved, static_cast<int64_t>(audio.size()), false);
+  repair_terminal_nudge_overlap(notes, resolved, n_samples, false);
 
   return notes;
 }
 
 NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int frame_start,
                      int frame_end, const NoteExtractorConfig& config) {
-  const pitch_editor::F0Track resolved = resolve_track(audio, track, config);
+  return make_note(audio, 0, static_cast<int64_t>(audio.size()), track, frame_start, frame_end,
+                   config);
+}
+
+NoteObject make_note(const Audio& segment, int64_t segment_start, int64_t n_samples,
+                     const pitch_editor::F0Track& track, int frame_start, int frame_end,
+                     const NoteExtractorConfig& config) {
+  SONARE_CHECK(segment_start >= 0, ErrorCode::InvalidParameter);
+  const pitch_editor::F0Track resolved =
+      resolve_track(segment.sample_rate(), n_samples, track, config);
   SONARE_CHECK(frame_start >= 0 && frame_start < frame_end && frame_end <= resolved.n_frames(),
                ErrorCode::InvalidParameter);
-  return build_note(audio, resolved, frame_start, frame_end, config);
+  return build_note(segment, segment_start, n_samples, resolved, frame_start, frame_end, config);
 }
 
 void repair_rederived_note_set_bounds(const Audio& audio, const pitch_editor::F0Track& track,
                                       std::vector<NoteObject>& notes,
                                       const NoteExtractorConfig& config) {
-  const pitch_editor::F0Track resolved = resolve_track(audio, track, config);
+  const pitch_editor::F0Track resolved =
+      resolve_track(audio.sample_rate(), static_cast<int64_t>(audio.size()), track, config);
   const size_t cardinality = notes.size();
   repair_terminal_nudge_overlap(notes, resolved, static_cast<int64_t>(audio.size()), true);
   SONARE_CHECK(notes.size() == cardinality, ErrorCode::InvalidParameter);

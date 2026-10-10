@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -261,6 +262,53 @@ Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask) {
     }
   }
   return scaled_like(spec, std::move(masked));
+}
+
+NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length) {
+  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+  check_mask_shape(mask, spec.n_bins(), spec.n_frames());
+  SONARE_CHECK(length >= 0, ErrorCode::InvalidParameter);
+
+  const int n_bins = spec.n_bins();
+  const int n_frames = spec.n_frames();
+  const int n_fft = spec.n_fft();
+  const int hop = spec.hop_length();
+  // Every frame whose window overlaps a masked frame's, so each sample the note
+  // reaches sums the same frames the full-length inverse does.
+  const int reach = (n_fft + hop - 1) / hop;
+  const int first = std::max(0, mask.frame_start - reach);
+  const int last = std::min(n_frames, mask.frame_start + mask.n_frames + reach);
+  const int span = last - first;
+
+  const std::complex<float>* data = spec.complex_data();
+  std::vector<std::complex<float>> masked(static_cast<size_t>(n_bins) * span);
+  for (int index = 0; index < mask.n_frames; ++index) {
+    const int frame = mask.frame_start + index;
+    for (int32_t k = mask.frame_offset[static_cast<size_t>(index)];
+         k < mask.frame_offset[static_cast<size_t>(index) + 1]; ++k) {
+      const size_t bin = static_cast<size_t>(mask.bins[static_cast<size_t>(k)]);
+      masked[bin * span + static_cast<size_t>(frame - first)] =
+          data[bin * n_frames + static_cast<size_t>(frame)] * mask.weights[static_cast<size_t>(k)];
+    }
+  }
+  const Spectrogram part =
+      Spectrogram::from_complex(std::move(masked), n_bins, span, n_fft, hop, spec.sample_rate(),
+                                spec.window(), spec.center(), spec.win_length());
+
+  // Centred or not, output position j of the part is input position first*hop + j.
+  const int64_t first_sample = static_cast<int64_t>(first) * hop;
+  const int64_t trim = spec.center() ? n_fft / 2 : 0;
+  const int64_t whole =
+      length > 0 ? length : static_cast<int64_t>(n_frames - 1) * hop + n_fft - 2 * trim;
+  // Short of the last frame the part ends where its own frames do; reaching it,
+  // the part runs to the length as the zero-padded full inverse does.
+  const int64_t part_natural = static_cast<int64_t>(span - 1) * hop + n_fft - trim;
+  const int64_t available = last < n_frames ? part_natural : whole - first_sample;
+  const int64_t count = std::clamp<int64_t>(whole - first_sample, 0, available);
+  if (count == 0) {
+    return {Audio::from_vector({}, spec.sample_rate()), first_sample};
+  }
+  return {part.to_audio(static_cast<int>(count)), first_sample};
 }
 
 Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks) {

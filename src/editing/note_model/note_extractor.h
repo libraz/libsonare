@@ -3,6 +3,7 @@
 /// @file note_extractor.h
 /// @brief Builds note objects from audio and an F0 track.
 
+#include <cstdint>
 #include <vector>
 
 #include "core/audio.h"
@@ -50,6 +51,18 @@ std::vector<NoteObject> extract_notes(const Audio& audio, const pitch_editor::F0
 ///         rejects, or a span that is empty, reversed or outside the track.
 NoteObject make_note(const Audio& audio, const pitch_editor::F0Track& track, int frame_start,
                      int frame_end, const NoteExtractorConfig& config = {});
+
+/// @brief @ref make_note over a part of the input rather than all of it.
+/// @details @p segment holds the input's samples from @p segment_start on, and
+///          @p n_samples is the whole input's length, so the note comes back in
+///          the whole input's positions. The segment has to cover the samples
+///          the span's frames read; the rest of the input is never consulted.
+/// @throws SonareException(InvalidParameter) on what @ref make_note rejects, a
+///         negative @p segment_start, a non-positive @p n_samples, or a segment
+///         that does not cover the span.
+NoteObject make_note(const Audio& segment, int64_t segment_start, int64_t n_samples,
+                     const pitch_editor::F0Track& track, int frame_start, int frame_end,
+                     const NoteExtractorConfig& config = {});
 
 /// @brief Repairs physical bounds after a note set was re-derived from frame spans.
 /// @details A terminal frame whose raw sample range lies beyond the audio is

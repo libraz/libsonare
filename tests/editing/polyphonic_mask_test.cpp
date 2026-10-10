@@ -740,6 +740,55 @@ TEST_CASE("apply_note_mask zeroes every bin the mask does not name", "[polyphony
   REQUIRE(leaked == 0);
 }
 
+TEST_CASE("invert_note_mask is the full-length inverse over the samples a note reaches",
+          "[polyphony_mask]") {
+  // Two seconds, so a short note in the middle leaves frames on both sides that
+  // the segment does not invert.
+  const sonare::Spectrogram spec = spectrogram_of(tone_audio(300.0f, 10, 2.0f));
+  const int n_frames = spec.n_frames();
+  const int reach = (kNfft + kHopLength - 1) / kHopLength;
+  const int start = n_frames / 3;
+  const NoteMaskSet masks =
+      build_note_masks(spec, track_over(spec, {steady_ridge(300.0f, start, 12, kHopLength)}));
+  const NoteMask& mask = masks.notes[0];
+  REQUIRE(mask.frame_start - reach > 0);
+  REQUIRE(mask.frame_end() + reach < n_frames);
+
+  const int length = static_cast<int>(spec.to_audio(0).size()) + 777;
+  for (const int at : {0, length}) {
+    INFO("length " << at);
+    const sonare::Audio full = apply_note_mask(spec, mask).to_audio(at);
+    const NoteSegment segment = invert_note_mask(spec, mask, at);
+    REQUIRE(segment.first_sample > 0);
+    REQUIRE(segment.first_sample + static_cast<int64_t>(segment.audio.size()) <
+            static_cast<int64_t>(full.size()));
+
+    double peak = 0.0;
+    for (size_t i = 0; i < full.size(); ++i) peak = std::max(peak, std::abs(double{full[i]}));
+    REQUIRE(peak > 0.01);
+    size_t outside_nonzero = 0;
+    double worst = 0.0;
+    for (size_t i = 0; i < full.size(); ++i) {
+      const int64_t j = static_cast<int64_t>(i) - segment.first_sample;
+      if (j < 0 || j >= static_cast<int64_t>(segment.audio.size())) {
+        if (full[i] != 0.0f) ++outside_nonzero;
+      } else {
+        worst = std::max(worst,
+                         std::abs(double{full[i]} - double{segment.audio[static_cast<size_t>(j)]}));
+      }
+    }
+    REQUIRE(outside_nonzero == 0);
+    REQUIRE(worst <= 1e-6 * peak);
+  }
+
+  // A note reaching the last frame runs to the requested length, zero-padded as
+  // the full inverse is.
+  const NoteMaskSet tail =
+      build_note_masks(spec, track_over(spec, {steady_ridge(300.0f, n_frames - 6, 6, kHopLength)}));
+  const NoteSegment last = invert_note_mask(spec, tail.notes[0], length);
+  REQUIRE(last.first_sample + static_cast<int64_t>(last.audio.size()) == length);
+}
+
 // --- Claim geometry --------------------------------------------------------
 
 TEST_CASE("a claim is a fixed frequency span that travels across zero padding",

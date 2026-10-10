@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <utility>
 #include <vector>
 
@@ -70,18 +71,25 @@ std::vector<note_model::NoteObject> make_masked_notes(
   SONARE_CHECK(config.segmenter.reference_hz > 0.0f, ErrorCode::InvalidParameter);
   SONARE_CHECK(length >= 0, ErrorCode::InvalidParameter);
 
+  // The length the full-length inverse would have.
+  const int64_t whole = length > 0
+                            ? length
+                            : static_cast<int64_t>(spec.n_frames() - 1) * spec.hop_length() +
+                                  spec.n_fft() - (spec.center() ? 2 * (spec.n_fft() / 2) : 0);
+
   std::vector<note_model::NoteObject> notes;
   notes.reserve(track.ridges.size());
 
   for (std::size_t i = 0; i < track.ridges.size(); ++i) {
     const F0Ridge& ridge = track.ridges[i];
-    // The masked spectrogram is a temporary, so it dies with the statement that
-    // inverts it and one note's full-length inverse is alive at a time.
-    const Audio note_audio = apply_note_mask(spec, masks.notes[i]).to_audio(length);
     // A framing that reconstructs to nothing is a framing error, not a silent note.
-    SONARE_CHECK(!note_audio.empty(), ErrorCode::InvalidParameter);
+    SONARE_CHECK(whole > 0, ErrorCode::InvalidParameter);
+    // Only the samples the note reaches are inverted, so the loop stays linear
+    // in the input rather than paying a full-length inverse per note.
+    const NoteSegment segment = invert_note_mask(spec, masks.notes[i], length);
     note_model::NoteObject note = note_model::make_note(
-        note_audio, ridge_track(track, ridge, masks), ridge.frame_start, ridge.frame_end(), config);
+        segment.audio, segment.first_sample, whole, ridge_track(track, ridge, masks),
+        ridge.frame_start, ridge.frame_end(), config);
     // A length ending before the ridge clamps the span empty, which make_note accepts.
     note_model::validate_note_for_render(note);
     notes.push_back(std::move(note));
