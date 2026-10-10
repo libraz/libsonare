@@ -1126,13 +1126,7 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   return out;
 }
 
-val js_room_morph(val samples, const val& sample_rate_val, val opts) {
-  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
-  validateAcousticSampleRate(sample_rate);
-  std::vector<float> data = float32ArrayToVector(samples);
-  validateAcousticInput(data);
-  validate_offline_audio_input(data.data(), data.size(), sample_rate);
-  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+static sonare::effects::acoustic::RoomMorphConfig roomMorphConfigFromVal(val opts) {
   sonare::effects::acoustic::RoomMorphConfig config;
   config.target = roomFromVal(opts, 0.2f);
   config.placement = placementFromVal(opts);
@@ -1161,6 +1155,18 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
       sonare::ZeroIsDefault(floatProperty(opts, "airHumidityPercent", 0.0f))
           .or_default(config.air.humidity_percent);
 
+  return config;
+}
+
+val js_room_morph(val samples, const val& sample_rate_val, val opts) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateAcousticSampleRate(sample_rate);
+  std::vector<float> data = float32ArrayToVector(samples);
+  validateAcousticInput(data);
+  validate_offline_audio_input(data.data(), data.size(), sample_rate);
+  Audio audio = Audio::from_buffer(data.data(), data.size(), sample_rate);
+  const auto config = roomMorphConfigFromVal(opts);
+
   const auto result = sonare::effects::acoustic::room_morph(audio, config);
   std::vector<float> morphed;
   if (!result.audio.empty()) {
@@ -1173,6 +1179,36 @@ val js_room_morph(val samples, const val& sample_rate_val, val opts) {
   val out = val::object();
   out.set("audio", vectorToFloat32Array(morphed));
   out.set("sampleRate", result.audio.sample_rate());
+  out.set("diagnostics", diagnosticsArray(result.diagnostics));
+  return out;
+}
+
+val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val opts) {
+  const int sample_rate = checkedIntFromVal(sample_rate_val, "sampleRate");
+  validateAcousticSampleRate(sample_rate);
+  std::vector<float> left_data = float32ArrayToVector(left);
+  std::vector<float> right_data = float32ArrayToVector(right);
+  if (left_data.size() != right_data.size()) {
+    throw WasmRangeError("Stereo channel lengths must match.");
+  }
+  validateAcousticInput(left_data);
+  validateAcousticInput(right_data);
+  validate_offline_audio_input(left_data.data(), left_data.size(), sample_rate);
+  validate_offline_audio_input(right_data.data(), right_data.size(), sample_rate);
+  Audio left_audio = Audio::from_buffer(left_data.data(), left_data.size(), sample_rate);
+  Audio right_audio = Audio::from_buffer(right_data.data(), right_data.size(), sample_rate);
+  auto config = roomMorphConfigFromVal(opts);
+  config.receiver_spacing_m = floatProperty(opts, "receiverSpacingM", config.receiver_spacing_m);
+
+  const auto result = sonare::effects::acoustic::room_morph_stereo(left_audio, right_audio, config);
+  const auto to_vector = [](const Audio& audio) {
+    return audio.empty() ? std::vector<float>()
+                         : std::vector<float>(audio.data(), audio.data() + audio.size());
+  };
+  val out = val::object();
+  out.set("left", vectorToFloat32Array(to_vector(result.left)));
+  out.set("right", vectorToFloat32Array(to_vector(result.right)));
+  out.set("sampleRate", result.left.sample_rate());
   out.set("diagnostics", diagnosticsArray(result.diagnostics));
   return out;
 }
@@ -1295,6 +1331,7 @@ void registerQuickAnalysisBindings() {
   function("synthesizeRir", &js_synthesize_rir);
   function("estimateRoom", &js_estimate_room);
   function("roomMorph", &js_room_morph);
+  function("roomMorphStereo", &js_room_morph_stereo);
   function("roomGeometryFromEstimate", &js_room_geometry_from_estimate);
 #endif
   function("analyzeWithProgress", &js_analyze_with_progress);

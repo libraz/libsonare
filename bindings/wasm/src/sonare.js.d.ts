@@ -351,6 +351,13 @@ export interface WasmRoomMorphResult {
   diagnostics: WasmRirDiagnostic[];
 }
 
+export interface WasmRoomMorphStereoResult {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate: number;
+  diagnostics: WasmRirDiagnostic[];
+}
+
 export interface WasmRirResult {
   rir: Float32Array;
   sampleRate: number;
@@ -576,6 +583,11 @@ export interface WasmTrimSilenceStereoResult {
 export interface WasmRoomMorphOptions extends WasmRoomGeometryOptions {
   wet?: number;
   sourceTailSuppression?: number;
+}
+
+export interface WasmRoomMorphStereoOptions extends WasmRoomMorphOptions {
+  /** Receiver spacing in metres, in (0, 4]; omitted = 0.5. */
+  receiverSpacingM?: number;
 }
 
 export interface WasmHpssResult {
@@ -2059,6 +2071,12 @@ export interface SonareModule {
     sampleRate: number,
     options: WasmRoomMorphOptions,
   ) => WasmRoomMorphResult;
+  roomMorphStereo?: (
+    left: Float32Array,
+    right: Float32Array,
+    sampleRate: number,
+    options: WasmRoomMorphStereoOptions,
+  ) => WasmRoomMorphStereoResult;
   roomGeometryFromEstimate?: (estimate: {
     lengthM: number;
     widthM: number;

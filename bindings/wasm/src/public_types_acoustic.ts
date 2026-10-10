@@ -243,3 +243,14 @@ export interface RoomMorphResult {
    */
   diagnostics: RirDiagnostic[];
 }
+
+/** Result of {@link roomMorphStereo}: one morphed channel per input channel. */
+export interface RoomMorphStereoResult {
+  /** Morphed left samples: input length plus the target room's reverb tail. */
+  left: Float32Array;
+  /** Morphed right samples, the same length as `left`. */
+  right: Float32Array;
+  sampleRate: number;
+  /** Target-room synthesis diagnostics, with the same codes as {@link RoomMorphResult.diagnostics}. */
+  diagnostics: RirDiagnostic[];
+}

@@ -11,6 +11,7 @@ import {
   init,
   roomGeometryFromEstimate,
   roomMorph,
+  roomMorphStereo,
   synthesizeRir,
 } from '../src/index';
 
@@ -506,5 +507,73 @@ describe('named selectors and estimate-to-geometry', () => {
     const silent = estimateRoom(new Float32Array(48000), 48000);
     expect(Number.isNaN(silent.lengthM)).toBe(true);
     expect(() => roomGeometryFromEstimate(silent)).toThrow();
+  });
+});
+
+describe('roomMorphStereo', () => {
+  const room = { lengthM: 8, widthM: 6, heightM: 3, absorption: 0.2, wet: 1.0, maxSeconds: 0.3 };
+  const impulse = () => {
+    const x = new Float32Array(2000);
+    x[0] = 1.0;
+    return x;
+  };
+
+  it('returns two equal-length channels longer than the input', () => {
+    const r = roomMorphStereo({ left: impulse(), right: impulse(), sampleRate: 48000, ...room });
+    expect(r.left.length).toBe(r.right.length);
+    expect(r.left.length).toBeGreaterThan(2000);
+    expect(r.sampleRate).toBe(48000);
+    expect(Array.isArray(r.diagnostics)).toBe(true);
+  });
+
+  it('decorrelates the channels for identical inputs', () => {
+    const r = roomMorphStereo({ left: impulse(), right: impulse(), sampleRate: 48000, ...room });
+    expect(Array.from(r.left)).not.toEqual(Array.from(r.right));
+  });
+
+  it('treats an omitted spacing as 0.5 m', () => {
+    const base = { left: impulse(), right: impulse(), sampleRate: 48000, ...room };
+    const a = roomMorphStereo(base);
+    const b = roomMorphStereo({ ...base, receiverSpacingM: 0.5 });
+    expect(Array.from(a.left)).toEqual(Array.from(b.left));
+    expect(Array.from(a.right)).toEqual(Array.from(b.right));
+  });
+
+  it.each([0, -1, 4.5, Number.NaN])('rejects receiverSpacingM %s with a RangeError', (value) => {
+    const attempt = () =>
+      roomMorphStereo({
+        left: impulse(),
+        right: impulse(),
+        sampleRate: 48000,
+        ...room,
+        receiverSpacingM: value,
+      });
+    expect(attempt).toThrow(RangeError);
+    expect(attempt).toThrow(/receiverSpacingM/);
+  });
+
+  it('rejects mismatched channel lengths with a RangeError', () => {
+    expect(() =>
+      roomMorphStereo({
+        left: new Float32Array(100),
+        right: new Float32Array(99),
+        sampleRate: 48000,
+        ...room,
+      }),
+    ).toThrow(RangeError);
+  });
+
+  it('refuses a listener too close to a wall with the coded geometry error', () => {
+    const attempt = () =>
+      roomMorphStereo({
+        left: impulse(),
+        right: impulse(),
+        sampleRate: 48000,
+        ...room,
+        listenerX: 0.1,
+        listenerY: 3,
+        listenerZ: 1.5,
+      });
+    expect(attempt).toThrow(expect.objectContaining({ code: ErrorCode.InvalidParameter }));
   });
 });

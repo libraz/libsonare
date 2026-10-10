@@ -7,9 +7,11 @@ type NoMixStereo = Assert<'mixStereo' extends keyof typeof analysis ? false : tr
 type NoProject = Assert<'Project' extends keyof typeof analysis ? false : true>;
 type NoRealtimeEngine = Assert<'RealtimeEngine' extends keyof typeof analysis ? false : true>;
 type NoRoomMorph = Assert<'roomMorph' extends keyof typeof analysis ? false : true>;
+type NoRoomMorphStereo = Assert<'roomMorphStereo' extends keyof typeof analysis ? false : true>;
 
 void (true as NoMasterAudio);
 void (true as NoMixStereo);
 void (true as NoProject);
 void (true as NoRealtimeEngine);
 void (true as NoRoomMorph);
+void (true as NoRoomMorphStereo);

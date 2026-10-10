@@ -41,6 +41,7 @@ import type {
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
+  RoomMorphStereoResult,
 } from './public_types.js';
 import { Mode, PitchClass } from './public_types.js';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
@@ -176,6 +177,15 @@ export interface RoomGeometryFromEstimateRequest extends RoomGeometryFromEstimat
 export interface RoomMorphRequest extends RoomMorphOptions, GuardedOptions {
   samples: Float32Array;
   sampleRate: number;
+}
+
+/** Canonical request form for stereo room-reverb morphing. */
+export interface RoomMorphStereoRequest extends RoomMorphOptions, GuardedOptions {
+  left: Float32Array;
+  right: Float32Array;
+  sampleRate?: number;
+  /** Receiver spacing in metres, in (0, 4]; omitted = 0.5. */
+  receiverSpacingM?: number;
 }
 
 /** Canonical request forms for detailed music-analysis APIs. */
@@ -926,6 +936,48 @@ export function roomMorph(
       : requestObject('roomMorph', samples);
   assertAudioInput('roomMorph', request.samples, request.sampleRate, request);
   return module.roomMorph(request.samples, request.sampleRate, resolveAcousticSelectors(request));
+}
+
+/**
+ * Morph a stereo recording's reverberation toward a target room, as heard by two
+ * omnidirectional receivers `receiverSpacingM` apart (receiver spacing in
+ * metres, in (0, 4]; omitted = 0.5).
+ *
+ * Returns both channels (input length plus the reverb tail) and the target-room
+ * synthesis `diagnostics`, with the same codes as {@link RoomMorphResult}.
+ * `sampleRate` defaults to 48000.
+ *
+ * @throws RangeError if the channel lengths differ or `receiverSpacingM` is
+ *   non-finite or outside (0, 4].
+ */
+export function roomMorphStereo(request: RoomMorphStereoRequest): RoomMorphStereoResult {
+  const module = requireModule();
+  if (typeof module.roomMorphStereo !== 'function') {
+    throw new SonareError(
+      ErrorCode.NotSupported,
+      'NotSupported',
+      'libsonare was built without acoustic-simulation support',
+    );
+  }
+  requestObject('roomMorphStereo', request, 'request', true);
+  const sampleRate = request.sampleRate ?? 48000;
+  assertAudioInput('roomMorphStereo', request.left, sampleRate, request, 'left');
+  assertAudioInput('roomMorphStereo', request.right, sampleRate, request, 'right');
+  if (request.left.length !== request.right.length) {
+    throw new RangeError('Stereo channel lengths must match.');
+  }
+  const spacing = request.receiverSpacingM;
+  if (spacing !== undefined && !(Number.isFinite(spacing) && spacing > 0 && spacing <= 4)) {
+    throw new RangeError(
+      `receiverSpacingM must be a finite number in (0, 4] metres; omitted = 0.5 (got ${spacing})`,
+    );
+  }
+  return module.roomMorphStereo(
+    request.left,
+    request.right,
+    sampleRate,
+    resolveAcousticSelectors(request),
+  );
 }
 
 /**

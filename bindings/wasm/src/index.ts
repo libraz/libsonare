@@ -891,6 +891,7 @@ export type {
   RoomGeometryOptions,
   RoomMorphOptions,
   RoomMorphResult,
+  RoomMorphStereoResult,
   RoomPlacement,
   ScaleName,
   Section,
@@ -962,6 +963,7 @@ export type {
   RoomGeometryEstimate,
   RoomGeometryFromEstimateRequest,
   RoomMorphRequest,
+  RoomMorphStereoRequest,
   SamplesRequest,
   TimbreAnalysisResult,
   TimbreFrame,
@@ -989,6 +991,7 @@ export {
   hasFfmpegSupport,
   roomGeometryFromEstimate,
   roomMorph,
+  roomMorphStereo,
   synthesizeRir,
 } from './quick_analysis.js';
 export type {
