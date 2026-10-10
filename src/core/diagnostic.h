@@ -50,4 +50,14 @@ inline bool has_error(const std::vector<Diagnostic>& diagnostics) noexcept {
   return false;
 }
 
+/// @brief Appends each diagnostic of @p from whose code @p into does not already carry.
+inline void append_new_diagnostic_codes(std::vector<Diagnostic>& into,
+                                        const std::vector<Diagnostic>& from) {
+  for (const Diagnostic& d : from) {
+    bool seen = false;
+    for (const Diagnostic& e : into) seen = seen || e.code == d.code;
+    if (!seen) into.push_back(d);
+  }
+}
+
 }  // namespace sonare

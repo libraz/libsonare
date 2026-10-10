@@ -23,8 +23,9 @@
 
 #include <vector>
 
-#include "acoustic/late_reverb.h"  // ReverbModel
-#include "acoustic/room_model.h"   // ShoeboxRoom, SourceListener
+#include "acoustic/late_reverb.h"      // ReverbModel
+#include "acoustic/rir_synthesizer.h"  // ReceiverLayout
+#include "acoustic/room_model.h"       // ShoeboxRoom, SourceListener
 #include "core/audio.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "rt/processor_base.h"
@@ -64,6 +65,9 @@ struct RoomMorphConfig {
   /// and defaults to the ISO reference climate.
   bool air_absorption_enabled = false;
   sonare::acoustic::AirAbsorption air{};
+  /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
+  /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).
+  float receiver_spacing_m = 0.5f;
 };
 
 /// Validates the target room, placement, morph controls, and every RIR synthesis
@@ -93,6 +97,23 @@ struct RoomMorphResult {
 /// compensated. An empty recording returns empty audio and no diagnostics.
 RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config);
 
+/// @brief A stereo morph: each channel convolved with its own receiver's target RIR.
+struct RoomMorphStereoResult {
+  Audio left;                           ///< morphed left channel
+  Audio right;                          ///< morphed right channel
+  std::vector<Diagnostic> diagnostics;  ///< mono + pair synthesis telemetry, deduplicated by code
+};
+
+/// @brief Offline stereo room-character morph (dual mono through a spaced receiver pair).
+///
+/// Runs RoomMorphProcessor with `ReceiverLayout::MonoAndPair`: left is convolved with the
+/// left receiver's RIR, right with the right one's, and one linked suppressor gain is applied
+/// to both. Each output is `left.size()` samples plus the reverb tail, latency-compensated.
+/// Throws ErrorCode::InvalidParameter on a length or sample-rate mismatch, and on a receiver
+/// pair outside the room or a spacing outside (0, 4] m.
+RoomMorphStereoResult room_morph_stereo(const Audio& left, const Audio& right,
+                                        const RoomMorphConfig& config);
+
 /// @brief Streaming room-character morph.
 ///
 /// `prepare()` synthesizes and partitions the target RIR and sizes the
@@ -101,9 +122,16 @@ RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config
 /// host sample rate, which prepare() sees first and rejects with
 /// ErrorCode::InvalidParameter rather than discarding the diagnostics and
 /// preparing an inert insert.
+///
+/// With `ReceiverLayout::MonoAndPair` (the default) the constructor also validates the
+/// receiver pair, and prepare() loads the mono RIR plus the pair: one channel runs the mono
+/// RIR, two channels run left/right. `ReceiverLayout::Mono` neither validates nor synthesizes
+/// the pair. Two channels share one suppressor gain driven by the louder channel.
 class RoomMorphProcessor : public rt::ProcessorBase {
  public:
-  explicit RoomMorphProcessor(RoomMorphConfig config = {});
+  explicit RoomMorphProcessor(
+      RoomMorphConfig config = {},
+      sonare::acoustic::ReceiverLayout layout = sonare::acoustic::ReceiverLayout::MonoAndPair);
 
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -132,8 +160,8 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   const std::vector<Diagnostic>& diagnostics() const noexcept { return diagnostics_; }
 
  private:
-  // Per-channel state for the relative downward expander that suppresses the
-  // source reverberation tail.
+  // State of the relative downward expander that suppresses the source
+  // reverberation tail; one per processor so the channels share one gain.
   struct SuppressorState {
     float env = 0.0f;   ///< fast envelope of |x|
     float peak = 0.0f;  ///< slow peak follower (recent local maximum)
@@ -141,8 +169,9 @@ class RoomMorphProcessor : public rt::ProcessorBase {
   };
 
   RoomMorphConfig config_{};
+  sonare::acoustic::ReceiverLayout layout_ = sonare::acoustic::ReceiverLayout::MonoAndPair;
   reverb::ConvolutionReverb reverb_{};
-  std::vector<SuppressorState> suppressor_;
+  SuppressorState suppressor_{};
   std::vector<Diagnostic> diagnostics_;
 
   // One-pole coefficients computed from the sample rate in prepare().

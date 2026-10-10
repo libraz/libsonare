@@ -561,4 +561,37 @@ TEST_CASE("the room morph's tail expander is returned to rest", "[effects][non_f
   check_recovery(make, probe->target_ir_size() + 2 * probe->latency_samples(),
                  probe->latency_samples());
 }
+
+TEST_CASE("the room morph's linked gain keeps one channel's poison out of the other",
+          "[effects][non_finite][acoustic]") {
+  using sonare::RoomDimensions;
+  using sonare::acoustic::uniform_shoebox;
+  using sonare::effects::acoustic::RoomMorphConfig;
+  using sonare::effects::acoustic::RoomMorphProcessor;
+
+  RoomMorphConfig config;
+  config.target = uniform_shoebox(RoomDimensions{4.0f, 3.0f, 2.5f}, 0.4f);
+  config.placement.source = {1.0f, 1.0f, 1.2f};
+  config.placement.listener = {2.6f, 2.0f, 1.2f};
+  config.ism_order = 1;
+  config.max_seconds = 0.2f;
+  config.source_tail_suppression = 1.0f;
+  config.wet = 0.5f;
+
+  const auto make = prepared<RoomMorphProcessor>(config);
+  for (const float poison_value : poison_values()) {
+    DYNAMIC_SECTION("poison " << poison_value) {
+      auto insert = make();
+      const Stream poisoned =
+          run_stream(*insert, kPoisonBlock + kTrailingBlocks, poison_value, true);
+      bool left_poisoned = false;
+      for (float sample : poisoned.left) left_poisoned |= !std::isfinite(sample);
+      REQUIRE(left_poisoned);
+      for (size_t i = 0; i < poisoned.right.size(); ++i) {
+        INFO("right sample " << i);
+        REQUIRE(std::isfinite(poisoned.right[i]));
+      }
+    }
+  }
+}
 #endif  // SONARE_WITH_ACOUSTIC_SIM

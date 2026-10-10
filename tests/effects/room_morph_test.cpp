@@ -16,6 +16,8 @@
 #include "core/audio.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "metering/lufs.h"
+#include "rt/biquad_design.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 using namespace sonare;
@@ -69,6 +71,50 @@ std::vector<float> render(Processor& processor, std::vector<float> buffer, int b
 float integrated_lufs(const std::vector<float>& samples, int sample_rate) {
   return sonare::metering::lufs(Audio::from_vector(std::vector<float>(samples), sample_rate))
       .integrated_lufs;
+}
+
+constexpr int kStereoRate = 48000;
+
+// The reference room of the stereo criteria: 8x6x3.5 m, uniform absorption 0.15.
+RoomMorphConfig reference_stereo_config() {
+  RoomMorphConfig cfg;
+  cfg.target = uniform_room(8.0f, 6.0f, 3.5f, 0.15f);
+  cfg.placement = {{2.0f, 3.0f, 1.2f}, {6.0f, 3.0f, 1.5f}};
+  cfg.seed = 1u;
+  cfg.wet = 1.0f;
+  cfg.source_tail_suppression = 0.0f;
+  cfg.receiver_spacing_m = 0.5f;
+  return cfg;
+}
+
+// 4th-order Butterworth highpass at 1 kHz: two cascaded RBJ sections.
+std::vector<double> highpass_1khz(const Audio& audio) {
+  using sonare::constants::kPiD;
+  std::vector<double> out(audio.size());
+  for (size_t i = 0; i < audio.size(); ++i) out[i] = static_cast<double>(audio[i]);
+  for (const int k : {1, 3}) {
+    rt::BiquadStateD section;
+    section.set(rt::rbj_highpass_d(1000.0, static_cast<double>(audio.sample_rate()),
+                                   1.0 / (2.0 * std::cos(k * kPiD / 8.0))));
+    for (double& x : out) x = section.process(x);
+  }
+  return out;
+}
+
+double correlation(const std::vector<double>& a, const std::vector<double>& b) {
+  double ab = 0.0, aa = 0.0, bb = 0.0, ma = 0.0, mb = 0.0;
+  for (size_t i = 0; i < a.size(); ++i) {
+    ma += a[i];
+    mb += b[i];
+  }
+  ma /= static_cast<double>(a.size());
+  mb /= static_cast<double>(b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    ab += (a[i] - ma) * (b[i] - mb);
+    aa += (a[i] - ma) * (a[i] - ma);
+    bb += (b[i] - mb) * (b[i] - mb);
+  }
+  return ab / std::sqrt(aa * bb);
 }
 
 }  // namespace
@@ -422,4 +468,157 @@ TEST_CASE("room_morph exposes air absorption controls", "[effects][acoustic][roo
   const size_t common = std::min(a.size(), b.size());
   for (size_t i = 0; i < common && !differs; ++i) differs = (a[i] != b[i]);
   REQUIRE(differs);
+}
+
+TEST_CASE("room_morph_stereo decorrelates the added target room above 1 kHz",
+          "[.][slow][effects][acoustic][room_morph][stereo]") {
+  const Audio input = Audio::from_vector(noise(static_cast<size_t>(kStereoRate) * 3), kStereoRate);
+  const RoomMorphStereoResult out = room_morph_stereo(input, input, reference_stereo_config());
+  REQUIRE(out.left.size() == out.right.size());
+  REQUIRE(out.left.size() > input.size());
+
+  const double rho = correlation(highpass_1khz(out.left), highpass_1khz(out.right));
+  INFO("correlation above 1 kHz " << rho);
+  REQUIRE(std::abs(rho) < 0.3);
+}
+
+TEST_CASE("room_morph_stereo links the suppressor gain across the channels",
+          "[effects][acoustic][room_morph][stereo]") {
+  constexpr size_t kLength = kStereoRate;  // 1 s
+  constexpr size_t kOnset = kStereoRate * 3 / 10;
+  std::vector<float> right(kLength);
+  for (size_t i = 0; i < kLength; ++i) {
+    right[i] = 0.1f * static_cast<float>(std::sin(2.0 * sonare::constants::kPiD * 1000.0 *
+                                                  static_cast<double>(i) / kStereoRate));
+  }
+  std::vector<float> left(kLength, 0.0f);
+  const std::vector<float> tail = noise(kLength - kOnset);
+  for (size_t i = kOnset; i < kLength; ++i) {
+    const float decay =
+        std::exp(-static_cast<float>(i - kOnset) / (0.3f * static_cast<float>(kStereoRate)));
+    left[i] = tail[i - kOnset] * decay;  // a tail 12 dB under the onset peak
+  }
+  left[kOnset] = 1.0f;
+
+  RoomMorphConfig cfg = reference_stereo_config();
+  cfg.source_tail_suppression = 1.0f;
+  cfg.wet = 0.0f;
+  const RoomMorphStereoResult out =
+      room_morph_stereo(Audio::from_vector(left, kStereoRate),
+                        Audio::from_vector(std::vector<float>(right), kStereoRate), cfg);
+
+  const size_t from = kOnset + static_cast<size_t>(kStereoRate) * 20 / 1000;
+  const size_t to = kOnset + static_cast<size_t>(kStereoRate) * 200 / 1000;
+  const auto rms_ratio = [&](const Audio& output, const std::vector<float>& input) {
+    double e_out = 0.0;
+    double e_in = 0.0;
+    for (size_t i = from; i < to; ++i) {
+      e_out += static_cast<double>(output[i]) * output[i];
+      e_in += static_cast<double>(input[i]) * input[i];
+    }
+    return std::sqrt(e_out / e_in);
+  };
+  const double left_ratio = rms_ratio(out.left, left);
+  const double right_ratio = rms_ratio(out.right, right);
+  INFO("output/input RMS ratio: left " << left_ratio << ", right " << right_ratio);
+  // Non-vacuity: the tail in the driving channel is suppressed at all, and the right channel
+  // on its own (what a per-channel suppressor saw) is left untouched.
+  const double alone_ratio = rms_ratio(
+      room_morph(Audio::from_vector(std::vector<float>(right), kStereoRate), cfg).audio, right);
+  INFO("right channel suppressed on its own " << alone_ratio);
+  REQUIRE(left_ratio < 0.9);
+  REQUIRE(alone_ratio >= 0.999);
+  REQUIRE(right_ratio < 0.9);
+}
+
+TEST_CASE("a one-channel RoomMorphProcessor renders exactly what room_morph renders",
+          "[effects][acoustic][room_morph][stereo]") {
+  constexpr int kBlock = 256;
+  RoomMorphConfig cfg = reference_stereo_config();
+  cfg.wet = 0.6f;
+  cfg.source_tail_suppression = 0.5f;
+  cfg.max_seconds = 0.3f;
+  const Audio rec = Audio::from_vector(noise(kStereoRate / 4), kStereoRate);
+
+  const Audio offline = room_morph(rec, cfg).audio;
+
+  // The insert's layout loads the pair too; one channel must still run the mono RIR.
+  RoomMorphProcessor processor(cfg);
+  processor.prepare(static_cast<double>(kStereoRate), kBlock);
+  const size_t latency = static_cast<size_t>(processor.latency_samples());
+  const size_t total = offline.size() + latency;
+  std::vector<float> buf(total, 0.0f);
+  std::copy(rec.begin(), rec.end(), buf.begin());
+  for (size_t off = 0; off < total; off += kBlock) {
+    float* blk = buf.data() + off;
+    processor.process(&blk, 1, static_cast<int>(std::min<size_t>(kBlock, total - off)));
+  }
+  for (size_t i = 0; i < offline.size(); ++i) {
+    INFO("sample " << i);
+    REQUIRE(buf[i + latency] == offline[i]);
+  }
+}
+
+TEST_CASE("room_morph_stereo wet level matches the mono wet level",
+          "[.][slow][effects][acoustic][room_morph][stereo]") {
+  const Audio input = Audio::from_vector(noise(static_cast<size_t>(kStereoRate)), kStereoRate);
+  const RoomMorphConfig cfg = reference_stereo_config();
+  const double e_mono = energy(room_morph(input, cfg).audio);
+  const RoomMorphStereoResult stereo = room_morph_stereo(input, input, cfg);
+  const double e_pair = 0.5 * (energy(stereo.left) + energy(stereo.right));
+  const double db = 10.0 * std::log10(e_pair / e_mono);
+  INFO("pair minus mono wet energy " << db << " dB");
+  REQUIRE(std::abs(db) < 1.0);
+}
+
+TEST_CASE("a non-finite sample in one channel does not reach the other through the linked gain",
+          "[effects][acoustic][room_morph][stereo][numeric]") {
+  constexpr int kBlock = 256;
+  RoomMorphConfig cfg = reference_stereo_config();
+  cfg.wet = 0.5f;
+  cfg.source_tail_suppression = 1.0f;
+  cfg.max_seconds = 0.2f;
+  for (const float poison :
+       {std::numeric_limits<float>::quiet_NaN(), std::numeric_limits<float>::infinity()}) {
+    DYNAMIC_SECTION("poison " << poison) {
+      RoomMorphProcessor processor(cfg);
+      processor.prepare(static_cast<double>(kStereoRate), kBlock);
+      std::vector<float> left = noise(static_cast<size_t>(kBlock) * 16);
+      std::vector<float> right = left;
+      left[static_cast<size_t>(kBlock) * 2 + 10] = poison;
+      for (size_t off = 0; off < left.size(); off += kBlock) {
+        float* blk[2] = {left.data() + off, right.data() + off};
+        processor.process(blk, 2, kBlock);
+      }
+      for (size_t i = 0; i < right.size(); ++i) {
+        INFO("sample " << i);
+        REQUIRE(std::isfinite(right[i]));
+      }
+    }
+  }
+}
+
+TEST_CASE("room_morph_stereo refuses mismatched channels and an invalid receiver pair",
+          "[effects][acoustic][room_morph][stereo][numeric]") {
+  const RoomMorphConfig cfg = reference_stereo_config();
+  const Audio a = Audio::from_vector(std::vector<float>(1000, 0.0f), kStereoRate);
+  const auto refuses = [](const auto& call) {
+    try {
+      call();
+    } catch (const SonareException& error) {
+      return error.code() == ErrorCode::InvalidParameter;
+    }
+    return false;
+  };
+  REQUIRE(refuses([&] {
+    room_morph_stereo(a, Audio::from_vector(std::vector<float>(999, 0.0f), kStereoRate), cfg);
+  }));
+  REQUIRE(refuses([&] {
+    room_morph_stereo(a, Audio::from_vector(std::vector<float>(1000, 0.0f), 44100), cfg);
+  }));
+  RoomMorphConfig wide = cfg;
+  wide.receiver_spacing_m = 4.5f;
+  REQUIRE(refuses([&] { room_morph_stereo(a, a, wide); }));
+  // The mono entry point never reads the pair spacing.
+  REQUIRE_NOTHROW(room_morph(a, wide));
 }

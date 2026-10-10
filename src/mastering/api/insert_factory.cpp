@@ -614,8 +614,8 @@ SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::FdnReverbConfig, 3);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::VelvetReverbConfig, 5);
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::ConvolutionReverbConfig, 4);
 #ifdef SONARE_HAVE_ACOUSTIC
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::RoomReverbConfig, 10);
-SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::acoustic::RoomMorphConfig, 12);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::reverb::RoomReverbConfig, 11);
+SONARE_ASSERT_EVERY_FIELD_IS_WIRED(effects::acoustic::RoomMorphConfig, 13);
 // Reached through a room's own keys: three each for the box and the two
 // endpoints, two for the climate pair.
 SONARE_ASSERT_EVERY_FIELD_IS_WIRED(sonare::RoomDimensions, 3);
@@ -852,7 +852,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                                    .or_default(config.air.temperature_c);
     config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
                                       .or_default(config.air.humidity_percent);
-    return make<RoomReverb>(config);
+    // Same "0 selects the library value" convention; the constructor refuses the rest.
+    config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
+                                    .or_default(config.receiver_spacing_m);
+    return make<RoomReverb>(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
   if (name == "effects.acoustic.roomMorph") {
     // Source-reverb tail suppression in front of a target-room convolution. The
@@ -893,7 +896,10 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                                    .or_default(config.air.temperature_c);
     config.air.humidity_percent = ZeroIsDefault(f(params, "airHumidityPercent", 0.0f, kPercent))
                                       .or_default(config.air.humidity_percent);
-    return make<effects::acoustic::RoomMorphProcessor>(config);
+    config.receiver_spacing_m = ZeroIsDefault(f(params, "receiverSpacingM", 0.0f, kMeters))
+                                    .or_default(config.receiver_spacing_m);
+    return make<effects::acoustic::RoomMorphProcessor>(
+        config, sonare::acoustic::ReceiverLayout::MonoAndPair);
   }
 #endif
   if (name == "effects.modulation.chorus") {

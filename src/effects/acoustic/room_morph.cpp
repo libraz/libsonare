@@ -46,6 +46,13 @@ sonare::acoustic::RirSynthConfig rir_config_from(const RoomMorphConfig& config) 
   rc.air = config.air;
   return rc;
 }
+
+std::vector<float> to_vector(const Audio& audio) {
+  return std::vector<float>(audio.begin(), audio.end());
+}
+
+// The suppressor runs on at most the two channels the convolver processes.
+constexpr int kMaxSuppressedChannels = 2;
 }  // namespace
 
 void validate_room_morph_config(const RoomMorphConfig& config) {
@@ -66,8 +73,17 @@ void validate_room_morph_config(const RoomMorphConfig& config) {
                    "room morph image-source order, RIR timing, or air absorption is invalid");
 }
 
-RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config) : config_(std::move(config)) {
+RoomMorphProcessor::RoomMorphProcessor(RoomMorphConfig config,
+                                       sonare::acoustic::ReceiverLayout layout)
+    : config_(std::move(config)), layout_(layout) {
   validate_room_morph_config(config_);
+  if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
+    const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
+        config_.target, config_.placement, config_.receiver_spacing_m);
+    SONARE_CHECK_MSG(
+        !has_error(pair), ErrorCode::InvalidParameter,
+        "room morph receiver pair is invalid: " + sonare::acoustic::first_error_text(pair));
+  }
 }
 
 void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
@@ -89,6 +105,17 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   // one says the target room differs from the requested one.
   diagnostics_ = res.diagnostics;
 
+  RirPairResult pair;
+  const bool with_pair = layout_ == ReceiverLayout::MonoAndPair;
+  if (with_pair) {
+    pair =
+        synthesize_rir_pair(config_.target, config_.placement, config_.receiver_spacing_m, sr, rc);
+    SONARE_CHECK_MSG(
+        !has_error(pair.diagnostics), ErrorCode::InvalidParameter,
+        "room morph target RIR pair synthesis failed: " + first_error_text(pair.diagnostics));
+    append_new_diagnostic_codes(diagnostics_, pair.diagnostics);
+  }
+
   // prepare() otherwise synthesizes a default noise IR which the load below
   // immediately discards. This processor always supplies its own target RIR,
   // normalized to the same unit energy as that default so `wet` means the same
@@ -96,7 +123,12 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   // 1/(4*pi*d) physical scale would otherwise put it around 20 dB down.
   reverb_.suppress_default_ir_synthesis();
   reverb_.prepare(sample_rate, max_block_size);
-  reverb_.load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
+  if (with_pair) {
+    reverb_.load_ir_set_unit_energy(to_vector(res.rir), to_vector(pair.left),
+                                    to_vector(pair.right));
+  } else {
+    reverb_.load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
+  }
   reverb_.set_parameter(0, config_.wet);  // dry/wet = target-room mix
 
   env_attack_ = one_pole_coef(0.005f, sr);
@@ -104,8 +136,7 @@ void RoomMorphProcessor::prepare(double sample_rate, int max_block_size) {
   peak_release_ = one_pole_coef(0.300f, sr);
   gain_smooth_ = one_pole_coef(0.020f, sr);
 
-  // The underlying convolver preallocates mono/stereo engines; match it.
-  suppressor_.assign(2, SuppressorState{});
+  suppressor_ = SuppressorState{};
 }
 
 void RoomMorphProcessor::process(float* const* channels, int num_channels, int num_samples) {
@@ -121,32 +152,42 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
   const float supp = std::clamp(config_.source_tail_suppression, 0.0f, 1.0f);
   const float max_cut = supp * kMaxAttenuation;
   bool discarded = false;
-  if (max_cut > 0.0f) {
-    const int n = std::min(num_channels, static_cast<int>(suppressor_.size()));
-    for (int ch = 0; ch < n; ++ch) {
-      if (channels[ch] == nullptr) continue;
-      SuppressorState& st = suppressor_[static_cast<size_t>(ch)];
-      float* d = channels[ch];
-      for (int i = 0; i < num_samples; ++i) {
-        const float a = std::abs(d[i]);
-        // Fast envelope (attack on rising level, slower release on decay).
-        st.env = (a > st.env) ? env_attack_ * st.env + (1.0f - env_attack_) * a
-                              : env_release_ * st.env + (1.0f - env_release_) * a;
-        // Slow peak follower tracks the recent local maximum.
-        st.peak = std::max(a, st.peak * peak_release_);
-        // Level relative to the recent peak: ~1 on onsets, small on the tail.
-        const float r = st.env / (st.peak + kPeakFloor);
-        float t = std::clamp((r - kKneeLo) / (kKneeHi - kKneeLo), 0.0f, 1.0f);
-        t = t * t * (3.0f - 2.0f * t);  // smoothstep
-        const float target_gain = st.env < kSilenceFloor ? 1.0f : (1.0f - max_cut) + max_cut * t;
-        st.gain = gain_smooth_ * st.gain + (1.0f - gain_smooth_) * target_gain;
-        d[i] *= st.gain;
+  float* active[kMaxSuppressedChannels] = {};
+  int num_active = 0;
+  for (int ch = 0; ch < std::min(num_channels, kMaxSuppressedChannels); ++ch) {
+    if (channels[ch] != nullptr) active[num_active++] = channels[ch];
+  }
+  if (max_cut > 0.0f && num_active > 0) {
+    SuppressorState& st = suppressor_;
+    for (int i = 0; i < num_samples; ++i) {
+      float a = 0.0f;
+      if (num_active == 1) {
+        a = std::abs(active[0][i]);
+      } else {
+        // Linked detector: the louder channel drives one gain. A non-finite sample is
+        // skipped so it cannot reach the other channel through the shared gain.
+        for (int ch = 0; ch < num_active; ++ch) {
+          const float v = std::abs(active[ch][i]);
+          if (std::isfinite(v) && v > a) a = v;
+        }
       }
-      // Three floats per channel, once per block. The envelopes rest at silence
-      // and the smoothed gain at unity, which is this expander's bypass.
-      discarded |= discard_group_if_non_finite(st.env, st.peak);
-      discarded |= discard_if_non_finite(st.gain, 1.0f);
+      // Fast envelope (attack on rising level, slower release on decay).
+      st.env = (a > st.env) ? env_attack_ * st.env + (1.0f - env_attack_) * a
+                            : env_release_ * st.env + (1.0f - env_release_) * a;
+      // Slow peak follower tracks the recent local maximum.
+      st.peak = std::max(a, st.peak * peak_release_);
+      // Level relative to the recent peak: ~1 on onsets, small on the tail.
+      const float r = st.env / (st.peak + kPeakFloor);
+      float t = std::clamp((r - kKneeLo) / (kKneeHi - kKneeLo), 0.0f, 1.0f);
+      t = t * t * (3.0f - 2.0f * t);  // smoothstep
+      const float target_gain = st.env < kSilenceFloor ? 1.0f : (1.0f - max_cut) + max_cut * t;
+      st.gain = gain_smooth_ * st.gain + (1.0f - gain_smooth_) * target_gain;
+      for (int ch = 0; ch < num_active; ++ch) active[ch][i] *= st.gain;
     }
+    // Three floats, once per block. The envelopes rest at silence and the
+    // smoothed gain at unity, which is this expander's bypass.
+    discarded |= discard_group_if_non_finite(st.env, st.peak);
+    discarded |= discard_if_non_finite(st.gain, 1.0f);
   }
   if (discarded) note_non_finite_discard();
 
@@ -157,7 +198,7 @@ void RoomMorphProcessor::process(float* const* channels, int num_channels, int n
 
 void RoomMorphProcessor::reset() {
   reverb_.reset();
-  for (SuppressorState& s : suppressor_) s = SuppressorState{};
+  suppressor_ = SuppressorState{};
 }
 
 bool RoomMorphProcessor::set_parameter_impl(unsigned int param_id, float value) {
@@ -185,7 +226,7 @@ RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config
   }
   const int sr = recording.sample_rate();
 
-  RoomMorphProcessor processor(config);
+  RoomMorphProcessor processor(config, sonare::acoustic::ReceiverLayout::Mono);
   constexpr int kBlock = 256;
   processor.prepare(static_cast<double>(sr), kBlock);
 
@@ -211,6 +252,46 @@ RoomMorphResult room_morph(const Audio& recording, const RoomMorphConfig& config
     out[i] = buf[i + static_cast<size_t>(latency)];
   }
   return {Audio::from_vector(std::move(out), sr), processor.diagnostics()};
+}
+
+RoomMorphStereoResult room_morph_stereo(const Audio& left, const Audio& right,
+                                        const RoomMorphConfig& config) {
+  validate_room_morph_config(config);
+  SONARE_CHECK_MSG(left.size() == right.size(), ErrorCode::InvalidParameter,
+                   "room morph stereo channels must have the same length");
+  SONARE_CHECK_MSG(left.sample_rate() == right.sample_rate(), ErrorCode::InvalidParameter,
+                   "room morph stereo channels must have the same sample rate");
+  RoomMorphProcessor processor(config, sonare::acoustic::ReceiverLayout::MonoAndPair);
+  if (left.empty()) {
+    return {left, right, {}};
+  }
+  const int sr = left.sample_rate();
+
+  constexpr int kBlock = 256;
+  processor.prepare(static_cast<double>(sr), kBlock);
+
+  const int tail = processor.tail_samples();
+  // Same compensation rule as room_morph(): only a loaded RIR delays the output.
+  const int latency = processor.target_ir_size() > 0 ? processor.latency_samples() : 0;
+
+  const size_t out_len = left.size() + static_cast<size_t>(tail);
+  const size_t total = out_len + static_cast<size_t>(latency);
+  std::vector<float> buf_l(total, 0.0f);
+  std::vector<float> buf_r(total, 0.0f);
+  std::copy(left.begin(), left.end(), buf_l.begin());
+  std::copy(right.begin(), right.end(), buf_r.begin());
+
+  for (size_t off = 0; off < total; off += static_cast<size_t>(kBlock)) {
+    const int nn = static_cast<int>(std::min<size_t>(static_cast<size_t>(kBlock), total - off));
+    float* blk[2] = {buf_l.data() + off, buf_r.data() + off};
+    processor.process(blk, 2, nn);
+  }
+
+  const auto aligned = [&](const std::vector<float>& buf) {
+    return Audio::from_vector(
+        std::vector<float>(buf.begin() + latency, buf.begin() + latency + out_len), sr);
+  };
+  return {aligned(buf_l), aligned(buf_r), processor.diagnostics()};
 }
 
 }  // namespace sonare::effects::acoustic

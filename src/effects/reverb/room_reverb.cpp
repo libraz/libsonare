@@ -26,7 +26,8 @@ sonare::acoustic::RirSynthConfig rir_config_from(const RoomReverbConfig& config)
 
 }  // namespace
 
-RoomReverb::RoomReverb(RoomReverbConfig config) : config_(config) {
+RoomReverb::RoomReverb(RoomReverbConfig config, sonare::acoustic::ReceiverLayout layout)
+    : config_(config), layout_(layout) {
   // uniform_shoebox clamps rather than validates, so an out-of-range absorption
   // would reach validate_shoebox already inside the range and be accepted as a
   // different room. The insert factory rejects the same value; so does the C
@@ -45,6 +46,14 @@ RoomReverb::RoomReverb(RoomReverbConfig config) : config_(config) {
       sonare::acoustic::validate_rir_synth_config(rir_config_from(config_));
   SONARE_CHECK_MSG(!has_error(synthesis), ErrorCode::InvalidParameter,
                    "room reverb image-source order, RIR length cap, or air absorption is invalid");
+  if (layout_ == sonare::acoustic::ReceiverLayout::MonoAndPair) {
+    const std::vector<Diagnostic> pair = sonare::acoustic::validate_receiver_pair(
+        room, sonare::acoustic::SourceListener{config_.source, config_.listener},
+        config_.receiver_spacing_m);
+    SONARE_CHECK_MSG(
+        !has_error(pair), ErrorCode::InvalidParameter,
+        "room reverb receiver pair is invalid: " + sonare::acoustic::first_error_text(pair));
+  }
 
   // Honour the configured mix at construction (sibling reverbs do the same).
   set_parameter(0, config_.dry_wet);
@@ -57,8 +66,8 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   const RirSynthConfig rc = rir_config_from(config_);
 
   const int sr = sample_rate > 0.0 ? static_cast<int>(std::lround(sample_rate)) : 48000;
-  const RirSynthResult res =
-      synthesize_rir(room, SourceListener{config_.source, config_.listener}, sr, rc);
+  const SourceListener placement{config_.source, config_.listener};
+  const RirSynthResult res = synthesize_rir(room, placement, sr, rc);
 
   // Geometry, order, length cap and air absorption were all validated at
   // construction; the host sample rate was not, and it is the one synthesis
@@ -68,6 +77,14 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   // refusal is raised with the reason the synthesizer gave.
   SONARE_CHECK_MSG(!has_error(res.diagnostics), ErrorCode::InvalidParameter,
                    "room reverb RIR synthesis failed: " + first_error_text(res.diagnostics));
+  RirPairResult pair;
+  const bool with_pair = layout_ == ReceiverLayout::MonoAndPair;
+  if (with_pair) {
+    pair = synthesize_rir_pair(room, placement, config_.receiver_spacing_m, sr, rc);
+    SONARE_CHECK_MSG(
+        !has_error(pair.diagnostics), ErrorCode::InvalidParameter,
+        "room reverb RIR pair synthesis failed: " + first_error_text(pair.diagnostics));
+  }
 
   // Establish partition size and per-channel buffers, then load the synthesized
   // IR (rebuilds the convolvers). The RIR carries its physical 1/(4*pi*d)
@@ -76,7 +93,13 @@ void RoomReverb::prepare(double sample_rate, int max_block_size) {
   // sibling reverbs.
   suppress_default_ir_synthesis();
   ConvolutionReverb::prepare(sample_rate, max_block_size);
-  load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
+  if (with_pair) {
+    load_ir_set_unit_energy(std::vector<float>(res.rir.begin(), res.rir.end()),
+                            std::vector<float>(pair.left.begin(), pair.left.end()),
+                            std::vector<float>(pair.right.begin(), pair.right.end()));
+  } else {
+    load_ir_unit_energy(res.rir.data(), static_cast<int>(res.rir.size()));
+  }
 }
 
 }  // namespace sonare::effects::reverb

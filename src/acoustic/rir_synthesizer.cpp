@@ -425,15 +425,6 @@ LateReverbConfig late_config_for(const RirPlan& plan, const RirSynthConfig& conf
   return late_cfg;
 }
 
-// Appends each diagnostic of @p from whose code @p into does not already carry.
-void append_new_codes(std::vector<Diagnostic>& into, const std::vector<Diagnostic>& from) {
-  for (const Diagnostic& d : from) {
-    const bool seen = std::any_of(into.begin(), into.end(),
-                                  [&](const Diagnostic& e) { return e.code == d.code; });
-    if (!seen) into.push_back(d);
-  }
-}
-
 // Fixed-point coordinates for a receiver diagnostic message.
 std::string format_point(const Vec3& p) {
   char buffer[96];
@@ -570,8 +561,8 @@ RirPairResult synthesize_rir_pair(const ShoeboxRoom& room, const SourceListener&
   result.left = Audio::from_vector(std::move(left_out), sample_rate);
   result.right = Audio::from_vector(std::move(right_out), sample_rate);
 
-  append_new_codes(result.diagnostics, left_diagnostics);
-  append_new_codes(result.diagnostics, right_diagnostics);
+  append_new_diagnostic_codes(result.diagnostics, left_diagnostics);
+  append_new_diagnostic_codes(result.diagnostics, right_diagnostics);
   return result;
 }
 

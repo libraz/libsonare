@@ -6,7 +6,8 @@
 ///        absorption, then convolves the signal with it.
 
 #include "acoustic/geometry.h"
-#include "acoustic/late_reverb.h"  // AirAbsorption
+#include "acoustic/late_reverb.h"      // AirAbsorption
+#include "acoustic/rir_synthesizer.h"  // ReceiverLayout
 #include "acoustic/room_types.h"
 #include "effects/reverb/convolution_reverb.h"
 
@@ -33,6 +34,9 @@ struct RoomReverbConfig {
   /// climate.
   bool air_absorption_enabled = false;
   sonare::acoustic::AirAbsorption air{};
+  /// Spacing (m) of the omnidirectional receiver pair centred on the listener, in (0, 4].
+  /// Read only by the stereo layout (`ReceiverLayout::MonoAndPair`).
+  float receiver_spacing_m = 0.5f;
 };
 
 /// @brief Convolution reverb whose impulse response is synthesized from room
@@ -57,14 +61,23 @@ struct RoomReverbConfig {
 /// convolution reverb (see ConvolutionReverb::load_ir_unit_energy). Offline
 /// consumers that want the physical scale call acoustic::synthesize_rir
 /// directly, which is unchanged.
+///
+/// With `ReceiverLayout::MonoAndPair` (the default) the constructor also refuses a receiver
+/// pair outside the room, and prepare() loads the mono RIR plus the pair RIRs: one channel
+/// runs the mono RIR, two channels run left/right. The mono samples are unchanged, but
+/// tail_samples() is the longest of the three RIRs, so an early-dominated room may report a
+/// few more samples (up to about 35 at 48 kHz and 0.5 m) than the mono RIR alone.
 class RoomReverb : public ConvolutionReverb {
  public:
-  explicit RoomReverb(RoomReverbConfig config = {});
+  explicit RoomReverb(
+      RoomReverbConfig config = {},
+      sonare::acoustic::ReceiverLayout layout = sonare::acoustic::ReceiverLayout::MonoAndPair);
 
   void prepare(double sample_rate, int max_block_size) override;
 
  private:
   RoomReverbConfig config_{};
+  sonare::acoustic::ReceiverLayout layout_ = sonare::acoustic::ReceiverLayout::MonoAndPair;
 };
 
 }  // namespace sonare::effects::reverb

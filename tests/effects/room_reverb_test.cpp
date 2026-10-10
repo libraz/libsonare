@@ -14,6 +14,8 @@
 #include "core/audio.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "metering/lufs.h"
+#include "rt/biquad_design.h"
+#include "util/constants.h"
 #include "util/exception.h"
 
 using sonare::Audio;
@@ -92,6 +94,48 @@ float rms_db(const std::vector<float>& samples) {
   for (float sample : samples) energy += static_cast<double>(sample) * sample;
   return 10.0f *
          std::log10(static_cast<float>(energy / static_cast<double>(samples.size())) + 1e-30f);
+}
+
+// The reference room of the stereo criteria: 8x6x3.5 m, uniform absorption 0.15.
+RoomReverbConfig reference_stereo_config() {
+  RoomReverbConfig config;
+  config.dims = {8.0f, 6.0f, 3.5f};
+  config.source = {2.0f, 3.0f, 1.2f};
+  config.listener = {6.0f, 3.0f, 1.5f};
+  config.absorption = 0.15f;
+  config.seed = 1u;
+  config.dry_wet = 1.0f;
+  config.receiver_spacing_m = 0.5f;
+  return config;
+}
+
+// 4th-order Butterworth highpass at 1 kHz: two cascaded RBJ sections.
+std::vector<double> highpass_1khz(const std::vector<float>& samples) {
+  using sonare::constants::kPiD;
+  std::vector<double> out(samples.begin(), samples.end());
+  for (const int k : {1, 3}) {
+    sonare::rt::BiquadStateD section;
+    section.set(sonare::rt::rbj_highpass_d(1000.0, static_cast<double>(kLevelSampleRate),
+                                           1.0 / (2.0 * std::cos(k * kPiD / 8.0))));
+    for (double& x : out) x = section.process(x);
+  }
+  return out;
+}
+
+double correlation(const std::vector<double>& a, const std::vector<double>& b) {
+  double ab = 0.0, aa = 0.0, bb = 0.0, ma = 0.0, mb = 0.0;
+  for (size_t i = 0; i < a.size(); ++i) {
+    ma += a[i];
+    mb += b[i];
+  }
+  ma /= static_cast<double>(a.size());
+  mb /= static_cast<double>(b.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    ab += (a[i] - ma) * (b[i] - mb);
+    aa += (a[i] - ma) * (a[i] - ma);
+    bb += (b[i] - mb) * (b[i] - mb);
+  }
+  return ab / std::sqrt(aa * bb);
 }
 
 }  // namespace
@@ -293,4 +337,35 @@ TEST_CASE("the normalizing IR loader refuses an impulse response with no energy"
   impulse[3] = 0.001f;
   REQUIRE_NOTHROW(reverb.load_ir_unit_energy(impulse.data(), static_cast<int>(impulse.size())));
   REQUIRE(reverb.ir_size() == static_cast<int>(impulse.size()));
+}
+
+TEST_CASE("a stereo RoomReverb decorrelates its reverberation above 1 kHz",
+          "[.][slow][effects][reverb][acoustic][stereo]") {
+  RoomReverb reverb(reference_stereo_config());
+  reverb.prepare(static_cast<double>(kLevelSampleRate), kBlock);
+  const std::vector<float> input = noise(static_cast<size_t>(kLevelSampleRate) * 3);
+  std::vector<float> left = input;
+  std::vector<float> right = input;
+  for (size_t off = 0; off + kBlock <= left.size(); off += kBlock) {
+    float* block[2] = {left.data() + off, right.data() + off};
+    reverb.process(block, 2, kBlock);
+  }
+  const double rho = correlation(highpass_1khz(left), highpass_1khz(right));
+  INFO("correlation above 1 kHz " << rho);
+  REQUIRE(std::abs(rho) < 0.3);
+}
+
+TEST_CASE("RoomReverb refuses a receiver pair that leaves the room at construction",
+          "[effects][reverb][acoustic][stereo][numeric]") {
+  RoomReverbConfig config = reference_stereo_config();
+  config.listener = {6.0f, 0.1f, 1.5f};  // 0.1 m from the y = 0 wall
+  try {
+    RoomReverb reverb(config);
+    FAIL("a receiver outside the room was accepted");
+  } catch (const SonareException& error) {
+    REQUIRE(error.code() == ErrorCode::InvalidParameter);
+    REQUIRE(std::string(error.what()).find("acoustic.receiver_outside_room") != std::string::npos);
+  }
+  // The mono layout never places the pair, so the same listener is accepted there.
+  REQUIRE_NOTHROW(RoomReverb(config, sonare::acoustic::ReceiverLayout::Mono));
 }

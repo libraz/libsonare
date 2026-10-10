@@ -829,6 +829,52 @@ TEST_CASE("effects.acoustic.roomMorph rejects a crossfade the caller cannot see 
           render(std::string("{") + geometry + R"(,"crossfadeMs":0})"));
 }
 
+TEST_CASE("acoustic room inserts read receiverSpacingM with 0 as the library default",
+          "[mastering][insert_factory][effects][acoustic][stereo]") {
+  constexpr const char* geometry =
+      R"("lengthM":8,"widthM":6,"heightM":3.5,"absorption":0.15,"maxSeconds":0.3,"seed":3,)"
+      R"("dryWet":1,"sourceTailSuppression":0)";
+  constexpr int block = 256;
+  // Stereo, since one channel runs the mono RIR whatever the spacing.
+  const auto render = [](const std::string& name, const std::string& params) {
+    auto processor = make_insert(name, params);
+    REQUIRE(processor != nullptr);
+    std::vector<float> left(static_cast<size_t>(block) * 12, 0.0f);
+    std::vector<float> right(left.size(), 0.0f);
+    left[0] = 1.0f;
+    right[0] = 1.0f;
+    processor->prepare(48000.0, block);
+    for (size_t off = 0; off < left.size(); off += static_cast<size_t>(block)) {
+      float* blk[2] = {left.data() + off, right.data() + off};
+      processor->process(blk, 2, block);
+    }
+    left.insert(left.end(), right.begin(), right.end());
+    return left;
+  };
+  const auto with = [&](const char* spacing) {
+    return std::string("{") + geometry + (spacing[0] != '\0' ? "," : "") + spacing + "}";
+  };
+
+  for (const char* name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    DYNAMIC_SECTION(name) {
+      REQUIRE(ListContains(insert_param_names(name), "receiverSpacingM"));
+      const std::vector<float> omitted = render(name, with(""));
+      REQUIRE(render(name, with(R"("receiverSpacingM":0)")) == omitted);
+      REQUIRE(render(name, with(R"("receiverSpacingM":0.5)")) == omitted);
+      REQUIRE_FALSE(render(name, with(R"("receiverSpacingM":1.0)")) == omitted);
+      for (const char* refused : {R"("receiverSpacingM":4.5)", R"("receiverSpacingM":-0.5)"}) {
+        try {
+          auto processor = make_insert(name, with(refused));
+          (void)processor;
+          FAIL("receiver spacing " << refused << " was accepted");
+        } catch (const sonare::SonareException& error) {
+          REQUIRE(error.code() == sonare::ErrorCode::InvalidParameter);
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("effects.reverb.room air absorption shortens the round-tripped high-band RT60",
           "[.][slow][mastering][insert_factory][effects][acoustic]") {
   // Reachability proof: this drives the insert through make_insert()/JSON
