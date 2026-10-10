@@ -25,10 +25,12 @@ from ._project import chord_symbol_from_analysis as chord_symbol_from_analysis
 from ._project import controller_profile_names as controller_profile_names
 from ._project import key_mode_from_analysis as key_mode_from_analysis
 from ._project import project_abi_version as project_abi_version
+from ._project import synth_engine_param_info as synth_engine_param_info
 from ._project import synth_enum_tables as synth_enum_tables
 from ._project import synth_gs_drum_kit_is_voiced_apart as synth_gs_drum_kit_is_voiced_apart
 from ._project import synth_gs_drum_kit_name as synth_gs_drum_kit_name
 from ._project import synth_gs_variation_is_voiced_apart as synth_gs_variation_is_voiced_apart
+from ._project import synth_patch_param_info as synth_patch_param_info
 from ._project import synth_preset_names as synth_preset_names
 from ._project import synth_preset_patch as synth_preset_patch
 from ._project_edit import PART_RIG_ALL_PARTS as PART_RIG_ALL_PARTS

@@ -278,7 +278,9 @@ class _EngineMidiMixin:
         bank = sample_bank if sample_bank is not None else resolved.sample_bank
         binding = SonareSynthInstrumentBinding()
         binding.destination_id = _to_c_uint32(destination_id, "destination_id")
-        binding.patch = resolved._to_c()
+        # Held until the C call returns: the patch borrows its engine params.
+        c_patch = resolved._to_c()
+        binding.patch = c_patch
         binding.use_gm_programs = 1 if resolved.use_gm_programs else 0
         binding.sample_bank = bank._require_handle() if bank is not None else None
         _check(

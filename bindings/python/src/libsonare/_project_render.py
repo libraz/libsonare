@@ -261,9 +261,14 @@ class _ProjectRenderMixin:
             bindings = [(dst, _synth_patch_arg(patch)) for dst, patch in instruments]
         count = len(bindings)
         c_bindings = (SonareSynthInstrumentBinding * count)()
+        # Each converted patch borrows its engine params; copying it into the
+        # binding array copies bytes only, so these stay alive past the C call.
+        c_patches = []
         for i, (dst, patch) in enumerate(bindings):
             c_bindings[i].destination_id = dst
-            c_bindings[i].patch = patch._to_c()
+            c_patch = patch._to_c()
+            c_patches.append(c_patch)
+            c_bindings[i].patch = c_patch
             # Per binding, because the C struct carries both per binding; an
             # unstated patch field falls back to the per-call argument.
             follow_gm = patch.use_gm_programs

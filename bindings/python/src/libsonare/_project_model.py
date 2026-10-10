@@ -18,6 +18,7 @@ without ``SONARE_WITH_ARRANGEMENT`` every call returns
 from __future__ import annotations
 
 import ctypes
+import json
 import math
 import numbers
 from collections.abc import Iterator, Mapping, Sequence
@@ -28,6 +29,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
+    from ._types_capabilities import MasteringInsertParamInfo
 
 from ._errors import ErrorCode, SonareError, _not_supported
 from ._ffi_types_mastering_project import (
@@ -103,12 +105,14 @@ from ._runtime import (
     SonareMidiCcBinding,
     SonareMidiEventPod,
     SonareSf2InstrumentConfig,
+    SonareSynthEngineParam,
     SonareSynthModRouting,
     SonareSynthPatch,
     SonareValueError,
     _check,
     _curve_value,
     _get_lib,
+    _last_error,
     _resolve_enum,
     _to_c_int,
     _to_c_size_t,
@@ -696,12 +700,24 @@ class SynthPatch:
     ``mod_routings`` tuple REPLACES the base mod matrix, and an empty tuple
     clears it, while ``None`` keeps it.
 
-    Mode-specific deep parameters (FM operator stacks, modal mode tables,
-    drawbar registrations, kit pieces, piano strings) travel inside the named
-    presets; the struct exposes the wrapper sections most engines share. Two
-    exceptions: ``waveform`` is read by the subtractive engine only, and on a
-    percussion channel the whole section is discarded in favor of the per-note
-    drum-kit patch -- only ``gain``, ``bus_drive`` and ``polyphony`` still act.
+    Every engine mode except ``"sample"`` is audible from ``engine_mode`` alone:
+    the engine section is the named preset's when that preset uses the selected
+    engine, else the engine's base preset's, so the bare ``"fm"``, ``"modal"``,
+    ``"percussion"`` and ``"karplus-strong"`` modes voice their base preset
+    (``"percussion"`` is the GM drum kit) and follow that preset's bank version.
+    ``"sample"`` without a bank stays silent. The struct exposes the wrapper
+    sections most engines share; ``waveform`` is read by the subtractive engine
+    only, and on a percussion channel the whole section is discarded in favor of
+    the per-note drum-kit patch -- only ``gain``, ``bus_drive`` and
+    ``polyphony`` still act.
+
+    ``engine_params`` sets fields of the selected engine's own section by public
+    key (``"bowForce"``, ``"ops1.level"``; the keys and their ranges, units and
+    defaults are :func:`synth_engine_param_info`). A key outside the selected
+    engine's section, a non-finite value, a fractional value for an integer
+    field or a value outside a bounded field's range is refused with a coded
+    :class:`SonareError` naming the key; nothing is clamped. A patch read back
+    from a preset carries ``None`` here.
 
     ``env_to_cutoff_cents`` is the filter envelope's cutoff depth, in cents at
     full envelope; ``0`` leaves the envelope's cutoff contribution off. The
@@ -805,12 +821,13 @@ class SynthPatch:
     # what leaves Project.bounce_with_synth_instrument's per-call
     # `auto_select_gm` reachable as the fallback.
     use_gm_programs: bool | None = None
+    engine_params: Mapping[str, float] | None = None
 
     def _to_c(self) -> SonareSynthPatch:
         if not isinstance(self.preset, str):
             raise TypeError("synth patch preset must be a string")
         c = SonareSynthPatch()
-        c.struct_version = 7
+        c.struct_version = 8
 
         # A field left at None keeps the base; anything supplied — including a
         # zero — is marked present so the core overrides with it.
@@ -908,6 +925,24 @@ class SynthPatch:
             0.0 if self.sample_start_offset is None else float(self.sample_start_offset)
         )
         c.sample_key_track = _sample_key_track_value(self.sample_key_track)
+        if self.engine_params:
+            # The struct borrows the key bytes and the array, and copying the
+            # struct into a binding array copies bytes only, so the caller keeps
+            # the returned object alive until the C call returns.
+            keys: list[bytes] = []
+            for key in self.engine_params:
+                if not isinstance(key, str):
+                    raise TypeError("engine_params keys must be strings")
+                keys.append(_utf8_arg(key, "engine_params key"))
+            params = (SonareSynthEngineParam * len(keys))()
+            for i, (raw_key, value) in enumerate(
+                zip(keys, self.engine_params.values(), strict=True)
+            ):
+                params[i].key = raw_key
+                params[i].value = float(value)
+            c.engine_params = ctypes.cast(params, ctypes.POINTER(SonareSynthEngineParam))
+            c.engine_param_count = len(keys)
+            c._keepalive = (keys, params)
         return c
 
     @classmethod
@@ -986,6 +1021,47 @@ def synth_preset_names() -> list[str]:
     if not raw:
         return []
     return [name for name in raw.decode("utf-8").split("\n") if name]
+
+
+def _synth_param_info(raw: bytes | None, what: str) -> list[MasteringInsertParamInfo]:
+    if raw is None:
+        raise _last_error(int(ErrorCode.INVALID_PARAMETER), what)
+    return cast("list[MasteringInsertParamInfo]", json.loads(raw.decode("utf-8")))
+
+
+def synth_engine_param_info(engine_mode: str | int) -> list[MasteringInsertParamInfo]:
+    """Describe every :attr:`SynthPatch.engine_params` key of ``engine_mode``.
+
+    One descriptor per field of that engine's own section, in the layout of
+    :func:`mastering_insert_param_info` plus an ``integer`` flag (present and
+    true for a field taking whole numbers). ``min`` / ``max`` are present only
+    for a field with a closed range, which a value outside is refused rather than
+    clamped; ``default`` is the engine's base preset value. The ``"default"``,
+    ``"subtractive"`` and ``"sample"`` modes have no engine section and give an
+    empty list. An unknown mode raises.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_engine_param_info"):
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
+    mode = _synth_enum_value(engine_mode, _SYNTH_ENGINE_MODES, "engine mode")
+    return _synth_param_info(
+        lib.sonare_synth_engine_param_info(_to_c_int(mode, "engine_mode")),
+        "synth engine param info",
+    )
+
+
+def synth_patch_param_info() -> list[MasteringInsertParamInfo]:
+    """Describe every numeric :class:`SynthPatch` wrapper field.
+
+    One descriptor per field, in the layout of :func:`synth_engine_param_info`:
+    ``name`` is the binding spelling of the field, ``min`` / ``max`` the range it
+    is clamped to and ``default`` the init patch's value. Enum fields, the preset
+    name and the mod matrix are not described.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_synth_patch_param_info"):
+        raise _not_supported("libsonare was built without the NativeSynth ABI")
+    return _synth_param_info(lib.sonare_synth_patch_param_info(), "synth patch param info")
 
 
 def synth_gs_drum_kit_name(program: int) -> str | None:

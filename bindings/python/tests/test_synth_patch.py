@@ -3,6 +3,8 @@ Project.bounce_with_synth_instrument and RealtimeEngine.set_synth_instrument."""
 
 from __future__ import annotations
 
+import gc
+
 import numpy as np
 import pytest
 
@@ -14,10 +16,12 @@ from libsonare import (
     SonareError,
     SynthModRouting,
     SynthPatch,
+    synth_engine_param_info,
     synth_enum_tables,
     synth_gs_drum_kit_is_voiced_apart,
     synth_gs_drum_kit_name,
     synth_gs_variation_is_voiced_apart,
+    synth_patch_param_info,
     synth_preset_names,
     synth_preset_patch,
 )
@@ -236,7 +240,7 @@ def test_synth_patch_retrigger_round_trips_and_refuses_unknown_values() -> None:
     for ordinal, name in enumerate(("default", "free", "note")):
         assert SynthPatch._from_c(SynthPatch(retrigger=name)._to_c()).retrigger == name
         assert SynthPatch._from_c(SynthPatch(retrigger=ordinal)._to_c()).retrigger == name
-    assert SynthPatch()._to_c().struct_version == 7
+    assert SynthPatch()._to_c().struct_version == 8
     assert synth_preset_patch("saw-lead").retrigger == "free"
     with pytest.raises(ValueError):
         SynthPatch(retrigger="phase")._to_c()
@@ -660,3 +664,127 @@ def test_a_gs_variation_bank_reports_whether_it_is_voiced_or_falls_back() -> Non
     assert synth_gs_variation_is_voiced_apart(127, 0) is not None  # the last in range
     assert synth_gs_variation_is_voiced_apart(0, -1) is None
     assert synth_gs_variation_is_voiced_apart(0, 128) is None
+
+
+def _peak(audio: np.ndarray) -> float:
+    return float(np.max(np.abs(audio)))
+
+
+@pytest.mark.parametrize(
+    "engine_mode",
+    [name for name in EXPECTED_SYNTH_ENUM_TABLES["engine_modes"] if name != "sample"],
+)
+def test_every_engine_mode_but_sample_is_audible_bare(engine_mode: str) -> None:
+    project = _build_midi_only_project()
+    try:
+        audio = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode=engine_mode), total_frames=24000
+        )
+        assert _peak(audio) > 10 ** (-60 / 20)
+        silent = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode="sample"), total_frames=24000
+        )
+        assert _peak(silent) == 0.0
+    finally:
+        project.close()
+
+
+def test_engine_params_change_a_render_and_default_to_none() -> None:
+    assert SynthPatch().engine_params is None
+    assert SynthPatch()._to_c().engine_param_count == 0
+    project = _build_midi_only_project()
+    try:
+        soft = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.15}),
+            total_frames=24000,
+        )
+        hard = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.9}),
+            total_frames=24000,
+        )
+        assert _peak(soft) > 0.0 and _peak(hard) > 0.0
+        assert not np.array_equal(soft, hard)
+    finally:
+        project.close()
+
+
+def test_engine_params_refusals_are_coded_errors_naming_the_key() -> None:
+    project = _build_midi_only_project()
+    try:
+        cases = [
+            ("bowed-string", {"noSuchKey": 1.0}, "noSuchKey"),
+            ("bowed-string", {"bowForce": 7.0}, "bowForce"),
+            ("bowed-string", {"bowForce": float("nan")}, "bowForce"),
+            ("fm", {"bowForce": 0.5}, "bowForce"),
+            ("percussion", {"numModes": 2.5}, "numModes"),
+        ]
+        for engine_mode, params, key in cases:
+            with pytest.raises(SonareError, match=key) as err:
+                project.bounce_with_synth_instrument(
+                    SynthPatch(engine_mode=engine_mode, engine_params=params), total_frames=128
+                )
+            assert err.value.code == 4
+    finally:
+        project.close()
+
+
+def test_engine_param_info_shape() -> None:
+    for mode in ("default", "subtractive", "sample"):
+        assert synth_engine_param_info(mode) == []
+    bowed = synth_engine_param_info("bowed-string")
+    by_name = {row["name"]: row for row in bowed}
+    force = by_name["bowForce"]
+    assert force["type"] == "number"
+    assert force["min"] <= force["default"] <= force["max"]
+    assert force["unit"]
+    assert synth_engine_param_info(SYNTH_ENUM_TABLES["engine_modes"].index("bowed-string")) == bowed
+    with pytest.raises(Exception, match="engine mode"):
+        synth_engine_param_info(99)
+    patch_rows = synth_patch_param_info()
+    names = {row["name"] for row in patch_rows}
+    assert {"gain", "busDrive"} <= names
+    assert all(row["unit"] for row in patch_rows)
+
+
+def _engine_params_patch() -> SynthPatch:
+    # Built in its own scope: the dict and its keys are garbage once this
+    # returns, so only the patch's own conversion keeps them alive.
+    key = "bow" + "Force"
+    return SynthPatch(engine_mode="bowed-string", engine_params={key: 0.9})
+
+
+def test_engine_params_survive_garbage_collection_until_the_call_returns() -> None:
+    project = _build_midi_only_project()
+    try:
+        expected = project.bounce_with_synth_instrument(
+            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.9}),
+            total_frames=24000,
+        )
+        patch = _engine_params_patch()
+        c_patch = patch._to_c()
+        del patch
+        gc.collect()
+        assert c_patch.engine_param_count == 1
+        assert c_patch.engine_params[0].key == b"bowForce"
+        assert c_patch.engine_params[0].value == 0.9
+        again = project.bounce_with_synth_instrument(_engine_params_patch(), total_frames=24000)
+        gc.collect()
+        assert np.array_equal(again, expected)
+    finally:
+        project.close()
+
+
+def test_engine_params_reach_the_live_engine_binding() -> None:
+    engine = RealtimeEngine()
+    try:
+        engine.set_synth_instrument(
+            SynthPatch(engine_mode="bowed-string", engine_params={"bowForce": 0.5}),
+            destination_id=1,
+        )
+        with pytest.raises(SonareError, match="noSuchKey"):
+            engine.set_synth_instrument(
+                SynthPatch(engine_mode="bowed-string", engine_params={"noSuchKey": 0.5}),
+                destination_id=1,
+            )
+    finally:
+        engine.close()

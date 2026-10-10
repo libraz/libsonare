@@ -22,6 +22,7 @@ MasteringInsertParamUnit = Literal[
     "samples",
     "m",
     "cm",
+    "mm",
     "deg",
     "percent",
     "degC",
