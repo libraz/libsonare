@@ -3,6 +3,880 @@
     "engine": 3,
     "project": 2
   },
+  "chain": {
+    "aliases": [
+      {
+        "aliases": [
+          "repair.denoise"
+        ],
+        "key": "repair.denoise.enabled"
+      },
+      {
+        "aliases": [
+          "repair.nFft"
+        ],
+        "key": "repair.denoise.nFft"
+      },
+      {
+        "aliases": [
+          "repair.hopLength"
+        ],
+        "key": "repair.denoise.hopLength"
+      },
+      {
+        "aliases": [
+          "repair.ddAlpha"
+        ],
+        "key": "repair.denoise.ddAlpha"
+      },
+      {
+        "aliases": [
+          "repair.reductionDb"
+        ],
+        "key": "repair.denoise.reductionDb"
+      },
+      {
+        "aliases": [
+          "repair.gainFloor"
+        ],
+        "key": "repair.denoise.gainFloor"
+      },
+      {
+        "aliases": [
+          "eq.tiltDb"
+        ],
+        "key": "eq.tilt.tiltDb"
+      },
+      {
+        "aliases": [
+          "eq.pivotHz"
+        ],
+        "key": "eq.tilt.pivotHz"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.crossover.slope"
+        ],
+        "key": "dynamics.multibandComp.slope"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.crossover.mode"
+        ],
+        "key": "dynamics.multibandComp.mode"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.crossover.firKernelSize"
+        ],
+        "key": "dynamics.multibandComp.firKernelSize"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.cutoff<i>Hz"
+        ],
+        "key": "dynamics.multibandComp.crossover.cutoffsHz.<i>"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.lowCutoffHz"
+        ],
+        "key": "dynamics.multibandComp.crossover.cutoffsHz.0"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.highCutoffHz"
+        ],
+        "key": "dynamics.multibandComp.crossover.cutoffsHz.1"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.thresholdDb"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.thresholdDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.ratio"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.ratio"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.attackMs"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.attackMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.releaseMs"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.releaseMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.kneeDb"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.kneeDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.makeupGainDb"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.makeupGainDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.autoMakeup"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.autoMakeup"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.detector"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.detector"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.sidechainHpfEnabled"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.sidechainHpfEnabled"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.sidechainHpfHz"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.sidechainHpfHz"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.pdrTimeMs"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.pdrTimeMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.band<i>.pdrReleaseScale"
+        ],
+        "key": "dynamics.multibandComp.bands.<i>.pdrReleaseScale"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.lowThresholdDb"
+        ],
+        "key": "dynamics.multibandComp.bands.0.thresholdDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.lowRatio"
+        ],
+        "key": "dynamics.multibandComp.bands.0.ratio"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.lowAttackMs"
+        ],
+        "key": "dynamics.multibandComp.bands.0.attackMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.lowReleaseMs"
+        ],
+        "key": "dynamics.multibandComp.bands.0.releaseMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.midThresholdDb"
+        ],
+        "key": "dynamics.multibandComp.bands.1.thresholdDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.midRatio"
+        ],
+        "key": "dynamics.multibandComp.bands.1.ratio"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.midAttackMs"
+        ],
+        "key": "dynamics.multibandComp.bands.1.attackMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.midReleaseMs"
+        ],
+        "key": "dynamics.multibandComp.bands.1.releaseMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.highThresholdDb"
+        ],
+        "key": "dynamics.multibandComp.bands.2.thresholdDb"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.highRatio"
+        ],
+        "key": "dynamics.multibandComp.bands.2.ratio"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.highAttackMs"
+        ],
+        "key": "dynamics.multibandComp.bands.2.attackMs"
+      },
+      {
+        "aliases": [
+          "dynamics.multibandComp.highReleaseMs"
+        ],
+        "key": "dynamics.multibandComp.bands.2.releaseMs"
+      }
+    ],
+    "lists": [
+      {
+        "key": "dynamics.multibandComp.crossover.cutoffsHz",
+        "maxItems": 63,
+        "minItems": 1,
+        "processor": null
+      },
+      {
+        "key": "dynamics.multibandComp.bands",
+        "maxItems": 64,
+        "minItems": 2,
+        "processor": "dynamics.compressor"
+      }
+    ],
+    "params": [
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.compressor.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.deesser.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": null,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 0,
+        "minExclusive": true,
+        "name": "dynamics.multibandComp.crossover.cutoffsHz",
+        "rtSafe": false,
+        "scale": "log",
+        "slot": null,
+        "type": "number",
+        "uiMax": 20000,
+        "uiMin": 20,
+        "unit": "Hz"
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.multibandComp.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": 513,
+        "dependsOn": [],
+        "id": null,
+        "max": 65535,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 1,
+        "minExclusive": false,
+        "name": "dynamics.multibandComp.firKernelSize",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "samples"
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "dynamics.transientShaper.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "eq.tilt.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "loudness.applyGainAtInputRate",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": -1,
+        "dependsOn": [],
+        "id": null,
+        "max": 0,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "loudness.ceilingDb",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "dBFS"
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "loudness.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": 12,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 0,
+        "minExclusive": false,
+        "name": "loudness.maxLimiterGainReductionDb",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "dB"
+      },
+      {
+        "choices": null,
+        "default": 50,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": 0,
+        "minExclusive": false,
+        "name": "loudness.releaseMs",
+        "rtSafe": false,
+        "scale": "log",
+        "slot": null,
+        "type": "number",
+        "uiMax": 10000,
+        "uiMin": 0.1,
+        "unit": "ms"
+      },
+      {
+        "choices": null,
+        "default": -14,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "loudness.targetLufs",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "LUFS"
+      },
+      {
+        "choices": [
+          {
+            "name": "1",
+            "value": 1
+          },
+          {
+            "name": "2",
+            "value": 2
+          },
+          {
+            "name": "4",
+            "value": 4
+          },
+          {
+            "name": "8",
+            "value": 8
+          },
+          {
+            "name": "16",
+            "value": 16
+          }
+        ],
+        "default": 4,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "loudness.truePeakOversample",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "ratio"
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "maximizer.truePeakLimiter.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.declick.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.declip.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.decrackle.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.dehum.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.denoise.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": null,
+        "dependsOn": [],
+        "id": null,
+        "max": 1,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.denoise.gainFloor",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "number",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": "none"
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "repair.dereverb.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "saturation.exciter.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "saturation.tape.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "spectral.airBand.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "stereo.imager.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      },
+      {
+        "choices": null,
+        "default": false,
+        "dependsOn": [],
+        "id": null,
+        "max": null,
+        "maxExclusive": false,
+        "maxRelativeTo": null,
+        "min": null,
+        "minExclusive": false,
+        "name": "stereo.monoMaker.enabled",
+        "rtSafe": false,
+        "scale": "linear",
+        "slot": null,
+        "type": "boolean",
+        "uiMax": null,
+        "uiMin": null,
+        "unit": null
+      }
+    ],
+    "stages": [
+      {
+        "enabledKey": "repair.declick.enabled",
+        "prefix": "repair.declick",
+        "processor": "repair.declick"
+      },
+      {
+        "enabledKey": "repair.declip.enabled",
+        "prefix": "repair.declip",
+        "processor": "repair.declip"
+      },
+      {
+        "enabledKey": "repair.decrackle.enabled",
+        "prefix": "repair.decrackle",
+        "processor": "repair.decrackle"
+      },
+      {
+        "enabledKey": "repair.dehum.enabled",
+        "prefix": "repair.dehum",
+        "processor": "repair.dehum"
+      },
+      {
+        "enabledKey": "repair.dereverb.enabled",
+        "prefix": "repair.dereverb",
+        "processor": "repair.dereverbClassical"
+      },
+      {
+        "enabledKey": "repair.denoise.enabled",
+        "prefix": "repair.denoise",
+        "processor": "repair.denoiseClassical"
+      },
+      {
+        "enabledKey": "eq.tilt.enabled",
+        "prefix": "eq.tilt",
+        "processor": "eq.tilt"
+      },
+      {
+        "enabledKey": "dynamics.deesser.enabled",
+        "prefix": "dynamics.deesser",
+        "processor": "dynamics.deesser"
+      },
+      {
+        "enabledKey": "dynamics.transientShaper.enabled",
+        "prefix": "dynamics.transientShaper",
+        "processor": "dynamics.transientShaper"
+      },
+      {
+        "enabledKey": "dynamics.compressor.enabled",
+        "prefix": "dynamics.compressor",
+        "processor": "dynamics.compressor"
+      },
+      {
+        "enabledKey": "dynamics.multibandComp.enabled",
+        "prefix": "dynamics.multibandComp",
+        "processor": "multiband.compressor"
+      },
+      {
+        "enabledKey": "saturation.tape.enabled",
+        "prefix": "saturation.tape",
+        "processor": "saturation.tape"
+      },
+      {
+        "enabledKey": "saturation.exciter.enabled",
+        "prefix": "saturation.exciter",
+        "processor": "saturation.exciter"
+      },
+      {
+        "enabledKey": "spectral.airBand.enabled",
+        "prefix": "spectral.airBand",
+        "processor": "spectral.airBand"
+      },
+      {
+        "enabledKey": "stereo.imager.enabled",
+        "prefix": "stereo.imager",
+        "processor": "stereo.imager"
+      },
+      {
+        "enabledKey": "stereo.monoMaker.enabled",
+        "prefix": "stereo.monoMaker",
+        "processor": "stereo.monoMaker"
+      },
+      {
+        "enabledKey": "maximizer.truePeakLimiter.enabled",
+        "prefix": "maximizer.truePeakLimiter",
+        "processor": "maximizer.truePeakLimiter"
+      },
+      {
+        "enabledKey": "loudness.enabled",
+        "prefix": "loudness",
+        "processor": null
+      }
+    ]
+  },
   "masteringPresets": [
     {
       "kind": "mastering",
