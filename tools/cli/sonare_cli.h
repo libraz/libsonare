@@ -148,11 +148,10 @@ std::vector<float> require_float_values(const CliArgs& args);
 std::vector<int> require_int_values(const CliArgs& args);
 Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t expected_size);
 
-// Like load_reference_audio but does NOT require the reference to match the
-// input length. Used by the two-input "match.*" pair commands, where the
-// reference master is commonly a different length than the source. The sample
-// rate must still match (the match primitives require equal sample rates).
-Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate);
+// Like load_reference_audio but requires neither the input's length nor its
+// sample rate. Used by the two-input "match.*" pair commands, whose library
+// calls take the reference at its own rate and resample it onto the input's.
+Audio load_pair_reference_audio(const CliArgs& args);
 
 /// The de-interleaved channels of a stereo input.
 struct StereoPlanes {

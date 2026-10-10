@@ -682,12 +682,15 @@ def cmd_mastering_pair_analyze(args: argparse.Namespace) -> int:
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
-    if ref_sr != sr:
-        raise ValueError("reference sample rate must match input sample rate")
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
     result_json = mastering_pair_analyze(
-        args.analysis, source, reference, sample_rate=sr, params=params or None
+        args.analysis,
+        source,
+        reference,
+        sample_rate=sr,
+        reference_sample_rate=ref_sr,
+        params=params or None,
     )
     # The library returns a JSON string regardless of --json, keyed in camelCase
     # like every other core JSON producer. CLI stdout is snake_case throughout,
@@ -701,12 +704,15 @@ def cmd_mastering_pair_processor(args: argparse.Namespace) -> int:
 
     source, sr = _load_audio(args.file)
     reference, ref_sr = _load_audio(args.reference)
-    if ref_sr != sr:
-        raise ValueError("reference sample rate must match input sample rate")
     params_raw = getattr(args, "params", "") or ""
     params = _parse_kv_params(params_raw) if params_raw else {}
     result = mastering_pair_process(
-        args.processor, source, reference, sample_rate=sr, params=params or None
+        args.processor,
+        source,
+        reference,
+        sample_rate=sr,
+        reference_sample_rate=ref_sr,
+        params=params or None,
     )
     output = getattr(args, "output", "") or ""
     if output:

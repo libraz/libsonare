@@ -288,14 +288,16 @@ def test_cli_legacy_exit_code_folds_failures_to_one() -> None:
     assert result.returncode == 1
 
 
-def test_mastering_pair_analyze_cli_rejects_reference_rate_mismatch(monkeypatch) -> None:
-    """Pair analysis requires source and reference audio to use the same rate."""
+def test_mastering_pair_analyze_cli_takes_reference_at_its_own_rate(monkeypatch, capsys) -> None:
+    """Pair analysis hands the reference's own rate to the library, which resamples it."""
     import argparse
 
-    from libsonare import cli
+    from libsonare import cli, mastering_pair_analyze
 
-    source_samples = _generate_sine(440, 48000, 0.01)
-    reference_samples = _generate_sine(440, 44100, 0.01)
+    # 2 kHz sits on the K-weighting shelf, so the tone read at the wrong rate (2.18 kHz)
+    # is not the control's only difference; 1 s clears the loudness gate.
+    source_samples = _generate_sine(2000, 48000, 1.0)
+    reference_samples = _generate_sine(2000, 44100, 1.0)
 
     def fake_load_audio(path: str) -> tuple[list[float], int]:
         if path == "master.wav":
@@ -310,9 +312,28 @@ def test_mastering_pair_analyze_cli_rejects_reference_rate_mismatch(monkeypatch)
         analysis="match.referenceLoudness",
         file="master.wav",
         reference="reference.wav",
+        params="",
     )
-    with pytest.raises(ValueError, match="reference sample rate must match input sample rate"):
-        cli.cmd_mastering_pair_analyze(args)
+    assert cli.cmd_mastering_pair_analyze(args) == 0
+    payload = json.loads(capsys.readouterr().out)
+
+    expected = json.loads(
+        mastering_pair_analyze(
+            "match.referenceLoudness",
+            source_samples,
+            reference_samples,
+            sample_rate=48000,
+            reference_sample_rate=44100,
+        )
+    )
+    assert payload["reference_lufs"] == expected["referenceLufs"]
+    # Control: the same reference declared at the source rate is a different signal.
+    declared_at_source = json.loads(
+        mastering_pair_analyze(
+            "match.referenceLoudness", source_samples, reference_samples, sample_rate=48000
+        )
+    )
+    assert payload["reference_lufs"] != declared_at_source["referenceLufs"]
 
 
 def test_project_cli_exports_smf_and_midi_render_smoke() -> None:

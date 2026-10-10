@@ -438,6 +438,8 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
     std::string mode = "config";
     std::string preset_name;
     std::vector<std::string> explanation;
+    // The document's params as written; with --params appended they are one list.
+    std::vector<mastering::api::Param> document_params;
 
     if (has_assistant) {
       // --params here overrides the suggested chain, so none of it reaches the
@@ -448,8 +450,15 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       explanation = std::move(suggestion.explanation);
       mode = "assistant";
     } else if (has_config) {
-      chain_config =
-          mastering::api::chain_config_from_json(read_text_file(args.get_string("chain-config")));
+      const std::string document = read_text_file(args.get_string("chain-config"));
+      // Parsed only to apply the document's own refusals; the chain is built from the list.
+      mastering::api::chain_config_from_json(document);
+      const auto root = sonare::util::json::parse(document);
+      if (!root.find("params")->as_object().empty()) {
+        for (auto& flat : mastering::api::chain_config_flat_params(document)) {
+          document_params.push_back({std::move(flat.key), flat.value});
+        }
+      }
       mode = "config";
     } else {
       preset_name = args.get_string("preset");
@@ -477,7 +486,11 @@ int cmd_mastering(const CliArgs& args, const Audio& audio) {
       overrides.push_back({"loudness.truePeakOversample",
                            static_cast<double>(args.get_int("true-peak-oversample", 4))});
     }
-    if (!overrides.empty()) {
+    if (has_config) {
+      document_params.insert(document_params.end(), overrides.begin(), overrides.end());
+      chain_config =
+          mastering::api::parse_chain_config_params(document_params.data(), document_params.size());
+    } else if (!overrides.empty()) {
       mastering::api::apply_chain_config_overrides(chain_config, overrides.data(),
                                                    overrides.size());
     }
@@ -900,11 +913,11 @@ int cmd_mastering_pair_processor(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --processor is required" << color::reset << "\n";
     return 1;
   }
-  const Audio reference = load_reference_audio_any_length(args, audio.sample_rate());
+  const Audio reference = load_pair_reference_audio(args);
   const auto params = parse_mastering_params(args.get_string("params"));
   const auto result = mastering::api::apply_named_pair_processor(
       processor, audio.data(), reference.data(), audio.size(), reference.size(),
-      audio.sample_rate(), params);
+      audio.sample_rate(), reference.sample_rate(), params);
   if (!args.output_file.empty()) {
     save_wav(args.output_file, result.samples.data(), result.samples.size(), result.sample_rate,
              args.get_int("bits", 16));
@@ -942,11 +955,11 @@ int cmd_mastering_pair_analyze(const CliArgs& args, const Audio& audio) {
     std::cerr << color::red << "Error: --analysis is required" << color::reset << "\n";
     return 1;
   }
-  const Audio reference = load_reference_audio_any_length(args, audio.sample_rate());
+  const Audio reference = load_pair_reference_audio(args);
   const auto params = parse_mastering_params(args.get_string("params"));
   std::cout << analysis_json_for_cli(mastering::api::analyze_named_pair(
                    analysis, audio.data(), reference.data(), audio.size(), reference.size(),
-                   audio.sample_rate(), params))
+                   audio.sample_rate(), reference.sample_rate(), params))
             << "\n";
   return 0;
 }

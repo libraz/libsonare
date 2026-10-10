@@ -976,14 +976,6 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                     sample_rate, params);
 }
 
-MonoResult apply_named_pair_processor(const std::string& name, const float* source,
-                                      const float* reference, std::size_t source_length,
-                                      std::size_t reference_length, int sample_rate,
-                                      const std::vector<Param>& params) {
-  return apply_named_pair_processor(name, source, reference, source_length, reference_length,
-                                    sample_rate, sample_rate, params);
-}
-
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
                                                const float* source_right, std::size_t source_length,
                                                const float* reference_left,
@@ -1111,13 +1103,6 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
                                const std::vector<Param>& params) {
   return analyze_named_pair(name, source, reference, length, length, sample_rate, sample_rate,
                             params);
-}
-
-std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
-                               std::size_t source_length, std::size_t reference_length,
-                               int sample_rate, const std::vector<Param>& params) {
-  return analyze_named_pair(name, source, reference, source_length, reference_length, sample_rate,
-                            sample_rate, params);
 }
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,

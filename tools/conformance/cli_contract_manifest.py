@@ -472,10 +472,10 @@ def _validate_parser_cases(parser_cases: Any, errors: list[str]) -> None:
 
 
 def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
-    """The audio, melody, project and preset fixtures the cases name."""
+    """The audio, melody, project, preset and chain-config fixtures the cases name."""
     if _exact(
         fixtures,
-        {"audio", "melodies", "projects", "presets"},
+        {"audio", "melodies", "projects", "presets", "chain_configs"},
         "manifest.fixtures",
         errors,
     ):
@@ -587,6 +587,22 @@ def _validate_fixtures(fixtures: Any, errors: list[str]) -> None:
             for key in ("valid", "invalid", "custom"):
                 if not isinstance(presets[key], dict):
                     errors.append(f"manifest.fixtures.presets.{key}: expected an object")
+        # Chain-config documents the --chain-config cases read; each is a {version, params}
+        # object, so a fixture that is not one would fail on a parse rather than on the rule.
+        chain_configs = fixtures["chain_configs"]
+        if _exact(
+            chain_configs,
+            {"mixed_spelling", "module_off"},
+            "manifest.fixtures.chain_configs",
+            errors,
+        ):
+            for key in ("mixed_spelling", "module_off"):
+                _exact(
+                    chain_configs[key],
+                    {"version", "params"},
+                    f"manifest.fixtures.chain_configs.{key}",
+                    errors,
+                )
 
 
 def validate_manifest(manifest: Any) -> list[str]:

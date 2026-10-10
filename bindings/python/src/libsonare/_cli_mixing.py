@@ -57,8 +57,8 @@ def _mix_assistant_options(params: dict[str, float]) -> dict[str, Any]:
     return options
 
 
-def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
-    """Load each ``[ID=]WAV`` entry as one track at ``sample_rate``.
+def _mix_assistant_tracks(entries: list[str]) -> list[Any]:
+    """Load each ``[ID=]WAV`` entry as one track at its own rate.
 
     A two-channel file is handed over as a stereo track rather than a downmix,
     because the assistant's image domain is the one thing that reads a track's
@@ -84,11 +84,11 @@ def _mix_assistant_tracks(entries: list[str], sample_rate: int) -> list[Any]:
         planes, track_rate = _load_channels_or_downmix(path)
         left = planes[0]
         right = planes[1] if len(planes) == 2 else None
-        if track_rate != sample_rate:
-            left = _resample(left, track_rate, sample_rate)
-            if right is not None:
-                right = _resample(right, track_rate, sample_rate)
-        tracks.append(MixTrackInput(track_id=track_id, left=left, right=right, name=track_id))
+        tracks.append(
+            MixTrackInput(
+                track_id=track_id, left=left, right=right, name=track_id, sample_rate=track_rate
+            )
+        )
     return tracks
 
 
@@ -121,7 +121,7 @@ def cmd_suggest_mix(args: argparse.Namespace) -> int:
         if "tempo_bpm" in options:
             raise ValueError("--tempo-bpm and --params tempoBpm= set the same value")
         options["tempo_bpm"] = _resolve_tempo_bpm(args.tempo_bpm, args.input)
-    tracks = _mix_assistant_tracks(args.input, args.sample_rate)
+    tracks = _mix_assistant_tracks(args.input)
     document = suggest_mix_scene(tracks, sample_rate=args.sample_rate, **options)
     if args.scene_out:
         # Written from the document already in hand rather than through

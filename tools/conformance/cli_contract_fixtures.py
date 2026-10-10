@@ -115,12 +115,17 @@ def _write_fixtures(directory: Path, manifest: dict[str, Any]) -> dict[str, str]
         preset_path = directory / f"preset_{name}.json"
         preset_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
         paths[f"preset_{name}"] = str(preset_path)
+    for name, value in fixtures["chain_configs"].items():
+        chain_config_path = directory / f"chain_config_{name}.json"
+        chain_config_path.write_text(json.dumps(value, separators=(",", ":")), encoding="utf-8")
+        paths[f"chain_config_{name}"] = str(chain_config_path)
     for name, value in fixtures["melodies"].items():
         melody_path = directory / f"melody_{name}.mid"
         _write_smf(melody_path, value)
         paths[f"melody_{name}"] = str(melody_path)
     paths["project_warning_output"] = str(directory / "canonical_project.json")
     paths["mastering_report"] = str(directory / "mastering-report.json")
+    paths["chain_config_module_off_output"] = str(directory / "chain-config-module-off.wav")
     paths["preset_missing"] = str(directory / "preset-does-not-exist.json")
     paths["melody_missing"] = str(directory / "melody-does-not-exist.mid")
     paths["output"] = str(directory / "rejected-output.wav")

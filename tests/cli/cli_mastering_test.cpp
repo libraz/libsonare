@@ -1,7 +1,10 @@
 /// @file cli_mastering_test.cpp
 /// @brief Tests for the sonare CLI mastering, repair and mixing commands.
 
+#include <catch2/matchers/catch_matchers_floating_point.hpp>
+
 #include "cli/cli_test_helpers.h"
+#include "mastering/api/named_processor.h"
 
 #ifdef SONARE_WITH_MASTERING
 TEST_CASE("CLI mastering command", "[cli][mastering]") {
@@ -450,6 +453,96 @@ TEST_CASE("CLI mastering takes an enum-valued key by its name", "[cli][mastering
   std::remove(by_number_out.c_str());
   std::remove(config_path.c_str());
   std::remove(config_out.c_str());
+}
+
+TEST_CASE("CLI pair analysis takes a reference at its own rate", "[cli][mastering]") {
+  // 2 kHz sits on the K-weighting shelf, so the same tone read at the wrong rate
+  // (1 kHz) measures a different loudness and the control below can tell them apart.
+  constexpr int kSourceRate = 22050;
+  constexpr int kReferenceRate = 44100;
+  const std::string source = unique_temp_path("_pair_source.wav");
+  const std::string reference = unique_temp_path("_pair_reference_44k.wav");
+  create_test_wav(source, 1.0f, 2000.0f, kSourceRate);
+  create_test_wav(reference, 1.0f, 2000.0f, kReferenceRate);
+
+  auto [code, output] = exec_command(CLI + " mastering-pair-analyze " + source + " --reference " +
+                                     reference + " --analysis match.referenceLoudness -q");
+  INFO(output);
+  REQUIRE(code == 0);
+  const double cli_lufs = sonare::util::json::parse_strict(output)["reference_lufs"].as_number();
+
+  const auto source_audio = load_audio(source);
+  const auto reference_audio = load_audio(reference);
+  const std::vector<float>& source_samples = std::get<0>(source_audio);
+  const std::vector<float>& reference_samples = std::get<0>(reference_audio);
+  const int source_rate = std::get<1>(source_audio);
+  const int reference_rate = std::get<1>(reference_audio);
+  const auto at_source_rate = sonare::resample(reference_samples.data(), reference_samples.size(),
+                                               reference_rate, source_rate);
+  const auto lufs_of = [&](const std::vector<float>& ref) {
+    return sonare::util::json::parse_strict(sonare::mastering::api::analyze_named_pair(
+        "match.referenceLoudness", source_samples.data(), ref.data(), source_samples.size(),
+        ref.size(), source_rate, source_rate, {}))["referenceLufs"]
+        .as_number();
+  };
+  CHECK_THAT(cli_lufs, Catch::Matchers::WithinAbs(lufs_of(at_source_rate), 1e-6));
+  // Control: the raw reference declared at the source rate is a different signal.
+  CHECK(std::abs(cli_lufs - lufs_of(reference_samples)) > 0.5);
+
+  // The stereo analysis pairs two channels of one signal, so it keeps refusing.
+  auto [stereo_code, stereo_output] =
+      exec_command(CLI + " mastering-stereo-analyze " + source + " --reference " + reference +
+                   " --analysis stereo.monoCompatCheck -q 2>&1");
+  CHECK(stereo_code == 3);
+  CHECK_THAT(stereo_output, ContainsSubstring("reference sample rate must match input"));
+  std::remove(source.c_str());
+  std::remove(reference.c_str());
+}
+
+TEST_CASE("CLI mastering reads a chain config and --params as one list", "[cli][mastering]") {
+  create_test_wav(TEST_WAV, 1.0f);
+  const auto write_config = [](const std::string& params) {
+    const std::string path = unique_temp_path("_one_list_chain.json");
+    std::ofstream(path) << R"({"version":1,"params":{)" << params << "}}";
+    return path;
+  };
+  const auto render = [&](const std::string& config, const std::string& extra) {
+    const std::string out = unique_temp_path("_one_list.wav");
+    auto [code, output] = exec_command(CLI + " mastering " + TEST_WAV + " --chain-config " +
+                                       config + extra + " -o " + out + " -q");
+    INFO(output);
+    REQUIRE(code == 0);
+    std::ifstream file(out, std::ios::binary);
+    std::string bytes((std::istreambuf_iterator<char>(file)), {});
+    std::remove(out.c_str());
+    return bytes;
+  };
+
+  SECTION("two spellings of one field across the document and --params are refused") {
+    const std::string config = write_config(
+        R"("dynamics.multibandComp.enabled":true,"dynamics.multibandComp.lowThresholdDb":-20)");
+    auto [code, output] =
+        exec_command(CLI + " mastering " + TEST_WAV + " --chain-config " + config +
+                     " --params dynamics.multibandComp.bands.0.thresholdDb=-18"
+                     " -q 2>&1");
+    CHECK(code == 3);
+    CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.lowThresholdDb"));
+    CHECK_THAT(output, ContainsSubstring("dynamics.multibandComp.bands.0.thresholdDb"));
+    std::remove(config.c_str());
+  }
+
+  SECTION("the document's enabled=false keeps a module off that --params configures") {
+    const std::string off = write_config(R"("dynamics.compressor.enabled":false)");
+    const std::string on = write_config(R"("dynamics.compressor.enabled":true)");
+    const std::string params = " --params dynamics.compressor.thresholdDb=-40";
+    const std::string off_alone = render(off, "");
+    REQUIRE_FALSE(off_alone.empty());
+    CHECK(render(off, params) == off_alone);
+    // Control: the same field on an enabled compressor is audible.
+    CHECK(render(on, params) != render(on, ""));
+    std::remove(off.c_str());
+    std::remove(on.c_str());
+  }
 }
 
 TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[cli][mastering]") {

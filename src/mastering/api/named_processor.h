@@ -145,12 +145,6 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
                                       const float* reference, std::size_t length, int sample_rate,
                                       const std::vector<Param>& params = {});
 
-/// Two lengths at one rate: delegates with reference_sample_rate == sample_rate.
-MonoResult apply_named_pair_processor(const std::string& name, const float* source,
-                                      const float* reference, std::size_t source_length,
-                                      std::size_t reference_length, int sample_rate,
-                                      const std::vector<Param>& params);
-
 /// Apply the stereo pair processor subset. Source and reference may have
 /// different frame counts and rates; pair members must have equal lengths within
 /// each pair. A reference at another rate is resampled onto @p sample_rate first.
@@ -181,11 +175,6 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t length, int sample_rate,
                                const std::vector<Param>& params = {});
-
-/// Two lengths at one rate: delegates with reference_sample_rate == sample_rate.
-std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
-                               std::size_t source_length, std::size_t reference_length,
-                               int sample_rate, const std::vector<Param>& params);
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,

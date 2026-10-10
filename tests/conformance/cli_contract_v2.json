@@ -6945,9 +6945,55 @@
           "payload": "success",
           "artifact": "none",
           "stdout": "json"
+        },
+        {
+          "id": "chain_config_mixed_spellings",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--chain-config",
+            "{chain_config_mixed_spelling}",
+            "--params",
+            "dynamics.multibandComp.bands.0.thresholdDb=-18",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "chain_config_module_stays_off",
+          "argv": [
+            "mastering",
+            "{audio}",
+            "--chain-config",
+            "{chain_config_module_off}",
+            "--params",
+            "dynamics.compressor.thresholdDb=-40",
+            "-o",
+            "{chain_config_module_off_output}"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "none",
+          "artifact": "module_off_wav",
+          "stdout": "text",
+          "stdout_contains": [
+            "Output LUFS"
+          ]
         }
       ],
-      "artifacts": {}
+      "artifacts": {
+        "module_off_wav": {
+          "placeholder": "chain_config_module_off_output",
+          "kind": "wav",
+          "sample_rate_key": "sample_rate",
+          "sha256": "758c11bbf5a65f7466e2cfc111319854c5a7a7f9ca0d4cee56a52727cc83e01c"
+        }
+      }
     },
     {
       "path": "synthesize-rir",
@@ -11202,6 +11248,23 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "reference_delay",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_at_another_rate",
+          "argv": [
+            "mastering-pair-analyze",
+            "{audio}",
+            "--reference",
+            "{audio_take_other_rate}",
+            "--analysis",
+            "match.referenceLoudness",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "reference_loudness",
           "artifact": "none",
           "stdout": "json"
         }
@@ -16410,6 +16473,21 @@
         "name": "Contract Custom",
         "category": "custom",
         "schemaVersion": 1
+      }
+    },
+    "chain_configs": {
+      "mixed_spelling": {
+        "version": 1,
+        "params": {
+          "dynamics.multibandComp.enabled": true,
+          "dynamics.multibandComp.lowThresholdDb": -20
+        }
+      },
+      "module_off": {
+        "version": 1,
+        "params": {
+          "dynamics.compressor.enabled": false
+        }
       }
     }
   },

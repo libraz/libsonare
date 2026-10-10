@@ -64,14 +64,14 @@ std::string read_plain_text_file(const std::string& path) {
 
 namespace {
 
-Audio load_reference_audio_impl(const CliArgs& args, int expected_sample_rate,
+Audio load_reference_audio_impl(const CliArgs& args, std::optional<int> expected_sample_rate,
                                 std::optional<size_t> expected_size) {
   const std::string path = args.get_string("reference");
   if (path.empty()) {
     throw std::invalid_argument("--reference is required");
   }
   auto [samples, sample_rate] = load_audio(path);
-  if (sample_rate != expected_sample_rate) {
+  if (expected_sample_rate && sample_rate != *expected_sample_rate) {
     throw std::invalid_argument("reference sample rate must match input sample rate");
   }
   if (expected_size && samples.size() != *expected_size) {
@@ -87,8 +87,8 @@ Audio load_reference_audio(const CliArgs& args, int expected_sample_rate, size_t
   return load_reference_audio_impl(args, expected_sample_rate, expected_size);
 }
 
-Audio load_reference_audio_any_length(const CliArgs& args, int expected_sample_rate) {
-  return load_reference_audio_impl(args, expected_sample_rate, std::nullopt);
+Audio load_pair_reference_audio(const CliArgs& args) {
+  return load_reference_audio_impl(args, std::nullopt, std::nullopt);
 }
 
 StereoPlanes load_stereo_planes(const CliArgs& args, const Audio& audio) {
