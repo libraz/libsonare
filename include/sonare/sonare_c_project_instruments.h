@@ -222,8 +222,10 @@ int sonare_synth_builtin_waveform_from_name(const char* name);
 ///        realism / bus), so hosts can inspect a preset and tweak fields
 ///        before binding it. Passing the result back unchanged selects the
 ///        exact preset. The engine section stays inside the preset, so
-///        @c engine_param_count is 0. Unknown names return
-///        SONARE_ERROR_INVALID_PARAMETER.
+///        @c engine_param_count is 0 and @c engine_params is NULL: nothing in
+///        @p out is library-allocated, so there is nothing to free (the
+///        preset-name and pointer fields must not be freed). Unknown names
+///        return SONARE_ERROR_INVALID_PARAMETER.
 SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 
 /// @brief Describes the engine-section fields @ref SonareSynthPatch
@@ -252,9 +254,9 @@ const char* sonare_synth_engine_param_info(int engine_mode);
 ///          clamped to, and `default` is the init patch's value, which a zero
 ///          left in the field keeps when no preset is named. Enum fields, the
 ///          preset name and the mod matrix are not described here. Owned by
-///          libsonare and valid for the program lifetime; the caller must NOT
-///          free it. Returns NULL with SONARE_ERROR_NOT_SUPPORTED in a build
-///          without arrangement support.
+///          libsonare in static storage and remains valid for the program
+///          lifetime; the caller must NOT free it. Returns NULL with SONARE_ERROR_NOT_SUPPORTED in
+///          a build without arrangement support.
 const char* sonare_synth_patch_param_info(void);
 
 /// @brief Returns the GS rhythm-set name a rhythm part's @p program selects
