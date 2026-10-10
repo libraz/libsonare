@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
@@ -365,6 +366,39 @@ TEST_CASE("GM static tails take no GS envelope-time offset", "[midi][synth][sf2]
     CHECK(tail >= unscaled);
     CHECK(tail < scaled);
   }
+}
+
+TEST_CASE("GM mode narrows the tail to the patches its note-ons resolved",
+          "[midi][synth][native-gs][gs-tail]") {
+  NativeSynthConfig cfg;
+  cfg.use_gm_programs = true;
+  NativeSynth gm(cfg);
+  gm.prepare(kRate, kBlock);
+  const int64_t every_program = tail_of(gm);
+
+  // Program 0 is the piano, whose body rings past the voice; still far short of every program.
+  gm.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, 60, 100)));
+  const int64_t piano = tail_of(gm);
+  CHECK(piano < every_program);
+  render_stereo(gm, 4096);
+  gm.on_event(0, event(sonare::midi::make_midi1_note_off(0, 0, 60, 0)));
+  int64_t rendered = 0;
+  float peak = 1.0f;
+  while (rendered < piano) {
+    const auto block = render_stereo(gm, 4096);
+    rendered += 4096;
+    peak = 0.0f;
+    for (const float s : block.left) peak = std::max(peak, std::abs(s));
+  }
+  // What the narrowed tail promises: nothing audible is left once it has elapsed.
+  CHECK(gm.active_voice_count() == 0);
+  CHECK(peak < 1.0e-4f);
+
+  // A drum strike on the rhythm part can only widen it, and a reset forgets what was heard.
+  gm.on_event(0, event(sonare::midi::make_midi1_note_on(0, 9, 49, 100)));
+  CHECK(tail_of(gm) >= piano);
+  gm.reset();
+  CHECK(tail_of(gm) == every_program);
 }
 
 TEST_CASE("a received GS envelope-time edit raises NativeSynth's tail and never lowers it",

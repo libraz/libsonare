@@ -753,7 +753,8 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
                             static_cast<int64_t>(std::numeric_limits<int>::max())));
     return numeric::saturating_add(base, std::max(part_fx_.tail_samples(), 0));
   }
-  /// A received GS envelope-time edit raises the tail (raise_tail).
+  /// A received GS envelope-time edit raises the tail (raise_tail); in GM mode the first
+  /// note-on narrows it to the patches heard (observe_tail_patch).
   bool tail_follows_events() const noexcept override { return true; }
   /// CONTROL thread, offline tail probe: publish a pending inline EFX change
   /// without processing audio, so the host reads the chain that replayed events
@@ -979,6 +980,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// Raises the published tail to recompute_tail() and never lowers it: a voice
   /// struck under an edit since withdrawn may still be ringing.
   void raise_tail() noexcept;
+  /// GM mode: adds a note-on's resolved patch (with its drum @p kit, or kNoTailKit) to the
+  /// set bounding the tail, and republishes it; the first note lowers the every-program bound.
+  void observe_tail_patch(const NativeSynthPatch& patch, uint8_t kit, uint8_t note) noexcept;
   /// The slowest GS EG time multipliers any part holds; 1 where none lengthens.
   EnvelopeTimeScales gs_tail_scales() const noexcept;
   /// GS part SysEx (40 1x xx) and the system resets, on the channel state.
@@ -1159,6 +1163,18 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// Written on the audio thread by a live raise and read by the host, so
   /// atomic; held by pointer so the instrument stays movable.
   std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
+  /// GM mode: the patches note-ons resolved since prepare()/reset(), which bound the tail in
+  /// place of every program's. Audio-thread state; a full set falls back to that bound.
+  struct TailPatch {
+    const NativeSynthPatch* patch;
+    uint8_t kit;
+    uint8_t note;
+  };
+  static constexpr uint8_t kNoTailKit = 0xFFu;
+  static constexpr size_t kMaxTailPatches = 128;
+  std::array<TailPatch, kMaxTailPatches> tail_patches_{};
+  size_t tail_patch_count_ = 0;
+  bool tail_patches_full_ = false;
   /// Ids written by apply_parameter whose voice state awaits refresh_live (bit =
   /// NativeSynthParamId). Audio-thread state under config_.patch's contract.
   uint64_t live_dirty_ = 0;

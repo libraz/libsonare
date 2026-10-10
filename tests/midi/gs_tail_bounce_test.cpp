@@ -1,27 +1,34 @@
 /// @file gs_tail_bounce_test.cpp
 /// @brief The auto-length project bounce against the instrument tail: a GM
 ///        project that sends no GS envelope-time edit ends at the unscaled
-///        bound, one that does gets the scaled release it asked for, and an
+///        tail of the program it plays, one that does gets the scaled release it asked for, and an
 ///        instrument reporting an unbounded tail makes the caller name a length.
 
 #include <sonare/sonare_c.h>
 #include <sonare/sonare_c_project.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <vector>
 
 #include "midi/synth/gm_fallback_map.h"
 #include "midi/synth/gs_layer.h"
+#include "midi/synth/native_synth.h"
+#include "midi/synth/piano_resonance.h"
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 
 namespace {
 
+using sonare::midi::synth::EnvelopeTimeScales;
 using sonare::midi::synth::gm_fallback_max_tail_samples;
+using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::gs_time_scale;
 using sonare::midi::synth::kGsPartOffsetMax;
+using sonare::midi::synth::kPianoBodyRingS;
+using sonare::midi::synth::native_patch_tail_samples;
 
 constexpr double kRate = 48000.0;
 /// One quarter at the default 120 BPM.
@@ -124,15 +131,20 @@ SonareError bounce_sf2(SonareProject* project, const SonareProjectBounceOptions*
 
 void silent_render(void*, float* const*, int, int) {}
 
+/// The GM piano's voice tail at @p scales plus the body ring the bus adds after it.
+int64_t piano_tail_samples(const EnvelopeTimeScales& scales) {
+  const int64_t voice = native_patch_tail_samples(gm_fallback_patch(0, 0), kRate, scales, nullptr);
+  return voice + static_cast<int64_t>(std::ceil(kRate * kPianoBodyRingS));
+}
+
 }  // namespace
 
 TEST_CASE("a GM bounce with no GS envelope-time edit ends at the unscaled tail",
           "[project][midi][gs-tail]") {
-  const float max_scale = gs_time_scale(kGsPartOffsetMax);
+  // The clip plays program 0 alone, so its tail is the piano's, not every program's.
   const int64_t frames = bounce_gm_frames(false);
-  CHECK(frames >= kArrangementFrames + gm_fallback_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f));
-  CHECK(frames <
-        kArrangementFrames + gm_fallback_max_tail_samples(kRate, max_scale, max_scale, max_scale));
+  CHECK(frames >= kArrangementFrames + piano_tail_samples({}));
+  CHECK(frames < kArrangementFrames + gm_fallback_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f));
 }
 
 TEST_CASE("a GM bounce whose clip edits the GS release covers the scaled release",
@@ -140,7 +152,7 @@ TEST_CASE("a GM bounce whose clip edits the GS release covers the scaled release
   const float max_scale = gs_time_scale(kGsPartOffsetMax);
   const int64_t plain = bounce_gm_frames(false);
   const int64_t edited = bounce_gm_frames(true);
-  CHECK(edited >= kArrangementFrames + gm_fallback_max_tail_samples(kRate, 1.0f, 1.0f, max_scale));
+  CHECK(edited >= kArrangementFrames + piano_tail_samples({1.0f, 1.0f, max_scale}));
   CHECK(edited > plain);
 }
 

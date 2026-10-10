@@ -77,6 +77,29 @@ int64_t NativeSynth::recompute_tail() const noexcept {
       config_.patch.percussion.gm_kit) {
     return gm_drum_kit_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release);
   }
+  // Once a note has resolved its patch, only the patches heard so far can still be ringing.
+  if (config_.use_gm_programs && tail_patch_count_ > 0 && !tail_patches_full_) {
+    int64_t tail = 0;
+    for (size_t i = 0; i < tail_patch_count_; ++i) {
+      const TailPatch& heard = tail_patches_[i];
+      NativeSynthPatch voiced = *heard.patch;
+      if (heard.kit != kNoTailKit) {
+        apply_gs_drum_kit(voiced.percussion, voiced.amp_env, heard.kit, heard.note);
+      }
+      tail = std::max(tail, native_patch_tail_samples(voiced, sample_rate_, scales, sample_bank_));
+    }
+    const bool part_halo =
+        std::any_of(part_halo_armed_.begin(), part_halo_armed_.end(), [](bool a) { return a; });
+    if (guitar_halo_active_ || part_halo) {
+      tail = numeric::saturating_add(
+          tail, numeric::ceil_sample_count(sample_rate_ * kKsSympatheticRingS));
+    }
+    if (piano_body_active_) {
+      tail =
+          numeric::saturating_add(tail, numeric::ceil_sample_count(sample_rate_ * kPianoBodyRingS));
+    }
+    return tail;
+  }
   // GM mode resolves the patch per program at note-on, so the fallback tables bound it.
   const bool gm_tables = config_.use_gm_programs;
   int64_t tail =
@@ -102,6 +125,30 @@ void NativeSynth::raise_tail() noexcept {
   int64_t current = tail_samples_->load(std::memory_order_relaxed);
   while (tail > current &&
          !tail_samples_->compare_exchange_weak(current, tail, std::memory_order_relaxed)) {
+  }
+}
+
+void NativeSynth::observe_tail_patch(const NativeSynthPatch& patch, uint8_t kit,
+                                     uint8_t note) noexcept {
+  if (tail_patches_full_) return;
+  for (size_t i = 0; i < tail_patch_count_; ++i) {
+    const TailPatch& heard = tail_patches_[i];
+    // Only a kit variation reads the note, so a melodic patch is one entry for every key.
+    if (heard.patch == &patch && heard.kit == kit && (kit == kNoTailKit || heard.note == note)) {
+      return;
+    }
+  }
+  const bool first = tail_patch_count_ == 0;
+  if (tail_patch_count_ == kMaxTailPatches) {
+    tail_patches_full_ = true;
+  } else {
+    tail_patches_[tail_patch_count_++] = {&patch, kit, note};
+  }
+  // Nothing rang before the first note, so lowering the every-program bound strands no voice.
+  if (first) {
+    tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
+  } else {
+    raise_tail();
   }
 }
 
@@ -297,6 +344,8 @@ void NativeSynth::prepare(double sample_rate, int /*max_block_size*/) {
   mpe_.reset();
   bus_fed_channels_ = 0;
   refresh_all_channel_mods();
+  tail_patch_count_ = 0;
+  tail_patches_full_ = false;
   tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
   // Mix-bus polish: ~8 Hz DC blocker pole and the gain-neutral drive factor.
   dc_r_ = 1.0f - static_cast<float>(constants::kTwoPiD * 8.0 / sample_rate_);
@@ -369,6 +418,8 @@ void NativeSynth::reset() {
     part_fx_.settle_quiescent(*this);
   }
   part_fx_.clear_dirty();
+  tail_patch_count_ = 0;
+  tail_patches_full_ = false;
   if (prepared_) tail_samples_->store(recompute_tail(), std::memory_order_relaxed);
 }
 
@@ -573,8 +624,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     if (bank == kDrumBank) {
       patch = &gm_fallback_drum_patch(drum_lookup_note);
       drum_kit = gm_fallback_drum_kit(st.program, map);
+      observe_tail_patch(*patch, drum_kit, drum_lookup_note);
     } else {
       patch = &gm_fallback_patch(bank, st.program, map);
+      observe_tail_patch(*patch, kNoTailKit, note);
     }
   } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
     patch = &gm_fallback_drum_patch(drum_lookup_note);
@@ -614,6 +667,10 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
 
   NativeSynthVoice* voice = pool_.allocate(ch, note, source_track_id);
   if (voice == nullptr) return;
+  const auto bus_tails = [&] {
+    return std::array<bool, 3>{piano_body_active_, guitar_halo_active_, part_halo_armed_[ch]};
+  };
+  const std::array<bool, 3> bus_tails_before = bus_tails();
   bus_fed_channels_ |= static_cast<uint16_t>(uint16_t{1} << ch);
   const uint32_t voice_index = static_cast<uint32_t>(voice - pool_.data());
   // KS patches get their delay span before start() (pointer wiring only).
@@ -819,6 +876,8 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
     part_halo_[ch].prepare_guitar_sympathetic(sample_rate_);
     part_halo_armed_[ch] = true;
   }
+  // A body or halo armed by this note rings past it, which the heard-patch tail counts.
+  if (config_.use_gm_programs && bus_tails_before != bus_tails()) raise_tail();
   channels_[ch].last_freq_hz = voice->base_freq_hz;
   // A second note on a member channel is what makes the channel's bend and
   // pressure ambiguous, so the attribution is recomputed as the set changes.

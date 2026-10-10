@@ -321,7 +321,9 @@ typedef struct {
 ///        unknown preset name or a refused engine param fails with
 ///        SONARE_ERROR_INVALID_PARAMETER.
 ///        When @p options->total_frames <= 0 the render length is auto-derived
-///        from the arrangement (musical end + the patch's release tail);
+///        from the arrangement (musical end + the patch's release tail; with
+///        use_gm_programs, the longest tail among the programs and drum notes
+///        the arrangement plays);
 ///        an instrument reporting an unbounded tail makes that fail with
 ///        SONARE_ERROR_INVALID_PARAMETER. A positive total_frames is used as-is
 ///        and does not auto-extend for mixer FX / instrument tails.
