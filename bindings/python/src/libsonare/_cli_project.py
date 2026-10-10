@@ -664,6 +664,10 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             fixed_velocity=args.fixed_velocity,
             group=args.group,
             channel=args.channel,
+            max_polyphony=args.max_polyphony,
+            min_frame_peak_ratio=args.min_frame_peak_ratio,
+            min_ridge_peak_ratio=args.min_ridge_peak_ratio,
+            reattack_ratio=args.reattack_ratio,
         )
         data = cast(Any, project).export_smf()
     finally:
@@ -942,7 +946,34 @@ def register_project_parsers(
         "--min-note-ms",
         type=_finite_float,
         default=None,
-        help="Shortest span kept as a note, in ms (default: 30)",
+        help="Shortest span kept as a note, in ms (default: 30 monophonic, 100 polyphonic)",
+    )
+    transcribe_p.add_argument(
+        "--max-polyphony",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Polyphonic only: voices one frame may hold, 1-64 (default: 10)",
+    )
+    transcribe_p.add_argument(
+        "--min-frame-peak-ratio",
+        type=_finite_float,
+        default=None,
+        help="Polyphonic only: a frame's search stops below this share of its first "
+        "peak, 0-1 (default: 0.20)",
+    )
+    transcribe_p.add_argument(
+        "--min-ridge-peak-ratio",
+        type=_finite_float,
+        default=None,
+        help="Polyphonic only: a ridge ends below this share of its own peak, 0-1 (default: 0.10)",
+    )
+    transcribe_p.add_argument(
+        "--reattack-ratio",
+        type=_finite_float,
+        default=None,
+        help="Polyphonic only: split a ridge where its salience climbs past this "
+        "multiple of the level before, above 1; 0 disables the split (default: 2.0)",
     )
     transcribe_p.add_argument(
         "--segmentation-threshold-cents",

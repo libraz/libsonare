@@ -1,4 +1,6 @@
+#include <cmath>
 #include <cstdint>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -131,7 +133,7 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   // what an unset option means, so an absent option is left at 0 rather than
   // given a value this CLI would have to keep in step with the core's.
   SonareTranscribeConfig config{};
-  config.struct_version = 1;
+  config.struct_version = 3;
   config.polyphonic = args.has("polyphonic") ? 1 : 0;
   config.reference_hz = args.get_float("reference-hz", 0.0f);
   config.fmin = args.get_float("fmin", 0.0f);
@@ -142,6 +144,39 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
   config.fixed_velocity = args.get_int("fixed-velocity", 0);
   config.group = args.get_int("group", 0);
   config.channel = args.get_int("channel", 0);
+
+  // A written 0 means a real zero (ratios) or "no split" (reattack), which the C
+  // ABI spells as a negative value; its own 0 would mean the default.
+  if (args.has("max-polyphony")) {
+    const int max_polyphony = args.get_int("max-polyphony", 0);
+    if (max_polyphony < 1 || max_polyphony > 64) {
+      throw std::invalid_argument("--max-polyphony must be an integer in 1..64");
+    }
+    config.max_polyphony = max_polyphony;
+  }
+  const auto read_ratio = [&args](const char* name) {
+    const float value = args.get_float(name, 0.0f);
+    if (!(value >= 0.0f) || !std::isfinite(value)) {
+      throw std::invalid_argument(std::string("--") + name + " must be a finite number >= 0");
+    }
+    return value == 0.0f ? -1.0f : value;
+  };
+  if (args.has("min-frame-peak-ratio")) {
+    config.min_frame_peak_ratio = read_ratio("min-frame-peak-ratio");
+  }
+  if (args.has("min-ridge-peak-ratio")) {
+    config.min_ridge_peak_ratio = read_ratio("min-ridge-peak-ratio");
+  }
+  if (args.has("reattack-ratio")) {
+    const float value = args.get_float("reattack-ratio", 0.0f);
+    if (value == 0.0f) {
+      config.reattack_ratio = -1.0f;
+    } else if (std::isfinite(value) && value > 1.0f) {
+      config.reattack_ratio = value;
+    } else {
+      throw std::invalid_argument("--reattack-ratio must be 0 (no split) or greater than 1");
+    }
+  }
 
   size_t note_count = 0;
   err = sonare_project_transcribe_to_clip(handle.ptr, clip_id, audio.data(), audio.size(),

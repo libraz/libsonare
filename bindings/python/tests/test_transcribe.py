@@ -231,6 +231,43 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
         ("min_note_ms", {"min_note_ms": -1.0}, f"{entry}: min_note_ms must be positive"),
         ("group", {"group": 16}, f"{entry}: group must be an integer in [0, 15]"),
         ("channel", {"channel": -1}, f"{entry}: channel must be an integer in [0, 15]"),
+        ("max_polyphony_zero", {"max_polyphony": 0}, f"{entry}: max_polyphony must be an integer"),
+        ("max_polyphony_high", {"max_polyphony": 65}, f"{entry}: max_polyphony must be an integer"),
+        (
+            "frame_ratio_negative",
+            {"min_frame_peak_ratio": -0.1},
+            f"{entry}: min_frame_peak_ratio must not be negative",
+        ),
+        (
+            "frame_ratio_above_one",
+            {"min_frame_peak_ratio": 1.5},
+            f"{entry}: min_frame_peak_ratio must be at most 1",
+        ),
+        (
+            "ridge_ratio_negative",
+            {"min_ridge_peak_ratio": -1.0},
+            f"{entry}: min_ridge_peak_ratio must not be negative",
+        ),
+        (
+            "ridge_ratio_above_one",
+            {"min_ridge_peak_ratio": 1.01},
+            f"{entry}: min_ridge_peak_ratio must be at most 1",
+        ),
+        (
+            "reattack_within_one",
+            {"reattack_ratio": 1.0},
+            f"{entry}: reattack_ratio must be 0 or above 1",
+        ),
+        (
+            "reattack_negative",
+            {"reattack_ratio": -2.0},
+            f"{entry}: reattack_ratio must be 0 or above 1",
+        ),
+        (
+            "reattack_nan",
+            {"reattack_ratio": float("nan")},
+            f"{entry}: reattack_ratio must be",
+        ),
     ]
 
 
@@ -418,3 +455,137 @@ def test_transcribe_to_clip_rejects_an_unknown_clip(melody: np.ndarray) -> None:
             project.transcribe_to_clip(4242, melody, SR)
     finally:
         project.close()
+
+
+# ---------------------------------------------------------------------------
+# Polyphonic limits: max_polyphony, the two peak ratios and reattack_ratio
+# ---------------------------------------------------------------------------
+
+_POLY_SR = 44100
+
+
+def _poly_sine(freq: float, seconds: float, amp: float) -> np.ndarray:
+    count = int(_POLY_SR * seconds)
+    return amp * np.sin(2.0 * np.pi * freq * np.arange(count) / _POLY_SR)
+
+
+def _note_ons(events: list[tuple[float, int, int]]) -> int:
+    return sum(1 for _ppq, data0, _d1 in events if _status(data0) == _NOTE_ON)
+
+
+def _max_simultaneous(events: list[tuple[float, int, int]]) -> int:
+    """Largest number of notes sounding at once, a note-off ending before a note-on starts."""
+    edges = sorted((ppq, 1 if _status(d0) == _NOTE_ON else -1) for ppq, d0, _d1 in events)
+    open_notes = peak = 0
+    for _ppq, step in edges:
+        open_notes += step
+        peak = max(peak, open_notes)
+    return peak
+
+
+def _poly(samples: np.ndarray, **options: object) -> libsonare.TranscribeResult:
+    return libsonare.transcribe(
+        samples.astype(np.float32), _POLY_SR, tempo_bpm=120.0, polyphonic=True, **options
+    )
+
+
+@pytest.fixture(scope="module")
+def four_note_chord() -> np.ndarray:
+    return np.sum([_poly_sine(hz, 1.0, 0.15) for hz in (261.63, 329.63, 392.0, 493.88)], axis=0)
+
+
+@pytest.fixture(scope="module")
+def weak_voice_chord() -> np.ndarray:
+    """A strong tone with a second one 30 dB under it: below the default frame ratio."""
+    return _poly_sine(261.63, 1.0, 0.4) + _poly_sine(392.0, 1.0, 0.012)
+
+
+@pytest.fixture(scope="module")
+def decaying_tone() -> np.ndarray:
+    t = np.arange(int(_POLY_SR * 1.2)) / _POLY_SR
+    return 0.4 * np.exp(-5.0 * t) * np.sin(2.0 * np.pi * 261.63 * t)
+
+
+@pytest.fixture(scope="module")
+def restruck_tone() -> np.ndarray:
+    """One pitch struck again at 0.5 s: a decay to 0.12, then a 20 ms rise to 0.5.
+
+    The level never falls low enough to end the ridge, so only a re-attack split
+    can make it two notes.
+    """
+    half = int(0.5 * _POLY_SR)
+    fall = 0.4 * np.exp(np.log(0.12 / 0.4) * np.arange(half) / half)
+    rise = 0.12 + 0.38 * np.minimum(1.0, np.arange(half) / (0.02 * _POLY_SR))
+    t = np.arange(2 * half) / _POLY_SR
+    return np.concatenate([fall, rise]) * np.sin(2.0 * np.pi * 261.63 * t)
+
+
+def test_max_polyphony_caps_the_simultaneous_notes(four_note_chord: np.ndarray) -> None:
+    default = _poly(four_note_chord)
+    capped = _poly(four_note_chord, max_polyphony=1)
+    assert _max_simultaneous(default.events) == 4
+    assert _max_simultaneous(capped.events) == 1
+
+
+def test_min_frame_peak_ratio_changes_the_result(weak_voice_chord: np.ndarray) -> None:
+    default = _poly(weak_voice_chord)
+    stricter = _poly(weak_voice_chord, min_frame_peak_ratio=1.0)
+    zero = _poly(weak_voice_chord, min_frame_peak_ratio=0.0)
+    assert _note_ons(stricter.events) == _note_ons(default.events)
+    # A written 0 is a real 0 (the search runs on), not the 0.20 default.
+    assert _note_ons(zero.events) > _note_ons(default.events)
+
+
+def test_min_ridge_peak_ratio_changes_the_note_length(decaying_tone: np.ndarray) -> None:
+    def last_off(result: libsonare.TranscribeResult) -> float:
+        return max((p for p, d0, _d1 in result.events if _status(d0) == _NOTE_OFF), default=-1.0)
+
+    default = _poly(decaying_tone)
+    zero = _poly(decaying_tone, min_ridge_peak_ratio=0.0)
+    assert default.note_count > 0
+    # With no fade threshold the ridge rides the decay to the end of the take.
+    assert last_off(zero) > last_off(default)
+    assert _note_ons(_poly(decaying_tone, min_ridge_peak_ratio=0.9).events) == 0
+
+
+def test_reattack_ratio_splits_a_restruck_tone(restruck_tone: np.ndarray) -> None:
+    default = _poly(restruck_tone)
+    assert _note_ons(default.events) == 2
+    # 0 is "no split", not the default 2.0; so is a ratio nothing climbs past.
+    assert _note_ons(_poly(restruck_tone, reattack_ratio=0.0).events) == 1
+    assert _note_ons(_poly(restruck_tone, reattack_ratio=100.0).events) == 1
+    assert _note_ons(_poly(restruck_tone, reattack_ratio=2.0).events) == 2
+
+
+def test_to_clip_forwards_the_polyphonic_limits(four_note_chord: np.ndarray) -> None:
+    project = libsonare.Project()
+    try:
+        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        count = project.transcribe_to_clip(
+            clip_id,
+            four_note_chord.astype(np.float32),
+            _POLY_SR,
+            polyphonic=True,
+            max_polyphony=1,
+        )
+        assert count == 1
+    finally:
+        project.close()
+
+
+@pytest.mark.parametrize(
+    ("option", "value"),
+    [
+        pytest.param("max_polyphony", 3, id="max_polyphony"),
+        pytest.param("min_frame_peak_ratio", 0.0, id="min_frame_peak_ratio"),
+        pytest.param("min_ridge_peak_ratio", 0.5, id="min_ridge_peak_ratio"),
+        pytest.param("reattack_ratio", 3.0, id="reattack_ratio"),
+    ],
+)
+def test_a_polyphonic_limit_on_the_monophonic_path_is_refused_by_the_core(
+    melody: np.ndarray, option: str, value: float
+) -> None:
+    """Not pre-checked here: the C ABI refuses it and names the field."""
+    with pytest.raises(libsonare.SonareError) as excinfo:
+        libsonare.transcribe(melody, SR, **{option: value})
+    assert option in str(excinfo.value)

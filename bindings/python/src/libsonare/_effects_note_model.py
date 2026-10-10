@@ -42,7 +42,7 @@ _NOTE_STRUCT_VERSION = 1
 
 # The transcription config's own layout version. Unlike the note-object configs
 # above, 0 is rejected rather than read as version 1.
-_TRANSCRIBE_STRUCT_VERSION = 2
+_TRANSCRIBE_STRUCT_VERSION = 3
 
 
 @dataclasses.dataclass
@@ -306,6 +306,30 @@ def _transcribe_positive(fn_name: str, value: float, arg_name: str) -> float:
     return number
 
 
+def _transcribe_ratio(fn_name: str, value: float, arg_name: str) -> float:
+    """Narrow one polyphonic peak ratio to its C spelling: a real 0 travels as -1.
+
+    The C field reads 0 as "the transcription default" and a negative as 0.
+    A negative or a value above 1 is refused here.
+    """
+    number = _validate_scalar(fn_name, value, arg_name)
+    if number < 0.0:
+        raise SonareValueError(f"{fn_name}: {arg_name} must not be negative")
+    if number > 1.0:
+        raise SonareValueError(f"{fn_name}: {arg_name} must be at most 1")
+    return -1.0 if number == 0.0 else number
+
+
+def _transcribe_reattack(fn_name: str, value: float) -> float:
+    """Narrow ``reattack_ratio``: 0 is "no split" (C: negative), otherwise above 1."""
+    number = _validate_scalar(fn_name, value, "reattack_ratio")
+    if number == 0.0:
+        return -1.0
+    if number <= 1.0:
+        raise SonareValueError(f"{fn_name}: reattack_ratio must be 0 or above 1")
+    return number
+
+
 def _transcribe_config(
     fn_name: str,
     *,
@@ -319,6 +343,10 @@ def _transcribe_config(
     fixed_velocity: int | None,
     group: int,
     channel: int,
+    max_polyphony: int | None = None,
+    min_frame_peak_ratio: float | None = None,
+    min_ridge_peak_ratio: float | None = None,
+    reattack_ratio: float | None = None,
 ) -> SonareTranscribeConfig:
     """Build the transcription config, refusing an out-of-domain field by name.
 
@@ -367,6 +395,27 @@ def _transcribe_config(
     )
     config.group = _transcribe_int(fn_name, group, "group", 0, 15)
     config.channel = _transcribe_int(fn_name, channel, "channel", 0, 15)
+
+    # Polyphonic-only fields: given on the monophonic path, the C ABI refuses
+    # them by name, so nothing is pre-checked against `polyphonic` here.
+    config.max_polyphony = (
+        0
+        if max_polyphony is None
+        else _transcribe_int(fn_name, max_polyphony, "max_polyphony", 1, 64)
+    )
+    config.min_frame_peak_ratio = (
+        0.0
+        if min_frame_peak_ratio is None
+        else _transcribe_ratio(fn_name, min_frame_peak_ratio, "min_frame_peak_ratio")
+    )
+    config.min_ridge_peak_ratio = (
+        0.0
+        if min_ridge_peak_ratio is None
+        else _transcribe_ratio(fn_name, min_ridge_peak_ratio, "min_ridge_peak_ratio")
+    )
+    config.reattack_ratio = (
+        0.0 if reattack_ratio is None else _transcribe_reattack(fn_name, reattack_ratio)
+    )
     return config
 
 

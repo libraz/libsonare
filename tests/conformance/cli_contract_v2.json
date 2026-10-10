@@ -3986,7 +3986,34 @@
           "domain": null
         },
         {
+          "name": "max-polyphony",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-frame-peak-ratio",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-ridge-peak-ratio",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -4009,6 +4036,15 @@
           "name": "polyphonic",
           "type": "boolean",
           "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reattack-ratio",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,
@@ -14593,7 +14629,34 @@
           "domain": null
         },
         {
+          "name": "max-polyphony",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-frame-peak-ratio",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-ridge-peak-ratio",
           "type": "number",
           "default": null,
           "aliases": [],
@@ -14616,6 +14679,15 @@
           "name": "polyphonic",
           "type": "boolean",
           "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reattack-ratio",
+          "type": "number",
+          "default": null,
           "aliases": [],
           "repeatable": false,
           "required": false,

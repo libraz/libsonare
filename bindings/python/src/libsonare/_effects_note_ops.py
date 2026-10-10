@@ -977,6 +977,10 @@ def transcribe(
     fixed_velocity: int | None = None,
     group: int = 0,
     channel: int = 0,
+    max_polyphony: int | None = None,
+    min_frame_peak_ratio: float | None = None,
+    min_ridge_peak_ratio: float | None = None,
+    reattack_ratio: float | None = None,
 ) -> TranscribeResult:
     """Transcribe mono audio into MIDI events on a constant-tempo grid.
 
@@ -1028,7 +1032,7 @@ def transcribe(
             this bound, with the same polyphonic salience-axis behavior as
             ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
-            (30 ms).
+            (30 ms monophonic, 100 ms polyphonic).
         segmentation_threshold_cents: Pitch movement that ends one note and
             starts the next; ``None`` keeps the default (50 cents).
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
@@ -1039,6 +1043,18 @@ def transcribe(
             level measurement; ``None`` measures.
         group: UMP group the events are emitted on, 0..15.
         channel: MIDI channel the events are emitted on, 0..15.
+        max_polyphony: Polyphonic only. Voices one frame may hold, 1..64;
+            ``None`` keeps the default (10).
+        min_frame_peak_ratio: Polyphonic only. A frame's search stops below this
+            share of its first peak, 0..1; ``None`` keeps the default (0.20) and
+            0 means a real 0.
+        min_ridge_peak_ratio: Polyphonic only. A ridge ends below this share of
+            its own running peak, 0..1; ``None`` keeps the default (0.10) and 0
+            means a real 0.
+        reattack_ratio: Polyphonic only. A ridge is split where its salience
+            climbs past this multiple of the level just before (the same pitch
+            struck again while it sounds); must be above 1. ``None`` keeps the
+            default (2.0) and 0 means no split.
 
     Returns:
         A :class:`TranscribeResult`.
@@ -1047,7 +1063,9 @@ def transcribe(
         SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample,
             or if a config argument is outside its domain -- each named against
             this function.
-        SonareError: ``INVALID_PARAMETER`` when only one of ``fmin``/``fmax``
+        SonareError: ``INVALID_PARAMETER`` when any polyphonic-only field is
+            given with ``polyphonic=False`` (the message names the field), or
+            when only one of ``fmin``/``fmax``
             is given and it does not lie on the right side of the selected
             path's default for the other bound; ``NOT_SUPPORTED`` when the
             library was built without the pitch editor.
@@ -1084,6 +1102,10 @@ def transcribe(
         fixed_velocity=fixed_velocity,
         group=group,
         channel=channel,
+        max_polyphony=max_polyphony,
+        min_frame_peak_ratio=min_frame_peak_ratio,
+        min_ridge_peak_ratio=min_ridge_peak_ratio,
+        reattack_ratio=reattack_ratio,
     )
     c_array, length = _to_c_float_array(samples)
 

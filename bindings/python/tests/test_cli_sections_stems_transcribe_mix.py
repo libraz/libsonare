@@ -312,6 +312,103 @@ def test_transcribe_applies_a_fixed_velocity(melody_wav: str) -> None:
     assert velocities == {77}
 
 
+def test_transcribe_polyphonic_limits_reach_the_call(
+    melody_wav: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The four polyphonic options parse and arrive at ``transcribe_to_clip``."""
+    import libsonare
+    from libsonare import cli
+
+    seen: dict[str, object] = {}
+    original = libsonare.Project.transcribe_to_clip
+
+    def spy(self: object, clip_id: int, samples: object, sr: int, **options: object) -> int:
+        seen.update(options)
+        return original(self, clip_id, samples, sr, **options)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(libsonare.Project, "transcribe_to_clip", spy)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            [
+                "sonare",
+                "transcribe",
+                melody_wav,
+                "-o",
+                output,
+                "--tempo-bpm",
+                "120",
+                "--polyphonic",
+                "--max-polyphony",
+                "3",
+                "--min-frame-peak-ratio",
+                "0.3",
+                "--min-ridge-peak-ratio",
+                "0",
+                "--reattack-ratio",
+                "2.5",
+                "--json",
+            ],
+        )
+        try:
+            cli.main()
+        except SystemExit as exc:
+            assert exc.code in (0, None)
+    assert seen["max_polyphony"] == 3
+    assert seen["min_frame_peak_ratio"] == pytest.approx(0.3)
+    assert seen["min_ridge_peak_ratio"] == 0.0
+    assert seen["reattack_ratio"] == pytest.approx(2.5)
+
+
+def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
+    melody_wav: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Omitted options travel as None, so a monophonic run is not refused."""
+    import libsonare
+    from libsonare import cli
+
+    seen: dict[str, object] = {}
+    original = libsonare.Project.transcribe_to_clip
+
+    def spy(self: object, clip_id: int, samples: object, sr: int, **options: object) -> int:
+        seen.update(options)
+        return original(self, clip_id, samples, sr, **options)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(libsonare.Project, "transcribe_to_clip", spy)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        monkeypatch.setattr(
+            sys, "argv", ["sonare", "transcribe", melody_wav, "-o", output, "--tempo-bpm", "120"]
+        )
+        try:
+            cli.main()
+        except SystemExit as exc:
+            assert exc.code in (0, None)
+    for name in ("max_polyphony", "min_frame_peak_ratio", "min_ridge_peak_ratio", "reattack_ratio"):
+        assert seen[name] is None
+
+
+def test_transcribe_refuses_a_polyphonic_limit_without_polyphonic(melody_wav: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        result = _run_cli(["transcribe", melody_wav, "-o", output, "--max-polyphony", "3"])
+        assert result.returncode != 0
+        assert "max_polyphony" in result.stderr
+        assert not os.path.exists(output)
+
+
+def test_transcribe_refuses_an_out_of_domain_reattack_ratio(melody_wav: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        result = _run_cli(
+            ["transcribe", melody_wav, "-o", output, "--polyphonic", "--reattack-ratio", "1"]
+        )
+        assert result.returncode != 0
+        assert "reattack_ratio" in result.stderr
+
+
 def test_transcribe_refuses_a_non_positive_tempo(melody_wav: str) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         output = os.path.join(tmpdir, "take.mid")

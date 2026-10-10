@@ -881,3 +881,56 @@ TEST_CASE("CLI tune-to-midi bounds reach the assignment rule", "[cli][tune-to-mi
   REQUIRE(strict_assigned < default_assigned);
 }
 #endif  // SONARE_WITH_ARRANGEMENT && SONARE_WITH_PITCH_EDITOR
+
+TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][transcribe]") {
+  const std::string chord = unique_temp_path("_chord.wav");
+  const std::string out = unique_temp_path("_chord.mid");
+  constexpr int kRate = 22050;
+  const std::array<float, 4> tones{261.63f, 329.63f, 392.0f, 493.88f};
+  std::vector<float> samples(static_cast<size_t>(2.0f * kRate));
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const float t = static_cast<float>(i) / kRate;
+    float sum = 0.0f;
+    for (float hz : tones) {
+      sum += std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * hz * t);
+    }
+    samples[i] = 0.2f * sum;
+  }
+  save_wav(chord, samples, kRate);
+
+  const std::string base =
+      CLI + " transcribe " + chord + " --polyphonic --tempo-bpm 120 --json -o " + out;
+
+  SECTION("a polyphony cap of one yields fewer notes than the default") {
+    auto [default_code, default_output] = exec_command(base);
+    INFO(default_output);
+    REQUIRE(default_code == 0);
+    auto [capped_code, capped_output] = exec_command(base + " --max-polyphony 1");
+    INFO(capped_output);
+    REQUIRE(capped_code == 0);
+    const auto default_payload = sonare::util::json::parse_strict(default_output);
+    const auto capped_payload = sonare::util::json::parse_strict(capped_output);
+    REQUIRE(default_payload["note_count"].as_int() > capped_payload["note_count"].as_int());
+  }
+
+  SECTION("each rejected value is an invalid parameter") {
+    for (const char* bad :
+         {"--reattack-ratio 0.5", "--reattack-ratio -1", "--max-polyphony 0", "--max-polyphony 65",
+          "--min-frame-peak-ratio -0.1", "--min-ridge-peak-ratio -0.1"}) {
+      auto [code, output] = exec_command(base + " " + bad);
+      INFO(bad << ": " << output);
+      REQUIRE(code == 3);
+    }
+  }
+
+  SECTION("zero ratios and no-split are accepted") {
+    auto [code, output] = exec_command(base +
+                                       " --reattack-ratio 0 --min-frame-peak-ratio 0"
+                                       " --min-ridge-peak-ratio 0 --max-polyphony 4");
+    INFO(output);
+    REQUIRE(code == 0);
+  }
+
+  std::remove(chord.c_str());
+  std::remove(out.c_str());
+}

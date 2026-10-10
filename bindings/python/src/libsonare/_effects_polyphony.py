@@ -13,6 +13,7 @@ second analysis.
 from __future__ import annotations
 
 import ctypes
+import math
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Self
 
@@ -56,8 +57,8 @@ from ._runtime import (
     _validate_samples,
 )
 
-# The polyphonic config is at layout version 1; 0 selects the same layout.
-_POLYPHONIC_STRUCT_VERSION = 1
+# The polyphonic config is at layout version 2 (adds reattack_ratio).
+_POLYPHONIC_STRUCT_VERSION = 2
 
 
 def _count_field(name: str, value: int | None) -> int:
@@ -72,6 +73,20 @@ def _count_field(name: str, value: int | None) -> int:
 def _value_field(value: float | None) -> float:
     """Same sentinel for the float fields, which 0 never means literally."""
     return 0.0 if value is None else float(value)
+
+
+def _reattack_field(value: float | None) -> float:
+    """``None`` and 0 are off (C 0); anything else must be finite and above 1."""
+    if value is None:
+        return 0.0
+    number = float(value)
+    if number == 0.0:
+        return 0.0
+    if not math.isfinite(number) or number <= 1.0:
+        raise SonareValueError(
+            f"PolyphonicAnalysis: reattack_ratio must be 0 or finite and above 1, got {value!r}"
+        )
+    return number
 
 
 class PolyphonicAnalysis:
@@ -144,6 +159,7 @@ class PolyphonicAnalysis:
         segmentation_threshold_cents: float | None = None,
         min_note_ms: float | None = None,
         reference_hz: float | None = None,
+        reattack_ratio: float | None = None,
     ) -> None:
         """Analyse ``samples`` into editable notes.
 
@@ -245,6 +261,10 @@ class PolyphonicAnalysis:
                 ``min_ridge_duration_ms`` to drop short ridges instead.
             reference_hz: Reference for each note's ``median_cents`` (default
                 A4 = 440).
+            reattack_ratio: Splits a ridge where its salience climbs past this
+                multiple of the level just before (the same pitch struck again
+                while it sounds). ``None`` (the editing default) and 0 are
+                off; any other value must be finite and above 1.
 
         Raises:
             SonareValueError: If ``samples`` is empty, non-finite, or not a
@@ -306,6 +326,7 @@ class PolyphonicAnalysis:
             segmentation_threshold_cents=_value_field(segmentation_threshold_cents),
             min_note_ms=_value_field(min_note_ms),
             reference_hz=_value_field(reference_hz),
+            reattack_ratio=_reattack_field(reattack_ratio),
         )
 
         c_array, length = _to_c_float_array(buf)

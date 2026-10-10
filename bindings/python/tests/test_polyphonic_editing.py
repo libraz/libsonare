@@ -523,3 +523,41 @@ def test_a_negative_selects_zero_on_the_four_fields_that_accept_it(
     ) as floored:
         assert floored.note_count() >= EXPECTED_NOTES
         assert floored.frame_count() == EXPECTED_FRAMES
+
+
+# ---------------------------------------------------------------------------
+# reattack_ratio
+# ---------------------------------------------------------------------------
+
+
+def _restruck_tone() -> NDArray[np.float32]:
+    """One pitch struck again at 0.5 s: decay to 0.12, then a 20 ms rise to 0.5.
+
+    The level never falls far enough to end the ridge, so only a re-attack split
+    makes it two notes.
+    """
+    half = int(0.5 * SR)
+    fall = 0.4 * np.exp(np.log(0.12 / 0.4) * np.arange(half) / half)
+    rise = 0.12 + 0.38 * np.minimum(1.0, np.arange(half) / (0.02 * SR))
+    t = np.arange(2 * half) / SR
+    return (np.concatenate([fall, rise]) * np.sin(2.0 * np.pi * 261.63 * t)).astype(np.float32)
+
+
+def test_reattack_ratio_splits_a_restruck_tone() -> None:
+    tone = _restruck_tone()
+    with libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=2.0) as split:
+        assert len(split.notes()) == 2
+    # Omitted and None are off: the editing chain keeps one ridge one note.
+    with libsonare.PolyphonicAnalysis.analyze(tone, SR) as whole:
+        assert len(whole.notes()) == 1
+    with libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=None) as whole:
+        assert len(whole.notes()) == 1
+    # A written 0 is off too, as on the transcribe facade and the other surfaces.
+    with libsonare.PolyphonicAnalysis.analyze(tone, SR, reattack_ratio=0.0) as whole:
+        assert len(whole.notes()) == 1
+
+
+@pytest.mark.parametrize("value", [1.0, 0.5, -2.0, float("nan"), float("inf")], ids=str)
+def test_reattack_ratio_out_of_domain_is_refused(chord: NDArray[np.float32], value: float) -> None:
+    with pytest.raises(SonareValueError, match="reattack_ratio"):
+        libsonare.PolyphonicAnalysis.analyze(chord, SR, reattack_ratio=value)
