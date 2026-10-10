@@ -10,7 +10,7 @@
 
 - `SONARE_FEATURE_ABI_VERSION` is 7 and `SonareBoundaryOptions` grows from 40 to 44 bytes with the new `reference_window` field, so C callers rebuild; a caller that starts from `sonare_boundary_options_default()` gets the field's default.
 
-- Within the same `SONARE_FEATURE_ABI_VERSION` 7, six more shipped structs change layout, so C callers rebuild: `SonareMusicAnalyzeOptions`, `SonareChordDetectionOptions`, `SonareChordAnalysisResult`, `SonareMelResult`, `SonareMfccResult` and `SonareTranscribeResult` gain a leading `struct_version` and the fields listed under New; `SonareTranscribeConfig` is version 2 with a trailing `reference_auto` (version 1 is still read). `sonare_analyze_json_ex` refuses a `SonareMusicAnalyzeOptions` whose `struct_version` is not `SONARE_MUSIC_ANALYZE_OPTIONS_VERSION`, so start from `sonare_music_analyze_options_default()`; the chord options take 0 or the current version. The libraries fill the result structs' `struct_version` themselves.
+- Within the same `SONARE_FEATURE_ABI_VERSION` 7, six more shipped structs change layout, so C callers rebuild: `SonareMusicAnalyzeOptions`, `SonareChordDetectionOptions`, `SonareChordAnalysisResult`, `SonareMelResult`, `SonareMfccResult` and `SonareTranscribeResult` gain a leading `struct_version` and the fields listed under New; `SonareTranscribeConfig` is version 3, with a trailing `reference_auto` (version 2) and the four polyphonic limits below (version 3); versions 1 and 2 are still read. `SonarePolyphonicConfig` is version 2 with a trailing `reattack_ratio`; versions 0 and 1 are still read. `sonare_analyze_json_ex` refuses a `SonareMusicAnalyzeOptions` whose `struct_version` is not `SONARE_MUSIC_ANALYZE_OPTIONS_VERSION`, so start from `sonare_music_analyze_options_default()`; the chord options take 0 or the current version. The libraries fill the result structs' `struct_version` themselves.
 
 #### Now refused
 
@@ -36,6 +36,8 @@
 - A project or engine sample rate that is not a whole number of hertz within the supported range is refused on every surface. Project JSON with a fractional `sample_rate` fails to load with `InvalidFormat` and the diagnostic `invalid_sample_rate`, and `project bounce` in both CLIs exits 5 for it instead of rounding the rate.
 - The WASM worklet engine, playback and stream-analyzer node factories throw `RangeError` for a `sampleRate` that differs from the `AudioContext`'s.
 - Node `extractPercussiveEvents` refuses an integer option past the 32-bit range with `RangeError`, as WASM does.
+
+- Monophonic `transcribe` / `transcribeToClip` refuse `maxPolyphony`, `minFramePeakRatio`, `minRidgePeakRatio` or `reattackRatio` (Python and C: snake_case) with InvalidParameter naming the field; they apply to the polyphonic tracker only.
 
 #### Error classes
 
@@ -141,6 +143,8 @@
 
 #### Editing and voice
 
+- `transcribe` and `transcribeToClip` take the polyphonic tracker's limits: `maxPolyphony` (voices per frame, 1..64, default 10), `minFramePeakRatio` (default 0.20), `minRidgePeakRatio` (default 0.10) and `reattackRatio` (default 2.0), as snake_case keywords in Python, fields of `SonareTranscribeConfig` version 3 in C, and `--max-polyphony`, `--min-frame-peak-ratio`, `--min-ridge-peak-ratio` and `--reattack-ratio` on both CLIs. A written `0` is a real zero for the two peak ratios and turns re-strike splitting off for `reattackRatio`.
+- Polyphonic analysis splits a pitch struck again while it still sounds into two notes with `reattackRatio` (Python `reattack_ratio`, C `SonarePolyphonicConfig.reattack_ratio`); omitted or `0` keeps it off, as before.
 - `scaleMaskForMode(root, mode)` / `scale_mask_for_mode` / `sonare_scale_mask_for_mode` return the 12-bit scale mask of a mode (church-mode names as `detectKey` reports them), and `scaleModeMask` on pitch correction accepts a mode name as well as a mask on Node, WASM and Python.
 - `autoTune({ samples, sampleRate, key: 'detect' | { root, mode }, strength, ... })` / `auto_tune` / `sonare_auto_tune` tune a monophonic recording to a detected or named key offline and return the corrected samples plus the key used.
 - `voiceChange` / `voice_change` and the `voice-change` CLI take `formantMode` / `formant_mode`: `relative` (the default, unchanged output) or `absolute`, where `formantFactor` is the formant shift relative to the input whatever the pitch shift. An absolute request the formant warp cannot reach is refused with the reachable range. C: `sonare_voice_change_ex` with the versioned `SonareVoiceChangeConfig` and `SonareFormantMode`.
@@ -150,6 +154,7 @@
 
 ### Behaviour changes
 
+- Polyphonic `transcribe` keeps more of a dense recording by default: up to 10 voices per frame instead of 4, notes from 100 ms instead of 140 ms, and a same-pitch re-strike as a new note instead of an extension of the sounding one. On rendered piano scores this raised onset recall on 5-8 voice chords, 16th notes at 128 BPM and repeated notes, at the cost of more spurious notes in thick chords. `minNoteMs` now applies to the polyphonic tracker as its shortest note, and its default depends on the tracker (30 ms monophonic, 100 ms polyphonic). Known limits: the upper note of an octave doubling is usually lost, a re-strike much softer than the note it interrupts is not split, and broadband noise yields a few short notes per second.
 - Boundary detection gates each novelty peak against the largest novelty within `referenceWindow` seconds on either side instead of the whole-track maximum, so a dominant change no longer hides weaker section changes far from it. This affects tracks longer than 60 s and the sections `analyze()` reports. Minimum spacing keeps the strongest peaks first and no longer depends on peak order, so chains of peaks closer than `peakDistance` resolve differently. `strength` and `noveltyCurve` keep their meaning.
 - Beat trimming measures the edge beats against the third-highest peak of the onset envelope instead of its single loudest frame, so one loud burst no longer trims quiet edge beats.
 - Analyzers that take audio at its own sample rate (beats, tempo, onsets, key, rhythm, the chord beat grid, timbre) read `n_fft` as a window length in samples at 22050 Hz and rescale it to the input rate; the hop stays in input samples. Results at other rates can change and now agree across rates; 22050 Hz input is unchanged.
@@ -204,6 +209,7 @@
 
 ### Fixes
 
+- Polyphonic transcription and polyphonic note extraction run in time proportional to the input length; each note used to invert the whole recording, so 158 s of piano took over two minutes and now takes about two seconds, with identical notes.
 - The first `capabilityCatalog()` call is about a third faster on Node and about three times faster on WASM; the catalog content is unchanged.
 - Python: a `None` element in a sample list is named (`samples[7] is None, not a number`) instead of being reported as a NaN sample.
 - The realtime voice changer's pitch stage shifts by exactly `2^(semitones/12)` on every surface. Its grains used to re-lock to the input period, landing tens of hertz off (a +4 semitone shift of 220 Hz came out near 306 Hz) and cancelling 7 to 25 dB of level; they now read one continuous resampling of the source and re-align by a source-period search. The wet path carries a shift-dependent delay of up to two grains on top of the reported latency.
