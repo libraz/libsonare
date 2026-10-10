@@ -22,6 +22,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type {
   CapabilityCatalog,
+  CapabilityCatalogChain,
+  CapabilityCatalogChainAlias,
+  CapabilityCatalogChainList,
+  CapabilityCatalogChainStage,
   CapabilityCatalogMasteringPreset,
   CapabilityCatalogParameter,
   CapabilityCatalogPresets,
@@ -150,10 +154,36 @@ const catalogMasteringPreset = {
   maxLimiterGainReductionDb: null,
 } satisfies CapabilityCatalogMasteringPreset;
 
+const catalogChainStage = {
+  prefix: 'dynamics.compressor',
+  processor: 'dynamics.compressor',
+  enabledKey: 'dynamics.compressor.enabled',
+} satisfies CapabilityCatalogChainStage;
+
+const catalogChainList = {
+  key: 'dynamics.multibandComp.bands',
+  processor: 'dynamics.compressor',
+  minItems: 2,
+  maxItems: 64,
+} satisfies CapabilityCatalogChainList;
+
+const catalogChainAlias = {
+  key: 'eq.tilt.tiltDb',
+  aliases: ['eq.tiltDb'],
+} satisfies CapabilityCatalogChainAlias;
+
+const catalogChain = {
+  stages: [catalogChainStage],
+  lists: [catalogChainList],
+  params: [catalogParameter],
+  aliases: [catalogChainAlias],
+} satisfies CapabilityCatalogChain;
+
 const capabilityCatalog = {
   version: '',
   abi: null as unknown as CapabilityCatalog['abi'],
   processors: [catalogProcessor],
+  chain: catalogChain,
   presets: catalogPresets,
   masteringPresets: [catalogMasteringPreset],
 } satisfies CapabilityCatalog;
@@ -161,6 +191,10 @@ const capabilityCatalog = {
 describe('capability catalog type shapes', () => {
   it.each([
     ['CapabilityCatalog', capabilityCatalog],
+    ['CapabilityCatalogChain', catalogChain],
+    ['CapabilityCatalogChainAlias', catalogChainAlias],
+    ['CapabilityCatalogChainList', catalogChainList],
+    ['CapabilityCatalogChainStage', catalogChainStage],
     ['CapabilityCatalogMasteringPreset', catalogMasteringPreset],
     ['CapabilityCatalogParameter', catalogParameter],
     ['CapabilityCatalogPresets', catalogPresets],

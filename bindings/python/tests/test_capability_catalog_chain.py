@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+
 from libsonare import capability_catalog
 
 from ._helpers import LIB_AVAILABLE

@@ -14,11 +14,16 @@
     "DynamicsProcessorResult": ["latencySamples", "samples"],
     "CapabilityCatalog": [
       "abi",
+      "chain",
       "masteringPresets",
       "presets",
       "processors",
       "version"
     ],
+    "CapabilityCatalogChain": ["aliases", "lists", "params", "stages"],
+    "CapabilityCatalogChainAlias": ["aliases", "key"],
+    "CapabilityCatalogChainList": ["key", "maxItems", "minItems", "processor"],
+    "CapabilityCatalogChainStage": ["enabledKey", "prefix", "processor"],
     "CapabilityCatalogMasteringPreset": [
       "kind",
       "maxLimiterGainReductionDb",
