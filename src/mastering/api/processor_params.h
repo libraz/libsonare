@@ -162,15 +162,31 @@ class ParamMap {
   double& operator[](const std::string& key) { return map_[key]; }
 
   /// @brief Looks up @p key, recording it as probed (whether present or not).
+  /// @details A map that stopped recording declarations is a bounds probe, which never reads
+  ///          the probed set back, so it skips the insert.
   const_iterator find(const std::string& key) const {
-    probed_.insert(key);
+    if (records_declarations_) probed_.insert(key);
     return map_.find(key);
   }
   const_iterator find(const char* key) const {
-    probed_.insert(key);
+    if (records_declarations_) probed_.insert(key);
     return map_.find(key);
   }
   const_iterator end() const { return map_.end(); }
+
+  /// @brief Whether a supplied key is @p prefix followed by one of @p fields, without recording
+  ///        anything as probed. Scans the supplied keys, so it suits the one- or two-key maps of
+  ///        a bounds probe better than a lookup per field.
+  bool has_prefixed_field(const std::string& prefix, const std::vector<std::string>& fields) const {
+    for (const auto& entry : map_) {
+      const std::string& key = entry.first;
+      if (key.size() <= prefix.size() || key.compare(0, prefix.size(), prefix) != 0) continue;
+      for (const std::string& field : fields) {
+        if (key.compare(prefix.size(), std::string::npos, field) == 0) return true;
+      }
+    }
+    return false;
+  }
 
   /// @brief Records the C++ type a builder read @p key as.
   /// @details Called by the accessors below, so the recorded kind is the
@@ -623,8 +639,11 @@ inline bool supplied_slot(const ParamMap& params, const std::string& prefix,
   if (params.records_declarations()) {
     params.note_slot(prefix.substr(0, prefix.size() - 1), SlotDeclaration{parent, true, 0});
   }
+  if (!params.records_declarations()) return params.has_prefixed_field(prefix, fields);
+  static thread_local std::string key;
   for (const std::string& field : fields) {
-    if (params.find(prefix + field) != params.end()) return true;
+    key.assign(prefix).append(field);
+    if (params.find(key) != params.end()) return true;
   }
   return false;
 }
