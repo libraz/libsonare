@@ -923,6 +923,27 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
   }
 
+  SECTION("a coarser note division keeps fewer notes") {
+    auto [fine_code, fine_output] = exec_command(base + " --min-note-division 32");
+    INFO(fine_output);
+    REQUIRE(fine_code == 0);
+    auto [whole_code, whole_output] = exec_command(base + " --min-note-division 1");
+    INFO(whole_output);
+    REQUIRE(whole_code == 0);
+    const auto fine_payload = sonare::util::json::parse_strict(fine_output);
+    const auto whole_payload = sonare::util::json::parse_strict(whole_output);
+    REQUIRE(fine_payload["note_count"].as_int() > whole_payload["note_count"].as_int());
+  }
+
+  SECTION("a rejected note division is an invalid parameter") {
+    for (const char* bad : {"--min-note-division 0", "--min-note-division 129",
+                            "--min-note-division 32 --min-note-ms 30"}) {
+      auto [code, output] = exec_command(base + " " + bad);
+      INFO(bad << ": " << output);
+      REQUIRE(code == 3);
+    }
+  }
+
   SECTION("zero ratios and no-split are accepted") {
     auto [code, output] = exec_command(base +
                                        " --reattack-ratio 0 --min-frame-peak-ratio 0"

@@ -347,6 +347,7 @@ def _transcribe_config(
     min_frame_peak_ratio: float | None = None,
     min_ridge_peak_ratio: float | None = None,
     reattack_ratio: float | None = None,
+    min_note_division: int | None = None,
 ) -> SonareTranscribeConfig:
     """Build the transcription config, refusing an out-of-domain field by name.
 
@@ -415,6 +416,14 @@ def _transcribe_config(
     )
     config.reattack_ratio = (
         0.0 if reattack_ratio is None else _transcribe_reattack(fn_name, reattack_ratio)
+    )
+
+    # Both polyphonic and monophonic read the division; giving it together with
+    # min_note_ms is refused by the C ABI, naming min_note_division.
+    config.min_note_division = (
+        0
+        if min_note_division is None
+        else _transcribe_int(fn_name, min_note_division, "min_note_division", 1, 128)
     )
     return config
 

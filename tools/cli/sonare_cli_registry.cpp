@@ -1047,10 +1047,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {required_output(), number_value("tempo-bpm"), flag("polyphonic"),
                  number_value("reference-hz"), number_value("fmin"), number_value("fmax"),
                  number_value("min-note-ms"), number_value("segmentation-threshold-cents"),
-                 int_value("max-polyphony"), number_value("min-frame-peak-ratio"),
-                 number_value("min-ridge-peak-ratio"), number_value("reattack-ratio"),
-                 number_value("velocity-floor-db"), int_value("fixed-velocity"),
-                 int_value("group", 0), int_value("channel", 0)});
+                 int_value("max-polyphony"), int_value("min-note-division"),
+                 number_value("min-frame-peak-ratio"), number_value("min-ridge-peak-ratio"),
+                 number_value("reattack-ratio"), number_value("velocity-floor-db"),
+                 int_value("fixed-velocity"), int_value("group", 0), int_value("channel", 0)});
     // The reference melody is read by the arrangement library and assigned by the
     // pitch editor, so the leaf exists only where both do. `--reference-smf` is
     // required in the parser on both front-ends and so keeps the usage class,

@@ -178,6 +178,16 @@ int cmd_transcribe(const CliArgs& args, const Audio& audio) {
     }
   }
 
+  // Both paths read the division; giving it with --min-note-ms is refused by the
+  // core, which names the field.
+  if (args.has("min-note-division")) {
+    const int division = args.get_int("min-note-division", 0);
+    if (division < 1 || division > 128) {
+      throw std::invalid_argument("--min-note-division must be an integer in 1..128");
+    }
+    config.min_note_division = division;
+  }
+
   size_t note_count = 0;
   err = sonare_project_transcribe_to_clip(handle.ptr, clip_id, audio.data(), audio.size(),
                                           audio.sample_rate(), &config, &note_count);

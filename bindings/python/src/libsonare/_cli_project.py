@@ -668,6 +668,7 @@ def cmd_transcribe(args: argparse.Namespace) -> int:
             min_frame_peak_ratio=args.min_frame_peak_ratio,
             min_ridge_peak_ratio=args.min_ridge_peak_ratio,
             reattack_ratio=args.reattack_ratio,
+            min_note_division=args.min_note_division,
         )
         data = cast(Any, project).export_smf()
     finally:
@@ -946,7 +947,16 @@ def register_project_parsers(
         "--min-note-ms",
         type=_finite_float,
         default=None,
-        help="Shortest span kept as a note, in ms (default: 30 monophonic, 100 polyphonic)",
+        help="Shortest span kept as a note, in ms (default: 30 monophonic; polyphonic a "
+        "thirty-second note at the tempo, held within 30-60)",
+    )
+    transcribe_p.add_argument(
+        "--min-note-division",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Shortest note kept, as a note value: N is a 1/N note at the tempo "
+        "(32 = thirty-second note), 1-128; not with --min-note-ms",
     )
     transcribe_p.add_argument(
         "--max-polyphony",

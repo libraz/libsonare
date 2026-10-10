@@ -4004,6 +4004,15 @@
           "domain": null
         },
         {
+          "name": "min-note-division",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "min-note-ms",
           "type": "number",
           "default": null,
@@ -14640,6 +14649,15 @@
         {
           "name": "min-frame-peak-ratio",
           "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-note-division",
+          "type": "integer",
           "default": null,
           "aliases": [],
           "repeatable": false,

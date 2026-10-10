@@ -981,6 +981,7 @@ def transcribe(
     min_frame_peak_ratio: float | None = None,
     min_ridge_peak_ratio: float | None = None,
     reattack_ratio: float | None = None,
+    min_note_division: int | None = None,
 ) -> TranscribeResult:
     """Transcribe mono audio into MIDI events on a constant-tempo grid.
 
@@ -1032,7 +1033,12 @@ def transcribe(
             this bound, with the same polyphonic salience-axis behavior as
             ``fmin``.
         min_note_ms: Shortest span kept as a note; ``None`` keeps the default
-            (30 ms monophonic, 100 ms polyphonic).
+            (30 ms monophonic; polyphonic a thirty-second note at the
+            transcription tempo, held within 30..60 ms). Not given together with
+            ``min_note_division``.
+        min_note_division: Shortest note kept, as a note value: ``n`` is a 1/n
+            note at the transcription tempo (32 is a thirty-second note), 1..128.
+            Applies to both paths; ``None`` keeps the ``min_note_ms`` rule.
         segmentation_threshold_cents: Pitch movement that ends one note and
             starts the next; ``None`` keeps the default (50 cents).
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
@@ -1063,7 +1069,8 @@ def transcribe(
         SonareValueError: If ``samples`` is empty or holds a NaN or Inf sample,
             or if a config argument is outside its domain -- each named against
             this function.
-        SonareError: ``INVALID_PARAMETER`` when any polyphonic-only field is
+        SonareError: ``INVALID_PARAMETER`` when ``min_note_division`` is given
+            together with ``min_note_ms``, when any polyphonic-only field is
             given with ``polyphonic=False`` (the message names the field), or
             when only one of ``fmin``/``fmax``
             is given and it does not lie on the right side of the selected
@@ -1106,6 +1113,7 @@ def transcribe(
         min_frame_peak_ratio=min_frame_peak_ratio,
         min_ridge_peak_ratio=min_ridge_peak_ratio,
         reattack_ratio=reattack_ratio,
+        min_note_division=min_note_division,
     )
     c_array, length = _to_c_float_array(samples)
 

@@ -229,6 +229,26 @@ def _rejections(entry: str) -> list[tuple[str, dict[str, object], str]]:
         ("fmin_above_fmax", {"fmin": 900.0, "fmax": 200.0}, f"{entry}: fmax must be above fmin"),
         ("reference_hz", {"reference_hz": float("nan")}, f"{entry}: reference_hz must be"),
         ("min_note_ms", {"min_note_ms": -1.0}, f"{entry}: min_note_ms must be positive"),
+        (
+            "min_note_division_zero",
+            {"min_note_division": 0},
+            f"{entry}: min_note_division must be an integer in [1, 128]",
+        ),
+        (
+            "min_note_division_high",
+            {"min_note_division": 129},
+            f"{entry}: min_note_division must be an integer in [1, 128]",
+        ),
+        (
+            "min_note_division_float",
+            {"min_note_division": 32.0},
+            f"{entry}: min_note_division must be an integer",
+        ),
+        (
+            "min_note_division_bool",
+            {"min_note_division": True},
+            f"{entry}: min_note_division must be an integer",
+        ),
         ("group", {"group": 16}, f"{entry}: group must be an integer in [0, 15]"),
         ("channel", {"channel": -1}, f"{entry}: channel must be an integer in [0, 15]"),
         ("max_polyphony_zero", {"max_polyphony": 0}, f"{entry}: max_polyphony must be an integer"),
@@ -545,7 +565,8 @@ def test_min_ridge_peak_ratio_changes_the_note_length(decaying_tone: np.ndarray)
     assert default.note_count > 0
     # With no fade threshold the ridge rides the decay to the end of the take.
     assert last_off(zero) > last_off(default)
-    assert _note_ons(_poly(decaying_tone, min_ridge_peak_ratio=0.9).events) == 0
+    # A ratio near 1 ends the ridge almost as soon as the decay begins.
+    assert last_off(_poly(decaying_tone, min_ridge_peak_ratio=0.9)) < last_off(default)
 
 
 def test_reattack_ratio_splits_a_restruck_tone(restruck_tone: np.ndarray) -> None:
@@ -589,3 +610,41 @@ def test_a_polyphonic_limit_on_the_monophonic_path_is_refused_by_the_core(
     with pytest.raises(libsonare.SonareError) as excinfo:
         libsonare.transcribe(melody, SR, **{option: value})
     assert option in str(excinfo.value)
+
+
+# ---------------------------------------------------------------------------
+# min_note_division: the shortest note as a note value, on both paths
+# ---------------------------------------------------------------------------
+
+
+def test_min_note_division_drops_notes_shorter_than_the_note_value(melody: np.ndarray) -> None:
+    default = libsonare.transcribe(melody, SR, tempo_bpm=120.0)
+    # At 120 BPM a whole note is 2 s: no tone of the melody reaches it.
+    whole = libsonare.transcribe(melody, SR, tempo_bpm=120.0, min_note_division=1)
+    fine = libsonare.transcribe(melody, SR, tempo_bpm=120.0, min_note_division=32)
+    assert default.note_count == len(_EXPECTED_NOTES)
+    assert whole.note_count == 0
+    assert fine.note_count == default.note_count
+
+
+def test_min_note_division_applies_to_the_polyphonic_path(four_note_chord: np.ndarray) -> None:
+    assert _note_ons(_poly(four_note_chord, min_note_division=32).events) == 4
+    assert _note_ons(_poly(four_note_chord, min_note_division=1).events) == 0
+
+
+def test_min_note_division_with_min_note_ms_is_refused_by_the_core(melody: np.ndarray) -> None:
+    with pytest.raises(libsonare.SonareError) as excinfo:
+        libsonare.transcribe(melody, SR, min_note_ms=30.0, min_note_division=32)
+    assert "min_note_division" in str(excinfo.value)
+
+
+def test_to_clip_forwards_min_note_division(melody: np.ndarray) -> None:
+    project = libsonare.Project()
+    try:
+        _track_id, clip_id = project.add_midi_clip(0.0, 8.0)
+        assert project.transcribe_to_clip(clip_id, melody, SR, min_note_division=1) == 0
+        assert project.transcribe_to_clip(clip_id, melody, SR, min_note_division=32) == len(
+            _EXPECTED_NOTES
+        )
+    finally:
+        project.close()

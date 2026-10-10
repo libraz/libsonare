@@ -118,6 +118,7 @@ class _ProjectMidiMixin:
         min_frame_peak_ratio: float | None = None,
         min_ridge_peak_ratio: float | None = None,
         reattack_ratio: float | None = None,
+        min_note_division: int | None = None,
     ) -> int:
         """Transcribe mono audio straight into a MIDI clip's event list.
 
@@ -148,7 +149,12 @@ class _ProjectMidiMixin:
                 paths use this bound, with the same polyphonic salience-axis
                 behavior as ``fmin``.
             min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms
-                (monophonic) or 100 ms (polyphonic).
+                (monophonic) or a thirty-second note at the project's tempo at
+                the clip start, held within 30..60 ms (polyphonic). Not given
+                together with ``min_note_division``.
+            min_note_division: Shortest note kept, as a note value: ``n`` is a
+                1/n note at the project's tempo at the clip start (32 is a
+                thirty-second note), 1..128. Applies to both paths.
             segmentation_threshold_cents: Pitch movement that ends one note and
                 starts the next; ``None`` keeps 50 cents.
             velocity_floor_db: Level mapped to velocity 1; must be negative.
@@ -205,6 +211,7 @@ class _ProjectMidiMixin:
             min_frame_peak_ratio=min_frame_peak_ratio,
             min_ridge_peak_ratio=min_ridge_peak_ratio,
             reattack_ratio=reattack_ratio,
+            min_note_division=min_note_division,
         )
         c_array, length = _to_c_float_array(samples)
         note_count = ctypes.c_size_t()

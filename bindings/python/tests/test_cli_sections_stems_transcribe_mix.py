@@ -349,6 +349,8 @@ def test_transcribe_polyphonic_limits_reach_the_call(
                 "0",
                 "--reattack-ratio",
                 "2.5",
+                "--min-note-division",
+                "32",
                 "--json",
             ],
         )
@@ -360,6 +362,7 @@ def test_transcribe_polyphonic_limits_reach_the_call(
     assert seen["min_frame_peak_ratio"] == pytest.approx(0.3)
     assert seen["min_ridge_peak_ratio"] == 0.0
     assert seen["reattack_ratio"] == pytest.approx(2.5)
+    assert seen["min_note_division"] == 32
 
 
 def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
@@ -388,6 +391,7 @@ def test_transcribe_leaves_the_polyphonic_limits_unsent_by_default(
             assert exc.code in (0, None)
     for name in ("max_polyphony", "min_frame_peak_ratio", "min_ridge_peak_ratio", "reattack_ratio"):
         assert seen[name] is None
+    assert seen["min_note_division"] is None
 
 
 def test_transcribe_refuses_a_polyphonic_limit_without_polyphonic(melody_wav: str) -> None:
@@ -407,6 +411,38 @@ def test_transcribe_refuses_an_out_of_domain_reattack_ratio(melody_wav: str) -> 
         )
         assert result.returncode != 0
         assert "reattack_ratio" in result.stderr
+
+
+@pytest.mark.parametrize("division", ["0", "129"])
+def test_transcribe_refuses_an_out_of_domain_min_note_division(
+    melody_wav: str, division: str
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        result = _run_cli(["transcribe", melody_wav, "-o", output, "--min-note-division", division])
+        assert result.returncode != 0
+        assert "min_note_division" in result.stderr
+        assert not os.path.exists(output)
+
+
+def test_transcribe_refuses_min_note_division_with_min_note_ms(melody_wav: str) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        output = os.path.join(tmpdir, "take.mid")
+        result = _run_cli(
+            [
+                "transcribe",
+                melody_wav,
+                "-o",
+                output,
+                "--min-note-ms",
+                "30",
+                "--min-note-division",
+                "32",
+            ]
+        )
+        assert result.returncode != 0
+        assert "min_note_division" in result.stderr
+        assert not os.path.exists(output)
 
 
 def test_transcribe_refuses_a_non_positive_tempo(melody_wav: str) -> None:
