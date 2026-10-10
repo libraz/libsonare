@@ -15,7 +15,7 @@
 #include "sonare_c_types.h"
 
 /// ABI version of the flat acoustic POD structs below. Bump on any layout change.
-#define SONARE_ACOUSTIC_ABI_VERSION 4u
+#define SONARE_ACOUSTIC_ABI_VERSION 5u
 
 /// Statistical late-reverberation RT60 model for RIR synthesis / room morph
 /// (SonareRirSynthConfig::late_model, SonareRoomMorphConfig::late_model).
@@ -220,7 +220,17 @@ typedef struct {
   int air_absorption_enabled;
   float air_temperature_c;
   float air_humidity_percent;
+  /* Receiver spacing in metres for sonare_room_morph_stereo, in (0, 4]; 0 = library default
+   * (0.5). Ignored and not validated by sonare_room_morph. */
+  float receiver_spacing_m;
 } SonareRoomMorphConfig;
+
+/// @brief Result of sonare_room_morph_stereo; free with sonare_free_room_morph_stereo_result.
+typedef struct {
+  float* left;
+  float* right;
+  size_t length;
+} SonareRoomMorphStereoResult;
 
 #ifdef __cplusplus
 // Each config's scalar prefix is a packed run of 4-byte members (float/int/
@@ -265,6 +275,9 @@ static_assert(offsetof(SonareRoomMorphConfig, air_absorption_enabled) ==
 static_assert(offsetof(SonareRoomMorphConfig, air_humidity_percent) ==
                   offsetof(SonareRoomMorphConfig, air_temperature_c) + sizeof(float),
               "SonareRoomMorphConfig air climate layout changed");
+static_assert(offsetof(SonareRoomMorphConfig, receiver_spacing_m) ==
+                  offsetof(SonareRoomMorphConfig, air_humidity_percent) + sizeof(float),
+              "SonareRoomMorphConfig receiver spacing layout changed");
 #endif
 
 /// @brief Synthesize a room impulse response from shoebox geometry.
@@ -288,6 +301,15 @@ void sonare_free_room_estimate(SonareRoomEstimate* result);
 ///                   target room's reverb tail.
 SonareError sonare_room_morph(const float* samples, size_t length, int sample_rate,
                               const SonareRoomMorphConfig* config, float** out, size_t* out_length);
+
+/// @brief Offline room-character morph of a stereo pair toward a target room heard at two
+///        receivers spaced config->receiver_spacing_m apart across the listener.
+/// @param out Receives the morphed pair (free with sonare_free_room_morph_stereo_result).
+///            Length is the input length plus the target room's reverb tail.
+SonareError sonare_room_morph_stereo(const float* left, const float* right, size_t length,
+                                     int sample_rate, const SonareRoomMorphConfig* config,
+                                     SonareRoomMorphStereoResult* out);
+void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result);
 
 /// @brief Name of a SONARE_MATERIAL_PRESET_* value ("none", "concrete", "wood", "curtain",
 ///        "carpet", "glass"), or NULL when @p preset is not one. The values are contiguous from

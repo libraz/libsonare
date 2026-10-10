@@ -20,7 +20,7 @@ describe.each([
     expect(sonare.code).toBe(entry.ErrorCode.AbiMismatch);
     expect(sonare.codeName).toBe('AbiMismatch');
     expect(sonare.message).toContain('0x01010101');
-    expect(sonare.message).toContain('0x04030207');
+    expect(sonare.message).toContain('0x05030207');
     expect(sonare.message).toMatch(/wasmBinary.*locateFile.*moduleFactory/);
     expect(entry.isInitialized()).toBe(false);
 
@@ -35,7 +35,7 @@ describe.each([
 
 describe('EXPECTED_ABI_VERSION', () => {
   it('is exported from every entry that takes a moduleFactory', () => {
-    expect(full.EXPECTED_ABI_VERSION).toBe(0x04030207);
+    expect(full.EXPECTED_ABI_VERSION).toBe(0x05030207);
     expect(analysis.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
     expect(worklet.EXPECTED_ABI_VERSION).toBe(full.EXPECTED_ABI_VERSION);
   });

@@ -565,6 +565,21 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(ctypes.c_size_t),
         ]
 
+    if hasattr(lib, "sonare_room_morph_stereo"):
+        lib.sonare_room_morph_stereo.restype = ctypes.c_int32
+        lib.sonare_room_morph_stereo.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.POINTER(SonareRoomMorphConfig),
+            ctypes.POINTER(SonareRoomMorphStereoResult),
+        ]
+        lib.sonare_free_room_morph_stereo_result.restype = None
+        lib.sonare_free_room_morph_stereo_result.argtypes = [
+            ctypes.POINTER(SonareRoomMorphStereoResult)
+        ]
+
     if hasattr(lib, "sonare_analyze_sections"):
         lib.sonare_analyze_sections.restype = ctypes.c_int32
         lib.sonare_analyze_sections.argtypes = [

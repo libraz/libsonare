@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include "acoustic/material.h"
@@ -330,6 +331,69 @@ void sonare_free_room_estimate(SonareRoomEstimate* result) {
   result->band_count = 0;
 }
 
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+namespace {
+
+// The scalar and band checks the core does not repeat, shared by both morph entries.
+bool room_morph_config_is_valid(const SonareRoomMorphConfig& config) {
+  const auto unit = [](float value) {
+    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
+  };
+  if (!unit(config.absorption) || !unit(config.source_tail_suppression) || !unit(config.wet) ||
+      config.absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
+      config.scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
+      (config.absorption_band_count > 0 && config.absorption_bands == nullptr) ||
+      (config.scattering_band_count > 0 && config.scattering_bands == nullptr)) {
+    return false;
+  }
+  for (size_t i = 0; i < config.absorption_band_count; ++i) {
+    if (!unit(config.absorption_bands[i])) return false;
+  }
+  for (size_t i = 0; i < config.scattering_band_count; ++i) {
+    if (!unit(config.scattering_bands[i])) return false;
+  }
+  return true;
+}
+
+sonare::effects::acoustic::RoomMorphConfig room_morph_config_from(
+    const SonareRoomMorphConfig& config) {
+  sonare::effects::acoustic::RoomMorphConfig cfg;
+  cfg.target =
+      make_room(config.length_m, config.width_m, config.height_m, config.absorption,
+                config.absorption_bands, config.absorption_band_count, config.scattering_bands,
+                config.scattering_band_count, config.material_preset);
+  cfg.placement = {{config.source_x, config.source_y, config.source_z},
+                   {config.listener_x, config.listener_y, config.listener_z}};
+  cfg.source_tail_suppression = config.source_tail_suppression;
+  cfg.wet = config.wet;
+  cfg.ism_order = config.ism_order;
+  // seed == 0 keeps the library default (1); see synthesize_rir above.
+  if (config.seed != 0) cfg.seed = config.seed;
+  cfg.max_seconds = config.max_seconds;
+  cfg.late_model = reverb_model_from_int(config.late_model);
+  cfg.mixing_time_ms = config.mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
+  // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
+  // not a useful setting), matching the RIR-synth ABI convention. Any
+  // other value reaches the morph core, which rejects it if out of range.
+  cfg.crossfade_ms = sonare::ZeroIsDefault(config.crossfade_ms).or_default(cfg.crossfade_ms);
+  // Air absorption on the target room; zero climate values keep the ISO
+  // reference, exactly as in synthesize_rir above. Here the core rejects an
+  // implausible climate by throwing, which the entry maps to
+  // SONARE_ERROR_INVALID_PARAMETER.
+  cfg.air_absorption_enabled = config.air_absorption_enabled != 0;
+  cfg.air.temperature_c =
+      sonare::ZeroIsDefault(config.air_temperature_c).or_default(cfg.air.temperature_c);
+  cfg.air.humidity_percent =
+      sonare::ZeroIsDefault(config.air_humidity_percent).or_default(cfg.air.humidity_percent);
+  // Read by the stereo entry only; the mono morph neither validates nor uses it.
+  cfg.receiver_spacing_m =
+      sonare::ZeroIsDefault(config.receiver_spacing_m).or_default(cfg.receiver_spacing_m);
+  return cfg;
+}
+
+}  // namespace
+#endif
+
 SonareError sonare_room_morph(const float* samples, size_t length, int sample_rate,
                               const SonareRoomMorphConfig* config, float** out,
                               size_t* out_length) {
@@ -337,55 +401,11 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
   if (!begin_vector_output(out, out_length)) return SONARE_ERROR_INVALID_PARAMETER;
 #if defined(SONARE_WITH_ACOUSTIC_SIM)
   sonare_c_detail::clear_last_warning();
-  if (!config) return SONARE_ERROR_INVALID_PARAMETER;
-  const auto unit = [](float value) {
-    return std::isfinite(value) && value >= 0.0f && value <= 1.0f;
-  };
-  if (!unit(config->absorption) || !unit(config->source_tail_suppression) || !unit(config->wet) ||
-      config->absorption_band_count > sonare::acoustic::kMaxMaterialBands ||
-      config->scattering_band_count > sonare::acoustic::kMaxMaterialBands ||
-      (config->absorption_band_count > 0 && config->absorption_bands == nullptr) ||
-      (config->scattering_band_count > 0 && config->scattering_bands == nullptr)) {
-    return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < config->absorption_band_count; ++i) {
-    if (!unit(config->absorption_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
-  for (size_t i = 0; i < config->scattering_band_count; ++i) {
-    if (!unit(config->scattering_bands[i])) return SONARE_ERROR_INVALID_PARAMETER;
-  }
+  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
   return run_mono_offline(
       samples, length, sample_rate, out, out_length, [&](const Audio& audio) -> Audio {
-        sonare::effects::acoustic::RoomMorphConfig cfg;
-        cfg.target = make_room(config->length_m, config->width_m, config->height_m,
-                               config->absorption, config->absorption_bands,
-                               config->absorption_band_count, config->scattering_bands,
-                               config->scattering_band_count, config->material_preset);
-        cfg.placement = {{config->source_x, config->source_y, config->source_z},
-                         {config->listener_x, config->listener_y, config->listener_z}};
-        cfg.source_tail_suppression = config->source_tail_suppression;
-        cfg.wet = config->wet;
-        cfg.ism_order = config->ism_order;
-        // seed == 0 keeps the library default (1); see synthesize_rir above.
-        if (config->seed != 0) cfg.seed = config->seed;
-        cfg.max_seconds = config->max_seconds;
-        cfg.late_model = reverb_model_from_int(config->late_model);
-        cfg.mixing_time_ms = config->mixing_time_ms;  // 0 = auto (~sqrt(V) ms)
-        // crossfade_ms == 0 preserves the C++ default (a true zero crossfade is
-        // not a useful setting), matching the RIR-synth ABI convention. Any
-        // other value reaches the morph core, which rejects it if out of range.
-        cfg.crossfade_ms = sonare::ZeroIsDefault(config->crossfade_ms).or_default(cfg.crossfade_ms);
-        // Air absorption on the target room; zero climate values keep the ISO
-        // reference, exactly as in synthesize_rir above. Here the core rejects an
-        // implausible climate by throwing, which run_mono_offline maps to
-        // SONARE_ERROR_INVALID_PARAMETER.
-        cfg.air_absorption_enabled = config->air_absorption_enabled != 0;
-        cfg.air.temperature_c =
-            sonare::ZeroIsDefault(config->air_temperature_c).or_default(cfg.air.temperature_c);
-        cfg.air.humidity_percent = sonare::ZeroIsDefault(config->air_humidity_percent)
-                                       .or_default(cfg.air.humidity_percent);
         sonare::effects::acoustic::RoomMorphResult result =
-            sonare::effects::acoustic::room_morph(audio, cfg);
+            sonare::effects::acoustic::room_morph(audio, room_morph_config_from(*config));
         // Published the way synthesize_rir publishes its own: the target RIR is
         // synthesized by the same code, and a clamp there means this morph used a
         // room the caller did not request.
@@ -395,4 +415,49 @@ SonareError sonare_room_morph(const float* samples, size_t length, int sample_ra
 #else
   SONARE_C_STUB_NOT_SUPPORTED(samples, length, sample_rate, config, out, out_length);
 #endif
+}
+
+SonareError sonare_room_morph_stereo(const float* left, const float* right, size_t length,
+                                     int sample_rate, const SonareRoomMorphConfig* config,
+                                     SonareRoomMorphStereoResult* out) {
+  SONARE_C_API_ENTRY;
+  if (out == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
+  // Defined before any validation return, so a rejected call hands back an empty result.
+  *out = SonareRoomMorphStereoResult{};
+#if defined(SONARE_WITH_ACOUSTIC_SIM)
+  sonare_c_detail::clear_last_warning();
+  if (!config || !room_morph_config_is_valid(*config)) return SONARE_ERROR_INVALID_PARAMETER;
+  SonareError err = sonare_c_detail::validate_audio_params(left, length, sample_rate);
+  if (err != SONARE_OK) return err;
+  err = sonare_c_detail::validate_audio_params(right, length, sample_rate);
+  if (err != SONARE_OK) return err;
+
+  SONARE_C_TRY
+  const sonare::effects::acoustic::RoomMorphStereoResult result =
+      sonare::effects::acoustic::room_morph_stereo(Audio::from_buffer(left, length, sample_rate),
+                                                   Audio::from_buffer(right, length, sample_rate),
+                                                   room_morph_config_from(*config));
+  publish_rir_diagnostics(result.diagnostics);
+  const size_t n = result.left.size();
+  std::unique_ptr<float[]> left_out(new float[n]);
+  std::unique_ptr<float[]> right_out(new float[n]);
+  std::memcpy(left_out.get(), result.left.data(), n * sizeof(float));
+  std::memcpy(right_out.get(), result.right.data(), n * sizeof(float));
+  out->left = sonare_c_detail::release_array(left_out);
+  out->right = sonare_c_detail::release_array(right_out);
+  out->length = n;
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  SONARE_C_STUB_NOT_SUPPORTED(left, right, length, sample_rate, config);
+#endif
+}
+
+void sonare_free_room_morph_stereo_result(SonareRoomMorphStereoResult* result) {
+  if (!result) return;
+  delete[] result->left;
+  delete[] result->right;
+  result->left = nullptr;
+  result->right = nullptr;
+  result->length = 0;
 }

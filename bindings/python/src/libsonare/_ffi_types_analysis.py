@@ -233,6 +233,18 @@ class SonareRoomMorphConfig(CStruct):
         ("air_absorption_enabled", ctypes.c_int),
         ("air_temperature_c", ctypes.c_float),
         ("air_humidity_percent", ctypes.c_float),
+        # Read by sonare_room_morph_stereo only; 0 = library default (0.5 m).
+        ("receiver_spacing_m", ctypes.c_float),
+    ]
+
+
+class SonareRoomMorphStereoResult(CStruct):
+    """Maps to SonareRoomMorphStereoResult in sonare_c_acoustic.h."""
+
+    _fields_ = [
+        ("left", ctypes.POINTER(ctypes.c_float)),
+        ("right", ctypes.POINTER(ctypes.c_float)),
+        ("length", ctypes.c_size_t),
     ]
 
 
