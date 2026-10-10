@@ -540,6 +540,18 @@ class TestDocumentedBufferInputForms:
             metering_rms_db(["not", "numbers"])
         assert "metering_rms_db: samples" in str(exc_info.value)
 
+    def test_none_element_is_named_rather_than_reported_as_nan(self):
+        samples = [0.0] * 1024
+        samples[7] = None
+        with pytest.raises(SonareValueError, match=r"metering_rms_db: samples\[7\] is None"):
+            metering_rms_db(samples)
+
+    def test_nan_element_in_a_list_still_reports_nan(self):
+        samples = [0.0] * 1024
+        samples[7] = math.nan
+        with pytest.raises(SonareValueError, match=r"samples contains NaN or Inf at index 7"):
+            metering_rms_db(samples)
+
 
 def _stereo_2d(n: int = 1024) -> np.ndarray:
     """A ``(frames, channels)`` buffer, the shape ``soundfile`` returns."""

@@ -205,6 +205,7 @@
 ### Fixes
 
 - The first `capabilityCatalog()` call is about a third faster on Node and about three times faster on WASM; the catalog content is unchanged.
+- Python: a `None` element in a sample list is named (`samples[7] is None, not a number`) instead of being reported as a NaN sample.
 - The realtime voice changer's pitch stage shifts by exactly `2^(semitones/12)` on every surface. Its grains used to re-lock to the input period, landing tens of hertz off (a +4 semitone shift of 220 Hz came out near 306 Hz) and cancelling 7 to 25 dB of level; they now read one continuous resampling of the source and re-align by a source-period search. The wet path carries a shift-dependent delay of up to two grains on top of the reported latency.
 - Published insert parameter bounds are rounded inward, so a gain ceiling such as 770.637 that the insert itself refused is no longer advertised.
 - Percussion keeps its strike level under pitch bend, the organ wind chest stops loading the regulator when a release ends mid-block, harpsichord tails fade with the release law on choke, and SF2 applies GS scale tuning live.

@@ -169,6 +169,9 @@ def _validate_samples(
         finite = np.isfinite(buf[start:stop])
         if not bool(finite.all()):
             bad = start + int(np.argmin(finite))
+            # NumPy converts a None element to NaN; name what the caller passed.
+            if not isinstance(samples, np.ndarray) and _element_is_none(samples, bad):
+                raise SonareValueError(f"{fn_name}: {arg_name}[{bad}] is None, not a number")
             raise SonareValueError(f"{fn_name}: {arg_name} contains NaN or Inf at index {bad}")
     return buf
 
@@ -263,6 +266,14 @@ def _validate_scalar(fn_name: str, value: float, arg_name: str) -> float:
     if not np.isfinite(v):
         raise SonareValueError(refusal)
     return v
+
+
+def _element_is_none(samples: object, index: int) -> bool:
+    """Whether ``samples[index]`` is ``None``, for a sequence that can be indexed."""
+    try:
+        return samples[index] is None  # type: ignore[index]
+    except (TypeError, IndexError, KeyError):
+        return False
 
 
 def _not_a_buffer(samples: object, fn_name: str, arg_name: str) -> SonareValueError:
