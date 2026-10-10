@@ -114,6 +114,10 @@ class _ProjectMidiMixin:
         fixed_velocity: int | None = None,
         group: int = 0,
         channel: int = 0,
+        max_polyphony: int | None = None,
+        min_frame_peak_ratio: float | None = None,
+        min_ridge_peak_ratio: float | None = None,
+        reattack_ratio: float | None = None,
     ) -> int:
         """Transcribe mono audio straight into a MIDI clip's event list.
 
@@ -143,7 +147,8 @@ class _ProjectMidiMixin:
                 the monophonic path or 1760 Hz for the polyphonic path. Both
                 paths use this bound, with the same polyphonic salience-axis
                 behavior as ``fmin``.
-            min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms.
+            min_note_ms: Shortest span kept as a note; ``None`` keeps 30 ms
+                (monophonic) or 100 ms (polyphonic).
             segmentation_threshold_cents: Pitch movement that ends one note and
                 starts the next; ``None`` keeps 50 cents.
             velocity_floor_db: Level mapped to velocity 1; must be negative.
@@ -152,6 +157,17 @@ class _ProjectMidiMixin:
                 level measurement; ``None`` measures.
             group: UMP group the events are emitted on, 0..15.
             channel: MIDI channel the events are emitted on, 0..15.
+            max_polyphony: Polyphonic only. Voices one frame may hold, 1..64;
+                ``None`` keeps the default (10).
+            min_frame_peak_ratio: Polyphonic only. A frame's search stops below
+                this share of its first peak, 0..1; ``None`` keeps 0.20 and 0
+                means a real 0.
+            min_ridge_peak_ratio: Polyphonic only. A ridge ends below this share
+                of its own running peak, 0..1; ``None`` keeps 0.10 and 0 means a
+                real 0.
+            reattack_ratio: Polyphonic only. Splits a ridge where its salience
+                climbs past this multiple of the level just before; above 1.
+                ``None`` keeps 2.0 and 0 means no split.
 
         Returns:
             The number of notes written; the clip holds twice that many events.
@@ -185,6 +201,10 @@ class _ProjectMidiMixin:
             fixed_velocity=fixed_velocity,
             group=group,
             channel=channel,
+            max_polyphony=max_polyphony,
+            min_frame_peak_ratio=min_frame_peak_ratio,
+            min_ridge_peak_ratio=min_ridge_peak_ratio,
+            reattack_ratio=reattack_ratio,
         )
         c_array, length = _to_c_float_array(samples)
         note_count = ctypes.c_size_t()
@@ -596,7 +616,9 @@ class _ProjectMidiMixin:
         """Pack a MIDI 2.0 program-change event tuple.
 
         The bank travels in the same message and is applied only when
-        ``bank_valid`` is true."""
+        ``bank_valid`` is true. A non-zero ``bank_msb`` or ``bank_lsb`` with
+        ``bank_valid`` false is refused with :class:`SonareError`
+        (``INVALID_PARAMETER``): a bank the receiver would ignore is not packed."""
         return _midi_event_tuple(
             "sonare_midi2_program",
             _validate_midi_event_ppq(ppq, "ppq"),

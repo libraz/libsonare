@@ -355,6 +355,17 @@ class RealtimeEngine:
         words: Iterable[int],
         render_frame: int | None = None,
     ) -> None: ...
+    def push_midi_program(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        program: int,
+        bank_valid: bool = False,
+        bank_msb: int = 0,
+        bank_lsb: int = 0,
+        render_frame: int | None = None,
+    ) -> None: ...
     def push_midi_panic(self, render_frame: int | None = None) -> None: ...
     def set_builtin_instrument(
         self, config: BuiltinSynthConfig | None = None, destination_id: int = 0
@@ -466,6 +477,16 @@ class RealtimeEngine:
         channel: int,
         note: int,
         pressure: int,
+        port_time_samples: int = 0,
+    ) -> None: ...
+    def push_midi_input_program(
+        self,
+        group: int,
+        channel: int,
+        program: int,
+        bank_valid: bool = False,
+        bank_msb: int = 0,
+        bank_lsb: int = 0,
         port_time_samples: int = 0,
     ) -> None: ...
     def push_midi_input_ump(self, words: Iterable[int], port_time_samples: int = 0) -> None: ...

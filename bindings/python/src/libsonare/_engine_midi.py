@@ -154,6 +154,49 @@ class _EngineMidiMixin:
             )
         )
 
+    def push_midi_program(
+        self,
+        destination_id: int,
+        group: int,
+        channel: int,
+        program: int,
+        bank_valid: bool = False,
+        bank_msb: int = 0,
+        bank_lsb: int = 0,
+        render_frame: int | None = None,
+    ) -> None:
+        """Queue a live MIDI 2.0 program change (with optional bank) to a destination.
+
+        One message selects the bank (when ``bank_valid``) and then the program,
+        through the receive path a wire message takes. ``program``, ``bank_msb``
+        and ``bank_lsb`` are 0..127; ``channel`` and ``group`` 0..15. A non-zero
+        bank with ``bank_valid`` false is refused. ``render_frame`` is the
+        render-frame time to apply (``None`` for immediate). Raises
+        :class:`SonareError` with code ``INVALID_PARAMETER`` for a refused
+        argument and ``OUT_OF_MEMORY`` if the queue is full.
+
+        A receiver that does not select programs (the built-in synth,
+        a native synth without GM programs, a part with RX PROGRAM CHANGE off,
+        an MPE member channel) accepts and ignores it; a future-dated op can be
+        evicted by the pending-command bank like any future command.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_program"):
+            raise _not_supported("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_program(
+                self._require_handle(),
+                _to_c_uint32(destination_id, "destination_id"),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(program, "program"),
+                _to_c_int(1 if bank_valid else 0, "bank_valid"),
+                _to_c_uint8(bank_msb, "bank_msb"),
+                _to_c_uint8(bank_lsb, "bank_lsb"),
+                _to_c_int64(_resolve_render_frame(render_frame), "render_frame"),
+            )
+        )
+
     def push_midi_panic(self, render_frame: int | None = None) -> None:
         """Queue a MIDI panic (all-notes-off) releasing every sounding note.
 
@@ -969,6 +1012,42 @@ class _EngineMidiMixin:
                 self._require_handle(),
                 c_words,
                 _to_c_size_t(count, "word_count"),
+                _to_c_int64(port_time_samples, "port_time_samples"),
+            )
+        )
+
+    def push_midi_input_program(
+        self,
+        group: int,
+        channel: int,
+        program: int,
+        bank_valid: bool = False,
+        bank_msb: int = 0,
+        bank_lsb: int = 0,
+        port_time_samples: int = 0,
+    ) -> None:
+        """Queue a MIDI 2.0 program change into the live MIDI input source.
+
+        Arguments follow :meth:`push_midi_program`. Requires
+        :meth:`set_midi_input_source`; without it the call is refused.
+
+        A receiver that does not select programs (the built-in synth,
+        a native synth without GM programs, a part with RX PROGRAM CHANGE off,
+        an MPE member channel) accepts and ignores it; a future-dated op can be
+        evicted by the pending-command bank like any future command.
+        """
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_engine_push_midi_input_program"):
+            raise _not_supported("libsonare was built without live-MIDI support")
+        _check(
+            lib.sonare_engine_push_midi_input_program(
+                self._require_handle(),
+                _to_c_uint8(group, "group"),
+                _to_c_uint8(channel, "channel"),
+                _to_c_uint8(program, "program"),
+                _to_c_int(1 if bank_valid else 0, "bank_valid"),
+                _to_c_uint8(bank_msb, "bank_msb"),
+                _to_c_uint8(bank_lsb, "bank_lsb"),
                 _to_c_int64(port_time_samples, "port_time_samples"),
             )
         )

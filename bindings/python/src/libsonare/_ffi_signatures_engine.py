@@ -925,6 +925,31 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_size_t,
             ctypes.c_int64,
         ]
+    if hasattr(lib, "sonare_engine_push_midi_program"):
+        lib.sonare_engine_push_midi_program.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_program.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
+    if hasattr(lib, "sonare_engine_push_midi_input_program"):
+        lib.sonare_engine_push_midi_input_program.restype = ctypes.c_int32
+        lib.sonare_engine_push_midi_input_program.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int,
+            ctypes.c_uint8,
+            ctypes.c_uint8,
+            ctypes.c_int64,
+        ]
     # MIDI 2.0 event-POD builders: each packs its UMP words into the POD.
     _u8, _u32, _i32 = ctypes.c_uint8, ctypes.c_uint32, ctypes.c_int32
     _head: list[Any] = [ctypes.c_double, _u8, _u8]
