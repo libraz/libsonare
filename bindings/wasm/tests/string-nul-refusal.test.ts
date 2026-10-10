@@ -256,93 +256,116 @@ describe('embedded NUL refusal, mastering names', () => {
 describe('embedded NUL refusal, scan', () => {
   /**
    * `.c_str()` calls that never carry a JS-supplied string, each with the reason.
-   * An entry matches a source line by its text; one that matches nothing is stale.
+   * An entry matches source lines by their text and names how many it matches, so
+   * a new line that happens to share the text is not excused by an old entry.
    */
-  const ALLOWED: { file: string; text: string; reason: string }[] = [
-    { file: 'common/common.cpp', text: 'return text.c_str();', reason: 'wasmCString itself' },
+  const ALLOWED: { file: string; text: string; count: number; reason: string }[] = [
+    {
+      file: 'common/common.cpp',
+      text: 'return text.c_str();',
+      count: 1,
+      reason: 'wasmCString itself',
+    },
     {
       file: 'common/common.cpp',
       text: 'budget.c_str()',
+      count: 1,
       reason: 'error-subject label built from literals',
     },
     {
       file: 'common/common.h',
       text: '(std::string(subject) + "." + key).c_str()',
+      count: 1,
       reason: 'error-subject label built from a literal subject and key',
     },
     {
       file: 'common/note_val.h',
       text: 'subject.c_str()',
+      count: 1,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'effects/notes.cpp',
       text: 'budget.c_str()',
+      count: 6,
       reason: 'error-subject label built from literals',
     },
     {
       file: 'effects/notes.cpp',
       text: 'list_subject.c_str()',
+      count: 2,
       reason: 'error-subject label built from literals',
     },
     {
       file: 'effects/notes.cpp',
       text: 'subject.c_str()',
+      count: 7,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'effects/notes.cpp',
       text: '".frameStart").c_str()',
+      count: 1,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'effects/notes.cpp',
       text: '".frameEnd").c_str()',
+      count: 1,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'effects/repair.cpp',
       text: '" input").c_str()',
+      count: 1,
       reason: 'error-subject label built from a literal entry-point name',
     },
     {
       file: 'features/core.cpp',
       text: 'budget_subject.c_str()',
+      count: 1,
       reason: 'error-subject label built from a literal function name',
     },
     {
       file: 'analysis/quick.cpp',
       text: '".root").c_str()',
+      count: 1,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'analysis/quick.cpp',
       text: '".quality").c_str()',
+      count: 1,
       reason: 'error-subject label built from an element index',
     },
     {
       file: 'mastering/api.cpp',
       text: 'hasProperty(params_obj, key.c_str())',
+      count: 1,
       reason: 'property name from a static table of literals',
     },
     {
       file: 'common/synth_patch_val.h',
       text: 'subject.c_str()',
+      count: 1,
       reason: 'error-subject label built from an engineParams key already refused for NUL',
     },
     {
       file: 'mixing/mixing_assistant.cpp',
       text: 'subject.c_str()',
+      count: 1,
       reason: 'error-subject label built from a literal name and an element index',
     },
     {
       file: 'mixing/mixing.cpp',
       text: 'element.c_str()',
+      count: 1,
       reason: 'error-subject label built from literals and an index',
     },
     {
       file: 'mixing/mixing.cpp',
       text: '("strip" + std::to_string(index)).c_str()',
+      count: 1,
       reason: 'strip id generated internally',
     },
   ];
@@ -372,12 +395,19 @@ describe('embedded NUL refusal, scan', () => {
     expect(unlisted.map((call) => call.at)).toEqual([]);
   });
 
-  it('keeps every allowlist entry live', () => {
+  it('matches every allowlist entry exactly as many times as it declares', () => {
     const { calls } = cStrCalls();
-    const stale = ALLOWED.filter(
-      (entry) => !calls.some((call) => call.file === entry.file && call.code.includes(entry.text)),
-    );
-    expect(stale.map((entry) => `${entry.file}: ${entry.text}`)).toEqual([]);
+    const drifted = ALLOWED.map((entry) => ({
+      entry,
+      found: calls.filter((call) => call.file === entry.file && call.code.includes(entry.text))
+        .length,
+    }))
+      .filter(({ entry, found }) => found !== entry.count)
+      .map(
+        ({ entry, found }) =>
+          `${entry.file}: ${entry.text} (declares ${entry.count}, found ${found})`,
+      );
+    expect(drifted).toEqual([]);
   });
 
   it('routes the handoffs through the helper', () => {
