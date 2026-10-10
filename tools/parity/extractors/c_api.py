@@ -204,6 +204,7 @@ _ABI_PLUMBING_FIELDS = {
     "struct_size",
     "abi_version",
     "present_fields",
+    "present_fields2",
 }
 
 # Integer spellings a length companion is written in. A ``float* ..._length``

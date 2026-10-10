@@ -167,7 +167,7 @@ files), catching a wiring break the C-anchored checks structurally cannot see.
    per-record entries:
    - explicit padding / `reserved` members;
    - ABI plumbing that describes the struct rather than the data (`struct_version`,
-     `present_fields`, `struct_size`, `abi_version`);
+     `present_fields` and its second word `present_fields2`, `struct_size`, `abi_version`);
    - the length companion of a pointer / array member (`*_count`, `*_length`,
      `*_len`, `num_*`, or the bare `length` / `count` / `size`) — **only** when
      the record actually owns a pointer or array for the facade to derive the
