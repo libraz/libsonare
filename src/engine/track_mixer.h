@@ -394,6 +394,11 @@ class TrackMixerRuntime final : public rt::ProcessorBase {
   /// CONTROL thread: track ids of the published lane snapshot and configured bus
   /// ids, each in configuration order.
   size_t copy_control_lane_track_ids(uint32_t* out, size_t capacity) const noexcept;
+  /// CONTROL thread: the most recently published lane list, or nullptr before
+  /// the first successful set_track_lanes. Valid until the next set_track_lanes.
+  const std::vector<TrackLaneConfig>* control_lanes() const noexcept {
+    return lanes_.control_current().get();
+  }
   const std::vector<TrackBusConfig>& bus_configs() const noexcept { return bus_configs_; }
   bool configured_bus(uint32_t bus_id) const noexcept { return configured_bus_index(bus_id) >= 0; }
   /// AUDIO-thread safe: true when @p track_id's prepared lane, or configured bus

@@ -1,6 +1,7 @@
 /// @file sonare_c_engine_routing_test.cpp
-/// @brief Engine C ABI bus routing (bus output, bus sends), bus/master
-///        sidechain keys, and MIDI clip gain/fade conversion.
+/// @brief Engine C ABI bus routing (bus output, bus sends), per-lane send and
+///        output edits, bus/master sidechain keys, and MIDI clip gain/fade
+///        conversion.
 
 #include <algorithm>
 #include <array>
@@ -12,6 +13,9 @@
 #include "sonare_c_engine_test_helpers.h"
 #include "util/constants.h"
 #include "util/db.h"
+#if defined(SONARE_WITH_MIXING)
+#include "mixing/channel_strip.h"
+#endif
 
 namespace {
 
@@ -819,6 +823,239 @@ TEST_CASE("per-insert gain reduction validates its arguments",
                                                              entries.size(), &count) ==
             SONARE_ERROR_INVALID_PARAMETER);
   }
+  sonare_engine_destroy(engine);
+}
+#endif
+
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+constexpr SonareEngineTrackSend kSendBus1[] = {{1, -6.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+constexpr SonareEngineTrackSend kSendBus1Track20[] = {{1, -3.0f, 1, SONARE_SEND_TIMING_PRE_FADER}};
+constexpr SonareEngineTrackSend kSendBus2[] = {{2, -9.0f, 1, SONARE_SEND_TIMING_PRE_FADER}};
+
+// Tracks 10 and 20 over buses 1 (-6 dB) and 2 (-12 dB): track 10 on the master
+// with a send to bus 1, track 20 into bus 2 with its own send to bus 1.
+SonareRealtimeEngine* make_lane_edit_rig(const SonareEngineTrackLane (&lanes)[2]) {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}, {20, 0.5f}});
+  const SonareEngineBus buses[] = {{1, -6.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0},
+                                   {2, -12.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0}};
+  REQUIRE(sonare_engine_set_track_buses(engine, buses, 2) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_lanes(engine, lanes, 2) == SONARE_OK);
+  return engine;
+}
+
+constexpr SonareEngineTrackLane kRigLanes[] = {
+    {10, kSendBus1, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO},
+    {20, kSendBus1Track20, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
+
+void require_same_render(SonareRealtimeEngine* actual_engine, SonareRealtimeEngine* expected_engine,
+                         int blocks = 30) {
+  const std::vector<float> expected = render_all(expected_engine, blocks);
+  const std::vector<float> actual = render_all(actual_engine, blocks);
+  REQUIRE(std::abs(expected.back()) > 1e-3f);
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    REQUIRE(actual[i] == Catch::Approx(expected[i]).margin(1e-6f));
+  }
+}
+
+}  // namespace
+
+TEST_CASE("sonare_engine_set_track_sends replaces one lane's sends", "[c_engine_routing]") {
+  const SonareEngineTrackLane final_lanes[] = {
+      {10, kSendBus2, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO},
+      {20, kSendBus1Track20, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
+  SonareRealtimeEngine* edited = make_lane_edit_rig(kRigLanes);
+  SonareRealtimeEngine* replaced = make_lane_edit_rig(final_lanes);
+  SonareRealtimeEngine* before = make_lane_edit_rig(kRigLanes);
+  // The edit must be audible, or matching the replaced engine would prove nothing.
+  REQUIRE(std::abs(settled(before) - settled(replaced)) > 1e-2f);
+
+  REQUIRE(sonare_engine_set_track_sends(edited, 10, kSendBus2, 1) == SONARE_OK);
+  require_same_render(edited, replaced);
+  sonare_engine_destroy(before);
+  sonare_engine_destroy(replaced);
+  sonare_engine_destroy(edited);
+}
+
+TEST_CASE("sonare_engine_set_track_sends with no sends clears the lane's sends",
+          "[c_engine_routing]") {
+  const SonareEngineTrackLane final_lanes[] = {
+      {10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO},
+      {20, kSendBus1Track20, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
+  SonareRealtimeEngine* edited = make_lane_edit_rig(kRigLanes);
+  // The lane keeps the strip its earlier sends created, so the reference takes the same history.
+  SonareRealtimeEngine* replaced = make_lane_edit_rig(kRigLanes);
+  REQUIRE(sonare_engine_set_track_lanes(replaced, final_lanes, 2) == SONARE_OK);
+  SonareRealtimeEngine* before = make_lane_edit_rig(kRigLanes);
+  REQUIRE(std::abs(settled(before) - settled(replaced)) > 1e-2f);
+
+  REQUIRE(sonare_engine_set_track_sends(edited, 10, nullptr, 0) == SONARE_OK);
+  require_same_render(edited, replaced);
+  sonare_engine_destroy(before);
+  sonare_engine_destroy(replaced);
+  sonare_engine_destroy(edited);
+}
+
+TEST_CASE("sonare_engine_set_track_output_bus moves only one lane's output", "[c_engine_routing]") {
+  const SonareEngineTrackLane to_bus2[] = {
+      {10, kSendBus1, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO},
+      {20, kSendBus1Track20, 1, 2, SONARE_CHANNEL_LAYOUT_STEREO}};
+  const SonareEngineTrackLane to_master[] = {
+      {10, kSendBus1, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO},
+      {20, kSendBus1Track20, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  SonareRealtimeEngine* before = make_lane_edit_rig(kRigLanes);
+  const float before_level = settled(before);
+  sonare_engine_destroy(before);
+
+  SECTION("into a bus") {
+    SonareRealtimeEngine* edited = make_lane_edit_rig(kRigLanes);
+    SonareRealtimeEngine* replaced = make_lane_edit_rig(to_bus2);
+    REQUIRE(std::abs(before_level - settled(replaced)) > 1e-2f);
+    REQUIRE(sonare_engine_set_track_output_bus(edited, 10, 2) == SONARE_OK);
+    require_same_render(edited, replaced);
+    sonare_engine_destroy(replaced);
+    sonare_engine_destroy(edited);
+  }
+  SECTION("back to the master mix") {
+    SonareRealtimeEngine* edited = make_lane_edit_rig(kRigLanes);
+    SonareRealtimeEngine* replaced = make_lane_edit_rig(to_master);
+    REQUIRE(std::abs(before_level - settled(replaced)) > 1e-2f);
+    REQUIRE(sonare_engine_set_track_output_bus(edited, 20, 0) == SONARE_OK);
+    require_same_render(edited, replaced);
+    sonare_engine_destroy(replaced);
+    sonare_engine_destroy(edited);
+  }
+}
+
+TEST_CASE("sonare_engine per-lane routing edits refuse and leave the render unchanged",
+          "[c_engine_routing]") {
+  SonareRealtimeEngine* control = make_lane_edit_rig(kRigLanes);
+  SonareRealtimeEngine* engine = make_lane_edit_rig(kRigLanes);
+  constexpr SonareError kInvalid = SONARE_ERROR_INVALID_PARAMETER;
+
+  CHECK(sonare_engine_set_track_sends(engine, 99, kSendBus2, 1) == kInvalid);
+  CHECK(std::string(sonare_last_error_message()) == "unknown track id 99");
+  CHECK(sonare_engine_set_track_output_bus(engine, 98, 0) == kInvalid);
+  CHECK(std::string(sonare_last_error_message()) == "unknown track id 98");
+
+  const SonareEngineTrackSend undeclared[] = {{9, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  const SonareEngineTrackSend duplicate[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER},
+                                             {1, -6.0f, 1, SONARE_SEND_TIMING_PRE_FADER}};
+  const SonareEngineTrackSend too_hot[] = {{1, 24.5f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  const SonareEngineTrackSend below_floor[] = {{1, -121.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  const SonareEngineTrackSend bad_timing[] = {{1, 0.0f, 1, 7}};
+  CHECK(sonare_engine_set_track_sends(engine, 10, undeclared, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(engine, 10, duplicate, 2) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(engine, 10, too_hot, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(engine, 10, below_floor, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(engine, 10, bad_timing, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(engine, 10, nullptr, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_sends(nullptr, 10, kSendBus2, 1) == kInvalid);
+  CHECK(sonare_engine_set_track_output_bus(engine, 10, 9) == kInvalid);
+  CHECK(sonare_engine_set_track_output_bus(nullptr, 10, 0) == kInvalid);
+
+  require_same_render(engine, control);
+  sonare_engine_destroy(engine);
+  sonare_engine_destroy(control);
+}
+
+TEST_CASE("sonare_engine per-lane routing edits refuse every track before the first lane list",
+          "[c_engine_routing]") {
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  CHECK(sonare_engine_set_track_sends(engine, 10, nullptr, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "unknown track id 10");
+  CHECK(sonare_engine_set_track_output_bus(engine, 10, 0) == SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(std::string(sonare_last_error_message()) == "unknown track id 10");
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("a track insert automation id survives per-lane routing edits", "[c_engine_routing]") {
+  const float direct = direct_level();
+  SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+  const SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+  REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+  const SonareEngineTrackLane lane[] = {{10, nullptr, 0, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+  REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+  REQUIRE(
+      sonare_engine_set_track_strip_json(
+          engine, 10,
+          R"({"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre","processor":"utility.gain","params":"{\"levelDb\":0}"}]}],"buses":[],"connections":[]})") ==
+      SONARE_OK);
+  uint32_t gain_id = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &gain_id) ==
+          SONARE_OK);
+
+  const SonareEngineTrackSend to_bus1[] = {{1, 0.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  REQUIRE(sonare_engine_set_track_sends(engine, 10, to_bus1, 1) == SONARE_OK);
+  REQUIRE(sonare_engine_set_track_output_bus(engine, 10, 1) == SONARE_OK);
+  // Output and send both reach bus 1, so the lane sums in twice.
+  REQUIRE(settled(engine) == Catch::Approx(2.0f * direct).epsilon(1e-3));
+
+  uint32_t again = 0;
+  REQUIRE(sonare_engine_resolve_track_insert_automation_id(engine, 10, 0, "levelDb", &again) ==
+          SONARE_OK);
+  CHECK(again == gain_id);
+  const SonareAutomationPoint duck[] = {{0.0, -60.0f, 0}};
+  REQUIRE(sonare_engine_set_automation_lane(engine, gain_id, duck, 1) == SONARE_OK);
+  CHECK(std::abs(settled(engine)) < 1e-2f * direct);
+  sonare_engine_destroy(engine);
+}
+
+TEST_CASE("sonare_engine_set_track_sends with an unchanged list keeps an in-flight send ramp",
+          "[c_engine_routing]") {
+  const SonareEngineTrackSend quiet_send[] = {{1, -20.0f, 1, SONARE_SEND_TIMING_POST_FADER}};
+  const auto make = [&](sonare::mixing::ChannelStrip* strip) {
+    SonareRealtimeEngine* engine = make_routing_engine({{10, 1.0f}});
+    const SonareEngineBus bus{1, 0.0f, SONARE_CHANNEL_LAYOUT_STEREO, 0, nullptr, 0};
+    REQUIRE(sonare_engine_set_track_buses(engine, &bus, 1) == SONARE_OK);
+    REQUIRE(engine->engine.bind_track_strip(10, strip));
+    const SonareEngineTrackLane lane[] = {{10, quiet_send, 1, 0, SONARE_CHANNEL_LAYOUT_STEREO}};
+    REQUIRE(sonare_engine_set_track_lanes(engine, lane, 1) == SONARE_OK);
+    REQUIRE(sonare_engine_play(engine, -1) == SONARE_OK);
+    return engine;
+  };
+  const auto next_blocks = [](SonareRealtimeEngine* engine, int blocks) {
+    std::vector<float> out;
+    std::array<float, kRoutingBlock> block{};
+    float* io[] = {block.data()};
+    for (int b = 0; b < blocks; ++b) {
+      block.fill(0.0f);
+      REQUIRE(sonare_engine_process(engine, io, 1, kRoutingBlock) == SONARE_OK);
+      out.insert(out.end(), block.begin(), block.end());
+    }
+    return out;
+  };
+
+  sonare::mixing::ChannelStrip edited_strip;
+  sonare::mixing::ChannelStrip control_strip;
+  SonareRealtimeEngine* edited = make(&edited_strip);
+  SonareRealtimeEngine* control = make(&control_strip);
+  const std::vector<float> first = next_blocks(control, 1);
+  (void)next_blocks(edited, 1);
+
+  edited_strip.set_send_db(0, 0.0f);
+  control_strip.set_send_db(0, 0.0f);
+  REQUIRE(sonare_engine_set_track_sends(edited, 10, quiet_send, 1) == SONARE_OK);
+
+  const std::vector<float> expected = next_blocks(control, 4);
+  const std::vector<float> actual = next_blocks(edited, 4);
+  // The ramp toward 0 dB must move the control render, or retention is untested.
+  REQUIRE(expected.back() - first.back() > 0.1f * first.back());
+  REQUIRE(actual.size() == expected.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    REQUIRE(actual[i] == Catch::Approx(expected[i]).margin(1e-6f));
+  }
+  sonare_engine_destroy(control);
+  sonare_engine_destroy(edited);
+}
+#else
+TEST_CASE("sonare_engine per-lane routing edits need the mixing feature", "[c_engine_routing]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  CHECK(sonare_engine_set_track_sends(engine, 10, nullptr, 0) == SONARE_ERROR_NOT_SUPPORTED);
+  CHECK(sonare_engine_set_track_output_bus(engine, 10, 0) == SONARE_ERROR_NOT_SUPPORTED);
   sonare_engine_destroy(engine);
 }
 #endif

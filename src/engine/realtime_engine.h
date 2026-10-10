@@ -64,6 +64,17 @@ enum class InsertParamSetResult : uint8_t {
   kQueueFull,
 };
 
+/// Result of @ref RealtimeEngine::set_track_sends and
+/// @ref RealtimeEngine::set_track_output_bus.
+///
+/// kUnknownTrack: the track has no lane in the published lane list.
+/// kRefused: the edited lane list failed set_track_lanes.
+enum class TrackLaneEditResult : uint8_t {
+  kApplied,
+  kUnknownTrack,
+  kRefused,
+};
+
 /// Result of @ref RealtimeEngine::push_midi_ump.
 ///
 /// A malformed or unsupported message is a permanent caller error; a full slot
@@ -744,6 +755,12 @@ class RealtimeEngine : private ClipPageRequestSink {
   MixingRuntime& mixing() noexcept { return mixing_runtime_; }
   bool set_master_strip(const mixing::api::Strip& strip);
   bool set_track_lanes(std::vector<TrackLaneConfig> lanes);
+  /// Replaces @p track_id's lane sends (empty clears them) and republishes the
+  /// rest of the lane list unchanged through set_track_lanes, so an unchanged
+  /// send list keeps its in-flight ramps. CONTROL thread only, like set_track_lanes.
+  TrackLaneEditResult set_track_sends(uint32_t track_id, std::vector<TrackLaneConfig::Send> sends);
+  /// Sets @p track_id's lane output bus (0 = master mix), otherwise as set_track_sends.
+  TrackLaneEditResult set_track_output_bus(uint32_t track_id, uint32_t output_bus_id);
   /// Pure, const: true exactly when set_track_lanes would not refuse @p lanes on validation
   /// grounds.
   bool validate_track_lanes(const std::vector<TrackLaneConfig>& lanes) const;

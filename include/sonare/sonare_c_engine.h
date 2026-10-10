@@ -322,6 +322,28 @@ SonareError sonare_engine_clip_count(SonareRealtimeEngine* engine, size_t* out_c
 ///   mixing support is disabled.
 SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
                                           const SonareEngineTrackLane* lanes, size_t lane_count);
+/// @brief Replaces one track lane's sends, leaving its output bus, layout and
+///   every other lane as published.
+/// @details @p send_count 0 clears the lane's sends. The edited lane list goes
+///   through @ref sonare_engine_set_track_lanes, so it is validated the same
+///   way, automation ids keep naming their track, and a call with an unchanged
+///   send list keeps the sends' in-flight level ramps (a changed list restarts
+///   every send ramp on the lane). Control-thread only; do not call
+///   concurrently with @ref sonare_engine_process.
+/// @return SONARE_ERROR_INVALID_PARAMETER when @p track_id has no lane in the
+///   published lane list (with the last-error message "unknown track id <n>"),
+///   or for a send list sonare_engine_set_track_lanes would refuse;
+///   SONARE_ERROR_NOT_SUPPORTED when mixing support is disabled.
+SonareError sonare_engine_set_track_sends(SonareRealtimeEngine* engine, uint32_t track_id,
+                                          const SonareEngineTrackSend* sends, size_t send_count);
+/// @brief Sets one track lane's output bus, leaving its sends, layout and every
+///   other lane as published.
+/// @details @p output_bus_id 0 returns the lane to the master mix; any other
+///   value must name a declared bus. Same validation, automation and threading
+///   contract as @ref sonare_engine_set_track_sends.
+/// @return As for @ref sonare_engine_set_track_sends.
+SonareError sonare_engine_set_track_output_bus(SonareRealtimeEngine* engine, uint32_t track_id,
+                                               uint32_t output_bus_id);
 /// @brief Keys one insert of a lane strip from another lane's post-strip audio.
 /// @details Sidechain for ducking/sidechainRouter inserts: the source lane's
 ///   post-strip, pre-fader audio feeds the insert's key input. Lanes are

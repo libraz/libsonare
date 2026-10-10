@@ -346,6 +346,48 @@ bool RealtimeEngine::set_track_lanes(std::vector<TrackLaneConfig> lanes) {
   return ok;
 }
 
+namespace {
+
+// Copies the published lane list into @p out; false when @p track_id has no lane in it.
+bool copy_lanes_holding(const std::vector<TrackLaneConfig>* published, uint32_t track_id,
+                        std::vector<TrackLaneConfig>* out, TrackLaneConfig** out_lane) {
+  if (published == nullptr) return false;
+  *out = *published;
+  for (TrackLaneConfig& lane : *out) {
+    if (lane.track_id == track_id) {
+      *out_lane = &lane;
+      return true;
+    }
+  }
+  return false;
+}
+
+}  // namespace
+
+TrackLaneEditResult RealtimeEngine::set_track_sends(uint32_t track_id,
+                                                    std::vector<TrackLaneConfig::Send> sends) {
+  std::vector<TrackLaneConfig> lanes;
+  TrackLaneConfig* lane = nullptr;
+  if (!copy_lanes_holding(track_mixer_runtime_.control_lanes(), track_id, &lanes, &lane)) {
+    return TrackLaneEditResult::kUnknownTrack;
+  }
+  lane->sends = std::move(sends);
+  return set_track_lanes(std::move(lanes)) ? TrackLaneEditResult::kApplied
+                                           : TrackLaneEditResult::kRefused;
+}
+
+TrackLaneEditResult RealtimeEngine::set_track_output_bus(uint32_t track_id,
+                                                         uint32_t output_bus_id) {
+  std::vector<TrackLaneConfig> lanes;
+  TrackLaneConfig* lane = nullptr;
+  if (!copy_lanes_holding(track_mixer_runtime_.control_lanes(), track_id, &lanes, &lane)) {
+    return TrackLaneEditResult::kUnknownTrack;
+  }
+  lane->output_bus_id = output_bus_id;
+  return set_track_lanes(std::move(lanes)) ? TrackLaneEditResult::kApplied
+                                           : TrackLaneEditResult::kRefused;
+}
+
 bool RealtimeEngine::set_track_buses(std::vector<TrackBusConfig> buses) {
   // An entering bus mints its fader entry; its slots are minted when its strip is set.
   size_t entering = 0;

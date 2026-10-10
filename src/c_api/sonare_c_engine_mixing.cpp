@@ -97,6 +97,66 @@ SonareError sonare_engine_set_track_lanes(SonareRealtimeEngine* engine,
 #endif
 }
 
+#if defined(SONARE_WITH_MIXING)
+namespace {
+
+SonareError track_lane_edit_result_to_error(engine::TrackLaneEditResult result, uint32_t track_id) {
+  switch (result) {
+    case engine::TrackLaneEditResult::kApplied:
+      return SONARE_OK;
+    case engine::TrackLaneEditResult::kUnknownTrack:
+      set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                     ("unknown track id " + std::to_string(track_id)).c_str());
+      return SONARE_ERROR_INVALID_PARAMETER;
+    case engine::TrackLaneEditResult::kRefused:
+      return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  return SONARE_ERROR_INVALID_STATE;
+}
+
+}  // namespace
+#endif
+
+SonareError sonare_engine_set_track_sends(SonareRealtimeEngine* engine, uint32_t track_id,
+                                          const SonareEngineTrackSend* sends, size_t send_count) {
+  SONARE_C_API_ENTRY;
+  if (!engine || (send_count > 0 && !sends)) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)sends;
+  (void)send_count;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  std::vector<engine::TrackLaneConfig::Send> configs;
+  configs.reserve(send_count);
+  for (size_t send_index = 0; send_index < send_count; ++send_index) {
+    const SonareEngineTrackSend& send = sends[send_index];
+    configs.push_back({send.bus_id, send.level_db, send.enabled != 0,
+                       sonare_c_mixing_detail::to_send_timing(send.send_timing)});
+  }
+  return track_lane_edit_result_to_error(
+      engine->engine.set_track_sends(track_id, std::move(configs)), track_id);
+  SONARE_C_CATCH
+#endif
+}
+
+SonareError sonare_engine_set_track_output_bus(SonareRealtimeEngine* engine, uint32_t track_id,
+                                               uint32_t output_bus_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+#if !defined(SONARE_WITH_MIXING)
+  (void)track_id;
+  (void)output_bus_id;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  return track_lane_edit_result_to_error(
+      engine->engine.set_track_output_bus(track_id, output_bus_id), track_id);
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_set_lane_sidechain(SonareRealtimeEngine* engine, uint32_t track_id,
                                              unsigned int insert_index, uint32_t source_track_id) {
   SONARE_C_API_ENTRY;
