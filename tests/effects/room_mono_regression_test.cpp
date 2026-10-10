@@ -6,8 +6,6 @@
 /// can show that its mono behaviour did not move. Each row digests the samples
 /// and carries the lengths and diagnostics in the row's meta column.
 
-#include "support/golden_hash.h"
-
 #include <catch2/catch_test_macros.hpp>
 #include <cstdint>
 #include <cstdlib>
@@ -25,6 +23,7 @@
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/convolution_reverb.h"
 #include "effects/reverb/room_reverb.h"
+#include "support/golden_hash.h"
 
 namespace {
 
@@ -102,8 +101,9 @@ Row row_room_morph() {
   config.max_seconds = kRirSeconds;
   const auto result = room_morph(input, config);
   const std::vector<float> samples(result.audio.data(), result.audio.data() + result.audio.size());
-  return {"room_morph/mono", hex64(sonare::test::fnv1a_quantized(samples)),
-          "len=" + std::to_string(samples.size()) + " diag=" + diagnostic_codes(result.diagnostics)};
+  return {
+      "room_morph/mono", hex64(sonare::test::fnv1a_quantized(samples)),
+      "len=" + std::to_string(samples.size()) + " diag=" + diagnostic_codes(result.diagnostics)};
 }
 
 /// Runs a processor 1- or 2-channel in whole blocks over burst + trailing zeros.
@@ -144,12 +144,11 @@ Row row_room_reverb() {
 }
 
 Row row_convolution(int channels) {
-  const auto rir = synthesize_rir(room(), placement(), kSampleRate,
-                                  [] {
-                                    sonare::acoustic::RirSynthConfig c;
-                                    c.max_seconds = kRirSeconds;
-                                    return c;
-                                  }());
+  const auto rir = synthesize_rir(room(), placement(), kSampleRate, [] {
+    sonare::acoustic::RirSynthConfig c;
+    c.max_seconds = kRirSeconds;
+    return c;
+  }());
   ConvolutionReverbConfig config;
   config.dry_wet = 0.5f;
   ConvolutionReverb reverb(config);
@@ -168,8 +167,9 @@ Row row_synthesize_rir() {
   config.max_seconds = kRirSeconds;
   const auto result = synthesize_rir(room(), placement(), kSampleRate, config);
   const std::vector<float> samples(result.rir.data(), result.rir.data() + result.rir.size());
-  return {"synthesize_rir/mono", hex64(sonare::test::fnv1a_quantized(samples)),
-          "len=" + std::to_string(samples.size()) + " diag=" + diagnostic_codes(result.diagnostics)};
+  return {
+      "synthesize_rir/mono", hex64(sonare::test::fnv1a_quantized(samples)),
+      "len=" + std::to_string(samples.size()) + " diag=" + diagnostic_codes(result.diagnostics)};
 }
 
 std::vector<Row> compute_rows() {
