@@ -15,7 +15,6 @@
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/match/match_eq.h"
-#include "mastering/match/reference_spectrum.h"
 #include "sonare_wrap_options.h"
 #include "sonare_wrap_utils.h"
 
@@ -912,6 +911,7 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   int sample_rate = static_cast<int>(std::lround(sample_rate_));
+  int reference_sample_rate = sample_rate;
   size_t max_bands = 8;
   if (info.Length() >= 3 && info[2].IsObject()) {
     Napi::Object options = info[2].As<Napi::Object>();
@@ -919,6 +919,10 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
     // non-finite is unspecified, and the arbitrary int it yields then meets a
     // range check it can pass. The supported-rate bound stays below.
     if (!Int32Property(env, options, "sampleRate", sample_rate, &sample_rate)) {
+      return env.Undefined();
+    }
+    // An omitted reference rate is the source's.
+    if (!Int32Property(env, options, "referenceSampleRate", sample_rate, &reference_sample_rate)) {
       return env.Undefined();
     }
     // Positivity stays below, where the C ABI's own bound is; this is the read.
@@ -929,20 +933,19 @@ Napi::Value StreamingEqualizerWrap::Match(const Napi::CallbackInfo& info) {
   Napi::Float32Array source = info[0].As<Napi::Float32Array>();
   Napi::Float32Array reference = info[1].As<Napi::Float32Array>();
   sonare::validate_offline_audio_input(source.Data(), source.ElementLength(), sample_rate);
-  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(), sample_rate);
+  sonare::validate_offline_audio_input(reference.Data(), reference.ElementLength(),
+                                       reference_sample_rate);
   if (max_bands == 0) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
                                   "StreamingEqualizer.match: maxBands must be positive");
   }
-  sonare::Audio source_audio =
-      sonare::Audio::from_buffer(source.Data(), source.ElementLength(), sample_rate);
-  sonare::Audio reference_audio =
-      sonare::Audio::from_buffer(reference.Data(), reference.ElementLength(), sample_rate);
   sonare::mastering::match::MatchEqConfig match_config;
   match_config.max_bands = max_bands;
-  sonare::mastering::match::configure_equalizer_from_match(
-      *eq_, sonare::mastering::match::reference_spectrum(source_audio),
-      sonare::mastering::match::reference_spectrum(reference_audio), match_config);
+  sonare::mastering::match::configure_equalizer_from_audio(
+      *eq_, sonare::Audio::from_buffer(source.Data(), source.ElementLength(), sample_rate),
+      sonare::Audio::from_buffer(reference.Data(), reference.ElementLength(),
+                                 reference_sample_rate),
+      match_config);
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

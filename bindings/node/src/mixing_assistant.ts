@@ -13,9 +13,14 @@ interface NativeTrackArrays {
   right: (Float32Array | null)[] | null;
   ids: string[];
   names: (string | null)[] | null;
+  sampleRates: number[] | null;
 }
 
-function normalizeTracks(fnName: string, tracks: MixAssistantTrack[]): NativeTrackArrays {
+function normalizeTracks(
+  fnName: string,
+  tracks: MixAssistantTrack[],
+  sampleRate: number,
+): NativeTrackArrays {
   if (!Array.isArray(tracks)) {
     throw new TypeError(`${fnName}: tracks must be an array`);
   }
@@ -23,9 +28,11 @@ function normalizeTracks(fnName: string, tracks: MixAssistantTrack[]): NativeTra
   const right: (Float32Array | null)[] = [];
   const ids: string[] = [];
   const names: (string | null)[] = [];
+  const sampleRates: number[] = [];
   const seen = new Set<string>();
   let anyRight = false;
   let anyName = false;
+  let anySampleRate = false;
 
   tracks.forEach((track, index) => {
     const prefix = `tracks[${index}]`;
@@ -51,17 +58,29 @@ function normalizeTracks(fnName: string, tracks: MixAssistantTrack[]): NativeTra
     if (track.name !== undefined && typeof track.name !== 'string') {
       throw new TypeError(`${fnName}: ${prefix}.name must be a string when present`);
     }
+    if (track.sampleRate !== undefined) {
+      assertSampleRate(fnName, track.sampleRate, `${prefix}.sampleRate`);
+    }
     left.push(track.left);
     right.push(track.right ?? null);
     ids.push(track.id);
     names.push(track.name ?? null);
+    sampleRates.push(track.sampleRate ?? sampleRate);
     anyRight ||= track.right !== undefined;
     anyName ||= track.name !== undefined;
+    anySampleRate ||= track.sampleRate !== undefined;
   });
 
-  // An all-mono set and a set with no names pass NULL rather than an array of
-  // nulls, which is what the native side treats as "not supplied at all".
-  return { left, right: anyRight ? right : null, ids, names: anyName ? names : null };
+  // An all-mono set, a set with no names and a set with no per-track rate pass
+  // null rather than an array, which is what the native side treats as "not
+  // supplied at all".
+  return {
+    left,
+    right: anyRight ? right : null,
+    ids,
+    names: anyName ? names : null,
+    sampleRates: anySampleRate ? sampleRates : null,
+  };
 }
 
 /** The two analysis-geometry keys, which reach the core as a truncating cast. */
@@ -98,10 +117,18 @@ function suggest(fnName: string, request: SuggestMixSceneRequest, sceneOnly: boo
     throw new TypeError(`${fnName}: expected a request object`);
   }
   assertSampleRate(fnName, request.sampleRate);
-  const tracks = normalizeTracks(fnName, request.tracks);
+  const tracks = normalizeTracks(fnName, request.tracks, request.sampleRate);
   const params = normalizeOptions(fnName, request.options);
   const entry = sceneOnly ? addon.mixingAssistantSuggestSceneJson : addon.mixingAssistantSuggest;
-  return entry(tracks.left, tracks.right, tracks.ids, tracks.names, request.sampleRate, params);
+  return entry(
+    tracks.left,
+    tracks.right,
+    tracks.ids,
+    tracks.names,
+    tracks.sampleRates,
+    request.sampleRate,
+    params,
+  );
 }
 
 /**

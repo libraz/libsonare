@@ -216,6 +216,11 @@ export interface MixAssistantTrack {
   left: Float32Array;
   /** Right channel; omit for a mono track. Must match `left` in length. */
   right?: Float32Array;
+  /**
+   * Rate of this track, in Hz. Omitted: the request's `sampleRate`. A track at
+   * another rate is resampled onto the request's rate before analysis.
+   */
+  sampleRate?: number;
 }
 
 /**
@@ -284,7 +289,10 @@ export interface MixAssistantOptions {
 export interface SuggestMixSceneRequest {
   /** Tracks to mix. An empty array yields an empty suggestion. */
   tracks: MixAssistantTrack[];
-  /** Shared sample rate for every track. */
+  /**
+   * Analysis rate, and the rate of every track that does not state its own; a
+   * track at another rate is resampled onto it.
+   */
   sampleRate: number;
   /** Assistant tunables; omitted fields keep the native defaults. */
   options?: MixAssistantOptions;

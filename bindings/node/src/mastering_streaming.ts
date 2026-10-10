@@ -2,6 +2,7 @@ import { flattenChainConfig, STREAMING_ONLY_CONFIG_KEYS } from './_chain_config.
 import { addon } from './native.js';
 import type {
   EqBandInput,
+  EqMatchOptions,
   EqSpectrumSnapshot,
   EqStereoPlacement,
   StreamAnalyzerConfig,
@@ -640,12 +641,11 @@ export class StreamingEqualizer {
     return this.native.spectrum();
   }
 
-  /** Configure bands to match a reference spectrum (offline analysis). */
-  match(
-    source: Float32Array,
-    reference: Float32Array,
-    options: { sampleRate?: number; maxBands?: number } = {},
-  ): void {
+  /**
+   * Configure bands to match a reference spectrum (offline analysis). The two
+   * buffers may differ in length and rate; see {@link EqMatchOptions}.
+   */
+  match(source: Float32Array, reference: Float32Array, options: EqMatchOptions = {}): void {
     this.native.match(source, reference, options);
   }
   /**

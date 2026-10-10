@@ -47,19 +47,23 @@ struct TrackArrays {
   std::vector<const char*> id_pointers;
   std::vector<const char*> name_pointers;
   std::vector<size_t> lengths;
+  // Empty when every track is at the call's sample rate.
+  std::vector<int> sample_rates;
   // Tracks may differ in length, so the count is per track rather than shared.
   std::vector<bool> has_name;
   bool any_right = false;
   bool any_name = false;
 };
 
-// Reads the five leading positional arguments into @p out. Returns false with a
+// Reads the six leading positional arguments into @p out. Returns false with a
 // pending JS exception on the first bad argument, so the caller must bail out
 // before touching native state (a second throw on a pending exception aborts).
 bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays* out) {
-  if (info.Length() < 5 || !info[0].IsArray() || !info[2].IsArray() || !info[4].IsNumber()) {
-    Napi::TypeError::New(
-        env, "Expected (leftChannels, rightChannels, trackIds, trackNames, sampleRate, params?)")
+  if (info.Length() < 6 || !info[0].IsArray() || !info[2].IsArray() || !info[5].IsNumber() ||
+      !(info[4].IsArray() || info[4].IsNull() || info[4].IsUndefined())) {
+    Napi::TypeError::New(env,
+                         "Expected (leftChannels, rightChannels, trackIds, trackNames, "
+                         "trackSampleRates, sampleRate, params?)")
         .ThrowAsJavaScriptException();
     return false;
   }
@@ -86,6 +90,19 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
     Napi::TypeError::New(env, "trackNames must have one entry per track")
         .ThrowAsJavaScriptException();
     return false;
+  }
+  if (info[4].IsArray()) {
+    Napi::Array rate_input = info[4].As<Napi::Array>();
+    if (rate_input.Length() != count) {
+      Napi::TypeError::New(env, "trackSampleRates must have one entry per track")
+          .ThrowAsJavaScriptException();
+      return false;
+    }
+    out->sample_rates.reserve(count);
+    for (uint32_t index = 0; index < count; ++index) {
+      out->sample_rates.push_back(
+          node_narrow_int_element(env, rate_input.Get(index), "trackSampleRates", index));
+    }
   }
 
   out->left_handles.reserve(count);
@@ -162,7 +179,7 @@ bool ReadTrackArrays(Napi::Env env, const Napi::CallbackInfo& info, TrackArrays*
 }
 
 using SuggestEntry = SonareError (*)(const float* const*, const float* const*, const char* const*,
-                                     const char* const*, const size_t*, size_t, int,
+                                     const char* const*, const size_t*, const int*, size_t, int,
                                      const SonareMasteringParam*, size_t, char**);
 
 // Shared body of the two suggest entry points, so they cannot drift into
@@ -177,8 +194,8 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
 
   SONARE_NODE_TRY
   std::vector<sonare::mastering::api::Param> params;
-  if (info.Length() >= 6 && info[5].IsObject()) {
-    params = ParamsFromObject(info[5].As<Napi::Object>());
+  if (info.Length() >= 7 && info[6].IsObject()) {
+    params = ParamsFromObject(info[6].As<Napi::Object>());
   }
   if (env.IsExceptionPending()) return env.Undefined();
   std::vector<SonareMasteringParam> c_params;
@@ -188,12 +205,12 @@ Napi::Value SuggestMixScene(const Napi::CallbackInfo& info, SuggestEntry entry) 
   }
 
   char* json = nullptr;
-  const SonareError err =
-      entry(tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
-            tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
-            tracks.lengths.data(), tracks.left.size(),
-            node_narrow_int(env, info[4], node_arg_label(4).c_str()),
-            c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
+  const SonareError err = entry(
+      tracks.left.data(), tracks.any_right ? tracks.right.data() : nullptr,
+      tracks.id_pointers.data(), tracks.any_name ? tracks.name_pointers.data() : nullptr,
+      tracks.lengths.data(), tracks.sample_rates.empty() ? nullptr : tracks.sample_rates.data(),
+      tracks.left.size(), node_narrow_int(env, info[5], node_arg_label(5).c_str()),
+      c_params.empty() ? nullptr : c_params.data(), c_params.size(), &json);
   if (err != SONARE_OK) {
     sonare_free_string(json);
     ThrowSonareError(env, err);

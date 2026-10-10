@@ -131,6 +131,7 @@ export type {
   EngineTrackSend,
   EngineTransportState,
   EqBandInput,
+  EqMatchOptions,
   EqSpectrumSnapshot,
   ExternalInstrument,
   ExternalInstrumentEvent,
