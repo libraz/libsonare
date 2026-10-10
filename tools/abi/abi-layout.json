@@ -8323,9 +8323,15 @@
         "name": "length",
         "offset": 16,
         "size": 8
+      },
+      {
+        "kind": "signed",
+        "name": "sample_rate",
+        "offset": 24,
+        "size": 4
       }
     ],
-    "size": 24
+    "size": 32
   },
   "SonareSampleDesc": {
     "align": 8,

@@ -703,7 +703,7 @@ def room_morph_stereo(
         return RoomMorphStereoResult(
             left=_float_array_result(out.left, out.length),
             right=_float_array_result(out.right, out.length),
-            sample_rate=sample_rate,
+            sample_rate=int(out.sample_rate),
             diagnostics=diagnostics,
         )
     finally:

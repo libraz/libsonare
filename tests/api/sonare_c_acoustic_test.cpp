@@ -1150,6 +1150,7 @@ TEST_CASE("sonare acoustic C API stereo morph returns two different channels",
   REQUIRE(sonare_room_morph_stereo(input.data(), input.data(), input.size(), 48000, &cfg, &out) ==
           SONARE_OK);
   REQUIRE(out.length > input.size());
+  CHECK(out.sample_rate == 48000);
   REQUIRE(out.left != nullptr);
   REQUIRE(out.right != nullptr);
   // Identical inputs through two receivers: the added room differs between the channels.

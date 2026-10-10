@@ -446,6 +446,7 @@ SonareError sonare_room_morph_stereo(const float* left, const float* right, size
   out->left = sonare_c_detail::release_array(left_out);
   out->right = sonare_c_detail::release_array(right_out);
   out->length = n;
+  out->sample_rate = result.left.sample_rate();
   return SONARE_OK;
   SONARE_C_CATCH
 #else

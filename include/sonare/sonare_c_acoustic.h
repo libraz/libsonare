@@ -230,6 +230,7 @@ typedef struct {
   float* left;
   float* right;
   size_t length;
+  int sample_rate;
 } SonareRoomMorphStereoResult;
 
 #ifdef __cplusplus

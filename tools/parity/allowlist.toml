@@ -1013,6 +1013,10 @@ fields = [
   # credited to `source_by_index` in compare._ALIAS_COVERAGE).
   "project_source.content_hash",
   "project_source.external_stem_role",
+  # The stereo room morph's diagnostics travel on the C diagnostic channel
+  # (sonare_last_diagnostic_*), as the mono morph's do; the facades fold them
+  # into the result.
+  "room_morph_stereo_result.diagnostics",
 
   # --- category 4: intentionally one-sided facade additions ---
   # Documented MIDI 1.0 aliases for the first two UMP words; the comments in
