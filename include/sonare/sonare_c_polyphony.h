@@ -41,7 +41,8 @@ typedef struct SonarePolyphonicAnalysis SonarePolyphonicAnalysis;
 
 /// @brief Versioned configuration for @ref sonare_polyphonic_analyze.
 /// @details Zero-initialize for the defaults; @c struct_version 0 and 1 both select
-///          the version-1 layout. Every field takes its default at 0, so a zeroed
+///          the version-1 layout and 2 adds @c reattack_ratio, which is read from a
+///          version-2 struct only. Every field takes its default at 0, so a zeroed
 ///          struct and a NULL pointer behave alike.
 ///
 ///          Four fields accept 0 as a value as well as reading it as their default,
@@ -137,6 +138,9 @@ typedef struct {
   float min_note_ms;                  /* not read: one note per ridge means nothing here filters
                                           a short one; 0 => 30 */
   float reference_hz;                 /* cents reference; 0 => 440 */
+
+  /* --- Version 2. --- */
+  float reattack_ratio; /* 0 => off; otherwise > 1 */
 } SonarePolyphonicConfig;
 
 /// @brief Analyses @p samples into editable notes and returns a handle to it.

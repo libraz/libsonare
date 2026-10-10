@@ -727,4 +727,5 @@ class SonarePolyphonicConfig(CStruct):
         ("segmentation_threshold_cents", ctypes.c_float),
         ("min_note_ms", ctypes.c_float),
         ("reference_hz", ctypes.c_float),
+        ("reattack_ratio", ctypes.c_float),
     ]

@@ -161,6 +161,38 @@ SonarePolyphonicConfig fitted_c_config() {
   return config;
 }
 
+/// @brief One pitch struck at 0 s and again at 3x the level while the first is still
+///        sounding, each strike decaying on its own.
+std::vector<float> restruck_tone() {
+  constexpr double kRestrikeSec = 0.45;
+  constexpr double kDecayPerSec = 1.5;
+  constexpr double kAttackSec = 0.02;
+  std::vector<float> samples(static_cast<size_t>(0.9 * kSampleRate), 0.0f);
+  std::vector<float> tone(samples.size(), 0.0f);
+  add_tone(tone, kLowHz);
+  const size_t restrike = static_cast<size_t>(kRestrikeSec * kSampleRate);
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const double t = static_cast<double>(i) / kSampleRate;
+    double gain = std::exp(-kDecayPerSec * t);
+    if (i >= restrike) {
+      const double since = t - kRestrikeSec;
+      gain += 3.0 * std::min(1.0, since / kAttackSec) * std::exp(-kDecayPerSec * since);
+    }
+    samples[i] = tone[i] * static_cast<float>(gain);
+  }
+  return samples;
+}
+
+size_t restruck_note_count(const SonarePolyphonicConfig& config) {
+  const std::vector<float> samples = restruck_tone();
+  SonarePolyphonicAnalysis* analysis = nullptr;
+  REQUIRE(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config,
+                                    &analysis) == SONARE_OK);
+  const size_t count = note_count_of(analysis);
+  sonare_polyphonic_analysis_destroy(analysis);
+  return count;
+}
+
 }  // namespace
 
 TEST_CASE("the polyphonic handle reports what the chain found", "[c_api][polyphony]") {
@@ -392,7 +424,7 @@ TEST_CASE("the polyphonic C API refuses what it cannot do", "[c_api][polyphony]"
           SONARE_ERROR_INVALID_PARAMETER);
 
     SonarePolyphonicConfig config{};
-    config.struct_version = 2;
+    config.struct_version = 3;
     CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
           SONARE_ERROR_INVALID_PARAMETER);
     config.struct_version = 0;
@@ -669,6 +701,36 @@ TEST_CASE("the stretch accessor sizes a buffer the way its siblings do", "[c_api
           SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_polyphonic_note_inharmonicity(handle.get(), &one, 1, nullptr) ==
           SONARE_ERROR_INVALID_PARAMETER);
+}
+
+TEST_CASE("reattack_ratio splits a pitch struck again while it sounds", "[c_api][polyphony]") {
+  SonarePolyphonicConfig config{};
+  config.struct_version = 2;
+  const size_t off = restruck_note_count(config);
+
+  config.reattack_ratio = 2.5f;
+  const size_t split = restruck_note_count(config);
+  CHECK(split > off);
+
+  SECTION("a version-1 struct never reads the trailing field") {
+    config.struct_version = 1;
+    CHECK(restruck_note_count(config) == off);
+    config.struct_version = 0;
+    CHECK(restruck_note_count(config) == off);
+  }
+}
+
+TEST_CASE("reattack_ratio outside 0 or above 1 is refused", "[c_api][polyphony]") {
+  const std::vector<float> samples = chord();
+  SonarePolyphonicConfig config{};
+  config.struct_version = 2;
+  for (const float ratio : {-1.0f, 0.5f, 1.0f, std::nanf("")}) {
+    config.reattack_ratio = ratio;
+    SonarePolyphonicAnalysis* out = nullptr;
+    CHECK(sonare_polyphonic_analyze(samples.data(), samples.size(), kSampleRate, &config, &out) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+    CHECK(out == nullptr);
+  }
 }
 
 #endif  // SONARE_WITH_PITCH_EDITOR

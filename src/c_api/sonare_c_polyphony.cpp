@@ -34,7 +34,7 @@ using sonare::editing::polyphony::PolyphonicEditConfig;
 ///          so the two meanings cannot collide.
 SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfig& out) {
   if (in == nullptr) return SONARE_OK;
-  if (in->struct_version < 0 || in->struct_version > 1) return SONARE_ERROR_INVALID_PARAMETER;
+  if (in->struct_version < 0 || in->struct_version > 2) return SONARE_ERROR_INVALID_PARAMETER;
 
   // Anything the core range-checks is forwarded as given and refused there, so one
   // stage's bounds are stated in one place. Only the sentinels are resolved here.
@@ -82,6 +82,8 @@ SonareError resolve_config(const SonarePolyphonicConfig* in, PolyphonicEditConfi
   set_positive(in->max_jump_cents, ridges.max_jump_cents);
   set_floor(in->min_ridge_peak_ratio, ridges.min_ridge_peak_ratio);
   set_floor(in->min_ridge_duration_ms, ridges.min_duration_ms);
+  // Version 2 only; 0 is off and any other value is range-checked by the core.
+  if (in->struct_version >= 2) ridges.reattack_ratio = in->reattack_ratio;
 
   set_count(in->mask_harmonics, out.masks.n_harmonics);
   set_positive(in->claim_lobes, out.masks.claim_lobes);

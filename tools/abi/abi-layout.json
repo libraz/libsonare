@@ -6217,9 +6217,15 @@
         "name": "reference_hz",
         "offset": 144,
         "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "reattack_ratio",
+        "offset": 148,
+        "size": 4
       }
     ],
-    "size": 148
+    "size": 152
   },
   "SonareProjectAssistSidecar": {
     "align": 8,
