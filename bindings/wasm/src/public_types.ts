@@ -242,11 +242,46 @@ export interface CapabilityCatalogMasteringPreset {
   maxLimiterGainReductionDb: number | null;
 }
 
+/** One flat mastering chain stage: `<prefix>.<leaf>` keys are `processor`'s parameters. */
+export interface CapabilityCatalogChainStage {
+  prefix: string;
+  /** Catalog processor id, or null when every key of the stage is chain-only. */
+  processor: string | null;
+  enabledKey: string;
+}
+
+/**
+ * An indexed chain list. `<key>.<i>` is the chain parameter `key` when
+ * `processor` is null; otherwise `<key>.<i>.<field>` is that processor's `field`.
+ */
+export interface CapabilityCatalogChainList {
+  key: string;
+  processor: string | null;
+  minItems: number;
+  maxItems: number;
+}
+
+/** The other spellings of a canonical chain key; `<i>` stands for a list index. */
+export interface CapabilityCatalogChainAlias {
+  key: string;
+  aliases: string[];
+}
+
+/** How each flat mastering chain key is described. */
+export interface CapabilityCatalogChain {
+  stages: CapabilityCatalogChainStage[];
+  lists: CapabilityCatalogChainList[];
+  /** Keys no processor describes, with bounds measured through the chain's own validator. */
+  params: CapabilityCatalogParameter[];
+  aliases: CapabilityCatalogChainAlias[];
+}
+
 /** Complete runtime catalog exposed by {@link capabilityCatalog}. */
 export interface CapabilityCatalog {
   version: string;
   abi: SonareCapabilities['abi'];
   processors: CapabilityCatalogProcessor[];
+  chain: CapabilityCatalogChain;
   presets: CapabilityCatalogPresets;
   masteringPresets: CapabilityCatalogMasteringPreset[];
 }

@@ -28,6 +28,10 @@ describe('mastering preset catalog', () => {
     expect(capabilityCatalog().masteringPresets).toEqual(TRACKED_CATALOG.masteringPresets);
   });
 
+  it('matches the tracked capability catalog chain section', () => {
+    expect(capabilityCatalog().chain).toEqual(TRACKED_CATALOG.chain);
+  });
+
   it('carries exactly the 30 built-in presets, 5 of them restoration', () => {
     const presets = capabilityCatalog().masteringPresets;
     expect(presets).toHaveLength(30);

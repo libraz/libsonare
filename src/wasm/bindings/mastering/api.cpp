@@ -149,6 +149,7 @@ std::string build_capability_catalog() {
   abi["engine"] = static_cast<int>(sonare::rt::kEngineAbiVersion);
   catalog["abi"] = std::move(abi);
   catalog["processors"] = json::parse_strict(mastering::api::processor_catalog_json());
+  catalog["chain"] = json::parse_strict(mastering::api::chain_catalog_json());
 
   json::Object presets;
   presets["mastering"] = catalog_name_array(mastering::api::preset_names());
