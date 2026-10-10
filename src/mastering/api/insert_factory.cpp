@@ -1,6 +1,7 @@
 #include "mastering/api/insert_factory.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -1478,9 +1479,99 @@ class OfflineRepairMeasurement {
   bool previous_;
 };
 
+// A flat chain stage: its key prefix and the catalog processor its keys are, or nullptr.
+struct ChainStage {
+  const char* prefix;
+  const char* processor;
+};
+
+// In execution order. The multiband prefix covers the crossover; its bands are kChainBandList.
+constexpr ChainStage kChainStages[] = {
+    {"repair.declick", "repair.declick"},
+    {"repair.declip", "repair.declip"},
+    {"repair.decrackle", "repair.decrackle"},
+    {"repair.dehum", "repair.dehum"},
+    {"repair.dereverb", "repair.dereverbClassical"},
+    {"repair.denoise", "repair.denoiseClassical"},
+    {"eq.tilt", "eq.tilt"},
+    {"dynamics.deesser", "dynamics.deesser"},
+    {"dynamics.transientShaper", "dynamics.transientShaper"},
+    {"dynamics.compressor", "dynamics.compressor"},
+    {"dynamics.multibandComp", "multiband.compressor"},
+    {"saturation.tape", "saturation.tape"},
+    {"saturation.exciter", "saturation.exciter"},
+    {"spectral.airBand", "spectral.airBand"},
+    {"stereo.imager", "stereo.imager"},
+    {"stereo.monoMaker", "stereo.monoMaker"},
+    {"maximizer.truePeakLimiter", "maximizer.truePeakLimiter"},
+    {"loudness", nullptr},
+};
+
+// A multiband band is the chain compressor's fields at any index, past the insert's nine bands.
+constexpr const char* kChainBandList = "dynamics.multibandComp.bands";
+constexpr const char* kChainBandProcessor = "dynamics.compressor";
+constexpr const char* kChainCutoffList = "dynamics.multibandComp.crossover.cutoffsHz";
+
+// The name the chain-only keys are measured under; no processor id starts with '#'.
+constexpr const char* kChainOnlyProbe = "#chain";
+
+std::string chain_enabled_key(const ChainStage& stage) {
+  return std::string(stage.prefix) + ".enabled";
+}
+
+// Declares the flat chain keys no processor describes and applies @p params through the chain's
+// own parser and validator, so a measured bound is the one the chain refuses past.
+bool read_chain_only_config(const ParamMap& params) {
+  const MasteringChainConfig defaults;
+  std::vector<Param> supplied;
+  const auto supply_if_given = [&](const std::string& key, const std::string& spelled,
+                                   double value) {
+    if (params.find(key) != params.end()) supplied.push_back(Param{spelled, value});
+  };
+  for (const ChainStage& stage : kChainStages) {
+    const std::string key = chain_enabled_key(stage);
+    bool enabled = chain_config_parameter_value(defaults, key).value_or(0.0) != 0.0;
+    detail::read_field(params, key.c_str(), enabled);
+    supply_if_given(key, key, enabled ? 1.0 : 0.0);
+  }
+  // The field table names its metadata as detail does.
+  using detail::kDb;
+  using detail::kDbfs;
+  using detail::kLufs;
+  using detail::kMsLog;
+  using detail::kNone;
+  using detail::kRatio;
+#define X(jkey, member, meta)                                                            \
+  {                                                                                      \
+    auto field = defaults.loudness.member;                                               \
+    detail::read_field(params, "loudness." jkey, field, meta);                           \
+    supply_if_given("loudness." jkey, "loudness." jkey, detail::field_as_double(field)); \
+  }
+  SONARE_FIELDS_LOUDNESS(X)
+#undef X
+  // The chain caps the kernel at kMaxFirKernelSize, which the multiband insert does not.
+  const std::string fir_key = "dynamics.multibandComp.firKernelSize";
+  int fir_kernel_size = defaults.dynamics.multiband_comp.config.crossover.fir_kernel_size;
+  detail::read_field(params, fir_key.c_str(), fir_kernel_size, detail::kSamples);
+  supply_if_given(fir_key, fir_key, fir_kernel_size);
+  // A cutoff element and the legacy linear floor have no single default: declared, not read.
+  const std::pair<std::string, detail::ParamMeta> undefaulted[] = {
+      {kChainCutoffList, detail::kHzLog}, {"repair.denoise.gainFloor", detail::kNone}};
+  for (const auto& [key, meta] : undefaulted) {
+    params.note_kind(key, ParamKind::Number);
+    params.note_meta(key, meta);
+    const auto given = params.find(key);
+    if (given == params.end()) continue;
+    supplied.push_back(Param{key == kChainCutoffList ? key + ".0" : key, given->second});
+  }
+  validate_mastering_chain_config(parse_chain_config_params(supplied.data(), supplied.size()));
+  return true;
+}
+
 // Whether @p name, an insert or a repair stage, constructs from @p params. Throws what
 // construction throws.
 bool constructs(const std::string& name, const ParamMap& params) {
+  if (name == kChainOnlyProbe) return read_chain_only_config(params);
   if (measuring_offline_repair) return read_repair_config(name, params);
   return build_insert(name, params) != nullptr || read_repair_config(name, params);
 }
@@ -1651,6 +1742,7 @@ bool insert_accepts_at_rate(const std::string& name, const std::string& key, dou
                             double sample_rate) {
   try {
     const ParamMap probe = probe_map(name, key, value);
+    if (name == kChainOnlyProbe) return read_chain_only_config(probe);
     if (measuring_offline_repair) return read_repair_config(name, probe);
     auto processor = build_insert(name, probe, nullptr, sample_rate);
     if (processor == nullptr) return read_repair_config(name, probe);
@@ -2228,41 +2320,27 @@ namespace {
 bool chain_key_processor(const std::string& chain_key, std::string* processor, std::string* key) {
   std::string canonical_storage;
   const std::string& canonical = canonical_chain_param_key(chain_key, &canonical_storage);
-  static const std::pair<const char*, const char*> kStages[] = {
-      {"repair.denoise.", "repair.denoiseClassical"},
-      {"repair.decrackle.", "repair.decrackle"},
-      {"repair.dehum.", "repair.dehum"},
-      {"dynamics.compressor.", "dynamics.compressor"},
-  };
-  for (const auto& [prefix, id] : kStages) {
-    const std::string stage_prefix = prefix;
+  // A band before its stage: the multiband prefix names the crossover's processor.
+  const std::string band_prefix = "dynamics.multibandComp.band";
+  const std::size_t dot = canonical.find('.', band_prefix.size());
+  // The chain's index spelling: decimal digits, no leading zero.
+  if (canonical.compare(0, band_prefix.size(), band_prefix) == 0 && dot != std::string::npos &&
+      dot != band_prefix.size() &&
+      canonical.find_first_not_of("0123456789", band_prefix.size()) == dot &&
+      (canonical[band_prefix.size()] != '0' || dot == band_prefix.size() + 1)) {
+    *processor = kChainBandProcessor;
+    *key = canonical.substr(dot + 1);
+    return true;
+  }
+  for (const ChainStage& stage : kChainStages) {
+    const std::string stage_prefix = std::string(stage.prefix) + '.';
     if (canonical.compare(0, stage_prefix.size(), stage_prefix) != 0) continue;
-    *processor = id;
+    if (stage.processor == nullptr) return false;
+    *processor = stage.processor;
     *key = canonical.substr(stage_prefix.size());
     return true;
   }
-  // The crossover enums are the multiband insert's; a band is the chain compressor's fields at
-  // any index, including past the insert's nine bands.
-  const std::string multiband_prefix = "dynamics.multibandComp.";
-  if (canonical.compare(0, multiband_prefix.size(), multiband_prefix) != 0) return false;
-  const std::string leaf = canonical.substr(multiband_prefix.size());
-  if (leaf == "slope" || leaf == "mode") {
-    *processor = "multiband.compressor";
-    *key = leaf;
-    return true;
-  }
-  const std::string band_prefix = "band";
-  const std::size_t dot = leaf.find('.');
-  // The chain's index spelling: decimal digits, no leading zero.
-  if (leaf.compare(0, band_prefix.size(), band_prefix) != 0 || dot == std::string::npos ||
-      dot == band_prefix.size() ||
-      leaf.find_first_not_of("0123456789", band_prefix.size()) != dot ||
-      (leaf[band_prefix.size()] == '0' && dot > band_prefix.size() + 1)) {
-    return false;
-  }
-  *processor = "dynamics.compressor";
-  *key = leaf.substr(dot + 1);
-  return true;
+  return false;
 }
 
 }  // namespace
@@ -2282,6 +2360,105 @@ std::optional<double> mastering_enum_value(const std::string& processor, const s
   }
   throw SonareException(ErrorCode::InvalidParameter,
                         key + ": unknown name '" + choice + "' (valid names: " + valid + ")");
+}
+
+namespace {
+
+void append_json_string(std::string& out, const std::string& text) {
+  out += '"';
+  out += text;
+  out += '"';
+}
+
+// `{key, aliases}` entries: each other spelling canonical_chain_param_key folds onto a key, with
+// the list spellings canonical and `<i>` standing for an index.
+std::vector<std::pair<std::string, std::string>> chain_aliases() {
+  const std::string multiband = "dynamics.multibandComp.";
+  std::vector<std::pair<std::string, std::string>> aliases = {
+      {"repair.denoise.enabled", "repair.denoise"},
+      {"repair.denoise.nFft", "repair.nFft"},
+      {"repair.denoise.hopLength", "repair.hopLength"},
+      {"repair.denoise.ddAlpha", "repair.ddAlpha"},
+      {"repair.denoise.reductionDb", "repair.reductionDb"},
+      {"repair.denoise.gainFloor", "repair.gainFloor"},
+      {"eq.tilt.tiltDb", "eq.tiltDb"},
+      {"eq.tilt.pivotHz", "eq.pivotHz"},
+      {multiband + "slope", multiband + "crossover.slope"},
+      {multiband + "mode", multiband + "crossover.mode"},
+      {multiband + "firKernelSize", multiband + "crossover.firKernelSize"},
+      {std::string(kChainCutoffList) + ".<i>", multiband + "cutoff<i>Hz"},
+      {std::string(kChainCutoffList) + ".0", multiband + "lowCutoffHz"},
+      {std::string(kChainCutoffList) + ".1", multiband + "highCutoffHz"},
+  };
+#define X(jkey, member, meta) \
+  aliases.emplace_back(std::string(kChainBandList) + ".<i>." jkey, multiband + "band<i>." jkey);
+  SONARE_FIELDS_COMPRESSOR(X)
+#undef X
+  // The shorthand of the default split's three bands.
+  const char* const band_words[] = {"low", "mid", "high"};
+  for (std::size_t band = 0; band < std::size(band_words); ++band) {
+    for (const char* field : {"thresholdDb", "ratio", "attackMs", "releaseMs"}) {
+      std::string shorthand = multiband + band_words[band] + field;
+      const std::size_t capital = shorthand.size() - std::strlen(field);
+      shorthand[capital] = static_cast<char>(std::toupper(static_cast<unsigned char>(field[0])));
+      aliases.emplace_back(std::string(kChainBandList) + "." + std::to_string(band) + "." + field,
+                           std::move(shorthand));
+    }
+  }
+  return aliases;
+}
+
+std::string chain_only_param_info_json() {
+  ParamMap params;
+  (void)read_chain_only_config(params);
+  std::string out = "[";
+  for (const std::string& key : construction_keys(params)) {
+    if (out.size() > 1) out += ',';
+    append_param_entry(out, kChainOnlyProbe, key, "null", false, params, 0.0);
+  }
+  out += ']';
+  return out;
+}
+
+}  // namespace
+
+std::string chain_catalog_json() {
+  std::string out = "{\"stages\":[";
+  for (const ChainStage& stage : kChainStages) {
+    if (out.back() != '[') out += ',';
+    out += "{\"prefix\":";
+    append_json_string(out, stage.prefix);
+    out += ",\"processor\":";
+    if (stage.processor == nullptr) {
+      out += "null";
+    } else {
+      append_json_string(out, stage.processor);
+    }
+    out += ",\"enabledKey\":";
+    append_json_string(out, chain_enabled_key(stage));
+    out += '}';
+  }
+  out += "],\"lists\":[{\"key\":";
+  append_json_string(out, kChainCutoffList);
+  out += ",\"processor\":null,\"minItems\":" + std::to_string(kMinMultibandBands - 1u) +
+         ",\"maxItems\":" + std::to_string(kMaxMultibandBands - 1u) + "},{\"key\":";
+  append_json_string(out, kChainBandList);
+  out += ",\"processor\":";
+  append_json_string(out, kChainBandProcessor);
+  out += ",\"minItems\":" + std::to_string(kMinMultibandBands) +
+         ",\"maxItems\":" + std::to_string(kMaxMultibandBands) + "}],\"params\":";
+  out += chain_only_param_info_json();
+  out += ",\"aliases\":[";
+  for (const auto& [key, alias] : chain_aliases()) {
+    if (out.back() != '[') out += ',';
+    out += "{\"key\":";
+    append_json_string(out, key);
+    out += ",\"aliases\":[";
+    append_json_string(out, alias);
+    out += "]}";
+  }
+  out += "]}";
+  return out;
 }
 
 std::string insert_slot_info_json(const std::string& name) {

@@ -289,6 +289,7 @@ std::string build_capability_catalog_json() {
   abi["engine"] = static_cast<int>(sonare_engine_abi_version());
   catalog["abi"] = std::move(abi);
   catalog["processors"] = json::parse_strict(sonare::mastering::api::processor_catalog_json());
+  catalog["chain"] = json::parse_strict(sonare::mastering::api::chain_catalog_json());
 
   json::Object presets;
   presets["mastering"] = newline_name_array(sonare_mastering_preset_names());
@@ -411,6 +412,39 @@ const std::vector<std::string>& capability_catalog_schema_paths() {
       "processors[].slots[].parent",
       "processors[].slots[].activation",
       "processors[].slots[].minCrossoverCutoffs",
+      "chain",
+      "chain.stages",
+      "chain.stages[].prefix",
+      "chain.stages[].processor",
+      "chain.stages[].enabledKey",
+      "chain.lists",
+      "chain.lists[].key",
+      "chain.lists[].processor",
+      "chain.lists[].minItems",
+      "chain.lists[].maxItems",
+      "chain.params",
+      "chain.params[].name",
+      "chain.params[].id",
+      "chain.params[].rtSafe",
+      "chain.params[].type",
+      "chain.params[].min",
+      "chain.params[].max",
+      "chain.params[].minExclusive",
+      "chain.params[].maxExclusive",
+      "chain.params[].maxRelativeTo",
+      "chain.params[].default",
+      "chain.params[].unit",
+      "chain.params[].uiMin",
+      "chain.params[].uiMax",
+      "chain.params[].scale",
+      "chain.params[].choices",
+      "chain.params[].choices[].name",
+      "chain.params[].choices[].value",
+      "chain.params[].slot",
+      "chain.params[].dependsOn",
+      "chain.aliases",
+      "chain.aliases[].key",
+      "chain.aliases[].aliases",
   };
   return paths;
 }

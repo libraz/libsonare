@@ -35,6 +35,25 @@ PARAMETER_UNITS = {
 }
 DEPENDENCY_RELATIONS = {"lt", "le", "gt", "ge"}
 PRESET_GROUPS = ("mastering", "synth", "mixingScene", "voiceChanger", "playbackRoom")
+PARAMETER_KEYS = {
+    "name",
+    "id",
+    "rtSafe",
+    "type",
+    "min",
+    "max",
+    "minExclusive",
+    "maxExclusive",
+    "maxRelativeTo",
+    "default",
+    "unit",
+    "uiMin",
+    "uiMax",
+    "scale",
+    "choices",
+    "slot",
+    "dependsOn",
+}
 MASTERING_PRESET_KEYS = {
     "name",
     "kind",
@@ -265,10 +284,86 @@ def validate_mastering_presets(root: dict[str, Any]) -> None:
         raise ValueError("catalog.masteringPresets order must match catalog.presets.mastering")
 
 
+def validate_chain(root: dict[str, Any]) -> None:
+    """Guard `chain`: every processor it links exists, and every enable key is a boolean."""
+    chain = require_object(root["chain"], "catalog.chain")
+    require_keys(chain, "catalog.chain", {"stages", "lists", "params", "aliases"})
+    for name in ("stages", "lists", "params", "aliases"):
+        if not isinstance(chain[name], list):
+            raise ValueError(  # noqa: TRY004 -- one error class per document
+                f"catalog.chain.{name} must be an array"
+            )
+    processor_ids = {processor["id"] for processor in root["processors"]}
+    params: dict[str, dict[str, Any]] = {}
+    for index, parameter_value in enumerate(chain["params"]):
+        path = f"catalog.chain.params[{index}]"
+        parameter = require_object(parameter_value, path)
+        require_keys(parameter, path, PARAMETER_KEYS)
+        validate_parameter(parameter, path)
+        if parameter["slot"] is not None:
+            raise ValueError(f"{path}.slot must be null: the chain declares no slots")
+        if not isinstance(parameter["name"], str) or parameter["name"] in params:
+            raise ValueError(f"{path}.name must be a unique string")
+        params[parameter["name"]] = parameter
+    for name, parameter in params.items():
+        for dependency in parameter["dependsOn"]:
+            if dependency["key"] == name or dependency["key"] not in params:
+                raise ValueError(f"catalog.chain.params {name} dependsOn must name another param")
+
+    def linked_processor(entry: dict[str, Any], path: str) -> None:
+        processor = entry["processor"]
+        if processor is not None and processor not in processor_ids:
+            raise ValueError(f"{path}.processor must name a catalog processor or be null")
+
+    prefixes: set[str] = set()
+    for index, stage_value in enumerate(chain["stages"]):
+        path = f"catalog.chain.stages[{index}]"
+        stage = require_object(stage_value, path)
+        require_keys(stage, path, {"prefix", "processor", "enabledKey"})
+        if (
+            not isinstance(stage["prefix"], str)
+            or not stage["prefix"]
+            or stage["prefix"] in prefixes
+        ):
+            raise ValueError(f"{path}.prefix must be a unique non-empty string")
+        prefixes.add(stage["prefix"])
+        linked_processor(stage, path)
+        enabled = params.get(stage["enabledKey"])
+        if enabled is None or enabled["type"] != "boolean":
+            raise ValueError(f"{path}.enabledKey must name a boolean chain param")
+    for index, list_value in enumerate(chain["lists"]):
+        path = f"catalog.chain.lists[{index}]"
+        entry = require_object(list_value, path)
+        require_keys(entry, path, {"key", "processor", "minItems", "maxItems"})
+        linked_processor(entry, path)
+        if entry["processor"] is None and entry["key"] not in params:
+            raise ValueError(f"{path} links no processor and so needs a chain param of its key")
+        counts = (entry["minItems"], entry["maxItems"])
+        if any(not isinstance(n, int) or isinstance(n, bool) for n in counts) or not (
+            0 <= counts[0] <= counts[1] and counts[1] >= 1
+        ):
+            raise ValueError(f"{path} must carry integer minItems <= maxItems")
+    spellings: set[str] = set()
+    for index, alias_value in enumerate(chain["aliases"]):
+        path = f"catalog.chain.aliases[{index}]"
+        entry = require_object(alias_value, path)
+        require_keys(entry, path, {"key", "aliases"})
+        if not isinstance(entry["key"], str) or not entry["key"]:
+            raise ValueError(f"{path}.key must be a non-empty string")
+        if not isinstance(entry["aliases"], list) or not entry["aliases"]:
+            raise ValueError(f"{path}.aliases must be a non-empty array")
+        for spelling in entry["aliases"]:
+            if not isinstance(spelling, str) or not spelling or spelling in spellings:
+                raise ValueError(f"{path}.aliases must hold strings no other entry spells")
+            spellings.add(spelling)
+
+
 def validate_catalog(catalog: Any) -> dict[str, Any]:
     """Guard the generated artifact's stable schema without a third-party dependency."""
     root = require_object(catalog, "catalog")
-    require_keys(root, "catalog", {"version", "abi", "processors", "presets", "masteringPresets"})
+    require_keys(
+        root, "catalog", {"version", "abi", "processors", "presets", "masteringPresets", "chain"}
+    )
     if not isinstance(root["version"], str):
         raise ValueError(  # noqa: TRY004 -- one error class per document
             "catalog.version must be a string"
@@ -322,29 +417,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
         for parameter_index, parameter_value in enumerate(processor["params"]):
             path = f"catalog.processors[{index}].params[{parameter_index}]"
             parameter = require_object(parameter_value, path)
-            require_keys(
-                parameter,
-                path,
-                {
-                    "name",
-                    "id",
-                    "rtSafe",
-                    "type",
-                    "min",
-                    "max",
-                    "minExclusive",
-                    "maxExclusive",
-                    "maxRelativeTo",
-                    "default",
-                    "unit",
-                    "uiMin",
-                    "uiMax",
-                    "scale",
-                    "choices",
-                    "slot",
-                    "dependsOn",
-                },
-            )
+            require_keys(parameter, path, PARAMETER_KEYS)
             validate_parameter(parameter, path)
             sibling_names = {sibling["name"] for sibling in processor["params"]}
             for dependency in parameter["dependsOn"]:
@@ -374,6 +447,7 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
         if len(preset_names) != len(set(preset_names)):
             raise ValueError(f"catalog.presets.{name} must contain unique names")
     validate_mastering_presets(root)
+    validate_chain(root)
     return root
 
 

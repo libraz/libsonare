@@ -164,6 +164,19 @@ std::string insert_slot_info_json(const std::string& name);
 std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
                                            const std::string& choice);
 
+/// @brief The capability catalog's `chain` section: how each flat mastering chain key is described.
+/// @return A JSON object string with four arrays:
+///   - `stages`: each chain stage in execution order, `{prefix, processor, enabledKey}`; the keys
+///     `<prefix>.<leaf>` are `processor`'s parameters, or chain-only when it is null.
+///   - `lists`: the multiband stage's indexed lists, `{key, processor, minItems, maxItems}`; an
+///     element `<key>.<i>` is the chain param `key` when `processor` is null, otherwise
+///     `<key>.<i>.<field>` is the processor's `field`.
+///   - `params`: the keys no processor describes, in the shape of insert_param_info_json(), with
+///     bounds measured through the chain's own parser and validator.
+///   - `aliases`: `{key, aliases}`, the other spellings of a canonical key; `<i>` stands for a
+///     list index.
+std::string chain_catalog_json();
+
 /// Rate and block size an insert is prepared at when the catalog measures it.
 inline constexpr double kInsertProbeSampleRate = 48000.0;
 inline constexpr int kInsertProbeBlockSize = 512;

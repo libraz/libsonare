@@ -4,7 +4,7 @@
   "title": "libsonare Capability Catalog",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "abi", "processors", "presets", "masteringPresets"],
+  "required": ["version", "abi", "processors", "presets", "masteringPresets", "chain"],
   "properties": {
     "version": { "type": "string", "minLength": 1 },
     "abi": {
@@ -65,97 +65,7 @@
           "causal": { "type": "boolean" },
           "params": {
             "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": false,
-              "required": [
-                "name",
-                "id",
-                "rtSafe",
-                "type",
-                "min",
-                "max",
-                "minExclusive",
-                "maxExclusive",
-                "maxRelativeTo",
-                "default",
-                "unit",
-                "uiMin",
-                "uiMax",
-                "scale",
-                "choices",
-                "slot",
-                "dependsOn"
-              ],
-              "properties": {
-                "name": { "type": "string", "minLength": 1 },
-                "id": { "type": ["integer", "null"], "minimum": 0 },
-                "rtSafe": { "type": "boolean" },
-                "type": { "enum": ["number", "boolean", "enum", "string", "array"] },
-                "min": { "type": ["number", "null"] },
-                "max": { "type": ["number", "null"] },
-                "minExclusive": { "type": "boolean" },
-                "maxExclusive": { "type": "boolean" },
-                "maxRelativeTo": { "enum": ["nyquist", null] },
-                "default": { "type": ["number", "boolean", "null"] },
-                "unit": {
-                  "enum": [
-                    "dB",
-                    "dBFS",
-                    "LUFS",
-                    "Hz",
-                    "ms",
-                    "s",
-                    "samples",
-                    "m",
-                    "cm",
-                    "mm",
-                    "deg",
-                    "percent",
-                    "degC",
-                    "V",
-                    "inPerSec",
-                    "dBPerOct",
-                    "semitones",
-                    "cents",
-                    "ratio",
-                    "bits",
-                    "count",
-                    "none",
-                    null
-                  ]
-                },
-                "uiMin": { "type": ["number", "null"] },
-                "uiMax": { "type": ["number", "null"] },
-                "scale": { "enum": ["linear", "log"] },
-                "choices": {
-                  "type": ["array", "null"],
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["name", "value"],
-                    "properties": {
-                      "name": { "type": "string", "minLength": 1 },
-                      "value": { "type": "number" }
-                    }
-                  }
-                },
-                "slot": { "type": ["string", "null"], "minLength": 1 },
-                "dependsOn": {
-                  "type": "array",
-                  "items": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "required": ["key", "relation", "factor"],
-                    "properties": {
-                      "key": { "type": "string", "minLength": 1 },
-                      "relation": { "enum": ["lt", "le", "gt", "ge"] },
-                      "factor": { "type": "number", "exclusiveMinimum": 0 }
-                    }
-                  }
-                }
-              }
-            }
+            "items": { "$ref": "#/$defs/parameter" }
           },
           "slots": {
             "type": "array",
@@ -177,16 +87,164 @@
     "presets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mastering", "synth", "mixingScene", "voiceChanger"],
+      "required": ["mastering", "synth", "mixingScene", "voiceChanger", "playbackRoom"],
       "properties": {
         "mastering": { "$ref": "#/$defs/nameList" },
         "synth": { "$ref": "#/$defs/nameList" },
         "mixingScene": { "$ref": "#/$defs/nameList" },
-        "voiceChanger": { "$ref": "#/$defs/nameList" }
+        "voiceChanger": { "$ref": "#/$defs/nameList" },
+        "playbackRoom": { "$ref": "#/$defs/nameList" }
+      }
+    },
+    "chain": {
+      "description": "The flat mastering chain keys. A key resolves through its canonical spelling (aliases), then a chain-only descriptor (params), then a list element (lists: `<key>.<i>` is the descriptor named `key` when processor is null, `<key>.<i>.<field>` is the processor's `field` otherwise), then the longest stage prefix (stages: `<prefix>.<leaf>` is the processor's `leaf`). `<i>` in an alias stands for a list index, decimal with no leading zero.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stages", "lists", "params", "aliases"],
+      "properties": {
+        "stages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["prefix", "processor", "enabledKey"],
+            "properties": {
+              "prefix": { "type": "string", "minLength": 1 },
+              "processor": { "type": ["string", "null"], "minLength": 1 },
+              "enabledKey": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "lists": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "processor", "minItems", "maxItems"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "processor": { "type": ["string", "null"], "minLength": 1 },
+              "minItems": { "type": "integer", "minimum": 0 },
+              "maxItems": { "type": "integer", "minimum": 1 }
+            }
+          }
+        },
+        "params": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameter" }
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "aliases"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "aliases": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "type": "string", "minLength": 1 },
+                "uniqueItems": true
+              }
+            }
+          }
+        }
       }
     }
   },
   "$defs": {
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "id",
+        "rtSafe",
+        "type",
+        "min",
+        "max",
+        "minExclusive",
+        "maxExclusive",
+        "maxRelativeTo",
+        "default",
+        "unit",
+        "uiMin",
+        "uiMax",
+        "scale",
+        "choices",
+        "slot",
+        "dependsOn"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "id": { "type": ["integer", "null"], "minimum": 0 },
+        "rtSafe": { "type": "boolean" },
+        "type": { "enum": ["number", "boolean", "enum", "string", "array"] },
+        "min": { "type": ["number", "null"] },
+        "max": { "type": ["number", "null"] },
+        "minExclusive": { "type": "boolean" },
+        "maxExclusive": { "type": "boolean" },
+        "maxRelativeTo": { "enum": ["nyquist", null] },
+        "default": { "type": ["number", "boolean", "null"] },
+        "unit": {
+          "enum": [
+            "dB",
+            "dBFS",
+            "LUFS",
+            "Hz",
+            "ms",
+            "s",
+            "samples",
+            "m",
+            "cm",
+            "mm",
+            "deg",
+            "percent",
+            "degC",
+            "V",
+            "inPerSec",
+            "dBPerOct",
+            "semitones",
+            "cents",
+            "ratio",
+            "bits",
+            "count",
+            "none",
+            null
+          ]
+        },
+        "uiMin": { "type": ["number", "null"] },
+        "uiMax": { "type": ["number", "null"] },
+        "scale": { "enum": ["linear", "log"] },
+        "choices": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "value"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "value": { "type": "number" }
+            }
+          }
+        },
+        "slot": { "type": ["string", "null"], "minLength": 1 },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "relation", "factor"],
+            "properties": {
+              "key": { "type": "string", "minLength": 1 },
+              "relation": { "enum": ["lt", "le", "gt", "ge"] },
+              "factor": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        }
+      }
+    },
     "nameList": {
       "type": "array",
       "items": { "type": "string", "minLength": 1 },

@@ -7,6 +7,7 @@
 #include "c_api/sonare_c_mastering_helpers.h"
 #include "core/audio.h"
 #include "mastering/api/audio_utils.h"
+#include "mastering/api/chain.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/maximizer/loudness_optimize.h"
@@ -1087,6 +1088,103 @@ TEST_CASE("the capability catalog schema list matches what the writer emits",
     if (path.rfind("processors[]", 0) == 0) interior.insert(path);
   }
   REQUIRE(interior == prefixed);
+}
+
+TEST_CASE("the capability catalog's chain aliases name what the chain parser folds together",
+          "[c_api][mastering]") {
+  namespace api = sonare::mastering::api;
+  const auto catalog = sonare::util::json::parse_strict(sonare_capability_catalog_json());
+  const auto& chain = catalog["chain"];
+  const auto& aliases = chain["aliases"].as_array();
+  REQUIRE(aliases.size() > 30);
+
+  const auto substitute = [](std::string text, std::size_t index) {
+    const std::size_t at = text.find("<i>");
+    if (at != std::string::npos) text.replace(at, 3, std::to_string(index));
+    return text;
+  };
+  const auto parse_one = [](const std::string& key, double value) {
+    const api::Param param{key, value};
+    return api::parse_chain_config_params(&param, 1);
+  };
+  // A value the canonical spelling accepts that is not the field's default, so a fold onto the
+  // wrong field shows.
+  const auto accepted_value = [&](const std::string& key) {
+    const auto fallback = api::chain_config_parameter_value(api::MasteringChainConfig{}, key);
+    const double scaled = fallback ? *fallback * 2.0 : 3.0;
+    for (const double candidate : {1.0, 0.5, 2.0, 1000.0, scaled}) {
+      if (fallback && candidate == *fallback) continue;
+      try {
+        (void)api::chain_config_to_json(parse_one(key, candidate));
+        return candidate;
+      } catch (const sonare::SonareException&) {
+      }
+    }
+    FAIL("no accepted value for " << key);
+    return 0.0;
+  };
+  const std::string cutoff_list = "dynamics.multibandComp.crossover.cutoffsHz.";
+  for (const auto& entry : aliases) {
+    const std::string canonical = entry["key"].as_string();
+    for (std::size_t index : {0u, 1u}) {
+      const std::string key = substitute(canonical, index);
+      const bool is_cutoff = key.rfind(cutoff_list, 0) == 0;
+      // A cutoff stays ascending against the default split's other one.
+      const double value = is_cutoff ? (key.back() == '1' ? 1000.0 : 50.0) : accepted_value(key);
+      for (const auto& spelling : entry["aliases"].as_array()) {
+        const std::string alias = substitute(spelling.as_string(), index);
+        CAPTURE(alias, key);
+        const auto via_alias = parse_one(alias, value);
+        if (is_cutoff) {
+          // The list spelling replaces the whole list, so the alias is compared by the element.
+          REQUIRE(api::chain_config_parameter_value(via_alias, key) == value);
+        } else {
+          REQUIRE(api::chain_config_to_json(via_alias) ==
+                  api::chain_config_to_json(parse_one(key, value)));
+        }
+      }
+    }
+  }
+
+  const auto& lists = chain["lists"].as_array();
+  REQUIRE(lists.size() == 2);
+  REQUIRE(lists[0]["minItems"].as_int() == static_cast<int>(api::kMinMultibandBands - 1));
+  REQUIRE(lists[0]["maxItems"].as_int() == static_cast<int>(api::kMaxMultibandBands - 1));
+  REQUIRE(lists[1]["minItems"].as_int() == static_cast<int>(api::kMinMultibandBands));
+  REQUIRE(lists[1]["maxItems"].as_int() == static_cast<int>(api::kMaxMultibandBands));
+}
+
+TEST_CASE("the capability catalog's chain-only params are measured through the chain",
+          "[c_api][mastering]") {
+  const auto catalog = sonare::util::json::parse_strict(sonare_capability_catalog_json());
+  const auto& chain = catalog["chain"];
+  const auto find = [&](const std::string& name) -> const sonare::util::json::Value& {
+    for (const auto& param : chain["params"].as_array()) {
+      if (param["name"].as_string() == name) return param;
+    }
+    FAIL("no chain param " << name);
+    return chain;
+  };
+  REQUIRE(chain["stages"].as_array().size() == 18);
+  for (const auto& stage : chain["stages"].as_array()) {
+    const auto& enabled = find(stage["enabledKey"].as_string());
+    REQUIRE(enabled["type"].as_string() == "boolean");
+    REQUIRE(enabled["default"].is_bool());
+    REQUIRE_FALSE(enabled["default"].as_bool());
+  }
+  // Each bound below is the chain's own refusal, not a value written beside it.
+  const auto& oversample = find("loudness.truePeakOversample");
+  REQUIRE(oversample["choices"].as_array().size() == 5);
+  REQUIRE(find("loudness.ceilingDb")["max"].as_number() == 0.0);
+  REQUIRE(find("loudness.maxLimiterGainReductionDb")["min"].as_number() == 0.0);
+  REQUIRE(find("loudness.targetLufs")["unit"].as_string() == "LUFS");
+  const auto& fir = find("dynamics.multibandComp.firKernelSize");
+  REQUIRE(fir["min"].as_number() == 1.0);
+  REQUIRE(fir["max"].as_number() == static_cast<double>(sonare::mastering::api::kMaxFirKernelSize));
+  const auto& cutoff = find("dynamics.multibandComp.crossover.cutoffsHz");
+  REQUIRE(cutoff["min"].as_number() == 0.0);
+  REQUIRE(cutoff["minExclusive"].as_bool());
+  REQUIRE(find("repair.denoise.gainFloor")["max"].as_number() == 1.0);
 }
 
 TEST_CASE("sonare_mastering named-processor rejects out-of-range repair modes",
