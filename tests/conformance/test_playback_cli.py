@@ -37,13 +37,19 @@ def _native_cli() -> Path | None:
     """Locate the native sonare-cli binary this run should exercise.
 
     `SONARE_NATIVE_CLI` names it explicitly (a private `-B` build directory, per
-    AGENT.md's rule against building into `build/` at the repo root); a couple
-    of conventional build directories are tried as a fallback for a plain
-    in-tree build.
+    AGENT.md's rule against building into `build/` at the repo root). Otherwise
+    the binary beside the library `SONARE_LIB_PATH` names is used, so both front
+    ends come from one build; a couple of conventional build directories are the
+    fallback for a plain in-tree build.
     """
     env_path = os.environ.get("SONARE_NATIVE_CLI")
     if env_path:
         return Path(env_path)
+    lib_path = os.environ.get("SONARE_LIB_PATH")
+    if lib_path:
+        sibling = Path(lib_path).resolve().parent.parent / "bin" / "sonare-cli"
+        if sibling.is_file():
+            return sibling
     for candidate in ("build/bin/sonare-cli", "build-shared/bin/sonare-cli"):
         path = ROOT / candidate
         if path.is_file():

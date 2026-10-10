@@ -1,9 +1,10 @@
 """Test configuration for libsonare Python binding tests.
 
-This file resolves the shared library's location and nothing else. It installs
-no collection hook and skips nothing: a suite that needs the C layer declares
-its own ``pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, ...)`` from
-``_helpers``. That is deliberate -- a conftest-level "skip everything when the
+This file resolves the shared library's location and refuses to start against a
+stale in-tree build. It installs no collection hook and skips nothing: a suite
+that needs the C layer declares its own
+``pytestmark = pytest.mark.skipif(not LIB_AVAILABLE, ...)`` from ``_helpers``.
+That is deliberate -- a conftest-level "skip everything when the
 library will not load" cannot tell an absent library from a broken one, so a
 genuine build or ABI break would report as a green run full of skips instead of
 a failure.
@@ -41,6 +42,19 @@ def _find_dev_lib_path() -> str | None:
 _dev_lib_path = _find_dev_lib_path()
 if _dev_lib_path is not None:
     os.environ.setdefault("SONARE_LIB_PATH", _dev_lib_path)
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    """Refuse to run against an in-tree library older than the core sources."""
+    if _dev_lib_path is None:
+        return
+    # The tests directory joins sys.path only once collection starts.
+    sys.path.insert(0, str(Path(__file__).parent))
+    from _lib_freshness import stale_library_message
+
+    message = stale_library_message(_dev_lib_path, Path(__file__).parent.parent.parent.parent)
+    if message is not None:
+        pytest.exit(message, returncode=3)
 
 
 @pytest.fixture()
