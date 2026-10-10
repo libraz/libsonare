@@ -252,6 +252,8 @@ const char* PitchClassNameLocal(SonarePitchClass pc);
 SonarePitchClass PitchClassFromValue(const Napi::Value& value, const char* what);
 const char* ModeNameLocal(SonareMode mode);
 const char* ChordQualityName(SonareChordQuality quality);
+/// @brief Resolves a chord quality given as an ordinal or as the name a detected chord carries.
+SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what);
 Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, float confidence);
 Napi::Object AnalysisToObject(Napi::Env env, const SonareAnalysisResult& analysis);
 bool EnrichFullAnalysisObject(Napi::Env env, Napi::Object result, Napi::Error* error);

@@ -1096,32 +1096,6 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
-namespace {
-
-// Resolves a chord quality given as an ordinal or as the name a detected chord carries.
-SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what) {
-  const Napi::Env env = value.Env();
-  if (value.IsNumber()) {
-    const int ordinal = node_narrow_int(env, value, what);
-    if (ordinal < 0 || ordinal >= SONARE_CHORD_QUALITY_COUNT) {
-      throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality");
-    }
-    return static_cast<SonareChordQuality>(ordinal);
-  }
-  if (!value.IsString()) {
-    throw Napi::TypeError::New(env, std::string(what) + " must be a chord quality name or number");
-  }
-  const std::string name = node_narrow_string(env, value, what);
-  for (int quality = 0; quality < SONARE_CHORD_QUALITY_COUNT; ++quality) {
-    if (name == ChordQualityName(static_cast<SonareChordQuality>(quality))) {
-      return static_cast<SonareChordQuality>(quality);
-    }
-  }
-  throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality: '" + name + "'");
-}
-
-}  // namespace
-
 Napi::Value SonareWrap::ChordFunctions(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

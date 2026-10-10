@@ -560,29 +560,6 @@ struct WarpAnchorArrayDeleter {
   void operator()(SonareProjectWarpAnchor* anchors) const { sonare_free_warp_anchors(anchors); }
 };
 
-// Resolves a chord quality given as an ordinal or as the name a detected chord
-// carries, by reverse lookup over the addon's ordinal-to-name table.
-SonareChordQuality ChordQualityFromValue(const Napi::Value& value, const char* what) {
-  const Napi::Env env = value.Env();
-  if (value.IsNumber()) {
-    const int ordinal = node_narrow_int(env, value, what);
-    if (ordinal < 0 || ordinal >= SONARE_CHORD_QUALITY_COUNT) {
-      throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality");
-    }
-    return static_cast<SonareChordQuality>(ordinal);
-  }
-  if (!value.IsString()) {
-    throw Napi::TypeError::New(env, std::string(what) + " must be a chord quality name or number");
-  }
-  const std::string name = sonare_node::node_narrow_string(env, value, what);
-  for (int quality = 0; quality < SONARE_CHORD_QUALITY_COUNT; ++quality) {
-    if (name == sonare_node::ChordQualityName(static_cast<SonareChordQuality>(quality))) {
-      return static_cast<SonareChordQuality>(quality);
-    }
-  }
-  throw Napi::RangeError::New(env, std::string(what) + " is not a chord quality: '" + name + "'");
-}
-
 // Capacity for the extension scale degrees; the library emits at most three.
 constexpr size_t kChordExtensionCapacity = 32;
 
