@@ -3203,7 +3203,7 @@ TEST_CASE("flat multiband list rules hold in any key order", "[mastering][chain]
         too_many.push_back({mb_key("crossover.cutoffsHz." + std::to_string(index)),
                             20.0 + 10.0 * static_cast<double>(index)});
       }
-      require_refused([&] { parse(too_many); }, {"multiband bands count must be between 1 and 64"});
+      require_refused([&] { parse(too_many); }, {"multiband bands count must be between 2 and 64"});
       require_refused(
           [&] {
             parse({on,

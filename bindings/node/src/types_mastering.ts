@@ -660,7 +660,7 @@ export interface MasteringChainConfig {
       highReleaseMs?: number;
       /**
        * Crossover of the N-band form. `cutoffsHz` replaces the whole cutoff list
-       * and sets the band count to `length + 1` (1 to 64 bands); do not combine
+       * and sets the band count to `length + 1` (2 to 64 bands); do not combine
        * it with the `lowCutoffHz` / `highCutoffHz` shorthand in one call. An empty
        * list is refused. Giving any member of `crossover` enables the stage unless
        * `enabled` says otherwise.

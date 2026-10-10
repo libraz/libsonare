@@ -215,8 +215,12 @@ void validate_chain_multiband_config(const multiband::MultibandCompressorConfig&
   const auto& crossover = config.crossover;
   const auto& bands = config.bands;
 
-  if (bands.empty() || bands.size() > kMaxMultibandBands) {
-    throw_invalid_multiband("multiband bands count must be between 1 and 64");
+  if (bands.size() < kMinMultibandBands) {
+    throw_invalid_multiband(
+        "multiband stage needs at least two bands; one band is the compressor stage");
+  }
+  if (bands.size() > kMaxMultibandBands) {
+    throw_invalid_multiband("multiband bands count must be between 2 and 64");
   }
   if (crossover.cutoffs_hz.size() > kMaxMultibandBands - 1u) {
     throw_invalid_multiband("crossover cutoff count exceeds the 64-band limit");

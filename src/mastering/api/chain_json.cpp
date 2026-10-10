@@ -421,8 +421,12 @@ MultibandCompStage parse_multiband_config(const JsonValue& value) {
     throw_invalid_json("field must be an array: " + std::string(path) + ".bands");
   }
   const auto& band_values = bands_value.as_array();
-  if (band_values.empty() || band_values.size() > kMaxMultibandBands) {
-    throw_invalid_json("multiband bands count must be between 1 and 64");
+  if (band_values.size() < kMinMultibandBands) {
+    throw_invalid_json(
+        "multiband stage needs at least two bands; one band is the compressor stage");
+  }
+  if (band_values.size() > kMaxMultibandBands) {
+    throw_invalid_json("multiband bands count must be between 2 and 64");
   }
   if (band_values.size() != crossover.cutoffs_hz.size() + 1u) {
     throw_invalid_json("multiband band count must equal cutoff count plus one");
@@ -579,7 +583,56 @@ class JsonParamParser {
   const std::string& text_;
 };
 
+// Appends one params entry under its dotted path: object members as `.<key>`, array
+// elements as `.<index>`.
+void append_flat_param(std::vector<ChainFlatParam>& out, const std::string& path,
+                       const JsonValue& value) {
+  if (value.is_number()) {
+    out.push_back(ChainFlatParam{path, value.as_number(), false});
+  } else if (value.is_bool()) {
+    out.push_back(ChainFlatParam{path, value.as_bool() ? 1.0 : 0.0, true});
+  } else if (const auto named = value.is_string()
+                                    ? mastering_enum_value("", path, value.as_string())
+                                    : std::nullopt) {
+    out.push_back(ChainFlatParam{path, *named, false});
+  } else if (value.is_object()) {
+    for (const auto& [key, member] : value.as_object()) {
+      append_flat_param(out, path + "." + key, member);
+    }
+  } else if (value.is_array()) {
+    const auto& elements = value.as_array();
+    if (elements.empty()) {
+      throw SonareException(
+          ErrorCode::InvalidParameter,
+          "chain config param '" + path + "' is an empty list, which has no flat spelling");
+    }
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+      append_flat_param(out, path + "." + std::to_string(index), elements[index]);
+    }
+  } else {
+    throw SonareException(ErrorCode::InvalidParameter,
+                          "chain config param '" + path + "' is not a number or boolean");
+  }
+}
+
 }  // namespace
+
+std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json) {
+  try {
+    const auto root = sonare::util::json::admit_strict(chain_config_json, kChainJsonLimits);
+    const JsonValue* params = root.find("params");
+    if (!params || !params->is_object() || params->as_object().empty()) {
+      throw SonareException(ErrorCode::InvalidParameter, "chain config carries no params block");
+    }
+    std::vector<ChainFlatParam> flat;
+    for (const auto& [key, value] : params->as_object()) {
+      append_flat_param(flat, key, value);
+    }
+    return flat;
+  } catch (const sonare::util::json::JsonError& e) {
+    throw SonareException(ErrorCode::InvalidParameter, e.what());
+  }
+}
 
 std::optional<double> chain_config_parameter_value(const MasteringChainConfig& config,
                                                    const std::string& key) {

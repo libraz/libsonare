@@ -4,9 +4,11 @@
 #include <cmath>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/insert_factory.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/presets.h"
 #include "support/audio_fixtures.h"
@@ -85,6 +87,60 @@ void replace_once(std::string& text, const std::string& from, const std::string&
   const auto position = text.find(from);
   REQUIRE(position != std::string::npos);
   text.replace(position, from.size(), to);
+}
+
+// The refusal is InvalidParameter carrying exactly @p message.
+template <typename Fn>
+void require_refused_with(Fn&& call, const std::string& message) {
+  try {
+    call();
+    FAIL("expected an InvalidParameter refusal");
+  } catch (const sonare::SonareException& error) {
+    CHECK(error.code() == sonare::ErrorCode::InvalidParameter);
+    CHECK(std::string(error.what()) == message);
+  }
+}
+
+void require_same_multiband(const MultibandCompStage& actual, const MultibandCompStage& expected) {
+  REQUIRE(actual.enabled == expected.enabled);
+  REQUIRE(actual.config.crossover == expected.config.crossover);
+  REQUIRE(actual.config.bands.size() == expected.config.bands.size());
+  for (std::size_t index = 0; index < expected.config.bands.size(); ++index) {
+    CAPTURE(index);
+    const auto& expected_band = expected.config.bands[index];
+    const auto& actual_band = actual.config.bands[index];
+    REQUIRE(actual_band.threshold_db == expected_band.threshold_db);
+    REQUIRE(actual_band.ratio == expected_band.ratio);
+    REQUIRE(actual_band.attack_ms == expected_band.attack_ms);
+    REQUIRE(actual_band.release_ms == expected_band.release_ms);
+    REQUIRE(actual_band.knee_db == expected_band.knee_db);
+    REQUIRE(actual_band.makeup_gain_db == expected_band.makeup_gain_db);
+    REQUIRE(actual_band.auto_makeup == expected_band.auto_makeup);
+    REQUIRE(actual_band.detector == expected_band.detector);
+    REQUIRE(actual_band.sidechain_hpf_enabled == expected_band.sidechain_hpf_enabled);
+    REQUIRE(actual_band.sidechain_hpf_hz == expected_band.sidechain_hpf_hz);
+    REQUIRE(actual_band.pdr_time_ms == expected_band.pdr_time_ms);
+    REQUIRE(actual_band.pdr_release_scale == expected_band.pdr_release_scale);
+  }
+}
+
+// A v2 document whose multiband stage carries @p band_count bands; built by
+// editing a writer document, since the writer refuses a count outside 2..64.
+std::string v2_document_with_band_count(std::size_t band_count) {
+  const std::size_t source_count = std::clamp<std::size_t>(band_count, 2, 64);
+  auto root = sonare::util::json::parse_strict(
+      chain_config_to_json(make_full_multiband_config(source_count)));
+  auto& stage = root.as_object().at("params").as_object().at("dynamics.multibandComp").as_object();
+  auto& cutoffs = stage.at("crossover").as_object().at("cutoffsHz").as_array();
+  auto& bands = stage.at("bands").as_array();
+  while (bands.size() > band_count) {
+    bands.pop_back();
+    cutoffs.pop_back();
+  }
+  while (bands.size() < band_count) {
+    bands.push_back(bands.back());
+  }
+  return sonare::util::json::dump(root);
 }
 
 }  // namespace
@@ -360,6 +416,141 @@ TEST_CASE("v2 multiband JSON rejects malformed structured fields", "[mastering][
     config.dynamics.multiband_comp.config.crossover.fir_kernel_size = 65'537;
     REQUIRE_THROWS_AS(chain_config_to_json(config), sonare::SonareException);
   }
+}
+
+TEST_CASE("a multiband chain stage carries between two and 64 bands", "[mastering][preset][json]") {
+  const std::string too_few =
+      "multiband stage needs at least two bands; one band is the compressor stage";
+  const std::string too_many = "multiband bands count must be between 2 and 64";
+
+  SECTION("the shared validator") {
+    require_refused_with(
+        [] {
+          validate_chain_multiband_config(
+              make_full_multiband_config(1).dynamics.multiband_comp.config);
+        },
+        too_few);
+    require_refused_with(
+        [] {
+          validate_chain_multiband_config(
+              make_full_multiband_config(65).dynamics.multiband_comp.config);
+        },
+        too_many);
+    validate_chain_multiband_config(make_full_multiband_config(2).dynamics.multiband_comp.config);
+  }
+
+  SECTION("the JSON writer") {
+    require_refused_with([] { chain_config_to_json(make_full_multiband_config(1)); }, too_few);
+  }
+
+  SECTION("the JSON reader") {
+    const std::string one_band = v2_document_with_band_count(1);
+    REQUIRE(one_band.find("\"cutoffsHz\":[]") != std::string::npos);
+    require_refused_with([&] { chain_config_from_json(one_band); }, too_few);
+    require_refused_with([] { chain_config_from_json(v2_document_with_band_count(65)); }, too_many);
+    REQUIRE(chain_config_from_json(v2_document_with_band_count(64))
+                .dynamics.multiband_comp.config.bands.size() == 64);
+  }
+
+  SECTION("the flat spelling of a one-band document") {
+    require_refused_with([] { chain_config_flat_params(v2_document_with_band_count(1)); },
+                         "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an "
+                         "empty list, which has no flat spelling");
+  }
+}
+
+TEST_CASE("a chain config document's flat params parse to the document's config",
+          "[mastering][preset][json]") {
+  std::vector<std::pair<std::string, MasteringChainConfig>> cases = {
+      {"default", MasteringChainConfig{}},
+      {"four bands", make_full_multiband_config(4)},
+      {"five bands", make_full_multiband_config(5)},
+  };
+  for (const auto& name : preset_names()) {
+    cases.emplace_back(name, preset_config(preset_from_string(name)));
+  }
+
+  for (const auto& [name, source] : cases) {
+    CAPTURE(name);
+    const std::string text = chain_config_to_json(source);
+    const auto root = sonare::util::json::parse_strict(text);
+    const int version = root["version"].as_int();
+    REQUIRE(version == (name == "four bands" || name == "five bands" ? 2 : 1));
+
+    const auto flat = chain_config_flat_params(text);
+    REQUIRE_FALSE(flat.empty());
+    std::vector<Param> params;
+    params.reserve(flat.size());
+    for (const auto& entry : flat) {
+      CAPTURE(entry.key);
+      if (entry.is_bool) REQUIRE((entry.value == 0.0 || entry.value == 1.0));
+      params.push_back(Param{entry.key, entry.value});
+    }
+    if (version == 2) {
+      const auto enabled = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
+        return entry.key == "dynamics.multibandComp.enabled";
+      });
+      REQUIRE(enabled != flat.end());
+      REQUIRE(enabled->is_bool);
+      const auto cutoff = std::find_if(flat.begin(), flat.end(), [](const auto& entry) {
+        return entry.key == "dynamics.multibandComp.crossover.cutoffsHz.0";
+      });
+      REQUIRE(cutoff != flat.end());
+      REQUIRE_FALSE(cutoff->is_bool);
+    }
+
+    const auto from_flat = parse_chain_config_params(params.data(), params.size());
+    const auto from_json = chain_config_from_json(text);
+    require_same_multiband(from_flat.dynamics.multiband_comp, from_json.dynamics.multiband_comp);
+    // The canonical writer emits every stage's every field, so equal text is equal fields.
+    REQUIRE(chain_config_to_json(from_flat) == chain_config_to_json(from_json));
+    REQUIRE(chain_config_to_json(from_flat) == text);
+  }
+}
+
+TEST_CASE("chain config flat params refuse what has no flat spelling",
+          "[mastering][preset][json]") {
+  const std::string no_params = "chain config carries no params block";
+  require_refused_with([] { chain_config_flat_params(R"({"version":1})"); }, no_params);
+  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":[1]})"); },
+                       no_params);
+  require_refused_with([] { chain_config_flat_params(R"({"version":1,"params":{}})"); }, no_params);
+
+  require_refused_with(
+      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":"steep"}})"); },
+      "chain config param 'eq.tiltDb' is not a number or boolean");
+  require_refused_with(
+      [] { chain_config_flat_params(R"({"version":1,"params":{"eq.tiltDb":null}})"); },
+      "chain config param 'eq.tiltDb' is not a number or boolean");
+  require_refused_with(
+      [] {
+        chain_config_flat_params(
+            R"({"version":2,"params":{"dynamics.multibandComp":{"bands":[{"ratio":"x"}]}}})");
+      },
+      "chain config param 'dynamics.multibandComp.bands.0.ratio' is not a number or boolean");
+  require_refused_with(
+      [] {
+        chain_config_flat_params(
+            R"({"version":2,"params":{"dynamics.multibandComp":{"crossover":{"cutoffsHz":[]}}}})");
+      },
+      "chain config param 'dynamics.multibandComp.crossover.cutoffsHz' is an empty list, which "
+      "has no flat spelling");
+}
+
+TEST_CASE("chain config flat params resolve an enum name as the validating reader does",
+          "[mastering][preset][json]") {
+  const std::string text =
+      R"({"version":1,"params":{"repair.denoise.enabled":true,"repair.denoise.noiseEstimator":"mcra"}})";
+  const auto flat = chain_config_flat_params(text);
+  REQUIRE(flat.size() == 2u);
+  REQUIRE(flat[1].key == "repair.denoise.noiseEstimator");
+  REQUIRE_FALSE(flat[1].is_bool);
+  const auto expected = mastering_enum_value("", "repair.denoise.noiseEstimator", "mcra");
+  REQUIRE(expected.has_value());
+  REQUIRE(flat[1].value == *expected);
+  REQUIRE_THROWS_AS(
+      chain_config_flat_params(R"({"version":1,"params":{"repair.denoise.noiseEstimator":"x"}})"),
+      sonare::SonareException);
 }
 
 TEST_CASE("chain config JSON rejects malformed input", "[mastering][preset][json]") {

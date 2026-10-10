@@ -224,12 +224,14 @@ void validate_chain_config_for_rate(const MasteringChainConfig& config, double s
 /// Most bands the chain's multiband stage carries. The multiband insert's own limit is lower
 /// (nine bands); the two are different processors and keep different limits.
 inline constexpr std::size_t kMaxMultibandBands = 64u;
+/// Fewest bands the chain's multiband stage carries; one band is the compressor stage.
+inline constexpr std::size_t kMinMultibandBands = 2u;
 /// Largest crossover FIR kernel the chain's multiband stage carries.
 inline constexpr int kMaxFirKernelSize = 65'535;
 
 /// @brief Structural check of the chain's multiband stage: band count against the cutoff
-///        count and @ref kMaxMultibandBands, ascending positive cutoffs, slope / mode / FIR
-///        kernel ranges, and each band's finite in-range fields.
+///        count, @ref kMinMultibandBands and @ref kMaxMultibandBands, ascending positive
+///        cutoffs, slope / mode / FIR kernel ranges, and each band's finite in-range fields.
 /// @details The one validator the flat parameters, the JSON reader and the JSON writer
 ///          share, run whether or not the stage is enabled. Its messages carry no stage
 ///          path, so every caller reports the same text.
@@ -645,6 +647,26 @@ std::optional<double> chain_config_parameter_value(const MasteringChainConfig& c
 /// Throws SonareException(InvalidParameter) for malformed JSON, unsupported
 /// versions, or unknown parameter keys.
 MasteringChainConfig chain_config_from_json(const std::string& json);
+
+/// @brief One leaf of a chain config document's `params` block, in flat spelling.
+struct ChainFlatParam {
+  std::string key;       ///< Dotted key parse_chain_config_params accepts.
+  double value = 0.0;    ///< The number, or 1.0 / 0.0 for a boolean.
+  bool is_bool = false;  ///< True when the document wrote a boolean.
+};
+
+/// @brief Flatten the `params` block of a chain config document as written.
+/// @details Nested object members become `.<member>` and array elements `.<index>`, the array
+///          spelling parse_chain_config_params accepts, so a v2 structured multiband stage
+///          becomes `dynamics.multibandComp.crossover.cutoffsHz.<i>` and
+///          `dynamics.multibandComp.bands.<i>.<field>`. Numbers and booleans are the leaves, and
+///          a string is the name of an enum value, resolved as chain_config_from_json resolves it.
+///          The document is not otherwise validated; chain_config_from_json is the validating
+///          reader.
+/// @throws SonareException (InvalidParameter) for malformed JSON, an absent, non-object or empty
+///         `params` block, an empty list, an unknown enum name, or a leaf that is neither a number,
+///         a boolean nor an enum name.
+std::vector<ChainFlatParam> chain_config_flat_params(const std::string& chain_config_json);
 
 /// @brief Convenience: parse params, build chain, run mono once.
 MonoChainResult run_chain_mono_params(const Param* params, std::size_t param_count,
