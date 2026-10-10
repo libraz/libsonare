@@ -39,6 +39,8 @@
 
 - Monophonic `transcribe` / `transcribeToClip` refuse `maxPolyphony`, `minFramePeakRatio`, `minRidgePeakRatio` or `reattackRatio` (Python and C: snake_case) with InvalidParameter naming the field; they apply to the polyphonic tracker only.
 
+- `sonare_midi2_program`, `Project.midi2Program` and `midi2_program` refuse a non-zero bank MSB or LSB when bank-valid is false; the receiver would have ignored that bank, and a MIDI 2.0 sender fills those fields with zero.
+
 #### Error classes
 
 - A failure that comes from the library or from an object's state is a `SonareError` carrying the C-ABI code on every surface. On Node and WASM a released, destroyed or uninitialised handle, including a WASM embind object already deleted, throws `SonareError` with `InvalidState` where it threw a plain `Error` or `TypeError`; in Python the bare `RuntimeError`s became `SonareError` (still a `RuntimeError` subclass) with `NOT_SUPPORTED`, `INVALID_STATE` or `UNKNOWN`.
@@ -134,6 +136,8 @@
 - `SonareEngine.attachOpfsClipStream` no longer requires SharedArrayBuffer: on the postMessage path the worklet reads page misses without allocating and posts a request when the set of missing pages changes, re-posting an unchanged set every 250 ms so a failed read is retried. `capabilities.clipPageRequestsRealtimeSafe` still reports whether the SAB ring is in use.
 
 - Add, replace or remove one clip without resending the clip set (C: `sonare_engine_upsert_clip`, `sonare_engine_remove_clip`; Node and WASM: `upsertClip`, `removeClip`; Python: `upsert_clip`, `remove_clip`). The functions are additive. The worklet engine sends clip edits as single-clip deltas.
+
+- Push a live program change with an optional bank in one call, timed like note and CC and packed as one MIDI 2.0 Program Change so the receiver's own gates apply (C: `sonare_engine_push_midi_program`, `sonare_engine_push_midi_input_program`; Node and WASM: `pushMidiProgram`, `pushMidiInputProgram`, and `pushMidiProgram` on the worklet `SonareEngine`; Python: `push_midi_program`, `push_midi_input_program`). A receiver that selects nothing (the built-in synth, a part with RX PROGRAM CHANGE off) accepts it and ignores it.
 
 #### Mixing
 
