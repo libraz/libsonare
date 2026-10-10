@@ -1238,7 +1238,7 @@ void RealtimeEngineWasm::pushMidiCc(const val& destination_id_val, const val& gr
   command.sample_time = renderFrameFromVal(render_frame_val);
   command.arg.i = static_cast<int64_t>(packed);
   if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI CC command");
   }
 }
@@ -1403,7 +1403,7 @@ void RealtimeEngineWasm::queueMidiUmp(uint32_t destination_id, uint32_t word0,
   command.sample_time = render_frame;
   command.arg.i = static_cast<int64_t>(word0);
   if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI UMP command");
   }
 }
@@ -1540,7 +1540,7 @@ void RealtimeEngineWasm::pushMidiPanic(const val& render_frame_val) {
   command.target_id = 0;
   command.sample_time = renderFrameFromVal(render_frame_val);
   if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI panic command");
   }
 }
@@ -1560,7 +1560,7 @@ void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int ch
   command.sample_time = render_frame;
   command.arg.i = static_cast<int64_t>(packed);
   if (!engine_.push_command(command)) {
-    throw sonare::SonareException(sonare::ErrorCode::InvalidState,
+    throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   "failed to queue MIDI note command");
   }
 }

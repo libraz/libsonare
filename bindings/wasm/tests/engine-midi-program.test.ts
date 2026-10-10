@@ -191,6 +191,13 @@ describe('SonareEngine.pushMidiProgram (worklet facade)', () => {
         /pushMidiProgram: .*bank MSB and LSB must be 0 when bank-valid is false/,
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(RangeError);
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0)).toThrow(
+        new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
+      );
+      expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(
+        new RangeError('pushMidiProgram: group must be in [0, 15]'),
+      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 1.5)).toThrow(TypeError);
     } finally {
       engine.destroy();
     }

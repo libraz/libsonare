@@ -93,6 +93,10 @@ describe('RealtimeEngine live program change', () => {
       'Project.midi2Program: bank MSB and LSB must be 0 when bank-valid is false',
     );
     expect(() => Project.midi2Program(0, 0, 0, 5, false, 0, 1)).toThrow(RangeError);
+    expect(() => Project.midi2Program(0, 0, 0, 5, true, 128, 0)).toThrow(
+      new RangeError('Project.midi2Program: bank_msb must be in [0, 127]'),
+    );
+    expect(() => Project.midi2Program(0, 0, 0, 5, true, 0, 1.5)).toThrow(TypeError);
     expect(() => Project.midi2Program(0, 0, 0, 5, true, 8, 1)).not.toThrow();
     expect(() => Project.midi2Program(0, 0, 0, 5)).not.toThrow();
   });

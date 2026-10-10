@@ -1,4 +1,13 @@
-import { assertNibble, assertU7 } from './validation.js';
+/** Integer in `[0, max]`, worded like the shared live-push rule; a non-integer is a TypeError. */
+function programArg(fnName: string, value: number, argName: string, max: number): number {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (value < 0 || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be in [0, ${max}]`);
+  }
+  return value;
+}
 
 /**
  * Pack a MIDI 2.0 Program Change into its two UMP words, refusing a non-zero
@@ -14,11 +23,11 @@ export function packMidi2Program(
   bankMsb: number,
   bankLsb: number,
 ): [number, number] {
-  const g = assertNibble(fnName, group, 'group');
-  const ch = assertNibble(fnName, channel, 'channel');
-  const p = assertU7(fnName, program, 'program');
-  const msb = assertU7(fnName, bankMsb, 'bankMsb');
-  const lsb = assertU7(fnName, bankLsb, 'bankLsb');
+  const g = programArg(fnName, group, 'group', 15);
+  const ch = programArg(fnName, channel, 'channel', 15);
+  const p = programArg(fnName, program, 'program', 127);
+  const msb = programArg(fnName, bankMsb, 'bank_msb', 127);
+  const lsb = programArg(fnName, bankLsb, 'bank_lsb', 127);
   if (!bankValid && (msb !== 0 || lsb !== 0)) {
     throw new RangeError(`${fnName}: bank MSB and LSB must be 0 when bank-valid is false`);
   }

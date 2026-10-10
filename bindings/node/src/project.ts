@@ -177,6 +177,17 @@ function midi2Event(
   return { ppq, data0: word0, data1: word1 >>> 0 };
 }
 
+/** Integer in `[0, max]` worded like the shared live-push rule; a non-integer is a TypeError. */
+function programArg(fnName: string, value: number, argName: string, max: number): number {
+  if (!Number.isInteger(value)) {
+    throw new TypeError(`${fnName}: ${argName} must be an integer`);
+  }
+  if (value < 0 || value > max) {
+    throw new RangeError(`${fnName}: ${argName} must be in [0, ${max}]`);
+  }
+  return value;
+}
+
 function midi2U32(fnName: string, value: number, argName: string): number {
   assertBoundedInteger(fnName, value, argName, 0, MIDI2_U32_MAX);
   return value;
@@ -489,9 +500,11 @@ export class Project {
     bankLsb = 0,
   ): ProjectMidiEvent {
     const fn = 'Project.midi2Program';
-    const p = assertU7(fn, program, 'program');
-    const msb = assertU7(fn, bankMsb, 'bankMsb');
-    const lsb = assertU7(fn, bankLsb, 'bankLsb');
+    programArg(fn, group, 'group', 15);
+    programArg(fn, channel, 'channel', 15);
+    const p = programArg(fn, program, 'program', 127);
+    const msb = programArg(fn, bankMsb, 'bank_msb', 127);
+    const lsb = programArg(fn, bankLsb, 'bank_lsb', 127);
     if (!bankValid && (msb !== 0 || lsb !== 0)) {
       throw new RangeError(`${fn}: bank MSB and LSB must be 0 when bank-valid is false`);
     }
