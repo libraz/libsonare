@@ -151,16 +151,11 @@ describe('RealtimeEngine raw UMP push', () => {
 
   it('pushMidiUmp refuses data messages and mismatched word counts', () => {
     withEngine((engine) => {
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x30160000, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x50000000, 0, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x41923c00]))).toBe(ErrorCode.InvalidParameter);
-      expect(errorCode(() => engine.pushMidiUmp(0, [0x41923c00, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
+      const shape = new RangeError('pushMidiUmp: words do not form a pushable UMP message');
+      expect(() => engine.pushMidiUmp(0, [0x30160000, 0])).toThrow(shape);
+      expect(() => engine.pushMidiUmp(0, [0x50000000, 0, 0, 0])).toThrow(shape);
+      expect(() => engine.pushMidiUmp(0, [0x41923c00])).toThrow(shape);
+      expect(() => engine.pushMidiUmp(0, [0x41923c00, 0, 0])).toThrow(shape);
     });
   });
 
@@ -185,19 +180,14 @@ describe('RealtimeEngine raw UMP push', () => {
 
   it('pushMidiInputUmp needs an enabled input source and mirrors the destination rules', () => {
     withEngine((engine) => {
-      expect(errorCode(() => engine.pushMidiInputUmp(NOTE_ON_2W))).toBe(ErrorCode.InvalidParameter);
+      expect(errorCode(() => engine.pushMidiInputUmp(NOTE_ON_2W))).toBe(ErrorCode.InvalidState);
       engine.setMidiInputSource(0);
       expect(() => engine.pushMidiInputUmp(new Uint32Array(NOTE_ON_2W))).not.toThrow();
       expect(() => engine.pushMidiInputUmp(NOTE_ON_2W, 128)).not.toThrow();
-      expect(errorCode(() => engine.pushMidiInputUmp([0x30160000, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiInputUmp([0x50000000, 0, 0, 0]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
-      expect(errorCode(() => engine.pushMidiInputUmp([0x41923c00]))).toBe(
-        ErrorCode.InvalidParameter,
-      );
+      const shape = new RangeError('pushMidiInputUmp: words do not form a pushable UMP message');
+      expect(() => engine.pushMidiInputUmp([0x30160000, 0])).toThrow(shape);
+      expect(() => engine.pushMidiInputUmp([0x50000000, 0, 0, 0])).toThrow(shape);
+      expect(() => engine.pushMidiInputUmp([0x41923c00])).toThrow(shape);
       expect(() => engine.pushMidiInputUmp([])).toThrow(RangeError);
       expect(() => engine.pushMidiInputUmp(NOTE_ON_2W, 'now' as unknown as number)).toThrow(
         TypeError,

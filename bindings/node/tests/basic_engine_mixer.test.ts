@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Mixer, mixingScenePresetJson, RealtimeEngine } from '../src/index.js';
+import { ErrorCode, Mixer, mixingScenePresetJson, RealtimeEngine } from '../src/index.js';
 
 /** One strip feeding a master bus that carries a peaking band at `gainDb`. */
 function sceneWithBusEq(gainDb: number): string {
@@ -135,7 +135,9 @@ describe('RealtimeEngine', () => {
       engine.process([new Float32Array(16), new Float32Array(16)]);
       expect(engine.midiInputPendingCount()).toBe(0);
       engine.clearMidiInputSource();
-      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow();
+      expect(() => engine.pushMidiInputNoteOff(0, 0, 60, 0, 0)).toThrow(
+        expect.objectContaining({ code: ErrorCode.InvalidState }),
+      );
     } finally {
       engine.destroy();
     }

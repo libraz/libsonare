@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, RealtimeEngine } from '../src/index.js';
+import { RealtimeEngine } from '../src/index.js';
 
 const SR = 48000;
 const BLOCK = 128;
@@ -79,16 +79,6 @@ function fundamentalHz(data: Float32Array): number {
 
 const rms = (data: Float32Array): number =>
   Math.sqrt(data.reduce((sum, value) => sum + value * value, 0) / data.length);
-
-/** What the C ABI answers for a bend outside its 14-bit domain. */
-function sonareErrorCode(call: () => void): ErrorCode | undefined {
-  try {
-    call();
-  } catch (error) {
-    return isSonareError(error) ? error.code : undefined;
-  }
-  return undefined;
-}
 
 describe('a live pitch bend reaches the rendered audio', () => {
   const unbent = renderHeldNote((engine) => {
@@ -209,11 +199,11 @@ describe('a bend outside its domain is refused, never truncated into it', () => 
     const engine = preparedEngine();
     // 16384 is 0 masked to 14 bits — a FULL BEND DOWN — so a truncating reader
     // would accept it and bend the wrong way rather than report anything.
-    expect(sonareErrorCode(() => engine.pushMidiPitchBend(0, 0, 0, BEND_MAX + 1))).toBe(
-      ErrorCode.InvalidParameter,
+    expect(() => engine.pushMidiPitchBend(0, 0, 0, BEND_MAX + 1)).toThrow(
+      new RangeError('pushMidiPitchBend: bend14 must be in [0, 16383]'),
     );
-    expect(sonareErrorCode(() => engine.pushMidiInputPitchBend(0, 0, BEND_MAX + 1, 0))).toBe(
-      ErrorCode.InvalidParameter,
+    expect(() => engine.pushMidiInputPitchBend(0, 0, BEND_MAX + 1, 0)).toThrow(
+      new RangeError('pushMidiInputPitchBend: bend14 must be in [0, 16383]'),
     );
     engine.destroy();
   });
@@ -249,11 +239,11 @@ describe('a bend outside its domain is refused, never truncated into it', () => 
 
   it('reports a pressure past the 7-bit domain rather than masking it', () => {
     const engine = preparedEngine();
-    expect(sonareErrorCode(() => engine.pushMidiChannelPressure(0, 0, 0, 128))).toBe(
-      ErrorCode.InvalidParameter,
+    expect(() => engine.pushMidiChannelPressure(0, 0, 0, 128)).toThrow(
+      new RangeError('pushMidiChannelPressure: pressure must be in [0, 127]'),
     );
-    expect(sonareErrorCode(() => engine.pushMidiInputPolyPressure(0, 0, NOTE, 128, 0))).toBe(
-      ErrorCode.InvalidParameter,
+    expect(() => engine.pushMidiInputPolyPressure(0, 0, NOTE, 128, 0)).toThrow(
+      new RangeError('pushMidiInputPolyPressure: pressure must be in [0, 127]'),
     );
     engine.destroy();
   });

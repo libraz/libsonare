@@ -1,18 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { ErrorCode, isSonareError, Project, RealtimeEngine } from '../src/index.js';
+import { Project, RealtimeEngine } from '../src/index.js';
 
 const DEST = 7;
 const BLOCK = 128;
 const BLOCKS = 24;
-
-function errorCode(call: () => void): ErrorCode | undefined {
-  try {
-    call();
-  } catch (error) {
-    return isSonareError(error) ? error.code : undefined;
-  }
-  return undefined;
-}
 
 /** Words of a MIDI 2.0 Program Change, as the builder packs them. */
 function programWords(
@@ -84,14 +75,17 @@ describe('RealtimeEngine live program change', () => {
   it('refuses a bank with bank-valid false on the pushes and the builder', () => {
     const engine = new RealtimeEngine(48000, BLOCK);
     try {
-      // The pushes refuse through the C ABI, so the error is a coded SonareError.
-      for (const call of [
-        () => engine.pushMidiProgram(DEST, 0, 0, 5, false, 8, 0),
-        () => engine.pushMidiProgram(DEST, 0, 0, 5, false, 0, 1),
-        () => engine.pushMidiInputProgram(0, 0, 5, false, 8, 0),
-      ]) {
-        expect(errorCode(call)).toBe(ErrorCode.InvalidParameter);
-      }
+      // The pushes refuse an argument before the C call, so the error is a RangeError.
+      const bankRule = 'bank MSB and LSB must be 0 when bank-valid is false';
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, 8, 0)).toThrow(
+        new RangeError(`pushMidiProgram: ${bankRule}`),
+      );
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 5, false, 0, 1)).toThrow(
+        new RangeError(`pushMidiProgram: ${bankRule}`),
+      );
+      expect(() => engine.pushMidiInputProgram(0, 0, 5, false, 8, 0)).toThrow(
+        new RangeError(`pushMidiInputProgram: ${bankRule}`),
+      );
     } finally {
       engine.destroy();
     }
@@ -106,19 +100,19 @@ describe('RealtimeEngine live program change', () => {
   it('refuses out-of-range and mistyped arguments like the sibling pushes', () => {
     const engine = new RealtimeEngine(48000, BLOCK);
     try {
-      expect(errorCode(() => engine.pushMidiProgram(DEST, 16, 0, 0))).toBe(
-        ErrorCode.InvalidParameter,
+      expect(() => engine.pushMidiProgram(DEST, 16, 0, 0)).toThrow(
+        new RangeError('pushMidiProgram: group must be in [0, 15]'),
       );
-      expect(errorCode(() => engine.pushMidiProgram(DEST, 0, 16, 0))).toBe(
-        ErrorCode.InvalidParameter,
+      expect(() => engine.pushMidiProgram(DEST, 0, 16, 0)).toThrow(
+        new RangeError('pushMidiProgram: channel must be in [0, 15]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 300, 0, 0)).toThrow(/group/);
       expect(() => engine.pushMidiProgram(DEST, 0, 300, 0)).toThrow(/channel/);
-      expect(errorCode(() => engine.pushMidiProgram(DEST, 0, 0, 128))).toBe(
-        ErrorCode.InvalidParameter,
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 128)).toThrow(
+        new RangeError('pushMidiProgram: program must be in [0, 127]'),
       );
-      expect(errorCode(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0))).toBe(
-        ErrorCode.InvalidParameter,
+      expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 128, 0)).toThrow(
+        new RangeError('pushMidiProgram: bank_msb must be in [0, 127]'),
       );
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 300)).toThrow(/program/);
       expect(() => engine.pushMidiProgram(DEST, 0, 0, 0, true, 300, 0)).toThrow(/bankMsb/);
