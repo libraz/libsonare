@@ -867,6 +867,11 @@ def transcribe(
     fixed_velocity: int | None = None,
     group: int = 0,
     channel: int = 0,
+    max_polyphony: int | None = None,
+    min_frame_peak_ratio: float | None = None,
+    min_ridge_peak_ratio: float | None = None,
+    reattack_ratio: float | None = None,
+    min_note_division: int | None = None,
 ) -> TranscribeResult: ...
 
 class PercussiveEventEdit:
