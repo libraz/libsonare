@@ -75,7 +75,7 @@ typedef struct {
   float fmin;
   float fmax;
   /// Shortest span kept as a note, in milliseconds; 0 => the source's default:
-  /// 30 for the monophonic path, and the transcription default (60) for the
+  /// 30 for the monophonic path, and the transcription default (100) for the
   /// polyphonic path, where it is the shortest ridge the tracker keeps.
   float min_note_ms;
   /// Pitch movement, in cents, that ends one note and starts the next;
@@ -111,7 +111,7 @@ typedef struct {
   float min_ridge_peak_ratio;
   /// Splits a ridge where its salience climbs past this multiple of the level
   /// just before, the same pitch struck again while it sounds. 0 => the
-  /// transcription default (2.5); negative => no split; otherwise finite and
+  /// transcription default (2.0); negative => no split; otherwise finite and
   /// above 1.
   float reattack_ratio;
 } SonareTranscribeConfig;

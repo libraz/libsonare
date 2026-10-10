@@ -34,20 +34,20 @@ TranscribeF0Range resolve_transcribe_f0_range(const TranscribeConfig& config) no
 
 namespace {
 
-// Transcription defaults, apart from the editing chain's: on a 20 s piano-solo
-// excerpt, 10 voices left fewer onsets without a note than the editing chain's 4,
-// and a listening check kept it. A later evaluation re-measures each of these.
+// Transcription defaults, apart from the editing chain's, measured on rendered
+// piano scores ([transcribe_eval_sweep]): chords without octave doublings scored
+// onset F 0.32 / 0.36 / 0.42 at 6 / 8 / 10 voices.
 constexpr int kTranscribeMaxPolyphony = 10;
-// The editing chain's 140 ms dropped short notes on that excerpt; 60 ms recovered
-// most onsets without a note there, and the listening check kept it.
-constexpr float kTranscribePolyphonicMinNoteMs = 60.0f;
-// Unchanged from the editing chain: nothing on that excerpt pointed at it.
+// Piano onset F was 0.660 / 0.671 / 0.676 at 60 / 80 / 100 ms while noise notes
+// fell from 24.8 to 5.8 per second; 140 ms (the editing chain's) dropped 16ths.
+constexpr float kTranscribePolyphonicMinNoteMs = 100.0f;
+// Unchanged from the editing chain: the sweep never moved it.
 constexpr float kTranscribeMinFramePeakRatio = 0.20f;
-// Unchanged from the editing chain: nothing on that excerpt pointed at it.
+// Unchanged from the editing chain: the sweep never moved it.
 constexpr float kTranscribeMinRidgePeakRatio = 0.10f;
-// On that excerpt 1.8 over-split by ear while 2.5 still missed a few re-strikes;
-// the listening check preferred 2.5.
-constexpr float kTranscribeReattackRatio = 2.5f;
+// Re-strikes scored F 1.0 at 1.5 and 2.0 and 0.86 at 2.5, none splitting a held
+// note; 2.0 had the higher mean piano F (0.717 against 0.678).
+constexpr float kTranscribeReattackRatio = 2.0f;
 
 /// A sentinel-coded ratio: 0 => @p fallback, negative => a real 0.
 float resolve_ratio(float value, float fallback) noexcept {

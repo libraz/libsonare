@@ -734,11 +734,11 @@ TEST_CASE("the polyphonic limits resolve per source", "[note_transcriber]") {
   TranscribeConfig polyphonic;
   polyphonic.source = TranscribeSource::kPolyphonic;
   const TranscribePolyphonyLimits poly = resolve_transcribe_polyphony_limits(polyphonic);
-  CHECK(poly.min_note_ms == 60.0f);
+  CHECK(poly.min_note_ms == 100.0f);
   CHECK(poly.max_polyphony == 10);
   CHECK(poly.min_frame_peak_ratio == 0.20f);
   CHECK(poly.min_ridge_peak_ratio == 0.10f);
-  CHECK(poly.reattack_ratio == 2.5f);
+  CHECK(poly.reattack_ratio == 2.0f);
 
   SECTION("a negative ratio is a real 0 and a negative reattack is off") {
     polyphonic.min_frame_peak_ratio = -1.0f;
