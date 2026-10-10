@@ -52,6 +52,33 @@ def _sidechain_check(refusal: int) -> SidechainCheck:
     return SidechainCheck(ok=reason is None, reason=reason)
 
 
+def _marshal_sends(sends: Sequence[Mapping[str, object]]) -> ctypes.Array[SonareEngineTrackSend]:
+    """Pack send mappings into a ``SonareEngineTrackSend`` array."""
+    send_array = (SonareEngineTrackSend * len(sends))()
+    for send_index, send in enumerate(sends):
+        if not isinstance(send, Mapping):
+            raise TypeError("track lane send must be a mapping")
+        send_array[send_index].bus_id = cast(
+            int, send["bus_id"] if "bus_id" in send else send["busId"]
+        )
+        send_array[send_index].level_db = float(
+            cast(
+                float,
+                send["level_db"] if "level_db" in send else send.get("levelDb", 0.0),
+            )
+        )
+        send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
+        # Default to post-fader so callers that omit the timing key keep the
+        # prior behavior.
+        timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
+        send_array[send_index].send_timing = (
+            _send_timing_value(cast(SendTiming | str | int, timing))
+            if timing is not None
+            else int(SendTiming.POST_FADER)
+        )
+    return send_array
+
+
 class _EngineMixingMixin:
     if TYPE_CHECKING:
 
@@ -73,30 +100,7 @@ class _EngineMixingMixin:
                 )
                 sends = cast(Sequence[Mapping[str, object]], lane.get("sends", []))
                 if sends:
-                    send_array = (SonareEngineTrackSend * len(sends))()
-                    for send_index, send in enumerate(sends):
-                        if not isinstance(send, Mapping):
-                            raise TypeError("track lane send must be a mapping")
-                        send_array[send_index].bus_id = cast(
-                            int, send["bus_id"] if "bus_id" in send else send["busId"]
-                        )
-                        send_array[send_index].level_db = float(
-                            cast(
-                                float,
-                                send["level_db"]
-                                if "level_db" in send
-                                else send.get("levelDb", 0.0),
-                            )
-                        )
-                        send_array[send_index].enabled = 1 if bool(send.get("enabled", True)) else 0
-                        # Default to post-fader so callers that omit the timing
-                        # key keep the prior behavior.
-                        timing = send.get("timing", send.get("send_timing", send.get("sendTiming")))
-                        send_array[send_index].send_timing = (
-                            _send_timing_value(cast(SendTiming | str | int, timing))
-                            if timing is not None
-                            else int(SendTiming.POST_FADER)
-                        )
+                    send_array = _marshal_sends(sends)
                     raw[i].sends = send_array
                     raw[i].send_count = len(sends)
                     send_arrays.append(send_array)
@@ -120,6 +124,42 @@ class _EngineMixingMixin:
             else:
                 raw[i].track_id = lane
         _check(_get_lib().sonare_engine_set_track_lanes(self._require_handle(), raw, len(lanes)))
+
+    def set_track_sends(self, track_id: int, sends: Sequence[Mapping[str, object]]) -> None:
+        """Replace one track lane's sends, leaving its output bus and every other lane as published.
+
+        Each send is a mapping with ``bus_id``, optional ``level_db`` (default 0),
+        ``enabled`` (default True) and ``timing``. An empty sequence clears the
+        lane's sends. Goes through the same validation as :meth:`set_track_lanes`,
+        so an unchanged send keeps its ramp. Raises ``SonareError`` for an unknown
+        track (the lane list is empty before the first :meth:`set_track_lanes`), an
+        undeclared or duplicate send bus, or a level outside the allowed range.
+        Control thread only; not concurrent with processing.
+        """
+        send_array = _marshal_sends(sends) if sends else None
+        _check(
+            _get_lib().sonare_engine_set_track_sends(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                send_array,
+                len(sends),
+            )
+        )
+
+    def set_track_output_bus(self, track_id: int, bus_id: int) -> None:
+        """Route one track lane to a bus, leaving its sends and every other lane as published.
+
+        ``bus_id`` 0 returns the lane to the master mix. Raises ``SonareError`` for
+        an unknown track or an undeclared bus. Control thread only; not concurrent
+        with processing.
+        """
+        _check(
+            _get_lib().sonare_engine_set_track_output_bus(
+                self._require_handle(),
+                _to_c_uint32(track_id, "track_id"),
+                _to_c_uint32(bus_id, "bus_id"),
+            )
+        )
 
     def set_lane_sidechain(self, track_id: int, insert_index: int, source_track_id: int) -> None:
         """Key one insert of a lane strip from another lane's post-strip audio.

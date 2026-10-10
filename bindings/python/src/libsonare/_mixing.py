@@ -255,6 +255,35 @@ class Mixer:
             raise _not_supported("libsonare was built without mixer bus support")
         _check(lib.sonare_mixer_remove_bus(self._handle, _utf8_arg(bus_id, "bus_id")))
 
+    def set_output_bus(self, source_id: str, bus_id: str) -> None:
+        """Send a strip or bus into a submix bus, or back to the master.
+
+        ``source_id`` is a strip or a non-master bus; ``bus_id`` is a declared bus
+        or the master id the compile resolves (the literal ``"master"`` is not an
+        alias when the master bus has another id). Every connection leaving
+        ``source_id`` is replaced, including a strip-to-strip edge authored in
+        scene JSON. Lazy like :meth:`add_bus`: nothing compiles in this call, so
+        call :meth:`compile` afterwards. A refused call (unknown id, master as
+        source, self-route, an edit closing a cycle) raises ``SonareError``
+        ``INVALID_PARAMETER`` naming the ids and leaves the topology unchanged.
+        Control thread only.
+
+        Two calls route a strip through a submix to the master::
+
+            mixer.set_output_bus("a", "sub")
+            mixer.set_output_bus("sub", "master")
+            mixer.compile()
+        """
+        self._require()
+        lib = _get_lib()
+        if not hasattr(lib, "sonare_mixer_set_output_bus"):
+            raise _not_supported("libsonare was built without mixer bus support")
+        _check(
+            lib.sonare_mixer_set_output_bus(
+                self._handle, _utf8_arg(source_id, "source_id"), _utf8_arg(bus_id, "bus_id")
+            )
+        )
+
     def bus_count(self) -> int:
         """Return the number of buses in the mixer topology."""
         self._require()

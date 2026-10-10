@@ -152,6 +152,13 @@ def configure_mixing_signatures(lib: ctypes.CDLL) -> None:
             ]
             lib.sonare_mixer_remove_bus.restype = ctypes.c_int32
             lib.sonare_mixer_remove_bus.argtypes = [ctypes.c_void_p, ctypes.c_char_p]
+            if hasattr(lib, "sonare_mixer_set_output_bus"):
+                lib.sonare_mixer_set_output_bus.restype = ctypes.c_int32
+                lib.sonare_mixer_set_output_bus.argtypes = [
+                    ctypes.c_void_p,
+                    ctypes.c_char_p,
+                    ctypes.c_char_p,
+                ]
             lib.sonare_mixer_bus_count.restype = ctypes.c_int32
             lib.sonare_mixer_bus_count.argtypes = [
                 ctypes.c_void_p,

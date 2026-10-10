@@ -158,6 +158,94 @@ def test_engine_bus_sends_tap_before_or_after_gain_db() -> None:
     assert run("post", 0.0, False) == pytest.approx(x * g1, rel=1e-2)
 
 
+def _routing_engine(lanes: list[object]) -> RealtimeEngine:
+    """Engine with one DC lane (track 10), buses 1 and 2 declared, and ``lanes`` applied."""
+    engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
+    engine.set_clips(
+        [
+            EngineClip(
+                id=1,
+                track_id=10,
+                channels=[[1.0] * _FRAMES],
+                start_ppq=0.0,
+                length_samples=_FRAMES,
+            )
+        ]
+    )
+    engine.set_track_buses([{"bus_id": 1, "gain_db": 0.0}, {"bus_id": 2, "gain_db": -6.0}])
+    engine.set_track_lanes(lanes)  # type: ignore[arg-type]
+    return engine
+
+
+_SEND_TO_2 = [{"bus_id": 2, "level_db": -3.0}]
+
+
+def test_set_track_sends_matches_set_track_lanes_with_the_same_final_config() -> None:
+    with (
+        _routing_engine([{"track_id": 10, "output_bus_id": 1}]) as partial,
+        _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as full,
+    ):
+        partial.set_track_sends(10, _SEND_TO_2)
+        assert _render_last(partial) == pytest.approx(_render_last(full), abs=1e-6)
+
+    # Clearing goes through the same replace path as an omitted-sends lane list.
+    with (
+        _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as partial,
+        _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as full,
+    ):
+        partial.set_track_sends(10, [])
+        full.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        assert _render_last(partial) == pytest.approx(_render_last(full), abs=1e-6)
+
+
+def test_set_track_output_bus_matches_set_track_lanes_with_the_same_final_config() -> None:
+    for target in (2, 0):
+        with (
+            _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as partial,
+            _routing_engine(
+                [{"track_id": 10, "output_bus_id": target, "sends": _SEND_TO_2}]
+            ) as full,
+        ):
+            partial.set_track_output_bus(10, target)
+            assert _render_last(partial) == pytest.approx(_render_last(full), abs=1e-6)
+
+
+def test_partial_lane_edits_refuse_bad_input_and_leave_the_lane_rendering() -> None:
+    with _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as engine:
+        before = _render_last(engine)
+        with pytest.raises(SonareError, match="unknown track id 99"):
+            engine.set_track_sends(99, [])
+        with pytest.raises(SonareError, match="unknown track id 99"):
+            engine.set_track_output_bus(99, 0)
+        with pytest.raises(SonareError):
+            engine.set_track_sends(10, [{"bus_id": 7}])
+        with pytest.raises(SonareError):
+            engine.set_track_sends(10, [{"bus_id": 2}, {"bus_id": 2}])
+        with pytest.raises(SonareError):
+            engine.set_track_sends(10, [{"bus_id": 2, "level_db": 30.0}])
+        with pytest.raises(SonareError):
+            engine.set_track_output_bus(10, 7)
+        assert _render_last(engine) == pytest.approx(before, abs=1e-6)
+
+
+def test_partial_lane_edits_refuse_every_track_before_the_first_lane_list() -> None:
+    with (
+        RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine,
+        pytest.raises(SonareError, match="unknown track id 10"),
+    ):
+        engine.set_track_sends(10, [])
+
+
+def test_set_track_lanes_omitting_sends_clears_them() -> None:
+    """Pins the replace semantics: a lane with a send is louder than the same lane without."""
+    with _routing_engine([{"track_id": 10, "output_bus_id": 1, "sends": _SEND_TO_2}]) as engine:
+        with_send = _render_last(engine)
+        engine.set_track_lanes([{"track_id": 10, "output_bus_id": 1}])
+        without_send = _render_last(engine)
+    assert with_send > without_send * 1.1
+    assert without_send > 0.1
+
+
 # Track 10 is quiet program (-26 dB, under the duckers' -20 dB threshold) into
 # bus 2, which carries a ducker keyed from bus 1. Track 30 is a loud key-only
 # source into bus 1, whose -60 dB gain_db keeps it out of the mix while its key

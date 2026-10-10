@@ -283,6 +283,21 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.POINTER(SonareEngineTrackLane),
             ctypes.c_size_t,
         ]
+    if hasattr(lib, "sonare_engine_set_track_sends"):
+        lib.sonare_engine_set_track_sends.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_sends.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(SonareEngineTrackSend),
+            ctypes.c_size_t,
+        ]
+    if hasattr(lib, "sonare_engine_set_track_output_bus"):
+        lib.sonare_engine_set_track_output_bus.restype = ctypes.c_int32
+        lib.sonare_engine_set_track_output_bus.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+        ]
     if hasattr(lib, "sonare_engine_set_track_buses"):
         lib.sonare_engine_set_track_buses.restype = ctypes.c_int32
         lib.sonare_engine_set_track_buses.argtypes = [
