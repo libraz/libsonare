@@ -217,6 +217,7 @@ export type {
   MixSceneVcaGroup,
   MixSourceClass,
   MpeDimension,
+  MultibandCompressorBand,
   NoiseDetection,
   NoteEdit,
   NoteEditInput,

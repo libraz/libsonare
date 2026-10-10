@@ -182,12 +182,43 @@ sonare::mastering::assistant::AssistantConfig AssistantConfigFromParams(
   return config;
 }
 
+// Writes one params entry into `result` under its dotted path. A nested object
+// or array (the v2 structured multiband stage) flattens into the array spelling
+// the input side accepts: object members as `.<key>`, array elements as
+// `.<index>`. Throws by path if a leaf is neither a number nor a boolean, so a
+// silent drop can never let a caller apply a partial suggestion as the whole.
+void SetChainParamEntry(Napi::Object& result, const std::string& path,
+                        const sonare::util::json::Value& value) {
+  Napi::Env env = result.Env();
+  if (value.is_number()) {
+    result.Set(path, Napi::Number::New(env, value.as_number()));
+  } else if (value.is_bool()) {
+    result.Set(path, Napi::Boolean::New(env, value.as_bool()));
+  } else if (value.is_object()) {
+    for (const auto& [key, member] : value.as_object()) {
+      SetChainParamEntry(result, path + "." + key, member);
+    }
+  } else if (value.is_array()) {
+    const auto& elements = value.as_array();
+    if (elements.empty()) {
+      throw sonare::SonareException(
+          sonare::ErrorCode::InvalidParameter,
+          "chain config param '" + path + "' is an empty list, which has no flat spelling");
+    }
+    for (size_t index = 0; index < elements.size(); ++index) {
+      SetChainParamEntry(result, path + "." + std::to_string(index), elements[index]);
+    }
+  } else {
+    throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
+                                  "chain config param '" + path + "' is not a number or boolean");
+  }
+}
+
 // Converts the "params" object of a chain_config_to_json() string into a flat
-// JS object. Throws by key name if a leaf is not a number or boolean -- the
-// only way that happens today is a v2 structured multiband stage, which a
-// silent drop would let a caller apply as if it were the whole suggestion. An
-// absent or empty params block is refused for the same reason: an empty
-// overrides object applies the preset unchanged.
+// JS object. A v2 structured multiband stage flattens into dotted array-spelling
+// keys; a leaf that is not a number or boolean is refused by path. An absent or
+// empty params block is refused: an empty overrides object applies the preset
+// unchanged, which a caller would take for the whole suggestion.
 Napi::Object ChainConfigParamsToObject(Napi::Env env, const std::string& chain_config_json) {
   namespace json = sonare::util::json;
   const json::Value root = json::parse(chain_config_json);
@@ -198,14 +229,7 @@ Napi::Object ChainConfigParamsToObject(Napi::Env env, const std::string& chain_c
                                   "chain config carries no params block");
   }
   for (const auto& [key, value] : params->as_object()) {
-    if (value.is_number()) {
-      result.Set(key, Napi::Number::New(env, value.as_number()));
-    } else if (value.is_bool()) {
-      result.Set(key, Napi::Boolean::New(env, value.as_bool()));
-    } else {
-      throw sonare::SonareException(sonare::ErrorCode::InvalidParameter,
-                                    "chain config param '" + key + "' is not a number or boolean");
-    }
+    SetChainParamEntry(result, key, value);
   }
   return result;
 }

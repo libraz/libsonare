@@ -477,6 +477,26 @@ export interface LoudnessMatchStereoResult {
 export type MasteringChainSection = Record<string, unknown>;
 
 /**
+ * One band of the N-band multiband compressor (`dynamics.multibandComp.bands`).
+ * Every field is optional: an omitted field keeps the base config's value for
+ * that band, or the compressor default for a band the crossover adds.
+ */
+export interface MultibandCompressorBand {
+  thresholdDb?: number;
+  ratio?: number;
+  attackMs?: number;
+  releaseMs?: number;
+  kneeDb?: number;
+  makeupGainDb?: number;
+  autoMakeup?: boolean;
+  detector?: 'peak' | 'rms' | 'logRms' | number;
+  sidechainHpfEnabled?: boolean;
+  sidechainHpfHz?: number;
+  pdrTimeMs?: number;
+  pdrReleaseScale?: number;
+}
+
+/**
  * Nested mastering-chain configuration. Top-level keys are the processing
  * modules; nest processor and parameter names beneath them, e.g.
  *
@@ -638,6 +658,25 @@ export interface MasteringChainConfig {
       highRatio?: number;
       highAttackMs?: number;
       highReleaseMs?: number;
+      /**
+       * Crossover of the N-band form. `cutoffsHz` replaces the whole cutoff list
+       * and sets the band count to `length + 1` (1 to 64 bands); do not combine
+       * it with the `lowCutoffHz` / `highCutoffHz` shorthand in one call. An empty
+       * list is refused. Giving any member of `crossover` enables the stage unless
+       * `enabled` says otherwise.
+       */
+      crossover?: {
+        cutoffsHz?: number[];
+        slope?: 'lr2' | 'lr4' | 'lr8' | number;
+        mode?: 'linkwitzRiley' | 'butterworth' | 'bessel' | 'firLinearPhase' | number;
+        firKernelSize?: number;
+      };
+      /**
+       * Per-band compressor settings, indexed by band. An omitted band keeps the
+       * base config's band, or the compressor default for a band the crossover
+       * adds; an omitted field of a given band keeps that band's value.
+       */
+      bands?: MultibandCompressorBand[];
     };
   };
   saturation?: {

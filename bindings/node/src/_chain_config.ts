@@ -17,6 +17,9 @@ export const STREAMING_ONLY_CONFIG_KEYS = [
   'loudnessStaticGainPeakDb',
 ] as const;
 
+const emptyList = (path: string): string =>
+  `Mastering override '${path}' is an empty list, which has no flat spelling.`;
+
 const notAValue = (path: string): string =>
   `Mastering override '${path}' must be a number or boolean.`;
 
@@ -29,6 +32,9 @@ const notAValue = (path: string): string =>
  * both spellings a {@link MasteringChainConfig} accepts reach the core as the
  * same parameter — matching what the Python binding documents. An unknown key
  * in either spelling is rejected by the core, not here.
+ *
+ * An array flattens as `<path>.<index>` (`crossover.cutoffsHz.0`); an empty
+ * array has no flat spelling and is refused by path.
  *
  * An enum-valued key may be given by its name (`noiseEstimator: 'mcra'`); the
  * core resolves the name to the number every flat parameter list carries and
@@ -59,6 +65,8 @@ export function flattenChainConfig(
           throw new TypeError(notAValue(path));
         }
         out[path] = resolved;
+      } else if (Array.isArray(value) && value.length === 0) {
+        throw new TypeError(emptyList(path));
       } else if (value !== null && typeof value === 'object') {
         walk(value as MasteringChainSection, path);
       } else if (value !== undefined) {

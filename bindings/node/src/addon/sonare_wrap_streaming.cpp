@@ -27,6 +27,36 @@ namespace {
 // Param entries that sonare::mastering::api::parse_chain_config_params
 // understands. Mirrors libsonare/python's _flatten_chain_config.
 void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
+                        std::vector<sonare::mastering::api::Param>* out);
+
+// Flattens one value under `path`: objects as `.<key>`, arrays as `.<index>`.
+// An empty array has no flat spelling and is refused by path.
+void FlattenChainConfigValue(const Napi::Value& value, const std::string& path,
+                             std::vector<sonare::mastering::api::Param>* out) {
+  if (value.IsArray()) {
+    Napi::Array array = value.As<Napi::Array>();
+    if (array.Length() == 0) {
+      throw Napi::TypeError::New(value.Env(), "Mastering override '" + path +
+                                                  "' is an empty list, which has no flat spelling");
+    }
+    for (uint32_t index = 0; index < array.Length(); ++index) {
+      FlattenChainConfigValue(array.Get(index), path + "." + std::to_string(index), out);
+    }
+  } else if (value.IsObject() && !value.IsBuffer() && !value.IsTypedArray() &&
+             !value.IsFunction()) {
+    FlattenChainConfig(value.As<Napi::Object>(), path, out);
+  } else if (value.IsNumber()) {
+    out->push_back({path, value.As<Napi::Number>().DoubleValue()});
+  } else if (value.IsBoolean()) {
+    out->push_back({path, value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
+  } else if (!value.IsUndefined()) {
+    // Same refusal, in the same words, as the facade's flattenChainConfig.
+    throw Napi::TypeError::New(value.Env(),
+                               "Mastering override '" + path + "' must be a number or boolean.");
+  }
+}
+
+void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
                         std::vector<sonare::mastering::api::Param>* out) {
   Napi::Array names = object.GetPropertyNames();
   for (uint32_t index = 0; index < names.Length(); ++index) {
@@ -42,19 +72,7 @@ void FlattenChainConfig(const Napi::Object& object, const std::string& prefix,
       continue;
     }
 
-    Napi::Value value = object.Get(key_value);
-    if (value.IsObject() && !value.IsArray() && !value.IsBuffer() && !value.IsTypedArray() &&
-        !value.IsFunction()) {
-      FlattenChainConfig(value.As<Napi::Object>(), full_key, out);
-    } else if (value.IsNumber()) {
-      out->push_back({full_key, value.As<Napi::Number>().DoubleValue()});
-    } else if (value.IsBoolean()) {
-      out->push_back({full_key, value.As<Napi::Boolean>().Value() ? 1.0 : 0.0});
-    } else if (!value.IsUndefined()) {
-      // Same refusal, in the same words, as the facade's flattenChainConfig.
-      throw Napi::TypeError::New(
-          object.Env(), "Mastering override '" + full_key + "' must be a number or boolean.");
-    }
+    FlattenChainConfigValue(object.Get(key_value), full_key, out);
   }
 }
 
