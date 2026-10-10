@@ -244,10 +244,32 @@ class MasteringProcessorCatalogEntry(TypedDict):
     params: list[MasteringInsertParamInfo]
     slots: list[MasteringInsertSlot]
 
+class CapabilityCatalogChainStage(TypedDict):
+    prefix: str
+    processor: str | None
+    enabledKey: str
+
+class CapabilityCatalogChainList(TypedDict):
+    key: str
+    processor: str | None
+    minItems: int
+    maxItems: int
+
+class CapabilityCatalogChainAlias(TypedDict):
+    key: str
+    aliases: list[str]
+
+class CapabilityCatalogChain(TypedDict):
+    stages: list[CapabilityCatalogChainStage]
+    lists: list[CapabilityCatalogChainList]
+    params: list[MasteringInsertParamInfo]
+    aliases: list[CapabilityCatalogChainAlias]
+
 class CapabilityCatalog(TypedDict):
     version: str
     abi: CapabilitiesAbi
     processors: list[MasteringProcessorCatalogEntry]
+    chain: CapabilityCatalogChain
     presets: CapabilityCatalogPresets
     masteringPresets: list[MasteringPresetCatalogEntry]
 

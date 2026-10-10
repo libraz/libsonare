@@ -194,6 +194,18 @@ from ._types_capabilities import (
     CapabilityCatalog as CapabilityCatalog,
 )
 from ._types_capabilities import (
+    CapabilityCatalogChain as CapabilityCatalogChain,
+)
+from ._types_capabilities import (
+    CapabilityCatalogChainAlias as CapabilityCatalogChainAlias,
+)
+from ._types_capabilities import (
+    CapabilityCatalogChainList as CapabilityCatalogChainList,
+)
+from ._types_capabilities import (
+    CapabilityCatalogChainStage as CapabilityCatalogChainStage,
+)
+from ._types_capabilities import (
     CapabilityCatalogPresets as CapabilityCatalogPresets,
 )
 from ._types_capabilities import (

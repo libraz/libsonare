@@ -281,11 +281,56 @@ class MasteringPresetCatalogEntry(TypedDict):
     maxLimiterGainReductionDb: float | None
 
 
+class CapabilityCatalogChainStage(TypedDict):
+    """One flat chain stage; ``<prefix>.<leaf>`` keys are ``processor``'s parameters.
+
+    ``processor`` is ``None`` when every key of the stage is chain-only.
+    """
+
+    prefix: str
+    processor: str | None
+    enabledKey: str
+
+
+class CapabilityCatalogChainList(TypedDict):
+    """An indexed chain list.
+
+    ``<key>.<i>`` is the chain parameter ``key`` when ``processor`` is ``None``;
+    otherwise ``<key>.<i>.<field>`` is that processor's ``field``.
+    """
+
+    key: str
+    processor: str | None
+    minItems: int
+    maxItems: int
+
+
+class CapabilityCatalogChainAlias(TypedDict):
+    """The other spellings of a canonical chain key; ``<i>`` stands for a list index."""
+
+    key: str
+    aliases: list[str]
+
+
+class CapabilityCatalogChain(TypedDict):
+    """How each flat mastering chain key is described.
+
+    ``params`` holds the keys no processor describes, with bounds measured
+    through the chain's own validator.
+    """
+
+    stages: list[CapabilityCatalogChainStage]
+    lists: list[CapabilityCatalogChainList]
+    params: list[MasteringInsertParamInfo]
+    aliases: list[CapabilityCatalogChainAlias]
+
+
 class CapabilityCatalog(TypedDict):
     """Machine-readable catalog returned by :func:`capability_catalog`."""
 
     version: str
     abi: CapabilitiesAbi
     processors: list[MasteringProcessorCatalogEntry]
+    chain: CapabilityCatalogChain
     presets: CapabilityCatalogPresets
     masteringPresets: list[MasteringPresetCatalogEntry]

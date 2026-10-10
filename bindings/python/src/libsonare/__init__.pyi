@@ -864,6 +864,10 @@ from .types import CapabilitiesAbi as CapabilitiesAbi
 from .types import CapabilitiesDecode as CapabilitiesDecode
 from .types import CapabilitiesFeatures as CapabilitiesFeatures
 from .types import CapabilityCatalog as CapabilityCatalog
+from .types import CapabilityCatalogChain as CapabilityCatalogChain
+from .types import CapabilityCatalogChainAlias as CapabilityCatalogChainAlias
+from .types import CapabilityCatalogChainList as CapabilityCatalogChainList
+from .types import CapabilityCatalogChainStage as CapabilityCatalogChainStage
 from .types import CapabilityCatalogPresets as CapabilityCatalogPresets
 from .types import (
     ChannelLayout as ChannelLayout,
