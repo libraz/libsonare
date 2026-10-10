@@ -15,8 +15,11 @@
 /// weighting reduces them and does not remove them; surviving them is estimation's
 /// problem, in multi_f0.h.
 
+#include <cstddef>
+#include <functional>
 #include <vector>
 
+#include "core/audio.h"
 #include "core/spectrum.h"
 
 namespace sonare::editing::polyphony {
@@ -41,6 +44,57 @@ inline constexpr int kPolyphonyReferenceRate = 44100;
 ///          to the hop's duration. Unchanged at 44.1 kHz.
 /// @throws SonareException(InvalidParameter) on what @ref stft_config_scaled_to_rate refuses.
 StftConfig polyphony_stft_at_rate(const StftConfig& at_reference, int sample_rate);
+
+/// @brief The shape of one STFT without its values.
+/// @details Everything after the extraction reads a spectrogram for two things:
+///          this, and the cells a mask names. The claims are placed from the bin
+///          spacing, the apportionment and the measurement index frames by it,
+///          and an inverse hands it to @ref Spectrogram::from_complex. Carrying it
+///          apart from the values is what lets a chain hold the cells alone.
+struct StftGeometry {
+  int n_bins = 0;
+  int n_frames = 0;
+  int n_fft = 0;
+  int win_length = 0;
+  int hop_length = 0;
+  int sample_rate = 0;
+  WindowType window = WindowType::Hann;
+  bool center = true;
+
+  bool empty() const noexcept { return n_frames == 0 || n_bins == 0; }
+};
+
+/// @brief @p spec's geometry.
+StftGeometry geometry_of(const Spectrogram& spec);
+
+/// @brief The geometry `Spectrogram::compute(audio, config)` carries over
+///        @p signal_length samples at @p sample_rate, without computing it.
+/// @throws SonareException(InvalidParameter) on what @ref Spectrogram::compute
+///         refuses about @p config.
+StftGeometry stft_geometry(const StftConfig& config, int sample_rate, std::size_t signal_length);
+
+/// @brief Runs @p fn over `Spectrogram::compute(audio, config)` in frame tiles,
+///        never holding more than one tile.
+/// @details A tile is frames [first_frame, first_frame + tile.n_frames()) of the
+///          full spectrogram bit for bit: each frame is the FFT of the same
+///          windowed samples, so the tile is a view of the same values and not an
+///          approximation of them. @p overlap leading frames are repeated at the
+///          head of every tile after the first, for a consumer that reads the
+///          previous frame (the cent spectrum's phase advance). @p fn receives
+///          (tile, first_frame, discard): @c first_frame is the index of the
+///          tile's frame 0 in the full spectrogram and the first @c discard frames
+///          are the overlap, whose outputs the caller already produced. Emitted
+///          frames are contiguous and ascending across calls.
+///
+///          The tile reports `center() == false`, since the padding it was framed
+///          over is the source's and not its own; a consumer of the full
+///          spectrogram's centering reads it from @ref stft_geometry instead.
+/// @throws SonareException(InvalidParameter) on empty @p audio, what
+///         @ref Spectrogram::compute refuses about @p config, or an @p overlap
+///         that is negative or not under the tile length.
+void for_each_stft_tile(
+    const Audio& audio, const StftConfig& config, int overlap,
+    const std::function<void(const Spectrogram& tile, int first_frame, int discard)>& fn);
 
 /// @brief A log-frequency axis, shared by the cent spectrum and the F0 surface.
 struct CentAxis {

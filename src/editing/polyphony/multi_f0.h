@@ -240,6 +240,12 @@ struct MultiF0ExtractorConfig {
 ///          a disappointing result: at the default n_fft a four-note chord
 ///          resolves from about C3 up, and under that the estimator reports
 ///          composite pitches rather than nothing.
+///
+///          The STFT is read through @ref for_each_stft_tile and never held whole,
+///          so the footprint is the candidates and the ridges rather than the
+///          spectrogram. The result is the spectrogram form's bit for bit: a tile
+///          holds the same frames, and the cent spectrum of a frame reads only
+///          that frame and the one before it.
 /// @throws SonareException(InvalidParameter) on empty audio, plus every reason
 ///         @ref compute_cent_spectrum, @ref MultiF0Estimator and
 ///         @ref track_f0_ridges throw.

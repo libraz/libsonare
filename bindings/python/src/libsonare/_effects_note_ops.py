@@ -1023,6 +1023,9 @@ def transcribe(
         polyphonic: Read the multi-F0 chain, which finds overlapping notes at
             the cost of a full STFT and a mask per tracked ridge. The default
             reads pYIN cut into notes, which follows one line at a time.
+            Working memory grows with the input: about 0.75 MB per second of
+            audio at any rate, plus about 3 MB, plus about 32 bytes per sample
+            of the longest note while it is measured.
         reference_hz: Tuning reference the MIDI note numbers are measured
             against, in Hz; ``"auto"`` measures it from the audio; ``None``
             keeps the default (A4 = 440 Hz).

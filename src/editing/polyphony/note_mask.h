@@ -29,11 +29,13 @@
 /// input many times over.
 
 #include <complex>
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
 #include "core/audio.h"
 #include "core/spectrum.h"
+#include "editing/polyphony/f0_salience.h"
 #include "editing/polyphony/multi_f0.h"
 
 namespace sonare::editing::polyphony {
@@ -248,6 +250,13 @@ struct PartialClaim {
 std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
                                          const NoteMaskConfig& config = {});
 
+/// @brief The same claims from the geometry alone, which is all the overload
+///        above reads of its spectrogram.
+/// @throws SonareException(InvalidParameter) on the grounds the overload above
+///         enumerates, read off @p geometry.
+std::vector<PartialClaim> partial_claims(const StftGeometry& geometry, float f0_hz,
+                                         const NoteMaskConfig& config = {});
+
 /// @brief Builds one mask per ridge over @p spec.
 /// @details The claim of a partial is flat across its width, and a claim running
 ///          off either end of the spectrum is clamped to it rather than dropped,
@@ -314,6 +323,16 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config,
                              const std::vector<float>& per_ridge_stretch);
 
+/// @brief The two overloads above from the geometry alone, which is all they read
+///        of their spectrogram: a claim is predicted and never read from the data.
+/// @throws SonareException(InvalidParameter) on what the spectrogram forms reject,
+///         read off @p geometry.
+NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
+                             const NoteMaskConfig& config = {});
+NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
+                             const NoteMaskConfig& config,
+                             const std::vector<float>& per_ridge_stretch);
+
 /// @brief One note's share of @p spec.
 /// @details Every bin the mask does not name is zero, so the result is a
 ///          spectrogram of the same shape carrying only that note.
@@ -337,6 +356,37 @@ struct NoteSegment {
 /// @throws SonareException(InvalidParameter) when @p mask reaches outside
 ///         @p spec, or @p length is negative.
 NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length);
+
+/// @brief The spectrogram at every cell a mask set names, and nothing else.
+/// @details After the extraction nothing reads a cell no mask claims: the
+///          apportionment fits trajectories over claimed bins, the refinement
+///          votes from them, and an inverse multiplies them by their weights. So
+///          this is the whole of what those stages read, at 8 bytes per mask
+///          entry instead of 8 per cell of the spectrogram. A bin two notes claim
+///          is held once per claimant.
+struct MaskedCells {
+  /// The spectrogram the cells were read from, for the inverse's framing.
+  StftGeometry geometry;
+  /// `notes[i][k]` is the spectrogram at `masks.notes[i].bins[k]` in the frame that
+  /// entry belongs to, so the two index alike.
+  std::vector<std::vector<std::complex<float>>> notes;
+};
+
+/// @brief Reads `Spectrogram::compute(audio, stft)` where @p masks names it,
+///        through @ref for_each_stft_tile, so the whole spectrogram is never held.
+/// @throws SonareException(InvalidParameter) on what @ref for_each_stft_tile
+///         refuses, a @p masks that does not describe that spectrogram's geometry,
+///         or a mask whose shape is inconsistent.
+MaskedCells read_masked_cells(const Audio& audio, const StftConfig& stft, const NoteMaskSet& masks);
+
+/// @brief @ref invert_note_mask over the cells alone: the same frames, summed in the
+///        same order, so the segment is the spectrogram form's bit for bit.
+/// @param note Index into both @c masks.notes and @c cells.notes.
+/// @throws SonareException(InvalidParameter) on a @p note outside either, a
+///         cell count that is not the mask's entry count, or what the spectrogram
+///         form refuses about the mask and @p length.
+NoteSegment invert_note_mask(const MaskedCells& cells, const NoteMaskSet& masks, std::size_t note,
+                             int length);
 
 /// @brief What no note claimed: @p spec weighted by one minus every mask.
 /// @details It holds noise, reverb tails and anything at no partial position,

@@ -4,11 +4,16 @@
 #include <cmath>
 #include <complex>
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <utility>
 #include <vector>
 
 #include "analysis/analysis_rate.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/reflect_padding.h"
+#include "util/validated.h"
 
 namespace sonare::editing::polyphony {
 namespace {
@@ -66,10 +71,84 @@ void fill_phase(const std::complex<float>* data, int n_bins, int n_frames, int f
   }
 }
 
+/// Frames per tile. Fixed, so a tile is the part of a tiled consumer's footprint
+/// that does not grow with the input: 2305 bins by 129 frames at 48 kHz is 2.4 MB.
+constexpr int kStftTileFrames = 128;
+
+/// Frames [first, first + count) of `Spectrogram::compute(audio, checked)`, framed
+/// over the padded samples those frames read so each is the FFT of the same
+/// windowed values.
+Spectrogram stft_frames(const Audio& audio, const StftConfig& checked, int first, int count) {
+  const int n_fft = checked.n_fft;
+  const int hop = checked.hop_length;
+  const int64_t pad = checked.center ? n_fft / 2 : 0;
+  const auto n_samples = static_cast<int64_t>(audio.size());
+  const float* data = audio.data();
+  const bool reflect = checked.center && checked.pad_mode == PadMode::Reflect;
+
+  std::vector<float> samples(static_cast<size_t>(count - 1) * hop + n_fft, 0.0f);
+  const int64_t padded_start = static_cast<int64_t>(first) * hop;
+  for (size_t i = 0; i < samples.size(); ++i) {
+    const int64_t source = padded_start + static_cast<int64_t>(i) - pad;
+    if (source >= 0 && source < n_samples) {
+      samples[i] = data[source];
+    } else if (reflect) {
+      samples[i] = data[reflect_index(source, static_cast<size_t>(n_samples))];
+    }
+  }
+  // The padding is already in the samples, so the tile is framed from its start.
+  StftConfig local = checked;
+  local.center = false;
+  return Spectrogram::compute(Audio::from_vector(std::move(samples), audio.sample_rate()), local);
+}
+
 }  // namespace
 
 StftConfig polyphony_stft_at_rate(const StftConfig& at_reference, int sample_rate) {
   return stft_config_scaled_to_rate(at_reference, sample_rate, kPolyphonyReferenceRate);
+}
+
+StftGeometry geometry_of(const Spectrogram& spec) {
+  StftGeometry geometry;
+  geometry.n_bins = spec.n_bins();
+  geometry.n_frames = spec.n_frames();
+  geometry.n_fft = spec.n_fft();
+  geometry.win_length = spec.win_length();
+  geometry.hop_length = spec.hop_length();
+  geometry.sample_rate = spec.sample_rate();
+  geometry.window = spec.window();
+  geometry.center = spec.center();
+  return geometry;
+}
+
+StftGeometry stft_geometry(const StftConfig& config, int sample_rate, std::size_t signal_length) {
+  const StftConfig checked = Validated<StftConfig>::make(config).get();
+  StftGeometry geometry;
+  geometry.n_bins = checked.n_fft / 2 + 1;
+  geometry.n_frames = stft_frame_count(signal_length, checked);
+  geometry.n_fft = checked.n_fft;
+  geometry.win_length = checked.actual_win_length();
+  geometry.hop_length = checked.hop_length;
+  geometry.sample_rate = sample_rate;
+  geometry.window = checked.window;
+  geometry.center = checked.center;
+  return geometry;
+}
+
+void for_each_stft_tile(
+    const Audio& audio, const StftConfig& config, int overlap,
+    const std::function<void(const Spectrogram& tile, int first_frame, int discard)>& fn) {
+  const StftConfig checked = Validated<StftConfig>::make(config).get();
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(overlap >= 0 && overlap < kStftTileFrames, ErrorCode::InvalidParameter);
+
+  const int n_frames = stft_frame_count(audio.size(), checked);
+  for (int first = 0; first < n_frames; first += kStftTileFrames) {
+    const int discard = first == 0 ? 0 : overlap;
+    const int from = first - discard;
+    const int count = std::min(kStftTileFrames, n_frames - first) + discard;
+    fn(stft_frames(audio, checked, from, count), from, discard);
+  }
 }
 
 float CentAxis::hz_at(float bin) const {

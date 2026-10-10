@@ -64,7 +64,9 @@ typedef struct {
   int32_t struct_version;
   /// Non-zero reads the multi-F0 chain, which finds overlapping notes at the
   /// cost of a full STFT and a mask per tracked ridge. 0 reads pYIN cut into
-  /// notes, which follows one line at a time.
+  /// notes, which follows one line at a time. The polyphonic working memory
+  /// is about 0.75 MB per second of input at any rate, plus about 3 MB, plus
+  /// about 32 bytes per sample of the longest note while it is measured.
   int32_t polyphonic;
   /// Tuning reference the MIDI note numbers are measured against; 0 => 440.
   float reference_hz;

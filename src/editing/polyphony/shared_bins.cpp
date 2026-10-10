@@ -6,6 +6,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -89,15 +90,16 @@ void check_config(const SharedBinConfig& config) {
                ErrorCode::InvalidParameter);
 }
 
-void check_inputs(const Spectrogram& spec, const NoteMaskSet& masks, const MultiF0Track& track,
+void check_inputs(const StftGeometry& geometry, const NoteMaskSet& masks, const MultiF0Track& track,
                   const SharedBinConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  SONARE_CHECK(spec.n_fft() > 0 && spec.hop_length() > 0 && spec.sample_rate() > 0,
+  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
+  SONARE_CHECK(geometry.n_fft > 0 && geometry.hop_length > 0 && geometry.sample_rate > 0,
                ErrorCode::InvalidParameter);
   // The hop and the rate as well as the sizes: a set from another framing indexes
   // the same array while meaning different times.
-  SONARE_CHECK(masks.n_bins == spec.n_bins() && masks.n_frames == spec.n_frames() &&
-                   masks.hop_length == spec.hop_length() && masks.sample_rate == spec.sample_rate(),
+  SONARE_CHECK(masks.n_bins == geometry.n_bins && masks.n_frames == geometry.n_frames &&
+                   masks.hop_length == geometry.hop_length &&
+                   masks.sample_rate == geometry.sample_rate,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(masks.notes.size() == track.ridges.size(), ErrorCode::InvalidParameter);
   // Read rather than carried here, so its shape is checked here: the set's own note
@@ -112,12 +114,12 @@ void check_inputs(const Spectrogram& spec, const NoteMaskSet& masks, const Multi
   }
   // The track carries the instants the ridges mean, so a hop or a rate of its own
   // indexes the same frames while describing different times.
-  SONARE_CHECK(track.n_frames == spec.n_frames() && track.hop_length == spec.hop_length() &&
-                   track.sample_rate == spec.sample_rate(),
+  SONARE_CHECK(track.n_frames == geometry.n_frames && track.hop_length == geometry.hop_length &&
+                   track.sample_rate == geometry.sample_rate,
                ErrorCode::InvalidParameter);
   for (const F0Ridge& ridge : track.ridges) {
     SONARE_CHECK(
-        ridge.frame_start >= 0 && !ridge.f0_hz.empty() && ridge.frame_end() <= spec.n_frames(),
+        ridge.frame_start >= 0 && !ridge.f0_hz.empty() && ridge.frame_end() <= geometry.n_frames,
         ErrorCode::InvalidParameter);
     // The same standard build_note_masks holds the same struct to: a value one
     // entry point refuses and another absorbs is where a validation gap hides.
@@ -382,7 +384,7 @@ std::complex<float> clamped_weight(Complexd weight, double limit) {
 ///        predicted centre. Without widening by it the test is not fail-safe: the
 ///        centres compared carry that error undiluted, and at 50 cents it is twice
 ///        the half-width even at the alias ceiling.
-bool partial_stands_alone(const Spectrogram& spec, const MultiF0Track& track,
+bool partial_stands_alone(const StftGeometry& geometry, const MultiF0Track& track,
                           const NoteMaskSet& masks, int note, int frame_start, int frame_end,
                           double centre_hz, double half_width_hz, double error_rel,
                           std::vector<PartialClaim>& scratch) {
@@ -395,7 +397,7 @@ bool partial_stands_alone(const Spectrogram& spec, const MultiF0Track& track,
     if (!(f0 > 0.0)) continue;
     // The rival's own geometry, not this note's: the set places each note's claims
     // at its own stretch, so a rival's partials stand where its stretch put them.
-    scratch = partial_claims(spec, static_cast<float>(f0), note_geometry(masks, other));
+    scratch = partial_claims(geometry, static_cast<float>(f0), note_geometry(masks, other));
     for (const PartialClaim& claim : scratch) {
       const double rival_hz = claim.centre_hz;
       const double margin = half_width_hz + error_rel * (centre_hz + rival_hz);
@@ -407,24 +409,42 @@ bool partial_stands_alone(const Spectrogram& spec, const MultiF0Track& track,
   return true;
 }
 
-/// @ref refine_track_f0 once the claim index is already built.
-std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Track& track,
-                                      const NoteMaskSet& masks, const SharedBinConfig& config,
+/// The spectrogram at one claimed cell, read off the whole array.
+struct DenseCells {
+  const std::complex<float>* data;
+  int n_frames;
+  std::complex<float> operator()(int bin, int frame, const BinClaim&) const {
+    return data[static_cast<size_t>(bin) * n_frames + frame];
+  }
+};
+
+/// The same cell read off the claimant's own copy of it.
+struct SparseCells {
+  const MaskedCells* cells;
+  std::complex<float> operator()(int, int, const BinClaim& claim) const {
+    return cells->notes[static_cast<size_t>(claim.note)][static_cast<size_t>(claim.entry)];
+  }
+};
+
+/// @ref refine_track_f0 once the claim index is already built. @p at reads the
+/// spectrogram at (bin, frame) given one of that cell's claims.
+template <typename Cells>
+std::vector<float> refine_from_claims(const StftGeometry& geometry, const Cells& at,
+                                      const MultiF0Track& track, const NoteMaskSet& masks,
+                                      const SharedBinConfig& config,
                                       const std::vector<size_t>& bin_start,
                                       const std::vector<BinClaim>& claims) {
-  const int n_frames = spec.n_frames();
   const int window = config.window_frames;
-  const double sample_rate = spec.sample_rate();
-  const double hop = spec.hop_length();
-  const double hz_per_bin = sample_rate / spec.n_fft();
+  const double sample_rate = geometry.sample_rate;
+  const double hop = geometry.hop_length;
+  const double hz_per_bin = sample_rate / geometry.n_fft;
   const double ceiling = refine_ceiling_hz(config, sample_rate, hop);
   const double alias = sample_rate / hop;
-  const std::complex<float>* data = spec.complex_data();
 
   // The claim's own half-width in Hz, which is what a rival partial has to clear
   // to leave this one alone: 2 * claim_lobes * sample_rate / win_length.
   const double half_width_hz =
-      2.0 * static_cast<double>(masks.config.claim_lobes) * sample_rate / spec.win_length();
+      2.0 * static_cast<double>(masks.config.claim_lobes) * sample_rate / geometry.win_length;
   // Read whether or not max_refine_hz was set: the ceiling is one use of the
   // tolerance and widening the qualifier is the other.
   const double error_rel =
@@ -449,11 +469,11 @@ std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Trac
       const int note = claims[span.group_lo].note;
       const double f0 =
           detail::ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
-      partials = partial_claims(spec, static_cast<float>(f0),
+      partials = partial_claims(geometry, static_cast<float>(f0),
                                 note_geometry(masks, static_cast<size_t>(note)));
       const PartialClaim* partial = claim_over_bin(partials, bin);
       if (partial == nullptr) continue;
-      if (!partial_stands_alone(spec, track, masks, note, span.frame_start,
+      if (!partial_stands_alone(geometry, track, masks, note, span.frame_start,
                                 span.frame_start + window, partial->centre_hz, half_width_hz,
                                 error_rel, rival_partials)) {
         continue;
@@ -461,7 +481,7 @@ std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Trac
 
       for (int n = 0; n < window; ++n) {
         trajectory[static_cast<size_t>(n)] =
-            Complexd(data[static_cast<size_t>(bin) * n_frames + span.frame_start + n]);
+            Complexd(at(bin, span.frame_start + n, claims[span.group_lo + static_cast<size_t>(n)]));
       }
       if (!esprit_poles(trajectory, 1, poles)) continue;
 
@@ -485,22 +505,15 @@ std::vector<float> refine_from_claims(const Spectrogram& spec, const MultiF0Trac
   return refined;
 }
 
-}  // namespace
-
-std::vector<float> refine_track_f0(const Spectrogram& spec, const MultiF0Track& track,
-                                   const NoteMaskSet& masks, const SharedBinConfig& config) {
-  check_inputs(spec, masks, track, config);
-
-  std::vector<size_t> bin_start;
-  std::vector<BinClaim> claims;
-  build_bin_claims(masks, bin_start, claims);
-  return refine_from_claims(spec, track, masks, config, bin_start, claims);
-}
-
-NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
-                              const MultiF0Track& track, const SharedBinConfig& config,
-                              SharedBinReport* report) {
-  check_inputs(spec, masks, track, config);
+/// @ref solve_shared_bins writing into @p masks, whose weights are the equal split
+/// on the way in and the apportionment on the way out. Nothing below reads a weight
+/// it found there -- every one written is computed from the cells -- so the set
+/// serves as both input and result.
+template <typename Cells>
+void solve_in_place(const StftGeometry& geometry, const Cells& at, NoteMaskSet& masks,
+                    const MultiF0Track& track, const SharedBinConfig& config,
+                    SharedBinReport* report) {
+  check_inputs(geometry, masks, track, config);
 
   std::vector<size_t> bin_start;
   std::vector<BinClaim> claims;
@@ -508,9 +521,8 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
   // The assignment is what f0 error breaks, so every predicted rate below is
   // read off the refinement rather than off the track's own f0.
   const std::vector<float> refined =
-      refine_from_claims(spec, track, masks, config, bin_start, claims);
+      refine_from_claims(geometry, at, track, masks, config, bin_start, claims);
 
-  NoteMaskSet result = masks;
   // The spectrogram's own layout, as mask_total uses. Every cell a span covers is
   // overwritten below, so the fill is what the cells no note reached keep.
   const size_t surface = static_cast<size_t>(masks.n_bins) * static_cast<size_t>(masks.n_frames);
@@ -520,15 +532,14 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
     report->fit_residual.assign(surface, 0.0f);
   }
 
-  const int n_frames = spec.n_frames();
+  const int n_frames = geometry.n_frames;
   const int window = config.window_frames;
   const int step = window / 2;
   // The lesser of the two ceilings: what the fit can hold poles for, and what the
   // assignment can enumerate.
   const int max_claimants = std::min(window / 2, kMaxAssignmentOrder);
-  const double sample_rate = spec.sample_rate();
-  const double hop = spec.hop_length();
-  const std::complex<float>* data = spec.complex_data();
+  const double sample_rate = geometry.sample_rate;
+  const double hop = geometry.hop_length;
 
   std::vector<Span> spans;
   std::vector<int> starts;
@@ -595,7 +606,7 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
         // built with; guessing it back from the bin's frequency misses the stretch.
         const double f0_built =
             detail::ridge_f0_at(track.ridges[static_cast<size_t>(note)], span.frame_start);
-        partials = partial_claims(spec, static_cast<float>(f0_built),
+        partials = partial_claims(geometry, static_cast<float>(f0_built),
                                   note_geometry(masks, static_cast<size_t>(note)));
         const PartialClaim* partial = claim_over_bin(partials, bin);
         every_partial_placed = partial != nullptr && partial->centre_hz > 0.0f;
@@ -635,8 +646,9 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
 
       for (const int start : starts) {
         for (int n = 0; n < window; ++n) {
-          trajectory[static_cast<size_t>(n)] =
-              Complexd(data[static_cast<size_t>(bin) * n_frames + start + n]);
+          const size_t claim = span.group_lo + static_cast<size_t>(start - span.frame_start + n) *
+                                                   static_cast<size_t>(span.n_notes);
+          trajectory[static_cast<size_t>(n)] = Complexd(at(bin, start + n, claims[claim]));
         }
 
         // The residual stays zero until the fit that measures it has run, so a
@@ -693,7 +705,9 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
                  residual_at[static_cast<size_t>(f)]);
           continue;
         }
-        const Complexd observed(data[static_cast<size_t>(bin) * n_frames + span.frame_start + f]);
+        const Complexd observed(
+            at(bin, span.frame_start + f,
+               claims[span.group_lo + static_cast<size_t>(f) * static_cast<size_t>(span.n_notes)]));
         // Every weight of the bin is resolved before any is stored: one the mask
         // cannot hold sends the whole bin back, since a bin divided partly by the
         // fit and partly equally is neither division.
@@ -724,13 +738,70 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
           const BinClaim& claim =
               claims[span.group_lo + static_cast<size_t>(f) * static_cast<size_t>(span.n_notes) +
                      static_cast<size_t>(j)];
-          result.notes[static_cast<size_t>(claim.note)].weights[static_cast<size_t>(claim.entry)] =
+          masks.notes[static_cast<size_t>(claim.note)].weights[static_cast<size_t>(claim.entry)] =
               resolved[static_cast<size_t>(j)];
         }
       }
     }
   }
+}
 
+/// Checks @p cells against @p masks and @p track the way check_inputs checks the
+/// rest, then solves in place.
+void solve_over_cells(const MaskedCells& cells, NoteMaskSet& masks, const MultiF0Track& track,
+                      const SharedBinConfig& config, SharedBinReport* report) {
+  SONARE_CHECK(cells.notes.size() == masks.notes.size(), ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    SONARE_CHECK(cells.notes[i].size() == masks.notes[i].bins.size(), ErrorCode::InvalidParameter);
+  }
+  solve_in_place(cells.geometry, SparseCells{&cells}, masks, track, config, report);
+}
+
+}  // namespace
+
+std::vector<float> refine_track_f0(const Spectrogram& spec, const MultiF0Track& track,
+                                   const NoteMaskSet& masks, const SharedBinConfig& config) {
+  const StftGeometry geometry = geometry_of(spec);
+  check_inputs(geometry, masks, track, config);
+
+  std::vector<size_t> bin_start;
+  std::vector<BinClaim> claims;
+  build_bin_claims(masks, bin_start, claims);
+  return refine_from_claims(geometry, DenseCells{spec.complex_data(), spec.n_frames()}, track,
+                            masks, config, bin_start, claims);
+}
+
+NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config,
+                              SharedBinReport* report) {
+  NoteMaskSet result = masks;
+  solve_in_place(geometry_of(spec), DenseCells{spec.complex_data(), spec.n_frames()}, result, track,
+                 config, report);
+  return result;
+}
+
+NoteMaskSet solve_shared_bins(const Spectrogram& spec, NoteMaskSet&& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config,
+                              SharedBinReport* report) {
+  NoteMaskSet result = std::move(masks);
+  solve_in_place(geometry_of(spec), DenseCells{spec.complex_data(), spec.n_frames()}, result, track,
+                 config, report);
+  return result;
+}
+
+NoteMaskSet solve_shared_bins(const MaskedCells& cells, const NoteMaskSet& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config,
+                              SharedBinReport* report) {
+  NoteMaskSet result = masks;
+  solve_over_cells(cells, result, track, config, report);
+  return result;
+}
+
+NoteMaskSet solve_shared_bins(const MaskedCells& cells, NoteMaskSet&& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config,
+                              SharedBinReport* report) {
+  NoteMaskSet result = std::move(masks);
+  solve_over_cells(cells, result, track, config, report);
   return result;
 }
 

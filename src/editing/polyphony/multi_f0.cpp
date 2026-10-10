@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <vector>
 
 #include "core/spectrum.h"
@@ -296,31 +297,22 @@ float MultiF0Track::frame_rate_hz() const noexcept {
   return static_cast<float>(sample_rate) / static_cast<float>(hop_length);
 }
 
-MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
-                              const MultiF0ExtractorConfig& config) {
-  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  // Checked rather than trusted: a spectrogram of another framing would put every
-  // ridge on frames it never measured.
-  validate_reused_geometry(spec, polyphony_stft_at_rate(config.stft, audio.sample_rate()),
-                           audio.sample_rate(), audio.size());
+namespace {
 
-  const CentSpectrum spectrum = compute_cent_spectrum(spec, config.spectrum);
-  const MultiF0Estimator estimator(spectrum.axis, config.estimation);
-
+/// The track the per-frame candidates make, over @p audio's framing.
+MultiF0Track track_from_frames(const Audio& audio,
+                               const std::vector<std::vector<F0Candidate>>& frames, int hop_length,
+                               const RidgeConfig& config) {
   MultiF0Track track;
-  track.n_frames = spectrum.n_frames;
-  track.hop_length = spectrum.hop_length;
-  track.sample_rate = spectrum.sample_rate;
-  track.polyphony.assign(static_cast<size_t>(spectrum.n_frames), 0);
-
-  std::vector<std::vector<F0Candidate>> frames(static_cast<size_t>(spectrum.n_frames));
-  for (int frame = 0; frame < spectrum.n_frames; ++frame) {
-    frames[static_cast<size_t>(frame)] = estimator.estimate(spectrum.column(frame));
-    track.polyphony[static_cast<size_t>(frame)] =
-        static_cast<int>(frames[static_cast<size_t>(frame)].size());
+  track.n_frames = static_cast<int>(frames.size());
+  track.hop_length = hop_length;
+  track.sample_rate = audio.sample_rate();
+  track.polyphony.resize(frames.size());
+  for (size_t frame = 0; frame < frames.size(); ++frame) {
+    track.polyphony[frame] = static_cast<int>(frames[frame].size());
   }
 
-  track.ridges = track_f0_ridges(frames, spectrum.hop_length, spectrum.sample_rate, config.ridges);
+  track.ridges = track_f0_ridges(frames, hop_length, audio.sample_rate(), config);
 
   // Centre padding puts the last frame's end past the audio, so every ridge
   // reaching it would otherwise report a span that cannot be sliced.
@@ -332,11 +324,44 @@ MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
   return track;
 }
 
+}  // namespace
+
+MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
+                              const MultiF0ExtractorConfig& config) {
+  SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
+  // Checked rather than trusted: a spectrogram of another framing would put every
+  // ridge on frames it never measured.
+  validate_reused_geometry(spec, polyphony_stft_at_rate(config.stft, audio.sample_rate()),
+                           audio.sample_rate(), audio.size());
+
+  const CentSpectrum spectrum = compute_cent_spectrum(spec, config.spectrum);
+  const MultiF0Estimator estimator(spectrum.axis, config.estimation);
+
+  std::vector<std::vector<F0Candidate>> frames(static_cast<size_t>(spectrum.n_frames));
+  for (int frame = 0; frame < spectrum.n_frames; ++frame) {
+    frames[static_cast<size_t>(frame)] = estimator.estimate(spectrum.column(frame));
+  }
+  return track_from_frames(audio, frames, spectrum.hop_length, config.ridges);
+}
+
 MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& config) {
   SONARE_CHECK(!audio.empty(), ErrorCode::InvalidParameter);
-  return extract_multi_f0(
-      audio, Spectrogram::compute(audio, polyphony_stft_at_rate(config.stft, audio.sample_rate())),
-      config);
+  const StftConfig stft = polyphony_stft_at_rate(config.stft, audio.sample_rate());
+
+  // The cent spectrum reads one frame back for its phase advance, so each tile
+  // repeats the previous tile's last frame and that column is not estimated twice.
+  std::vector<std::vector<F0Candidate>> frames(
+      static_cast<size_t>(stft_frame_count(audio.size(), stft)));
+  std::optional<MultiF0Estimator> estimator;
+  for_each_stft_tile(audio, stft, 1, [&](const Spectrogram& tile, int first_frame, int discard) {
+    const CentSpectrum spectrum = compute_cent_spectrum(tile, config.spectrum);
+    if (!estimator) estimator.emplace(spectrum.axis, config.estimation);
+    for (int frame = discard; frame < spectrum.n_frames; ++frame) {
+      frames[static_cast<size_t>(first_frame + frame)] =
+          estimator->estimate(spectrum.column(frame));
+    }
+  });
+  return track_from_frames(audio, frames, stft.hop_length, config.ridges);
 }
 
 }  // namespace sonare::editing::polyphony

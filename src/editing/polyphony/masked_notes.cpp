@@ -38,15 +38,18 @@ pitch_editor::F0Track ridge_track(const MultiF0Track& track, const F0Ridge& ridg
   return out;
 }
 
-}  // namespace
-
-std::vector<note_model::NoteObject> make_masked_notes(
-    const Spectrogram& spec, const MultiF0Track& track, const NoteMaskSet& masks, int length,
-    const note_model::NoteExtractorConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+/// The measurement over whatever @p invert(i) reads note @p i's isolated audio from.
+template <typename Invert>
+std::vector<note_model::NoteObject> make_notes_over(const StftGeometry& geometry,
+                                                    const MultiF0Track& track,
+                                                    const NoteMaskSet& masks, int length,
+                                                    const note_model::NoteExtractorConfig& config,
+                                                    const Invert& invert) {
+  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
   // A set and a track agreeing with each other can still describe another framing.
-  SONARE_CHECK(masks.n_bins == spec.n_bins() && masks.n_frames == spec.n_frames() &&
-                   masks.hop_length == spec.hop_length() && masks.sample_rate == spec.sample_rate(),
+  SONARE_CHECK(masks.n_bins == geometry.n_bins && masks.n_frames == geometry.n_frames &&
+                   masks.hop_length == geometry.hop_length &&
+                   masks.sample_rate == geometry.sample_rate,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(masks.n_frames == track.n_frames && masks.hop_length == track.hop_length &&
                    masks.sample_rate == track.sample_rate,
@@ -74,8 +77,8 @@ std::vector<note_model::NoteObject> make_masked_notes(
   // The length the full-length inverse would have.
   const int64_t whole = length > 0
                             ? length
-                            : static_cast<int64_t>(spec.n_frames() - 1) * spec.hop_length() +
-                                  spec.n_fft() - (spec.center() ? 2 * (spec.n_fft() / 2) : 0);
+                            : static_cast<int64_t>(geometry.n_frames - 1) * geometry.hop_length +
+                                  geometry.n_fft - (geometry.center ? 2 * (geometry.n_fft / 2) : 0);
 
   std::vector<note_model::NoteObject> notes;
   notes.reserve(track.ridges.size());
@@ -86,7 +89,7 @@ std::vector<note_model::NoteObject> make_masked_notes(
     SONARE_CHECK(whole > 0, ErrorCode::InvalidParameter);
     // Only the samples the note reaches are inverted, so the loop stays linear
     // in the input rather than paying a full-length inverse per note.
-    const NoteSegment segment = invert_note_mask(spec, masks.notes[i], length);
+    const NoteSegment segment = invert(i);
     note_model::NoteObject note = note_model::make_note(
         segment.audio, segment.first_sample, whole, ridge_track(track, ridge, masks),
         ridge.frame_start, ridge.frame_end(), config);
@@ -96,6 +99,24 @@ std::vector<note_model::NoteObject> make_masked_notes(
   }
 
   return notes;
+}
+
+}  // namespace
+
+std::vector<note_model::NoteObject> make_masked_notes(
+    const Spectrogram& spec, const MultiF0Track& track, const NoteMaskSet& masks, int length,
+    const note_model::NoteExtractorConfig& config) {
+  return make_notes_over(geometry_of(spec), track, masks, length, config, [&](std::size_t i) {
+    return invert_note_mask(spec, masks.notes[i], length);
+  });
+}
+
+std::vector<note_model::NoteObject> make_masked_notes(
+    const MaskedCells& cells, const MultiF0Track& track, const NoteMaskSet& masks, int length,
+    const note_model::NoteExtractorConfig& config) {
+  SONARE_CHECK(cells.notes.size() == masks.notes.size(), ErrorCode::InvalidParameter);
+  return make_notes_over(cells.geometry, track, masks, length, config,
+                         [&](std::size_t i) { return invert_note_mask(cells, masks, i, length); });
 }
 
 }  // namespace sonare::editing::polyphony

@@ -2553,3 +2553,65 @@ TEST_CASE("the spectrogram form rejects empty audio and inherits the audio form'
 
   REQUIRE_NOTHROW(extract_multi_f0(audio, spec, config));
 }
+
+// --- STFT tiles --------------------------------------------------------------
+
+TEST_CASE("for_each_stft_tile is the spectrogram in tiles, bit for bit", "[polyphonic_f0]") {
+  // Three seconds at the default hop is over 250 frames against a tile of 128, so
+  // the run below crosses tile boundaries and exercises the overlap at each.
+  const sonare::Audio audio = chord_audio(kChordMid, 4, 3.0f, 12);
+  const sonare::StftConfig stft = polyphony_stft_defaults();
+  const sonare::Spectrogram full = sonare::Spectrogram::compute(audio, stft);
+  REQUIRE(full.n_frames() > 250);
+
+  const StftGeometry geometry = stft_geometry(stft, audio.sample_rate(), audio.size());
+  const StftGeometry want = geometry_of(full);
+  REQUIRE(geometry.n_bins == want.n_bins);
+  REQUIRE(geometry.n_frames == want.n_frames);
+  REQUIRE(geometry.n_fft == want.n_fft);
+  REQUIRE(geometry.win_length == want.win_length);
+  REQUIRE(geometry.hop_length == want.hop_length);
+  REQUIRE(geometry.sample_rate == want.sample_rate);
+  REQUIRE(geometry.window == want.window);
+  REQUIRE(geometry.center == want.center);
+
+  for (const int overlap : {0, 1, 3}) {
+    INFO("overlap " << overlap);
+    int next_frame = 0;
+    int tiles = 0;
+    for_each_stft_tile(
+        audio, stft, overlap, [&](const sonare::Spectrogram& tile, int first_frame, int discard) {
+          REQUIRE(tile.n_bins() == full.n_bins());
+          REQUIRE(tile.hop_length() == full.hop_length());
+          REQUIRE(tile.n_fft() == full.n_fft());
+          // The overlap repeats frames already emitted; the rest
+          // continue from where the previous tile stopped.
+          REQUIRE(discard == (tiles == 0 ? 0 : overlap));
+          REQUIRE(first_frame + discard == next_frame);
+          for (int j = 0; j < tile.n_frames(); ++j) {
+            const int frame = first_frame + j;
+            for (int bin = 0; bin < full.n_bins(); ++bin) {
+              const std::complex<float> got =
+                  tile.complex_data()[static_cast<size_t>(bin) * tile.n_frames() + j];
+              const std::complex<float> expected =
+                  full.complex_data()[static_cast<size_t>(bin) * full.n_frames() + frame];
+              if (got != expected) {
+                FAIL("tile frame " << j << " (frame " << frame << ") bin " << bin << " differs");
+              }
+            }
+          }
+          next_frame = first_frame + tile.n_frames();
+          ++tiles;
+        });
+    REQUIRE(next_frame == full.n_frames());
+    REQUIRE(tiles >= 2);
+  }
+
+  REQUIRE(code_of([&] {
+            for_each_stft_tile(sonare::Audio(), stft, 0,
+                               [](const sonare::Spectrogram&, int, int) {});
+          }) == sonare::ErrorCode::InvalidParameter);
+  REQUIRE(code_of([&] {
+            for_each_stft_tile(audio, stft, -1, [](const sonare::Spectrogram&, int, int) {});
+          }) == sonare::ErrorCode::InvalidParameter);
+}

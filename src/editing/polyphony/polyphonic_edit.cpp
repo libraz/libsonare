@@ -2,7 +2,9 @@
 
 #include <cstddef>
 #include <limits>
+#include <utility>
 
+#include "editing/polyphony/f0_salience.h"
 #include "editing/polyphony/inharmonicity.h"
 #include "editing/polyphony/masked_notes.h"
 #include "editing/polyphony/masked_renderer.h"
@@ -32,11 +34,28 @@ PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditCo
   }
   // An equal split is what build_note_masks can decide without reading the data;
   // this is the stage that reads it.
-  analysis.masks =
-      solve_shared_bins(analysis.spectrum, analysis.masks, analysis.track, config.shared_bins);
+  analysis.masks = solve_shared_bins(analysis.spectrum, std::move(analysis.masks), analysis.track,
+                                     config.shared_bins);
   analysis.notes = make_masked_notes(analysis.spectrum, analysis.track, analysis.masks,
                                      analysis.length, config.notes);
   return analysis;
+}
+
+std::vector<note_model::NoteObject> transcribe_polyphonic(const Audio& audio,
+                                                          const PolyphonicEditConfig& config) {
+  SONARE_CHECK(audio.size() <= static_cast<std::size_t>(std::numeric_limits<int>::max()),
+               ErrorCode::InvalidParameter);
+  // The fit reads the spectrum's magnitude over a ridge's frames, which no mask names.
+  if (config.estimate_inharmonicity) return analyze_polyphonic(audio, config).notes;
+
+  const int length = static_cast<int>(audio.size());
+  const StftConfig stft = polyphony_stft_at_rate(config.extraction.stft, audio.sample_rate());
+  const MultiF0Track track = extract_multi_f0(audio, config.extraction);
+  NoteMaskSet masks =
+      build_note_masks(stft_geometry(stft, audio.sample_rate(), audio.size()), track, config.masks);
+  const MaskedCells cells = read_masked_cells(audio, stft, masks);
+  masks = solve_shared_bins(cells, std::move(masks), track, config.shared_bins);
+  return make_masked_notes(cells, track, masks, length, config.notes);
 }
 
 Audio render_polyphonic(const PolyphonicAnalysis& analysis,

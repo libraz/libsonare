@@ -129,4 +129,16 @@ std::vector<note_model::NoteObject> make_masked_notes(
     const Spectrogram& spec, const MultiF0Track& track, const NoteMaskSet& masks, int length = 0,
     const note_model::NoteExtractorConfig& config = {});
 
+/// @brief The same notes measured over the claimed cells alone.
+/// @details Each note's isolated audio is @ref invert_note_mask over its own cells,
+///          which is the same frames summed in the same order, so the result is the
+///          spectrogram form's bit for bit. The geometry is read off
+///          @c cells.geometry where the spectrogram form reads the spectrogram.
+/// @throws SonareException(InvalidParameter) on what the spectrogram form rejects,
+///         plus a @p cells whose note count or per-note cell count is not
+///         @p masks's.
+std::vector<note_model::NoteObject> make_masked_notes(
+    const MaskedCells& cells, const MultiF0Track& track, const NoteMaskSet& masks, int length = 0,
+    const note_model::NoteExtractorConfig& config = {});
+
 }  // namespace sonare::editing::polyphony

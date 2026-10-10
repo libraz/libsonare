@@ -138,6 +138,9 @@ class _ProjectMidiMixin:
                 project's: the conversion goes through seconds, so a 44.1 kHz
                 take lands correctly on a 48 kHz project's grid.
             polyphonic: Read the multi-F0 chain instead of pYIN cut into notes.
+                Working memory grows with the input: about 0.75 MB per second
+                of audio at any rate, plus about 3 MB, plus about 32 bytes per
+                sample of the longest note while it is measured.
             reference_hz: Tuning reference in Hz; ``"auto"`` measures it from the
                 audio; ``None`` keeps the default (440 Hz).
             fmin: Low end of the F0 tracker's range; ``None`` uses 65 Hz for the

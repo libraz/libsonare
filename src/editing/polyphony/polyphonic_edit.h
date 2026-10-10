@@ -147,6 +147,26 @@ struct PolyphonicAnalysis {
 ///         configs.
 PolyphonicAnalysis analyze_polyphonic(const Audio& audio, const PolyphonicEditConfig& config = {});
 
+/// @brief The notes @ref analyze_polyphonic returns, without holding the analysis.
+/// @details For a caller that reads only the notes -- transcription -- and so pays
+///          for the spectrum and the masks without rendering anything from them.
+///          The same stages run in the same order on the same values, so the
+///          result is `analyze_polyphonic(audio, config).notes` bit for bit; what
+///          differs is what is held while they run. The STFT is read in fixed
+///          tiles (@ref for_each_stft_tile) twice, once for the extraction and
+///          once to keep the cells the masks name (@ref read_masked_cells), and
+///          the apportionment and the measurement read those cells rather than a
+///          spectrogram. The footprint that grows with the input is then the
+///          masks and their cells -- 20 bytes per mask entry -- plus the
+///          candidates and the notes, rather than 8 bytes per spectrogram cell.
+///
+///          @ref PolyphonicEditConfig::estimate_inharmonicity is honoured by
+///          running the whole analysis instead: the fit reads the spectrum's
+///          magnitude over a ridge's frames, which is not a claimed-cell read.
+/// @throws What @ref analyze_polyphonic throws, for the same inputs.
+std::vector<note_model::NoteObject> transcribe_polyphonic(const Audio& audio,
+                                                          const PolyphonicEditConfig& config = {});
+
 /// @brief Renders @p analysis back to audio, with whatever edits its notes carry.
 /// @details @ref render_masked_notes over the carried framing, masks, notes and
 ///          length. With every edit identity the result is

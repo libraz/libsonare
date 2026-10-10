@@ -470,4 +470,29 @@ NoteMaskSet solve_shared_bins(const Spectrogram& spec, const NoteMaskSet& masks,
                               const MultiF0Track& track, const SharedBinConfig& config = {},
                               SharedBinReport* report = nullptr);
 
+/// @brief The overload above taking @p masks by move, so the equal split is not
+///        held beside the result while it is being written.
+/// @details Allowed because no weight written is computed from the weight it
+///          replaces, which is the same fact that makes passing a result back in a
+///          no-op. Bit for bit the overload above.
+NoteMaskSet solve_shared_bins(const Spectrogram& spec, NoteMaskSet&& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config = {},
+                              SharedBinReport* report = nullptr);
+
+/// @brief The apportionment over the claimed cells alone.
+/// @details Every trajectory the fit reads and every observation it divides by
+///          lies on a bin some note claims, so @p cells holds all of it, and the
+///          result is the spectrogram form's bit for bit: the same values enter the
+///          same arithmetic in the same order. The geometry is read off
+///          @c cells.geometry where the spectrogram form reads the spectrogram.
+/// @throws SonareException(InvalidParameter) on what the spectrogram form rejects,
+///         plus a @p cells whose note count or per-note cell count is not
+///         @p masks's.
+NoteMaskSet solve_shared_bins(const MaskedCells& cells, const NoteMaskSet& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config = {},
+                              SharedBinReport* report = nullptr);
+NoteMaskSet solve_shared_bins(const MaskedCells& cells, NoteMaskSet&& masks,
+                              const MultiF0Track& track, const SharedBinConfig& config = {},
+                              SharedBinReport* report = nullptr);
+
 }  // namespace sonare::editing::polyphony

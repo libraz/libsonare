@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <string>
 #include <utility>
@@ -1825,4 +1826,257 @@ TEST_CASE("the fit's own configuration is read where the fit runs and nowhere el
     on.estimate_inharmonicity = true;
     REQUIRE(code_of([&] { analyze_polyphonic(audio, on); }) == sonare::ErrorCode::InvalidParameter);
   }
+}
+
+// --- The transcription route -----------------------------------------------
+
+namespace {
+
+/// @brief Three voices changing chord every @p chord_seconds at @p sample_rate.
+/// @details Neighbouring triads share no pitch and every chord fades over 10 ms
+///          at both ends, so each ridge ends where its chord does and the
+///          progression's ridges start and end inside the tiles the transcription
+///          route reads the STFT in, rather than all spanning the whole source.
+sonare::Audio progression_audio(int sample_rate, float seconds, float chord_seconds) {
+  constexpr float kRoots[] = {130.8128f, 146.8324f, 164.8138f, 174.6141f};
+  constexpr float kMajorThird = 1.259921f;
+  constexpr float kFifth = 1.498307f;
+  const auto n_samples = static_cast<size_t>(seconds * static_cast<float>(sample_rate));
+  const auto chord_samples = static_cast<size_t>(chord_seconds * static_cast<float>(sample_rate));
+  const double nyquist = 0.5 * static_cast<double>(sample_rate);
+  std::vector<float> samples(n_samples, 0.0f);
+  size_t chord = 0;
+  for (size_t start = 0; start < n_samples; start += chord_samples, ++chord) {
+    const size_t end = std::min(n_samples, start + chord_samples);
+    const float root = kRoots[chord % std::size(kRoots)];
+    for (const float voice_hz : {root, root * kMajorThird, root * kFifth}) {
+      for (int h = 1; h <= 8; ++h) {
+        const double hz = static_cast<double>(h) * static_cast<double>(voice_hz);
+        if (hz >= nyquist) break;
+        const float level = 0.15f / static_cast<float>(h);
+        for (size_t i = start; i < end; ++i) {
+          const double since_start = static_cast<double>(i - start) / sample_rate;
+          const double until_end = static_cast<double>(end - 1 - i) / sample_rate;
+          const auto fade =
+              static_cast<float>(std::min({1.0, since_start / 0.01, until_end / 0.01}));
+          samples[i] += fade * level *
+                        static_cast<float>(std::sin(sonare::constants::kTwoPiD * hz *
+                                                    static_cast<double>(i) / sample_rate));
+        }
+      }
+    }
+  }
+  return sonare::Audio::from_vector(std::move(samples), sample_rate);
+}
+
+/// @brief The route's own framing over @p audio, which is what its tiles are cut from.
+StftGeometry route_geometry(const sonare::Audio& audio, const PolyphonicEditConfig& config = {}) {
+  return stft_geometry(polyphony_stft_at_rate(config.extraction.stft, audio.sample_rate()),
+                       audio.sample_rate(), audio.size());
+}
+
+}  // namespace
+
+TEST_CASE("transcribe_polyphonic returns the analysis's notes bit for bit", "[polyphony_edit]") {
+  // The route holds no spectrogram and no mask set past the call, so the one
+  // observable it has is the one it exists for: the notes analyze_polyphonic
+  // returns, compared field for field with no tolerance. A tolerance would admit a
+  // route that computes something near the analysis, which is not the contract.
+  SECTION("the fixture pair and the chord at the default framing") {
+    for (const sonare::Audio& audio : {source_audio(), chord_audio()}) {
+      const PolyphonicAnalysis analysis = analyze_polyphonic(audio);
+      REQUIRE(!analysis.notes.empty());
+      require_same_notes(transcribe_polyphonic(audio), analysis.notes);
+    }
+  }
+
+  SECTION("a progression longer than one STFT tile, at 44.1 and 48 kHz") {
+    for (const int sample_rate : {44100, 48000}) {
+      INFO("rate " << sample_rate);
+      const sonare::Audio audio = progression_audio(sample_rate, 2.0f, 0.5f);
+      // Over 128 frames, one tile at the default hop, so the route crosses a tile
+      // boundary and reads frames whose predecessor sits in the previous tile.
+      REQUIRE(route_geometry(audio).n_frames >= 160);
+      const PolyphonicAnalysis analysis = analyze_polyphonic(audio);
+      // Enough notes, and notes starting late enough, that later tiles carry ridges.
+      REQUIRE(analysis.notes.size() >= 6);
+      int64_t latest_onset = 0;
+      for (const NoteObject& note : analysis.notes) {
+        latest_onset = std::max(latest_onset, note.onset_sample);
+      }
+      REQUIRE(latest_onset > static_cast<int64_t>(sample_rate));
+      require_same_notes(transcribe_polyphonic(audio), analysis.notes);
+    }
+  }
+
+  SECTION("a framing the configuration asks for") {
+    PolyphonicEditConfig config;
+    config.extraction.stft = sonare::make_stft_config(2 * kNfft, 2 * kHopLength);
+    const sonare::Audio audio = progression_audio(kSampleRate, 2.0f, 0.5f);
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    REQUIRE(!analysis.notes.empty());
+    require_same_notes(transcribe_polyphonic(audio, config), analysis.notes);
+  }
+
+  SECTION("silence") {
+    const sonare::Audio audio = silent_audio();
+    REQUIRE(analyze_polyphonic(audio).notes.empty());
+    REQUIRE(transcribe_polyphonic(audio).empty());
+  }
+
+  SECTION("with the stretch fit on, the route is the whole analysis") {
+    PolyphonicEditConfig config;
+    config.masks.inharmonicity = kDeclaredStretch;
+    config.estimate_inharmonicity = true;
+    const sonare::Audio audio = stretched_tone_audio();
+    const PolyphonicAnalysis analysis = analyze_polyphonic(audio, config);
+    REQUIRE(!analysis.notes.empty());
+    // The fit reached the material, so the notes below were measured over claims
+    // the declared geometry did not place.
+    REQUIRE(analysis.inharmonicity_fit.front() >= 0.0f);
+    require_same_notes(transcribe_polyphonic(audio, config), analysis.notes);
+  }
+}
+
+TEST_CASE("transcribe_polyphonic refuses what analyze_polyphonic refuses, with the same code",
+          "[polyphony_edit]") {
+  const sonare::Audio audio = source_audio();
+
+  struct NamedConfig {
+    const char* what;
+    PolyphonicEditConfig config;
+  };
+  std::vector<NamedConfig> rejected;
+  {
+    PolyphonicEditConfig config;
+    config.extraction.stft.hop_length = 0;
+    rejected.push_back({"a framing with no hop", config});
+  }
+  {
+    PolyphonicEditConfig config;
+    config.masks.n_harmonics = 0;
+    rejected.push_back({"a claim geometry with no partials", config});
+  }
+  {
+    PolyphonicEditConfig config;
+    config.shared_bins.window_frames = 1;
+    rejected.push_back({"an apportionment window under the minimum", config});
+  }
+  {
+    PolyphonicEditConfig config;
+    config.notes.segmenter.reference_hz = 0.0f;
+    rejected.push_back({"a measurement with no reference pitch", config});
+  }
+
+  for (const NamedConfig& entry : rejected) {
+    INFO(entry.what);
+    REQUIRE(code_of([&] { analyze_polyphonic(audio, entry.config); }) ==
+            sonare::ErrorCode::InvalidParameter);
+    REQUIRE(code_of([&] { transcribe_polyphonic(audio, entry.config); }) ==
+            sonare::ErrorCode::InvalidParameter);
+  }
+
+  const sonare::Audio empty;
+  REQUIRE(code_of([&] { analyze_polyphonic(empty); }) == sonare::ErrorCode::InvalidParameter);
+  REQUIRE(code_of([&] { transcribe_polyphonic(empty); }) == sonare::ErrorCode::InvalidParameter);
+}
+
+TEST_CASE("the claimed cells carry everything the apportionment and the measurement read",
+          "[polyphony_edit]") {
+  // Stage by stage rather than end to end, so a disagreement names the stage. The
+  // material is longer than one tile at 48 kHz, where the framing is not the
+  // reference one, so the tiles are cut at a converted hop. One pass rather than
+  // sections: the setup is the expensive part and every comparison reads it.
+  const sonare::Audio audio = progression_audio(48000, 2.2f, 0.5f);
+  const PolyphonicEditConfig config;
+  const sonare::StftConfig stft =
+      polyphony_stft_at_rate(config.extraction.stft, audio.sample_rate());
+  const sonare::Spectrogram spec = sonare::Spectrogram::compute(audio, stft);
+  // Over 128 frames, which is one tile at the default hop.
+  REQUIRE(spec.n_frames() >= 160);
+  const int length = static_cast<int>(audio.size());
+
+  const MultiF0Track track = extract_multi_f0(audio, spec, config.extraction);
+  REQUIRE(track.ridges.size() >= 6);
+  const NoteMaskSet equal = build_note_masks(spec, track, config.masks);
+  require_same_masks(build_note_masks(geometry_of(spec), track, config.masks), equal);
+
+  // Every cell is the spectrogram's value at the entry it mirrors.
+  const MaskedCells cells = read_masked_cells(audio, stft, equal);
+  const StftGeometry geometry = geometry_of(spec);
+  REQUIRE(cells.geometry.n_bins == geometry.n_bins);
+  REQUIRE(cells.geometry.n_frames == geometry.n_frames);
+  REQUIRE(cells.geometry.n_fft == geometry.n_fft);
+  REQUIRE(cells.geometry.win_length == geometry.win_length);
+  REQUIRE(cells.geometry.hop_length == geometry.hop_length);
+  REQUIRE(cells.geometry.sample_rate == geometry.sample_rate);
+  REQUIRE(cells.geometry.window == geometry.window);
+  REQUIRE(cells.geometry.center == geometry.center);
+  REQUIRE(cells.notes.size() == equal.notes.size());
+  const std::complex<float>* data = spec.complex_data();
+  size_t compared = 0;
+  size_t mismatched = 0;
+  for (size_t i = 0; i < equal.notes.size(); ++i) {
+    const NoteMask& mask = equal.notes[i];
+    REQUIRE(cells.notes[i].size() == mask.bins.size());
+    for (int index = 0; index < mask.n_frames; ++index) {
+      const size_t frame = static_cast<size_t>(mask.frame_start + index);
+      for (int32_t k = mask.frame_offset[static_cast<size_t>(index)];
+           k < mask.frame_offset[static_cast<size_t>(index) + 1]; ++k) {
+        const size_t bin = static_cast<size_t>(mask.bins[static_cast<size_t>(k)]);
+        if (cells.notes[i][static_cast<size_t>(k)] !=
+            data[bin * static_cast<size_t>(spec.n_frames()) + frame]) {
+          ++mismatched;
+        }
+        ++compared;
+      }
+    }
+  }
+  REQUIRE(compared > 10000);
+  REQUIRE(mismatched == 0);
+
+  // The apportionment over the cells is the apportionment over the spectrogram.
+  const NoteMaskSet solved = solve_shared_bins(spec, equal, track, config.shared_bins);
+  // The stage did something on this material, or the comparison is of two equal splits.
+  REQUIRE(masks_differ(equal, solved));
+  require_same_masks(solve_shared_bins(cells, equal, track, config.shared_bins), solved);
+  require_same_masks(solve_shared_bins(spec, NoteMaskSet(equal), track, config.shared_bins),
+                     solved);
+  require_same_masks(solve_shared_bins(cells, NoteMaskSet(equal), track, config.shared_bins),
+                     solved);
+
+  // Each inverse and every measured note agree.
+  for (size_t i = 0; i < solved.notes.size(); ++i) {
+    INFO("note " << i);
+    const NoteSegment want = invert_note_mask(spec, solved.notes[i], length);
+    const NoteSegment got = invert_note_mask(cells, solved, i, length);
+    REQUIRE(got.first_sample == want.first_sample);
+    REQUIRE(got.audio.size() == want.audio.size());
+    REQUIRE(std::equal(got.audio.begin(), got.audio.end(), want.audio.begin()));
+  }
+  require_same_notes(make_masked_notes(cells, track, solved, length, config.notes),
+                     make_masked_notes(spec, track, solved, length, config.notes));
+
+  // Cells that do not describe the set are refused.
+  MaskedCells fewer = cells;
+  fewer.notes.pop_back();
+  REQUIRE(code_of([&] { solve_shared_bins(fewer, equal, track); }) ==
+          sonare::ErrorCode::InvalidParameter);
+  REQUIRE(code_of([&] { make_masked_notes(fewer, track, equal, length); }) ==
+          sonare::ErrorCode::InvalidParameter);
+  REQUIRE(code_of([&] { invert_note_mask(fewer, equal, equal.notes.size() - 1, length); }) ==
+          sonare::ErrorCode::InvalidParameter);
+
+  MaskedCells short_note = cells;
+  short_note.notes.front().pop_back();
+  REQUIRE(code_of([&] { solve_shared_bins(short_note, equal, track); }) ==
+          sonare::ErrorCode::InvalidParameter);
+  REQUIRE(code_of([&] { invert_note_mask(short_note, equal, 0, length); }) ==
+          sonare::ErrorCode::InvalidParameter);
+
+  // A set from another framing is refused before any tile is read.
+  NoteMaskSet other = equal;
+  other.hop_length += 1;
+  REQUIRE(code_of([&] { read_masked_cells(audio, stft, other); }) ==
+          sonare::ErrorCode::InvalidParameter);
 }

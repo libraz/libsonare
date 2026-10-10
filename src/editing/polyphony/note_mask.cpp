@@ -23,8 +23,8 @@ constexpr float kMaxClaimLobes = 64.0f;
 /// Half a claim's width, in bins. The Hann main lobe is 4 * n_fft / win_length
 /// bins wide, so one lobe reaches half of that either side; counting in lobes
 /// carries the width across zero padding instead of tying it to one framing.
-double claim_half_width(const Spectrogram& spec, const NoteMaskConfig& config) {
-  return static_cast<double>(config.claim_lobes) * 2.0 * spec.n_fft() / spec.win_length();
+double claim_half_width(const StftGeometry& geometry, const NoteMaskConfig& config) {
+  return static_cast<double>(config.claim_lobes) * 2.0 * geometry.n_fft / geometry.win_length;
 }
 
 /// The claim geometry, and the only place it is derived. @p f0_hz is positive
@@ -62,13 +62,13 @@ void place_claims(float f0_hz, const NoteMaskConfig& config, double bins_per_hz,
 
 /// The framing and geometry checks @ref build_note_masks and @ref partial_claims
 /// share, so one cannot drift into accepting what the other refuses.
-void check_geometry(const Spectrogram& spec, const NoteMaskConfig& config) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
+void check_geometry(const StftGeometry& geometry, const NoteMaskConfig& config) {
+  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
   // A partial is a frequency read at one bin spacing over one lobe, so a
   // spectrogram carrying neither is not an input this can read.
-  SONARE_CHECK(
-      spec.n_fft() > 0 && spec.win_length() > 0 && spec.hop_length() > 0 && spec.sample_rate() > 0,
-      ErrorCode::InvalidParameter);
+  SONARE_CHECK(geometry.n_fft > 0 && geometry.win_length > 0 && geometry.hop_length > 0 &&
+                   geometry.sample_rate > 0,
+               ErrorCode::InvalidParameter);
   SONARE_CHECK(config.n_harmonics >= 1 && config.n_harmonics <= kMaxNoteMaskHarmonics,
                ErrorCode::InvalidParameter);
   SONARE_CHECK(std::isfinite(config.claim_lobes) && config.claim_lobes > 0.0f &&
@@ -129,29 +129,45 @@ Spectrogram scaled_like(const Spectrogram& spec, std::vector<std::complex<float>
 
 std::vector<PartialClaim> partial_claims(const Spectrogram& spec, float f0_hz,
                                          const NoteMaskConfig& config) {
-  check_geometry(spec, config);
+  return partial_claims(geometry_of(spec), f0_hz, config);
+}
+
+std::vector<PartialClaim> partial_claims(const StftGeometry& geometry, float f0_hz,
+                                         const NoteMaskConfig& config) {
+  check_geometry(geometry, config);
   SONARE_CHECK(std::isfinite(f0_hz) && f0_hz > 0.0f, ErrorCode::InvalidParameter);
 
   std::vector<PartialClaim> claims;
-  place_claims(f0_hz, config, static_cast<double>(spec.n_fft()) / spec.sample_rate(),
-               claim_half_width(spec, config), spec.n_bins(), claims);
+  place_claims(f0_hz, config, static_cast<double>(geometry.n_fft) / geometry.sample_rate,
+               claim_half_width(geometry, config), geometry.n_bins, claims);
   return claims;
 }
 
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config) {
-  return build_note_masks(spec, track, config, std::vector<float>{});
+  return build_note_masks(geometry_of(spec), track, config, std::vector<float>{});
 }
 
 NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                              const NoteMaskConfig& config,
                              const std::vector<float>& per_ridge_stretch) {
-  check_geometry(spec, config);
-  SONARE_CHECK(track.n_frames == spec.n_frames() && track.hop_length == spec.hop_length() &&
-                   track.sample_rate == spec.sample_rate(),
+  return build_note_masks(geometry_of(spec), track, config, per_ridge_stretch);
+}
+
+NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
+                             const NoteMaskConfig& config) {
+  return build_note_masks(geometry, track, config, std::vector<float>{});
+}
+
+NoteMaskSet build_note_masks(const StftGeometry& geometry, const MultiF0Track& track,
+                             const NoteMaskConfig& config,
+                             const std::vector<float>& per_ridge_stretch) {
+  check_geometry(geometry, config);
+  SONARE_CHECK(track.n_frames == geometry.n_frames && track.hop_length == geometry.hop_length &&
+                   track.sample_rate == geometry.sample_rate,
                ErrorCode::InvalidParameter);
   for (const F0Ridge& ridge : track.ridges) {
-    SONARE_CHECK(ridge.frame_start >= 0 && ridge.frame_end() <= spec.n_frames(),
+    SONARE_CHECK(ridge.frame_start >= 0 && ridge.frame_end() <= geometry.n_frames,
                  ErrorCode::InvalidParameter);
     // Rejected here as track_f0_ridges rejects it: a value one entry point
     // refuses and another absorbs is where a validation gap hides.
@@ -169,16 +185,16 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
                      "build_note_masks: perRidgeStretch must be finite");
   }
 
-  const int n_bins = spec.n_bins();
-  const int n_frames = spec.n_frames();
-  const double bins_per_hz = static_cast<double>(spec.n_fft()) / spec.sample_rate();
-  const double half_width = claim_half_width(spec, config);
+  const int n_bins = geometry.n_bins;
+  const int n_frames = geometry.n_frames;
+  const double bins_per_hz = static_cast<double>(geometry.n_fft) / geometry.sample_rate;
+  const double half_width = claim_half_width(geometry, config);
 
   NoteMaskSet set;
   set.n_bins = n_bins;
   set.n_frames = n_frames;
-  set.hop_length = spec.hop_length();
-  set.sample_rate = spec.sample_rate();
+  set.hop_length = geometry.hop_length;
+  set.sample_rate = geometry.sample_rate;
   // Carried so a later stage can tell which partial stands on a bin without
   // guessing a harmonic number back out of the bin's frequency.
   set.config = config;
@@ -187,12 +203,12 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
   // single derivation. The effective value is stored rather than the argument: a
   // negative entry is the caller's refusal and the geometry used the declared
   // value, which is the number a replay has to read back.
-  std::vector<NoteMaskConfig> geometry(track.ridges.size(), config);
+  std::vector<NoteMaskConfig> per_ridge(track.ridges.size(), config);
   if (!per_ridge_stretch.empty()) {
     set.inharmonicity.resize(track.ridges.size());
     for (size_t i = 0; i < track.ridges.size(); ++i) {
-      if (per_ridge_stretch[i] >= 0.0f) geometry[i].inharmonicity = per_ridge_stretch[i];
-      set.inharmonicity[i] = geometry[i].inharmonicity;
+      if (per_ridge_stretch[i] >= 0.0f) per_ridge[i].inharmonicity = per_ridge_stretch[i];
+      set.inharmonicity[i] = per_ridge[i].inharmonicity;
     }
   }
   for (size_t i = 0; i < track.ridges.size(); ++i) {
@@ -214,7 +230,7 @@ NoteMaskSet build_note_masks(const Spectrogram& spec, const MultiF0Track& track,
       NoteMask& mask = set.notes[i];
       const int index = frame - mask.frame_start;
       if (index < 0 || index >= mask.n_frames) continue;
-      place_claims(track.ridges[i].f0_hz[static_cast<size_t>(index)], geometry[i], bins_per_hz,
+      place_claims(track.ridges[i].f0_hz[static_cast<size_t>(index)], per_ridge[i], bins_per_hz,
                    half_width, n_bins, partials);
       for (const PartialClaim& partial : partials) {
         for (int bin = partial.first_bin; bin <= partial.last_bin; ++bin) {
@@ -264,15 +280,21 @@ Spectrogram apply_note_mask(const Spectrogram& spec, const NoteMask& mask) {
   return scaled_like(spec, std::move(masked));
 }
 
-NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length) {
-  SONARE_CHECK(!spec.empty(), ErrorCode::InvalidParameter);
-  check_mask_shape(mask, spec.n_bins(), spec.n_frames());
+namespace {
+
+/// The inverse over the frames a mask reaches; @p cell_at(k, bin, frame) is the
+/// spectrogram at mask entry @p k, which sits at (@p bin, @p frame).
+template <typename CellAt>
+NoteSegment invert_cells(const StftGeometry& geometry, const NoteMask& mask, int length,
+                         const CellAt& cell_at) {
+  SONARE_CHECK(!geometry.empty(), ErrorCode::InvalidParameter);
+  check_mask_shape(mask, geometry.n_bins, geometry.n_frames);
   SONARE_CHECK(length >= 0, ErrorCode::InvalidParameter);
 
-  const int n_bins = spec.n_bins();
-  const int n_frames = spec.n_frames();
-  const int n_fft = spec.n_fft();
-  const int hop = spec.hop_length();
+  const int n_bins = geometry.n_bins;
+  const int n_frames = geometry.n_frames;
+  const int n_fft = geometry.n_fft;
+  const int hop = geometry.hop_length;
   // Every frame whose window overlaps a masked frame's, so each sample the note
   // reaches sums the same frames the full-length inverse does.
   const int reach = (n_fft + hop - 1) / hop;
@@ -280,7 +302,6 @@ NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int 
   const int last = std::min(n_frames, mask.frame_start + mask.n_frames + reach);
   const int span = last - first;
 
-  const std::complex<float>* data = spec.complex_data();
   std::vector<std::complex<float>> masked(static_cast<size_t>(n_bins) * span);
   for (int index = 0; index < mask.n_frames; ++index) {
     const int frame = mask.frame_start + index;
@@ -288,16 +309,17 @@ NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int 
          k < mask.frame_offset[static_cast<size_t>(index) + 1]; ++k) {
       const size_t bin = static_cast<size_t>(mask.bins[static_cast<size_t>(k)]);
       masked[bin * span + static_cast<size_t>(frame - first)] =
-          data[bin * n_frames + static_cast<size_t>(frame)] * mask.weights[static_cast<size_t>(k)];
+          cell_at(static_cast<size_t>(k), bin, static_cast<size_t>(frame)) *
+          mask.weights[static_cast<size_t>(k)];
     }
   }
   const Spectrogram part =
-      Spectrogram::from_complex(std::move(masked), n_bins, span, n_fft, hop, spec.sample_rate(),
-                                spec.window(), spec.center(), spec.win_length());
+      Spectrogram::from_complex(std::move(masked), n_bins, span, n_fft, hop, geometry.sample_rate,
+                                geometry.window, geometry.center, geometry.win_length);
 
   // Centred or not, output position j of the part is input position first*hop + j.
   const int64_t first_sample = static_cast<int64_t>(first) * hop;
-  const int64_t trim = spec.center() ? n_fft / 2 : 0;
+  const int64_t trim = geometry.center ? n_fft / 2 : 0;
   const int64_t whole =
       length > 0 ? length : static_cast<int64_t>(n_frames - 1) * hop + n_fft - 2 * trim;
   // Short of the last frame the part ends where its own frames do; reaching it,
@@ -306,9 +328,64 @@ NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int 
   const int64_t available = last < n_frames ? part_natural : whole - first_sample;
   const int64_t count = std::clamp<int64_t>(whole - first_sample, 0, available);
   if (count == 0) {
-    return {Audio::from_vector({}, spec.sample_rate()), first_sample};
+    return {Audio::from_vector({}, geometry.sample_rate), first_sample};
   }
   return {part.to_audio(static_cast<int>(count)), first_sample};
+}
+
+}  // namespace
+
+NoteSegment invert_note_mask(const Spectrogram& spec, const NoteMask& mask, int length) {
+  const std::complex<float>* data = spec.complex_data();
+  const auto n_frames = static_cast<size_t>(spec.n_frames());
+  return invert_cells(geometry_of(spec), mask, length, [&](size_t, size_t bin, size_t frame) {
+    return data[bin * n_frames + frame];
+  });
+}
+
+NoteSegment invert_note_mask(const MaskedCells& cells, const NoteMaskSet& masks, std::size_t note,
+                             int length) {
+  SONARE_CHECK(note < masks.notes.size() && note < cells.notes.size(), ErrorCode::InvalidParameter);
+  const NoteMask& mask = masks.notes[note];
+  const std::vector<std::complex<float>>& values = cells.notes[note];
+  SONARE_CHECK(values.size() == mask.bins.size(), ErrorCode::InvalidParameter);
+  return invert_cells(cells.geometry, mask, length,
+                      [&](size_t k, size_t, size_t) { return values[k]; });
+}
+
+MaskedCells read_masked_cells(const Audio& audio, const StftConfig& stft,
+                              const NoteMaskSet& masks) {
+  MaskedCells cells;
+  cells.geometry = stft_geometry(stft, audio.sample_rate(), audio.size());
+  SONARE_CHECK(masks.n_bins == cells.geometry.n_bins && masks.n_frames == cells.geometry.n_frames &&
+                   masks.hop_length == cells.geometry.hop_length &&
+                   masks.sample_rate == cells.geometry.sample_rate,
+               ErrorCode::InvalidParameter);
+  check_set_shape(masks);
+
+  cells.notes.resize(masks.notes.size());
+  for (size_t i = 0; i < masks.notes.size(); ++i) {
+    cells.notes[i].resize(masks.notes[i].bins.size());
+  }
+  for_each_stft_tile(audio, stft, 0, [&](const Spectrogram& tile, int first_frame, int) {
+    const int tile_frames = tile.n_frames();
+    const int tile_end = first_frame + tile_frames;
+    const std::complex<float>* data = tile.complex_data();
+    for (size_t i = 0; i < masks.notes.size(); ++i) {
+      const NoteMask& mask = masks.notes[i];
+      const int from = std::max(mask.frame_start, first_frame);
+      const int to = std::min(mask.frame_end(), tile_end);
+      for (int frame = from; frame < to; ++frame) {
+        const auto index = static_cast<size_t>(frame - mask.frame_start);
+        for (int32_t k = mask.frame_offset[index]; k < mask.frame_offset[index + 1]; ++k) {
+          const auto bin = static_cast<size_t>(mask.bins[static_cast<size_t>(k)]);
+          cells.notes[i][static_cast<size_t>(k)] = data[bin * static_cast<size_t>(tile_frames) +
+                                                        static_cast<size_t>(frame - first_frame)];
+        }
+      }
+    }
+  });
+  return cells;
 }
 
 Spectrogram residual_spectrum(const Spectrogram& spec, const NoteMaskSet& masks) {

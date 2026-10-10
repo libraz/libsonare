@@ -209,7 +209,8 @@ std::vector<NoteObject> polyphonic_notes(const Audio& audio, const TranscribeCon
   poly.extraction.estimation.min_frame_peak_ratio = limits.min_frame_peak_ratio;
   poly.notes.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;
   poly.notes.segmenter.reference_hz = config.reference_hz;
-  return polyphony::analyze_polyphonic(audio, poly).notes;
+  // Transcription reads only the notes, so the analysis is never held.
+  return polyphony::transcribe_polyphonic(audio, poly);
 }
 
 }  // namespace
