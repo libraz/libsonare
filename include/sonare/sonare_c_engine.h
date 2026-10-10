@@ -37,8 +37,9 @@ extern "C" {
 ///   centre on every channel the sequencer has played since the last reset, so
 ///   controller values set before a loop region are not restored at the wrap.
 /// - Live parameter / MIDI: `sonare_engine_set_parameter`,
-///   `sonare_engine_set_parameter_smoothed`, `sonare_engine_push_midi_cc`,
-///   `sonare_engine_push_midi_panic`.
+///   `sonare_engine_set_parameter_smoothed`, and the live MIDI push family
+///   (`sonare_engine_push_midi_*`, `sonare_engine_push_midi_input_*`; see the
+///   MIDI section below for the full list).
 /// - Capture control: `sonare_engine_set_capture_buffer`,
 ///   `sonare_engine_arm_capture`, `sonare_engine_set_capture_punch`,
 ///   `sonare_engine_reset_capture`. The buffer given to `set_capture_buffer`
@@ -1734,6 +1735,44 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
 ///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full.
 SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
                                               size_t word_count, int64_t port_time_samples);
+/// @brief Queues a live MIDI 2.0 program change, with an optional bank, to a MIDI destination.
+/// @details Packs one MIDI 2.0 Program Change (bank and program in a single message)
+///          and hands it to the same path as @ref sonare_engine_push_midi_ump, so
+///          the receiver's own gates apply (for a GS instrument, RX PROGRAM CHANGE
+///          and RX BANK SELECT). A receiver that does not select programs (the
+///          built-in synth, a NativeSynth without GM programs, a part with RX
+///          PROGRAM CHANGE off, an MPE member channel) accepts the message and
+///          ignores it. A future-dated op can be evicted by the pending-command
+///          bank like any future command. Selection only: no preset is loaded.
+/// @param destination_id MIDI destination id (clip/instrument destination).
+/// @param group UMP group (0..15).
+/// @param channel MIDI channel (0..15).
+/// @param program Program number (0..127).
+/// @param bank_valid Non-zero to select @p bank_msb / @p bank_lsb with the program;
+///        zero keeps the receiver's bank.
+/// @param bank_msb Bank select MSB (0..127); must be 0 when @p bank_valid is zero.
+/// @param bank_lsb Bank select LSB (0..127); must be 0 when @p bank_valid is zero.
+/// @param render_frame Render-frame time to apply, or -1 for immediate.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an out-of-range argument or a
+///         non-zero bank with @p bank_valid zero;
+///         SONARE_ERROR_OUT_OF_MEMORY when the slot ring or command queue is
+///         full (transient back-pressure; retry after a process block).
+SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                            uint8_t group, uint8_t channel, uint8_t program,
+                                            int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
+                                            int64_t render_frame);
+/// @brief Pushes a live MIDI 2.0 program change (optional bank) to the engine-owned MIDI input
+///        source.
+/// @details The input-source counterpart of @ref sonare_engine_push_midi_program;
+///          the receiver rules and argument domains are the same.
+/// @param port_time_samples Port timestamp in samples.
+/// @return SONARE_ERROR_INVALID_PARAMETER for an out-of-range argument, a
+///         non-zero bank with @p bank_valid zero, or when the input source is
+///         not enabled; SONARE_ERROR_OUT_OF_MEMORY when the input queue is full.
+SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, uint8_t group,
+                                                  uint8_t channel, uint8_t program, int bank_valid,
+                                                  uint8_t bank_msb, uint8_t bank_lsb,
+                                                  int64_t port_time_samples);
 /// @brief Marks a MIDI destination for external routing (or clears it).
 /// @details A destination marked external bypasses the internal instrument rack:
 ///   its sequenced events are buffered in the engine's external-MIDI output queue

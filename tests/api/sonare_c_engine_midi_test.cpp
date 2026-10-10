@@ -1059,3 +1059,201 @@ TEST_CASE("sonare_engine raw UMP push reports a full queue as retryable back-pre
   sonare_engine_destroy(engine);
 }
 #endif
+
+namespace {
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+constexpr uint32_t kProgramDestination = 7;
+constexpr int kProgramBlock = 256;
+constexpr int kProgramBlocks = 8;
+
+// Engine with a SoundFont-less Sf2Player (the GM/GS fallback floor) on kProgramDestination.
+SonareRealtimeEngine* make_program_engine() {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, kProgramBlock, 16, 16) == SONARE_OK);
+  SonareEngineSf2InstrumentConfig config{};
+  config.struct_version = 4;
+  REQUIRE(sonare_engine_set_sf2_instrument(engine, kProgramDestination, &config) == SONARE_OK);
+  return engine;
+}
+
+std::vector<float> render_program_blocks(SonareRealtimeEngine* engine) {
+  std::vector<float> left(kProgramBlock * kProgramBlocks, 0.0f);
+  std::vector<float> right(left.size(), 0.0f);
+  for (size_t at = 0; at < left.size(); at += kProgramBlock) {
+    float* channels[] = {left.data() + at, right.data() + at};
+    REQUIRE(sonare_engine_process(engine, channels, 2, kProgramBlock) == SONARE_OK);
+  }
+  return left;
+}
+
+// Pushes @p select, then a note-on on channel 0, and renders.
+template <typename Select>
+std::vector<float> render_after(Select select) {
+  SonareRealtimeEngine* engine = make_program_engine();
+  select(engine);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, kProgramDestination, 0, 0, 60, 100, -1) ==
+          SONARE_OK);
+  std::vector<float> out = render_program_blocks(engine);
+  sonare_engine_destroy(engine);
+  return out;
+}
+
+void push_raw_program(SonareRealtimeEngine* engine, bool bank_valid, uint8_t msb) {
+  const sonare::midi::Ump ump =
+      sonare::midi::make_midi2_program_change(0, 0, 0, msb, 0, bank_valid);
+  REQUIRE(sonare_engine_push_midi_ump(engine, kProgramDestination, ump.words, ump.word_count, -1) ==
+          SONARE_OK);
+}
+
+void push_typed_program(SonareRealtimeEngine* engine, bool bank_valid, uint8_t msb) {
+  REQUIRE(sonare_engine_push_midi_program(engine, kProgramDestination, 0, 0, 0, bank_valid ? 1 : 0,
+                                          msb, 0, -1) == SONARE_OK);
+}
+
+// Roland GS DT1 "RX BANK SELECT" for part 1 (channel 0), address 40 11 23.
+void push_rx_bank_select(SonareRealtimeEngine* engine, uint8_t value) {
+  uint8_t sysex[] = {0xF0, 0x41, 0x10, 0x42, 0x12, 0x40, 0x11, 0x23, value, 0x00, 0xF7};
+  const int sum = 0x40 + 0x11 + 0x23 + value;
+  sysex[9] = static_cast<uint8_t>((128 - sum % 128) % 128);
+  REQUIRE(sonare_engine_push_midi_sysex(engine, kProgramDestination, sysex, sizeof(sysex), -1) ==
+          SONARE_OK);
+}
+#endif
+
+}  // namespace
+
+TEST_CASE("sonare_engine typed program change equals the raw UMP and reaches the voice",
+          "[c_api][engine][midi]") {
+#if defined(SONARE_WITH_ARRANGEMENT)
+  const std::vector<float> none = render_after([](SonareRealtimeEngine*) {});
+  const std::vector<float> bank0 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 0); });
+  const std::vector<float> bank8 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 8); });
+  const std::vector<float> raw8 =
+      render_after([](SonareRealtimeEngine* e) { push_raw_program(e, true, 8); });
+  REQUIRE(peak_abs(bank8) > 0.01f);
+  CHECK(bank8 == raw8);
+  CHECK(bank8 != bank0);
+  CHECK(bank8 != none);
+#else
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_program(engine, 3, 0, 0, 0, 1, 8, 0, -1) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  REQUIRE(sonare_engine_push_midi_input_program(engine, 0, 0, 0, 1, 8, 0, 0) ==
+          SONARE_ERROR_NOT_SUPPORTED);
+  sonare_engine_destroy(engine);
+#endif
+}
+
+TEST_CASE("sonare_engine typed program change refuses out-of-domain arguments",
+          "[c_api][engine][midi]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 64, 16, 16) == SONARE_OK);
+#if defined(SONARE_WITH_ARRANGEMENT)
+  REQUIRE(sonare_engine_set_midi_input_source(engine, 3) == SONARE_OK);
+#endif
+
+  struct Args {
+    const char* what;
+    uint8_t group, channel, program;
+    int bank_valid;
+    uint8_t msb, lsb;
+  };
+  const Args refused[] = {
+      {"group 16", 16, 0, 0, 1, 0, 0},
+      {"channel 16", 0, 16, 0, 1, 0, 0},
+      {"program 128", 0, 0, 128, 1, 0, 0},
+      {"bank MSB 128", 0, 0, 0, 1, 128, 0},
+      {"bank LSB 128", 0, 0, 0, 1, 0, 128},
+      {"MSB with bank-valid false", 0, 0, 0, 0, 1, 0},
+      {"LSB with bank-valid false", 0, 0, 0, 0, 0, 1},
+  };
+  for (const Args& a : refused) {
+    INFO(a.what);
+    REQUIRE(sonare_engine_push_midi_program(engine, 3, a.group, a.channel, a.program, a.bank_valid,
+                                            a.msb, a.lsb, -1) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_engine_push_midi_input_program(engine, a.group, a.channel, a.program,
+                                                  a.bank_valid, a.msb, a.lsb,
+                                                  0) == SONARE_ERROR_INVALID_PARAMETER);
+  }
+  REQUIRE(sonare_engine_push_midi_program(nullptr, 3, 0, 0, 0, 1, 8, 0, -1) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  REQUIRE(sonare_engine_push_midi_input_program(nullptr, 0, 0, 0, 1, 8, 0, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+  // Bank-valid false with a zero bank is the "keep the bank" form and is accepted.
+  REQUIRE(sonare_engine_push_midi_program(engine, 3, 0, 0, 5, 0, 0, 0, -1) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_program(engine, 0, 0, 5, 0, 0, 0, 0) == SONARE_OK);
+  // A cleared input source refuses, like its siblings.
+  REQUIRE(sonare_engine_clear_midi_input_source(engine) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_program(engine, 0, 0, 5, 1, 8, 0, 0) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+#endif
+  sonare_engine_destroy(engine);
+}
+
+#if defined(SONARE_WITH_ARRANGEMENT)
+TEST_CASE("sonare_engine input-source program change reaches the destination voice",
+          "[c_api][engine][midi]") {
+  const std::vector<float> bank0 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 0); });
+  const std::vector<float> bank8 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 8); });
+
+  SonareRealtimeEngine* engine = make_program_engine();
+  REQUIRE(sonare_engine_set_midi_input_source(engine, kProgramDestination) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_program(engine, 0, 0, 0, 1, 8, 0, 0) == SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_input_note_on(engine, 0, 0, 60, 100, 0) == SONARE_OK);
+  const std::vector<float> via_input = render_program_blocks(engine);
+  sonare_engine_destroy(engine);
+  CHECK(via_input == bank8);
+  CHECK(via_input != bank0);
+}
+
+TEST_CASE("sonare_engine program change at a render frame precedes a note at the same frame",
+          "[c_api][engine][midi]") {
+  const std::vector<float> bank8 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 8); });
+  const std::vector<float> bank0 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 0); });
+
+  SonareRealtimeEngine* engine = make_program_engine();
+  REQUIRE(sonare_engine_push_midi_program(engine, kProgramDestination, 0, 0, 0, 1, 8, 0, 0) ==
+          SONARE_OK);
+  REQUIRE(sonare_engine_push_midi_note_on(engine, kProgramDestination, 0, 0, 60, 100, 0) ==
+          SONARE_OK);
+  const std::vector<float> same_frame = render_program_blocks(engine);
+  sonare_engine_destroy(engine);
+  CHECK(same_frame == bank8);
+  CHECK(same_frame != bank0);
+}
+
+TEST_CASE("sonare_engine program change bank follows the live GS RX BANK SELECT switch",
+          "[c_api][engine][midi]") {
+  const std::vector<float> bank0 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 0); });
+  const std::vector<float> bank8 =
+      render_after([](SonareRealtimeEngine* e) { push_typed_program(e, true, 8); });
+  REQUIRE(bank0 != bank8);
+
+  // RX BANK SELECT off: the bank is ignored and the bank-0 voice sounds.
+  const std::vector<float> rx_off = render_after([](SonareRealtimeEngine* e) {
+    push_rx_bank_select(e, 0);
+    push_typed_program(e, true, 8);
+  });
+  CHECK(rx_off == bank0);
+
+  // RX BANK SELECT on: the bank-8 voice sounds.
+  const std::vector<float> rx_on = render_after([](SonareRealtimeEngine* e) {
+    push_rx_bank_select(e, 1);
+    push_typed_program(e, true, 8);
+  });
+  CHECK(rx_on == bank8);
+}
+#endif

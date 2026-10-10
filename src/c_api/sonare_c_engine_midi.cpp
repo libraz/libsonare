@@ -1001,6 +1001,48 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
 #endif
 }
 
+SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32_t destination_id,
+                                            uint8_t group, uint8_t channel, uint8_t program,
+                                            int bank_valid, uint8_t bank_msb, uint8_t bank_lsb,
+                                            int64_t render_frame) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || program > 127 || bank_msb > 127 || bank_lsb > 127 ||
+      (bank_valid == 0 && (bank_msb != 0 || bank_lsb != 0))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)destination_id;
+  (void)render_frame;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  const midi::Ump ump =
+      midi::make_midi2_program_change(group, channel, program, bank_msb, bank_lsb, bank_valid != 0);
+  return sonare_engine_push_midi_ump(engine, destination_id, ump.words, ump.word_count,
+                                     render_frame);
+#endif
+}
+
+SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, uint8_t group,
+                                                  uint8_t channel, uint8_t program, int bank_valid,
+                                                  uint8_t bank_msb, uint8_t bank_lsb,
+                                                  int64_t port_time_samples) {
+  SONARE_C_API_ENTRY;
+  if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
+  if (group > 15 || channel > 15 || program > 127 || bank_msb > 127 || bank_lsb > 127 ||
+      (bank_valid == 0 && (bank_msb != 0 || bank_lsb != 0))) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+#if !defined(SONARE_WITH_ARRANGEMENT)
+  (void)port_time_samples;
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  const midi::Ump ump =
+      midi::make_midi2_program_change(group, channel, program, bank_msb, bank_lsb, bank_valid != 0);
+  return sonare_engine_push_midi_input_ump(engine, ump.words, ump.word_count, port_time_samples);
+#endif
+}
+
 SonareError sonare_engine_set_midi_destination_external(SonareRealtimeEngine* engine,
                                                         uint32_t destination_id, int external) {
   SONARE_C_API_ENTRY;
