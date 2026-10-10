@@ -205,7 +205,7 @@ export function masteringRepairDenoiseClassicalLinked(
 ): MasteringRepairDenoiseClassicalLinkedResult {
   const request: MasteringRepairDenoiseClassicalLinkedRequest = Array.isArray(channels)
     ? { channels, sampleRate, ...config }
-    : channels;
+    : requestObject('masteringRepairDenoiseClassicalLinked', channels, 'request', true);
   assertAudioChannels(
     'masteringRepairDenoiseClassicalLinked',
     request.channels,

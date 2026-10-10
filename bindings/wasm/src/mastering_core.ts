@@ -531,7 +531,7 @@ export function masteringProcess(
   const request =
     typeof processorName === 'string'
       ? { processorName, samples: samples as Float32Array, sampleRate, params }
-      : processorName;
+      : requestObject('masteringProcess', processorName, 'request', true);
   assertString('masteringProcess', request.processorName, 'processorName');
   assertAudioInput('masteringProcess', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringProcess(
@@ -568,7 +568,7 @@ export function masteringProcessStereo(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringProcessStereo', processorName, 'request', true);
   assertString('masteringProcessStereo', request.processorName, 'processorName');
   assertAudioInput('masteringProcessStereo', request.left, request.sampleRate ?? 22050, {}, 'left');
   assertAudioInput(
@@ -619,7 +619,7 @@ export function masteringPairProcess(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringPairProcess', processorName, 'request', true);
   assertString('masteringPairProcess', request.processorName, 'processorName');
   assertAudioInput(
     'masteringPairProcess',
@@ -680,7 +680,7 @@ export function masteringPairProcessStereo(
           sampleRate,
           params,
         }
-      : processorName;
+      : requestObject('masteringPairProcessStereo', processorName, 'request', true);
   assertString('masteringPairProcessStereo', request.processorName, 'processorName');
   assertAudioInput(
     'masteringPairProcessStereo',
@@ -811,7 +811,7 @@ export function masteringPairAnalyze(
           sampleRate,
           params,
         }
-      : analysisName;
+      : requestObject('masteringPairAnalyze', analysisName, 'request', true);
   assertString('masteringPairAnalyze', request.analysisName, 'analysisName');
   assertAudioInput(
     'masteringPairAnalyze',
@@ -859,6 +859,7 @@ export function masteringPairAnalyze(
 export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
+  requestObject('masteringAbMatchLoudness', request, 'request', true);
   assertAudioInput(
     'masteringAbMatchLoudness',
     request.source,
@@ -884,6 +885,7 @@ export function masteringAbMatchLoudness(
 export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
+  requestObject('masteringAbMatchLoudnessStereo', request, 'request', true);
   assertAudioInput(
     'masteringAbMatchLoudnessStereo',
     request.sourceLeft,
@@ -978,7 +980,7 @@ export function masteringStereoAnalyze(
           sampleRate,
           params,
         }
-      : analysisName;
+      : requestObject('masteringStereoAnalyze', analysisName, 'request', true);
   assertString('masteringStereoAnalyze', request.analysisName, 'analysisName');
   assertAudioInput('masteringStereoAnalyze', request.left, request.sampleRate ?? 22050, {}, 'left');
   assertAudioInput(
@@ -1031,6 +1033,7 @@ export function masteringAssistantSuggest(
 export function masteringAssistantSuggestChain(
   request: MasteringAssistantParamsRequest,
 ): Record<string, number | boolean> {
+  requestObject('masteringAssistantSuggestChain', request, 'request', true);
   assertAudioInput('masteringAssistantSuggestChain', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringAssistantSuggestChain(
     request.samples,

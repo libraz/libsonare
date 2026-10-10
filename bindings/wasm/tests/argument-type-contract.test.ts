@@ -3,7 +3,8 @@
  * wrong-typed first argument apart from a request: `null`, a number, an array or
  * another typed array is a `TypeError` naming the field, never a property-read
  * failure ("Cannot read properties of null"). And a string the native layer reads
- * through embind is a `TypeError` too, never a raw `BindingError`.
+ * through embind is a `TypeError` too, never a raw `BindingError`. An entry point
+ * that takes only a request refuses a non-object request the same way.
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
@@ -192,6 +193,90 @@ const STRING_ARGUMENT: Array<[string, () => unknown, string]> = [
   ],
 ];
 
+/** Entry points that take a request object, alone or beside a positional form. */
+const REQUEST_ONLY: string[] = [
+  'alignTakeToReference',
+  'analyzePolyphonic',
+  'assignNoteTargets',
+  'autoTune',
+  'chirp',
+  'chordFunctions',
+  'decomposeNotePitch',
+  'decomposeStems',
+  'decomposeStemsLinked',
+  'detectBoundaries',
+  'estimateMeter',
+  'extractNotes',
+  'extractPercussiveEvents',
+  'fixFrames',
+  'masteringAbMatchLoudness',
+  'masteringAbMatchLoudnessStereo',
+  'masteringAssistantSuggestChain',
+  'masteringPairAnalyze',
+  'masteringPairProcess',
+  'masteringPairProcessStereo',
+  'masteringProcess',
+  'masteringProcessStereo',
+  'masteringRepairAnalyze',
+  'masteringRepairApply',
+  'masteringRepairDenoiseClassicalLinked',
+  'masteringRepairDereverbClassicalLinked',
+  'masteringStereoAnalyze',
+  'mergeNotes',
+  'meteringCrestFactorDbStereo',
+  'mixStereo',
+  'normalizeStereo',
+  'noteSegments',
+  'noteTargetsFromSmf',
+  'onsetBacktrack',
+  'renderNotes',
+  'renderPercussiveEvents',
+  'renderPlayback',
+  'restoreVocalEditSession',
+  'segmentAgglomerative',
+  'segmentCrossSimilarity',
+  'segmentLagToRecurrence',
+  'segmentPathEnhance',
+  'segmentRecurrenceMatrix',
+  'segmentRecurrenceToLag',
+  'segmentSubsegment',
+  'splitNote',
+  'splitSilenceCommon',
+  'splitSilenceCommonWithReport',
+  'streamingLoudnessGain',
+  'streamingLoudnessGainStereo',
+  'suggestMixScene',
+  'suggestMixSceneJson',
+  'synthesizeRir',
+  'tone',
+  'transcribe',
+];
+
+/** Request entry points whose positional form leads with a number or an array of planes. */
+const NUMBER_FIRST = new Set(['chirp', 'tone']);
+const ARRAY_FIRST = new Set([
+  'masteringRepairDenoiseClassicalLinked',
+  'masteringRepairDereverbClassicalLinked',
+  'mixStereo',
+]);
+
+/** Exports whose first argument is not a request, or that need a browser. */
+const NOT_A_REQUEST_ENTRY = new Set([
+  'init',
+  'createOpfsClipPageProvider',
+  'createOpfsClipPageWorker',
+  'hzToNote',
+  'masteringRepairNoiseBandBins',
+  'realtimeVoiceChangerPresetConfig',
+  'roomGeometryFromEstimate',
+  'scaleCorrectionSemitones',
+  'scaleMaskForMode',
+  'scaleQuantizeMidi',
+  'voiceCharacterPresetId',
+]);
+
+const RAW_PROPERTY_READ = /Cannot read propert|Cannot destructure|undefined is not|is not iterable/;
+
 describe('wrong-typed first argument of a buffer-or-request entry point', () => {
   beforeAll(async () => {
     await sonare.init();
@@ -218,5 +303,51 @@ describe('wrong-typed string argument', () => {
   it.each(STRING_ARGUMENT)('%s refuses a number as a TypeError', (name, call, argName) => {
     expect(call).toThrow(TypeError);
     expect(call).toThrow(`${name}: ${argName} must be a string`);
+  });
+});
+
+describe('wrong-typed request of a request entry point', () => {
+  beforeAll(async () => {
+    await sonare.init();
+  });
+
+  describe.each(REQUEST_ONLY)('%s', (name) => {
+    it.each([
+      ['null', null],
+      ['a number', 42],
+      ['an array', [1, 2, 3]],
+      ['a Float64Array', new Float64Array(8)],
+    ])('refuses %s as a TypeError', (label, value) => {
+      if (
+        (label === 'a number' && NUMBER_FIRST.has(name)) ||
+        (label === 'an array' && ARRAY_FIRST.has(name))
+      ) {
+        return; // a legitimate positional first argument
+      }
+      expect(() => fn(name)(value)).toThrow(TypeError);
+      expect(() => fn(name)(value)).toThrow(`${name}: request must be an object`);
+    });
+  });
+
+  it('leaves no export failing on a property read of a wrong-typed first argument', () => {
+    const raw: string[] = [];
+    for (const [name, entry] of Object.entries(sonare)) {
+      if (typeof entry !== 'function' || /^[A-Z]/.test(name) || NOT_A_REQUEST_ENTRY.has(name)) {
+        continue;
+      }
+      for (const value of [null, undefined, 42]) {
+        try {
+          const result = (entry as Fn)(value);
+          if (result instanceof Promise) {
+            result.catch(() => {});
+          }
+        } catch (error) {
+          if (error instanceof Error && RAW_PROPERTY_READ.test(error.message)) {
+            raw.push(`${name}(${String(value)}): ${error.message}`);
+          }
+        }
+      }
+    }
+    expect(raw).toEqual([]);
   });
 });

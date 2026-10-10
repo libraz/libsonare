@@ -23,7 +23,7 @@ import type {
   VocalUint64,
 } from './public_types_vocal_edit.js';
 import type { SonareModule } from './sonare.js';
-import { assertAudioInput, resolveSampleBound } from './validation.js';
+import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
 
 /** Native symbols registered by the full vocal-edit WASM binding. */
 export interface VocalWasmExports {
@@ -539,6 +539,7 @@ export function createVocalEditSession(request: VocalCreateRequest): VocalEditSe
 
 /** Open a new session from an exported state blob and the same source PCM. */
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
+  requestObject('restoreVocalEditSession', request, 'request', true);
   assertAudioInput('restoreVocalEditSession', request.samples, request.sampleRate);
   if (!(request.state instanceof Uint8Array)) {
     throw new TypeError('state must be a Uint8Array');

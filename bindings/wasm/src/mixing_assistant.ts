@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { MixAssistantOptions, MixAssistantResult, MixAssistantTrack } from './public_types.js';
-import { assertSampleRate, assertString } from './validation.js';
+import { assertSampleRate, assertString, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -108,6 +108,7 @@ function suggestJson(fnName: string, request: SuggestMixSceneRequest, sceneOnly:
  *   and the explanation behind each change
  */
 export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantResult {
+  requestObject('suggestMixScene', request, 'request', true);
   return JSON.parse(suggestJson('suggestMixScene', request, false)) as MixAssistantResult;
 }
 
@@ -123,6 +124,7 @@ export function suggestMixScene(request: SuggestMixSceneRequest): MixAssistantRe
  * @returns Scene JSON string
  */
 export function suggestMixSceneJson(request: SuggestMixSceneRequest): string {
+  requestObject('suggestMixSceneJson', request, 'request', true);
   return suggestJson('suggestMixSceneJson', request, true);
 }
 

@@ -35,7 +35,7 @@ export function tone(
   const request =
     typeof frequency === 'number'
       ? { frequency, sampleRate, duration, phase, amplitude }
-      : frequency;
+      : requestObject('tone', frequency, 'request', true);
   return requireModule().tone(
     request.frequency ?? 440,
     request.sampleRate ?? 22050,
@@ -60,7 +60,10 @@ export function chirp(
   duration = 1,
   linear = true,
 ): Float32Array {
-  const request = typeof fmin === 'number' ? { fmin, fmax, sampleRate, duration, linear } : fmin;
+  const request =
+    typeof fmin === 'number'
+      ? { fmin, fmax, sampleRate, duration, linear }
+      : requestObject('chirp', fmin, 'request', true);
   return requireModule().chirp(
     request.fmin ?? 440,
     request.fmax ?? 880,
@@ -550,6 +553,7 @@ function assertCommonSignals(fnName: string, signals: unknown): void {
  *   does for it.
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  requestObject('splitSilenceCommon', request, 'request', true);
   assertCommonSignals('splitSilenceCommon', request.signals);
   return requireModule().splitSilenceCommon(
     request.signals,
@@ -574,6 +578,7 @@ export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Arr
 export function splitSilenceCommonWithReport(
   request: SplitSilenceCommonRequest,
 ): SplitSilenceCommonWithReportResult {
+  requestObject('splitSilenceCommonWithReport', request, 'request', true);
   assertCommonSignals('splitSilenceCommonWithReport', request.signals);
   return requireModule().splitSilenceCommonWithReport(
     request.signals,
@@ -651,6 +656,7 @@ export function fixFrames(
   pad = true,
 ): Int32Array {
   if (!(frames instanceof Int32Array)) {
+    requestObject('fixFrames', frames, 'request', true);
     return fixFrames(frames.frames, frames.xMin, frames.xMax, frames.pad);
   }
   return requireModule().fixFrames(
@@ -668,6 +674,7 @@ export function onsetBacktrack(
   energy?: Float32Array,
 ): Int32Array {
   if (!(events instanceof Int32Array)) {
+    requestObject('onsetBacktrack', events, 'request', true);
     return onsetBacktrack(events.events, events.energy);
   }
   return requireModule().onsetBacktrack(events, energy as Float32Array);

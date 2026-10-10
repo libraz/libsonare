@@ -613,6 +613,7 @@ export function analyzeSections(
  * ```
  */
 export function detectBoundaries(request: DetectBoundariesRequest): BoundaryResult {
+  requestObject('detectBoundaries', request, 'request', true);
   const { samples, sampleRate = 22050 } = request;
   assertAudioInput('detectBoundaries', samples, sampleRate, request);
   // The request IS the options bag: every field is read straight off it, so an

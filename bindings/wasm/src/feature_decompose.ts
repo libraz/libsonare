@@ -283,6 +283,7 @@ export interface DecomposeStemsResult {
  * to the input.
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
+  requestObject('decomposeStems', request, 'request', true);
   assertAudioInput('decomposeStems', request.samples, request.sampleRate ?? 22050);
   return requireModule().decomposeStems(request.samples, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
@@ -343,6 +344,7 @@ export interface DecomposeStemsLinkedResult {
 export function decomposeStemsLinked(
   request: DecomposeStemsLinkedRequest,
 ): DecomposeStemsLinkedResult {
+  requestObject('decomposeStemsLinked', request, 'request', true);
   assertAudioChannels('decomposeStemsLinked', request.channels, request.sampleRate ?? 22050);
   return requireModule().decomposeStemsLinked(request.channels, request.sampleRate ?? 22050, {
     nComponents: request.nComponents,
@@ -533,6 +535,7 @@ export function hpssWithResidual(
 
 /** Column-wise cross-similarity (librosa.segment.cross_similarity). */
 export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): SegmentMatrix {
+  requestObject('segmentCrossSimilarity', request, 'request', true);
   validateSegmentMatrix('segmentCrossSimilarity', request.x, request.xRows, request.xCols, 'x');
   validateSegmentMatrix('segmentCrossSimilarity', request.y, request.yRows, request.yCols, 'y');
   if (request.xRows !== request.yRows) {
@@ -554,6 +557,7 @@ export function segmentCrossSimilarity(request: SegmentCrossSimilarityRequest): 
 
 /** Self-similarity recurrence matrix (librosa.segment.recurrence_matrix). */
 export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest): SegmentMatrix {
+  requestObject('segmentRecurrenceMatrix', request, 'request', true);
   validateSegmentMatrix(
     'segmentRecurrenceMatrix',
     request.data,
@@ -577,6 +581,7 @@ export function segmentRecurrenceMatrix(request: SegmentRecurrenceMatrixRequest)
 
 /** Convert an `n × n` recurrence matrix to a lag matrix. */
 export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): SegmentMatrix {
+  requestObject('segmentRecurrenceToLag', request, 'request', true);
   validateSegmentMatrix(
     'segmentRecurrenceToLag',
     request.recurrence,
@@ -593,12 +598,14 @@ export function segmentRecurrenceToLag(request: SegmentRecurrenceToLagRequest): 
 
 /** Convert a lag matrix back to an `n × n` recurrence matrix. */
 export function segmentLagToRecurrence(request: SegmentLagToRecurrenceRequest): SegmentMatrix {
+  requestObject('segmentLagToRecurrence', request, 'request', true);
   validateSegmentMatrix('segmentLagToRecurrence', request.lag, request.rows, request.lags, 'lag');
   return requireModule().segmentLagToRecurrence(request.lag, request.rows, request.lags);
 }
 
 /** Refine frame boundaries by clustering within each parent segment. */
 export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array {
+  requestObject('segmentSubsegment', request, 'request', true);
   validateSegmentMatrix('segmentSubsegment', request.data, request.rows, request.cols, 'data');
   assertPositiveInteger('segmentSubsegment', request.nSegments ?? 4, 'nSegments');
   return requireModule().segmentSubsegment(
@@ -612,6 +619,7 @@ export function segmentSubsegment(request: SegmentSubsegmentRequest): Int32Array
 
 /** Cluster feature columns and return one label per column. */
 export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int32Array {
+  requestObject('segmentAgglomerative', request, 'request', true);
   validateSegmentMatrix('segmentAgglomerative', request.data, request.rows, request.cols, 'data');
   assertPositiveInteger('segmentAgglomerative', request.k, 'k');
   return requireModule().segmentAgglomerative(
@@ -625,6 +633,7 @@ export function segmentAgglomerative(request: SegmentAgglomerativeRequest): Int3
 
 /** Enhance diagonal paths in an `n × n` recurrence matrix. */
 export function segmentPathEnhance(request: SegmentPathEnhanceRequest): SegmentMatrix {
+  requestObject('segmentPathEnhance', request, 'request', true);
   validateSegmentMatrix(
     'segmentPathEnhance',
     request.recurrence,

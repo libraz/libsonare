@@ -1,6 +1,6 @@
 import { projectModule } from './project_internal.js';
 import type { TranscribeOptions, TranscribeResult } from './project_types.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 /**
  * Canonical request form for {@link transcribe}.
@@ -80,6 +80,7 @@ export interface TranscribeRequest extends TranscribeOptions {
  * ```
  */
 export function transcribe(request: TranscribeRequest): TranscribeResult {
+  requestObject('transcribe', request, 'request', true);
   assertAudioInput('transcribe', request.samples, request.sampleRate);
   return projectModule().transcribe(
     request.samples,

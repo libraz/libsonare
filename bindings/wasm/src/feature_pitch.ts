@@ -225,6 +225,7 @@ export interface NoteSegmentsRequest {
  * and values below `voicedThreshold` (default `0.5`) are treated as unvoiced.
  */
 export function noteSegments(request: NoteSegmentsRequest): NoteSegment[] {
+  requestObject('noteSegments', request, 'request', true);
   return requireModule().noteSegments(request.f0Hz, request.voicedProb, request.frameRate, {
     segmentationThresholdCents: request.segmentationThresholdCents,
     minNoteMs: request.minNoteMs,

@@ -215,7 +215,7 @@ export function masteringRepairDereverbClassicalLinked(
 ): MasteringRepairDereverbClassicalLinkedResult {
   const request: MasteringRepairDereverbClassicalLinkedRequest = Array.isArray(channels)
     ? { channels, sampleRate, ...config }
-    : channels;
+    : requestObject('masteringRepairDereverbClassicalLinked', channels, 'request', true);
   assertAudioChannels(
     'masteringRepairDereverbClassicalLinked',
     request.channels,

@@ -218,6 +218,7 @@ export function meteringCrestFactorDb(
  * overstates the crest factor.
  */
 export function meteringCrestFactorDbStereo(request: MeteringStereoRequest): number {
+  requestObject('meteringCrestFactorDbStereo', request, 'request', true);
   assertAudioInput(
     'meteringCrestFactorDbStereo',
     request.left,

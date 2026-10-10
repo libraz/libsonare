@@ -436,6 +436,7 @@ export function pitchCorrectTimevarying(
  * @returns The corrected audio and the key it was tuned to
  */
 export function autoTune(request: AutoTuneRequest): AutoTuneResult {
+  requestObject('autoTune', request, 'request', true);
   assertAudioInput('autoTune', request.samples, request.sampleRate ?? 22050, request);
   const { samples, sampleRate, key = 'detect', validate: _validate, ...options } = request;
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {

@@ -8,7 +8,7 @@ import type {
 } from './public_types.js';
 import type { WasmPolyphonicAnalysis } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, resolveSampleBound } from './validation.js';
+import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
 
 /** Canonical request form for {@link analyzePolyphonic}. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions, ValidateOptions {
@@ -297,5 +297,6 @@ export class PolyphonicAnalysis {
  * ```
  */
 export function analyzePolyphonic(request: AnalyzePolyphonicRequest): PolyphonicAnalysis {
+  requestObject('analyzePolyphonic', request, 'request', true);
   return new PolyphonicAnalysis(request);
 }

@@ -156,6 +156,7 @@ export interface NormalizeStereoResult {
  * ```
  */
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
+  requestObject('normalizeStereo', request, 'request', true);
   assertAudioInput('normalizeStereo', request.left, request.sampleRate ?? 22050, request, 'left');
   assertAudioInput('normalizeStereo', request.right, request.sampleRate ?? 22050, request, 'right');
   if (request.left.length !== request.right.length) {
@@ -232,6 +233,7 @@ export interface StreamingLoudnessGainStereoRequest {
 export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,
 ): StreamingLoudnessGainResult {
+  requestObject('streamingLoudnessGain', request, 'request', true);
   assertAudioInput('streamingLoudnessGain', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringStreamingLoudnessGain(
     request.samples,
@@ -244,6 +246,7 @@ export function streamingLoudnessGain(
 export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
+  requestObject('streamingLoudnessGainStereo', request, 'request', true);
   assertAudioInput(
     'streamingLoudnessGainStereo',
     request.left,
@@ -291,6 +294,7 @@ export interface MasterAudioStereoRequest {
 }
 
 function masterAudioRequest(
+  fnName: string,
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
@@ -306,10 +310,11 @@ function masterAudioRequest(
       onProgress,
     };
   }
-  return requestOrSamples;
+  return requestObject(fnName, requestOrSamples);
 }
 
 function masterAudioStereoRequest(
+  fnName: string,
   requestOrLeft: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined,
   sampleRate: number,
@@ -327,7 +332,7 @@ function masterAudioStereoRequest(
       onProgress,
     };
   }
-  return requestOrLeft;
+  return requestObject(fnName, requestOrLeft, 'left');
 }
 
 /**
@@ -587,7 +592,14 @@ export function masterAudio(
   overrides: MasteringChainConfig = {},
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
-  const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  const request = masterAudioRequest(
+    'masterAudio',
+    samples,
+    sampleRate,
+    presetName,
+    overrides,
+    onProgress,
+  );
   assertString('masterAudio', request.preset ?? 'pop', 'preset');
   assertAudioInput('masterAudio', request.samples, request.sampleRate ?? 22050);
   const flat = flattenChainConfig(request.overrides ?? {});
@@ -638,6 +650,7 @@ export function masterAudioStereo(
   onProgress?: ProgressCallback,
 ): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
+    'masterAudioStereo',
     left,
     right,
     sampleRate,
@@ -693,7 +706,14 @@ export function masterAudioWithProgress(
   overrides: MasteringChainConfig | null = null,
   onProgress?: ProgressCallback,
 ): MasteringChainResult {
-  const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
+  const request = masterAudioRequest(
+    'masterAudioWithProgress',
+    samples,
+    sampleRate,
+    presetName,
+    overrides,
+    onProgress,
+  );
   assertString('masterAudioWithProgress', request.preset ?? 'pop', 'preset');
   assertAudioInput('masterAudioWithProgress', request.samples, request.sampleRate ?? 22050);
   if (!request.onProgress) {
@@ -732,6 +752,7 @@ export function masterAudioStereoWithProgress(
   onProgress?: ProgressCallback,
 ): MasteringChainStereoResult {
   const request = masterAudioStereoRequest(
+    'masterAudioStereoWithProgress',
     left,
     right,
     sampleRate,

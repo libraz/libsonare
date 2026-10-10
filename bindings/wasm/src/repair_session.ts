@@ -13,7 +13,7 @@ import type {
   DenoiseReport,
   DereverbReport,
 } from './public_types_repair.js';
-import { assertAudioChannels } from './validation.js';
+import { assertAudioChannels, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -140,6 +140,7 @@ function toStageReports(entry: StageReportsJson): MasteringRepairStageReports {
 export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
 ): MasteringRepairAnalysis {
+  requestObject('masteringRepairAnalyze', request, 'request', true);
   assertAudioChannels(
     'masteringRepairAnalyze',
     request.channels,
@@ -181,6 +182,7 @@ export function masteringRepairAnalyze(
 export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
 ): MasteringRepairApplyResult {
+  requestObject('masteringRepairApply', request, 'request', true);
   assertAudioChannels(
     'masteringRepairApply',
     request.channels,

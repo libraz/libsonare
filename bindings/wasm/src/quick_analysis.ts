@@ -443,6 +443,7 @@ export function chordFunctions<T extends ChordFunctionsInput>(
 export function chordFunctions(
   request: ChordFunctionsRequest<ChordFunctionsInput>,
 ): FunctionalChord<ChordFunctionsInput>[] {
+  requestObject('chordFunctions', request, 'request', true);
   const entries = 'chords' in request.chords ? request.chords.chords : request.chords;
   const labels = requireModule().chordFunctions(
     entries,
@@ -708,6 +709,7 @@ export interface EstimateMeterRequest {
  * spans of different lengths are not directly comparable.
  */
 export function estimateMeter(request: EstimateMeterRequest): MeterEstimate {
+  requestObject('estimateMeter', request, 'request', true);
   return requireModule().estimateMeter(request.beatTimes, request.beatStrengths, request);
 }
 
@@ -783,6 +785,7 @@ export function detectAcoustic(
  *   code, such as `acoustic.source_outside_room`.
  */
 export function synthesizeRir(options: RirSynthOptions = {}): RirResult {
+  requestObject('synthesizeRir', options, 'request', true);
   const module = requireModule();
   if (typeof module.synthesizeRir !== 'function') {
     throw new SonareError(

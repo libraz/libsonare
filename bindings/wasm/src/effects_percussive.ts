@@ -7,7 +7,7 @@ import { resolveEntryTimes } from './_effects_common.js';
 import { getSonareModule } from './module_state.js';
 import type { PercussiveEvent, PercussiveEventInput } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertPercussiveSeparation } from './validation.js';
+import { assertAudioInput, assertPercussiveSeparation, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -159,6 +159,7 @@ export interface RenderPercussiveEventsRequest
 export function extractPercussiveEvents(
   request: ExtractPercussiveEventsRequest,
 ): PercussiveEvent[] {
+  requestObject('extractPercussiveEvents', request, 'request', true);
   const samples = asFloat32(request.samples);
   assertAudioInput('extractPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('extractPercussiveEvents', request);
@@ -212,6 +213,7 @@ export function extractPercussiveEvents(
  * ```
  */
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
+  requestObject('renderPercussiveEvents', request, 'request', true);
   const samples = asFloat32(request.samples);
   assertAudioInput('renderPercussiveEvents', samples, request.sampleRate, request);
   assertPercussiveSeparation('renderPercussiveEvents', request);

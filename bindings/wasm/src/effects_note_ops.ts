@@ -370,6 +370,7 @@ export function noteMove(
  * ```
  */
 export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
+  requestObject('extractNotes', request, 'request', true);
   const voicedF32 = assertNoteTrack('extractNotes', request);
   return requireModule().extractNotes(
     request.samples,
@@ -441,6 +442,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  * ```
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
+  requestObject('renderNotes', request, 'request', true);
   assertAudioInput('renderNotes', request.samples, request.sampleRate, request);
   if (!Array.isArray(request.notes)) {
     throw new TypeError('renderNotes: notes must be an array');
@@ -505,6 +507,7 @@ export function renderNotes(request: RenderNotesRequest): Float32Array {
  * ```
  */
 export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDecompositionResult {
+  requestObject('decomposeNotePitch', request, 'request', true);
   if (!(request.f0Hz instanceof Float32Array)) {
     throw new TypeError('decomposeNotePitch: f0Hz must be a Float32Array');
   }
@@ -570,6 +573,7 @@ export function decomposeNotePitch(request: DecomposeNotePitchRequest): PitchDec
  * ```
  */
 export function splitNote(request: SplitNoteRequest): NoteObject[] {
+  requestObject('splitNote', request, 'request', true);
   const voicedF32 = assertNoteTrack('splitNote', request);
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('splitNote', request.notes, 'notes', request.sampleRate, false)
@@ -628,6 +632,7 @@ export function splitNote(request: SplitNoteRequest): NoteObject[] {
  * ```
  */
 export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
+  requestObject('mergeNotes', request, 'request', true);
   const voicedF32 = assertNoteTrack('mergeNotes', request);
   const notes = Array.isArray(request.notes)
     ? resolveEntryTimes('mergeNotes', request.notes, 'notes', request.sampleRate, false)
@@ -676,6 +681,7 @@ export function mergeNotes(request: MergeNotesRequest): NoteObject[] {
  * ```
  */
 export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarget[] {
+  requestObject('noteTargetsFromSmf', request, 'request', true);
   const module = requireModule();
   if (typeof module.noteTargetsFromSmf !== 'function') {
     throw new SonareError(
@@ -733,6 +739,7 @@ export function noteTargetsFromSmf(request: NoteTargetsFromSmfRequest): NoteTarg
  * ```
  */
 export function assignNoteTargets(request: AssignNoteTargetsRequest): NoteTargetAssignResult {
+  requestObject('assignNoteTargets', request, 'request', true);
   return requireModule().assignNoteTargets(
     request.notes,
     request.sampleRate,

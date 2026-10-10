@@ -7,7 +7,7 @@ import type {
   RenderPlaybackResult,
 } from './public_types_playback.js';
 import type { WasmHrtfSet, WasmPlaybackLoudnessMeter, WasmPlaybackRenderer } from './sonare.js';
-import { assertAudioInput } from './validation.js';
+import { assertAudioInput, requestObject } from './validation.js';
 
 function configJsonText(config: PlaybackRendererConfig | string): string {
   return typeof config === 'string' ? config : JSON.stringify(config);
@@ -259,6 +259,7 @@ export class PlaybackLoudnessMeter {
  * `RangeError`.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
+  requestObject('renderPlayback', request, 'request', true);
   assertAudioInput('renderPlayback', request.samples, request.sampleRate);
   return getSonareModule().renderPlayback(
     request.samples,
