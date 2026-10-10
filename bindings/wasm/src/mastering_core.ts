@@ -1,5 +1,4 @@
-import { resolveProcessorParams } from './_processor_params.js';
-import { ErrorCode, SonareError } from './errors.js';
+import { resolveInsertParams, resolveProcessorParams } from './_processor_params.js';
 import { getSonareModule } from './module_state.js';
 import type {
   LoudnessMatchResult,
@@ -9,6 +8,7 @@ import type {
   MasteringInsertParamChoice,
   MasteringInsertParamDependency,
   MasteringInsertParamScale,
+  MasteringInsertParams,
   MasteringInsertParamUnit,
   MasteringInsertSlot,
   MasteringOptions,
@@ -370,35 +370,6 @@ export function masteringAmpPresetCatalog(): MasteringAmpPresetCatalogEntry[] {
 }
 
 /**
- * Reject a `params` value {@link masteringInsertTiming} cannot serialize:
- * anything other than a finite number or a boolean, naming the offending key.
- * Booleans serialize as JSON booleans, not 0/1, since the C++ reader accepts
- * `is_bool` alongside a number.
- */
-function insertTimingParamsToJson(
-  fnName: string,
-  processor: string,
-  params: MasteringSoloProcessorParams,
-) {
-  const out: Record<string, number | boolean> = {};
-  for (const [key, value] of Object.entries(resolveProcessorParams(processor, params))) {
-    if (typeof value === 'boolean') {
-      out[key] = value;
-      continue;
-    }
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      throw new SonareError(
-        ErrorCode.InvalidParameter,
-        'InvalidParameter',
-        `${fnName}: params.${key} must be a finite number or boolean`,
-      );
-    }
-    out[key] = value;
-  }
-  return JSON.stringify(out);
-}
-
-/**
  * Latency and tail of insert `name` built from `params` and prepared at
  * `sampleRate` (`mastering::api::insert_timing`). Answers for the exact
  * instance a scene or strip would build — an oversampled saturation path, a
@@ -413,20 +384,23 @@ function insertTimingParamsToJson(
  * ask for.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
- * @param params - Flat parameter values, keyed as in {@link masteringInsertParamInfo};
- *   an enum-valued key also takes its `choices` name.
+ * @param params - Parameter values, keyed as in {@link masteringInsertParamInfo}
+ *   and shaped as the document a scene or strip insert is built from: each
+ *   value matches its key's declared `type` (a finite number or boolean, the
+ *   `choices` name of an `enum` key, a string for a `string` key, a list of
+ *   finite numbers for an `array` key).
  * @param sampleRate - Rate the insert is prepared at.
- * @throws For an unknown `name`, a key the insert does not read, a value its
- *   construction or `prepare` refuses, or a `params` value that is not a
- *   finite number or boolean.
+ * @throws For an unknown `name`, a key the insert does not read, or a value its
+ *   construction or `prepare` refuses; a `TypeError` for a value of the wrong
+ *   type, a `RangeError` for a non-finite number.
  */
 export function masteringInsertTiming(
   name: string,
-  params: MasteringSoloProcessorParams,
+  params: MasteringInsertParams,
   sampleRate: number,
 ): MasteringInsertTiming {
   assertString('masteringInsertTiming', name, 'name');
-  const json = insertTimingParamsToJson('masteringInsertTiming', name, params);
+  const json = JSON.stringify(resolveInsertParams('masteringInsertTiming', name, params));
   return requireModule().masteringInsertTiming(name, json, sampleRate);
 }
 

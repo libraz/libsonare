@@ -451,6 +451,17 @@ export type MasteringProcessorParams = Record<string, number | boolean>;
  */
 export type MasteringSoloProcessorParams = Record<string, number | boolean | string>;
 
+/** An insert parameter value: a solo value, or a list of numbers for an `array`-typed key. */
+export type MasteringInsertParamValue = number | boolean | string | readonly number[];
+
+/**
+ * Insert parameters, keyed as in `masteringInsertParamInfo`; the shape an insert
+ * is built from. Each value matches its key's declared `type`: a number or
+ * boolean, an enum name, a string for a `string` key, a list of numbers for an
+ * `array` key.
+ */
+export type MasteringInsertParams = Record<string, MasteringInsertParamValue>;
+
 /**
  * Params accepted by the assistant entry points. Every key is numeric except
  * two NAMES: `targetPlatform`, a delivery target (`'broadcast'`, `'podcast'`,

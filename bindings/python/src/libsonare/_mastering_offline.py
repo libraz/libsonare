@@ -5,7 +5,7 @@ from __future__ import annotations
 import ctypes
 import json
 import math
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import Any, cast
 
 from ._cancellation import CancellationState, make_cancel_trampoline
@@ -114,6 +114,49 @@ def _processor_params(
         key: _enum_value(processor, key, value) if isinstance(value, str) else value
         for key, value in params.items()
     }
+
+
+def _insert_params(
+    processor: str, params: Mapping[str, float | int | bool | str | Sequence[float]]
+) -> dict[str, float | bool | str | list[float]]:
+    """Check an insert's ``params`` against the ``type`` each descriptor declares.
+
+    A ``string`` key takes a ``str``, an ``array`` key a sequence of finite
+    numbers; every other key takes a finite number or bool, or an enum name
+    resolved as :func:`_processor_params` does. A wrong type is a ``TypeError``,
+    a non-finite number a ``SonareValueError``. A key the processor does not
+    declare is left to the core, which refuses it by name.
+    """
+    kinds = {info["name"]: info["type"] for info in mastering_insert_param_info(processor)}
+    out: dict[str, float | bool | str | list[float]] = {}
+    for key, value in params.items():
+        kind = kinds.get(key)
+        if kind == "string":
+            if not isinstance(value, str):
+                raise TypeError(f"params[{key!r}] must be a str")
+            out[key] = value
+        elif kind == "array":
+            if isinstance(value, str | bytes | Mapping) or not isinstance(value, Iterable):
+                raise TypeError(f"params[{key!r}] must be a sequence of numbers")
+            items = list(value)
+            if any(isinstance(item, bool) or not isinstance(item, int | float) for item in items):
+                raise TypeError(f"params[{key!r}] must be a sequence of numbers")
+            if not all(math.isfinite(item) for item in items):
+                raise SonareValueError(f"params[{key!r}] must contain only finite numbers")
+            out[key] = [float(item) for item in items]
+        elif isinstance(value, str):
+            if kind != "enum":
+                raise TypeError(f"params[{key!r}] must be a number or bool (got a str)")
+            out[key] = _enum_value(processor, key, value)
+        elif isinstance(value, bool):
+            out[key] = value
+        elif isinstance(value, int | float):
+            if not math.isfinite(value):
+                raise SonareValueError(f"params[{key!r}] must be a finite number")
+            out[key] = float(value)
+        else:
+            raise TypeError(f"params[{key!r}] must be a number, bool or enum name")
+    return out
 
 
 def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
@@ -305,7 +348,7 @@ def mastering_insert_param_info(
 
 
 def mastering_insert_timing(
-    name: str, params: Mapping[str, float | bool | str], sample_rate: int
+    name: str, params: Mapping[str, float | bool | str | Sequence[float]], sample_rate: int
 ) -> MasteringInsertTiming:
     """Return the latency and tail of one insert built from ``params`` at ``sample_rate``.
 
@@ -317,29 +360,18 @@ def mastering_insert_timing(
     ``latencySamples`` and ``tailSamples`` are this query at default
     parameters and 48 kHz.
 
-    ``params`` is keyed as in :func:`mastering_insert_param_info`; each value
-    must be a bool or a finite number, or the ``choices`` name of an enum-valued
-    key. A key the insert does not read is
-    refused rather than ignored, because an ignored key would answer for a
-    configuration the caller did not ask for.
+    ``params`` is keyed as in :func:`mastering_insert_param_info` and shaped as
+    the document a scene or strip insert is built from; each value matches its
+    key's declared ``type``: a bool or finite number, the ``choices`` name of an
+    ``enum`` key, a ``str`` for a ``string`` key, a sequence of finite numbers
+    for an ``array`` key. A wrong type is a ``TypeError``. A key the insert does
+    not read is refused rather than ignored, because an ignored key would answer
+    for a configuration the caller did not ask for.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_insert_timing"):
         raise _not_supported("libsonare was built without mastering support")
-    payload: dict[str, float | bool] = {}
-    for key, value in (_processor_params(name, params) or {}).items():
-        if isinstance(value, bool):
-            payload[key] = value
-            continue
-        if isinstance(value, int | float):
-            number = float(value)
-            if not math.isfinite(number):
-                raise SonareValueError(f"mastering_insert_timing: {key} must be a finite number")
-            payload[key] = number
-            continue
-        raise SonareValueError(
-            f"mastering_insert_timing: {key} must be a boolean or a finite number"
-        )
+    payload = _insert_params(name, params)
     params_json = _utf8_arg(json.dumps(payload, allow_nan=False), "params")
     out_latency = ctypes.c_int(0)
     out_tail = ctypes.c_int(0)

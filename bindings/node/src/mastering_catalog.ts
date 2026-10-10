@@ -1,4 +1,4 @@
-import { type MasteringSoloProcessorParams, resolveProcessorParams } from './_processor_params.js';
+import { type MasteringInsertParams, resolveInsertParams } from './_processor_params.js';
 import { addon } from './native.js';
 import type {
   MasteringInsertParamChoice,
@@ -12,7 +12,6 @@ import type {
   SoloProcessor,
   StereoAnalysis,
 } from './types.js';
-import { assertFiniteScalar } from './validation.js';
 
 export function masteringPresetNames(): MasteringPreset[] {
   return addon.masteringPresetNames();
@@ -207,22 +206,18 @@ export interface MasteringInsertTiming {
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  * @param params - Flat parameter values, keyed as in
- *   {@link masteringInsertParamInfo}. Each value must be a finite number or a
- *   boolean, or the `choices` name of an enum-valued key.
+ *   {@link masteringInsertParamInfo}. Each value must match the key's declared
+ *   `type`: a finite number or boolean, the `choices` name of an `enum` key, a
+ *   string for a `string` key, or a list of finite numbers for an `array` key.
+ *   The same document a scene or strip insert is built from.
  * @param sampleRate - Rate the insert is prepared at.
  */
 export function masteringInsertTiming(
   name: string,
-  params: MasteringSoloProcessorParams,
+  params: MasteringInsertParams,
   sampleRate: number,
 ): MasteringInsertTiming {
-  const resolved = resolveProcessorParams(name, params);
-  for (const [key, value] of Object.entries(resolved)) {
-    if (typeof value === 'boolean') {
-      continue;
-    }
-    assertFiniteScalar('masteringInsertTiming', value, key);
-  }
+  const resolved = resolveInsertParams('masteringInsertTiming', name, params);
   return addon.masteringInsertTiming(
     name,
     JSON.stringify(resolved),

@@ -164,3 +164,75 @@ def test_causal_repair_stages_reach_the_generic_insert_path() -> None:
     assert "quantile" not in [
         choice["name"] for choice in params["noiseEstimator"]["choices"] or []
     ]
+
+
+def _scene_timing(processor: str, params: dict) -> tuple[int, int]:
+    """Latency and tail of the insert a scene builds from ``params``."""
+    import json
+
+    import libsonare
+
+    scene = {
+        "version": 1,
+        "strips": [
+            {"id": "a", "inserts": [{"slot": "pre", "processor": processor, "params": params}]}
+        ],
+        "buses": [{"id": "master", "role": "master", "inserts": []}],
+        "connections": [{"source": "a", "destination": "master"}],
+    }
+    with libsonare.Mixer.from_scene_json(json.dumps(scene), 48000) as mixer:
+        return mixer.latency_samples(), mixer.tail_samples()
+
+
+def _timing_pair(processor: str, params: dict) -> tuple[int, int]:
+    import libsonare
+
+    timing = libsonare.mastering_insert_timing(processor, params, 48000)
+    return timing["latencySamples"], timing["tailSamples"]
+
+
+def test_insert_timing_matches_the_constructed_insert_for_an_array_key() -> None:
+    """An array-typed key travels as an array and reproduces the scene-built insert."""
+    params = {"bandAbsorption": [0.1] * 6}
+    pair = _timing_pair("effects.acoustic.roomMorph", params)
+    assert pair == _scene_timing("effects.acoustic.roomMorph", params)
+    assert pair[1] != _timing_pair("effects.acoustic.roomMorph", {})[1]
+
+
+def test_insert_timing_matches_the_constructed_insert_for_a_string_key() -> None:
+    """A string-typed key travels as a string and reproduces the scene-built insert."""
+    import base64
+    import struct
+
+    cab_ir = base64.b64encode(struct.pack("<2000f", 0.5, *([0.0] * 1999))).decode()
+    params = {"cabIrF32Base64": cab_ir, "cabIrSampleRate": 48000}
+    pair = _timing_pair("saturation.ampSim", params)
+    assert pair == _scene_timing("saturation.ampSim", params)
+    assert pair[1] != _timing_pair("saturation.ampSim", {})[1]
+    named = {"preset": "britStack"}
+    assert _timing_pair("saturation.ampSim", named) == _scene_timing("saturation.ampSim", named)
+
+
+def test_insert_timing_refuses_a_value_that_does_not_match_the_key_type() -> None:
+    """A wrong type is a TypeError, a non-finite number a SonareValueError."""
+    import libsonare
+
+    def timing(name: str, params: dict) -> None:
+        libsonare.mastering_insert_timing(name, params, 48000)
+
+    with pytest.raises(TypeError, match="bandAbsorption"):
+        timing("effects.acoustic.roomMorph", {"bandAbsorption": 0.1})
+    with pytest.raises(TypeError, match="bandAbsorption"):
+        timing("effects.acoustic.roomMorph", {"bandAbsorption": ["a"]})
+    with pytest.raises(TypeError, match="bandAbsorption"):
+        timing("effects.acoustic.roomMorph", {"bandAbsorption": "0.1"})
+    with pytest.raises(TypeError, match="preset"):
+        timing("saturation.ampSim", {"preset": 3})
+    with pytest.raises(TypeError, match="driveDb"):
+        timing("saturation.softClipper", {"driveDb": [1.0]})
+    with pytest.raises(TypeError, match="driveDb"):
+        timing("saturation.softClipper", {"driveDb": "loud"})
+    with pytest.raises(libsonare.SonareValueError, match="bandAbsorption"):
+        timing("effects.acoustic.roomMorph", {"bandAbsorption": [float("nan")]})
+    with pytest.raises(libsonare.SonareError):
+        timing("saturation.ampSim", {"preset": "nope"})

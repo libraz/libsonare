@@ -2,7 +2,11 @@
 // share stay private to their _common modules rather than reaching the public
 // surface.
 export type { EffectSamplesRequest } from './_effects_common.js';
-export type { MasteringSoloProcessorParams } from './_processor_params.js';
+export type {
+  MasteringInsertParams,
+  MasteringInsertParamValue,
+  MasteringSoloProcessorParams,
+} from './_processor_params.js';
 export type { MasteringRepairSamplesRequest } from './_repair_common.js';
 export * from './effects_note_ops.js';
 export * from './effects_percussive.js';
