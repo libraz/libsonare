@@ -893,6 +893,16 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       }),
   },
   {
+    jsName: 'setTrackSends',
+    invoke: (o) =>
+      withEngine((engine) => {
+        engine.setTrackBuses([{ busId: 1 }]);
+        engine.setTrackLanes([1]);
+        engine.setTrackSends(1, [{ ...o, busId: 1 }]);
+        return 'accepted';
+      }),
+  },
+  {
     jsName: 'setTrackBuses',
     invoke: (o) =>
       withEngine((engine) => {

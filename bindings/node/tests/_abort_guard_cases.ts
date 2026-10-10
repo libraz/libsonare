@@ -436,6 +436,27 @@ export const CASES: AbortGuardCase[] = [
       ),
   },
   {
+    name: 'RealtimeEngine.setTrackSends',
+    missingRequired: [
+      {
+        field: 'sends[].busId',
+        call: () => withEngine((e) => e.setTrackSends(1, [{}])),
+      },
+    ],
+    badArguments: [
+      { argument: 'trackId', call: (e) => e.setTrackSends('1', []) },
+      { argument: 'sends', call: (e) => e.setTrackSends(TRACK_ID, undefined) },
+    ],
+  },
+  {
+    name: 'RealtimeEngine.setTrackOutputBus',
+    missingRequired: [],
+    badArguments: [
+      { argument: 'trackId', call: (e) => e.setTrackOutputBus('1', 0) },
+      { argument: 'busId', call: (e) => e.setTrackOutputBus(TRACK_ID, '1') },
+    ],
+  },
+  {
     name: 'RealtimeEngine.setTrackBuses',
     missingRequired: [{ field: 'busId', call: () => withEngine((e) => e.setTrackBuses([{}])) }],
     badOptional: () =>

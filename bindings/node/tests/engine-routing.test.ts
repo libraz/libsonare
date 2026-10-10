@@ -121,6 +121,186 @@ describe('RealtimeEngine bus routing and sends', () => {
   });
 });
 
+/** Renders `blocks` blocks from the top and returns the first channel's samples. */
+function renderBlocks(engine: RealtimeEngine, blocks = 12): Float32Array {
+  engine.seekSample(0);
+  engine.play();
+  const out = new Float32Array(blocks * BLOCK);
+  for (let b = 0; b < blocks; b += 1) {
+    out.set(engine.process([new Float32Array(BLOCK)])[0], b * BLOCK);
+  }
+  return out;
+}
+
+function expectSameRender(a: Float32Array, b: Float32Array): void {
+  expect(a.length).toBe(b.length);
+  for (let i = 0; i < a.length; i += 1) {
+    expect(Math.abs(a[i] - b[i])).toBeLessThanOrEqual(1e-6);
+  }
+}
+
+/** Two declared buses and one DC track (10) on the master mix, no sends. */
+function partialOpsEngine(): RealtimeEngine {
+  const engine = new RealtimeEngine(48000, BLOCK);
+  engine.setClips([
+    {
+      id: 1,
+      trackId: 10,
+      channels: [new Float32Array(FRAMES).fill(0.5)],
+      startPpq: 0,
+      lengthSamples: FRAMES,
+    },
+    {
+      id: 2,
+      trackId: 11,
+      channels: [new Float32Array(FRAMES).fill(0.25)],
+      startPpq: 0,
+      lengthSamples: FRAMES,
+    },
+  ]);
+  engine.setTrackBuses([
+    { busId: 1, gainDb: 0 },
+    { busId: 2, gainDb: -6 },
+  ]);
+  engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
+  return engine;
+}
+
+const peak = (samples: Float32Array): number =>
+  samples.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+
+describe('RealtimeEngine per-lane sends and output bus', () => {
+  it('setTrackSends matches setTrackLanes with the same final configuration', () => {
+    const partial = partialOpsEngine();
+    const replaced = partialOpsEngine();
+    partial.setTrackSends(10, [{ busId: 2, levelDb: -3 }]);
+    replaced.setTrackLanes([{ trackId: 10, sends: [{ busId: 2, levelDb: -3 }] }, { trackId: 11 }]);
+    const withSend = renderBlocks(partial);
+    expectSameRender(withSend, renderBlocks(replaced));
+    expect(peak(withSend)).toBeGreaterThan(0.1);
+
+    const baseline = partialOpsEngine();
+    expect(peak(withSend)).toBeGreaterThan(peak(renderBlocks(baseline)) * 1.1);
+    partial.destroy();
+    replaced.destroy();
+    baseline.destroy();
+  });
+
+  it('setTrackSends leaves the output bus and the other lanes unchanged', () => {
+    const partial = partialOpsEngine();
+    const replaced = partialOpsEngine();
+    partial.setTrackLanes([{ trackId: 10, outputBusId: 1 }, { trackId: 11 }]);
+    replaced.setTrackLanes([{ trackId: 10, outputBusId: 1 }, { trackId: 11 }]);
+    partial.setTrackSends(10, [{ busId: 2 }]);
+    replaced.setTrackLanes([
+      { trackId: 10, outputBusId: 1, sends: [{ busId: 2 }] },
+      { trackId: 11 },
+    ]);
+    expectSameRender(renderBlocks(partial), renderBlocks(replaced));
+    partial.destroy();
+    replaced.destroy();
+  });
+
+  it('setTrackSends with an empty array clears the lane sends', () => {
+    const partial = partialOpsEngine();
+    const replaced = partialOpsEngine();
+    partial.setTrackSends(10, [{ busId: 2 }]);
+    replaced.setTrackLanes([{ trackId: 10, sends: [{ busId: 2 }] }, { trackId: 11 }]);
+    partial.setTrackSends(10, []);
+    replaced.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
+    expectSameRender(renderBlocks(partial), renderBlocks(replaced));
+    partial.destroy();
+    replaced.destroy();
+  });
+
+  it('setTrackOutputBus matches setTrackLanes and 0 returns to the master mix', () => {
+    const partial = partialOpsEngine();
+    const replaced = partialOpsEngine();
+    partial.setTrackSends(10, [{ busId: 2 }]);
+    replaced.setTrackLanes([{ trackId: 10, sends: [{ busId: 2 }] }, { trackId: 11 }]);
+    partial.setTrackOutputBus(10, 1);
+    replaced.setTrackLanes([
+      { trackId: 10, outputBusId: 1, sends: [{ busId: 2 }] },
+      { trackId: 11 },
+    ]);
+    expectSameRender(renderBlocks(partial), renderBlocks(replaced));
+
+    partial.setTrackOutputBus(10, 0);
+    replaced.setTrackLanes([{ trackId: 10, sends: [{ busId: 2 }] }, { trackId: 11 }]);
+    expectSameRender(renderBlocks(partial), renderBlocks(replaced));
+    partial.destroy();
+    replaced.destroy();
+  });
+
+  it('refuses an unknown track with a coded error naming the id', () => {
+    const engine = partialOpsEngine();
+    const before = renderBlocks(engine);
+    for (const call of [
+      () => engine.setTrackSends(99, []),
+      () => engine.setTrackOutputBus(99, 0),
+    ]) {
+      let error: unknown;
+      try {
+        call();
+      } catch (thrown) {
+        error = thrown;
+      }
+      expect(isSonareError(error)).toBe(true);
+      if (!isSonareError(error)) {
+        throw new Error('expected SonareError');
+      }
+      expect(error.code).toBe(ErrorCode.InvalidParameter);
+      expect(error.message).toMatch(/unknown track id 99/);
+    }
+    expectSameRender(renderBlocks(engine), before);
+    engine.destroy();
+  });
+
+  it('refuses an undeclared bus, a duplicate send bus and an out-of-range level', () => {
+    const engine = partialOpsEngine();
+    engine.setTrackSends(10, [{ busId: 2 }]);
+    const before = renderBlocks(engine);
+    expectSonareErrorCode(
+      () => engine.setTrackSends(10, [{ busId: 7 }]),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(() => engine.setTrackOutputBus(10, 7), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(
+      () => engine.setTrackSends(10, [{ busId: 1 }, { busId: 1 }]),
+      ErrorCode.InvalidParameter,
+    );
+    expectSonareErrorCode(
+      () => engine.setTrackSends(10, [{ busId: 1, levelDb: 100 }]),
+      ErrorCode.InvalidParameter,
+    );
+    expectSameRender(renderBlocks(engine), before);
+    engine.destroy();
+  });
+
+  it('refuses a non-array sends instead of clearing', () => {
+    const engine = partialOpsEngine();
+    engine.setTrackSends(10, [{ busId: 2 }]);
+    const before = renderBlocks(engine);
+    const call = engine.setTrackSends as unknown as (t: number, s?: unknown) => void;
+    expect(() => call.call(engine, 10, undefined)).toThrow(TypeError);
+    expect(() => call.call(engine, 10, { busId: 2 })).toThrow(TypeError);
+    expectSameRender(renderBlocks(engine), before);
+    engine.destroy();
+  });
+
+  it('keeps setTrackLanes replace semantics: omitting sends clears them', () => {
+    const engine = partialOpsEngine();
+    engine.setTrackLanes([{ trackId: 10, sends: [{ busId: 2 }] }, { trackId: 11 }]);
+    const withSend = peak(renderBlocks(engine));
+    expect(withSend).toBeGreaterThan(0.1);
+    engine.setTrackLanes([{ trackId: 10 }, { trackId: 11 }]);
+    const omitted = peak(renderBlocks(engine));
+    expect(omitted).toBeGreaterThan(0.1);
+    expect(withSend).toBeGreaterThan(omitted * 1.1);
+    engine.destroy();
+  });
+});
+
 const kDuckerBusJson = JSON.stringify({
   version: 1,
   strips: [],

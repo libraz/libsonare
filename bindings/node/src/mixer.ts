@@ -326,6 +326,38 @@ export class Mixer {
     this.native.addBus(id, role);
   }
 
+  /**
+   * Route a strip or bus into a submix bus (or the master), replacing where it
+   * went before.
+   *
+   * @param sourceId - A strip id or a non-master bus id
+   * @param busId - A declared bus id, or the id the master resolves to; the
+   *   literal `"master"` is not an alias when the master bus has another id
+   *
+   * Every connection leaving `sourceId` is removed first, including a
+   * scene-authored strip-to-strip edge, then `sourceId -> busId` is added. Like
+   * {@link addBus} it only marks the routing graph dirty: nothing compiles in
+   * the call, so a bus's meters read as never compiled until {@link compile}
+   * (or process) runs. An explicit route suppresses the default master edge, so
+   * a strip sent to a submix is silent on the master until the submix itself is
+   * routed on. The recipe for sending a strip into a submix:
+   *
+   * @example
+   * mixer.addStrip('a');
+   * mixer.addBus('sub', 'submix');
+   * mixer.setOutputBus('a', 'sub');
+   * mixer.setOutputBus('sub', 'master');
+   * mixer.compile();
+   *
+   * @throws SonareError `InvalidParameter` naming the ids (and the path, for a
+   *   cycle) for an unknown source or destination, a destination that is not a
+   *   bus, the master as source, a self-route, or an edit that closes a cycle
+   *   through connections or sends; the scene is unchanged after a refusal
+   */
+  setOutputBus(sourceId: string, busId: string): void {
+    this.native.setOutputBus(sourceId, busId);
+  }
+
   /** Remove a bus by id. */
   removeBus(id: string): void {
     this.native.removeBus(id);

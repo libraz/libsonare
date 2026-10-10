@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { Mixer, mixingScenePresetJson } from '../src/index.js';
+import { ErrorCode, isSonareError, Mixer, mixingScenePresetJson } from '../src/index.js';
 
 const BLOCK_SIZE = 8;
 const SAMPLE_RATE = 48000;
@@ -471,5 +471,84 @@ describe('Mixer argument validation', () => {
     // The endpoints of the range are accepted.
     expect(() => mixer.drainTailStereo(1)).not.toThrow();
     expect(() => mixer.drainTailStereo(BLOCK_SIZE)).not.toThrow();
+  });
+});
+
+describe('Mixer.setOutputBus', () => {
+  const tone = (): Float32Array[] => [new Float32Array(BLOCK_SIZE).fill(0.5)];
+  const connections = (m: Mixer): unknown =>
+    (JSON.parse(m.toSceneJson()) as { connections?: unknown }).connections;
+
+  function emptyMixer(): Mixer {
+    return Mixer.fromSceneJson(JSON.stringify({ version: 1 }), SAMPLE_RATE, BLOCK_SIZE);
+  }
+
+  function refusal(call: () => void): Error & { code?: number } {
+    let error: unknown;
+    try {
+      call();
+    } catch (thrown) {
+      error = thrown;
+    }
+    expect(isSonareError(error)).toBe(true);
+    if (!isSonareError(error)) {
+      throw new Error('expected SonareError');
+    }
+    expect(error.code).toBe(ErrorCode.InvalidParameter);
+    return error;
+  }
+
+  it('sends a strip into a submix, then on to the master', () => {
+    const mixer = emptyMixer();
+    mixer.addStrip('a');
+    mixer.addBus('sub', 'submix');
+    mixer.setOutputBus('a', 'sub');
+    mixer.compile();
+    let out = mixer.processStereo(tone(), tone());
+    expect(peakAbs(out.left)).toBe(0);
+    expect(mixer.busMeter('sub').peakDb[0]).toBeGreaterThan(-120);
+
+    mixer.setOutputBus('sub', 'master');
+    mixer.compile();
+    out = mixer.processStereo(tone(), tone());
+    expect(peakAbs(out.left)).toBeGreaterThan(0.01);
+    expect(connections(mixer)).toEqual([
+      { source: 'a', destination: 'sub' },
+      { source: 'sub', destination: 'master' },
+    ]);
+    mixer.destroy();
+  });
+
+  it('refuses bad edits with the ids in the message and leaves the scene unchanged', () => {
+    const mixer = emptyMixer();
+    mixer.addStrip('a');
+    mixer.addBus('sub', 'submix');
+    mixer.addBus('sub2', 'submix');
+    mixer.setOutputBus('sub', 'sub2');
+    const before = mixer.toSceneJson();
+    expect(refusal(() => mixer.setOutputBus('ghost', 'sub')).message).toMatch(/ghost/);
+    expect(refusal(() => mixer.setOutputBus('a', 'nowhere')).message).toMatch(/nowhere/);
+    expect(refusal(() => mixer.setOutputBus('a', 'a')).message).toMatch(/a/);
+    expect(refusal(() => mixer.setOutputBus('master', 'sub')).message).toMatch(/master/);
+    const cycle = refusal(() => mixer.setOutputBus('sub2', 'sub')).message;
+    expect(cycle).toMatch(/sub2/);
+    expect(cycle).toMatch(/sub/);
+    expect(mixer.toSceneJson()).toBe(before);
+    mixer.destroy();
+  });
+
+  it('runs no compile in the call, accepted or refused', () => {
+    const mixer = emptyMixer();
+    mixer.addBus('sub');
+    refusal(() => mixer.setOutputBus('sub', 'sub'));
+    expect(() => mixer.busNonFiniteDiscardCount('sub')).toThrow();
+    mixer.destroy();
+  });
+
+  it('refuses non-string arguments with a TypeError', () => {
+    const mixer = emptyMixer();
+    const call = mixer.setOutputBus as unknown as (...args: unknown[]) => void;
+    expect(() => call.call(mixer, 'a', 1)).toThrow(TypeError);
+    mixer.destroy();
   });
 });

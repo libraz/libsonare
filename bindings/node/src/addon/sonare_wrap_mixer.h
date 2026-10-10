@@ -87,6 +87,7 @@ class MixerWrap : public Napi::ObjectWrap<MixerWrap> {
   // Imperative topology: strips, buses and VCA groups.
   Napi::Value AddStrip(const Napi::CallbackInfo& info);
   Napi::Value AddBus(const Napi::CallbackInfo& info);
+  Napi::Value SetOutputBus(const Napi::CallbackInfo& info);
   Napi::Value RemoveBus(const Napi::CallbackInfo& info);
   Napi::Value BusCount(const Napi::CallbackInfo& info);
   Napi::Value AddVcaGroup(const Napi::CallbackInfo& info);

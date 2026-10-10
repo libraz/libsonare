@@ -73,6 +73,30 @@ Napi::Value MixerWrap::AddBus(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value MixerWrap::SetOutputBus(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  if (mixer_ == nullptr) {
+    sonare_node::ThrowSonareErrorMessage(env, SONARE_ERROR_INVALID_STATE,
+                                         "Mixer is not initialized");
+    return env.Undefined();
+  }
+  if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
+    Napi::TypeError::New(env, "Expected (sourceId: string, busId: string)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  const std::string source_id = node_narrow_string(env, info[0], "sourceId");
+  const std::string bus_id = node_narrow_string(env, info[1], "busId");
+  if (env.IsExceptionPending()) return env.Undefined();
+  const SonareError err = sonare_mixer_set_output_bus(mixer_, source_id.c_str(), bus_id.c_str());
+  if (err != SONARE_OK) {
+    sonare_node::ThrowLastSonareError(env, "", err);
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value MixerWrap::RemoveBus(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

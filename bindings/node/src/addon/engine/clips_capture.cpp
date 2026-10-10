@@ -59,20 +59,11 @@ SonareClipPageProvider* ProviderById(
   return it == providers.end() ? nullptr : it->second;
 }
 
-// Reads an optional `sends` array off a track lane or bus object, in the one
-// shape both share (SonareEngineTrackSend). Absent/null `sends` leaves
-// *out_sends empty and returns true. Returns false with a pending JS exception
-// on a malformed entry.
-bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
-                       std::vector<SonareEngineTrackSend>* out_sends) {
-  if (!obj.Has("sends") || obj.Get("sends").IsUndefined() || obj.Get("sends").IsNull()) {
-    return true;
-  }
-  if (!obj.Get("sends").IsArray()) {
-    Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
-    return false;
-  }
-  Napi::Array sends = obj.Get("sends").As<Napi::Array>();
+// Reads a JS array of sends into SonareEngineTrackSend, the one shape lanes,
+// buses and the positional per-lane op share. Returns false with a pending JS
+// exception on a malformed entry.
+bool ReadSends(Napi::Env env, const Napi::Array& sends,
+               std::vector<SonareEngineTrackSend>* out_sends) {
   out_sends->reserve(sends.Length());
   for (uint32_t send_index = 0; send_index < sends.Length(); ++send_index) {
     if (!sends.Get(send_index).IsObject()) {
@@ -92,6 +83,21 @@ bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
     out_sends->push_back(send);
   }
   return true;
+}
+
+// Reads an optional `sends` array off a track lane or bus object. Absent/null
+// `sends` leaves *out_sends empty and returns true. Returns false with a
+// pending JS exception on a malformed entry.
+bool ReadOptionalSends(Napi::Env env, const Napi::Object& obj,
+                       std::vector<SonareEngineTrackSend>* out_sends) {
+  if (!obj.Has("sends") || obj.Get("sends").IsUndefined() || obj.Get("sends").IsNull()) {
+    return true;
+  }
+  if (!obj.Get("sends").IsArray()) {
+    Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
+    return false;
+  }
+  return ReadSends(env, obj.Get("sends").As<Napi::Array>(), out_sends);
 }
 
 // Backing storage a SonareEngineClip read from JS points into.
@@ -325,6 +331,41 @@ Napi::Value RealtimeEngineWrap::SetTrackLanes(const Napi::CallbackInfo& info) {
     lanes.push_back(lane);
   }
   ThrowIfError(env, sonare_engine_set_track_lanes(engine_, lanes.data(), lanes.size()));
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackSends(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t track_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) return env.Undefined();
+  if (info.Length() <= 1 || !info[1].IsArray()) {
+    Napi::TypeError::New(env, "sends must be an array").ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  std::vector<SonareEngineTrackSend> sends;
+  if (!ReadSends(env, info[1].As<Napi::Array>(), &sends)) return env.Undefined();
+  const SonareError err =
+      sonare_engine_set_track_sends(engine_, track_id, sends.data(), sends.size());
+  if (err != SONARE_OK) {
+    sonare_node::ThrowLastSonareError(env, "", err);
+  }
+  return env.Undefined();
+  SONARE_NODE_CATCH(env)
+}
+
+Napi::Value RealtimeEngineWrap::SetTrackOutputBus(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  uint32_t track_id = 0;
+  uint32_t bus_id = 0;
+  if (!RequiredUint32Arg(env, info, 0, "trackId", &track_id)) return env.Undefined();
+  if (!RequiredUint32Arg(env, info, 1, "busId", &bus_id)) return env.Undefined();
+  const SonareError err = sonare_engine_set_track_output_bus(engine_, track_id, bus_id);
+  if (err != SONARE_OK) {
+    sonare_node::ThrowLastSonareError(env, "", err);
+  }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

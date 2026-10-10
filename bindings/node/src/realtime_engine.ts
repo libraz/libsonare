@@ -475,6 +475,38 @@ export class RealtimeEngine {
   }
 
   /**
+   * Replaces one lane's sends, leaving its output bus, layout and every other
+   * lane as published. An empty array clears the lane's sends.
+   *
+   * The edited lane list goes through {@link setTrackLanes}, so it is validated
+   * the same way (a send naming an undeclared bus, a duplicate send bus or a
+   * level outside the allowed range is refused), automation ids keep naming
+   * their track, and an unchanged send list keeps the sends' in-flight ramps; a
+   * changed list restarts every send ramp on the lane. Lane membership is
+   * caller-owned here: `trackId` must already be in the published lane list
+   * (set through {@link setTrackLanes}), otherwise this throws. The worklet
+   * facade's `setTrackSends` shares the name but creates lanes as needed.
+   * Control-thread only; do not call concurrently with `process`.
+   *
+   * @throws SonareError `InvalidParameter` for an unknown track (the message
+   *   names the id) or a send list `setTrackLanes` would refuse; `TypeError`
+   *   when `sends` is not an array
+   */
+  setTrackSends(trackId: number, sends: EngineTrackSend[]): void {
+    this.native.setTrackSends(trackId, Array.isArray(sends) ? normalizeSends(sends) : sends);
+  }
+
+  /**
+   * Sets one lane's output bus, leaving its sends, layout and every other lane
+   * as published. `busId` 0 returns the lane to the master mix; any other value
+   * must name a declared bus. Same validation, membership and threading
+   * contract as {@link setTrackSends}.
+   */
+  setTrackOutputBus(trackId: number, busId: number): void {
+    this.native.setTrackOutputBus(trackId, busId);
+  }
+
+  /**
    * Configure realtime engine buses: layout, fader, output and sends. Replaces
    * the whole bus list. An `outputBusId` or send naming an undeclared bus, the
    * bus itself, or forming a cycle (through outputs, sends, or bus-sourced

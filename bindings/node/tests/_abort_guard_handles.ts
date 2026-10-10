@@ -208,6 +208,8 @@ export interface NativeEngine {
   setGraph(spec: unknown): void;
   setClips(clips: unknown): void;
   setTrackLanes(lanes: unknown): void;
+  setTrackSends(trackId: unknown, sends: unknown): void;
+  setTrackOutputBus(trackId: unknown, busId: unknown): void;
   setTrackBuses(buses: unknown): void;
   setTempoSegments(segments: unknown): void;
   setTimeSignatureSegments(segments: unknown): void;
