@@ -150,6 +150,15 @@ class MasteringInsertParamDependency(TypedDict):
     relation: MasteringInsertParamRelation
     factor: float
 
+class SynthParamInfo(TypedDict):
+    name: str
+    type: Literal["number", "boolean"]
+    default: float
+    unit: MasteringInsertParamUnit
+    integer: NotRequired[bool]
+    min: NotRequired[float]
+    max: NotRequired[float]
+
 class MasteringInsertParamInfo(TypedDict):
     """One key an insert processor's construction or automation reads.
 

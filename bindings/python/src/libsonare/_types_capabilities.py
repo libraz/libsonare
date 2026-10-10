@@ -7,7 +7,7 @@ result of analysing any audio.
 
 from __future__ import annotations
 
-from typing import Literal, TypedDict
+from typing import Literal, NotRequired, TypedDict
 
 MasteringProcessorKind = Literal["realtime", "offline", "pair"]
 MasteringChannelPolicy = Literal["multichannel", "stereoPairOnly", "perChannel", "passthrough"]
@@ -133,6 +133,27 @@ class MasteringInsertParamDependency(TypedDict):
     key: str
     relation: MasteringInsertParamRelation
     factor: float
+
+
+class SynthParamInfo(TypedDict):
+    """One synth parameter as :func:`synth_engine_param_info` and
+    :func:`synth_patch_param_info` describe it.
+
+    ``name`` is the key ``SynthPatch.engine_params`` (or the patch field) is
+    spelled with; ``"boolean"`` is a switch given as 0 or 1. ``integer`` is
+    true for a field taking whole numbers only. ``min`` / ``max`` are absent
+    for a field with no closed range. ``default`` is the engine's base
+    preset's value for an engine field and the "keep base" default for a
+    patch field.
+    """
+
+    name: str
+    type: Literal["number", "boolean"]
+    default: float
+    unit: MasteringInsertParamUnit
+    integer: NotRequired[bool]
+    min: NotRequired[float]
+    max: NotRequired[float]
 
 
 class MasteringInsertParamInfo(TypedDict):

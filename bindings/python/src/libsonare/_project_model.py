@@ -29,7 +29,7 @@ import numpy as np
 
 if TYPE_CHECKING:
     from ._project import Project, ProjectTimeline
-    from ._types_capabilities import MasteringInsertParamInfo
+    from ._types_capabilities import SynthParamInfo
 
 from ._errors import ErrorCode, SonareError, _not_supported
 from ._ffi_types_mastering_project import (
@@ -1023,13 +1023,13 @@ def synth_preset_names() -> list[str]:
     return [name for name in raw.decode("utf-8").split("\n") if name]
 
 
-def _synth_param_info(raw: bytes | None, what: str) -> list[MasteringInsertParamInfo]:
+def _synth_param_info(raw: bytes | None, what: str) -> list[SynthParamInfo]:
     if raw is None:
         raise _last_error(int(ErrorCode.INVALID_PARAMETER), what)
-    return cast("list[MasteringInsertParamInfo]", json.loads(raw.decode("utf-8")))
+    return cast("list[SynthParamInfo]", json.loads(raw.decode("utf-8")))
 
 
-def synth_engine_param_info(engine_mode: str | int) -> list[MasteringInsertParamInfo]:
+def synth_engine_param_info(engine_mode: str | int) -> list[SynthParamInfo]:
     """Describe every :attr:`SynthPatch.engine_params` key of ``engine_mode``.
 
     One descriptor per field of that engine's own section, in the layout of
@@ -1050,7 +1050,7 @@ def synth_engine_param_info(engine_mode: str | int) -> list[MasteringInsertParam
     )
 
 
-def synth_patch_param_info() -> list[MasteringInsertParamInfo]:
+def synth_patch_param_info() -> list[SynthParamInfo]:
     """Describe every numeric :class:`SynthPatch` wrapper field.
 
     One descriptor per field, in the layout of :func:`synth_engine_param_info`:
