@@ -6,7 +6,9 @@
 
 #### Rebuild
 
-- Within the same `SONARE_FEATURE_ABI_VERSION` 7, `SonareSynthPatch` moves to struct version 8 and appends `engine_params` / `engine_param_count` (a borrowed list of `SonareSynthEngineParam {key, value}`), so C callers rebuild; the bindings fill it from `engineParams` / `engine_params`.
+- Within the same `SONARE_FEATURE_ABI_VERSION` 7, `SonareSynthPatch` moves to struct version 9, so C callers rebuild. Version 8 appends `engine_params` / `engine_param_count` (a borrowed list of `SonareSynthEngineParam {key, value}`), which the bindings fill from `engineParams` / `engine_params`; version 9 appends `present_fields2` (bits `SONARE_SYNTH_FIELD2_*`) with `drift_rate_hz`, `amp_delay_ms`, `amp_hold_ms`, `filter_delay_ms`, `filter_hold_ms` and `one_shot`. Versions up to 8 are still read.
+
+- Within the same `SONARE_FEATURE_ABI_VERSION` 7, the two-buffer C entries take the reference's rate in place, so C callers rebuild: `sonare_mastering_apply_pair_processor_ex`, `sonare_mastering_apply_pair_processor_stereo_ex`, `sonare_mastering_analyze_pair_ex`, `sonare_mastering_ab_match_loudness` and `sonare_mastering_ab_match_loudness_stereo` gain `int reference_sample_rate` after `reference_length`, and `sonare_mixing_assistant_suggest` / `sonare_mixing_assistant_suggest_scene_json` gain `const int* track_sample_rates` after `track_lengths` (NULL: every track at `sample_rate`). A rate of 0 or below is refused with InvalidParameter.
 
 - Every binding checks the loaded native module's ABI version when it loads and refuses a mismatch with the new error code `AbiMismatch` (10): Node when the addon is required, WASM in `init()`, Python on first library use (the Python CLI exits with 13). The code is binding-only; the core never reports it.
 
@@ -46,6 +48,10 @@
 
 - `sonare_midi2_program`, `Project.midi2Program` and `midi2_program` refuse a non-zero bank MSB or LSB when bank-valid is false; the receiver would have ignored that bank, and a MIDI 2.0 sender fills those fields with zero.
 
+- A multiband chain stage with one band is refused on every surface and both CLIs (`multiband stage needs at least two bands; one band is the compressor stage`), and the band count is checked as 2 to 64; the native CLI accepted a one-band version 2 document that the bindings refused.
+- The live MIDI push calls refuse a value outside its MIDI range with an error naming the argument and the range (`channel must be in [0, 15]`, `bend14 must be in [0, 16383]`, ...), on the destination pushes (`sonare_engine_push_midi_note_on`, `_note_off`, `_cc`, `_pitch_bend`, `_channel_pressure`, `_poly_pressure`, `_program`, `_ump`) and the input-source pushes (`sonare_engine_push_midi_input_*`) alike: InvalidParameter in C, `RangeError` on Node and WASM, `SonareValueError` in Python, each prefixed with the calling function's name. Only Node named the argument before.
+- `repair.decrackle.mode` in a chain config or override refuses a value other than 0 (median) or 1 (wavelet shrinkage) with `unknown decrackle mode`, as the dehum and denoise modes do; any other number was read as median.
+
 #### Error classes
 
 - A failure that comes from the library or from an object's state is a `SonareError` carrying the C-ABI code on every surface. On Node and WASM a released, destroyed or uninitialised handle, including a WASM embind object already deleted, throws `SonareError` with `InvalidState` where it threw a plain `Error` or `TypeError`; in Python the bare `RuntimeError`s became `SonareError` (still a `RuntimeError` subclass) with `NOT_SUPPORTED`, `INVALID_STATE` or `UNKNOWN`.
@@ -56,6 +62,7 @@
 - `melToStft`, `melToAudio`, `mfccToMel` and `mfccToAudio` (Node, WASM) throw a `TypeError` naming the missing field (`melToStft: power is required (or pass result)`) for a request with neither `result` nor `power` / `coefficients`, or an argument that is not an object.
 - `masteringAudioProfileStereo`, `masteringAssistantSuggestStereo`, `masteringAssistantSuggestChainStereo` and `masteringStreamingPreviewStereo` (Node, WASM) throw a `TypeError` naming the request object when called positionally.
 - The streaming `ChordChange` / `BarChord` constructors take `name` after `quality`.
+- Pushing to a disabled MIDI input source (`sonare_engine_push_midi_input_*` and the Node, WASM and Python methods over them) fails with InvalidState and `<function>: the MIDI input source is not enabled`, where it was InvalidParameter; a full input queue is OutOfMemory on every input push, including the UMP and program pushes on WASM. A WASM build without the MIDI input source throws `NotSupported`.
 
 - Loading a malformed project document raises the C ABI's own code on every surface: WASM `Project.fromJson` / `fromJsonWithDiagnostics` threw `InvalidFormat` whatever the native code was, WASM `setSampleRate` threw `InvalidParameter` without the native message, and Python `Project.from_json` raised `SonareValueError` without a code. The Python CLI exits 5 for a malformed project document, as the native CLI does, where it exited 3.
 
@@ -130,6 +137,9 @@
 - `masteringRepairAnalyze` / `masteringRepairApply` (Python `mastering_repair_analyze` / `mastering_repair_apply`, C `sonare_mastering_repair_analyze` / `sonare_mastering_repair_apply`) analyse and repair audio of any channel count in one call each. Analyze returns the defects per channel, the declip safety flag and the assistant's recommended stages with their settings (it never recommends dereverb); apply takes `stages: [{ stage, ...settings }]`, runs them in the fixed order declip, declick, decrackle, dehum, denoise, dereverb whatever the array order, refuses a repeated stage or an unknown setting, reports per channel or once for a linked stage, and takes `onProgress` / `cancel` (Python `on_progress` / `cancel`).
 - `repair.decrackle` (median), `repair.dehum`, `repair.denoiseClassical` and `repair.dereverbClassical` (subtraction mask) are realtime inserts under their ids. Each equals its offline function for the same settings, delayed by the latency the instance reports; an offline-only setting (wavelet mode, WPE, the quantile estimator) is refused by name, and the insert's denoise estimator defaults to `spp`. Denoise and dereverb link their masks across the insert's channels. Declick and declip stay offline-only.
 
+- Hand the pair processors, pair analyses, A/B loudness match and EQ match a reference at its own sample rate: the library resamples it onto the source's rate, and equal rates are processed exactly as before. `referenceSampleRate` on the Node and WASM requests (`masteringPairProcess`, `masteringPairProcessStereo`, `masteringPairAnalyze`, `masteringAbMatchLoudness`, `masteringAbMatchLoudnessStereo`) and on `EqMatchOptions`; `reference_sample_rate=` in Python, including `StreamingEqualizer.match`, which no longer requires equal lengths. Delay estimates are reported in source-rate samples. C: the `reference_sample_rate` argument above and the new `sonare_eq_match_ex`. `mastering-pair-analyze` and `mastering-pair-processor` on both CLIs read a reference file at any rate; `mastering-stereo-analyze` still requires the input's rate.
+- The capability catalog describes every flat mastering chain key in a new `chain` section: each stage's key prefix, the processor whose parameters its keys are and its `enabled` key; the multiband stage's `cutoffsHz` and `bands` lists with their item counts; descriptors for the keys no processor carries (the `enabled` switches, `loudness.*`, `repair.denoise.gainFloor`, the crossover FIR kernel size and cutoff list), measured through the chain's own validator; and every alias spelling of a key. Chain enum names resolve on every stage's keys. Node, WASM and Python declare it as `CapabilityCatalogChain` (with `CapabilityCatalogChainStage`, `CapabilityCatalogChainList` and `CapabilityCatalogChainAlias`), and the schema requires it and `presets.playbackRoom`.
+
 #### Packaging
 
 - The WASM package resolves every entry under the `default` condition and TypeScript's node10 resolution, exports the analysis-only module as `./wasm/analysis`, and its glue no longer makes webpack or esbuild fail on `node:module`.
@@ -160,10 +170,14 @@
 
 - Fold the true-peak meter's pending window in at the end of a signal (C: `sonare_mixer_flush_meters`; Node and WASM: `Mixer.flushMeters()`; Python: `flush_meters()`). The function is additive. Offline engine renders and the one-shot mix flush every meter themselves.
 
+- Give each mixing-assistant track its own sample rate: `sampleRate` on a Node or WASM `MixAssistantTrack` (positional `trackSampleRates` after `trackNames`), `sample_rate` on Python `MixTrackInput`; each track is resampled onto the request's rate. `suggest-mix` on both CLIs passes each file at its own rate, with unchanged output.
+
 #### MIDI and synthesizer
 
 - Set a synth engine's own model fields on a patch by key — bow force, breath pressure, lip tension, strike position, FM operator levels, mode ratios — with `engineParams` (Node, WASM) / `engine_params` (Python, C). Keys are the engine section's fields in lowerCamelCase (`bowForce`, `ranks2.level`); an unknown key, another engine's key or a value outside the field's range is refused by name rather than clamped.
 - Describe every engine field and every `SynthPatch` field with its range, default and unit in the insert descriptor shape (C: `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`; Node and WASM: `synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; Python: `synth_engine_param_info`, `synth_patch_param_info`). The parameter unit vocabulary gains `mm`.
+- Set the per-voice drift rate, the delay and hold stages of the amplitude and filter envelopes, and one-shot playback on a patch: `driftRateHz`, `ampDelayMs`, `ampHoldMs`, `filterDelayMs`, `filterHoldMs` and `oneShot` on Node and WASM, the snake_case fields in Python and `SonareSynthPatch` version 9 in C. The five times are realtime-automatable like their sibling fields; a delay or hold change applies the next time its envelope stage starts.
+- Choose the FM operator algorithm with the engine param `fm.algorithm`.
 
 #### Editing and voice
 
@@ -179,6 +193,8 @@
 
 ### Behaviour changes
 
+- A centred mono lane of the realtime engine plays at unity for every pan law, including a lane whose strip the engine created for a send or insert or built from a scene spec. Such a strip read its mono pan through the raw law, so with the default seed law a centred mono lane came out 3 dB louder (√2) once a send or insert had created its strip, and stayed louder after the sends were cleared. Panning such a lane still moves it; strips a caller builds are unchanged.
+- The native CLI reads a `--chain-config` document and `--params` as one parameter list, as the Python CLI does: two spellings of one field across the document and `--params` are refused naming both keys, and a document's `<stage>.enabled: false` keeps the stage off when `--params` sets one of its fields, where that field used to switch it back on.
 - On a stereo strip, `effects.reverb.room` and `effects.acoustic.roomMorph` convolve each channel with the target room heard at its own receiver of a spaced pair (`receiverSpacingM`, default 0.5 m) instead of one response shared by both channels, so the added room is no longer centred and identical in both channels. Summed to mono, the added room above about 300 Hz is about 3 dB lower than before, because the two tails no longer add coherently. A mono strip keeps the single-listener response.
 - The room morph's source-tail suppressor applies one gain, taken from the louder channel, to both channels of a stereo input instead of one per channel, so suppression no longer shifts the stereo image; a non-finite sample in one channel no longer reaches the other.
 - `eq` and `room-morph` on both CLIs process a two-channel file as a stereo pair and write a stereo file, where they folded it to mono; `--placement` and `--output-pan` on `eq` act on the file's own channels. Their JSON reports carry `stereo`, as `mastering-processor`'s does.
