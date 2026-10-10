@@ -12,7 +12,15 @@ from pathlib import Path
 
 import pytest
 
-from libsonare import Mixer, SonareValueError, mix_stereo, mixing_scene_preset_json, note_to_hz
+from libsonare import (
+    Mixer,
+    SonareValueError,
+    master_audio,
+    mastering_preset_params,
+    mix_stereo,
+    mixing_scene_preset_json,
+    note_to_hz,
+)
 from libsonare._engine_conversions import _fixed_bytes
 from libsonare._narrowing import _utf8_arg
 
@@ -54,8 +62,16 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
         lambda: note_to_hz("A\x004"),
         lambda: mixing_scene_preset_json("a\x00b"),
         lambda: Mixer.from_scene_json('{"version":1}\x00trailing'),
+        lambda: mastering_preset_params("pop\x00junk"),
+        lambda: master_audio([0.1] * 4096, 44100, "pop\x00junk"),
     ],
-    ids=["note_to_hz", "mixing_scene_preset_json", "Mixer.from_scene_json"],
+    ids=[
+        "note_to_hz",
+        "mixing_scene_preset_json",
+        "Mixer.from_scene_json",
+        "mastering_preset_params",
+        "master_audio",
+    ],
 )
 def test_embedded_nul_is_refused(call) -> None:
     with pytest.raises(SonareValueError, match="must not contain NUL"):

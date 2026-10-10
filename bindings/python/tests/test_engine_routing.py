@@ -360,6 +360,9 @@ def test_grown_structs_match_abi_layout_snapshot() -> None:
 def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -> None:
     engine = RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK)
     try:
+        engine.set_track_lanes([10, 20])
+        for track_id in (10, 20):
+            engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
         engine.set_lane_sidechain(10, 0, 20)
         with pytest.raises(SonareError):
             engine.set_lane_sidechain(10, 0, 10)
@@ -374,6 +377,9 @@ def test_lane_sidechain_refuses_self_key_and_cycles_but_keeps_valid_bindings() -
             engine.set_lane_sidechain(10, 0, 20)
     finally:
         engine.destroy()
+
+
+_PASS_LIMITER = ("dynamics.limiter", {"thresholdDb": 24.0, "releaseMs": 50.0})
 
 
 def _strip_json(strip_id: int, inserts: list[tuple[str, dict[str, float]]]) -> str:
@@ -405,8 +411,16 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
         seen.add(result.reason)
 
     try:
-        # Lane keys.
+        # Lane keys; each lane carries one insert to key.
+        for track_id in (10, 30):
+            engine.set_track_strip_json(track_id, _strip_json(track_id, [_PASS_LIMITER]))
         check(engine.can_set_lane_sidechain(0, 0, 30), "invalid_target")
+        check(engine.can_set_lane_sidechain(10, 1, 30), "insert_out_of_range")
+        check(engine.can_set_lane_sidechain(10, 0, 99), "undeclared_source")
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(10, 1, 30)
+        with pytest.raises(SonareError):
+            engine.set_lane_sidechain(10, 0, 99)
         check(engine.can_set_lane_sidechain(10, 0, 10), "self_key")
         check(engine.can_set_lane_sidechain(10, 0, 30), None)
         engine.set_lane_sidechain(10, 0, 30)
@@ -436,6 +450,7 @@ def test_can_set_sidechain_reports_each_refusal_and_matches_the_setters() -> Non
     # Table full: every slot of the binding table taken by lane 10, then a new key.
     with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as full:
         full.set_track_lanes([10, 30])
+        full.set_track_strip_json(10, _strip_json(10, [_PASS_LIMITER] * 33))
         for insert in range(32):
             full.set_lane_sidechain(10, insert, 30)
         check(full.can_set_lane_sidechain(10, 32, 30), "table_full")

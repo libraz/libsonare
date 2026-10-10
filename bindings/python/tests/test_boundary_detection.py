@@ -94,7 +94,7 @@ def test_the_absolute_threshold_reaches_the_detector(three_sections) -> None:
 def test_the_absolute_threshold_is_what_keeps_stationary_input_unsegmented(stationary) -> None:
     """The floor's whole reason for existing, asserted in both directions.
 
-    The relative threshold is compared against a curve scaled by its own maximum,
+    The relative threshold is compared against the curve's local maximum,
     so a signal that never changes still produces peaks of 1.0. Disabling the
     floor must therefore segment steady noise -- if it does not, the floor is not
     what is holding this back and the default case proves nothing about it.

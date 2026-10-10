@@ -952,9 +952,13 @@ def _array_stats(vals: list[float], *, with_count: bool = True) -> dict[str, flo
     return stats
 
 
-def _parse_kv_params(value: str) -> dict[str, float]:
-    """Parse a ``k=v,k=v`` string into a dict of floats."""
-    params: dict[str, float] = {}
+def _parse_kv_params(value: str, *, names: bool = False) -> dict[str, Any]:
+    """Parse a ``k=v,k=v`` string into a dict of floats.
+
+    With ``names`` a value that is not a number is kept as text, for the library to
+    resolve as the ``choices`` name of an enum-valued key (``noiseEstimator=mcra``).
+    """
+    params: dict[str, Any] = {}
     for item in value.split(","):
         item = item.strip()
         if not item:
@@ -962,7 +966,13 @@ def _parse_kv_params(value: str) -> dict[str, float]:
         if "=" not in item:
             raise ValueError(f"invalid param (expected key=value): {item}")
         key, raw = item.split("=", 1)
-        params[key.strip()] = float(raw.strip())
+        text = raw.strip()
+        try:
+            params[key.strip()] = float(text)
+        except ValueError:
+            if not names:
+                raise
+            params[key.strip()] = text
     return params
 
 

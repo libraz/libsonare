@@ -104,6 +104,18 @@ def mastering(
         lib.sonare_free_mastering_result(ctypes.byref(out))
 
 
+def _processor_params(
+    processor: str, params: Mapping[str, float | int | bool | str] | None
+) -> dict[str, float | int | bool] | None:
+    """Resolve the enum names in a solo processor's ``params`` to their numbers."""
+    if not params:
+        return None
+    return {
+        key: _enum_value(processor, key, value) if isinstance(value, str) else value
+        for key, value in params.items()
+    }
+
+
 def _mastering_params(params: dict[str, float | int | bool] | None) -> tuple[Any, int]:
     items = list((params or {}).items())
     array_type = SonareMasteringParam * len(items)
@@ -257,15 +269,18 @@ def mastering_insert_param_info(
     Each entry describes one parameter the insert reads, with keys ``name``
     (camelCase parameter name), ``id`` (stable numeric parameter id) and
     ``rtSafe`` (whether the parameter can be changed on the realtime audio
-    thread), and optional ``unit`` metadata. Returns an empty list for an
-    unknown ``name`` (or one whose insert needs an unavailable build feature,
-    e.g. FX).
+    thread), and optional ``unit`` metadata. Any id of
+    :func:`mastering_processor_catalog` is served, an offline repair stage
+    (``repair.declick``, ``repair.declip``, ``repair.trimSilence``) included,
+    with the rows its catalog entry's ``params`` carries; those rows have a
+    ``None`` ``id``. Returns an empty list for an unknown ``name`` (or one whose
+    insert needs an unavailable build feature, e.g. FX).
 
     With ``sample_rate``, a key whose ``maxRelativeTo`` is ``"nyquist"`` reports
     as ``max`` / ``maxExclusive`` the bound accepted when the insert is built and
-    prepared at that rate, including any cap fixed at build time (an EQ band
-    frequency stays at 24000 for a 96000 Hz host). Without it the rate-less
-    answer is returned. A rate outside the supported range raises.
+    prepared at that rate (an EQ band frequency reaches 48000 for a 96000 Hz
+    host). Without it the rate-less answer is returned, with the 24000 cap of
+    the 48 kHz probe. A rate outside the supported range raises.
 
     The native layer returns a thread-local JSON array string the caller must
     NOT free (same convention as the other mastering getters).
@@ -290,7 +305,7 @@ def mastering_insert_param_info(
 
 
 def mastering_insert_timing(
-    name: str, params: Mapping[str, float | bool], sample_rate: int
+    name: str, params: Mapping[str, float | bool | str], sample_rate: int
 ) -> MasteringInsertTiming:
     """Return the latency and tail of one insert built from ``params`` at ``sample_rate``.
 
@@ -303,7 +318,8 @@ def mastering_insert_timing(
     parameters and 48 kHz.
 
     ``params`` is keyed as in :func:`mastering_insert_param_info`; each value
-    must be a bool or a finite number. A key the insert does not read is
+    must be a bool or a finite number, or the ``choices`` name of an enum-valued
+    key. A key the insert does not read is
     refused rather than ignored, because an ignored key would answer for a
     configuration the caller did not ask for.
     """
@@ -311,7 +327,7 @@ def mastering_insert_timing(
     if not hasattr(lib, "sonare_mastering_insert_timing"):
         raise _not_supported("libsonare was built without mastering support")
     payload: dict[str, float | bool] = {}
-    for key, value in params.items():
+    for key, value in (_processor_params(name, params) or {}).items():
         if isinstance(value, bool):
             payload[key] = value
             continue
@@ -416,14 +432,18 @@ def mastering_process(
     processor_name: str,
     samples: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    params: dict[str, float | int | bool] | None = None,
+    params: dict[str, float | int | bool | str] | None = None,
 ) -> MasteringResult:
-    """Apply a named mastering processor using the shared cross-language API."""
+    """Apply a named mastering processor using the shared cross-language API.
+
+    An enum-valued key of ``params`` also takes its ``choices`` name
+    (``{"noiseEstimator": "mcra"}``), resolved by the core.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_processor"):
         raise _not_supported("libsonare was built without mastering support")
     c_array, length = _to_c_float_array(samples)
-    param_array, param_count = _mastering_params(params)
+    param_array, param_count = _mastering_params(_processor_params(processor_name, params))
     out = SonareMasteringResult()
     rc = lib.sonare_mastering_apply_processor(
         _utf8_arg(processor_name, "processor_name"),
@@ -456,9 +476,12 @@ def mastering_process_stereo(
     left: Sequence[float] | list[float],
     right: Sequence[float] | list[float],
     sample_rate: int = 22050,
-    params: dict[str, float | int | bool] | None = None,
+    params: dict[str, float | int | bool | str] | None = None,
 ) -> MasteringStereoResult:
-    """Apply a named stereo mastering processor using the shared cross-language API."""
+    """Apply a named stereo mastering processor using the shared cross-language API.
+
+    ``params`` takes enum names as :func:`mastering_process` does.
+    """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_apply_processor_stereo"):
         raise _not_supported("libsonare was built without mastering support")
@@ -466,7 +489,7 @@ def mastering_process_stereo(
     right_array, right_length = _to_c_float_array(right)
     if left_length != right_length:
         raise SonareValueError("left and right channel lengths must match")
-    param_array, param_count = _mastering_params(params)
+    param_array, param_count = _mastering_params(_processor_params(processor_name, params))
     out = SonareMasteringStereoResult()
     rc = lib.sonare_mastering_apply_processor_stereo(
         _utf8_arg(processor_name, "processor_name"),
@@ -495,6 +518,32 @@ def mastering_process_stereo(
         lib.sonare_free_mastering_stereo_result(ctypes.byref(out))
 
 
+def _enum_value(processor: str | None, key: str, name: str) -> float:
+    """Resolve ``name`` for the enum key ``key``; a non-enum key keeps ``float(name)``.
+
+    ``processor`` is the processor id whose parameter ``key`` is, or ``None`` when
+    ``key`` is a flat mastering chain key.
+    """
+    lib = _get_lib()
+    if not hasattr(lib, "sonare_mastering_enum_value"):
+        raise _not_supported("libsonare was built without mastering support")
+    is_enum = ctypes.c_int(0)
+    value = ctypes.c_double(0.0)
+    rc = lib.sonare_mastering_enum_value(
+        None if processor is None else _utf8_arg(processor, "processor"),
+        _utf8_arg(key, "key"),
+        _utf8_arg(name, "name"),
+        ctypes.byref(is_enum),
+        ctypes.byref(value),
+    )
+    if rc == int(ErrorCode.INVALID_PARAMETER):
+        # An unknown name is an out-of-domain argument: the core's text, as a SonareValueError.
+        detail = lib.sonare_last_error_message()
+        raise SonareValueError(detail.decode("utf-8") if detail else f"{key}: unknown name")
+    _check(rc)
+    return value.value if is_enum.value else float(name)
+
+
 def _flatten_chain_config(
     config: dict[str, Any] | None,
     prefix: str = "",
@@ -503,7 +552,10 @@ def _flatten_chain_config(
 
     Accepts both nested (``{"dynamics": {"compressor": {"thresholdDb": -24}}}``)
     and flat (``{"dynamics.compressor.thresholdDb": -24}``) representations.
-    Booleans are coerced to 0.0/1.0; other values are coerced via ``float``.
+    Booleans are coerced to 0.0/1.0 and other values via ``float``. A string
+    for an enum-valued key (``"repair.denoise.noiseEstimator": "mcra"``) is
+    resolved by the core to the number every flat parameter list carries; an
+    unknown name raises with the key and the valid names.
     """
     flat: dict[str, float] = {}
     if not config:
@@ -514,6 +566,8 @@ def _flatten_chain_config(
             flat.update(_flatten_chain_config(value, full_key))
         elif isinstance(value, bool):
             flat[full_key] = 1.0 if value else 0.0
+        elif isinstance(value, str):
+            flat[full_key] = _enum_value(None, full_key, value)
         else:
             flat[full_key] = float(value)
     return flat

@@ -147,13 +147,15 @@ class StreamingMasteringChain:
     only), maximizer.truePeakLimiter. Configurations that enable any of the five
     whole-signal repair stages (``repair.declick``, ``repair.declip``,
     ``repair.decrackle``, ``repair.dehum``, ``repair.dereverb``) or
-    ``loudness`` raise :class:`RuntimeError`.
+    ``loudness`` raise :class:`SonareError` (code ``INVALID_PARAMETER``).
 
     ``repair.denoise`` runs here, but only with a noise estimator that is
-    recursive in time. Its default ranks every frame of the whole signal by
-    energy, which a stream never reaches the end of, so it is refused by name
-    rather than substituted; set ``repair.denoise.noiseEstimator`` to ``1``
-    (mcra), ``2`` (imcra) or ``3`` (spp). The two minimum-tracking estimators
+    recursive in time. A stream defaults it to ``"spp"`` (``3``), so
+    ``{"repair.denoise.enabled": True}`` prepares. The offline default,
+    ``"quantile"`` (``0``), ranks every frame of the whole signal, which a
+    stream never reaches the end of, so it is refused by name rather than
+    substituted; ``"mcra"`` (``1``) and ``"imcra"`` (``2``) are accepted too.
+    The two minimum-tracking estimators
     (``1`` and ``2``) seed their noise floor from the first frame they see and
     hold it for the half second their minimum window spans, so a stream opened
     in the middle of the programme is over-suppressed until it turns over;

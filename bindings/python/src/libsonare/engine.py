@@ -705,7 +705,10 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         immediate). This value also becomes ``param_id``'s base value: if an
         automation lane later starts (and stops) driving ``param_id``, the
         target reverts to this value once that lane empties -- see
-        :meth:`set_automation_lane`.
+        :meth:`set_automation_lane`. A reserved mixer id (``0x4D58xxxx``) other
+        than a master id names no strip and raises :class:`SonareError`
+        (invalid parameter); resolve per-strip ids with the ``resolve_*_automation_id``
+        methods.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_parameter"):

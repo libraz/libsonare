@@ -113,7 +113,7 @@ def test_estimate_room_round_trips_a_known_shoebox() -> None:
     assert math.isclose(est.volume, true_volume, rel_tol=0.20)
     assert est.confidence > 0.0
     assert len(est.rt60_bands) >= 4
-    assert len(est.absorption_bands) == len(est.rt60_bands)
+    assert len(est.band_absorption) == len(est.rt60_bands)
     assert math.isfinite(est.drr_db)
     # camelCase aliases mirror the other bindings.
     assert est.drrDb == est.drr_db
@@ -179,13 +179,28 @@ def test_synthesize_rir_honors_per_band_scattering() -> None:
         length_m=7.0,
         width_m=5.0,
         height_m=3.0,
-        absorption_bands=[0.2, 0.22, 0.24, 0.26],
+        band_absorption=[0.2, 0.22, 0.24, 0.26],
         max_seconds=0.3,
         seed=123,
     )
-    mirror = libsonare.synthesize_rir(**base, scattering_bands=[0.0, 0.0, 0.0, 0.0])
-    diffuse = libsonare.synthesize_rir(**base, scattering_bands=[0.8, 0.8, 0.8, 0.8])
+    mirror = libsonare.synthesize_rir(**base, band_scattering=[0.0, 0.0, 0.0, 0.0])
+    diffuse = libsonare.synthesize_rir(**base, band_scattering=[0.8, 0.8, 0.8, 0.8])
     assert diffuse.rir != mirror.rir
+
+
+@acoustic
+def test_band_arguments_use_the_node_and_wasm_spelling() -> None:
+    room = dict(length_m=7.0, width_m=5.0, height_m=3.0, max_seconds=0.2)
+    with pytest.raises(TypeError, match="absorption_bands"):
+        libsonare.synthesize_rir(**room, absorption_bands=[0.2])
+    with pytest.raises(TypeError, match="scattering_bands"):
+        libsonare.synthesize_rir(**room, scattering_bands=[0.2])
+    rir = libsonare.synthesize_rir(7.0, 5.0, 3.0, absorption=0.15)
+    est = libsonare.estimate_room(
+        rir.rir, sample_rate=48000, mode="impulse_response", min_decay_db=25.0
+    )
+    assert not hasattr(est, "absorption_bands")
+    assert est.bandAbsorption == est.band_absorption
 
 
 @acoustic
@@ -194,7 +209,7 @@ def test_estimate_room_band_arrays_share_length() -> None:
     est = libsonare.estimate_room(
         rir.rir, sample_rate=48000, mode="impulse_response", min_decay_db=25.0
     )
-    assert len(est.absorption_bands) == len(est.rt60_bands)
+    assert len(est.band_absorption) == len(est.rt60_bands)
 
 
 @acoustic
@@ -311,8 +326,8 @@ def test_synthesize_rir_accepts_a_numpy_band_array_of_any_length() -> None:
 
     for shape in _BAND_SHAPES:
         bands = np.array(shape, dtype=np.float32)
-        result = libsonare.synthesize_rir(absorption_bands=bands, **_BAND_ROOM)
-        scattering = libsonare.synthesize_rir(scattering_bands=bands, **_BAND_ROOM)
+        result = libsonare.synthesize_rir(band_absorption=bands, **_BAND_ROOM)
+        scattering = libsonare.synthesize_rir(band_scattering=bands, **_BAND_ROOM)
         assert max(abs(s) for s in result.rir) > 1e-4
         assert max(abs(s) for s in scattering.rir) > 1e-4
 
@@ -324,7 +339,7 @@ def test_a_single_zero_band_array_is_not_read_as_absent() -> None:
     # An absence-of-exception check cannot see it -- the outcome has to move.
     default = libsonare.synthesize_rir(**_BAND_ROOM)
     zero_band = libsonare.synthesize_rir(
-        absorption_bands=np.array([0.0], dtype=np.float32), **_BAND_ROOM
+        band_absorption=np.array([0.0], dtype=np.float32), **_BAND_ROOM
     )
     assert max(abs(s) for s in zero_band.rir) > 1e-4
     assert zero_band.rir != default.rir
@@ -335,9 +350,9 @@ def test_band_arrays_agree_between_a_list_and_a_numpy_array() -> None:
     # The positive control: without it, a fix that rejected every numpy input
     # would satisfy every rejection test above.
     for shape in _BAND_SHAPES:
-        from_list = libsonare.synthesize_rir(absorption_bands=shape, **_BAND_ROOM)
+        from_list = libsonare.synthesize_rir(band_absorption=shape, **_BAND_ROOM)
         from_array = libsonare.synthesize_rir(
-            absorption_bands=np.array(shape, dtype=np.float32), **_BAND_ROOM
+            band_absorption=np.array(shape, dtype=np.float32), **_BAND_ROOM
         )
         assert from_array.rir == from_list.rir
         assert from_array.sample_rate == from_list.sample_rate
@@ -348,8 +363,8 @@ def test_an_empty_band_array_reads_as_absent() -> None:
     # Empty means absent for a list and must mean the same for a numpy array,
     # whose `bool()` raises rather than answering.
     default = libsonare.synthesize_rir(**_BAND_ROOM)
-    assert libsonare.synthesize_rir(absorption_bands=[], **_BAND_ROOM).rir == default.rir
-    empty = libsonare.synthesize_rir(absorption_bands=np.array([], dtype=np.float32), **_BAND_ROOM)
+    assert libsonare.synthesize_rir(band_absorption=[], **_BAND_ROOM).rir == default.rir
+    empty = libsonare.synthesize_rir(band_absorption=np.array([], dtype=np.float32), **_BAND_ROOM)
     assert empty.rir == default.rir
 
 
@@ -357,10 +372,10 @@ def test_an_empty_band_array_reads_as_absent() -> None:
 def test_a_malformed_band_array_is_rejected_naming_the_parameter() -> None:
     # Rejection is the binding's own, so it carries the caller's parameter name
     # rather than a bare numpy message about an ambiguous truth value.
-    with pytest.raises(libsonare.SonareValueError, match="absorption_bands"):
-        libsonare.synthesize_rir(absorption_bands=np.zeros((2, 3), dtype=np.float32), **_BAND_ROOM)
-    with pytest.raises(libsonare.SonareValueError, match="scattering_bands"):
-        libsonare.synthesize_rir(scattering_bands="not a buffer", **_BAND_ROOM)
+    with pytest.raises(libsonare.SonareValueError, match="band_absorption"):
+        libsonare.synthesize_rir(band_absorption=np.zeros((2, 3), dtype=np.float32), **_BAND_ROOM)
+    with pytest.raises(libsonare.SonareValueError, match="band_scattering"):
+        libsonare.synthesize_rir(band_scattering="not a buffer", **_BAND_ROOM)
 
 
 @acoustic
@@ -371,21 +386,19 @@ def test_room_morph_accepts_numpy_band_arrays() -> None:
     assert max(abs(s) for s in default) > 1e-4
 
     zero_band = libsonare.room_morph(
-        samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
+        samples, band_absorption=np.array([0.0], dtype=np.float32), **room
     ).audio
     assert zero_band != default
     assert (
         libsonare.room_morph(
-            samples, absorption_bands=np.array([0.0], dtype=np.float32), **room
+            samples, band_absorption=np.array([0.0], dtype=np.float32), **room
         ).audio
-        == libsonare.room_morph(samples, absorption_bands=[0.0], **room).audio
+        == libsonare.room_morph(samples, band_absorption=[0.0], **room).audio
     )
     scattered = libsonare.room_morph(
-        samples, scattering_bands=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
+        samples, band_scattering=np.array([0.3, 0.4, 0.5], dtype=np.float32), **room
     ).audio
-    assert (
-        scattered == libsonare.room_morph(samples, scattering_bands=[0.3, 0.4, 0.5], **room).audio
-    )
+    assert scattered == libsonare.room_morph(samples, band_scattering=[0.3, 0.4, 0.5], **room).audio
 
 
 @acoustic
@@ -475,12 +488,12 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
         "length_m",
         "width_m",
         "height_m",
-        "absorption_bands",
+        "band_absorption",
         "source",
         "listener",
     }
     assert geometry["length_m"] == pytest.approx(estimate.length_m, rel=1e-6)
-    assert geometry["absorption_bands"] == pytest.approx(estimate.absorption_bands, rel=1e-6)
+    assert geometry["band_absorption"] == pytest.approx(estimate.band_absorption, rel=1e-6)
     options = dict(max_seconds=0.1, ism_order=2)
     mapped = libsonare.synthesize_rir(**geometry, **options)
     by_hand = libsonare.synthesize_rir(
@@ -489,7 +502,7 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
         estimate.height_m,
         source=(1.0, 1.0, 1.2),
         listener=(3.0, 2.0, 1.7),
-        absorption_bands=estimate.absorption_bands,
+        band_absorption=estimate.band_absorption,
         **options,
     )
     assert mapped.rir == by_hand.rir

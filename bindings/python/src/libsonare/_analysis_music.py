@@ -259,7 +259,7 @@ def chord_functional_analysis(
         lib.sonare_free_string_array(ctypes.byref(functions))
 
 
-def _key_pair(key: object) -> tuple[ctypes.c_int32, ctypes.c_int32]:
+def _key_pair(key: object) -> tuple[object, object]:
     """Reads a key given as an object with ``root`` / ``mode``, a mapping, or a pair."""
     if isinstance(key, Mapping):
         root, mode = key.get("root"), key.get("mode")
@@ -269,7 +269,7 @@ def _key_pair(key: object) -> tuple[ctypes.c_int32, ctypes.c_int32]:
         root, mode = getattr(key, "root", None), getattr(key, "mode", None)
     if root is None or mode is None:
         raise SonareValueError("key must have a root and a mode")
-    return _to_c_int32(root, "key.root"), _to_c_int32(mode, "key.mode")
+    return root, mode
 
 
 def chord_functions(
@@ -291,7 +291,9 @@ def chord_functions(
     Every mode other than minor reads the major scale.
     """
     entries = list(chords.chords if isinstance(chords, ChordAnalysisResult) else chords)
-    key_root, key_mode = _key_pair(key)
+    root, mode = _key_pair(key)
+    key_root = _to_c_int32(root, "key.root")
+    key_mode = _to_c_int32(mode, "key.mode")
     lib = _get_lib()
     array = (SonareChord * len(entries))()
     for i, chord in enumerate(entries):

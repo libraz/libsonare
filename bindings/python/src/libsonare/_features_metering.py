@@ -37,6 +37,7 @@ from ._runtime import (
     _to_c_float,
     _to_c_float_array,
     _to_c_int,
+    _to_c_int32,
     _to_c_size_t,
     _to_c_uint16,
     _validate_samples,
@@ -1101,7 +1102,7 @@ def scale_mask_for_mode(root: int, mode: Mode | str | int) -> int:
     lib = _get_lib()
     out = ctypes.c_uint16(0)
     rc = lib.sonare_scale_mask_for_mode(
-        _to_c_int(root, "root"), ctypes.c_int32(_mode_value(mode)), ctypes.byref(out)
+        _to_c_int(root, "root"), _to_c_int32(_mode_value(mode), "mode"), ctypes.byref(out)
     )
     _check(rc)
     return int(out.value)

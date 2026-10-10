@@ -128,7 +128,7 @@ def cmd_estimate_room(args: argparse.Namespace) -> int:
                     "drr_db": est.drr_db,
                     "confidence": est.confidence,
                     "rt60_bands": [float(value) for value in est.rt60_bands],
-                    "absorption_bands": [float(value) for value in est.absorption_bands],
+                    "absorption_bands": [float(value) for value in est.band_absorption],
                 }
             )
         )

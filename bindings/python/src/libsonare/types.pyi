@@ -177,7 +177,8 @@ class MasteringInsertParamInfo(TypedDict):
     reports ``None`` on both, meaning "this catalog states no limit" rather
     than "unknown". Three properties to plan for: a bound is measured with
     every other parameter at its default, so two parameters that constrain
-    each other each report the other's default; a sample-rate-derived bound
+    each other each report the other's default (unless it is a ``dependsOn``
+    entry, which leaves the bound ``None``); a sample-rate-derived bound
     reflects the un-prepared processor and rises once the insert is prepared
     at a higher rate; and an exclusive bound is reported as its limit value
     and flagged by ``minExclusive`` / ``maxExclusive`` (false when the bound is
@@ -754,7 +755,7 @@ class RoomEstimate:
     height_m: float
     drr_db: float
     confidence: float
-    absorption_bands: list[float]
+    band_absorption: list[float]
     rt60_bands: list[float]
     def __init__(
         self,
@@ -764,13 +765,13 @@ class RoomEstimate:
         height_m: float,
         drr_db: float,
         confidence: float,
-        absorption_bands: list[float],
+        band_absorption: list[float],
         rt60_bands: list[float],
     ) -> None: ...
     @property
     def drrDb(self) -> float: ...
     @property
-    def absorptionBands(self) -> list[float]: ...
+    def bandAbsorption(self) -> list[float]: ...
     @property
     def rt60Bands(self) -> list[float]: ...
 
@@ -781,7 +782,7 @@ class RoomGeometry(TypedDict):
     length_m: float
     width_m: float
     height_m: float
-    absorption_bands: NotRequired[list[float]]
+    band_absorption: NotRequired[list[float]]
     source: NotRequired[tuple[float, float, float]]
     listener: NotRequired[tuple[float, float, float]]
 

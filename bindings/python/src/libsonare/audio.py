@@ -282,7 +282,7 @@ def downmix(
             "loaded libsonare does not expose sonare_downmix; "
             "rebuild or install a newer native library"
         )
-    layout = ChannelLayout(int(target_layout))
+    layout = ChannelLayout(_to_c_int(target_layout, "target_layout").value)
     planes = _linked_channel_planes("downmix", channels)
     frame_count = int(planes[0].shape[0])
     if any(int(plane.shape[0]) != frame_count for plane in planes):
@@ -935,7 +935,7 @@ class Audio:
         )
 
     def mastering_process(
-        self, processor_name: str, params: dict[str, float | int | bool] | None = None
+        self, processor_name: str, params: dict[str, float | int | bool | str] | None = None
     ) -> MasteringResult:
         """Apply a named mastering processor."""
         return _mastering_process(processor_name, self.data, self.sample_rate, params)

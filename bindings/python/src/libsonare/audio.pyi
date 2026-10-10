@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from .analyzer import MasteringParams, MasteringPreset, SoloProcessor
+from .analyzer import MasteringPreset, MasteringSoloParams, SoloProcessor
 from .types import (
     AcousticResult,
     AnalysisResult,
@@ -187,7 +187,7 @@ class Audio:
         apply_gain_at_input_rate: bool = False,
     ) -> MasteringResult: ...
     def mastering_process(
-        self, processor_name: SoloProcessor, params: MasteringParams | None = None
+        self, processor_name: SoloProcessor, params: MasteringSoloParams | None = None
     ) -> MasteringResult: ...
     def mastering_chain(
         self,

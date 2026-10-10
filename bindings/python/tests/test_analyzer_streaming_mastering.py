@@ -317,12 +317,13 @@ def test_streaming_equalizer_magnitude_response_rejects_unknown_placement() -> N
         eq.magnitude_response([1000.0], placement="rear")
 
 
-def test_streaming_mastering_chain_rejects_denoise() -> None:
-    """StreamingMasteringChain refuses configurations enabling repair.denoise."""
-    from libsonare import StreamingMasteringChain
+def test_streaming_mastering_chain_rejects_denoise_with_the_quantile_estimator() -> None:
+    """The whole-signal estimator is refused by name; the stream's default prepares."""
+    from libsonare import SonareError, StreamingMasteringChain
 
-    with pytest.raises(RuntimeError):
-        StreamingMasteringChain({"repair.denoise.enabled": 1})
+    with pytest.raises(SonareError, match="quantile"):
+        StreamingMasteringChain({"repair.denoise.enabled": 1, "repair.denoise.noiseEstimator": 0})
+    StreamingMasteringChain({"repair.denoise.enabled": 1}).prepare(44100, 512, 1)
 
 
 def test_streaming_mastering_chain_accepts_loudness_with_static_gain() -> None:

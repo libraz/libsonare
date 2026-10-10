@@ -668,7 +668,7 @@ def test_note_to_hz() -> None:
     assert abs(note_to_hz("A4") - 440.0) < 1.0
 
 
-@pytest.mark.parametrize("name", ["H4", "C#x", "", "A4junk", "C2147483647"])
+@pytest.mark.parametrize("name", ["H4", "C#x", "", "A4junk", "C2147483647", "C10", "A-2"])
 def test_note_to_hz_refuses_an_unparsable_name(name: str) -> None:
     """note_to_hz raises the coded InvalidParameter error instead of answering 0."""
     from libsonare import ErrorCode, SonareValueError, note_to_hz
@@ -676,6 +676,14 @@ def test_note_to_hz_refuses_an_unparsable_name(name: str) -> None:
     with pytest.raises(SonareValueError) as caught:
         note_to_hz(name)
     assert caught.value.code == int(ErrorCode.INVALID_PARAMETER)
+
+
+def test_note_to_hz_spans_the_midi_note_octaves() -> None:
+    """The octaves of C-1 (MIDI 0) through G9 (MIDI 127) are answered."""
+    from libsonare import note_to_hz
+
+    assert abs(note_to_hz("C-1") - 8.1758) < 1e-3
+    assert abs(note_to_hz("G9") - 12543.85) < 0.1
 
 
 @pytest.mark.parametrize("hz", [0.0, -440.0, float("nan"), float("inf")])

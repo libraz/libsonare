@@ -315,7 +315,7 @@ def test_estimate_room_forwards_band_controls_and_uses_zero_default(
         drr_db=0.0,
         confidence=0.5,
         rt60_bands=[],
-        absorption_bands=[],
+        band_absorption=[],
     )
     monkeypatch.setattr(
         libsonare,

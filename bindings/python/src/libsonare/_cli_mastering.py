@@ -334,7 +334,7 @@ def cmd_mastering(args: argparse.Namespace) -> int:
             joined = ", ".join(f"--{name}" for name in ignored_loudness)
             raise ValueError(f"{joined} cannot be combined with --{selectors[0]}")
 
-    params = _parse_kv_params(params_raw) if params_raw else {}
+    params = _parse_kv_params(params_raw, names=True) if params_raw else {}
 
     def _run_chain(config: dict[str, Any]) -> Any:
         """Run one chain config over however many channels the source has."""
@@ -489,7 +489,7 @@ def cmd_mastering_processor(args: argparse.Namespace) -> int:
 
     planes, sr = _load_channels_or_downmix(args.file)
     params_raw = getattr(args, "params", "") or ""
-    params = _parse_kv_params(params_raw) if params_raw else {}
+    params = _parse_kv_params(params_raw, names=True) if params_raw else {}
     bits = _wav_bits(args)
     processor = getattr(args, "processor", None) or ""
     _reject_unknown_processor_params(processor, params)
@@ -747,7 +747,7 @@ def cmd_mastering_chain(args: argparse.Namespace) -> int:
     planes, sr = _load_channels_or_downmix(args.file)
     config = _parse_json_config(args.config, args.config_file)
     if args.params:
-        config.update(_parse_kv_params(args.params))
+        config.update(_parse_kv_params(args.params, names=True))
     # Declared across the branches rather than inferred from the first one: the
     # two results share the metrics this function goes on to read, and differ
     # only in which buffers they carry.
@@ -800,7 +800,7 @@ def cmd_master(args: argparse.Namespace) -> int:
     stereo = len(planes) == 2
     overrides = _parse_json_config(args.config, args.config_file)
     if args.params:
-        overrides.update(_parse_kv_params(args.params))
+        overrides.update(_parse_kv_params(args.params, names=True))
     chain_config_path = getattr(args, "chain_config", None) or ""
     assistant = bool(getattr(args, "assistant", False))
     # --preset carries a default, so whether the caller chose it is decided by

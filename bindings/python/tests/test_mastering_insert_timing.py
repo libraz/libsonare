@@ -57,8 +57,8 @@ def test_param_info_sample_rate_resolves_the_nyquist_ceiling() -> None:
     assert frequency(None)["max"] == 24000
     assert frequency(44100)["max"] == 22050
     assert frequency(44100)["maxExclusive"] is True
-    # The insert's build-time cap holds above its build rate.
-    assert frequency(96000)["max"] == 24000
+    # An insert built for a known rate reaches that rate's Nyquist frequency.
+    assert frequency(96000)["max"] == 48000
 
     def ratio(rate: int | None) -> dict:
         info = libsonare.mastering_insert_param_info("dynamics.compressor", sample_rate=rate)

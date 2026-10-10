@@ -137,7 +137,7 @@ class TestMasteringRepairDereverbConfigForRoom:
             height_m=0.0,
             drr_db=0.0,
             confidence=0.0,
-            absorption_bands=[],
+            band_absorption=[],
             rt60_bands=self.MID_BANDS if rt60_bands is None else rt60_bands,
         )
 

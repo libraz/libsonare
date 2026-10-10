@@ -114,6 +114,8 @@ AutomationCurveArg: TypeAlias = AutomationCurve | str | int
 IntSamples: TypeAlias = Sequence[int] | list[int] | np.ndarray[Any, Any]
 MasteringParamValue: TypeAlias = float | int | bool
 MasteringParams: TypeAlias = dict[str, MasteringParamValue]
+# A solo processor's params additionally take the choices name of an enum-valued key.
+MasteringSoloParams: TypeAlias = dict[str, MasteringParamValue | str]
 # The assistant additionally accepts two names: targetPlatform, a delivery
 # target (see mastering_platform_names), and preset, the mastering preset the
 # suggestion starts from (see mastering_preset_names; default "streaming").
@@ -413,8 +415,8 @@ def synthesize_rir(
     source: tuple[float, float, float] = (1.0, 1.0, 1.2),
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
-    absorption_bands: Sequence[float] | None = None,
-    scattering_bands: Sequence[float] | None = None,
+    band_absorption: Sequence[float] | None = None,
+    band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
     sample_rate: int = 48000,
     ism_order: int = 3,
@@ -456,8 +458,8 @@ def room_morph(
     source: tuple[float, float, float] = ...,
     listener: tuple[float, float, float] = ...,
     absorption: float = 0.2,
-    absorption_bands: Sequence[float] | None = None,
-    scattering_bands: Sequence[float] | None = None,
+    band_absorption: Sequence[float] | None = None,
+    band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
@@ -1198,14 +1200,14 @@ def mastering_process(
     processor_name: SoloProcessor,
     samples: FloatSamples,
     sample_rate: int = 22050,
-    params: MasteringParams | None = None,
+    params: MasteringSoloParams | None = None,
 ) -> MasteringResult: ...
 def mastering_process_stereo(
     processor_name: SoloProcessor,
     left: FloatSamples,
     right: FloatSamples,
     sample_rate: int = 22050,
-    params: MasteringParams | None = None,
+    params: MasteringSoloParams | None = None,
 ) -> MasteringStereoResult: ...
 def mastering_chain(
     samples: FloatSamples,
@@ -1233,7 +1235,7 @@ def mastering_insert_param_info(
     name: str, sample_rate: int | None = None
 ) -> list[MasteringInsertParamInfo]: ...
 def mastering_insert_timing(
-    name: str, params: Mapping[str, float | bool], sample_rate: int
+    name: str, params: Mapping[str, float | bool | str], sample_rate: int
 ) -> MasteringInsertTiming: ...
 def mastering_processor_catalog() -> list[MasteringProcessorCatalogEntry]: ...
 def mastering_amp_preset_catalog() -> list[MasteringAmpPresetCatalogEntry]: ...

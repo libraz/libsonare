@@ -401,3 +401,46 @@ def test_native_front_end_declares_the_same_two_spellings() -> None:
     assert 'args.has("chain-config")' in handler
     assert 'args.get_string("chain-config")' in handler
     assert 'mode == "config" ? "chain-config" : mode' in handler
+
+
+def test_mastering_params_and_chain_config_take_an_enum_name(tmp_path, capsys) -> None:
+    """``--params`` and ``--chain-config`` accept ``noiseEstimator=mcra`` as the number 1."""
+    source = tmp_path / "input.wav"
+    _write_source(source)
+
+    def run(extra: list[str]) -> dict[str, object]:
+        assert _run(["mastering", str(source), *extra, "--json"]) == 0
+        return json.loads(capsys.readouterr().out)
+
+    base = ["--preset", "pop", "--params"]
+    by_name = run([*base, "repair.denoise.enabled=1,repair.denoise.noiseEstimator=mcra"])
+    by_number = run([*base, "repair.denoise.enabled=1,repair.denoise.noiseEstimator=1"])
+    assert by_name["output_lufs"] == by_number["output_lufs"]
+
+    config = tmp_path / "chain.json"
+    config.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "params": {
+                    "repair.denoise.enabled": True,
+                    "repair.denoise.noiseEstimator": "mcra",
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    from_file = run(["--chain-config", str(config)])
+    assert from_file["mode"] == "config"
+
+    with pytest.raises(Exception, match="unknown name 'nope'"):
+        _run(
+            [
+                "mastering",
+                str(source),
+                "--preset",
+                "pop",
+                "--params",
+                "repair.denoise.noiseEstimator=nope",
+            ]
+        )

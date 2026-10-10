@@ -158,8 +158,8 @@ def synthesize_rir(
     source: tuple[float, float, float] = (1.0, 1.0, 1.2),
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
-    absorption_bands: Sequence[float] | None = None,
-    scattering_bands: Sequence[float] | None = None,
+    band_absorption: Sequence[float] | None = None,
+    band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
     sample_rate: int = 48000,
     ism_order: int = 3,
@@ -179,7 +179,7 @@ def synthesize_rir(
             7 x 5 x 3, matching the other bindings).
         source, listener: (x, y, z) positions inside the room, in metres.
         absorption: Uniform wall absorption, clamped to [0, 0.999].
-        absorption_bands: Optional per-octave-band wall absorption
+        band_absorption: Optional per-octave-band wall absorption
             (125/250/500/1k/2k/4k.. Hz). When given it overrides ``absorption``
             (unless ``material_preset`` selects a named preset). The late
             tail's decay time runs continuously between octave centres, so
@@ -187,13 +187,13 @@ def synthesize_rir(
             octave to the next, the octave-band RT60 measured back from the
             result leans toward the slower neighbour, as it does for a real
             room; the design value holds at the octave centre.
-        scattering_bands: Optional per-octave-band wall scattering; missing
-            bands read as 0. Independent of ``absorption_bands`` and
+        band_scattering: Optional per-octave-band wall scattering; missing
+            bands read as 0. Independent of ``band_absorption`` and
             ``material_preset`` -- it applies to whichever material the
             absorption precedence selected.
         material_preset: Named wall-material preset, by name (``"none"``,
             ``"concrete"``, ``"wood"``, ``"curtain"``, ``"carpet"``, ``"glass"``).
-            Any preset but ``"none"`` wins over ``absorption_bands`` and
+            Any preset but ``"none"`` wins over ``band_absorption`` and
             ``absorption``. An unknown name raises ``SonareValueError`` and a
             number ``TypeError``.
         sample_rate: Output sample rate in Hz.
@@ -229,10 +229,10 @@ def synthesize_rir(
     if not hasattr(lib, "sonare_synthesize_rir"):
         raise _not_supported("libsonare was built without acoustic-simulation support")
     bands_ptr, bands_count, _bands_owner = _band_array_args(
-        absorption_bands, arg_name="absorption_bands"
+        band_absorption, arg_name="band_absorption"
     )
     scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
-        scattering_bands, arg_name="scattering_bands"
+        band_scattering, arg_name="band_scattering"
     )
     config = SonareRirSynthConfig(
         length_m=length_m,
@@ -352,7 +352,7 @@ def estimate_room(
             height_m=float(out.height_m),
             drr_db=float(out.drr_db),
             confidence=float(out.confidence),
-            absorption_bands=_optional_float_array_result(out.absorption_bands, count),
+            band_absorption=_optional_float_array_result(out.absorption_bands, count),
             rt60_bands=_optional_float_array_result(out.rt60_bands, count),
         )
     finally:
@@ -374,7 +374,7 @@ def room_geometry_from_estimate(
     """Turn a room estimate into the geometry :func:`synthesize_rir` takes.
 
     The pair to :func:`estimate_room`: the estimate's ``length_m``, ``width_m``,
-    ``height_m`` and ``absorption_bands`` are already :func:`synthesize_rir`'s
+    ``height_m`` and ``band_absorption`` are already :func:`synthesize_rir`'s
     names, so this merges the placement in and drops what the estimate did not
     converge on::
 
@@ -393,7 +393,7 @@ def room_geometry_from_estimate(
     """
     lib = _get_lib()
     bands_ptr, bands_count, _bands_owner = _band_array_args(
-        estimate.absorption_bands, arg_name="absorption_bands"
+        estimate.band_absorption, arg_name="band_absorption"
     )
     c_estimate = SonareRoomEstimate(
         volume=estimate.volume,
@@ -414,7 +414,7 @@ def room_geometry_from_estimate(
         "height_m": float(config.height_m),
     }
     if config.absorption_band_count > 0:
-        geometry["absorption_bands"] = _optional_float_array_result(
+        geometry["band_absorption"] = _optional_float_array_result(
             config.absorption_bands, config.absorption_band_count
         )
     if source is not None:
@@ -435,8 +435,8 @@ def room_morph(
     source: tuple[float, float, float] = (1.0, 1.0, 1.2),
     listener: tuple[float, float, float] = (5.0, 4.0, 1.7),
     absorption: float = 0.2,
-    absorption_bands: Sequence[float] | None = None,
-    scattering_bands: Sequence[float] | None = None,
+    band_absorption: Sequence[float] | None = None,
+    band_scattering: Sequence[float] | None = None,
     material_preset: MaterialPresetName = "none",
     source_tail_suppression: float = 0.5,
     wet: float = 0.5,
@@ -459,10 +459,10 @@ def room_morph(
     target room is added.
 
     Args:
-        absorption_bands: Optional per-octave-band target-wall absorption; when
+        band_absorption: Optional per-octave-band target-wall absorption; when
             given it overrides ``absorption`` unless ``material_preset`` is set.
-        scattering_bands: Optional per-octave-band target-wall scattering;
-            missing bands read as 0. Independent of ``absorption_bands`` and
+        band_scattering: Optional per-octave-band target-wall scattering;
+            missing bands read as 0. Independent of ``band_absorption`` and
             ``material_preset`` -- it applies to whichever material the
             absorption precedence selected.
         material_preset: Named target-wall material preset (``"none"``; see
@@ -485,10 +485,10 @@ def room_morph(
         raise _not_supported("libsonare was built without acoustic-simulation support")
     c_array, length = _to_c_float_array(samples)
     bands_ptr, bands_count, _bands_owner = _band_array_args(
-        absorption_bands, arg_name="absorption_bands"
+        band_absorption, arg_name="band_absorption"
     )
     scatter_ptr, scatter_count, _scatter_owner = _band_array_args(
-        scattering_bands, arg_name="scattering_bands"
+        band_scattering, arg_name="band_scattering"
     )
     config = SonareRoomMorphConfig(
         length_m=length_m,

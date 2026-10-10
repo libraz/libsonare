@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from libsonare import (
+    AutomationPoint,
     ChannelLayout,
     EngineClip,
     EngineTrackMonitorMode,
@@ -279,6 +280,27 @@ def test_engine_track_strip_json_routes_lane_strip() -> None:
         assert 1.20 < processed[0][-1] < 1.40
 
 
+def test_engine_track_strip_eq_insert_is_bounded_by_the_engine_rate_nyquist() -> None:
+    def strip_json(frequency_hz: int) -> str:
+        return (
+            '{"version":1,"strips":[{"id":"track-10","inserts":[{"slot":"pre",'
+            '"processor":"eq.parametric","params":"{\\"band0.frequencyHz\\":'
+            + str(frequency_hz)
+            + '}"}]}],"buses":[],"connections":[]}'
+        )
+
+    with RealtimeEngine(sample_rate=96000.0, max_block_size=256) as engine:
+        engine.set_track_lanes([10])
+        engine.set_track_strip_json(10, strip_json(30000))
+        with pytest.raises(SonareError):
+            engine.set_track_strip_json(10, strip_json(48000))
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_lanes([10])
+        with pytest.raises(SonareError):
+            engine.set_track_strip_json(10, strip_json(30000))
+        engine.set_track_strip_json(10, strip_json(20000))
+
+
 def test_engine_track_strip_insert_bypass_toggles_insert() -> None:
     frames = 256 * 16
     source = [math.sin(2.0 * math.pi * 1000.0 * i / 48000.0) for i in range(frames)]
@@ -411,6 +433,28 @@ def test_engine_master_strip_json_routes_master_strip() -> None:
         for _ in range(8):
             attenuated = engine.process([[0.0] * 256])
         assert 0.05 < attenuated[0][-1] < 0.25
+
+
+def test_engine_refuses_a_reserved_mixer_id_that_names_no_strip() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=256) as engine:
+        engine.set_track_lanes([5, 7])
+        points = [AutomationPoint(ppq=0.0, value=-6.0)]
+        # The retired positional encoding, for the lane that now holds track 7.
+        for positional in (0x4D580101, 0x4D580001, 0x4D58FE00):
+            with pytest.raises(SonareError) as smoothed:
+                engine.set_parameter_smoothed(positional, -6.0)
+            assert smoothed.value.code == 4
+            with pytest.raises(SonareError) as immediate:
+                engine.set_parameter(positional, -6.0)
+            assert immediate.value.code == 4
+            with pytest.raises(SonareError) as lane:
+                engine.set_automation_lane(positional, points)
+            assert lane.value.code == 4
+        lane_fader = engine.resolve_track_lane_automation_id(7, "faderDb")
+        engine.set_parameter_smoothed(lane_fader, -6.0)
+        engine.set_automation_lane(lane_fader, points)
+        engine.set_parameter_smoothed(0x4D58FF01, -6.0)
+        engine.set_automation_lane(0x4D58FF01, points)
 
 
 def test_engine_master_strip_eq_band_updates_embedded_eq() -> None:

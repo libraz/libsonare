@@ -152,8 +152,8 @@ class MasteringInsertParamInfo(TypedDict):
     the axis a control draws the value on. ``uiMin`` / ``uiMax``, when not
     ``None``, are a display range inside ``[min, max]``; ``None`` means the
     accepted range is also the display range. ``dependsOn`` lists the siblings
-    whose values bound this one; ``min`` / ``max`` stay what they are with the
-    siblings at their defaults.
+    whose values bound this one; a bound that only restates that dependency at
+    the sibling's default is ``None``, so ``min`` / ``max`` are limits of the key's own.
     """
 
     name: str
