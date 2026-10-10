@@ -252,7 +252,13 @@ export class ProjectTimeline {
     this.native.destroy();
   }
 
-  /** Releases the native timeline; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native timeline; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.dispose();
   }
@@ -1850,7 +1856,13 @@ export class Project {
     this.destroy();
   }
 
-  /** Releases the native project; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native project; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

@@ -781,7 +781,7 @@ describe('unit conversions', () => {
     expect(noteToHz('A4')).toBeCloseTo(440, 1);
   });
 
-  it.each(['H4', 'C#x', '', 'A4junk', 'C2147483647'])(
+  it.each(['H4', 'C#x', '', 'A4junk', 'C2147483647', 'C10', 'A-2'])(
     'noteToHz(%j) is refused with InvalidParameter',
     (name) => {
       expect(() => noteToHz(name)).toThrow(
@@ -789,6 +789,11 @@ describe('unit conversions', () => {
       );
     },
   );
+
+  it('noteToHz spans the MIDI note range octaves C-1 through G9', () => {
+    expect(noteToHz('C-1')).toBeCloseTo(8.1758, 3);
+    expect(noteToHz('G9')).toBeCloseTo(12543.85, 1);
+  });
 
   it.each([0, -440, Number.NaN, Number.POSITIVE_INFINITY])(
     'hzToNote(%d) is refused with InvalidParameter',

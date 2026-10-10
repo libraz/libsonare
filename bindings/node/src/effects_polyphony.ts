@@ -5,7 +5,7 @@ import type {
   PolyphonicAnalysisOptions,
   PolyphonicRenderOptions,
 } from './types.js';
-import { assertInt32, assertInt64, assertSampleRate, resolveSampleBound } from './validation.js';
+import { assertAudioInput, assertInt32, assertInt64, resolveSampleBound } from './validation.js';
 
 /** Audio, its sample rate, and the analysis tuning, flat in one request. */
 export interface AnalyzePolyphonicRequest extends PolyphonicAnalysisOptions {
@@ -83,7 +83,7 @@ export class PolyphonicAnalysis {
    */
   constructor(request: AnalyzePolyphonicRequest) {
     const { samples, sampleRate, ...options } = request;
-    assertSampleRate('analyzePolyphonic', sampleRate);
+    assertAudioInput('analyzePolyphonic', samples, sampleRate, options);
     assertPolyphonicOptions('analyzePolyphonic', options);
     this.sampleRate = sampleRate;
     this.native = new addon.PolyphonicAnalysis(samples, sampleRate, options);
@@ -279,7 +279,13 @@ export class PolyphonicAnalysis {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

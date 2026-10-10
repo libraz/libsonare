@@ -57,10 +57,12 @@ export interface StreamingMasteringChainConfig extends Record<string, unknown> {
  * {@link StreamingMasteringChainConfig.loudnessStaticGainDb} is supplied.
  *
  * `repair.denoise` runs here, but only with a noise estimator that is recursive
- * in time. Its default ranks every frame of the whole signal by energy, which a
- * stream never reaches the end of, so it is refused by name rather than
- * substituted; set `repair.denoise.noiseEstimator` to `1` (MCRA), `2` (IMCRA)
- * or `3` (speech-presence probability). The two minimum-tracking estimators
+ * in time. A stream defaults it to `'spp'` (`3`, speech-presence probability),
+ * so `{ repair: { denoise: { enabled: true } } }` prepares. The offline
+ * default, `'quantile'` (`0`), ranks every frame of the whole signal by energy,
+ * which a stream never reaches the end of, so it is refused by name rather than
+ * substituted; `'mcra'` (`1`) and `'imcra'` (`2`) are accepted too. The two
+ * minimum-tracking estimators
  * (`1` and `2`) seed their noise floor from the first frame they see and hold it
  * for the half second their minimum window spans, so a stream opened in the
  * middle of the programme is over-suppressed until it turns over; `3` tracks no
@@ -81,16 +83,18 @@ export class StreamingMasteringChain {
   private disposed = false;
 
   constructor(config: StreamingMasteringChainConfig = {}) {
-    // The addon flattens the nested config itself and keeps only the number and
-    // boolean leaves; anything else is skipped with no error, so a value that
-    // arrived as a string from a JSON preset or a UI field used to build a
-    // chain at the stage default and say nothing, while the same object threw
-    // a TypeError on the offline path. Run the canonical flattener first purely
-    // for its rejection: it names the offending dotted path, so both paths fail
-    // the same way on the same input. The result is discarded — the addon still
-    // does the flattening that actually reaches the core.
-    flattenChainConfig(config, STREAMING_ONLY_CONFIG_KEYS);
-    this.native = new addon.StreamingMasteringChain(config);
+    // The addon keeps only the number and boolean leaves of what it is given;
+    // anything else is skipped with no error. The canonical flattener runs
+    // first so a value that arrived as a string from a JSON preset or a UI
+    // field is rejected by dotted path, as on the offline path, and an enum
+    // given by name reaches the addon as its number.
+    const native: Record<string, unknown> = flattenChainConfig(config, STREAMING_ONLY_CONFIG_KEYS);
+    for (const key of STREAMING_ONLY_CONFIG_KEYS) {
+      if (config[key] !== undefined) {
+        native[key] = config[key];
+      }
+    }
+    this.native = new addon.StreamingMasteringChain(native);
   }
 
   /**
@@ -233,7 +237,13 @@ export class StreamingMasteringChain {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -407,7 +417,13 @@ export class StreamAnalyzer {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -646,7 +662,13 @@ export class StreamingEqualizer {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

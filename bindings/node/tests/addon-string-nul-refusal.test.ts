@@ -12,7 +12,10 @@ import { describe, expect, it } from 'vitest';
 import {
   Audio,
   Mixer,
+  masterAudio,
+  masterAudioStereo,
   masteringInsertParamNames,
+  masteringPresetParams,
   mixingScenePresetJson,
   RealtimeEngine,
   realtimeVoiceChangerPresetJson,
@@ -58,6 +61,22 @@ const SCENE_JSON = JSON.stringify({
   connections: [],
 });
 const WAV_PATH = new URL('../resampled.wav', import.meta.url).pathname;
+
+describe('embedded NUL refusal, mastering preset names', () => {
+  const samples = new Float32Array(4096).fill(0.1);
+  const preset = `pop${NUL}x` as never;
+
+  it('every spelling of a preset name is refused by name', () => {
+    expect(() => masteringPresetParams('pop')).not.toThrow();
+    expectNulRefusal(() => masteringPresetParams(preset), 'preset');
+    expectNulRefusal(() => masterAudio({ samples, sampleRate: 44100, preset }), 'presetName');
+    expectNulRefusal(() => masterAudio(samples, 44100, preset), 'presetName');
+    expectNulRefusal(
+      () => masterAudioStereo({ left: samples, right: samples, sampleRate: 44100, preset }),
+      'presetName',
+    );
+  });
+});
 
 describe('embedded NUL refusal, by reader', () => {
   it('node_narrow_string (positional) names the argument', () => {

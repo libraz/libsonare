@@ -42,7 +42,7 @@ describe('Node async API', () => {
       const samples = generateSine(440, 1);
       const [syncResult, asyncResult] = [analyze(samples, SR), await analyzeAsync(samples, SR)];
       expect(Object.keys(asyncResult).sort()).toEqual(Object.keys(syncResult).sort());
-      expect(typeof asyncResult.key.root).toBe('string');
+      expect(typeof asyncResult.key.root).toBe('number');
       expect(typeof asyncResult.key.mode).toBe('string');
       expect(typeof asyncResult.key.name).toBe('string');
       expect(typeof asyncResult.key.shortName).toBe('string');
@@ -81,9 +81,9 @@ describe('Node async API', () => {
     it('rejects C-ABI failures as SonareError', async () => {
       let caught: unknown;
       try {
-        // Empty rather than a wrong sample rate: the facade refuses that one
-        // itself as a RangeError, so it would never reach the core to be coded.
-        await analyzeAsync(new Float32Array(0), SR);
+        // A bad hop rather than empty audio or a wrong sample rate: the facade
+        // refuses those itself as a RangeError, so they never reach the core to be coded.
+        await analyzeAsync(generateSine(440, 0.1), SR, { hopLength: 0 });
       } catch (error) {
         caught = error;
       }

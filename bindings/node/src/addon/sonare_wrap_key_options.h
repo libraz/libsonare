@@ -13,19 +13,21 @@
 
 namespace sonare_node {
 
-/// @brief Parse a single key mode from a JS value (numeric ordinal or name).
-inline SonareMode node_mode_from_value(const Napi::Value& value) {
+/// @brief Parse a single key mode from a JS value (numeric ordinal or name); `what` names the field
+/// in errors.
+inline SonareMode node_mode_from_value(const Napi::Value& value, const char* what = "keyMode") {
   if (value.IsNumber()) {
-    const int mode = sonare_node::node_narrow_int(value.Env(), value, "keyMode");
+    const int mode = sonare_node::node_narrow_int(value.Env(), value, what);
     if (mode < SONARE_MODE_MAJOR || mode > SONARE_MODE_LOCRIAN) {
-      throw Napi::RangeError::New(value.Env(), "invalid key mode");
+      throw Napi::RangeError::New(value.Env(), std::string(what) + ": invalid key mode");
     }
     return static_cast<SonareMode>(mode);
   }
   if (!value.IsString()) {
-    throw Napi::TypeError::New(value.Env(), "key modes must be strings or numbers");
+    throw Napi::TypeError::New(value.Env(),
+                               std::string(what) + " must be a key mode name or number");
   }
-  std::string key = node_narrow_string(value.Env(), value, "mode");
+  std::string key = node_narrow_string(value.Env(), value, what);
   std::transform(key.begin(), key.end(), key.begin(),
                  [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
   if (key == "major" || key == "maj") return SONARE_MODE_MAJOR;
@@ -35,7 +37,7 @@ inline SonareMode node_mode_from_value(const Napi::Value& value) {
   if (key == "lydian") return SONARE_MODE_LYDIAN;
   if (key == "mixolydian") return SONARE_MODE_MIXOLYDIAN;
   if (key == "locrian") return SONARE_MODE_LOCRIAN;
-  throw Napi::RangeError::New(value.Env(), "invalid key mode: " + key);
+  throw Napi::RangeError::New(value.Env(), std::string(what) + ": invalid key mode: " + key);
 }
 
 /// @brief Parse the `modes` option: a mode-set string, single mode, or array.

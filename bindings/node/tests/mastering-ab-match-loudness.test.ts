@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  ErrorCode,
-  isSonareError,
-  lufs,
-  masteringAbMatchLoudness,
-  meteringTruePeakDb,
-  type SonareError,
-} from '../src/index.js';
+import { lufs, masteringAbMatchLoudness, meteringTruePeakDb } from '../src/index.js';
 
 const SR = 44100;
 
@@ -93,7 +86,7 @@ describe('masteringAbMatchLoudness', () => {
     const caught = capture(() =>
       masteringAbMatchLoudness({ source, reference: broken, sampleRate: SR }),
     );
-    expect(isSonareError(caught)).toBe(true);
-    expect((caught as SonareError).code).toBe(ErrorCode.InvalidParameter);
+    expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as RangeError).message).toMatch(/reference contains NaN or Inf at index 1000/);
   });
 });

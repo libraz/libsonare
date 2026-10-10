@@ -20,6 +20,7 @@ import type {
   VoicedFlags,
 } from './types.js';
 import {
+  assertAudioInput,
   assertFiniteScalar,
   assertIntegerValue,
   assertSampleRate,
@@ -192,7 +193,7 @@ function assertNoteSetEntries(fnName: string, notes: readonly NoteSetEntry[]): v
 
 /** Shared entry check for the three entry points that re-measure a whole track. */
 function assertNoteTrackRequest(fnName: string, request: NoteTrackRequest): Int32Array | undefined {
-  assertSampleRate(fnName, request.sampleRate);
+  assertAudioInput(fnName, request.samples, request.sampleRate, request);
   assertFiniteScalar(fnName, request.frameRate, 'frameRate');
   if (request.voiced == null && request.voicedProb == null) {
     throw new TypeError(`${fnName}: one of voiced or voicedProb is required`);
@@ -217,6 +218,7 @@ export function noteStretch(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const rate = request.sampleRate ?? 22050;
+  assertAudioInput('noteStretch', request.samples, rate, request);
   return addon.noteStretch(
     request.samples,
     rate,
@@ -254,6 +256,7 @@ export function noteMove(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const rate = request.sampleRate ?? 22050;
+  assertAudioInput('noteMove', request.samples, rate, request);
   return addon.noteMove(
     request.samples,
     rate,
@@ -386,7 +389,7 @@ export function extractNotes(request: ExtractNotesRequest): NoteObject[] {
  */
 export function renderNotes(request: RenderNotesRequest): Float32Array {
   const { samples, sampleRate, notes, voiced, ...options } = request;
-  assertSampleRate('renderNotes', sampleRate);
+  assertAudioInput('renderNotes', samples, sampleRate, options);
   if (!Array.isArray(notes)) {
     throw new TypeError('renderNotes: notes must be an array');
   }

@@ -149,7 +149,8 @@ export interface MasteringInsertSlot {
  * reports null on both, meaning "this catalog states no limit" rather than
  * "unknown". Three properties to plan for: a bound is measured with every
  * other parameter at its default, so two parameters that constrain each other
- * each report the other's default; a sample-rate-derived bound reflects the
+ * each report the other's default (unless it is a `dependsOn` entry, which
+ * leaves the bound null); a sample-rate-derived bound reflects the
  * un-prepared processor and rises once the insert is prepared at a higher
  * rate; and an exclusive bound is reported as its limit value and flagged by
  * `minExclusive` / `maxExclusive`, so a control requiring `> 0` reports `min` 0
@@ -186,7 +187,7 @@ export interface CapabilityCatalogParameter {
   slot: string | null;
   /**
    * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
-   * empty for an independent key. `min` and `max` are measured with every sibling at its default.
+   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
   dependsOn: MasteringInsertParamDependency[];
 }

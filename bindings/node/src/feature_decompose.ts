@@ -3,7 +3,12 @@ import { resolveEffectFftOptions } from './_fft_options.js';
 import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { Matrix2D } from './types.js';
-import { assertHpssKernels, assertInt32, assertSampleRate, assertSamples } from './validation.js';
+import {
+  assertAudioChannels,
+  assertAudioInput,
+  assertHpssKernels,
+  assertInt32,
+} from './validation.js';
 
 function resolveHardMaskOption(fnName: string, value: unknown): boolean {
   if (value === undefined) {
@@ -286,9 +291,8 @@ export function decompose(
  * to the input.
  */
 export function decomposeStems(request: DecomposeStemsRequest): DecomposeStemsResult {
-  assertSamples('decomposeStems', request.samples, true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('decomposeStems', resolvedSampleRate);
+  assertAudioInput('decomposeStems', request.samples, resolvedSampleRate, {});
   // Each of the four is its own "0 => the documented default" on the C side, and
   // the addon's narrowing truncates onto that 0.
   for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
@@ -358,16 +362,14 @@ export function decomposeStemsLinked(
   if (!Array.isArray(request.channels) || request.channels.length === 0) {
     throw new RangeError('decomposeStemsLinked: channels must be a non-empty array');
   }
+  const resolvedSampleRate = request.sampleRate ?? 22050;
+  assertAudioChannels('decomposeStemsLinked', request.channels, resolvedSampleRate, request);
   const [first, ...rest] = request.channels;
-  assertSamples('decomposeStemsLinked', first, true, 'channels[0]');
-  rest.forEach((channel, index) => {
-    assertSamples('decomposeStemsLinked', channel, true, `channels[${index + 1}]`);
+  for (const channel of rest) {
     if (channel.length !== first.length) {
       throw new RangeError('decomposeStemsLinked: every channel must have the same length');
     }
-  });
-  const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('decomposeStemsLinked', resolvedSampleRate);
+  }
   for (const field of ['nComponents', 'nFft', 'hopLength', 'nIter'] as const) {
     const value = request[field];
     if (value !== undefined) {
@@ -443,7 +445,7 @@ export function remix(
   const request =
     samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('remix', resolvedSampleRate);
+  assertAudioInput('remix', request.samples, resolvedSampleRate, request);
   return addon.remix(
     request.samples,
     request.intervals,
@@ -478,7 +480,7 @@ export function remixAlignedIntervals(
   const request =
     samples instanceof Float32Array ? { samples, intervals, sampleRate, alignZeros } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('remixAlignedIntervals', resolvedSampleRate);
+  assertAudioInput('remixAlignedIntervals', request.samples, resolvedSampleRate, request);
   return addon.remixAlignedIntervals(
     request.samples,
     request.intervals,
@@ -549,7 +551,7 @@ export function hpssWithResidual(
   const resolvedKernelPercussive = request.kernelPercussive ?? 31;
   assertHpssKernels('hpssWithResidual', resolvedKernelHarmonic, resolvedKernelPercussive);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('hpssWithResidual', resolvedSampleRate);
+  assertAudioInput('hpssWithResidual', request.samples, resolvedSampleRate, request);
   return addon.hpssWithResidual(
     request.samples,
     resolvedSampleRate,

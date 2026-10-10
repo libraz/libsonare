@@ -124,7 +124,8 @@ describe('Audio class methods', () => {
   it('analyze via class returns beat aliases and rich key', () => {
     const audio = Audio.fromBuffer(generateSine(440, SR, 1.0), SR);
     const result = audio.analyze();
-    expect(result.key.name).toContain(result.key.root);
+    expect(Number.isInteger(result.key.root)).toBe(true);
+    expect(result.key.name).toContain(result.key.mode);
     expect(result.beats.length).toBe(result.beatTimes.length);
     audio.destroy();
   });

@@ -12,7 +12,7 @@ import type {
   DeclipStereoResult,
   DecrackleStereoResult,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /** Options for `masteringRepairDeclick`. */
 export interface DeclickOptions {
@@ -41,7 +41,7 @@ export function masteringRepairDeclick(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDeclick', resolvedSampleRate);
+  assertAudioInput('masteringRepairDeclick', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDeclick(request.samples, resolvedSampleRate, request);
 }
 
@@ -70,7 +70,20 @@ export function masteringRepairDeclickStereo(
   request: MasteringRepairDeclickStereoRequest,
 ): DeclickStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDeclickStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDeclickStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDeclickStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringRepairDeclickStereo(
     request.left,
     request.right,
@@ -129,7 +142,7 @@ export function masteringRepairDeclip(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDeclip', resolvedSampleRate);
+  assertAudioInput('masteringRepairDeclip', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDeclip(request.samples, resolvedSampleRate, request);
 }
 
@@ -158,7 +171,20 @@ export function masteringRepairDeclipStereo(
   request: MasteringRepairDeclipStereoRequest,
 ): DeclipStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDeclipStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDeclipStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDeclipStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringRepairDeclipStereo(
     request.left,
     request.right,
@@ -181,7 +207,7 @@ export function masteringRepairDecrackle(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDecrackle', resolvedSampleRate);
+  assertAudioInput('masteringRepairDecrackle', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDecrackle(request.samples, resolvedSampleRate, request);
 }
 
@@ -207,7 +233,20 @@ export function masteringRepairDecrackleStereo(
   request: MasteringRepairDecrackleStereoRequest,
 ): DecrackleStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDecrackleStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDecrackleStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDecrackleStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringRepairDecrackleStereo(
     request.left,
     request.right,
@@ -241,7 +280,7 @@ export function masteringRepairDetectClicks(
   request: MasteringRepairDetectClicksRequest,
 ): ClickDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectClicks', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectClicks', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectClicks(request.samples, resolvedSampleRate, request);
 }
 
@@ -297,7 +336,7 @@ export function masteringRepairDetectClipping(
   request: MasteringRepairDetectClippingRequest,
 ): ClipDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectClipping', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectClipping', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectClipping(request.samples, resolvedSampleRate, request);
 }
 
@@ -323,6 +362,6 @@ export function masteringRepairDetectCrackle(
   request: MasteringRepairDetectCrackleRequest,
 ): CrackleDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectCrackle', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectCrackle', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectCrackle(request.samples, resolvedSampleRate, request);
 }

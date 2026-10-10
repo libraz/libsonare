@@ -955,10 +955,12 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   bool use_key_context{};
   if (!OptionalBoolArg(env, info, 11, "useKeyContext", false, &use_key_context))
     return env.Undefined();
-  int key_root{};
-  if (!OptionalIntArg(env, info, 12, "keyRoot", 0, &key_root)) return env.Undefined();
-  int key_mode{};
-  if (!OptionalIntArg(env, info, 13, "keyMode", 0, &key_mode)) return env.Undefined();
+  const SonarePitchClass key_root = info[12].IsUndefined() || info[12].IsNull()
+                                        ? SONARE_PITCH_C
+                                        : PitchClassFromValue(info[12], "keyRoot");
+  const SonareMode key_mode = info[13].IsUndefined() || info[13].IsNull()
+                                  ? SONARE_MODE_MAJOR
+                                  : node_mode_from_value(info[13], "keyMode");
   bool detect_inversions{};
   if (!OptionalBoolArg(env, info, 14, "detectInversions", false, &detect_inversions))
     return env.Undefined();
@@ -981,8 +983,8 @@ Napi::Value SonareWrap::DetectChords(const Napi::CallbackInfo& info) {
   options.use_hmm = use_hmm ? 1 : 0;
   options.hmm_beam_width = hmm_beam_width;
   options.use_key_context = use_key_context ? 1 : 0;
-  options.key_root = static_cast<SonarePitchClass>(key_root);
-  options.key_mode = static_cast<SonareMode>(key_mode);
+  options.key_root = key_root;
+  options.key_mode = key_mode;
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
   options.tuning = tuning;
@@ -1014,10 +1016,12 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   auto typed = info[0].As<Napi::Float32Array>();
   const float* data = typed.Data();
   size_t length = typed.ElementLength();
-  int key_root{};
-  if (!OptionalIntArg(env, info, 1, "keyRoot", 0, &key_root)) return env.Undefined();
-  int key_mode{};
-  if (!OptionalIntArg(env, info, 2, "keyMode", 0, &key_mode)) return env.Undefined();
+  const SonarePitchClass key_root = info[1].IsUndefined() || info[1].IsNull()
+                                        ? SONARE_PITCH_C
+                                        : PitchClassFromValue(info[1], "keyRoot");
+  const SonareMode key_mode = info[2].IsUndefined() || info[2].IsNull()
+                                  ? SONARE_MODE_MAJOR
+                                  : node_mode_from_value(info[2], "keyMode");
   int sample_rate{};
   if (!OptionalIntArg(env, info, 3, "sampleRate", 22050, &sample_rate)) return env.Undefined();
   float min_duration{};
@@ -1064,8 +1068,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   options.use_hmm = use_hmm ? 1 : 0;
   options.hmm_beam_width = hmm_beam_width;
   options.use_key_context = use_key_context ? 1 : 0;
-  options.key_root = static_cast<SonarePitchClass>(key_root);
-  options.key_mode = static_cast<SonareMode>(key_mode);
+  options.key_root = key_root;
+  options.key_mode = key_mode;
   options.detect_inversions = detect_inversions ? 1 : 0;
   options.chroma_method = chroma_method;
   options.tuning = tuning;
@@ -1074,9 +1078,8 @@ Napi::Value SonareWrap::FunctionalAnalysis(const Napi::CallbackInfo& info) {
   SonareChordAnalysisResult detected{};
   SonareStringArray roman{};
   SonareStringArray functions{};
-  SonareError err = sonare_chord_functional_analysis(
-      data, length, sample_rate, &options, static_cast<SonarePitchClass>(key_root),
-      static_cast<SonareMode>(key_mode), &detected, &roman, &functions);
+  SonareError err = sonare_chord_functional_analysis(data, length, sample_rate, &options, key_root,
+                                                     key_mode, &detected, &roman, &functions);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();
@@ -1141,7 +1144,7 @@ Napi::Value SonareWrap::ChordFunctions(const Napi::CallbackInfo& info) {
     chords[i].bass = chords[i].root;
   }
   const SonarePitchClass key_root = PitchClassFromValue(info[1], "key.root");
-  const SonareMode key_mode = node_mode_from_value(info[2]);
+  const SonareMode key_mode = node_mode_from_value(info[2], "key.mode");
 
   SonareStringArray roman{};
   SonareStringArray functions{};

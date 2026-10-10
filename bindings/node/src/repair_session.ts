@@ -13,7 +13,7 @@ import type {
   DereverbReport,
   ProgressCallback,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioChannels } from './validation.js';
 
 /** The repair stages, in the order {@link masteringRepairApply} runs them. */
 export type MasteringRepairStageName =
@@ -122,7 +122,7 @@ export function masteringRepairAnalyze(
   request: MasteringRepairAnalyzeRequest,
 ): MasteringRepairAnalysis {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairAnalyze', resolvedSampleRate);
+  assertAudioChannels('masteringRepairAnalyze', request.channels, resolvedSampleRate, request);
   const options =
     request.preferStreamingSafe === undefined
       ? {}
@@ -155,7 +155,7 @@ export function masteringRepairApply(
   request: MasteringRepairApplyRequest,
 ): MasteringRepairApplyResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairApply', resolvedSampleRate);
+  assertAudioChannels('masteringRepairApply', request.channels, resolvedSampleRate, request);
   if (!Array.isArray(request.stages)) {
     throw new TypeError('masteringRepairApply: stages must be an array');
   }

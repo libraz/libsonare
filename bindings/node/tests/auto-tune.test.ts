@@ -111,7 +111,7 @@ describe('autoTune', () => {
       key: { root: 'C', mode: 'major' },
     });
     expect(samples.length).toBe(input.length);
-    expect(key).toMatchObject({ root: 'C', mode: 'major', confidence: 1 });
+    expect(key).toMatchObject({ root: 0, mode: 'major', confidence: 1 });
     let worstBefore = 0;
     let worstAfter = 0;
     MELODY.forEach((target, note) => {

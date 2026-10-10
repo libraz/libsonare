@@ -1,6 +1,7 @@
 export interface Key {
-  root: string;
-  mode: string;
+  /** Pitch class ordinal 0..11 (C=0), the form `detectChords` and `chordFunctions` take back. */
+  root: number;
+  mode: KeyMode;
   /**
    * Share of the model's belief that this key is the answer, in `[0, 1)`.
    *
@@ -1027,8 +1028,10 @@ export interface ChordDetectionOptions {
   useHmm?: boolean;
   hmmBeamWidth?: number;
   useKeyContext?: boolean;
-  keyRoot?: number;
-  keyMode?: number;
+  /** Pitch class ordinal or name (`'C'`, `'C#'`, ...), e.g. {@link detectKey}'s `root`. */
+  keyRoot?: ChordFunctionsKey['root'];
+  /** Mode ordinal or name, e.g. {@link detectKey}'s `mode`. */
+  keyMode?: ChordFunctionsKey['mode'];
   detectInversions?: boolean;
   chromaMethod?: ChordChromaMethod;
   /**

@@ -246,8 +246,14 @@ describe('StreamingMasteringChain', () => {
     expect(chain.flushMono()).toHaveLength(0);
   });
 
-  it('rejects denoise and loudness stages', () => {
-    expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).toThrow();
+  it('accepts denoise by default, refuses its whole-signal estimator and a loudness stage', () => {
+    expect(() => new StreamingMasteringChain({ 'repair.denoise.enabled': true })).not.toThrow();
+    expect(
+      () =>
+        new StreamingMasteringChain({
+          repair: { denoise: { enabled: true, noiseEstimator: 'quantile' } },
+        }),
+    ).toThrow(/quantile/);
     expect(() => new StreamingMasteringChain({ 'loudness.targetLufs': -14 })).toThrow();
   });
 

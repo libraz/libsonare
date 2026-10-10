@@ -180,16 +180,17 @@ describe('normalizeStereo refusals', () => {
     expect(error.message).toMatch(/same length/);
   });
 
+  // Empty audio is the facade's own RangeError, not a code the core sent back.
   it('refuses an empty left channel', () => {
-    invalidParameter(() =>
+    expect(() =>
       normalizeStereo({ left: new Float32Array(0), right: new Float32Array(0), sampleRate: SR }),
-    );
+    ).toThrow(RangeError);
   });
 
   it('refuses an empty right channel beside a channel that has signal', () => {
-    invalidParameter(() =>
+    expect(() =>
       normalizeStereo({ left: loud(), right: new Float32Array(0), sampleRate: SR }),
-    );
+    ).toThrow(RangeError);
   });
 
   it('refuses a target above full scale', () => {

@@ -187,6 +187,7 @@ class SonareWrap : public Napi::ObjectWrap<SonareWrap> {
   static Napi::Value MasteringInsertParamNames(const Napi::CallbackInfo& info);
   static Napi::Value MasteringInsertParamInfo(const Napi::CallbackInfo& info);
   static Napi::Value MasteringInsertTiming(const Napi::CallbackInfo& info);
+  static Napi::Value MasteringEnumValue(const Napi::CallbackInfo& info);
   static Napi::Value MasteringProcessorCatalog(const Napi::CallbackInfo& info);
   static Napi::Value MasteringAmpPresetCatalog(const Napi::CallbackInfo& info);
   static Napi::Value CapabilityCatalog(const Napi::CallbackInfo& info);

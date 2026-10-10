@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSampleRate, assertSamples } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /** Detector mode for `masteringDynamicsCompressor`. */
 export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 | 2;
@@ -89,9 +89,8 @@ export function masteringDynamicsCompressor(
   options: CompressorOptions = {},
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsCompressor', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringDynamicsCompressor', resolvedSampleRate);
+  assertAudioInput('masteringDynamicsCompressor', request.samples, resolvedSampleRate, request);
   return addon.masteringDynamicsCompressor(request.samples, resolvedSampleRate, request);
 }
 
@@ -110,9 +109,8 @@ export function masteringDynamicsGate(
   options: GateOptions = {},
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsGate', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringDynamicsGate', resolvedSampleRate);
+  assertAudioInput('masteringDynamicsGate', request.samples, resolvedSampleRate, request);
   return addon.masteringDynamicsGate(request.samples, resolvedSampleRate, request);
 }
 
@@ -131,8 +129,12 @@ export function masteringDynamicsTransientShaper(
   options: TransientShaperOptions = {},
 ): DynamicsProcessorResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('masteringDynamicsTransientShaper', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringDynamicsTransientShaper', resolvedSampleRate);
+  assertAudioInput(
+    'masteringDynamicsTransientShaper',
+    request.samples,
+    resolvedSampleRate,
+    request,
+  );
   return addon.masteringDynamicsTransientShaper(request.samples, resolvedSampleRate, request);
 }

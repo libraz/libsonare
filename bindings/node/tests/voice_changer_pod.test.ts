@@ -83,4 +83,27 @@ describe('RealtimeVoiceChanger flat POD setConfig', () => {
         }),
     ).toThrow();
   });
+
+  it('requires formantMode on a flat POD in the constructor and in setConfig', () => {
+    const pod = realtimeVoiceChangerPresetConfig('neutral-monitor');
+    const { formantMode: _omitted, ...partial } = pod;
+    const podWithoutMode = partial as unknown as typeof pod;
+    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, preset: podWithoutMode })).toThrow(
+      TypeError,
+    );
+    expect(() => new RealtimeVoiceChanger({ sampleRate: 48000, preset: podWithoutMode })).toThrow(
+      /formantMode is required/,
+    );
+    const vc = new RealtimeVoiceChanger({ sampleRate: 48000, preset: pod });
+    try {
+      expect(() => vc.setConfig(podWithoutMode)).toThrow(TypeError);
+      expect(() => vc.setConfig({ ...pod, formantMode: 3 } as never)).toThrow(
+        /formantMode must be a string/,
+      );
+      // A preset id keeps its own defaults.
+      expect(() => vc.setConfig('neutral-monitor')).not.toThrow();
+    } finally {
+      vc.destroy();
+    }
+  });
 });

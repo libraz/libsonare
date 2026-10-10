@@ -45,8 +45,8 @@ describe('insert catalog carries construction-only params, and timing answers pe
     expect(frequency()?.max).toBe(24000);
     expect(frequency(44100)?.max).toBe(22050);
     expect(frequency(44100)?.maxExclusive).toBe(true);
-    // The insert's build-time cap holds above its build rate.
-    expect(frequency(96000)?.max).toBe(24000);
+    // An insert built for a known rate reaches that rate's Nyquist frequency.
+    expect(frequency(96000)?.max).toBe(48000);
     const ratio = (rate?: number) =>
       masteringInsertParamInfo('dynamics.compressor', rate).find((param) => param.name === 'ratio');
     expect(ratio(44100)).toEqual(ratio());

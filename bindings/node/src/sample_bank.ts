@@ -102,7 +102,13 @@ export class SampleBank {
     this.destroy();
   }
 
-  /** Releases the native bank; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native bank; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

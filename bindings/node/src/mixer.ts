@@ -16,7 +16,7 @@ import type {
   StripRef,
   SurroundPan,
 } from './types.js';
-import { assertFiniteScalar, assertSampleRate } from './validation.js';
+import { assertAudioChannels, assertFiniteScalar, assertSampleRate } from './validation.js';
 import {
   automationCurveValue,
   meterTapValue,
@@ -645,7 +645,13 @@ export class Mixer {
     this.destroy();
   }
 
-  /** Releases the native mixer; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native mixer; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -689,6 +695,19 @@ export function mixStereo(
     ? { leftChannels, rightChannels: rightChannels as Float32Array[], sampleRate, ...options }
     : leftChannels;
   const resolvedSampleRate = request.sampleRate ?? 48000;
-  assertSampleRate('mixStereo', resolvedSampleRate);
+  assertAudioChannels(
+    'mixStereo',
+    request.leftChannels,
+    resolvedSampleRate,
+    request,
+    'leftChannels',
+  );
+  assertAudioChannels(
+    'mixStereo',
+    request.rightChannels,
+    resolvedSampleRate,
+    request,
+    'rightChannels',
+  );
   return addon.mixStereo(request.leftChannels, request.rightChannels, resolvedSampleRate, request);
 }

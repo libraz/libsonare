@@ -5,7 +5,7 @@ import type {
   StreamingPlatform,
   TypedJson,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /**
  * Params accepted by the assistant entry points. Every key is numeric except
@@ -162,7 +162,7 @@ export function masteringAssistantSuggest(
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAssistantSuggest', resolvedSampleRate);
+  assertAudioInput('masteringAssistantSuggest', request.samples, resolvedSampleRate, request);
   return addon.masteringAssistantSuggest(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
@@ -181,7 +181,7 @@ export function masteringAssistantSuggestChain(
   request: MasteringAssistantSuggestRequest,
 ): Record<string, number | boolean> {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAssistantSuggestChain', resolvedSampleRate);
+  assertAudioInput('masteringAssistantSuggestChain', request.samples, resolvedSampleRate, request);
   return addon.masteringAssistantSuggestChain(
     request.samples,
     resolvedSampleRate,
@@ -204,7 +204,7 @@ export function masteringAudioProfile(
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, params } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAudioProfile', resolvedSampleRate);
+  assertAudioInput('masteringAudioProfile', request.samples, resolvedSampleRate, request);
   return addon.masteringAudioProfile(request.samples, resolvedSampleRate, request.params ?? {});
 }
 
@@ -223,12 +223,23 @@ export function masteringStreamingPreview(
 ): string {
   const request = samples instanceof Float32Array ? { samples, sampleRate, platforms } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringStreamingPreview', resolvedSampleRate);
+  assertAudioInput('masteringStreamingPreview', request.samples, resolvedSampleRate, request);
   return addon.masteringStreamingPreview(
     request.samples,
     resolvedSampleRate,
     request.platforms ?? [],
   );
+}
+
+/**
+ * The stereo helpers below take a request object only. A `Float32Array` in the
+ * first position is the positional spelling of the mono helpers, and would
+ * otherwise surface as an unrelated complaint about `left`.
+ */
+function assertStereoRequest(fnName: string, request: unknown): void {
+  if (request === null || typeof request !== 'object' || ArrayBuffer.isView(request)) {
+    throw new TypeError(`${fnName} takes a request object { left, right, sampleRate }`);
+  }
 }
 
 /**
@@ -241,8 +252,22 @@ export function masteringStreamingPreview(
 export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): TypedJson<MasteringAssistantResult> {
+  assertStereoRequest('masteringAssistantSuggestStereo', request);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAssistantSuggestStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringAssistantSuggestStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringAssistantSuggestStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringAssistantSuggestStereo(
     request.left,
     request.right,
@@ -265,8 +290,22 @@ export function masteringAssistantSuggestStereo(
 export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): Record<string, number | boolean> {
+  assertStereoRequest('masteringAssistantSuggestChainStereo', request);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAssistantSuggestChainStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringAssistantSuggestChainStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringAssistantSuggestChainStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringAssistantSuggestChainStereo(
     request.left,
     request.right,
@@ -288,8 +327,22 @@ export function masteringAssistantSuggestChainStereo(
 export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,
 ): TypedJson<MasteringAudioProfile> {
+  assertStereoRequest('masteringAudioProfileStereo', request);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAudioProfileStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringAudioProfileStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringAudioProfileStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringAudioProfileStereo(
     request.left,
     request.right,
@@ -310,8 +363,22 @@ export function masteringAudioProfileStereo(
 export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): TypedJson<MasteringStreamingPreviewResult> {
+  assertStereoRequest('masteringStreamingPreviewStereo', request);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringStreamingPreviewStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringStreamingPreviewStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringStreamingPreviewStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringStreamingPreviewStereo(
     request.left,
     request.right,

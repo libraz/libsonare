@@ -15,7 +15,7 @@ import type {
   PitchCorrectOptions,
   VoicedFlags,
 } from './types.js';
-import { assertFiniteScalar } from './validation.js';
+import { assertAudioInput, assertFiniteScalar } from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
   /**
@@ -90,6 +90,7 @@ export function timeStretch(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
+  assertAudioInput('timeStretch', request.samples, request.sampleRate ?? 22050, request);
   assertFiniteScalar('timeStretch', request.rate as number, 'rate');
   const fftOptions = resolveEffectFftOptions('timeStretch', request.nFft, request.hopLength);
   return addon.timeStretch(
@@ -129,6 +130,7 @@ export function pitchShift(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, semitones, nFft, hopLength } : samples;
+  assertAudioInput('pitchShift', request.samples, request.sampleRate ?? 22050, request);
   assertFiniteScalar('pitchShift', request.semitones as number, 'semitones');
   const fftOptions = resolveEffectFftOptions('pitchShift', request.nFft, request.hopLength);
   return addon.pitchShift(
@@ -165,6 +167,7 @@ export function pitchCorrectToMidi(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, currentMidi, targetMidi } : samples;
+  assertAudioInput('pitchCorrectToMidi', request.samples, request.sampleRate ?? 22050, request);
   return addon.pitchCorrectToMidi(
     request.samples,
     request.sampleRate ?? 22050,
@@ -235,6 +238,12 @@ export function pitchCorrectToMidiTimevarying(
           voicedProb,
         }
       : samples;
+  assertAudioInput(
+    'pitchCorrectToMidiTimevarying',
+    request.samples,
+    request.sampleRate ?? 22050,
+    request,
+  );
   const nativeVoiced =
     request.voiced != null
       ? toVoicedInt32('pitchCorrectToMidiTimevarying', request.voiced)
@@ -315,6 +324,7 @@ export function pitchCorrectTimevarying(
     hopLength: requestHopLength,
     ...requestOptions
   } = request;
+  assertAudioInput('pitchCorrectTimevarying', input, requestSampleRate ?? 22050, requestOptions);
   const nativeVoiced =
     requestOptions.voiced != null
       ? toVoicedInt32('pitchCorrectTimevarying', requestOptions.voiced)
@@ -365,5 +375,6 @@ export function autoTune(request: AutoTuneRequest): AutoTuneResult {
   if (key !== 'detect' && (key === null || typeof key !== 'object')) {
     throw new TypeError("autoTune: key must be 'detect' or { root, mode }");
   }
+  assertAudioInput('autoTune', samples, sampleRate ?? 22050, options);
   return addon.autoTune(samples, sampleRate ?? 22050, key === 'detect' ? null : key, options);
 }

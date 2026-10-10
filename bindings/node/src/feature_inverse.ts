@@ -8,12 +8,31 @@ import type {
   MfccResult,
 } from './types.js';
 import {
+  assertAudioInput,
   assertFiniteScalar,
   assertIntegralSampleRate,
   assertPositiveInteger,
   assertSampleRate,
   resolveOptionalNonNegative,
 } from './validation.js';
+
+/** True for a `{ result }` request; a request with neither `result` nor `field` is refused by name. */
+function isResultRequest(
+  fn: string,
+  request: unknown,
+  field: string,
+): request is { result: unknown } {
+  if (typeof request !== 'object' || request === null) {
+    throw new TypeError(`${fn}: expected a Float32Array or a request object`);
+  }
+  if ('result' in request) {
+    return true;
+  }
+  if ((request as Record<string, unknown>)[field] === undefined) {
+    throw new TypeError(`${fn}: ${field} is required (or pass result)`);
+  }
+  return false;
+}
 
 export interface CqtToAudioRequest {
   magnitude: Float32Array;
@@ -415,7 +434,7 @@ export function melToStft(
   const request =
     power instanceof Float32Array
       ? { power, nMels, nFrames, sampleRate, nFft, fmin, fmax, htk }
-      : 'result' in power
+      : isResultRequest('melToStft', power, 'power')
         ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED)
         : power;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -469,7 +488,7 @@ export function melToAudio(
   const request =
     power instanceof Float32Array
       ? { power, nMels, nFrames, sampleRate, nFft, hopLength, fmin, fmax, nIter, htk }
-      : 'result' in power
+      : isResultRequest('melToAudio', power, 'power')
         ? melRequestFromResult('melToAudio', power, MEL_TO_AUDIO_CARRIED)
         : power;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -572,7 +591,7 @@ export function mfccToMel(
   const request =
     coefficients instanceof Float32Array
       ? { coefficients, nMfcc, nFrames, nMels, lifter }
-      : 'result' in coefficients
+      : isResultRequest('mfccToMel', coefficients, 'coefficients')
         ? mfccRequestFromResult('mfccToMel', coefficients, MFCC_TO_MEL_CARRIED)
         : coefficients;
   return addon.mfccToMel(
@@ -633,7 +652,7 @@ export function mfccToAudio(
           htk,
           lifter,
         }
-      : 'result' in coefficients
+      : isResultRequest('mfccToAudio', coefficients, 'coefficients')
         ? mfccRequestFromResult('mfccToAudio', coefficients, MFCC_TO_AUDIO_CARRIED)
         : coefficients;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -689,7 +708,7 @@ export function phaseVocoder(
     samples instanceof Float32Array ? { samples, sampleRate, rate, nFft, hopLength } : samples;
   assertFiniteScalar('phaseVocoder', request.rate, 'rate');
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('phaseVocoder', resolvedSampleRate);
+  assertAudioInput('phaseVocoder', request.samples, resolvedSampleRate, request);
   // Positivity only: the analysis geometry is an StftConfig, which requires a
   // positive size and hop and reports its own size ceiling by name.
   const resolvedNFft = resolvePositiveIntegerOption('phaseVocoder', 'nFft', request.nFft, 2048);

@@ -2,7 +2,7 @@ import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSampleRate, assertSamples } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /** Input for LUFS feature functions, including optional input validation control. */
 export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
@@ -29,7 +29,7 @@ export function lufsInterleaved(
 ): LufsResult {
   const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('lufsInterleaved', resolvedSampleRate);
+  assertAudioInput('lufsInterleaved', request.samples, resolvedSampleRate, request);
   return addon.lufsInterleaved(request.samples, request.channels, resolvedSampleRate);
 }
 
@@ -73,7 +73,7 @@ export function lufsSeriesInterleaved(
 ): LufsSeriesResult {
   const request = samples instanceof Float32Array ? { samples, channels, sampleRate } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('lufsSeriesInterleaved', resolvedSampleRate);
+  assertAudioInput('lufsSeriesInterleaved', request.samples, resolvedSampleRate, request);
   return addon.lufsSeriesInterleaved(request.samples, request.channels, resolvedSampleRate);
 }
 
@@ -90,7 +90,7 @@ export function ebur128LoudnessRange(
 ): number {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('ebur128LoudnessRange', resolvedSampleRate);
+  assertAudioInput('ebur128LoudnessRange', request.samples, resolvedSampleRate, request);
   return addon.ebur128LoudnessRange(request.samples, resolvedSampleRate);
 }
 
@@ -111,9 +111,8 @@ export function lufs(
   options: ValidateOptions = {},
 ): LufsResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('lufs', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('lufs', resolvedSampleRate);
+  assertAudioInput('lufs', request.samples, resolvedSampleRate, request);
   return addon.lufs(request.samples, resolvedSampleRate);
 }
 
@@ -133,9 +132,8 @@ export function momentaryLufs(
   options: ValidateOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('momentaryLufs', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('momentaryLufs', resolvedSampleRate);
+  assertAudioInput('momentaryLufs', request.samples, resolvedSampleRate, request);
   return addon.momentaryLufs(request.samples, resolvedSampleRate);
 }
 
@@ -155,8 +153,7 @@ export function shortTermLufs(
   options: ValidateOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('shortTermLufs', request.samples, request.validate !== false);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('shortTermLufs', resolvedSampleRate);
+  assertAudioInput('shortTermLufs', request.samples, resolvedSampleRate, request);
   return addon.shortTermLufs(request.samples, resolvedSampleRate);
 }

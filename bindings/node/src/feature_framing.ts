@@ -3,7 +3,12 @@ import type { FeatureSamplesRequest } from './feature_spectral.js';
 import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
 import type { SilenceCommonReport } from './types_features.js';
-import { assertPositiveInteger, resolveOptionalNonNegative } from './validation.js';
+import {
+  assertAudioInput,
+  assertAudioSamples,
+  assertPositiveInteger,
+  resolveOptionalNonNegative,
+} from './validation.js';
 
 export interface TrimSilenceRequest {
   samples: Float32Array;
@@ -18,6 +23,15 @@ export interface SplitSilenceCommonRequest {
   frameLength?: number;
   hopLength?: number;
 }
+/** An empty or non-array `signals` is the addon's own `TypeError`; only each element's content is checked here. */
+function assertSilenceSignals(fnName: string, request: SplitSilenceCommonRequest): void {
+  if (Array.isArray(request.signals)) {
+    request.signals.forEach((signal, i) => {
+      assertAudioSamples(fnName, signal, request, `signals[${i}]`);
+    });
+  }
+}
+
 export interface FrameSignalRequest {
   samples: Float32Array;
   frameLength: number;
@@ -62,6 +76,7 @@ export function trim(
     samples instanceof Float32Array
       ? { samples, sampleRate, thresholdDb, frameLength, hopLength }
       : samples;
+  assertAudioInput('trim', request.samples, request.sampleRate ?? 22050, request);
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'trim',
     'frameLength',
@@ -128,6 +143,7 @@ export function trimSilence(
 ): { audio: Float32Array; startSample: number; endSample: number } {
   const request =
     samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+  assertAudioSamples('trimSilence', request.samples, request);
   // The framing rule `trim` itself enforces: both positive, no other domain.
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'trimSilence',
@@ -164,6 +180,7 @@ export function splitSilence(
 ): Int32Array {
   const request =
     samples instanceof Float32Array ? { samples, topDb, frameLength, hopLength } : samples;
+  assertAudioSamples('splitSilence', request.samples, request);
   // Both positive, as trimSilence: `split` applies the same framing rule.
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'splitSilence',
@@ -203,6 +220,7 @@ export function splitSilence(
  *   not a `Float32Array`.
  */
 export function splitSilenceCommon(request: SplitSilenceCommonRequest): Int32Array {
+  assertSilenceSignals('splitSilenceCommon', request);
   // Both positive, as splitSilence: `split_silence_common` applies the same
   // framing rule to every signal.
   const resolvedFrameLength = resolvePositiveIntegerOption(
@@ -251,6 +269,7 @@ export function splitSilenceCommonWithReport(request: SplitSilenceCommonRequest)
   intervals: Int32Array;
   report: SilenceCommonReport;
 } {
+  assertSilenceSignals('splitSilenceCommonWithReport', request);
   const resolvedFrameLength = resolvePositiveIntegerOption(
     'splitSilenceCommonWithReport',
     'frameLength',

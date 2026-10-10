@@ -419,7 +419,7 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGain(const Napi::CallbackInfo&
     params = ParamsFromObject(info[2].As<Napi::Object>());
   }
   const auto config =
-      sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+      sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
   return StreamingLoudnessGainToObject(
       env, sonare::mastering::api::streaming_loudness_gain_mono(
                config, typed.Data(), typed.ElementLength(), sample_rate));
@@ -450,7 +450,7 @@ Napi::Value SonareWrap::MasteringStreamingLoudnessGainStereo(const Napi::Callbac
     params = ParamsFromObject(info[3].As<Napi::Object>());
   }
   const auto config =
-      sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+      sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
   return StreamingLoudnessGainToObject(
       env, sonare::mastering::api::streaming_loudness_gain_stereo(
                config, left.Data(), right.Data(), left.ElementLength(), sample_rate));

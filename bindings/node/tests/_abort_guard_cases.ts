@@ -149,7 +149,7 @@ const NAMED_OPTIONAL_REFUSALS: Array<[string, string, () => unknown]> = [
   [
     'addon.chordFunctionalAnalysis',
     'keyRoot',
-    () => addon.chordFunctionalAnalysis(readerTone, 'x'),
+    () => addon.chordFunctionalAnalysis(readerTone, true),
   ],
   ['addon.chroma', 'sampleRate', () => addon.chroma(readerTone, 'x')],
   ['addon.chromaCens', 'sampleRate', () => addon.chromaCens(readerTone, 'x')],

@@ -565,12 +565,12 @@ describe('extractPercussiveEvents', () => {
   });
 
   it('rejects malformed audio and config', () => {
-    expectInvalidParameter(() =>
-      extractPercussiveEvents({ samples: new Float32Array(0), sampleRate: SR }),
+    expect(() => extractPercussiveEvents({ samples: new Float32Array(0), sampleRate: SR })).toThrow(
+      RangeError,
     );
-    expectInvalidParameter(() =>
+    expect(() =>
       extractPercussiveEvents({ samples: Float32Array.from([0, Number.NaN, 0]), sampleRate: SR }),
-    );
+    ).toThrow(RangeError);
     expect(() => extractPercussiveEvents({ samples: two, sampleRate: 0 })).toThrow(RangeError);
     expect(() => extractPercussiveEvents({ samples: two, sampleRate: 1e9 })).toThrow(RangeError);
 
@@ -1018,9 +1018,9 @@ describe('renderPercussiveEvents', () => {
       { onsetSample: 4410, offsetSample: 15435, edit: { gainDb: -3 } },
     ];
 
-    expectInvalidParameter(() =>
+    expect(() =>
       renderPercussiveEvents({ samples: new Float32Array(0), sampleRate: SR, events: edited }),
-    );
+    ).toThrow(RangeError);
     expect(() => renderPercussiveEvents({ samples: three, sampleRate: 0, events: edited })).toThrow(
       RangeError,
     );

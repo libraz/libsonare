@@ -19,7 +19,7 @@ import type {
   VocalTransition,
   VocalUint64,
 } from './types_vocal_edit.js';
-import { resolveSampleBound } from './validation.js';
+import { assertAudioInput, resolveSampleBound } from './validation.js';
 
 interface NativeSession {
   notes(): { notes: VocalNote[]; transitions: VocalTransition[] };
@@ -589,10 +589,12 @@ export function vocalEditApiVersion(): number {
 }
 
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
+  assertAudioInput('createVocalEditSession', request?.samples, request?.sampleRate);
   return wrapVocalEditSession(vocalAddon.createVocalEditSession(request), request.sampleRate);
 }
 
 export function restoreVocalEditSession(request: VocalRestoreRequest): VocalEditSession {
+  assertAudioInput('restoreVocalEditSession', request?.samples, request?.sampleRate);
   return wrapVocalEditSession(vocalAddon.restoreVocalEditSession(request), request.sampleRate);
 }
 

@@ -4,6 +4,7 @@ import type { ValuesRequest } from './feature_units.js';
 import { addon } from './native.js';
 import type { TempogramMode } from './types.js';
 import {
+  assertAudioInput,
   assertNonNegativeSafeInteger,
   assertPositiveInteger,
   assertSampleRate,
@@ -298,7 +299,7 @@ export function onsetEnvelope(
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, nFft, hopLength, nMels } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('onsetEnvelope', resolvedSampleRate);
+  assertAudioInput('onsetEnvelope', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('onsetEnvelope', request.nFft, request.hopLength);
   assertPositiveInteger('onsetEnvelope', request.nMels ?? 128, 'nMels');
   return addon.onsetEnvelope(
@@ -336,7 +337,7 @@ export function onsetStrengthMulti(
       ? { samples, sampleRate, nFft, hopLength, nMels, nBands }
       : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('onsetStrengthMulti', resolvedSampleRate);
+  assertAudioInput('onsetStrengthMulti', request.samples, resolvedSampleRate, request);
   const fft = resolveFftOptions('onsetStrengthMulti', request.nFft, request.hopLength);
   assertPositiveInteger('onsetStrengthMulti', request.nMels ?? 128, 'nMels');
   assertPositiveInteger('onsetStrengthMulti', request.nBands ?? 3, 'nBands');

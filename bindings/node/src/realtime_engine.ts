@@ -177,11 +177,14 @@ export class RealtimeEngine {
     this.sampleRate = sampleRate;
   }
 
+  /** Starts transport playback, at `renderFrame` when given. */
   play(renderFrame?: number): void {
     this.native.play(resolveRenderFrame('play', renderFrame));
   }
 
   /**
+   * Stops transport playback, at `renderFrame` when given.
+   *
    * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
    * centred pitch bend on every channel played since the last reset, so
    * controller values set before a loop region are not restored at the wrap.
@@ -190,11 +193,7 @@ export class RealtimeEngine {
     this.native.stop(resolveRenderFrame('stop', renderFrame));
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Moves the transport to `timelineSample`, a position in timeline samples. */
   seekSample(timelineSample: number, renderFrame?: number): void {
     this.native.seekSample(timelineSample, resolveRenderFrame('seekSample', renderFrame));
   }
@@ -294,11 +293,7 @@ export class RealtimeEngine {
     this.native.applyCommandsDueNowPreservingFuture();
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Moves the transport to `ppq`, a position in quarter notes. */
   seekPpq(ppq: number, renderFrame?: number): void {
     this.native.seekPpq(ppq, resolveRenderFrame('seekPpq', renderFrame));
   }
@@ -333,11 +328,7 @@ export class RealtimeEngine {
     return this.native.sampleAtPpq(ppq);
   }
 
-  /**
-   * A loop wrap, seek or stop sends note-offs plus CC64=0, CC121, CC123 and a
-   * centred pitch bend on every channel played since the last reset, so
-   * controller values set before a loop region are not restored at the wrap.
-   */
+  /** Sets the loop region between two quarter-note positions and enables or disables it. */
   setLoop(startPpq: number, endPpq: number, enabled = true): void {
     this.native.setLoop(startPpq, endPpq, enabled);
   }
@@ -366,6 +357,9 @@ export class RealtimeEngine {
    * unchanged if no such value was ever sent for `paramId`. This holds
    * regardless of whether the manual value or the lane clear reaches the
    * audio thread first.
+   * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
+   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
+   * methods.
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(paramId, points.map(engineAutomationPointValue));
@@ -1333,6 +1327,9 @@ export class RealtimeEngine {
    * This value also becomes `paramId`'s base value: if an automation lane
    * later starts (and stops) driving `paramId`, the target reverts to this
    * value once that lane empties — see {@link setAutomationLane}.
+   * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
+   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
+   * methods.
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
     this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
@@ -2054,7 +2051,13 @@ export class RealtimeEngine {
     this.native.destroy();
   }
 
-  /** Releases the native handle; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native handle; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

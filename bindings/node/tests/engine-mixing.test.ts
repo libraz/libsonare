@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { MasteringProcessorCatalogEntry } from '../src/index.js';
+import type { EngineAutomationPoint, MasteringProcessorCatalogEntry } from '../src/index.js';
 import {
   ErrorCode,
   isSonareError,
@@ -767,6 +767,38 @@ describe('RealtimeEngine native binding', () => {
     }
     expect(attenuated[0].at(-1)).toBeGreaterThan(0.05);
     expect(attenuated[0].at(-1)).toBeLessThan(0.25);
+    engine.destroy();
+  });
+
+  it('refuses a reserved mixer id that names no strip and keeps the master and per-strip ids', () => {
+    const engine = new RealtimeEngine(48000, 256);
+    engine.setTrackLanes([{ trackId: 5 }, { trackId: 7 }]);
+    const point: EngineAutomationPoint[] = [{ ppq: 0, value: -6, curveToNext: 0 }];
+    // The retired positional encoding, for the lane that now holds track 7.
+    for (const positional of [0x4d580101, 0x4d580001, 0x4d58fe00]) {
+      for (const call of [
+        () => engine.setParameterSmoothed(positional, -6),
+        () => engine.setParameter(positional, -6),
+        () => engine.setAutomationLane(positional, point),
+      ]) {
+        let error: unknown;
+        try {
+          call();
+        } catch (e) {
+          error = e;
+        }
+        expect(isSonareError(error)).toBe(true);
+        if (!isSonareError(error)) {
+          throw new Error('expected SonareError');
+        }
+        expect(error.code).toBe(ErrorCode.InvalidParameter);
+      }
+    }
+    const laneFader = engine.resolveTrackLaneAutomationId(7, 'faderDb');
+    expect(() => engine.setParameterSmoothed(laneFader, -6)).not.toThrow();
+    expect(() => engine.setAutomationLane(laneFader, point)).not.toThrow();
+    expect(() => engine.setParameterSmoothed(0x4d58ff01, -6)).not.toThrow();
+    expect(() => engine.setAutomationLane(0x4d58ff01, point)).not.toThrow();
     engine.destroy();
   });
 

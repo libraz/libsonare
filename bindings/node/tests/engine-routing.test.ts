@@ -184,6 +184,23 @@ const kDuckerMasterJson = JSON.stringify({
   buses: [],
   connections: [],
 });
+const kDuckerTrackJson = JSON.stringify({
+  version: 1,
+  strips: [
+    {
+      id: 'track-10',
+      inserts: [
+        {
+          slot: 'pre',
+          processor: 'dynamics.duckingProcessor',
+          params: { thresholdDb: -20, ratio: 20, attackMs: 0.05, releaseMs: 80, rangeDb: 30 },
+        },
+      ],
+    },
+  ],
+  buses: [],
+  connections: [],
+});
 
 /**
  * Track 10 is a quiet program (-26 dB, under the duckers' -20 dB threshold)
@@ -322,6 +339,28 @@ describe('RealtimeEngine sidechain pre-check', () => {
     const engine = makeKeyedRig();
     expect(() => engine.canSetBusSidechain(2, 0, 2, 30)).toThrow(RangeError);
     expect(() => engine.canSetMasterSidechain(0, 'sideways' as never, 30)).toThrow(RangeError);
+    engine.destroy();
+  });
+
+  it('names an undeclared source and an insert the lane strip lacks on the lane form', () => {
+    const engine = makeKeyedRig();
+    expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual({
+      ok: false,
+      reason: 'insertOutOfRange',
+    });
+    engine.setTrackStripJson(10, kDuckerTrackJson);
+    expect(engine.canSetLaneSidechain(10, 0, 99)).toEqual({
+      ok: false,
+      reason: 'undeclaredSource',
+    });
+    expect(engine.canSetLaneSidechain(10, 3, 30)).toEqual({
+      ok: false,
+      reason: 'insertOutOfRange',
+    });
+    expect(engine.canSetLaneSidechain(10, 0, 30)).toEqual({ ok: true, reason: null });
+    expectSonareErrorCode(() => engine.setLaneSidechain(10, 0, 99), ErrorCode.InvalidParameter);
+    expectSonareErrorCode(() => engine.setLaneSidechain(10, 3, 30), ErrorCode.InvalidParameter);
+    expect(() => engine.setLaneSidechain(10, 0, 30)).not.toThrow();
     engine.destroy();
   });
 

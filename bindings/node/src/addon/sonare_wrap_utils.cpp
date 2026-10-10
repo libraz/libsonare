@@ -372,7 +372,7 @@ Napi::Object KeyToObject(Napi::Env env, SonarePitchClass root, SonareMode mode, 
   Napi::Object key = Napi::Object::New(env);
   std::string root_name = PitchClassNameLocal(root);
   std::string mode_name = ModeNameLocal(mode);
-  key.Set("root", Napi::String::New(env, root_name));
+  key.Set("root", Napi::Number::New(env, static_cast<double>(root)));
   key.Set("mode", Napi::String::New(env, mode_name));
   key.Set("confidence", Napi::Number::New(env, static_cast<double>(confidence)));
   key.Set("name", Napi::String::New(env, root_name + " " + mode_name));

@@ -42,6 +42,27 @@ function buildProject(): { project: Project; audioClip: number; audioTrack: numb
   return { project, audioClip, audioTrack };
 }
 
+/** A strip with one ducker insert, the insert a lane sidechain binding keys. */
+function duckerStripJson(trackId: number): string {
+  return JSON.stringify({
+    version: 1,
+    strips: [
+      {
+        id: `track-${trackId}`,
+        inserts: [
+          {
+            slot: 'pre',
+            processor: 'dynamics.duckingProcessor',
+            params: { thresholdDb: -20, ratio: 20, attackMs: 0.05, releaseMs: 80, rangeDb: 30 },
+          },
+        ],
+      },
+    ],
+    buses: [],
+    connections: [],
+  });
+}
+
 function preparedEngine(): RealtimeEngine {
   const engine = new RealtimeEngine(SAMPLE_RATE, BLOCK_SIZE);
   engine.prepare(SAMPLE_RATE, BLOCK_SIZE, 64, 16);
@@ -167,6 +188,9 @@ describe('project timeline', () => {
 
   it('rejects a self key and a cycle in lane sidechain bindings, keeping existing ones', () => {
     const engine = preparedEngine();
+    engine.setTrackLanes([1, 2]);
+    engine.setTrackStripJson(1, duckerStripJson(1));
+    engine.setTrackStripJson(2, duckerStripJson(2));
     engine.setLaneSidechain(1, 0, 2);
     expect(() => engine.setLaneSidechain(1, 0, 1)).toThrow();
     expect(() => engine.setLaneSidechain(2, 0, 1)).toThrow();

@@ -64,9 +64,7 @@ describe('masteringRepairAnalyze', () => {
   });
 
   it('refuses an empty channel set as an argument error', () => {
-    expect(() => masteringRepairAnalyze({ channels: [], sampleRate: SR })).toThrow(
-      expect.objectContaining({ code: ErrorCode.InvalidParameter }),
-    );
+    expect(() => masteringRepairAnalyze({ channels: [], sampleRate: SR })).toThrow(RangeError);
   });
 });
 

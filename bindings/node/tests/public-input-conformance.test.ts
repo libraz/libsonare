@@ -687,11 +687,11 @@ describe('async entry points reject instead of throwing synchronously', () => {
       () => masterAudioAsync(undefined as never),
       /Expected \(presetName/,
     ],
-    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /Expected \(presetName/],
+    ['masterAudioAsync({})', () => masterAudioAsync({} as never), /must be a Float32Array/],
     [
       'masterAudioAsync without samples',
       () => masterAudioAsync({ sampleRate: 22050 } as never),
-      /Expected \(presetName/,
+      /must be a Float32Array/,
     ],
     [
       'masterAudioStereoAsync(undefined)',
@@ -701,7 +701,7 @@ describe('async entry points reject instead of throwing synchronously', () => {
     [
       'masterAudioStereoAsync({})',
       () => masterAudioStereoAsync({} as never),
-      /Expected \(presetName/,
+      /must be a Float32Array/,
     ],
     [
       'masterAudioAsync with a non-numeric override leaf',

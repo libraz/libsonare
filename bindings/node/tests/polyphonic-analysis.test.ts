@@ -219,9 +219,8 @@ describe('analyzePolyphonic', () => {
   });
 
   it('refuses an empty buffer and a sample rate out of range', () => {
-    expectSonareError(
-      caught(() => analyzePolyphonic({ samples: new Float32Array(0), sampleRate: SR })),
-      ErrorCode.InvalidParameter,
+    expect(() => analyzePolyphonic({ samples: new Float32Array(0), sampleRate: SR })).toThrow(
+      RangeError,
     );
     expect(() => analyzePolyphonic({ samples: CHORD, sampleRate: 1 })).toThrow(RangeError);
   });

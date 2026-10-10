@@ -69,6 +69,7 @@ import type {
   BpmAnalysisResult,
   ChordAnalysisResult,
   ChordDetectionOptions,
+  ChordFunctionsKey,
   ChromaResult,
   DetectKeyOptions,
   DynamicsResult,
@@ -212,7 +213,13 @@ export class Audio {
     this.native.destroy();
   }
 
-  /** Releases the native handle; lets `using` (Node 22+) free it automatically. */
+  /**
+
+   * Releases the native handle; lets `using` free it automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -360,8 +367,8 @@ export class Audio {
   }
 
   chordFunctionalAnalysis(
-    keyRoot: number,
-    keyMode = 0,
+    keyRoot: ChordFunctionsKey['root'],
+    keyMode: ChordFunctionsKey['mode'] = 0,
     options: ChordDetectionOptions = {},
   ): FunctionalChord[] {
     return chordFunctionalAnalysisFn(this.data(), keyRoot, keyMode, this.getSampleRate(), options);

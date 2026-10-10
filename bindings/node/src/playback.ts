@@ -6,6 +6,7 @@ import type {
   RenderPlaybackRequest,
   RenderPlaybackResult,
 } from './types_playback.js';
+import { assertAudioInput } from './validation.js';
 
 type NativeHrtfSet = InstanceType<typeof addon.HrtfSet>;
 type NativePlaybackRenderer = InstanceType<typeof addon.PlaybackRenderer>;
@@ -64,7 +65,13 @@ export class HrtfSet {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -174,7 +181,13 @@ export class PlaybackRenderer {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -212,7 +225,13 @@ export class PlaybackLoudnessMeter {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -225,6 +244,7 @@ export class PlaybackLoudnessMeter {
  * An empty or non-finite `samples` is refused with an `InvalidParameter` error.
  */
 export function renderPlayback(request: RenderPlaybackRequest): RenderPlaybackResult {
+  assertAudioInput('renderPlayback', request.samples, request.sampleRate, request);
   return addon.renderPlayback(
     request.samples,
     request.channels,

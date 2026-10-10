@@ -1,5 +1,5 @@
 import { addon } from './native.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 export type NormalizeMode = 'peak' | 'rms';
 
@@ -32,7 +32,7 @@ export function normalize(
     samples instanceof Float32Array ? { samples, sampleRate, targetDb, mode } : samples;
   const resolvedMode = resolveNormalizeMode('normalize', request.mode);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('normalize', resolvedSampleRate);
+  assertAudioInput('normalize', request.samples, resolvedSampleRate, request);
   return addon.normalize(
     request.samples,
     resolvedSampleRate,
@@ -121,7 +121,8 @@ export interface NormalizeStereoResult {
 export function normalizeStereo(request: NormalizeStereoRequest): NormalizeStereoResult {
   const resolvedMode = resolveNormalizeMode('normalizeStereo', request.mode);
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('normalizeStereo', resolvedSampleRate);
+  assertAudioInput('normalizeStereo', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput('normalizeStereo', request.right, resolvedSampleRate, request, 'right');
   // Mode-dependent, as in the mono `normalize`: 0 dBFS RMS is not a usable
   // default -- the peaks sit well above the RMS, so effectively all of them clip.
   const resolvedTargetDb = request.targetDb ?? (resolvedMode === 'rms' ? -20.0 : 0.0);

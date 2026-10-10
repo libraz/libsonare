@@ -202,6 +202,32 @@ Napi::Value SonareWrap::MasteringInsertTiming(const Napi::CallbackInfo& info) {
   SONARE_NODE_CATCH(env)
 }
 
+Napi::Value SonareWrap::MasteringEnumValue(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (info.Length() < 3 || !(info[0].IsString() || info[0].IsNull()) || !info[1].IsString() ||
+      !info[2].IsString()) {
+    Napi::TypeError::New(env, "Expected (processor: string | null, key: string, name: string)")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
+  SONARE_NODE_TRY
+  const std::string processor =
+      info[0].IsNull() ? std::string() : node_narrow_string(env, info[0], "processor");
+  const std::string key = node_narrow_string(env, info[1], "key");
+  const std::string name = node_narrow_string(env, info[2], "name");
+  int is_enum = 0;
+  double value = 0.0;
+  const SonareError err =
+      sonare_mastering_enum_value(processor.c_str(), key.c_str(), name.c_str(), &is_enum, &value);
+  if (err != SONARE_OK) {
+    ThrowSonareError(env, err);
+    return env.Undefined();
+  }
+  // null: the key is not an enum, which the facade refuses as a wrong type.
+  return is_enum != 0 ? Napi::Value(Napi::Number::New(env, value)) : env.Null();
+  SONARE_NODE_CATCH(env)
+}
+
 Napi::Value SonareWrap::MasteringProcessorCatalog(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY

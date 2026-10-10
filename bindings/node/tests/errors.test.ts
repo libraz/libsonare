@@ -60,19 +60,18 @@ describe('every C-ABI failure carries the SonareError code', () => {
     }
   };
 
-  const poisoned = (n: number): Float32Array => {
-    const buffer = sine(n);
-    buffer[10] = Number.NaN;
-    return buffer;
-  };
-
-  // Each input has to fail INSIDE the core. A wrong sample rate no longer does:
-  // the facade refuses it on its own authority as a RangeError, which is what
-  // every other entry point here already did and what this surface documents.
-  // These two reach the core with arguments the facade has nothing to say about.
+  // Each input has to fail INSIDE the core. Empty or non-finite audio and a
+  // wrong sample rate no longer do: the facade refuses them on its own authority
+  // as a RangeError, which is what this surface documents. These reach the core
+  // with arguments the facade has nothing to say about.
+  const badHop = { samples: sine(22050), sampleRate: 22050, hopLength: 0 };
   const cases: ReadonlyArray<[string, () => unknown, ErrorCode]> = [
-    ['analyze (sync)', () => analyze(new Float32Array(0), 22050), ErrorCode.InvalidParameter],
-    ['mixStereo', () => mixStereo([poisoned(256)], [sine(256)], 22050), ErrorCode.InvalidParameter],
+    ['analyze (sync)', () => analyze(badHop), ErrorCode.InvalidParameter],
+    [
+      'mixStereo',
+      () => mixStereo([sine(256)], [sine(256)], 22050, { panMode: 'bogus' as never }),
+      ErrorCode.InvalidParameter,
+    ],
     [
       'synthPresetPatch',
       () => synthPresetPatch('definitely-not-a-real-preset'),
@@ -91,11 +90,10 @@ describe('every C-ABI failure carries the SonareError code', () => {
   }
 
   it('reports the same code for analyze and analyzeAsync on the same input', async () => {
-    const samples = new Float32Array(0);
-    const sync = capture(() => analyze(samples, 22050));
+    const sync = capture(() => analyze(badHop));
     let async: unknown;
     try {
-      await analyzeAsync(samples, 22050);
+      await analyzeAsync(badHop);
     } catch (error) {
       async = error;
     }

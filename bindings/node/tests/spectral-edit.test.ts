@@ -180,4 +180,10 @@ describe('spectralEdit (Node)', () => {
     // biome-ignore lint/suspicious/noExplicitAny: deliberately wrong-typed arg
     expect(() => spectralEdit(samples, SR, 'nope' as any)).toThrow();
   });
+
+  it.each([6, 1000, 2])('refuses nFft %i naming nFft and the power-of-two rule', (nFft) => {
+    expect(() => spectralEdit(sine(440, 0.1), SR, [{ mode: 'mute' }], { nFft })).toThrow(
+      /nFft must be a power of two/,
+    );
+  });
 });

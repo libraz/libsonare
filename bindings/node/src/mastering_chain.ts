@@ -1,4 +1,5 @@
 import { flattenChainConfig } from './_chain_config.js';
+import { type MasteringSoloProcessorParams, resolveProcessorParams } from './_processor_params.js';
 import { addon } from './native.js';
 import type {
   LoudnessMatchResult,
@@ -28,7 +29,7 @@ import type {
   StreamingLoudnessGainResult,
   TypedJson,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 export * from './mastering_assistant.js';
 export * from './mastering_catalog.js';
@@ -44,7 +45,7 @@ export interface MasteringProcessRequest {
   processorName: SoloProcessor;
   samples: Float32Array;
   sampleRate?: number;
-  params?: Record<string, number | boolean>;
+  params?: MasteringSoloProcessorParams;
 }
 
 export interface MasteringProcessStereoRequest {
@@ -52,7 +53,7 @@ export interface MasteringProcessStereoRequest {
   left: Float32Array;
   right: Float32Array;
   sampleRate?: number;
-  params?: Record<string, number | boolean>;
+  params?: MasteringSoloProcessorParams;
 }
 
 export interface MasteringChainRequest {
@@ -137,7 +138,7 @@ export function mastering(
 ): MasteringResult {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('mastering', resolvedSampleRate);
+  assertAudioInput('mastering', request.samples, resolvedSampleRate, request);
   return addon.mastering(
     request.samples,
     resolvedSampleRate,
@@ -154,25 +155,25 @@ export function masteringProcess(
   processorName: SoloProcessor,
   samples: Float32Array,
   sampleRate?: number,
-  params?: Record<string, number | boolean>,
+  params?: MasteringSoloProcessorParams,
 ): MasteringResult;
 export function masteringProcess(
   processorName: SoloProcessor | MasteringProcessRequest,
   samples?: Float32Array,
   sampleRate = 22050,
-  params: Record<string, number | boolean> = {},
+  params: MasteringSoloProcessorParams = {},
 ): MasteringResult {
   const request =
     typeof processorName === 'string'
       ? { processorName, samples: samples as Float32Array, sampleRate, params }
       : processorName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringProcess', resolvedSampleRate);
+  assertAudioInput('masteringProcess', request.samples, resolvedSampleRate, request);
   return addon.masteringProcess(
     request.processorName,
     request.samples,
     resolvedSampleRate,
-    request.params ?? {},
+    resolveProcessorParams(request.processorName, request.params ?? {}),
   );
 }
 
@@ -184,14 +185,14 @@ export function masteringProcessStereo(
   left: Float32Array,
   right: Float32Array,
   sampleRate?: number,
-  params?: Record<string, number | boolean>,
+  params?: MasteringSoloProcessorParams,
 ): MasteringStereoResult;
 export function masteringProcessStereo(
   processorName: SoloProcessor | MasteringProcessStereoRequest,
   left?: Float32Array,
   right?: Float32Array,
   sampleRate = 22050,
-  params: Record<string, number | boolean> = {},
+  params: MasteringSoloProcessorParams = {},
 ): MasteringStereoResult {
   const request =
     typeof processorName === 'string'
@@ -204,13 +205,14 @@ export function masteringProcessStereo(
         }
       : processorName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringProcessStereo', resolvedSampleRate);
+  assertAudioInput('masteringProcessStereo', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput('masteringProcessStereo', request.right, resolvedSampleRate, request, 'right');
   return addon.masteringProcessStereo(
     request.processorName,
     request.left,
     request.right,
     resolvedSampleRate,
-    request.params ?? {},
+    resolveProcessorParams(request.processorName, request.params ?? {}),
   );
 }
 
@@ -231,7 +233,7 @@ export function masteringChain(
     samples instanceof Float32Array ? { samples, sampleRate, config, onProgress } : samples;
   const flat = flattenChainConfig(request.config ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringChain', resolvedSampleRate);
+  assertAudioInput('masteringChain', request.samples, resolvedSampleRate, request);
   if (request.onProgress || request.cancel) {
     return addon.masteringChainWithProgress(
       request.samples,
@@ -267,7 +269,8 @@ export function masteringChainStereo(
       : left;
   const flat = flattenChainConfig(request.config ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringChainStereo', resolvedSampleRate);
+  assertAudioInput('masteringChainStereo', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput('masteringChainStereo', request.right, resolvedSampleRate, request, 'right');
   if (request.onProgress || request.cancel) {
     return addon.masteringChainStereoWithProgress(
       request.left,
@@ -318,7 +321,7 @@ export function streamingLoudnessGain(
   request: StreamingLoudnessGainRequest,
 ): StreamingLoudnessGainResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('streamingLoudnessGain', resolvedSampleRate);
+  assertAudioInput('streamingLoudnessGain', request.samples, resolvedSampleRate, request);
   return addon.masteringStreamingLoudnessGain(
     request.samples,
     resolvedSampleRate,
@@ -331,7 +334,20 @@ export function streamingLoudnessGainStereo(
   request: StreamingLoudnessGainStereoRequest,
 ): StreamingLoudnessGainResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('streamingLoudnessGainStereo', resolvedSampleRate);
+  assertAudioInput(
+    'streamingLoudnessGainStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'streamingLoudnessGainStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringStreamingLoudnessGainStereo(
     request.left,
     request.right,
@@ -413,7 +429,7 @@ export function masterAudio(
   const request = masterAudioRequest(samples, sampleRate, presetName, overrides, onProgress);
   const flat = flattenChainConfig(request.overrides ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masterAudio', resolvedSampleRate);
+  assertAudioInput('masterAudio', request.samples, resolvedSampleRate, request);
   if (request.onProgress || request.cancel) {
     return addon.masterAudioWithProgress(
       request.preset ?? 'pop',
@@ -462,7 +478,7 @@ export function masterAudioAsync(
   try {
     const request = masterAudioRequest(samples, sampleRate, presetName, overrides);
     const resolvedSampleRate = request.sampleRate ?? 22050;
-    assertSampleRate('masterAudioAsync', resolvedSampleRate);
+    assertAudioInput('masterAudioAsync', request.samples, resolvedSampleRate, request);
     return addon.masterAudioAsync(
       request.preset ?? 'pop',
       request.samples,
@@ -501,7 +517,8 @@ export function masterAudioStereo(
   );
   const flat = flattenChainConfig(request.overrides ?? {});
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masterAudioStereo', resolvedSampleRate);
+  assertAudioInput('masterAudioStereo', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput('masterAudioStereo', request.right, resolvedSampleRate, request, 'right');
   if (request.onProgress || request.cancel) {
     return addon.masterAudioStereoWithProgress(
       request.preset ?? 'pop',
@@ -560,7 +577,8 @@ export function masterAudioStereoAsync(
   try {
     const request = masterAudioStereoRequest(left, right, sampleRate, presetName, overrides);
     const resolvedSampleRate = request.sampleRate ?? 22050;
-    assertSampleRate('masterAudioStereoAsync', resolvedSampleRate);
+    assertAudioInput('masterAudioStereoAsync', request.left, resolvedSampleRate, request, 'left');
+    assertAudioInput('masterAudioStereoAsync', request.right, resolvedSampleRate, request, 'right');
     return addon.masterAudioStereoAsync(
       request.preset ?? 'pop',
       request.left,
@@ -604,7 +622,14 @@ export function masteringPairProcess(
         }
       : processorName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringPairProcess', resolvedSampleRate);
+  assertAudioInput('masteringPairProcess', request.source, resolvedSampleRate, request, 'source');
+  assertAudioInput(
+    'masteringPairProcess',
+    request.reference,
+    resolvedSampleRate,
+    request,
+    'reference',
+  );
   return addon.masteringPairProcess(
     request.processorName,
     request.source,
@@ -652,7 +677,34 @@ export function masteringPairProcessStereo(
         }
       : processorName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringPairProcessStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.sourceLeft,
+    resolvedSampleRate,
+    request,
+    'sourceLeft',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.sourceRight,
+    resolvedSampleRate,
+    request,
+    'sourceRight',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.referenceLeft,
+    resolvedSampleRate,
+    request,
+    'referenceLeft',
+  );
+  assertAudioInput(
+    'masteringPairProcessStereo',
+    request.referenceRight,
+    resolvedSampleRate,
+    request,
+    'referenceRight',
+  );
   return addon.masteringPairProcessStereo(
     request.processorName,
     request.sourceLeft,
@@ -684,7 +736,20 @@ export function masteringAbMatchLoudness(
   request: MasteringAbMatchLoudnessRequest,
 ): LoudnessMatchResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAbMatchLoudness', resolvedSampleRate);
+  assertAudioInput(
+    'masteringAbMatchLoudness',
+    request.source,
+    resolvedSampleRate,
+    request,
+    'source',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudness',
+    request.reference,
+    resolvedSampleRate,
+    request,
+    'reference',
+  );
   return addon.masteringAbMatchLoudness(request.source, request.reference, resolvedSampleRate);
 }
 
@@ -697,7 +762,34 @@ export function masteringAbMatchLoudnessStereo(
   request: MasteringAbMatchLoudnessStereoRequest,
 ): LoudnessMatchStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringAbMatchLoudnessStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.sourceLeft,
+    resolvedSampleRate,
+    request,
+    'sourceLeft',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.sourceRight,
+    resolvedSampleRate,
+    request,
+    'sourceRight',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.referenceLeft,
+    resolvedSampleRate,
+    request,
+    'referenceLeft',
+  );
+  assertAudioInput(
+    'masteringAbMatchLoudnessStereo',
+    request.referenceRight,
+    resolvedSampleRate,
+    request,
+    'referenceRight',
+  );
   return addon.masteringAbMatchLoudnessStereo(
     request.sourceLeft,
     request.sourceRight,
@@ -793,7 +885,14 @@ export function masteringPairAnalyze(
         }
       : analysisName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringPairAnalyze', resolvedSampleRate);
+  assertAudioInput('masteringPairAnalyze', request.source, resolvedSampleRate, request, 'source');
+  assertAudioInput(
+    'masteringPairAnalyze',
+    request.reference,
+    resolvedSampleRate,
+    request,
+    'reference',
+  );
   return addon.masteringPairAnalyze(
     request.analysisName,
     request.source,
@@ -856,7 +955,8 @@ export function masteringStereoAnalyze(
         }
       : analysisName;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringStereoAnalyze', resolvedSampleRate);
+  assertAudioInput('masteringStereoAnalyze', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput('masteringStereoAnalyze', request.right, resolvedSampleRate, request, 'right');
   return addon.masteringStereoAnalyze(
     request.analysisName,
     request.left,

@@ -11,7 +11,7 @@ import type {
   HumDetection,
   NoiseDetection,
 } from './types.js';
-import { assertPositiveInteger, assertSampleRate } from './validation.js';
+import { assertAudioChannels, assertAudioInput, assertPositiveInteger } from './validation.js';
 
 /** Algorithms accepted by `masteringRepairDenoiseClassical`. */
 export type DenoiseClassicalMode = 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
@@ -55,7 +55,7 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDenoiseClassical', resolvedSampleRate);
+  assertAudioInput('masteringRepairDenoiseClassical', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDenoiseClassical', request);
   return addon.masteringRepairDenoiseClassical(request.samples, resolvedSampleRate, request);
 }
@@ -106,7 +106,20 @@ export function masteringRepairDenoiseClassicalStereo(
   request: MasteringRepairDenoiseClassicalStereoRequest,
 ): DenoiseStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDenoiseClassicalStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDenoiseClassicalStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDenoiseClassicalStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   assertRepairGeometry('masteringRepairDenoiseClassicalStereo', request);
   return addon.masteringRepairDenoiseClassicalStereo(
     request.left,
@@ -168,7 +181,12 @@ export function masteringRepairDenoiseClassicalLinked(
   request: MasteringRepairDenoiseClassicalLinkedRequest,
 ): DenoiseLinkedResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDenoiseClassicalLinked', resolvedSampleRate);
+  assertAudioChannels(
+    'masteringRepairDenoiseClassicalLinked',
+    request.channels,
+    resolvedSampleRate,
+    request,
+  );
   assertRepairGeometry('masteringRepairDenoiseClassicalLinked', request);
   return addon.masteringRepairDenoiseClassicalLinked(request.channels, resolvedSampleRate, request);
 }
@@ -213,7 +231,7 @@ export function masteringRepairDehum(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDehum', resolvedSampleRate);
+  assertAudioInput('masteringRepairDehum', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDehum(request.samples, resolvedSampleRate, request);
 }
 
@@ -243,7 +261,14 @@ export function masteringRepairDehumStereo(
   request: MasteringRepairDehumStereoRequest,
 ): DehumStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDehumStereo', resolvedSampleRate);
+  assertAudioInput('masteringRepairDehumStereo', request.left, resolvedSampleRate, request, 'left');
+  assertAudioInput(
+    'masteringRepairDehumStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   return addon.masteringRepairDehumStereo(request.left, request.right, resolvedSampleRate, request);
 }
 
@@ -275,7 +300,7 @@ export function masteringRepairDetectNoiseFloor(
   request: MasteringRepairDetectNoiseFloorRequest,
 ): NoiseDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectNoiseFloor', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDetectNoiseFloor', request);
   return addon.masteringRepairDetectNoiseFloor(request.samples, resolvedSampleRate, request);
 }
@@ -363,6 +388,6 @@ export interface MasteringRepairDetectHumRequest
  */
 export function masteringRepairDetectHum(request: MasteringRepairDetectHumRequest): HumDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectHum', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectHum', request.samples, resolvedSampleRate, request);
   return addon.masteringRepairDetectHum(request.samples, resolvedSampleRate, request);
 }

@@ -64,8 +64,8 @@ describe('tuning on batch analysis', () => {
   it('re-centres analyze on C major and numbers its chords like chordFunctionalAnalysis', () => {
     const off = analyze(detuned, sampleRate);
     const on = analyze({ samples: detuned, sampleRate, tuning: estimate });
-    expect([off.key.root, off.key.mode]).not.toEqual(['C', 'major']);
-    expect([on.key.root, on.key.mode]).toEqual(['C', 'major']);
+    expect([off.key.root, off.key.mode]).not.toEqual([0, 'major']);
+    expect([on.key.root, on.key.mode]).toEqual([0, 'major']);
     const numerals = new Set(on.chords.filter((c) => c.name !== 'N.C.').map((c) => c.romanNumeral));
     for (const numeral of ['I', 'V', 'vi', 'IV']) {
       expect(numerals.has(numeral)).toBe(true);

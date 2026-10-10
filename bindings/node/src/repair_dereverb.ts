@@ -10,7 +10,7 @@ import type {
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import { assertSampleRate } from './validation.js';
+import { assertAudioChannels, assertAudioInput } from './validation.js';
 
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
@@ -55,7 +55,12 @@ export function masteringRepairDereverbClassical(
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDereverbClassical', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDereverbClassical',
+    request.samples,
+    resolvedSampleRate,
+    request,
+  );
   assertRepairGeometry('masteringRepairDereverbClassical', request);
   return addon.masteringRepairDereverbClassical(request.samples, resolvedSampleRate, request);
 }
@@ -106,7 +111,20 @@ export function masteringRepairDereverbClassicalStereo(
   request: MasteringRepairDereverbClassicalStereoRequest,
 ): DereverbStereoResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDereverbClassicalStereo', resolvedSampleRate);
+  assertAudioInput(
+    'masteringRepairDereverbClassicalStereo',
+    request.left,
+    resolvedSampleRate,
+    request,
+    'left',
+  );
+  assertAudioInput(
+    'masteringRepairDereverbClassicalStereo',
+    request.right,
+    resolvedSampleRate,
+    request,
+    'right',
+  );
   assertRepairGeometry('masteringRepairDereverbClassicalStereo', request);
   return addon.masteringRepairDereverbClassicalStereo(
     request.left,
@@ -169,7 +187,12 @@ export function masteringRepairDereverbClassicalLinked(
   request: MasteringRepairDereverbClassicalLinkedRequest,
 ): DereverbLinkedResult {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDereverbClassicalLinked', resolvedSampleRate);
+  assertAudioChannels(
+    'masteringRepairDereverbClassicalLinked',
+    request.channels,
+    resolvedSampleRate,
+    request,
+  );
   assertRepairGeometry('masteringRepairDereverbClassicalLinked', request);
   return addon.masteringRepairDereverbClassicalLinked(
     request.channels,
@@ -269,7 +292,7 @@ export function masteringRepairDetectReverb(
   request: MasteringRepairDetectReverbRequest,
 ): ReverbDetection {
   const resolvedSampleRate = request.sampleRate ?? 22050;
-  assertSampleRate('masteringRepairDetectReverb', resolvedSampleRate);
+  assertAudioInput('masteringRepairDetectReverb', request.samples, resolvedSampleRate, request);
   assertRepairGeometry('masteringRepairDetectReverb', request);
   return addon.masteringRepairDetectReverb(request.samples, resolvedSampleRate, request);
 }

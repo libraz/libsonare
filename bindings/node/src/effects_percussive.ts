@@ -6,7 +6,7 @@
 import { resolveEntryTimes, toSamples } from './_effects_common.js';
 import { addon } from './native.js';
 import type { PercussiveEvent, PercussiveEventInput } from './types.js';
-import { assertInt32, assertSampleRate, C_INT_MAX, C_INT_MIN } from './validation.js';
+import { assertAudioInput, assertInt32, C_INT_MAX, C_INT_MIN } from './validation.js';
 
 /**
  * Check the separation an extracted or rendered event set is measured against
@@ -154,8 +154,9 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
  *   optional detection tuning.
  * @returns One {@link PercussiveEvent} per detected hit, in time order. Audio in
  *   which nothing was detected returns an empty array rather than throwing.
- * @throws {RangeError} `sampleRate` is out of the supported range.
- * @throws {SonareError} `samples` is empty, a separation field is not an
+ * @throws {RangeError} `samples` is empty or holds a non-finite sample, or
+ *   `sampleRate` is out of the supported range.
+ * @throws {SonareError} A separation field is not an
  *   integer within the signed 32-bit range, the framing breaks constant
  *   overlap-add, `maxEventMs` is not positive and finite, or
  *   `minPercussiveRatio` is outside `[0, 1]`.
@@ -173,15 +174,16 @@ export interface RenderPercussiveEventsRequest extends PercussiveSeparationOptio
 export function extractPercussiveEvents(
   request: ExtractPercussiveEventsRequest,
 ): PercussiveEvent[] {
-  const { samples, sampleRate, ...options } = request;
-  assertSampleRate('extractPercussiveEvents', sampleRate);
+  const { samples: input, sampleRate, ...options } = request;
+  const samples = Array.isArray(input) ? toSamples(input) : input;
+  assertAudioInput('extractPercussiveEvents', samples, sampleRate, options);
   assertPercussiveSeparation('extractPercussiveEvents', options);
   if (options.onsetWait !== undefined) {
     // Checked here with its four bag-siblings, and for the same reason: 0 is
     // this field's default, and the addon's narrowing truncates onto it.
     assertInt32('extractPercussiveEvents', options.onsetWait, 'onsetWait');
   }
-  return addon.extractPercussiveEvents(toSamples(samples), sampleRate, options);
+  return addon.extractPercussiveEvents(samples, sampleRate, options);
 }
 
 /**
@@ -215,8 +217,9 @@ export function extractPercussiveEvents(
  * @returns The rendered audio, the same length as `samples`.
  * @throws {TypeError} `events` is not an array, or one of its entries is not a
  *   plain object.
- * @throws {RangeError} `sampleRate` is out of the supported range.
- * @throws {SonareError} `samples` is empty, a separation field is not an integer
+ * @throws {RangeError} `samples` is empty or holds a non-finite sample, or
+ *   `sampleRate` is out of the supported range.
+ * @throws {SonareError} A separation field is not an integer
  *   within the signed 32-bit range, an event's span is empty, reversed or
  *   outside the audio, two source spans overlap, a `gainDb` is not finite, the
  *   framing breaks constant overlap-add, or `fadeMs` is not positive and finite.
@@ -233,8 +236,9 @@ export function extractPercussiveEvents(
  * ```
  */
 export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): Float32Array {
-  const { samples, sampleRate, events, ...options } = request;
-  assertSampleRate('renderPercussiveEvents', sampleRate);
+  const { samples: input, sampleRate, events, ...options } = request;
+  const samples = Array.isArray(input) ? toSamples(input) : input;
+  assertAudioInput('renderPercussiveEvents', samples, sampleRate, options);
   if (!Array.isArray(events)) {
     throw new TypeError('renderPercussiveEvents: events must be an array');
   }
@@ -246,5 +250,5 @@ export function renderPercussiveEvents(request: RenderPercussiveEventsRequest): 
     sampleRate,
     true,
   );
-  return addon.renderPercussiveEvents(toSamples(samples), sampleRate, nativeEvents, options);
+  return addon.renderPercussiveEvents(samples, sampleRate, nativeEvents, options);
 }

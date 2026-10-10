@@ -339,6 +339,8 @@ Napi::Object SonareWrap::Init(Napi::Env env, Napi::Object exports) {
       Napi::Function::New(env, &SonareWrap::MasteringInsertParamInfo, "masteringInsertParamInfo"));
   exports.Set("masteringInsertTiming", Napi::Function::New(env, &SonareWrap::MasteringInsertTiming,
                                                            "masteringInsertTiming"));
+  exports.Set("masteringEnumValue",
+              Napi::Function::New(env, &SonareWrap::MasteringEnumValue, "masteringEnumValue"));
   exports.Set("masteringProcessorCatalog",
               Napi::Function::New(env, &SonareWrap::MasteringProcessorCatalog,
                                   "masteringProcessorCatalog"));

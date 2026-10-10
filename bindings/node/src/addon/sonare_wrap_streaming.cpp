@@ -189,7 +189,8 @@ StreamingMasteringChainWrap::StreamingMasteringChainWrap(const Napi::CallbackInf
   }
 
   try {
-    auto config = sonare::mastering::api::parse_chain_config_params(params.data(), params.size());
+    auto config =
+        sonare::mastering::api::parse_streaming_chain_config_params(params.data(), params.size());
     chain_ = std::make_unique<sonare::mastering::api::StreamingMasteringChain>(std::move(config),
                                                                                options);
   } catch (const std::exception& e) {

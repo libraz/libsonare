@@ -504,10 +504,10 @@ export interface MasteringChainConfig {
       | boolean
       | {
           enabled?: boolean;
-          /** 0 = log-MMSE, 1 = MMSE-STSA, 2 = spectral subtraction. */
-          mode?: number;
-          /** 0 = quantile, 1 = MCRA, 2 = IMCRA, 3 = speech-presence probability. */
-          noiseEstimator?: number;
+          /** 0 / `'logMmse'`, 1 / `'mmseStsa'`, 2 / `'spectralSubtraction'`. */
+          mode?: number | 'logMmse' | 'mmseStsa' | 'spectralSubtraction';
+          /** 0 / `'quantile'`, 1 / `'mcra'`, 2 / `'imcra'`, 3 / `'spp'` (speech-presence probability). */
+          noiseEstimator?: number | 'quantile' | 'mcra' | 'imcra' | 'spp';
           nFft?: number;
           hopLength?: number;
           ddAlpha?: number;
@@ -536,8 +536,8 @@ export interface MasteringChainConfig {
     decrackle?: {
       enabled?: boolean;
       threshold?: number;
-      /** 0 = median, 1 = wavelet shrinkage. */
-      mode?: number;
+      /** 0 / `'median'`, 1 / `'waveletShrinkage'`. */
+      mode?: number | 'median' | 'waveletShrinkage';
       levels?: number;
     };
     dehum?: {
@@ -550,8 +550,8 @@ export interface MasteringChainConfig {
       adaptation?: number;
       frameSize?: number;
       pllBandwidth?: number;
-      /** 0 = subtract the tracked harmonics, 1 = cascaded notches. */
-      mode?: number;
+      /** 0 / `'subtract'` the tracked harmonics, 1 / `'notch'` (cascaded notches). */
+      mode?: number | 'subtract' | 'notch';
     };
     declick?: {
       enabled?: boolean;
@@ -662,9 +662,10 @@ export interface MasteringChainConfig {
       q?: number;
       evenOddMix?: number;
       /**
-       * Antialiasing mode ordinal: 0 = none, 3 = 4x oversampling. The ADAA
-       * modes (1, 2) name a member the exciter does not implement and are
-       * rejected; an ordinal outside 0-3 is rejected as out of range.
+       * Antialiasing mode ordinal: 0 = none, 3 = 4x oversampling, which adds
+       * 48 samples of latency at any host rate. The ADAA modes (1, 2) name a
+       * member the exciter does not implement and are rejected; an ordinal
+       * outside 0-3 is rejected as out of range.
        */
       aliasing?: number;
     };
@@ -724,9 +725,10 @@ export interface MasteringChainConfig {
    * ABI carries parameters in, so a caller assembling overrides dynamically can
    * emit it directly; the core validates the key and rejects an unknown one.
    * The nested spelling is canonical — prefer it in hand-written code, where it
-   * is checked field by field while a dotted key is only checked at run time.
+   * is checked field by field while a dotted key is only checked at run time. An
+   * enum-valued key also takes its name (`'repair.denoise.noiseEstimator': 'mcra'`).
    */
-  [flatKey: `${string}.${string}`]: number | boolean | undefined;
+  [flatKey: `${string}.${string}`]: number | boolean | string | undefined;
 }
 
 /** Gain reduction reported by a single dynamics/maximizer chain stage. */

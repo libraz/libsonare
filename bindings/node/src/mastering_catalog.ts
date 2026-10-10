@@ -1,3 +1,4 @@
+import { type MasteringSoloProcessorParams, resolveProcessorParams } from './_processor_params.js';
 import { addon } from './native.js';
 import type {
   MasteringInsertParamChoice,
@@ -148,7 +149,7 @@ export interface MasteringInsertParamInfo {
   slot: string | null;
   /**
    * Siblings whose live value bounds this key, each read as `this <relation> factor * sibling`;
-   * empty for an independent key. `min` and `max` are measured with every sibling at its default.
+   * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
   dependsOn: MasteringInsertParamDependency[];
 }
@@ -162,14 +163,17 @@ export interface MasteringInsertParamInfo {
  * that are not automation targets (`id` null, `rtSafe` false — they take
  * effect only when the insert is built). The names are the same set
  * {@link masteringInsertParamNames} returns, plus any automation target
- * construction does not read. Returns an empty array for an unknown name.
+ * construction does not read. Any id of the processor catalog is served, an
+ * offline repair stage (`repair.declick`, `repair.declip`, `repair.trimSilence`)
+ * included, with the rows its catalog entry's `params` carries; those rows have
+ * a null `id`. Returns an empty array for an unknown name.
  *
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  * @param sampleRate - Optional host rate in Hz. A key whose `maxRelativeTo` is
  *   `"nyquist"` then reports, as `max` and `maxExclusive`, the bound accepted
- *   when the insert is built and prepared at that rate, which includes any cap
- *   fixed at build time (an EQ band frequency stays at 24000 for a 96000 Hz
- *   host). Omitted, the rate-less answer is returned. Throws for a rate outside
+ *   when the insert is built and prepared at that rate (an EQ band frequency
+ *   reaches 48000 for a 96000 Hz host). Omitted, the rate-less answer is
+ *   returned, with the 24000 cap of the 48 kHz probe. Throws for a rate outside
  *   the supported range.
  */
 export function masteringInsertParamInfo(
@@ -204,15 +208,16 @@ export interface MasteringInsertTiming {
  * @param name - Insert processor name (see {@link masteringInsertNames}).
  * @param params - Flat parameter values, keyed as in
  *   {@link masteringInsertParamInfo}. Each value must be a finite number or a
- *   boolean.
+ *   boolean, or the `choices` name of an enum-valued key.
  * @param sampleRate - Rate the insert is prepared at.
  */
 export function masteringInsertTiming(
   name: string,
-  params: Record<string, number | boolean>,
+  params: MasteringSoloProcessorParams,
   sampleRate: number,
 ): MasteringInsertTiming {
-  for (const [key, value] of Object.entries(params)) {
+  const resolved = resolveProcessorParams(name, params);
+  for (const [key, value] of Object.entries(resolved)) {
     if (typeof value === 'boolean') {
       continue;
     }
@@ -220,7 +225,7 @@ export function masteringInsertTiming(
   }
   return addon.masteringInsertTiming(
     name,
-    JSON.stringify(params),
+    JSON.stringify(resolved),
     sampleRate,
   ) as MasteringInsertTiming;
 }

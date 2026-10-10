@@ -7,7 +7,7 @@ import type {
   VoicePresetId,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertSamples } from './validation.js';
+import { assertAudioInput } from './validation.js';
 
 /**
  * The core refuses an unreachable absolute formant warp and a live formant-mode change with a
@@ -24,11 +24,30 @@ function formantConfigRefusal(error: unknown): unknown {
   return error;
 }
 
+/**
+ * The flat POD shape (recognised by its `retuneSemitones` key) must carry `formantMode`,
+ * exactly as {@link RealtimeVoiceChanger.setPodConfig} requires; a preset id or a nested
+ * preset document keeps its own defaults.
+ */
+function requirePodFormantMode(config: unknown): void {
+  if (config === null || typeof config !== 'object' || !('retuneSemitones' in config)) {
+    return;
+  }
+  const pod = config as { formantMode?: unknown };
+  if (!('formantMode' in pod)) {
+    throw new TypeError('voice changer POD config.formantMode is required');
+  }
+  if (typeof pod.formantMode !== 'string') {
+    throw new TypeError('voice changer POD config.formantMode must be a string');
+  }
+}
+
 export class RealtimeVoiceChanger {
   private native: InstanceType<typeof addon.RealtimeVoiceChanger>;
   private disposed = false;
 
   constructor(options: RealtimeVoiceChangerOptions) {
+    requirePodFormantMode(options.preset);
     try {
       this.native = new addon.RealtimeVoiceChanger(options.preset ?? 'neutral-monitor');
     } catch (error) {
@@ -52,6 +71,7 @@ export class RealtimeVoiceChanger {
   setConfig(config: RealtimeVoiceChangerConfigInput | RealtimeVoiceChangerConfig): void {
     // The shared native parser recognizes the flat POD produced by
     // realtimeVoiceChangerPresetConfig, so bindings never duplicate its 37-field mapping.
+    requirePodFormantMode(config);
     try {
       this.native.setConfig(config);
     } catch (error) {
@@ -130,7 +150,13 @@ export class RealtimeVoiceChanger {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }
@@ -177,7 +203,7 @@ export function voiceChange(
   options: VoiceChangeOptions = {},
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate, ...options } : samples;
-  assertSamples('voiceChange', request.samples, request.validate !== false);
+  assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
   const formantMode = request.formantMode ?? 'relative';
   try {
     return addon.voiceChange(
@@ -227,8 +253,7 @@ export function voiceChangeRealtime(
 ): Float32Array {
   const request =
     samples instanceof Float32Array ? { samples, sampleRate, preset, ...options } : samples;
-  const validate = request.validate !== false;
-  assertSamples('voiceChangeRealtime', request.samples, validate);
+  assertAudioInput('voiceChangeRealtime', request.samples, request.sampleRate ?? 48000, request);
   const channels = request.channels ?? 1;
   if (channels !== 1 && channels !== 2) {
     throw new RangeError('voiceChangeRealtime: channels must be 1 or 2.');
@@ -386,7 +411,13 @@ export class StreamingRetune {
     this.native.destroy();
   }
 
-  /** Releases native resources; lets `using` (Node 22+) free them automatically. */
+  /**
+
+   * Releases native resources; lets `using` free them automatically (needs TypeScript 5.2+
+
+   * or a runtime with native explicit resource management; Node 22 does not parse `using`).
+
+   */
   [Symbol.dispose](): void {
     this.destroy();
   }

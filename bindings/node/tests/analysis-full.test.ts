@@ -37,7 +37,7 @@ describe('analyze() full result', () => {
     expect(result.bpmCandidates[0]?.relation).toBe('primary');
     expect(result.bpmCandidates[0]?.value).toBe(result.bpm);
     expect(result.key).toBeDefined();
-    expect(typeof result.key.root).toBe('string');
+    expect(typeof result.key.root).toBe('number');
     expect(result.timeSignature).toBeDefined();
     expect(typeof result.timeSignature.numerator).toBe('number');
     expect(Array.isArray(result.timeSignatureCandidates)).toBe(true);

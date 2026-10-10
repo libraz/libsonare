@@ -124,6 +124,14 @@ describe('standalone functions', () => {
     expect(catalog.abi.project).toBe(EXPECTED_PROJECT_ABI_VERSION);
     expect(catalog.processors.length).toBeGreaterThan(0);
     expect(catalog.presets.mastering).toContain('pop');
+    expect(Object.keys(catalog.presets).sort()).toEqual([
+      'mastering',
+      'mixingScene',
+      'playbackRoom',
+      'synth',
+      'voiceChanger',
+    ]);
+    expect(catalog.presets.playbackRoom).toContain('none');
     const compressor = catalog.processors.find(({ id }) => id === 'dynamics.compressor');
     expect(compressor).toMatchObject({ category: 'dynamics', realtimeInsertable: true });
     expect(compressor?.params[0]).toEqual(
@@ -139,7 +147,7 @@ describe('standalone functions', () => {
 
   it('detectKey returns key object', () => {
     const key = detectKey(new Float32Array(SR), SR);
-    expect(typeof key.root).toBe('string');
+    expect(typeof key.root).toBe('number');
     expect(typeof key.mode).toBe('string');
     expect(typeof key.confidence).toBe('number');
     expect(typeof key.name).toBe('string');
@@ -428,7 +436,7 @@ describe('standalone functions', () => {
 
   it('converts invalid native arguments into JS exceptions', () => {
     expect(() => timeStretch(new Float32Array(SR), -1, 2.0)).toThrow(
-      /sample_rate.*supported range/,
+      /sampleRate out of supported range/,
     );
   });
 

@@ -6,7 +6,7 @@
 import type { EffectSamplesRequest } from './_effects_common.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
-import { assertInt32, assertSampleRate, resolveSampleBound } from './validation.js';
+import { assertAudioInput, assertInt32, resolveSampleBound } from './validation.js';
 
 export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditOptions {
   /**
@@ -87,7 +87,7 @@ export function spectralEdit(
     ops: requestOps = [],
     ...requestOptions
   } = request;
-  assertSampleRate('spectralEdit', requestSampleRate as number);
+  assertAudioInput('spectralEdit', input, requestSampleRate, requestOptions);
   // Each of the three is its own "0 => the documented default" on the C side,
   // and the addon's narrowing truncates onto that 0.
   for (const field of ['nFft', 'hopLength', 'healRadiusFrames'] as const) {

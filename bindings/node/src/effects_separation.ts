@@ -7,7 +7,7 @@ import type { EffectSamplesRequest } from './_effects_common.js';
 import { resolveEffectFftOptions } from './_fft_options.js';
 import { addon } from './native.js';
 import type { HpssResult } from './types.js';
-import { assertHpssKernels } from './validation.js';
+import { assertAudioInput, assertHpssKernels } from './validation.js';
 
 function resolveHardMask(fnName: string, hardMask: unknown): boolean {
   if (hardMask === undefined) {
@@ -56,6 +56,7 @@ export function hpss(
     samples instanceof Float32Array
       ? { samples, sampleRate, kernelHarmonic, kernelPercussive, nFft, hopLength, hardMask }
       : samples;
+  assertAudioInput('hpss', request.samples, request.sampleRate ?? 22050, request);
   const fftOptions = resolveEffectFftOptions('hpss', request.nFft, request.hopLength);
   const resolvedHardMask = resolveHardMask('hpss', request.hardMask);
   const resolvedKernelHarmonic = request.kernelHarmonic ?? 31;
@@ -79,6 +80,7 @@ export function harmonic(
   sampleRate = 22050,
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
+  assertAudioInput('harmonic', request.samples, request.sampleRate ?? 22050, request);
   return addon.harmonic(request.samples, request.sampleRate ?? 22050);
 }
 
@@ -89,5 +91,6 @@ export function percussive(
   sampleRate = 22050,
 ): Float32Array {
   const request = samples instanceof Float32Array ? { samples, sampleRate } : samples;
+  assertAudioInput('percussive', request.samples, request.sampleRate ?? 22050, request);
   return addon.percussive(request.samples, request.sampleRate ?? 22050);
 }
