@@ -326,6 +326,16 @@ describe('embedded NUL refusal, scan', () => {
       reason: 'property name from a static table of literals',
     },
     {
+      file: 'common/synth_patch_val.h',
+      text: 'subject.c_str()',
+      reason: 'error-subject label built from an engineParams key already refused for NUL',
+    },
+    {
+      file: 'mixing/mixing_assistant.cpp',
+      text: 'subject.c_str()',
+      reason: 'error-subject label built from a literal name and an element index',
+    },
+    {
       file: 'mixing/mixing.cpp',
       text: 'element.c_str()',
       reason: 'error-subject label built from literals and an index',

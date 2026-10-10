@@ -366,6 +366,8 @@ const NOT_AUDIO: string[] = [
     'version',
     'capabilities',
     'capabilityCatalog',
+    'synthEngineParamInfo',
+    'synthPatchParamInfo',
     'abiVersion',
     'engineAbiVersion',
     'engineCapabilities',
