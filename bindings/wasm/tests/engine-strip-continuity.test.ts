@@ -173,7 +173,6 @@ function makeFixture(constantSource = false, includeTail = true, symmetricSource
     offlineEngine: engine,
     trackLaneIds,
     postSync: () => undefined,
-    postInstrumentSync: () => undefined,
     ensureTrackLane,
     resolveTargetId: (target) => (typeof target === 'number' ? target : Number(target)),
     readStripJson: (target) =>

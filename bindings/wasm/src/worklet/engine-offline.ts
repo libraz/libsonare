@@ -62,7 +62,7 @@ export function buildCaptureConfig(
 /**
  * Collaborator surface the transport facade needs from the owning engine: the
  * realtime node (sample-accurate command transport), the offline engine it
- * mirrors, and the tempo/loop setters plus playing-state bookkeeping.
+ * mirrors, and the tempo/loop setters.
  */
 export interface EngineTransportContext extends EngineCommitContext {
   readonly sampleRate: number;
@@ -71,8 +71,6 @@ export interface EngineTransportContext extends EngineCommitContext {
     stop(sampleTime?: number): boolean;
   };
   offlineEngine: RealtimeEngine;
-  setTransportPlaying(playing: boolean): void;
-  flushPendingInstrumentSync(): void;
   setTempo(bpm: number): void;
   setTempoSegments(segments: readonly { startPpq: number; bpm: number }[]): void;
   setLoop(startPpq: number, endPpq: number, enabled?: boolean): boolean;
@@ -82,19 +80,10 @@ export interface EngineTransportContext extends EngineCommitContext {
 export function buildTransportFacade(ctx: EngineTransportContext): SonareEngineTransportFacade {
   return {
     play: (sampleTime) => {
-      const ok = ctx.realtimeNode.play(sampleTime);
-      if (ok) {
-        ctx.setTransportPlaying(true);
-      }
-      return ok;
+      return ctx.realtimeNode.play(sampleTime);
     },
     stop: (sampleTime) => {
-      const ok = ctx.realtimeNode.stop(sampleTime);
-      if (ok) {
-        ctx.setTransportPlaying(false);
-        ctx.flushPendingInstrumentSync();
-      }
-      return ok;
+      return ctx.realtimeNode.stop(sampleTime);
     },
     seekPpq: (ppq, sampleTime) =>
       commitCommand(

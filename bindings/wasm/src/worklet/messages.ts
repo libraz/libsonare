@@ -907,13 +907,6 @@ export interface SonareEngineDestroyMessage {
   type: 'destroy';
 }
 
-export type SonareEngineInstrumentSyncMessage =
-  | SonareEngineSyncBuiltinInstrumentMessage
-  | SonareEngineSyncSynthInstrumentMessage
-  | SonareEngineSyncSf2InstrumentMessage
-  | SonareEngineSyncLoadSoundFontMessage
-  | SonareEngineSyncMidiFxMessage;
-
 export type SonareEngineSyncMessage =
   | SonareEngineSyncClipsMessage
   | SonareEngineSyncClipsDeltaMessage

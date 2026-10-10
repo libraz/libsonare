@@ -73,7 +73,6 @@ function fakeStripContext(
     offlineEngine: engine,
     trackLaneIds: [10],
     postSync: () => undefined,
-    postInstrumentSync: () => undefined,
     ensureTrackLane: () => 0,
     resolveTargetId: (target) => (typeof target === 'number' ? target : Number(target)),
     readStripJson: (target) =>

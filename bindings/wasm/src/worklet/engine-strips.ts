@@ -13,7 +13,7 @@ import {
   replaceStripScene,
   type StripJsonTarget,
 } from './engine-mixer-facade.js';
-import type { SonareEngineInstrumentSyncMessage, SonareEngineSyncMessage } from './messages.js';
+import type { SonareEngineSyncMessage } from './messages.js';
 
 /**
  * Collaborator surface the strip/pan/EQ/insert/instrument/MIDI setters need from
@@ -24,7 +24,6 @@ export interface EngineStripContext {
   readonly offlineEngine: RealtimeEngine;
   readonly trackLaneIds: number[];
   postSync(message: SonareEngineSyncMessage): void;
-  postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void;
   ensureTrackLane(target: string | number): number;
   resolveTargetId(target: string | number): number;
   readStripJson(target: StripJsonTarget): string | undefined;
@@ -667,7 +666,7 @@ export function setBuiltinInstrument(
     ctx,
     (offline) => offline.setBuiltinInstrument(config, destinationId),
     () => {
-      ctx.postInstrumentSync({ type: 'syncBuiltinInstrument', destinationId, config });
+      ctx.postSync({ type: 'syncBuiltinInstrument', destinationId, config });
     },
   );
 }
@@ -691,14 +690,14 @@ export function setSynthInstrument(
     ctx,
     (offline) => offline.setSynthInstrument(patch, destinationId),
     () => {
-      ctx.postInstrumentSync({ type: 'syncSynthInstrument', destinationId, patch });
+      ctx.postSync({ type: 'syncSynthInstrument', destinationId, patch });
     },
   );
 }
 
 export function loadSoundFont(ctx: EngineStripContext, data: Uint8Array): void {
   ctx.offlineEngine.loadSoundFont(data);
-  ctx.postInstrumentSync({ type: 'syncLoadSoundFont', data });
+  ctx.postSync({ type: 'syncLoadSoundFont', data });
 }
 
 export function setSf2Instrument(
@@ -718,7 +717,7 @@ export function setSf2Instrument(
     ctx,
     (offline) => offline.setSf2Instrument(config, destinationId),
     () => {
-      ctx.postInstrumentSync({ type: 'syncSf2Instrument', destinationId, config });
+      ctx.postSync({ type: 'syncSf2Instrument', destinationId, config });
     },
   );
 }
@@ -758,7 +757,7 @@ export function setMidiFx(
     ctx,
     (offline) => offline.setMidiFx(destinationId, configJson),
     () => {
-      ctx.postInstrumentSync({ type: 'syncMidiFx', destinationId, configJson });
+      ctx.postSync({ type: 'syncMidiFx', destinationId, configJson });
     },
   );
 }
@@ -769,7 +768,7 @@ export function clearMidiFx(ctx: EngineStripContext, trackId: string | number): 
     ctx,
     (offline) => offline.clearMidiFx(destinationId),
     () => {
-      ctx.postInstrumentSync({ type: 'syncClearMidiFx', destinationId });
+      ctx.postSync({ type: 'syncClearMidiFx', destinationId });
     },
   );
 }

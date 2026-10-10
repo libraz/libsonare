@@ -459,6 +459,12 @@ export class RealtimeEngine {
    * An `engineMode: 'sample'` patch also carries the {@link SampleBank} its
    * keymap names. The synth takes a share of the bank, so it may be released
    * right after this call; a sample patch bound without one renders silence.
+   *
+   * Replacing a bound instrument takes effect at the next render block,
+   * whether or not the transport is rolling. The outgoing instrument's
+   * sounding notes fade out over 10 ms. The incoming instrument starts from its
+   * default channel state (program, bank, controllers); a host that needs the
+   * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSynthInstrument(
     patch: SynthPatch | string = {},
@@ -485,6 +491,12 @@ export class RealtimeEngine {
    * edits, GS/GM SysEx resets). Without a loaded SoundFont — or for programs
    * the SoundFont does not cover — notes play through the built-in
    * synthesizer GM fallback bank (the data-free floor).
+   *
+   * Replacing a bound instrument takes effect at the next render block,
+   * whether or not the transport is rolling. The outgoing instrument's
+   * sounding notes fade out over 10 ms. The incoming instrument starts from its
+   * default channel state (program, bank, controllers); a host that needs the
+   * current position's state resends it with {@link pushMidiUmp} after this call.
    */
   setSf2Instrument(
     config: {

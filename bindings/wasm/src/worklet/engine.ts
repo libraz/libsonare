@@ -69,7 +69,6 @@ import type { EngineTempoContext } from './engine-tempo-facade.js';
 import * as tempo from './engine-tempo-facade.js';
 import { resolveContextSampleRate } from './guards.js';
 import type {
-  SonareEngineInstrumentSyncMessage,
   SonareEngineSyncCaptureMessage,
   SonareEngineSyncMessage,
   SonareEngineTransportFacade,
@@ -147,8 +146,6 @@ export class SonareEngine {
   private latestTransportState: EngineTransportState | undefined;
   private nextClipId = 1;
   private nextMarkerId = 1;
-  private transportPlaying = false;
-  private readonly pendingInstrumentSync: SonareEngineInstrumentSyncMessage[] = [];
   // One latest frontier per clip is sufficient: ClipPageStreamer expands it to
   // the bounded read window. A Map both coalesces repeated page misses and
   // places a hard cap on work queued while OPFS I/O is stalled.
@@ -194,10 +191,6 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       hasCommandRoom: () => this.realtimeNode.hasCommandRoom(),
       sendCommand: (command) => this.sendMirroredCommand(command),
-      setTransportPlaying: (playing) => {
-        this.transportPlaying = playing;
-      },
-      flushPendingInstrumentSync: () => this.flushPendingInstrumentSync(),
       setTempo: (bpm) => this.setTempo(bpm),
       setTempoSegments: (segments) => this.setTempoSegments(segments),
       setLoop: (startPpq, endPpq, enabled) => this.setLoop(startPpq, endPpq, enabled),
@@ -1017,6 +1010,14 @@ export class SonareEngine {
     clips.setMidiClips(this.clipContext, schedules);
   }
 
+  /**
+   * Binds an instrument to a track's MIDI destination on both engines. A change
+   * made while the transport is rolling reaches the worklet at once and takes
+   * effect at its next render block; the outgoing instrument's sounding notes
+   * fade out over 10 ms. The incoming instrument starts from its default
+   * channel state (program, bank, controllers), so a host that needs the
+   * current position's state resends it with {@link pushMidiUmp} afterwards.
+   */
   setBuiltinInstrument(
     trackId: string | number,
     config: { destinationId?: number } & Record<string, unknown> = {},
@@ -1024,6 +1025,7 @@ export class SonareEngine {
     strips.setBuiltinInstrument(this.stripContext, trackId, config);
   }
 
+  /** Binds a NativeSynth patch; see {@link setBuiltinInstrument} for swap timing. */
   setSynthInstrument(trackId: string | number, patch: Record<string, unknown> | string = {}): void {
     strips.setSynthInstrument(this.stripContext, trackId, patch);
   }
@@ -1032,6 +1034,7 @@ export class SonareEngine {
     strips.loadSoundFont(this.stripContext, data);
   }
 
+  /** Binds a SoundFont player; see {@link setBuiltinInstrument} for swap timing. */
   setSf2Instrument(
     trackId: string | number,
     config: {
@@ -1674,29 +1677,6 @@ export class SonareEngine {
     }
   }
 
-  private postInstrumentSync(message: SonareEngineInstrumentSyncMessage): void {
-    if (this.epoch.closed) {
-      return;
-    }
-    if (this.transportPlaying) {
-      // Snapshot now, as posting would: the caller may reuse or detach its
-      // buffers once the call returns.
-      this.pendingInstrumentSync.push(structuredClone(message));
-      return;
-    }
-    this.postSync(message);
-  }
-
-  private flushPendingInstrumentSync(): void {
-    if (this.epoch.closed || this.pendingInstrumentSync.length === 0) {
-      return;
-    }
-    const pending = this.pendingInstrumentSync.splice(0);
-    for (const message of pending) {
-      this.postSync(message);
-    }
-  }
-
   // Posts an out-of-band control-sync message to the worklet engine processor.
   // Sync messages use a string `type` so the worklet's message handler routes
   // them to receiveSync() (numeric `type` is reserved for SonareEngineCommandRecord).
@@ -1768,7 +1748,6 @@ export class SonareEngine {
       offlineEngine: this.offlineEngine,
       trackLaneIds: this.trackLaneIds,
       postSync: (message) => this.postSync(message),
-      postInstrumentSync: (message) => this.postInstrumentSync(message),
       ensureTrackLane: (target) => this.ensureTrackLane(target),
       resolveTargetId: (target) => this.resolveTargetId(target),
       readStripJson: (target) => mixer.cachedStripJson(this.mixerContext, target),

@@ -138,7 +138,7 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('delivers the SoundFont and patch content of a call made during playback, not later edits', async () => {
+    it('delivers an instrument change made during playback at once, ahead of the MIDI that follows it', async () => {
       const posted: unknown[] = [];
       const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
         string,
@@ -151,28 +151,35 @@ describe('SonareRealtimeEngineNode', () => {
       try {
         engine.setTrackLanes([3]);
         engine.transport.play();
+        posted.length = 0;
         const sf2 = new Uint8Array(
           readFileSync(new URL('../../../tests/fixtures/sf2/minimal_gs.sf2', import.meta.url)),
         );
-        const original = sf2.slice();
         engine.loadSoundFont(sf2);
-        sf2.fill(0);
-        const config = { gain: 0.5 };
-        engine.setBuiltinInstrument(3, config);
-        config.gain = 0.25;
-        expect(
-          posted.some((message) => (message as { type?: unknown }).type === 'syncLoadSoundFont'),
-        ).toBe(false);
+        engine.setBuiltinInstrument(3, { gain: 0.5 });
+        engine.setSynthInstrument(3, 'saw-lead');
+        engine.setSf2Instrument(3, { gain: 0.5 });
+        // Program Change 5 on group 0, channel 0: it must reach the new instrument.
+        engine.pushMidiUmp(3, 0x20c00500);
+        engine.setMidiFx(3, '{"transpose_semitones":12}');
+        engine.clearMidiFx(3);
+        expect(posted.map((message) => (message as { type?: unknown }).type)).toEqual([
+          'syncLoadSoundFont',
+          'syncBuiltinInstrument',
+          'syncSynthInstrument',
+          'syncSf2Instrument',
+          'syncMidiUmp',
+          'syncMidiFx',
+          'syncClearMidiFx',
+        ]);
 
+        posted.length = 0;
         engine.transport.stop();
-        const load = posted.find(
-          (message) => (message as { type?: unknown }).type === 'syncLoadSoundFont',
-        ) as { data: Uint8Array } | undefined;
-        expect(load?.data).toEqual(original);
-        const builtin = posted.find(
-          (message) => (message as { type?: unknown }).type === 'syncBuiltinInstrument',
-        ) as { config: { gain: number } } | undefined;
-        expect(builtin?.config.gain).toBe(0.5);
+        expect(
+          posted.filter((message) =>
+            /Instrument|SoundFont|MidiFx/.test(String((message as { type?: unknown }).type)),
+          ),
+        ).toEqual([]);
       } finally {
         engine.destroy();
       }
@@ -390,7 +397,7 @@ describe('SonareRealtimeEngineNode', () => {
       }
     });
 
-    it('refuses a sample-bank synth patch before the offline engine or the pending sync changes', async () => {
+    it('refuses a sample-bank synth patch before the offline engine or the worklet changes', async () => {
       const posted: unknown[] = [];
       const port: { onmessage?: ((event: MessageEvent<unknown>) => void) | null } & Record<
         string,
@@ -1092,7 +1099,7 @@ describe('SonareRealtimeEngineNode', () => {
               message !== null &&
               (message as { type?: unknown }).type === 'syncBuiltinInstrument',
           ),
-        ).toBe(false);
+        ).toBe(true);
         expect(engine.transport.stop()).toBe(true);
 
         const track3Fader = engine.automationParamId(3, 'faderDb');
