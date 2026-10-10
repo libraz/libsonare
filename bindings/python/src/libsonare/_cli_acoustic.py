@@ -15,7 +15,9 @@ from typing import Any, cast
 from ._cli_common import (
     EXIT_INVALID_PARAMETER,
     _legacy_exit_codes,
+    _load_channels_or_downmix,
     _strict_json_dumps,
+    _write_channel_output,
     _write_wav,
 )
 from ._cli_common import (
@@ -24,6 +26,9 @@ from ._cli_common import (
 from ._cli_inventory import _cli_domain
 from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
 from ._errors import SonareError
+
+# Upper bound of the receiver spacing, in metres; the library's own limit.
+_MAX_RECEIVER_SPACING_M = 4.0
 
 
 def _print_diagnostic_warnings(result: Any) -> None:
@@ -191,37 +196,60 @@ def cmd_synthesize_rir(args: argparse.Namespace) -> int:
 
 
 def cmd_room_morph(args: argparse.Namespace) -> int:
-    from . import room_morph
+    from . import room_morph, room_morph_stereo
 
     if not args.output:
         raise ValueError("room-morph requires --output")
-    samples, sr = _load_audio(args.file)
-    result = room_morph(
-        samples,
-        sr,
-        args.length,
-        args.width,
-        args.height,
-        source=(args.source_x, args.source_y, args.source_z),
-        listener=(args.listener_x, args.listener_y, args.listener_z),
-        absorption=args.absorption,
-        source_tail_suppression=args.suppression,
-        wet=args.wet,
-        ism_order=args.ism_order,
-        seed=args.seed,
-        max_seconds=args.max_seconds,
-        prefer_eyring=not args.sabine,
-    )
+    # Ahead of the audio load, matching the native CLI, which enforces every
+    # declared option domain before dispatching the handler.
+    spacing = args.receiver_spacing
+    if not 0.0 < spacing <= _MAX_RECEIVER_SPACING_M:
+        raise ValueError(
+            f"invalid value for --receiver-spacing: {spacing} "
+            f"(expected above 0 and at most {_MAX_RECEIVER_SPACING_M:g})"
+        )
+    planes, sr = _load_channels_or_downmix(args.file)
+    use_stereo = len(planes) == 2
+    options: dict[str, Any] = {
+        "source": (args.source_x, args.source_y, args.source_z),
+        "listener": (args.listener_x, args.listener_y, args.listener_z),
+        "absorption": args.absorption,
+        "source_tail_suppression": args.suppression,
+        "wet": args.wet,
+        "ism_order": args.ism_order,
+        "seed": args.seed,
+        "max_seconds": args.max_seconds,
+        "prefer_eyring": not args.sabine,
+    }
+    geometry = (args.length, args.width, args.height)
+    channels: list[list[float]]
+    if use_stereo:
+        result: Any = room_morph_stereo(
+            planes[0],
+            planes[1],
+            sr,
+            *geometry,
+            receiver_spacing_m=spacing,
+            **options,
+        )
+        channels = [list(result.left), list(result.right)]
+    else:
+        result = room_morph(planes[0], sr, *geometry, **options)
+        channels = [list(result.audio)]
     # The target RIR is synthesized by the code synthesize-rir uses, so the same
     # clamps fire and each one says the morph went through a room the caller did
     # not ask for. stderr in every mode, so the JSON document on stdout stays
     # exactly the payload both CLIs publish.
     _print_diagnostic_warnings(result)
-    _write_wav(args.output, result.audio, sr)
+    _write_channel_output(args.output, channels, sr)
     if args.json:
-        print(_strict_json_dumps({"output": args.output, "samples": len(result.audio)}))
+        print(
+            _strict_json_dumps(
+                {"output": args.output, "samples": len(channels[0]), "stereo": use_stereo}
+            )
+        )
     else:
-        print(f"  Saved morphed audio ({len(result.audio)} samples) to {args.output}")
+        print(f"  Saved morphed audio ({len(channels[0])} samples) to {args.output}")
     return 0
 
 
@@ -321,4 +349,17 @@ def register_acoustic_parsers(
     )
     room_morph_p.add_argument(
         "--suppression", type=_finite_float, default=0.5, help="Source-tail suppression [0,1]"
+    )
+    # A two-channel input is morphed as a pair heard by two receivers this far apart.
+    _cli_domain(
+        room_morph_p.add_argument(
+            "--receiver-spacing",
+            type=_finite_float,
+            default=0.5,
+            help="Receiver spacing for a stereo input, in metres (0,4]",
+        ),
+        minimum=0,
+        exclusive_minimum=True,
+        maximum=_MAX_RECEIVER_SPACING_M,
+        reject_exit="invalid_parameter",
     )

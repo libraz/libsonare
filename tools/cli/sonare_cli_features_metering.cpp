@@ -705,23 +705,50 @@ int cmd_room_morph(const CliArgs& args, const Audio& audio) {
   cfg.late_model = args.has("sabine") ? sonare::acoustic::ReverbModel::Sabine
                                       : sonare::acoustic::ReverbModel::Eyring;
 
-  const sonare::effects::acoustic::RoomMorphResult morph =
-      sonare::effects::acoustic::room_morph(audio, cfg);
-  const Audio& result = morph.audio;
+  cfg.receiver_spacing_m = args.get_float("receiver-spacing", cfg.receiver_spacing_m);
+
+  // A two-channel source is morphed as a pair heard by two receivers, so the
+  // written file keeps the image; a mono source takes the single-receiver path.
+  const bool stereo = args.source_channels == 2;
+  StereoPlanes planes;
+  sonare::effects::acoustic::RoomMorphStereoResult stereo_morph;
+  sonare::effects::acoustic::RoomMorphResult mono_morph;
+  if (stereo) {
+    planes = load_stereo_planes(args, audio);
+    const int rate = audio.sample_rate();
+    stereo_morph = sonare::effects::acoustic::room_morph_stereo(
+        Audio::from_vector(planes.left, rate), Audio::from_vector(planes.right, rate), cfg);
+  } else {
+    mono_morph = sonare::effects::acoustic::room_morph(audio, cfg);
+  }
+  const auto& diagnostics = stereo ? stereo_morph.diagnostics : mono_morph.diagnostics;
   // The same loop synthesize-rir runs, for the same reason: a warning describes a
   // target room the caller did not ask for, and it goes to stderr in every mode so
   // the --json document on stdout stays the payload both CLIs publish.
-  for (const sonare::Diagnostic& diagnostic : morph.diagnostics) {
+  for (const sonare::Diagnostic& diagnostic : diagnostics) {
     if (diagnostic.severity != sonare::Diagnostic::Severity::Warning) continue;
     std::cerr << color::yellow << "warning: " << diagnostic.code << ": " << diagnostic.message
               << color::reset << "\n";
   }
-  save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  size_t out_samples = 0;
+  if (stereo) {
+    const Audio& left = stereo_morph.left;
+    const Audio& right = stereo_morph.right;
+    out_samples = left.size();
+    save_stereo_wav(args.output_file, std::vector<float>(left.data(), left.data() + left.size()),
+                    std::vector<float>(right.data(), right.data() + right.size()),
+                    left.sample_rate());
+  } else {
+    const Audio& result = mono_morph.audio;
+    out_samples = result.size();
+    save_wav(args.output_file, result.data(), result.size(), result.sample_rate());
+  }
   if (args.json_output) {
     JsonBuilder()
         .begin_object()
         .kv("output", args.output_file)
-        .kv("samples", result.size())
+        .kv("samples", out_samples)
+        .kv("stereo", stereo)
         .end_object()
         .print();
   } else if (!args.quiet) {

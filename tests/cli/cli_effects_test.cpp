@@ -300,6 +300,45 @@ TEST_CASE("CLI room-morph reports the same warning diagnostics its sibling does"
   std::remove(quiet.c_str());
   std::remove(input.c_str());
 }
+
+TEST_CASE("CLI room-morph keeps a two-channel input stereo", "[cli][acoustic]") {
+  const int sample_rate = 48000;
+  const size_t frames = 24000;
+  std::vector<float> interleaved(2 * frames);
+  for (size_t i = 0; i < frames; ++i) {
+    const float t = static_cast<float>(i) / static_cast<float>(sample_rate);
+    interleaved[2 * i] = 0.3f * std::sin(2.0f * 3.14159265f * 220.0f * t);
+    interleaved[2 * i + 1] = 0.3f * std::sin(2.0f * 3.14159265f * 330.0f * t);
+  }
+  const std::string input = unique_temp_path("_morph_stereo_input.wav");
+  save_wav_multichannel(input, interleaved.data(), frames, 2, ChannelLayout::Stereo, sample_rate);
+  const std::string output = unique_temp_path("_morph_stereo_output.wav");
+  const std::string room =
+      " --length 6 --width 4 --height 3 --source-x 1.5 --source-y 1.5"
+      " --listener-x 4 --listener-y 2 --max-seconds 0.3 ";
+
+  auto [code, command_output] = exec_command(CLI + " room-morph " + input + " -o " + output + room +
+                                             "--receiver-spacing 0.4 --json");
+  REQUIRE(code == 0);
+  // Nothing was dropped, so the downmix warning must not be printed.
+  REQUIRE_THAT(command_output, !ContainsSubstring("downmixed to mono"));
+  REQUIRE_THAT(command_output, ContainsSubstring("\"stereo\": true"));
+
+  const auto [samples, rate, channels] = load_audio_interleaved(output);
+  REQUIRE(channels == 2);
+  REQUIRE(rate == sample_rate);
+  double side = 0.0;
+  for (size_t i = 0; i + 1 < samples.size(); i += 2) side += std::fabs(samples[i] - samples[i + 1]);
+  REQUIRE(side > 0.0);
+
+  // A spacing the room's receiver pair cannot take is refused before any work.
+  auto [bad_code, bad_output] = exec_command(CLI + " room-morph " + input + " -o " + output + room +
+                                             "--receiver-spacing 4.5");
+  REQUIRE(bad_code != 0);
+  REQUIRE_THAT(bad_output, ContainsSubstring("--receiver-spacing"));
+  std::remove(input.c_str());
+  std::remove(output.c_str());
+}
 #endif
 
 TEST_CASE("CLI lufs --json stays valid JSON on a silent input", "[cli]") {

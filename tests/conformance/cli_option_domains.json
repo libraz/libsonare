@@ -817,6 +817,16 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "room-morph",
+      "option": "receiver-spacing",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": 4.0,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "playback",
       "option": "target",
       "rejectExit": "usage",

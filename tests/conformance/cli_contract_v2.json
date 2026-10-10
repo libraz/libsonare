@@ -3323,6 +3323,22 @@
           "domain": null
         },
         {
+          "name": "receiver-spacing",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 4,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "sabine",
           "type": "boolean",
           "default": false,
@@ -10746,6 +10762,22 @@
           "domain": null
         },
         {
+          "name": "receiver-spacing",
+          "type": "number",
+          "default": 0.5,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 4,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "sabine",
           "type": "boolean",
           "default": false,
@@ -10836,7 +10868,8 @@
         "success": {
           "keys": {
             "output": "string",
-            "samples": "integer"
+            "samples": "integer",
+            "stereo": "boolean"
           }
         }
       },

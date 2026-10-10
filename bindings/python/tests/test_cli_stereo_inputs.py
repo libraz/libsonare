@@ -357,3 +357,53 @@ def test_declip_cli_repairs_a_stereo_pair_as_a_pair(tmp_path) -> None:
     ]
     worst = max(abs(a - b) for a, b in zip(rendered_right, alone, strict=True))
     assert worst > 0.05
+
+
+_ROOM_MORPH_ARGS = [
+    *("--length", "6", "--width", "4", "--height", "3"),
+    *("--source-x", "1.5", "--source-y", "1.5", "--listener-x", "4", "--listener-y", "2"),
+    *("--max-seconds", "0.3"),
+]
+
+
+def test_room_morph_cli_keeps_a_stereo_input_stereo(tmp_path) -> None:
+    """A two-channel input is morphed through a receiver pair and written as a pair."""
+    source = tmp_path / "mix.wav"
+    output = tmp_path / "morph.wav"
+    length = 24000
+    left = [0.3 * math.sin(2.0 * math.pi * 220.0 * i / 48000) for i in range(length)]
+    right = [0.3 * math.sin(2.0 * math.pi * 330.0 * i / 48000) for i in range(length)]
+    _write_stereo_wav(str(source), left, right, 48000)
+
+    result = _run_cli(
+        ["room-morph", str(source), "-o", str(output), *_ROOM_MORPH_ARGS]
+        + ["--receiver-spacing", "0.4", "--json"]
+    )
+
+    assert result.returncode == 0, result.stderr
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 2
+    assert _side_energy(str(output)) > 0
+    assert json.loads(result.stdout)["stereo"] is True
+    assert "downmixed to mono" not in result.stderr
+
+    refused = _run_cli(
+        ["room-morph", str(source), "-o", str(output), *_ROOM_MORPH_ARGS]
+        + ["--receiver-spacing", "4.5"]
+    )
+    assert refused.returncode != 0
+    assert "--receiver-spacing" in refused.stderr
+
+
+def test_room_morph_cli_keeps_a_mono_input_mono(tmp_path) -> None:
+    """The stereo path is taken from the source, not applied to everything."""
+    source = tmp_path / "take.wav"
+    output = tmp_path / "morph.wav"
+    _write_test_wav(str(source), _generate_sine(220, 48000, 0.5), 48000)
+
+    result = _run_cli(["room-morph", str(source), "-o", str(output), *_ROOM_MORPH_ARGS, "--json"])
+
+    assert result.returncode == 0, result.stderr
+    with wave.open(str(output), "rb") as wav:
+        assert wav.getnchannels() == 1
+    assert json.loads(result.stdout)["stereo"] is False

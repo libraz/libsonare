@@ -931,7 +931,11 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          number_value("suppression", 0.5), number_value("wet", 0.5), int_value("ism-order", 3),
          with_domain(int_value("seed", 1),
                      between(0.0, kMaxCliSeed, CliOptionDomainStage::Parameter)),
-         number_value("max-seconds", 0.0), required_output(), flag("sabine")});
+         number_value("max-seconds", 0.0),
+         with_domain(number_value("receiver-spacing", 0.5),
+                     above_zero_up_to(4.0, CliOptionDomainStage::Parameter)),
+         required_output(), flag("sabine")},
+        {}, nullptr, 0, /*preserves_stereo_input=*/true);
 #endif
 
     // Metering and scalar utility leaves.
