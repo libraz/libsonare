@@ -282,9 +282,14 @@ constexpr AutomatedWrapperField kAutomatedWrapperFields[] = {
     {sonare::midi::synth::NativeSynthParamId::kHpCutoffHz, Unit::Hz},
     {sonare::midi::synth::NativeSynthParamId::kSampleHoldHz, Unit::Hz},
     {sonare::midi::synth::NativeSynthParamId::kBitDepth, Unit::Bits},
+    {sonare::midi::synth::NativeSynthParamId::kDriftRateHz, Unit::Hz},
+    {sonare::midi::synth::NativeSynthParamId::kAmpDelayMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kAmpHoldMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kFilterDelayMs, Unit::Ms},
+    {sonare::midi::synth::NativeSynthParamId::kFilterHoldMs, Unit::Ms},
 };
 
-/// Every numeric SonareSynthPatch field: the automated ones with the automation
+/// Every numeric and switch SonareSynthPatch field: the automated ones with the automation
 /// table's name and range, the rest under their facade names with the range the
 /// conversion's clamps apply. Defaults are the init patch's.
 std::string synth_patch_param_info_json() {
@@ -303,15 +308,16 @@ std::string synth_patch_param_info_json() {
                     description.max_value, description.default_value, field.unit});
   }
   const NativeSynthConfig init{};
-  // The sample block's ranges are the patch clamp's, read back from its extremes.
-  NativeSynthPatch low = init.patch;
-  low.sample.level = -std::numeric_limits<float>::max();
-  low.sample.start_offset01 = -std::numeric_limits<float>::max();
-  low = sonare::midi::synth::clamp_synth_patch(low);
-  NativeSynthPatch high = init.patch;
-  high.sample.level = std::numeric_limits<float>::max();
-  high.sample.start_offset01 = std::numeric_limits<float>::max();
-  high = sonare::midi::synth::clamp_synth_patch(high);
+  // The ranges of the fields not automated are the patch clamp's, read back
+  // from its extremes.
+  const auto extreme = [&init](float value) {
+    NativeSynthPatch p = init.patch;
+    p.sample.level = value;
+    p.sample.start_offset01 = value;
+    return sonare::midi::synth::clamp_synth_patch(p);
+  };
+  const NativeSynthPatch low = extreme(-std::numeric_limits<float>::max());
+  const NativeSynthPatch high = extreme(std::numeric_limits<float>::max());
   rows.push_back({"unison", true, false, true, 1.0f,
                   static_cast<float>(sonare::midi::synth::kMaxUnisonOscs),
                   static_cast<float>(init.patch.unison), Unit::Count});
@@ -325,6 +331,8 @@ std::string synth_patch_param_info_json() {
                   init.patch.sample.level, Unit::Ratio});
   rows.push_back({"sampleStartOffset", false, false, true, low.sample.start_offset01,
                   high.sample.start_offset01, init.patch.sample.start_offset01, Unit::None});
+  rows.push_back(
+      {"oneShot", false, true, false, 0.0f, 0.0f, init.patch.one_shot ? 1.0f : 0.0f, Unit::None});
   return descriptor_array(rows);
 }
 

@@ -25,8 +25,10 @@
 ///   IF engine = modal THEN unison = 1      (osc-less engines ignore unison)
 /// 39 rows, listed in kPairwiseRows. envTime expands to the amp and filter time
 /// of its stage, sustain to amp and filter sustain, converter to sampleHoldHz
-/// and bitDepth, so all 21 note-on-latched ids are reached. One row sits
-/// outside the model: lfoRate A -> 0. The modal engine is a single long-ringing
+/// and bitDepth, so 21 note-on-latched ids are reached. Two rows sit outside
+/// the model: lfoRate A -> 0 and driftRateHz. The hold lengths have their own
+/// case; a running delay keeps the length it started with, so the two delays
+/// have no held-note observable. The modal engine is a single long-ringing
 /// mode (a sine); its glide runs on a mono retrigger, since it declines legato.
 ///
 /// A / B values:
@@ -40,6 +42,8 @@
 ///   bitDepth off_on 0 -> 3  on_off 3 -> 0  on_on 2 -> 6 (sine)
 ///   stereoSpread 0.2 -> 1           lfoRateHz / lfo2RateHz 5.859375 -> 11.71875
 ///   driftCents 10 -> 30 (rate 40 Hz, note 84)        glideMs 400 -> 100
+///   driftRateHz 11.71875 -> 23.4375 (depth 30 cents, note 84)
+///   ampHoldMs / filterHoldMs 300 -> 100 ms, moved inside a 200 ms attack
 ///   envelope times 400 -> 200 ms (attack), 600 -> 300 ms (decay, release)
 ///   sustain 0.5 -> 0.25
 
@@ -956,6 +960,18 @@ std::vector<Scenario> sc1_scenarios() {
     sc.obs = Obs::kLfoStop;
     all.push_back(sc);
   }
+  {
+    Scenario sc;
+    sc.cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+    sc.cfg.patch.drift_cents = 30.0f;
+    sc.name = "extra driftRateHz k2->k4";
+    sc.param = P::kDriftRateHz;
+    sc.a = kLfoB;
+    sc.b = 2.0f * kLfoB;
+    sc.notes = {kDriftNote};
+    sc.obs = Obs::kLfoPeriod;
+    all.push_back(sc);
+  }
   return all;
 }
 
@@ -968,14 +984,21 @@ std::vector<Scenario> sc1_group(std::initializer_list<Obs> group) {
   return out;
 }
 
+/// Stage lengths with a case of their own: a hold moved before its stage opens.
+constexpr std::array<P, 2> kHoldParams{P::kAmpHoldMs, P::kFilterHoldMs};
+/// A running delay keeps the length it started with and a held note never
+/// re-enters it, so these reach only the next note.
+constexpr std::array<P, 2> kDelayParams{P::kAmpDelayMs, P::kFilterDelayMs};
+
 }  // namespace
 
 // --- SC1 -------------------------------------------------------------------
 
-TEST_CASE("live params: the 21 note-on ids cover the pairwise expansion",
+TEST_CASE("live params: the 24 note-on ids cover the pairwise expansion and the hold case",
           "[midi][synth][synth-live]") {
   std::vector<bool> seen(sonare::midi::synth::native_synth_param_count(), false);
   for (const Scenario& sc : sc1_scenarios()) seen[pid(sc.param)] = true;
+  for (P p : kHoldParams) seen[pid(p)] = true;
   const std::array<P, 7> already_live{P::kGain,
                                       P::kBusDrive,
                                       P::kCutoffHz,
@@ -983,15 +1006,17 @@ TEST_CASE("live params: the 21 note-on ids cover the pairwise expansion",
                                       P::kEnvToCutoffCents,
                                       P::kLfoToPitchCents,
                                       P::kPitchOffsetCents};
+  const auto listed = [](const auto& ids, size_t i) {
+    return std::find(ids.begin(), ids.end(), static_cast<P>(i)) != ids.end();
+  };
   int covered = 0;
   for (size_t i = 0; i < seen.size(); ++i) {
-    const bool live = std::find(already_live.begin(), already_live.end(), static_cast<P>(i)) !=
-                      already_live.end();
+    const bool unobservable = listed(already_live, i) || listed(kDelayParams, i);
     INFO("param id " << i);
-    CHECK(seen[i] != live);
+    CHECK(seen[i] != unobservable);
     if (seen[i]) ++covered;
   }
-  CHECK(covered == 21);
+  CHECK(covered == 24);
 }
 
 TEST_CASE("live params: a spectral parameter moved on a held note sounds as if struck at B",
@@ -1013,6 +1038,63 @@ TEST_CASE("live params: envelope and glide times change inside the running stage
           "[midi][synth][synth-live]") {
   for (const Scenario& sc : sc1_group({Obs::kAmpTau, Obs::kFilterTau, Obs::kGlideTau})) {
     DYNAMIC_SECTION(sc.name) { check_equivalence(sc); }
+  }
+}
+
+namespace {
+
+/// Sample index at which the level first falls 10 % below its peak after the
+/// peak: the end of the hold.
+double hold_end(const std::vector<float>& x) {
+  const Frames f = tkeo_frames(x, 0, x.size());
+  const size_t peak = static_cast<size_t>(std::max_element(f.a.begin(), f.a.end()) - f.a.begin());
+  for (size_t j = peak; j < f.a.size(); ++j) {
+    if (f.a[j] < 0.9 * f.a[peak]) return f.t[j];
+  }
+  return f.t.empty() ? 0.0 : f.t.back();
+}
+
+}  // namespace
+
+TEST_CASE("live params: a hold length moved during the attack sets the hold the note enters",
+          "[midi][synth][synth-live]") {
+  constexpr float kHoldA = 300.0f;
+  constexpr float kHoldB = 100.0f;
+  constexpr size_t kChangeAt = 4864;  // inside the 200 ms attack
+  constexpr size_t kLength = 48000;
+  constexpr double kHoldTol = 256.0;
+  for (P param : kHoldParams) {
+    const bool filter = param == P::kFilterHoldMs;
+    DYNAMIC_SECTION((filter ? "filterHoldMs" : "ampHoldMs") << " 300->100") {
+      NativeSynthConfig cfg = base_config(Engine::kSubtractive, 1, VaWaveform::kSine);
+      auto& p = cfg.patch;
+      auto& env = filter ? p.filter_env : p.amp_env;
+      env.attack_ms = 200.0f;
+      env.decay_ms = 50.0f;
+      env.sustain = 0.25f;
+      if (filter) {
+        p.cutoff_hz = sonare::midi::synth::synth_note_to_hz(81.0f) / 16.0f;
+        p.env_to_cutoff_cents = 2400.0f;
+      }
+      auto run = [&](float initial, const float* change) {
+        NativeSynth s(cfg);
+        s.prepare(kRate, kBlock);
+        REQUIRE(s.apply_parameter(pid(param), initial));
+        note_on(s, 81);
+        Stereo out;
+        render(s, out, kChangeAt);
+        if (change != nullptr) REQUIRE(s.apply_parameter(pid(param), *change));
+        render(s, out, kLength - kChangeAt);
+        return hold_end(out.l);
+      };
+      const double held = run(kHoldA, &kHoldB);
+      const double ctrl = run(kHoldA, nullptr);
+      const double ref = run(kHoldB, nullptr);
+      INFO("hold end: held " << held << ", ctrl " << ctrl << ", ref " << ref);
+      REQUIRE(ref > static_cast<double>(kChangeAt));
+      REQUIRE(std::fabs(ctrl - ref) >= kContrast * kHoldTol);
+      CHECK(std::fabs(held - ref) <= kHoldTol);
+    }
   }
 }
 
@@ -1142,6 +1224,16 @@ float current_value(const NativeSynth& s, P id) {
       return p.sample_hold_hz;
     case P::kBitDepth:
       return p.bit_depth;
+    case P::kDriftRateHz:
+      return p.drift_rate_hz;
+    case P::kAmpDelayMs:
+      return p.amp_env.delay_ms;
+    case P::kAmpHoldMs:
+      return p.amp_env.hold_ms;
+    case P::kFilterDelayMs:
+      return p.filter_env.delay_ms;
+    case P::kFilterHoldMs:
+      return p.filter_env.hold_ms;
   }
   return 0.0f;
 }
@@ -1251,7 +1343,7 @@ TEST_CASE("live params: a GM program voice ignores patch automation", "[midi][sy
     REQUIRE(current_value(touched, id) != cur);
     ++applied;
   }
-  REQUIRE(applied == 26);
+  REQUIRE(applied == 31);
   render(touched, a, 8192);
   render(untouched, b, 8192);
   REQUIRE(rms(b.l, 4096, 8192) > 1.0e-3);

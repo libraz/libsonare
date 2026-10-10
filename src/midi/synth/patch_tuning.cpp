@@ -682,6 +682,8 @@ void apply_percussion(NativeSynthPatch& p, const Fields& f) {
 }
 
 void apply_fm(NativeSynthPatch& p, const Fields& f) {
+  I_TYPED(fm.algorithm, static_cast<int>(FmAlgorithm::kStack2),
+          static_cast<int>(FmAlgorithm::kAdd2));
   for (int i = 0; i < kMaxFmOperators; ++i) {
     FmOperatorParams& op = p.fm.ops[static_cast<size_t>(i)];
     const std::string base = "fm.ops" + std::to_string(i);
@@ -1083,6 +1085,7 @@ constexpr UnitRow kEngineUnits[] = {
     {"percussion.shell_freq_hz", Unit::Hz},
     {"percussion.shell_t60_s", Unit::Seconds},
     {"percussion.shell_weight", Unit::None},
+    {"fm.algorithm", Unit::None},
     {"fm.ops.ratio", Unit::Ratio},
     {"fm.ops.detune_cents", Unit::Cents},
     {"fm.ops.level", Unit::None},

@@ -1244,7 +1244,8 @@ SonareError sonare_engine_set_synth_instrument_binding(SonareRealtimeEngine* eng
 ///   `filterDecayMs`, `filterSustain`, `filterReleaseMs`, `lfoRateHz`,
 ///   `lfoToPitchCents`, `lfo2RateHz`, `glideMs`, `bodyMix`, `stereoSpread`,
 ///   `detuneCents`, `driftCents`, `pitchOffsetCents`, `hpCutoffHz`,
-///   `sampleHoldHz`, `bitDepth`.
+///   `sampleHoldHz`, `bitDepth`, `driftRateHz`, `ampDelayMs`, `ampHoldMs`,
+///   `filterDelayMs`, `filterHoldMs`.
 ///
 ///   Structural patch fields (preset, engine mode, waveform, filter model,
 ///   unison, polyphony, body type, mod routings) are NOT automatable and fail

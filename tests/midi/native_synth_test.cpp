@@ -1571,6 +1571,7 @@ TEST_CASE("the tuning field table reaches the switch beside every field it gates
       {SynthEngineMode::kBrass, "brass.conical", "brass.brightness"},
       {SynthEngineMode::kVocal, "vocal.vowel", "vocal.brightness"},
       {SynthEngineMode::kPercussion, "percussion.gm_kit", "percussion.num_modes"},
+      {SynthEngineMode::kFm, "fm.algorithm", "fm.ops1.level"},
       // The two every engine carries: the filter's output tap and whether a
       // note-off is heard at all.
       {SynthEngineMode::kSubtractive, "filter_output", "cutoff_hz"},
@@ -1758,6 +1759,36 @@ TEST_CASE("engine param keys drop the section and camelCase each segment", "[mid
     REQUIRE(apply_engine_params(p, &param, 1, &error));
     REQUIRE(probe.member(p) == static_cast<float>(probe.value));
   }
+}
+
+TEST_CASE("the FM algorithm is an engine param over the whole enum", "[midi][synth]") {
+  using sonare::midi::synth::FmAlgorithm;
+  NativeSynthPatch fm;
+  fm.mode = SynthEngineMode::kFm;
+  const std::vector<EngineParamDescriptor> ds = engine_param_descriptors(fm);
+  const EngineParamDescriptor* algorithm = descriptor_named(ds, "algorithm");
+  REQUIRE(algorithm != nullptr);
+  REQUIRE(algorithm->integer);
+  REQUIRE_FALSE(algorithm->boolean);
+  REQUIRE(algorithm->bounded);
+  REQUIRE(algorithm->lo == static_cast<float>(FmAlgorithm::kStack2));
+  REQUIRE(algorithm->hi == static_cast<float>(FmAlgorithm::kAdd2));
+  REQUIRE(algorithm->unit == EngineUnit::None);
+  REQUIRE(algorithm->value == static_cast<float>(fm.fm.algorithm));
+
+  const EngineParam pair{"algorithm", static_cast<double>(FmAlgorithm::kPair2x2)};
+  std::string error;
+  REQUIRE(apply_engine_params(fm, &pair, 1, &error));
+  REQUIRE(fm.fm.algorithm == FmAlgorithm::kPair2x2);
+  const EngineParam past{"algorithm", static_cast<double>(FmAlgorithm::kAdd2) + 1.0};
+  REQUIRE_FALSE(apply_engine_params(fm, &past, 1, &error));
+  REQUIRE(error == "engine param 'algorithm': out of range [0, 5]");
+  REQUIRE(fm.fm.algorithm == FmAlgorithm::kPair2x2);
+
+  // No other engine's section carries the key.
+  NativeSynthPatch reed;
+  reed.mode = SynthEngineMode::kReed;
+  REQUIRE(descriptor_named(engine_param_descriptors(reed), "algorithm") == nullptr);
 }
 
 TEST_CASE("engine params refuse what they cannot set and leave the patch untouched",

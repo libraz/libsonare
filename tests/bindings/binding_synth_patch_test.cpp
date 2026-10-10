@@ -16,6 +16,7 @@
 #include "binding_project_parity_test_helpers.h"
 #include "c_api/synth_patch_common.h"
 #include "support/midi_render.h"
+#include "util/constants.h"
 #include "util/json.h"
 
 namespace {
@@ -468,9 +469,9 @@ TEST_CASE("synth engine param info lists exactly the walker's engine section",
 }
 
 TEST_CASE("synth patch param info describes every numeric patch field", "[project][synth_patch]") {
-  // The numeric SonareSynthPatch fields under their binding names; enums, the
-  // preset name, the mod matrix, the presence mask and the engine params are not
-  // numeric parameters.
+  // The numeric and switch SonareSynthPatch fields under their binding names;
+  // enums, the preset name, the mod matrix, the presence masks and the engine
+  // params are not parameters of their own.
   const std::set<std::string> fields = {"unison",          "detuneCents",       "driftCents",
                                         "drive",           "cutoffHz",          "resonanceQ",
                                         "keyTrack",        "envToCutoffCents",  "velToCutoffCents",
@@ -481,7 +482,9 @@ TEST_CASE("synth patch param info describes every numeric patch field", "[projec
                                         "bodyMix",         "stereoSpread",      "gain",
                                         "polyphony",       "busDrive",          "sampleSet",
                                         "sampleLevel",     "sampleStartOffset", "hpCutoffHz",
-                                        "sampleHoldHz",    "bitDepth",          "pitchOffsetCents"};
+                                        "sampleHoldHz",    "bitDepth",          "pitchOffsetCents",
+                                        "driftRateHz",     "ampDelayMs",        "ampHoldMs",
+                                        "filterDelayMs",   "filterHoldMs",      "oneShot"};
   const sonare::util::json::Value info = parse_info(sonare_synth_patch_param_info());
   std::set<std::string> names;
   const auto ends_with = [](const std::string& name, const std::string& suffix) {
@@ -807,6 +810,272 @@ TEST_CASE("the patch retrigger mode is read only by a caller that declares it",
   REQUIRE(preset.retrigger == SONARE_SYNTH_RETRIGGER_FREE);
 }
 
+TEST_CASE("the second presence word's fields are read only by a caller that declares them",
+          "[project][synth_patch]") {
+  static_assert(SONARE_SYNTH_FIELD2_ONE_SHOT == 1u << 5, "second presence word bits moved");
+  SonareSynthPatch asked{};
+  asked.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(asked.preset, "saw-lead");
+  asked.drift_rate_hz = 4.5f;
+  asked.amp_delay_ms = 30.0f;
+  asked.amp_hold_ms = 40.0f;
+  asked.filter_delay_ms = 50.0f;
+  asked.filter_hold_ms = 60.0f;
+  asked.one_shot = 1;
+  sonare::midi::synth::NativeSynthConfig read;
+  const char* error = nullptr;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(asked, &read, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(read.patch.drift_rate_hz == 4.5f);
+  REQUIRE(read.patch.amp_env.delay_ms == 30.0f);
+  REQUIRE(read.patch.amp_env.hold_ms == 40.0f);
+  REQUIRE(read.patch.filter_env.delay_ms == 50.0f);
+  REQUIRE(read.patch.filter_env.hold_ms == 60.0f);
+  REQUIRE(read.patch.one_shot);
+
+  // Zero keeps the base unless the second word says it was meant.
+  SonareSynthPatch zero{};
+  zero.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+  std::strcpy(zero.preset, "saw-lead");
+  const sonare::midi::synth::SynthPreset* saw = sonare::midi::synth::find_synth_preset("saw-lead");
+  REQUIRE(saw != nullptr);
+  REQUIRE(saw->config.patch.drift_rate_hz != 0.0f);
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
+  REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
+  zero.present_fields2 = SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(zero, &read, &error));
+  REQUIRE(read.patch.drift_rate_hz == 0.0f);
+
+  // A version-8 caller's struct ends at engine_param_count, so nothing past it is read.
+  SonareSynthPatch older = asked;
+  older.struct_version = 8;
+  older.present_fields2 = ~0u;
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(older, &read, &error));
+  REQUIRE(error == nullptr);
+  REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
+  REQUIRE(read.patch.amp_env.delay_ms == saw->config.patch.amp_env.delay_ms);
+  REQUIRE(read.patch.amp_env.hold_ms == saw->config.patch.amp_env.hold_ms);
+  REQUIRE(read.patch.filter_env.delay_ms == saw->config.patch.filter_env.delay_ms);
+  REQUIRE(read.patch.filter_env.hold_ms == saw->config.patch.filter_env.hold_ms);
+  REQUIRE(read.patch.one_shot == saw->config.patch.one_shot);
+
+  // The read direction reports every field with its presence bit set.
+  SonareSynthPatch preset{};
+  REQUIRE(sonare_synth_preset_patch("saw-lead", &preset) == SONARE_OK);
+  REQUIRE(preset.present_fields2 == sonare_c_detail::kSynthPatchAllFields2);
+  REQUIRE(preset.drift_rate_hz == saw->config.patch.drift_rate_hz);
+  REQUIRE(preset.one_shot == 0);
+  REQUIRE(sonare_c_detail::synth_config_from_patch_c(preset, &read, &error));
+  REQUIRE(read.patch.drift_rate_hz == saw->config.patch.drift_rate_hz);
+}
+
+namespace {
+
+/// One note held for 0.1 s, so a release lands inside the census render.
+SonareProject* make_census_project(uint8_t note) {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, 48000.0) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 4.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2];
+  events[0].ppq = 0.0;
+  events[0].data0 = 0x20900064u | (static_cast<uint32_t>(note) << 8);  // note-on, vel 100
+  events[0].data1 = 0u;
+  events[1].ppq = 0.2;
+  events[1].data0 = 0x20800000u | (static_cast<uint32_t>(note) << 8);  // note-off
+  events[1].data1 = 0u;
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_track_midi_destination(project, track, 3) == SONARE_OK);
+  return project;
+}
+
+std::vector<float> census_render(const SonareSynthPatch& patch, SonareSampleBank* bank = nullptr) {
+  SonareProject* project = make_census_project(60);
+  SonareProjectBounceOptions options{};
+  options.total_frames = 9600;
+  options.block_size = 128;
+  options.num_channels = 2;
+  options.sample_rate = 48000;
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = 3;
+  binding.patch = patch;
+  binding.sample_bank = bank;
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+  REQUIRE(out != nullptr);
+  std::vector<float> result(out, out + out_len);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+  return result;
+}
+
+struct CensusEdit {
+  const char* field;
+  void (*apply)(SonareSynthPatch&);
+};
+
+}  // namespace
+
+TEST_CASE("each wrapper field group sounds on the engines the header says honour it",
+          "[project][synth_patch]") {
+  // Each base carries the settings that make every edit below audible where it is
+  // honoured: a drift depth for its rate, a filter envelope for its delay and hold,
+  // an amplitude decay for its hold, an LFO rate for its depth.
+  const auto base = [](int engine_mode, const char* preset) {
+    SonareSynthPatch p{};
+    p.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
+    std::strncpy(p.preset, preset, SONARE_SYNTH_PRESET_NAME_MAX - 1);
+    p.engine_mode = engine_mode;
+    p.unison = 3;
+    p.drift_cents = 40.0f;
+    p.cutoff_hz = 1500.0f;
+    p.env_to_cutoff_cents = 2400.0f;
+    p.filter_decay_ms = 200.0f;
+    p.filter_sustain = 0.3f;
+    p.amp_decay_ms = 200.0f;
+    p.amp_sustain = 0.5f;
+    p.lfo_rate_hz = 5.0f;
+    return p;
+  };
+
+  // Each base renders once; every edit is compared against that render.
+  struct Base {
+    SonareSynthPatch patch;
+    SonareSampleBank* bank;
+    std::vector<float> render;
+  };
+  const auto rendered = [](const SonareSynthPatch& patch, SonareSampleBank* with_bank) {
+    Base b{patch, with_bank, census_render(patch, with_bank)};
+    REQUIRE(peak_of(b.render) > 0.0f);
+    return b;
+  };
+  const auto edited_render = [](const Base& on, const CensusEdit& edit) {
+    SonareSynthPatch edited = on.patch;
+    edit.apply(edited);
+    return census_render(edited, on.bank);
+  };
+  const auto require_heard = [&](const Base& on, const CensusEdit& edit) {
+    INFO(edit.field << " heard on engine " << on.patch.engine_mode);
+    REQUIRE(edited_render(on, edit) != on.render);
+  };
+  const auto require_ignored = [&](const Base& on, const CensusEdit& edit) {
+    INFO(edit.field << " ignored on engine " << on.patch.engine_mode << " preset '"
+                    << on.patch.preset << "'");
+    REQUIRE(edited_render(on, edit) == on.render);
+  };
+
+  std::vector<float> pcm(24000);
+  for (size_t i = 0; i < pcm.size(); ++i) {
+    pcm[i] = 0.5f *
+             std::sin(2.0f * sonare::constants::kPi * 261.6256f * static_cast<float>(i) / 48000.0f);
+  }
+  SonareSampleBank* bank = sonare_sample_bank_create();
+  REQUIRE(bank != nullptr);
+  SonareSampleDesc desc{};
+  REQUIRE(sonare_sample_bank_add_sample(bank, pcm.data(), pcm.size(), &desc, nullptr) == SONARE_OK);
+  SonareSampleZoneDesc zone{};
+  REQUIRE(sonare_sample_bank_add_zone(bank, 0, &zone) == SONARE_OK);
+
+  const Base subtractive = rendered(base(SONARE_SYNTH_ENGINE_SUBTRACTIVE, ""), nullptr);
+  const Base reed = rendered(base(SONARE_SYNTH_ENGINE_REED, ""), nullptr);
+  const Base fm = rendered(base(SONARE_SYNTH_ENGINE_FM, ""), nullptr);
+  const Base sample = rendered(base(SONARE_SYNTH_ENGINE_SAMPLE, ""), bank);
+  // A percussion channel: each note runs the per-note kit patch instead of this one.
+  const Base kit = rendered(base(0, "drum-kit"), nullptr);
+
+  // Subtractive only: the oscillator stack.
+  const CensusEdit kOscillator[] = {
+      {"waveform", [](SonareSynthPatch& p) { p.waveform = SONARE_SYNTH_OSC_SQUARE; }},
+      {"unison", [](SonareSynthPatch& p) { p.unison = 6; }},
+      {"detune_cents", [](SonareSynthPatch& p) { p.detune_cents = 35.0f; }},
+  };
+  for (const CensusEdit& edit : kOscillator) {
+    require_heard(subtractive, edit);
+    require_ignored(reed, edit);
+    require_ignored(fm, edit);
+  }
+
+  // Sample only: the sample block.
+  const CensusEdit kSampleBlock[] = {
+      {"sample_level", [](SonareSynthPatch& p) { p.sample_level = 0.3f; }},
+      {"sample_start_offset", [](SonareSynthPatch& p) { p.sample_start_offset = 0.25f; }},
+  };
+  for (const CensusEdit& edit : kSampleBlock) {
+    require_heard(sample, edit);
+    require_ignored(reed, edit);
+  }
+
+  // Every engine, and none of them on a percussion channel.
+  const CensusEdit kEveryEngine[] = {
+      {"pitch_offset_cents", [](SonareSynthPatch& p) { p.pitch_offset_cents = 300.0f; }},
+      {"lfo_to_pitch_cents", [](SonareSynthPatch& p) { p.lfo_to_pitch_cents = 60.0f; }},
+      {"drift_cents", [](SonareSynthPatch& p) { p.drift_cents = 90.0f; }},
+      {"drift_rate_hz",
+       [](SonareSynthPatch& p) {
+         p.drift_rate_hz = 7.0f;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ;
+       }},
+      {"cutoff_hz", [](SonareSynthPatch& p) { p.cutoff_hz = 500.0f; }},
+      {"filter_attack_ms", [](SonareSynthPatch& p) { p.filter_attack_ms = 150.0f; }},
+      {"filter_delay_ms",
+       [](SonareSynthPatch& p) {
+         p.filter_delay_ms = 80.0f;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_FILTER_DELAY_MS;
+       }},
+      {"filter_hold_ms",
+       [](SonareSynthPatch& p) {
+         p.filter_hold_ms = 80.0f;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_FILTER_HOLD_MS;
+       }},
+      {"amp_attack_ms", [](SonareSynthPatch& p) { p.amp_attack_ms = 150.0f; }},
+      {"amp_delay_ms",
+       [](SonareSynthPatch& p) {
+         p.amp_delay_ms = 80.0f;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_AMP_DELAY_MS;
+       }},
+      {"amp_hold_ms",
+       [](SonareSynthPatch& p) {
+         p.amp_hold_ms = 80.0f;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_AMP_HOLD_MS;
+       }},
+      {"one_shot",
+       [](SonareSynthPatch& p) {
+         p.one_shot = 1;
+         p.present_fields2 |= SONARE_SYNTH_FIELD2_ONE_SHOT;
+       }},
+      {"body",
+       [](SonareSynthPatch& p) {
+         p.body = SONARE_SYNTH_BODY_GUITAR;
+         p.body_mix = 0.7f;
+       }},
+      {"drive", [](SonareSynthPatch& p) { p.drive = 0.9f; }},
+      {"hp_cutoff_hz", [](SonareSynthPatch& p) { p.hp_cutoff_hz = 1500.0f; }},
+      {"sample_hold_hz", [](SonareSynthPatch& p) { p.sample_hold_hz = 3000.0f; }},
+      {"bit_depth", [](SonareSynthPatch& p) { p.bit_depth = 3.0f; }},
+      {"stereo_spread", [](SonareSynthPatch& p) { p.stereo_spread = 1.0f; }},
+  };
+  for (const CensusEdit& edit : kEveryEngine) {
+    require_heard(reed, edit);
+    require_ignored(kit, edit);
+  }
+
+  // A percussion channel keeps the instrument's own level and bus.
+  const CensusEdit kInstrument[] = {
+      {"gain", [](SonareSynthPatch& p) { p.gain = 0.2f; }},
+      {"bus_drive", [](SonareSynthPatch& p) { p.bus_drive = 0.9f; }},
+  };
+  for (const CensusEdit& edit : kInstrument) {
+    require_heard(kit, edit);
+    require_heard(reed, edit);
+  }
+
+  sonare_sample_bank_destroy(bank);
+}
+
 TEST_CASE("the patch pitch offset reaches both of the engine pitch sources",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
@@ -946,7 +1215,7 @@ TEST_CASE("sonare_engine synth instrument renders live MIDI input", "[c_api][syn
 
   // Invalid patches are rejected without disturbing the binding.
   SonareSynthPatch bad{};
-  bad.struct_version = 9;
+  bad.struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION + 1;
   REQUIRE(sonare_engine_set_synth_instrument(engine, 7, &bad) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_set_synth_instrument(engine, 7, nullptr) == SONARE_ERROR_INVALID_PARAMETER);
   REQUIRE(sonare_engine_midi_instrument_count(engine, &count) == SONARE_OK);

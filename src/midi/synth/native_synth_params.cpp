@@ -31,7 +31,7 @@ struct ParamEntry {
 /// absent. Changing them mid-flight would resize the voice pool, reallocate a
 /// waveguide slab or swap a filter topology, none of which is audio-thread
 /// safe; they stay patch edits applied through the instrument sync path.
-constexpr std::array<ParamEntry, 28> kParams{{
+constexpr std::array<ParamEntry, 33> kParams{{
     {"gain", NativeSynthParamId::kGain, 0.0f, 4.0f, ""},
     {"busDrive", NativeSynthParamId::kBusDrive, 0.0f, 1.0f, ""},
     {"cutoffHz", NativeSynthParamId::kCutoffHz, 10.0f, 22000.0f, "Hz"},
@@ -60,13 +60,18 @@ constexpr std::array<ParamEntry, 28> kParams{{
     {"hpCutoffHz", NativeSynthParamId::kHpCutoffHz, 0.0f, 22000.0f, "Hz"},
     {"sampleHoldHz", NativeSynthParamId::kSampleHoldHz, 0.0f, 192000.0f, "Hz"},
     {"bitDepth", NativeSynthParamId::kBitDepth, 0.0f, 24.0f, "bits"},
+    {"driftRateHz", NativeSynthParamId::kDriftRateHz, 0.01f, 20.0f, "Hz"},
+    {"ampDelayMs", NativeSynthParamId::kAmpDelayMs, 0.0f, 5000.0f, "ms"},
+    {"ampHoldMs", NativeSynthParamId::kAmpHoldMs, 0.0f, 5000.0f, "ms"},
+    {"filterDelayMs", NativeSynthParamId::kFilterDelayMs, 0.0f, 5000.0f, "ms"},
+    {"filterHoldMs", NativeSynthParamId::kFilterHoldMs, 0.0f, 5000.0f, "ms"},
 }};
 
-static_assert(kParams.size() <= 32, "live_dirty_ holds one bit per parameter id");
+static_assert(kParams.size() <= 64, "live_dirty_ holds one bit per parameter id");
 
 /// Ids whose value start() derives voice state from; a write marks the id for
 /// refresh_live. The rest are read by the render every sample.
-constexpr uint32_t kVoiceDerivedParams =
+constexpr uint64_t kVoiceDerivedParams =
     native_synth_param_bit(NativeSynthParamId::kDrive) |
     native_synth_param_bit(NativeSynthParamId::kKeyTrack) |
     native_synth_param_bit(NativeSynthParamId::kVelToCutoffCents) |
@@ -87,7 +92,12 @@ constexpr uint32_t kVoiceDerivedParams =
     native_synth_param_bit(NativeSynthParamId::kDriftCents) |
     native_synth_param_bit(NativeSynthParamId::kHpCutoffHz) |
     native_synth_param_bit(NativeSynthParamId::kSampleHoldHz) |
-    native_synth_param_bit(NativeSynthParamId::kBitDepth);
+    native_synth_param_bit(NativeSynthParamId::kBitDepth) |
+    native_synth_param_bit(NativeSynthParamId::kDriftRateHz) |
+    native_synth_param_bit(NativeSynthParamId::kAmpDelayMs) |
+    native_synth_param_bit(NativeSynthParamId::kAmpHoldMs) |
+    native_synth_param_bit(NativeSynthParamId::kFilterDelayMs) |
+    native_synth_param_bit(NativeSynthParamId::kFilterHoldMs);
 
 const ParamEntry* find_param_entry(NativeSynthParamId id) noexcept {
   for (const ParamEntry& entry : kParams) {
@@ -166,6 +176,16 @@ float default_value_for(NativeSynthParamId id) noexcept {
       return p.sample_hold_hz;
     case NativeSynthParamId::kBitDepth:
       return p.bit_depth;
+    case NativeSynthParamId::kDriftRateHz:
+      return p.drift_rate_hz;
+    case NativeSynthParamId::kAmpDelayMs:
+      return p.amp_env.delay_ms;
+    case NativeSynthParamId::kAmpHoldMs:
+      return p.amp_env.hold_ms;
+    case NativeSynthParamId::kFilterDelayMs:
+      return p.filter_env.delay_ms;
+    case NativeSynthParamId::kFilterHoldMs:
+      return p.filter_env.hold_ms;
   }
   return 0.0f;
 }
@@ -296,6 +316,24 @@ bool NativeSynth::apply_parameter(unsigned int param_id, float value) noexcept {
     case NativeSynthParamId::kBitDepth:
       p.bit_depth = clamp_finite(value, entry->min, entry->max, p.bit_depth);
       if (p.bit_depth > 0.0f) p.bit_depth = std::max(p.bit_depth, 1.0f);
+      return true;
+    case NativeSynthParamId::kDriftRateHz:
+      p.drift_rate_hz = clamp_finite(value, entry->min, entry->max, p.drift_rate_hz);
+      return true;
+    // Delay and hold lengthen a one-shot note, so they raise the tail as attack does.
+    case NativeSynthParamId::kAmpDelayMs:
+      p.amp_env.delay_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.delay_ms);
+      raise_tail();
+      return true;
+    case NativeSynthParamId::kAmpHoldMs:
+      p.amp_env.hold_ms = clamp_finite(value, entry->min, entry->max, p.amp_env.hold_ms);
+      raise_tail();
+      return true;
+    case NativeSynthParamId::kFilterDelayMs:
+      p.filter_env.delay_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.delay_ms);
+      return true;
+    case NativeSynthParamId::kFilterHoldMs:
+      p.filter_env.hold_ms = clamp_finite(value, entry->min, entry->max, p.filter_env.hold_ms);
       return true;
   }
   return false;

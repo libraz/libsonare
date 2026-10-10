@@ -9690,22 +9690,22 @@
         "kind": "aggregate",
         "name": "patch",
         "offset": 8,
-        "size": 320
+        "size": 352
       },
       {
         "kind": "unsigned",
         "name": "use_gm_programs",
-        "offset": 328,
+        "offset": 360,
         "size": 1
       },
       {
         "kind": "pointer",
         "name": "sample_bank",
-        "offset": 336,
+        "offset": 368,
         "size": 8
       }
     ],
-    "size": 344
+    "size": 376
   },
   "SonareSynthModRouting": {
     "align": 4,
@@ -10021,9 +10021,51 @@
         "name": "engine_param_count",
         "offset": 312,
         "size": 8
+      },
+      {
+        "kind": "unsigned",
+        "name": "present_fields2",
+        "offset": 320,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "drift_rate_hz",
+        "offset": 324,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "amp_delay_ms",
+        "offset": 328,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "amp_hold_ms",
+        "offset": 332,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "filter_delay_ms",
+        "offset": 336,
+        "size": 4
+      },
+      {
+        "kind": "float",
+        "name": "filter_hold_ms",
+        "offset": 340,
+        "size": 4
+      },
+      {
+        "kind": "signed",
+        "name": "one_shot",
+        "offset": 344,
+        "size": 4
       }
     ],
-    "size": 320
+    "size": 352
   },
   "SonareTakeAlignConfig": {
     "align": 4,

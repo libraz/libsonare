@@ -246,8 +246,9 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 ///          SONARE_ERROR_NOT_SUPPORTED in a build without arrangement support.
 const char* sonare_synth_engine_param_info(int engine_mode);
 
-/// @brief Describes every numeric @ref SonareSynthPatch field, one descriptor
-///        per field in the layout of @ref sonare_synth_engine_param_info.
+/// @brief Describes every numeric @ref SonareSynthPatch field and the
+///        @c one_shot switch, one descriptor per field in the layout of
+///        @ref sonare_synth_engine_param_info.
 /// @details `name` is the field's binding spelling (the name
 ///          @ref sonare_engine_resolve_instrument_automation_id takes where the
 ///          field is automatable); `min` / `max` are the range the field is

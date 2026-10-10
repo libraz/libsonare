@@ -364,7 +364,7 @@ typedef struct {
    * against. Default 60. 0 makes the reference the frame itself, so `threshold`
    * no longer applies; a value at least the track length makes the
    * reference whole-track, still with a lone dominant event (one no other event
-   * in the window comes within `threshold` of) set aside. */
+   * in the window comes within 30% of) set aside. */
   float reference_window;
 } SonareBoundaryOptions;
 
@@ -601,13 +601,21 @@ typedef struct {
    that already contains the desired zero. A non-empty @c num_mod_routings
    REPLACES the base mod matrix.
 
-   The struct fields are the wrapper sections most engines share (oscillator /
-   filter / envelopes / LFO / glide / realism / mod matrix / bus); a field of
-   the engine section is set by key through @c engine_params (struct_version
-   8). Two exceptions: waveform is read by the subtractive
-   engine only, and on a percussion channel the whole section is discarded in
-   favor of the per-note drum-kit patch — only gain, polyphony and bus_drive
-   still act. */
+   The struct fields are the wrapper sections; a field of the engine section
+   is set by key through @c engine_params (struct_version 8). Which engines
+   honour each wrapper field:
+   - subtractive only: waveform, unison, detune_cents.
+   - sample only: the sample block (sample_set through sample_key_track).
+   - every engine: pitch_offset_cents, the LFOs, drift_cents / drift_rate_hz,
+     glide_ms, the filter and its envelope, the amplitude envelope (an
+     undamped harpsichord tail outlasts it), one_shot, body / body_mix, drive,
+     hp_cutoff_hz, sample_hold_hz / bit_depth, stereo_spread.
+   - every engine and a percussion channel: gain, polyphony, bus_drive. On a
+     percussion channel (a percussion patch voicing a GM kit, as the drum-kit
+     preset does) each note runs its per-note kit patch and every other field
+     is discarded.
+   The Node / WASM SynthPatch TSDoc and the Python SynthPatch docstring carry
+   this table by hand; nothing checks the copies against each other. */
 typedef struct {
   int struct_version;                        /* 0 or 1 => version 1; 2 => present_fields honoured;
                                                 3 => the sample-engine block at the tail is read too;
@@ -615,7 +623,8 @@ typedef struct {
                                                 5 => the converter block at the tail is read too;
                                                 6 => the pitch offset at the tail is read too;
                                                 7 => the retrigger mode at the tail is read too;
-                                                8 => the engine params at the tail are read too */
+                                                8 => the engine params at the tail are read too;
+                                                9 => present_fields2 and its fields are read too */
   char preset[SONARE_SYNTH_PRESET_NAME_MAX]; /* base preset name; "" = init patch */
   int engine_mode;                           /* SonareSynthEngineMode; 0 => base */
 
@@ -759,13 +768,26 @@ typedef struct {
      the range. */
   const SonareSynthEngineParam* engine_params;
   size_t engine_param_count;
+
+  /* --- second presence word (struct_version 9) --- */
+  /* Bitmask of SONARE_SYNTH_FIELD2_* for the fields below, meaning what
+     present_fields means above: a set bit makes a zero an explicit value. Each
+     field below is 0 => base otherwise. */
+  uint32_t present_fields2;
+  float drift_rate_hz;   /* per-voice drift rate, [0.01, 20] Hz */
+  float amp_delay_ms;    /* amplitude envelope delay before the attack, [0, 5000] ms */
+  float amp_hold_ms;     /* amplitude envelope hold at the peak, [0, 5000] ms */
+  float filter_delay_ms; /* filter envelope delay before the attack, [0, 5000] ms */
+  float filter_hold_ms;  /* filter envelope hold at the peak, [0, 5000] ms */
+  int one_shot;          /* non-zero: note-off is ignored and the voice ends with its
+                            envelope's decay or its engine's own end */
 } SonareSynthPatch;
 
 /* Newest SonareSynthPatch layout. Named rather than written out at each site,
    because every one of them — the reader's upper bound, the writer's stamp, and
    the tests that pin "one past the newest is refused" — has to move together,
    and a literal in any of them goes stale silently. */
-#define SONARE_SYNTH_PATCH_STRUCT_VERSION 8
+#define SONARE_SYNTH_PATCH_STRUCT_VERSION 9
 
 /* Bit positions for SonareSynthPatch.present_fields. The enum fields are absent
    on purpose: their zero is already the reserved "keep base" value and every
@@ -803,6 +825,14 @@ typedef struct {
 #define SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ (1u << 28)
 #define SONARE_SYNTH_FIELD_BIT_DEPTH (1u << 29)
 #define SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS (1u << 30)
+
+/* Bit positions for SonareSynthPatch.present_fields2 (struct_version 9). */
+#define SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ (1u << 0)
+#define SONARE_SYNTH_FIELD2_AMP_DELAY_MS (1u << 1)
+#define SONARE_SYNTH_FIELD2_AMP_HOLD_MS (1u << 2)
+#define SONARE_SYNTH_FIELD2_FILTER_DELAY_MS (1u << 3)
+#define SONARE_SYNTH_FIELD2_FILTER_HOLD_MS (1u << 4)
+#define SONARE_SYNTH_FIELD2_ONE_SHOT (1u << 5)
 
 #ifdef __cplusplus
 // Layout guards for the previously-unversioned analysis / feature PODs. Any
@@ -856,6 +886,11 @@ static_assert(offsetof(SonareSynthPatch, present_fields) ==
 static_assert(SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS ==
                   1u << 30,  // Highest bit in use; widening needs a struct_version bump.
               "SonareSynthPatch presence bit range changed");
+static_assert(SONARE_SYNTH_FIELD2_ONE_SHOT == 1u << 5,  // Highest bit in use in the second word.
+              "SonareSynthPatch second presence bit range changed");
+static_assert(offsetof(SonareSynthPatch, present_fields2) ==
+                  offsetof(SonareSynthPatch, engine_param_count) + sizeof(size_t),
+              "SonareSynthPatch present_fields2 offset changed");
 #endif
 
 #ifdef __cplusplus

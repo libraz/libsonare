@@ -528,6 +528,7 @@ struct NativeSynthVoice : VoiceState {
   float part_vib_rate_scale = 1.0f;
   std::array<float, kMaxUnisonOscs> unison_spread{};
   float drift_seed = 0.0f;
+  float drift_rate_scale = 1.0f;  ///< seeded per-voice factor on drift_rate_hz
   float pan_scatter = 0.0f;
   float sampler_pan_units = 0.0f;
   /// Set by choke(): the voice is being cut and takes no live refresh.
@@ -610,7 +611,7 @@ struct NativeSynthVoice : VoiceState {
   /// @p mask (bit = NativeSynthParamId), from the same derivations and the
   /// note-on inputs saved above. Running state (phases, levels) is kept.
   /// Audio thread; no allocation.
-  void refresh_live(const NativeSynthPatch& p, double sample_rate, uint32_t mask) noexcept;
+  void refresh_live(const NativeSynthPatch& p, double sample_rate, uint64_t mask) noexcept;
   /// Note-off: enter release (ignored by one-shot patches).
   void release() noexcept;
   /// Immediate silence (All Sound Off / steal-kill).
@@ -700,11 +701,16 @@ enum class NativeSynthParamId : unsigned int {
   kHpCutoffHz = 25,
   kSampleHoldHz = 26,
   kBitDepth = 27,
+  kDriftRateHz = 28,
+  kAmpDelayMs = 29,
+  kAmpHoldMs = 30,
+  kFilterDelayMs = 31,
+  kFilterHoldMs = 32,
 };
 
 /// Bit for @p id in a refresh_live() mask.
-inline constexpr uint32_t native_synth_param_bit(NativeSynthParamId id) noexcept {
-  return 1u << static_cast<unsigned int>(id);
+inline constexpr uint64_t native_synth_param_bit(NativeSynthParamId id) noexcept {
+  return uint64_t{1} << static_cast<unsigned int>(id);
 }
 
 /// JSON-key name for @p id (the same string a SynthPatch object would use), or
@@ -1155,7 +1161,7 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   std::unique_ptr<std::atomic<int64_t>> tail_samples_ = std::make_unique<std::atomic<int64_t>>(0);
   /// Ids written by apply_parameter whose voice state awaits refresh_live (bit =
   /// NativeSynthParamId). Audio-thread state under config_.patch's contract.
-  uint32_t live_dirty_ = 0;
+  uint64_t live_dirty_ = 0;
   std::array<ChannelState, 16> channels_{};
   std::array<Sf2ChannelMod, 16> channel_mods_{};
   /// Mix-bus polish state (per stereo leg): DC blocker + drive constants.

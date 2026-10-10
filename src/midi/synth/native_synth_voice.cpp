@@ -419,7 +419,8 @@ void NativeSynthVoice::start(const NativeSynthPatch& p, double sample_rate, Velo
   // stacked voices beat against each other instead of wobbling in unison.
   drift_seed = seq.bipolar_at(101);
   drift_depth_cents = drift_depth(p.drift_cents, drift_seed);
-  drift_lfo.start(sample_rate, 0.0f, p.drift_rate_hz * (0.75f + 0.5f * seq.unipolar_at(102)));
+  drift_rate_scale = 0.75f + 0.5f * seq.unipolar_at(102);
+  drift_lfo.start(sample_rate, 0.0f, p.drift_rate_hz * drift_rate_scale);
 
   // Mod-matrix source constants.
   has_matrix = !p.mod_matrix.empty();
@@ -830,7 +831,7 @@ void NativeSynthVoice::retune(uint8_t new_note, uint8_t voiced_note, float per_n
 }
 
 void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rate,
-                                    uint32_t mask) noexcept {
+                                    uint64_t mask) noexcept {
   using Id = NativeSynthParamId;
   const auto has = [mask](Id id) noexcept { return (mask & native_synth_param_bit(id)) != 0u; };
   const auto has_any = [mask](std::initializer_list<Id> ids) noexcept {
@@ -842,14 +843,16 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
 
   // Envelopes: configure() swaps rates and the sustain target, keeping the
   // level and the stage, so a running segment continues from where it is.
-  if (has_any({Id::kAmpAttackMs, Id::kAmpDecayMs, Id::kAmpSustain, Id::kAmpReleaseMs})) {
+  // A delay or hold length applies from the next entry of that stage.
+  if (has_any({Id::kAmpDelayMs, Id::kAmpAttackMs, Id::kAmpHoldMs, Id::kAmpDecayMs, Id::kAmpSustain,
+               Id::kAmpReleaseMs})) {
     const DahdsrConfig scaled_amp =
         scaled_amp_env(p.amp_env, part_attack_scale, part_decay_scale, part_release_scale);
     amp_env.configure(sample_rate, scaled_amp);
     harpsichord_tail_choke_multiplier = 1.0f - amp_env.release_rate();
   }
-  if (has_any(
-          {Id::kFilterAttackMs, Id::kFilterDecayMs, Id::kFilterSustain, Id::kFilterReleaseMs})) {
+  if (has_any({Id::kFilterDelayMs, Id::kFilterAttackMs, Id::kFilterHoldMs, Id::kFilterDecayMs,
+               Id::kFilterSustain, Id::kFilterReleaseMs})) {
     filter_env.configure(sample_rate, p.filter_env);
   }
 
@@ -918,6 +921,8 @@ void NativeSynthVoice::refresh_live(const NativeSynthPatch& p, double sample_rat
   }
 
   if (has(Id::kDriftCents)) drift_depth_cents = drift_depth(p.drift_cents, drift_seed);
+  if (has(Id::kDriftRateHz))
+    drift_lfo.set_frequency(sample_rate, p.drift_rate_hz * drift_rate_scale);
 
   if (has(Id::kHpCutoffHz)) {
     if (p.hp_cutoff_hz > 0.0f) {

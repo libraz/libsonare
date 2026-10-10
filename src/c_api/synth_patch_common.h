@@ -294,6 +294,9 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
   // part of that contract even though the member exists in this build.
   const uint32_t present = c.struct_version >= 2 ? c.present_fields : 0u;
   const auto set = [present](uint32_t bit) { return (present & bit) != 0u; };
+  // A pre-9 struct ends at engine_param_count, so the second word is not read.
+  const uint32_t present2 = c.struct_version >= 9 ? c.present_fields2 : 0u;
+  const auto set2 = [present2](uint32_t bit) { return (present2 & bit) != 0u; };
   if (!valid_c_enum(c.engine_mode, SONARE_SYNTH_ENGINE_MODE_COUNT)) {
     if (out_error) *out_error = "invalid synth engine_mode";
     return false;
@@ -436,6 +439,19 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     p.pitch_offset_cents = c.pitch_offset_cents;
   }
   if (retrigger > 0) p.retrigger = static_cast<SynthRetrigger>(retrigger - 1);
+  if (c.struct_version >= 9) {
+    if (set2(SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ) || c.drift_rate_hz != 0.0f)
+      p.drift_rate_hz = c.drift_rate_hz;
+    if (set2(SONARE_SYNTH_FIELD2_AMP_DELAY_MS) || c.amp_delay_ms != 0.0f)
+      p.amp_env.delay_ms = c.amp_delay_ms;
+    if (set2(SONARE_SYNTH_FIELD2_AMP_HOLD_MS) || c.amp_hold_ms != 0.0f)
+      p.amp_env.hold_ms = c.amp_hold_ms;
+    if (set2(SONARE_SYNTH_FIELD2_FILTER_DELAY_MS) || c.filter_delay_ms != 0.0f)
+      p.filter_env.delay_ms = c.filter_delay_ms;
+    if (set2(SONARE_SYNTH_FIELD2_FILTER_HOLD_MS) || c.filter_hold_ms != 0.0f)
+      p.filter_env.hold_ms = c.filter_hold_ms;
+    if (set2(SONARE_SYNTH_FIELD2_ONE_SHOT) || c.one_shot != 0) p.one_shot = c.one_shot != 0;
+  }
   if (engine_param_count > 0) {
     std::vector<sonare::midi::synth::EngineParam> params(engine_param_count);
     for (size_t i = 0; i < engine_param_count; ++i) {
@@ -492,6 +508,13 @@ inline constexpr uint32_t kSynthPatchAllFields =
     SONARE_SYNTH_FIELD_SAMPLE_HOLD_HZ | SONARE_SYNTH_FIELD_BIT_DEPTH |
     SONARE_SYNTH_FIELD_PITCH_OFFSET_CENTS;
 
+/// Every presence bit of SonareSynthPatch.present_fields2, set by the read
+/// direction for the same reason.
+inline constexpr uint32_t kSynthPatchAllFields2 =
+    SONARE_SYNTH_FIELD2_DRIFT_RATE_HZ | SONARE_SYNTH_FIELD2_AMP_DELAY_MS |
+    SONARE_SYNTH_FIELD2_AMP_HOLD_MS | SONARE_SYNTH_FIELD2_FILTER_DELAY_MS |
+    SONARE_SYNTH_FIELD2_FILTER_HOLD_MS | SONARE_SYNTH_FIELD2_ONE_SHOT;
+
 /// Fills a versioned C synth patch from a catalog preset (the read direction:
 /// preset name + the wrapper-section values, so hosts can inspect and tweak).
 inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
@@ -500,6 +523,7 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   *out = SonareSynthPatch{};
   out->struct_version = SONARE_SYNTH_PATCH_STRUCT_VERSION;
   out->present_fields = kSynthPatchAllFields;
+  out->present_fields2 = kSynthPatchAllFields2;
   std::strncpy(out->preset, preset.name, SONARE_SYNTH_PRESET_NAME_MAX - 1);
   out->engine_mode = static_cast<int>(p.mode) + 1;
   out->waveform = static_cast<int>(p.waveform) + 1;
@@ -534,6 +558,12 @@ inline void synth_patch_to_c(const sonare::midi::synth::SynthPreset& preset,
   out->body_mix = p.body_mix;
   out->stereo_spread = p.stereo_spread;
   out->retrigger = static_cast<int>(p.retrigger) + 1;
+  out->drift_rate_hz = p.drift_rate_hz;
+  out->amp_delay_ms = p.amp_env.delay_ms;
+  out->amp_hold_ms = p.amp_env.hold_ms;
+  out->filter_delay_ms = p.filter_env.delay_ms;
+  out->filter_hold_ms = p.filter_env.hold_ms;
+  out->one_shot = p.one_shot ? 1 : 0;
   int n = 0;
   for (const sonare::midi::synth::ModRoute& r : p.mod_matrix.routes) {
     if (r.source == sonare::midi::synth::ModSource::kNone ||
