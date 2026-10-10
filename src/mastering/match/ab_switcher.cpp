@@ -6,6 +6,7 @@
 #include <utility>
 #include <vector>
 
+#include "core/resample.h"
 #include "mastering/common/loudness_measure.h"
 #include "metering/lufs.h"
 #include "util/db.h"
@@ -16,10 +17,14 @@ namespace sonare::mastering::match {
 
 namespace {
 
-void validate_pair(const Audio& a, const Audio& b) {
+void validate_nonempty(const Audio& a, const Audio& b) {
   if (a.empty() || b.empty()) {
     throw SonareException(ErrorCode::InvalidParameter, "audio must not be empty");
   }
+}
+
+void validate_pair(const Audio& a, const Audio& b) {
+  validate_nonempty(a, b);
   if (a.sample_rate() != b.sample_rate()) {
     throw SonareException(ErrorCode::InvalidParameter, "sample rates must match");
   }
@@ -100,8 +105,8 @@ StereoAudioPair ab_crossfade_stereo(const StereoAudioPair& a, const StereoAudioP
 }
 
 LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b) {
-  validate_pair(a, b);
-  const float a_lufs = common::measure_lufs(a);
+  validate_nonempty(a, b);
+  const float a_lufs = common::measure_lufs(resample(a, b.sample_rate()));
   const metering::LufsGainToTarget solved =
       metering::gain_to_integrated_lufs(b.data(), b.size(), 1, b.sample_rate(), a_lufs);
   const float b_lufs = solved.measured_lufs;
@@ -126,15 +131,13 @@ StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
                                                    const StereoAudioPair& b) {
   validate_stereo_pair(a, "reference");
   validate_stereo_pair(b, "source");
-  if (a.left.sample_rate() != b.left.sample_rate()) {
-    throw SonareException(ErrorCode::InvalidParameter, "stereo sample rates must match");
-  }
 
-  const int sample_rate = a.left.sample_rate();
-  const std::vector<float> reference_interleaved = interleave_stereo(a);
+  const int sample_rate = b.left.sample_rate();
+  const StereoAudioPair reference{resample(a.left, sample_rate), resample(a.right, sample_rate)};
+  const std::vector<float> reference_interleaved = interleave_stereo(reference);
   const std::vector<float> source_interleaved = interleave_stereo(b);
-  const float reference_lufs =
-      common::measure_lufs_interleaved(reference_interleaved.data(), a.left.size(), 2, sample_rate);
+  const float reference_lufs = common::measure_lufs_interleaved(
+      reference_interleaved.data(), reference.left.size(), 2, sample_rate);
   const metering::LufsGainToTarget solved = metering::gain_to_integrated_lufs(
       source_interleaved.data(), b.left.size(), 2, sample_rate, reference_lufs);
   const float source_lufs = solved.measured_lufs;

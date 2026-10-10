@@ -668,17 +668,21 @@ SonareError sonare_mastering_apply_pair_processor(const char* processor_name, co
                                                   size_t param_count, SonareMasteringResult* out);
 
 /// @brief Apply a two-input "match.*" processor with independent source and
-/// reference lengths. Reference masters are commonly a different length than the
-/// source; the underlying match primitives consume each buffer at its own
-/// length. @ref sonare_mastering_apply_pair_processor delegates here with
-/// reference_length == length.
-/// @details See @c sonare_mastering_apply_pair_processor for
+/// reference lengths and rates. Reference masters are commonly a different
+/// length and rate than the source; the underlying match primitives consume each
+/// buffer at its own length. @ref sonare_mastering_apply_pair_processor
+/// delegates here with reference_length == length and one rate.
+/// @details A reference at another rate is resampled onto @p sample_rate before
+///   processing (equal rates take no resample pass), so the output is at
+///   @p sample_rate. See @c sonare_mastering_apply_pair_processor for
 ///   @c non_finite_substitution_count semantics.
+/// @param reference_sample_rate Rate of @p reference; must be > 0.
+/// @param sample_rate Rate of @p source and of the output; must be > 0.
 /// @param out Receives heap-owned buffers; free with sonare_free_mastering_result.
 SonareError sonare_mastering_apply_pair_processor_ex(
     const char* processor_name, const float* source, size_t source_length, const float* reference,
-    size_t reference_length, int sample_rate, const SonareMasteringParam* params,
-    size_t param_count, SonareMasteringResult* out);
+    size_t reference_length, int reference_sample_rate, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringResult* out);
 
 /// @brief Stereo counterpart of the pair processor API.
 /// @details Supports match.abCrossfade. The same linear mix is applied to both
@@ -689,15 +693,18 @@ SonareError sonare_mastering_apply_pair_processor_stereo(
     const float* reference_left, const float* reference_right, size_t length, int sample_rate,
     const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
-/// @brief Stereo pair processing with independent source and reference lengths.
-/// @details Each stereo input must have equally sized left and right planes.
+/// @brief Stereo pair processing with independent source and reference lengths
+/// and rates.
+/// @details Each stereo input must have equally sized left and right planes. A
+/// reference at @p reference_sample_rate other than @p sample_rate is resampled
+/// onto @p sample_rate first (both must be > 0).
 /// See sonare_mastering_apply_pair_processor_stereo for supported processors.
 /// Free the result with sonare_free_mastering_stereo_result.
 SonareError sonare_mastering_apply_pair_processor_stereo_ex(
     const char* processor_name, const float* source_left, const float* source_right,
     size_t source_length, const float* reference_left, const float* reference_right,
-    size_t reference_length, int sample_rate, const SonareMasteringParam* params,
-    size_t param_count, SonareMasteringStereoResult* out);
+    size_t reference_length, int reference_sample_rate, int sample_rate,
+    const SonareMasteringParam* params, size_t param_count, SonareMasteringStereoResult* out);
 
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float* source,
@@ -706,15 +713,17 @@ SonareError sonare_mastering_analyze_pair(const char* analysis_name, const float
                                           char** json_out);
 
 /// @brief Analyze a two-input "match.*" analysis with independent source and
-/// reference lengths. See @ref sonare_mastering_apply_pair_processor_ex.
+/// reference lengths and rates. See @ref sonare_mastering_apply_pair_processor_ex.
 /// @ref sonare_mastering_analyze_pair delegates here with
-/// reference_length == length.
+/// reference_length == length and one rate.
+/// @details A reference at another rate is resampled onto @p sample_rate first, so
+///   @c match.estimateReferenceDelaySamples reports a delay in source-rate samples.
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_pair_ex(const char* analysis_name, const float* source,
                                              size_t source_length, const float* reference,
-                                             size_t reference_length, int sample_rate,
-                                             const SonareMasteringParam* params, size_t param_count,
-                                             char** json_out);
+                                             size_t reference_length, int reference_sample_rate,
+                                             int sample_rate, const SonareMasteringParam* params,
+                                             size_t param_count, char** json_out);
 /// @note Free @p json_out with @ref sonare_free_string.
 SonareError sonare_mastering_analyze_stereo(const char* analysis_name, const float* left,
                                             const float* right, size_t length, int sample_rate,
@@ -738,25 +747,32 @@ typedef struct {
 ///          a headroom clamp would return @p source at its own loudness whenever
 ///          it started near full scale, which is the one thing a match must not
 ///          do. Both loudness values are non-finite for a silent or below-gate
-///          take, and @c applied_gain_db is then 0.
+///          take, and @c applied_gain_db is then 0. A @p reference at another
+///          rate is resampled onto @p sample_rate and measured there.
+/// @param reference_sample_rate Rate of @p reference; must be > 0.
+/// @param sample_rate Rate of @p source and of @p out; must be > 0.
 /// @param out Receives @p source at @p reference's loudness. Heap-allocated;
 ///            release with @ref sonare_free_floats.
 /// @param out_match Pass NULL to take only the audio.
 SonareError sonare_mastering_ab_match_loudness(const float* source, size_t source_length,
                                                const float* reference, size_t reference_length,
-                                               int sample_rate, float** out, size_t* out_length,
+                                               int reference_sample_rate, int sample_rate,
+                                               float** out, size_t* out_length,
                                                SonareLoudnessMatch* out_match);
 
 /// @brief Match stereo source loudness using one gain shared by both channels.
 /// @details BS.1770 stereo channel summing preserves phase-cancelling material.
 /// The output keeps the source length and stereo image. Gain is not capped;
 /// out_match reports the maximum true peak across both matched channels.
-/// Silence follows the mono API's zero-gain fallback. Free the result with
+/// Silence follows the mono API's zero-gain fallback. A reference at
+/// reference_sample_rate other than sample_rate is resampled onto sample_rate and
+/// measured there; both must be > 0. Free the result with
 /// sonare_free_mastering_stereo_result. out_match may be NULL.
 SonareError sonare_mastering_ab_match_loudness_stereo(
     const float* source_left, const float* source_right, size_t source_length,
     const float* reference_left, const float* reference_right, size_t reference_length,
-    int sample_rate, SonareMasteringStereoResult* out, SonareLoudnessMatch* out_match);
+    int reference_sample_rate, int sample_rate, SonareMasteringStereoResult* out,
+    SonareLoudnessMatch* out_match);
 
 typedef struct {
   const char* name;
@@ -981,9 +997,18 @@ void sonare_eq_clear(SonareEq* eq);
 SonareError sonare_eq_set_phase_mode(SonareEq* eq, int mode);
 /// @brief Configures bands that match @p source to @p reference.
 /// @details Both mono buffers contain @p length samples at @p sample_rate;
-/// @p max_bands must be in [1, SONARE_EQ_MAX_BANDS].
+/// @p max_bands must be in [1, SONARE_EQ_MAX_BANDS]. Delegates to
+/// @ref sonare_eq_match_ex with one length and one rate.
 SonareError sonare_eq_match(SonareEq* eq, const float* source, const float* reference,
                             size_t length, int sample_rate, int max_bands);
+/// @brief Configures bands that match @p source to @p reference, each buffer at
+///        its own length and rate.
+/// @details A @p reference at another rate is resampled onto @p sample_rate before
+/// its spectrum is taken; equal rates take no resample pass. Both rates must be
+/// > 0 and @p max_bands in [1, SONARE_EQ_MAX_BANDS].
+SonareError sonare_eq_match_ex(SonareEq* eq, const float* source, size_t source_length,
+                               int sample_rate, const float* reference, size_t reference_length,
+                               int reference_sample_rate, int max_bands);
 /// @brief Enables or disables automatic output-gain compensation. Accepts NULL.
 void sonare_eq_set_auto_gain(SonareEq* eq, int enabled);
 /// @brief Returns the automatic gain applied by the latest process call, or zero for NULL.

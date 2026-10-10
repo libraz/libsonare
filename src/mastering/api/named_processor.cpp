@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "core/audio.h"
+#include "core/resample.h"
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/internal_processor_runner.h"
@@ -726,6 +727,12 @@ bool mono_dispatch_handles(const std::string& name) {
   return config;
 }
 
+// A pair reference on the source's clock; equal rates return the buffer unresampled.
+Audio reference_at_rate(const float* reference, std::size_t length, int reference_sample_rate,
+                        int sample_rate) {
+  return resample(Audio::from_buffer(reference, length, reference_sample_rate), sample_rate);
+}
+
 }  // namespace
 
 std::vector<std::string> stereo_processor_names() {
@@ -916,13 +923,14 @@ StereoResult apply_named_processor_stereo(const std::string& name, const float* 
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
                                       const float* reference, std::size_t source_length,
                                       std::size_t reference_length, int sample_rate,
-                                      const std::vector<Param>& params) {
+                                      int reference_sample_rate, const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
   validate_offline_audio_input(source, source_length, sample_rate);
-  validate_offline_audio_input(reference, reference_length, sample_rate);
+  validate_offline_audio_input(reference, reference_length, reference_sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
-  auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
+  auto reference_audio =
+      reference_at_rate(reference, reference_length, reference_sample_rate, sample_rate);
   Audio out;
   if (name == "match.applyMatchEq") {
     const ::sonare::mastering::match::MatchEqConfig match_config = read_match_eq_config(map);
@@ -964,7 +972,16 @@ MonoResult apply_named_pair_processor(const std::string& name, const float* sour
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
                                       const float* reference, std::size_t length, int sample_rate,
                                       const std::vector<Param>& params) {
-  return apply_named_pair_processor(name, source, reference, length, length, sample_rate, params);
+  return apply_named_pair_processor(name, source, reference, length, length, sample_rate,
+                                    sample_rate, params);
+}
+
+MonoResult apply_named_pair_processor(const std::string& name, const float* source,
+                                      const float* reference, std::size_t source_length,
+                                      std::size_t reference_length, int sample_rate,
+                                      const std::vector<Param>& params) {
+  return apply_named_pair_processor(name, source, reference, source_length, reference_length,
+                                    sample_rate, sample_rate, params);
 }
 
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
@@ -972,6 +989,7 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                                const float* reference_left,
                                                const float* reference_right,
                                                std::size_t reference_length, int sample_rate,
+                                               int reference_sample_rate,
                                                const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
   // Only the crossfade is defined for planar pairs; reject the rest before copying.
@@ -981,8 +999,8 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
   }
   validate_offline_audio_input(source_left, source_length, sample_rate);
   validate_offline_audio_input(source_right, source_length, sample_rate);
-  validate_offline_audio_input(reference_left, reference_length, sample_rate);
-  validate_offline_audio_input(reference_right, reference_length, sample_rate);
+  validate_offline_audio_input(reference_left, reference_length, reference_sample_rate);
+  validate_offline_audio_input(reference_right, reference_length, reference_sample_rate);
   const auto map = make_map(params);
   const float mix = f(map, "mix", 0.5f);
 
@@ -990,8 +1008,8 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
       Audio::from_buffer(source_left, source_length, sample_rate),
       Audio::from_buffer(source_right, source_length, sample_rate)};
   const ::sonare::mastering::match::StereoAudioPair reference{
-      Audio::from_buffer(reference_left, reference_length, sample_rate),
-      Audio::from_buffer(reference_right, reference_length, sample_rate)};
+      reference_at_rate(reference_left, reference_length, reference_sample_rate, sample_rate),
+      reference_at_rate(reference_right, reference_length, reference_sample_rate, sample_rate)};
   const auto mixed = ::sonare::mastering::match::ab_crossfade_stereo(source, reference, mix);
 
   StereoResult result;
@@ -1015,18 +1033,21 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                                const float* reference_right, std::size_t length,
                                                int sample_rate, const std::vector<Param>& params) {
   return apply_named_pair_processor_stereo(name, source_left, source_right, length, reference_left,
-                                           reference_right, length, sample_rate, params);
+                                           reference_right, length, sample_rate, sample_rate,
+                                           params);
 }
 
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t source_length, std::size_t reference_length,
-                               int sample_rate, const std::vector<Param>& params) {
+                               int sample_rate, int reference_sample_rate,
+                               const std::vector<Param>& params) {
   validate_params(params.data(), params.size());
   validate_offline_audio_input(source, source_length, sample_rate);
-  validate_offline_audio_input(reference, reference_length, sample_rate);
+  validate_offline_audio_input(reference, reference_length, reference_sample_rate);
   auto map = make_map(params);
   auto source_audio = Audio::from_buffer(source, source_length, sample_rate);
-  auto reference_audio = Audio::from_buffer(reference, reference_length, sample_rate);
+  auto reference_audio =
+      reference_at_rate(reference, reference_length, reference_sample_rate, sample_rate);
   // Built as a util::json tree rather than hand-rolled text: these analyses
   // legitimately return non-finite values (reference_loudness yields -inf LUFS
   // for a silent source), and only util::json::dump maps those to `null` and
@@ -1088,7 +1109,15 @@ std::string analyze_named_pair(const std::string& name, const float* source, con
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t length, int sample_rate,
                                const std::vector<Param>& params) {
-  return analyze_named_pair(name, source, reference, length, length, sample_rate, params);
+  return analyze_named_pair(name, source, reference, length, length, sample_rate, sample_rate,
+                            params);
+}
+
+std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
+                               std::size_t source_length, std::size_t reference_length,
+                               int sample_rate, const std::vector<Param>& params) {
+  return analyze_named_pair(name, source, reference, source_length, reference_length, sample_rate,
+                            sample_rate, params);
 }
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,

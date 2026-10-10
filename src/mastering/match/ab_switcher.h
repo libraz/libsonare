@@ -62,15 +62,17 @@ struct StereoLoudnessMatchedPair {
 ///          own loudness whenever it started near full scale, defeating the
 ///          only reason this function exists. Returns 0 dB unchanged when
 ///          either integrated loudness is non-finite (silence, or below the
-///          absolute gate).
+///          absolute gate). An `a` at another sample rate is resampled onto
+///          `b`'s rate and measured there; equal rates take no resample pass.
 LoudnessMatchedPair ab_match_loudness(const Audio& a, const Audio& b);
 
 /// @brief Gain-match a stereo source pair to a stereo reference pair.
 /// @details The LUFS measurement uses BS.1770 channel summing, so antiphase or
 ///          one-sided material remains measurable. One gain is applied to both
-///          planes, preserving their ratio and phase. The pair must have equal
-///          per-pair lengths and sample rates; each pair may have a different
-///          length from the other.
+///          planes, preserving their ratio and phase. Each pair must have equal
+///          per-plane lengths and sample rates; the two pairs may differ in
+///          length and rate, and an `a` at another rate is resampled onto `b`'s
+///          and measured there.
 StereoLoudnessMatchedPair ab_match_loudness_stereo(const StereoAudioPair& a,
                                                    const StereoAudioPair& b);
 

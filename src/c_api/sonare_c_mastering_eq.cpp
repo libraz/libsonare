@@ -89,22 +89,28 @@ SonareEq* sonare_eq_create(double sample_rate, int max_block_size) {
   SonareError sonare_eq_match(SonareEq * eq, const float* source, const float* reference,
                               size_t length, int sample_rate, int max_bands) {
     SONARE_C_API_ENTRY;
+    return sonare_eq_match_ex(eq, source, length, sample_rate, reference, length, sample_rate,
+                              max_bands);
+  }
+
+  SonareError sonare_eq_match_ex(SonareEq * eq, const float* source, size_t source_length,
+                                 int sample_rate, const float* reference, size_t reference_length,
+                                 int reference_sample_rate, int max_bands) {
+    SONARE_C_API_ENTRY;
     if (!eq || max_bands <= 0 || max_bands > static_cast<int>(SONARE_EQ_MAX_BANDS)) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
-    SonareError err = validate_audio_params(source, length, sample_rate);
+    SonareError err = validate_audio_params(source, source_length, sample_rate);
     if (err != SONARE_OK) return err;
-    err = validate_audio_params(reference, length, sample_rate);
+    err = validate_audio_params(reference, reference_length, reference_sample_rate);
     if (err != SONARE_OK) return err;
 
     SONARE_C_TRY
     sonare::mastering::match::MatchEqConfig config;
     config.max_bands = static_cast<size_t>(max_bands);
-    const Audio source_audio = Audio::from_buffer(source, length, sample_rate);
-    const Audio reference_audio = Audio::from_buffer(reference, length, sample_rate);
-    sonare::mastering::match::configure_equalizer_from_match(
-        eq->processor, sonare::mastering::match::reference_spectrum(source_audio),
-        sonare::mastering::match::reference_spectrum(reference_audio), config);
+    sonare::mastering::match::configure_equalizer_from_audio(
+        eq->processor, Audio::from_buffer(source, source_length, sample_rate),
+        Audio::from_buffer(reference, reference_length, reference_sample_rate), config);
     return SONARE_OK;
     SONARE_C_CATCH
   }

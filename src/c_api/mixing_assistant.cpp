@@ -15,6 +15,7 @@
 #include "sonare_c_internal.h"
 
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
+#include "core/resample.h"
 #include "mixing/api/scene.h"
 #include "mixing/assistant/config_from_params.h"
 #include "mixing/assistant/suggester.h"
@@ -33,7 +34,8 @@ namespace assistant = sonare::mixing::assistant;
 // Shared argument checking for the two suggest entry points. Kept as one
 // function so the two cannot drift into accepting different inputs.
 SonareError check_track_arrays(const float* const* input_left, const char* const* track_ids,
-                               const size_t* track_lengths, size_t input_count, int sample_rate,
+                               const size_t* track_lengths, const int* track_sample_rates,
+                               size_t input_count, int sample_rate,
                                const SonareMasteringParam* params, size_t param_count) {
   if (params == nullptr && param_count > 0) return SONARE_ERROR_INVALID_PARAMETER;
   if (input_count == 0) return SONARE_OK;
@@ -46,16 +48,17 @@ SonareError check_track_arrays(const float* const* input_left, const char* const
     if (track_lengths[index] > 0 && input_left[index] == nullptr) {
       return SONARE_ERROR_INVALID_PARAMETER;
     }
+    if (track_sample_rates != nullptr && track_sample_rates[index] <= 0) {
+      return SONARE_ERROR_INVALID_PARAMETER;
+    }
   }
   return SONARE_OK;
 }
 
-std::vector<assistant::TrackInput> build_tracks(const float* const* input_left,
-                                                const float* const* input_right,
-                                                const char* const* track_ids,
-                                                const char* const* track_names,
-                                                const size_t* track_lengths, size_t input_count,
-                                                int sample_rate) {
+std::vector<assistant::TrackInput> build_tracks(
+    const float* const* input_left, const float* const* input_right, const char* const* track_ids,
+    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
+    size_t input_count, int sample_rate, std::vector<std::vector<float>>& resampled) {
   std::vector<assistant::TrackInput> tracks;
   tracks.reserve(input_count);
   for (size_t index = 0; index < input_count; ++index) {
@@ -68,6 +71,19 @@ std::vector<assistant::TrackInput> build_tracks(const float* const* input_left,
     track.right = input_right != nullptr ? input_right[index] : nullptr;
     track.frame_count = track_lengths[index];
     track.sample_rate = sample_rate;
+    const int track_rate = track_sample_rates != nullptr ? track_sample_rates[index] : sample_rate;
+    // A track at another rate is analysed from a copy on the analysis clock; moving a
+    // plane between vectors keeps its buffer, so the pointers stay valid.
+    if (track_rate != sample_rate && track.frame_count > 0) {
+      const size_t frames = track.frame_count;
+      resampled.push_back(sonare::resample(track.left, frames, track_rate, sample_rate));
+      track.left = resampled.back().data();
+      track.frame_count = resampled.back().size();
+      if (track.right != nullptr) {
+        resampled.push_back(sonare::resample(track.right, frames, track_rate, sample_rate));
+        track.right = resampled.back().data();
+      }
+    }
     tracks.push_back(std::move(track));
   }
   return tracks;
@@ -79,21 +95,24 @@ std::vector<assistant::TrackInput> build_tracks(const float* const* input_left,
 
 SonareError sonare_mixing_assistant_suggest(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, size_t input_count,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out) {
+    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
+    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
+    char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const SonareError err = check_track_arrays(input_left, track_ids, track_lengths, input_count,
-                                             sample_rate, params, param_count);
+  const SonareError err =
+      check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
+                         sample_rate, params, param_count);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
   const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
   const auto config = assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
+  std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
-                                   input_count, sample_rate);
+                                   track_sample_rates, input_count, sample_rate, resampled);
   const auto result = assistant::suggest_scene(tracks, config);
   *json_out = copy_string(assistant::mix_assistant_result_to_json(result));
   return SONARE_OK;
@@ -104,6 +123,7 @@ SonareError sonare_mixing_assistant_suggest(
   (void)track_ids;
   (void)track_names;
   (void)track_lengths;
+  (void)track_sample_rates;
   (void)input_count;
   (void)sample_rate;
   (void)params;
@@ -114,21 +134,24 @@ SonareError sonare_mixing_assistant_suggest(
 
 SonareError sonare_mixing_assistant_suggest_scene_json(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, size_t input_count,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out) {
+    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
+    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
+    char** json_out) {
   SONARE_C_API_ENTRY;
   if (!json_out) return SONARE_ERROR_INVALID_PARAMETER;
   *json_out = nullptr;
 #if defined(SONARE_WITH_MIXING_ASSISTANT) && SONARE_WITH_MIXING_ASSISTANT
-  const SonareError err = check_track_arrays(input_left, track_ids, track_lengths, input_count,
-                                             sample_rate, params, param_count);
+  const SonareError err =
+      check_track_arrays(input_left, track_ids, track_lengths, track_sample_rates, input_count,
+                         sample_rate, params, param_count);
   if (err != SONARE_OK) return err;
 
   SONARE_C_TRY
   const auto parsed = sonare_c_mastering_detail::to_params(params, param_count);
   const auto config = assistant::mix_assistant_config_from_params(parsed.data(), parsed.size());
+  std::vector<std::vector<float>> resampled;
   const auto tracks = build_tracks(input_left, input_right, track_ids, track_names, track_lengths,
-                                   input_count, sample_rate);
+                                   track_sample_rates, input_count, sample_rate, resampled);
   const auto result = assistant::suggest_scene(tracks, config);
   *json_out = copy_string(sonare::mixing::api::scene_to_json(result.scene));
   return SONARE_OK;
@@ -139,6 +162,7 @@ SonareError sonare_mixing_assistant_suggest_scene_json(
   (void)track_ids;
   (void)track_names;
   (void)track_lengths;
+  (void)track_sample_rates;
   (void)input_count;
   (void)sample_rate;
   (void)params;

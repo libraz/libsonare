@@ -132,27 +132,36 @@ std::string amp_preset_catalog_json();
 const std::vector<std::string>& processor_catalog_schema_paths();
 
 // Apply a two-input "match.*" processor. The source and reference buffers may
-// have different lengths; the underlying match primitives consume each buffer at
-// its own length. The single-length overload delegates with
-// reference_length == length for backward compatibility.
+// have different lengths and rates; a reference at another rate is resampled
+// onto sample_rate first (equal rates take no resample pass), so every result,
+// including a delay, is in source-rate samples. The single-length overload
+// delegates with one length and one rate.
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
                                       const float* reference, std::size_t source_length,
                                       std::size_t reference_length, int sample_rate,
-                                      const std::vector<Param>& params = {});
+                                      int reference_sample_rate, const std::vector<Param>& params);
 
 MonoResult apply_named_pair_processor(const std::string& name, const float* source,
                                       const float* reference, std::size_t length, int sample_rate,
                                       const std::vector<Param>& params = {});
 
+/// Two lengths at one rate: delegates with reference_sample_rate == sample_rate.
+MonoResult apply_named_pair_processor(const std::string& name, const float* source,
+                                      const float* reference, std::size_t source_length,
+                                      std::size_t reference_length, int sample_rate,
+                                      const std::vector<Param>& params);
+
 /// Apply the stereo pair processor subset. Source and reference may have
-/// different frame counts; pair members must have equal lengths within each
-/// pair. The output follows the shorter pair for the supported crossfade.
+/// different frame counts and rates; pair members must have equal lengths within
+/// each pair. A reference at another rate is resampled onto @p sample_rate first.
+/// The output follows the shorter pair for the supported crossfade.
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
                                                const float* source_right, std::size_t source_length,
                                                const float* reference_left,
                                                const float* reference_right,
                                                std::size_t reference_length, int sample_rate,
-                                               const std::vector<Param>& params = {});
+                                               int reference_sample_rate,
+                                               const std::vector<Param>& params);
 
 /// Backward-compatible equal-length overload for stereo pair processing.
 StereoResult apply_named_pair_processor_stereo(const std::string& name, const float* source_left,
@@ -162,13 +171,21 @@ StereoResult apply_named_pair_processor_stereo(const std::string& name, const fl
                                                int sample_rate,
                                                const std::vector<Param>& params = {});
 
+/// Analyze a two-input "match.*" analysis. A reference at another rate is
+/// resampled onto @p sample_rate first, so a delay estimate is in source-rate samples.
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t source_length, std::size_t reference_length,
-                               int sample_rate, const std::vector<Param>& params = {});
+                               int sample_rate, int reference_sample_rate,
+                               const std::vector<Param>& params);
 
 std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
                                std::size_t length, int sample_rate,
                                const std::vector<Param>& params = {});
+
+/// Two lengths at one rate: delegates with reference_sample_rate == sample_rate.
+std::string analyze_named_pair(const std::string& name, const float* source, const float* reference,
+                               std::size_t source_length, std::size_t reference_length,
+                               int sample_rate, const std::vector<Param>& params);
 
 std::string analyze_named_stereo(const std::string& name, const float* left, const float* right,
                                  std::size_t length, int sample_rate,

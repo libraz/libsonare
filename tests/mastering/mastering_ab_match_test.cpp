@@ -6,6 +6,7 @@
 #include <new>
 #include <vector>
 
+#include "core/resample.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/match/ab_switcher.h"
@@ -136,10 +137,30 @@ TEST_CASE("ABMatchLoudness validates like the existing A/B helpers",
   const auto b = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
   REQUIRE_THROWS(ab_match_loudness(empty, b));
   REQUIRE_THROWS(ab_match_loudness(b, empty));
+}
 
-  const auto a_44k = generate_sine_audio(1000.0f, 44100, 1.0f, 0.2f);
+TEST_CASE("ABMatchLoudness measures a reference at another rate on the source's clock",
+          "[mastering][match][ab-match]") {
+  const auto a_44k = square_audio(110.0f, 0.5f, 44100);
   const auto b_48k = generate_sine_audio(1000.0f, 48000, 1.0f, 0.2f);
-  REQUIRE_THROWS(ab_match_loudness(a_44k, b_48k));
+  const auto expected = ab_match_loudness(resample(a_44k, 48000), b_48k);
+  const auto matched = ab_match_loudness(a_44k, b_48k);
+  REQUIRE(matched.reference_lufs == expected.reference_lufs);
+  REQUIRE(matched.applied_gain_db == expected.applied_gain_db);
+  REQUIRE(std::equal(matched.b.begin(), matched.b.end(), expected.b.begin(), expected.b.end()));
+  REQUIRE(matched.b.sample_rate() == 48000);
+  // Control: the same samples read at the source rate measure differently.
+  const auto misread = Audio::from_vector(std::vector<float>(a_44k.begin(), a_44k.end()), 48000);
+  REQUIRE(ab_match_loudness(misread, b_48k).reference_lufs != expected.reference_lufs);
+
+  const StereoAudioPair a_pair{a_44k, a_44k};
+  const StereoAudioPair b_pair{b_48k, b_48k};
+  const auto stereo_expected =
+      ab_match_loudness_stereo({resample(a_44k, 48000), resample(a_44k, 48000)}, b_pair);
+  const auto stereo = ab_match_loudness_stereo(a_pair, b_pair);
+  REQUIRE(stereo.reference_lufs == stereo_expected.reference_lufs);
+  REQUIRE(std::equal(stereo.b.left.begin(), stereo.b.left.end(), stereo_expected.b.left.begin(),
+                     stereo_expected.b.left.end()));
 }
 
 TEST_CASE("ABMatchLoudness returns a unchanged", "[mastering][match][ab-match]") {
@@ -353,7 +374,7 @@ TEST_CASE("Named stereo A/B crossfade is linear and uses the shorter pair",
   const auto result = apply_named_pair_processor_stereo(
       "match.abCrossfade", source_left.data(), source_right.data(), source_left.size(),
       reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
-      {Param{"mix", 0.25}});
+      kSampleRate, {Param{"mix", 0.25}});
   REQUIRE(result.left.size() == reference_left.size());
   REQUIRE_THAT(result.left[0], WithinAbs(1.5f, 1.0e-6f));
   REQUIRE_THAT(result.right[0], WithinAbs(-1.5f, 1.0e-6f));
@@ -361,11 +382,11 @@ TEST_CASE("Named stereo A/B crossfade is linear and uses the shorter pair",
   const auto at_a = apply_named_pair_processor_stereo(
       "match.abCrossfade", source_left.data(), source_right.data(), source_left.size(),
       reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
-      {Param{"mix", 0.0}});
+      kSampleRate, {Param{"mix", 0.0}});
   const auto at_b = apply_named_pair_processor_stereo(
       "match.abCrossfade", source_left.data(), source_right.data(), source_left.size(),
       reference_left.data(), reference_right.data(), reference_left.size(), kSampleRate,
-      {Param{"mix", 1.0}});
+      kSampleRate, {Param{"mix", 1.0}});
   REQUIRE(at_a.left[0] == source_left[0]);
   REQUIRE(at_b.left[0] == reference_left[0]);
 }
@@ -380,10 +401,11 @@ TEST_CASE("Named stereo A/B crossfade validates every parameter like its mono si
   REQUIRE_THROWS_AS(apply_named_pair_processor("match.abCrossfade", samples.data(), samples.data(),
                                                samples.size(), kSampleRate, params),
                     SonareException);
-  REQUIRE_THROWS_AS(apply_named_pair_processor_stereo(
-                        "match.abCrossfade", samples.data(), samples.data(), samples.size(),
-                        samples.data(), samples.data(), samples.size(), kSampleRate, params),
-                    SonareException);
+  REQUIRE_THROWS_AS(
+      apply_named_pair_processor_stereo("match.abCrossfade", samples.data(), samples.data(),
+                                        samples.size(), samples.data(), samples.data(),
+                                        samples.size(), kSampleRate, kSampleRate, params),
+      SonareException);
 }
 
 TEST_CASE("Named stereo A/B crossfade rejects other pairs and bad parameters",
@@ -392,16 +414,16 @@ TEST_CASE("Named stereo A/B crossfade rejects other pairs and bad parameters",
   const std::vector<float> samples(48000, 0.1f);
   REQUIRE_THROWS(apply_named_pair_processor_stereo("match.abSwitch", samples.data(), samples.data(),
                                                    samples.size(), samples.data(), samples.data(),
-                                                   samples.size(), kSampleRate));
+                                                   samples.size(), kSampleRate, kSampleRate, {}));
   REQUIRE_THROWS(apply_named_pair_processor_stereo("unknown", samples.data(), samples.data(),
                                                    samples.size(), samples.data(), samples.data(),
-                                                   samples.size(), kSampleRate));
+                                                   samples.size(), kSampleRate, kSampleRate, {}));
   REQUIRE_THROWS(apply_named_pair_processor_stereo(
       "match.abCrossfade", samples.data(), samples.data(), samples.size(), samples.data(),
-      samples.data(), samples.size(), kSampleRate, {Param{"mix", -0.01}}));
+      samples.data(), samples.size(), kSampleRate, kSampleRate, {Param{"mix", -0.01}}));
   REQUIRE_THROWS(apply_named_pair_processor_stereo(
       "match.abCrossfade", samples.data(), samples.data(), samples.size(), samples.data(),
-      samples.data(), samples.size(), kSampleRate, {Param{"mix", 1.01}}));
+      samples.data(), samples.size(), kSampleRate, kSampleRate, {Param{"mix", 1.01}}));
 }
 
 TEST_CASE("Named stereo A/B crossfade reads parameters like the mono pair processor",
@@ -436,7 +458,7 @@ TEST_CASE("Named stereo pair rejects oversized buffers before copying",
     try {
       static_cast<void>(apply_named_pair_processor_stereo("match.abCrossfade", &sample, &sample,
                                                           oversized, &sample, &sample, oversized,
-                                                          kSampleRate));
+                                                          kSampleRate, kSampleRate, {}));
     } catch (const SonareException& error) {
       invalid_parameter = error.code() == ErrorCode::InvalidParameter;
     } catch (const std::bad_alloc&) {

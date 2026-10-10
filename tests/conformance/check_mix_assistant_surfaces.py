@@ -334,6 +334,7 @@ def _suggest_c(
             id_ptrs,
             name_ptrs,
             lengths,
+            None,
             ctypes.c_size_t(count),
             ctypes.c_int(SAMPLE_RATE),
             params,

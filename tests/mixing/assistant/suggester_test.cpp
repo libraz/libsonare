@@ -509,7 +509,7 @@ TEST_CASE("the mixing assistant rejects an empty track id on core and C surfaces
   const size_t lengths[] = {1};
   char* json = nullptr;
   const auto error = sonare_mixing_assistant_suggest_scene_json(
-      channels, nullptr, ids, nullptr, lengths, 1, 48000, nullptr, 0, &json);
+      channels, nullptr, ids, nullptr, lengths, nullptr, 1, 48000, nullptr, 0, &json);
   if (json != nullptr) sonare_free_string(json);
   CHECK(error == SONARE_ERROR_INVALID_PARAMETER);
   CHECK(json == nullptr);
@@ -1271,4 +1271,101 @@ TEST_CASE("the master headroom bound counts a routed track too short to stage",
       profiles, sonare::mixing::assistant::analyze_mix_profile(tracks, profiles, config), config);
   REQUIRE(staged.tracks[1].usable);
   check_bound(staged);
+}
+
+namespace {
+
+std::vector<float> resampled_by_c_abi(const std::vector<float>& samples, int src_sr,
+                                      int target_sr) {
+  float* out = nullptr;
+  size_t out_length = 0;
+  REQUIRE(sonare_resample(samples.data(), samples.size(), src_sr, target_sr, &out, &out_length) ==
+          SONARE_OK);
+  std::vector<float> result(out, out + out_length);
+  sonare_free_floats(out);
+  return result;
+}
+
+// Calls both suggest entry points through the C ABI and returns their documents joined.
+SonareError suggest_through_c_abi(const sonare::mixing::assistant::test::SyntheticTracks& tracks,
+                                  const int* track_sample_rates, int sample_rate,
+                                  std::string* out) {
+  const std::size_t count = tracks.left.size();
+  std::vector<const float*> left(count);
+  std::vector<const float*> right(count);
+  std::vector<const char*> ids(count);
+  std::vector<size_t> lengths(count);
+  for (std::size_t index = 0; index < count; ++index) {
+    left[index] = tracks.left[index].data();
+    right[index] = tracks.right[index].empty() ? nullptr : tracks.right[index].data();
+    ids[index] = tracks.ids[index].c_str();
+    lengths[index] = tracks.left[index].size();
+  }
+  out->clear();
+  char* json = nullptr;
+  SonareError error = sonare_mixing_assistant_suggest(left.data(), right.data(), ids.data(),
+                                                      nullptr, lengths.data(), track_sample_rates,
+                                                      count, sample_rate, nullptr, 0, &json);
+  if (error != SONARE_OK) return error;
+  *out = json;
+  sonare_free_string(json);
+  error = sonare_mixing_assistant_suggest_scene_json(left.data(), right.data(), ids.data(), nullptr,
+                                                     lengths.data(), track_sample_rates, count,
+                                                     sample_rate, nullptr, 0, &json);
+  if (error != SONARE_OK) return error;
+  *out += json;
+  sonare_free_string(json);
+  return SONARE_OK;
+}
+
+}  // namespace
+
+TEST_CASE("the C ABI resamples a track at another rate onto the analysis rate",
+          "[mixing][assistant][c_api]") {
+  constexpr int kAnalysisRate = 48000;
+  constexpr int kTrackRate = 32000;
+  const auto base = make_demo_tracks(kAnalysisRate, 0.8f);
+  const auto other = make_demo_tracks(kTrackRate, 0.8f);
+
+  // Odd tracks arrive at the other rate.
+  auto mixed = base;
+  auto pre_resampled = base;
+  std::vector<int> rates(base.left.size(), kAnalysisRate);
+  for (std::size_t index = 1; index < base.left.size(); index += 2) {
+    mixed.left[index] = other.left[index];
+    mixed.right[index] = other.right[index];
+    rates[index] = kTrackRate;
+    pre_resampled.left[index] = resampled_by_c_abi(other.left[index], kTrackRate, kAnalysisRate);
+    pre_resampled.right[index] =
+        other.right[index].empty()
+            ? std::vector<float>()
+            : resampled_by_c_abi(other.right[index], kTrackRate, kAnalysisRate);
+  }
+
+  std::string expected;
+  REQUIRE(suggest_through_c_abi(pre_resampled, nullptr, kAnalysisRate, &expected) == SONARE_OK);
+  std::string actual;
+  REQUIRE(suggest_through_c_abi(mixed, rates.data(), kAnalysisRate, &actual) == SONARE_OK);
+  CHECK(actual == expected);
+
+  // Control: the same samples read at the analysis rate suggest something else.
+  std::string misread;
+  REQUIRE(suggest_through_c_abi(mixed, nullptr, kAnalysisRate, &misread) == SONARE_OK);
+  CHECK(misread != expected);
+
+  // Every rate equal to the analysis rate is the NULL form bit for bit.
+  const std::vector<int> equal_rates(base.left.size(), kAnalysisRate);
+  std::string with_null;
+  std::string with_rates;
+  REQUIRE(suggest_through_c_abi(base, nullptr, kAnalysisRate, &with_null) == SONARE_OK);
+  REQUIRE(suggest_through_c_abi(base, equal_rates.data(), kAnalysisRate, &with_rates) == SONARE_OK);
+  CHECK(with_rates == with_null);
+
+  for (const int bad_rate : {0, -1}) {
+    std::vector<int> bad = equal_rates;
+    bad[1] = bad_rate;
+    std::string ignored;
+    CHECK(suggest_through_c_abi(base, bad.data(), kAnalysisRate, &ignored) ==
+          SONARE_ERROR_INVALID_PARAMETER);
+  }
 }

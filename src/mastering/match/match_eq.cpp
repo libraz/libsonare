@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/fft.h"
+#include "core/resample.h"
 #include "core/window.h"
 #include "rt/biquad_design.h"
 #include "rt/partitioned_convolver.h"
@@ -850,6 +851,13 @@ void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,
   for (size_t i = 0; i < bands.size(); ++i) {
     equalizer.set_band(i, bands[i]);
   }
+}
+
+void configure_equalizer_from_audio(eq::EqualizerProcessor& equalizer, const Audio& source,
+                                    const Audio& reference, const MatchEqConfig& config) {
+  configure_equalizer_from_match(equalizer, reference_spectrum(source),
+                                 reference_spectrum(resample(reference, source.sample_rate())),
+                                 config);
 }
 
 }  // namespace sonare::mastering::match

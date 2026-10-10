@@ -71,5 +71,11 @@ void configure_equalizer_from_match(eq::EqualizerProcessor& equalizer,
                                     const ReferenceSpectrum& source,
                                     const ReferenceSpectrum& reference,
                                     const MatchEqConfig& config = {});
+/// @brief Configures @p equalizer from the spectra of two buffers.
+/// @details The buffers may differ in length and rate; a @p reference at another
+///          rate is resampled onto @p source's first, and equal rates take no
+///          resample pass.
+void configure_equalizer_from_audio(eq::EqualizerProcessor& equalizer, const Audio& source,
+                                    const Audio& reference, const MatchEqConfig& config = {});
 
 }  // namespace sonare::mastering::match

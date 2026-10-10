@@ -476,8 +476,12 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // @param track_names  Optional per-track display names used only as a
 //                     classification hint, or NULL. Individual entries may be NULL.
 // @param track_lengths Per-track frame counts; @c input_count entries.
+// @param track_sample_rates Per-track sample rates, or NULL when every track is
+//                     at @c sample_rate. A track at another rate is resampled
+//                     onto @c sample_rate before analysis; an entry <= 0 returns
+//                     @c SONARE_ERROR_INVALID_PARAMETER.
 // @param input_count  Number of tracks. Zero yields an empty suggestion.
-// @param sample_rate  Shared sample rate for every track.
+// @param sample_rate  Analysis rate every track is brought to; must be > 0.
 // @param params       Flat configuration; accepts targetTrackLufs,
 //                     suggestionStrength, eqMaxCutDb, mixBusHeadroomDbtp,
 //                     tempoBpm, enableStructure,
@@ -498,8 +502,9 @@ void sonare_mixer_destroy(SonareMixer* mixer);
 // mixing assistant.
 SonareError sonare_mixing_assistant_suggest(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, size_t input_count,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out);
+    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
+    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
+    char** json_out);
 
 // As sonare_mixing_assistant_suggest, but writes only the suggested scene, in
 // the same schema sonare_mixer_from_scene_json reads. Provided so a caller that
@@ -508,8 +513,9 @@ SonareError sonare_mixing_assistant_suggest(
 // Free *json_out with sonare_free_string.
 SonareError sonare_mixing_assistant_suggest_scene_json(
     const float* const* input_left, const float* const* input_right, const char* const* track_ids,
-    const char* const* track_names, const size_t* track_lengths, size_t input_count,
-    int sample_rate, const SonareMasteringParam* params, size_t param_count, char** json_out);
+    const char* const* track_names, const size_t* track_lengths, const int* track_sample_rates,
+    size_t input_count, int sample_rate, const SonareMasteringParam* params, size_t param_count,
+    char** json_out);
 
 // Returns the source-class identifiers the assistant can report, separated by
 // '\n'. Backed by thread-local storage REBUILT ON EVERY CALL, so the pointer is
