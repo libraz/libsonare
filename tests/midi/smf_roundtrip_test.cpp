@@ -550,6 +550,38 @@ TEST_CASE("SMF export then re-import round-trips events and tempo", "[midi]") {
   }
 }
 
+TEST_CASE("SMF export keeps a late-starting tempo ramp at the tempo map's times", "[midi]") {
+  // The shape a beat-tracked tempo installs: a ramp that starts just after ppq 0.
+  sonare::transport::TempoSegment ramp;
+  ramp.start_ppq = 0.1265;
+  ramp.bpm = 142.35;
+  ramp.end_bpm = 137.82;
+  sonare::transport::TempoSegment tail;
+  tail.start_ppq = 38.1265;
+  tail.bpm = 137.82;
+  const std::vector<sonare::transport::TempoSegment> segments{ramp, tail};
+
+  const auto exported = export_smf({}, segments, {});
+  REQUIRE(exported.ok());
+  const SmfImportResult round = import_smf(exported.bytes);
+  REQUIRE(round.ok());
+  REQUIRE_FALSE(round.tempo_segments.empty());
+  CHECK(round.tempo_segments.front().start_ppq == 0.0);
+  CHECK(round.tempo_segments.front().bpm == Catch::Approx(142.35).margin(0.01));
+
+  sonare::transport::TempoMap source;
+  source.prepare(48000.0);
+  source.set_segments(segments);
+  sonare::transport::TempoMap written;
+  written.prepare(48000.0);
+  written.set_segments(round.tempo_segments);
+  // Set Tempo is a 1 us/quarter field, so a sub-millisecond residual is the encoding's.
+  for (double ppq = 0.0; ppq <= 60.0; ppq += 0.125) {
+    INFO("ppq " << ppq);
+    CHECK(written.ppq_to_seconds(ppq) == Catch::Approx(source.ppq_to_seconds(ppq)).margin(1e-3));
+  }
+}
+
 TEST_CASE("SMF export rejects a PPQN outside the positive 15-bit header field", "[midi]") {
   for (const uint16_t ppqn : {uint16_t{0x8000u}, uint16_t{0xFFFFu}}) {
     CAPTURE(ppqn);

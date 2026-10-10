@@ -199,10 +199,12 @@ struct SmfExportResult {
 
 /// Serializes PPQ-timed MidiClips plus a tempo / time-signature map into a
 /// format-1 SMF byte buffer. Track 0 carries the tempo + time-signature meta
-/// (and end-of-track); each clip becomes one MTrk whose channel-voice UMP
-/// events are serialized via the ump.h adapter. SysEx-handle events are written
-/// when `options.sysex_store` can resolve a MIDI 1.0 SysEx7-representable
-/// payload. `clip_names` (if
+/// (and end-of-track). Set Tempo cannot ramp, so a tempo ramp is written as
+/// sixteenth-note steps that keep every step boundary at the ramp's exact time,
+/// and the first segment's tempo is written at tick 0 even when the segment
+/// starts later, as the tempo map holds it there. Each clip becomes one MTrk whose channel-voice
+/// UMP events are serialized via the ump.h adapter. SysEx-handle events are written when
+/// `options.sysex_store` can resolve a MIDI 1.0 SysEx7-representable payload. `clip_names` (if
 /// non-empty and index-parallel to `clips`) supplies per-track name meta events.
 /// The result is round-trippable through @ref import_smf for MIDI 1.0
 /// channel-voice data and stored SysEx payloads. Format 1 reserves one 16-bit

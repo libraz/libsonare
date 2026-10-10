@@ -865,6 +865,51 @@ void put_sysex(std::vector<uint8_t>* body, uint32_t delta, const SysExBody& syse
   body->insert(body->end(), payload.begin(), payload.end());
 }
 
+struct SmfTempoEvent {
+  int64_t tick;
+  double bpm;
+};
+
+// Set Tempo is a step function, so a ramp is written as steps whose durations
+// equal the ramp's at every step boundary; no drift accumulates across it.
+constexpr int64_t kMaxTempoRampSteps = 4096;
+
+std::vector<SmfTempoEvent> smf_tempo_events(const std::vector<transport::TempoSegment>& segments,
+                                            uint16_t ppqn) {
+  std::vector<SmfTempoEvent> events;
+  if (segments.empty()) return events;
+  std::vector<transport::TempoSegment> sorted = segments;
+  transport::sort_by_start(&sorted);
+  transport::TempoMap map;
+  map.prepare(sonare::constants::kDefaultDawSampleRate);
+  map.set_segments(sorted);
+  const double ticks_per_ppq = static_cast<double>(ppqn);
+  for (size_t i = 0; i < sorted.size(); ++i) {
+    const transport::TempoSegment& seg = sorted[i];
+    const double bpm = seg.bpm > 0.0 ? seg.bpm : kDefaultBpm;
+    const int64_t start = smf_ppq_to_ticks(seg.start_ppq, ppqn);
+    // The map holds the first tempo back to ppq 0, where a reader would assume 120 BPM.
+    const int64_t hold = i == 0 ? 0 : start;
+    const bool ramp = i + 1 < sorted.size() && seg.end_bpm > 0.0 && seg.end_bpm != seg.bpm;
+    if (!ramp) {
+      events.push_back({hold, bpm});
+      continue;
+    }
+    if (hold < start) events.push_back({hold, bpm});
+    const int64_t end = smf_ppq_to_ticks(sorted[i + 1].start_ppq, ppqn);
+    const int64_t step = std::max<int64_t>(
+        {1, ppqn / 4, (end - start + kMaxTempoRampSteps - 1) / kMaxTempoRampSteps});
+    for (int64_t a = start; a < end; a += step) {
+      const int64_t b = std::min(a + step, end);
+      const double seconds = map.ppq_to_seconds(static_cast<double>(b) / ticks_per_ppq) -
+                             map.ppq_to_seconds(static_cast<double>(a) / ticks_per_ppq);
+      const double beats = static_cast<double>(b - a) / ticks_per_ppq;
+      events.push_back({a, seconds > 0.0 ? 60.0 * beats / seconds : bpm});
+    }
+  }
+  return events;
+}
+
 }  // namespace
 
 SmfExportResult export_smf(const std::vector<MidiClip>& clips,
@@ -915,15 +960,8 @@ SmfExportResult export_smf(const std::vector<MidiClip>& clips,
       bool key_minor = false;                              // key signature only.
     };
     std::vector<MetaItem> items;
-    for (const auto& seg : tempo_segments) {
-      items.push_back({smf_ppq_to_ticks(seg.start_ppq, ppqn),
-                       0,
-                       seg.bpm > 0.0 ? seg.bpm : kDefaultBpm,
-                       0,
-                       0,
-                       24,
-                       8,
-                       {}});
+    for (const SmfTempoEvent& tempo : smf_tempo_events(tempo_segments, ppqn)) {
+      items.push_back({tempo.tick, 0, tempo.bpm, 0, 0, 24, 8, {}});
     }
     for (const auto& seg : time_signatures) {
       items.push_back({smf_ppq_to_ticks(seg.start_ppq, ppqn),

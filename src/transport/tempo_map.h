@@ -91,6 +91,8 @@ class TempoMap {
 
   double sample_to_ppq(int64_t sample) const noexcept;
   int64_t ppq_to_sample(double ppq) const noexcept;
+  /// Seconds from ppq 0 to @p ppq, unrounded (ppq_to_sample rounds to a sample).
+  double ppq_to_seconds(double ppq) const noexcept;
   double bpm_at_sample(int64_t sample) const noexcept;
   TimeSignature time_signature_at_ppq(double ppq) const noexcept;
   /// Start of the time-signature segment active at @p ppq, where its bar grid begins.

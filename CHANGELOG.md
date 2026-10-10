@@ -283,6 +283,7 @@
 - CutFilter automation of IIR parameters no longer allocates on the audio thread. A change that rebuilds a linear-phase FIR (a brickwall corner, or an Equalizer linear-phase or brickwall band) is reported as not realtime-safe instead of being accepted there.
 - Short inputs no longer collapse to silence or to nothing: mono clips and warp segments shorter than one hop, short custom HRTF responses when resampled, and empty streaming phase-vocoder jobs, which no longer emit one silent sample.
 - SMF import keeps a fragmented SysEx message across meta events, and an empty F7 escape no longer moves the next SysEx earlier. SMF and MIDI Clip File export keep a leading F0 or trailing F7 data byte of a SysEx8 payload.
+- SMF export keeps notes at the project tempo map's times when the map ramps or starts after beat 0. A tempo ramp was written as its starting tempo, and the first tempo after the file's opening ticks, so the `transcribe` command with a detected tempo, or `exportSmf` after `autoTempo`, wrote a middle section a quarter second early. A ramp is now written as sixteenth-note tempo steps that land on the ramp's time at every step, and the first tempo at tick 0.
 - Generated cabinet impulse responses keep in-band driver directivity at low sample rates.
 - Multiband setters reconfigure the crossover the processor owns, before or after prepare. A sparse dynamic-EQ sub-band keeps the slot its parameter keys name.
 - Gated silence trimming no longer rescans the full RMS window for every sample.

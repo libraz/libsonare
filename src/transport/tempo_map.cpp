@@ -239,6 +239,13 @@ int64_t TempoMap::ppq_to_sample(double ppq) const noexcept {
   return static_cast<int64_t>(std::round(sample));
 }
 
+double TempoMap::ppq_to_seconds(double ppq) const noexcept {
+  const std::vector<TempoSegment>* segments = segments_.load();
+  if (!segments || segments->empty() || !std::isfinite(ppq)) return 0.0;
+  const TempoSegment& segment = (*segments)[segment_index_for_ppq(*segments, ppq)];
+  return (segment.start_sample + segment_samples_at_ppq(segment, sample_rate_, ppq)) / sample_rate_;
+}
+
 double TempoMap::bpm_at_sample(int64_t sample) const noexcept {
   const std::vector<TempoSegment>* segments = segments_.load();
   if (!segments || segments->empty()) return constants::kDefaultBpm;
