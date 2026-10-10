@@ -797,6 +797,12 @@ if(BUILD_ARRANGEMENT)
   endif()
 endif()
 
+# Renders scores through the native synth and transcribes them, so it needs
+# both the arrangement (synth) and the pitch editor (transcriber).
+if(BUILD_ARRANGEMENT AND BUILD_PITCH_EDITOR)
+  target_sources(sonare_tests PRIVATE editing/note_transcriber_eval_test.cpp)
+endif()
+
 # macOS host backend tests. Built only when a backend is enabled on APPLE; the
 # backend static libs are defined in src/host/backends (added before this
 # subdirectory). Live-device / system-AU cases inside are tagged "[.]" and stay
