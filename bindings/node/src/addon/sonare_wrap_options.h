@@ -454,6 +454,33 @@ inline double DoubleProperty(const Napi::Object& obj, const char* key, double fa
   return value.As<Napi::Number>().DoubleValue();
 }
 
+/// @brief Read a string-keyed map of numbers: undefined/null returns an empty
+///        map, a non-object (or an array) and any non-number value are refused
+///        by key.
+/// @details The values stay doubles and unnarrowed, because the consumer owns
+///   the range rule and reports it by key; a key carrying a NUL is refused like
+///   every other string. Entries come back in the object's own key order.
+inline std::vector<std::pair<std::string, double>> NumberMapProperty(const Napi::Object& obj,
+                                                                     const char* key) {
+  Napi::Value value = obj.Get(key);
+  if (value.IsUndefined() || value.IsNull()) return {};
+  node_require_property_type(obj.Env(), value.IsObject() && !value.IsArray(), key,
+                             "an object of numbers");
+  const Napi::Object map = value.As<Napi::Object>();
+  const Napi::Array names = map.GetPropertyNames();
+  std::vector<std::pair<std::string, double>> entries;
+  entries.reserve(names.Length());
+  for (uint32_t i = 0; i < names.Length(); ++i) {
+    const std::string entry_key =
+        node_narrow_string(obj.Env(), names.Get(i), std::string(key) + " key");
+    const std::string label = std::string(key) + "." + entry_key;
+    const Napi::Value entry = map.Get(entry_key);
+    node_require_property_type(obj.Env(), entry.IsNumber(), label.c_str(), "a number");
+    entries.emplace_back(entry_key, entry.As<Napi::Number>().DoubleValue());
+  }
+  return entries;
+}
+
 /// @brief Read a bool property: undefined/null returns the fallback, any other
 ///        non-boolean is refused by name.
 inline bool BoolProperty(const Napi::Object& obj, const char* key, bool fallback) {

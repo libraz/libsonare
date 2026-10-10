@@ -2435,6 +2435,24 @@ export const CASES: AbortGuardCase[] = [
     ],
   },
   {
+    name: 'addon.synthEngineParamInfo',
+    missingRequired: [],
+    rejectsArgument: [
+      { argument: 'omitted engine mode', call: () => addon.synthEngineParamInfo() },
+      { argument: 'engine mode', call: () => addon.synthEngineParamInfo(true) },
+      {
+        argument: 'unknown engine mode name',
+        call: () => addon.synthEngineParamInfo('no-such-engine'),
+        error: RangeError,
+      },
+      {
+        argument: 'engine mode ordinal past the table',
+        call: () => addon.synthEngineParamInfo(99),
+        error: RangeError,
+      },
+    ],
+  },
+  {
     name: 'addon.synthGsDrumKitIsVoicedApart',
     missingRequired: [],
     rejectsArgument: [

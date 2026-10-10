@@ -303,6 +303,7 @@ const UNSCANNED_SHARED_READERS: ReadonlyMap<string, string> = new Map([
     'Takes a decimal string and refuses any number outright, so no fractional value can truncate onto its zero.',
   ],
   ['DoubleProperty', 'Reads a double; truncation is not in play.'],
+  ['NumberMapProperty', 'Reads an object of doubles; truncation is not in play.'],
   ['FloatProperty', 'Reads a float; truncation is not in play.'],
   ['FiniteFloatProperty', 'Reads a float; truncation is not in play.'],
   ['AutoFiniteFloatProperty', 'Reads a float or the string "auto"; truncation is not in play.'],

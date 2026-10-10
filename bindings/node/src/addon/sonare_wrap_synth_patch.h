@@ -8,6 +8,7 @@
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <vector>
 
 #include "sonare_wrap_options.h"
 
@@ -138,14 +139,13 @@ inline bool SynthFieldPresent(const Napi::Object& obj, const char* key) {
   return !value.IsUndefined() && !value.IsNull();
 }
 
-// Parses a JS SynthPatch descriptor (a preset-name string — a "va:" routing
-// prefix is accepted — or an object of wrapper-section overrides) into the
-// versioned C struct. A key the caller actually supplied also sets its
-// present_fields bit, so `stereoSpread: 0` reaches the core as an explicit zero
-// rather than the "keep base" sentinel a bare zero would be. Returns false with
-// a pending JS exception on an unknown enum name; unknown PRESET names are
+// Parses the wrapper-section fields of a JS SynthPatch descriptor (a preset-name string — a "va:"
+// routing prefix is accepted — or an object of wrapper-section overrides) into the versioned C
+// struct. A key the caller actually supplied also sets its present_fields bit, so `stereoSpread: 0`
+// reaches the core as an explicit zero rather than the "keep base" sentinel a bare zero would be.
+// Returns false with a pending JS exception on an unknown enum name; unknown PRESET names are
 // validated downstream by the C ABI.
-inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
+inline bool ReadSynthPatchFields(Napi::Env env, const Napi::Value& desc, SonareSynthPatch* patch) {
   *patch = SonareSynthPatch{};
   // Version 5 is a superset: the sample block at the tail is read only when the
   // resolved engine is the sample engine, and the series highpass and converter
@@ -282,9 +282,49 @@ inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SonareSynthPa
   return true;
 }
 
+// A parsed patch together with the engine-param list its `engine_params`
+// pointer borrows. Keys are char vectors rather than strings: a moved vector
+// keeps its heap buffer, while a short string's bytes live inline and would
+// dangle once the storage is moved into a caller's container. The pointers are
+// fixed up once, so the storage is move-only and must outlive the C call.
+struct SynthPatchStorage {
+  SonareSynthPatch patch{};
+  std::vector<std::vector<char>> keys;
+  std::vector<SonareSynthEngineParam> params;
+
+  SynthPatchStorage() = default;
+  SynthPatchStorage(const SynthPatchStorage&) = delete;
+  SynthPatchStorage& operator=(const SynthPatchStorage&) = delete;
+  SynthPatchStorage(SynthPatchStorage&&) noexcept = default;
+  SynthPatchStorage& operator=(SynthPatchStorage&&) noexcept = default;
+};
+
+// Parses a JS SynthPatch descriptor into @p storage, including the
+// `engineParams` map (key -> number) that sets the selected engine's own model
+// fields. A non-number value is refused by key; an unknown key or an
+// out-of-range value is refused by the C ABI when the patch is bound.
+inline bool ReadSynthPatch(Napi::Env env, const Napi::Value& desc, SynthPatchStorage* storage) {
+  *storage = SynthPatchStorage{};
+  if (!ReadSynthPatchFields(env, desc, &storage->patch)) return false;
+  if (!desc.IsObject()) return true;
+  const auto entries = NumberMapProperty(desc.As<Napi::Object>(), "engineParams");
+  if (entries.empty()) return true;
+  storage->keys.reserve(entries.size());
+  storage->params.reserve(entries.size());
+  for (const auto& [key, value] : entries) {
+    storage->keys.emplace_back(key.begin(), key.end());
+    storage->keys.back().push_back('\0');
+    storage->params.push_back({storage->keys.back().data(), value});
+  }
+  storage->patch.engine_params = storage->params.data();
+  storage->patch.engine_param_count = storage->params.size();
+  return true;
+}
+
 // Converts a versioned C synth patch into the JS SynthPatch object shape
 // (the read direction for synthPresetPatch): enum ordinals become their
-// canonical names so the object can be passed back verbatim.
+// canonical names so the object can be passed back verbatim. The engine section
+// stays out: a patch reads back without `engineParams`.
 inline Napi::Object SynthPatchToObject(Napi::Env env, const SonareSynthPatch& patch) {
   auto enum_name = [&env](int value, const char* const* names, int count) -> Napi::Value {
     return SynthEnumName(env, value, names, count);

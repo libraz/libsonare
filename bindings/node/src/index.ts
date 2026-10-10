@@ -386,6 +386,7 @@ export type {
   SynthModRouting,
   SynthModSource,
   SynthOscWaveform,
+  SynthParamInfo,
   SynthPatch,
   SynthRetrigger,
   SynthWaveform,

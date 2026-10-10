@@ -1133,13 +1133,16 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
   SonareSynthInstrumentBinding binding{};
+  // Owns the engine-param keys the binding's patch borrows; alive across the C call.
+  sonare_node::SynthPatchStorage patch_storage;
   if (!OptionalUint32Arg(env, info, 0, "destinationId", 0, &binding.destination_id)) {
     return env.Undefined();
   }
   if (info.Length() > 1) {
-    if (!sonare_node::ReadSynthPatch(env, info[1], &binding.patch)) {
+    if (!sonare_node::ReadSynthPatch(env, info[1], &patch_storage)) {
       return env.Undefined();  // exception already pending
     }
+    binding.patch = patch_storage.patch;
     if (info[1].IsObject() && !info[1].IsArray()) {
       Napi::Object obj = info[1].As<Napi::Object>();
       binding.use_gm_programs = BoolProperty(obj, "useGmPrograms", false) ? 1 : 0;
@@ -1151,7 +1154,10 @@ Napi::Value RealtimeEngineWrap::SetSynthInstrument(const Napi::CallbackInfo& inf
   } else {
     binding.patch.struct_version = 3;
   }
-  ThrowIfError(env, sonare_engine_set_synth_instrument_binding(engine_, &binding));
+  const SonareError bind_err = sonare_engine_set_synth_instrument_binding(engine_, &binding);
+  if (bind_err != SONARE_OK && !env.IsExceptionPending()) {
+    sonare_node::ThrowLastSonareError(env, "", bind_err);
+  }
   return env.Undefined();
   SONARE_NODE_CATCH(env)
 }

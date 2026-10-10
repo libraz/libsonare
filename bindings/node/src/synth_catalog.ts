@@ -1,5 +1,5 @@
 import { addon } from './native.js';
-import type { SynthEnumTables, SynthPatch } from './types.js';
+import type { SynthEngineMode, SynthEnumTables, SynthParamInfo, SynthPatch } from './types.js';
 
 /**
  * NativeSynth preset catalog names (`'sine'`, `'saw-lead'`, `'e-piano'`,
@@ -88,4 +88,19 @@ export function controllerProfileNames(): string[] {
 /** Return the canonical NativeSynth enum tables from the native C oracle. */
 export function synthEnumTables(): SynthEnumTables {
   return addon._synthEnumTables();
+}
+
+/**
+ * Describe the fields {@link SynthPatch.engineParams} accepts for an engine
+ * mode: key, type, range, default (the engine's base preset's value) and unit.
+ * Empty for `'default'`, `'subtractive'` and `'sample'`, which have no engine
+ * section. An unknown mode name or an out-of-range ordinal throws.
+ */
+export function synthEngineParamInfo(engineMode: SynthEngineMode | number): SynthParamInfo[] {
+  return JSON.parse(addon.synthEngineParamInfo(engineMode)) as SynthParamInfo[];
+}
+
+/** Describe every numeric {@link SynthPatch} wrapper field: range, default and unit. */
+export function synthPatchParamInfo(): SynthParamInfo[] {
+  return JSON.parse(addon.synthPatchParamInfo()) as SynthParamInfo[];
 }

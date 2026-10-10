@@ -112,6 +112,10 @@ import { glide } from './_helpers.js';
  */
 const FILE_LOCAL_READER_ALLOWLIST: ReadonlyMap<string, string> = new Map([
   [
+    'effects/mastering_pair.cpp:SetChainParamEntry',
+    'Writes one chain-config entry INTO the result object (recursing into a v2 multiband block); it has the reader parameter shape but reads nothing from a caller object.',
+  ],
+  [
     'effects/mixing.cpp:OptionAt',
     'Per-strip scalar-or-array accessor: reads either one value or the index-th element of an array-valued key, a shape the scalar families do not model. Type-checks at each call site and is already named in OPTION_READER.',
   ],

@@ -580,9 +580,12 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
     if (env.IsExceptionPending()) return env.Undefined();
   }
   std::vector<SonareSynthInstrumentBinding> bindings;
+  // Owns the engine-param keys each binding's patch borrows; alive across the C call.
+  std::vector<sonare_node::SynthPatchStorage> patch_storages;
   if (info.Length() > 0 && info[0].IsArray()) {
     Napi::Array arr = info[0].As<Napi::Array>();
     bindings.reserve(arr.Length());
+    patch_storages.reserve(arr.Length());
     for (uint32_t i = 0; i < arr.Length(); ++i) {
       Napi::Value element = arr.Get(i);
       SonareSynthInstrumentBinding binding{};
@@ -598,17 +601,22 @@ Napi::Value ProjectWrap::BounceWithSynthInstruments(const Napi::CallbackInfo& in
           return env.Undefined();  // exception already pending
         }
       }
-      if (!sonare_node::ReadSynthPatch(env, element, &binding.patch)) {
+      patch_storages.emplace_back();
+      if (!sonare_node::ReadSynthPatch(env, element, &patch_storages.back())) {
         return env.Undefined();  // exception already pending
       }
+      binding.patch = patch_storages.back().patch;
       bindings.push_back(binding);
     }
   }
   float* interleaved = nullptr;
   size_t len = 0;
-  ThrowIfError(env, sonare_project_bounce_with_synth_instruments(
-                        project_, &options, bindings.empty() ? nullptr : bindings.data(),
-                        bindings.size(), &interleaved, &len));
+  const SonareError bounce_err = sonare_project_bounce_with_synth_instruments(
+      project_, &options, bindings.empty() ? nullptr : bindings.data(), bindings.size(),
+      &interleaved, &len);
+  if (bounce_err != SONARE_OK && !env.IsExceptionPending()) {
+    sonare_node::ThrowLastSonareError(env, "", bounce_err);
+  }
   if (env.IsExceptionPending()) return env.Undefined();
   Napi::Float32Array out = Napi::Float32Array::New(env, len);
   if (len > 0 && interleaved != nullptr) {

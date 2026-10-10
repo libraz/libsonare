@@ -16,7 +16,9 @@ import {
   SYNTH_MOD_SOURCES,
   SYNTH_OSC_WAVEFORMS,
   SYNTH_RETRIGGERS,
+  synthEngineParamInfo,
   synthEnumTables,
+  synthPatchParamInfo,
   synthPresetNames,
   synthPresetPatch,
 } from '../src/index.js';
@@ -567,5 +569,155 @@ describe('RealtimeEngine.setSynthInstrument', () => {
     } finally {
       engine.destroy();
     }
+  });
+});
+
+describe('SynthPatch.engineParams', () => {
+  const bounce = (patch: SynthPatch | string): Float32Array => {
+    const project = buildMidiOnlyProject();
+    try {
+      return project.bounceWithSynthInstrument(patch, { totalFrames: 24000 });
+    } finally {
+      project.destroy();
+    }
+  };
+  const rejection = (patch: SynthPatch): { code?: number; name?: string; message: string } => {
+    try {
+      bounce(patch);
+    } catch (error) {
+      return error as { code?: number; name?: string; message: string };
+    }
+    throw new Error('expected the bounce to be refused');
+  };
+
+  it('voices every engine mode but sample from a bare engineMode', () => {
+    for (const mode of SYNTH_ENGINE_MODES) {
+      const audio = bounce({ engineMode: mode });
+      if (mode === 'sample') {
+        expect(peak(audio)).toBe(0);
+      } else {
+        expect(peak(audio), mode).toBeGreaterThan(10 ** (-60 / 20));
+      }
+    }
+  });
+
+  it('changes a render when an engine field is set', () => {
+    const bare = bounce({ engineMode: 'bowed-string' });
+    const stronger = bounce({ engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } });
+    expect(peak(stronger)).toBeGreaterThan(0);
+    expect(stronger).not.toEqual(bare);
+    // The same params through the realtime-free bounce path are deterministic.
+    expect(bounce({ engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } })).toEqual(
+      stronger,
+    );
+    // Several bindings each keep their own keys alive.
+    const project = buildMidiOnlyProject();
+    try {
+      const audio = project.bounceWithSynthInstruments(
+        [
+          { destinationId: 0, engineMode: 'bowed-string', engineParams: { bowForce: 0.9 } },
+          { destinationId: 1, engineMode: 'bowed-string', engineParams: { bowForce: 0.2 } },
+        ],
+        { totalFrames: 24000 },
+      );
+      expect(peak(audio)).toBeGreaterThan(0);
+    } finally {
+      project.destroy();
+    }
+  });
+
+  it('refuses a bad key or value with a coded SonareError naming the key', () => {
+    const unknown = rejection({ engineMode: 'bowed-string', engineParams: { noSuchField: 1 } });
+    expect(unknown.name).toBe('SonareError');
+    expect(unknown.code).toBe(4);
+    expect(unknown.message).toContain('noSuchField');
+
+    const info = synthEngineParamInfo('bowed-string');
+    const otherEngine = synthEngineParamInfo('brass').find(
+      (field) => !info.some((own) => own.name === field.name),
+    );
+    expect(otherEngine).toBeDefined();
+    const wrongEngine = rejection({
+      engineMode: 'bowed-string',
+      engineParams: { [otherEngine?.name as string]: 0.5 },
+    });
+    expect(wrongEngine.code).toBe(4);
+    expect(wrongEngine.message).toContain(otherEngine?.name as string);
+
+    const bounded = info.find((field) => field.min !== undefined && field.max !== undefined);
+    expect(bounded).toBeDefined();
+    const outOfRange = rejection({
+      engineMode: 'bowed-string',
+      engineParams: { [bounded?.name as string]: (bounded?.max as number) + 1000 },
+    });
+    expect(outOfRange.code).toBe(4);
+    expect(outOfRange.message).toContain(bounded?.name as string);
+
+    const nonFinite = rejection({
+      engineMode: 'bowed-string',
+      engineParams: { bowForce: Number.NaN },
+    });
+    expect(nonFinite.code).toBe(4);
+    expect(nonFinite.message).toContain('bowForce');
+  });
+
+  it('refuses a non-number value by key before the call', () => {
+    const wrongType = { engineMode: 'bowed-string', engineParams: { bowForce: '0.5' } };
+    expect(() => bounce(wrongType as unknown as SynthPatch)).toThrow(/engineParams\.bowForce/);
+    expect(() =>
+      bounce({ engineMode: 'bowed-string', engineParams: [1] } as unknown as SynthPatch),
+    ).toThrow(/engineParams/);
+  });
+
+  it('is write-only: preset and round-trip reads carry no engineParams', () => {
+    expect(synthPresetPatch('violin').engineParams).toBeUndefined();
+    const read = synthPatchRoundTripForTest({
+      engineMode: 'bowed-string',
+      engineParams: { bowForce: 0.5 },
+    });
+    expect(read.engineMode).toBe('bowed-string');
+    expect(read.engineParams).toBeUndefined();
+  });
+
+  it('binds engineParams on a realtime engine and surfaces a refusal', () => {
+    const engine = new RealtimeEngine();
+    try {
+      engine.setSynthInstrument({ engineMode: 'bowed-string', engineParams: { bowForce: 0.5 } }, 0);
+      expect(() =>
+        engine.setSynthInstrument(
+          { engineMode: 'bowed-string', engineParams: { noSuchField: 1 } },
+          0,
+        ),
+      ).toThrow(/noSuchField/);
+    } finally {
+      engine.destroy();
+    }
+  });
+});
+
+describe('synth parameter descriptors', () => {
+  it('describes each engine section; engines without one answer empty', () => {
+    for (const mode of ['default', 'subtractive', 'sample'] as const) {
+      expect(synthEngineParamInfo(mode)).toEqual([]);
+    }
+    const bowed = synthEngineParamInfo('bowed-string');
+    expect(synthEngineParamInfo(SYNTH_ENGINE_MODES.indexOf('bowed-string'))).toEqual(bowed);
+    const force = bowed.find((field) => field.name === 'bowForce');
+    expect(force).toBeDefined();
+    expect(force?.type).toBe('number');
+    expect(typeof force?.default).toBe('number');
+    expect(typeof force?.unit).toBe('string');
+    expect(() => synthEngineParamInfo('no-such-engine' as never)).toThrow(/synth engine mode/);
+    expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.length)).toThrow(RangeError);
+  });
+
+  it('describes the wrapper fields', () => {
+    const fields = synthPatchParamInfo();
+    const names = fields.map((field) => field.name);
+    for (const expected of ['cutoffHz', 'resonanceQ', 'ampAttackMs', 'gain']) {
+      expect(names).toContain(expected);
+    }
+    expect(fields.find((field) => field.name === 'resonanceQ')?.unit).toBe('ratio');
+    expect(new Set(names).size).toBe(names.length);
   });
 });

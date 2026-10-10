@@ -352,6 +352,8 @@ const TABLE: Entry[] = [
 const NOT_AUDIO: string[] = [
   // Module state, version and capability queries.
   ...[
+    'synthEngineParamInfo',
+    'synthPatchParamInfo',
     'version',
     'capabilities',
     'capabilityCatalog',

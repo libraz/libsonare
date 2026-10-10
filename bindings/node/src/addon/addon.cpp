@@ -580,11 +580,44 @@ Napi::Value SynthEnumTables(const Napi::CallbackInfo& info) {
 Napi::Value SynthPatchRoundTrip(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   SONARE_NODE_TRY
-  SonareSynthPatch patch{};
-  if (!sonare_node::ReadSynthPatch(env, info.Length() > 0 ? info[0] : env.Undefined(), &patch)) {
+  sonare_node::SynthPatchStorage storage;
+  if (!sonare_node::ReadSynthPatch(env, info.Length() > 0 ? info[0] : env.Undefined(), &storage)) {
     return env.Undefined();
   }
-  return sonare_node::SynthPatchToObject(env, patch);
+  return sonare_node::SynthPatchToObject(env, storage.patch);
+  SONARE_NODE_CATCH(env)
+}
+
+// Engine-section field descriptors for one engine mode (name or ordinal), as the
+// C ABI's JSON text; the TS wrapper parses it.
+Napi::Value SynthEngineParamInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  int mode = 0;
+  if (!sonare_node::SynthEnumValue(env, info.Length() > 0 ? info[0] : env.Undefined(),
+                                   sonare_node::kSynthEngineModes, SONARE_SYNTH_ENGINE_MODE_COUNT,
+                                   "synth engine mode", &mode)) {
+    return env.Undefined();
+  }
+  const char* json = sonare_synth_engine_param_info(mode);
+  if (json == nullptr) {
+    sonare_node::ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
+  SONARE_NODE_CATCH(env)
+}
+
+// Descriptors for every numeric SynthPatch wrapper field, as JSON text.
+Napi::Value SynthPatchParamInfo(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  SONARE_NODE_TRY
+  const char* json = sonare_synth_patch_param_info();
+  if (json == nullptr) {
+    sonare_node::ThrowLastSonareError(env, "", SONARE_ERROR_INVALID_PARAMETER);
+    return env.Undefined();
+  }
+  return Napi::String::New(env, json);
   SONARE_NODE_CATCH(env)
 }
 
@@ -610,6 +643,10 @@ Napi::Object Init(Napi::Env env, Napi::Object exports) {
               Napi::Function::New(env, ProjectAbiVersion, "projectAbiVersion"));
   exports.Set("synthPresetNames", Napi::Function::New(env, SynthPresetNames, "synthPresetNames"));
   exports.Set("synthPresetPatch", Napi::Function::New(env, SynthPresetPatch, "synthPresetPatch"));
+  exports.Set("synthEngineParamInfo",
+              Napi::Function::New(env, SynthEngineParamInfo, "synthEngineParamInfo"));
+  exports.Set("synthPatchParamInfo",
+              Napi::Function::New(env, SynthPatchParamInfo, "synthPatchParamInfo"));
   exports.Set("synthGsDrumKitName",
               Napi::Function::New(env, SynthGsDrumKitName, "synthGsDrumKitName"));
   exports.Set("synthGsDrumKitIsVoicedApart",
