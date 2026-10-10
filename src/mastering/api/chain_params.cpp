@@ -341,9 +341,12 @@ bool apply_repair_param(MasteringChainConfig& cfg, const std::string& key, doubl
     return true;
   }
   if (key == "repair.decrackle.mode") {
-    cfg.repair.decrackle.config.mode = vi() == 1
-                                           ? mastering::repair::DecrackleMode::WaveletShrinkage
-                                           : mastering::repair::DecrackleMode::Median;
+    const int mode = vi();
+    if (mode < static_cast<int>(repair::DecrackleMode::Median) ||
+        mode > static_cast<int>(repair::DecrackleMode::WaveletShrinkage)) {
+      throw SonareException(ErrorCode::InvalidParameter, "unknown decrackle mode");
+    }
+    cfg.repair.decrackle.config.mode = static_cast<repair::DecrackleMode>(mode);
     mark_field(flags.decrackle);
     return true;
   }

@@ -4,6 +4,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
+#include <catch2/matchers/catch_matchers_string.hpp>
 #include <clocale>
 #include <cmath>
 #include <cstdint>
@@ -36,6 +37,7 @@
 #include "util/exception.h"
 #include "util/json.h"
 
+using Catch::Matchers::ContainsSubstring;
 using Catch::Matchers::WithinAbs;
 
 namespace sonare::mastering::api {
@@ -2598,6 +2600,16 @@ TEST_CASE("parse_chain_config_params handles new repair keys", "[mastering][chai
   REQUIRE_THAT(config.repair.dereverb.config.attenuation, WithinAbs(0.7f, 1e-6f));
 }
 
+TEST_CASE("parse_chain_config_params refuses a repair mode past the last enumerator",
+          "[mastering][chain]") {
+  for (const char* key : {"repair.decrackle.mode", "repair.dehum.mode", "repair.denoise.mode"}) {
+    CAPTURE(key);
+    const Param params[] = {{key, 7.0}};
+    CHECK_THROWS_WITH(parse_chain_config_params(params, 1),
+                      ContainsSubstring("unknown") && ContainsSubstring("mode"));
+  }
+}
+
 TEST_CASE("parse_chain_config_params handles new dynamics keys", "[mastering][chain]") {
   Param params[] = {
       {"dynamics.deesser.thresholdDb", -30.0},
@@ -2678,9 +2690,9 @@ TEST_CASE("analyze_named_pair serializes a silent source as valid JSON",
   const std::vector<float> silence(static_cast<size_t>(kAnalysisSampleRate) / 4, 0.0f);
   const auto reference = analysis_sine(440.0f, 0.5f, silence.size());
 
-  const std::string text =
-      analyze_named_pair("match.referenceLoudness", silence.data(), reference.data(),
-                         silence.size(), reference.size(), kAnalysisSampleRate, {});
+  const std::string text = analyze_named_pair("match.referenceLoudness", silence.data(),
+                                              reference.data(), silence.size(), reference.size(),
+                                              kAnalysisSampleRate, kAnalysisSampleRate, {});
   REQUIRE(text.find("inf") == std::string::npos);
 
   const auto value = sonare::util::json::parse_strict(text);
@@ -2727,7 +2739,7 @@ TEST_CASE("named analysis JSON is locale-independent", "[mastering][chain][json]
   const auto reference = analysis_sine(440.0f, 0.125f, source.size());
   const std::string pair_text =
       analyze_named_pair("match.referenceLoudness", source.data(), reference.data(), source.size(),
-                         reference.size(), kAnalysisSampleRate, {});
+                         reference.size(), kAnalysisSampleRate, kAnalysisSampleRate, {});
   const std::string stereo_text =
       analyze_named_stereo("stereo.monoCompatCheck", source.data(), reference.data(), source.size(),
                            kAnalysisSampleRate, {});
