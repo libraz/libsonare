@@ -87,8 +87,11 @@ static_assert(sizeof(SonareProjectKeySegment) == 2u * sizeof(double) + 2u * size
 /// @p root_pc and @p slash_bass_pc are 0..11 (C=0) or 255 for unknown / none.
 /// @p quality uses the arrangement ChordQuality ordinal (0 unknown, 1 major,
 /// 2 minor, 3 diminished, 4 augmented, 5 dominant, 6 half-diminished,
-/// 7 suspended). @p extensions is copied and may be NULL only when
-/// @p extension_count is 0. @p roman_numeral is optional and copied.
+/// 7 suspended). @p extensions holds scale degrees (e.g. 7, 9, 13, or 2 / 4 for a
+/// suspension), not semitone offsets; at most 32 are accepted. It is copied and
+/// may be NULL only when @p extension_count is 0. @p roman_numeral is optional
+/// and copied. @ref sonare_chord_symbol_from_analysis fills the root, quality,
+/// extensions and slash bass from an analysis chord.
 typedef struct {
   double start_ppq;
   double end_ppq;
@@ -301,8 +304,56 @@ SonareError sonare_project_annotate_keys(SonareProject* project,
 
 /// @brief Replaces the project's chord-symbol annotation stream via an
 ///        undoable command. @p chords may be NULL only when @p count is 0.
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a span does not start at a
+///   finite, non-negative PPQ and end after it, a pitch class is neither 0..11
+///   nor 255, a quality is outside 0..7, or a chord carries more than 32
+///   extension scale degrees (or a NULL @c extensions with a non-zero count);
+///   nothing is applied in that case.
 SonareError sonare_project_annotate_chords(SonareProject* project,
                                            const SonareProjectChordSymbol* chords, size_t count);
+
+/// @brief Converts an analysis chord into the fields of a
+///        @ref SonareProjectChordSymbol.
+/// @details The analysis vocabulary and the annotation vocabulary are numbered
+///   differently and the annotation one is coarser: an analysis quality becomes
+///   an annotation family plus extension scale degrees (Dominant9 -> dominant
+///   with 7, 9), so an ordinal offset mislabels most of them. This is the one
+///   published conversion, the same the library uses when it builds a harmonic
+///   timeline from analysis. The root is kept as given, including for
+///   ::SONARE_CHORD_UNKNOWN; a @p bass equal to @p root is no slash bass. Times
+///   are not converted: the caller places the result on the timeline.
+/// @param root Chord root, 0..11.
+/// @param quality Analysis chord quality, below ::SONARE_CHORD_QUALITY_COUNT.
+/// @param bass Bass pitch class, 0..11; pass @p root for a chord without one.
+/// @param out_root_pc Receives the annotation root (0..11).
+/// @param out_quality Receives the annotation quality ordinal (0..7).
+/// @param out_extensions Caller-owned array of @p extension_capacity scale
+///   degrees; may be NULL only when @p extension_capacity is 0. A capacity of 32,
+///   the annotation's own cap, always suffices.
+/// @param out_extension_count Receives the number of degrees the chord carries,
+///   written on every return, including when @p extension_capacity is too small.
+/// @param out_slash_bass_pc Receives the slash bass (0..11), or 255 for none.
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when a pitch class is outside 0..11,
+///   @p quality is not a ::SonareChordQuality, a required out-parameter is NULL,
+///   or @p extension_capacity is below the count, which is then already written.
+///   Every input is checked before it is read as an enumerator.
+SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChordQuality quality,
+                                              SonarePitchClass bass, uint32_t* out_root_pc,
+                                              uint32_t* out_quality, uint8_t* out_extensions,
+                                              size_t extension_capacity,
+                                              size_t* out_extension_count,
+                                              uint32_t* out_slash_bass_pc);
+
+/// @brief Converts an analysis key mode into the @c mode of a
+///        @ref SonareProjectKeySegment.
+/// @details The annotation numbering reserves 0 for an unknown mode, so every
+///   analysis mode lands one ordinal higher; this is the conversion the library
+///   uses itself.
+/// @param mode Analysis mode, 0..6.
+/// @param out_mode Receives the annotation KeyMode ordinal (1..7).
+/// @return ::SONARE_ERROR_INVALID_PARAMETER when @p mode is outside 0..6 or
+///   @p out_mode is NULL.
+SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode);
 
 // ============================================================================
 // Memory management (heap byte buffers)

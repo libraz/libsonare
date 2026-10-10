@@ -140,6 +140,12 @@ static_assert(sizeof(SonareProjectLoopRecordingDesc) == 6u * sizeof(double),
 #endif
 
 /// @brief One warp-map anchor for @ref sonare_project_set_warp_map.
+///
+/// Both fields are sample positions at the PROJECT's sample rate: @c warp_sample
+/// on the warped timeline, @c source_sample in the clip's source as the project
+/// resamples it. @ref sonare_align_take_to_reference_ex returns anchors in
+/// reference-rate samples instead; scale both fields by
+/// project_rate / reference_rate before passing them here.
 typedef struct {
   double warp_sample;
   double source_sample;
@@ -210,6 +216,10 @@ typedef struct {
 /// Reported so a caller can tell a take the reference genuinely fits from one it
 /// does not. Every field is descriptive: none of them makes the call fail, and a
 /// caller deciding what is acceptable supplies its own threshold.
+///
+/// Every count is in chroma hop frames at the REFERENCE sample rate; under
+/// @ref sonare_align_take_to_reference_ex @c take_frames counts the take after
+/// it was resampled to that rate.
 typedef struct {
   /// Mean absolute frame residual of the path around its diagonal trend. A
   /// coarse indicator of how far the alignment strayed from a constant rate, not
@@ -502,8 +512,10 @@ SonareError sonare_project_set_clip_comp_segments(SonareProject* project, uint32
 ///   hand: that one names its arguments the other way round, so passing the
 ///   reference as its reference yields the inverse map and nothing reports it.
 ///
-///   Both signals are read at @p sample_rate; resample first if they differ,
-///   since the alignment does no I/O and no rate conversion.
+///   Both signals are read at @p sample_rate, and both anchor axes are in samples
+///   at that rate. A take recorded at another rate goes through
+///   @ref sonare_align_take_to_reference_ex, which this call equals with
+///   @p sample_rate given for both signals.
 /// @param reference The reference timeline -- the guide take, or the backing
 ///   track the takes were sung against.
 /// @param take The signal to be placed under it.
@@ -527,12 +539,48 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
                                            SonareProjectWarpAnchor** out_anchors, size_t* out_count,
                                            SonareTakeAlignment* out_alignment);
 
-/// @brief Releases an anchor array from @ref sonare_align_take_to_reference.
+/// @brief @ref sonare_align_take_to_reference for a take recorded at a different
+///        sample rate from the reference.
+/// @details When the rates differ the take is resampled to
+///   @p reference_sample_rate first, so both chromagrams share one hop grid; with
+///   equal rates no resampling happens and the result is exactly the single-rate
+///   call's. Anchors keep the single-rate call's orientation (@c warp_sample on
+///   the reference timeline, @c source_sample in the take).
+///
+///   **Both anchor axes are in samples at @p reference_sample_rate**, including
+///   @c source_sample, which therefore indexes the resampled take rather than the
+///   buffer passed in. They are not rounded. To use them in a project, scale both
+///   axes by project_rate / reference_sample_rate before
+///   @ref sonare_project_set_warp_map. @c hop_length is in reference-rate samples
+///   too, and the roughly 8 kHz floor on the chroma grid applies to
+///   @p reference_sample_rate.
+/// @param reference The reference timeline.
+/// @param reference_sample_rate Sample rate of @p reference; must be > 0.
+/// @param take The signal to be placed under it.
+/// @param take_sample_rate Sample rate of @p take; must be > 0.
+/// @param config Optional; NULL or a zeroed struct selects the library values.
+/// @param out_anchors Receives a heap-owned array of @p out_count anchors,
+///   released with @ref sonare_free_warp_anchors. Written on success only.
+/// @param out_alignment Optional; receives how well the alignment was
+///   conditioned, in hop frames at @p reference_sample_rate. Zeroed on entry, so
+///   a caller may read it after any return code.
+/// @return ::SONARE_ERROR_INVALID_PARAMETER for every refusal of
+///   @ref sonare_align_take_to_reference, for a non-positive rate on either
+///   signal, and when the take resampled to @p reference_sample_rate would exceed
+///   the buffer size limit -- checked before anything is copied.
+SonareError sonare_align_take_to_reference_ex(
+    const float* reference, size_t reference_len, int reference_sample_rate, const float* take,
+    size_t take_len, int take_sample_rate, const SonareTakeAlignConfig* config,
+    SonareProjectWarpAnchor** out_anchors, size_t* out_count, SonareTakeAlignment* out_alignment);
+
+/// @brief Releases an anchor array from @ref sonare_align_take_to_reference or
+///        @ref sonare_align_take_to_reference_ex.
 void sonare_free_warp_anchors(SonareProjectWarpAnchor* anchors);
 
 /// @brief Adds or replaces a first-class project warp map via an undoable edit.
 ///        @p desc->id must be non-zero and @p anchors must contain at least two
-///        finite, strictly increasing anchor pairs.
+///        finite, strictly increasing anchor pairs, both axes in samples at the
+///        project's sample rate (see @ref SonareProjectWarpAnchor).
 SonareError sonare_project_set_warp_map(SonareProject* project,
                                         const SonareProjectWarpMapDesc* desc);
 

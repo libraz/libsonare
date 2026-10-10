@@ -1,5 +1,10 @@
 #include "c_api/project_internal.h"
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+#include "core/resample.h"
+#include "mir/key_context.h"
+#endif
+
 // ============================================================================
 // MIR
 // ============================================================================
@@ -340,6 +345,84 @@ SonareError sonare_project_annotate_chords(SonareProject* project,
 #endif
 }
 
+#if defined(SONARE_WITH_ARRANGEMENT)
+// The analysis ordinals are cast straight onto the core enums below, so the
+// range checks in front of those casts are only sound while the two agree.
+static_assert(SONARE_CHORD_QUALITY_COUNT == sonare::kChordQualityCount,
+              "SonareChordQuality count drift");
+static_assert(static_cast<int>(sonare::ChordQuality::Dominant7s9) == SONARE_CHORD_DOMINANT7_SHARP9,
+              "SonareChordQuality ordinal drift");
+static_assert(static_cast<int>(sonare::Mode::Locrian) == SONARE_MODE_LOCRIAN,
+              "SonareMode ordinal drift");
+#endif
+
+SonareError sonare_chord_symbol_from_analysis(SonarePitchClass root, SonareChordQuality quality,
+                                              SonarePitchClass bass, uint32_t* out_root_pc,
+                                              uint32_t* out_quality, uint8_t* out_extensions,
+                                              size_t extension_capacity,
+                                              size_t* out_extension_count,
+                                              uint32_t* out_slash_bass_pc) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_root_pc) *out_root_pc = arr::kUnknownPitchClass;
+  if (out_quality) *out_quality = static_cast<uint32_t>(arr::ChordQuality::kUnknown);
+  if (out_extension_count) *out_extension_count = 0;
+  if (out_slash_bass_pc) *out_slash_bass_pc = arr::kUnknownPitchClass;
+  if (!out_root_pc || !out_quality || !out_extension_count || !out_slash_bass_pc ||
+      (extension_capacity > 0 && !out_extensions)) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  const int root_value = static_cast<int>(root);
+  const int quality_value = static_cast<int>(quality);
+  const int bass_value = static_cast<int>(bass);
+  if (root_value < SONARE_PITCH_C || root_value > SONARE_PITCH_B || bass_value < SONARE_PITCH_C ||
+      bass_value > SONARE_PITCH_B || quality_value < 0 ||
+      quality_value >= SONARE_CHORD_QUALITY_COUNT) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  SONARE_C_TRY
+  const sonare::mir::MappedQuality mapped =
+      sonare::mir::map_chord_quality(static_cast<sonare::ChordQuality>(quality_value));
+  *out_extension_count = mapped.extensions.size();
+  if (mapped.extensions.size() > extension_capacity) return SONARE_ERROR_INVALID_PARAMETER;
+  std::copy(mapped.extensions.begin(), mapped.extensions.end(), out_extensions);
+  // Root kept even for an unknown quality, and a bass equal to the root is no
+  // slash bass: both are the rules build_harmonic_timeline applies.
+  *out_root_pc = static_cast<uint32_t>(root_value);
+  *out_quality = static_cast<uint32_t>(mapped.quality);
+  *out_slash_bass_pc =
+      bass_value == root_value ? arr::kUnknownPitchClass : static_cast<uint32_t>(bass_value);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#else
+  if (out_root_pc) *out_root_pc = {};
+  if (out_quality) *out_quality = {};
+  if (out_extension_count) *out_extension_count = {};
+  if (out_slash_bass_pc) *out_slash_bass_pc = {};
+  SONARE_C_STUB_NOT_SUPPORTED(root, quality, bass, out_root_pc, out_quality, out_extensions,
+                              extension_capacity, out_extension_count, out_slash_bass_pc);
+#endif
+}
+
+SonareError sonare_key_mode_from_analysis(SonareMode mode, uint32_t* out_mode) {
+  SONARE_C_API_ENTRY;
+#if defined(SONARE_WITH_ARRANGEMENT)
+  if (out_mode) *out_mode = static_cast<uint32_t>(arr::KeyMode::kUnknown);
+  const int mode_value = static_cast<int>(mode);
+  // The core maps an out-of-range mode to unknown without a word, so the
+  // refusal has to happen here.
+  if (!out_mode || mode_value < SONARE_MODE_MAJOR || mode_value > SONARE_MODE_LOCRIAN) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  *out_mode =
+      static_cast<uint32_t>(sonare::mir::map_key_mode(static_cast<sonare::Mode>(mode_value)));
+  return SONARE_OK;
+#else
+  if (out_mode) *out_mode = {};
+  SONARE_C_STUB_NOT_SUPPORTED(mode, out_mode);
+#endif
+}
+
 // ============================================================================
 // Take alignment
 // ============================================================================
@@ -349,6 +432,15 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
                                            const SonareTakeAlignConfig* config,
                                            SonareProjectWarpAnchor** out_anchors, size_t* out_count,
                                            SonareTakeAlignment* out_alignment) {
+  return sonare_align_take_to_reference_ex(reference, reference_len, sample_rate, take, take_len,
+                                           sample_rate, config, out_anchors, out_count,
+                                           out_alignment);
+}
+
+SonareError sonare_align_take_to_reference_ex(
+    const float* reference, size_t reference_len, int reference_sample_rate, const float* take,
+    size_t take_len, int take_sample_rate, const SonareTakeAlignConfig* config,
+    SonareProjectWarpAnchor** out_anchors, size_t* out_count, SonareTakeAlignment* out_alignment) {
   SONARE_C_API_ENTRY;
   if (out_alignment != nullptr) *out_alignment = SonareTakeAlignment{};
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -357,7 +449,18 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
   *out_count = 0;
   if (reference == nullptr || take == nullptr) return SONARE_ERROR_INVALID_PARAMETER;
   if (reference_len == 0 || take_len == 0) return SONARE_ERROR_INVALID_PARAMETER;
-  if (sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  if (reference_sample_rate <= 0 || take_sample_rate <= 0) return SONARE_ERROR_INVALID_PARAMETER;
+  const bool resample_take = take_sample_rate != reference_sample_rate;
+  // Sized before anything is copied, so a rate ratio that would blow the take up
+  // past the buffer cap is refused rather than allocated.
+  size_t resampled_take_len = take_len;
+  if (resample_take &&
+      !sonare::numeric::checked_converted_count(take_len, take_sample_rate, reference_sample_rate,
+                                                kMaxBufferSize, &resampled_take_len)) {
+    set_last_error(SONARE_ERROR_INVALID_PARAMETER,
+                   "take resampled to the reference sample rate exceeds the buffer size limit");
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
 
   sonare::mir::ChromaDtwConfig dtw_config;
   if (config != nullptr) {
@@ -368,10 +471,14 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
   }
 
   SONARE_C_TRY
-  const Audio reference_audio =
-      Audio::from_vector(std::vector<float>(reference, reference + reference_len), sample_rate);
-  const Audio take_audio =
-      Audio::from_vector(std::vector<float>(take, take + take_len), sample_rate);
+  const Audio reference_audio = Audio::from_vector(
+      std::vector<float>(reference, reference + reference_len), reference_sample_rate);
+  // The take goes onto the reference's grid, so one hop means the same span of
+  // time in both signals and both anchor axes come back in reference-rate samples.
+  const Audio take_audio = Audio::from_vector(
+      resample_take ? sonare::resample(take, take_len, take_sample_rate, reference_sample_rate)
+                    : std::vector<float>(take, take + take_len),
+      reference_sample_rate);
   // Argument order inverted on purpose, and this is the whole reason the entry
   // point exists rather than the core call being exposed directly: the core names
   // the signal that lands on the SOURCE axis its `reference`, while a clip needs
@@ -411,8 +518,8 @@ SonareError sonare_align_take_to_reference(const float* reference, size_t refere
 #else
   if (out_anchors) *out_anchors = nullptr;
   if (out_count) *out_count = 0;
-  SONARE_C_STUB_NOT_SUPPORTED(reference, reference_len, take, take_len, sample_rate, config,
-                              out_anchors, out_count, out_alignment);
+  SONARE_C_STUB_NOT_SUPPORTED(reference, reference_len, reference_sample_rate, take, take_len,
+                              take_sample_rate, config, out_anchors, out_count, out_alignment);
 #endif
 }
 

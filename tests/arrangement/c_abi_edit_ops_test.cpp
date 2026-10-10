@@ -15,6 +15,8 @@
 #include <vector>
 
 #include "c_api/project_internal.h"
+#include "mir/key_context.h"
+#include "transport/tempo_map.h"
 
 namespace {
 
@@ -1766,5 +1768,279 @@ TEST_CASE("C ABI take alignment reads its configuration and refuses unusable inp
                                            take.size(), -1, nullptr, &anchors, &count,
                                            &alignment) == SONARE_ERROR_INVALID_PARAMETER);
     REQUIRE(alignment.reference_frames == 0);
+  }
+}
+
+TEST_CASE("C ABI two-rate take alignment at equal rates is the single-rate call", "[c_api][mir]") {
+  const int sr = 22050;
+  const std::vector<float> reference = make_glide(sr, 261.63, 11.0, 0.5);
+  const std::vector<float> take = make_glide(sr, 261.63, 11.0, 0.75);
+
+  SonareProjectWarpAnchor* single = nullptr;
+  size_t single_count = 0;
+  SonareTakeAlignment single_alignment{};
+  REQUIRE(sonare_align_take_to_reference(reference.data(), reference.size(), take.data(),
+                                         take.size(), sr, nullptr, &single, &single_count,
+                                         &single_alignment) == SONARE_OK);
+  SonareProjectWarpAnchor* two_rate = nullptr;
+  size_t two_rate_count = 0;
+  SonareTakeAlignment two_rate_alignment{};
+  REQUIRE(sonare_align_take_to_reference_ex(reference.data(), reference.size(), sr, take.data(),
+                                            take.size(), sr, nullptr, &two_rate, &two_rate_count,
+                                            &two_rate_alignment) == SONARE_OK);
+
+  REQUIRE(two_rate_count == single_count);
+  for (size_t i = 0; i < single_count; ++i) {
+    CAPTURE(i);
+    REQUIRE(two_rate[i].warp_sample == single[i].warp_sample);
+    REQUIRE(two_rate[i].source_sample == single[i].source_sample);
+  }
+  REQUIRE(two_rate_alignment.reference_frames == single_alignment.reference_frames);
+  REQUIRE(two_rate_alignment.take_frames == single_alignment.take_frames);
+  REQUIRE(two_rate_alignment.mean_residual_frames == single_alignment.mean_residual_frames);
+
+  sonare_free_warp_anchors(single);
+  sonare_free_warp_anchors(two_rate);
+}
+
+TEST_CASE("C ABI two-rate take alignment measures the take on the reference's grid",
+          "[c_api][mir]") {
+  // 32000 / 22050 is about 6.44 semitones, not an octave, so a take read at the
+  // wrong rate cannot be folded back onto the right pitch classes by the chroma.
+  const int reference_rate = 22050;
+  const int take_rate = 32000;
+  const std::vector<float> reference = make_glide(reference_rate, 261.63, 11.0, 2.0);
+  std::vector<float> take(static_cast<size_t>(take_rate / 2), 0.0f);
+  const std::vector<float> glide = make_glide(take_rate, 261.63, 11.0, 2.0);
+  take.insert(take.end(), glide.begin(), glide.end());
+
+  const double hop = static_cast<double>(sonare::mir::ChromaDtwConfig{}.hop_length);
+  const double offset = 0.5 * reference_rate;
+
+  const auto align = [&](int declared_take_rate, std::vector<SonareProjectWarpAnchor>* anchors,
+                         SonareTakeAlignment* alignment) {
+    SonareProjectWarpAnchor* rows = nullptr;
+    size_t count = 0;
+    REQUIRE(sonare_align_take_to_reference_ex(reference.data(), reference.size(), reference_rate,
+                                              take.data(), take.size(), declared_take_rate, nullptr,
+                                              &rows, &count, alignment) == SONARE_OK);
+    anchors->assign(rows, rows + count);
+    sonare_free_warp_anchors(rows);
+  };
+  // Anchors after the first that sit off the take's half-second lead by more
+  // than one hop. The first is skipped: the silence collapses to one boundary
+  // anchor at the reference start.
+  const auto off_offset = [&](const std::vector<SonareProjectWarpAnchor>& anchors) {
+    size_t off = 0;
+    for (size_t i = 1; i < anchors.size(); ++i) {
+      if (std::abs(anchors[i].source_sample - anchors[i].warp_sample - offset) > hop) ++off;
+    }
+    return off;
+  };
+
+  std::vector<SonareProjectWarpAnchor> anchors;
+  SonareTakeAlignment alignment{};
+  align(take_rate, &anchors, &alignment);
+  REQUIRE(anchors.size() >= 3);
+
+  // The frame count does not go through the alignment path, so it is the direct
+  // proof that the take was put on the reference grid: read at its own rate it
+  // would carry about 32000 / 22050 times as many frames.
+  const double resampled_len =
+      static_cast<double>(take.size()) * reference_rate / static_cast<double>(take_rate);
+  const double expected_take_frames = std::ceil(resampled_len / hop);
+  CAPTURE(alignment.take_frames, expected_take_frames, alignment.reference_frames);
+  REQUIRE(std::abs(alignment.take_frames - expected_take_frames) <= 1.0);
+
+  for (size_t i = 1; i < anchors.size(); ++i) {
+    CAPTURE(i, anchors[i].warp_sample, anchors[i].source_sample);
+    REQUIRE(std::abs(anchors[i].source_sample - anchors[i].warp_sample - offset) <= hop);
+  }
+
+  // Control: the same take declared at the reference rate is measured on a grid
+  // 1.45 times too fine and loses the lead for most anchors.
+  std::vector<SonareProjectWarpAnchor> wrong_anchors;
+  SonareTakeAlignment wrong_alignment{};
+  align(reference_rate, &wrong_anchors, &wrong_alignment);
+  const size_t wrong_off = off_offset(wrong_anchors);
+  const double wrong_fraction =
+      static_cast<double>(wrong_off) / static_cast<double>(wrong_anchors.size() - 1);
+  CAPTURE(wrong_alignment.take_frames, wrong_off, wrong_anchors.size(), wrong_fraction);
+  REQUIRE(wrong_alignment.take_frames > alignment.take_frames + alignment.take_frames / 3);
+  REQUIRE(wrong_fraction > 0.5);
+  REQUIRE(off_offset(anchors) == 0);
+}
+
+TEST_CASE("C ABI two-rate take alignment refuses an oversized resampled take before copying",
+          "[c_api][mir]") {
+  // 384 kHz over 8 kHz multiplies the take by 48, so one sample past the cap's
+  // 48th part is refused by the length check alone.
+  const int take_rate = 8000;
+  const int reference_rate = 384000;
+  const size_t take_len = kMaxBufferSize / static_cast<size_t>(reference_rate / take_rate) + 1;
+  const std::vector<float> take(take_len, 0.0f);
+  const std::vector<float> reference(384, 0.0f);
+  // A bins value the core refuses before its first chromagram keeps the equal-rate
+  // control from analysing the whole take; the two calls differ only in the rate.
+  SonareTakeAlignConfig refused_by_core{};
+  refused_by_core.bins_per_octave = -12;
+
+  const auto align = [&](int declared_take_rate, std::string* message) {
+    SonareProjectWarpAnchor* anchors = nullptr;
+    size_t count = 0;
+    const SonareError code = sonare_align_take_to_reference_ex(
+        reference.data(), reference.size(), reference_rate, take.data(), take.size(),
+        declared_take_rate, &refused_by_core, &anchors, &count, nullptr);
+    const char* text = sonare_last_error_message();
+    *message = text != nullptr ? text : "";
+    REQUIRE(anchors == nullptr);
+    REQUIRE(count == 0);
+    return code;
+  };
+
+  std::string message;
+  REQUIRE(align(take_rate, &message) == SONARE_ERROR_INVALID_PARAMETER);
+  CAPTURE(message);
+  REQUIRE(message.find("buffer size limit") != std::string::npos);
+
+  // Control: at equal rates the length check does not apply, so the refusal that
+  // comes back is the core's, about the config.
+  std::string control_message;
+  REQUIRE(align(reference_rate, &control_message) == SONARE_ERROR_INVALID_PARAMETER);
+  CAPTURE(control_message);
+  REQUIRE_FALSE(control_message.empty());
+  REQUIRE(control_message.find("buffer size limit") == std::string::npos);
+}
+
+TEST_CASE("C ABI chord and key conversion matches the core mapping and refuses unknown ordinals",
+          "[c_api][mir]") {
+  // Oracle: the timeline builder, which owns the root and slash-bass rules on top
+  // of map_chord_quality.
+  sonare::transport::TempoMap map;
+  map.prepare(22050.0);
+  sonare::transport::TempoSegment segment;
+  segment.bpm = 120.0;
+  map.set_segments({segment});
+
+  sonare::mir::HarmonicAnalysisInput input;
+  for (int q = 0; q < SONARE_CHORD_QUALITY_COUNT; ++q) {
+    for (const int bass_shift : {0, 5}) {
+      sonare::Chord chord;
+      chord.root = static_cast<sonare::PitchClass>(q % 12);
+      chord.bass = static_cast<sonare::PitchClass>((q + bass_shift) % 12);
+      chord.quality = static_cast<sonare::ChordQuality>(q);
+      chord.start = static_cast<float>(input.chords.size());
+      chord.end = chord.start + 1.0f;
+      input.chords.push_back(chord);
+    }
+  }
+  const sonare::arrangement::HarmonicTimeline timeline =
+      sonare::mir::build_harmonic_timeline(input, map);
+  REQUIRE(timeline.chords.size() == input.chords.size());
+
+  const auto convert = [](int root, int quality, int bass, uint32_t* root_pc, uint32_t* out_quality,
+                          std::vector<uint8_t>* extensions, uint32_t* slash) {
+    uint8_t buffer[32] = {};
+    size_t count = 99;
+    const SonareError code = sonare_chord_symbol_from_analysis(
+        static_cast<SonarePitchClass>(root), static_cast<SonareChordQuality>(quality),
+        static_cast<SonarePitchClass>(bass), root_pc, out_quality, buffer, 32, &count, slash);
+    extensions->assign(buffer, buffer + std::min<size_t>(count, 32));
+    return code;
+  };
+
+  for (size_t i = 0; i < input.chords.size(); ++i) {
+    const sonare::Chord& chord = input.chords[i];
+    const sonare::arrangement::ChordSymbol& expected = timeline.chords[i];
+    uint32_t root_pc = 99;
+    uint32_t quality = 99;
+    uint32_t slash = 99;
+    std::vector<uint8_t> extensions;
+    CAPTURE(i, static_cast<int>(chord.quality), static_cast<int>(chord.bass));
+    REQUIRE(convert(static_cast<int>(chord.root), static_cast<int>(chord.quality),
+                    static_cast<int>(chord.bass), &root_pc, &quality, &extensions,
+                    &slash) == SONARE_OK);
+    REQUIRE(root_pc == expected.root_pc);
+    REQUIRE(quality == static_cast<uint32_t>(expected.quality));
+    REQUIRE(extensions == expected.extensions);
+    REQUIRE(slash == expected.slash_bass_pc);
+    REQUIRE(extensions ==
+            sonare::mir::map_chord_quality(static_cast<sonare::ChordQuality>(chord.quality))
+                .extensions);
+  }
+
+  SECTION("hand-checked rows the oracle could share a defect with") {
+    uint32_t root_pc = 0;
+    uint32_t quality = 0;
+    uint32_t slash = 0;
+    std::vector<uint8_t> extensions;
+    REQUIRE(convert(SONARE_PITCH_A, SONARE_CHORD_MINOR, SONARE_PITCH_A, &root_pc, &quality,
+                    &extensions, &slash) == SONARE_OK);
+    REQUIRE(root_pc == 9);
+    REQUIRE(quality == 2);
+    REQUIRE(extensions.empty());
+    REQUIRE(slash == 255);
+    REQUIRE(convert(SONARE_PITCH_G, SONARE_CHORD_DOMINANT13, SONARE_PITCH_B, &root_pc, &quality,
+                    &extensions, &slash) == SONARE_OK);
+    REQUIRE(quality == 5);
+    REQUIRE(extensions == std::vector<uint8_t>{7, 9, 13});
+    REQUIRE(slash == 11);
+    REQUIRE(convert(SONARE_PITCH_D, SONARE_CHORD_UNKNOWN, SONARE_PITCH_D, &root_pc, &quality,
+                    &extensions, &slash) == SONARE_OK);
+    REQUIRE(root_pc == 2);
+    REQUIRE(quality == 0);
+    REQUIRE(extensions.empty());
+  }
+
+  SECTION("an ordinal outside either vocabulary is refused with the count written") {
+    uint32_t root_pc = 0;
+    uint32_t quality = 0;
+    uint32_t slash = 0;
+    std::vector<uint8_t> extensions;
+    REQUIRE(convert(0, SONARE_CHORD_QUALITY_COUNT, 0, &root_pc, &quality, &extensions, &slash) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(convert(0, -1, 0, &root_pc, &quality, &extensions, &slash) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(convert(12, SONARE_CHORD_MAJOR, 0, &root_pc, &quality, &extensions, &slash) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(convert(0, SONARE_CHORD_MAJOR, 12, &root_pc, &quality, &extensions, &slash) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    // convert() seeds the count with 99, so an empty list means it was written.
+    REQUIRE(extensions.empty());
+
+    uint8_t two[2] = {};
+    size_t count = 0;
+    REQUIRE(sonare_chord_symbol_from_analysis(SONARE_PITCH_G, SONARE_CHORD_DOMINANT13,
+                                              SONARE_PITCH_G, &root_pc, &quality, two, 2, &count,
+                                              &slash) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(count == 3);
+    REQUIRE(sonare_chord_symbol_from_analysis(SONARE_PITCH_G, SONARE_CHORD_DOMINANT7,
+                                              SONARE_PITCH_G, &root_pc, &quality, nullptr, 0,
+                                              &count, &slash) == SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(count == 1);
+    // A chord with no extensions needs no buffer at all.
+    REQUIRE(sonare_chord_symbol_from_analysis(SONARE_PITCH_G, SONARE_CHORD_MAJOR, SONARE_PITCH_G,
+                                              &root_pc, &quality, nullptr, 0, &count,
+                                              &slash) == SONARE_OK);
+    REQUIRE(count == 0);
+  }
+
+  SECTION("key modes land one ordinal up, and an eighth mode is refused") {
+    for (int mode = SONARE_MODE_MAJOR; mode <= SONARE_MODE_LOCRIAN; ++mode) {
+      uint32_t out = 99;
+      CAPTURE(mode);
+      REQUIRE(sonare_key_mode_from_analysis(static_cast<SonareMode>(mode), &out) == SONARE_OK);
+      REQUIRE(out ==
+              static_cast<uint32_t>(sonare::mir::map_key_mode(static_cast<sonare::Mode>(mode))));
+      REQUIRE(out == static_cast<uint32_t>(mode) + 1u);
+    }
+    uint32_t out = 99;
+    REQUIRE(sonare_key_mode_from_analysis(static_cast<SonareMode>(7), &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(out == 0);
+    REQUIRE(sonare_key_mode_from_analysis(static_cast<SonareMode>(-1), &out) ==
+            SONARE_ERROR_INVALID_PARAMETER);
+    REQUIRE(sonare_key_mode_from_analysis(SONARE_MODE_MAJOR, nullptr) ==
+            SONARE_ERROR_INVALID_PARAMETER);
   }
 }
