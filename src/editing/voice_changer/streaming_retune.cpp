@@ -149,6 +149,8 @@ float StreamingRetune::read_ring_linear(double position) const noexcept {
   if (pos < 0.0) {
     pos += cap;
   }
+  // A tiny negative remainder plus cap rounds to exactly cap.
+  if (pos >= cap) pos = 0.0;
   const std::size_t i0 = static_cast<std::size_t>(pos);
   const std::size_t i1 = (i0 + 1) % ring_cap_;
   const float frac = static_cast<float>(pos - static_cast<double>(i0));
