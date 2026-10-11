@@ -280,6 +280,18 @@ class SalienceKernel {
   /// @param out @c f0_axis().n_bins values, overwritten.
   void evaluate(const float* column, float* out) const;
 
+  /// @brief One weighted partial of one F0 bin: @ref partial_weight times the
+  ///        column read at @ref partial_bin, 0 for a partial over the axis.
+  float partial_term(const float* column, int f0_bin, int harmonic) const;
+
+  /// @brief The harmonic sum of one F0 bin without the partials whose index is
+  ///        a multiple of @p every.
+  /// @details What is left is the energy a candidate @p every times higher
+  ///          cannot account for: a true F0 under its own harmonic holds most
+  ///          of its sum there, a sub-harmonic image of a lone note holds none.
+  /// @param every At least 2.
+  float evaluate_excluding(const float* column, int f0_bin, int every) const;
+
   /// @brief Removes one F0's partials from a column, in place.
   /// @details Reads and writes through the same interpolation weights
   ///          @ref evaluate reads with, so what a call removes is exactly what

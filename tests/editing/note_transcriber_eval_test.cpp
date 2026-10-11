@@ -187,22 +187,30 @@ Item noise(const char* name, Source source) {
   return item;
 }
 
+/// The floors sit 0.05 under the Release figures of the estimator that takes a
+/// sounding note before the peak on its partial. Two groups read lower than
+/// under the greedy order: an octave doubling's upper voice is now lost whenever
+/// its lower voice sounds (full-partial subtraction had decided that whichever
+/// note came first), and a re-strike 150 ms after an equal strike climbs to
+/// about twice the level held before it, which at the default ratio is read as
+/// a re-strike three times in four. The eight-voice octave chord's C4 ridge runs
+/// 46 ms, under the 60 ms minimum, once its onset sits at the strike.
 const std::vector<Item>& corpus() {
   static const std::vector<Item> items = {
-      chord("chord 5 voices", {48, 52, 55, 59, 62}, true, 0.28),
-      chord("chord 5 voices octave", {48, 55, 60, 64, 72}, false, 0.83),
-      chord("chord 6 voices", {48, 52, 55, 59, 62, 66}, true, 0.19),
-      chord("chord 6 voices octave", {48, 55, 60, 64, 67, 72}, false, 0.48),
-      chord("chord 8 voices", {48, 52, 55, 59, 62, 66, 69, 73}, true, 0.23),
-      chord("chord 8 voices octave", {48, 52, 55, 60, 64, 67, 72, 76}, false, 0.61),
-      sixteenth_line(0.92),
-      melody_over_chord(0.59),
+      chord("chord 5 voices", {48, 52, 55, 59, 62}, true, 0.78),
+      chord("chord 5 voices octave", {48, 55, 60, 64, 72}, false, 0.70),
+      chord("chord 6 voices", {48, 52, 55, 59, 62, 66}, true, 0.55),
+      chord("chord 6 voices octave", {48, 55, 60, 64, 67, 72}, false, 0.61),
+      chord("chord 8 voices", {48, 52, 55, 59, 62, 66, 69, 73}, true, 0.51),
+      chord("chord 8 voices octave", {48, 52, 55, 60, 64, 67, 72, 76}, false, 0.38),
+      sixteenth_line(0.95),
+      melody_over_chord(0.55),
       restrike(250, 1.0, 0.95),
-      restrike(250, 0.7, 0.95),
+      restrike(250, 0.7, 0.80),
       restrike(250, 0.5, 0.80),
-      restrike(150, 1.0, 0.95),
-      restrike(150, 0.7, 0.61),
-      restrike(150, 0.5, 0.61),
+      restrike(150, 1.0, 0.80),
+      restrike(150, 0.7, 0.52),
+      restrike(150, 0.5, 0.52),
       held_note(0.95),
       noise("white noise", Source::kWhiteNoise),
       noise("pink noise", Source::kPinkNoise),

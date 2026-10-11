@@ -338,6 +338,23 @@ void SalienceKernel::evaluate(const float* column, float* out) const {
   }
 }
 
+float SalienceKernel::partial_term(const float* column, int f0_bin, int harmonic) const {
+  const size_t index = static_cast<size_t>(f0_bin) * n_harmonics_ + (harmonic - 1);
+  const BinSplit split = split_at(spectrum_axis_, partial_bins_[index]);
+  if (!split.inside) return 0.0f;
+  const float value = column[split.lo] * (1.0f - split.frac) + column[split.lo + 1] * split.frac;
+  return partial_weights_[index] * value;
+}
+
+float SalienceKernel::evaluate_excluding(const float* column, int f0_bin, int every) const {
+  float sum = 0.0f;
+  for (int harmonic = 1; harmonic <= n_harmonics_; ++harmonic) {
+    if (harmonic % every == 0) continue;
+    sum += partial_term(column, f0_bin, harmonic);
+  }
+  return sum;
+}
+
 float SalienceKernel::subtract(float* column, int f0_bin, float factor) const {
   double before = 0.0;
   for (int bin = 0; bin < spectrum_axis_.n_bins; ++bin) before += column[bin];

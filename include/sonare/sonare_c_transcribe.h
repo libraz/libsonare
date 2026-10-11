@@ -87,10 +87,11 @@ typedef struct {
   float segmentation_threshold_cents;
   /// Level mapped to velocity 1. A note's PEAK per-frame RMS is taken in dBFS
   /// and mapped linearly from [velocity_floor_db, 0] onto [1, 127], clamped at
-  /// both ends. Must be negative; 0 => -48.
+  /// the top; a note whose peak stays under the floor is dropped. Must be
+  /// negative; 0 => -48.
   float velocity_floor_db;
-  /// 1..127 gives every note that velocity and skips the level measurement;
-  /// 0 measures. Anything else is rejected.
+  /// 1..127 gives every note that velocity instead of the mapped one; 0 maps
+  /// the level. The floor still drops quiet notes. Anything else is rejected.
   int32_t fixed_velocity;
   /// UMP group and MIDI channel the events are emitted on; both 0..15.
   int32_t group;

@@ -51,6 +51,9 @@ constexpr float kTranscribeMinRidgePeakRatio = 0.10f;
 // Re-strikes scored F 1.0 at 1.5 and 2.0 and 0.86 at 2.5, none splitting a held
 // note; 2.0 had the higher mean piano F (0.717 against 0.678).
 constexpr float kTranscribeReattackRatio = 2.0f;
+// A held piano note loses its candidate for one or two frames at a time (a
+// beat minimum, or a frame's search ending first); two frames at the 11.6 ms hop.
+constexpr float kTranscribeMaxGapMs = 25.0f;
 
 /// Length of a 1/@p division note at @p tempo_bpm, in milliseconds.
 float note_value_ms(int division, float tempo_bpm) noexcept {
@@ -196,15 +199,23 @@ std::vector<NoteObject> monophonic_notes(const Audio& audio, const TranscribeCon
 std::vector<NoteObject> polyphonic_notes(const Audio& audio, const TranscribeConfig& config) {
   polyphony::PolyphonicEditConfig poly;
   // The range belongs to the estimator's F0 axis. The cent spectrum keeps its
-  // own frequency ceiling, because it also has to hold the harmonics it sums.
+  // own frequency ceiling, because it also has to hold the harmonics it sums;
+  // its floor follows fmin, or a fundamental under 55 Hz would never be read.
   poly.extraction.estimation.salience.f0_min_hz = config.fmin;
   poly.extraction.estimation.salience.f0_max_hz = config.fmax;
+  poly.extraction.spectrum.ref_hz = std::min(poly.extraction.spectrum.ref_hz, config.fmin);
   // One note per ridge, so the shortest note is the shortest ridge kept;
   // segmenter.min_note_ms is never consulted on this path (see masked_notes.h).
   const TranscribePolyphonyLimits limits = resolve_transcribe_polyphony_limits(config);
   poly.extraction.ridges.min_duration_ms = limits.min_note_ms;
   poly.extraction.ridges.min_ridge_peak_ratio = limits.min_ridge_peak_ratio;
   poly.extraction.ridges.reattack_ratio = limits.reattack_ratio;
+  poly.extraction.ridges.max_gap_ms = kTranscribeMaxGapMs;
+  // A note begins where its partials' magnitude crossed half of their attack;
+  // the framing is stated at the reference rate.
+  poly.extraction.ridges.attack_window_ms = 1000.0f *
+                                            static_cast<float>(poly.extraction.stft.n_fft) /
+                                            static_cast<float>(polyphony::kPolyphonyReferenceRate);
   poly.extraction.estimation.max_polyphony = limits.max_polyphony;
   poly.extraction.estimation.min_frame_peak_ratio = limits.min_frame_peak_ratio;
   poly.notes.segmenter.segmentation_threshold_cents = config.segmentation_threshold_cents;
@@ -223,6 +234,12 @@ int midi_note_for_hz(float hz, float reference_hz) noexcept {
   const float note = std::round(semitones) + constants::kMidiA4;
   if (note < 0.0f || note > static_cast<float>(kMaxMidiNote)) return -1;
   return static_cast<int>(note);
+}
+
+bool level_reaches_floor(float peak_rms_linear, float velocity_floor_db) noexcept {
+  if (!std::isfinite(velocity_floor_db) || velocity_floor_db >= 0.0f) return false;
+  if (!std::isfinite(peak_rms_linear) || peak_rms_linear <= 0.0f) return false;
+  return 20.0f * std::log10(peak_rms_linear) >= velocity_floor_db;
 }
 
 uint8_t velocity_for_peak_rms(float peak_rms_linear, float velocity_floor_db) noexcept {
@@ -254,10 +271,13 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const Transcri
     if (note.offset_sample <= note.onset_sample) continue;
     const int midi_note = midi_note_for_hz(note.median_hz, resolved.reference_hz);
     if (midi_note < 0) continue;
-    const uint8_t velocity =
-        resolved.fixed_velocity != 0
-            ? static_cast<uint8_t>(resolved.fixed_velocity)
-            : velocity_for_peak_rms(peak_rms(note), resolved.velocity_floor_db);
+    // Under the floor there is no note: a decay tail or a ghost ridge would
+    // otherwise arrive at velocity 1, which nothing downstream can tell apart.
+    const float peak = peak_rms(note);
+    if (!level_reaches_floor(peak, resolved.velocity_floor_db)) continue;
+    const uint8_t velocity = resolved.fixed_velocity != 0
+                                 ? static_cast<uint8_t>(resolved.fixed_velocity)
+                                 : velocity_for_peak_rms(peak, resolved.velocity_floor_db);
     notes.push_back(TranscribedNote{note.onset_sample, note.offset_sample,
                                     static_cast<uint8_t>(midi_note), velocity, note.median_hz});
   }

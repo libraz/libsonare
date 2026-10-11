@@ -1047,10 +1047,12 @@ def transcribe(
             starts the next; ``None`` keeps the default (50 cents).
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
             RMS is taken in dBFS and mapped linearly from
-            ``[velocity_floor_db, 0]`` onto ``[1, 127]``, clamped at both ends.
-            Must be negative; ``None`` keeps the default (-48 dB).
-        fixed_velocity: 1..127 gives every note that velocity and skips the
-            level measurement; ``None`` measures.
+            ``[velocity_floor_db, 0]`` onto ``[1, 127]``, clamped at the top; a
+            note whose peak stays under the floor is dropped. Must be negative;
+            ``None`` keeps the default (-48 dB).
+        fixed_velocity: 1..127 gives every note that velocity instead of the
+            mapped one (notes under the floor are still dropped); ``None`` maps
+            the level.
         group: UMP group the events are emitted on, 0..15.
         channel: MIDI channel the events are emitted on, 0..15.
         max_polyphony: Polyphonic only. Voices one frame may hold, 1..64;

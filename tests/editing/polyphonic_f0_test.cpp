@@ -2615,3 +2615,250 @@ TEST_CASE("for_each_stft_tile is the spectrogram in tiles, bit for bit", "[polyp
             for_each_stft_tile(audio, stft, -1, [](const sonare::Spectrogram&, int, int) {});
           }) == sonare::ErrorCode::InvalidParameter);
 }
+
+// --- Sub-harmonic ordering and the range ceiling ----------------------------
+
+/// @brief A series with a piano's partial envelope: the third partial over the
+///        fundamental, the second and fourth weak. Measured on a sampled A2.
+void add_piano_series(std::vector<float>& column, const CentAxis& axis, float f0_hz,
+                      float fundamental) {
+  constexpr float kEnvelope[] = {1.0f,  0.17f, 1.64f, 0.03f, 0.06f,
+                                 0.23f, 0.12f, 0.01f, 0.22f, 0.16f};
+  for (int h = 1; h <= 10; ++h) {
+    const float bin = axis.bin_at(static_cast<float>(h) * f0_hz);
+    const int lo = static_cast<int>(std::floor(bin));
+    const float frac = bin - static_cast<float>(lo);
+    const float level = (h == 1 ? fundamental : kEnvelope[h - 1]);
+    if (lo >= 0 && lo < axis.n_bins) column[static_cast<size_t>(lo)] += level * (1.0f - frac);
+    if (lo + 1 >= 0 && lo + 1 < axis.n_bins) column[static_cast<size_t>(lo + 1)] += level * frac;
+  }
+}
+
+TEST_CASE("a peak on the third partial of a sounding note is taken as that note",
+          "[polyphonic_f0]") {
+  const CentAxis axis = spectrum_axis_for(8000.0f);
+  const MultiF0Estimator estimator(axis, MultiF0Config{});
+  constexpr float kA2 = 110.0f;
+  constexpr float kTwelfth = 3.0f * kA2;
+
+  // The kernel weights a candidate's own fundamental far above what the true
+  // F0 gets for the same partial, so the raw salience peaks at the twelfth.
+  std::vector<float> column(static_cast<size_t>(axis.n_bins), 0.0f);
+  add_piano_series(column, axis, kA2, 1.0f);
+  std::vector<float> salience(static_cast<size_t>(estimator.kernel().f0_axis().n_bins), 0.0f);
+  estimator.kernel().evaluate(column.data(), salience.data());
+  const int raw_peak = argmax(salience.data(), estimator.kernel().f0_axis().n_bins);
+  REQUIRE(std::abs(cents_between(
+              kTwelfth, estimator.kernel().f0_axis().hz_at(static_cast<float>(raw_peak)))) < 50.0f);
+
+  const std::vector<F0Candidate> found = estimator.estimate(column.data());
+  REQUIRE(found.size() == 1);
+  REQUIRE(std::abs(cents_between(kA2, found[0].f0_hz)) < 16.0f);
+
+  SECTION("a fundamental the peak's partial series cannot explain is what decides") {
+    // Nothing at the sub-harmonic's own fundamental: a lone note at the twelfth
+    // whose sub-harmonic image is only its partials, so the image is not taken.
+    std::vector<float> lone(static_cast<size_t>(axis.n_bins), 0.0f);
+    add_series(lone, axis, kTwelfth, 10, 1.0f);
+    const std::vector<F0Candidate> alone = estimator.estimate(lone.data());
+    REQUIRE(alone.size() == 1);
+    REQUIRE(std::abs(cents_between(kTwelfth, alone[0].f0_hz)) < 16.0f);
+  }
+
+  SECTION("a real note at the twelfth beside the sounding one is still lost") {
+    // Full-partial subtraction already decided this whenever the lower note
+    // came first; stated so the limit is read as a limit and not a regression.
+    std::vector<float> both = column;
+    add_series(both, axis, kTwelfth, 10, 0.5f);
+    const std::vector<F0Candidate> pair = estimator.estimate(both.data());
+    REQUIRE(pair.size() == 1);
+    REQUIRE(std::abs(cents_between(kA2, pair[0].f0_hz)) < 16.0f);
+  }
+}
+
+TEST_CASE("a note over f0_max_hz is dropped rather than returned an octave low",
+          "[polyphonic_f0]") {
+  const CentAxis axis = spectrum_axis_for(8000.0f);
+  MultiF0Config config;
+  REQUIRE_THAT(config.salience.f0_max_hz, WithinAbs(1760.0, 1e-3));
+  const MultiF0Estimator estimator(axis, config);
+  // The search runs an octave past the ceiling, which is where the note peaks.
+  REQUIRE(estimator.kernel().f0_axis().hz_at(static_cast<float>(
+              estimator.kernel().f0_axis().n_bins - 1)) >= 2.0f * config.salience.f0_max_hz);
+
+  constexpr float kC7 = 2093.0f;
+  const std::vector<float> over = voiced_column(axis, {kC7}, 3);
+  REQUIRE(estimator.estimate(over.data()).empty());
+
+  // A note inside the range, with the same envelope, is still returned.
+  constexpr float kA6 = 1700.0f;
+  const std::vector<F0Candidate> inside = estimator.estimate(voiced_column(axis, {kA6}, 3).data());
+  REQUIRE(inside.size() == 1);
+  REQUIRE(std::abs(cents_between(kA6, inside[0].f0_hz)) < 16.0f);
+
+  // The dropped note is still subtracted, so it leaves no sub-octave behind
+  // for a later iteration either.
+  const std::vector<float> both = voiced_column(axis, {kA6, kC7}, 3);
+  const std::vector<F0Candidate> found = estimator.estimate(both.data());
+  REQUIRE(found.size() == 1);
+  REQUIRE(std::abs(cents_between(kA6, found[0].f0_hz)) < 16.0f);
+}
+
+// --- Gaps and dips in a ridge -----------------------------------------------
+
+TEST_CASE("max_gap_ms bridges a dropout of up to that length and fills it by interpolation",
+          "[polyphonic_f0]") {
+  const float ms_per_frame =
+      static_cast<float>(kHopLength) * 1000.0f / static_cast<float>(kSampleRate);
+  RidgeConfig config;
+  // Two frames at the default framing.
+  config.max_gap_ms = 2.0f * ms_per_frame + 1.0f;
+
+  SECTION("a two-frame gap is one ridge, the gap frames interpolated") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40, 1.0f);
+    frames[20] = {};
+    frames[21] = {};
+    frames[22] = {candidate(224.0f, 0.4f)};
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].f0_hz.size() == 40);
+    REQUIRE_THAT(ridges[0].f0_hz[20], WithinAbs(220.0 + 4.0 / 3.0, 1e-3));
+    REQUIRE_THAT(ridges[0].f0_hz[21], WithinAbs(220.0 + 8.0 / 3.0, 1e-3));
+    REQUIRE_THAT(ridges[0].salience[20], WithinAbs(0.8, 1e-5));
+    REQUIRE_THAT(ridges[0].salience[21], WithinAbs(0.6, 1e-5));
+    // The default still ends the ridge on the first frame without a candidate.
+    REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate).size() == 2);
+  }
+
+  SECTION("a three-frame gap is two ridges") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40);
+    frames[20] = {};
+    frames[21] = {};
+    frames[22] = {};
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 2);
+    REQUIRE(ridges[0].f0_hz.size() == 20);
+    REQUIRE(ridges[1].frame_start == 23);
+  }
+
+  SECTION("a candidate under min_ridge_peak_ratio is a gap frame, not a new ridge") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40);
+    frames[20] = {candidate(220.0f, 0.02f)};
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].f0_hz.size() == 40);
+    REQUIRE_THAT(ridges[0].salience[20], WithinAbs(1.0, 1e-5));
+  }
+
+  SECTION("a ridge still in a gap at the end stops at its last measured frame") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 20);
+    frames.push_back({});
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].f0_hz.size() == 20);
+  }
+
+  for (const float bad : {-1.0f, kNaN, kInf}) {
+    INFO("max_gap_ms " << bad);
+    RidgeConfig refused;
+    refused.max_gap_ms = bad;
+    REQUIRE(code_of([&] {
+              track_f0_ridges(steady_frames(220.0f, 4), kHopLength, kSampleRate, refused);
+            }) == sonare::ErrorCode::InvalidParameter);
+  }
+}
+
+TEST_CASE("a one-frame dip followed by the level held before is not a re-attack",
+          "[polyphonic_f0]") {
+  // A held level with one frame at 40 percent: the frame in which another
+  // candidate took this pitch's partials first. Read against the window's
+  // lowest frame the recovery is a 2.5x climb; against its highest it is none.
+  std::vector<float> salience(60, 1.0f);
+  salience[30] = 0.4f;
+  const std::vector<std::vector<F0Candidate>> frames = salience_frames(220.0f, salience);
+  RidgeConfig config;
+  config.reattack_ratio = 2.0f;
+  config.min_duration_ms = 0.0f;
+  const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+  REQUIRE(ridges.size() == 1);
+  REQUIRE(ridges[0].f0_hz.size() == 60);
+
+  // A climb over the level held before is still cut.
+  std::vector<float> struck(salience);
+  for (size_t f = 31; f < struck.size(); ++f) struck[f] = 2.5f;
+  const std::vector<F0Ridge> cut =
+      track_f0_ridges(salience_frames(220.0f, struck), kHopLength, kSampleRate, config);
+  REQUIRE(cut.size() == 2);
+}
+
+TEST_CASE("attack_window_ms starts a ridge at the strike its attack reading places",
+          "[polyphonic_f0]") {
+  const float ms_per_frame =
+      static_cast<float>(kHopLength) * 1000.0f / static_cast<float>(kSampleRate);
+  RidgeConfig config;
+  // Eight frames, so the reading is taken four frames into the ridge.
+  config.attack_window_ms = 8.0f * ms_per_frame;
+  config.min_duration_ms = 0.0f;
+
+  SECTION("frames admitted before the strike are dropped") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 40);
+    // The reading at the fifth frame puts the strike two frames back, at frame 2.
+    frames[4][0].attack_frames = 2.0f;
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].frame_start == 2);
+    REQUIRE(ridges[0].f0_hz.size() == 38);
+    // Off, the admitted frame stands.
+    REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate)[0].frame_start == 0);
+  }
+
+  SECTION("a strike before the first admitted frame fills the frames up to it") {
+    std::vector<std::vector<F0Candidate>> frames(5);
+    append_frames(frames, steady_frames(220.0f, 20, 0.7f));
+    // Admitted at frame 5; read at frame 9, the strike lies six frames back, at frame 3.
+    frames[9][0].attack_frames = 6.0f;
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 1);
+    REQUIRE(ridges[0].frame_start == 3);
+    REQUIRE(ridges[0].f0_hz.size() == 22);
+    REQUIRE_THAT(ridges[0].f0_hz[0], WithinAbs(220.0, 1e-5));
+    REQUIRE_THAT(ridges[0].salience[1], WithinAbs(0.7, 1e-5));
+
+    // The filled frames are not followed evidence: twenty followed frames pass
+    // a minimum under twenty, and twenty-two in all do not rescue one over it.
+    RidgeConfig twenty = config;
+    twenty.min_duration_ms = 19.5f * ms_per_frame;
+    REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate, twenty).size() == 1);
+    twenty.min_duration_ms = 20.5f * ms_per_frame;
+    REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate, twenty).empty());
+  }
+
+  SECTION("the start never reaches back into a ridge at the same pitch") {
+    std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 10);
+    for (int i = 0; i < 4; ++i) frames.push_back({});
+    append_frames(frames, steady_frames(221.0f, 20));
+    // Read at frame 18, nine frames back is frame 9, inside the ridge that ended at 10.
+    frames[18][0].attack_frames = 9.0f;
+    const std::vector<F0Ridge> ridges = track_f0_ridges(frames, kHopLength, kSampleRate, config);
+    REQUIRE(ridges.size() == 2);
+    REQUIRE(ridges[1].frame_start == 10);
+  }
+
+  SECTION("a reading of 0 keeps the admitted frame") {
+    const std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 12);
+    REQUIRE(track_f0_ridges(frames, kHopLength, kSampleRate, config)[0].frame_start == 0);
+  }
+
+  for (const float bad : {-1.0f, kNaN, kInf}) {
+    INFO("attack_window_ms " << bad);
+    RidgeConfig refused;
+    refused.attack_window_ms = bad;
+    REQUIRE(code_of([&] {
+              track_f0_ridges(steady_frames(220.0f, 4), kHopLength, kSampleRate, refused);
+            }) == sonare::ErrorCode::InvalidParameter);
+  }
+  std::vector<std::vector<F0Candidate>> frames = steady_frames(220.0f, 4);
+  frames[1][0].attack_frames = kNaN;
+  REQUIRE(code_of([&] { track_f0_ridges(frames, kHopLength, kSampleRate); }) ==
+          sonare::ErrorCode::InvalidParameter);
+}

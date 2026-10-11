@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <complex>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -24,13 +25,36 @@ float cents_between(float hz, float reference_hz) {
 }
 
 /// A ridge while it is still taking candidates; @c peak is the running maximum
-/// the salience rule is read against.
+/// the salience rule is read against, @c gap the frames since it last took one.
 struct LiveRidge {
   int frame_start = 0;
   std::vector<float> f0_hz;
   std::vector<float> salience;
+  /// F0Candidate::attack_frames of each frame's candidate, 0 on a filled frame.
+  std::vector<float> attack;
   float peak = 0.0f;
+  int gap = 0;
+  /// Leading frames place_onsets filled in, which carry no candidate of their own.
+  int filled = 0;
 };
+
+/// Appends @p taken after the gap frames, filled linearly from the last value.
+void take_after_gap(LiveRidge& ridge, const F0Candidate& taken) {
+  const float from_hz = ridge.f0_hz.back();
+  const float from_salience = ridge.salience.back();
+  const float steps = static_cast<float>(ridge.gap + 1);
+  for (int i = 1; i <= ridge.gap; ++i) {
+    const float t = static_cast<float>(i) / steps;
+    ridge.f0_hz.push_back(from_hz + t * (taken.f0_hz - from_hz));
+    ridge.salience.push_back(from_salience + t * (taken.salience - from_salience));
+    ridge.attack.push_back(0.0f);
+  }
+  ridge.gap = 0;
+  ridge.f0_hz.push_back(taken.f0_hz);
+  ridge.salience.push_back(taken.salience);
+  ridge.attack.push_back(taken.attack_frames);
+  ridge.peak = std::max(ridge.peak, taken.salience);
+}
 
 /// Re-attack rise window: holds a struck attack but too little of a 1-2 Hz
 /// beat's climb to reach the ratio.
@@ -54,16 +78,23 @@ void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const Ridg
     const int end = static_cast<int>(s.size());
     std::vector<int> cuts;
     int frag_start = 0;
+    // Filled frames are not followed evidence, so the first fragment's length excludes them.
+    const auto frag_long_enough = [&](int frames) {
+      return long_enough(frames - (frag_start == 0 ? ridge.filled : 0));
+    };
     int t = frag_start + 2;
     while (t + window - 1 <= end - 1) {
       // Clipped at the fragment start so a cut never reads its pre-attack valley back.
       const int valley_from = std::max(frag_start, t - window - 1);
       const auto valley_at = std::min_element(s.begin() + valley_from, s.begin() + t - 1);
       const auto summit_at = std::max_element(s.begin() + frag_start, s.begin() + t - 1);
-      const float valley = *valley_at;
+      // The level held before the climb is the window's highest frame, not its
+      // lowest: a frame in which another candidate took this pitch's partials
+      // first reads a fraction of the level, and a dip of one frame is not a decay.
+      const float before = *std::max_element(s.begin() + valley_from, s.begin() + t - 1);
       const float crest = *std::max_element(s.begin() + t, s.begin() + t + window);
       // Only a valley after the fragment's summit: the note's own rising attack is not a re-attack.
-      if (valley > 0.0f && crest > config.reattack_ratio * valley && summit_at < valley_at) {
+      if (*valley_at > 0.0f && crest > config.reattack_ratio * before && summit_at < valley_at) {
         const int first = std::max(frag_start + 1, t - 2);
         int cut = first;
         const int last = std::min(end - 1, t + 2);
@@ -77,7 +108,7 @@ void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const Ridg
         while (cut > first && s[static_cast<size_t>(cut - 2)] < s[static_cast<size_t>(cut - 1)]) {
           --cut;
         }
-        if (long_enough(cut - frag_start) && long_enough(end - cut)) {
+        if (frag_long_enough(cut - frag_start) && long_enough(end - cut)) {
           cuts.push_back(cut);
           frag_start = cut;
           t = cut + 2;
@@ -96,6 +127,7 @@ void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const Ridg
     for (const int to : cuts) {
       LiveRidge fragment;
       fragment.frame_start = ridge.frame_start + from;
+      fragment.filled = from == 0 ? ridge.filled : 0;
       fragment.f0_hz.assign(ridge.f0_hz.begin() + from, ridge.f0_hz.begin() + to);
       fragment.salience.assign(s.begin() + from, s.begin() + to);
       fragment.peak = *std::max_element(fragment.salience.begin(), fragment.salience.end());
@@ -106,14 +138,81 @@ void split_reattacks(std::vector<LiveRidge>& ridges, double frame_ms, const Ridg
   ridges = std::move(split);
 }
 
+/// @brief Moves each ridge's start to the strike its attack reading places, per
+///        RidgeConfig::attack_window_ms; a window of 0 returns at once.
+void place_onsets(std::vector<LiveRidge>& ridges, double frame_ms, const RidgeConfig& config) {
+  if (config.attack_window_ms == 0.0f) return;
+  const int window = std::max(
+      1, static_cast<int>(std::lround(static_cast<double>(config.attack_window_ms) / frame_ms)));
+  for (size_t i = 0; i < ridges.size(); ++i) {
+    LiveRidge& ridge = ridges[i];
+    const int size = static_cast<int>(ridge.f0_hz.size());
+    // Read half a window in, where the reading's own window brackets the attack.
+    const int read = std::min(window / 2, size - 1);
+    const float back = ridge.attack[static_cast<size_t>(read)];
+    if (!(back > 0.0f)) continue;
+    int start = ridge.frame_start + read - static_cast<int>(std::lround(back));
+    start = std::clamp(start, 0, ridge.frame_start + size - 1);
+    // Never back into a ridge this one could have continued.
+    for (size_t j = 0; j < ridges.size(); ++j) {
+      const LiveRidge& other = ridges[j];
+      if (j == i || other.frame_start >= ridge.frame_start) continue;
+      const int other_end = other.frame_start + static_cast<int>(other.f0_hz.size());
+      if (other_end > start && std::abs(cents_between(other.f0_hz.back(), ridge.f0_hz.front())) <=
+                                   config.max_jump_cents) {
+        start = std::max(start, other_end);
+      }
+    }
+    if (start > ridge.frame_start) {
+      const int drop = std::min(start - ridge.frame_start, size - 1);
+      ridge.f0_hz.erase(ridge.f0_hz.begin(), ridge.f0_hz.begin() + drop);
+      ridge.salience.erase(ridge.salience.begin(), ridge.salience.begin() + drop);
+      ridge.attack.erase(ridge.attack.begin(), ridge.attack.begin() + drop);
+      ridge.frame_start += drop;
+    } else if (start < ridge.frame_start) {
+      const size_t fill = static_cast<size_t>(ridge.frame_start - start);
+      ridge.f0_hz.insert(ridge.f0_hz.begin(), fill, ridge.f0_hz.front());
+      ridge.salience.insert(ridge.salience.begin(), fill, ridge.salience.front());
+      ridge.attack.insert(ridge.attack.begin(), fill, 0.0f);
+      ridge.frame_start = start;
+      ridge.filled = static_cast<int>(fill);
+    }
+  }
+}
+
+/// Deepest sub-harmonic position read for the note a peak may stand on: the
+/// octave, the twelfth and the double octave. Reading deeper promoted bass
+/// images in textures and cost more real notes than it recovered.
+constexpr int kSubharmonicsChecked = 4;
+/// Harmonics of a taken note whose peak is read as that note's residual rather
+/// than as a note: the octave and the twelfth, which is where a piano's
+/// partials leave one. Measured on rendered repertoire, suppressing the double
+/// octave and beyond lost melody notes over a bass and recovered few ghosts.
+constexpr int kResidualHarmonics = 3;
+/// What explaining_subharmonic returns for a peak standing on a note already taken.
+constexpr int kExplainedByTaken = -1;
+
+/// @p config with its F0 ceiling raised an octave, the axis the estimator searches.
+SalienceConfig search_range(const SalienceConfig& config) {
+  // The kernel checks the raised ceiling, so the configured one is checked here.
+  SONARE_CHECK(std::isfinite(config.f0_max_hz) && config.f0_max_hz > config.f0_min_hz,
+               ErrorCode::InvalidParameter);
+  SalienceConfig search = config;
+  search.f0_max_hz = 2.0f * config.f0_max_hz;
+  return search;
+}
+
 }  // namespace
 
 MultiF0Estimator::MultiF0Estimator(const CentAxis& spectrum_axis, const MultiF0Config& config)
-    : kernel_(spectrum_axis, config.salience), config_(config) {
+    : kernel_(spectrum_axis, search_range(config.salience)), config_(config) {
   // Bounded above as well as below because the iteration count is derived from
   // it; what 64 refuses is on MultiF0Config::max_polyphony.
   SONARE_CHECK(config.max_polyphony >= 1 && config.max_polyphony <= kMaxPolyphonyVoices,
                ErrorCode::InvalidParameter);
+  // The last bin an axis ending at the configured ceiling would have carried.
+  report_max_hz_ =
+      kernel_.f0_axis().hz_at(std::ceil(kernel_.f0_axis().bin_at(config.salience.f0_max_hz)));
   SONARE_CHECK(std::isfinite(config.min_frame_peak_ratio) && config.min_frame_peak_ratio >= 0.0f &&
                    config.min_frame_peak_ratio <= 1.0f,
                ErrorCode::InvalidParameter);
@@ -158,20 +257,36 @@ std::vector<F0Candidate> MultiF0Estimator::estimate(const float* column) const {
         salience_[static_cast<size_t>(peak)] < config_.min_frame_peak_ratio * first_peak) {
       break;
     }
-
-    // Parabolic interpolation over the peak and its neighbours, so a returned F0
+    // Parabolic interpolation over a bin and its neighbours, so a returned F0
     // is not confined to the axis.
-    const float below = salience_[static_cast<size_t>(std::max(peak - 1, 0))];
-    const float centre = salience_[static_cast<size_t>(peak)];
-    const float above = salience_[static_cast<size_t>(std::min(peak + 1, n_f0_bins - 1))];
-    const float denominator = below - 2.0f * centre + above;
-    const float offset =
-        denominator != 0.0f ? std::clamp(0.5f * (below - above) / denominator, -1.0f, 1.0f) : 0.0f;
-    const float f0_hz = kernel_.f0_axis().hz_at(static_cast<float>(peak) + offset);
+    const auto refined_hz = [&](int bin) {
+      const float below = salience_[static_cast<size_t>(std::max(bin - 1, 0))];
+      const float centre = salience_[static_cast<size_t>(bin)];
+      const float above = salience_[static_cast<size_t>(std::min(bin + 1, n_f0_bins - 1))];
+      const float denominator = below - 2.0f * centre + above;
+      const float offset = denominator != 0.0f
+                               ? std::clamp(0.5f * (below - above) / denominator, -1.0f, 1.0f)
+                               : 0.0f;
+      return kernel_.f0_axis().hz_at(static_cast<float>(bin) + offset);
+    };
+
+    // The frame cut above read the peak; what is taken may be the note under it.
+    const int explained = explaining_subharmonic(peak, refined_hz(peak), candidates);
+    if (explained == kExplainedByTaken) {
+      // Cleared so the loop moves on to the next voice rather than meeting it again.
+      kernel_.subtract(residual_.data(), peak, config_.subtraction_factor);
+      continue;
+    }
+    const int taken_bin = explained;
+    const float centre = salience_[static_cast<size_t>(taken_bin)];
+    const float f0_hz = refined_hz(taken_bin);
 
     // Subtracted before the separation rule runs, so a rejected peak is gone
     // rather than left to be taken again.
-    const float removed = kernel_.subtract(residual_.data(), peak, config_.subtraction_factor);
+    const float removed = kernel_.subtract(residual_.data(), taken_bin, config_.subtraction_factor);
+
+    // Over the configured range: found as itself, not handed back as its sub-octave.
+    if (f0_hz > report_max_hz_) continue;
 
     const bool too_close =
         std::any_of(candidates.begin(), candidates.end(), [&](const F0Candidate& taken) {
@@ -190,6 +305,54 @@ std::vector<F0Candidate> MultiF0Estimator::estimate(const float* column) const {
   return candidates;
 }
 
+int MultiF0Estimator::explaining_subharmonic(int peak, float peak_hz,
+                                             const std::vector<F0Candidate>& taken) const {
+  const int n_f0_bins = kernel_.f0_axis().n_bins;
+  const float cents_per_bin = kernel_.f0_axis().cents_per_bin;
+  const float bins_per_octave = kCentsPerOctave / cents_per_bin;
+  for (int every = kSubharmonicsChecked; every >= 2; --every) {
+    const int middle = static_cast<int>(std::lround(
+        static_cast<float>(peak) - std::log2(static_cast<float>(every)) * bins_per_octave));
+    if (middle < 0) continue;
+    // A note already taken this frame explains the peak as what its subtraction
+    // left -- the partials over the kernel's reach, and the stretched ones -- when
+    // the peak lies within the bin the kernel reads that partial over.
+    const bool taken_here =
+        std::any_of(taken.begin(), taken.end(), [&](const F0Candidate& candidate) {
+          return std::abs(cents_between(peak_hz, static_cast<float>(every) * candidate.f0_hz)) <=
+                 cents_per_bin;
+        });
+    if (taken_here) return every <= kResidualHarmonics ? kExplainedByTaken : peak;
+    // The local maximum about the ideal position, so a stretched series still lands.
+    int best = -1;
+    for (int bin = std::max(0, middle - 1); bin <= std::min(middle + 1, n_f0_bins - 1); ++bin) {
+      if (best < 0 || salience_[static_cast<size_t>(bin)] > salience_[static_cast<size_t>(best)]) {
+        best = bin;
+      }
+    }
+    const float whole = salience_[static_cast<size_t>(best)];
+    if (!(whole > 0.0f)) continue;
+    // The peak has to sit on this candidate's partial, within the bin the kernel
+    // reads it over; a note a quarter-tone off the octave is its own note.
+    const float best_hz = kernel_.f0_axis().hz_at(static_cast<float>(best));
+    if (std::abs(cents_between(peak_hz, static_cast<float>(every) * best_hz)) > cents_per_bin) {
+      continue;
+    }
+    // Three readings, because a texture fills any low bin with other notes'
+    // partials: the unshared sum has to be most of the candidate's own, to rival
+    // the peak, and to rest on a fundamental of its own rather than on partials
+    // that are another note's.
+    const float own = kernel_.evaluate_excluding(residual_.data(), best, every);
+    if (own < kSubharmonicOwnShare * whole) continue;
+    if (own < kSubharmonicPeakShare * salience_[static_cast<size_t>(peak)]) continue;
+    if (kernel_.partial_term(residual_.data(), best, 1) < kSubharmonicFundamentalShare * own) {
+      continue;
+    }
+    return best;
+  }
+  return peak;
+}
+
 std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>& frames,
                                      int hop_length, int sample_rate, const RidgeConfig& config) {
   SONARE_CHECK(hop_length > 0, ErrorCode::InvalidParameter);
@@ -204,15 +367,24 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
   SONARE_CHECK(std::isfinite(config.reattack_ratio) &&
                    (config.reattack_ratio == 0.0f || config.reattack_ratio > 1.0f),
                ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.max_gap_ms) && config.max_gap_ms >= 0.0f,
+               ErrorCode::InvalidParameter);
+  SONARE_CHECK(std::isfinite(config.attack_window_ms) && config.attack_window_ms >= 0.0f,
+               ErrorCode::InvalidParameter);
   for (const std::vector<F0Candidate>& frame : frames) {
     for (const F0Candidate& candidate : frame) {
       // The salience too: a NaN would make the candidate ordering below
       // intransitive rather than merely arbitrary.
       SONARE_CHECK(std::isfinite(candidate.f0_hz) && candidate.f0_hz > 0.0f &&
-                       std::isfinite(candidate.salience),
+                       std::isfinite(candidate.salience) && std::isfinite(candidate.attack_frames),
                    ErrorCode::InvalidParameter);
     }
   }
+
+  const double frame_ms =
+      1000.0 * static_cast<double>(hop_length) / static_cast<double>(sample_rate);
+  const int max_gap_frames =
+      static_cast<int>(std::floor(static_cast<double>(config.max_gap_ms) / frame_ms));
 
   std::vector<LiveRidge> finished;
   std::vector<LiveRidge> active;
@@ -243,14 +415,18 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
           best >= 0 && best_distance <= config.max_jump_cents &&
           ordered[static_cast<size_t>(best)].salience >= config.min_ridge_peak_ratio * ridge.peak;
       if (!takes) {
-        finished.push_back(std::move(ridge));
+        // A gap frame keeps the ridge in the running; it is filled once it resumes.
+        if (ridge.gap < max_gap_frames) {
+          ++ridge.gap;
+          survivors.push_back(std::move(ridge));
+        } else {
+          finished.push_back(std::move(ridge));
+        }
         continue;
       }
       const F0Candidate& taken = ordered[static_cast<size_t>(best)];
       claimed[static_cast<size_t>(best)] = true;
-      ridge.f0_hz.push_back(taken.f0_hz);
-      ridge.salience.push_back(taken.salience);
-      ridge.peak = std::max(ridge.peak, taken.salience);
+      take_after_gap(ridge, taken);
       survivors.push_back(std::move(ridge));
     }
     for (size_t i = 0; i < ordered.size(); ++i) {
@@ -259,6 +435,7 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
       started.frame_start = static_cast<int>(frame);
       started.f0_hz.push_back(ordered[i].f0_hz);
       started.salience.push_back(ordered[i].salience);
+      started.attack.push_back(ordered[i].attack_frames);
       started.peak = ordered[i].salience;
       survivors.push_back(std::move(started));
     }
@@ -267,13 +444,14 @@ std::vector<F0Ridge> track_f0_ridges(const std::vector<std::vector<F0Candidate>>
   finished.insert(finished.end(), std::make_move_iterator(active.begin()),
                   std::make_move_iterator(active.end()));
 
-  const double frame_ms =
-      1000.0 * static_cast<double>(hop_length) / static_cast<double>(sample_rate);
+  place_onsets(finished, frame_ms, config);
   split_reattacks(finished, frame_ms, config);
   std::vector<F0Ridge> ridges;
   ridges.reserve(finished.size());
   for (LiveRidge& live : finished) {
-    if (static_cast<double>(live.f0_hz.size()) * frame_ms < config.min_duration_ms) continue;
+    // Measured over the frames the tracker followed: a filled frame is not evidence.
+    const auto followed = static_cast<double>(live.f0_hz.size()) - live.filled;
+    if (followed * frame_ms < config.min_duration_ms) continue;
     F0Ridge ridge;
     ridge.frame_start = live.frame_start;
     ridge.f0_hz = std::move(live.f0_hz);
@@ -298,6 +476,84 @@ float MultiF0Track::frame_rate_hz() const noexcept {
 }
 
 namespace {
+
+/// The last few STFT magnitude columns, for reading an attack without phase placement.
+class MagnitudeHistory {
+ public:
+  MagnitudeHistory(int n_bins, int length)
+      : n_bins_(n_bins), columns_(static_cast<size_t>(length) * static_cast<size_t>(n_bins)) {}
+
+  /// Appends @p spec's frame @p frame as the newest column.
+  void push(const Spectrogram& spec, int frame) {
+    const int length = static_cast<int>(columns_.size()) / n_bins_;
+    newest_ = (newest_ + 1) % length;
+    count_ = std::min(count_ + 1, length);
+    float* column = columns_.data() + static_cast<size_t>(newest_) * static_cast<size_t>(n_bins_);
+    const std::complex<float>* data = spec.complex_data();
+    const size_t n_frames = static_cast<size_t>(spec.n_frames());
+    for (int bin = 0; bin < n_bins_; ++bin) {
+      column[bin] =
+          std::abs(data[static_cast<size_t>(bin) * n_frames + static_cast<size_t>(frame)]);
+    }
+  }
+
+  int count() const noexcept { return count_; }
+
+  /// The column @p back frames before the newest, which must be under count().
+  const float* at(int back) const noexcept {
+    const int length = static_cast<int>(columns_.size()) / n_bins_;
+    const int index = (newest_ - back + length) % length;
+    return columns_.data() + static_cast<size_t>(index) * static_cast<size_t>(n_bins_);
+  }
+
+ private:
+  int n_bins_;
+  std::vector<float> columns_;
+  int newest_ = -1;
+  int count_ = 0;
+};
+
+/// @brief F0Candidate::attack_frames for @p f0_hz over @p history.
+/// @details The magnitude at the first @p n_harmonics partial bins is summed per
+///          column; where the newest-to-oldest span doubles, the crossing of the
+///          level halfway between its lowest and highest column is interpolated
+///          between the two frames it falls between.
+float attack_frames(const MagnitudeHistory& history, float f0_hz, float bin_hz, int n_harmonics,
+                    int n_bins) {
+  const int count = history.count();
+  if (count < 2) return 0.0f;
+  std::vector<float> summed(static_cast<size_t>(count), 0.0f);
+  for (int back = 0; back < count; ++back) {
+    const float* column = history.at(back);
+    for (int harmonic = 1; harmonic <= n_harmonics; ++harmonic) {
+      const int bin = static_cast<int>(std::lround(harmonic * f0_hz / bin_hz));
+      if (bin >= n_bins) break;
+      summed[static_cast<size_t>(back)] += column[bin];
+    }
+  }
+  const float lowest = *std::min_element(summed.begin(), summed.end());
+  const float highest = *std::max_element(summed.begin(), summed.end());
+  if (!(highest > 2.0f * lowest)) return 0.0f;
+  const float half = 0.5f * (lowest + highest);
+  // Oldest first: the first column at or over the half level, with one under it before.
+  if (summed[static_cast<size_t>(count - 1)] >= half) return 0.0f;
+  for (int back = count - 2; back >= 0; --back) {
+    const float above = summed[static_cast<size_t>(back)];
+    if (above < half) continue;
+    const float below = summed[static_cast<size_t>(back + 1)];
+    return static_cast<float>(back) + (above - half) / (above - below);
+  }
+  return 0.0f;
+}
+
+/// Reads the attack of every candidate in @p frame against @p history.
+void read_attacks(std::vector<F0Candidate>& candidates, const MagnitudeHistory& history,
+                  const SalienceKernel& kernel, float bin_hz, int n_bins) {
+  for (F0Candidate& candidate : candidates) {
+    candidate.attack_frames =
+        attack_frames(history, candidate.f0_hz, bin_hz, kernel.n_harmonics(), n_bins);
+  }
+}
 
 /// The track the per-frame candidates make, over @p audio's framing.
 MultiF0Track track_from_frames(const Audio& audio,
@@ -336,10 +592,18 @@ MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
 
   const CentSpectrum spectrum = compute_cent_spectrum(spec, config.spectrum);
   const MultiF0Estimator estimator(spectrum.axis, config.estimation);
+  const bool read_attack = config.ridges.attack_window_ms != 0.0f;
+  const float bin_hz = static_cast<float>(spec.sample_rate()) / static_cast<float>(spec.n_fft());
+  MagnitudeHistory history(spec.n_bins(), spec.n_fft() / spec.hop_length() + 1);
 
   std::vector<std::vector<F0Candidate>> frames(static_cast<size_t>(spectrum.n_frames));
   for (int frame = 0; frame < spectrum.n_frames; ++frame) {
-    frames[static_cast<size_t>(frame)] = estimator.estimate(spectrum.column(frame));
+    std::vector<F0Candidate>& candidates = frames[static_cast<size_t>(frame)];
+    candidates = estimator.estimate(spectrum.column(frame));
+    if (read_attack) {
+      history.push(spec, frame);
+      read_attacks(candidates, history, estimator.kernel(), bin_hz, spec.n_bins());
+    }
   }
   return track_from_frames(audio, frames, spectrum.hop_length, config.ridges);
 }
@@ -353,12 +617,20 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
   std::vector<std::vector<F0Candidate>> frames(
       static_cast<size_t>(stft_frame_count(audio.size(), stft)));
   std::optional<MultiF0Estimator> estimator;
+  const bool read_attack = config.ridges.attack_window_ms != 0.0f;
+  const float bin_hz = static_cast<float>(audio.sample_rate()) / static_cast<float>(stft.n_fft);
+  // The history runs across tiles, so only a tile's new frames are pushed.
+  MagnitudeHistory history(stft.n_fft / 2 + 1, stft.n_fft / stft.hop_length + 1);
   for_each_stft_tile(audio, stft, 1, [&](const Spectrogram& tile, int first_frame, int discard) {
     const CentSpectrum spectrum = compute_cent_spectrum(tile, config.spectrum);
     if (!estimator) estimator.emplace(spectrum.axis, config.estimation);
     for (int frame = discard; frame < spectrum.n_frames; ++frame) {
-      frames[static_cast<size_t>(first_frame + frame)] =
-          estimator->estimate(spectrum.column(frame));
+      std::vector<F0Candidate>& candidates = frames[static_cast<size_t>(first_frame + frame)];
+      candidates = estimator->estimate(spectrum.column(frame));
+      if (read_attack) {
+        history.push(tile, frame);
+        read_attacks(candidates, history, estimator->kernel(), bin_hz, tile.n_bins());
+      }
     }
   });
   return track_from_frames(audio, frames, stft.hop_length, config.ridges);
