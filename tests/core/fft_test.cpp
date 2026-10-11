@@ -444,8 +444,19 @@ TEST_CASE("FFT::prepare leaves the first transform allocation-free", "[fft][rt]"
   // kiss_fftr_alloc) rather than operator new, so the malloc zone's in-use bytes are the
   // instrument, and the case is macOS-only for that reason. CI runs the C++ suite on
   // ubuntu-latest AND macos-latest, so the macOS row is what executes this case.
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+#define SONARE_FFT_TEST_UNDER_ASAN 1
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+#define SONARE_FFT_TEST_UNDER_ASAN 1
+#endif
 #if !defined(__APPLE__)
   SKIP("allocation is measured through the macOS malloc zone statistics");
+#elif defined(SONARE_FFT_TEST_UNDER_ASAN)
+  // ASan replaces the default zone, whose in-use bytes then move with its quarantine.
+  SKIP("malloc zone statistics do not measure allocation under AddressSanitizer");
 #else
   const auto in_use = []() {
     malloc_statistics_t stats;
