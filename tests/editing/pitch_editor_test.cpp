@@ -1,6 +1,7 @@
 #include "editing/pitch_editor/pitch_editor.h"
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
@@ -280,6 +281,160 @@ TEST_CASE("one F0Track converts frames at a single cadence everywhere", "[pitch_
   REQUIRE(regions[0].offset_sample == 60);
   REQUIRE(regions[1].onset_sample == 80);
   REQUIRE(regions[1].offset_sample == 140);
+}
+
+namespace {
+
+// A sung contour at the pYIN cadence (44.1 kHz, hop 512): per-note centres in cents from A4,
+// linear glides centred on each change, and a vibrato that grows in over fade_s on every note.
+struct SungContour {
+  std::vector<double> centres_cents;
+  double note_s = 0.7;
+  double glide_s = 0.0;
+  double vibrato_hz = 5.5;
+  double vibrato_cents = 0.0;
+  double fade_s = 0.0;
+  double phase = 0.0;
+};
+
+constexpr int kContourRate = 44100;
+constexpr int kContourHop = 512;
+
+F0Track sung_track(const SungContour& contour) {
+  const double frame_s = static_cast<double>(kContourHop) / kContourRate;
+  const int frames_per_note = static_cast<int>(std::lround(contour.note_s / frame_s));
+  const int total = frames_per_note * static_cast<int>(contour.centres_cents.size());
+  F0Track track;
+  track.sample_rate = kContourRate;
+  track.hop_length = kContourHop;
+  for (int frame = 0; frame < total; ++frame) {
+    const double t = frame * frame_s;
+    const size_t note = static_cast<size_t>(frame / frames_per_note);
+    double centre = contour.centres_cents[note];
+    // Inside a glide window the pitch moves linearly between the neighbouring centres.
+    for (size_t k = 1; k < contour.centres_cents.size(); ++k) {
+      const double boundary = static_cast<double>(k) * frames_per_note * frame_s;
+      const double into = t - (boundary - 0.5 * contour.glide_s);
+      if (contour.glide_s > 0.0 && into >= 0.0 && into < contour.glide_s) {
+        const double from = contour.centres_cents[k - 1];
+        centre = from + (contour.centres_cents[k] - from) * into / contour.glide_s;
+      }
+    }
+    const double since_onset = t - static_cast<double>(note) * frames_per_note * frame_s;
+    const double grown = contour.fade_s > 0.0 ? std::min(since_onset / contour.fade_s, 1.0) : 1.0;
+    const double vibrato =
+        contour.vibrato_cents * grown *
+        std::sin(sonare::constants::kTwoPiD * contour.vibrato_hz * since_onset + contour.phase);
+    track.f0_hz.push_back(static_cast<float>(440.0 * std::pow(2.0, (centre + vibrato) / 1200.0)));
+  }
+  track.voiced.assign(track.f0_hz.size(), true);
+  track.voiced_prob.assign(track.f0_hz.size(), 1.0f);
+  return track;
+}
+
+double region_start_s(const NoteRegion& region) {
+  return static_cast<double>(region.onset_sample) / kContourRate;
+}
+
+}  // namespace
+
+TEST_CASE("NoteSegmenter keeps a held note with vibrato as one note", "[pitch_editor]") {
+  // A reference taken from one frame sat a half-excursion off centre whenever the vibrato did
+  // not start on its zero crossing, and a span reaching full depth then crossed the threshold.
+  struct Case {
+    double rate_hz, depth_cents, fade_s, phase;
+  };
+  const Case cases[] = {{4.0, 45.0, 0.2, 0.0},
+                        {7.0, 35.0, 0.0, 0.0},
+                        {5.5, 25.0, 0.0, sonare::constants::kPiD / 2},
+                        {6.0, 35.0, 0.0, sonare::constants::kPiD / 2},
+                        {4.0, 25.0, 0.0, 0.0},
+                        {5.5, 30.0, 0.3, sonare::constants::kPiD}};
+  for (const Case& c : cases) {
+    SungContour contour;
+    contour.centres_cents = {-20.0};
+    contour.note_s = 1.5;
+    contour.vibrato_hz = c.rate_hz;
+    contour.vibrato_cents = c.depth_cents;
+    contour.fade_s = c.fade_s;
+    contour.phase = c.phase;
+    const F0Track track = sung_track(contour);
+    const auto regions = NoteSegmenter().segment(track);
+    INFO("vibrato " << c.rate_hz << " Hz +-" << c.depth_cents << " cents, fade " << c.fade_s
+                    << " s, phase " << c.phase);
+    REQUIRE(regions.size() == 1);
+    CHECK(regions[0].frame_start == 0);
+    CHECK(regions[0].frame_end == track.n_frames());
+    CHECK_THAT(regions[0].median_cents, WithinAbs(-20.0f, 6.0f));
+  }
+}
+
+TEST_CASE("NoteSegmenter leaves no fragment on the glide between notes", "[pitch_editor]") {
+  // The frame confirming a split sits mid-glide; a reference frozen there left a 30-60 ms
+  // fragment before the pitch arrived.
+  struct Case {
+    double from, to, glide_s, vibrato_cents, fade_s;
+  };
+  const Case cases[] = {{-900.0, -700.0, 0.06, 0.0, 0.0},
+                        {-900.0, -700.0, 0.10, 0.0, 0.0},
+                        {-180.0, -15.0, 0.06, 25.0, 0.2},
+                        {-700.0, -900.0, 0.10, 25.0, 0.2}};
+  for (const Case& c : cases) {
+    SungContour contour;
+    contour.centres_cents = {c.from, c.to};
+    contour.glide_s = c.glide_s;
+    contour.vibrato_cents = c.vibrato_cents;
+    contour.fade_s = c.fade_s;
+    const auto regions = NoteSegmenter().segment(sung_track(contour));
+    INFO(c.from << " to " << c.to << " cents over " << c.glide_s * 1000.0 << " ms, vibrato +-"
+                << c.vibrato_cents);
+    REQUIRE(regions.size() == 2);
+    CHECK(region_start_s(regions[1]) ==
+          Catch::Approx(contour.note_s).margin(0.5 * c.glide_s + 0.02));
+    CHECK_THAT(regions[0].median_cents, WithinAbs(static_cast<float>(c.from), 6.0f));
+    CHECK_THAT(regions[1].median_cents, WithinAbs(static_cast<float>(c.to), 6.0f));
+  }
+}
+
+TEST_CASE("NoteSegmenter still splits a semitone step and keeps the threshold's meaning",
+          "[pitch_editor]") {
+  for (const double vibrato : {0.0, 25.0}) {
+    SungContour contour;
+    contour.centres_cents = {-900.0, -800.0};
+    contour.note_s = 0.6;
+    contour.glide_s = 0.06;
+    contour.vibrato_cents = vibrato;
+    contour.fade_s = 0.2;
+    const auto regions = NoteSegmenter().segment(sung_track(contour));
+    INFO("vibrato +-" << vibrato);
+    REQUIRE(regions.size() == 2);
+    CHECK(region_start_s(regions[1]) == Catch::Approx(contour.note_s).margin(0.05));
+  }
+
+  // A sixteenth at 128 bpm is shorter than the reference takes to settle; a span bound alone
+  // (2 x threshold) let each semitone step in it through.
+  SungContour run;
+  run.centres_cents = {-500.0, -400.0, -200.0, -400.0, -500.0, -300.0, -200.0, -100.0};
+  run.note_s = 0.117;
+  const auto run_regions = NoteSegmenter().segment(sung_track(run));
+  REQUIRE(run_regions.size() == run.centres_cents.size());
+  for (size_t i = 0; i < run_regions.size(); ++i) {
+    CHECK_THAT(run_regions[i].median_cents,
+               WithinAbs(static_cast<float>(run.centres_cents[i]), 1.0f));
+  }
+
+  // A 45-cent step is under the default 50-cent threshold and over a 40-cent one.
+  SungContour step;
+  step.centres_cents = {-900.0, -855.0};
+  step.note_s = 0.6;
+  step.glide_s = 0.06;
+  const F0Track track = sung_track(step);
+  CHECK(NoteSegmenter().segment(track).size() == 1);
+  NoteSegmenterConfig lowered;
+  lowered.segmentation_threshold_cents = 40.0f;
+  const auto split = NoteSegmenter(lowered).segment(track);
+  REQUIRE(split.size() == 2);
+  CHECK_THAT(split[1].median_cents, WithinAbs(-855.0f, 1.0f));
 }
 
 TEST_CASE("ScaleQuantizer maps all chroma to enabled scale degrees", "[pitch_editor]") {

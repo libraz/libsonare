@@ -227,14 +227,11 @@ CompiledPitchPlan compile_pitch_plan_at_rate(const VocalAnalysisData& analysis,
     }
     previous_voiced = true;
 
-    double delta = base - measured + smoothed + note.edit.pitch.transpose_semitones;
-    // Float-cents decomposition and float F0 can differ by ulps; force the identity exactly.
-    const bool target_correction_disabled =
-        note.edit.pitch.target.mode == PitchTargetMode::kNone || note.edit.pitch.amount == 0.0;
-    if (target_correction_disabled && note.edit.pitch.drift_scale == 1.0 &&
-        note.edit.pitch.vibrato_scale == 1.0 && note.edit.pitch.transpose_semitones == 0.0) {
-      delta = 0.0;
-    }
+    // measured == centre + drift + vibrato up to float ulps, so scaling the components directly
+    // (rather than base - measured) keeps the identity and a bare transpose exact.
+    double delta = (note.edit.pitch.drift_scale - 1.0) * drift +
+                   (note.edit.pitch.vibrato_scale - 1.0) * vibrato + smoothed +
+                   note.edit.pitch.transpose_semitones;
     // Canonicalize -0.0 to the +0.0 bit pattern pitch_identity and the bypass compare.
     if (delta == 0.0) delta = 0.0;
     if (!std::isfinite(delta) || delta < -static_cast<double>(std::numeric_limits<float>::max()) ||

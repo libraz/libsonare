@@ -18,6 +18,7 @@
 namespace sonare::editing::vocal_edit {
 
 using sonare::constants::kA4Hz;
+using sonare::constants::kCentsPerOctave;
 using sonare::constants::kCentsPerSemitone;
 using sonare::constants::kMidiA4;
 using sonare::constants::kSemitonesPerOctave;
@@ -75,6 +76,246 @@ int64_t rounded_sample(double value) {
     invalid("analysis.grid", "analysis frame position cannot be represented as a sample");
   }
   return static_cast<int64_t>(rounded);
+}
+
+bool usable_frame(const VocalAnalysisData& analysis, size_t frame) {
+  return analysis.voiced[frame] != 0 && analysis.f0_hz[frame] > 0.0f &&
+         std::isfinite(analysis.f0_hz[frame]);
+}
+
+double hz_to_midi(double hz) { return kMidiA4 + kSemitonesPerOctave * std::log2(hz / kA4Hz); }
+
+double median_of_sorted(const std::vector<double>& sorted) {
+  const size_t n = sorted.size();
+  return n % 2 == 1 ? sorted[n / 2] : 0.5 * (sorted[n / 2 - 1] + sorted[n / 2]);
+}
+
+// The analysis F0 is a pYIN bin centre (10-cent grid anchored at fmin), and the Viterbi path
+// has been seen one bin past the nearest; the next difference-function minimum is an octave away.
+constexpr double kRefineWindowCents = 25.0;
+
+/// @brief Sub-bin F0 for one analysis frame, read off the source audio.
+///
+/// Minimises the exact fixed-window difference function d(tau) = sum (x[n] - x[n + tau])^2 over
+/// the lags within kRefineWindowCents of the analysis period, with a parabolic sub-sample
+/// minimum. The window is fixed across lags so its length cannot bias the minimum. Returns the
+/// analysis value when the minimum sits on the search edge or the frame carries no dip.
+float refine_frame_f0(const Audio& source, const AnalysisGrid& grid, uint32_t frame, float f0_hz,
+                      std::vector<float>& frame_samples, std::vector<double>& difference) {
+  const double sample_rate = source.sample_rate();
+  const double period = sample_rate / static_cast<double>(f0_hz);
+  const double ratio = std::pow(2.0, kRefineWindowCents / kCentsPerOctave);
+  const int frame_length = static_cast<int>(grid.frame_length_samples);
+  const double lag_low_raw = std::floor(period / ratio);
+  const double lag_high_raw = std::ceil(period * ratio);
+  if (!(lag_low_raw >= 1.0) || !(lag_high_raw + 1.0 < static_cast<double>(frame_length))) {
+    return f0_hz;
+  }
+  const int lag_low = static_cast<int>(lag_low_raw);
+  const int lag_high = static_cast<int>(lag_high_raw);
+  const int window = frame_length - lag_high;
+
+  const double centre = sample_at(grid, frame);
+  const int64_t begin = static_cast<int64_t>(std::floor(centre - 0.5 * frame_length));
+  frame_samples.assign(static_cast<size_t>(frame_length), 0.0f);
+  const int64_t source_size = static_cast<int64_t>(source.size());
+  for (int n = 0; n < frame_length; ++n) {
+    const int64_t sample = begin + n;
+    if (sample >= 0 && sample < source_size) {
+      frame_samples[static_cast<size_t>(n)] = source[static_cast<size_t>(sample)];
+    }
+  }
+
+  difference.assign(static_cast<size_t>(lag_high - lag_low + 1), 0.0);
+  size_t best = 0;
+  for (int lag = lag_low; lag <= lag_high; ++lag) {
+    double sum = 0.0;
+    for (int n = 0; n < window; ++n) {
+      const double delta = static_cast<double>(frame_samples[static_cast<size_t>(n)]) -
+                           static_cast<double>(frame_samples[static_cast<size_t>(n + lag)]);
+      sum += delta * delta;
+    }
+    const size_t index = static_cast<size_t>(lag - lag_low);
+    difference[index] = sum;
+    if (sum < difference[best]) best = index;
+  }
+  if (best == 0 || best + 1 == difference.size()) return f0_hz;
+  const double left = difference[best - 1];
+  const double middle = difference[best];
+  const double right = difference[best + 1];
+  const double denominator = left - 2.0 * middle + right;
+  if (!(denominator > 0.0)) return f0_hz;
+  const double offset = 0.5 * (left - right) / denominator;
+  const double refined_period = static_cast<double>(lag_low) + static_cast<double>(best) + offset;
+  const double refined = sample_rate / refined_period;
+  if (!std::isfinite(refined) || refined < f0_hz / ratio || refined > f0_hz * ratio) return f0_hz;
+  return static_cast<float>(refined);
+}
+
+/// @brief Refined F0 for the frames [frame_start, frame_end); unusable frames keep their value.
+std::vector<float> refine_f0_range(const Audio& source, const VocalAnalysisData& analysis,
+                                   uint32_t frame_start, uint32_t frame_end) {
+  std::vector<float> refined(analysis.f0_hz.begin() + frame_start,
+                             analysis.f0_hz.begin() + frame_end);
+  std::vector<float> frame_samples;
+  std::vector<double> difference;
+  for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
+    const size_t i = static_cast<size_t>(frame);
+    if (!usable_frame(analysis, i)) continue;
+    refined[static_cast<size_t>(frame - frame_start)] =
+        refine_frame_f0(source, analysis.grid, frame, analysis.f0_hz[i], frame_samples, difference);
+  }
+  return refined;
+}
+
+/// @brief Cuts the refined contour into notes with the shared segmenter.
+std::vector<pitch_editor::NoteRegion> segment_contour(const VocalAnalysisData& analysis,
+                                                      const std::vector<float>& f0_hz,
+                                                      int sample_rate) {
+  pitch_editor::F0Track track;
+  track.f0_hz = f0_hz;
+  track.voiced.resize(analysis.voiced.size());
+  for (size_t i = 0; i < analysis.voiced.size(); ++i) track.voiced[i] = analysis.voiced[i] != 0;
+  track.sample_rate = sample_rate;
+  track.frame_rate_hz = static_cast<float>(sample_rate / analysis.grid.samples_per_frame);
+  track.hop_length = std::max(1, static_cast<int>(std::llround(analysis.grid.samples_per_frame)));
+  const pitch_editor::NoteSegmenter segmenter(
+      {static_cast<float>(analysis.settings.segmentation_threshold_cents),
+       static_cast<float>(analysis.settings.minimum_note_ms),
+       static_cast<float>(analysis.settings.reference_hz)});
+  return segmenter.segment(track);
+}
+
+// A vibrato peak well below the others is the fade-in's first hump, whose position is noise;
+// on a flat note every noise peak is alike and all of them count.
+constexpr double kProminentPeakFraction = 0.5;
+
+/// @brief Pitch centre of a note from its refined per-frame MIDI contour, in frame order.
+///
+/// Body: the frames within the threshold of the median, less the monotonic run at either end
+/// (the glide in or out). Centre: the piecewise-linear body integrated from its first to its
+/// last vibrato peak, each the parabolic maximum of one excursion above the body mean. A peak
+/// sits at the same phase whatever the amplitude, so a vibrato still growing in integrates to
+/// zero over a cycle; a level crossing does not (asin(level / amplitude)), and a frame median
+/// is off by the partial cycle at either end (measured 2.6 cents at 5.5 Hz, +-25 cents). With
+/// fewer than two peaks the body mean stands in.
+double contour_centre(const std::vector<double>& midi, double threshold_semitones) {
+  std::vector<double> sorted(midi);
+  std::sort(sorted.begin(), sorted.end());
+  const double median = median_of_sorted(sorted);
+  std::vector<double> in_band;
+  in_band.reserve(midi.size());
+  for (const double value : midi) {
+    if (std::abs(value - median) <= threshold_semitones) in_band.push_back(value);
+  }
+  const auto mean_of = [](const std::vector<double>& values) {
+    return std::accumulate(values.begin(), values.end(), 0.0) / static_cast<double>(values.size());
+  };
+  if (in_band.size() < 2) return median;
+  // Keep the frames from the first to the last turning point; the runs outside are the glides.
+  size_t first_turn = in_band.size();
+  size_t last_turn = 0;
+  for (size_t i = 1; i + 1 < in_band.size(); ++i) {
+    if ((in_band[i] - in_band[i - 1]) * (in_band[i + 1] - in_band[i]) > 0.0) continue;
+    if (first_turn == in_band.size()) first_turn = i;
+    last_turn = i;
+  }
+  if (first_turn == in_band.size() || last_turn < first_turn + 1) return mean_of(in_band);
+  const std::vector<double> body(in_band.begin() + static_cast<std::ptrdiff_t>(first_turn),
+                                 in_band.begin() + static_cast<std::ptrdiff_t>(last_turn + 1));
+
+  const double level = mean_of(body);
+  struct Peak {
+    double position;
+    double height;
+  };
+  std::vector<Peak> peaks;
+  for (size_t i = 0; i < body.size();) {
+    if (!(body[i] > level)) {
+      ++i;
+      continue;
+    }
+    size_t end = i;
+    size_t top = i;
+    while (end < body.size() && body[end] > level) {
+      if (body[end] > body[top]) top = end;
+      ++end;
+    }
+    if (top > 0 && top + 1 < body.size()) {
+      const double left = body[top - 1];
+      const double middle = body[top];
+      const double right = body[top + 1];
+      const double denominator = left - 2.0 * middle + right;
+      const double offset =
+          denominator < 0.0 ? std::clamp(0.5 * (left - right) / denominator, -0.5, 0.5) : 0.0;
+      peaks.push_back({static_cast<double>(top) + offset, middle - level});
+    }
+    i = end;
+  }
+  if (peaks.size() < 2) return level;
+  std::vector<double> heights;
+  heights.reserve(peaks.size());
+  for (const auto& peak : peaks) heights.push_back(peak.height);
+  std::sort(heights.begin(), heights.end());
+  const double prominent = kProminentPeakFraction * median_of_sorted(heights);
+  double first = -1.0;
+  double last = -1.0;
+  for (const auto& peak : peaks) {
+    if (peak.height < prominent) continue;
+    if (first < 0.0) first = peak.position;
+    last = peak.position;
+  }
+  if (first < 0.0 || !(last > first)) return level;
+  // Trapezoid integral of the piecewise-linear body between the two peaks.
+  const auto value_at = [&](double x) {
+    const size_t k = static_cast<size_t>(std::floor(x));
+    if (k + 1 >= body.size()) return body.back();
+    return body[k] + (body[k + 1] - body[k]) * (x - static_cast<double>(k));
+  };
+  double area = 0.0;
+  double x = first;
+  double y = value_at(first);
+  for (size_t k = static_cast<size_t>(std::floor(first)) + 1; static_cast<double>(k) < last; ++k) {
+    area += 0.5 * (y + body[k]) * (static_cast<double>(k) - x);
+    x = static_cast<double>(k);
+    y = body[k];
+  }
+  area += 0.5 * (y + value_at(last)) * (last - x);
+  return area / (last - first);
+}
+
+/// @brief Measures a note whose refined contour for [frame_start, frame_end) is already known.
+VocalNote measure_from_contour(const VocalAnalysisData& analysis, VocalNoteId id,
+                               SampleRange source_range, uint32_t frame_start, uint32_t frame_end,
+                               const std::vector<float>& refined_f0) {
+  std::vector<double> midi;
+  for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
+    if (usable_frame(analysis, static_cast<size_t>(frame))) {
+      midi.push_back(hz_to_midi(refined_f0[static_cast<size_t>(frame - frame_start)]));
+    }
+  }
+  VocalNote note;
+  note.id = id;
+  note.source_range = source_range;
+  note.analysis_frame_start = frame_start;
+  note.analysis_frame_end = frame_end;
+  note.has_pitch = !midi.empty();
+  if (midi.empty()) {
+    note.centre_midi = 0.0;
+    note.median_hz = 0.0;
+    note.f0_stability = 0.0;
+  } else {
+    const double threshold_semitones =
+        analysis.settings.segmentation_threshold_cents / kCentsPerSemitone;
+    note.centre_midi = contour_centre(midi, threshold_semitones);
+    note.median_hz = kA4Hz * std::pow(2.0, (note.centre_midi - kMidiA4) / kSemitonesPerOctave);
+    double mad = 0.0;
+    for (const double value : midi) mad += std::abs(value - note.centre_midi);
+    mad /= static_cast<double>(midi.size());
+    note.f0_stability = std::max(0.0, std::min(1.0, 1.0 - mad / threshold_semitones));
+  }
+  note.edit = VocalNoteEdit::identity_for(source_range);
+  return note;
 }
 
 }  // namespace
@@ -275,18 +516,9 @@ VocalAnalysisData analyze_vocal(const Audio& source, const VocalAnalysisOptions&
 }
 
 std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnalysisData& analysis) {
-  pitch_editor::F0Track track;
-  track.f0_hz = analysis.f0_hz;
-  track.voiced.resize(analysis.voiced.size());
-  for (size_t i = 0; i < analysis.voiced.size(); ++i) track.voiced[i] = analysis.voiced[i] != 0;
-  track.sample_rate = source.sample_rate();
-  track.frame_rate_hz = static_cast<float>(source.sample_rate() / analysis.grid.samples_per_frame);
-  track.hop_length = std::max(1, static_cast<int>(std::llround(analysis.grid.samples_per_frame)));
-  pitch_editor::NoteSegmenter segmenter(
-      {static_cast<float>(analysis.settings.segmentation_threshold_cents),
-       static_cast<float>(analysis.settings.minimum_note_ms),
-       static_cast<float>(analysis.settings.reference_hz)});
-  const auto regions = segmenter.segment(track);
+  const std::vector<float> refined =
+      refine_f0_range(source, analysis, 0, static_cast<uint32_t>(analysis.f0_hz.size()));
+  const auto regions = segment_contour(analysis, refined, source.sample_rate());
   std::vector<VocalNote> notes;
   notes.reserve(regions.size());
   for (const auto& region : regions) {
@@ -301,11 +533,11 @@ std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnaly
     if (notes.size() >= static_cast<size_t>(std::numeric_limits<VocalNoteId>::max())) {
       invalid("note_id", "note ID counter exhausted");
     }
-    VocalNote note = measure_vocal_note(source, analysis,
-                                        static_cast<VocalNoteId>(notes.size() + 1), {start, end});
-    note.analysis_frame_start = static_cast<uint32_t>(region.frame_start);
-    note.analysis_frame_end = static_cast<uint32_t>(region.frame_end);
-    notes.push_back(std::move(note));
+    const auto frame_start = static_cast<uint32_t>(region.frame_start);
+    const auto frame_end = static_cast<uint32_t>(region.frame_end);
+    const std::vector<float> region_f0(refined.begin() + frame_start, refined.begin() + frame_end);
+    notes.push_back(measure_from_contour(analysis, static_cast<VocalNoteId>(notes.size() + 1),
+                                         {start, end}, frame_start, frame_end, region_f0));
   }
   return notes;
 }
@@ -345,38 +577,8 @@ VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analy
   const uint32_t frame_start = frame_boundary(source_range.start);
   const uint32_t frame_end = std::max(frame_start, frame_boundary(source_range.end));
   if (frame_end <= frame_start) invalid("source_range", "source span contains no analysis frame");
-  std::vector<double> midi;
-  for (uint32_t frame = frame_start; frame < frame_end; ++frame) {
-    const size_t i = static_cast<size_t>(frame);
-    if (analysis.voiced[i] != 0 && analysis.f0_hz[i] > 0.0f) {
-      midi.push_back(kMidiA4 + kSemitonesPerOctave *
-                                   std::log2(static_cast<double>(analysis.f0_hz[i]) / kA4Hz));
-    }
-  }
-  VocalNote note;
-  note.id = id;
-  note.source_range = source_range;
-  note.analysis_frame_start = frame_start;
-  note.analysis_frame_end = frame_end;
-  note.has_pitch = !midi.empty();
-  if (midi.empty()) {
-    note.centre_midi = 0.0;
-    note.median_hz = 0.0;
-    note.f0_stability = 0.0;
-  } else {
-    std::sort(midi.begin(), midi.end());
-    note.centre_midi = midi[midi.size() / 2];
-    note.median_hz = kA4Hz * std::pow(2.0, (note.centre_midi - kMidiA4) / kSemitonesPerOctave);
-    double mad = 0.0;
-    for (const double value : midi) mad += std::abs(value - note.centre_midi);
-    mad /= static_cast<double>(midi.size());
-    note.f0_stability =
-        std::max(0.0, std::min(1.0, 1.0 - mad / (analysis.settings.segmentation_threshold_cents /
-                                                 kCentsPerSemitone)));
-  }
-  note.edit = VocalNoteEdit::identity_for(source_range);
-  static_cast<void>(source);
-  return note;
+  return measure_from_contour(analysis, id, source_range, frame_start, frame_end,
+                              refine_f0_range(source, analysis, frame_start, frame_end));
 }
 
 }  // namespace sonare::editing::vocal_edit

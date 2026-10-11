@@ -10,6 +10,10 @@
 namespace sonare::editing::pitch_editor {
 namespace {
 
+// One cycle of the slowest common vibrato (4 Hz): a span held for half of it has seen a full
+// excursion whatever phase the note started on.
+constexpr double kReferenceSettleMs = 250.0;
+
 int saturated_sample_offset(int frame, double samples_per_frame) noexcept {
   if (frame <= 0 || !(samples_per_frame > 0.0)) return 0;
   const double samples = static_cast<double>(frame) * samples_per_frame;
@@ -27,6 +31,12 @@ int saturated_sample_offset(int frame, double samples_per_frame) noexcept {
 bool usable_pitch(const F0Track& track, int frame) noexcept {
   const float hz = track.f0_hz[static_cast<size_t>(frame)];
   return track.voiced[static_cast<size_t>(frame)] && std::isfinite(hz) && hz > 0.0f;
+}
+
+// Cents in double so a span compared against 2 x threshold does not round at the boundary.
+double frame_cents(float hz, float reference_hz) noexcept {
+  return static_cast<double>(constants::kCentsPerOctave) *
+         std::log2(static_cast<double>(hz) / reference_hz);
 }
 
 }  // namespace
@@ -50,51 +60,89 @@ std::vector<NoteRegion> NoteSegmenter::segment(const F0Track& track) const {
   // are derived from the same one, so a host-supplied frame_rate_hz cannot be
   // honoured for the duration threshold and ignored for the region bounds.
   const float frame_rate = track.frame_rate();
+  const double threshold = config_.segmentation_threshold_cents;
   const int min_frames =
       std::max(1, static_cast<int>(std::ceil(config_.min_note_ms * 0.001f * frame_rate)));
+  const int settle_frames =
+      std::max(min_frames, static_cast<int>(std::ceil(kReferenceSettleMs * 0.001 * frame_rate)));
 
   int start = -1;
-  float reference_cents = 0.0f;
-  int sustained_deviation = 0;
+  int sustained = 0;
+  int member_count = 0;
+  int last_growth = 0;
+  double low = 0.0;
+  double high = 0.0;
+  bool frozen = false;
+  bool gliding = false;
+  double glide_sign = 0.0;
+  double last_cents = 0.0;
+  const auto open_region = [&](int first_frame, double seed_cents, bool follows_glide) {
+    start = first_frame;
+    sustained = 0;
+    member_count = 1;
+    last_growth = first_frame;
+    low = high = seed_cents;
+    frozen = false;
+    gliding = follows_glide;
+  };
+  const auto close_region = [&](int end_frame) {
+    if (start >= 0 && end_frame - start >= min_frames) {
+      regions.push_back(make_region(track, start, end_frame));
+    }
+  };
 
   for (int frame = 0; frame < track.n_frames(); ++frame) {
-    const bool voiced = usable_pitch(track, frame);
-    if (!voiced) {
-      if (start >= 0 && frame - start >= min_frames) {
-        regions.push_back(make_region(track, start, frame));
-      }
+    if (!usable_pitch(track, frame)) {
+      close_region(frame);
       start = -1;
-      sustained_deviation = 0;
       continue;
     }
-
-    const float cents = hz_to_cents(track.f0_hz[static_cast<size_t>(frame)], config_.reference_hz);
+    const double cents = frame_cents(track.f0_hz[static_cast<size_t>(frame)], config_.reference_hz);
     if (start < 0) {
-      start = frame;
-      reference_cents = cents;
-      sustained_deviation = 0;
+      open_region(frame, cents, false);
+      last_cents = cents;
       continue;
     }
-
-    if (std::abs(cents - reference_cents) > config_.segmentation_threshold_cents) {
-      ++sustained_deviation;
-      if (sustained_deviation >= min_frames) {
-        const int split = frame - sustained_deviation + 1;
-        if (split - start >= min_frames) {
-          regions.push_back(make_region(track, start, split));
-        }
-        start = split;
-        reference_cents = cents;
-        sustained_deviation = 0;
+    if (gliding) {
+      // The note opened mid-glide: carry its pitch along until the glide stops.
+      if ((cents - last_cents) * glide_sign > 0.0 && frame - start < settle_frames) {
+        low = high = cents;
+        last_growth = frame;
+        last_cents = cents;
+        continue;
       }
-    } else {
-      sustained_deviation = 0;
+      gliding = false;
+    }
+    last_cents = cents;
+    const double reference = 0.5 * (low + high);
+    // While settling a frame also has to keep the span within 2 x threshold, so the midpoint
+    // stays within the threshold of every frame it was built from.
+    const bool deviates =
+        std::abs(cents - reference) > threshold ||
+        (!frozen && std::max(high, cents) - std::min(low, cents) > 2.0 * threshold);
+    if (deviates) {
+      ++sustained;
+      if (sustained >= min_frames) {
+        const int split = frame - sustained + 1;
+        glide_sign = cents > reference ? 1.0 : -1.0;
+        close_region(split);
+        open_region(split, cents, true);
+      }
+      continue;
+    }
+    sustained = 0;
+    if (!frozen) {
+      if (cents < low || cents > high) {
+        low = std::min(low, cents);
+        high = std::max(high, cents);
+        last_growth = frame;
+      }
+      ++member_count;
+      frozen = (member_count >= settle_frames && frame - last_growth >= settle_frames / 2) ||
+               frame - start >= 2 * settle_frames;
     }
   }
-
-  if (start >= 0 && track.n_frames() - start >= min_frames) {
-    regions.push_back(make_region(track, start, track.n_frames()));
-  }
+  close_region(track.n_frames());
 
   return regions;
 }

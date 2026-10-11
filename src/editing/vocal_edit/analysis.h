@@ -35,13 +35,22 @@ VocalAnalysisData analyze_vocal(const Audio& source, const VocalAnalysisOptions&
 
 /// @brief Builds the initial note state from the immutable analysis track.
 ///
-/// Notes follow the persisted NoteSegmenter settings and have disjoint,
+/// Notes are cut on the persisted segmentation settings and have disjoint,
 /// source-clamped sample spans. Their IDs start at one; the session owns the
 /// high-water mark after this function returns.
+///
+/// Segmentation and measurement read a per-frame F0 refined on the source
+/// audio within a quarter semitone of the analysis value, so a note's centre is
+/// not held to the analysis pitch grid; the analysis arrays themselves are
+/// never rewritten.
 std::vector<VocalNote> extract_vocal_notes(const Audio& source, const VocalAnalysisData& analysis);
 
 /// @brief Measures one note through the same absolute-origin path used by
 /// extraction, split and merge operations.
+///
+/// centre_midi is the mean of the refined contour over a whole number of
+/// vibrato cycles, excluding the glide frames at either end; median_hz is the
+/// same centre in hertz.
 VocalNote measure_vocal_note(const Audio& source, const VocalAnalysisData& analysis, VocalNoteId id,
                              SampleRange source_range);
 

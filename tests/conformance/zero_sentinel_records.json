@@ -61,7 +61,7 @@
       "file": "src/c_api/features_spectral_pitch.cpp",
       "value": "config->reference_hz",
       "measured": "yes",
-      "reason": "NoteSegmenter substitutes its own default for a non-positive or non-finite reference, so the filter is redundant with the core rather than pre-empting it."
+      "reason": "NoteSegmenter returns no regions for a non-positive or non-finite reference, so the filter maps 0 to the default (and refuses a negative or non-finite value) before the core would return nothing."
     },
     {
       "file": "src/c_api/features_spectral_pitch.cpp",
