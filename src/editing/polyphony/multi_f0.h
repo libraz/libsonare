@@ -44,13 +44,14 @@ struct F0Candidate {
   float harmonic_share = 0.0f;
 
   /// Frames back from this one to where the plain STFT magnitude summed at
-  /// this candidate's partials crossed half of its rise over the preceding
-  /// analysis window. The window's coverage of an attack is half at its
-  /// centre, so for a note struck at once that point is the strike; the
-  /// magnitude is read without phase placement, since a partial's phase
-  /// advance settles only a hop after the attack. 0 where the magnitude did
-  /// not double over the window (no attack in view), and always when
-  /// @ref RidgeConfig::attack_window_ms is 0.
+  /// this candidate's first eight partials last crossed half of its rise over
+  /// the two preceding analysis windows. The window's coverage of an attack is
+  /// half at its centre, so for a note struck at once that point is the
+  /// strike; the magnitude is read without phase placement, since a partial's
+  /// phase advance settles only a hop after the attack, and the latest
+  /// crossing is taken so an earlier event still in view is not read as this
+  /// one's. 0 where the magnitude did not double over the history (no attack
+  /// in view), and always when @ref RidgeConfig::attack_window_ms is 0.
   float attack_frames = 0.0f;
 };
 
@@ -266,7 +267,9 @@ struct RidgeConfig {
   /// brackets the attack, rather than at the frame a candidate was first
   /// admitted: the window reaches a lone note up to half a window before its
   /// centre does, and a note under a louder voice, or one with a long
-  /// transient, is admitted frames after it struck. Leading frames before the
+  /// transient, is admitted frames after it struck. The reading reaches two
+  /// windows back, so a bass note under a chord, admitted 60-100 ms after its
+  /// strike, still has the strike in view. Leading frames before the
   /// strike are dropped and missing ones filled with the first value, though a
   /// filled frame is not followed evidence and does not count toward
   /// @ref min_duration_ms; the start never reaches back into a ridge within

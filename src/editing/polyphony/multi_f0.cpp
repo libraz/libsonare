@@ -515,9 +515,9 @@ class MagnitudeHistory {
 
 /// @brief F0Candidate::attack_frames for @p f0_hz over @p history.
 /// @details The magnitude at the first @p n_harmonics partial bins is summed per
-///          column; where the newest-to-oldest span doubles, the crossing of the
-///          level halfway between its lowest and highest column is interpolated
-///          between the two frames it falls between.
+///          column; where the newest-to-oldest span doubles, the latest crossing
+///          of the level halfway between its lowest and highest column is
+///          interpolated between the two frames it falls between.
 float attack_frames(const MagnitudeHistory& history, float f0_hz, float bin_hz, int n_harmonics,
                     int n_bins) {
   const int count = history.count();
@@ -535,23 +535,32 @@ float attack_frames(const MagnitudeHistory& history, float f0_hz, float bin_hz, 
   const float highest = *std::max_element(summed.begin(), summed.end());
   if (!(highest > 2.0f * lowest)) return 0.0f;
   const float half = 0.5f * (lowest + highest);
-  // Oldest first: the first column at or over the half level, with one under it before.
-  if (summed[static_cast<size_t>(count - 1)] >= half) return 0.0f;
-  for (int back = count - 2; back >= 0; --back) {
+  // Newest first: the latest column at or over the half level with one under it
+  // before, so an earlier event's rise still in the history is not the one read.
+  for (int back = 0; back + 1 < count; ++back) {
     const float above = summed[static_cast<size_t>(back)];
-    if (above < half) continue;
     const float below = summed[static_cast<size_t>(back + 1)];
+    if (above < half || below >= half) continue;
     return static_cast<float>(back) + (above - half) / (above - below);
   }
   return 0.0f;
 }
 
+/// Partials the attack is read over. Measured on a C2 struck under an E5, whose
+/// fundamental is C2's tenth partial: over all 20 the sum never doubles across
+/// the history and the strike is not read; over 8 it is read 36 ms after the strike.
+constexpr int kAttackPartials = 8;
+/// Analysis windows the attack is read back over. One misses a note admitted
+/// 60-100 ms after its strike (a bass note under a chord); three reached earlier
+/// events and raised octave-below ghosts on rendered repertoire.
+constexpr int kAttackHistoryWindows = 2;
+
 /// Reads the attack of every candidate in @p frame against @p history.
 void read_attacks(std::vector<F0Candidate>& candidates, const MagnitudeHistory& history,
-                  const SalienceKernel& kernel, float bin_hz, int n_bins) {
+                  float bin_hz, int n_bins) {
   for (F0Candidate& candidate : candidates) {
     candidate.attack_frames =
-        attack_frames(history, candidate.f0_hz, bin_hz, kernel.n_harmonics(), n_bins);
+        attack_frames(history, candidate.f0_hz, bin_hz, kAttackPartials, n_bins);
   }
 }
 
@@ -594,7 +603,8 @@ MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
   const MultiF0Estimator estimator(spectrum.axis, config.estimation);
   const bool read_attack = config.ridges.attack_window_ms != 0.0f;
   const float bin_hz = static_cast<float>(spec.sample_rate()) / static_cast<float>(spec.n_fft());
-  MagnitudeHistory history(spec.n_bins(), spec.n_fft() / spec.hop_length() + 1);
+  MagnitudeHistory history(spec.n_bins(),
+                           kAttackHistoryWindows * (spec.n_fft() / spec.hop_length()) + 1);
 
   std::vector<std::vector<F0Candidate>> frames(static_cast<size_t>(spectrum.n_frames));
   for (int frame = 0; frame < spectrum.n_frames; ++frame) {
@@ -602,7 +612,7 @@ MultiF0Track extract_multi_f0(const Audio& audio, const Spectrogram& spec,
     candidates = estimator.estimate(spectrum.column(frame));
     if (read_attack) {
       history.push(spec, frame);
-      read_attacks(candidates, history, estimator.kernel(), bin_hz, spec.n_bins());
+      read_attacks(candidates, history, bin_hz, spec.n_bins());
     }
   }
   return track_from_frames(audio, frames, spectrum.hop_length, config.ridges);
@@ -620,7 +630,8 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
   const bool read_attack = config.ridges.attack_window_ms != 0.0f;
   const float bin_hz = static_cast<float>(audio.sample_rate()) / static_cast<float>(stft.n_fft);
   // The history runs across tiles, so only a tile's new frames are pushed.
-  MagnitudeHistory history(stft.n_fft / 2 + 1, stft.n_fft / stft.hop_length + 1);
+  MagnitudeHistory history(stft.n_fft / 2 + 1,
+                           kAttackHistoryWindows * (stft.n_fft / stft.hop_length) + 1);
   for_each_stft_tile(audio, stft, 1, [&](const Spectrogram& tile, int first_frame, int discard) {
     const CentSpectrum spectrum = compute_cent_spectrum(tile, config.spectrum);
     if (!estimator) estimator.emplace(spectrum.axis, config.estimation);
@@ -629,7 +640,7 @@ MultiF0Track extract_multi_f0(const Audio& audio, const MultiF0ExtractorConfig& 
       candidates = estimator->estimate(spectrum.column(frame));
       if (read_attack) {
         history.push(tile, frame);
-        read_attacks(candidates, history, estimator->kernel(), bin_hz, tile.n_bins());
+        read_attacks(candidates, history, bin_hz, tile.n_bins());
       }
     }
   });
