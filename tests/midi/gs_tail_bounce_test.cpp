@@ -10,6 +10,8 @@
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <limits>
 #include <vector>
 
@@ -194,6 +196,72 @@ TEST_CASE("events after a note do not reach the bounce's opening through the tai
       INFO("trailing case " << i << (bounce == &bounce_native ? " (NativeSynth)" : " (Sf2Player)"));
       CHECK(opening(note_then(trailing[i]), bounce) == plain);
     }
+  }
+}
+
+namespace {
+
+/// Mean square of the left channel over [@p t0, @p t1) seconds, in dB.
+double left_rms_db(const std::vector<float>& interleaved, double t0, double t1) {
+  const size_t i0 = static_cast<size_t>(t0 * kRate);
+  const size_t i1 = static_cast<size_t>(t1 * kRate);
+  REQUIRE(interleaved.size() >= 2 * i1);
+  double sum = 0.0;
+  for (size_t i = i0; i < i1; ++i) {
+    sum += static_cast<double>(interleaved[2 * i]) * interleaved[2 * i];
+  }
+  return 10.0 * std::log10(sum / static_cast<double>(i1 - i0) + 1.0e-20);
+}
+
+/// Middle C struck 0.1-0.4 s; with @p pedal_cc given, that pedal goes down at 0.3 s, while the key
+/// is held (so a sostenuto captures it), and up at 2.5 s. Bounced for 4 s through the looped
+/// fixture SoundFont or the GM synth bank.
+std::vector<float> pedal_bounce(int pedal_cc, bool sf2) {
+  // 120 BPM: one quarter is 0.5 s.
+  std::vector<SonareMidiEventPod> events;
+  const uint32_t cc = 0x20B00000u | (static_cast<uint32_t>(pedal_cc) << 8);
+  events.push_back(pod(0.2, 0x20903C64u));
+  if (pedal_cc >= 0) events.push_back(pod(0.6, cc | 0x7Fu));
+  events.push_back(pod(0.8, 0x20803C00u));
+  if (pedal_cc >= 0) events.push_back(pod(5.0, cc));
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  REQUIRE(sonare_project_set_sample_rate(project, kRate) == SONARE_OK);
+  if (sf2) {
+    std::ifstream file("tests/fixtures/sf2/minimal_gs.sf2", std::ios::binary);
+    const std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file),
+                                     std::istreambuf_iterator<char>()};
+    REQUIRE(!bytes.empty());
+    REQUIRE(sonare_project_load_soundfont(project, bytes.data(), bytes.size()) == SONARE_OK);
+  }
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 8.0, &track, &clip) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events.data(), events.size()) == SONARE_OK);
+  SonareProjectBounceOptions options = auto_length_options();
+  options.total_frames = static_cast<int64_t>(4.0 * kRate);
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE((sf2 ? bounce_sf2 : bounce_native)(project, &options, &out, &out_len) == SONARE_OK);
+  std::vector<float> rendered(out, out + out_len);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
+  return rendered;
+}
+
+}  // namespace
+
+TEST_CASE("a held pedal sustains a released note through every bounce kind",
+          "[project][midi][gs-tail][sf2]") {
+  for (const bool sf2 : {true, false}) {
+    INFO((sf2 ? "Sf2Player" : "NativeSynth"));
+    const std::vector<float> dry = pedal_bounce(-1, sf2);
+    const std::vector<float> sustain = pedal_bounce(64, sf2);
+    const std::vector<float> sostenuto = pedal_bounce(66, sf2);
+    // The key has been up for 0.6 s: unpedalled, the note has died away.
+    const double dry_db = left_rms_db(dry, 1.0, 1.3);
+    CHECK(left_rms_db(sustain, 1.0, 1.3) > dry_db + 12.0);
+    CHECK(left_rms_db(sostenuto, 1.0, 1.3) > dry_db + 12.0);
   }
 }
 
