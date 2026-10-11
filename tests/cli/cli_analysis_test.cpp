@@ -1,6 +1,8 @@
 /// @file cli_analysis_test.cpp
 /// @brief Tests for the sonare CLI analysis commands.
 
+#include <catch2/catch_approx.hpp>
+
 #include "cli/cli_test_helpers.h"
 
 TEST_CASE("CLI info command", "[cli]") {
@@ -594,6 +596,56 @@ TEST_CASE("CLI pitch command", "[cli]") {
   }
 }
 
+TEST_CASE("CLI pitch --frames adds the per-frame contour", "[cli][pitch]") {
+  // A tone followed by silence, so the contour holds both voiced and unvoiced
+  // frames and the null encoding of a non-finite f0 is exercised.
+  const std::string wav = unique_temp_path("_pitch_frames.wav");
+  {
+    std::vector<float> samples(22050 * 2, 0.0f);
+    for (size_t i = 0; i < 22050; ++i) {
+      samples[i] = 0.5f * std::sin(2.0f * static_cast<float>(sonare::constants::kPiD) * 440.0f *
+                                   static_cast<float>(i) / 22050.0f);
+    }
+    save_wav(wav, samples, 22050);
+  }
+
+  const auto [plain_code, plain_text] = exec_command(CLI + " pitch " + wav + " --json -q");
+  REQUIRE(plain_code == 0);
+  REQUIRE(sonare::util::json::parse_strict(plain_text).size() == 6);
+
+  const auto [code, text] = exec_command(CLI + " pitch " + wav + " --frames --json -q");
+  INFO(text);
+  REQUIRE(code == 0);
+  const auto payload = sonare::util::json::parse_strict(text);
+  REQUIRE(payload.size() == 10);
+  const size_t n_frames = static_cast<size_t>(payload["n_frames"].as_int());
+  REQUIRE(n_frames > 0);
+  for (const char* key : {"times", "f0", "voiced_flag", "voiced_prob"}) {
+    REQUIRE(payload[key].as_array().size() == n_frames);
+  }
+  // Frame i sits i * hop / sr seconds in; the default hop is 512.
+  REQUIRE(payload["times"][1].as_number() == Catch::Approx(512.0 / 22050.0));
+  size_t voiced = 0;
+  size_t unvoiced_null = 0;
+  for (size_t i = 0; i < n_frames; ++i) {
+    if (payload["voiced_flag"][i].as_bool()) {
+      ++voiced;
+      REQUIRE(payload["f0"][i].as_number() == Catch::Approx(440.0).margin(5.0));
+    } else if (payload["f0"][i].is_null()) {
+      ++unvoiced_null;
+    }
+  }
+  REQUIRE(voiced == static_cast<size_t>(payload["voiced_count"].as_int()));
+  REQUIRE(voiced > 0);
+  REQUIRE(unvoiced_null > 0);
+
+  // Text mode has no per-frame form, so the flag changes nothing there.
+  const auto [text_code, text_output] = exec_command(CLI + " pitch " + wav + " --frames -q");
+  REQUIRE(text_code == 0);
+  REQUIRE_THAT(text_output, ContainsSubstring("Pitch Tracking"));
+  std::remove(wav.c_str());
+}
+
 TEST_CASE("CLI onset-env command", "[cli]") {
   create_test_wav(TEST_WAV);
 
@@ -677,4 +729,115 @@ TEST_CASE("CLI analyze command", "[.][slow][cli]") {
       REQUIRE(canonical);
     }
   }
+}
+
+namespace {
+
+// Three sung-like tones with short gaps: A4, C5, and an E5 sung 30 cents sharp.
+// 22.05 kHz, 0.93 s in all.
+std::string write_vocal_notes_take() {
+  const std::string path = unique_temp_path("_vocal_notes.wav");
+  constexpr int kRate = 22050;
+  const double e5_sharp = 659.2551138257398 * std::pow(2.0, 30.0 / 1200.0);
+  const double tones[] = {440.0, 523.2511306011972, e5_sharp};
+  std::vector<float> samples;
+  for (const double hz : tones) {
+    for (int i = 0; i < kRate * 28 / 100; ++i) {
+      samples.push_back(
+          0.5f * static_cast<float>(std::sin(2.0 * sonare::constants::kPiD * hz * i / kRate)));
+    }
+    samples.insert(samples.end(), static_cast<size_t>(kRate * 3 / 100), 0.0f);
+  }
+  save_wav(path, samples, kRate);
+  return path;
+}
+
+}  // namespace
+
+TEST_CASE("CLI vocal-notes lists the notes a vocal session finds", "[cli][vocal]") {
+  const std::string wav = write_vocal_notes_take();
+  const auto [code, text] = exec_command(CLI + " vocal-notes " + wav + " --json -q");
+  INFO(text);
+  REQUIRE(code == 0);
+  const auto payload = sonare::util::json::parse_strict(text);
+  REQUIRE(payload["sample_rate"].as_int() == 22050);
+  REQUIRE(payload["note_count"].as_int() == 3);
+  const auto& notes = payload["notes"].as_array();
+  REQUIRE(notes.size() == 3);
+
+  const char* names[] = {"A4", "C5", "E5"};
+  const double cents[] = {0.0, 0.0, 30.0};
+  double previous_end = 0.0;
+  for (size_t i = 0; i < notes.size(); ++i) {
+    const auto& note = notes[i];
+    REQUIRE(note["index"].as_int() == static_cast<int>(i));
+    REQUIRE(note["has_pitch"].as_bool());
+    REQUIRE(note["note_name"].as_string() == names[i]);
+    REQUIRE(note["cents"].as_number() == Catch::Approx(cents[i]).margin(12.0));
+    // The seconds are the sample positions over the take's own rate.
+    REQUIRE(note["start_sec"].as_number() ==
+            Catch::Approx(note["source_start_sample"].as_number() / 22050.0));
+    REQUIRE(note["end_sec"].as_number() ==
+            Catch::Approx(note["source_end_sample"].as_number() / 22050.0));
+    REQUIRE(note["start_sec"].as_number() >= previous_end);
+    REQUIRE(note["end_sec"].as_number() > note["start_sec"].as_number());
+    previous_end = note["end_sec"].as_number();
+    REQUIRE(note["median_hz"].as_number() > 0.0);
+    REQUIRE(note["f0_stability"].as_number() >= 0.0);
+    REQUIRE_FALSE(note["amplitude"].as_array().empty());
+    // The name and the offset are both read off center_midi.
+    const double midi = note["center_midi"].as_number();
+    REQUIRE(note["cents"].as_number() ==
+            Catch::Approx((midi - std::floor(midi + 0.5)) * 100.0).margin(1e-9));
+  }
+
+  SECTION("text mode shows the note name and the offset from it") {
+    const auto [text_code, text_output] = exec_command(CLI + " vocal-notes " + wav + " -q");
+    REQUIRE(text_code == 0);
+    REQUIRE_THAT(text_output, ContainsSubstring("Vocal notes: 3"));
+    REQUIRE_THAT(text_output, ContainsSubstring("A4"));
+    REQUIRE_THAT(text_output, ContainsSubstring("E5"));
+    REQUIRE_THAT(text_output, ContainsSubstring("cents"));
+  }
+
+  SECTION("a spelled setting reaches the session; an unspelled one is not restated") {
+    // Spelling every default is the same as spelling none.
+    const auto [same_code, same_text] = exec_command(
+        CLI + " vocal-notes " + wav +
+        " --segmentation-threshold-cents 50 --min-note-ms 30 --frame-length-samples 2048"
+        " --hop-length-samples 512 --fmin-hz 65 --fmax-hz 2093 --yin-threshold 0.1"
+        " --voiced-threshold 0.5 --reference-hz 440 --json -q");
+    REQUIRE(same_code == 0);
+    REQUIRE(same_text == text);
+
+    // Notes shorter than the floor no longer stand alone.
+    const auto [long_code, long_text] =
+        exec_command(CLI + " vocal-notes " + wav + " --min-note-ms 400 --json -q");
+    REQUIRE(long_code == 0);
+    REQUIRE(sonare::util::json::parse_strict(long_text)["note_count"].as_int() < 3);
+
+    const auto [uncentered_code, uncentered_text] =
+        exec_command(CLI + " vocal-notes " + wav + " --no-centered --json -q");
+    REQUIRE(uncentered_code == 0);
+    REQUIRE(sonare::util::json::parse_strict(uncentered_text)["note_count"].as_int() == 3);
+  }
+
+  SECTION("an out-of-domain setting is a usage error") {
+    for (const char* bad :
+         {"--segmentation-threshold-cents 0", "--min-note-ms -1", "--frame-length-samples 0",
+          "--hop-length-samples 0", "--fmin-hz 0", "--fmax-hz 0", "--yin-threshold 0",
+          "--yin-threshold 1.5", "--voiced-threshold 1.5", "--voiced-threshold -0.1",
+          "--reference-hz 0"}) {
+      const auto [bad_code, bad_text] =
+          exec_command(CLI + " vocal-notes " + wav + " " + bad + " -q");
+      INFO(bad << ": " << bad_text);
+      REQUIRE(bad_code == 2);
+    }
+    // The effective range is checked, so `--fmin-hz` alone can invert it.
+    const auto [inverted_code, inverted_text] =
+        exec_command(CLI + " vocal-notes " + wav + " --fmin-hz 3000 -q");
+    REQUIRE(inverted_code == 2);
+    REQUIRE_THAT(inverted_text, ContainsSubstring("--fmax-hz must be greater than --fmin-hz"));
+  }
+  std::remove(wav.c_str());
 }

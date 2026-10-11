@@ -2233,6 +2233,15 @@
           }
         },
         {
+          "name": "frames",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "hop-length",
           "type": "integer",
           "default": 512,
@@ -2341,6 +2350,22 @@
           "domain": null
         },
         {
+          "name": "max-correction-semitones",
+          "type": "number",
+          "default": 12,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
           "name": "mode",
           "type": "string",
           "default": "midi",
@@ -2378,6 +2403,38 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "retune-amount",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "retune-speed-ms",
+          "type": "number",
+          "default": 50,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "scale-mode-mask",
@@ -2423,6 +2480,22 @@
             "minimum": 0,
             "exclusiveMinimum": false,
             "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "vibrato-threshold-cents",
+          "type": "number",
+          "default": 20,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -2596,6 +2669,170 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        }
+      ],
+      "vocal-notes": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "frame-length-samples",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "hop-length-samples",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "no-centered",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "segmentation-threshold-cents",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "voiced-threshold",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "yin-threshold",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
         }
       ],
       "project.abi": [
@@ -5067,6 +5304,14 @@
         "pitchEditor"
       ]
     },
+    "vocal-notes": {
+      "classification": "shared",
+      "status": "active",
+      "option_status": "active",
+      "requires": [
+        "pitchEditor"
+      ]
+    },
     "preemphasis": {
       "classification": "native_only",
       "status": "native_only",
@@ -7419,6 +7664,15 @@
           }
         },
         {
+          "name": "frames",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
           "name": "hop-length",
           "type": "integer",
           "default": 512,
@@ -7477,6 +7731,32 @@
             "median_f0": "number|null",
             "mean_f0": "number|null"
           }
+        },
+        "frames": {
+          "keys": {
+            "algorithm": "string",
+            "n_frames": "integer",
+            "voiced_count": "integer",
+            "voiced_ratio": "number|null",
+            "median_f0": "number|null",
+            "mean_f0": "number|null",
+            "times": {
+              "type": "array",
+              "items": "number"
+            },
+            "f0": {
+              "type": "array",
+              "items": "number|null"
+            },
+            "voiced_flag": {
+              "type": "array",
+              "items": "boolean"
+            },
+            "voiced_prob": {
+              "type": "array",
+              "items": "number|null"
+            }
+          }
         }
       },
       "cases": [
@@ -7490,6 +7770,20 @@
           "exit": 0,
           "legacy_exit": 0,
           "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "frames",
+          "argv": [
+            "pitch",
+            "{audio}",
+            "--frames",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "frames",
           "artifact": "none",
           "stdout": "json"
         }
@@ -10635,6 +10929,274 @@
       "artifacts": {}
     },
     {
+      "path": "vocal-notes",
+      "options": [
+        {
+          "name": "fmax-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "fmin-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "frame-length-samples",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "hop-length-samples",
+          "type": "integer",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "json",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "min-note-ms",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "no-centered",
+          "type": "boolean",
+          "default": false,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": null
+        },
+        {
+          "name": "reference-hz",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "segmentation-threshold-cents",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "voiced-threshold",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        },
+        {
+          "name": "yin-threshold",
+          "type": "number",
+          "default": null,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": true,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "usage"
+          }
+        }
+      ],
+      "positionals": [
+        {
+          "name": "file",
+          "type": "path",
+          "required": true
+        }
+      ],
+      "payloads": {
+        "success": {
+          "keys": {
+            "sample_rate": "integer",
+            "note_count": "integer",
+            "notes": {
+              "type": "array",
+              "items": {
+                "keys": {
+                  "index": "integer",
+                  "id": "integer",
+                  "source_start_sample": "integer",
+                  "source_end_sample": "integer",
+                  "start_sec": "number",
+                  "end_sec": "number",
+                  "analysis_frame_start": "integer",
+                  "analysis_frame_end": "integer",
+                  "has_pitch": "boolean",
+                  "median_hz": "number|null",
+                  "center_midi": "number|null",
+                  "f0_stability": "number|null",
+                  "note_name": "string|null",
+                  "cents": "number|null",
+                  "amplitude": {
+                    "type": "array",
+                    "items": "number|null"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "cases": [
+        {
+          "id": "success",
+          "argv": [
+            "vocal-notes",
+            "{audio}",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "settings",
+          "argv": [
+            "vocal-notes",
+            "{audio}",
+            "--segmentation-threshold-cents",
+            "80",
+            "--min-note-ms",
+            "20",
+            "--fmin-hz",
+            "100",
+            "--fmax-hz",
+            "1000",
+            "--yin-threshold",
+            "0.15",
+            "--voiced-threshold",
+            "0.4",
+            "--reference-hz",
+            "442",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "framing",
+          "argv": [
+            "vocal-notes",
+            "{audio}",
+            "--frame-length-samples",
+            "1024",
+            "--hop-length-samples",
+            "256",
+            "--no-centered",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        }
+      ],
+      "artifacts": {}
+    },
+    {
       "path": "resample",
       "options": [
         {
@@ -13592,6 +14154,114 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "mode_name",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "dorian",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "mode_name_case_insensitive",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "Minor",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_midi_zero",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--reference-midi",
+            "0",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_mode_name",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "bogus",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "hex_mode_mask",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "0xAB5",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "leading_zero_decimal_mode_mask",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "010",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "hex_mode_mask_out_of_range",
+          "argv": [
+            "scale-quantize",
+            "60.4",
+            "--mode-mask",
+            "0x1000",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
         }
       ],
       "artifacts": {}
@@ -13623,6 +14293,22 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "max-correction-semitones",
+          "type": "number",
+          "default": 12,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "mode",
@@ -13662,6 +14348,38 @@
           "repeatable": false,
           "required": false,
           "domain": null
+        },
+        {
+          "name": "retune-amount",
+          "type": "number",
+          "default": 1,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": 1,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "retune-speed-ms",
+          "type": "number",
+          "default": 50,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
         },
         {
           "name": "scale-mode-mask",
@@ -13707,6 +14425,22 @@
             "minimum": 0,
             "exclusiveMinimum": false,
             "maximum": 127,
+            "exclusiveMaximum": false,
+            "rejectExit": "invalid_parameter"
+          }
+        },
+        {
+          "name": "vibrato-threshold-cents",
+          "type": "number",
+          "default": 20,
+          "aliases": [],
+          "repeatable": false,
+          "required": false,
+          "domain": {
+            "choices": [],
+            "minimum": 0,
+            "exclusiveMinimum": false,
+            "maximum": null,
             "exclusiveMaximum": false,
             "rejectExit": "invalid_parameter"
           }
@@ -13851,6 +14585,176 @@
           "artifact": "none",
           "stdout": "empty",
           "stderr": "nonempty"
+        },
+        {
+          "id": "retune_options",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--retune-amount",
+            "0.5",
+            "--max-correction-semitones",
+            "2",
+            "--retune-speed-ms",
+            "20",
+            "--vibrato-threshold-cents",
+            "10",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "scale_mode_name",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "scale",
+            "--scale-mode-mask",
+            "dorian",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "reference_midi_zero",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "scale",
+            "--reference-midi",
+            "0",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
+        },
+        {
+          "id": "unknown_scale_mode_name",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--scale-mode-mask",
+            "bogus",
+            "--json"
+          ],
+          "exit": 2,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "retune_amount_out_of_range",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--retune-amount",
+            "1.5",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "negative_max_correction",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--max-correction-semitones",
+            "-1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "negative_retune_speed",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--retune-speed-ms",
+            "-1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "negative_vibrato_threshold",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--vibrato-threshold-cents",
+            "-1",
+            "--json"
+          ],
+          "exit": 3,
+          "legacy_exit": 1,
+          "payload": "none",
+          "artifact": "none",
+          "stdout": "empty",
+          "stderr": "nonempty"
+        },
+        {
+          "id": "hex_scale_mode_mask",
+          "argv": [
+            "pitch-correct-timevarying",
+            "{audio}",
+            "-o",
+            "{output}",
+            "--mode",
+            "scale",
+            "--scale-mode-mask",
+            "0xAB5",
+            "--json"
+          ],
+          "exit": 0,
+          "legacy_exit": 0,
+          "payload": "success",
+          "artifact": "none",
+          "stdout": "json"
         }
       ],
       "artifacts": {}
@@ -16255,6 +17159,62 @@
         "--json"
       ],
       "exit": 3,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "vocal_notes_reject_zero_yin_threshold",
+      "argv": [
+        "vocal-notes",
+        "{audio}",
+        "--yin-threshold",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "vocal_notes_reject_voiced_threshold_above_one",
+      "argv": [
+        "vocal-notes",
+        "{audio}",
+        "--voiced-threshold",
+        "1.5",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "vocal_notes_reject_zero_hop_length",
+      "argv": [
+        "vocal-notes",
+        "{audio}",
+        "--hop-length-samples",
+        "0",
+        "--json"
+      ],
+      "exit": 2,
+      "legacy_exit": 1,
+      "stdout": "empty",
+      "payload": "none"
+    },
+    {
+      "id": "vocal_notes_reject_inverted_frequency_range",
+      "argv": [
+        "vocal-notes",
+        "{audio}",
+        "--fmin-hz",
+        "3000",
+        "--json"
+      ],
+      "exit": 2,
       "legacy_exit": 1,
       "stdout": "empty",
       "payload": "none"

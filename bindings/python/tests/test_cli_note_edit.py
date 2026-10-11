@@ -511,3 +511,152 @@ def test_tune_to_midi_cli_track_index_reaches_the_smf_reader() -> None:
 
         assert result.returncode == 3, result.stdout
         assert "no MIDI-bearing track at index 1" in result.stderr
+
+
+# A 440 Hz tone: one semitone below the 70 the corrector is told to aim for, so
+# the correction is the whole of the difference between two renders.
+_RETUNE_SR = 22050
+
+
+def _render_time_varying(tmpdir: str, *options: str, hz: float = 440.0) -> list[float]:
+    source = os.path.join(tmpdir, f"tone_{hz}.wav")
+    output = os.path.join(tmpdir, "out.wav")
+    if not os.path.exists(source):
+        tone = [0.5 * s for s in _generate_sine(hz, _RETUNE_SR, 1.5)]
+        _write_test_wav(source, tone, _RETUNE_SR)
+    result = _run_cli(["pitch-correct-timevarying", source, "-o", output, *options, "--json"])
+    assert result.returncode == 0, result.stderr
+    return _read_wav_samples(output)
+
+
+def test_pitch_correct_timevarying_cli_exposes_the_correction_parameters() -> None:
+    """Every retune option reaches the corrector; the flags default to the library defaults."""
+    toward = ["--mode", "midi", "--target-midi", "70"]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        full = _render_time_varying(tmpdir, *toward)
+        explicit_defaults = _render_time_varying(
+            tmpdir,
+            *toward,
+            "--retune-amount",
+            "1",
+            "--max-correction-semitones",
+            "12",
+            "--retune-speed-ms",
+            "50",
+            "--vibrato-threshold-cents",
+            "20",
+        )
+        assert explicit_defaults == full
+        for option in (
+            ("--retune-amount", "0"),
+            ("--max-correction-semitones", "0.25"),
+            ("--retune-speed-ms", "400"),
+            ("--vibrato-threshold-cents", "200"),
+        ):
+            assert _render_time_varying(tmpdir, *toward, *option) != full, option
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        ("--retune-amount", "1.5"),
+        ("--retune-amount", "-0.1"),
+        ("--max-correction-semitones", "-1"),
+        ("--retune-speed-ms", "-1"),
+        ("--vibrato-threshold-cents", "-1"),
+    ],
+)
+def test_pitch_correct_timevarying_cli_refuses_out_of_range_parameters(option) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source = os.path.join(tmpdir, "tone.wav")
+        _write_test_wav(source, _generate_sine(440.0, _RETUNE_SR, 0.5), _RETUNE_SR)
+        result = _run_cli(
+            ["pitch-correct-timevarying", source, "-o", os.path.join(tmpdir, "o.wav"), *option]
+        )
+        assert result.returncode == 3, result.stderr
+
+
+def test_pitch_correct_timevarying_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> None:
+    scale = ["--mode", "scale", "--scale-root", "0"]
+    # MIDI 63.4: E-flat is in dorian and not in major, so the two scales pull it
+    # to different notes and a name that selected nothing would show.
+    eflat_hz = 440.0 * 2 ** ((63.4 - 69) / 12)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        by_name = _render_time_varying(tmpdir, *scale, "--scale-mode-mask", "dorian", hz=eflat_hz)
+        assert by_name == _render_time_varying(
+            tmpdir, *scale, "--scale-mode-mask", "1709", hz=eflat_hz
+        )
+        assert by_name != _render_time_varying(tmpdir, *scale, hz=eflat_hz)
+        # The anchor only fixes which integers are candidates: 0 and 69 are one grid.
+        assert _render_time_varying(tmpdir, *scale, "--reference-midi", "0") == (
+            _render_time_varying(tmpdir, *scale)
+        )
+
+        source = os.path.join(tmpdir, "tone.wav")
+        result = _run_cli(
+            ["pitch-correct-timevarying", source, "-o", "x.wav", "--scale-mode-mask", "bogus"]
+        )
+        assert result.returncode == 2
+        assert "--scale-mode-mask" in result.stderr
+        assert "bogus" in result.stderr
+
+
+def test_pitch_correct_timevarying_help_says_the_scale_target_is_chosen_per_frame() -> None:
+    result = _run_cli(["pitch-correct-timevarying", "--help"])
+    assert result.returncode == 0
+    assert " ".join(result.stdout.split()).count("chosen per frame") == 1
+    assert "--retune-amount" in result.stdout
+
+
+def test_scale_quantize_cli_reads_a_mode_name_and_an_explicit_zero_anchor() -> None:
+    def quantize(*options: str) -> subprocess.CompletedProcess:
+        return _run_cli(["scale-quantize", "63.4", *options, "--json"])
+
+    by_name = quantize("--mode-mask", "dorian")
+    assert by_name.returncode == 0, by_name.stderr
+    assert by_name.stdout == quantize("--mode-mask", "1709").stdout
+    assert by_name.stdout == quantize("--mode-mask", "DORIAN").stdout
+    for spelling in ("0x6AD", "0X6ad", "0o3255", "0b11010101101", "1_709", " 1709 "):
+        assert by_name.stdout == quantize("--mode-mask", spelling).stdout, spelling
+    assert quantize("--mode-mask", "010").returncode == 2
+    assert quantize("--mode-mask", "0x1000").returncode == 3
+    default = quantize()
+    assert by_name.stdout != default.stdout
+
+    assert quantize("--reference-midi", "0").stdout == default.stdout
+    assert quantize("--reference-midi", "0.25").stdout != default.stdout
+
+    unknown = quantize("--mode-mask", "bogus")
+    assert unknown.returncode == 2
+    assert "--mode-mask" in unknown.stderr
+    assert quantize("--mode-mask", "0").returncode == 3
+    assert quantize("--mode-mask", "4096").returncode == 3
+
+
+def test_pitch_frames_cli_reports_the_contour_with_null_for_unvoiced_frames() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        wav_path = os.path.join(tmpdir, "tone_then_silence.wav")
+        tone = [0.5 * s for s in _generate_sine(440.0, _RETUNE_SR, 1.0)]
+        _write_test_wav(wav_path, tone + [0.0] * _RETUNE_SR, _RETUNE_SR)
+
+        plain = _run_cli(["pitch", wav_path, "--json"])
+        assert plain.returncode == 0, plain.stderr
+        assert len(json.loads(plain.stdout)) == 6
+
+        result = _run_cli(["pitch", wav_path, "--frames", "--json"])
+        assert result.returncode == 0, result.stderr
+        payload = json.loads(result.stdout)
+        n_frames = payload["n_frames"]
+        assert n_frames > 0
+        for key in ("times", "f0", "voiced_flag", "voiced_prob"):
+            assert len(payload[key]) == n_frames, key
+        assert payload["times"][1] == pytest.approx(512 / _RETUNE_SR)
+        voiced = [i for i, flag in enumerate(payload["voiced_flag"]) if flag]
+        assert len(voiced) == payload["voiced_count"] > 0
+        for index in voiced:
+            assert payload["f0"][index] == pytest.approx(440.0, abs=5.0)
+        assert any(
+            value is None
+            for value, flag in zip(payload["f0"], payload["voiced_flag"], strict=True)
+            if not flag
+        )

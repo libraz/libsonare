@@ -139,7 +139,6 @@ std::string find_voice_preset_in_pack(const std::string& pack_json, const std::s
 std::string apply_voice_preset_sets(std::string config_text,
                                     const std::vector<std::string>& assignments);
 PitchClass parse_pitch_class_option(const std::string& value);
-Mode parse_mode_option(const std::string& value);
 std::vector<Mode> parse_mode_list_option(const std::string& value);
 KeyProfileType parse_key_profile_option(const std::string& value);
 void print_float_values(const CliArgs& args, const std::vector<float>& values);
@@ -209,6 +208,7 @@ int cmd_note_move(const CliArgs& args, const Audio& audio);
 int cmd_note_stretch(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_notes(const CliArgs& args, const Audio& audio);
 int cmd_polyphonic_render(const CliArgs& args, const Audio& audio);
+int cmd_vocal_notes(const CliArgs& args, const Audio& audio);
 // Both gates, because neither half alone answers the command: the reference
 // melody comes from the arrangement library's SMF reader and the assignment rule
 // from the pitch editor. A build missing either does not register it, which is

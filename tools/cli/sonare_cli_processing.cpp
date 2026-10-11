@@ -1,3 +1,7 @@
+#include <sonare/sonare_c_vocal_edit.h>
+
+#include <cmath>
+
 #include "c_api/sonare_c_error_mapping.h"
 #include "sonare_cli.h"
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
@@ -154,19 +158,25 @@ double required_positional_number(const CliArgs& args, const char* name) {
   return value;
 }
 
+// The mask arrives as an integer or a mode name; the registry has already
+// checked both spellings and the 12-bit range, so this only resolves it.
+int mode_mask_option(const CliArgs& args, const char* name) {
+  return args.has(name) ? parse_mode_mask_option(name, args.get_string(name))
+                        : args.get_int(name, 0xAB5);
+}
+
 }  // namespace
 
 int cmd_scale_quantize(const CliArgs& args, const Audio&) {
   const double midi = required_positional_number(args, "midi");
   editing::pitch_editor::ScaleQuantizerConfig config;
   config.root = args.get_int("root", 0);
-  config.mode_mask = static_cast<uint16_t>(args.get_int("mode-mask", 0xAB5));
-  // Zero is the sentinel for "use the library default", which is the anchor the
-  // config already carries. The C ABI applies it and the Python CLI inherits it
-  // from there, so a `--reference-midi 0` that anchored the grid at MIDI 0 here
-  // would answer a different pitch for the same command line.
-  const float reference_midi = args.get_float("reference-midi", 69.0f);
-  if (reference_midi != 0.0f) config.reference_midi = reference_midi;
+  config.mode_mask = static_cast<uint16_t>(mode_mask_option(args, "mode-mask"));
+  // An absent flag is the registry default (69) and a given value is the anchor.
+  // The Python CLI reaches the C ABI, which reads 0 as "library default"; that
+  // is the same grid, because the anchor only fixes which integers are
+  // candidates and 0 and 69 name the same ones.
+  config.reference_midi = args.get_float("reference-midi", 69.0f);
 
   const editing::pitch_editor::ScaleQuantizer quantizer(config);
   const float quantized = quantizer.quantize_midi(static_cast<float>(midi));
@@ -194,10 +204,18 @@ int cmd_pitch_correct_timevarying(const CliArgs& args, const Audio& audio) {
 
   editing::pitch_editor::PitchCorrectionConfig config;
   config.scale.root = args.get_int("scale-root", 0);
-  config.scale.mode_mask = static_cast<uint16_t>(args.get_int("scale-mode-mask", 0xAB5));
+  config.scale.mode_mask = static_cast<uint16_t>(mode_mask_option(args, "scale-mode-mask"));
   // Assigned as given, with no zero-is-default sentinel: this path validates the
   // anchor for finiteness only, so an explicit 0 anchors the grid at MIDI 0.
   config.scale.reference_midi = args.get_float("reference-midi", 69.0f);
+  // The registry holds the library defaults and the ranges the correction
+  // config refuses outside of, so these are read as given.
+  config.retune_amount = args.get_float("retune-amount", config.retune_amount);
+  config.max_correction_semitones =
+      args.get_float("max-correction-semitones", config.max_correction_semitones);
+  config.retune_speed_ms = args.get_float("retune-speed-ms", config.retune_speed_ms);
+  config.vibrato_threshold_cents =
+      args.get_float("vibrato-threshold-cents", config.vibrato_threshold_cents);
 
   const editing::pitch_editor::PitchCorrector corrector(config);
   const bool to_scale = args.get_string("mode", "midi") == "scale";
@@ -453,6 +471,125 @@ int cmd_polyphonic_render(const CliArgs& args, const Audio& audio) {
   return 0;
 }
 
+namespace {
+
+// The nearest equal-tempered note of a pitch given as a fractional MIDI number,
+// with the signed distance to it in cents. Ties round up, as the Python CLI does.
+struct NearestNote {
+  std::string name;
+  double cents;
+};
+
+NearestNote nearest_note(double midi) {
+  const long nearest = static_cast<long>(std::floor(midi + 0.5));
+  const long pitch_class = ((nearest % 12) + 12) % 12;
+  const long octave = (nearest - pitch_class) / 12 - 1;
+  return {std::string(sonare::pitch_class_name(static_cast<sonare::PitchClass>(pitch_class))) +
+              std::to_string(octave),
+          (midi - static_cast<double>(nearest)) * 100.0};
+}
+
+[[noreturn]] void throw_vocal_error(SonareError err, const char* what) {
+  const char* message = sonare_error_message(err);
+  throw sonare::SonareException(sonare_c_detail::error_code_from_c_error(err),
+                                message != nullptr ? message : what);
+}
+
+}  // namespace
+
+// A read-only view of what a vocal-edit session finds in a take: the session is
+// created with the analysis settings the caller spelled, its notes are read, and
+// nothing is edited or rendered. An unspelled setting is left at the session's
+// own default rather than restated here.
+int cmd_vocal_notes(const CliArgs& args, const Audio& audio) {
+  SonareVocalCreateOptions options;
+  sonare_vocal_create_options_init(&options);
+  if (args.has("segmentation-threshold-cents"))
+    options.segmentation_threshold_cents = args.get_double("segmentation-threshold-cents", 0.0);
+  if (args.has("min-note-ms")) options.min_note_ms = args.get_double("min-note-ms", 0.0);
+  if (args.has("frame-length-samples"))
+    options.frame_length_samples = args.get_uint32("frame-length-samples", 0);
+  if (args.has("hop-length-samples"))
+    options.hop_length_samples = args.get_uint32("hop-length-samples", 0);
+  if (args.has("fmin-hz")) options.fmin_hz = args.get_double("fmin-hz", 0.0);
+  if (args.has("fmax-hz")) options.fmax_hz = args.get_double("fmax-hz", 0.0);
+  if (args.has("yin-threshold")) options.yin_threshold = args.get_double("yin-threshold", 0.0);
+  if (args.has("voiced-threshold"))
+    options.voiced_threshold = args.get_double("voiced-threshold", 0.0);
+  if (args.has("no-centered")) options.centered = 0;
+  if (args.has("reference-hz")) options.reference_hz = args.get_double("reference-hz", 0.0);
+
+  if (!args.quiet && !args.json_output) {
+    std::cerr << color::blue << "Analyzing vocal notes..." << color::reset << "\n";
+  }
+  SonareVocalEditSession* raw_session = nullptr;
+  const SonareError created =
+      sonare_vocal_session_create(audio.data(), static_cast<int64_t>(audio.size()), 1,
+                                  audio.sample_rate(), &options, &raw_session);
+  std::unique_ptr<SonareVocalEditSession, decltype(&sonare_vocal_session_destroy)> session(
+      raw_session, &sonare_vocal_session_destroy);
+  if (created != SONARE_OK) throw_vocal_error(created, "vocal session creation failed");
+
+  SonareVocalNotesResult notes;
+  sonare_vocal_notes_result_init(&notes);
+  const SonareError read = sonare_vocal_session_notes(session.get(), &notes);
+  std::unique_ptr<SonareVocalNotesResult, decltype(&sonare_vocal_free_notes)> owned(
+      &notes, &sonare_vocal_free_notes);
+  if (read != SONARE_OK) throw_vocal_error(read, "vocal note read failed");
+
+  const int sample_rate = audio.sample_rate();
+  const size_t note_count = static_cast<size_t>(notes.note_count);
+  if (args.json_output) {
+    JsonBuilder json;
+    json.begin_object()
+        .kv("sample_rate", sample_rate)
+        .kv("note_count", note_count)
+        .key("notes")
+        .begin_array();
+    for (size_t i = 0; i < note_count; ++i) {
+      const SonareVocalNote& note = notes.notes[i];
+      json.begin_object()
+          .kv("index", i)
+          .kv("id", static_cast<size_t>(note.id))
+          .kv("source_start_sample", static_cast<size_t>(note.source_start_sample))
+          .kv("source_end_sample", static_cast<size_t>(note.source_end_sample))
+          .kv("start_sec", static_cast<double>(note.source_start_sample) / sample_rate)
+          .kv("end_sec", static_cast<double>(note.source_end_sample) / sample_rate)
+          .kv("analysis_frame_start", static_cast<size_t>(note.analysis_frame_start))
+          .kv("analysis_frame_end", static_cast<size_t>(note.analysis_frame_end))
+          .kv("has_pitch", note.has_pitch != 0)
+          .kv("median_hz", note.median_hz)
+          .kv("center_midi", note.center_midi)
+          .kv("f0_stability", note.f0_stability);
+      if (note.has_pitch != 0) {
+        const NearestNote nearest = nearest_note(note.center_midi);
+        json.kv("note_name", nearest.name).kv("cents", nearest.cents);
+      } else {
+        json.key("note_name").null_value().key("cents").null_value();
+      }
+      std::vector<float> amplitude(note.amplitude, note.amplitude + note.amplitude_count);
+      json.key("amplitude").float_array(amplitude).end_object();
+    }
+    json.end_array().end_object().print();
+  } else {
+    std::cout << "Vocal notes: " << note_count << "\n";
+    for (size_t i = 0; i < note_count; ++i) {
+      const SonareVocalNote& note = notes.notes[i];
+      printf("  [%zu] %.3f-%.3f s  ", i,
+             static_cast<double>(note.source_start_sample) / sample_rate,
+             static_cast<double>(note.source_end_sample) / sample_rate);
+      if (note.has_pitch != 0) {
+        const NearestNote nearest = nearest_note(note.center_midi);
+        printf("%-4s %+6.1f cents  midi %.2f  %.2f Hz  stability %.3f\n", nearest.name.c_str(),
+               nearest.cents, note.center_midi, note.median_hz, note.f0_stability);
+      } else {
+        printf("unpitched\n");
+      }
+    }
+  }
+  return 0;
+}
+
 #else  // !SONARE_WITH_PITCH_EDITOR
 
 int cmd_pitch_correct(const CliArgs&, const Audio&) {
@@ -486,6 +623,11 @@ int cmd_polyphonic_notes(const CliArgs&, const Audio&) {
 }
 
 int cmd_polyphonic_render(const CliArgs&, const Audio&) {
+  throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
+                                "pitch editor support is not compiled in");
+}
+
+int cmd_vocal_notes(const CliArgs&, const Audio&) {
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "pitch editor support is not compiled in");
 }

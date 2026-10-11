@@ -52,6 +52,7 @@ const std::vector<CommandInfo>& get_commands() {
        "Apply note edits to a polyphonic analysis (--edit N.FIELD=VALUE, repeatable; -o out.wav; "
        "amplitude envelopes are outside this CLI)",
        cmd_polyphonic_render, true},
+      {"vocal-notes", "List the notes a vocal-edit session finds in a take", cmd_vocal_notes, true},
 #if defined(SONARE_WITH_ARRANGEMENT) && defined(SONARE_WITH_PITCH_EDITOR)
       {"tune-to-midi", "Tune a take to the reference melody a MIDI file carries", cmd_tune_to_midi,
        true},
@@ -311,6 +312,12 @@ void print_command_usage(const char* prog, const CommandInfo& command,
   std::cout << "Usage: " << prog << " " << invocation_for_path(path) << " [options]";
   if (command.requires_audio) std::cout << " <audio_file>";
   std::cout << "\n\n" << command.description << "\n";
+  if (command.name == "pitch-correct-timevarying") {
+    std::cout
+        << "\nIn --mode scale the target is chosen per frame, so a note whose vibrato crosses "
+           "the midpoint between two scale notes is pulled toward both and its vibrato "
+           "widens.\n";
+  }
   const auto options = cli_options_for_command(path);
   if (!options.empty()) {
     std::cout << "\nOPTIONS:\n";

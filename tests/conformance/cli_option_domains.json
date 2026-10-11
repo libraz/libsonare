@@ -567,6 +567,46 @@
       "exclusiveMaximum": false
     },
     {
+      "command": "pitch-correct-timevarying",
+      "option": "retune-amount",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "max-correction-semitones",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "retune-speed-ms",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "pitch-correct-timevarying",
+      "option": "vibrato-threshold-cents",
+      "rejectExit": "invalid_parameter",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
       "command": "project.align-takes",
       "option": "reference-source",
       "rejectExit": "invalid_parameter",
@@ -910,6 +950,96 @@
       "minimum": -40.0,
       "exclusiveMinimum": false,
       "maximum": -5.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "fmax-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "fmin-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "frame-length-samples",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "hop-length-samples",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "min-note-ms",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "reference-hz",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "segmentation-threshold-cents",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": null,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "voiced-threshold",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": false,
+      "maximum": 1.0,
+      "exclusiveMaximum": false
+    },
+    {
+      "command": "vocal-notes",
+      "option": "yin-threshold",
+      "rejectExit": "usage",
+      "choices": [],
+      "minimum": 0.0,
+      "exclusiveMinimum": true,
+      "maximum": 1.0,
       "exclusiveMaximum": false
     }
   ],

@@ -235,6 +235,14 @@ CliOptionSpec with_domain(CliOptionSpec spec, CliOptionDomain domain) {
   return spec;
 }
 
+// A twelve-bit scale mask the caller may also name by mode. It stays an Integer
+// option in the inventory: the name is another spelling of the same mask.
+CliOptionSpec mode_mask_value(const char* name, int value) {
+  CliOptionSpec spec = int_value(name, value);
+  spec.accepts_mode_name = true;
+  return spec;
+}
+
 /// Marks an option required and declares which exit class its absence reports.
 CliOptionSpec required_with_stage(CliOptionSpec spec, CliOptionDomainStage stage) {
   spec.required = true;
@@ -313,6 +321,21 @@ CliValidationError validate_pitch_frequency_order(const CliArgs& args) {
   std::ostringstream message;
   message << "--fmax must be greater than --fmin (--fmin " << minimum << ", --fmax " << maximum
           << ")";
+  return {message.str(), false};
+}
+
+// The same ordering rule as `pitch`, over `--fmin-hz` / `--fmax-hz`. Neither
+// option has a registry default here (an unspelled one is left to the session),
+// so the effective value of the missing half is the session's own default,
+// which is the pitch tracker's range.
+CliValidationError validate_vocal_frequency_order(const CliArgs& args) {
+  if (!args.has("fmin-hz") && !args.has("fmax-hz")) return {};
+  const double minimum = args.get_double("fmin-hz", 65.0);
+  const double maximum = args.get_double("fmax-hz", 2093.0);
+  if (maximum > minimum) return {};
+  std::ostringstream message;
+  message << "--fmax-hz must be greater than --fmin-hz (--fmin-hz " << minimum << ", --fmax-hz "
+          << maximum << ")";
   return {message.str(), false};
 }
 
@@ -589,7 +612,7 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     add_command(
         commands, "scale-quantize", false,
         {with_domain(int_value("root", 0), between(0.0, 11.0, CliOptionDomainStage::Parameter)),
-         with_domain(int_value("mode-mask", 0xAB5),
+         with_domain(mode_mask_value("mode-mask", 0xAB5),
                      between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
          with_domain(number_value("reference-midi", 69.0),
                      between(0.0, 127.0, CliOptionDomainStage::Parameter))},
@@ -599,6 +622,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // rather than only on the branch that reads them. --reference-midi is
     // deliberately unnarrowed: this path validates the anchor for finiteness
     // only, and declaring a range would refuse a value the library accepts.
+    // The four retune options carry the ranges the library's correction config
+    // refuses outside of.
     add_command(commands, "pitch-correct-timevarying", true,
                 {with_domain(string_value("mode", "midi"),
                              choices_of({"midi", "scale"}, CliOptionDomainStage::Usage)),
@@ -608,9 +633,18 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                              greater_than(0.0, CliOptionDomainStage::Parameter)),
                  with_domain(int_value("scale-root", 0),
                              between(0.0, 11.0, CliOptionDomainStage::Parameter)),
-                 with_domain(int_value("scale-mode-mask", 0xAB5),
+                 with_domain(mode_mask_value("scale-mode-mask", 0xAB5),
                              between(1.0, 4095.0, CliOptionDomainStage::Parameter)),
-                 number_value("reference-midi", 69.0), required_output()});
+                 number_value("reference-midi", 69.0),
+                 with_domain(number_value("retune-amount", 1.0),
+                             between(0.0, 1.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("max-correction-semitones", 12.0),
+                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("retune-speed-ms", 50.0),
+                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                 with_domain(number_value("vibrato-threshold-cents", 20.0),
+                             at_least(0.0, CliOptionDomainStage::Parameter)),
+                 required_output()});
     // --offset defaults to the end of the buffer rather than to a number, which
     // no registry default can spell, so it is the null-default overload and the
     // handler resolves the absent case.
@@ -621,6 +655,28 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
                 {int_value("onset", 0), int_value("offset", 0), number_value("ratio", 1.0),
                  required_output()});
     add_command(commands, "polyphonic-notes", true, {});
+    // The analysis settings a vocal-edit session takes at creation, spelled as
+    // the session spells them. None carries a default here: an omitted one is
+    // not passed, so the session's own default applies, and `--no-centered` is
+    // the only way to turn the (default-on) centred framing off.
+    add_command(
+        commands, "vocal-notes", true,
+        {with_domain(number_value("segmentation-threshold-cents"),
+                     greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("min-note-ms"), greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(int_value("frame-length-samples"),
+                     greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(int_value("hop-length-samples"),
+                     greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("fmin-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("fmax-hz"), greater_than(0.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("yin-threshold"),
+                     above_zero_up_to(1.0, CliOptionDomainStage::Usage)),
+         with_domain(number_value("voiced-threshold"),
+                     between(0.0, 1.0, CliOptionDomainStage::Usage)),
+         flag("no-centered"),
+         with_domain(number_value("reference-hz"), greater_than(0.0, CliOptionDomainStage::Usage))},
+        {}, &validate_vocal_frequency_order);
     // One assignment per --edit occurrence, as --set does: the value reaches the
     // field parser as written, so no separator a fold could pick has to be
     // reserved.
@@ -839,7 +895,8 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
     // and the algorithm name is a handler-level rejection (invalid parameter).
     add_command(
         commands, "pitch", true,
-        {with_domain(string_value("algorithm", "pyin"),
+        {flag("frames"),
+         with_domain(string_value("algorithm", "pyin"),
                      choices_of({"yin", "pyin"}, CliOptionDomainStage::Parameter)),
          with_domain(number_value("threshold", 0.1),
                      above_zero_up_to(1.0, CliOptionDomainStage::Usage)),

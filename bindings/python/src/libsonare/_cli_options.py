@@ -71,6 +71,8 @@ class _ContractArgumentParser(argparse.ArgumentParser):
         _reject_stdout_output(parsed, self)
         if self.prog.endswith(" pitch") or getattr(parsed, "command", None) == "pitch":
             _validate_pitch_namespace(parsed, self)
+        if self.prog.endswith(" vocal-notes") or getattr(parsed, "command", None) == "vocal-notes":
+            _validate_vocal_notes_namespace(parsed, self)
         return parsed, extras
 
     def _expand_flag_values(self, argv: list[str]) -> list[str]:
@@ -177,6 +179,20 @@ def _positive_pitch_frequency(value: str) -> float:
     return parsed
 
 
+def _positive_finite_float(value: str) -> float:
+    parsed = _finite_float(value)
+    if parsed <= 0.0:
+        raise argparse.ArgumentTypeError("must be greater than 0")
+    return parsed
+
+
+def _closed_unit_float(value: str) -> float:
+    parsed = _finite_float(value)
+    if parsed < 0.0 or parsed > 1.0:
+        raise argparse.ArgumentTypeError("must be between 0 and 1")
+    return parsed
+
+
 def _pitch_threshold(value: str) -> float:
     parsed = _finite_float(value)
     if parsed <= 0.0 or parsed > 1.0:
@@ -219,11 +235,37 @@ def _candidate_count(value: str) -> int:
     return _c_int_option(value, "must be an integer or 'true'")
 
 
+def _mode_mask(value: str) -> int:
+    """Parse a scale mask given as an integer or as a mode name.
+
+    A name resolves through ``scale_mask_for_mode``, the facade's own mode-name
+    table over the C ABI, so no second table exists here.
+    """
+    try:
+        return int(value, 0)
+    except ValueError:
+        pass
+    from ._features_metering import scale_mask_for_mode
+
+    try:
+        return scale_mask_for_mode(0, value)
+    except SonareValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"{value!r} is neither an integer mask nor a mode name "
+            "(major, minor, dorian, phrygian, lydian, mixolydian, locrian)"
+        ) from exc
+
+
 # The contract type of a ``type=`` callable that stands in for a builtin. Left
 # unstated, the inventory guesses from the default, and an option defaulting to
 # None has no default to guess from.
 _cli_scalar_type(_finite_float, "number")
 _cli_scalar_type(_candidate_count, "integer")
+_cli_scalar_type(_mode_mask, "integer")
+_cli_scalar_type(_positive_finite_float, "number")
+_cli_scalar_type(_closed_unit_float, "number")
+_cli_scalar_type(_pitch_threshold, "number")
+_cli_scalar_type(_positive_int, "integer")
 
 # The accepted value set each of the checkers above enforces, in the shape the
 # published inventory uses.  A ``type=`` callable is opaque to argparse, so the
@@ -233,6 +275,8 @@ _cli_scalar_type(_candidate_count, "integer")
 _cli_domain(_nonnegative_finite_float, minimum=0.0)
 _cli_domain(_positive_pitch_frequency, minimum=0.0, exclusive_minimum=True)
 _cli_domain(_pitch_threshold, minimum=0.0, exclusive_minimum=True, maximum=1.0)
+_cli_domain(_positive_finite_float, minimum=0.0, exclusive_minimum=True)
+_cli_domain(_closed_unit_float, minimum=0.0, maximum=1.0)
 _cli_domain(_positive_int, minimum=0.0, exclusive_minimum=True)
 
 
@@ -278,6 +322,27 @@ def _validate_pitch_namespace(args: argparse.Namespace, parser: argparse.Argumen
         # the 2093 Hz default `--fmax` reads as an unexplained refusal without
         # them.
         parser.error(f"--fmax must be greater than --fmin (--fmin {fmin:g}, --fmax {fmax:g})")
+
+
+# The pitch tracker's range, which a vocal session falls back to for whichever
+# of `--fmin-hz` / `--fmax-hz` the caller left out.
+_VOCAL_DEFAULT_FMIN_HZ = 65.0
+_VOCAL_DEFAULT_FMAX_HZ = 2093.0
+
+
+def _validate_vocal_notes_namespace(
+    args: argparse.Namespace, parser: argparse.ArgumentParser
+) -> None:
+    fmin_given = getattr(args, "fmin_hz", None)
+    fmax_given = getattr(args, "fmax_hz", None)
+    if fmin_given is None and fmax_given is None:
+        return
+    fmin = _VOCAL_DEFAULT_FMIN_HZ if fmin_given is None else fmin_given
+    fmax = _VOCAL_DEFAULT_FMAX_HZ if fmax_given is None else fmax_given
+    if fmax <= fmin:
+        parser.error(
+            f"--fmax-hz must be greater than --fmin-hz (--fmin-hz {fmin:g}, --fmax-hz {fmax:g})"
+        )
 
 
 def _restore_parser_compat_defaults(args: argparse.Namespace) -> None:

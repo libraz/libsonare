@@ -8,6 +8,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "analysis/key_profiles.h"
 #include "sonare_cli_registry.h"
 #include "util/exception.h"
 
@@ -74,6 +75,102 @@ int parse_int_strict(const std::string& option, const std::string& value) {
     throw std::invalid_argument("invalid integer value for --" + option + ": " + value);
   }
   return parsed;
+}
+
+sonare::Mode parse_mode_option(const std::string& value) {
+  std::string key = value;
+  std::transform(key.begin(), key.end(), key.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  if (key == "major" || key == "maj") return sonare::Mode::Major;
+  if (key == "minor" || key == "min" || key == "m") return sonare::Mode::Minor;
+  if (key == "dorian") return sonare::Mode::Dorian;
+  if (key == "phrygian") return sonare::Mode::Phrygian;
+  if (key == "lydian") return sonare::Mode::Lydian;
+  if (key == "mixolydian") return sonare::Mode::Mixolydian;
+  if (key == "locrian") return sonare::Mode::Locrian;
+  throw std::invalid_argument("invalid mode: " + value);
+}
+
+namespace {
+
+// Mirrors Python's int(text, 0), which the Python CLI reads this option with:
+// surrounding whitespace, an optional sign, and a 0x / 0o / 0b prefix or plain
+// decimal. A single underscore may sit between digits (and after a prefix); a
+// decimal with a leading zero is refused unless every digit is zero. A value
+// beyond int saturates, so the option's domain refuses it as Python's does.
+bool parse_python_int0(const std::string& text, int* out) {
+  size_t begin = 0;
+  size_t end = text.size();
+  const auto is_space = [](char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; };
+  while (begin < end && is_space(text[begin])) ++begin;
+  while (end > begin && is_space(text[end - 1])) --end;
+  bool negative = false;
+  if (begin < end && (text[begin] == '+' || text[begin] == '-')) {
+    negative = text[begin] == '-';
+    ++begin;
+  }
+  int base = 10;
+  bool prefixed = false;
+  if (end - begin >= 2 && text[begin] == '0') {
+    const char marker =
+        static_cast<char>(std::tolower(static_cast<unsigned char>(text[begin + 1])));
+    if (marker == 'x') base = 16;
+    if (marker == 'o') base = 8;
+    if (marker == 'b') base = 2;
+    if (base != 10) {
+      prefixed = true;
+      begin += 2;
+    }
+  }
+  if (begin >= end) return false;
+  long long value = 0;
+  bool previous_digit = false;
+  bool previous_underscore = false;
+  bool all_zero = true;
+  bool first = true;
+  for (size_t i = begin; i < end; ++i) {
+    const char c = text[i];
+    if (c == '_') {
+      // Allowed between digits, and straight after a prefix.
+      if (previous_underscore || (first && !prefixed)) return false;
+      previous_underscore = true;
+      continue;
+    }
+    int digit;
+    if (c >= '0' && c <= '9') {
+      digit = c - '0';
+    } else if (std::isalpha(static_cast<unsigned char>(c))) {
+      digit = std::tolower(static_cast<unsigned char>(c)) - 'a' + 10;
+    } else {
+      return false;
+    }
+    if (digit >= base) return false;
+    previous_underscore = false;
+    previous_digit = true;
+    first = false;
+    if (digit != 0) all_zero = false;
+    if (value <= std::numeric_limits<int>::max()) value = value * base + digit;
+  }
+  if (!previous_digit || previous_underscore) return false;
+  if (base == 10 && !all_zero && text[begin] == '0') return false;
+  if (value > std::numeric_limits<int>::max()) value = std::numeric_limits<int>::max();
+  *out = static_cast<int>(negative ? -value : value);
+  return true;
+}
+
+}  // namespace
+
+int parse_mode_mask_option(const std::string& option, const std::string& value) {
+  int parsed = 0;
+  if (parse_python_int0(value, &parsed)) return parsed;
+  try {
+    return static_cast<int>(sonare::scale_mask_for_mode(parse_mode_option(value)));
+  } catch (const std::invalid_argument&) {
+    throw std::invalid_argument(
+        "invalid value for --" + option + ": " + value +
+        " (expected an integer mask or a mode name: major, minor, dorian, phrygian, lydian, "
+        "mixolydian, locrian)");
+  }
 }
 
 double parse_double_strict(const std::string& option, const std::string& value) {
@@ -235,6 +332,16 @@ float CliArgs::get_float(const std::string& k, float def) const {
   }
   const CliOptionValue value = static_default_for(*this, k);
   return value.kind == CliOptionDefaultKind::Number ? static_cast<float>(value.number_value) : def;
+}
+
+double CliArgs::get_double(const std::string& k, double def) const {
+  const auto it = option_value_for(*this, k);
+  if (it != options.end()) {
+    const CliOptionSpec* spec = cli_option_spec_for_command(command_path_for_args(*this), k);
+    return parse_double_strict(spec == nullptr ? k : spec->name, it->second);
+  }
+  const CliOptionValue value = static_default_for(*this, k);
+  return value.kind == CliOptionDefaultKind::Number ? value.number_value : def;
 }
 
 int CliArgs::get_int(const std::string& k, int def) const {

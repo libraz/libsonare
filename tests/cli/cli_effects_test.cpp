@@ -790,3 +790,127 @@ TEST_CASE("CLI hpss command", "[cli]") {
     REQUIRE_THAT(output, ContainsSubstring("Missing required option '--output'"));
   }
 }
+
+TEST_CASE("CLI scale-quantize reads a mode name where it reads a mask", "[cli][scale-quantize]") {
+  const auto quantize = [](const std::string& options) {
+    return exec_command(CLI + " scale-quantize 63.4 " + options + " --json -q");
+  };
+
+  // Dorian is {0,2,3,5,7,9,10}: 1709. A name is another spelling of its mask, so
+  // the two commands must answer identically, and not the way the default does.
+  const auto [name_code, by_name] = quantize("--mode-mask dorian");
+  const auto [number_code, by_number] = quantize("--mode-mask 1709");
+  const auto [default_code, by_default] = quantize("");
+  REQUIRE(name_code == 0);
+  REQUIRE(number_code == 0);
+  REQUIRE(default_code == 0);
+  REQUIRE(by_name == by_number);
+  REQUIRE(by_name != by_default);
+  // Integer spellings are Python's int(text, 0): prefixes and underscores in,
+  // a decimal with a leading zero out.
+  for (const char* spelling : {"0x6AD", "0X6ad", "0o3255", "0b11010101101", "1_709", " 1709 "}) {
+    INFO(spelling);
+    REQUIRE(quantize(std::string("--mode-mask '") + spelling + "'").second == by_number);
+  }
+  REQUIRE(quantize("--mode-mask 010").first == 2);
+  REQUIRE(quantize("--mode-mask 0x1000").first == 3);
+  const auto [upper_code, by_upper_name] = quantize("--mode-mask DORIAN");
+  REQUIRE(upper_code == 0);
+  REQUIRE(by_upper_name == by_name);
+
+  SECTION("an unknown name is a usage error that names the flag") {
+    const auto [code, output] = quantize("--mode-mask bogus");
+    REQUIRE(code == 2);
+    REQUIRE_THAT(output, ContainsSubstring("--mode-mask"));
+    REQUIRE_THAT(output, ContainsSubstring("bogus"));
+  }
+
+  SECTION("an integer outside the twelve-bit range stays an invalid parameter") {
+    REQUIRE(quantize("--mode-mask 0").first == 3);
+    REQUIRE(quantize("--mode-mask 4096").first == 3);
+  }
+
+  SECTION("an explicit anchor of 0 is used as given and agrees with the default") {
+    // The anchor only fixes which integers are candidates, so 0 and 69 are the
+    // same grid. Neither is a sentinel: the flag is either given or absent.
+    const auto [zero_code, zero] = quantize("--reference-midi 0");
+    REQUIRE(zero_code == 0);
+    REQUIRE(zero == by_default);
+    // A fractional anchor moves the grid, which a swallowed 0 could not show.
+    const auto [shifted_code, shifted] = quantize("--reference-midi 0.25");
+    REQUIRE(shifted_code == 0);
+    REQUIRE(shifted != by_default);
+  }
+}
+
+TEST_CASE("CLI pitch-correct-timevarying exposes the correction parameters",
+          "[cli][pitch-correct-timevarying]") {
+  const std::string input = unique_temp_path("_tv_in.wav");
+  create_test_wav(input, 1.5f, 440.0f);
+  const auto run = [&](const std::string& options, const std::string& output) {
+    return exec_command(CLI + " pitch-correct-timevarying " + input + " -o " + output + " " +
+                        options + " --json -q");
+  };
+  const auto render = [&](const std::string& options) {
+    const std::string output = unique_temp_path("_tv_out.wav");
+    const auto [code, text] = run(options, output);
+    INFO(text);
+    REQUIRE(code == 0);
+    auto samples = std::get<0>(load_wav(output));
+    std::remove(output.c_str());
+    return samples;
+  };
+
+  // A semitone up, so the correction is the whole of the difference.
+  const std::string toward_c5 = "--mode midi --target-midi 70";
+  const auto full = render(toward_c5);
+  REQUIRE(render(toward_c5 + " --retune-amount 1 --max-correction-semitones 12 "
+                             "--retune-speed-ms 50 --vibrato-threshold-cents 20") == full);
+
+  SECTION("each parameter reaches the corrector") {
+    REQUIRE(render(toward_c5 + " --retune-amount 0") != full);
+    REQUIRE(render(toward_c5 + " --max-correction-semitones 0.25") != full);
+    REQUIRE(render(toward_c5 + " --retune-speed-ms 400") != full);
+    REQUIRE(render(toward_c5 + " --vibrato-threshold-cents 200") != full);
+  }
+
+  SECTION("values outside the library's ranges are invalid parameters") {
+    const std::string output = unique_temp_path("_tv_bad.wav");
+    for (const char* option :
+         {"--retune-amount 1.5", "--retune-amount -0.1", "--max-correction-semitones -1",
+          "--retune-speed-ms -1", "--vibrato-threshold-cents -1"}) {
+      INFO(option);
+      REQUIRE(run(option, output).first == 3);
+    }
+    std::remove(output.c_str());
+  }
+
+  SECTION("a mode name selects the scale") {
+    // MIDI 63.4: E-flat is in dorian and not in major, so a name that selected
+    // nothing would leave the two scales rendering alike.
+    create_test_wav(input, 1.5f, 440.0f * std::pow(2.0f, (63.4f - 69.0f) / 12.0f));
+    const std::string scale = "--mode scale --scale-root 0 ";
+    const auto dorian = render(scale + "--scale-mode-mask dorian");
+    REQUIRE(dorian == render(scale + "--scale-mode-mask 1709"));
+    REQUIRE(dorian != render(scale));
+    const std::string output = unique_temp_path("_tv_bad.wav");
+    const auto [code, text] = run("--scale-mode-mask bogus", output);
+    REQUIRE(code == 2);
+    REQUIRE_THAT(text, ContainsSubstring("--scale-mode-mask"));
+    std::remove(output.c_str());
+  }
+
+  SECTION("an anchor of 0 is the same grid as the default") {
+    const std::string scale = "--mode scale ";
+    REQUIRE(render(scale + "--reference-midi 0") == render(scale));
+  }
+
+  SECTION("the help says the scale target is chosen per frame") {
+    const auto [code, text] = exec_command(CLI + " pitch-correct-timevarying --help");
+    REQUIRE(code == 0);
+    REQUIRE_THAT(text, ContainsSubstring("chosen per frame"));
+    REQUIRE_THAT(text, ContainsSubstring("--retune-amount"));
+  }
+
+  std::remove(input.c_str());
+}

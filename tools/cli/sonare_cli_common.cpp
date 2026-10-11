@@ -217,18 +217,6 @@ PitchClass parse_pitch_class_option(const std::string& value) {
   return it->second;
 }
 
-Mode parse_mode_option(const std::string& value) {
-  const std::string key = lowercase_cli_value(value);
-  if (key == "major" || key == "maj") return Mode::Major;
-  if (key == "minor" || key == "min" || key == "m") return Mode::Minor;
-  if (key == "dorian") return Mode::Dorian;
-  if (key == "phrygian") return Mode::Phrygian;
-  if (key == "lydian") return Mode::Lydian;
-  if (key == "mixolydian") return Mode::Mixolydian;
-  if (key == "locrian") return Mode::Locrian;
-  throw std::invalid_argument("invalid mode: " + value);
-}
-
 std::vector<Mode> parse_mode_list_option(const std::string& value) {
   const std::string key = lowercase_cli_value(value);
   if (key == "all" || key == "modal") {

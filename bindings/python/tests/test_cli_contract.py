@@ -77,6 +77,7 @@ TOP_LEVEL_ROUTES = (
     "tune-to-midi",
     "polyphonic-notes",
     "polyphonic-render",
+    "vocal-notes",
     "pitch-shift",
     "time-stretch",
     "normalize",

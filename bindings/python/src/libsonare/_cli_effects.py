@@ -60,6 +60,9 @@ from ._cli_note_edit import (
     cmd_tune_to_midi as cmd_tune_to_midi,
 )
 from ._cli_note_edit import (
+    cmd_vocal_notes as cmd_vocal_notes,
+)
+from ._cli_note_edit import (
     register_note_edit_parsers,
 )
 from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float

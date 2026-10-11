@@ -84,6 +84,9 @@ struct CliOptionSpec {
   bool repeatable = false;
   bool global_lexical = false;
   bool inventory = true;
+  /// An Integer option that also reads a mode name (`major`, `dorian`, ...) as
+  /// the scale mask of that mode. The domain is checked on the resolved mask.
+  bool accepts_mode_name = false;
 };
 
 /// A command-level check for a constraint that spans two options (for example

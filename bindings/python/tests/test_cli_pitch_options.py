@@ -202,3 +202,43 @@ def test_pitch_forwards_nondefault_options_to_selected_core_call(
             },
         )
     ]
+
+
+def test_pitch_frames_flag_defaults_off_and_adds_the_contour_to_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    import json
+
+    import libsonare
+    from libsonare import _cli_analysis
+
+    assert _pitch_args().frames is False
+    assert _pitch_args("--frames").frames is True
+
+    monkeypatch.setattr(_cli_analysis, "_load_audio", lambda path: ([0.0], 22050))
+    result = SimpleNamespace(
+        n_frames=2,
+        f0=[440.0, float("nan")],
+        voiced_flag=[True, False],
+        voiced_prob=[0.9, 0.0],
+        median_f0=440.0,
+        mean_f0=440.0,
+    )
+    monkeypatch.setattr(libsonare, "pitch_pyin", lambda samples, **kwargs: result)
+
+    _cli_analysis.cmd_pitch(_pitch_args("--json"))
+    assert set(json.loads(capsys.readouterr().out)) == {
+        "algorithm",
+        "n_frames",
+        "voiced_count",
+        "voiced_ratio",
+        "median_f0",
+        "mean_f0",
+    }
+
+    _cli_analysis.cmd_pitch(_pitch_args("--json", "--frames"))
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["times"] == [0.0, 512 / 22050]
+    assert payload["f0"] == [440.0, None]
+    assert payload["voiced_flag"] == [True, False]
+    assert payload["voiced_prob"] == [0.9, 0.0]

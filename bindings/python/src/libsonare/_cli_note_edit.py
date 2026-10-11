@@ -5,11 +5,12 @@ from __future__ import annotations
 import argparse
 import math
 import sys
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from ._cli_common import (
     _MAX_PROJECT_OR_MIDI_BYTES,
     EXIT_INVALID_PARAMETER,
+    PITCH_NAMES,
     _emit_effect_result,
     _legacy_exit_codes,
     _read_bounded,
@@ -19,7 +20,16 @@ from ._cli_common import (
     _load_audio_from_facade as _load_audio,
 )
 from ._cli_inventory import _cli_domain
-from ._cli_options import SharedParsers, _ContractArgumentParser, _finite_float
+from ._cli_options import (
+    SharedParsers,
+    _closed_unit_float,
+    _ContractArgumentParser,
+    _finite_float,
+    _mode_mask,
+    _pitch_threshold,
+    _positive_finite_float,
+    _positive_int,
+)
 from ._effects_note_ops import _UNMATCHED_POLICIES
 from ._runtime import _C_INT_MAX, _C_INT_MIN
 
@@ -68,6 +78,10 @@ def cmd_pitch_correct_timevarying(args: argparse.Namespace) -> int:
         scale_root=args.scale_root,
         scale_mode_mask=args.scale_mode_mask,
         reference_midi=args.reference_midi,
+        retune_amount=args.retune_amount,
+        max_correction_semitones=args.max_correction_semitones,
+        retune_speed_ms=args.retune_speed_ms,
+        vibrato_threshold_cents=args.vibrato_threshold_cents,
         voiced=[int(value) for value in track.voiced_flag],
         voiced_prob=track.voiced_prob,
     )
@@ -378,6 +392,92 @@ def cmd_polyphonic_notes(args: argparse.Namespace) -> int:
     return 0
 
 
+# Each analysis setting a vocal session takes at creation, as (argparse dest,
+# create_vocal_edit_session keyword). A setting the caller left out is not
+# passed, so the session's own default applies.
+_VOCAL_NOTES_SETTINGS = (
+    ("segmentation_threshold_cents", "segmentation_threshold_cents"),
+    ("min_note_ms", "min_note_ms"),
+    ("frame_length_samples", "frame_length_samples"),
+    ("hop_length_samples", "hop_length_samples"),
+    ("fmin_hz", "fmin_hz"),
+    ("fmax_hz", "fmax_hz"),
+    ("yin_threshold", "yin_threshold"),
+    ("voiced_threshold", "voiced_threshold"),
+    ("reference_hz", "reference_hz"),
+)
+
+
+def _nearest_note(midi: float) -> tuple[str, float]:
+    """Return the nearest equal-tempered note name and the signed cents to it.
+
+    Ties round up, as the native CLI does.
+    """
+    nearest = math.floor(midi + 0.5)
+    return f"{PITCH_NAMES[nearest % 12]}{nearest // 12 - 1}", (midi - nearest) * 100.0
+
+
+def cmd_vocal_notes(args: argparse.Namespace) -> int:
+    """List the notes a vocal-edit session finds in a take; nothing is edited or rendered."""
+    from . import create_vocal_edit_session
+
+    settings: dict[str, Any] = {
+        keyword: getattr(args, dest)
+        for dest, keyword in _VOCAL_NOTES_SETTINGS
+        if getattr(args, dest, None) is not None
+    }
+    if getattr(args, "no_centered", False):
+        settings["centered"] = False
+
+    samples, sr = _load_audio(args.file)
+    session = create_vocal_edit_session(samples, sr, **settings)
+    try:
+        notes, _transitions = session.notes()
+    finally:
+        session.close()
+
+    rows: list[dict[str, object]] = []
+    for index, note in enumerate(notes):
+        name, cents = _nearest_note(note.center_midi) if note.has_pitch else (None, None)
+        rows.append(
+            {
+                "index": index,
+                "id": note.id,
+                "source_start_sample": note.source_start_sample,
+                "source_end_sample": note.source_end_sample,
+                "start_sec": note.source_start_sample / sr,
+                "end_sec": note.source_end_sample / sr,
+                "analysis_frame_start": note.analysis_frame_start,
+                "analysis_frame_end": note.analysis_frame_end,
+                "has_pitch": note.has_pitch,
+                "median_hz": note.median_hz,
+                "center_midi": note.center_midi,
+                "f0_stability": note.f0_stability,
+                "note_name": name,
+                "cents": cents,
+                "amplitude": [float(value) for value in note.amplitude],
+            }
+        )
+
+    if args.json:
+        print(_strict_json_dumps({"sample_rate": sr, "note_count": len(rows), "notes": rows}))
+    else:
+        print(f"Vocal notes: {len(rows)}")
+        for row in rows:
+            span = f"{cast(float, row['start_sec']):.3f}-{cast(float, row['end_sec']):.3f} s"
+            if row["has_pitch"]:
+                print(
+                    f"  [{row['index']}] {span}  "
+                    f"{cast(str, row['note_name']):<4s} {cast(float, row['cents']):+6.1f} cents  "
+                    f"midi {cast(float, row['center_midi']):.2f}  "
+                    f"{cast(float, row['median_hz']):.2f} Hz  "
+                    f"stability {cast(float, row['f0_stability']):.3f}"
+                )
+            else:
+                print(f"  [{row['index']}] {span}  unpitched")
+    return 0
+
+
 def cmd_polyphonic_render(args: argparse.Namespace) -> int:
     """Re-render a polyphonic analysis with whatever ``--edit`` assigned."""
     from . import PolyphonicAnalysis
@@ -437,6 +537,11 @@ def register_note_edit_parsers(
         "pitch-correct-timevarying",
         parents=[common],
         help="Track pYIN contour and correct toward a note or scale",
+        description=(
+            "Track pYIN contour and correct toward a note or scale. In --mode scale the "
+            "target is chosen per frame, so a note whose vibrato crosses the midpoint "
+            "between two scale notes is pulled toward both and its vibrato widens."
+        ),
     )
     pitch_tv_p.add_argument("--mode", choices=["midi", "scale"], default="midi")
     # The scale arguments are checked whichever target mode is selected, and
@@ -464,13 +569,34 @@ def register_note_edit_parsers(
     )
     _cli_domain(
         pitch_tv_p.add_argument(
-            "--scale-mode-mask", type=lambda value: int(value, 0), default=0xAB5
+            "--scale-mode-mask",
+            type=_mode_mask,
+            default=0xAB5,
+            help="12-bit scale mask or a mode name such as major or dorian",
         ),
         minimum=1,
         maximum=4095,
         reject_exit="invalid_parameter",
     )
     pitch_tv_p.add_argument("--reference-midi", type=_finite_float, default=69.0)
+    # The library refuses these outside the ranges below, so each is declared
+    # with the class of exit that refusal carries.
+    _cli_domain(
+        pitch_tv_p.add_argument("--retune-amount", type=_finite_float, default=1.0),
+        minimum=0,
+        maximum=1,
+        reject_exit="invalid_parameter",
+    )
+    for option, default in (
+        ("--max-correction-semitones", 12.0),
+        ("--retune-speed-ms", 50.0),
+        ("--vibrato-threshold-cents", 20.0),
+    ):
+        _cli_domain(
+            pitch_tv_p.add_argument(option, type=_finite_float, default=default),
+            minimum=0,
+            reject_exit="invalid_parameter",
+        )
     note_move_p = sub.add_parser("note-move", parents=[common], help="Move one note region")
     note_move_p.add_argument("--onset", type=int, default=0)
     note_move_p.add_argument("--offset", type=int, default=None)
@@ -485,9 +611,9 @@ def register_note_edit_parsers(
     scale_quantize_p.add_argument("midi", type=_finite_float)
     # The parser accepts all three and the library refuses them after parsing,
     # so their accepted sets are declared here rather than left for a reader to
-    # infer from where the refusal happens to live. ``--reference-midi`` takes 0
-    # as the sentinel for the library default, which is why the range is closed
-    # at the bottom instead of starting above it.
+    # infer from where the refusal happens to live. ``--reference-midi`` is
+    # closed at 0 because the anchor is a MIDI note; the C ABI reads 0 as the
+    # library default, which is the same grid as any other whole-number anchor.
     _cli_domain(
         scale_quantize_p.add_argument("--root", type=int, default=0),
         minimum=0,
@@ -496,7 +622,10 @@ def register_note_edit_parsers(
     )
     _cli_domain(
         scale_quantize_p.add_argument(
-            "--mode-mask", type=lambda value: int(value, 0), default=0xAB5
+            "--mode-mask",
+            type=_mode_mask,
+            default=0xAB5,
+            help="12-bit scale mask or a mode name such as major or dorian",
         ),
         minimum=1,
         maximum=4095,
@@ -594,6 +723,82 @@ def register_note_edit_parsers(
         "polyphonic-notes",
         parents=[stdout_options],
         help="List the notes a polyphonic analysis found",
+    )
+    # The analysis settings a vocal session takes at creation. None carries a CLI
+    # default: an omitted one reaches the session unspelled, so its own default
+    # applies and the help names it rather than the parser restating it.
+    vocal_notes_p = sub.add_parser(
+        "vocal-notes",
+        parents=[stdout_options],
+        help="List the notes a vocal-edit session finds in a take",
+    )
+    vocal_notes_p.add_argument(
+        "--segmentation-threshold-cents",
+        type=_positive_finite_float,
+        default=None,
+        metavar="CENTS",
+        help="Pitch change that starts a new note (session default: 50)",
+    )
+    vocal_notes_p.add_argument(
+        "--min-note-ms",
+        type=_positive_finite_float,
+        default=None,
+        metavar="MS",
+        help="Shortest note kept (session default: 30)",
+    )
+    vocal_notes_p.add_argument(
+        "--frame-length-samples",
+        type=_positive_int,
+        default=None,
+        metavar="N",
+        help="Analysis frame length in samples (session default: 2048)",
+    )
+    vocal_notes_p.add_argument(
+        "--hop-length-samples",
+        type=_positive_int,
+        default=None,
+        metavar="N",
+        help="Analysis hop length in samples (session default: 512)",
+    )
+    vocal_notes_p.add_argument(
+        "--fmin-hz",
+        type=_positive_finite_float,
+        default=None,
+        metavar="HZ",
+        help="Lowest tracked frequency (session default: 65)",
+    )
+    vocal_notes_p.add_argument(
+        "--fmax-hz",
+        type=_positive_finite_float,
+        default=None,
+        metavar="HZ",
+        help="Highest tracked frequency, above --fmin-hz (session default: 2093)",
+    )
+    vocal_notes_p.add_argument(
+        "--yin-threshold",
+        type=_pitch_threshold,
+        default=None,
+        metavar="T",
+        help="YIN threshold (> 0 and <= 1; session default: 0.1)",
+    )
+    vocal_notes_p.add_argument(
+        "--voiced-threshold",
+        type=_closed_unit_float,
+        default=None,
+        metavar="P",
+        help="Voicing probability a frame needs (0 to 1; session default: 0.5)",
+    )
+    vocal_notes_p.add_argument(
+        "--no-centered",
+        action="store_true",
+        help="Analyse without padding the take by half a frame (session default: padded)",
+    )
+    vocal_notes_p.add_argument(
+        "--reference-hz",
+        type=_positive_finite_float,
+        default=None,
+        metavar="HZ",
+        help="Frequency of A4 that note numbers are measured from (session default: 440)",
     )
     polyphonic_render_p = sub.add_parser(
         "polyphonic-render",

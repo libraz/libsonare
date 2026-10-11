@@ -600,18 +600,22 @@ def cmd_pitch(args: argparse.Namespace) -> int:
     if args.json:
         voiced_count = sum(1 for flag in result.voiced_flag if flag)
         voiced_ratio = voiced_count / result.n_frames if result.n_frames else math.nan
-        print(
-            _strict_json_dumps(
-                {
-                    "algorithm": algo,
-                    "n_frames": result.n_frames,
-                    "voiced_count": voiced_count,
-                    "voiced_ratio": voiced_ratio,
-                    "median_f0": result.median_f0,
-                    "mean_f0": result.mean_f0,
-                }
-            )
-        )
+        payload: dict[str, object] = {
+            "algorithm": algo,
+            "n_frames": result.n_frames,
+            "voiced_count": voiced_count,
+            "voiced_ratio": voiced_ratio,
+            "median_f0": result.median_f0,
+            "mean_f0": result.mean_f0,
+        }
+        # The contour is opt-in: one value per frame. An unvoiced frame's
+        # non-finite f0 serializes as null.
+        if getattr(args, "frames", False):
+            payload["times"] = [index * hop_length / sr for index in range(result.n_frames)]
+            payload["f0"] = list(result.f0)
+            payload["voiced_flag"] = [bool(flag) for flag in result.voiced_flag]
+            payload["voiced_prob"] = list(result.voiced_prob)
+        print(_strict_json_dumps(payload))
     else:
         print(f"  Pitch Tracking ({algo}):")
         print(f"    Frames:    {result.n_frames}")
@@ -814,6 +818,11 @@ def register_analysis_parsers(
         pitch_p.add_argument("--algorithm", default="pyin"),
         choices=("yin", "pyin"),
         reject_exit="invalid_parameter",
+    )
+    pitch_p.add_argument(
+        "--frames",
+        action="store_true",
+        help="With --json, add the per-frame times, f0, voiced_flag and voiced_prob arrays",
     )
     pitch_p.add_argument(
         "--threshold",

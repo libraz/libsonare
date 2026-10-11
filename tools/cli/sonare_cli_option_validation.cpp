@@ -125,6 +125,10 @@ std::string validate_numeric_option_values(const CliArgs& args) {
     try {
       if (spec->scalar_type == CliOptionScalarType::Integer) {
         if (key == "candidates" && value == "true") continue;
+        if (spec->accepts_mode_name) {
+          (void)parse_mode_mask_option(key, value);
+          continue;
+        }
         // An option whose declared domain reaches past int is parsed at 64 bits,
         // so the domain below is what refuses the value rather than the parser's
         // width silently doing it first with a message that names no range.
@@ -267,7 +271,10 @@ CliValidationError validate_cli_arguments(const CliArgs& args, bool requires_aud
                 option.required_stage == CliOptionDomainStage::Parameter};
       }
       if (option.domain.empty() || !args.has(option.name)) continue;
-      const std::string value = args.get_string(option.name);
+      std::string value = args.get_string(option.name);
+      if (option.accepts_mode_name) {
+        value = std::to_string(parse_mode_mask_option(option.name, value));
+      }
       if (const std::string error = domain_error_for(option, value); !error.empty()) {
         return {error, option.domain.stage == CliOptionDomainStage::Parameter};
       }

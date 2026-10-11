@@ -83,6 +83,8 @@ struct CliArgs {
   std::vector<std::string> missing_value_options;
 
   float get_float(const std::string& k, float def) const;
+  /// Reads a number at full double width, for an option backed by a `double` field.
+  double get_double(const std::string& k, double def) const;
   int get_int(const std::string& k, int def) const;
   /// Reads an option backed by a C `uint32` field. Separate from @ref get_int
   /// because that one cannot express the upper half of the field's range, which
@@ -167,6 +169,15 @@ int parse_int_strict(const std::string& option, const std::string& value);
 /// whose declared domain reaches above `INT_MAX` is parsed with this instead, so
 /// the range is the domain's rather than the parser's.
 long long parse_int64_strict(const std::string& option, const std::string& value);
+/// The CLI's one mode-name table: `major`/`maj`, `minor`/`min`/`m` and the five
+/// church modes, case-insensitive. Every option naming a mode reads it.
+/// @throws std::invalid_argument for a name outside the table.
+sonare::Mode parse_mode_option(const std::string& value);
+/// Reads a scale mask given as a decimal integer or as a mode name, the name
+/// resolving to `scale_mask_for_mode` of the mode. The mask's range is the
+/// option's domain, so an integer is returned as written.
+/// @throws std::invalid_argument for text that is neither, naming @p option.
+int parse_mode_mask_option(const std::string& option, const std::string& value);
 /// Double-precision sibling of @ref parse_float_strict, for comparing a candidate
 /// against a declared domain bound. A float cannot hold every integer a domain
 /// may bound (2^32-1 rounds up past itself), which refused the top of a uint32

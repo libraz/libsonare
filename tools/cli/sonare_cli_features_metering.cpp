@@ -224,16 +224,31 @@ int cmd_pitch(const CliArgs& args, const Audio& audio) {
                                    : std::numeric_limits<float>::quiet_NaN();
 
   if (args.json_output) {
-    JsonBuilder()
-        .begin_object()
+    JsonBuilder json;
+    json.begin_object()
         .kv("algorithm", algo)
         .kv("n_frames", n_frames)
         .kv("voiced_count", voiced)
         .kv("voiced_ratio", ratio)
         .kv("median_f0", result.median_f0())
-        .kv("mean_f0", result.mean_f0())
-        .end_object()
-        .print();
+        .kv("mean_f0", result.mean_f0());
+    // The contour is opt-in: it is one value per frame, so the summary stays the
+    // default. A non-finite f0 (an unvoiced frame) serializes as null.
+    if (args.has("frames")) {
+      std::vector<double> times(result.f0.size());
+      for (size_t i = 0; i < times.size(); ++i) {
+        times[i] = static_cast<double>(i) * config.hop_length / audio.sample_rate();
+      }
+      json.key("times").begin_array();
+      for (double time : times) json.value(time);
+      json.end_array();
+      json.key("f0").float_array(result.f0);
+      json.key("voiced_flag").begin_array();
+      for (bool flag : result.voiced_flag) json.value(flag);
+      json.end_array();
+      json.key("voiced_prob").float_array(result.voiced_prob);
+    }
+    json.end_object().print();
   } else {
     std::cout << "Pitch Tracking (" << algo << "):\n";
     printf("  Frames:    %d\n", n_frames);
