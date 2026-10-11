@@ -5,6 +5,7 @@
  */
 
 import { beforeAll, describe, expect, it } from 'vitest';
+import type { SynthPatch as DistSynthPatch, SynthEngineMode } from '../dist/index.js';
 import {
   ARTICULATIONS,
   BUILTIN_SYNTH_WAVEFORMS,
@@ -213,7 +214,7 @@ describe('Sonare WASM NativeSynth', () => {
     try {
       // Long enough to pass the note-off, so a one-shot that ignores it differs.
       const frames = { totalFrames: 72000 };
-      const base: SynthPatch = {
+      const base: DistSynthPatch = {
         preset: 'saw-lead',
         driftCents: 40,
         ampDecayMs: 200,
@@ -439,7 +440,7 @@ describe('Sonare WASM NativeSynth', () => {
   });
 
   // Bounces a one-note project and returns the interleaved render.
-  function bounce(patch: SynthPatch | string): Float32Array {
+  function bounce(patch: DistSynthPatch | string): Float32Array {
     const project = buildMidiOnlyProject();
     try {
       return project.bounceWithSynthInstrument(patch, { totalFrames: 24000 });
@@ -487,7 +488,9 @@ describe('Sonare WASM NativeSynth', () => {
       const names = synthEngineParamInfo(mode).map((info) => info.name);
       expect(new Set(names).size, mode).toBe(names.length);
     }
-    expect(() => synthEngineParamInfo('no-such-engine')).toThrow(RangeError);
+    expect(() => synthEngineParamInfo('no-such-engine' as unknown as SynthEngineMode)).toThrow(
+      RangeError,
+    );
     expect(() => synthEngineParamInfo(99)).toThrow(RangeError);
 
     const wrapper = synthPatchParamInfo();
