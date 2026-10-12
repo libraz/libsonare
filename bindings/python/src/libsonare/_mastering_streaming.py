@@ -179,6 +179,9 @@ class StreamingMasteringChain:
             ...
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(
         self,
         config: dict[str, Any] | None = None,
@@ -508,6 +511,9 @@ class StreamingEqualizer:
         "mid": 3,
         "side": 4,
     }
+
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
 
     def __init__(self, sample_rate: int = 48000, max_block_size: int = 512) -> None:
         # Set first so a failed create or a missing build leaves a valid

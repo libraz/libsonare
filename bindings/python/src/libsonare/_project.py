@@ -92,6 +92,9 @@ class ProjectTimeline:
     engine keeps its own share, so :meth:`close` may run right after the apply.
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self, handle: ctypes.c_void_p) -> None:
         # Only Project.compile_timeline constructs this, with a live handle.
         self._handle: ctypes.c_void_p | None = handle
@@ -140,6 +143,9 @@ class Project(
     serialization is deterministic (``to_json`` is byte-stable for a given
     project state within one build).
     """
+
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
 
     def __init__(self) -> None:
         # Set first so a failed create (e.g. an ABI mismatch) leaves a valid

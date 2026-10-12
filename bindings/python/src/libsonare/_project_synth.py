@@ -372,6 +372,9 @@ class SampleBank:
             )
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self) -> None:
         # Set first so a failed create or a missing build leaves a valid
         # attribute for __del__/close() instead of raising AttributeError.

@@ -14,6 +14,7 @@ from __future__ import annotations
 import ast
 import inspect
 import re
+import sys
 import types
 from pathlib import Path
 
@@ -279,14 +280,14 @@ def test_every_abi_version_literal_lives_only_where_the_checker_reads_it() -> No
         )
 
 
-# Every handle-owning class assigns its handle sentinel before anything that can
-# raise, so a failed construction cannot make __del__ read a missing attribute.
-# The convention is documented on StreamAnalyzer; applying it is a per-class
-# edit, so the set is derived from the source rather than listed.
-def _handle_owning_inits() -> list[tuple[str, str, ast.FunctionDef]]:
+# Every handle-owning class declares its handle sentinel on the class, so a failed
+# construction cannot make __del__ read a missing attribute. Assigning it first in
+# __init__ is not enough: a wrong call signature raises before the body runs. The set
+# is derived from the source rather than listed.
+def _handle_owning_classes() -> list[tuple[str, ast.ClassDef]]:
     """Every class with a close()/__del__ whose __init__ assigns self._handle."""
     root = Path(__file__).parents[1] / "src" / "libsonare"
-    found: list[tuple[str, str, ast.FunctionDef]] = []
+    found: list[tuple[str, ast.ClassDef]] = []
     for path in sorted(root.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
@@ -308,41 +309,50 @@ def _handle_owning_inits() -> list[tuple[str, str, ast.FunctionDef]]:
                     else []
                 )
             ):
-                found.append((path.name, cls.name, init))
+                found.append((path.stem, cls))
     return found
 
 
-def test_every_handle_class_sets_its_handle_before_anything_can_raise() -> None:
+def test_every_handle_class_declares_its_handle_on_the_class() -> None:
     """A raise before the assignment leaves __del__ reading a missing attribute."""
-    owners = _handle_owning_inits()
+    owners = _handle_owning_classes()
     # Non-vacuity: the walk has to be finding the handle classes at all.
     assert len(owners) >= 8, owners
 
-    late = []
-    for filename, class_name, init in owners:
-        body = init.body
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
-            body = body[1:]  # a docstring cannot raise
-        first = body[0] if body else None
-        targets = (
-            first.targets
-            if isinstance(first, ast.Assign)
-            else [first.target]
-            if isinstance(first, ast.AnnAssign)
-            else []
-        )
+    undeclared = [
+        f"{module}::{cls.name}"
+        for module, cls in owners
         if not any(
-            isinstance(t, ast.Attribute)
-            and isinstance(t.value, ast.Name)
-            and t.value.id == "self"
-            and t.attr == "_handle"
-            for t in targets
-        ):
-            late.append(f"{filename}::{class_name}")
-    assert late == [], (
-        "these constructors can raise before self._handle exists, so __del__ "
-        f"would report an AttributeError over the real error: {late}"
+            isinstance(statement, ast.AnnAssign)
+            and isinstance(statement.target, ast.Name)
+            and statement.target.id == "_handle"
+            and isinstance(statement.value, ast.Constant)
+            and statement.value.value is None
+            for statement in cls.body
+        )
+    ]
+    assert undeclared == [], (
+        "these classes can raise before self._handle exists, so __del__ "
+        f"would report an AttributeError over the real error: {undeclared}"
     )
+
+
+def test_a_wrong_constructor_call_reports_nothing_from_del(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A signature error raises before __init__ runs; teardown must stay silent."""
+    import gc
+    import importlib
+
+    unraisable: list[str] = []
+    monkeypatch.setattr(sys, "unraisablehook", lambda u: unraisable.append(repr(u.exc_value)))
+    owners = _handle_owning_classes()
+    for module, cls in owners:
+        target = getattr(importlib.import_module(f"libsonare.{module}"), cls.name)
+        with pytest.raises(TypeError):
+            target(*([None] * 12), unexpected_keyword=1)
+        gc.collect()
+    assert unraisable == []
 
 
 @pytest.mark.parametrize("subject", ["engine", "project"])

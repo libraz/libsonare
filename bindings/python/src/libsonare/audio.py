@@ -309,6 +309,9 @@ class Audio:
     Supports context manager protocol for deterministic resource cleanup.
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self, handle: ctypes.c_void_p, lib: ctypes.CDLL) -> None:
         self._handle = handle
         self._lib = lib

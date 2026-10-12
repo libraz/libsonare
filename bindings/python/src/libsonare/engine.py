@@ -124,6 +124,9 @@ if TYPE_CHECKING:
 class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     """Thin Python wrapper around the native realtime engine handle."""
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(
         self,
         sample_rate: float = 48000.0,

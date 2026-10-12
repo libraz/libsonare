@@ -138,6 +138,9 @@ def _voice_config_to_json(preset: str | Mapping[str, object]) -> bytes:
 class RealtimeVoiceChanger:
     """Streaming realtime voice changer backed by the libsonare C API."""
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(
         self,
         sample_rate: int,
@@ -704,6 +707,9 @@ class StreamingRetune:
     either would otherwise enter the grain history and persist into every
     later block with nothing to tell the caller its input had been altered.
     """
+
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
 
     def __init__(
         self,

@@ -110,6 +110,9 @@ class Mixer:
     every strip). Do not retain results across a :meth:`close` call.
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: int | None = None
+
     def __init__(
         self,
         handle: int,
@@ -117,7 +120,7 @@ class Mixer:
         block_size: int,
         scene_warnings: list[str] | None = None,
     ) -> None:
-        self._handle: int | None = handle
+        self._handle = handle
         self._sample_rate = sample_rate
         self._block_size = block_size
         self._scene_warnings: list[str] = scene_warnings or []

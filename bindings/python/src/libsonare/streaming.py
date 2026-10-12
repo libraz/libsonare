@@ -73,6 +73,9 @@ class StreamAnalyzer:
     dropped while analysis totals continue advancing.
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self, config: StreamConfig | None = None) -> None:
         # Set first so a failed create (e.g. rejected malformed config) leaves a
         # valid attribute for __del__/close() instead of raising AttributeError.

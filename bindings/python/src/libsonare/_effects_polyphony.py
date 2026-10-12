@@ -118,6 +118,9 @@ class PolyphonicAnalysis:
         ...     quieter = analysis.render()
     """
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(
         self,
         samples: Sequence[float] | list[float] | np.ndarray,
@@ -276,9 +279,6 @@ class PolyphonicAnalysis:
                 ``ErrorCode.NOT_SUPPORTED`` when the library was built without
                 the pitch editor.
         """
-        # Set first so a failed analysis leaves a valid attribute for
-        # __del__ / close() instead of raising AttributeError.
-        self._handle: ctypes.c_void_p | None = None
         self._sample_rate = sample_rate
         buf = _validate_samples("PolyphonicAnalysis", samples)
 

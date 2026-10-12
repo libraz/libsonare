@@ -28,6 +28,9 @@ from ._runtime import (
 class ClipPageProvider:
     """Host-supplied paged audio source for realtime clip streaming."""
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self, num_channels: int, num_samples: int, page_frames: int) -> None:
         self._handle: ctypes.c_void_p | None = None
         handle = ctypes.c_void_p()

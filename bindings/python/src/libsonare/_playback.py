@@ -71,6 +71,9 @@ def _json_out_result(lib: ctypes.CDLL, out: ctypes.c_char_p) -> dict[str, Any]:
 class HrtfSet:
     """Opaque SHRF v1 HRTF set consumed by a headphones-target :class:`PlaybackRenderer`."""
 
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
+
     def __init__(self, handle: ctypes.c_void_p, lib: ctypes.CDLL) -> None:
         self._handle = handle
         self._lib = lib
@@ -139,6 +142,9 @@ class PlaybackRenderer:
     for a headphones target; on native builds a ``None`` hrtf falls back to
     the embedded default set.
     """
+
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
 
     def __init__(
         self,
@@ -396,6 +402,9 @@ class PlaybackLoudnessMeter:
     Feeds :meth:`push_interleaved` in chunks to measure ``loudness.program_lufs``
     ahead of a :class:`PlaybackRenderer`.
     """
+
+    # Declared on the class so close() reads it even when __init__ never ran.
+    _handle: ctypes.c_void_p | None = None
 
     def __init__(self, channels: int, sample_rate: int) -> None:
         self._handle = ctypes.c_void_p()
