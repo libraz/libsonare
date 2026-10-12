@@ -1,6 +1,6 @@
 # Changelog
 
-## v1.9.0 (2026-10-12)
+## v1.9.0 (2026-10-13)
 
 This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_ABI_VERSION` from 4 to 5 and `SONARE_VOICE_CHANGER_ABI_VERSION` from 2 to 3, and grows several shipped structs, so C callers and native consumers rebuild. It adds multichannel repair, realtime repair and voice-changer inserts, stereo room morphing, automatic tuning, offline auto-tune, multichannel decoding, per-reference and per-track sample rates, synth engine parameters by key, and offline bounce on the WASM worklet engine. Bindings refuse a mismatched native module, error classes agree across surfaces, many silently coerced inputs are refused, and polyphonic transcription, boundary detection, rate-dependent analysis windows, mixer automation ids and the stereo room inserts give different results.
 
