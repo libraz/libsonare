@@ -549,6 +549,38 @@ TEST_CASE("fixed_velocity replaces the measurement and velocity_floor_db changes
   }
 }
 
+TEST_CASE("a quiet take and a soft note keep their notes", "[note_transcriber]") {
+  const std::vector<int> melody = {60, 64, 67, 72};
+
+  SECTION("a take 40 dB down transcribes the same notes, under the velocity floor") {
+    const Sequence quiet = sequence_of(melody, 0.005f);
+    const std::vector<TranscribedNote> notes = transcribe_notes(quiet.audio());
+    REQUIRE(note_numbers(notes) == melody);
+    for (const TranscribedNote& note : notes) CHECK(note.velocity == 1);
+  }
+
+  SECTION("a note 34 dB under its neighbours survives in both chains") {
+    // Loud and soft alternate, so the soft notes sit 34 dB under the reference and
+    // under the -48 dB velocity floor too.
+    constexpr float kLoud = 0.1f;
+    const float soft = kLoud * std::pow(10.0f, -34.0f / 20.0f);
+    Sequence sequence;
+    append_silence(sequence.samples, kGapSamples);
+    for (size_t i = 0; i < melody.size(); ++i) {
+      append_tone(sequence.samples, hz_for_midi(melody[i]), i % 2 == 0 ? kLoud : soft,
+                  kToneSamples);
+      append_silence(sequence.samples, kGapSamples);
+    }
+    for (const TranscribeSource source :
+         {TranscribeSource::kMonophonic, TranscribeSource::kPolyphonic}) {
+      INFO("polyphonic " << (source == TranscribeSource::kPolyphonic));
+      TranscribeConfig config;
+      config.source = source;
+      REQUIRE(note_numbers(transcribe_notes(sequence.audio(), config)) == melody);
+    }
+  }
+}
+
 // --- Rejections -----------------------------------------------------------
 
 TEST_CASE("transcribe_notes refuses audio and config it cannot read", "[note_transcriber]") {

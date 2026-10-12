@@ -1046,13 +1046,14 @@ def transcribe(
         segmentation_threshold_cents: Pitch movement that ends one note and
             starts the next; ``None`` keeps the default (50 cents).
         velocity_floor_db: Level mapped to velocity 1. A note's peak per-frame
-            RMS is taken in dBFS and mapped linearly from
-            ``[velocity_floor_db, 0]`` onto ``[1, 127]``, clamped at the top; a
-            note whose peak stays under the floor is dropped. Must be negative;
-            ``None`` keeps the default (-48 dB).
+            RMS of the input over its span (other notes sounding then included)
+            is taken in dBFS and mapped linearly from ``[velocity_floor_db, 0]``
+            onto ``[1, 127]``, clamped at both ends. It does not drop notes: a
+            note more than 36 dB under the take's loudest notes, or under
+            -80 dBFS, is dropped whatever this is. Must be negative; ``None``
+            keeps the default (-48 dB).
         fixed_velocity: 1..127 gives every note that velocity instead of the
-            mapped one (notes under the floor are still dropped); ``None`` maps
-            the level.
+            mapped one (the level gate still applies); ``None`` maps the level.
         group: UMP group the events are emitted on, 0..15.
         channel: MIDI channel the events are emitted on, 0..15.
         max_polyphony: Polyphonic only. Voices one frame may hold, 1..64;

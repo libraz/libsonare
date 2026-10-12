@@ -85,13 +85,14 @@ typedef struct {
   /// Pitch movement, in cents, that ends one note and starts the next;
   /// 0 => 50.
   float segmentation_threshold_cents;
-  /// Level mapped to velocity 1. A note's PEAK per-frame RMS is taken in dBFS
-  /// and mapped linearly from [velocity_floor_db, 0] onto [1, 127], clamped at
-  /// the top; a note whose peak stays under the floor is dropped. Must be
-  /// negative; 0 => -48.
+  /// Level mapped to velocity 1. A note's PEAK per-frame RMS of the input over
+  /// its span (other notes sounding then included) is taken in dBFS and mapped
+  /// linearly from [velocity_floor_db, 0] onto [1, 127], clamped at both ends.
+  /// Must be negative; 0 => -48. It does not drop notes: a note more than 36 dB
+  /// under the take's loudest notes, or under -80 dBFS, is dropped whatever it is.
   float velocity_floor_db;
   /// 1..127 gives every note that velocity instead of the mapped one; 0 maps
-  /// the level. The floor still drops quiet notes. Anything else is rejected.
+  /// the level. The level gate still applies. Anything else is rejected.
   int32_t fixed_velocity;
   /// UMP group and MIDI channel the events are emitted on; both 0..15.
   int32_t group;

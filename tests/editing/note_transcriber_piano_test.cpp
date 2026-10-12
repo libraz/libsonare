@@ -2,8 +2,8 @@
 /// @brief Polyphonic transcription on material shaped like a piano note.
 ///
 /// Each case is a synthetic signal built to carry one measured property of a
-/// sampled piano -- a third partial over the fundamental, a tail under the
-/// velocity floor, a note over the tracker range -- so the assertion is about
+/// sampled piano -- a third partial over the fundamental, a tail far under the
+/// note, a note over the tracker range -- so the assertion is about
 /// what the transcriber reports and not about a rendering.
 
 #include <catch2/catch_test_macros.hpp>
@@ -82,9 +82,9 @@ TEST_CASE("a held note with a dominant third partial is one note and no twelfth"
   CHECK(notes[0].offset_sample >= static_cast<int64_t>(samples.size()) - kTwoHops);
 }
 
-TEST_CASE("material under the velocity floor is not a note", "[note_transcriber][piano]") {
-  // A note, then a tail at -80 dBFS: the tracker finds ridges in it all the
-  // same, because its thresholds are relative, and the floor is what says no.
+TEST_CASE("material far under the take's own notes is not a note", "[note_transcriber][piano]") {
+  // A note, then a tail about 66 dB under it: the tracker finds ridges in it all
+  // the same, because its thresholds are relative, and the level gate says no.
   constexpr int kC4 = 60;
   std::vector<float> samples = piano_tone(kC4, 0.6, 0.2f);
   const std::vector<float> tail = piano_tone(kC4, 1.5, 1e-4f);
@@ -99,17 +99,29 @@ TEST_CASE("material under the velocity floor is not a note", "[note_transcriber]
   CHECK(notes[0].velocity > 1);
   CHECK(notes[0].offset_sample <= static_cast<int64_t>(0.7 * kSampleRate));
 
-  SECTION("the floor decides, not the mapping: a fixed velocity drops it too") {
+  SECTION("the gate decides, not the mapping: a fixed velocity drops it too") {
     config.fixed_velocity = 100;
     REQUIRE(transcribe_notes(audio, config).size() == 1);
   }
 
-  SECTION("a floor under the tail's level admits it") {
+  SECTION("the velocity floor does not decide: one under the tail's level still drops it") {
     config.velocity_floor_db = -100.0f;
-    REQUIRE(transcribe_notes(audio, config).size() > 1);
+    REQUIRE(transcribe_notes(audio, config).size() == 1);
   }
 
-  SECTION("noise under the floor alone yields nothing") {
+  SECTION("the same take 40 dB quieter keeps its note, at velocity 1") {
+    std::vector<float> quiet = samples;
+    for (float& v : quiet) v *= 0.01f;
+    const std::vector<TranscribedNote> quiet_notes = transcribe_notes(
+        sonare::Audio::from_buffer(quiet.data(), quiet.size(), kSampleRate), config);
+    REQUIRE(quiet_notes.size() == 1);
+    CHECK(quiet_notes[0].note == kC4);
+    CHECK(quiet_notes[0].onset_sample == notes[0].onset_sample);
+    // About -51 dBFS of peak RMS, under the -48 dB velocity floor.
+    CHECK(quiet_notes[0].velocity == 1);
+  }
+
+  SECTION("noise under -80 dBFS alone yields nothing") {
     std::vector<float> noise(static_cast<size_t>(2 * kSampleRate));
     uint32_t state = 0x9e3779b9u;
     for (float& v : noise) {

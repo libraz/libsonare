@@ -225,7 +225,7 @@ This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_AB
 - Vocal edit analysis measures a note's `centerMidi` (`center_midi`) from an F0 refined from the audio and averaged over whole vibrato cycles, so an off-grid tone reads within a fraction of a cent and a `center` retune (`SONARE_VOCAL_TARGET_CENTER`) lands on target.
 - Note segmentation no longer splits a held note where its vibrato reaches full depth or leaves a short fragment after a glide, in vocal edit analysis, the monophonic transcriber and `noteSegments` / `note_segments` / `sonare_note_segments`.
 - Polyphonic transcription reports fewer false notes: a held piano note is no longer a chain of same-pitch pieces, harmonic ghosts at the octave and twelfth are suppressed (so an octave or twelfth doubling above a sounding note is usually not reported), a note above `fmax` is dropped instead of reported an octave low, a note's onset sits at the strike instead of up to two frames late, a bass note under a chord is found more often, and a fundamental below 55 Hz is found when `fmin` is set below it.
-- Transcription drops a note whose peak is below `velocityFloorDb` / `velocity_floor_db` instead of giving it velocity 1, also when `fixedVelocity` / `fixed_velocity` is set.
+- Transcription drops a note whose peak is more than 36 dB under the take's loudest notes, or under -80 dBFS, instead of reporting it, so a decay tail or a ghost no longer arrives as a velocity-1 note while a quietly recorded take keeps its notes; `velocityFloorDb` / `velocity_floor_db` still only sets the level mapped to velocity 1.
 
 #### MIDI and synthesizer
 

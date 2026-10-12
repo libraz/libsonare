@@ -996,14 +996,14 @@ def register_project_parsers(
         "--velocity-floor-db",
         type=_finite_float,
         default=None,
-        help="Level mapped to velocity 1, below which notes are dropped (default: -48)",
+        help="Level mapped to velocity 1; must be negative (default: -48)",
     )
     transcribe_p.add_argument(
         "--fixed-velocity",
         type=int,
         default=None,
         metavar="N",
-        help="Give every note velocity N (1-127); notes under the floor are still dropped",
+        help="Give every note velocity N (1-127) and skip the level measurement",
     )
     transcribe_p.add_argument(
         "--group", type=int, default=0, help="UMP group the events are emitted on (default: 0)"

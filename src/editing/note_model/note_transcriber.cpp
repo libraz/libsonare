@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <vector>
 
 #include "editing/note_model/note_extractor.h"
@@ -18,6 +19,7 @@
 namespace sonare::editing::note_model {
 
 using constants::kSemitonesPerOctave;
+using constants::kSilenceDb;
 
 TranscribeF0Range resolve_transcribe_f0_range(const TranscribeConfig& config) noexcept {
   TranscribeF0Range defaults;
@@ -54,6 +56,13 @@ constexpr float kTranscribeReattackRatio = 2.0f;
 // A held piano note loses its candidate for one or two frames at a time (a
 // beat minimum, or a frame's search ending first); two frames at the 11.6 ms hop.
 constexpr float kTranscribeMaxGapMs = 25.0f;
+// A note this far under the take's reference level is a tail or a ghost. On renders
+// peaking near 0 dBFS, 36 dB scored the same F as a -48 dBFS absolute floor
+// (0.564 / 0.695 against 0.565 / 0.696) and keeps a note 34 dB under its neighbours.
+constexpr float kNoteGateBelowReferenceDb = 36.0f;
+// The reference sets aside one loudest note per four, up to three.
+constexpr size_t kNotesPerSetAside = 4;
+constexpr size_t kMaxSetAsideNotes = 3;
 
 /// Length of a 1/@p division note at @p tempo_bpm, in milliseconds.
 float note_value_ms(int division, float tempo_bpm) noexcept {
@@ -236,12 +245,6 @@ int midi_note_for_hz(float hz, float reference_hz) noexcept {
   return static_cast<int>(note);
 }
 
-bool level_reaches_floor(float peak_rms_linear, float velocity_floor_db) noexcept {
-  if (!std::isfinite(velocity_floor_db) || velocity_floor_db >= 0.0f) return false;
-  if (!std::isfinite(peak_rms_linear) || peak_rms_linear <= 0.0f) return false;
-  return 20.0f * std::log10(peak_rms_linear) >= velocity_floor_db;
-}
-
 uint8_t velocity_for_peak_rms(float peak_rms_linear, float velocity_floor_db) noexcept {
   if (!std::isfinite(velocity_floor_db) || velocity_floor_db >= 0.0f) return kMinVelocity;
   if (!std::isfinite(peak_rms_linear) || peak_rms_linear <= 0.0f) return kMinVelocity;
@@ -255,6 +258,26 @@ uint8_t velocity_for_peak_rms(float peak_rms_linear, float velocity_floor_db) no
   return static_cast<uint8_t>(std::lround(velocity));
 }
 
+namespace {
+
+float level_db(float peak_rms_linear) noexcept {
+  if (!std::isfinite(peak_rms_linear) || peak_rms_linear <= 0.0f) return constants::kFloorDb;
+  return std::max(constants::kFloorDb, 20.0f * std::log10(peak_rms_linear));
+}
+
+/// Level under which a note is dropped: the reference level less the gate, where
+/// the reference is the peak of the loudest note once a few loudest are set
+/// aside, so one dominant strike does not set the bar; never under silence.
+float note_gate_db(std::vector<float> levels_db) noexcept {
+  if (levels_db.empty()) return kSilenceDb;
+  const size_t set_aside = std::min(kMaxSetAsideNotes, levels_db.size() / kNotesPerSetAside);
+  std::nth_element(levels_db.begin(), levels_db.begin() + static_cast<std::ptrdiff_t>(set_aside),
+                   levels_db.end(), std::greater<>());
+  return std::max(kSilenceDb, levels_db[set_aside] - kNoteGateBelowReferenceDb);
+}
+
+}  // namespace
+
 std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const TranscribeConfig& config) {
   // No pitch-editor guard here: this unit is compiled into the pitch-editor
   // archive, so its existence is the gate. The NOT_SUPPORTED answer belongs to
@@ -265,21 +288,39 @@ std::vector<TranscribedNote> transcribe_notes(const Audio& audio, const Transcri
                                                ? polyphonic_notes(audio, resolved)
                                                : monophonic_notes(audio, resolved);
 
-  std::vector<TranscribedNote> notes;
-  notes.reserve(measured.size());
+  struct Candidate {
+    const NoteObject* note;
+    int midi_note;
+    float peak;
+  };
+  std::vector<Candidate> candidates;
+  candidates.reserve(measured.size());
   for (const NoteObject& note : measured) {
     if (note.offset_sample <= note.onset_sample) continue;
     const int midi_note = midi_note_for_hz(note.median_hz, resolved.reference_hz);
     if (midi_note < 0) continue;
-    // Under the floor there is no note: a decay tail or a ghost ridge would
-    // otherwise arrive at velocity 1, which nothing downstream can tell apart.
-    const float peak = peak_rms(note);
-    if (!level_reaches_floor(peak, resolved.velocity_floor_db)) continue;
-    const uint8_t velocity = resolved.fixed_velocity != 0
-                                 ? static_cast<uint8_t>(resolved.fixed_velocity)
-                                 : velocity_for_peak_rms(peak, resolved.velocity_floor_db);
-    notes.push_back(TranscribedNote{note.onset_sample, note.offset_sample,
-                                    static_cast<uint8_t>(midi_note), velocity, note.median_hz});
+    candidates.push_back({&note, midi_note, peak_rms(note)});
+  }
+
+  // The gate is relative to the take, so a quiet recording keeps its notes while a
+  // decay tail or a ghost ridge far under the take's own notes does not arrive.
+  std::vector<float> levels_db;
+  levels_db.reserve(candidates.size());
+  for (const Candidate& candidate : candidates) levels_db.push_back(level_db(candidate.peak));
+  const float gate_db = note_gate_db(levels_db);
+
+  std::vector<TranscribedNote> notes;
+  notes.reserve(candidates.size());
+  for (size_t i = 0; i < candidates.size(); ++i) {
+    if (levels_db[i] < gate_db) continue;
+    const Candidate& candidate = candidates[i];
+    const uint8_t velocity =
+        resolved.fixed_velocity != 0
+            ? static_cast<uint8_t>(resolved.fixed_velocity)
+            : velocity_for_peak_rms(candidate.peak, resolved.velocity_floor_db);
+    notes.push_back(TranscribedNote{candidate.note->onset_sample, candidate.note->offset_sample,
+                                    static_cast<uint8_t>(candidate.midi_note), velocity,
+                                    candidate.note->median_hz});
   }
 
   std::sort(notes.begin(), notes.end(),

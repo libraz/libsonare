@@ -159,12 +159,13 @@ class _ProjectMidiMixin:
                 thirty-second note), 1..128. Applies to both paths.
             segmentation_threshold_cents: Pitch movement that ends one note and
                 starts the next; ``None`` keeps 50 cents.
-            velocity_floor_db: Level mapped to velocity 1; a note whose peak
-                stays under it is dropped. Must be negative. ``None`` keeps the
-                default (-48 dB).
+            velocity_floor_db: Level mapped to velocity 1; a note under it gets
+                velocity 1. A note more than 36 dB under the take's loudest
+                notes, or under -80 dBFS, is dropped whatever this is. Must be
+                negative. ``None`` keeps the default (-48 dB).
             fixed_velocity: 1..127 gives every note that velocity instead of the
-                mapped one (notes under the floor are still dropped); ``None``
-                maps the level.
+                mapped one (the level gate still applies); ``None`` maps the
+                level.
             group: UMP group the events are emitted on, 0..15.
             channel: MIDI channel the events are emitted on, 0..15.
             max_polyphony: Polyphonic only. Voices one frame may hold, 1..64;

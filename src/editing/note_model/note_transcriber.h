@@ -72,18 +72,16 @@ struct TranscribeConfig {
   /// mid-ridge pitch jump is never split into two notes.
   float segmentation_threshold_cents = 50.0f;
 
-  /// Level that maps to velocity 1, and the floor under which there is no
-  /// note. A note's PEAK per-frame RMS is taken in dBFS and mapped linearly
-  /// from [velocity_floor_db, 0] onto [1, 127], clamped at the top; a note
-  /// whose peak stays under the floor is dropped rather than reported at
-  /// velocity 1, so a decay tail or a ghost ridge does not arrive as a note
-  /// nothing downstream can tell from a deliberate pianissimo. Must be finite
-  /// and negative.
+  /// Level that maps to velocity 1. A note's PEAK per-frame RMS of the input
+  /// over its span (other notes sounding then included) is taken in dBFS and
+  /// mapped linearly from [velocity_floor_db, 0] onto [1, 127], clamped at both
+  /// ends. Must be finite and negative. Whether there is a note at all is not
+  /// decided here: a note more than 36 dB under the take's reference level
+  /// (its loudest notes, a few loudest set aside) or under -80 dBFS is dropped.
   float velocity_floor_db = -48.0f;
 
   /// 1..127 gives every note that velocity and skips the mapping; 0 measures.
-  /// The floor still applies, since it decides whether there is a note at all.
-  /// Anything else is rejected.
+  /// The level gate still applies. Anything else is rejected.
   int fixed_velocity = 0;
 
   // The four fields below are polyphonic only: a monophonic config carrying any
@@ -158,17 +156,9 @@ struct TranscribedNote {
 ///         A negative return is the only "no note here" spelling.
 int midi_note_for_hz(float hz, float reference_hz) noexcept;
 
-/// @brief Whether a linear peak RMS is at or over @p velocity_floor_db, which
-///        is what makes it a note at all.
-/// @details A non-finite or non-positive @p peak_rms, or a floor that is not
-///          finite and negative, does not reach it.
-bool level_reaches_floor(float peak_rms, float velocity_floor_db) noexcept;
-
 /// @brief The velocity a linear peak RMS maps to under @p velocity_floor_db.
 /// @details Exposed so a caller can reproduce the mapping instead of inferring
-///          it from the output. A level at or under the floor is velocity 1;
-///          @ref transcribe_notes drops such a note before asking, so the
-///          clamp is reached only by a caller mapping a level of its own.
+///          it from the output. A level at or under the floor is velocity 1.
 uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 
 /// @brief Transcribes @p audio into note events.
@@ -176,8 +166,8 @@ uint8_t velocity_for_peak_rms(float peak_rms, float velocity_floor_db) noexcept;
 ///          the same pitch cannot share an onset in either chain.
 ///
 ///          Finding no notes is not an error. Silence, material whose register
-///          the chain cannot resolve, and material under @c velocity_floor_db
-///          transcribe to an empty vector.
+///          the chain cannot resolve, and material under -80 dBFS transcribe
+///          to an empty vector.
 /// @throws SonareException(InvalidParameter) on empty @p audio, on a non-finite
 ///         or out-of-range config field, on a @c fixed_velocity outside {0} U
 ///         [1, 127], on a @c velocity_floor_db that is not finite and negative,

@@ -699,14 +699,16 @@ export interface TranscribeOptions {
   /**
    * Level mapped to velocity 1, in dBFS. Default `-48`; **must be negative**.
    *
-   * A note's peak per-frame RMS is taken in dBFS and mapped linearly from
-   * `[velocityFloorDb, 0]` onto `[1, 127]`, clamped at the top; a note whose
-   * peak stays under the floor is dropped.
+   * A note's peak per-frame RMS of the input over its span (other notes
+   * sounding then included) is taken in dBFS and mapped linearly from
+   * `[velocityFloorDb, 0]` onto `[1, 127]`, clamped at both ends. It does not
+   * drop notes: a note more than 36 dB under the take's loudest notes, or under
+   * -80 dBFS, is dropped whatever this is set to.
    */
   velocityFloorDb?: number;
   /**
    * An integer in `[1, 127]` gives every note that velocity instead of the
-   * mapped one; notes under `velocityFloorDb` are still dropped. **Omit the
+   * mapped one; the level gate still drops tails and ghosts. **Omit the
    * field to map the level** — `0` is refused, because it is not a MIDI
    * velocity and omission already says "measure".
    */
