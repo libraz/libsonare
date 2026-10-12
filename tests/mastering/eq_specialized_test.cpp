@@ -1,6 +1,7 @@
 /// @file eq_specialized_test.cpp
 /// @brief Specialized EQ processor tests.
 
+#include <algorithm>
 #include <limits>
 #include <memory>
 
@@ -185,8 +186,9 @@ TEST_CASE("CutFilter stays stable with its corner at the highest accepted freque
       for (const CutFilterSlope slope : slopes) {
         for (const float q : {0.5f, sonare::constants::kButterworthQ, 1.3f}) {
           for (const bool high_pass : {true, false}) {
+            constexpr int kBlock = 1024;
             CutFilter eq;
-            eq.prepare(sample_rate, length);
+            eq.prepare(sample_rate, kBlock);
             if (high_pass) {
               eq.set_high_pass(corner, q, slope);
             } else {
@@ -198,8 +200,10 @@ TEST_CASE("CutFilter stays stable with its corner at the highest accepted freque
               state = state * 1664525u + 1013904223u;
               sample = static_cast<float>(state >> 8) / static_cast<float>(1u << 24) - 0.5f;
             }
-            float* channels[] = {noise.data()};
-            eq.process(channels, 1, length);
+            for (int start = 0; start < length; start += kBlock) {
+              float* channels[] = {noise.data() + start};
+              eq.process(channels, 1, std::min(kBlock, length - start));
+            }
             INFO("sr=" << sample_rate << " corner=" << corner << " q=" << q
                        << " high_pass=" << high_pass << " slope=" << static_cast<int>(slope));
             float peak = 0.0f;
