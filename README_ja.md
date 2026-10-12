@@ -31,6 +31,7 @@
 - **ヘッドレス DAW ランタイム** — オーディオ／MIDI トラック、テイク、ワープ、MIDI 1.0/2.0 シーケンス、SMF 入出力、オフラインバウンス、リアルタイムエンジンで再生するタイムラインへのコンパイル（`compileTimeline`）。[プロジェクト編集](https://libsonare.libraz.net/ja/docs/project-editing)
 - **リアルタイムエンジン** — アロケーションフリーの再生、ストリーミング、ライブ MIDI 1.0/2.0 入力、ロックフリーのオートメーション、レコーディング、ボイスチェンジャーのインサート。AudioWorklet 経由でブラウザでも動きます。[リアルタイムエンジン](https://libsonare.libraz.net/ja/docs/realtime-engine) · [MIDI 入力](https://libsonare.libraz.net/ja/docs/midi-input)
 - **プレイバックレンダラー** — チャンネル変換、ラウドネス整合、低音管理、ヘッドホンとスピーカー向けの HRTF バイノーラル化。[プレイバック](https://libsonare.libraz.net/ja/docs/playback)
+- **パラメータ記述子** — すべてのプロセッサとシンセエンジンが、自分のパラメータの範囲、デフォルト、単位、表示スケール、範囲や有効・無効を左右するほかのパラメータを返します。ホストは手書きの表を持たずに、`capabilityCatalog()` と `synthEngineParamInfo` から操作画面を組み立てられます。[パラメータ記述子からコントロールを組み立てる](https://libsonare.libraz.net/ja/docs/use-cases/parameter-controls)
 - **C++ パッケージ** — C++ ライブラリは CMake パッケージとしてインストールできます（`find_package(sonare)`）。[C++ API](https://libsonare.libraz.net/ja/docs/cpp-api)
 
 ## インストール

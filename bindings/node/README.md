@@ -72,6 +72,7 @@ project.destroy();
 - **Instruments and synthesis** — built-in synth, the patch-driven NativeSynth, and a GS-compatible SoundFont (SF2) player that receives GS SysEx and offers two GS insertion-effect realisations (`gsEfxRealization`), with a selectable rig per part (`setPartRig`). The acoustic piano is calibrated; the other physical-model voices are still being tuned and will change in 1.9.x patch releases. → [GM and GS](https://libsonare.libraz.net/docs/gm-gs), [Native synth](https://libsonare.libraz.net/docs/native-synth)
 - **Headless DAW** — `Project` with audio and MIDI tracks, undo/redo, SMF and MIDI 2.0 Clip File I/O, and offline `bounce`; `transcribeToClip` writes a transcription into a clip, and `compileTimeline` turns a project into a timeline a stopped `RealtimeEngine` plays. → [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Playback** — `PlaybackRenderer` renders PCM up to 7.1 to speakers or HRTF binaural headphones. → [Playback](https://libsonare.libraz.net/docs/playback)
+- **Parameter descriptors** — `capabilityCatalog`, `masteringInsertParamInfo`, `synthEngineParamInfo` and `synthPatchParamInfo` describe every parameter's range, default, unit, display scale and the other parameters that bound or switch it, so a host builds its controls without a hand-written table. → [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 
 The whole surface is listed in the [Node.js API reference](https://libsonare.libraz.net/docs/node-api).
 

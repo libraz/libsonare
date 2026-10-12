@@ -31,6 +31,7 @@
 - **Headless DAW runtime** — projects with audio and MIDI tracks, takes, warp, MIDI 1.0/2.0 sequencing, SMF I/O, offline bounce, and compilation into a timeline the realtime engine plays (`compileTimeline`). [Project editing](https://libsonare.libraz.net/docs/project-editing)
 - **Realtime engine** — allocation-free playback, streaming, live MIDI 1.0/2.0 input, lock-free automation, recording, and a voice-changer insert, in the browser through an AudioWorklet too. [Realtime engine](https://libsonare.libraz.net/docs/realtime-engine) · [MIDI input](https://libsonare.libraz.net/docs/midi-input)
 - **Playback renderer** — channel conversion, loudness matching, bass management, and HRTF binaural rendering for headphones and speakers. [Playback](https://libsonare.libraz.net/docs/playback)
+- **Parameter descriptors** — every processor and synth engine describes its own parameters (range, default, unit, display scale, and which other parameters bound or switch them), so a host builds its controls from `capabilityCatalog()` and `synthEngineParamInfo` rather than a hand-written table. [Build controls from descriptors](https://libsonare.libraz.net/docs/use-cases/parameter-controls)
 - **C++ package** — the C++ library installs as a CMake package (`find_package(sonare)`). [C++ API](https://libsonare.libraz.net/docs/cpp-api)
 
 ## Installation
