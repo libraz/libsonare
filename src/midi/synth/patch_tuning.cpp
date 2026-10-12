@@ -133,13 +133,17 @@ struct Assignment {
     // An integer field also refuses what its type cannot hold, open or not.
     if (integer && !has_lo) lo = type_lo, has_lo = true;
     if (integer && !has_hi) hi = type_hi, has_hi = true;
+    // A float field is judged by the value it would hold, so a published bound read back
+    // from its shortest decimal spelling lands on the bound rather than just past it.
+    const bool held_as_float = !integer && std::fabs(value) <= std::numeric_limits<float>::max();
+    const double held = held_as_float ? static_cast<double>(static_cast<float>(value)) : value;
 
     const char* reason = nullptr;
     if (!std::isfinite(value)) {
       reason = "not a finite number";
     } else if (integer && value != std::floor(value)) {
       reason = "not an integer";
-    } else if ((has_lo && value < lo) || (has_hi && value > hi)) {
+    } else if ((has_lo && held < lo) || (has_hi && held > hi)) {
       reason = "out of range";
     } else if (!integer && std::fabs(value) > std::numeric_limits<float>::max()) {
       reason = "outside the 32-bit float range";

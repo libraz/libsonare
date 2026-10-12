@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <memory>
@@ -1885,6 +1886,43 @@ TEST_CASE("engine params refuse what they cannot set and leave the patch untouch
   REQUIRE(apply_engine_params(accepted, &ok, 1, &error));
   REQUIRE(error.empty());
   REQUIRE(accepted.piano.brightness == static_cast<float>(ok.value));
+}
+
+TEST_CASE("engine params accept each published float bound as its shortest decimal spelling",
+          "[midi][synth]") {
+  // The catalogue spells a float bound as the shortest decimal that reads back to it, so a
+  // caller handing that spelling back gets a double just off the float (0.05 against 0.05f).
+  const auto shortest = [](float value) {
+    double read = 0.0;
+    for (int precision = 1; precision <= 9; ++precision) {
+      char buffer[32];
+      std::snprintf(buffer, sizeof(buffer), "%.*g", precision, static_cast<double>(value));
+      read = std::strtod(buffer, nullptr);
+      if (static_cast<float>(read) == value) break;
+    }
+    return read;
+  };
+  int checked = 0;
+  for (const NativeSynthPatch& base : one_patch_per_engine_mode()) {
+    for (const EngineParamDescriptor& d : engine_param_descriptors(base)) {
+      if (!d.bounded || d.integer || d.boolean) continue;
+      for (const float bound : {d.lo, d.hi}) {
+        INFO(d.key << " = " << shortest(bound));
+        NativeSynthPatch patch = base;
+        const EngineParam param{d.key.c_str(), shortest(bound)};
+        std::string error;
+        REQUIRE(apply_engine_params(patch, &param, 1, &error));
+        ++checked;
+      }
+      // One float step past the bound is still refused.
+      NativeSynthPatch patch = base;
+      const EngineParam past{d.key.c_str(), static_cast<double>(std::nextafter(
+                                                d.hi, std::numeric_limits<float>::infinity()))};
+      std::string error;
+      REQUIRE_FALSE(apply_engine_params(patch, &past, 1, &error));
+    }
+  }
+  REQUIRE(checked > 0);
 }
 
 TEST_CASE("engine params with none given leave every preset bit-identical", "[midi][synth]") {
