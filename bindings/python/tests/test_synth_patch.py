@@ -835,7 +835,8 @@ def test_engine_param_info_states_gates_only_where_set() -> None:
     ]
     for mode in SYNTH_ENUM_TABLES["engine_modes"]:
         for row in synth_engine_param_info(mode):
-            assert row.get("activeWhen", [None]), (mode, row["name"])
+            if "activeWhen" in row:
+                assert row["activeWhen"], (mode, row["name"])
 
 
 def _engine_params_patch() -> SynthPatch:
