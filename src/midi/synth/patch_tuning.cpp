@@ -1104,160 +1104,328 @@ using Scope = ActiveCondition::Scope;
 using Relation = ActiveCondition::Relation;
 using Kind = ActiveCondition::Kind;
 
-/// One condition of an engine-section field's gate, keyed by its un-indexed
-/// path; a field's rows are ANDed. A path ending in `*` covers its whole
-/// section, and a row never gates the field on itself.
-struct GateRow {
-  const char* member_path;
-  const char* key;
-  Scope scope;
-  Relation relation;
-  Kind kind;
-  double number;
-  const char* text;
-  /// The compared number is the site's array index rather than @ref number.
-  bool by_index;
+bool same_condition(const ActiveCondition& a, const ActiveCondition& b) {
+  return a.key == b.key && a.scope == b.scope && a.relation == b.relation && a.kind == b.kind &&
+         a.number == b.number && a.text == b.text;
+}
+
+/// Whether @p wide asks for every condition @p narrow does.
+bool asks_all_of(const ActiveAlternative& wide, const ActiveAlternative& narrow) {
+  for (const ActiveCondition& c : narrow) {
+    bool found = false;
+    for (const ActiveCondition& d : wide) found = found || same_condition(c, d);
+    if (!found) return false;
+  }
+  return true;
+}
+
+/// A gate in disjunctive form: the field reaches the voice when every condition
+/// of at least one alternative holds. The default, one empty alternative, is a
+/// field that always does; no alternative at all is one that never does.
+struct Gate {
+  std::vector<ActiveAlternative> any{ActiveAlternative{}};
 };
 
-constexpr GateRow is(const char* path, const char* key, bool value) {
-  return {path, key, Scope::kEngine, Relation::kEq, Kind::kBoolean, value ? 1.0 : 0.0, "", false};
-}
-constexpr GateRow cmp(const char* path, const char* key, Relation relation, double value) {
-  return {path, key, Scope::kEngine, relation, Kind::kNumber, value, "", false};
-}
-/// `key > <the site's index>`: the slot sounds only once the count reaches it.
-constexpr GateRow past_index(const char* path, const char* key) {
-  return {path, key, Scope::kEngine, Relation::kGt, Kind::kNumber, 0.0, "", true};
-}
-constexpr GateRow wrapper_is(const char* path, const char* key, const char* name) {
-  return {path, key, Scope::kPatch, Relation::kEq, Kind::kString, 0.0, name, false};
-}
-constexpr GateRow wrapper_above(const char* path, const char* key, double value) {
-  return {path, key, Scope::kPatch, Relation::kGt, Kind::kNumber, value, "", false};
+Gate never() {
+  Gate g;
+  g.any.clear();
+  return g;
 }
 
-constexpr Relation kGt = Relation::kGt;
-constexpr Relation kEq = Relation::kEq;
+/// @p alternatives without any that another one already implies.
+Gate absorbed(std::vector<ActiveAlternative> alternatives) {
+  std::vector<bool> keep(alternatives.size(), true);
+  for (size_t i = 0; i < alternatives.size(); ++i) {
+    for (size_t j = 0; j < alternatives.size() && keep[i]; ++j) {
+      if (i == j || !keep[j] || !asks_all_of(alternatives[i], alternatives[j])) continue;
+      // Of two equal alternatives the first stays.
+      if (i < j && asks_all_of(alternatives[j], alternatives[i])) continue;
+      keep[i] = false;
+    }
+  }
+  Gate out = never();
+  for (size_t i = 0; i < alternatives.size(); ++i) {
+    if (keep[i]) out.any.push_back(std::move(alternatives[i]));
+  }
+  return out;
+}
 
-/// The patch fields an engine-section field reaches the voice through. A gate
-/// on several paths at once (a layer any of three sources excites) is not
-/// expressible as an AND and is left out rather than narrowed.
-constexpr GateRow kEngineGates[] = {
+/// Either gate.
+Gate operator|(const Gate& a, const Gate& b) {
+  std::vector<ActiveAlternative> all = a.any;
+  all.insert(all.end(), b.any.begin(), b.any.end());
+  return absorbed(std::move(all));
+}
+
+/// Both gates: every pairing of their alternatives.
+Gate operator&(const Gate& a, const Gate& b) {
+  std::vector<ActiveAlternative> all;
+  for (const ActiveAlternative& x : a.any) {
+    for (const ActiveAlternative& y : b.any) {
+      ActiveAlternative merged = x;
+      for (const ActiveCondition& c : y) {
+        if (!asks_all_of(merged, {c})) merged.push_back(c);
+      }
+      all.push_back(std::move(merged));
+    }
+  }
+  return absorbed(std::move(all));
+}
+
+Gate condition(std::string key, Scope scope, Relation relation, Kind kind, double number,
+               std::string text = {}) {
+  Gate g;
+  g.any = {{ActiveCondition{std::move(key), scope, relation, kind, number, std::move(text)}}};
+  return g;
+}
+Gate is(const std::string& key, bool value) {
+  return condition(key, Scope::kEngine, Relation::kEq, Kind::kBoolean, value ? 1.0 : 0.0);
+}
+Gate above(const std::string& key, double value) {
+  return condition(key, Scope::kEngine, Relation::kGt, Kind::kNumber, value);
+}
+Gate at_least(const std::string& key, double value) {
+  return condition(key, Scope::kEngine, Relation::kGe, Kind::kNumber, value);
+}
+Gate equals(const std::string& key, double value) {
+  return condition(key, Scope::kEngine, Relation::kEq, Kind::kNumber, value);
+}
+Gate differs(const std::string& key, double value) {
+  return condition(key, Scope::kEngine, Relation::kNe, Kind::kNumber, value);
+}
+Gate wrapper_is(const std::string& key, const char* name) {
+  return condition(key, Scope::kPatch, Relation::kEq, Kind::kString, 0.0, name);
+}
+Gate wrapper_above(const std::string& key, double value) {
+  return condition(key, Scope::kPatch, Relation::kGt, Kind::kNumber, value);
+}
+
+/// The public key of slot @p index of an indexed field.
+std::string slot(const char* key, int index) { return key + std::to_string(index); }
+
+/// The field a gate is being built for.
+struct GateSite {
+  const std::string& key;
+  /// The array index the walker put into the path; 0 at a plain member.
+  int index;
+  /// The patch the descriptors are taken from.
+  const NativeSynthPatch& base;
+};
+
+// Percussion. A layer is reached only once something excites it, and every
+// excitation the voice has is listed here, so "some layer sounds" is complete.
+
+/// Mode slot @p i is placed: below numModes, with a non-zero ratio.
+Gate mode_placed(int i) { return above("numModes", i) & above(slot("modeRatios", i), 0); }
+
+/// Any placed mode whose nodal-diameter order passes @p keep.
+template <typename Keep>
+Gate modes_where(const GateSite& s, Keep keep) {
+  Gate out = never();
+  for (int i = 0; i < kMaxPercussionModes; ++i) {
+    if (keep(static_cast<int>(s.base.percussion.mode_m[static_cast<size_t>(i)]))) {
+      out = out | mode_placed(i);
+    }
+  }
+  return out;
+}
+
+Gate tone(const GateSite& s) {
+  return modes_where(s, [](int) { return true; });
+}
+Gate axisymmetric_modes(const GateSite& s) {
+  return modes_where(s, [](int m) { return m == 0; });
+}
+Gate diametral_modes(const GateSite& s) {
+  return modes_where(s, [](int m) { return m > 0; });
+}
+Gate noise(const GateSite&) { return above("noiseGain", 0); }
+Gate particles(const GateSite&) { return above("phisemBeans", 0); }
+Gate plate_on(const GateSite&) { return above("plateGain", 0); }
+/// The plate rung by the stick's pulse alone.
+Gate struck_plate(const GateSite& s) { return plate_on(s) & above("plateContact", 0); }
+/// The plate with anything driving it: the dry hit or the stick's pulse.
+Gate plate(const GateSite& s) {
+  return plate_on(s) & (tone(s) | noise(s) | particles(s) | above("plateContact", 0));
+}
+/// What the shell resonates: the dry hit plus the plate's own ring.
+Gate shell_input(const GateSite& s) { return tone(s) | noise(s) | particles(s) | struck_plate(s); }
+/// Shell slot @p k resonating something.
+Gate shell_slot(const GateSite& s, int k) {
+  return above("shellMix", 0) & above("shellNumModes", k) & shell_input(s);
+}
+
+/// The strike shape reads alpha at a strike point; the air spring reads it as
+/// the piston area of an axisymmetric pair, against every other such mode.
+Gate mode_alpha(const GateSite& s) {
+  const int i = s.index;
+  Gate out = mode_placed(i) & above("strikeR", 0);
+  const auto& orders = s.base.percussion.mode_m;
+  if (orders[static_cast<size_t>(i)] != 0) return out;
+  for (int j = 0; j < kMaxPercussionModes; ++j) {
+    if (j == i || orders[static_cast<size_t>(j)] != 0) continue;
+    out = out | (above("numModes", std::max(i, j)) & above(slot("modeRatios", i), 0) &
+                 above(slot("modeRatios", j), 0) & above("airSpring", 0));
+  }
+  return out;
+}
+
+/// The damping law is a power of the ratio, so a mode at ratio 1 ignores it.
+Gate mode_decay_exp(const GateSite&) {
+  Gate out = never();
+  for (int i = 0; i < kMaxPercussionModes; ++i) {
+    out = out | (mode_placed(i) & differs(slot("modeRatios", i), 1));
+  }
+  return out;
+}
+
+/// The key-tracked base sets the modes and every shell slot left at 0 Hz.
+Gate base_freq(const GateSite& s) {
+  Gate out = tone(s);
+  for (int k = 0; k < kMaxShellModes; ++k) {
+    out = out | (shell_slot(s, k) & equals(slot("shellFreqHz", k), 0));
+  }
+  return out;
+}
+
+/// One gate an engine-section field takes, keyed by its un-indexed path. A
+/// path ending in `*` covers its whole section; a field several rows match
+/// takes all of them.
+struct GateRow {
+  const char* member_path;
+  Gate (*gate)(const GateSite&);
+};
+
+const GateRow kEngineGates[] = {
     // Pipe organ: the flat voicing builds the implicit 8' only.
-    cmp("pipe_organ.stopped", "rankCount", kEq, 0),
-    cmp("pipe_organ.brightness", "rankCount", kEq, 0),
-    cmp("pipe_organ.reed", "rankCount", kEq, 0),
-    cmp("pipe_organ.radiation", "rankCount", kEq, 0),
-    past_index("pipe_organ.ranks.footage_mult", "rankCount"),
-    past_index("pipe_organ.ranks.stopped", "rankCount"),
-    past_index("pipe_organ.ranks.brightness", "rankCount"),
-    past_index("pipe_organ.ranks.level", "rankCount"),
-    past_index("pipe_organ.ranks.reed", "rankCount"),
-    past_index("pipe_organ.ranks.radiation", "rankCount"),
+    {"pipe_organ.stopped", [](const GateSite&) { return equals("rankCount", 0); }},
+    {"pipe_organ.brightness", [](const GateSite&) { return equals("rankCount", 0); }},
+    {"pipe_organ.reed", [](const GateSite&) { return equals("rankCount", 0); }},
+    {"pipe_organ.radiation", [](const GateSite&) { return equals("rankCount", 0); }},
+    {"pipe_organ.ranks.*", [](const GateSite& s) { return above("rankCount", s.index); }},
     // Bowed string: the bristle model, and the violin corpus the wrapper selects.
-    is("bowed_string.stribeck", "elastoPlastic", true),
-    wrapper_is("bowed_string.corpus_scale", "body", "violin"),
-    wrapper_above("bowed_string.corpus_scale", "bodyMix", 0),
-    wrapper_is("bowed_string.corpus_tilt_hz", "body", "violin"),
-    wrapper_above("bowed_string.corpus_tilt_hz", "bodyMix", 0),
+    {"bowed_string.stribeck", [](const GateSite&) { return is("elastoPlastic", true); }},
+    {"bowed_string.corpus_scale",
+     [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
+    {"bowed_string.corpus_tilt_hz",
+     [](const GateSite&) { return wrapper_is("body", "violin") & wrapper_above("bodyMix", 0); }},
     // Reed: the mass-spring valve, the growth cone and the beating-reed channel.
-    is("reed.reed_resonance", "dynamicReed", true),
-    is("reed.cone_growth", "conical", true),
-    cmp("reed.flow_gain", "closingPressure", kGt, 0),
-    cmp("reed.pressure_scale", "closingPressure", kGt, 0),
+    {"reed.reed_resonance", [](const GateSite&) { return is("dynamicReed", true); }},
+    {"reed.cone_growth", [](const GateSite&) { return is("conical", true); }},
+    {"reed.flow_gain", [](const GateSite&) { return above("closingPressure", 0); }},
+    {"reed.pressure_scale", [](const GateSite&) { return above("closingPressure", 0); }},
     // Brass: a bell cutoff takes the radiation corner from the reflection pole.
-    cmp("brass.bell_radiation_hz", "bellCutoffHz", kEq, 0),
+    {"brass.bell_radiation_hz", [](const GateSite&) { return equals("bellCutoffHz", 0); }},
     // Free reed: the slot flow replaces the shaped saw.
-    cmp("free_reed.slot_return", "slotDuty", kGt, 0),
-    cmp("free_reed.slot_gap", "slotDuty", kGt, 0),
-    cmp("free_reed.radiation", "slotDuty", kGt, 0),
+    {"free_reed.slot_return", [](const GateSite&) { return above("slotDuty", 0); }},
+    {"free_reed.slot_gap", [](const GateSite&) { return above("slotDuty", 0); }},
+    {"free_reed.radiation", [](const GateSite&) { return above("slotDuty", 0); }},
     // Harpsichord: each choir's fields reach it only once it is drawn.
-    is("harpsichord.pluck_8b", "eightB", true),
-    is("harpsichord.unison_detune_cents", "eightB", true),
-    is("harpsichord.pluck_4", "four", true),
-    is("harpsichord.octave_detune_cents", "four", true),
-    is("harpsichord.undamped_from_note", "four", true),
+    {"harpsichord.pluck_8b", [](const GateSite&) { return is("eightB", true); }},
+    {"harpsichord.unison_detune_cents", [](const GateSite&) { return is("eightB", true); }},
+    {"harpsichord.pluck_4", [](const GateSite&) { return is("four", true); }},
+    {"harpsichord.octave_detune_cents", [](const GateSite&) { return is("four", true); }},
+    {"harpsichord.undamped_from_note", [](const GateSite&) { return is("four", true); }},
     // Additive: the percussion harmonic.
-    cmp("additive.percussion_decay_ms", "percussionHarmonic", Relation::kGe, 2),
-    cmp("additive.percussion_level", "percussionHarmonic", Relation::kGe, 2),
+    {"additive.percussion_decay_ms",
+     [](const GateSite&) { return at_least("percussionHarmonic", 2); }},
+    {"additive.percussion_level",
+     [](const GateSite&) { return at_least("percussionHarmonic", 2); }},
     // Percussion: the kit switch resolves every note through the GM map.
-    is("percussion.*", "gmKit", false),
-    cmp("percussion.shell_num_modes", "shellMix", kGt, 0),
-    cmp("percussion.noise_burst_count", "noiseGain", kGt, 0),
-    cmp("percussion.noise_output", "noiseGain", kGt, 0),
-    past_index("percussion.mode_ratios", "numModes"),
-    past_index("percussion.mode_alpha", "numModes"),
-    cmp("percussion.mode_decay_s", "numModes", kGt, 0),
-    cmp("percussion.mode_decay_exp", "numModes", kGt, 0),
-    cmp("percussion.tone_gain", "numModes", kGt, 0),
-    cmp("percussion.tone_direct", "numModes", kGt, 0),
-    cmp("percussion.tone_direct", "plateGain", kGt, 0),
-    cmp("percussion.pitch_drop", "numModes", kGt, 0),
-    cmp("percussion.pitch_drop_ms", "numModes", kGt, 0),
-    cmp("percussion.pitch_drop_ms", "pitchDrop", kGt, 0),
-    cmp("percussion.strike_r", "numModes", kGt, 0),
-    // Mode 0 is axisymmetric, so the angle needs a second mode to reach.
-    cmp("percussion.strike_theta", "numModes", kGt, 1),
-    cmp("percussion.strike_theta", "strikeR", kGt, 0),
-    cmp("percussion.mallet_ms", "numModes", kGt, 0),
-    cmp("percussion.mallet_vel_exp", "numModes", kGt, 0),
-    cmp("percussion.mallet_vel_exp", "malletMs", kGt, 0),
-    cmp("percussion.air_spring", "numModes", kGt, 0),
-    cmp("percussion.head_diameter_m", "numModes", kGt, 1),
-    cmp("percussion.shell_depth_m", "numModes", kGt, 0),
-    cmp("percussion.shell_depth_m", "airSpring", kGt, 0),
-    cmp("percussion.noise_decay_ms", "noiseGain", kGt, 0),
-    cmp("percussion.noise_cutoff_hz", "noiseGain", kGt, 0),
-    cmp("percussion.noise_q", "noiseGain", kGt, 0),
-    cmp("percussion.noise_burst_interval_ms", "noiseGain", kGt, 0),
-    cmp("percussion.noise_burst_interval_ms", "noiseBurstCount", kGt, 0),
-    cmp("percussion.noise_burst_decay_ms", "noiseGain", kGt, 0),
-    cmp("percussion.noise_burst_decay_ms", "noiseBurstCount", kGt, 0),
-    cmp("percussion.shell_mix", "shellNumModes", kGt, 0),
-    past_index("percussion.shell_freq_hz", "shellNumModes"),
-    cmp("percussion.shell_freq_hz", "shellMix", kGt, 0),
-    past_index("percussion.shell_t60_s", "shellNumModes"),
-    cmp("percussion.shell_t60_s", "shellMix", kGt, 0),
-    past_index("percussion.shell_weight", "shellNumModes"),
-    cmp("percussion.shell_weight", "shellMix", kGt, 0),
-    cmp("percussion.wire_buzz", "numModes", kGt, 0),
-    cmp("percussion.wire_threshold", "numModes", kGt, 0),
-    cmp("percussion.wire_threshold", "wireBuzz", kGt, 0),
-    cmp("percussion.wire_cutoff_hz", "numModes", kGt, 0),
-    cmp("percussion.wire_cutoff_hz", "wireBuzz", kGt, 0),
-    cmp("percussion.wire_decay_ms", "numModes", kGt, 0),
-    cmp("percussion.wire_decay_ms", "wireBuzz", kGt, 0),
-    cmp("percussion.shimmer", "numModes", kGt, 0),
-    cmp("percussion.shimmer_attack_ms", "numModes", kGt, 0),
-    cmp("percussion.shimmer_attack_ms", "shimmer", kGt, 0),
-    cmp("percussion.shimmer_cutoff_hz", "numModes", kGt, 0),
-    cmp("percussion.shimmer_cutoff_hz", "shimmer", kGt, 0),
-    cmp("percussion.plate_t60_s", "plateGain", kGt, 0),
-    cmp("percussion.plate_hf_ratio", "plateGain", kGt, 0),
-    cmp("percussion.plate_low_hz", "plateGain", kGt, 0),
-    cmp("percussion.plate_air_hz", "plateGain", kGt, 0),
-    cmp("percussion.plate_contact", "plateGain", kGt, 0),
-    cmp("percussion.plate_cascade", "plateGain", kGt, 0),
-    cmp("percussion.plate_cascade_hz", "plateGain", kGt, 0),
-    cmp("percussion.plate_cascade_hz", "plateCascade", kGt, 0),
-    cmp("percussion.plate_cascade_drop_db", "plateGain", kGt, 0),
-    cmp("percussion.plate_cascade_drop_db", "plateCascade", kGt, 0),
-    cmp("percussion.plate_floor_hz", "plateGain", kGt, 0),
-    cmp("percussion.phisem_energy_ms", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_sound_ms", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_res_hz", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_res_q", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_res_q", "phisemResHz", kGt, 0),
-    cmp("percussion.phisem_pitch_glide", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_pitch_glide", "phisemResHz", kGt, 0),
-    cmp("percussion.phisem_body_hz", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_body_hz", "phisemBodyGain", kGt, 0),
-    cmp("percussion.phisem_body_q", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_body_q", "phisemBodyHz", kGt, 0),
-    cmp("percussion.phisem_body_q", "phisemBodyGain", kGt, 0),
-    cmp("percussion.phisem_body_gain", "phisemBeans", kGt, 0),
-    cmp("percussion.phisem_body_gain", "phisemBodyHz", kGt, 0),
-    cmp("percussion.phisem_scrape_hz", "phisemBeans", kGt, 0),
+    {"percussion.*",
+     [](const GateSite& s) { return s.key == "gmKit" ? Gate{} : is("gmKit", false); }},
+    // A choke fades the amplitude envelope, which the direct contact bypasses.
+    {"percussion.exclusive_class", shell_input},
+    {"percussion.num_modes",
+     [](const GateSite&) {
+       Gate out = never();
+       for (int i = 0; i < kMaxPercussionModes; ++i) out = out | above(slot("modeRatios", i), 0);
+       return out;
+     }},
+    {"percussion.mode_ratios", [](const GateSite& s) { return above("numModes", s.index); }},
+    {"percussion.mode_alpha", mode_alpha},
+    {"percussion.mode_decay_s", tone},
+    {"percussion.mode_decay_exp", mode_decay_exp},
+    {"percussion.tone_gain", tone},
+    // The split is between the direct path and the plate.
+    {"percussion.tone_direct", [](const GateSite& s) { return tone(s) & plate_on(s); }},
+    {"percussion.base_freq_hz", base_freq},
+    {"percussion.pitch_drop", tone},
+    {"percussion.pitch_drop_ms", [](const GateSite& s) { return tone(s) & above("pitchDrop", 0); }},
+    {"percussion.strike_r", tone},
+    // Mode order 0 is axisymmetric, so the angle needs a mode with a diameter.
+    {"percussion.strike_theta",
+     [](const GateSite& s) { return diametral_modes(s) & above("strikeR", 0); }},
+    {"percussion.mallet_ms", tone},
+    {"percussion.mallet_vel_exp", [](const GateSite& s) { return tone(s) & above("malletMs", 0); }},
+    {"percussion.air_spring", axisymmetric_modes},
+    {"percussion.head_diameter_m", diametral_modes},
+    {"percussion.shell_depth_m",
+     [](const GateSite& s) { return axisymmetric_modes(s) & above("airSpring", 0); }},
+    {"percussion.noise_decay_ms", noise},
+    {"percussion.noise_cutoff_hz", noise},
+    {"percussion.noise_q", noise},
+    {"percussion.noise_output", noise},
+    {"percussion.noise_burst_count", noise},
+    {"percussion.noise_burst_interval_ms",
+     [](const GateSite& s) { return noise(s) & above("noiseBurstCount", 0); }},
+    {"percussion.noise_burst_decay_ms",
+     [](const GateSite& s) { return noise(s) & above("noiseBurstCount", 0); }},
+    // The ceiling bounds the burst, the wire rattle and the shimmer wash.
+    {"percussion.noise_air_hz",
+     [](const GateSite& s) {
+       return noise(s) | (tone(s) & (above("wireBuzz", 0) | above("shimmer", 0)));
+     }},
+    {"percussion.shell_mix",
+     [](const GateSite& s) { return above("shellNumModes", 0) & shell_input(s); }},
+    {"percussion.shell_num_modes",
+     [](const GateSite& s) { return above("shellMix", 0) & shell_input(s); }},
+    {"percussion.shell_freq_hz", [](const GateSite& s) { return shell_slot(s, s.index); }},
+    {"percussion.shell_t60_s", [](const GateSite& s) { return shell_slot(s, s.index); }},
+    {"percussion.shell_weight", [](const GateSite& s) { return shell_slot(s, s.index); }},
+    {"percussion.wire_buzz", tone},
+    {"percussion.wire_threshold", [](const GateSite& s) { return tone(s) & above("wireBuzz", 0); }},
+    {"percussion.wire_cutoff_hz", [](const GateSite& s) { return tone(s) & above("wireBuzz", 0); }},
+    {"percussion.wire_decay_ms", [](const GateSite& s) { return tone(s) & above("wireBuzz", 0); }},
+    {"percussion.shimmer", tone},
+    {"percussion.shimmer_attack_ms",
+     [](const GateSite& s) { return tone(s) & above("shimmer", 0); }},
+    {"percussion.shimmer_cutoff_hz",
+     [](const GateSite& s) { return tone(s) & above("shimmer", 0); }},
+    // One pulse length times the direct contact and the plate's.
+    {"percussion.contact_ms",
+     [](const GateSite& s) { return above("contact", 0) | struck_plate(s); }},
+    {"percussion.plate_gain",
+     [](const GateSite& s) {
+       return tone(s) | noise(s) | particles(s) | above("plateContact", 0);
+     }},
+    {"percussion.plate_t60_s", plate},
+    {"percussion.plate_hf_ratio", plate},
+    {"percussion.plate_low_hz", plate},
+    {"percussion.plate_air_hz", plate},
+    {"percussion.plate_floor_hz", plate},
+    {"percussion.plate_cascade", plate},
+    {"percussion.plate_contact", plate_on},
+    {"percussion.plate_cascade_hz",
+     [](const GateSite& s) { return plate(s) & above("plateCascade", 0); }},
+    {"percussion.plate_cascade_drop_db",
+     [](const GateSite& s) { return plate(s) & above("plateCascade", 0); }},
+    {"percussion.phisem_energy_ms", particles},
+    {"percussion.phisem_sound_ms", particles},
+    {"percussion.phisem_res_hz", particles},
+    {"percussion.phisem_scrape_hz", particles},
+    {"percussion.phisem_res_q",
+     [](const GateSite& s) { return particles(s) & above("phisemResHz", 0); }},
+    {"percussion.phisem_pitch_glide",
+     [](const GateSite& s) { return particles(s) & above("phisemResHz", 0); }},
+    {"percussion.phisem_body_hz",
+     [](const GateSite& s) { return particles(s) & above("phisemBodyGain", 0); }},
+    {"percussion.phisem_body_q",
+     [](const GateSite& s) {
+       return particles(s) & above("phisemBodyHz", 0) & above("phisemBodyGain", 0);
+     }},
+    {"percussion.phisem_body_gain",
+     [](const GateSite& s) { return particles(s) & above("phisemBodyHz", 0); }},
 };
 
 bool gate_row_matches(const char* row_path, const std::string& member_path) {
@@ -1278,21 +1446,16 @@ int site_index(const FieldSite& site) {
   return index;
 }
 
-std::vector<ActiveCondition> gates_of(const FieldSite& site, const std::string& own_key) {
-  std::vector<ActiveCondition> out;
+/// @p site's gate as alternatives; empty when the field always reaches the voice.
+std::vector<ActiveAlternative> gates_of(const FieldSite& site, const std::string& own_key,
+                                        const NativeSynthPatch& base) {
+  const GateSite s{own_key, site_index(site), base};
+  Gate gate;
   for (const GateRow& row : kEngineGates) {
-    if (!gate_row_matches(row.member_path, site.member_path)) continue;
-    if (row.scope == Scope::kEngine && own_key == row.key) continue;
-    ActiveCondition c;
-    c.key = row.key;
-    c.scope = row.scope;
-    c.relation = row.relation;
-    c.kind = row.kind;
-    c.number = row.by_index ? static_cast<double>(site_index(site)) : row.number;
-    c.text = row.text;
-    out.push_back(std::move(c));
+    if (gate_row_matches(row.member_path, site.member_path)) gate = gate & row.gate(s);
   }
-  return out;
+  if (gate.any.size() == 1 && gate.any.front().empty()) return {};
+  return std::move(gate.any);
 }
 
 bool find_unit(const std::string& member_path, Unit* unit) {
@@ -1480,7 +1643,7 @@ std::vector<EngineParamDescriptor> engine_param_descriptors(const NativeSynthPat
     d.unit = Unit::None;
     find_unit(site.member_path, &d.unit);
     d.value = site.value;
-    d.active_when = gates_of(site, d.key);
+    d.active_when = gates_of(site, d.key, base);
     out.push_back(std::move(d));
   }
   return out;

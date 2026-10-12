@@ -1,17 +1,19 @@
 /// @file synth_engine_param_active_test.cpp
 /// @brief The `active_when` gates of the engine-section descriptors, measured
-///        against renders: a field must change the audio exactly when its gate
-///        holds, must change it once the gate is satisfied, and must stop when
-///        any one of its conditions is broken. Fields that act only under a
-///        performance, saturate, or are reached through several layers at once
-///        sit on a reasoned exception list, and an entry that excuses nothing
-///        fails.
+///        against renders. Each alternative, satisfied minimally from the
+///        engine's mode-only patch, must let the field change the audio; with
+///        no alternative holding the field must not; and in a mode-only patch
+///        the fields whose gate holds are exactly the fields that alter the
+///        render. Fields that act only under a performance, saturate, or hang
+///        on a relation between two keys sit on a reasoned exception list, and
+///        an entry that excuses nothing fails.
 
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstring>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/synth_patch_common.h"
@@ -22,6 +24,7 @@
 
 namespace {
 
+using sonare::midi::synth::ActiveAlternative;
 using sonare::midi::synth::ActiveCondition;
 using sonare::midi::synth::apply_engine_params;
 using sonare::midi::synth::BodyType;
@@ -32,6 +35,8 @@ using sonare::midi::synth::NativeSynth;
 using sonare::midi::synth::NativeSynthConfig;
 using sonare::midi::synth::NativeSynthPatch;
 using sonare::midi::synth::SynthEngineMode;
+
+using Gate = std::vector<ActiveAlternative>;
 
 constexpr double kRate = 24000.0;
 constexpr int kBlock = 256;
@@ -55,18 +60,6 @@ const Excuse kExcuses[] = {
     {SynthEngineMode::kPipeOrgan, "swell", "performance: the shutter follows CC11"},
     {SynthEngineMode::kHarpsichord, "velocityDroopDb",
      "performance: acts only on a velocity above peakVelocity"},
-    {SynthEngineMode::kPercussion, "exclusiveClass",
-     "performance: chokes a sounding piece on an overlapping note of the same class"},
-    {SynthEngineMode::kPercussion, "modeAlpha*",
-     "reached through the strike point or the air-spring split, either one"},
-    {SynthEngineMode::kPercussion, "baseFreqHz",
-     "reached through the modes or a key-tracked shell mode, either one"},
-    {SynthEngineMode::kPercussion, "noiseAirHz", "bounds the noise, wire and shimmer layers alike"},
-    {SynthEngineMode::kPercussion, "contactMs",
-     "times the direct contact and the plate's contact alike"},
-    {SynthEngineMode::kPercussion, "shell*", "rings whichever layer sounds"},
-    {SynthEngineMode::kPercussion, "plate*",
-     "rings whichever layer sounds, its own contact included"},
 };
 
 bool excuse_matches(const Excuse& e, SynthEngineMode mode, const std::string& key) {
@@ -74,6 +67,13 @@ bool excuse_matches(const Excuse& e, SynthEngineMode mode, const std::string& ke
   const size_t n = std::strlen(e.key);
   if (n > 0 && e.key[n - 1] == '*') return key.compare(0, n - 1, e.key, n - 1) == 0;
   return key == e.key;
+}
+
+bool excused(SynthEngineMode mode, const std::string& key) {
+  for (const Excuse& e : kExcuses) {
+    if (excuse_matches(e, mode, key)) return true;
+  }
+  return false;
 }
 
 /// The wrapper body vocabulary, in BodyType order.
@@ -132,6 +132,29 @@ bool set_engine(NativeSynthConfig& cfg, const std::string& key, double value) {
   return apply_engine_params(cfg.patch, &p, 1, nullptr);
 }
 
+/// A patch under test and its engine fields, whose values follow every write
+/// made through @ref set, so a gate is read without rebuilding the descriptors.
+struct Patch {
+  NativeSynthConfig cfg;
+  std::vector<EngineParamDescriptor> fields;
+};
+
+Patch patch_of(const NativeSynthConfig& cfg) { return {cfg, engine_param_descriptors(cfg.patch)}; }
+
+const EngineParamDescriptor& field(const Patch& p, const std::string& key) {
+  const EngineParamDescriptor* d = find(p.fields, key);
+  REQUIRE(d != nullptr);
+  return *d;
+}
+
+bool set(Patch& p, const std::string& key, double value) {
+  if (!set_engine(p.cfg, key, value)) return false;
+  for (auto& d : p.fields) {
+    if (d.key == key) d.value = static_cast<float>(value);
+  }
+  return true;
+}
+
 /// Values a field is moved to, all accepted and none equal to its own.
 std::vector<double> candidates(const EngineParamDescriptor& d) {
   const double v = d.value;
@@ -157,31 +180,20 @@ std::vector<double> candidates(const EngineParamDescriptor& d) {
   return out;
 }
 
-/// Whether moving @p key off its value in @p cfg changes the render;
-/// @p reference is @p cfg's own render when the caller already has it.
-bool acts(const NativeSynthConfig& cfg, const std::string& key,
-          const std::vector<float>* reference = nullptr) {
-  const auto ds = engine_param_descriptors(cfg.patch);
-  const EngineParamDescriptor* d = find(ds, key);
-  REQUIRE(d != nullptr);
+/// Whether moving @p key off its value in @p p changes the render;
+/// @p reference is @p p's own render when the caller already has it.
+bool acts(const Patch& p, const std::string& key, const std::vector<float>* reference = nullptr) {
   std::vector<float> own;
   if (reference == nullptr) {
-    own = render(cfg);
+    own = render(p.cfg);
     reference = &own;
   }
-  for (double c : candidates(*d)) {
-    NativeSynthConfig moved = cfg;
+  for (double c : candidates(field(p, key))) {
+    NativeSynthConfig moved = p.cfg;
     if (!set_engine(moved, key, c)) continue;
     if (!same(render(moved), *reference)) return true;
   }
   return false;
-}
-
-double engine_value(const NativeSynthConfig& cfg, const std::string& key) {
-  const auto ds = engine_param_descriptors(cfg.patch);
-  const EngineParamDescriptor* d = find(ds, key);
-  REQUIRE(d != nullptr);
-  return d->value;
 }
 
 /// The wrapper's numeric fields a gate names, with the range the patch clamp keeps.
@@ -200,17 +212,17 @@ const WrapperNumber& wrapper_number(const std::string& key) {
   return kWrapperNumbers[0];
 }
 
-bool holds(const ActiveCondition& c, const NativeSynthConfig& cfg) {
+bool holds(const ActiveCondition& c, const Patch& p) {
   double v = 0.0;
   if (c.scope == ActiveCondition::Scope::kPatch && c.kind == ActiveCondition::Kind::kString) {
     REQUIRE(c.key == "body");
     REQUIRE(c.relation == ActiveCondition::Relation::kEq);
-    return c.text == kBodyNames[static_cast<int>(cfg.patch.body)];
+    return c.text == kBodyNames[static_cast<int>(p.cfg.patch.body)];
   }
   if (c.scope == ActiveCondition::Scope::kPatch) {
-    v = cfg.patch.*wrapper_number(c.key).member;
+    v = p.cfg.patch.*wrapper_number(c.key).member;
   } else {
-    v = engine_value(cfg, c.key);
+    v = field(p, c.key).value;
   }
   switch (c.relation) {
     case ActiveCondition::Relation::kEq:
@@ -229,36 +241,44 @@ bool holds(const ActiveCondition& c, const NativeSynthConfig& cfg) {
   return false;
 }
 
-bool all_hold(const std::vector<ActiveCondition>& gate, const NativeSynthConfig& cfg) {
-  for (const auto& c : gate) {
-    if (!holds(c, cfg)) return false;
+bool all_hold(const ActiveAlternative& alternative, const Patch& p) {
+  for (const auto& c : alternative) {
+    if (!holds(c, p)) return false;
   }
   return true;
 }
 
-/// Write a value into @p cfg that makes @p c hold (or, with @p broken, fail).
-void force(const ActiveCondition& c, NativeSynthConfig& cfg, bool broken) {
+/// What a UI reads off the descriptor: no gate, or some alternative holding.
+bool gate_holds(const Gate& gate, const Patch& p) {
+  if (gate.empty()) return true;
+  for (const auto& alternative : gate) {
+    if (all_hold(alternative, p)) return true;
+  }
+  return false;
+}
+
+/// Write the value nearest the condition's threshold that makes @p c hold (or,
+/// with @p broken, fail) into @p p.
+void force(const ActiveCondition& c, Patch& p, bool broken) {
   if (c.scope == ActiveCondition::Scope::kPatch && c.kind == ActiveCondition::Kind::kString) {
     const bool want_named = !broken;
     for (int i = 0; i < static_cast<int>(std::size(kBodyNames)); ++i) {
       if ((c.text == kBodyNames[i]) == want_named) {
-        cfg.patch.body = static_cast<BodyType>(i);
+        p.cfg.patch.body = static_cast<BodyType>(i);
         return;
       }
     }
     FAIL("no body to force " << c.key);
   }
   const bool wrapper = c.scope == ActiveCondition::Scope::kPatch;
-  const auto ds = engine_param_descriptors(cfg.patch);
-  const EngineParamDescriptor* d = wrapper ? nullptr : find(ds, c.key);
-  REQUIRE((wrapper || d != nullptr));
+  const EngineParamDescriptor* d = wrapper ? nullptr : &field(p, c.key);
   const bool whole = !wrapper && (d->integer || d->boolean);
   const bool boolean = !wrapper && d->boolean;
   const double v = c.number;
   const double lo = wrapper ? wrapper_number(c.key).lo : d->bounded ? d->lo : v - 1.0;
   const double hi = wrapper ? wrapper_number(c.key).hi : d->bounded ? d->hi : v + 1.0;
-  const auto above = [&] { return whole ? hi : 0.5 * (v + hi); };
-  const auto below = [&] { return whole ? lo : 0.5 * (v + lo); };
+  const auto above = [&] { return whole ? v + 1.0 : 0.5 * (v + hi); };
+  const auto below = [&] { return whole ? v - 1.0 : 0.5 * (v + lo); };
   using R = ActiveCondition::Relation;
   R relation = c.relation;
   if (broken) {
@@ -302,10 +322,21 @@ void force(const ActiveCondition& c, NativeSynthConfig& cfg, bool broken) {
   }
   INFO("forcing " << c.key << " to " << target);
   if (wrapper) {
-    cfg.patch.*wrapper_number(c.key).member = static_cast<float>(target);
+    p.cfg.patch.*wrapper_number(c.key).member = static_cast<float>(target);
     return;
   }
-  REQUIRE(set_engine(cfg, c.key, target));
+  REQUIRE(set(p, c.key, target));
+}
+
+/// @p alternative made to hold from @p base, each condition the base fails
+/// moved to its threshold.
+Patch satisfied(const Patch& base, const ActiveAlternative& alternative) {
+  Patch p = base;
+  for (const auto& c : alternative) {
+    if (!holds(c, p)) force(c, p, false);
+  }
+  REQUIRE(all_hold(alternative, p));
+  return p;
 }
 
 struct Mismatch {
@@ -313,7 +344,42 @@ struct Mismatch {
   std::string what;
 };
 
-/// Every gate of @p mode measured three ways; mismatches the exception list
+/// The keys whose gate holds in @p p against the keys whose movement changes
+/// its render, excused keys left out.
+std::vector<Mismatch> shown_against_altering(SynthEngineMode mode, const Patch& p,
+                                             const char* context) {
+  std::vector<Mismatch> out;
+  const std::vector<float> reference = render(p.cfg);
+  for (const auto& d : p.fields) {
+    if (excused(mode, d.key)) continue;
+    const bool shown = gate_holds(d.active_when, p);
+    if (acts(p, d.key, &reference) != shown) {
+      out.push_back({d.key, std::string(context) + (shown ? ": gate holds, field inert"
+                                                          : ": gate fails, field acts")});
+    }
+  }
+  return out;
+}
+
+/// @p base with every switch a gate names set the way a gate asks, where the
+/// switch itself is ungated: the patch a host reaches by flipping one switch.
+Patch opened(const Patch& base) {
+  Patch p = base;
+  for (const auto& d : base.fields) {
+    for (const auto& alternative : d.active_when) {
+      for (const auto& c : alternative) {
+        if (c.kind == ActiveCondition::Kind::kBoolean && field(base, c.key).active_when.empty()) {
+          force(c, p, false);
+        }
+      }
+    }
+  }
+  return p;
+}
+
+/// Every gate of @p mode measured: the mode-only and opened patches compared
+/// shown against altering, each alternative satisfied minimally, and each
+/// minimal state where no alternative holds. Mismatches the exception list
 /// does not cover are returned, and each covering entry is marked used.
 std::vector<Mismatch> sweep(SynthEngineMode mode, std::vector<bool>& used) {
   std::vector<Mismatch> out;
@@ -327,43 +393,35 @@ std::vector<Mismatch> sweep(SynthEngineMode mode, std::vector<bool>& used) {
     out.push_back({key, what});
   };
 
-  const NativeSynthConfig base = mode_only(mode);
-  const auto ds = engine_param_descriptors(base.patch);
-
-  // The opened context: every switch a gate names, set the way the gate asks.
-  NativeSynthConfig opened = base;
-  for (const auto& d : ds) {
-    for (const auto& c : d.active_when) {
-      if (c.kind == ActiveCondition::Kind::kBoolean && find(ds, c.key)->active_when.empty()) {
-        force(c, opened, false);
-      }
-    }
-  }
-
-  for (const NativeSynthConfig* context : {&base, static_cast<const NativeSynthConfig*>(&opened)}) {
-    const char* name = context == &base ? "base" : "opened";
-    const std::vector<float> reference = render(*context);
-    for (const auto& d : ds) {
-      const bool expected = all_hold(d.active_when, *context);
-      if (acts(*context, d.key, &reference) != expected) {
+  const Patch base = patch_of(mode_only(mode));
+  for (const auto& [context, name] :
+       {std::pair{base, "mode-only"}, std::pair{opened(base), "opened"}}) {
+    const std::vector<float> reference = render(context.cfg);
+    for (const auto& d : context.fields) {
+      const bool shown = gate_holds(d.active_when, context);
+      if (acts(context, d.key, &reference) != shown) {
         report(d.key, std::string(name) +
-                          (expected ? ": gate holds, field inert" : ": gate fails, field acts"));
+                          (shown ? ": gate holds, field inert" : ": gate fails, field acts"));
       }
     }
   }
 
-  for (const auto& d : ds) {
-    if (d.active_when.empty()) continue;
-    NativeSynthConfig satisfied = base;
-    for (const auto& c : d.active_when) force(c, satisfied, false);
-    if (!acts(satisfied, d.key)) report(d.key, "gate satisfied, field inert");
-    for (size_t broken = 0; broken < d.active_when.size(); ++broken) {
-      NativeSynthConfig cfg = base;
-      for (size_t i = 0; i < d.active_when.size(); ++i) {
-        if (i != broken) force(d.active_when[i], cfg, false);
+  for (const auto& d : base.fields) {
+    for (size_t a = 0; a < d.active_when.size(); ++a) {
+      const ActiveAlternative& alternative = d.active_when[a];
+      const std::string which = "alternative " + std::to_string(a);
+      if (!acts(satisfied(base, alternative), d.key)) report(d.key, which + " holds, field inert");
+      for (size_t broken = 0; broken < alternative.size(); ++broken) {
+        Patch p = base;
+        for (size_t i = 0; i < alternative.size(); ++i) {
+          if (i != broken && !holds(alternative[i], p)) force(alternative[i], p, false);
+        }
+        if (holds(alternative[broken], p)) force(alternative[broken], p, true);
+        if (gate_holds(d.active_when, p)) continue;
+        if (acts(p, d.key)) {
+          report(d.key, which + " with " + alternative[broken].key + " broken, field acts");
+        }
       }
-      if (all_hold({d.active_when[broken]}, cfg)) force(d.active_when[broken], cfg, true);
-      if (acts(cfg, d.key)) report(d.key, "acts with " + d.active_when[broken].key + " broken");
     }
   }
   return out;
@@ -387,43 +445,83 @@ void require_gates_measured(const std::vector<SynthEngineMode>& modes) {
   }
 }
 
-}  // namespace
-
-// Percussion's sweep alone runs ~20 s in a Debug build, so the untagged subset
-// takes a numeric-gated engine and the one gated on wrapper fields.
-TEST_CASE("engine param gates match the render on brass and bowed string", "[midi][synth]") {
-  require_gates_measured({SynthEngineMode::kBrass, SynthEngineMode::kBowedString});
-}
-
-TEST_CASE("engine param gates match the render on every engine", "[.][slow][midi][synth]") {
+std::vector<SynthEngineMode> engine_modes() {
   std::vector<SynthEngineMode> modes;
   for (int m = 0; m <= sonare::midi::synth::kSynthEngineModeMax; ++m) {
     const auto mode = static_cast<SynthEngineMode>(m);
     if (sonare::midi::synth::base_preset_name(mode) != nullptr) modes.push_back(mode);
   }
+  return modes;
+}
+
+}  // namespace
+
+// Percussion's sweep alone runs well past the fast budget in a Debug build, so
+// the untagged subset takes a numeric-gated engine and the one gated on
+// wrapper fields.
+TEST_CASE("engine param gates match the render on brass and bowed string", "[midi][synth]") {
+  require_gates_measured({SynthEngineMode::kBrass, SynthEngineMode::kBowedString});
+}
+
+TEST_CASE("engine param gates match the render on every engine", "[.][slow][midi][synth]") {
+  const std::vector<SynthEngineMode> modes = engine_modes();
   REQUIRE(modes.size() > 2);
   require_gates_measured(modes);
+}
+
+/// The percussion mode-only patch with only gmKit set, compared shown against altering.
+void require_kit_patch_shows_what_alters(bool gm_kit) {
+  Patch p = patch_of(mode_only(SynthEngineMode::kPercussion));
+  REQUIRE(set(p, "gmKit", gm_kit ? 1 : 0));
+  for (const Mismatch& m :
+       shown_against_altering(SynthEngineMode::kPercussion, p, gm_kit ? "kit on" : "kit off")) {
+    INFO(m.key << ": " << m.what);
+    CHECK(false);
+  }
+}
+
+// A host selecting the percussion engine and switching the kit off, nothing
+// else: every field a UI shows as live must move the render, and no other.
+TEST_CASE("percussion with the kit off shows exactly the fields that alter it", "[midi][synth]") {
+  require_kit_patch_shows_what_alters(false);
+}
+
+TEST_CASE("percussion with the kit on shows exactly the fields that alter it",
+          "[.][slow][midi][synth]") {
+  require_kit_patch_shows_what_alters(true);
+}
+
+TEST_CASE("every engine's mode-only patch shows exactly the fields that alter it",
+          "[.][slow][midi][synth]") {
+  for (SynthEngineMode mode : engine_modes()) {
+    INFO("engine mode " << static_cast<int>(mode));
+    for (const Mismatch& m : shown_against_altering(mode, patch_of(mode_only(mode)), "mode-only")) {
+      INFO(m.key << ": " << m.what);
+      CHECK(false);
+    }
+  }
 }
 
 TEST_CASE("an engine param gate never names its own field or a key outside its engine",
           "[midi][synth]") {
   size_t gated = 0;
-  for (int m = 0; m <= sonare::midi::synth::kSynthEngineModeMax; ++m) {
-    const auto mode = static_cast<SynthEngineMode>(m);
-    if (sonare::midi::synth::base_preset_name(mode) == nullptr) continue;
+  for (SynthEngineMode mode : engine_modes()) {
     const auto ds = engine_param_descriptors(mode_only(mode).patch);
     for (const auto& d : ds) {
-      for (const auto& c : d.active_when) {
-        INFO(d.key << " gated on " << c.key);
-        ++gated;
-        REQUIRE(c.key != d.key);
-        if (c.scope == ActiveCondition::Scope::kPatch) continue;
-        const EngineParamDescriptor* target = find(ds, c.key);
-        REQUIRE(target != nullptr);
-        REQUIRE((c.kind == ActiveCondition::Kind::kBoolean) == target->boolean);
-        if (target->bounded) {
-          REQUIRE(c.number >= target->lo);
-          REQUIRE(c.number <= target->hi);
+      for (const auto& alternative : d.active_when) {
+        REQUIRE_FALSE(alternative.empty());
+        for (const auto& c : alternative) {
+          INFO(d.key << " gated on " << c.key);
+          ++gated;
+          REQUIRE(c.key != d.key);
+          if (c.scope == ActiveCondition::Scope::kPatch) continue;
+          const EngineParamDescriptor* target = find(ds, c.key);
+          REQUIRE(target != nullptr);
+          REQUIRE((c.kind == ActiveCondition::Kind::kBoolean) == target->boolean);
+          if (target->bounded) {
+            REQUIRE(c.number >= target->lo);
+            REQUIRE(c.number <= target->hi);
+          }
         }
       }
     }

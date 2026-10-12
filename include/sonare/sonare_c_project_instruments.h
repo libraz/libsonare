@@ -239,16 +239,17 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 ///          with a closed range, and a value outside it is refused rather than
 ///          clamped; `default` is the engine's base preset's value; `unit` is
 ///          always present, from the vocabulary listed there. `activeWhen` is
-///          present only for a field that reaches the voice under a condition
-///          on another patch field: an array of
-///          `{"key","scope","relation","value"}` that must all hold, where
+///          present only for a field that reaches the voice under conditions
+///          on other patch fields: an array of alternatives, each an array of
+///          `{"key","scope","relation","value"}`, and the field reaches the
+///          voice when every condition of at least one alternative holds.
 ///          `scope` is `"engine"` (a key of this array) or `"patch"` (a
 ///          @ref SonareSynthPatch field by its binding spelling), `relation` is
 ///          one of `"eq"`, `"ne"`, `"gt"`, `"ge"`, `"lt"`, `"le"`, and `value`
 ///          is a number, a boolean (against a switch) or a vocabulary name
-///          (against a wrapper enum such as `body`). A field without it may
-///          still act only under a performance (velocity, a controller,
-///          overlapping notes) or past a value where it saturates. The default,
+///          (against a wrapper enum such as `body`). What a field further
+///          needs from a performance (velocity, a controller, overlapping
+///          notes), or a value past which it saturates, is not stated. The default,
 ///          subtractive and sample modes have no engine section and answer
 ///          `[]`. Valid until the next call on the same thread; the caller must
 ///          NOT free it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as

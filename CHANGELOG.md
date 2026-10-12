@@ -116,7 +116,7 @@ This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_AB
 #### MIDI and synthesizer
 
 - Set a synth engine's own model fields by key with `engineParams` / `engine_params` (`bowForce`, `ranks2.level`, ...); unknown keys, other engines' keys and out-of-range values are refused by name.
-- Describe every engine and `SynthPatch` field with range, default, unit and the other fields it needs set before it reaches the voice (`activeWhen`) (`synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; `synth_engine_param_info`, `synth_patch_param_info`; `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`).
+- Describe every engine and `SynthPatch` field with range, default, unit and the alternative sets of other-field conditions, any one of which lets it reach the voice (`activeWhen`) (`synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; `synth_engine_param_info`, `synth_patch_param_info`; `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`).
 - Set per-voice drift rate, amplitude and filter envelope delay and hold, and one-shot playback (`driftRateHz`, `ampDelayMs`, `ampHoldMs`, `filterDelayMs`, `filterHoldMs`, `oneShot`; `SonareSynthPatch` version 9).
 - Choose the FM operator algorithm with the `fm` engine's `algorithm` param.
 - Push a live program change with an optional bank in one call (`pushMidiProgram`, `pushMidiInputProgram`; `push_midi_program`, `push_midi_input_program`; `sonare_engine_push_midi_program`, `sonare_engine_push_midi_input_program`); the SoundFont player, a synth bound with `useGmPrograms` and a GM-kit percussion patch (drum-set select) follow it.

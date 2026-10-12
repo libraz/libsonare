@@ -164,7 +164,7 @@ class SynthParamInfo(TypedDict):
     integer: NotRequired[bool]
     min: NotRequired[float]
     max: NotRequired[float]
-    activeWhen: NotRequired[list[SynthParamCondition]]
+    activeWhen: NotRequired[list[list[SynthParamCondition]]]
 
 class MasteringInsertParamInfo(TypedDict):
     """One key an insert processor's construction or automation reads.

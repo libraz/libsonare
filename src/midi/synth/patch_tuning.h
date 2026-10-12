@@ -72,9 +72,9 @@ bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, siz
                          std::string* error);
 
 /// One condition another patch field must meet for an engine-section field to
-/// reach the voice. Only gates on patch fields are stated; a field that acts
-/// only under a performance (velocity, a controller, overlapping notes) or
-/// saturates carries none.
+/// reach the voice. Only conditions on patch fields are stated; what a field
+/// further needs from a performance (velocity, a controller, overlapping
+/// notes), or a value past which it saturates, is not.
 struct ActiveCondition {
   /// Where @ref key lives: this engine's section (an engine-param key) or the
   /// SonareSynthPatch wrapper (a facade field name).
@@ -93,6 +93,9 @@ struct ActiveCondition {
   /// The compared value for kString.
   std::string text;
 };
+
+/// Conditions that must all hold together: one way a field reaches the voice.
+using ActiveAlternative = std::vector<ActiveCondition>;
 
 /// The JSON spelling of @p scope / @p relation.
 const char* active_scope_name(ActiveCondition::Scope scope) noexcept;
@@ -113,9 +116,9 @@ struct EngineParamDescriptor {
   mastering::api::detail::Unit unit;
   /// The field's value on the patch the descriptors were taken from.
   float value;
-  /// Conditions that must all hold for the field to reach the voice; empty
-  /// when it always does.
-  std::vector<ActiveCondition> active_when;
+  /// The ways the field reaches the voice: it does when every condition of at
+  /// least one alternative holds. Empty when it always does.
+  std::vector<ActiveAlternative> active_when;
 };
 
 /// One descriptor per field of @p base's engine section (the common section

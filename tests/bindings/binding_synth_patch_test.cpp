@@ -160,17 +160,21 @@ void require_descriptor_shape(const sonare::util::json::Value& d) {
     REQUIRE(d["min"].as_number() <= d["default"].as_number());
     REQUIRE(d["default"].as_number() <= d["max"].as_number());
   }
-  // Present only when set, like `integer`.
+  // Present only when set, like `integer`: alternatives, none of them empty.
   if (d.contains("activeWhen")) {
     REQUIRE(d["activeWhen"].is_array());
     REQUIRE(d["activeWhen"].size() > 0);
-    for (const auto& c : d["activeWhen"].as_array()) {
-      REQUIRE(c["key"].is_string());
-      const std::string& scope = c["scope"].as_string();
-      REQUIRE((scope == "engine" || scope == "patch"));
-      const std::set<std::string> relations = {"eq", "ne", "gt", "ge", "lt", "le"};
-      REQUIRE(relations.count(c["relation"].as_string()) == 1);
-      REQUIRE((c["value"].is_number() || c["value"].is_bool() || c["value"].is_string()));
+    for (const auto& alternative : d["activeWhen"].as_array()) {
+      REQUIRE(alternative.is_array());
+      REQUIRE(alternative.size() > 0);
+      for (const auto& c : alternative.as_array()) {
+        REQUIRE(c["key"].is_string());
+        const std::string& scope = c["scope"].as_string();
+        REQUIRE((scope == "engine" || scope == "patch"));
+        const std::set<std::string> relations = {"eq", "ne", "gt", "ge", "lt", "le"};
+        REQUIRE(relations.count(c["relation"].as_string()) == 1);
+        REQUIRE((c["value"].is_number() || c["value"].is_bool() || c["value"].is_string()));
+      }
     }
   }
 }
@@ -514,34 +518,36 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
     };
     for (const auto& d : info.as_array()) {
       if (!d.contains("activeWhen")) continue;
-      for (const auto& c : d["activeWhen"].as_array()) {
-        const std::string& key = c["key"].as_string();
-        CAPTURE(d["name"].as_string(), key);
-        ++conditions;
-        REQUIRE(key != d["name"].as_string());
-        const sonare::util::json::Value& value = c["value"];
-        if (c["scope"].as_string() == "patch") {
-          ++patch_conditions;
-          if (key == "body") {
-            REQUIRE(value.is_string());
-            REQUIRE(body_types.count(value.as_string()) == 1);
+      for (const auto& alternative : d["activeWhen"].as_array()) {
+        for (const auto& c : alternative.as_array()) {
+          const std::string& key = c["key"].as_string();
+          CAPTURE(d["name"].as_string(), key);
+          ++conditions;
+          REQUIRE(key != d["name"].as_string());
+          const sonare::util::json::Value& value = c["value"];
+          if (c["scope"].as_string() == "patch") {
+            ++patch_conditions;
+            if (key == "body") {
+              REQUIRE(value.is_string());
+              REQUIRE(body_types.count(value.as_string()) == 1);
+              continue;
+            }
+            const sonare::util::json::Value* target = named(patch_info, key);
+            REQUIRE(target != nullptr);
+            REQUIRE(value.is_number() != ((*target)["type"].as_string() == "boolean"));
+            if (target->contains("min")) {
+              REQUIRE((*target)["min"].as_number() <= value.as_number());
+              REQUIRE(value.as_number() <= (*target)["max"].as_number());
+            }
             continue;
           }
-          const sonare::util::json::Value* target = named(patch_info, key);
+          const sonare::util::json::Value* target = named(info, key);
           REQUIRE(target != nullptr);
-          REQUIRE(value.is_number() != ((*target)["type"].as_string() == "boolean"));
-          if (target->contains("min")) {
+          REQUIRE(value.is_bool() == ((*target)["type"].as_string() == "boolean"));
+          if (value.is_number() && target->contains("min")) {
             REQUIRE((*target)["min"].as_number() <= value.as_number());
             REQUIRE(value.as_number() <= (*target)["max"].as_number());
           }
-          continue;
-        }
-        const sonare::util::json::Value* target = named(info, key);
-        REQUIRE(target != nullptr);
-        REQUIRE(value.is_bool() == ((*target)["type"].as_string() == "boolean"));
-        if (value.is_number() && target->contains("min")) {
-          REQUIRE((*target)["min"].as_number() <= value.as_number());
-          REQUIRE(value.as_number() <= (*target)["max"].as_number());
         }
       }
     }
@@ -553,10 +559,16 @@ TEST_CASE("synth engine param gates name a key of their scope with a value it ca
   const std::string percussion = sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_PERCUSSION);
   const size_t at = percussion.find("{\"name\":\"modeRatios6\"");
   REQUIRE(at != std::string::npos);
-  const std::string row = percussion.substr(at, percussion.find("]}", at) + 2 - at);
-  REQUIRE(row.find(",\"activeWhen\":[{\"key\":\"gmKit\",\"scope\":\"engine\",\"relation\":"
+  const std::string row = percussion.substr(at, percussion.find("]]}", at) + 3 - at);
+  REQUIRE(row.find(",\"activeWhen\":[[{\"key\":\"gmKit\",\"scope\":\"engine\",\"relation\":"
                    "\"eq\",\"value\":false},{\"key\":\"numModes\",\"scope\":\"engine\","
-                   "\"relation\":\"gt\",\"value\":6}]") != std::string::npos);
+                   "\"relation\":\"gt\",\"value\":6}]]}") != std::string::npos);
+  // A field reached through either of two paths states both.
+  const sonare::util::json::Value parsed = parse_info(percussion.c_str());
+  for (const auto& d : parsed.as_array()) {
+    if (d["name"].as_string() != "contactMs") continue;
+    REQUIRE(d["activeWhen"].size() == 2);
+  }
 }
 
 TEST_CASE("synth patch param info describes every numeric patch field", "[project][synth_patch]") {

@@ -316,8 +316,8 @@ export interface SynthEnumTables {
 export type SynthEngineMode = (typeof SYNTH_ENGINE_MODES)[number];
 
 /**
- * One condition another patch field must meet for a {@link SynthParamInfo}
- * field to reach the voice.
+ * One condition another patch field must meet, as one of the conditions of an
+ * alternative in {@link SynthParamInfo.activeWhen}.
  */
 export interface SynthParamCondition {
   /** The field the condition reads. */
@@ -360,11 +360,20 @@ export interface SynthParamInfo {
   unit: MasteringInsertParamUnit;
   /**
    * Present only for a field that reaches the voice under conditions on other
-   * patch fields, all of which must hold. A field without it may still act
-   * only under a performance (velocity, a controller, overlapping notes) or
-   * saturate past some value.
+   * patch fields: a list of alternatives, each a list of conditions. The field
+   * reaches the voice when every condition of at least one alternative holds,
+   * so a field reached through several layers lists one alternative per
+   * layer. What a field further needs from a performance (velocity, a
+   * controller, overlapping notes), or a value past which it saturates, is not
+   * stated.
+   *
+   * @example
+   * ```ts
+   * const live = (field: SynthParamInfo, holds: (c: SynthParamCondition) => boolean) =>
+   *   field.activeWhen === undefined || field.activeWhen.some((all) => all.every(holds));
+   * ```
    */
-  activeWhen?: SynthParamCondition[];
+  activeWhen?: SynthParamCondition[][];
 }
 
 /**

@@ -136,8 +136,8 @@ class MasteringInsertParamDependency(TypedDict):
 
 
 class SynthParamCondition(TypedDict):
-    """One condition another patch field must meet for a :class:`SynthParamInfo`
-    field to reach the voice.
+    """One condition another patch field must meet, as one of the conditions
+    of an alternative in :class:`SynthParamInfo` ``activeWhen``.
 
     ``scope`` is ``"engine"`` for a key of the same
     :func:`synth_engine_param_info` table and ``"patch"`` for a ``SynthPatch``
@@ -161,10 +161,16 @@ class SynthParamInfo(TypedDict):
     for a field with no closed range. ``default`` is the engine's base
     preset's value for an engine field and the "keep base" default for a
     patch field, a bool for a switch. ``activeWhen`` is present only for a
-    field that reaches the voice under conditions on other patch fields, all
-    of which must hold; a field without it may still act only under a
-    performance (velocity, a controller, overlapping notes) or saturate past
-    some value.
+    field that reaches the voice under conditions on other patch fields: a
+    list of alternatives, each a list of conditions, and the field reaches the
+    voice when every condition of at least one alternative holds, so a field
+    reached through several layers lists one alternative per layer. What a
+    field further needs from a performance (velocity, a controller,
+    overlapping notes), or a value past which it saturates, is not stated::
+
+        live = "activeWhen" not in field or any(
+            all(holds(c) for c in alternative) for alternative in field["activeWhen"]
+        )
     """
 
     name: str
@@ -174,7 +180,7 @@ class SynthParamInfo(TypedDict):
     integer: NotRequired[bool]
     min: NotRequired[float]
     max: NotRequired[float]
-    activeWhen: NotRequired[list[SynthParamCondition]]
+    activeWhen: NotRequired[list[list[SynthParamCondition]]]
 
 
 class MasteringInsertParamInfo(TypedDict):

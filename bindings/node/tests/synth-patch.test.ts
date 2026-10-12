@@ -769,16 +769,27 @@ describe('synth parameter descriptors', () => {
     expect(gmKit?.type).toBe('boolean');
     expect(typeof gmKit?.default).toBe('boolean');
     expect(gmKit && 'activeWhen' in gmKit).toBe(false);
+    const kitOff = { key: 'gmKit', scope: 'engine', relation: 'eq', value: false };
     expect(percussion.find((field) => field.name === 'modeRatios6')?.activeWhen).toEqual([
-      { key: 'gmKit', scope: 'engine', relation: 'eq', value: false },
-      { key: 'numModes', scope: 'engine', relation: 'gt', value: 6 },
+      [kitOff, { key: 'numModes', scope: 'engine', relation: 'gt', value: 6 }],
+    ]);
+    // Reached through the direct contact or through the plate's: two alternatives.
+    expect(percussion.find((field) => field.name === 'contactMs')?.activeWhen).toEqual([
+      [kitOff, { key: 'contact', scope: 'engine', relation: 'gt', value: 0 }],
+      [
+        kitOff,
+        { key: 'plateGain', scope: 'engine', relation: 'gt', value: 0 },
+        { key: 'plateContact', scope: 'engine', relation: 'gt', value: 0 },
+      ],
     ]);
     expect(
       synthEngineParamInfo('bowed-string').find((field) => field.name === 'corpusScale')
         ?.activeWhen,
     ).toEqual([
-      { key: 'body', scope: 'patch', relation: 'eq', value: 'violin' },
-      { key: 'bodyMix', scope: 'patch', relation: 'gt', value: 0 },
+      [
+        { key: 'body', scope: 'patch', relation: 'eq', value: 'violin' },
+        { key: 'bodyMix', scope: 'patch', relation: 'gt', value: 0 },
+      ],
     ]);
     for (const mode of SYNTH_ENGINE_MODES) {
       for (const field of synthEngineParamInfo(mode)) {
@@ -786,6 +797,9 @@ describe('synth parameter descriptors', () => {
           continue;
         }
         expect(field.activeWhen.length, `${mode} ${field.name}`).toBeGreaterThan(0);
+        for (const alternative of field.activeWhen) {
+          expect(alternative.length, `${mode} ${field.name}`).toBeGreaterThan(0);
+        }
       }
     }
   });

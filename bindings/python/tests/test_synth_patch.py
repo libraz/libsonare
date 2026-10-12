@@ -824,19 +824,31 @@ def test_engine_param_info_states_gates_only_where_set() -> None:
     assert gm_kit["type"] == "boolean"
     assert gm_kit["default"] is True
     assert "activeWhen" not in gm_kit
+    kit_off = {"key": "gmKit", "scope": "engine", "relation": "eq", "value": False}
     assert percussion["modeRatios6"]["activeWhen"] == [
-        {"key": "gmKit", "scope": "engine", "relation": "eq", "value": False},
-        {"key": "numModes", "scope": "engine", "relation": "gt", "value": 6},
+        [kit_off, {"key": "numModes", "scope": "engine", "relation": "gt", "value": 6}],
+    ]
+    # Reached through the direct contact or through the plate's: two alternatives.
+    assert percussion["contactMs"]["activeWhen"] == [
+        [kit_off, {"key": "contact", "scope": "engine", "relation": "gt", "value": 0}],
+        [
+            kit_off,
+            {"key": "plateGain", "scope": "engine", "relation": "gt", "value": 0},
+            {"key": "plateContact", "scope": "engine", "relation": "gt", "value": 0},
+        ],
     ]
     bowed = {row["name"]: row for row in synth_engine_param_info("bowed-string")}
     assert bowed["corpusScale"]["activeWhen"] == [
-        {"key": "body", "scope": "patch", "relation": "eq", "value": "violin"},
-        {"key": "bodyMix", "scope": "patch", "relation": "gt", "value": 0},
+        [
+            {"key": "body", "scope": "patch", "relation": "eq", "value": "violin"},
+            {"key": "bodyMix", "scope": "patch", "relation": "gt", "value": 0},
+        ],
     ]
     for mode in SYNTH_ENUM_TABLES["engine_modes"]:
         for row in synth_engine_param_info(mode):
             if "activeWhen" in row:
                 assert row["activeWhen"], (mode, row["name"])
+                assert all(alternative for alternative in row["activeWhen"]), (mode, row["name"])
 
 
 def _engine_params_patch() -> SynthPatch:

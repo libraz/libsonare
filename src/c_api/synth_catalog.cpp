@@ -213,41 +213,48 @@ struct DescriptorRow {
   Unit unit;
 };
 
-/// `"activeWhen":[...]`, the gate's conditions in table order.
-void append_active_when(const std::vector<sonare::midi::synth::ActiveCondition>& conditions,
+/// `"activeWhen":[[...],...]`, the gate's alternatives and each one's
+/// conditions in table order.
+void append_active_when(const std::vector<sonare::midi::synth::ActiveAlternative>& alternatives,
                         std::string* out) {
   using sonare::midi::synth::ActiveCondition;
   *out += ",\"activeWhen\":[";
-  for (size_t i = 0; i < conditions.size(); ++i) {
-    const ActiveCondition& c = conditions[i];
-    if (i > 0) *out += ',';
-    *out += "{\"key\":\"";
-    *out += c.key;
-    *out += "\",\"scope\":\"";
-    *out += sonare::midi::synth::active_scope_name(c.scope);
-    *out += "\",\"relation\":\"";
-    *out += sonare::midi::synth::active_relation_name(c.relation);
-    *out += "\",\"value\":";
-    switch (c.kind) {
-      case ActiveCondition::Kind::kBoolean:
-        *out += c.number != 0.0 ? "true" : "false";
-        break;
-      case ActiveCondition::Kind::kString:
-        *out += '"';
-        *out += c.text;
-        *out += '"';
-        break;
-      case ActiveCondition::Kind::kNumber:
-        *out += descriptor_number(static_cast<float>(c.number));
-        break;
+  for (size_t a = 0; a < alternatives.size(); ++a) {
+    if (a > 0) *out += ',';
+    *out += '[';
+    const std::vector<ActiveCondition>& conditions = alternatives[a];
+    for (size_t i = 0; i < conditions.size(); ++i) {
+      const ActiveCondition& c = conditions[i];
+      if (i > 0) *out += ',';
+      *out += "{\"key\":\"";
+      *out += c.key;
+      *out += "\",\"scope\":\"";
+      *out += sonare::midi::synth::active_scope_name(c.scope);
+      *out += "\",\"relation\":\"";
+      *out += sonare::midi::synth::active_relation_name(c.relation);
+      *out += "\",\"value\":";
+      switch (c.kind) {
+        case ActiveCondition::Kind::kBoolean:
+          *out += c.number != 0.0 ? "true" : "false";
+          break;
+        case ActiveCondition::Kind::kString:
+          *out += '"';
+          *out += c.text;
+          *out += '"';
+          break;
+        case ActiveCondition::Kind::kNumber:
+          *out += descriptor_number(static_cast<float>(c.number));
+          break;
+      }
+      *out += '}';
     }
-    *out += '}';
+    *out += ']';
   }
   *out += ']';
 }
 
 void append_descriptor(const DescriptorRow& row,
-                       const std::vector<sonare::midi::synth::ActiveCondition>* active_when,
+                       const std::vector<sonare::midi::synth::ActiveAlternative>* active_when,
                        std::string* out) {
   *out += "{\"name\":\"";
   *out += row.name;
@@ -274,10 +281,10 @@ void append_descriptor(const DescriptorRow& row,
   *out += '}';
 }
 
-/// @p gates, when given, holds each row's activeWhen conditions.
+/// @p gates, when given, holds each row's activeWhen alternatives.
 std::string descriptor_array(
     const std::vector<DescriptorRow>& rows,
-    const std::vector<std::vector<sonare::midi::synth::ActiveCondition>>* gates = nullptr) {
+    const std::vector<std::vector<sonare::midi::synth::ActiveAlternative>>* gates = nullptr) {
   std::string json = "[";
   for (size_t i = 0; i < rows.size(); ++i) {
     if (i > 0) json += ',';
@@ -401,7 +408,7 @@ const char* sonare_synth_engine_param_info(int engine_mode) {
                                   "synth engine base preset is missing from the catalog");
   }
   std::vector<DescriptorRow> rows;
-  std::vector<std::vector<sonare::midi::synth::ActiveCondition>> gates;
+  std::vector<std::vector<sonare::midi::synth::ActiveAlternative>> gates;
   for (sonare::midi::synth::EngineParamDescriptor& d :
        sonare::midi::synth::engine_param_descriptors(base->config.patch)) {
     rows.push_back({d.key, d.integer, d.boolean, d.bounded, d.lo, d.hi, d.value, d.unit});
