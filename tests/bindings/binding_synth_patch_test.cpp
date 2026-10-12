@@ -4,6 +4,7 @@
 ///        patch-driven bounce (sonare_project_bounce_with_synth_instruments)
 ///        and the realtime engine entry (sonare_engine_set_synth_instrument).
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstring>
@@ -158,6 +159,19 @@ void require_descriptor_shape(const sonare::util::json::Value& d) {
   if (d.contains("min")) {
     REQUIRE(d["min"].as_number() <= d["default"].as_number());
     REQUIRE(d["default"].as_number() <= d["max"].as_number());
+  }
+  // Present only when set, like `integer`.
+  if (d.contains("activeWhen")) {
+    REQUIRE(d["activeWhen"].is_array());
+    REQUIRE(d["activeWhen"].size() > 0);
+    for (const auto& c : d["activeWhen"].as_array()) {
+      REQUIRE(c["key"].is_string());
+      const std::string& scope = c["scope"].as_string();
+      REQUIRE((scope == "engine" || scope == "patch"));
+      const std::set<std::string> relations = {"eq", "ne", "gt", "ge", "lt", "le"};
+      REQUIRE(relations.count(c["relation"].as_string()) == 1);
+      REQUIRE((c["value"].is_number() || c["value"].is_bool() || c["value"].is_string()));
+    }
   }
 }
 #endif
@@ -466,6 +480,83 @@ TEST_CASE("synth engine param info lists exactly the walker's engine section",
     REQUIRE(sonare_synth_engine_param_info(mode) == nullptr);
     REQUIRE(sonare_last_error_code() == SONARE_ERROR_INVALID_PARAMETER);
   }
+}
+
+TEST_CASE("synth engine param gates name a key of their scope with a value it can take",
+          "[project][synth_patch]") {
+  // The wrapper enum fields a gate may name, with their vocabulary.
+  const auto vocabulary = [](int kind) {
+    std::set<std::string> names;
+    std::string joined = sonare_synth_enum_names(kind);
+    size_t start = 0;
+    while (start <= joined.size()) {
+      const size_t end = std::min(joined.find('\n', start), joined.size());
+      names.insert(joined.substr(start, end - start));
+      start = end + 1;
+    }
+    return names;
+  };
+  const std::set<std::string> body_types = vocabulary(SONARE_SYNTH_ENUM_BODY_TYPE);
+  REQUIRE(body_types.count("violin") == 1);
+  const sonare::util::json::Value patch_info = parse_info(sonare_synth_patch_param_info());
+
+  size_t conditions = 0;
+  size_t patch_conditions = 0;
+  for (int mode = 0; mode < SONARE_SYNTH_ENGINE_MODE_COUNT; ++mode) {
+    CAPTURE(mode);
+    const sonare::util::json::Value info = parse_info(sonare_synth_engine_param_info(mode));
+    const auto named = [](const sonare::util::json::Value& table, const std::string& key) {
+      const sonare::util::json::Value* found = nullptr;
+      for (const auto& d : table.as_array()) {
+        if (d["name"].as_string() == key) found = &d;
+      }
+      return found;
+    };
+    for (const auto& d : info.as_array()) {
+      if (!d.contains("activeWhen")) continue;
+      for (const auto& c : d["activeWhen"].as_array()) {
+        const std::string& key = c["key"].as_string();
+        CAPTURE(d["name"].as_string(), key);
+        ++conditions;
+        REQUIRE(key != d["name"].as_string());
+        const sonare::util::json::Value& value = c["value"];
+        if (c["scope"].as_string() == "patch") {
+          ++patch_conditions;
+          if (key == "body") {
+            REQUIRE(value.is_string());
+            REQUIRE(body_types.count(value.as_string()) == 1);
+            continue;
+          }
+          const sonare::util::json::Value* target = named(patch_info, key);
+          REQUIRE(target != nullptr);
+          REQUIRE(value.is_number() != ((*target)["type"].as_string() == "boolean"));
+          if (target->contains("min")) {
+            REQUIRE((*target)["min"].as_number() <= value.as_number());
+            REQUIRE(value.as_number() <= (*target)["max"].as_number());
+          }
+          continue;
+        }
+        const sonare::util::json::Value* target = named(info, key);
+        REQUIRE(target != nullptr);
+        REQUIRE(value.is_bool() == ((*target)["type"].as_string() == "boolean"));
+        if (value.is_number() && target->contains("min")) {
+          REQUIRE((*target)["min"].as_number() <= value.as_number());
+          REQUIRE(value.as_number() <= (*target)["max"].as_number());
+        }
+      }
+    }
+  }
+  REQUIRE(conditions > 0);
+  REQUIRE(patch_conditions > 0);
+
+  // The indexed threshold reads the slot's own index, and the emitted order is the table's.
+  const std::string percussion = sonare_synth_engine_param_info(SONARE_SYNTH_ENGINE_PERCUSSION);
+  const size_t at = percussion.find("{\"name\":\"modeRatios6\"");
+  REQUIRE(at != std::string::npos);
+  const std::string row = percussion.substr(at, percussion.find("]}", at) + 2 - at);
+  REQUIRE(row.find(",\"activeWhen\":[{\"key\":\"gmKit\",\"scope\":\"engine\",\"relation\":"
+                   "\"eq\",\"value\":false},{\"key\":\"numModes\",\"scope\":\"engine\","
+                   "\"relation\":\"gt\",\"value\":6}]") != std::string::npos);
 }
 
 TEST_CASE("synth patch param info describes every numeric patch field", "[project][synth_patch]") {

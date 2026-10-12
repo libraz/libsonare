@@ -804,6 +804,26 @@ export interface PartRigEntry {
 }
 
 /**
+ * One condition another patch field must meet for a {@link SynthParamInfo}
+ * field to reach the voice.
+ */
+export interface SynthParamCondition {
+  /** The field the condition reads. */
+  key: string;
+  /**
+   * `'engine'`: a key of the same {@link synthEngineParamInfo} table.
+   * `'patch'`: a {@link SynthPatch} field.
+   */
+  scope: 'engine' | 'patch';
+  relation: 'eq' | 'ne' | 'gt' | 'ge' | 'lt' | 'le';
+  /**
+   * A number, a boolean against a switch, or a vocabulary name against a
+   * wrapper enum (`body: 'violin'`).
+   */
+  value: number | boolean | string;
+}
+
+/**
  * One field descriptor from {@link synthEngineParamInfo} or
  * {@link synthPatchParamInfo}, in the field names of
  * {@link MasteringInsertParamInfo} (`min` / `max` are absent, not null, for an
@@ -820,7 +840,17 @@ export interface SynthParamInfo {
   min?: number;
   /** Largest accepted value; absent for a field with no closed range. */
   max?: number;
-  /** The engine's base preset's value (engine fields) or the "keep base" default (wrapper fields). */
-  default: number;
+  /**
+   * The engine's base preset's value (engine fields) or the "keep base"
+   * default (wrapper fields); a boolean for a switch.
+   */
+  default: number | boolean;
   unit: MasteringInsertParamUnit;
+  /**
+   * Present only for a field that reaches the voice under conditions on other
+   * patch fields, all of which must hold. A field without it may still act
+   * only under a performance (velocity, a controller, overlapping notes) or
+   * saturate past some value.
+   */
+  activeWhen?: SynthParamCondition[];
 }

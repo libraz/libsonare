@@ -232,13 +232,23 @@ SonareError sonare_synth_preset_patch(const char* name, SonareSynthPatch* out);
 ///        @c engine_params accepts for @p engine_mode (a SonareSynthEngineMode).
 /// @details A JSON array in the field names of
 ///          @ref sonare_mastering_insert_param_info:
-///          `[{"name","type","integer","min","max","default","unit"}, ...]`.
+///          `[{"name","type","integer","min","max","default","unit","activeWhen"}, ...]`.
 ///          `name` is the key; `type` is `"number"` or `"boolean"` (a switch,
 ///          given as 0 or 1); `integer` is present and true only for a field
 ///          taking whole numbers; `min` / `max` are present only for a field
 ///          with a closed range, and a value outside it is refused rather than
 ///          clamped; `default` is the engine's base preset's value; `unit` is
-///          always present, from the vocabulary listed there. The default,
+///          always present, from the vocabulary listed there. `activeWhen` is
+///          present only for a field that reaches the voice under a condition
+///          on another patch field: an array of
+///          `{"key","scope","relation","value"}` that must all hold, where
+///          `scope` is `"engine"` (a key of this array) or `"patch"` (a
+///          @ref SonareSynthPatch field by its binding spelling), `relation` is
+///          one of `"eq"`, `"ne"`, `"gt"`, `"ge"`, `"lt"`, `"le"`, and `value`
+///          is a number, a boolean (against a switch) or a vocabulary name
+///          (against a wrapper enum such as `body`). A field without it may
+///          still act only under a performance (velocity, a controller,
+///          overlapping notes) or past a value where it saturates. The default,
 ///          subtractive and sample modes have no engine section and answer
 ///          `[]`. Valid until the next call on the same thread; the caller must
 ///          NOT free it. Returns NULL with SONARE_ERROR_INVALID_PARAMETER as

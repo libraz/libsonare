@@ -482,7 +482,7 @@ export {
   zeroCrossingRate,
   zeroCrossings,
 } from './features.js';
-export type { SynthParamInfo } from './instrument_types.js';
+export type { SynthParamCondition, SynthParamInfo } from './instrument_types.js';
 export type { BindMicrophoneInputOptions, MicrophoneInputBinding } from './live_audio.js';
 export { bindMicrophoneInput } from './live_audio.js';
 export type {

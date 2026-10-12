@@ -512,6 +512,33 @@ describe('Sonare WASM NativeSynth', () => {
     expect(wrapper.find((info) => info.name === 'oneShot')?.type).toBe('boolean');
   });
 
+  it('states a gate only where a field has one, and a switch default as a boolean', () => {
+    const percussion = synthEngineParamInfo('percussion');
+    const gmKit = percussion.find((field) => field.name === 'gmKit');
+    expect(gmKit?.type).toBe('boolean');
+    expect(typeof gmKit?.default).toBe('boolean');
+    expect(gmKit && 'activeWhen' in gmKit).toBe(false);
+    expect(percussion.find((field) => field.name === 'modeRatios6')?.activeWhen).toEqual([
+      { key: 'gmKit', scope: 'engine', relation: 'eq', value: false },
+      { key: 'numModes', scope: 'engine', relation: 'gt', value: 6 },
+    ]);
+    expect(
+      synthEngineParamInfo('bowed-string').find((field) => field.name === 'corpusScale')
+        ?.activeWhen,
+    ).toEqual([
+      { key: 'body', scope: 'patch', relation: 'eq', value: 'violin' },
+      { key: 'bodyMix', scope: 'patch', relation: 'gt', value: 0 },
+    ]);
+    for (const mode of SYNTH_ENGINE_MODES) {
+      for (const field of synthEngineParamInfo(mode)) {
+        if (field.activeWhen === undefined) {
+          continue;
+        }
+        expect(field.activeWhen.length, `${mode} ${field.name}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('lets engineParams change a render and keeps absent keys at the base', () => {
     const bowed = synthEngineParamInfo('bowed-string');
     const force = bowed.find((info) => info.name === 'bowForce');
@@ -519,16 +546,14 @@ describe('Sonare WASM NativeSynth', () => {
     expect(force?.max).toBeDefined();
     const lo = force?.min ?? 0;
     const hi = force?.max ?? 1;
-    const changed =
-      Math.abs((force?.default ?? 0) - lo) > Math.abs((force?.default ?? 0) - hi) ? lo : hi;
+    const def = typeof force?.default === 'number' ? force.default : 0;
+    const changed = Math.abs(def - lo) > Math.abs(def - hi) ? lo : hi;
     const base = bounce({ engineMode: 'bowed-string' });
     const edited = bounce({ engineMode: 'bowed-string', engineParams: { bowForce: changed } });
     expect(edited).not.toEqual(base);
     expect(bounce({ engineMode: 'bowed-string', engineParams: {} })).toEqual(base);
     // Setting a field to its own base value is the base render.
-    expect(
-      bounce({ engineMode: 'bowed-string', engineParams: { bowForce: force?.default ?? 0 } }),
-    ).toEqual(base);
+    expect(bounce({ engineMode: 'bowed-string', engineParams: { bowForce: def } })).toEqual(base);
   });
 
   it('applies engineParams on the realtime engine path too', () => {

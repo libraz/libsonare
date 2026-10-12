@@ -1279,6 +1279,7 @@ from .types import (
 from .types import (
     StreamStats as StreamStats,
 )
+from .types import SynthParamCondition as SynthParamCondition
 from .types import SynthParamInfo as SynthParamInfo
 from .types import (
     TimbreFrame as TimbreFrame,

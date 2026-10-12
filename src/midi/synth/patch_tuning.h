@@ -71,6 +71,33 @@ struct EngineParam {
 bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, size_t count,
                          std::string* error);
 
+/// One condition another patch field must meet for an engine-section field to
+/// reach the voice. Only gates on patch fields are stated; a field that acts
+/// only under a performance (velocity, a controller, overlapping notes) or
+/// saturates carries none.
+struct ActiveCondition {
+  /// Where @ref key lives: this engine's section (an engine-param key) or the
+  /// SonareSynthPatch wrapper (a facade field name).
+  enum class Scope { kEngine, kPatch };
+  enum class Relation { kEq, kNe, kGt, kGe, kLt, kLe };
+  /// How @ref number / @ref text is spelled: a switch compares as a boolean,
+  /// a wrapper enum by its vocabulary name.
+  enum class Kind { kNumber, kBoolean, kString };
+
+  std::string key;
+  Scope scope;
+  Relation relation;
+  Kind kind;
+  /// The compared value for kNumber and kBoolean (0 or 1).
+  double number;
+  /// The compared value for kString.
+  std::string text;
+};
+
+/// The JSON spelling of @p scope / @p relation.
+const char* active_scope_name(ActiveCondition::Scope scope) noexcept;
+const char* active_relation_name(ActiveCondition::Relation relation) noexcept;
+
 /// What an engine-section field accepts, in walk order.
 struct EngineParamDescriptor {
   /// Public key (see the file comment).
@@ -86,6 +113,9 @@ struct EngineParamDescriptor {
   mastering::api::detail::Unit unit;
   /// The field's value on the patch the descriptors were taken from.
   float value;
+  /// Conditions that must all hold for the field to reach the voice; empty
+  /// when it always does.
+  std::vector<ActiveCondition> active_when;
 };
 
 /// One descriptor per field of @p base's engine section (the common section

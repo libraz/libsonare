@@ -763,6 +763,33 @@ describe('synth parameter descriptors', () => {
     expect(() => synthEngineParamInfo(SYNTH_ENGINE_MODES.length)).toThrow(RangeError);
   });
 
+  it('states a gate only where a field has one, and a switch default as a boolean', () => {
+    const percussion = synthEngineParamInfo('percussion');
+    const gmKit = percussion.find((field) => field.name === 'gmKit');
+    expect(gmKit?.type).toBe('boolean');
+    expect(typeof gmKit?.default).toBe('boolean');
+    expect(gmKit && 'activeWhen' in gmKit).toBe(false);
+    expect(percussion.find((field) => field.name === 'modeRatios6')?.activeWhen).toEqual([
+      { key: 'gmKit', scope: 'engine', relation: 'eq', value: false },
+      { key: 'numModes', scope: 'engine', relation: 'gt', value: 6 },
+    ]);
+    expect(
+      synthEngineParamInfo('bowed-string').find((field) => field.name === 'corpusScale')
+        ?.activeWhen,
+    ).toEqual([
+      { key: 'body', scope: 'patch', relation: 'eq', value: 'violin' },
+      { key: 'bodyMix', scope: 'patch', relation: 'gt', value: 0 },
+    ]);
+    for (const mode of SYNTH_ENGINE_MODES) {
+      for (const field of synthEngineParamInfo(mode)) {
+        if (field.activeWhen === undefined) {
+          continue;
+        }
+        expect(field.activeWhen.length, `${mode} ${field.name}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('describes the wrapper fields', () => {
     const fields = synthPatchParamInfo();
     const names = fields.map((field) => field.name);

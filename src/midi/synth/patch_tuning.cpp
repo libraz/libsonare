@@ -1100,6 +1100,201 @@ constexpr UnitRow kEngineUnits[] = {
     {"fm.ops.env.release_ms", Unit::Ms},
 };
 
+using Scope = ActiveCondition::Scope;
+using Relation = ActiveCondition::Relation;
+using Kind = ActiveCondition::Kind;
+
+/// One condition of an engine-section field's gate, keyed by its un-indexed
+/// path; a field's rows are ANDed. A path ending in `*` covers its whole
+/// section, and a row never gates the field on itself.
+struct GateRow {
+  const char* member_path;
+  const char* key;
+  Scope scope;
+  Relation relation;
+  Kind kind;
+  double number;
+  const char* text;
+  /// The compared number is the site's array index rather than @ref number.
+  bool by_index;
+};
+
+constexpr GateRow is(const char* path, const char* key, bool value) {
+  return {path, key, Scope::kEngine, Relation::kEq, Kind::kBoolean, value ? 1.0 : 0.0, "", false};
+}
+constexpr GateRow cmp(const char* path, const char* key, Relation relation, double value) {
+  return {path, key, Scope::kEngine, relation, Kind::kNumber, value, "", false};
+}
+/// `key > <the site's index>`: the slot sounds only once the count reaches it.
+constexpr GateRow past_index(const char* path, const char* key) {
+  return {path, key, Scope::kEngine, Relation::kGt, Kind::kNumber, 0.0, "", true};
+}
+constexpr GateRow wrapper_is(const char* path, const char* key, const char* name) {
+  return {path, key, Scope::kPatch, Relation::kEq, Kind::kString, 0.0, name, false};
+}
+constexpr GateRow wrapper_above(const char* path, const char* key, double value) {
+  return {path, key, Scope::kPatch, Relation::kGt, Kind::kNumber, value, "", false};
+}
+
+constexpr Relation kGt = Relation::kGt;
+constexpr Relation kEq = Relation::kEq;
+
+/// The patch fields an engine-section field reaches the voice through. A gate
+/// on several paths at once (a layer any of three sources excites) is not
+/// expressible as an AND and is left out rather than narrowed.
+constexpr GateRow kEngineGates[] = {
+    // Pipe organ: the flat voicing builds the implicit 8' only.
+    cmp("pipe_organ.stopped", "rankCount", kEq, 0),
+    cmp("pipe_organ.brightness", "rankCount", kEq, 0),
+    cmp("pipe_organ.reed", "rankCount", kEq, 0),
+    cmp("pipe_organ.radiation", "rankCount", kEq, 0),
+    past_index("pipe_organ.ranks.footage_mult", "rankCount"),
+    past_index("pipe_organ.ranks.stopped", "rankCount"),
+    past_index("pipe_organ.ranks.brightness", "rankCount"),
+    past_index("pipe_organ.ranks.level", "rankCount"),
+    past_index("pipe_organ.ranks.reed", "rankCount"),
+    past_index("pipe_organ.ranks.radiation", "rankCount"),
+    // Bowed string: the bristle model, and the violin corpus the wrapper selects.
+    is("bowed_string.stribeck", "elastoPlastic", true),
+    wrapper_is("bowed_string.corpus_scale", "body", "violin"),
+    wrapper_above("bowed_string.corpus_scale", "bodyMix", 0),
+    wrapper_is("bowed_string.corpus_tilt_hz", "body", "violin"),
+    wrapper_above("bowed_string.corpus_tilt_hz", "bodyMix", 0),
+    // Reed: the mass-spring valve, the growth cone and the beating-reed channel.
+    is("reed.reed_resonance", "dynamicReed", true),
+    is("reed.cone_growth", "conical", true),
+    cmp("reed.flow_gain", "closingPressure", kGt, 0),
+    cmp("reed.pressure_scale", "closingPressure", kGt, 0),
+    // Brass: a bell cutoff takes the radiation corner from the reflection pole.
+    cmp("brass.bell_radiation_hz", "bellCutoffHz", kEq, 0),
+    // Free reed: the slot flow replaces the shaped saw.
+    cmp("free_reed.slot_return", "slotDuty", kGt, 0),
+    cmp("free_reed.slot_gap", "slotDuty", kGt, 0),
+    cmp("free_reed.radiation", "slotDuty", kGt, 0),
+    // Harpsichord: each choir's fields reach it only once it is drawn.
+    is("harpsichord.pluck_8b", "eightB", true),
+    is("harpsichord.unison_detune_cents", "eightB", true),
+    is("harpsichord.pluck_4", "four", true),
+    is("harpsichord.octave_detune_cents", "four", true),
+    is("harpsichord.undamped_from_note", "four", true),
+    // Additive: the percussion harmonic.
+    cmp("additive.percussion_decay_ms", "percussionHarmonic", Relation::kGe, 2),
+    cmp("additive.percussion_level", "percussionHarmonic", Relation::kGe, 2),
+    // Percussion: the kit switch resolves every note through the GM map.
+    is("percussion.*", "gmKit", false),
+    cmp("percussion.shell_num_modes", "shellMix", kGt, 0),
+    cmp("percussion.noise_burst_count", "noiseGain", kGt, 0),
+    cmp("percussion.noise_output", "noiseGain", kGt, 0),
+    past_index("percussion.mode_ratios", "numModes"),
+    past_index("percussion.mode_alpha", "numModes"),
+    cmp("percussion.mode_decay_s", "numModes", kGt, 0),
+    cmp("percussion.mode_decay_exp", "numModes", kGt, 0),
+    cmp("percussion.tone_gain", "numModes", kGt, 0),
+    cmp("percussion.tone_direct", "numModes", kGt, 0),
+    cmp("percussion.tone_direct", "plateGain", kGt, 0),
+    cmp("percussion.pitch_drop", "numModes", kGt, 0),
+    cmp("percussion.pitch_drop_ms", "numModes", kGt, 0),
+    cmp("percussion.pitch_drop_ms", "pitchDrop", kGt, 0),
+    cmp("percussion.strike_r", "numModes", kGt, 0),
+    // Mode 0 is axisymmetric, so the angle needs a second mode to reach.
+    cmp("percussion.strike_theta", "numModes", kGt, 1),
+    cmp("percussion.strike_theta", "strikeR", kGt, 0),
+    cmp("percussion.mallet_ms", "numModes", kGt, 0),
+    cmp("percussion.mallet_vel_exp", "numModes", kGt, 0),
+    cmp("percussion.mallet_vel_exp", "malletMs", kGt, 0),
+    cmp("percussion.air_spring", "numModes", kGt, 0),
+    cmp("percussion.head_diameter_m", "numModes", kGt, 1),
+    cmp("percussion.shell_depth_m", "numModes", kGt, 0),
+    cmp("percussion.shell_depth_m", "airSpring", kGt, 0),
+    cmp("percussion.noise_decay_ms", "noiseGain", kGt, 0),
+    cmp("percussion.noise_cutoff_hz", "noiseGain", kGt, 0),
+    cmp("percussion.noise_q", "noiseGain", kGt, 0),
+    cmp("percussion.noise_burst_interval_ms", "noiseGain", kGt, 0),
+    cmp("percussion.noise_burst_interval_ms", "noiseBurstCount", kGt, 0),
+    cmp("percussion.noise_burst_decay_ms", "noiseGain", kGt, 0),
+    cmp("percussion.noise_burst_decay_ms", "noiseBurstCount", kGt, 0),
+    cmp("percussion.shell_mix", "shellNumModes", kGt, 0),
+    past_index("percussion.shell_freq_hz", "shellNumModes"),
+    cmp("percussion.shell_freq_hz", "shellMix", kGt, 0),
+    past_index("percussion.shell_t60_s", "shellNumModes"),
+    cmp("percussion.shell_t60_s", "shellMix", kGt, 0),
+    past_index("percussion.shell_weight", "shellNumModes"),
+    cmp("percussion.shell_weight", "shellMix", kGt, 0),
+    cmp("percussion.wire_buzz", "numModes", kGt, 0),
+    cmp("percussion.wire_threshold", "numModes", kGt, 0),
+    cmp("percussion.wire_threshold", "wireBuzz", kGt, 0),
+    cmp("percussion.wire_cutoff_hz", "numModes", kGt, 0),
+    cmp("percussion.wire_cutoff_hz", "wireBuzz", kGt, 0),
+    cmp("percussion.wire_decay_ms", "numModes", kGt, 0),
+    cmp("percussion.wire_decay_ms", "wireBuzz", kGt, 0),
+    cmp("percussion.shimmer", "numModes", kGt, 0),
+    cmp("percussion.shimmer_attack_ms", "numModes", kGt, 0),
+    cmp("percussion.shimmer_attack_ms", "shimmer", kGt, 0),
+    cmp("percussion.shimmer_cutoff_hz", "numModes", kGt, 0),
+    cmp("percussion.shimmer_cutoff_hz", "shimmer", kGt, 0),
+    cmp("percussion.plate_t60_s", "plateGain", kGt, 0),
+    cmp("percussion.plate_hf_ratio", "plateGain", kGt, 0),
+    cmp("percussion.plate_low_hz", "plateGain", kGt, 0),
+    cmp("percussion.plate_air_hz", "plateGain", kGt, 0),
+    cmp("percussion.plate_contact", "plateGain", kGt, 0),
+    cmp("percussion.plate_cascade", "plateGain", kGt, 0),
+    cmp("percussion.plate_cascade_hz", "plateGain", kGt, 0),
+    cmp("percussion.plate_cascade_hz", "plateCascade", kGt, 0),
+    cmp("percussion.plate_cascade_drop_db", "plateGain", kGt, 0),
+    cmp("percussion.plate_cascade_drop_db", "plateCascade", kGt, 0),
+    cmp("percussion.plate_floor_hz", "plateGain", kGt, 0),
+    cmp("percussion.phisem_energy_ms", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_sound_ms", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_res_hz", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_res_q", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_res_q", "phisemResHz", kGt, 0),
+    cmp("percussion.phisem_pitch_glide", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_pitch_glide", "phisemResHz", kGt, 0),
+    cmp("percussion.phisem_body_hz", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_body_hz", "phisemBodyGain", kGt, 0),
+    cmp("percussion.phisem_body_q", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_body_q", "phisemBodyHz", kGt, 0),
+    cmp("percussion.phisem_body_q", "phisemBodyGain", kGt, 0),
+    cmp("percussion.phisem_body_gain", "phisemBeans", kGt, 0),
+    cmp("percussion.phisem_body_gain", "phisemBodyHz", kGt, 0),
+    cmp("percussion.phisem_scrape_hz", "phisemBeans", kGt, 0),
+};
+
+bool gate_row_matches(const char* row_path, const std::string& member_path) {
+  const size_t n = std::strlen(row_path);
+  if (n > 0 && row_path[n - 1] == '*') return member_path.compare(0, n - 1, row_path, n - 1) == 0;
+  return member_path == row_path;
+}
+
+/// The array index the walker put into @p site's path; 0 at a plain member.
+int site_index(const FieldSite& site) {
+  if (!site.indexed) return 0;
+  size_t at = 0;
+  while (at < site.member_path.size() && site.path[at] == site.member_path[at]) ++at;
+  int index = 0;
+  while (at < site.path.size() && site.path[at] >= '0' && site.path[at] <= '9') {
+    index = index * 10 + (site.path[at++] - '0');
+  }
+  return index;
+}
+
+std::vector<ActiveCondition> gates_of(const FieldSite& site, const std::string& own_key) {
+  std::vector<ActiveCondition> out;
+  for (const GateRow& row : kEngineGates) {
+    if (!gate_row_matches(row.member_path, site.member_path)) continue;
+    if (row.scope == Scope::kEngine && own_key == row.key) continue;
+    ActiveCondition c;
+    c.key = row.key;
+    c.scope = row.scope;
+    c.relation = row.relation;
+    c.kind = row.kind;
+    c.number = row.by_index ? static_cast<double>(site_index(site)) : row.number;
+    c.text = row.text;
+    out.push_back(std::move(c));
+  }
+  return out;
+}
+
 bool find_unit(const std::string& member_path, Unit* unit) {
   for (const UnitRow& row : kEngineUnits) {
     if (member_path == row.member_path) {
@@ -1246,6 +1441,28 @@ bool apply_engine_params(NativeSynthPatch& patch, const EngineParam* params, siz
   return true;
 }
 
+const char* active_scope_name(ActiveCondition::Scope scope) noexcept {
+  return scope == ActiveCondition::Scope::kPatch ? "patch" : "engine";
+}
+
+const char* active_relation_name(ActiveCondition::Relation relation) noexcept {
+  switch (relation) {
+    case ActiveCondition::Relation::kEq:
+      return "eq";
+    case ActiveCondition::Relation::kNe:
+      return "ne";
+    case ActiveCondition::Relation::kGt:
+      return "gt";
+    case ActiveCondition::Relation::kGe:
+      return "ge";
+    case ActiveCondition::Relation::kLt:
+      return "lt";
+    case ActiveCondition::Relation::kLe:
+      return "le";
+  }
+  return "eq";
+}
+
 std::vector<EngineParamDescriptor> engine_param_descriptors(const NativeSynthPatch& base) {
   const std::vector<FieldSite> sites = engine_sites(base);
   const ModeBounds& bounds = mode_bounds(base.mode);
@@ -1263,6 +1480,7 @@ std::vector<EngineParamDescriptor> engine_param_descriptors(const NativeSynthPat
     d.unit = Unit::None;
     find_unit(site.member_path, &d.unit);
     d.value = site.value;
+    d.active_when = gates_of(site, d.key);
     out.push_back(std::move(d));
   }
   return out;

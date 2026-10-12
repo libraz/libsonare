@@ -754,6 +754,7 @@ if(BUILD_ARRANGEMENT)
     bindings/binding_project_part_rig_test.cpp
     bindings/binding_project_soundfont_test.cpp
     bindings/binding_synth_patch_test.cpp
+    midi/synth_engine_param_active_test.cpp
     bindings/binding_sample_bank_test.cpp
     arrangement/c_abi_external_stems_test.cpp
   )

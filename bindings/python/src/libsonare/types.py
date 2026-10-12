@@ -254,6 +254,9 @@ from ._types_capabilities import (
     MasteringProcessorKind as MasteringProcessorKind,
 )
 from ._types_capabilities import (
+    SynthParamCondition as SynthParamCondition,
+)
+from ._types_capabilities import (
     SynthParamInfo as SynthParamInfo,
 )
 from ._types_engine import (
