@@ -389,6 +389,7 @@ const std::vector<std::string>& processor_catalog_schema_paths() {
       "[].params[].dependsOn[].key",
       "[].params[].dependsOn[].relation",
       "[].params[].dependsOn[].factor",
+      "[].params[].coupledWith",
       "[].slots",
       "[].slots[].name",
       "[].slots[].parent",

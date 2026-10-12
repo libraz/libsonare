@@ -70,6 +70,18 @@ def test_param_info_serves_the_catalog_rows_of_an_offline_repair_stage() -> None
     assert libsonare.mastering_insert_param_info("repair.noSuchStage") == []
 
 
+@pytest.mark.parametrize("stage", ["effects.reverb.room", "effects.acoustic.roomMorph"])
+def test_receiver_spacing_names_the_room_geometry_it_is_accepted_against(stage: str) -> None:
+    import libsonare
+
+    info = libsonare.mastering_insert_param_info(stage)
+    spacing = {param["name"]: param for param in info}["receiverSpacingM"]
+    assert spacing["max"] == pytest.approx(2.5, abs=1e-3)
+    assert spacing["dependsOn"] == []
+    assert {"lengthM", "widthM", "listenerX", "listenerY"} <= set(spacing["coupledWith"])
+    assert all(isinstance(param["coupledWith"], list) for param in info)
+
+
 def test_eq_ceiling_follows_the_rate_the_insert_is_built_for() -> None:
     import libsonare
     from libsonare import SonareError

@@ -114,6 +114,7 @@ const catalogParameter = {
   choices: null,
   slot: 'band1',
   dependsOn: [{ key: 'maxHz', relation: 'le', factor: 1 }],
+  coupledWith: ['minHz'],
 } satisfies CapabilityCatalogParameter;
 
 const catalogSlot = {

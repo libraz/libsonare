@@ -98,6 +98,21 @@ describe('repair stage descriptors', () => {
   });
 });
 
+describe('coupled parameters', () => {
+  it('names the room geometry a receiver spacing is accepted against', () => {
+    for (const id of ['effects.reverb.room', 'effects.acoustic.roomMorph']) {
+      const info = masteringInsertParamInfo(id);
+      const spacing = info.find((param) => param.name === 'receiverSpacingM');
+      expect(spacing?.max).toBeCloseTo(2.5, 3);
+      expect(spacing?.dependsOn).toEqual([]);
+      expect(spacing?.coupledWith).toEqual(
+        expect.arrayContaining(['lengthM', 'widthM', 'listenerX', 'listenerY']),
+      );
+      expect(info.every((param) => Array.isArray(param.coupledWith))).toBe(true);
+    }
+  });
+});
+
 describe('equalizer ceiling', () => {
   it('follows the Nyquist frequency of the rate the insert is built for', () => {
     const ceiling = (rate?: number) =>

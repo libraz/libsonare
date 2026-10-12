@@ -113,8 +113,9 @@ std::vector<std::string> insert_param_names(const std::string& name);
 ///         `"nyquist"` when the effective ceiling is the lower of `max` and the
 ///         host's Nyquist frequency) or choices, default, unit and the slot it
 ///         belongs to (see insert_slot_info_json()), or null. Its unit,
-///         axis scale, display range and sibling bounds are declared by the
-///         builder that reads the key rather than measured. See
+///         axis scale, display range, sibling bounds and the siblings that move
+///         its accepted range beyond those bounds (`coupledWith`) are declared
+///         by the builder that reads the key rather than measured. See
 ///         insert_param_info_schema_paths() for the exact field set; every
 ///         entry carries every field, with `null` where a value could not be
 ///         measured. A repair stage with no insert form is served by repair_param_info_json(), so

@@ -151,6 +151,11 @@ export interface MasteringInsertParamInfo {
    * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
   dependsOn: MasteringInsertParamDependency[];
+  /**
+   * Siblings, other than `dependsOn` entries, whose value moves this key's accepted range in a way
+   * `dependsOn` cannot state (a receiver spacing against the room geometry); `min` / `max` are measured with them at their defaults. Empty for an independent key.
+   */
+  coupledWith: string[];
 }
 
 /**

@@ -51,11 +51,11 @@ val js_mastering_insert_param_names(std::string name) {
 // Parameter descriptors for every key an insert processor's construction
 // reads, as a JSON array string [{"name","id","rtSafe","type","min","max",
 // "minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin",
-// "uiMax","scale","choices","slot","dependsOn"}, ...]. The TS facade parses it; "[]" for an
-// unknown name. Entries come in two runs: realtime automation targets (integer
-// "id") in id order, then every other construction key sorted by name with
-// "id" null and "rtSafe" false. See sonare_mastering_insert_param_info (the C
-// ABI oracle for this JSON's semantics) for the full field contract.
+// "uiMax","scale","choices","slot","dependsOn","coupledWith"}, ...]. The TS facade parses it; "[]"
+// for an unknown name. Entries come in two runs: realtime automation targets (integer "id") in id
+// order, then every other construction key sorted by name with "id" null and "rtSafe" false. See
+// sonare_mastering_insert_param_info (the C ABI oracle for this JSON's semantics) for the full
+// field contract.
 std::string js_mastering_insert_param_info(std::string name) {
   wasmRefuseEmbeddedNul(name, "name");
   return mastering::api::insert_param_info_json(name);

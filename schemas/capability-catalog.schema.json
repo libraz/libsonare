@@ -174,7 +174,8 @@
         "scale",
         "choices",
         "slot",
-        "dependsOn"
+        "dependsOn",
+        "coupledWith"
       ],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
@@ -242,6 +243,11 @@
               "factor": { "type": "number", "exclusiveMinimum": 0 }
             }
           }
+        },
+        "coupledWith": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
         }
       }
     },

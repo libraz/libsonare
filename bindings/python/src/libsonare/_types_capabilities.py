@@ -176,6 +176,9 @@ class MasteringInsertParamInfo(TypedDict):
     accepted range is also the display range. ``dependsOn`` lists the siblings
     whose values bound this one; a bound that only restates that dependency at
     the sibling's default is ``None``, so ``min`` / ``max`` are limits of the key's own.
+    ``coupledWith`` names the other siblings that move this key's accepted
+    range in a way ``dependsOn`` cannot state; ``min`` / ``max`` are measured
+    with them at their defaults.
     """
 
     name: str
@@ -193,6 +196,7 @@ class MasteringInsertParamInfo(TypedDict):
     uiMax: float | None
     scale: MasteringInsertParamScale
     dependsOn: list[MasteringInsertParamDependency]
+    coupledWith: list[str]
     choices: list[MasteringInsertParamChoice] | None
     slot: str | None
 

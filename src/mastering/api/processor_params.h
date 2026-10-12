@@ -249,6 +249,19 @@ class ParamMap {
     return depends_;
   }
 
+  /// @brief Records that @p sibling's value moves @p key's accepted range in a way a
+  ///        `note_depends` relation cannot state.
+  void note_coupled(const std::string& key, const std::string& sibling) const {
+    if (!records_declarations_) return;
+    auto& list = coupled_[key];
+    if (std::find(list.begin(), list.end(), sibling) == list.end()) list.push_back(sibling);
+  }
+
+  /// @brief Siblings declared as coupled to each key, in declaration order.
+  const std::unordered_map<std::string, std::vector<std::string>>& probed_coupled() const {
+    return coupled_;
+  }
+
   /// @brief Records the declared values of the enum a builder read @p key as.
   /// @details The first record wins: a later one comes from the same enum type.
   void note_choices(const std::string& key, std::vector<EnumChoice> choices) const {
@@ -300,6 +313,9 @@ class ParamMap {
         note_depends(key, dependency.key, dependency.relation, dependency.factor);
       }
     }
+    for (const auto& [key, list] : other.coupled_) {
+      for (const auto& sibling : list) note_coupled(key, sibling);
+    }
     for (const auto& [key, value] : other.effective_) effective_.try_emplace(key, value);
     for (const auto& [key, choices] : other.choices_) note_choices(key, choices);
     for (const auto& [key, fallback] : other.defaults_) {
@@ -330,6 +346,7 @@ class ParamMap {
   mutable std::unordered_map<std::string, ParamKind> kinds_;
   mutable std::unordered_map<std::string, ParamMeta> meta_;
   mutable std::unordered_map<std::string, std::vector<ParamDependency>> depends_;
+  mutable std::unordered_map<std::string, std::vector<std::string>> coupled_;
   mutable std::unordered_map<std::string, ParamDefault> defaults_;
   mutable std::unordered_map<std::string, double> effective_;
   mutable std::unordered_map<std::string, std::vector<EnumChoice>> choices_;
@@ -691,6 +708,7 @@ inline void configure_equalizer(eq::EqualizerProcessor& processor, const ParamMa
 inline dynamics::CompressorConfig compressor_config(const ParamMap& params) {
   dynamics::CompressorConfig config;
   SONARE_FIELDS_COMPRESSOR(SONARE_READ_FIELD)
+  params.note_coupled("thresholdDb", "autoMakeup");
   return config;
 }
 
@@ -709,6 +727,8 @@ inline multiband::CrossoverConfig crossover_config(const ParamMap& params) {
   config.slope = read_enum(params, "slope", config.slope);
   config.mode = read_enum(params, "mode", config.mode);
   config.fir_kernel_size = i(params, "firKernelSize", config.fir_kernel_size, kSamples);
+  params.note_coupled("firKernelSize", "mode");
+  params.note_coupled("mode", "firKernelSize");
   return config;
 }
 
@@ -907,6 +927,7 @@ inline dynamics::ParallelCompConfig parallel_comp_config(const ParamMap& params)
 inline dynamics::SidechainRouterConfig sidechain_router_config(const ParamMap& params) {
   dynamics::SidechainRouterConfig config;
   SONARE_FIELDS_SIDECHAIN_ROUTER(SONARE_READ_FIELD)
+  params.note_coupled("sidechainHpfHz", "sidechainHpfEnabled");
   return config;
 }
 
@@ -937,6 +958,8 @@ inline dynamics::UpwardExpanderConfig upward_expander_config(const ParamMap& par
 inline dynamics::VocalRiderConfig vocal_rider_config(const ParamMap& params) {
   dynamics::VocalRiderConfig config;
   SONARE_FIELDS_VOCAL_RIDER(SONARE_READ_FIELD)
+  params.note_coupled("maxBoostDb", "outputGainDb");
+  params.note_coupled("outputGainDb", "maxBoostDb");
   return config;
 }
 
@@ -976,6 +999,8 @@ inline eq::LinearPhaseEqConfig linear_phase_config(const ParamMap& params) {
   config.fft_size = i(params, "fftSize", config.fft_size, kSamples);
   config.kernel_size = i(params, "kernelSize", config.kernel_size, kSamples);
   note_pair_order(params, "kernelSize", Relation::Le, "fftSize");
+  params.note_coupled("fftSize", "resolution");
+  params.note_coupled("kernelSize", "resolution");
   config.use_partitioned_convolution =
       b(params, "usePartitionedConvolution", config.use_partitioned_convolution);
   config.partition_size = i(params, "partitionSize", config.partition_size, kSamples);
@@ -1037,6 +1062,10 @@ inline void configure_band_pass(eq::BandPassEq& p, const ParamMap& params) {
                   f(params, "bandPassQ", 1.0f, kNone), b(params, "bandPassEnabled", true));
   p.set_notch(f(params, "notchFrequencyHz", 1000.0f, kHzLog), f(params, "notchQ", 1.0f, kNone),
               b(params, "notchEnabled", false));
+  params.note_coupled("bandPassFrequencyHz", "bandPassEnabled");
+  params.note_coupled("bandPassQ", "bandPassEnabled");
+  params.note_coupled("notchFrequencyHz", "notchEnabled");
+  params.note_coupled("notchQ", "notchEnabled");
 }
 
 inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
@@ -1046,6 +1075,10 @@ inline void configure_shelving(eq::ShelvingEq& p, const ParamMap& params) {
   p.set_high_shelf(
       f(params, "highFrequencyHz", 10000.0f, kHzLog), f(params, "highGainDb", 0.0f, kDb),
       f(params, "highQ", constants::kButterworthQ, kNone), b(params, "highEnabled", true));
+  params.note_coupled("lowFrequencyHz", "lowEnabled");
+  params.note_coupled("lowQ", "lowEnabled");
+  params.note_coupled("highFrequencyHz", "highEnabled");
+  params.note_coupled("highQ", "highEnabled");
 }
 
 inline void configure_graphic(eq::GraphicEq& p, const ParamMap& params) {
@@ -1112,6 +1145,8 @@ inline saturation::SoftClipperConfig soft_clipper_config(const ParamMap& params)
 inline saturation::WaveshaperConfig waveshaper_config(const ParamMap& params) {
   saturation::WaveshaperConfig config;
   SONARE_FIELDS_WAVESHAPER(SONARE_READ_FIELD)
+  params.note_coupled("aliasing", "curve");
+  params.note_coupled("curve", "aliasing");
   return config;
 }
 

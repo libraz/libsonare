@@ -496,7 +496,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 /// @brief Parameter descriptors for an insert processor: every key its
 ///        construction reads, plus every realtime automation target.
 /// @return A JSON array string
-///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn"},
+///   `[{"name","id","rtSafe","type","min","max","minExclusive","maxExclusive","maxRelativeTo","default","unit","uiMin","uiMax","scale","choices","slot","dependsOn","coupledWith"},
 ///   ...]` (UTF-8). Returns `"[]"` for an unknown @p name. The returned pointer is a thread-local
 ///   valid only until the next API call on the same thread; the caller must NOT free it.
 /// @details Entries come in two runs. The first lists the processor's realtime
@@ -568,7 +568,7 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   exists; @ref sonare_mastering_processor_catalog's `slots` says when each
 ///   group exists.
 ///
-///   `unit`, `uiMin`, `uiMax`, `scale` and `dependsOn` are declared where the
+///   `unit`, `uiMin`, `uiMax`, `scale`, `dependsOn` and `coupledWith` are declared where the
 ///   processor reads the key, not measured. `unit` is null for a non-number and,
 ///   for a number, one of `dB`, `dBFS`, `LUFS`, `Hz`, `ms`, `s`, `samples`, `m`,
 ///   `cm`, `mm`, `deg`, `percent`, `degC`, `V`, `inPerSec`, `dBPerOct`, `semitones`,
@@ -580,7 +580,10 @@ const char* sonare_mastering_insert_param_names(const char* name);
 ///   key (`relation` `lt`, `le`, `gt` or `ge` reads as `this <relation> factor * sibling`,
 ///   `factor` a positive multiplier, 1 for a plain ordering) and is
 ///   empty for an independent key; it is how a control narrows `min` and `max`,
-///   and a bound that merely restates it is left null (see above). All of these describe
+///   and a bound that merely restates it is left null (see above). `coupledWith` lists the
+///   other siblings whose value moves this key's accepted range in a way `dependsOn` cannot
+///   state (a receiver spacing against the room geometry), empty for an independent key;
+///   `min` and `max` are measured with them at their defaults. All of these describe
 ///   what construction accepts; the realtime parameter path clamps instead of
 ///   refusing.
 /// @param name Insert processor name (see @ref sonare_mastering_insert_names).

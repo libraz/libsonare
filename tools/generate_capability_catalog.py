@@ -53,6 +53,7 @@ PARAMETER_KEYS = {
     "choices",
     "slot",
     "dependsOn",
+    "coupledWith",
 }
 MASTERING_PRESET_KEYS = {
     "name",
@@ -219,6 +220,9 @@ def validate_parameter(parameter: dict[str, Any], path: str) -> None:
         factor = dependency["factor"]
         if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not factor > 0:
             raise ValueError(f"{dependency_path}.factor must be a positive number")
+    coupled = parameter["coupledWith"]
+    if not isinstance(coupled, list) or not all(isinstance(key, str) and key for key in coupled):
+        raise TypeError(f"{path}.coupledWith must be an array of non-empty strings")
 
 
 def validate_slots(processor: dict[str, Any], path: str) -> set[str]:
@@ -309,6 +313,9 @@ def validate_chain(root: dict[str, Any]) -> None:
         for dependency in parameter["dependsOn"]:
             if dependency["key"] == name or dependency["key"] not in params:
                 raise ValueError(f"catalog.chain.params {name} dependsOn must name another param")
+        for sibling in parameter["coupledWith"]:
+            if sibling == name or sibling not in params:
+                raise ValueError(f"catalog.chain.params {name} coupledWith must name another param")
 
     def linked_processor(entry: dict[str, Any], path: str) -> None:
         processor = entry["processor"]
@@ -424,6 +431,11 @@ def validate_catalog(catalog: Any) -> dict[str, Any]:
                 if dependency["key"] == parameter["name"] or dependency["key"] not in sibling_names:
                     raise ValueError(
                         f"{path}.dependsOn must name another parameter of the processor"
+                    )
+            for sibling in parameter["coupledWith"]:
+                if sibling == parameter["name"] or sibling not in sibling_names:
+                    raise ValueError(
+                        f"{path}.coupledWith must name another parameter of the processor"
                     )
             if parameter["slot"] is not None and parameter["slot"] not in slot_names:
                 raise ValueError(f"{path}.slot must name one of the processor's slots or be null")

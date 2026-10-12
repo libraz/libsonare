@@ -977,6 +977,19 @@ std::vector<std::string> descriptor_defects(const json::Array& params) {
         defects.push_back(name + ": dependsOn factor is not a positive number");
       }
     }
+    std::set<std::string> related;
+    for (const json::Value& dependency : field(parameter, "dependsOn").as_array()) {
+      related.insert(field(dependency, "key").as_string());
+    }
+    for (const json::Value& sibling : field(parameter, "coupledWith").as_array()) {
+      const std::string other = sibling.as_string();
+      if (other == name || names.count(other) == 0) {
+        defects.push_back(name + ": coupledWith names no sibling");
+      }
+      if (!related.insert(other).second) {
+        defects.push_back(name + ": coupledWith repeats a sibling already related");
+      }
+    }
   }
   return defects;
 }
@@ -992,7 +1005,7 @@ std::string descriptor_text(const std::string& overrides) {
   return R"([{"name":"a","id":null,"rtSafe":false,"type":"number","min":0,"max":10,)"
          R"("minExclusive":false,"maxExclusive":false,"maxRelativeTo":null,"default":1,)"
          R"("unit":"Hz","uiMin":null,"uiMax":null,"scale":"linear","choices":null,"slot":null,)"
-         R"("dependsOn":[]})" +
+         R"("dependsOn":[],"coupledWith":[]})" +
          overrides + "]";
 }
 
@@ -1045,6 +1058,8 @@ TEST_CASE("the descriptor check reports each defect it exists to catch", "[maste
             .size() == 1);
   CHECK(defects_of(R"("dependsOn":[])", R"("dependsOn":[{"key":"b","relation":"le","factor":0}])")
             .size() == 2);
+  CHECK(defects_of(R"("coupledWith":[])", R"("coupledWith":["b"])").size() == 1);
+  CHECK(defects_of(R"("coupledWith":[])", R"("coupledWith":["a"])").size() == 1);
   CHECK(defects_of(R"("type":"number")", R"("type":"boolean")").size() == 1);
 }
 
@@ -1643,6 +1658,214 @@ TEST_CASE("a bound that only restates a dependency at the sibling's default is n
   INFO(defects.size() << " defects, first: " << (defects.empty() ? "" : defects.front()));
   CHECK(defects.empty());
 }
+
+namespace {
+
+using Settings = std::vector<std::pair<std::string, double>>;
+
+// make_insert's verdict for the probe configuration of @p key = @p value with @p held beside it.
+bool builds_held(const std::string& name, const std::string& key, double value,
+                 const Settings& held) {
+  json::Object params;
+  for (const auto& param : insert_probe_params(name, key, 0.0)) {
+    params[param.key] = json::Value(param.value);
+  }
+  for (const auto& [held_key, held_value] : held) params[held_key] = json::Value(held_value);
+  params[key] = json::Value(value);
+  try {
+    return make_insert(name, json::dump(json::Value(std::move(params)))) != nullptr;
+  } catch (...) {
+    return false;
+  }
+}
+
+// What @p key accepts with @p held beside it: its accepted choices, or the interval a decade scan
+// brackets and bisection narrows. Two equal vectors are the same accepted range.
+std::vector<double> accepted_range(const std::string& name, const json::Value& key_info,
+                                   const Settings& held) {
+  const std::string key = field(key_info, "name").as_string();
+  std::vector<double> range;
+  if (!field(key_info, "choices").is_null()) {
+    for (const double value : choice_values(key_info)) {
+      if (builds_held(name, key, value, held)) range.push_back(value);
+    }
+    return range;
+  }
+  std::vector<double> points;
+  for (const double magnitude : {1.0e6, 1.0e5, 1.0e4, 1.0e3, 100.0, 10.0, 1.0, 0.1, 0.01, 1.0e-3}) {
+    points.push_back(-magnitude);
+  }
+  points.push_back(0.0);
+  for (const double magnitude : {1.0e-3, 0.01, 0.1, 1.0, 10.0, 100.0, 1.0e3, 1.0e4, 1.0e5, 1.0e6}) {
+    points.push_back(magnitude);
+  }
+  if (field(key_info, "default").is_number()) {
+    points.push_back(field(key_info, "default").as_number());
+    std::sort(points.begin(), points.end());
+  }
+  const auto accepts = [&](double value) { return builds_held(name, key, value, held); };
+  size_t lowest = 0;
+  while (lowest < points.size() && !accepts(points[lowest])) ++lowest;
+  if (lowest == points.size()) return {};
+  size_t highest = points.size() - 1;
+  while (highest > lowest && !accepts(points[highest])) --highest;
+  const auto edge = [&](double rejected, double accepted) {
+    for (int step = 0; step < 30; ++step) {
+      const double middle = 0.5 * (rejected + accepted);
+      (accepts(middle) ? accepted : rejected) = middle;
+    }
+    return accepted;
+  };
+  range.push_back(lowest > 0 ? edge(points[lowest - 1], points[lowest]) : -INFINITY);
+  range.push_back(highest + 1 < points.size() ? edge(points[highest + 1], points[highest])
+                                              : INFINITY);
+  return range;
+}
+
+bool same_range(const std::vector<double>& a, const std::vector<double>& b) {
+  if (a.size() != b.size()) return false;
+  for (size_t index = 0; index < a.size(); ++index) {
+    if (a[index] == b[index]) continue;
+    if (!std::isfinite(a[index]) || !std::isfinite(b[index])) return false;
+    if (std::fabs(a[index] - b[index]) > 1.0e-3 * std::max(1.0e-3, std::fabs(a[index]))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// Values of @p sibling away from its default that the insert still builds with.
+std::vector<double> legal_sibling_values(const std::string& name, const json::Value& sibling,
+                                         const Settings& held) {
+  const std::string key = field(sibling, "name").as_string();
+  std::vector<double> candidates;
+  const json::Value& fallback = field(sibling, "default");
+  if (!field(sibling, "choices").is_null()) {
+    candidates = choice_values(sibling);
+  } else if (field(sibling, "type").as_string() == "boolean") {
+    candidates = {fallback.is_bool() && fallback.as_bool() ? 0.0 : 1.0};
+  } else if (fallback.is_number() && fallback.as_number() != 0.0) {
+    const double base = fallback.as_number();
+    candidates = {0.5 * base, 2.0 * base, 0.25 * base, 4.0 * base, base + 1.0, base - 1.0};
+  } else {
+    candidates = {0.5, 1.0, 2.0, 10.0, -1.0};
+  }
+  std::vector<double> legal;
+  for (const double value : candidates) {
+    if (fallback.is_number() && value == fallback.as_number()) continue;
+    if (builds_held(name, key, value, held)) legal.push_back(value);
+  }
+  return legal;
+}
+
+// Tight room geometry: the receiver pair meets the length wall first, which the default
+// geometry never shows.
+const Settings& tight_room_geometry() {
+  static const Settings geometry = {
+      {"sourceX", 3.0}, {"sourceY", 0.5}, {"listenerX", 6.0}, {"listenerY", 4.0}};
+  return geometry;
+}
+
+// The declared couplings of @p names (all inserts when empty) whose sibling moves nothing, limited
+// to the keys in @p only when it is not empty. Returns the pair count through @p pairs.
+std::vector<std::string> vacuous_couplings(const std::vector<std::string>& names,
+                                           const std::set<std::string>& only, size_t* pairs) {
+  std::vector<std::string> vacuous;
+  for (const std::string& name : names.empty() ? insert_factory_names() : names) {
+    const json::Array params = param_info(name);
+    std::vector<Settings> geometries = {{}};
+    if (find_param(params, "receiverSpacingM") != nullptr) {
+      geometries.push_back(tight_room_geometry());
+    }
+    for (const json::Value& parameter : params) {
+      if (!only.empty() && only.count(field(parameter, "name").as_string()) == 0) continue;
+      if (field(parameter, "coupledWith").as_array().empty()) continue;
+      std::vector<std::vector<double>> alone;
+      for (const Settings& held : geometries)
+        alone.push_back(accepted_range(name, parameter, held));
+      for (const json::Value& sibling_name : field(parameter, "coupledWith").as_array()) {
+        const json::Value* sibling = find_param(params, sibling_name.as_string());
+        REQUIRE(sibling != nullptr);
+        ++*pairs;
+        bool moved = false;
+        for (size_t index = 0; index < geometries.size() && !moved; ++index) {
+          for (const double value : legal_sibling_values(name, *sibling, geometries[index])) {
+            Settings moved_to = geometries[index];
+            moved_to.emplace_back(sibling_name.as_string(), value);
+            moved = !same_range(alone[index], accepted_range(name, parameter, moved_to));
+            if (moved) break;
+          }
+        }
+        if (!moved) {
+          vacuous.push_back(name + "." + field(parameter, "name").as_string() + " <- " +
+                            sibling_name.as_string());
+        }
+      }
+    }
+  }
+  return vacuous;
+}
+
+}  // namespace
+
+#ifdef SONARE_WITH_FX
+TEST_CASE("a room's air pair and receiver spacing declare couplings that move their range",
+          "[mastering][catalog]") {
+  size_t pairs = 0;
+  const std::vector<std::string> vacuous =
+      vacuous_couplings({"effects.reverb.room"}, {"receiverSpacingM", "airTemperatureC"}, &pairs);
+  CHECK(pairs >= 7);
+  INFO(vacuous.size() << " declarations move nothing, first: "
+                      << (vacuous.empty() ? "" : vacuous.front()));
+  CHECK(vacuous.empty());
+}
+#endif
+
+TEST_CASE("every declared coupling moves the key's accepted range",
+          "[mastering][catalog][.][slow]") {
+  size_t pairs = 0;
+  const std::vector<std::string> vacuous = vacuous_couplings({}, {}, &pairs);
+  CHECK(pairs > 20);
+  INFO(vacuous.size() << " declarations move nothing, first: "
+                      << (vacuous.empty() ? "" : vacuous.front()));
+  CHECK(vacuous.empty());
+}
+
+#ifdef SONARE_WITH_FX
+TEST_CASE("a receiver spacing past the default geometry's limit builds in a larger room",
+          "[mastering][catalog]") {
+  for (const std::string name : {"effects.reverb.room", "effects.acoustic.roomMorph"}) {
+    const std::vector<std::string> names = insert_factory_names();
+    if (std::find(names.begin(), names.end(), name) == names.end()) continue;
+    INFO(name);
+    const json::Array params = param_info(name);
+    const json::Value* spacing = find_param(params, "receiverSpacingM");
+    REQUIRE(spacing != nullptr);
+    std::set<std::string> coupled;
+    for (const json::Value& sibling : field(*spacing, "coupledWith").as_array()) {
+      coupled.insert(sibling.as_string());
+    }
+    for (const char* key : {"lengthM", "widthM", "listenerX", "listenerY", "sourceX", "sourceY"}) {
+      CHECK(coupled.count(key) == 1);
+    }
+    const Settings room = {
+        {"lengthM", 20.0}, {"widthM", 15.0}, {"listenerX", 10.0}, {"listenerY", 9.0}};
+    for (const double spacing_m : {3.0, 4.0}) {
+      INFO("receiverSpacingM " << spacing_m);
+      CHECK(builds_held(name, "receiverSpacingM", spacing_m, room));
+      try {
+        const std::string text =
+            json::dump(json::Value(json::Object{{"receiverSpacingM", json::Value(spacing_m)}}));
+        make_insert(name, text);
+        FAIL("the default geometry accepted the spacing");
+      } catch (const sonare::SonareException& error) {
+        CHECK(std::string(error.what()).find("acoustic.receiver_outside_room") !=
+              std::string::npos);
+      }
+    }
+  }
+}
+#endif
 
 TEST_CASE("an enum parameter's name resolves to the number the flat lists carry",
           "[mastering][catalog]") {

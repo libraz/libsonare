@@ -33,6 +33,7 @@
     ],
     "CapabilityCatalogParameter": [
       "choices",
+      "coupledWith",
       "default",
       "dependsOn",
       "id",

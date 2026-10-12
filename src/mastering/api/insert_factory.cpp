@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <functional>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -681,6 +682,21 @@ void note_room_containment(const ParamMap& params) {
     params.note_depends(axis[1], axis[2], detail::Relation::Le);
   }
 }
+
+// The receiver pair must stay inside the walls, so the plan view and the spacing bound one
+// another beyond the containment above; the air pair is validated only while absorption is on.
+void note_room_coupling(const ParamMap& params) {
+  const auto couple = [&](const char* key, std::initializer_list<const char*> siblings) {
+    for (const char* sibling : siblings) params.note_coupled(key, sibling);
+  };
+  couple("lengthM", {"listenerX", "listenerY", "receiverSpacingM", "sourceX", "sourceY"});
+  couple("widthM", {"listenerX", "listenerY", "receiverSpacingM", "sourceX", "sourceY"});
+  couple("listenerX", {"listenerY", "receiverSpacingM", "sourceX", "sourceY"});
+  couple("listenerY", {"listenerX", "receiverSpacingM", "sourceX", "sourceY"});
+  couple("receiverSpacingM", {"lengthM", "widthM", "listenerX", "listenerY", "sourceX", "sourceY"});
+  couple("airTemperatureC", {"airAbsorptionEnabled"});
+  couple("airHumidityPercent", {"airAbsorptionEnabled"});
+}
 #endif
 
 std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap& params,
@@ -834,6 +850,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                        f(params, "listenerY", config.listener.y, kMeters),
                        f(params, "listenerZ", config.listener.z, kMeters)};
     note_room_containment(params);
+    note_room_coupling(params);
     // Rejected rather than clamped, matching sonare_synthesize_rir: the same
     // out-of-range absorption has to surface the same error whether the room is
     // built offline or as an insert.
@@ -875,6 +892,7 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
                                  f(params, "listenerY", 4.0f, kMeters),
                                  f(params, "listenerZ", 1.7f, kMeters)};
     note_room_containment(params);
+    note_room_coupling(params);
     config.source_tail_suppression =
         f(params, "sourceTailSuppression", config.source_tail_suppression, kNone);
     config.wet = f(params, "dryWet", config.wet, kNone);
@@ -1169,6 +1187,7 @@ std::unique_ptr<Processor> build_voice(const std::string& name, const ParamMap& 
   if (name != "voice.changer") return nullptr;
   RealtimeVoiceChangerConfig config;
   SONARE_FIELDS_VOICE_CHANGER(SONARE_READ_FIELD)
+  params.note_coupled("retuneSemitones", "formantMode");
   return make<sonare::editing::voice_changer::VoiceChangerInsert>(config);
 }
 #endif  // SONARE_WITH_VOICE_CHANGER
@@ -1674,7 +1693,8 @@ namespace {
 // wrong: a validator coupling two parameters yields the interval one accepts
 // while the other sits at its default (`maximizer.adaptiveRelease`), and a
 // sample-rate-derived bound reflects the pre-prepare rate (the EQ band ceiling
-// reads 24 kHz and rises once prepared higher).
+// reads 24 kHz and rises once prepared higher). The siblings that move a bound beyond what a
+// `dependsOn` relation states are published as `coupledWith`.
 //
 // Measuring rather than declaring costs three things. The probe visits
 // |value| <= kBoundProbeLimit, and anything beyond reports null, which reads the
@@ -2260,6 +2280,16 @@ void append_param_entry(std::string& out, const std::string& name, const std::st
       out += '}';
     }
   }
+  out += "],\"coupledWith\":[";
+  const auto coupled = params.probed_coupled().find(key);
+  if (coupled != params.probed_coupled().end()) {
+    for (size_t index = 0; index < coupled->second.size(); ++index) {
+      if (index > 0) out += ',';
+      out += '"';
+      out += coupled->second[index];
+      out += '"';
+    }
+  }
   out += "]}";
 }
 
@@ -2537,6 +2567,7 @@ const std::vector<std::string>& insert_param_info_schema_paths() {
       "[].dependsOn[].key",
       "[].dependsOn[].relation",
       "[].dependsOn[].factor",
+      "[].coupledWith",
   };
   return paths;
 }

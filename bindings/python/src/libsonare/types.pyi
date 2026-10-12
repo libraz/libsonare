@@ -188,7 +188,8 @@ class MasteringInsertParamInfo(TypedDict):
     than "unknown". Three properties to plan for: a bound is measured with
     every other parameter at its default, so two parameters that constrain
     each other each report the other's default (unless it is a ``dependsOn``
-    entry, which leaves the bound ``None``); a sample-rate-derived bound
+    entry, which leaves the bound ``None``; ``coupledWith`` names the siblings
+    that move a range ``dependsOn`` cannot state); a sample-rate-derived bound
     reflects the un-prepared processor and rises once the insert is prepared
     at a higher rate; and an exclusive bound is reported as its limit value
     and flagged by ``minExclusive`` / ``maxExclusive`` (false when the bound is
@@ -221,6 +222,7 @@ class MasteringInsertParamInfo(TypedDict):
     uiMax: float | None
     scale: MasteringInsertParamScale
     dependsOn: list[MasteringInsertParamDependency]
+    coupledWith: list[str]
     choices: list[MasteringInsertParamChoice] | None
     slot: str | None
 

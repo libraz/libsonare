@@ -156,7 +156,8 @@ export interface MasteringInsertSlot {
  * have holes), and then both bounds are null. Three properties to plan for: a
  * bound is measured with every other parameter at its default, so two
  * parameters that constrain each other each report the other's default (unless
- * it is a `dependsOn` entry, which leaves the bound null); a
+ * it is a `dependsOn` entry, which leaves the bound null; `coupledWith` names
+ * the siblings that move a range `dependsOn` cannot state); a
  * sample-rate-derived bound reflects the un-prepared processor and rises once
  * the insert is prepared at a higher rate; and an exclusive bound is reported
  * as its limit value and flagged by `minExclusive` / `maxExclusive`, so a
@@ -196,6 +197,11 @@ export interface CapabilityCatalogParameter {
    * empty for an independent key. A bound that only restates this dependency at the sibling's default is left null, so `min` and `max` are limits of the key's own.
    */
   dependsOn: MasteringInsertParamDependency[];
+  /**
+   * Siblings, other than `dependsOn` entries, whose value moves this key's accepted range in a way
+   * `dependsOn` cannot state (a receiver spacing against the room geometry); `min` / `max` are measured with them at their defaults. Empty for an independent key.
+   */
+  coupledWith: string[];
 }
 
 /** One named mastering processor and its host-facing capabilities. */
