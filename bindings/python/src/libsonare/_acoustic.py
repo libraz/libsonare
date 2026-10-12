@@ -385,11 +385,12 @@ def room_geometry_from_estimate(
                                                          listener=(3, 2, 1.7))
         rir = libsonare.synthesize_rir(**geometry)
 
-    ``source`` and ``listener`` are (x, y, z) positions in metres; an estimate
-    carries no placement, so an omitted one is left out of the result and
-    :func:`synthesize_rir` applies its own default, which may fall outside a
-    small estimated room. Absorption bands that did not converge are left out
-    too, so the scalar ``absorption`` applies.
+    The result also carries a placement, the default source and listener
+    positions scaled per axis into the estimated room (the default 7 x 5 x 3
+    room maps to the default placement exactly), and ``absorption`` as the mean
+    of the finite bands. ``source`` and ``listener`` are (x, y, z) positions in
+    metres that replace the scaled placement when given. Absorption bands that
+    did not converge are left out of ``band_absorption``.
 
     Raises:
         SonareValueError: The estimate has no measurable dimensions (NaN).
@@ -415,7 +416,15 @@ def room_geometry_from_estimate(
         "length_m": float(config.length_m),
         "width_m": float(config.width_m),
         "height_m": float(config.height_m),
+        "source": (float(config.source_x), float(config.source_y), float(config.source_z)),
+        "listener": (
+            float(config.listener_x),
+            float(config.listener_y),
+            float(config.listener_z),
+        ),
     }
+    if any(math.isfinite(band) for band in estimate.band_absorption):
+        geometry["absorption"] = float(config.absorption)
     if config.absorption_band_count > 0:
         geometry["band_absorption"] = _optional_float_array_result(
             config.absorption_bands, config.absorption_band_count

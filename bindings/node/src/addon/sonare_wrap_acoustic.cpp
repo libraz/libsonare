@@ -143,11 +143,14 @@ sonare::acoustic::ShoeboxRoom RoomFromOptions(const Napi::Object& opts, float de
 }
 
 sonare::acoustic::SourceListener PlacementFromOptions(const Napi::Object& opts) {
-  return {
-      {FiniteFloatProperty(opts, "sourceX", 1.0f), FiniteFloatProperty(opts, "sourceY", 1.0f),
-       FiniteFloatProperty(opts, "sourceZ", 1.2f)},
-      {FiniteFloatProperty(opts, "listenerX", 5.0f), FiniteFloatProperty(opts, "listenerY", 4.0f),
-       FiniteFloatProperty(opts, "listenerZ", 1.7f)}};
+  const auto& source = sonare::acoustic::kDefaultPlacement.source;
+  const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
+  return {{FiniteFloatProperty(opts, "sourceX", source.x),
+           FiniteFloatProperty(opts, "sourceY", source.y),
+           FiniteFloatProperty(opts, "sourceZ", source.z)},
+          {FiniteFloatProperty(opts, "listenerX", listener.x),
+           FiniteFloatProperty(opts, "listenerY", listener.y),
+           FiniteFloatProperty(opts, "listenerZ", listener.z)}};
 }
 
 std::vector<float> AudioToVector(const sonare::Audio& audio) {
@@ -348,6 +351,15 @@ Napi::Value SonareWrap::RoomGeometryFromEstimate(const Napi::CallbackInfo& info)
   out.Set("lengthM", Napi::Number::New(env, geometry.length_m));
   out.Set("widthM", Napi::Number::New(env, geometry.width_m));
   out.Set("heightM", Napi::Number::New(env, geometry.height_m));
+  out.Set("sourceX", Napi::Number::New(env, geometry.source_x));
+  out.Set("sourceY", Napi::Number::New(env, geometry.source_y));
+  out.Set("sourceZ", Napi::Number::New(env, geometry.source_z));
+  out.Set("listenerX", Napi::Number::New(env, geometry.listener_x));
+  out.Set("listenerY", Napi::Number::New(env, geometry.listener_y));
+  out.Set("listenerZ", Napi::Number::New(env, geometry.listener_z));
+  if (std::any_of(bands.begin(), bands.end(), [](float b) { return std::isfinite(b); })) {
+    out.Set("absorption", Napi::Number::New(env, geometry.absorption));
+  }
   if (geometry.absorption_band_count > 0) {
     out.Set("bandAbsorption",
             VecToFloat32(env, std::vector<float>(

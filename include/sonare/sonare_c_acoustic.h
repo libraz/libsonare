@@ -326,11 +326,15 @@ const char* sonare_acoustic_mode_name(int mode);
 /// @brief Room geometry for sonare_synthesize_rir taken from a room estimate.
 /// @details Zeroes @p out, then sets the three dimensions and borrows the estimate's per-band
 ///   absorption as @c absorption_bands (so @p estimate must outlive any use of @p out).
-///   Source and listener stay at the zero value: the estimate carries no placement, so the
-///   caller sets both before synthesizing. Absorption bands that are missing or contain a
-///   non-finite value (the fit did not converge) are left unset, so the synthesizer's scalar
-///   absorption applies. Refuses (SONARE_ERROR_INVALID_PARAMETER, with a message) an estimate
-///   whose dimensions are not finite and positive, i.e. no decay was measurable.
+///   Source and listener are the library's default positions (source (1, 1, 1.2), listener
+///   (5, 4, 1.7) in the default 7 x 5 x 3 room) scaled per axis by the estimated dimension over
+///   the default one, so they lie inside any estimated room and the default room maps to the
+///   default placement exactly. The scalar @c absorption is the mean of the finite bands;
+///   with no finite band it stays at the zeroed value. Absorption bands that are missing or
+///   contain a non-finite value (the fit did not converge) are not borrowed, so the scalar
+///   applies. A caller may overwrite any field before synthesizing. Refuses
+///   (SONARE_ERROR_INVALID_PARAMETER, with a message) an estimate whose dimensions are not
+///   finite and positive, i.e. no decay was measurable.
 /// @param estimate Result of sonare_estimate_room.
 /// @param out      Receives the geometry. Its band pointer is borrowed from @p estimate and
 ///                 released with it by sonare_free_room_estimate; do not free it.

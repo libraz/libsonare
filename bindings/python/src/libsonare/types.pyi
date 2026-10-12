@@ -150,14 +150,21 @@ class MasteringInsertParamDependency(TypedDict):
     relation: MasteringInsertParamRelation
     factor: float
 
+class SynthParamCondition(TypedDict):
+    key: str
+    scope: Literal["engine", "patch"]
+    relation: Literal["eq", "ne", "gt", "ge", "lt", "le"]
+    value: float | bool | str
+
 class SynthParamInfo(TypedDict):
     name: str
     type: Literal["number", "boolean"]
-    default: float
+    default: float | bool
     unit: MasteringInsertParamUnit
     integer: NotRequired[bool]
     min: NotRequired[float]
     max: NotRequired[float]
+    activeWhen: NotRequired[list[SynthParamCondition]]
 
 class MasteringInsertParamInfo(TypedDict):
     """One key an insert processor's construction or automation reads.
@@ -831,9 +838,10 @@ class RoomGeometry(TypedDict):
     length_m: float
     width_m: float
     height_m: float
+    source: tuple[float, float, float]
+    listener: tuple[float, float, float]
+    absorption: NotRequired[float]
     band_absorption: NotRequired[list[float]]
-    source: NotRequired[tuple[float, float, float]]
-    listener: NotRequired[tuple[float, float, float]]
 
 class DereverbClassicalConfig(TypedDict):
     threshold: float

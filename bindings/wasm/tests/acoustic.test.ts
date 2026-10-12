@@ -469,6 +469,7 @@ describe('named selectors and estimate-to-geometry', () => {
     const geometry = roomGeometryFromEstimate(estimate, { source, listener });
     expect(Object.keys(geometry).sort()).toEqual(
       [
+        'absorption',
         'bandAbsorption',
         'heightM',
         'lengthM',
@@ -500,7 +501,37 @@ describe('named selectors and estimate-to-geometry', () => {
     expect(Array.from(mapped.rir)).toEqual(Array.from(byHand.rir));
     // The request form and the positional form agree; omitted positions stay omitted.
     expect(roomGeometryFromEstimate({ estimate, source, listener })).toEqual(geometry);
-    expect(Object.keys(roomGeometryFromEstimate(estimate))).not.toContain('sourceX');
+    const scaled = roomGeometryFromEstimate(estimate);
+    expect(Object.keys(scaled)).toContain('sourceX');
+    expect(scaled.absorption).toBeGreaterThan(0);
+  });
+
+  it('places a small estimated room inside it so synthesizeRir accepts it', () => {
+    const estimate = {
+      lengthM: 1.33,
+      widthM: 1.33,
+      heightM: 1.33,
+      bandAbsorption: [0.2, 0.3, Number.NaN],
+    };
+    const geometry = roomGeometryFromEstimate(estimate);
+    expect(geometry.bandAbsorption).toBeUndefined();
+    expect(geometry.absorption).toBeCloseTo(0.25, 6);
+    for (const key of [
+      'sourceX',
+      'sourceY',
+      'sourceZ',
+      'listenerX',
+      'listenerY',
+      'listenerZ',
+    ] as const) {
+      expect(geometry[key]).toBeGreaterThan(0);
+      expect(geometry[key]).toBeLessThan(1.33);
+    }
+    expect(() => synthesizeRir({ ...geometry, maxSeconds: 0.1, ismOrder: 2 })).not.toThrow();
+    const full = roomGeometryFromEstimate({ lengthM: 7, widthM: 5, heightM: 3 });
+    expect([full.sourceX, full.sourceY, full.sourceZ]).toEqual([1, 1, expect.closeTo(1.2, 6)]);
+    expect([full.listenerX, full.listenerY]).toEqual([5, 4]);
+    expect(full.absorption).toBeUndefined();
   });
 
   it('refuses an estimate with no measurable room', () => {

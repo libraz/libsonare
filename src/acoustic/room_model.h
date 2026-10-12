@@ -22,6 +22,12 @@ struct SourceListener {
   Vec3 listener;
 };
 
+/// @brief The library's default room (m); `kDefaultPlacement` is defined for it.
+inline constexpr RoomDimensions kDefaultRoomDims{7.0f, 5.0f, 3.0f};
+
+/// @brief Default source and listener positions inside `kDefaultRoomDims` (m).
+inline constexpr SourceListener kDefaultPlacement{{1.0f, 1.0f, 1.2f}, {5.0f, 4.0f, 1.7f}};
+
 /// @brief Index of a shoebox wall in `ShoeboxRoom::walls`.
 enum ShoeboxWall {
   kWallXMin = 0,  ///< x = 0 plane

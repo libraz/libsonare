@@ -113,6 +113,7 @@
 #ifdef SONARE_HAVE_ACOUSTIC
 #include "acoustic/material.h"
 #include "acoustic/rir_synthesizer.h"
+#include "acoustic/room_model.h"
 #include "effects/acoustic/room_morph.h"
 #include "effects/reverb/room_reverb.h"
 #include "util/insertion_sort.h"
@@ -653,8 +654,9 @@ sonare::acoustic::ShoeboxRoom acoustic_room_from_json(const detail::ParamMap& pa
                                                       const Value* json_root) {
   using namespace sonare::acoustic;
 
-  const RoomDimensions dims{f(params, "lengthM", 7.0f, kMeters), f(params, "widthM", 5.0f, kMeters),
-                            f(params, "heightM", 3.0f, kMeters)};
+  const RoomDimensions dims{f(params, "lengthM", kDefaultRoomDims.length, kMeters),
+                            f(params, "widthM", kDefaultRoomDims.width, kMeters),
+                            f(params, "heightM", kDefaultRoomDims.height, kMeters)};
   // The precedence, the [0, 1] coefficient rejection and the band-wise
   // scattering come from the core builder the offline acoustic facade calls, so
   // an insert and a synthesizeRir call resolve the same option bag identically
@@ -885,12 +887,14 @@ std::unique_ptr<Processor> build_effects(const std::string& name, const ParamMap
     detail::note_side_channel_key(params, "bandAbsorption", ParamKind::Array);
     detail::note_side_channel_key(params, "bandScattering", ParamKind::Array);
     config.target = acoustic_room_from_json(params, json_root);
-    config.placement.source = {f(params, "sourceX", 1.0f, kMeters),
-                               f(params, "sourceY", 1.0f, kMeters),
-                               f(params, "sourceZ", 1.2f, kMeters)};
-    config.placement.listener = {f(params, "listenerX", 5.0f, kMeters),
-                                 f(params, "listenerY", 4.0f, kMeters),
-                                 f(params, "listenerZ", 1.7f, kMeters)};
+    const auto& source = sonare::acoustic::kDefaultPlacement.source;
+    const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
+    config.placement.source = {f(params, "sourceX", source.x, kMeters),
+                               f(params, "sourceY", source.y, kMeters),
+                               f(params, "sourceZ", source.z, kMeters)};
+    config.placement.listener = {f(params, "listenerX", listener.x, kMeters),
+                                 f(params, "listenerY", listener.y, kMeters),
+                                 f(params, "listenerZ", listener.z, kMeters)};
     note_room_containment(params);
     note_room_coupling(params);
     config.source_tail_suppression =

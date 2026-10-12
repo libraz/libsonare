@@ -216,14 +216,15 @@ class DereverbClassicalConfig(TypedDict):
 class RoomGeometry(TypedDict):
     """Room geometry in the shape :func:`libsonare.synthesize_rir` takes.
 
-    Splat it into the call: ``synthesize_rir(**geometry)``. ``source``,
-    ``listener`` and ``band_absorption`` are present only when there is a
-    value for them; an absent key leaves that argument at its default.
+    Splat it into the call: ``synthesize_rir(**geometry)``. ``absorption`` and
+    ``band_absorption`` are present only when the estimate has finite bands; an
+    absent key leaves that argument at its default.
     """
 
     length_m: float
     width_m: float
     height_m: float
+    source: tuple[float, float, float]
+    listener: tuple[float, float, float]
+    absorption: NotRequired[float]
     band_absorption: NotRequired[list[float]]
-    source: NotRequired[tuple[float, float, float]]
-    listener: NotRequired[tuple[float, float, float]]

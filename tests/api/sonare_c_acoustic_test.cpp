@@ -1,6 +1,7 @@
 #include <sonare/sonare_c.h>
 
 #include <algorithm>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <limits>
@@ -1077,18 +1078,48 @@ TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesi
   CHECK(geometry.absorption_band_count == 6);
   CHECK(geometry.seed == 0u);
 
-  SECTION("feeds the synthesizer once a placement is set") {
-    geometry.source_x = 1.0f;
-    geometry.source_y = 1.0f;
-    geometry.source_z = 1.2f;
-    geometry.listener_x = 4.0f;
-    geometry.listener_y = 3.0f;
-    geometry.listener_z = 1.7f;
+  SECTION("feeds the synthesizer with the placement it returns") {
     geometry.ism_order = 2;
     geometry.max_seconds = 0.1f;
     SonareRirSynthResult rir{};
     REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
     CHECK(rir.has_error == 0);
+    CHECK(rir.length > 0);
+    sonare_free_rir_synth_result(&rir);
+  }
+
+  SECTION("the scalar absorption is the mean of the finite bands") {
+    CHECK(geometry.absorption ==
+          Catch::Approx((0.1f + 0.12f + 0.15f + 0.2f + 0.25f + 0.3f) / 6.0f));
+  }
+
+  SECTION("the default dimensions map to the default placement exactly") {
+    estimate.length_m = 7.0f;
+    estimate.width_m = 5.0f;
+    estimate.height_m = 3.0f;
+    REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
+    CHECK(geometry.source_x == 1.0f);
+    CHECK(geometry.source_y == 1.0f);
+    CHECK(geometry.source_z == 1.2f);
+    CHECK(geometry.listener_x == 5.0f);
+    CHECK(geometry.listener_y == 4.0f);
+    CHECK(geometry.listener_z == 1.7f);
+  }
+
+  SECTION("a small room gets a placement inside it that synthesizes") {
+    estimate.length_m = 1.33f;
+    estimate.width_m = 1.33f;
+    estimate.height_m = 1.33f;
+    REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
+    for (float v : {geometry.source_x, geometry.source_y, geometry.source_z, geometry.listener_x,
+                    geometry.listener_y, geometry.listener_z}) {
+      CHECK(v > 0.0f);
+      CHECK(v < 1.33f);
+    }
+    geometry.ism_order = 2;
+    geometry.max_seconds = 0.1f;
+    SonareRirSynthResult rir{};
+    REQUIRE(sonare_synthesize_rir(&geometry, 22050, &rir) == SONARE_OK);
     CHECK(rir.length > 0);
     sonare_free_rir_synth_result(&rir);
   }
@@ -1099,14 +1130,16 @@ TEST_CASE("sonare_room_geometry_from_estimate maps an estimate onto the synthesi
     REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
     CHECK(geometry.absorption_bands == nullptr);
     CHECK(geometry.absorption_band_count == 0);
+    CHECK(geometry.absorption == 0.0f);
   }
 
-  SECTION("bands that did not converge are left unset") {
+  SECTION("bands that did not converge are not borrowed and stay out of the mean") {
     bands[2] = std::numeric_limits<float>::quiet_NaN();
     REQUIRE(sonare_room_geometry_from_estimate(&estimate, &geometry) == SONARE_OK);
     CHECK(geometry.absorption_bands == nullptr);
     CHECK(geometry.absorption_band_count == 0);
     CHECK(geometry.length_m == 6.0f);
+    CHECK(geometry.absorption == Catch::Approx((0.1f + 0.12f + 0.2f + 0.25f + 0.3f) / 5.0f));
   }
 
   SECTION("refuses an unmeasured estimate") {

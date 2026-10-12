@@ -932,10 +932,13 @@ unsigned seedFromVal(val opts, unsigned fallback) {
 }
 
 sonare::acoustic::SourceListener placementFromVal(val opts) {
-  return {{floatProperty(opts, "sourceX", 1.0f), floatProperty(opts, "sourceY", 1.0f),
-           floatProperty(opts, "sourceZ", 1.2f)},
-          {floatProperty(opts, "listenerX", 5.0f), floatProperty(opts, "listenerY", 4.0f),
-           floatProperty(opts, "listenerZ", 1.7f)}};
+  const auto& source = sonare::acoustic::kDefaultPlacement.source;
+  const auto& listener = sonare::acoustic::kDefaultPlacement.listener;
+  return {
+      {floatProperty(opts, "sourceX", source.x), floatProperty(opts, "sourceY", source.y),
+       floatProperty(opts, "sourceZ", source.z)},
+      {floatProperty(opts, "listenerX", listener.x), floatProperty(opts, "listenerY", listener.y),
+       floatProperty(opts, "listenerZ", listener.z)}};
 }
 
 // Acoustic sample-rate bounds, sourced from the shared core limits
@@ -1214,7 +1217,8 @@ val js_room_morph_stereo(val left, val right, const val& sample_rate_val, val op
 }
 
 // Shoebox geometry for synthesizeRir taken from an estimate result, under the synthesizer's own
-// field names. Absorption bands that did not converge are left out.
+// field names, with the default placement scaled into the estimated room and the scalar absorption
+// set to the mean of the finite bands. Absorption bands that did not converge are left out.
 val js_room_geometry_from_estimate(val estimate) {
   const float nan = std::numeric_limits<float>::quiet_NaN();
   const float length = floatOption(estimate, "lengthM", nan);
@@ -1227,8 +1231,18 @@ val js_room_geometry_from_estimate(val estimate) {
   out.set("lengthM", length);
   out.set("widthM", width);
   out.set("heightM", height);
+  const sonare::acoustic::SourceListener placement =
+      sonare::acoustic::scaled_default_placement(length, width, height);
+  out.set("sourceX", placement.source.x);
+  out.set("sourceY", placement.source.y);
+  out.set("sourceZ", placement.source.z);
+  out.set("listenerX", placement.listener.x);
+  out.set("listenerY", placement.listener.y);
+  out.set("listenerZ", placement.listener.z);
   if (hasProperty(estimate, "bandAbsorption")) {
     const std::vector<float> bands = float32ArrayToVector(estimate["bandAbsorption"]);
+    const float mean = sonare::acoustic::mean_finite_absorption(bands.data(), bands.size());
+    if (std::isfinite(mean)) out.set("absorption", mean);
     if (sonare::acoustic::estimated_absorption_measured(bands.data(), bands.size())) {
       out.set("bandAbsorption", vectorToFloat32Array(bands));
     }

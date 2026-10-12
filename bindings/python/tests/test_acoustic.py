@@ -488,6 +488,7 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
         "length_m",
         "width_m",
         "height_m",
+        "absorption",
         "band_absorption",
         "source",
         "listener",
@@ -506,8 +507,45 @@ def test_room_geometry_from_estimate_feeds_synthesize_rir() -> None:
         **options,
     )
     assert mapped.rir == by_hand.rir
-    # Omitted positions are left to synthesize_rir's own defaults.
-    assert "source" not in libsonare.room_geometry_from_estimate(estimate)
+    # Omitted positions take the default placement scaled into the estimated room.
+    scaled = libsonare.room_geometry_from_estimate(estimate)
+    assert len(scaled["source"]) == 3 and len(scaled["listener"]) == 3
+    assert scaled["absorption"] == pytest.approx(
+        sum(estimate.band_absorption) / len(estimate.band_absorption), rel=1e-5
+    )
+
+
+@acoustic
+def test_room_geometry_from_estimate_places_a_small_room_inside_itself() -> None:
+    estimate = libsonare.RoomEstimate(
+        volume=2.35,
+        length_m=1.33,
+        width_m=1.33,
+        height_m=1.33,
+        drr_db=0.0,
+        confidence=1.0,
+        band_absorption=[0.2, 0.3],
+        rt60_bands=[0.5, 0.5],
+    )
+    geometry = libsonare.room_geometry_from_estimate(estimate)
+    for point in (geometry["source"], geometry["listener"]):
+        assert all(0.0 < v < 1.33 for v in point)
+    assert geometry["absorption"] == pytest.approx(0.25, rel=1e-6)
+    assert libsonare.synthesize_rir(**geometry, max_seconds=0.1, ism_order=2).rir
+    full = libsonare.RoomEstimate(
+        volume=105.0,
+        length_m=7.0,
+        width_m=5.0,
+        height_m=3.0,
+        drr_db=0.0,
+        confidence=1.0,
+        band_absorption=[float("nan")],
+        rt60_bands=[0.5],
+    )
+    placed = libsonare.room_geometry_from_estimate(full)
+    assert placed["source"] == pytest.approx((1.0, 1.0, 1.2))
+    assert placed["listener"] == pytest.approx((5.0, 4.0, 1.7))
+    assert "absorption" not in placed
 
 
 @acoustic

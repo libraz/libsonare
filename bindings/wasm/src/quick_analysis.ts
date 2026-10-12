@@ -846,12 +846,12 @@ export function estimateRoom(
  * Turn a room estimate into the geometry {@link synthesizeRir} takes.
  *
  * The pair to {@link estimateRoom}: the estimate's `lengthM`, `widthM`,
- * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names, so this
- * merges the placement in and drops what the estimate does not converge on. The
- * estimate carries no placement, so `source` and `listener` are set only when
- * given; an omitted one is left to `synthesizeRir`'s own default, which may fall
- * outside a small estimated room. Absorption bands that did not converge are
- * left out, so the scalar `absorption` applies.
+ * `heightM` and `bandAbsorption` are already `synthesizeRir`'s names. The
+ * result also carries a placement, the default source and listener positions
+ * scaled per axis into the estimated room (the default 7 x 5 x 3 room maps to
+ * the default placement exactly), and `absorption` as the mean of the finite
+ * bands. `source` and `listener` override the scaled placement when given.
+ * Absorption bands that did not converge are left out of `bandAbsorption`.
  *
  * @throws RangeError when the estimate has no measurable dimensions (NaN).
  */

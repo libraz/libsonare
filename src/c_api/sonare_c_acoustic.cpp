@@ -148,9 +148,20 @@ SonareError sonare_room_geometry_from_estimate(const SonareRoomEstimate* estimat
     out->absorption_bands = estimate->absorption_bands;
     out->absorption_band_count = estimate->band_count;
   }
+  const float mean =
+      sonare::acoustic::mean_finite_absorption(estimate->absorption_bands, estimate->band_count);
+  if (std::isfinite(mean)) out->absorption = mean;
   out->length_m = estimate->length_m;
   out->width_m = estimate->width_m;
   out->height_m = estimate->height_m;
+  const sonare::acoustic::SourceListener placement = sonare::acoustic::scaled_default_placement(
+      estimate->length_m, estimate->width_m, estimate->height_m);
+  out->source_x = placement.source.x;
+  out->source_y = placement.source.y;
+  out->source_z = placement.source.z;
+  out->listener_x = placement.listener.x;
+  out->listener_y = placement.listener.y;
+  out->listener_z = placement.listener.z;
   return SONARE_OK;
 }
 

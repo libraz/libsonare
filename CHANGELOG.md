@@ -95,7 +95,7 @@ This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_AB
 - Name the streaming key and chords (`keyName`, `keyShortName`, `chordName`, and `name` on each chord change and bar chord; Python `key_name`, `key_short_name`, `chord_name`).
 - Pass a detected key straight back: `keyRoot` / `keyMode` of `detectChords`, `chordFunctionalAnalysis`, `Audio.chordFunctionalAnalysis` and `chordFunctions`' `key` accept a pitch-class name or number and a mode name or ordinal (WASM exports `PitchClassName`).
 - Add `roman` and `function` to chords already in hand (`chordFunctions`, `chord_functions`, `sonare_chord_functions`).
-- Turn an `estimateRoom` result into `synthesizeRir` input (`roomGeometryFromEstimate`, `room_geometry_from_estimate`, `sonare_room_geometry_from_estimate`).
+- Turn an `estimateRoom` result into `synthesizeRir` input, with the default source and listener scaled into the estimated room and the bands' mean as scalar absorption (`roomGeometryFromEstimate`, `room_geometry_from_estimate`, `sonare_room_geometry_from_estimate`).
 - Morph a stereo recording toward a target room heard at two receivers `receiverSpacingM` apart (default 0.5 m, (0, 4] m) (`roomMorphStereo`, `room_morph_stereo`, `sonare_room_morph_stereo`, `room-morph` on both CLIs with `--receiver-spacing`).
 - Decode audio once keeping every channel, and fold channels to a narrower layout with the ITU-R BS.775 rule (`decodeChannels`, `downmix`; `decode_channels`, `downmix`; `sonare_decode_channels`, `sonare_downmix`); a `targetLayout` outside the 32-bit integer range is refused.
 - Analyze an audio graph branch live with `SonareStreamAnalyzerNode` in `@libraz/libsonare/worklet` (`registerSonareStreamAnalyzerWorkletProcessor()`), without SharedArrayBuffer.
@@ -116,10 +116,10 @@ This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_AB
 #### MIDI and synthesizer
 
 - Set a synth engine's own model fields by key with `engineParams` / `engine_params` (`bowForce`, `ranks2.level`, ...); unknown keys, other engines' keys and out-of-range values are refused by name.
-- Describe every engine and `SynthPatch` field with range, default and unit (`synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; `synth_engine_param_info`, `synth_patch_param_info`; `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`).
+- Describe every engine and `SynthPatch` field with range, default, unit and the other fields it needs set before it reaches the voice (`activeWhen`) (`synthEngineParamInfo`, `synthPatchParamInfo` returning `SynthParamInfo`; `synth_engine_param_info`, `synth_patch_param_info`; `sonare_synth_engine_param_info`, `sonare_synth_patch_param_info`).
 - Set per-voice drift rate, amplitude and filter envelope delay and hold, and one-shot playback (`driftRateHz`, `ampDelayMs`, `ampHoldMs`, `filterDelayMs`, `filterHoldMs`, `oneShot`; `SonareSynthPatch` version 9).
 - Choose the FM operator algorithm with the `fm` engine's `algorithm` param.
-- Push a live program change with an optional bank in one call (`pushMidiProgram`, `pushMidiInputProgram`; `push_midi_program`, `push_midi_input_program`; `sonare_engine_push_midi_program`, `sonare_engine_push_midi_input_program`).
+- Push a live program change with an optional bank in one call (`pushMidiProgram`, `pushMidiInputProgram`; `push_midi_program`, `push_midi_input_program`; `sonare_engine_push_midi_program`, `sonare_engine_push_midi_input_program`); the SoundFont player, a synth bound with `useGmPrograms` and a GM-kit percussion patch (drum-set select) follow it.
 
 #### Realtime engine and project
 
@@ -170,7 +170,7 @@ This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_AB
 - Pre-fader sends of a muted or solo-silenced lane are silenced with it, and a solo-safe lane keeps sounding while another is soloed.
 - Bounce and freeze of a live engine reset its mixer and effect processors first, cutting tails still ringing.
 - The true-peak meter reads one reconstruction-filter group delay behind the block, so its reading no longer depends on block size.
-- Reported tails cover the output down to 1e-5 for every insert, the FDN tail is shorter (about 7.5 s at defaults, was 9.3 s) and a drum kit's about 29.5 s (was 42.7 s), so bounce and freeze lengths and catalog `tailSamples` change.
+- Reported tails cover the output down to 1e-5 for every insert, the FDN tail is shorter (about 7.5 s at defaults, was 9.3 s) and a drum kit's follows the pieces struck (at most about 29.5 s, was 42.7 s), so bounce and freeze lengths and catalog `tailSamples` change.
 - The WASM worklet delivers per-channel meters of 5.1 and 7.1 targets (`channelCount` and per-channel arrays), and its SharedArrayBuffer meter record (16 to 49 floats, protocol version 2) and external-MIDI record (five words) grow, so main thread and worklet must come from one package version.
 - Loading a mixing scene reports every unconsumed key in `sceneWarnings()` / `scene_warnings`, `Project.setMixerSceneJson` / `set_mixer_scene_json` return them as a list (C: `sonare_last_warning_message`), and `sonare_project_deserialize` now reports unknown scene keys as warnings with code `unknown_scene_key`.
 - The mixing assistant counts the peaks of short audible tracks toward master headroom, and phase alignment picks its window from the span the correlation uses.

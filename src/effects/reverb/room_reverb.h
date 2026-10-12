@@ -8,6 +8,7 @@
 #include "acoustic/geometry.h"
 #include "acoustic/late_reverb.h"      // AirAbsorption
 #include "acoustic/rir_synthesizer.h"  // ReceiverLayout
+#include "acoustic/room_model.h"
 #include "acoustic/room_types.h"
 #include "effects/reverb/convolution_reverb.h"
 
@@ -19,9 +20,9 @@ namespace sonare::effects::reverb {
 /// path); per-wall frequency-dependent materials are reachable through the
 /// struct/binding API, not this engine's JSON params.
 struct RoomReverbConfig {
-  sonare::RoomDimensions dims{7.0f, 5.0f, 3.0f};  ///< room size (m)
-  sonare::acoustic::Vec3 source{1.0f, 1.0f, 1.2f};
-  sonare::acoustic::Vec3 listener{5.0f, 4.0f, 1.7f};
+  sonare::RoomDimensions dims = sonare::acoustic::kDefaultRoomDims;  ///< room size (m)
+  sonare::acoustic::Vec3 source = sonare::acoustic::kDefaultPlacement.source;
+  sonare::acoustic::Vec3 listener = sonare::acoustic::kDefaultPlacement.listener;
   float absorption = 0.2f;   ///< uniform wall absorption, clamped to [0, 1)
   int ism_order = 3;         ///< image-source order for early reflections
   unsigned seed = 1u;        ///< deterministic late-tail noise seed
