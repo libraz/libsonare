@@ -818,6 +818,26 @@ def test_engine_param_info_shape() -> None:
     assert all(row["unit"] for row in patch_rows)
 
 
+def test_engine_param_info_states_gates_only_where_set() -> None:
+    percussion = {row["name"]: row for row in synth_engine_param_info("percussion")}
+    gm_kit = percussion["gmKit"]
+    assert gm_kit["type"] == "boolean"
+    assert gm_kit["default"] is True
+    assert "activeWhen" not in gm_kit
+    assert percussion["modeRatios6"]["activeWhen"] == [
+        {"key": "gmKit", "scope": "engine", "relation": "eq", "value": False},
+        {"key": "numModes", "scope": "engine", "relation": "gt", "value": 6},
+    ]
+    bowed = {row["name"]: row for row in synth_engine_param_info("bowed-string")}
+    assert bowed["corpusScale"]["activeWhen"] == [
+        {"key": "body", "scope": "patch", "relation": "eq", "value": "violin"},
+        {"key": "bodyMix", "scope": "patch", "relation": "gt", "value": 0},
+    ]
+    for mode in SYNTH_ENUM_TABLES["engine_modes"]:
+        for row in synth_engine_param_info(mode):
+            assert row.get("activeWhen", [None]), (mode, row["name"])
+
+
 def _engine_params_patch() -> SynthPatch:
     # Built in its own scope: the dict and its keys are garbage once this
     # returns, so only the patch's own conversion keeps them alive.
