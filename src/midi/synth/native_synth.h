@@ -753,8 +753,8 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
                             static_cast<int64_t>(std::numeric_limits<int>::max())));
     return numeric::saturating_add(base, std::max(part_fx_.tail_samples(), 0));
   }
-  /// A received GS envelope-time edit raises the tail (raise_tail); in GM mode the first
-  /// note-on narrows it to the patches heard (observe_tail_patch).
+  /// A received GS envelope-time edit raises the tail (raise_tail); in GM mode and on a kit
+  /// preset the first note-on narrows it to the patches heard (observe_tail_patch).
   bool tail_follows_events() const noexcept override { return true; }
   /// CONTROL thread, offline tail probe: publish a pending inline EFX change
   /// without processing audio, so the host reads the chain that replayed events
@@ -980,8 +980,9 @@ class NativeSynth final : public MidiInstrument, private PartFxHost {
   /// Raises the published tail to recompute_tail() and never lowers it: a voice
   /// struck under an edit since withdrawn may still be ringing.
   void raise_tail() noexcept;
-  /// GM mode: adds a note-on's resolved patch (with its drum @p kit, or kNoTailKit) to the
-  /// set bounding the tail, and republishes it; the first note lowers the every-program bound.
+  /// GM mode and kit presets: adds a note-on's resolved patch (with its drum @p kit, or
+  /// kNoTailKit) to the set bounding the tail, and republishes it; the first note lowers the
+  /// every-program bound.
   void observe_tail_patch(const NativeSynthPatch& patch, uint8_t kit, uint8_t note) noexcept;
   /// The slowest GS EG time multipliers any part holds; 1 where none lengthens.
   EnvelopeTimeScales gs_tail_scales() const noexcept;

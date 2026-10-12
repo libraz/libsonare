@@ -1461,3 +1461,28 @@ TEST_CASE("a drum-kit patch bounds its tail by the drum table alone",
   INFO("last audible sample = " << last_audible << ", tail = " << tail);
   CHECK(last_audible <= tail);
 }
+
+TEST_CASE("a drum-kit patch narrows its tail to the pieces struck",
+          "[midi][synth][percussion][gs-tail]") {
+  using sonare::midi::synth::apply_gs_drum_kit;
+  using sonare::midi::synth::gm_drum_kit_max_tail_samples;
+  using sonare::midi::synth::gm_fallback_drum_kit;
+  using sonare::midi::synth::gm_fallback_drum_patch;
+  using sonare::midi::synth::native_patch_tail_samples;
+
+  NativeSynthConfig cfg;
+  cfg.patch = drum_kit_patch();
+  NativeSynth synth(cfg);
+  synth.prepare(kRate, 512);
+  const int64_t kit_max = gm_drum_kit_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f);
+  CHECK(synth.tail_samples() == kit_max);
+
+  constexpr uint8_t kKick = 36;
+  synth.on_event(0, event(sonare::midi::make_midi1_note_on(0, 0, kKick, 127)));
+  NativeSynthPatch kick = gm_fallback_drum_patch(kKick);
+  apply_gs_drum_kit(kick.percussion, kick.amp_env, gm_fallback_drum_kit(0), kKick);
+  const int64_t expected = native_patch_tail_samples(kick, kRate, {}, nullptr);
+  INFO("kick tail = " << expected << ", kit max = " << kit_max);
+  CHECK(synth.tail_samples() == expected);
+  CHECK(synth.tail_samples() < kit_max);
+}

@@ -7,6 +7,7 @@
 #include <sonare/sonare_c.h>
 #include <sonare/sonare_c_project.h>
 
+#include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 #include <cmath>
 #include <cstdint>
@@ -25,6 +26,7 @@
 namespace {
 
 using sonare::midi::synth::EnvelopeTimeScales;
+using sonare::midi::synth::gm_drum_kit_max_tail_samples;
 using sonare::midi::synth::gm_fallback_max_tail_samples;
 using sonare::midi::synth::gm_fallback_patch;
 using sonare::midi::synth::gs_time_scale;
@@ -156,6 +158,34 @@ TEST_CASE("a GM bounce whose clip edits the GS release covers the scaled release
   const int64_t edited = bounce_gm_frames(true);
   CHECK(edited >= kArrangementFrames + piano_tail_samples({1.0f, 1.0f, max_scale}));
   CHECK(edited > plain);
+}
+
+TEST_CASE("a drum-kit bounce reports the tail of the pieces it strikes",
+          "[project][midi][gs-tail]") {
+  SonareProject* project = make_project(note_events(false));
+  SonareSynthInstrumentBinding binding{};
+  binding.destination_id = 0;
+  REQUIRE(sonare_synth_preset_patch("drum-kit", &binding.patch) == SONARE_OK);
+  binding.use_gm_programs = 0;
+  const SonareProjectBounceOptions options = auto_length_options();
+  float* out = nullptr;
+  size_t out_len = 0;
+  REQUIRE(sonare_project_bounce_with_synth_instruments(project, &options, &binding, 1, &out,
+                                                       &out_len) == SONARE_OK);
+  const int64_t frames = static_cast<int64_t>(out_len / 2);
+  // The clip strikes note 60; the bounce must end far short of the every-key bound.
+  const int64_t kit_max = gm_drum_kit_max_tail_samples(kRate, 1.0f, 1.0f, 1.0f);
+  CHECK(frames < kArrangementFrames + kit_max / 4);
+  // The render has decayed inside the reported tail.
+  float last_peak = 0.0f;
+  for (size_t i = out_len - 480u * 2u; i < out_len; ++i)
+    last_peak = std::max(last_peak, std::fabs(out[i]));
+  float head_peak = 0.0f;
+  for (size_t i = 0; i < 4800u * 2u; ++i) head_peak = std::max(head_peak, std::fabs(out[i]));
+  CHECK(head_peak > 1.0e-3f);
+  CHECK(last_peak < 1.0e-3f);
+  sonare_free_floats(out);
+  sonare_project_destroy(project);
 }
 
 TEST_CASE("an unbounded instrument tail makes the auto-length bounce refuse",

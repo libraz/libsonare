@@ -73,12 +73,15 @@ int64_t NativeSynth::recompute_tail() const noexcept {
   const EnvelopeTimeScales scales = gs_tail_scales();
   // A kit patch resolves each note against the drum table and a program change only selects
   // kits, so neither the melodic programs nor the piano and guitar halos are reachable.
-  if (!config_.use_gm_programs && config_.patch.mode == SynthEngineMode::kPercussion &&
-      config_.patch.percussion.gm_kit) {
+  const bool kit_preset = !config_.use_gm_programs &&
+                          config_.patch.mode == SynthEngineMode::kPercussion &&
+                          config_.patch.percussion.gm_kit;
+  const bool heard_set_usable = tail_patch_count_ > 0 && !tail_patches_full_;
+  if (kit_preset && !heard_set_usable) {
     return gm_drum_kit_max_tail_samples(sample_rate_, scales.attack, scales.decay, scales.release);
   }
   // Once a note has resolved its patch, only the patches heard so far can still be ringing.
-  if (config_.use_gm_programs && tail_patch_count_ > 0 && !tail_patches_full_) {
+  if ((config_.use_gm_programs || kit_preset) && heard_set_usable) {
     int64_t tail = 0;
     for (size_t i = 0; i < tail_patch_count_; ++i) {
       const TailPatch& heard = tail_patches_[i];
@@ -632,6 +635,7 @@ void NativeSynth::note_on(uint8_t channel, uint8_t note, Velocity16 velocity,
   } else if (patch->mode == SynthEngineMode::kPercussion && patch->percussion.gm_kit) {
     patch = &gm_fallback_drum_patch(drum_lookup_note);
     drum_kit = gm_fallback_drum_kit(st.program);
+    observe_tail_patch(*patch, drum_kit, drum_lookup_note);
   }
   // GM kit exclusive/mute groups: a new hi-hat / triangle / whistle / surdo
   // strike chokes the ringing voice in its group before the new one allocates.
