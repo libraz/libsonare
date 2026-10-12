@@ -1829,11 +1829,18 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
 /// @details Packs one MIDI 2.0 Program Change (bank and program in a single message)
 ///          and hands it to the same path as @ref sonare_engine_push_midi_ump, so
 ///          the receiver's own gates apply (for a GS instrument, RX PROGRAM CHANGE
-///          and RX BANK SELECT). A receiver that does not select programs (the
-///          built-in synth, a NativeSynth without GM programs, a part with RX
-///          PROGRAM CHANGE off, an MPE member channel) accepts the message and
-///          ignores it. A future-dated op can be evicted by the pending-command
-///          bank like any future command. Selection only: no preset is loaded.
+///          and RX BANK SELECT). Which receivers select programs: the SoundFont
+///          player (@ref sonare_engine_set_sf2_instrument) selects bank and program
+///          under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a NativeSynth
+///          bound with use_gm_programs
+///          (@ref sonare_engine_set_synth_instrument_binding) resolves each
+///          channel's voice from the bank and program; a NativeSynth whose patch
+///          plays the GM kit (the `drum-kit` preset, or a percussion patch with
+///          gm_kit on) takes the program as the GS drum-set select on every
+///          channel. Every other receiver accepts the message and ignores it: the
+///          built-in synth, any other NativeSynth patch, a part with RX PROGRAM
+///          CHANGE off, and an MPE member channel. A future-dated op can be evicted by the
+///          pending-command bank like any future command. Selection only: no preset is loaded.
 /// @param destination_id MIDI destination id (clip/instrument destination).
 /// @param group UMP group (0..15).
 /// @param channel MIDI channel (0..15).

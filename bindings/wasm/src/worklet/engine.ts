@@ -1170,6 +1170,19 @@ export class SonareEngine {
     strips.pushMidiUmp(this.stripContext, trackId, words, renderFrame);
   }
 
+  /**
+   * Queues a live MIDI 2.0 Program Change, with an optional bank, to a track's
+   * MIDI destination; arguments follow the main-thread engine's
+   * `pushMidiProgram`. Which receivers select programs: the SoundFont player
+   * (`setSf2Instrument`) selects bank and program under its own RX PROGRAM
+   * CHANGE / RX BANK SELECT gates; a NativeSynth bound with
+   * `useGmPrograms: true` (`setSynthInstrument`) resolves each channel's voice
+   * from the bank and program; a NativeSynth whose patch plays the GM kit (the
+   * `drum-kit` preset, or a percussion patch with `gmKit` on) takes the program
+   * as the GS drum-set select on every channel. Every other receiver accepts the
+   * message and ignores it: the built-in synth, any other NativeSynth patch, a
+   * part with RX PROGRAM CHANGE off, and an MPE member channel.
+   */
   pushMidiProgram(
     trackId: string | number,
     group: number,

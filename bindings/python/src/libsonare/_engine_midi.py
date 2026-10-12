@@ -241,9 +241,16 @@ class _EngineMidiMixin:
         :class:`SonareValueError` naming a refused argument and
         :class:`SonareError` with code ``OUT_OF_MEMORY`` if the queue is full.
 
-        A receiver that does not select programs (the built-in synth,
-        a native synth without GM programs, a part with RX PROGRAM CHANGE off,
-        an MPE member channel) accepts and ignores it; a future-dated op can be
+        Which receivers select programs: the SoundFont player
+        (:meth:`set_sf2_instrument`) selects bank and program under its own
+        RX PROGRAM CHANGE / RX BANK SELECT gates; a native synth bound with
+        ``SynthPatch.use_gm_programs`` (:meth:`set_synth_instrument`) resolves
+        each channel's voice from the bank and program; a native synth whose
+        patch plays the GM kit (the ``drum-kit`` preset, or a percussion patch
+        with ``gm_kit`` on) takes the program as the GS drum-set select on every
+        channel. Every other receiver accepts the message and ignores it: the
+        built-in synth, any other native synth patch, a part with RX PROGRAM
+        CHANGE off, and an MPE member channel. A future-dated op can be
         evicted by the pending-command bank like any future command.
         """
         lib = _get_lib()
@@ -1190,9 +1197,16 @@ class _EngineMidiMixin:
         :meth:`set_midi_input_source`; without it the call raises
         :class:`SonareError` with code ``INVALID_STATE``.
 
-        A receiver that does not select programs (the built-in synth,
-        a native synth without GM programs, a part with RX PROGRAM CHANGE off,
-        an MPE member channel) accepts and ignores it; a future-dated op can be
+        Which receivers select programs: the SoundFont player
+        (:meth:`set_sf2_instrument`) selects bank and program under its own
+        RX PROGRAM CHANGE / RX BANK SELECT gates; a native synth bound with
+        ``SynthPatch.use_gm_programs`` (:meth:`set_synth_instrument`) resolves
+        each channel's voice from the bank and program; a native synth whose
+        patch plays the GM kit (the ``drum-kit`` preset, or a percussion patch
+        with ``gm_kit`` on) takes the program as the GS drum-set select on every
+        channel. Every other receiver accepts the message and ignores it: the
+        built-in synth, any other native synth patch, a part with RX PROGRAM
+        CHANGE off, and an MPE member channel. A future-dated op can be
         evicted by the pending-command bank like any future command.
         """
         lib = _get_lib()

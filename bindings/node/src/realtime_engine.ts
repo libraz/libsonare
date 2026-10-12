@@ -1992,10 +1992,16 @@ export class RealtimeEngine {
    * travels in the same message and is applied only when `bankValid` is true;
    * a non-zero `bankMsb` or `bankLsb` with `bankValid` false is refused.
    * Program, bank MSB and LSB are 7-bit; group and channel 0..15. The message
-   * takes the receive path a wire Program Change takes, so a receiver that does
-   * not select programs (the built-in synth, a native synth without GM
-   * programs, a part with RX PROGRAM CHANGE off, an MPE member channel)
-   * accepts and ignores it. Throws when the slot ring or command queue is full
+   * takes the receive path a wire Program Change takes. Which receivers select
+   * programs: the SoundFont player (`setSf2Instrument`) selects bank and
+   * program under its own RX PROGRAM CHANGE / RX BANK SELECT gates; a
+   * NativeSynth bound with `useGmPrograms: true` (`setSynthInstrument`)
+   * resolves each channel's voice from the bank and program; a NativeSynth
+   * whose patch plays the GM kit (the `drum-kit` preset, or a percussion patch
+   * with `gmKit` on) takes the program as the GS drum-set select on every
+   * channel. Every other receiver accepts the message and ignores it: the
+   * built-in synth, any other NativeSynth patch, a part with RX PROGRAM CHANGE
+   * off, and an MPE member channel. Throws when the slot ring or command queue is full
    * (retry after a process block). `renderFrame` is the render-frame time to
    * apply (omit for immediate); a future-dated op can be evicted by the
    * pending-command bank like any future command.
