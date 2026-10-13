@@ -751,6 +751,7 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_param_smoothing_ms(self, smoothing_ms: float) -> None:
         """Set the ramp time (ms) of the engine-level smoother.
 
+        The time is one time constant: about 63% of the way at the set time.
         Governs only ``set_parameter_smoothed`` on parameters bound through the
         automation engine. Reserved engine targets -- track and bus faders, pan
         and width, and insert and instrument parameters -- keep their own fixed
@@ -769,6 +770,13 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def set_solo_mute(
         self, lane_index: int, solo: bool, mute: bool, render_frame: int | None = None
     ) -> None:
+        """Queue a lane's solo/mute state.
+
+        An armed PFL/AFL cue (:meth:`set_track_monitor_mode`) is folded into the
+        program output by ``process`` and kept separate by
+        the ``*_with_monitor`` variants; offline renders, bounces and freezes
+        never include it.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_solo_mute"):
             raise _not_supported("libsonare was built without realtime mixer support")
@@ -794,6 +802,11 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         or the case-insensitive ASCII names ``"off"``, ``"pfl"``, and
         ``"afl"``. Unknown lane indices are reported asynchronously by engine
         telemetry, matching the native command contract.
+
+        ``process`` fold the armed cue into the program
+        output, so the tapped lane is counted twice there; the
+        ``*_with_monitor`` variants keep the cue separate. Offline renders,
+        bounces and freezes never include the cue.
         """
         mode_value = _track_monitor_mode_value(mode)
         lib = _get_lib()

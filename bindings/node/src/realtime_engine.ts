@@ -1404,17 +1404,29 @@ export class RealtimeEngine {
    * Reserved engine targets — track and bus faders, pan and width, and insert and
    * instrument parameters — keep their own fixed smoothing whatever this is set
    * to, and MIDI-CC mappings apply their values directly. The default is 20 ms;
-   * `0` makes the governed changes instant.
+   * `0` makes the governed changes instant. The time is one time constant: about 63% of the
+   * way at the set time.
    */
   setParamSmoothingMs(smoothingMs: number): void {
     this.native.setParamSmoothingMs(smoothingMs);
   }
 
+  /**
+   * Queue a lane's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) is folded
+   * into the program output by `process()` / `processPrepared()` and kept separate by the
+   * `WithMonitor` variants; offline renders, bounces and freezes never include it.
+   */
   setSoloMute(laneIndex: number, solo: boolean, mute: boolean, renderFrame?: number): void {
     this.native.setSoloMute(laneIndex, solo, mute, resolveRenderFrame('setSoloMute', renderFrame));
   }
 
-  /** Schedule a per-track PFL/AFL monitor tap at a render-frame boundary. */
+  /**
+   * Schedule a per-track PFL/AFL monitor tap at a render-frame boundary.
+   *
+   * `process()` and `processPrepared()` fold the armed cue into the program output, so the
+   * tapped lane is counted twice there; the `WithMonitor` variants keep the cue separate.
+   * Offline renders, bounces and freezes never include the cue.
+   */
   setTrackMonitorMode(laneIndex: number, mode: EngineTrackMonitorMode, renderFrame?: number): void {
     this.native.setTrackMonitorMode(
       laneIndex,
@@ -1717,48 +1729,67 @@ export class RealtimeEngine {
     return this.native.midiInputPendingCount();
   }
 
+  /**
+   * Push a live MIDI note-on to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputNoteOn(
     group: number,
     channel: number,
     note: number,
     velocity: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+    this.native.pushMidiInputNoteOn(group, channel, note, velocity, offsetInBlockSamples);
   }
 
+  /**
+   * Push a live MIDI note-off to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputNoteOff(
     group: number,
     channel: number,
     note: number,
     velocity = 0,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+    this.native.pushMidiInputNoteOff(group, channel, note, velocity, offsetInBlockSamples);
   }
 
+  /**
+   * Push a live MIDI control change to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputCc(
     group: number,
     channel: number,
     controller: number,
     value: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+    this.native.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples);
   }
 
   /**
    * Push a live MIDI pitch bend into the engine-owned MIDI input source.
    *
    * Requires {@link RealtimeEngine.setMidiInputSource}; without it the call is
-   * refused. The engine drains the queue at block start, so the event lands on
-   * the block containing `portTimeSamples`.
+   * refused. The engine drains the queue at block start, so the event lands in
+   * the next block drained, `offsetInBlockSamples` frames in.
    *
    * @param group UMP group (0..15).
    * @param channel MIDI channel (0..15).
    * @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383). A value outside
    *   that range is refused rather than wrapped into it.
-   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
    * @example
    * ```ts
    * engine.setMidiInputSource(destinationId);
@@ -1769,9 +1800,9 @@ export class RealtimeEngine {
     group: number,
     channel: number,
     bend14: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputPitchBend(group, channel, bend14, portTimeSamples);
+    this.native.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples);
   }
 
   /**
@@ -1782,15 +1813,16 @@ export class RealtimeEngine {
    * @param channel MIDI channel (0..15).
    * @param pressure 7-bit channel pressure (0..127), applying to every sounding
    *   note on the channel.
-   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
    */
   pushMidiInputChannelPressure(
     group: number,
     channel: number,
     pressure: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputChannelPressure(group, channel, pressure, portTimeSamples);
+    this.native.pushMidiInputChannelPressure(group, channel, pressure, offsetInBlockSamples);
   }
 
   /**
@@ -1802,16 +1834,17 @@ export class RealtimeEngine {
    * @param note Key the pressure belongs to (0..127), so it reaches that voice
    *   alone rather than the whole channel.
    * @param pressure 7-bit key pressure (0..127).
-   * @param portTimeSamples Port-clock timestamp in samples; defaults to 0.
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
    */
   pushMidiInputPolyPressure(
     group: number,
     channel: number,
     note: number,
     pressure: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.native.pushMidiInputPolyPressure(group, channel, note, pressure, portTimeSamples);
+    this.native.pushMidiInputPolyPressure(group, channel, note, pressure, offsetInBlockSamples);
   }
 
   pushMidiNoteOn(
@@ -2046,8 +2079,9 @@ export class RealtimeEngine {
 
   /**
    * Push a live MIDI 2.0 Program Change to the engine-owned MIDI input source.
-   * The rules match {@link pushMidiProgram}. `portTimeSamples` is the port
-   * timestamp in samples.
+   * The rules match {@link pushMidiProgram}. `offsetInBlockSamples` is
+   * an offset into the next block drained (clamped to its last frame, negative reads as 0), not
+   * an absolute clock position.
    */
   pushMidiInputProgram(
     group: number,
@@ -2056,7 +2090,7 @@ export class RealtimeEngine {
     bankValid = false,
     bankMsb = 0,
     bankLsb = 0,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
     this.native.pushMidiInputProgram(
       group,
@@ -2065,17 +2099,18 @@ export class RealtimeEngine {
       bankValid,
       bankMsb,
       bankLsb,
-      portTimeSamples,
+      offsetInBlockSamples,
     );
   }
 
   /**
    * Push one raw UMP message (1 to 4 words) to the engine-owned MIDI input
-   * source. The message rules match {@link pushMidiUmp}. `portTimeSamples` is
-   * the port timestamp in samples.
+   * source. The message rules match {@link pushMidiUmp}. `offsetInBlockSamples` is
+   * an offset into the next block drained (clamped to its last frame, negative reads as 0), not
+   * an absolute clock position.
    */
-  pushMidiInputUmp(words: UmpWords, portTimeSamples = 0): void {
-    this.native.pushMidiInputUmp(words, portTimeSamples);
+  pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
+    this.native.pushMidiInputUmp(words, offsetInBlockSamples);
   }
 
   /**

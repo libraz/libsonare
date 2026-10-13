@@ -163,20 +163,20 @@ export interface NativeEngine {
     group: unknown,
     channel: unknown,
     bend14: unknown,
-    portTimeSamples?: unknown,
+    offsetInBlockSamples?: unknown,
   ): void;
   pushMidiInputChannelPressure(
     group: unknown,
     channel: unknown,
     pressure: unknown,
-    portTimeSamples?: unknown,
+    offsetInBlockSamples?: unknown,
   ): void;
   pushMidiInputPolyPressure(
     group: unknown,
     channel: unknown,
     note: unknown,
     pressure: unknown,
-    portTimeSamples?: unknown,
+    offsetInBlockSamples?: unknown,
   ): void;
   setArticulation(destinationId: unknown, channel: unknown, articulation: unknown): void;
   setPartRig(destinationId: unknown, part: unknown, mode: unknown, insertsJson?: unknown): void;
@@ -184,7 +184,7 @@ export interface NativeEngine {
   pushMidiPanic(renderFrame?: unknown): void;
   pushMidiSysex(destinationId: unknown, bytes: unknown, renderFrame?: unknown): void;
   pushMidiUmp(destinationId: unknown, words: unknown, renderFrame?: unknown): void;
-  pushMidiInputUmp(words: unknown, portTimeSamples?: unknown): void;
+  pushMidiInputUmp(words: unknown, offsetInBlockSamples?: unknown): void;
   pushMidiProgram(
     destinationId: unknown,
     group: unknown,
@@ -202,7 +202,7 @@ export interface NativeEngine {
     bankValid?: unknown,
     bankMsb?: unknown,
     bankLsb?: unknown,
-    portTimeSamples?: unknown,
+    offsetInBlockSamples?: unknown,
   ): void;
   renderOffline(channels: unknown, blockSize?: unknown, finalize?: unknown): Float32Array[];
   setGraph(spec: unknown): void;

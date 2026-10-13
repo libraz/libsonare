@@ -168,13 +168,13 @@ class RealtimeEngineWasm {
   void consumeExternalMidiScratch();
   void pushMidiInputNoteOn(const emscripten::val& group_val, const emscripten::val& channel_val,
                            const emscripten::val& note_val, const emscripten::val& velocity_val,
-                           int64_t port_time_samples);
+                           int64_t offset_in_block_samples);
   void pushMidiInputNoteOff(const emscripten::val& group_val, const emscripten::val& channel_val,
                             const emscripten::val& note_val, const emscripten::val& velocity_val,
-                            int64_t port_time_samples);
+                            int64_t offset_in_block_samples);
   void pushMidiInputCc(const emscripten::val& group_val, const emscripten::val& channel_val,
                        const emscripten::val& controller_val, const emscripten::val& value_val,
-                       int64_t port_time_samples);
+                       int64_t offset_in_block_samples);
   void pushMidiNoteOn(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                       const emscripten::val& channel_val, const emscripten::val& note_val,
                       const emscripten::val& velocity_val, const emscripten::val& render_frame_val);
@@ -183,14 +183,16 @@ class RealtimeEngineWasm {
                        const emscripten::val& velocity_val,
                        const emscripten::val& render_frame_val);
   void pushMidiInputPitchBend(const emscripten::val& group_val, const emscripten::val& channel_val,
-                              const emscripten::val& bend_val, int64_t port_time_samples);
+                              const emscripten::val& bend_val, int64_t offset_in_block_samples);
   void pushMidiInputChannelPressure(const emscripten::val& group_val,
                                     const emscripten::val& channel_val,
-                                    const emscripten::val& pressure_val, int64_t port_time_samples);
+                                    const emscripten::val& pressure_val,
+                                    int64_t offset_in_block_samples);
   void pushMidiInputPolyPressure(const emscripten::val& group_val,
                                  const emscripten::val& channel_val,
                                  const emscripten::val& note_val,
-                                 const emscripten::val& pressure_val, int64_t port_time_samples);
+                                 const emscripten::val& pressure_val,
+                                 int64_t offset_in_block_samples);
   void pushMidiCc(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                   const emscripten::val& channel_val, const emscripten::val& controller_val,
                   const emscripten::val& value_val, const emscripten::val& render_frame_val);
@@ -207,7 +209,7 @@ class RealtimeEngineWasm {
                             const emscripten::val& render_frame_val);
   void pushMidiUmp(const emscripten::val& destination_id_val, const emscripten::val& words_val,
                    const emscripten::val& render_frame_val);
-  void pushMidiInputUmp(const emscripten::val& words_val, int64_t port_time_samples);
+  void pushMidiInputUmp(const emscripten::val& words_val, int64_t offset_in_block_samples);
   void pushMidiProgram(const emscripten::val& destination_id_val, const emscripten::val& group_val,
                        const emscripten::val& channel_val, const emscripten::val& program_val,
                        const emscripten::val& bank_valid_val, const emscripten::val& bank_msb_val,
@@ -217,7 +219,7 @@ class RealtimeEngineWasm {
                             const emscripten::val& program_val,
                             const emscripten::val& bank_valid_val,
                             const emscripten::val& bank_msb_val,
-                            const emscripten::val& bank_lsb_val, int64_t port_time_samples);
+                            const emscripten::val& bank_lsb_val, int64_t offset_in_block_samples);
   void pushMidiSysex(const emscripten::val& destination_id_val, emscripten::val data,
                      const emscripten::val& render_frame_val);
   void pushMidiPanic(const emscripten::val& render_frame_val);
@@ -473,8 +475,8 @@ class RealtimeEngineWasm {
   bool registeredParameterRejectsRealtime(uint32_t param_id) const;
   void pushMidiNote(uint32_t destination_id, int group, int channel, int note, int velocity,
                     int64_t render_frame, sonare::rt::CommandType type);
-  void pushMidiInputEvent(int group, int channel, int note, int velocity, int64_t port_time_samples,
-                          bool note_on);
+  void pushMidiInputEvent(int group, int channel, int note, int velocity,
+                          int64_t offset_in_block_samples, bool note_on);
   /// Queues one single-word MIDI 1.0 UMP to a destination. Takes the raw word
   /// rather than a Ump so it stays compilable with the arrangement feature off,
   /// where the MIDI headers are not included.
@@ -483,7 +485,7 @@ class RealtimeEngineWasm {
   /// Enqueues one UMP message (one or more words) on the live input source. @p what
   /// names the entry point in the refusal, which is the only thing the three
   /// per-note dimensions do not share.
-  void pushMidiInputUmpInternal(const sonare::midi::Ump& ump, int64_t port_time_samples,
+  void pushMidiInputUmpInternal(const sonare::midi::Ump& ump, int64_t offset_in_block_samples,
                                 const char* what);
 #endif
 

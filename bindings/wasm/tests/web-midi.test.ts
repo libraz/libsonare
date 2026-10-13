@@ -194,6 +194,11 @@ function installMidi(access: FakeAccess, calls: unknown[] = []) {
   });
 }
 
+// Offset into the block being drained, relative to the block's start time (here 0 ms), never an
+// absolute timestamp scaled to samples.
+const blockStartMs = 0;
+const blockOffset = (ms: number): number => Math.round((ms - blockStartMs) * 48);
+
 describe('Web MIDI helper', () => {
   it('reports availability from navigator.requestMIDIAccess', () => {
     Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {} });
@@ -222,7 +227,7 @@ describe('Web MIDI helper', () => {
       ccBindings: [
         { channel: 0, controller: 74, paramId: 5, options: { minValue: -60, maxValue: 12 } },
       ],
-      timestampToSamples: (ms) => Math.round(ms * 48),
+      timestampToOffsetInBlockSamples: blockOffset,
       onInputsChanged: (inputs) => changed.push(inputs.map((input) => input.id)),
     });
 
@@ -310,7 +315,7 @@ describe('Web MIDI helper', () => {
     const engine = new FakeEngine();
     installMidi(access);
     const binding = await bindWebMidi(engine as never, {
-      timestampToSamples: (ms) => Math.round(ms * 48),
+      timestampToOffsetInBlockSamples: blockOffset,
     });
 
     input.emit([0xa2, 60, 70], 1);
@@ -400,7 +405,7 @@ describe('Web MIDI helper', () => {
     const engine = new FakeEngine();
     installMidi(access);
     const binding = await bindWebMidi(engine as never, {
-      timestampToSamples: (ms) => Math.round(ms * 48),
+      timestampToOffsetInBlockSamples: blockOffset,
     });
 
     input.emit([(0x2 << 28) | (4 << 24) | (0xd << 20) | (3 << 16) | (64 << 8)], 0.5);
@@ -424,7 +429,7 @@ describe('Web MIDI helper', () => {
     const engine = new RawUmpEngine();
     installMidi(access);
     const binding = await bindWebMidi(engine as never, {
-      timestampToSamples: (ms) => Math.round(ms * 48),
+      timestampToOffsetInBlockSamples: blockOffset,
     });
 
     const midi1NoteOn = 0x21903c64;

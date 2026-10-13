@@ -1464,7 +1464,10 @@ export const CASES: AbortGuardCase[] = [
         error: RangeError,
       },
       { argument: 'velocity', call: (e) => e.pushMidiInputNoteOn(0, 0, 60, 'x') },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputNoteOn(0, 0, 60, 100, 'now') },
+      {
+        argument: 'offsetInBlockSamples',
+        call: (e) => e.pushMidiInputNoteOn(0, 0, 60, 100, 'now'),
+      },
     ],
   },
   {
@@ -1476,7 +1479,7 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.pushMidiInputNoteOff(300, 300, 60, 0),
         error: RangeError,
       },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputNoteOff(0, 0, 60, 0, 'now') },
+      { argument: 'offsetInBlockSamples', call: (e) => e.pushMidiInputNoteOff(0, 0, 60, 0, 'now') },
     ],
   },
   {
@@ -1488,7 +1491,7 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.pushMidiInputCc(300, 300, 7, 64),
         error: RangeError,
       },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputCc(0, 0, 7, 64, 'now') },
+      { argument: 'offsetInBlockSamples', call: (e) => e.pushMidiInputCc(0, 0, 7, 64, 'now') },
     ],
   },
   {
@@ -1505,7 +1508,10 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.pushMidiInputPitchBend(0, 0, 65536),
         error: RangeError,
       },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputPitchBend(0, 0, 8192, 'now') },
+      {
+        argument: 'offsetInBlockSamples',
+        call: (e) => e.pushMidiInputPitchBend(0, 0, 8192, 'now'),
+      },
     ],
   },
   {
@@ -1517,7 +1523,10 @@ export const CASES: AbortGuardCase[] = [
         call: (e) => e.pushMidiInputChannelPressure(300, 300, 64),
         error: RangeError,
       },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputChannelPressure(0, 0, 64, 'now') },
+      {
+        argument: 'offsetInBlockSamples',
+        call: (e) => e.pushMidiInputChannelPressure(0, 0, 64, 'now'),
+      },
     ],
   },
   {
@@ -1530,7 +1539,7 @@ export const CASES: AbortGuardCase[] = [
         error: RangeError,
       },
       {
-        argument: 'portTimeSamples',
+        argument: 'offsetInBlockSamples',
         call: (e) => e.pushMidiInputPolyPressure(0, 0, 60, 64, 'now'),
       },
     ],
@@ -1568,7 +1577,7 @@ export const CASES: AbortGuardCase[] = [
     missingRequired: [],
     badTransportArguments: [
       { argument: 'words', call: (e) => e.pushMidiInputUmp([0x41923c00, 'x']) },
-      { argument: 'portTimeSamples', call: (e) => e.pushMidiInputUmp([0x41923c00, 0], 'now') },
+      { argument: 'offsetInBlockSamples', call: (e) => e.pushMidiInputUmp([0x41923c00, 0], 'now') },
     ],
   },
   {
@@ -1606,7 +1615,7 @@ export const CASES: AbortGuardCase[] = [
         error: RangeError,
       },
       {
-        argument: 'portTimeSamples',
+        argument: 'offsetInBlockSamples',
         call: (e) => e.pushMidiInputProgram(0, 0, 5, true, 8, 0, 'now'),
       },
     ],

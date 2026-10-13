@@ -942,9 +942,14 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         velocity: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
-        """Queue a note-on into the engine-owned live MIDI input source."""
+        """Queue a note-on into the engine-owned live MIDI input source.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_note_on"):
             raise _not_supported("libsonare was built without live-MIDI support")
@@ -953,7 +958,7 @@ class _EngineMidiMixin:
         c_channel = _to_c_uint8(channel, "channel")
         c_note = _to_c_uint8(note, "note")
         c_velocity = _to_c_uint8(velocity, "velocity")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_note_on",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -968,7 +973,7 @@ class _EngineMidiMixin:
                 c_channel,
                 c_note,
                 c_velocity,
-                c_port_time,
+                c_offset,
             )
         )
 
@@ -978,9 +983,14 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         velocity: int = 0,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
-        """Queue a note-off into the engine-owned live MIDI input source."""
+        """Queue a note-off into the engine-owned live MIDI input source.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_note_off"):
             raise _not_supported("libsonare was built without live-MIDI support")
@@ -989,7 +999,7 @@ class _EngineMidiMixin:
         c_channel = _to_c_uint8(channel, "channel")
         c_note = _to_c_uint8(note, "note")
         c_velocity = _to_c_uint8(velocity, "velocity")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_note_off",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -1004,7 +1014,7 @@ class _EngineMidiMixin:
                 c_channel,
                 c_note,
                 c_velocity,
-                c_port_time,
+                c_offset,
             )
         )
 
@@ -1014,9 +1024,14 @@ class _EngineMidiMixin:
         channel: int,
         controller: int,
         value: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
-        """Queue a control change into the engine-owned live MIDI input source."""
+        """Queue a control change into the engine-owned live MIDI input source.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
+        """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_cc"):
             raise _not_supported("libsonare was built without live-MIDI support")
@@ -1025,7 +1040,7 @@ class _EngineMidiMixin:
         c_channel = _to_c_uint8(channel, "channel")
         c_controller = _to_c_uint8(controller, "controller")
         c_value = _to_c_uint8(value, "value")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_cc",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -1040,7 +1055,7 @@ class _EngineMidiMixin:
                 c_channel,
                 c_controller,
                 c_value,
-                c_port_time,
+                c_offset,
             )
         )
 
@@ -1049,7 +1064,7 @@ class _EngineMidiMixin:
         group: int,
         channel: int,
         bend14: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
         """Queue a pitch bend into the engine-owned live MIDI input source.
 
@@ -1057,6 +1072,10 @@ class _EngineMidiMixin:
         a value above the range is refused rather than clamped. Requires
         :meth:`set_midi_input_source`; without it the call raises
         :class:`SonareError` with code ``INVALID_STATE``.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_pitch_bend"):
@@ -1065,7 +1084,7 @@ class _EngineMidiMixin:
         c_group = _to_c_uint8(group, "group")
         c_channel = _to_c_uint8(channel, "channel")
         c_bend14 = _to_c_uint16(bend14, "bend14")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_pitch_bend",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -1078,7 +1097,7 @@ class _EngineMidiMixin:
                 c_group,
                 c_channel,
                 c_bend14,
-                c_port_time,
+                c_offset,
             )
         )
 
@@ -1087,12 +1106,16 @@ class _EngineMidiMixin:
         group: int,
         channel: int,
         pressure: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
         """Queue a channel pressure into the engine-owned live MIDI input source.
 
         ``pressure`` is 7-bit (0..127). Requires :meth:`set_midi_input_source`;
         without it the call raises :class:`SonareError` with code ``INVALID_STATE``.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_channel_pressure"):
@@ -1101,7 +1124,7 @@ class _EngineMidiMixin:
         c_group = _to_c_uint8(group, "group")
         c_channel = _to_c_uint8(channel, "channel")
         c_pressure = _to_c_uint8(pressure, "pressure")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_channel_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -1114,7 +1137,7 @@ class _EngineMidiMixin:
                 c_group,
                 c_channel,
                 c_pressure,
-                c_port_time,
+                c_offset,
             )
         )
 
@@ -1124,13 +1147,17 @@ class _EngineMidiMixin:
         channel: int,
         note: int,
         pressure: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
         """Queue a polyphonic key pressure into the live MIDI input source.
 
         ``note`` is the key the pressure belongs to and ``pressure`` is 7-bit
         (both 0..127). Requires :meth:`set_midi_input_source`; without it the
         call raises :class:`SonareError` with code ``INVALID_STATE``.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_poly_pressure"):
@@ -1140,7 +1167,7 @@ class _EngineMidiMixin:
         c_channel = _to_c_uint8(channel, "channel")
         c_note = _to_c_uint8(note, "note")
         c_pressure = _to_c_uint8(pressure, "pressure")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_push_args(
             "push_midi_input_poly_pressure",
             ("group", c_group.value, _MAX_NIBBLE),
@@ -1155,16 +1182,20 @@ class _EngineMidiMixin:
                 c_channel,
                 c_note,
                 c_pressure,
-                c_port_time,
+                c_offset,
             )
         )
 
-    def push_midi_input_ump(self, words: Iterable[int], port_time_samples: int = 0) -> None:
+    def push_midi_input_ump(self, words: Iterable[int], offset_in_block_samples: int = 0) -> None:
         """Queue a raw UMP message into the live MIDI input source.
 
         ``words`` follows the rules of :meth:`push_midi_ump`. Requires
         :meth:`set_midi_input_source`; without it the call raises
         :class:`SonareError` with code ``INVALID_STATE``.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_ump"):
@@ -1177,7 +1208,7 @@ class _EngineMidiMixin:
                 handle,
                 c_words,
                 _to_c_size_t(count, "word_count"),
-                _to_c_int64(port_time_samples, "port_time_samples"),
+                _to_c_int64(offset_in_block_samples, "offset_in_block_samples"),
             ),
         )
 
@@ -1189,7 +1220,7 @@ class _EngineMidiMixin:
         bank_valid: bool = False,
         bank_msb: int = 0,
         bank_lsb: int = 0,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None:
         """Queue a MIDI 2.0 program change into the live MIDI input source.
 
@@ -1208,6 +1239,10 @@ class _EngineMidiMixin:
         built-in synth, any other native synth patch, a part with RX PROGRAM
         CHANGE off, and an MPE member channel. A future-dated op can be
         evicted by the pending-command bank like any future command.
+
+        ``offset_in_block_samples`` is an offset in samples into the next block
+        drained, clamped to that block's last frame; a negative value reads as 0.
+        It is not an absolute clock position.
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_push_midi_input_program"):
@@ -1218,7 +1253,7 @@ class _EngineMidiMixin:
         c_program = _to_c_uint8(program, "program")
         c_bank_msb = _to_c_uint8(bank_msb, "bank_msb")
         c_bank_lsb = _to_c_uint8(bank_lsb, "bank_lsb")
-        c_port_time = _to_c_int64(port_time_samples, "port_time_samples")
+        c_offset = _to_c_int64(offset_in_block_samples, "offset_in_block_samples")
         _refuse_live_program_args(
             "push_midi_input_program",
             c_group,
@@ -1237,7 +1272,7 @@ class _EngineMidiMixin:
                 _to_c_int(1 if bank_valid else 0, "bank_valid"),
                 c_bank_msb,
                 c_bank_lsb,
-                c_port_time,
+                c_offset,
             )
         )
 

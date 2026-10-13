@@ -1663,40 +1663,40 @@ export interface WasmRealtimeEngine {
     channel: number,
     note: number,
     velocity: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiInputNoteOff: (
     group: number,
     channel: number,
     note: number,
     velocity: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiInputCc: (
     group: number,
     channel: number,
     controller: number,
     value: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiInputPitchBend: (
     group: number,
     channel: number,
     bend14: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiInputChannelPressure: (
     group: number,
     channel: number,
     pressure: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiInputPolyPressure: (
     group: number,
     channel: number,
     note: number,
     pressure: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiNoteOn: (
     destinationId: number,
@@ -1749,7 +1749,7 @@ export interface WasmRealtimeEngine {
     words: Uint32Array | readonly number[],
     renderFrame?: number,
   ) => void;
-  pushMidiInputUmp: (words: Uint32Array | readonly number[], portTimeSamples: number) => void;
+  pushMidiInputUmp: (words: Uint32Array | readonly number[], offsetInBlockSamples: number) => void;
   pushMidiProgram: (
     destinationId: number,
     group: number,
@@ -1767,7 +1767,7 @@ export interface WasmRealtimeEngine {
     bankValid: boolean,
     bankMsb: number,
     bankLsb: number,
-    portTimeSamples: number,
+    offsetInBlockSamples: number,
   ) => void;
   pushMidiSysex: (destinationId: number, data: Uint8Array, renderFrame?: number) => void;
   pushMidiPanic: (renderFrame?: number) => void;

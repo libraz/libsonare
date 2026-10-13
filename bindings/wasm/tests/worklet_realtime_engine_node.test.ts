@@ -765,7 +765,7 @@ describe('SonareRealtimeEngineNode', () => {
               type: 'syncMidiInputNoteOn',
               data0: 60,
               data1: 100,
-              portTimeSamples: 128,
+              offsetInBlockSamples: 128,
             }),
             expect.objectContaining({ type: 'syncMidiInputCc', data0: 74, data1: 96 }),
             expect.objectContaining({ type: 'syncClearMidiInputSource' }),
@@ -824,7 +824,7 @@ describe('SonareRealtimeEngineNode', () => {
             {
               type: 'syncMidiInputUmp',
               words: Uint32Array.from([0x41923c00, 0x87654321]),
-              portTimeSamples: 512,
+              offsetInBlockSamples: 512,
             },
           ]),
         );

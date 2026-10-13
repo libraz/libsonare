@@ -442,7 +442,7 @@ class RealtimeEngine:
         channel: int,
         note: int,
         velocity: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_note_off(
         self,
@@ -450,7 +450,7 @@ class RealtimeEngine:
         channel: int,
         note: int,
         velocity: int = 0,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_cc(
         self,
@@ -458,21 +458,21 @@ class RealtimeEngine:
         channel: int,
         controller: int,
         value: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_pitch_bend(
         self,
         group: int,
         channel: int,
         bend14: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_channel_pressure(
         self,
         group: int,
         channel: int,
         pressure: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_poly_pressure(
         self,
@@ -480,7 +480,7 @@ class RealtimeEngine:
         channel: int,
         note: int,
         pressure: int,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
     def push_midi_input_program(
         self,
@@ -490,9 +490,11 @@ class RealtimeEngine:
         bank_valid: bool = False,
         bank_msb: int = 0,
         bank_lsb: int = 0,
-        port_time_samples: int = 0,
+        offset_in_block_samples: int = 0,
     ) -> None: ...
-    def push_midi_input_ump(self, words: Iterable[int], port_time_samples: int = 0) -> None: ...
+    def push_midi_input_ump(
+        self, words: Iterable[int], offset_in_block_samples: int = 0
+    ) -> None: ...
     def push_midi_note_on(
         self,
         destination_id: int,

@@ -898,7 +898,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputNoteOff':
@@ -907,7 +907,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputCc':
@@ -916,7 +916,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputPitchBend':
@@ -924,7 +924,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputChannelPressure':
@@ -932,7 +932,7 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.group,
           message.channel,
           message.data0,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputPolyPressure':
@@ -941,11 +941,11 @@ export class SonareRealtimeEngineWorkletProcessor {
           message.channel,
           message.data0,
           message.data1,
-          message.portTimeSamples,
+          message.offsetInBlockSamples,
         );
         break;
       case 'syncMidiInputUmp':
-        this.engine.pushMidiInputUmp(message.words, message.portTimeSamples);
+        this.engine.pushMidiInputUmp(message.words, message.offsetInBlockSamples);
         break;
     }
   }

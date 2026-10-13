@@ -1061,27 +1061,27 @@ void RealtimeEngineWasm::consumeExternalMidiScratch() {
 
 void RealtimeEngineWasm::pushMidiInputNoteOn(const val& group_val, const val& channel_val,
                                              const val& note_val, const val& velocity_val,
-                                             int64_t port_time_samples) {
+                                             int64_t offset_in_block_samples) {
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
-  pushMidiInputEvent(group, channel, note, velocity, port_time_samples, true);
+  pushMidiInputEvent(group, channel, note, velocity, offset_in_block_samples, true);
 }
 
 void RealtimeEngineWasm::pushMidiInputNoteOff(const val& group_val, const val& channel_val,
                                               const val& note_val, const val& velocity_val,
-                                              int64_t port_time_samples) {
+                                              int64_t offset_in_block_samples) {
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
   const int velocity = checkedIntFromVal(velocity_val, "velocity");
-  pushMidiInputEvent(group, channel, note, velocity, port_time_samples, false);
+  pushMidiInputEvent(group, channel, note, velocity, offset_in_block_samples, false);
 }
 
 void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channel_val,
                                          const val& controller_val, const val& value_val,
-                                         int64_t port_time_samples) {
+                                         int64_t offset_in_block_samples) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
@@ -1092,13 +1092,13 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
   pushMidiInputUmpInternal(sonare::midi::make_midi1_control_change(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(controller), static_cast<uint8_t>(value)),
-                           port_time_samples, "pushMidiInputCc");
+                           offset_in_block_samples, "pushMidiInputCc");
 #else
   (void)group_val;
   (void)channel_val;
   (void)controller_val;
   (void)value_val;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1106,12 +1106,13 @@ void RealtimeEngineWasm::pushMidiInputCc(const val& group_val, const val& channe
 
 #if defined(SONARE_WITH_ARRANGEMENT)
 void RealtimeEngineWasm::pushMidiInputUmpInternal(const sonare::midi::Ump& ump,
-                                                  int64_t port_time_samples, const char* what) {
+                                                  int64_t offset_in_block_samples,
+                                                  const char* what) {
   if (!midi_input_source_enabled_) {
     throw sonare::SonareException(sonare::ErrorCode::InvalidState,
                                   std::string(what) + ": the MIDI input source is not enabled");
   }
-  if (!midi_input_source_.push_event(ump, port_time_samples)) {
+  if (!midi_input_source_.push_event(ump, offset_in_block_samples)) {
     throw sonare::SonareException(sonare::ErrorCode::OutOfMemory,
                                   std::string(what) + ": the MIDI input queue is full");
   }
@@ -1119,7 +1120,8 @@ void RealtimeEngineWasm::pushMidiInputUmpInternal(const sonare::midi::Ump& ump,
 #endif
 
 void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val& channel_val,
-                                                const val& bend_val, int64_t port_time_samples) {
+                                                const val& bend_val,
+                                                int64_t offset_in_block_samples) {
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   // 14-bit, so the 7-bit check every sibling here uses would refuse most of the
@@ -1131,12 +1133,12 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
   pushMidiInputUmpInternal(sonare::midi::make_midi1_pitch_bend(static_cast<uint8_t>(group),
                                                                static_cast<uint8_t>(channel),
                                                                static_cast<uint16_t>(bend14)),
-                           port_time_samples, "pushMidiInputPitchBend");
+                           offset_in_block_samples, "pushMidiInputPitchBend");
 #else
   (void)group;
   (void)channel;
   (void)bend14;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1144,7 +1146,7 @@ void RealtimeEngineWasm::pushMidiInputPitchBend(const val& group_val, const val&
 
 void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, const val& channel_val,
                                                       const val& pressure_val,
-                                                      int64_t port_time_samples) {
+                                                      int64_t offset_in_block_samples) {
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int pressure = checkedIntFromVal(pressure_val, "pressure");
@@ -1154,12 +1156,12 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
   pushMidiInputUmpInternal(sonare::midi::make_midi1_channel_pressure(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(pressure)),
-                           port_time_samples, "pushMidiInputChannelPressure");
+                           offset_in_block_samples, "pushMidiInputChannelPressure");
 #else
   (void)group;
   (void)channel;
   (void)pressure;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1167,7 +1169,7 @@ void RealtimeEngineWasm::pushMidiInputChannelPressure(const val& group_val, cons
 
 void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const val& channel_val,
                                                    const val& note_val, const val& pressure_val,
-                                                   int64_t port_time_samples) {
+                                                   int64_t offset_in_block_samples) {
   const int group = checkedIntFromVal(group_val, "group");
   const int channel = checkedIntFromVal(channel_val, "channel");
   const int note = checkedIntFromVal(note_val, "note");
@@ -1178,13 +1180,13 @@ void RealtimeEngineWasm::pushMidiInputPolyPressure(const val& group_val, const v
   pushMidiInputUmpInternal(sonare::midi::make_midi1_poly_pressure(
                                static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                                static_cast<uint8_t>(note), static_cast<uint8_t>(pressure)),
-                           port_time_samples, "pushMidiInputPolyPressure");
+                           offset_in_block_samples, "pushMidiInputPolyPressure");
 #else
   (void)group;
   (void)channel;
   (void)note;
   (void)pressure;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1287,7 +1289,7 @@ void RealtimeEngineWasm::pushMidiUmp(const val& destination_id_val, const val& w
 
 // Pushes one raw UMP of 1 to 4 words to the engine-owned MIDI input source.
 // Mirrors the C ABI sonare_engine_push_midi_input_ump.
-void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_time_samples) {
+void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t offset_in_block_samples) {
   uint32_t words[4] = {0, 0, 0, 0};
   const size_t count = umpWordsFromVal(words_val, words, "pushMidiInputUmp");
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1298,9 +1300,9 @@ void RealtimeEngineWasm::pushMidiInputUmp(const val& words_val, int64_t port_tim
   for (size_t i = 0; i < count; ++i) ump.words[i] = words[i];
   ump.word_count = static_cast<uint8_t>(count);
   ump.group = sonare::midi::ump_group_from_word0(words[0]);
-  pushMidiInputUmpInternal(ump, port_time_samples, "pushMidiInputUmp");
+  pushMidiInputUmpInternal(ump, offset_in_block_samples, "pushMidiInputUmp");
 #else
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1376,7 +1378,7 @@ void RealtimeEngineWasm::pushMidiProgram(const val& destination_id_val, const va
 void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& channel_val,
                                               const val& program_val, const val& bank_valid_val,
                                               const val& bank_msb_val, const val& bank_lsb_val,
-                                              int64_t port_time_samples) {
+                                              int64_t offset_in_block_samples) {
   const ProgramArgs args = programArgsFromVal(group_val, channel_val, program_val, bank_valid_val,
                                               bank_msb_val, bank_lsb_val);
 #if defined(SONARE_WITH_ARRANGEMENT)
@@ -1386,10 +1388,10 @@ void RealtimeEngineWasm::pushMidiInputProgram(const val& group_val, const val& c
           static_cast<uint8_t>(args.group), static_cast<uint8_t>(args.channel),
           static_cast<uint8_t>(args.program), static_cast<uint8_t>(args.bank_msb),
           static_cast<uint8_t>(args.bank_lsb), args.bank_valid),
-      port_time_samples, "pushMidiInputProgram");
+      offset_in_block_samples, "pushMidiInputProgram");
 #else
   (void)args;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");
 #endif
@@ -1566,7 +1568,7 @@ void RealtimeEngineWasm::pushMidiNote(uint32_t destination_id, int group, int ch
 }
 
 void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, int velocity,
-                                            int64_t port_time_samples, bool note_on) {
+                                            int64_t offset_in_block_samples, bool note_on) {
 #if defined(SONARE_WITH_ARRANGEMENT)
   const char* what = note_on ? "pushMidiInputNoteOn" : "pushMidiInputNoteOff";
   refuseLivePushArg(what, sonare::midi::live_push_note_error(group, channel, note, velocity));
@@ -1577,13 +1579,13 @@ void RealtimeEngineWasm::pushMidiInputEvent(int group, int channel, int note, in
               : sonare::midi::make_midi1_note_off(
                     static_cast<uint8_t>(group), static_cast<uint8_t>(channel),
                     static_cast<uint8_t>(note), static_cast<uint8_t>(velocity));
-  pushMidiInputUmpInternal(ump, port_time_samples, what);
+  pushMidiInputUmpInternal(ump, offset_in_block_samples, what);
 #else
   (void)group;
   (void)channel;
   (void)note;
   (void)velocity;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   (void)note_on;
   throw sonare::SonareException(sonare::ErrorCode::NotImplemented,
                                 "arrangement/MIDI engine is not available in this build");

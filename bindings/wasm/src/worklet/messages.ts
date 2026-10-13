@@ -908,13 +908,13 @@ export interface SonareEngineSyncMidiInputEventMessage {
   channel: number;
   data0: number;
   data1: number;
-  portTimeSamples: number;
+  offsetInBlockSamples: number;
 }
 
 export interface SonareEngineSyncMidiInputUmpMessage {
   type: 'syncMidiInputUmp';
   words: UmpWords;
-  portTimeSamples: number;
+  offsetInBlockSamples: number;
 }
 
 /** Releases the realtime engine and all worklet-owned clip buffers. */

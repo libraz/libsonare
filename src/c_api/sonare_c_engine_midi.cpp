@@ -94,12 +94,13 @@ SonareError require_midi_input_source(const SonareRealtimeEngine* engine, const 
 
 // Queues @p ump on the engine-owned input source after the state check.
 SonareError push_midi_input_event(SonareRealtimeEngine* engine, const char* function,
-                                  const midi::Ump& ump, int64_t port_time_samples) {
+                                  const midi::Ump& ump, int64_t offset_in_block_samples) {
   if (const SonareError state = require_midi_input_source(engine, function); state != SONARE_OK) {
     return state;
   }
-  return engine->midi_input_source.push_event(ump, port_time_samples) ? SONARE_OK
-                                                                      : SONARE_ERROR_OUT_OF_MEMORY;
+  return engine->midi_input_source.push_event(ump, offset_in_block_samples)
+             ? SONARE_OK
+             : SONARE_ERROR_OUT_OF_MEMORY;
 }
 
 // Queues one single-word MIDI 1.0 channel-voice UMP to a destination. The three
@@ -671,7 +672,7 @@ SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
 
 SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t note, uint8_t velocity,
-                                                  int64_t port_time_samples) {
+                                                  int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -679,7 +680,7 @@ SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, 
   (void)channel;
   (void)note;
   (void)velocity;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_note_on";
@@ -690,13 +691,13 @@ SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, 
   }
   return push_midi_input_event(engine, kFunction,
                                midi::make_midi1_note_on(group, channel, note, velocity),
-                               port_time_samples);
+                               offset_in_block_samples);
 #endif
 }
 
 SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
                                                    uint8_t channel, uint8_t note, uint8_t velocity,
-                                                   int64_t port_time_samples) {
+                                                   int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -704,7 +705,7 @@ SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine,
   (void)channel;
   (void)note;
   (void)velocity;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_note_off";
@@ -715,13 +716,13 @@ SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine,
   }
   return push_midi_input_event(engine, kFunction,
                                midi::make_midi1_note_off(group, channel, note, velocity),
-                               port_time_samples);
+                               offset_in_block_samples);
 #endif
 }
 
 SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
                                              uint8_t channel, uint8_t controller, uint8_t value,
-                                             int64_t port_time_samples) {
+                                             int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -729,7 +730,7 @@ SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8
   (void)channel;
   (void)controller;
   (void)value;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_cc";
@@ -740,20 +741,20 @@ SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8
   }
   return push_midi_input_event(engine, kFunction,
                                midi::make_midi1_control_change(group, channel, controller, value),
-                               port_time_samples);
+                               offset_in_block_samples);
 #endif
 }
 
 SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engine, uint8_t group,
                                                      uint8_t channel, uint16_t bend14,
-                                                     int64_t port_time_samples) {
+                                                     int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
   (void)bend14;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_pitch_bend";
@@ -762,22 +763,23 @@ SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engin
       refused != SONARE_OK) {
     return refused;
   }
-  return push_midi_input_event(
-      engine, kFunction, midi::make_midi1_pitch_bend(group, channel, bend14), port_time_samples);
+  return push_midi_input_event(engine, kFunction,
+                               midi::make_midi1_pitch_bend(group, channel, bend14),
+                               offset_in_block_samples);
 #endif
 }
 
 SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine* engine,
                                                            uint8_t group, uint8_t channel,
                                                            uint8_t pressure,
-                                                           int64_t port_time_samples) {
+                                                           int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)group;
   (void)channel;
   (void)pressure;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_channel_pressure";
@@ -788,14 +790,14 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine*
   }
   return push_midi_input_event(engine, kFunction,
                                midi::make_midi1_channel_pressure(group, channel, pressure),
-                               port_time_samples);
+                               offset_in_block_samples);
 #endif
 }
 
 SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* engine, uint8_t group,
                                                         uint8_t channel, uint8_t note,
                                                         uint8_t pressure,
-                                                        int64_t port_time_samples) {
+                                                        int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -803,7 +805,7 @@ SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* en
   (void)channel;
   (void)note;
   (void)pressure;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_poly_pressure";
@@ -814,7 +816,7 @@ SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* en
   }
   return push_midi_input_event(engine, kFunction,
                                midi::make_midi1_poly_pressure(group, channel, note, pressure),
-                               port_time_samples);
+                               offset_in_block_samples);
 #endif
 }
 
@@ -1056,13 +1058,13 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
 }
 
 SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
-                                              size_t word_count, int64_t port_time_samples) {
+                                              size_t word_count, int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
   (void)words;
   (void)word_count;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_ump";
@@ -1073,7 +1075,7 @@ SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, cons
   for (size_t i = 0; i < word_count; ++i) ump.words[i] = words[i];
   ump.word_count = static_cast<uint8_t>(word_count);
   ump.group = midi::ump_group_from_word0(words[0]);
-  return push_midi_input_event(engine, kFunction, ump, port_time_samples);
+  return push_midi_input_event(engine, kFunction, ump, offset_in_block_samples);
 #endif
 }
 
@@ -1111,7 +1113,7 @@ SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32
 SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t program, int bank_valid,
                                                   uint8_t bank_msb, uint8_t bank_lsb,
-                                                  int64_t port_time_samples) {
+                                                  int64_t offset_in_block_samples) {
   SONARE_C_API_ENTRY;
   if (!engine) return SONARE_ERROR_INVALID_PARAMETER;
 #if !defined(SONARE_WITH_ARRANGEMENT)
@@ -1121,7 +1123,7 @@ SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, 
   (void)bank_valid;
   (void)bank_msb;
   (void)bank_lsb;
-  (void)port_time_samples;
+  (void)offset_in_block_samples;
   return SONARE_ERROR_NOT_SUPPORTED;
 #else
   constexpr const char* kFunction = "sonare_engine_push_midi_input_program";
@@ -1134,7 +1136,7 @@ SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, 
   return push_midi_input_event(
       engine, kFunction,
       midi::make_midi2_program_change(group, channel, program, bank_msb, bank_lsb, bank_valid != 0),
-      port_time_samples);
+      offset_in_block_samples);
 #endif
 }
 

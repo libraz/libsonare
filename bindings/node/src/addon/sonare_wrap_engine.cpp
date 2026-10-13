@@ -1610,7 +1610,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOn(const Napi::CallbackInfo& in
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
       !OptionalMidiByteArg(env, info, 3, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 4, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputNoteOn",
@@ -1635,7 +1635,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputNoteOff(const Napi::CallbackInfo& i
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
       !OptionalMidiByteArg(env, info, 3, "velocity", 0, &velocity) ||
-      !OptionalInt64Arg(env, info, 4, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputNoteOff",
@@ -1660,7 +1660,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputCc(const Napi::CallbackInfo& info) 
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "controller", 0, &controller) ||
       !OptionalMidiByteArg(env, info, 3, "value", 0, &value) ||
-      !OptionalInt64Arg(env, info, 4, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputCc",
@@ -1683,7 +1683,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPitchBend(const Napi::CallbackInfo&
   if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalUint16Arg(env, info, 2, "bend14", 0, &bend14) ||
-      !OptionalInt64Arg(env, info, 3, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 3, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputPitchBend",
@@ -1706,7 +1706,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputChannelPressure(const Napi::Callbac
   if (!OptionalMidiByteArg(env, info, 0, "group", 0, &group) ||
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 3, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 3, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputChannelPressure",
@@ -1731,7 +1731,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputPolyPressure(const Napi::CallbackIn
       !OptionalMidiByteArg(env, info, 1, "channel", 0, &channel) ||
       !OptionalMidiByteArg(env, info, 2, "note", 0, &note) ||
       !OptionalMidiByteArg(env, info, 3, "pressure", 0, &pressure) ||
-      !OptionalInt64Arg(env, info, 4, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 4, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(
@@ -1984,7 +1984,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputUmp(const Napi::CallbackInfo& info)
   size_t count = 0;
   int64_t port_time = 0;
   if (!ReadUmpWords(env, info[0], "words", &words, &count) ||
-      !OptionalInt64Arg(env, info, 1, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 1, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputUmp",
@@ -2047,7 +2047,7 @@ Napi::Value RealtimeEngineWrap::PushMidiInputProgram(const Napi::CallbackInfo& i
       !OptionalBoolArg(env, info, 3, "bankValid", false, &bank_valid) ||
       !OptionalMidiByteArg(env, info, 4, "bankMsb", 0, &bank_msb) ||
       !OptionalMidiByteArg(env, info, 5, "bankLsb", 0, &bank_lsb) ||
-      !OptionalInt64Arg(env, info, 6, "portTimeSamples", 0, &port_time)) {
+      !OptionalInt64Arg(env, info, 6, "offsetInBlockSamples", 0, &port_time)) {
     return env.Undefined();
   }
   if (RefuseLivePushArg(env, "pushMidiInputProgram",

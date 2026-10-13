@@ -461,11 +461,19 @@ export class SonareEngine {
     parameter.clearParameters(this.parameterContext);
   }
 
+  /**
+   * Queues a lane's solo/mute state. An armed PFL/AFL cue ({@link setTrackMonitorMode}) stays off
+   * the program output here, which the facade renders with the cue kept separate; offline renders,
+   * bounces and freezes never include it.
+   */
   setSoloMute(target: string | number, solo: boolean, mute: boolean): boolean {
     return parameter.setSoloMute(this.parameterContext, target, solo, mute);
   }
 
-  /** Queues a per-track PFL/AFL monitor tap mode change. */
+  /**
+   * Queues a per-track PFL/AFL monitor tap mode change. The facade renders with the cue kept
+   * separate from the program output; offline renders, bounces and freezes never include it.
+   */
   setTrackMonitorMode(
     target: string | number,
     mode: EngineTrackMonitorMode,
@@ -1241,116 +1249,164 @@ export class SonareEngine {
     );
   }
 
+  /**
+   * Push a live MIDI note-on to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputNoteOn(
     group: number,
     channel: number,
     note: number,
     velocity: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, portTimeSamples);
+    this.offlineEngine.pushMidiInputNoteOn(group, channel, note, velocity, offsetInBlockSamples);
     this.postSync({
       type: 'syncMidiInputNoteOn',
       group,
       channel,
       data0: note,
       data1: velocity,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
+  /**
+   * Push a live MIDI note-off to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputNoteOff(
     group: number,
     channel: number,
     note: number,
     velocity = 0,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, portTimeSamples);
+    this.offlineEngine.pushMidiInputNoteOff(group, channel, note, velocity, offsetInBlockSamples);
     this.postSync({
       type: 'syncMidiInputNoteOff',
       group,
       channel,
       data0: note,
       data1: velocity,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
+  /**
+   * Push a live MIDI control change to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputCc(
     group: number,
     channel: number,
     controller: number,
     value: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputCc(group, channel, controller, value, portTimeSamples);
+    this.offlineEngine.pushMidiInputCc(group, channel, controller, value, offsetInBlockSamples);
     this.postSync({
       type: 'syncMidiInputCc',
       group,
       channel,
       data0: controller,
       data1: value,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
+  /**
+   * Push a live MIDI pitch bend to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputPitchBend(
     group: number,
     channel: number,
     bend14: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, portTimeSamples);
+    this.offlineEngine.pushMidiInputPitchBend(group, channel, bend14, offsetInBlockSamples);
     this.postSync({
       type: 'syncMidiInputPitchBend',
       group,
       channel,
       data0: bend14,
       data1: 0,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
+  /**
+   * Push a live MIDI channel pressure to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputChannelPressure(
     group: number,
     channel: number,
     pressure: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, portTimeSamples);
+    this.offlineEngine.pushMidiInputChannelPressure(group, channel, pressure, offsetInBlockSamples);
     this.postSync({
       type: 'syncMidiInputChannelPressure',
       group,
       channel,
       data0: pressure,
       data1: 0,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
+  /**
+   * Push a live MIDI polyphonic key pressure to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
   pushMidiInputPolyPressure(
     group: number,
     channel: number,
     note: number,
     pressure: number,
-    portTimeSamples = 0,
+    offsetInBlockSamples = 0,
   ): void {
-    this.offlineEngine.pushMidiInputPolyPressure(group, channel, note, pressure, portTimeSamples);
+    this.offlineEngine.pushMidiInputPolyPressure(
+      group,
+      channel,
+      note,
+      pressure,
+      offsetInBlockSamples,
+    );
     this.postSync({
       type: 'syncMidiInputPolyPressure',
       group,
       channel,
       data0: note,
       data1: pressure,
-      portTimeSamples,
+      offsetInBlockSamples,
     });
   }
 
-  pushMidiInputUmp(words: UmpWords, portTimeSamples = 0): void {
+  /**
+   * Push a live MIDI raw UMP message to the engine-owned MIDI input source.
+   *
+   * @param offsetInBlockSamples Samples into the next block drained, clamped to its last frame;
+   *   negative reads as 0. Not an absolute clock position. Defaults to 0.
+   */
+  pushMidiInputUmp(words: UmpWords, offsetInBlockSamples = 0): void {
     const copiedWords = words instanceof Uint32Array ? new Uint32Array(words) : words.slice();
-    this.offlineEngine.pushMidiInputUmp(copiedWords, portTimeSamples);
-    this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, portTimeSamples });
+    this.offlineEngine.pushMidiInputUmp(copiedWords, offsetInBlockSamples);
+    this.postSync({ type: 'syncMidiInputUmp', words: copiedWords, offsetInBlockSamples });
   }
 
   pushMidiPanic(renderFrame?: number): void {

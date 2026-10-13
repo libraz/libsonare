@@ -713,7 +713,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
           channel: 0,
           data0: 60,
           data1: 100,
-          portTimeSamples: 128,
+          offsetInBlockSamples: 128,
         });
         const engine = (processor as unknown as { engine: { midiInputPendingCount: () => number } })
           .engine;
@@ -733,13 +733,15 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
       try {
         const engine = (
           processor as unknown as {
-            engine: { pushMidiInputUmp: (words: Uint32Array, portTimeSamples: number) => void };
+            engine: {
+              pushMidiInputUmp: (words: Uint32Array, offsetInBlockSamples: number) => void;
+            };
           }
         ).engine;
         const rawInput = vi.spyOn(engine, 'pushMidiInputUmp').mockImplementation(() => undefined);
         const words = new Uint32Array([0x41923c00, 0x12345678]);
         processor.receiveSync({ type: 'syncMidiInputSource', destinationId: 9 });
-        processor.receiveSync({ type: 'syncMidiInputUmp', words, portTimeSamples: 768 });
+        processor.receiveSync({ type: 'syncMidiInputUmp', words, offsetInBlockSamples: 768 });
 
         expect(rawInput).toHaveBeenCalledWith(Uint32Array.from([0x41923c00, 0x12345678]), 768);
         expect(rawInput.mock.calls[0]?.[0]).toEqual(Uint32Array.from([0x41923c00, 0x12345678]));
@@ -2217,7 +2219,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 7,
         data1: 100,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputChannelPressure: {
         type: 'syncMidiInputChannelPressure',
@@ -2225,7 +2227,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 100,
         data1: 0,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputNoteOff: {
         type: 'syncMidiInputNoteOff',
@@ -2233,7 +2235,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 60,
         data1: 0,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputNoteOn: {
         type: 'syncMidiInputNoteOn',
@@ -2241,7 +2243,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 60,
         data1: 100,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputPitchBend: {
         type: 'syncMidiInputPitchBend',
@@ -2249,7 +2251,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 12288,
         data1: 0,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputPolyPressure: {
         type: 'syncMidiInputPolyPressure',
@@ -2257,13 +2259,13 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
         channel: 0,
         data0: 60,
         data1: 100,
-        portTimeSamples: 0,
+        offsetInBlockSamples: 0,
       },
       syncMidiInputSource: { type: 'syncMidiInputSource', destinationId: 4 },
       syncMidiInputUmp: {
         type: 'syncMidiInputUmp',
         words: Uint32Array.from([0x41923c00, 0x12345678]),
-        portTimeSamples: 768,
+        offsetInBlockSamples: 768,
       },
       syncMidiNoteOff: {
         type: 'syncMidiNoteOff',
@@ -2465,7 +2467,7 @@ describe('SonareRealtimeEngineWorkletProcessor', () => {
                   words: Uint32Array | number[],
                   renderFrame: number,
                 ) => void;
-                pushMidiInputUmp: (words: Uint32Array, portTimeSamples: number) => void;
+                pushMidiInputUmp: (words: Uint32Array, offsetInBlockSamples: number) => void;
               };
             };
           }

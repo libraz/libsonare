@@ -1068,7 +1068,8 @@ SonareError sonare_engine_set_parameter(SonareRealtimeEngine* engine, uint32_t p
 SonareError sonare_engine_set_parameter_smoothed(SonareRealtimeEngine* engine, uint32_t param_id,
                                                  float value, int64_t render_frame);
 /// @brief Sets the ramp time (ms) of the engine-level smoother.
-/// @details Governs only @ref sonare_engine_set_parameter_smoothed on parameters
+/// @details The time is one time constant: about 63% of the way at the set time.
+///          Governs only @ref sonare_engine_set_parameter_smoothed on parameters
 ///          bound through the automation engine. Reserved engine targets -- track
 ///          and bus faders, pan and width, and insert and instrument parameters --
 ///          keep their own fixed smoothing whatever this is set to, and MIDI-CC
@@ -1079,7 +1080,10 @@ SonareError sonare_engine_set_param_smoothing_ms(SonareRealtimeEngine* engine, f
 /// @details @p lane_index is a lane position in the order of the last
 ///   @ref sonare_engine_set_track_lanes call, not an automation id: after a
 ///   reorder it addresses whichever track now holds that position. A command
-///   already queued when the lanes change keeps its track.
+///   already queued when the lanes change keeps its track. An armed PFL/AFL cue
+///   (@ref sonare_engine_set_track_monitor_mode) is folded into the program
+///   output by @ref sonare_engine_process and kept separate by the
+///   `_with_monitor` variants; offline renders, bounces and freezes never include it.
 SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t lane_index, int solo,
                                         int mute, int64_t render_frame);
 /// @brief Schedules a per-track-lane PFL/AFL monitor tap.
@@ -1089,6 +1093,7 @@ SonareError sonare_engine_set_solo_mute(SonareRealtimeEngine* engine, uint32_t l
 ///          before lane fader/gate/pan; AFL taps after those lane stages. The
 ///          monitor bus is folded into @ref sonare_engine_process output and is
 ///          returned separately by @ref sonare_engine_process_with_monitor.
+///          Offline renders, bounces and freezes never include the cue.
 /// @return @c SONARE_ERROR_INVALID_PARAMETER for a NULL engine or unknown mode,
 ///         @c SONARE_ERROR_NOT_SUPPORTED when mixing is disabled, and
 ///         @c SONARE_ERROR_OUT_OF_MEMORY when the realtime command queue is full.
@@ -1174,10 +1179,10 @@ typedef struct {
   int waveform;     /* SonareSynthWaveform: 0=sine, 1=saw, 2=square, 3=triangle.
                        Anything else fails with SONARE_ERROR_INVALID_PARAMETER. */
   float gain;       /* 0 => 0.2 */
-  float attack_ms;  /* 0 => 5 */
-  float decay_ms;   /* 0 => 60 */
+  float attack_ms;  /* 0 => 5. Linear ramp, full level at the set time */
+  float decay_ms;   /* 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep */
   float sustain;    /* 0 => 0.7 */
-  float release_ms; /* 0 => 120 */
+  float release_ms; /* 0 => 120. Linear ramp, as decay */
   int polyphony;    /* 0 => 16, clamped to [1,64] */
   /* Every field above takes 0 as "use the default". A negative or non-finite
      value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving
@@ -1644,10 +1649,13 @@ SonareError sonare_engine_set_midi_fx(SonareRealtimeEngine* engine, uint32_t des
 /// @brief Clears the live MIDI-FX insert on one destination.
 SonareError sonare_engine_clear_midi_fx(SonareRealtimeEngine* engine, uint32_t destination_id);
 /// @brief Enables the engine-owned live MIDI input source for a destination.
-/// @details Hosts can push timestamped input events with
+/// @details Hosts can push input events with
 ///          `sonare_engine_push_midi_input_*`; the engine drains them at block
 ///          start through the same `set_midi_input_source` path used by native
 ///          C++ hosts. `destination_id` selects the realtime MIDI destination.
+///          Each push takes an offset into the next block drained, not a clock
+///          position: an absolute timestamp from a running clock lands every
+///          event on the last frame of that block.
 SonareError sonare_engine_set_midi_input_source(SonareRealtimeEngine* engine,
                                                 uint32_t destination_id);
 /// @brief Clears the engine-owned live MIDI input source.
@@ -1657,7 +1665,8 @@ SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
 /// @brief Pushes a live MIDI note-on to the engine-owned MIDI input source.
 /// @param note Key (0..127).
 /// @param velocity 7-bit velocity (0..127).
-/// @param port_time_samples Port timestamp in samples.
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1666,11 +1675,12 @@ SonareError sonare_engine_midi_input_pending_count(SonareRealtimeEngine* engine,
 ///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t note, uint8_t velocity,
-                                                  int64_t port_time_samples);
+                                                  int64_t offset_in_block_samples);
 /// @brief Pushes a live MIDI note-off to the engine-owned MIDI input source.
 /// @param note Key (0..127).
 /// @param velocity 7-bit release velocity (0..127).
-/// @param port_time_samples Port timestamp in samples.
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1679,11 +1689,12 @@ SonareError sonare_engine_push_midi_input_note_on(SonareRealtimeEngine* engine, 
 ///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine, uint8_t group,
                                                    uint8_t channel, uint8_t note, uint8_t velocity,
-                                                   int64_t port_time_samples);
+                                                   int64_t offset_in_block_samples);
 /// @brief Pushes a live MIDI control change to the engine-owned MIDI input source.
 /// @param controller Controller number (0..127).
 /// @param value 7-bit controller value (0..127).
-/// @param port_time_samples Port timestamp in samples.
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1692,9 +1703,11 @@ SonareError sonare_engine_push_midi_input_note_off(SonareRealtimeEngine* engine,
 ///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8_t group,
                                              uint8_t channel, uint8_t controller, uint8_t value,
-                                             int64_t port_time_samples);
+                                             int64_t offset_in_block_samples);
 /// @brief Pushes a live MIDI pitch bend to the engine-owned MIDI input source.
 /// @param bend14 Unsigned 14-bit bend, centre 8192 (0..16383).
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1703,9 +1716,11 @@ SonareError sonare_engine_push_midi_input_cc(SonareRealtimeEngine* engine, uint8
 ///         processed block). Arguments are judged before the source state.
 SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engine, uint8_t group,
                                                      uint8_t channel, uint16_t bend14,
-                                                     int64_t port_time_samples);
+                                                     int64_t offset_in_block_samples);
 /// @brief Pushes a live MIDI channel pressure to the engine-owned MIDI input source.
 /// @param pressure 7-bit channel pressure (0..127).
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1715,10 +1730,12 @@ SonareError sonare_engine_push_midi_input_pitch_bend(SonareRealtimeEngine* engin
 SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine* engine,
                                                            uint8_t group, uint8_t channel,
                                                            uint8_t pressure,
-                                                           int64_t port_time_samples);
+                                                           int64_t offset_in_block_samples);
 /// @brief Pushes a live MIDI polyphonic key pressure to the engine-owned MIDI input source.
 /// @param note Key the pressure belongs to (0..127).
 /// @param pressure 7-bit key pressure (0..127).
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or an argument outside
 ///         its MIDI range (last error "<function>: <argument> must be in [lo, hi]");
 ///         SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI engine;
@@ -1728,7 +1745,7 @@ SonareError sonare_engine_push_midi_input_channel_pressure(SonareRealtimeEngine*
 SonareError sonare_engine_push_midi_input_poly_pressure(SonareRealtimeEngine* engine, uint8_t group,
                                                         uint8_t channel, uint8_t note,
                                                         uint8_t pressure,
-                                                        int64_t port_time_samples);
+                                                        int64_t offset_in_block_samples);
 /// @brief Queues an immediate live MIDI note-on to a MIDI destination.
 SonareError sonare_engine_push_midi_note_on(SonareRealtimeEngine* engine, uint32_t destination_id,
                                             uint8_t group, uint8_t channel, uint8_t note,
@@ -1831,7 +1848,8 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
 /// @param words UMP words, most significant word first. Must be non-NULL.
 /// @param word_count Must equal the word count the message type of `words[0]`
 ///        fixes (1, 2, 3 or 4).
-/// @param port_time_samples Port timestamp in samples.
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine or a malformed or
 ///         refused message (last error "<function>: words do not form a pushable
 ///         UMP message"); SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI
@@ -1839,7 +1857,7 @@ SonareError sonare_engine_push_midi_ump(SonareRealtimeEngine* engine, uint32_t d
 ///         SONARE_ERROR_OUT_OF_MEMORY when the input queue is full. Words are
 ///         judged before the source state.
 SonareError sonare_engine_push_midi_input_ump(SonareRealtimeEngine* engine, const uint32_t* words,
-                                              size_t word_count, int64_t port_time_samples);
+                                              size_t word_count, int64_t offset_in_block_samples);
 /// @brief Queues a live MIDI 2.0 program change, with an optional bank, to a MIDI destination.
 /// @details Packs one MIDI 2.0 Program Change (bank and program in a single message)
 ///          and hands it to the same path as @ref sonare_engine_push_midi_ump, so
@@ -1877,7 +1895,8 @@ SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32
 ///        source.
 /// @details The input-source counterpart of @ref sonare_engine_push_midi_program;
 ///          the receiver rules and argument domains are the same.
-/// @param port_time_samples Port timestamp in samples.
+/// @param offset_in_block_samples Offset in samples into the next block drained; clamped to that
+///        block's last frame, negative reads as 0. Not an absolute clock position.
 /// @return SONARE_ERROR_INVALID_PARAMETER for a NULL engine, an out-of-range
 ///         argument or a non-zero bank with @p bank_valid zero (last error names
 ///         the argument); SONARE_ERROR_NOT_SUPPORTED in a build without the MIDI
@@ -1887,7 +1906,7 @@ SonareError sonare_engine_push_midi_program(SonareRealtimeEngine* engine, uint32
 SonareError sonare_engine_push_midi_input_program(SonareRealtimeEngine* engine, uint8_t group,
                                                   uint8_t channel, uint8_t program, int bank_valid,
                                                   uint8_t bank_msb, uint8_t bank_lsb,
-                                                  int64_t port_time_samples);
+                                                  int64_t offset_in_block_samples);
 /// @brief Marks a MIDI destination for external routing (or clears it).
 /// @details A destination marked external bypasses the internal instrument rack:
 ///   its sequenced events are buffered in the engine's external-MIDI output queue

@@ -187,7 +187,7 @@ def test_push_midi_input_ump_queues_messages() -> None:
         assert disabled.value.code == int(ErrorCode.INVALID_STATE)
         engine.set_midi_input_source(0)
         engine.push_midi_input_ump([w0, w1], 0)
-        engine.push_midi_input_ump([0x20903C64], port_time_samples=16)
+        engine.push_midi_input_ump([0x20903C64], offset_in_block_samples=16)
         assert engine.midi_input_pending_count() == 2
         with pytest.raises(SonareValueError, match="words do not form a pushable UMP message"):
             engine.push_midi_input_ump([0x30160000, 0], 0)

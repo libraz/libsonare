@@ -127,8 +127,12 @@ export interface BindWebMidiOptions {
   software?: boolean;
   /** Bind CC-to-parameter mappings before ports are connected. */
   ccBindings?: readonly WebMidiCcBinding[];
-  /** Convert a Web MIDI event timestamp to engine port-time samples. */
-  timestampToSamples?: (eventTimeMs: number) => number;
+  /**
+   * Convert a Web MIDI event timestamp to an offset in samples into the next block drained (clamped
+   * to its last frame, negative reads as 0). Return a block-relative offset, not the timestamp
+   * scaled to samples: an absolute value lands every event on one frame. Omit for offset 0.
+   */
+  timestampToOffsetInBlockSamples?: (eventTimeMs: number) => number;
   /** Observe hot-plug updates after the helper rebinds matching inputs. */
   onInputsChanged?: (inputs: WebMidiInputInfo[]) => void;
 }
@@ -219,7 +223,7 @@ export async function bindWebMidi(
           event,
           group,
           entry.runningStatus,
-          options.timestampToSamples,
+          options.timestampToOffsetInBlockSamples,
         );
       },
       runningStatus: 0,
@@ -314,7 +318,7 @@ function dispatchMidiMessage(
   event: MidiMessageEventLike,
   group: number,
   runningStatus: number,
-  timestampToSamples?: (eventTimeMs: number) => number,
+  timestampToOffsetInBlockSamples?: (eventTimeMs: number) => number,
 ): number {
   const data = event.data;
   if (data.length === 0) {
@@ -325,7 +329,7 @@ function dispatchMidiMessage(
     dispatchUmpMessages(
       engine,
       data,
-      timestampToSamples?.(event.receivedTime ?? event.timeStamp ?? 0) ?? 0,
+      timestampToOffsetInBlockSamples?.(event.receivedTime ?? event.timeStamp ?? 0) ?? 0,
     );
     return 0;
   }
@@ -357,26 +361,26 @@ function dispatchMidiMessage(
     return status;
   }
 
-  const portTimeSamples = timestampToSamples
-    ? timestampToSamples(event.receivedTime ?? event.timeStamp ?? 0)
+  const offsetInBlockSamples = timestampToOffsetInBlockSamples
+    ? timestampToOffsetInBlockSamples(event.receivedTime ?? event.timeStamp ?? 0)
     : 0;
 
   if (message === 0x80) {
-    engine.pushMidiInputNoteOff(group, channel, a, b, portTimeSamples);
+    engine.pushMidiInputNoteOff(group, channel, a, b, offsetInBlockSamples);
   } else if (message === 0x90) {
     if (b === 0) {
-      engine.pushMidiInputNoteOff(group, channel, a, 0, portTimeSamples);
+      engine.pushMidiInputNoteOff(group, channel, a, 0, offsetInBlockSamples);
     } else {
-      engine.pushMidiInputNoteOn(group, channel, a, b, portTimeSamples);
+      engine.pushMidiInputNoteOn(group, channel, a, b, offsetInBlockSamples);
     }
   } else if (message === 0xb0 && b >= 0) {
-    engine.pushMidiInputCc(group, channel, a, b, portTimeSamples);
+    engine.pushMidiInputCc(group, channel, a, b, offsetInBlockSamples);
   } else if (message === 0xa0 && b >= 0) {
-    engine.pushMidiInputPolyPressure?.(group, channel, a, b, portTimeSamples);
+    engine.pushMidiInputPolyPressure?.(group, channel, a, b, offsetInBlockSamples);
   } else if (message === 0xd0) {
-    engine.pushMidiInputChannelPressure?.(group, channel, a, portTimeSamples);
+    engine.pushMidiInputChannelPressure?.(group, channel, a, offsetInBlockSamples);
   } else if (message === 0xe0 && b >= 0) {
-    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), portTimeSamples);
+    engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), offsetInBlockSamples);
   }
 
   return status;
@@ -385,7 +389,7 @@ function dispatchMidiMessage(
 function dispatchUmpMessages(
   engine: WebMidiEngine,
   words: ArrayLike<number>,
-  portTimeSamples: number,
+  offsetInBlockSamples: number,
 ): void {
   let offset = 0;
   while (offset < words.length) {
@@ -398,7 +402,7 @@ function dispatchUmpMessages(
     for (let index = 0; index < wordCount; index++) {
       packet[index] = words[offset + index] >>> 0;
     }
-    dispatchUmpMessage(engine, packet, portTimeSamples);
+    dispatchUmpMessage(engine, packet, offsetInBlockSamples);
     offset += wordCount;
   }
 }
@@ -406,7 +410,7 @@ function dispatchUmpMessages(
 function dispatchUmpMessage(
   engine: WebMidiEngine,
   words: Uint32Array,
-  portTimeSamples: number,
+  offsetInBlockSamples: number,
 ): void {
   const word0 = words[0] >>> 0;
   const messageType = word0 >>> 28;
@@ -417,7 +421,7 @@ function dispatchUmpMessage(
     return;
   }
   if (engine.pushMidiInputUmp) {
-    engine.pushMidiInputUmp(words, portTimeSamples);
+    engine.pushMidiInputUmp(words, offsetInBlockSamples);
     return;
   }
 
@@ -428,21 +432,21 @@ function dispatchUmpMessage(
     const a = (word0 >>> 8) & 0x7f;
     const b = word0 & 0x7f;
     if (message === 0x80) {
-      engine.pushMidiInputNoteOff(group, channel, a, b, portTimeSamples);
+      engine.pushMidiInputNoteOff(group, channel, a, b, offsetInBlockSamples);
     } else if (message === 0x90) {
       if (b === 0) {
-        engine.pushMidiInputNoteOff(group, channel, a, 0, portTimeSamples);
+        engine.pushMidiInputNoteOff(group, channel, a, 0, offsetInBlockSamples);
       } else {
-        engine.pushMidiInputNoteOn(group, channel, a, b, portTimeSamples);
+        engine.pushMidiInputNoteOn(group, channel, a, b, offsetInBlockSamples);
       }
     } else if (message === 0xb0) {
-      engine.pushMidiInputCc(group, channel, a, b, portTimeSamples);
+      engine.pushMidiInputCc(group, channel, a, b, offsetInBlockSamples);
     } else if (message === 0xa0) {
-      engine.pushMidiInputPolyPressure?.(group, channel, a, b, portTimeSamples);
+      engine.pushMidiInputPolyPressure?.(group, channel, a, b, offsetInBlockSamples);
     } else if (message === 0xd0) {
-      engine.pushMidiInputChannelPressure?.(group, channel, a, portTimeSamples);
+      engine.pushMidiInputChannelPressure?.(group, channel, a, offsetInBlockSamples);
     } else if (message === 0xe0) {
-      engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), portTimeSamples);
+      engine.pushMidiInputPitchBend?.(group, channel, a | (b << 7), offsetInBlockSamples);
     }
     return;
   }
@@ -453,27 +457,38 @@ function dispatchUmpMessage(
     const data1 = (word0 >>> 8) & 0x7f;
     const word1 = words[1] >>> 0;
     if (status === 0x8) {
-      engine.pushMidiInputNoteOff(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
+      engine.pushMidiInputNoteOff(
+        group,
+        channel,
+        data1,
+        (word1 >>> 25) & 0x7f,
+        offsetInBlockSamples,
+      );
     } else if (status === 0x9) {
       // MIDI 2.0 note-on is distinct from note-off (status 0x8). Downsample
       // its 16-bit velocity to the engine's 7-bit API, retaining a nonzero
       // note-on even when the top seven bits are all zero.
       const velocity = Math.max(1, (word1 >>> 25) & 0x7f);
-      engine.pushMidiInputNoteOn(group, channel, data1, velocity, portTimeSamples);
+      engine.pushMidiInputNoteOn(group, channel, data1, velocity, offsetInBlockSamples);
     } else if (status === 0xb) {
-      engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, portTimeSamples);
+      engine.pushMidiInputCc(group, channel, data1, (word1 >>> 25) & 0x7f, offsetInBlockSamples);
     } else if (status === 0xa) {
       engine.pushMidiInputPolyPressure?.(
         group,
         channel,
         data1,
         (word1 >>> 25) & 0x7f,
-        portTimeSamples,
+        offsetInBlockSamples,
       );
     } else if (status === 0xd) {
-      engine.pushMidiInputChannelPressure?.(group, channel, (word1 >>> 25) & 0x7f, portTimeSamples);
+      engine.pushMidiInputChannelPressure?.(
+        group,
+        channel,
+        (word1 >>> 25) & 0x7f,
+        offsetInBlockSamples,
+      );
     } else if (status === 0xe) {
-      engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, portTimeSamples);
+      engine.pushMidiInputPitchBend?.(group, channel, word1 >>> 18, offsetInBlockSamples);
     }
   }
 }
