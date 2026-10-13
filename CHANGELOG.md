@@ -1,5 +1,69 @@
 # Changelog
 
+## v1.9.1 (2026-10-13)
+
+This release renames processor ids, amp models and amp presets that carried product designations, refuses unknown keys in Node and WASM request objects, fixes Butterworth and Bessel multiband crossovers that cancelled at their cutoffs, weights 7.1 and quad loudness by loudspeaker position, fixes level changes at note-edit seams and drum hits read as repair defects, closes notes cut at a MIDI clip end, keeps the monitor cue out of offline renders, and closes several gaps between the bindings, the CLIs and the C ABI. No ABI counter moved.
+
+### Upgrade notes
+
+#### Removed and renamed
+
+- Processor ids `eq.pultec` and `eq.apiStyle` are `eq.passiveTube` and `eq.steppedProportionalQ`; the `saturation.ampSim` `ampModel` choices `fenderClean`, `tweed`, `voxChime` and `rectifier` are `cleanCombo`, `vintageCombo`, `classAChime` and `heavyHiGain`; the `eq.passiveTube` `componentModel` choice `eqp1aWdf` is `wdfCircuit`; amp presets `tweedGrind`, `britStack` and `rectifierChug` are `vintageGrind`, `crunchStack` and `heavyChug`. The old names are still read from saved scenes, rigs, presets and by-name lookups and are converted to the new ones; catalogs, descriptors and written scenes carry only the new names.
+- The synth filter model `moog-ladder` is `transistor-ladder`, and the C constant `SONARE_SYNTH_FILTER_MOOG_LADDER` is `SONARE_SYNTH_FILTER_TRANSISTOR_LADDER` (value unchanged); Node, WASM and Python still accept `moog-ladder` as input and report `transistor-ladder`.
+- Node and WASM `melToStft` return the matrix under `magnitude` instead of `power`, and the WASM result type is `StftMagnitudeResult`; the values are unchanged.
+- The MIDI push argument `portTimeSamples` / `port_time_samples` is `offsetInBlockSamples` / `offset_in_block_samples` on the C ABI, Node, WASM (including the worklet message field) and Python, and the Web MIDI bridge option `timestampToSamples` is `timestampToOffsetInBlockSamples`; the value is the offset inside the next processed block, not an absolute clock position.
+- The `hpss` JSON fields `harmonic_energy`, `percussive_energy` and `residual_energy` are `harmonic_mean_abs`, `percussive_mean_abs` and `residual_mean_abs` on both CLIs.
+- The pan mode name `'pan'` is no longer accepted; use `balance`, `stereoPan` or `dualPan` (Node, WASM, Python and both CLIs).
+
+#### Now refused
+
+- Node and WASM request objects refuse a key their entry point does not declare with a `TypeError` naming it (`detectBpm: unknown request key 'bpmMin'`), with a hint when the key belongs in a nested object (`'loudness' belongs under 'config'`); nested options objects and the options bags of the positional forms refuse unknown options the same way.
+- A `SynthPatch` master `gain` outside [0, 4] or non-finite is refused by name; values above 4 were clamped and negative or NaN values fell back to 0.5.
+- `sonare-cli repair --detect` refuses `-o` / `--output`, as the Python CLI does.
+- WASM `mixingScenePresetJson`, `realtimeVoiceChangerPresetJson`, `validateRealtimeVoiceChangerPresetJson`, `realtimeVoiceChangerPresetConfig`, `noteToHz` and `Project.fromJson`, and the Node and Python voice preset lookups, refuse an embedded NUL with a `RangeError` (Python: `SonareValueError`) naming the field.
+
+### New
+
+#### Realtime engine and project
+
+- Resolve the master fader, pan and width automation ids (C: `sonare_engine_resolve_master_automation_id`; Node and WASM: `resolveMasterAutomationId`; Python: `resolve_master_automation_id`).
+- The WASM `/worklet` entry exports `engineMixerMasterTarget`, `ENGINE_MIXER_PARAM_FADER_DB`, `ENGINE_MIXER_PARAM_PAN` and `SONARE_METER_RING_PROTOCOL_VERSION`.
+- The WASM playback and mixer AudioWorklet processors accept `wasmBinary` and initialise the module themselves when the worklet realm has none, posting `ready` when done.
+
+#### Mixing
+
+- `downmix` takes `normalize` and `includeLfe` options (Node and WASM: `{ normalize, includeLfe }`; Python: `normalize=`, `include_lfe=`; C: `sonare_downmix_ex`).
+
+#### Distribution and build
+
+- Node exports `EXPECTED_ABI_VERSION` and `EXPECTED_ENGINE_ABI_VERSION`.
+
+### Behaviour changes
+
+- Butterworth and Bessel multiband crossovers invert the high band of every pair that is out of phase at its cutoff and phase-compensate the lower bands of three-way and wider splits, so their band sum peaks by about +1.7 to +3 dB at each cutoff instead of cancelling; Linkwitz-Riley and linear-phase output is unchanged.
+- Loudness weighting follows loudspeaker position: the 7.1 back pair and the quad surrounds are weighted 1.0 instead of 1.41 in offline LUFS, the live mixer meter, the playback loudness meter and night-mode DRC; 5.1 is unchanged.
+- `analyzeBpm` / `analyze_bpm` / `sonare_analyze_bpm` list the chosen tempo first in `candidates`, followed by the rest in vote-share order; no tempo or confidence value changes.
+- WASM `analyzeWithProgress` takes the analysis options directly on the request as Node does, a field given both there and under `options` taking the `options` value.
+- `Mixer.processStereo` (and WASM `processStereoInto`) report more input channels than strips as an argument error naming both counts (`RangeError`; Python: `SonareValueError`) instead of a bare invalid-parameter error code.
+- WASM `processStereoInto` accepts fewer input channels than strips, leaving the rest silent, as `processStereo` and the C ABI do.
+- A mixer scene send to an undeclared bus raises a scene warning naming the strip and bus; the implicit aux bus is still created.
+- MIDI-FX `quantize` moves note-ons and their paired note-offs only; controllers and other events keep their position.
+- Repair detection no longer reads drum hits as defects, so `repair --detect` and the mastering assistant stop reporting hum, crackle and clicks on clean percussion: a hum candidate must be a stationary line through most of each analysis frame (a repeating kick reads prominence 1.0), and crackle samples and click runs are counted only where they stand above the local transient level; the repair stages still act inside transients, so `replacedSamples` and `repairedRuns` can exceed the detected counts.
+- Offline renders, bounces, stem bounces and freezes contain the program output only, whatever the PFL/AFL or solo monitor state; `process()` and `processPrepared()` still fold the cue into their single output.
+
+### Fixes
+
+- Node and WASM `estimateRoom` treat `referenceAbsorption: 0` as the library default, as the C ABI and Python do, instead of reporting a room thousands of times too small.
+- `sonare-cli eq --type 9` and the Python CLI `eq --type 9` accept the all-pass band; linear-phase mode still refuses it by name.
+- `sonare-cli` project-family commands such as `transcribe` print the library's refusal message after the error code.
+- `pitchCorrectTimevarying` and the other F0-track entry points name the field and frame in their errors (`f0Hz[5] is NaN but the frame is voiced`, `hopLength must be > 0`).
+- `noteStretch` keeps the level across its seams: each seam is cross-faded with weights matched to the correlation of its two sides, and the stretched copy is placed where its seams line up in phase, so a tone no longer bumps by about +2.8 dB at the head or dips at the tail.
+- `renderNotes` and polyphonic note rendering no longer lift the level at the edges of a note edited in place, which a gain or envelope edit raised by up to about +1.9 dB.
+- SMF export and `validateMidiNotes` close a note cut by the clip end or a loop boundary with a note-off there, so a note running past the clip validates as a matched pair; a note-on that never had a note-off is still reported.
+- WASM reports an unknown voice-character preset as a coded `SonareError` instead of a plain `Error`, and a mixer argument error as an argument error instead of an invalid-state error.
+- The repair-insert, `melToStft`, `primeOfflineParameters`, worklet `setTrackLanes`, `tailSamples`, `downmix` headroom, BPM confidence and true-peak ceiling documentation states what the library does, and the Python `SampleBank` example binds the bank through `SynthPatch(sample_bank=...)`.
+- Envelope, dynamics and smoothing times state their convention (dynamics and smoothing: one time constant; `SynthPatch` decay and release: three time constants; built-in instrument ADSR: linear ramps), the pan modes and laws state their centre levels, the hum fundamental prominence is documented as a linear ratio, and `setTrackMonitorMode` and `setSoloMute` state where the cue is heard.
+
 ## v1.9.0 (2026-10-13)
 
 This release moves `SONARE_FEATURE_ABI_VERSION` from 6 to 7, `SONARE_ACOUSTIC_ABI_VERSION` from 4 to 5 and `SONARE_VOICE_CHANGER_ABI_VERSION` from 2 to 3, and grows several shipped structs, so C callers and native consumers rebuild. It adds multichannel repair, realtime repair and voice-changer inserts, stereo room morphing, automatic tuning, offline auto-tune, multichannel decoding, per-reference and per-track sample rates, synth engine parameters by key, and offline bounce on the WASM worklet engine. Bindings refuse a mismatched native module, error classes agree across surfaces, many silently coerced inputs are refused, and polyphonic transcription, boundary detection, rate-dependent analysis windows, mixer automation ids and the stereo room inserts give different results.
