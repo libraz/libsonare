@@ -886,6 +886,10 @@ class RealtimeEngine : private ClipPageRequestSink {
   // ids' table and lifetime. -1 when the bus is not configured or the key is not
   // "faderDb". Control-thread; touches no audio state.
   int64_t resolve_bus_automation_id(uint32_t bus_id, const std::string& key) noexcept;
+  // Resolves the master strip's "faderDb", "pan" or "width" to its reserved id in
+  // the engine mixer namespace. -1 for any other key. Control-thread; touches no
+  // audio state.
+  int64_t resolve_master_automation_id(const std::string& key) const noexcept;
   /// Reads the immutable construction value captured by the resolved insert
   /// parameter. Control-thread only; this never mutates live DSP state and
   /// returns false for a null output, an unknown target, or a target whose

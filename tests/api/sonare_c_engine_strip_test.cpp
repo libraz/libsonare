@@ -2505,3 +2505,33 @@ TEST_CASE("sonare_engine_drain_meter_telemetry_wide reports per-plane meters for
 
   sonare_engine_destroy(engine);
 }
+
+#if defined(SONARE_WITH_MIXING)
+TEST_CASE("sonare_engine resolves the master fader, pan and width to engine parameters",
+          "[c_api][engine]") {
+  SonareRealtimeEngine* engine = nullptr;
+  REQUIRE(sonare_engine_create(&engine) == SONARE_OK);
+  REQUIRE(sonare_engine_prepare(engine, 48000.0, 256, 64, 16) == SONARE_OK);
+
+  const char* const names[] = {"faderDb", "pan", "width"};
+  uint32_t ids[3] = {};
+  for (int i = 0; i < 3; ++i) {
+    REQUIRE(sonare_engine_resolve_master_automation_id(engine, names[i], &ids[i]) == SONARE_OK);
+    SonareParameterInfo info{};
+    REQUIRE(sonare_engine_parameter_info(engine, ids[i], &info) == SONARE_OK);
+    CHECK(std::string(info.name) == names[i]);
+    CHECK(sonare_engine_set_parameter(engine, ids[i], i == 0 ? -6.0f : 0.5f, -1) == SONARE_OK);
+  }
+  CHECK(ids[0] != ids[1]);
+  CHECK(ids[1] != ids[2]);
+
+  uint32_t out_id = 123;
+  CHECK(sonare_engine_resolve_master_automation_id(engine, "gain", &out_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out_id == 0);
+  CHECK(sonare_engine_resolve_master_automation_id(nullptr, "faderDb", &out_id) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+
+  sonare_engine_destroy(engine);
+}
+#endif

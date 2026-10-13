@@ -751,6 +751,26 @@ SonareError sonare_engine_resolve_master_insert_automation_id(SonareRealtimeEngi
 #endif
 }
 
+SonareError sonare_engine_resolve_master_automation_id(SonareRealtimeEngine* engine,
+                                                       const char* param_name, uint32_t* out_id) {
+  SONARE_C_API_ENTRY;
+  if (!engine || !param_name || param_name[0] == '\0' || !out_id) {
+    return SONARE_ERROR_INVALID_PARAMETER;
+  }
+  // Defined on every exit path, as in the other resolvers.
+  *out_id = 0;
+#if !defined(SONARE_WITH_MIXING)
+  return SONARE_ERROR_NOT_SUPPORTED;
+#else
+  SONARE_C_TRY
+  const int64_t id = engine->engine.resolve_master_automation_id(param_name);
+  if (id < 0) return SONARE_ERROR_INVALID_PARAMETER;
+  *out_id = static_cast<uint32_t>(id);
+  return SONARE_OK;
+  SONARE_C_CATCH
+#endif
+}
+
 SonareError sonare_engine_resolve_bus_insert_automation_id(SonareRealtimeEngine* engine,
                                                            uint32_t bus_id,
                                                            unsigned int insert_index,

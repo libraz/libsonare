@@ -166,6 +166,9 @@ SonareError sonare_engine_graph_latency_samples_q8(SonareRealtimeEngine* engine,
 ///   through lane strips (channel delay included), buses, sends, the graph and
 ///   the master strip. Insert terms end where a unit impulse stays below 1e-5;
 ///   instrument terms where the voice envelope falls below 1e-4.
+///   An instrument lane whose patch is not known yet (a drum-kit lane or a
+///   General MIDI program lane before any note sounds) contributes a conservative
+///   worst-case bound; it narrows once a patch has sounded.
 ///   2147483647 means the tail is unbounded. Control-thread
 ///   only; must not run concurrently with process().
 SonareError sonare_engine_tail_samples(SonareRealtimeEngine* engine, int* out_tail_samples);
@@ -260,8 +263,9 @@ SonareError sonare_engine_parameter_info(SonareRealtimeEngine* engine, uint32_t 
 ///   whether the manual value or the lane clear reaches the audio thread
 ///   first. A mixer-namespace id (0x4D58xxxx) other than a master id names no
 ///   strip and is refused with @c SONARE_ERROR_INVALID_PARAMETER, as by
-///   @ref sonare_engine_set_parameter; resolve per-strip ids with the
-///   `sonare_engine_resolve_*_automation_id` functions.
+///   @ref sonare_engine_set_parameter; resolve ids with the
+///   `sonare_engine_resolve_*_automation_id` functions (the master fader, pan and
+///   width through @ref sonare_engine_resolve_master_automation_id).
 SonareError sonare_engine_set_automation_lane(SonareRealtimeEngine* engine, uint32_t param_id,
                                               const SonareAutomationPoint* points,
                                               size_t point_count);
@@ -597,10 +601,13 @@ SonareError sonare_engine_insert_parameter_constructed_value(SonareRealtimeEngin
 ///   `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
 ///   `maximizer.*` and `multiband.*` processors are all available as strip
 ///   inserts, so placing one on a strip and resolving its parameter here drives
-///   it at audio-block precision, live and offline alike. The whole-signal
-///   stages of the offline mastering chain (`repair.*`, `loudness`, and the
-///   match stages) have no insert form and no automation id: they buffer the
-///   entire signal by construction and do not run on the realtime path.
+///   it at audio-block precision, live and offline alike. The whole-signal stages of the offline
+///   mastering chain that have no insert form (`repair.declick`, `repair.declip`,
+///   `repair.trimSilence`, `loudness`, and the match stages) have no automation id: they buffer the
+///   entire signal by construction and do not run on the realtime path. The four realtime repair
+///   inserts (`repair.decrackle`, `repair.dehum`, `repair.denoiseClassical`,
+///   `repair.dereverbClassical`) load into a strip, but every one of their parameters is
+///   construction-only, so no automation id resolves (-1) and an edit needs a strip replacement.
 SonareError sonare_engine_resolve_track_insert_automation_id(SonareRealtimeEngine* engine,
                                                              uint32_t track_id,
                                                              unsigned int insert_index,
@@ -629,6 +636,14 @@ SonareError sonare_engine_resolve_track_lane_automation_id(SonareRealtimeEngine*
 ///   mixing support is disabled.
 SonareError sonare_engine_resolve_bus_automation_id(SonareRealtimeEngine* engine, uint32_t bus_id,
                                                     const char* param_name, uint32_t* out_id);
+/// @brief Resolves a master-strip control to its reserved automation id.
+/// @details @p param_name is `faderDb` (dB), `pan` (-1..1) or `width` (0..2). The
+///   id names the master strip, which always exists, so it never goes stale.
+///   Returns SONARE_ERROR_INVALID_PARAMETER if the name is none of the three (and
+///   sets @p out_id to 0); SONARE_ERROR_NOT_SUPPORTED when mixing support is
+///   disabled.
+SonareError sonare_engine_resolve_master_automation_id(SonareRealtimeEngine* engine,
+                                                       const char* param_name, uint32_t* out_id);
 /// @brief Resolves a master-strip insert parameter to its reserved automation id.
 /// @details Master-strip counterpart of
 ///   @ref sonare_engine_resolve_track_insert_automation_id.

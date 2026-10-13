@@ -774,6 +774,21 @@ int64_t RealtimeEngine::resolve_track_lane_automation_id(uint32_t track_id,
   return -1;
 }
 
+int64_t RealtimeEngine::resolve_master_automation_id(const std::string& key) const noexcept {
+  uint32_t kind = 0;
+  if (key == "faderDb") {
+    kind = TrackMixerRuntime::kFaderDb;
+  } else if (key == "pan") {
+    kind = TrackMixerRuntime::kPan;
+  } else if (key == "width") {
+    kind = TrackMixerRuntime::kWidth;
+  } else {
+    return -1;
+  }
+  return static_cast<int64_t>(kEngineParamNamespace |
+                              (kEngineParamLaneMaster << kEngineParamLaneShift) | kind);
+}
+
 int64_t RealtimeEngine::resolve_bus_automation_id(uint32_t bus_id,
                                                   const std::string& key) noexcept {
   if (key != "faderDb") return -1;

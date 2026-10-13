@@ -354,6 +354,42 @@ TEST_CASE("sonare_downmix applies the BS.775 coefficients", "[c_api][audio_io]")
   sonare_free_floats(copy);
 }
 
+TEST_CASE("sonare_downmix_ex reports the unnormalised fold and applies the options",
+          "[c_api][audio_io]") {
+  using sonare::constants::kInvSqrt2;
+  constexpr size_t kFrames = 8;
+  std::vector<float> full(6 * kFrames, 1.0f);
+
+  // The default fold of six full-scale planes exceeds full scale.
+  float* stereo = nullptr;
+  REQUIRE(sonare_downmix(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, &stereo) ==
+          SONARE_OK);
+  CHECK(stereo[0] == Catch::Approx(1.0f + 2.0f * kInvSqrt2).margin(1e-5));
+  sonare_free_floats(stereo);
+
+  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 0, 1, &stereo) ==
+          SONARE_OK);
+  CHECK(stereo[0] == Catch::Approx(1.0f).margin(1e-5));
+  sonare_free_floats(stereo);
+
+  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 1, 0, &stereo) ==
+          SONARE_OK);
+  CHECK(stereo[0] == Catch::Approx(1.0f + 3.0f * kInvSqrt2).margin(1e-5));
+  sonare_free_floats(stereo);
+
+  // Both options zero is sonare_downmix exactly.
+  float* plain = nullptr;
+  REQUIRE(sonare_downmix_ex(full.data(), kFrames, 6, SONARE_CHANNEL_LAYOUT_STEREO, 0, 0, &plain) ==
+          SONARE_OK);
+  CHECK(plain[0] == Catch::Approx(1.0f + 2.0f * kInvSqrt2).margin(1e-5));
+  sonare_free_floats(plain);
+
+  float* out = nullptr;
+  CHECK(sonare_downmix_ex(full.data(), kFrames, 6, 4, 0, 0, &out) ==
+        SONARE_ERROR_INVALID_PARAMETER);
+  CHECK(out == nullptr);
+}
+
 TEST_CASE("sonare_downmix folds an unmodelled channel count to mono by mean", "[c_api][audio_io]") {
   const float planes[9] = {0.3f, 0.6f, 0.9f, 0.0f, 0.3f, 0.6f, 0.6f, 0.0f, 0.3f};
   float* mono = nullptr;

@@ -38,7 +38,8 @@ SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** o
 /// @details @p channels holds @p channel_count planes of @p frames samples each. The
 ///          source layout is the one @p channel_count names (1 mono, 2 stereo, 6 5.1,
 ///          8 7.1; plane order as in @ref sonare_decode_channels). Center and
-///          surround enter the front pair at -3 dB, the LFE plane is dropped, and
+///          surround enter the front pair at -3 dB, the LFE plane is dropped, the result is
+///          not normalised (it can exceed full scale; see @ref sonare_downmix_ex), and
 ///          a stereo/5.1/7.1 source folds to mono through the same matrix the
 ///          decoders use. @p target_layout is a @ref SonareChannelLayout value. Supported targets
 ///          narrow the bed: 7.1 to 5.1, 5.1 and 7.1 to stereo, stereo/5.1/7.1 to mono, and the
@@ -52,6 +53,20 @@ SonareError sonare_decode_channels(const uint8_t* data, size_t length, float** o
 /// @note Free @p out_samples with @ref sonare_free_floats.
 SonareError sonare_downmix(const float* channels, size_t frames, int channel_count,
                            int target_layout, float** out_samples);
+/// @brief @ref sonare_downmix with the fold options.
+/// @details The BS.775 fold is not normalised, so a source with several
+///          full-scale planes can fold past full scale (six planes of 1.0 reach
+///          2.414 on a stereo target). @p normalize non-zero scales the output so the
+///          worst case, every input at full scale and in phase, stays at or below
+///          unity; @p include_lfe non-zero folds the LFE plane into the front pair at
+///          -3 dB instead of dropping it. A channel count the speaker model does not
+///          name folds to mono as the plain mean whatever the options. Every other
+///          argument and return value is as for @ref sonare_downmix, which is this
+///          function with both options zero.
+/// @note Free @p out_samples with @ref sonare_free_floats.
+SonareError sonare_downmix_ex(const float* channels, size_t frames, int channel_count,
+                              int target_layout, int include_lfe, int normalize,
+                              float** out_samples);
 
 #ifndef __EMSCRIPTEN__
 /// @note Release @p out with @ref sonare_audio_free; it is a handle, not a

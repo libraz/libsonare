@@ -345,7 +345,7 @@ typedef struct {
    ABI back-compat; each *_checked variant delegates to its unchecked form after
    validating the length. */
 
-/// @brief Approximate inverse of a Mel filterbank (Mel power -> STFT power).
+/// @brief Approximate inverse of a Mel filterbank (Mel power -> STFT magnitude).
 /// @param mel Mel power spectrogram [n_mels x n_frames] row-major.
 /// @param n_mels Number of Mel bands.
 /// @param n_frames Number of time frames.
@@ -353,7 +353,7 @@ typedef struct {
 /// @param n_fft FFT size of the source STFT (sets output bins = n_fft/2 + 1).
 /// @param fmin Minimum Mel frequency in Hz (0.0 for librosa default).
 /// @param fmax Maximum Mel frequency in Hz (0.0 = sr/2).
-/// @param out Receives an [(n_fft/2 + 1) x n_frames] STFT power matrix.
+/// @param out Receives an [(n_fft/2 + 1) x n_frames] STFT magnitude matrix (not squared).
 /// @warning Reads n_mels * n_frames floats from @p mel without verifying the
 ///          buffer length; see the UNCHECKED-LENGTH CONTRACT above. Use
 ///          sonare_mel_to_stft_checked to have the length validated.
