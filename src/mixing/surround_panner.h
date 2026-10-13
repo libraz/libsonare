@@ -53,45 +53,6 @@ struct SurroundPanGains {
   int count = 0;  ///< active planes = channel_count(layout)
 };
 
-/// Role azimuth (degrees, 0 = front, +right) shared by the 5.1 and 7.1 rings;
-/// 7.1 overrides Ls/Rs below. LFE has no position.
-constexpr float speaker_azimuth_deg(SpeakerRole role) noexcept {
-  switch (role) {
-    case SpeakerRole::C:
-      return 0.0f;
-    case SpeakerRole::L:
-      return -30.0f;
-    case SpeakerRole::R:
-      return 30.0f;
-    case SpeakerRole::Lss:
-      return -90.0f;
-    case SpeakerRole::Rss:
-      return 90.0f;
-    case SpeakerRole::Ls:
-      return -110.0f;
-    case SpeakerRole::Rs:
-      return 110.0f;
-    case SpeakerRole::LFE:
-      return 0.0f;
-  }
-  return 0.0f;
-}
-
-/// Azimuth of @p role on @p layout's horizontal ring; 7.1 places Ls/Rs at the rear (+/-135).
-constexpr float speaker_azimuth_deg(SpeakerRole role, ChannelLayout layout) noexcept {
-  if (layout == ChannelLayout::SevenPointOne) {
-    switch (role) {
-      case SpeakerRole::Ls:
-        return -135.0f;
-      case SpeakerRole::Rs:
-        return 135.0f;
-      default:
-        break;
-    }
-  }
-  return speaker_azimuth_deg(role);
-}
-
 /// Pure gain computation: pairwise constant-power panning between the two
 /// adjacent speakers on the layout's horizontal ring selected by `azimuth`, then
 /// a unit-power renormalized blend toward an equal-front-spread vector by

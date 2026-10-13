@@ -3,12 +3,14 @@
 #include <catch2/matchers/catch_matchers_floating_point.hpp>
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <iterator>
 #include <limits>
 #include <utility>
 #include <vector>
 
 #include "metering/basic.h"
+#include "metering/bs1770_weighting.h"
 #include "metering/clipping.h"
 #include "metering/dynamic_range.h"
 #include "metering/lufs.h"
@@ -1045,6 +1047,50 @@ TEST_CASE("BS.1770 surround channel weight is the spec-cited bit-exact value",
                 "ITU-R BS.1770-4 §2.4 surround weight must be bit-exact");
   // Numerical cross-check: 10^(1.5/10) within tight tolerance.
   REQUIRE_THAT(kBs1770SurroundWeight, WithinAbs(std::pow(10.0, 1.5 / 10.0), 1e-15));
+}
+
+TEST_CASE("BS.1770 channel weights follow loudspeaker position per layout", "[meter][lufs][spec]") {
+  // 1.41 within 60-120 degrees of azimuth, 1.0 elsewhere, 0 for the LFE.
+  constexpr double G = metering::kBs1770SurroundWeight;
+  const auto weights = [](int channels) {
+    std::vector<double> out;
+    for (int ch = 0; ch < channels; ++ch)
+      out.push_back(metering::bs1770_channel_weight(ch, channels));
+    return out;
+  };
+  CHECK(weights(1) == std::vector<double>{1.0});
+  CHECK(weights(2) == std::vector<double>{1.0, 1.0});
+  CHECK(weights(4) == std::vector<double>{1.0, 1.0, 1.0, 1.0});        // back pair at +/-135
+  CHECK(weights(5) == std::vector<double>{1.0, 1.0, 1.0, G, G});       // surrounds at +/-110
+  CHECK(weights(6) == std::vector<double>{1.0, 1.0, 1.0, 0.0, G, G});  // 5.1
+  CHECK(weights(8) == std::vector<double>{1.0, 1.0, 1.0, 0.0, 1.0, 1.0, G, G});  // 7.1
+}
+
+TEST_CASE("BS.1770 loudness weights a 7.1 side pair and leaves back pairs at unity",
+          "[meter][lufs][spec]") {
+  constexpr int kSampleRate = 48000;
+  constexpr int kFrames = 3 * kSampleRate;
+  // Integrated loudness of a 1 kHz tone placed on @p active planes only.
+  const auto loudness = [](int channels, std::initializer_list<int> active) {
+    std::vector<float> interleaved(static_cast<size_t>(kFrames * channels), 0.0f);
+    for (int i = 0; i < kFrames; ++i) {
+      const float s =
+          0.1f *
+          std::sin(static_cast<float>(sonare::constants::kTwoPiD * 1000.0 * i / kSampleRate));
+      for (const int ch : active) interleaved[static_cast<size_t>(i * channels + ch)] = s;
+    }
+    return metering::lufs_interleaved(interleaved.data(), static_cast<size_t>(kFrames), channels,
+                                      kSampleRate)
+        .integrated_lufs;
+  };
+  constexpr float kSurroundDb = 1.5f;
+  const float front_71 = loudness(8, {0, 1});
+  REQUIRE_THAT(loudness(8, {4, 5}), WithinAbs(front_71, 0.01f));
+  REQUIRE_THAT(loudness(8, {6, 7}), WithinAbs(front_71 + kSurroundDb, 0.01f));
+  const float front_quad = loudness(4, {0, 1});
+  REQUIRE_THAT(loudness(4, {2, 3}), WithinAbs(front_quad, 0.01f));
+  const float front_51 = loudness(6, {0, 1});
+  REQUIRE_THAT(loudness(6, {4, 5}), WithinAbs(front_51 + kSurroundDb, 0.01f));
 }
 
 TEST_CASE("LUFS integrated stays close to -23 LUFS for a calibrated 1 kHz sine (precision)",
