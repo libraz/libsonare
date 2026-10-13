@@ -64,8 +64,9 @@ def mastering(
     dependent, so a wrong rate mis-targets the loudness.
 
     ``release_ms`` tunes the post true-peak limiter release, one time constant
-    (about 63% of the way at the set time); ``0`` keeps the library default (50 ms). ``apply_gain_at_input_rate`` applies the static
-    loudness gain at the input (pre-oversample) rate.
+    (about 63% of the way at the set time); ``0`` keeps the library default
+    (50 ms). ``apply_gain_at_input_rate`` applies the static loudness gain at
+    the input (pre-oversample) rate.
 
     ``ceiling_db`` is held on the true peak read at ``true_peak_oversample``
     (4x, the BS.1770 measure, by default); a finer meter can read up to
