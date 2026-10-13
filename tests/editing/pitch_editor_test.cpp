@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include "core/audio.h"
@@ -581,6 +582,33 @@ TEST_CASE("PitchCorrector applies pYIN-verifiable one semitone correction", "[pi
 
   // Plan spec: within +-2 cents. At ~467.5 Hz, 2 cents is about +-0.54 Hz.
   REQUIRE_THAT(median_voiced_f0(corrected_track), WithinAbs(median_voiced_f0(target_track), 0.6f));
+}
+
+TEST_CASE("PitchCorrector names the field and frame of a malformed F0 track", "[pitch_editor]") {
+  constexpr int sample_rate = 22050;
+  const sonare::Audio audio =
+      sonare::Audio::from_vector(sine(440.0f, sample_rate, 8192), sample_rate);
+  PitchCorrector corrector;
+  auto message_of = [&](const F0Track& track) {
+    try {
+      corrector.correct_to_midi(audio, track, 70.0f);
+    } catch (const sonare::SonareException& e) {
+      CHECK(e.code() == sonare::ErrorCode::InvalidParameter);
+      return std::string(e.what());
+    }
+    return std::string();
+  };
+
+  F0Track track = constant_track(440.0f, sample_rate, 256, 16);
+  track.f0_hz[5] = std::numeric_limits<float>::quiet_NaN();
+  CHECK(message_of(track) == "f0Hz[5] is NaN but the frame is voiced");
+
+  track.f0_hz[5] = std::numeric_limits<float>::infinity();
+  CHECK(message_of(track) == "f0Hz[5] is not finite");
+
+  track = constant_track(440.0f, sample_rate, 256, 16);
+  track.hop_length = 0;
+  CHECK(message_of(track) == "hopLength must be > 0");
 }
 
 TEST_CASE("PitchCorrector constant MIDI transpose reaches its target independent of sample rate",

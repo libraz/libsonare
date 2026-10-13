@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <string>
 #include <vector>
 
 #include "core/convert.h"
@@ -37,32 +38,43 @@ float hann(float t) noexcept { return 0.5f - 0.5f * std::cos(kTwoPi * t); }
 
 void validate_f0_track(const Audio& audio, const F0Track& track) {
   // Validate in the core so every public surface inherits the same track contract.
-  SONARE_CHECK(!track.f0_hz.empty() && track.hop_length > 0 &&
-                   track.f0_hz.size() == track.voiced.size() &&
-                   (track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size()),
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(!track.f0_hz.empty(), ErrorCode::InvalidParameter, "f0Hz must not be empty");
+  SONARE_CHECK_MSG(track.hop_length > 0, ErrorCode::InvalidParameter, "hopLength must be > 0");
+  SONARE_CHECK_MSG(track.f0_hz.size() == track.voiced.size(), ErrorCode::InvalidParameter,
+                   "voiced must have the same length as f0Hz");
+  SONARE_CHECK_MSG(track.voiced_prob.empty() || track.voiced_prob.size() == track.f0_hz.size(),
+                   ErrorCode::InvalidParameter, "voicedProb must have the same length as f0Hz");
   // hop_length is in samples at the track's rate; a rate mismatch would
   // silently apply the correction curve at the wrong time positions.
-  SONARE_CHECK(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(track.sample_rate == audio.sample_rate(), ErrorCode::InvalidParameter,
+                   "f0 track sampleRate must match the audio sampleRate");
   const double samples_per_frame = track.samples_per_frame();
-  SONARE_CHECK(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
-               ErrorCode::InvalidParameter);
+  SONARE_CHECK_MSG(std::isfinite(samples_per_frame) && samples_per_frame >= 1.0,
+                   ErrorCode::InvalidParameter, "hopLength must be at least one sample");
 
   const float nyquist = 0.5f * static_cast<float>(audio.sample_rate());
   for (size_t i = 0; i < track.f0_hz.size(); ++i) {
     const float f0 = track.f0_hz[i];
+    const std::string at = "f0Hz[" + std::to_string(i) + "]";
     if (track.voiced[i]) {
-      SONARE_CHECK(std::isfinite(f0) && f0 > 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter);
-    } else {
+      SONARE_CHECK_MSG(!std::isnan(f0), ErrorCode::InvalidParameter,
+                       at + " is NaN but the frame is voiced");
+      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at + " is not finite");
+      SONARE_CHECK_MSG(f0 > 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
+                       at + " must be in (0, Nyquist] for a voiced frame");
+    } else if (!std::isnan(f0)) {
       // pYIN uses NaN for unvoiced F0. A finite non-negative value is also
       // accepted for host-supplied tracks because voiced[] is authoritative.
-      SONARE_CHECK((std::isnan(f0) || (std::isfinite(f0) && f0 >= 0.0f && f0 <= nyquist)),
-                   ErrorCode::InvalidParameter);
+      SONARE_CHECK_MSG(std::isfinite(f0), ErrorCode::InvalidParameter, at + " is not finite");
+      SONARE_CHECK_MSG(f0 >= 0.0f && f0 <= nyquist, ErrorCode::InvalidParameter,
+                       at + " must be in [0, Nyquist]");
     }
   }
-  for (const float probability : track.voiced_prob) {
-    SONARE_CHECK(std::isfinite(probability) && probability >= 0.0f && probability <= 1.0f,
-                 ErrorCode::InvalidParameter);
+  for (size_t i = 0; i < track.voiced_prob.size(); ++i) {
+    const float probability = track.voiced_prob[i];
+    SONARE_CHECK_MSG(std::isfinite(probability) && probability >= 0.0f && probability <= 1.0f,
+                     ErrorCode::InvalidParameter,
+                     "voicedProb[" + std::to_string(i) + "] must be in [0, 1]");
   }
 }
 
