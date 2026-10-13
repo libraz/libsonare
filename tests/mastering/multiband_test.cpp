@@ -249,6 +249,74 @@ TEST_CASE("Four-way Linkwitz-Riley recombination stays flat around every cutoff"
   }
 }
 
+TEST_CASE("Crossover bands sum without cancelling for every slope and mode",
+          "[mastering][multiband]") {
+  // A pair far from in-phase at its cutoff must have its high band inverted, and
+  // a lower band must follow every later split; either defect notches the sum.
+  constexpr int kSampleRate = 48000;
+  constexpr int kSamples = 32768;
+  constexpr size_t kSkip = 8192;
+  constexpr float kToneAmplitude = 0.02f;
+  const std::vector<float> third_octaves = {
+      63.0f,   80.0f,   100.0f,  125.0f,  160.0f,   200.0f,   250.0f,  315.0f,  400.0f,
+      500.0f,  630.0f,  800.0f,  1000.0f, 1250.0f,  1600.0f,  2000.0f, 2500.0f, 3150.0f,
+      4000.0f, 5000.0f, 6300.0f, 8000.0f, 10000.0f, 12500.0f, 16000.0f};
+  // Hann-weighted projection, so neighbouring tones a third of an octave apart do not leak.
+  const auto tone_gain_db = [&](const std::vector<float>& samples, float frequency_hz) {
+    double sin_sum = 0.0;
+    double cos_sum = 0.0;
+    double weight_sum = 0.0;
+    const size_t span = samples.size() - kSkip;
+    for (size_t i = kSkip; i < samples.size(); ++i) {
+      const double w = 0.5 - 0.5 * std::cos(kTwoPiD * static_cast<double>(i - kSkip) / span);
+      const double phase = kTwoPiD * frequency_hz * static_cast<double>(i) / kSampleRate;
+      sin_sum += w * samples[i] * std::sin(phase);
+      cos_sum += w * samples[i] * std::cos(phase);
+      weight_sum += w;
+    }
+    const double amplitude = 2.0 * std::hypot(sin_sum, cos_sum) / weight_sum;
+    return 20.0 * std::log10(amplitude / kToneAmplitude);
+  };
+
+  for (const std::vector<float>& cutoffs :
+       {std::vector<float>{120.0f, 2000.0f}, std::vector<float>{200.0f, 400.0f, 800.0f}}) {
+    std::vector<float> tones = cutoffs;
+    for (const float f : third_octaves) {
+      const bool near_cutoff = std::any_of(cutoffs.begin(), cutoffs.end(),
+                                           [f](float c) { return std::abs(f / c - 1.0f) < 0.1f; });
+      if (!near_cutoff) tones.push_back(f);
+    }
+    std::vector<float> signal(static_cast<size_t>(kSamples), 0.0f);
+    for (const float f : tones) {
+      const auto tone = sine(f, kSampleRate, kSamples, kToneAmplitude);
+      for (size_t i = 0; i < signal.size(); ++i) signal[i] += tone[i];
+    }
+
+    for (const CrossoverMode mode : {CrossoverMode::LinkwitzRiley, CrossoverMode::Butterworth,
+                                     CrossoverMode::Bessel, CrossoverMode::FirLinearPhase}) {
+      for (const CrossoverSlope slope :
+           {CrossoverSlope::LR2, CrossoverSlope::LR4, CrossoverSlope::LR8}) {
+        Crossover crossover({cutoffs, slope, mode});
+        crossover.prepare(kSampleRate, kSamples);
+        auto input = signal;
+        float* channels[] = {input.data()};
+        const auto reconstructed = reconstruct_mono(crossover.split(channels, 1, kSamples));
+        const bool flat =
+            mode == CrossoverMode::LinkwitzRiley || mode == CrossoverMode::FirLinearPhase;
+        for (const float f : tones) {
+          const double gain_db = tone_gain_db(reconstructed, f);
+          CAPTURE(cutoffs.size(), static_cast<int>(mode), static_cast<int>(slope), f, gain_db);
+          // Butterworth and Bessel pairs peak by up to 3 dB at each cutoff and
+          // stack where cutoffs sit an octave apart; they must never dip.
+          REQUIRE(gain_db > -1.5);
+          REQUIRE(gain_db < 7.0);
+          if (flat) REQUIRE(std::abs(gain_db) < 0.2);
+        }
+      }
+    }
+  }
+}
+
 TEST_CASE("Crossover routes low and high tones to expected bands", "[mastering][multiband]") {
   Crossover crossover({{1000.0f}, CrossoverSlope::LR2, CrossoverMode::LinkwitzRiley});
   crossover.prepare(48000.0, 1024);

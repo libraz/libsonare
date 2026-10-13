@@ -33,6 +33,13 @@ bool uses_linkwitz_riley_compensation(CrossoverMode mode) {
   return mode == CrossoverMode::LinkwitzRiley;
 }
 
+// A pair more than 90 degrees from in-phase at its cutoff (Butterworth and LR 2nd order at 180,
+// Bessel 2nd at 149 and 4th at 242) cancels there unless the high band is inverted.
+bool inverts_highpass(CrossoverSlope slope, CrossoverMode mode) {
+  if (slope == CrossoverSlope::LR2) return true;
+  return slope == CrossoverSlope::LR4 && mode == CrossoverMode::Bessel;
+}
+
 double scaled_digital_frequency(double base_hz, double scale, double sample_rate) {
   const double base = std::clamp(base_hz, 1.0, sample_rate * 0.49);
   const double warped = std::tan(kPiD * base / sample_rate);
@@ -228,13 +235,11 @@ void Crossover::process_block_iir(float* const* channels, int num_channels, int 
       for (int split_index = 0; split_index < splits; ++split_index) {
         float low = lowpass(remainder, split_index, ch);
         const float high = highpass(remainder, split_index, ch);
-        if (uses_linkwitz_riley_compensation(config_.mode)) {
-          // Multi-way LR sums flat only when lower bands see the same downstream
-          // all-pass phase rotations as the high-side remainder.
-          for (int compensation_split = split_index + 1; compensation_split < splits;
-               ++compensation_split) {
-            low = allpass(low, split_index, compensation_split, ch);
-          }
+        // A lower band must see every later split's low+high response, as the
+        // high-side remainder does, or the bands drift apart in phase and cancel.
+        for (int compensation_split = split_index + 1; compensation_split < splits;
+             ++compensation_split) {
+          low = compensate(low, split_index, compensation_split, ch);
         }
         out_bands[static_cast<size_t>(split_index)][static_cast<size_t>(ch)]
                  [static_cast<size_t>(i)] = low;
@@ -264,7 +269,7 @@ bool Crossover::discard_non_finite_state(int channel, int splits) noexcept {
   }
   for (auto& band_states : compensation_states_) {
     if (static_cast<size_t>(channel) >= band_states.size()) continue;
-    for (auto& split_states : band_states[static_cast<size_t>(channel)].allpass_by_split) {
+    for (auto& split_states : band_states[static_cast<size_t>(channel)].compensation_by_split) {
       discard_stages(split_states);
     }
   }
@@ -284,7 +289,7 @@ void Crossover::reset() {
   }
   for (auto& band_states : compensation_states_) {
     for (auto& channel_states : band_states) {
-      for (auto& split_states : channel_states.allpass_by_split) {
+      for (auto& split_states : channel_states.compensation_by_split) {
         for (auto& stage : split_states) {
           stage.reset();
         }
@@ -411,8 +416,8 @@ rt::TailBudget Crossover::tail() const noexcept {
   }
   for (const auto& band : compensation_states_) {
     if (band.empty()) continue;
-    for (const auto& allpasses : band.front().allpass_by_split) {
-      for (const Biquad& section : allpasses) tail.section(section.c);
+    for (const auto& compensation : band.front().compensation_by_split) {
+      for (const Biquad& section : compensation) tail.section(section.c);
     }
   }
   return tail;
@@ -444,10 +449,10 @@ void Crossover::install_coefficients() {
 
       for (auto& band_states : compensation_states_) {
         for (auto& channel_states : band_states) {
-          if (split_index >= channel_states.allpass_by_split.size()) {
+          if (split_index >= channel_states.compensation_by_split.size()) {
             continue;
           }
-          auto& allpass_stages = channel_states.allpass_by_split[split_index];
+          auto& allpass_stages = channel_states.compensation_by_split[split_index];
           for (auto& ap : allpass_stages) {
             assign_biquad(ap, ap_coeffs);
           }
@@ -474,18 +479,26 @@ void Crossover::install_coefficients() {
       }
     }
 
+    const bool linkwitz_riley = uses_linkwitz_riley_compensation(config_.mode);
     for (auto& band_states : compensation_states_) {
       for (auto& channel_states : band_states) {
-        if (split_index >= channel_states.allpass_by_split.size()) {
+        if (split_index >= channel_states.compensation_by_split.size()) {
           continue;
         }
-        auto& allpass_stages = channel_states.allpass_by_split[split_index];
-        for (size_t k = 0; k < sections.size() && k < allpass_stages.size(); ++k) {
+        auto& stages = channel_states.compensation_by_split[split_index];
+        for (size_t k = 0; k < sections.size() && k < stages.size(); ++k) {
           const float w0 = normalized_omega(
               scaled_digital_frequency(f, sections[k].lowpass_frequency_scale, sample_rate_),
               sample_rate_);
           const auto lp_coeffs = rt::rbj_lowpass(w0, static_cast<float>(sections[k].q));
-          assign_biquad(allpass_stages[k], rbj_allpass_from_denominator(lp_coeffs));
+          assign_biquad(stages[k],
+                        linkwitz_riley ? rbj_allpass_from_denominator(lp_coeffs) : lp_coeffs);
+          if (linkwitz_riley || sections.size() + k >= stages.size()) continue;
+          const float hp_w0 = normalized_omega(
+              scaled_digital_frequency(f, sections[k].highpass_frequency_scale, sample_rate_),
+              sample_rate_);
+          assign_biquad(stages[sections.size() + k],
+                        rt::rbj_highpass(hp_w0, static_cast<float>(sections[k].q)));
         }
       }
     }
@@ -618,9 +631,11 @@ void Crossover::rebuild_state(int num_channels) {
     // Its summed low/high response therefore has the phase of ONE half-order
     // denominator. Applying every duplicated LR section as an all-pass rotates
     // lower bands twice and creates deep notches in three-way+ recombination.
+    // Butterworth and Bessel pairs do not sum to an all-pass, so their
+    // compensation is the split's own low-pass and high-pass sections in parallel.
     cached_compensation_section_count_ = uses_linkwitz_riley_compensation(config_.mode)
                                              ? std::max<size_t>(1, section_count / 2)
-                                             : section_count;
+                                             : section_count * 2;
   }
   const size_t stages = cached_section_count_;
   const size_t compensation_stages = cached_compensation_section_count_;
@@ -632,9 +647,9 @@ void Crossover::rebuild_state(int num_channels) {
       compensation_states_.size() == bands &&
       (bands == 0 || compensation_states_[0].size() >= static_cast<size_t>(num_channels)) &&
       (bands == 0 || num_channels == 0 ||
-       (compensation_states_[0][0].allpass_by_split.size() == splits &&
+       (compensation_states_[0][0].compensation_by_split.size() == splits &&
         (splits == 0 ||
-         compensation_states_[0][0].allpass_by_split[0].size() == compensation_stages)));
+         compensation_states_[0][0].compensation_by_split[0].size() == compensation_stages)));
   if (!shape_matches) {
     states_.assign(splits, std::vector<SplitChannelState>(static_cast<size_t>(num_channels)));
     for (auto& split_states : states_) {
@@ -647,7 +662,8 @@ void Crossover::rebuild_state(int num_channels) {
         bands, std::vector<CompensationChannelState>(static_cast<size_t>(num_channels)));
     for (auto& band_states : compensation_states_) {
       for (auto& channel_states : band_states) {
-        channel_states.allpass_by_split.assign(splits, std::vector<Biquad>(compensation_stages));
+        channel_states.compensation_by_split.assign(splits,
+                                                    std::vector<Biquad>(compensation_stages));
       }
     }
   }
@@ -676,17 +692,28 @@ float Crossover::highpass(float sample, int split_index, int channel) {
   for (auto& stage : stages) {
     y = stage.process(y);
   }
-  return is_lr2_linkwitz_riley(config_.slope, config_.mode) ? -y : y;
+  return inverts_highpass(config_.slope, config_.mode) ? -y : y;
 }
 
-float Crossover::allpass(float sample, int band_index, int split_index, int channel) {
-  float y = sample;
+float Crossover::compensate(float sample, int band_index, int split_index, int channel) {
   auto& stages = compensation_states_[static_cast<size_t>(band_index)][static_cast<size_t>(channel)]
-                     .allpass_by_split[static_cast<size_t>(split_index)];
-  for (auto& stage : stages) {
-    y = stage.process(y);
+                     .compensation_by_split[static_cast<size_t>(split_index)];
+  if (uses_linkwitz_riley_compensation(config_.mode)) {
+    float y = sample;
+    for (auto& stage : stages) {
+      y = stage.process(y);
+    }
+    return y;
   }
-  return y;
+  // Stages hold the split's low-pass sections, then its high-pass sections.
+  const size_t half = stages.size() / 2;
+  float low = sample;
+  float high = sample;
+  for (size_t k = 0; k < half; ++k) {
+    low = stages[k].process(low);
+    high = stages[half + k].process(high);
+  }
+  return inverts_highpass(config_.slope, config_.mode) ? low - high : low + high;
 }
 
 }  // namespace sonare::mastering::multiband

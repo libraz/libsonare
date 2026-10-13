@@ -154,7 +154,8 @@ class Crossover {
   float process_fir_delay(float sample, int channel);
   float lowpass(float sample, int split_index, int channel);
   float highpass(float sample, int split_index, int channel);
-  float allpass(float sample, int band_index, int split_index, int channel);
+  /// @brief Runs a lower band through a later split's summed low/high response.
+  float compensate(float sample, int band_index, int split_index, int channel);
   /// @brief Returns the channel's split and compensation sections to rest when a
   ///        non-finite value has reached them (see util/non_finite_state.h).
   /// @return true when a section was returned to rest.
@@ -166,7 +167,7 @@ class Crossover {
   };
 
   struct CompensationChannelState {
-    std::vector<std::vector<Biquad>> allpass_by_split;
+    std::vector<std::vector<Biquad>> compensation_by_split;
   };
 
   CrossoverConfig config_{};
