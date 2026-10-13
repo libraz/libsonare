@@ -436,7 +436,8 @@ void MidiFxChain::process_chunk(const MidiEvent* in, size_t count, size_t input_
             paired_timing.shaped_on_frame < INT64_MAX) {
           shaped.render_frame = paired_timing.shaped_on_frame + 1;
         }
-      } else if (quantize_.enabled && quantize_.grid_frames > 0) {
+      } else if (shaped.ump.is_note_on() && quantize_.enabled && quantize_.grid_frames > 0) {
+        // Only note-ons snap; controllers and other events keep their position.
         const int64_t grid = quantize_.grid_frames;
         const int64_t f = shaped.render_frame;
         const int64_t snapped = numeric::saturating_add(

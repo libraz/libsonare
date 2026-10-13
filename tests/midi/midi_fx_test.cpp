@@ -161,6 +161,38 @@ TEST_CASE("MidiFx quantize snaps render frames to grid", "[midi]") {
   REQUIRE(out.events[0].render_frame == 120);  // 140 + (-40 * 0.5)
 }
 
+TEST_CASE("MidiFx quantize leaves controller events in place", "[midi]") {
+  MidiFxChain fx;
+  fx.prepare();
+  QuantizeConfig q;
+  q.enabled = true;
+  q.grid_frames = 100;
+  q.strength = 1.0f;
+  fx.set_quantize(q);
+
+  std::vector<MidiEvent> in = {
+      {140, sonare::midi::make_midi1_control_change(0, 0, 7, 90)},
+      note_on(149, 60, 100),
+      note_off(249, 60),
+  };
+  MidiFxBuffer out;
+  fx.process(in.data(), in.size(), &out);
+
+  REQUIRE(out.size == 3);
+  bool saw_cc = false;
+  for (size_t i = 0; i < out.size; ++i) {
+    if (out.events[i].ump.is_note_on()) {
+      REQUIRE(out.events[i].render_frame == 100);
+    } else if (out.events[i].ump.is_note_off()) {
+      REQUIRE(out.events[i].render_frame == 200);
+    } else {
+      saw_cc = true;
+      REQUIRE(out.events[i].render_frame == 140);
+    }
+  }
+  REQUIRE(saw_cc);
+}
+
 TEST_CASE("MidiFx quantize preserves short note gates instead of sorting off before on", "[midi]") {
   MidiFxChain fx;
   fx.prepare();
@@ -669,9 +701,10 @@ TEST_CASE("MidiFx preserves MIDI 2.0 channel controller forms while time shaping
   fx.process(in, 2, &out);
 
   REQUIRE(out.size == 2);
-  REQUIRE(out.events[0].render_frame == 100);
+  // Quantize moves notes only, so the controllers keep their frames.
+  REQUIRE(out.events[0].render_frame == 149);
   REQUIRE(out.events[0].ump == in[0].ump);
-  REQUIRE(out.events[1].render_frame == 200);
+  REQUIRE(out.events[1].render_frame == 151);
   REQUIRE(out.events[1].ump == in[1].ump);
 }
 

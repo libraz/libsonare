@@ -1240,8 +1240,8 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
   REQUIRE(seq.set_midi_fx(9, fx));
   seq.acquire_midi_fx(DeviceFrame{0});
 
-  // A same-timestamp RPN gesture must retain its written order after all four
-  // controllers are delayed into the pending-FX queue. The selector bytes
+  // A same-timestamp RPN gesture must retain its written order through the FX
+  // chain (quantize leaves controllers where they are). The selector bytes
   // (101, 100) give the following Data Entry pair its meaning.
   MidiClipSchedule clip;
   clip.id = 1201;
@@ -1260,7 +1260,7 @@ TEST_CASE("MidiSequencer preserves same-frame controller stream order after MIDI
   constexpr std::array<uint8_t, 4> kWritten{101, 100, 6, 38};
   for (size_t i = 0; i < kWritten.size(); ++i) {
     REQUIRE(sink.events[i].destination == 9);
-    REQUIRE(sink.events[i].event.render_frame == 100);
+    REQUIRE(sink.events[i].event.render_frame == 60);
     REQUIRE(sink.events[i].event.ump.note_number() == kWritten[i]);
   }
 }
@@ -1398,10 +1398,9 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   clip.id = 1208;
   clip.track_id = 92;
   clip.destination_id = 9;
-  // The three source frames quantize to 100 in this order, producing a
-  // pending queue of note-on(rank 5), reset(rank 4), CC(rank 4). Dispatching
-  // the reset removes the pending note-on, so the iterator must rescan the
-  // shifted slot and still dispatch the CC at frame 100.
+  // The note-on quantizes to 100 and waits in the pending queue; the reset and
+  // the CC keep their frames. Dispatching the reset removes the pending note-on,
+  // and the CC after it still dispatches.
   clip.events = {
       {60, sonare::midi::make_midi1_note_on(0, 0, 60, 100)},
       {61, sonare::midi::make_midi1_control_change(0, 0, 120, 0)},
@@ -1412,9 +1411,9 @@ TEST_CASE("MidiSequencer rescans pending events after a channel reset removes a 
   seq.process_block(SequencerClock::aligned(0), 128);
 
   REQUIRE(sink.events.size() == 2);
-  REQUIRE(sink.events[0].event.render_frame == 100);
+  REQUIRE(sink.events[0].event.render_frame == 61);
   REQUIRE(sink.events[0].event.ump.note_number() == 120);
-  REQUIRE(sink.events[1].event.render_frame == 100);
+  REQUIRE(sink.events[1].event.render_frame == 62);
   REQUIRE(sink.events[1].event.ump.note_number() == 1);
   REQUIRE(seq.active_note_count() == 0);
 
@@ -2159,24 +2158,26 @@ TEST_CASE("MidiSequencer removes queued notes before dispatching a queued channe
   seq.acquire_midi_fx(DeviceFrame{0});
 
   // The second arpeggiator gate is pending in the future. The controller reset
-  // is also pending (60 -> 100), so its cleanup must remove the selected slot
-  // safely before it erases the remaining future note slots.
+  // dispatches at its own frame (quantize leaves it at 70) and must erase the
+  // remaining future note slots safely.
   seq.inject_event(9, DeviceFrame{0}, sonare::midi::make_midi1_note_on(0, 0, 60, 100));
-  seq.inject_event(9, DeviceFrame{60}, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  seq.inject_event(9, DeviceFrame{70}, sonare::midi::make_midi1_control_change(0, 0, 120, 0));
+  bool saw_reset = false;
+  for (const auto& captured : sink.events) {
+    if (captured.destination == 9 && captured.event.render_frame == 70 &&
+        captured.event.ump.status_nibble() ==
+            static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
+      saw_reset = true;
+    }
+  }
+  REQUIRE(saw_reset);
   sink.events.clear();
   seq.process_block(SequencerClock::aligned(61), 300);
 
-  bool saw_queued_reset = false;
   for (const auto& captured : sink.events) {
     if (captured.destination != 9) continue;
-    if (captured.event.render_frame == 100 &&
-        captured.event.ump.status_nibble() ==
-            static_cast<uint8_t>(sonare::midi::UmpStatus::kControlChange)) {
-      saw_queued_reset = true;
-    }
     REQUIRE((captured.event.render_frame < 200 || !captured.event.ump.is_note_on()));
   }
-  REQUIRE(saw_queued_reset);
   REQUIRE(seq.midi_fx_pending_overflow_count() == 0);
   REQUIRE(seq.active_note_count() == 0);
 }

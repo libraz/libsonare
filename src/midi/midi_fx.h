@@ -74,9 +74,10 @@ struct TransposeConfig {
   int semitones = 0;
 };
 
-/// Snap event render frames to a grid. The grid is expressed in render frames so
-/// the control thread can bake a PPQ grid (via TempoMap) into a frame interval
-/// before handing the chain to the audio thread.
+/// Snap note-on render frames to a grid; paired note-offs follow their note-on and
+/// other events stay put. The grid is expressed in render frames so the control thread
+/// can bake a PPQ grid (via TempoMap) into a frame interval before handing the chain to
+/// the audio thread.
 struct QuantizeConfig {
   static constexpr size_t kMaxGrooveSteps = 16;
   bool enabled = false;
