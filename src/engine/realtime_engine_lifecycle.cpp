@@ -450,7 +450,8 @@ void RealtimeEngine::render_offline(float* const* out, int num_channels, int64_t
     for (int ch = 0; ch < num_channels; ++ch) {
       render_block_channels_[static_cast<size_t>(ch)] = out[ch] ? out[ch] + frame : nullptr;
     }
-    process(render_block_channels_.data(), num_channels, frames);
+    // The program output only: a bounce never depends on PFL/AFL listening state.
+    process_impl(render_block_channels_.data(), nullptr, num_channels, frames, false);
   }
   if (!was_playing) {
     transport_.stop();

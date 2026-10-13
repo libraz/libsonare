@@ -793,6 +793,32 @@ TEST_CASE("RealtimeEngine can route monitor PFL bus separately from output", "[e
   REQUIRE(left.back() > 0.70f);
   REQUIRE(left.back() < 0.72f);
 }
+
+TEST_CASE("RealtimeEngine render_offline renders the program output regardless of PFL",
+          "[engine][realtime]") {
+  constexpr int kFrames = 16;
+  const auto render = [&](bool pfl, bool use_process) {
+    sonare::engine::RealtimeEngine engine;
+    engine.prepare(48000.0, kFrames);
+    sonare::mixing::ChannelStrip strip({-6.0206f, 0.0f, sonare::mixing::PanLaw::Linear0dB, 0.0f});
+    strip.prepare(48000.0, kFrames);
+    REQUIRE(engine.add_monitor_strip(&strip));
+    engine.set_monitoring_enabled(true);
+    if (pfl) engine.monitor().set_monitor_mode(0, sonare::engine::MonitorMode::kPfl);
+    std::array<float, kFrames> left{};
+    left.fill(1.0f);
+    float* io[] = {left.data()};
+    if (use_process) {
+      engine.process(io, 1, kFrames);
+    } else {
+      engine.render_offline(io, 1, kFrames, kFrames);
+    }
+    return left.back();
+  };
+
+  REQUIRE(render(true, false) == Catch::Approx(render(false, false)).margin(1.0e-6f));
+  REQUIRE(render(true, true) > render(false, true) + 0.5f);
+}
 #endif  // defined(SONARE_WITH_MIXING)
 
 TEST_CASE("RealtimeEngine applies scheduled transport commands inside a block",

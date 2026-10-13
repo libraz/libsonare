@@ -765,11 +765,11 @@ void RealtimeEngine::process_subblock(float* const* io, float* const* monitor_ou
                                        transport_.sample_position(), monitor_bus_channels_.data());
       }
     }
-    // process() folds the complete cue bus into the main output for historical
-    // compatibility. process_with_monitor() copies it only to monitor_out, so
-    // the program output stays unchanged while the host receives a separate cue
-    // signal. Lane mode itself enables this stage even when the legacy
-    // monitoring flag is off.
+    // process() folds the complete cue bus into the main output because its
+    // caller has a single output to carry it. process_with_monitor() and
+    // render_offline() leave the program output unchanged; the former copies the
+    // cue to monitor_out, the latter discards it. Lane mode itself enables this stage even when the
+    // legacy monitoring flag is off.
     if (monitor_active) {
       for (int ch = 0; ch < channels; ++ch) {
         float* out = sub_channels[static_cast<size_t>(ch)];
