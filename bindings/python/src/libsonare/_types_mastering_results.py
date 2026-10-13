@@ -75,6 +75,7 @@ class MasteringAudioProfileDefects(TypedDict):
     noiseBandPeakDbfs: float
     noiseBandPeakIndex: int
     humFundamentalHz: float
+    # Linear energy ratio over the median hum candidate (not dB); 1.0 means no peak.
     humFundamentalProminence: float
     humHarmonics: int
     humFundamentalDbfs: float

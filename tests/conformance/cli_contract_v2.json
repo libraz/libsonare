@@ -9726,8 +9726,8 @@
           "keys": {
             "length": "integer",
             "sample_rate": "integer",
-            "harmonic_energy": "number",
-            "percussive_energy": "number",
+            "harmonic_mean_abs": "number",
+            "percussive_mean_abs": "number",
             "harmonic": "path",
             "percussive": "path"
           }

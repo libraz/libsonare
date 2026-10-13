@@ -50,6 +50,7 @@ export interface MasteringAudioProfileDefects {
   noiseBandPeakDbfs: number;
   noiseBandPeakIndex: number;
   humFundamentalHz: number;
+  /** Linear energy ratio of the winning hum candidate over the median candidate (not dB); 1.0 means no peak. */
   humFundamentalProminence: number;
   humHarmonics: number;
   humFundamentalDbfs: number;

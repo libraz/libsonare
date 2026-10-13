@@ -277,8 +277,8 @@ export interface HumDetection {
   /** Tracked fundamental; the configured value when adaptive tracking is off. */
   fundamentalHz: number;
   /**
-   * Winning candidate's projected energy over the median candidate. 1.0 means
-   * no peak was found at all. Not a lock flag.
+   * Winning candidate's projected energy over the median candidate, a linear
+   * ratio (not dB). 1.0 means no peak was found at all. Not a lock flag.
    */
   fundamentalProminence: number;
   /** Harmonics above the floor, not necessarily a contiguous run from the first. */

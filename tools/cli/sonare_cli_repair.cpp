@@ -33,10 +33,11 @@ void reject_non_repair_overrides(const std::vector<mastering::api::Param>& overr
 /// documented on DefectProfile (audio_profile.h) that this JSON exposes rather
 /// than hides: `measured` false means nothing ran, a large `click_rejected`
 /// alongside a zero `click_count` means the click detector could not decide
-/// rather than that the material is clean, `hum_fundamental_prominence` of 1.0
-/// means no candidate peak was found, and `noise_band_peak_index` of -1 means
-/// no band was measured. `hum_peak_found` and `noise_band_measured` spell those
-/// last two out explicitly so a consumer cannot read the sentinel as data.
+/// rather than that the material is clean, `hum_fundamental_prominence` (a linear
+/// energy ratio, not dB) of 1.0 means no candidate peak was found, and
+/// `noise_band_peak_index` of -1 means no band was measured. `hum_peak_found` and
+/// `noise_band_measured` spell those last two out explicitly so a consumer cannot read the sentinel
+/// as data.
 void append_defect_profile_json(JsonBuilder& json,
                                 const mastering::assistant::DefectProfile& defects) {
   json.key("defects").begin_object().kv("measured", defects.measured);
@@ -112,8 +113,9 @@ void print_defect_profile_text(const mastering::assistant::DefectProfile& defect
   if (defects.hum_fundamental_prominence > 1.0f) {
     std::cout << "  Hum:             " << defects.hum_fundamental_hz << " Hz fundamental, "
               << defects.hum_harmonics << " harmonics, prominence "
-              << defects.hum_fundamental_prominence << " (" << defects.hum_fundamental_dbfs
-              << " dBFS at f0, " << defects.hum_peak_harmonic_dbfs << " dBFS loudest harmonic)\n";
+              << defects.hum_fundamental_prominence << "x energy ratio ("
+              << defects.hum_fundamental_dbfs << " dBFS at f0, " << defects.hum_peak_harmonic_dbfs
+              << " dBFS loudest harmonic)\n";
   } else {
     std::cout << "  Hum:             no fundamental peak found at 50 or 60 Hz (inconclusive, not "
                  "the same as no hum)\n";

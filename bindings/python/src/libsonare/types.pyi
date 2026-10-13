@@ -1505,6 +1505,7 @@ class DecrackleStereoResult:
 
 class HumDetection:
     fundamental_hz: float
+    # Linear energy ratio (not dB); 1.0 means no peak.
     fundamental_prominence: float
     harmonics: int
     harmonic_dbfs: list[float]
@@ -1822,6 +1823,7 @@ class MasteringAudioProfileDefects(TypedDict):
     noiseBandPeakDbfs: float
     noiseBandPeakIndex: int
     humFundamentalHz: float
+    # Linear energy ratio over the median hum candidate (not dB); 1.0 means no peak.
     humFundamentalProminence: float
     humHarmonics: int
     humFundamentalDbfs: float

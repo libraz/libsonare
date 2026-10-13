@@ -169,9 +169,9 @@ def _repair_detection_report(defects: dict[str, Any]) -> dict[str, object]:
 
     ``noise_band_measured`` and ``hum_peak_found`` are added booleans, not
     replacements: ``noiseBandPeakIndex == -1`` and
-    ``humFundamentalProminence == 1.0`` are both "could not decide" sentinels
-    that a raw number invites a reader to mistake for a measured value, so a
-    boolean says so where it cannot be missed. When nothing was measured, no
+    ``humFundamentalProminence == 1.0`` (a linear energy ratio, not dB) are both
+    "could not decide" sentinels that a raw number invites a reader to mistake for a
+    measured value, so a boolean says so where it cannot be missed. When nothing was measured, no
     numeric field is emitted at all -- there must be nothing here for a
     caller to misread as "clean".
     """

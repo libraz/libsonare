@@ -205,6 +205,8 @@ class HumDetection:
     hand back its own input. ``harmonic_dbfs`` is measured for every
     harmonic the sample rate carries, not only the notched ones; an entry
     past Nyquist reads the dB floor because nothing is there to measure.
+    ``fundamental_prominence`` is a linear energy ratio (not dB); 1.0 means no
+    peak was found.
     """
 
     fundamental_hz: float

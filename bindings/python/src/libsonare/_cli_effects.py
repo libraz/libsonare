@@ -147,7 +147,7 @@ def cmd_hpss(args: argparse.Namespace) -> int:
                 _write_wav(residual_path, residual, output_sr)
 
     if args.json:
-        # Each component's energy is reported only when that component is part
+        # Each component's mean absolute amplitude is reported only when that component is part
         # of the requested output, so a single-component run publishes the same
         # keys on both CLIs -- the native one never separates the other half.
         payload: dict[str, object] = {
@@ -155,11 +155,11 @@ def cmd_hpss(args: argparse.Namespace) -> int:
             "sample_rate": output_sr,
         }
         if modes != ["percussive_only"]:
-            payload["harmonic_energy"] = round(h_energy, 6)
+            payload["harmonic_mean_abs"] = round(h_energy, 6)
         if modes != ["harmonic_only"]:
-            payload["percussive_energy"] = round(p_energy, 6)
+            payload["percussive_mean_abs"] = round(p_energy, 6)
         if residual:
-            payload["residual_energy"] = round(_mean_abs(residual), 6)
+            payload["residual_mean_abs"] = round(_mean_abs(residual), 6)
         if harmonic_path:
             payload["harmonic"] = harmonic_path
         if percussive_path:
