@@ -124,6 +124,11 @@ describe('Sonare WASM NativeSynth', () => {
       expect(synthPatchRoundTripForTest({ filterModel: name }).filterModel).toBe(name);
       expect(synthPatchRoundTripForTest({ filterModel: ordinal }).filterModel).toBe(name);
     }
+    // The pre-rename spelling is still read, and reads back under the current one.
+    expect(
+      synthPatchRoundTripForTest({ filterModel: 'moog-ladder' } as unknown as SynthPatch)
+        .filterModel,
+    ).toBe('transistor-ladder');
     for (const [ordinal, name] of SYNTH_FILTER_OUTPUTS.entries()) {
       expect(synthPatchRoundTripForTest({ filterOutput: name }).filterOutput).toBe(name);
       expect(synthPatchRoundTripForTest({ filterOutput: ordinal }).filterOutput).toBe(name);

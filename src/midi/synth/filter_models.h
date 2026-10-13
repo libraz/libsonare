@@ -3,23 +3,23 @@
 /// @file filter_models.h
 /// @brief Selectable virtual-analog filter models for the NativeSynth voice —
 ///        the core of each classic synth "character":
-///          - kSvf:         TPT state-variable filter (Oberheim/SEM family;
-///                          clean resonance, simultaneous LP/BP/HP).
-///          - kMoogLadder:  4-pole transistor ladder (ZDF cascade with global
-///                          feedback; saturating loop, self-oscillates).
-///          - kDiodeLadder: diode ladder (EMS VCS3 / TB-303 family; ZDF with
-///                          the bidirectionally coupled stages of Pirkle's
-///                          AN-6 derivation; creamier resonance, self-osc).
-///          - kSallenKey:   Korg35 Sallen-Key lowpass (MS-10 / early MS-20;
-///                          ZDF two-LPF1 + HPF1 loop of Pirkle's AN-5;
-///                          aggressive resonance, self-oscillates).
+///          - kSvf:              TPT state-variable filter (Oberheim/SEM family;
+///                               clean resonance, simultaneous LP/BP/HP).
+///          - kTransistorLadder: 4-pole transistor ladder (ZDF cascade with global
+///                               feedback; saturating loop, self-oscillates).
+///          - kDiodeLadder:      diode ladder (EMS VCS3 / TB-303 family; ZDF with
+///                               the bidirectionally coupled stages of Pirkle's
+///                               AN-6 derivation; creamier resonance, self-osc).
+///          - kSallenKey:        Korg35 Sallen-Key lowpass (MS-10 / early MS-20;
+///                               ZDF two-LPF1 + HPF1 loop of Pirkle's AN-5;
+///                               aggressive resonance, self-oscillates).
 ///
 /// All models are topology-preserving-transform (zero-delay-feedback)
 /// discretizations — stable and zipper-free under per-sample cutoff/resonance
 /// modulation, with a tanh nonlinearity inside the resonance loop (the
 /// "analog" saturation cue) that also bounds self-oscillation deterministically.
 /// References: Zavalishin, "The Art of VA Filter Design"; Stilson & Smith
-/// 1996 (Moog ladder); Stinchcombe (diode ladders); Pirkle AN-5/AN-6.
+/// 1996 (transistor ladder); Stinchcombe (diode ladders); Pirkle AN-5/AN-6.
 ///
 /// Resonance is normalized: set() takes the same Q the TPT SVF uses and maps
 /// it per model so one patch knob covers all models; the self-oscillation
@@ -36,7 +36,7 @@ namespace sonare::midi::synth {
 /// Filter model selector (patch field; the enum is mode-tagged for the ABI).
 enum class SynthFilterModel : int {
   kSvf = 0,
-  kMoogLadder = 1,
+  kTransistorLadder = 1,
   kDiodeLadder = 2,
   kSallenKey = 3,
 };
@@ -58,7 +58,7 @@ float filter_resonance01_from_q(float q) noexcept;
 
 /// 4-pole transistor-ladder lowpass (ZDF cascade, global feedback k in [0,4+]
 /// with tanh loop saturation).
-class MoogLadderFilter {
+class TransistorLadderFilter {
  public:
   void prepare(double sample_rate) noexcept;
   void reset() noexcept;
@@ -150,7 +150,7 @@ class SynthFilter {
  private:
   SynthFilterModel model_ = SynthFilterModel::kSvf;
   TptSvf svf_;
-  MoogLadderFilter moog_;
+  TransistorLadderFilter transistor_;
   DiodeLadderFilter diode_;
   Korg35Filter sallen_key_;
 };

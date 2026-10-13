@@ -53,7 +53,7 @@ EXPECTED_SYNTH_ENUM_TABLES = {
     ),
     "waveforms": ("default", "sine", "saw", "square", "triangle", "noise"),
     "builtin_waveforms": ("sine", "saw", "sawtooth", "square", "triangle"),
-    "filter_models": ("default", "svf", "moog-ladder", "diode-ladder", "sallen-key"),
+    "filter_models": ("default", "svf", "transistor-ladder", "diode-ladder", "sallen-key"),
     "filter_outputs": ("default", "lowpass", "bandpass", "highpass"),
     "body_types": ("default", "none", "guitar", "violin", "wood-tube", "brass-bell", "vocal"),
     "mod_sources": (
@@ -204,6 +204,8 @@ def test_synth_patch_enum_tables_round_trip_all_names_and_ordinals() -> None:
         by_ordinal = SynthPatch._from_c(SynthPatch(filter_model=ordinal)._to_c())
         assert by_name.filter_model == name
         assert by_ordinal.filter_model == name
+    legacy = SynthPatch._from_c(SynthPatch(filter_model="moog-ladder")._to_c())
+    assert legacy.filter_model == "transistor-ladder"
     for ordinal, name in enumerate(EXPECTED_SYNTH_ENUM_TABLES["filter_outputs"]):
         by_name = SynthPatch._from_c(SynthPatch(filter_output=name)._to_c())
         by_ordinal = SynthPatch._from_c(SynthPatch(filter_output=ordinal)._to_c())

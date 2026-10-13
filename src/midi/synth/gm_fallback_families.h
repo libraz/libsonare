@@ -166,7 +166,7 @@ SONARE_TUNED_CONSTEXPR std::array<NativeSynthPatch, 16> build_family_patches() n
   // punchy filter envelope and a touch of drive. Read by the two synth basses,
   // which start from it; no program resolves to it.
   t[4].waveform = VaWaveform::kSaw;
-  t[4].filter_model = SynthFilterModel::kMoogLadder;
+  t[4].filter_model = SynthFilterModel::kTransistorLadder;
   t[4].drive = 0.15f;
   t[4].amp_env = fallback_env(3.0f, 350.0f, 0.7f, 150.0f);
   t[4].cutoff_hz = 900.0f;

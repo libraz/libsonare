@@ -65,7 +65,7 @@ const char* sonare_synth_enum_names(int kind) {
       "bowed-string\nreed\nbrass\nflute\nplucked-string\nvocal\nfree-reed\nharpsichord\n"
       "sample";
   constexpr const char* kWaveforms = "default\nsine\nsaw\nsquare\ntriangle\nnoise";
-  constexpr const char* kFilterModels = "default\nsvf\nmoog-ladder\ndiode-ladder\nsallen-key";
+  constexpr const char* kFilterModels = "default\nsvf\ntransistor-ladder\ndiode-ladder\nsallen-key";
   constexpr const char* kFilterOutputs = "default\nlowpass\nbandpass\nhighpass";
   constexpr const char* kBodyTypes = "default\nnone\nguitar\nviolin\nwood-tube\nbrass-bell\nvocal";
   constexpr const char* kModSources =

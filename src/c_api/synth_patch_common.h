@@ -126,8 +126,8 @@ static_assert(static_cast<int>(sonare::midi::synth::VaWaveform::kNoise) + 1 ==
 
 static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSvf) + 1 ==
               SONARE_SYNTH_FILTER_SVF);
-static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kMoogLadder) + 1 ==
-              SONARE_SYNTH_FILTER_MOOG_LADDER);
+static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kTransistorLadder) + 1 ==
+              SONARE_SYNTH_FILTER_TRANSISTOR_LADDER);
 static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kDiodeLadder) + 1 ==
               SONARE_SYNTH_FILTER_DIODE_LADDER);
 static_assert(static_cast<int>(sonare::midi::synth::SynthFilterModel::kSallenKey) + 1 ==

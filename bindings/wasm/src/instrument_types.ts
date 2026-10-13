@@ -194,7 +194,7 @@ export const SYNTH_OSC_WAVEFORMS = [
 export const SYNTH_FILTER_MODELS = [
   'default',
   'svf',
-  'moog-ladder',
+  'transistor-ladder',
   'diode-ladder',
   'sallen-key',
 ] as const;

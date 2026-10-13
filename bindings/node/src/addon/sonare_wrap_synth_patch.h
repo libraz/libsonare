@@ -22,7 +22,7 @@ inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuou
 inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
 inline constexpr const char* kSynthWaveforms[] = {"default", "sine",     "saw",
                                                   "square",  "triangle", "noise"};
-inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "moog-ladder",
+inline constexpr const char* kSynthFilterModels[] = {"default", "svf", "transistor-ladder",
                                                      "diode-ladder", "sallen-key"};
 inline constexpr const char* kSynthFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kSynthBodyTypes[] = {"default",   "none",       "guitar", "violin",
@@ -73,6 +73,9 @@ inline int SynthEnumFromName(const std::string& name, const char* const* names, 
   for (int i = 0; i < count; ++i) {
     if (name == names[i]) return i;
   }
+  // Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
+  if (names == kSynthFilterModels && name == "moog-ladder")
+    return SONARE_SYNTH_FILTER_TRANSISTOR_LADDER;
   return -1;
 }
 

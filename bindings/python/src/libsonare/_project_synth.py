@@ -108,10 +108,12 @@ _BUILTIN_SYNTH_WAVEFORMS = {
 _SYNTH_FILTER_MODELS = {
     "default": 0,
     "svf": 1,
-    "moog-ladder": 2,
+    "transistor-ladder": 2,
     "diode-ladder": 3,
     "sallen-key": 4,
 }
+# Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
+_SYNTH_FILTER_MODEL_INPUT = {**_SYNTH_FILTER_MODELS, "moog-ladder": 2}
 _SYNTH_FILTER_OUTPUTS = {
     "default": 0,
     "lowpass": 1,

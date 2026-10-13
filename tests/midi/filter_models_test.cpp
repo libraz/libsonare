@@ -30,13 +30,13 @@ constexpr double kRate = 48000.0;
 
 constexpr SynthFilterModel kAllModels[] = {
     SynthFilterModel::kSvf,
-    SynthFilterModel::kMoogLadder,
+    SynthFilterModel::kTransistorLadder,
     SynthFilterModel::kDiodeLadder,
     SynthFilterModel::kSallenKey,
 };
 
 constexpr SynthFilterModel kSelfOscModels[] = {
-    SynthFilterModel::kMoogLadder,
+    SynthFilterModel::kTransistorLadder,
     SynthFilterModel::kDiodeLadder,
     SynthFilterModel::kSallenKey,
 };

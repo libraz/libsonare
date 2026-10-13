@@ -78,6 +78,7 @@ from ._project_synth import (
     _SAMPLE_LOOP_MODES,
     _SYNTH_BODY_TYPES,
     _SYNTH_ENGINE_MODES,
+    _SYNTH_FILTER_MODEL_INPUT,
     _SYNTH_FILTER_MODELS,
     _SYNTH_FILTER_OUTPUTS,
     _SYNTH_MOD_DESTINATIONS,
@@ -896,7 +897,9 @@ class SynthPatch:
         _set_float("detune_cents", SONARE_SYNTH_FIELD_DETUNE_CENTS, self.detune_cents)
         _set_float("drift_cents", SONARE_SYNTH_FIELD_DRIFT_CENTS, self.drift_cents)
         _set_float("drive", SONARE_SYNTH_FIELD_DRIVE, self.drive)
-        c.filter_model = _synth_enum_value(self.filter_model, _SYNTH_FILTER_MODELS, "filter model")
+        c.filter_model = _synth_enum_value(
+            self.filter_model, _SYNTH_FILTER_MODEL_INPUT, "filter model"
+        )
         c.filter_output = _synth_enum_value(
             self.filter_output, _SYNTH_FILTER_OUTPUTS, "filter output"
         )

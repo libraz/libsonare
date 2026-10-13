@@ -32,8 +32,8 @@ inline constexpr const char* kSampleLoopModes[] = {"default", "none", "continuou
 inline constexpr const char* kSampleKeyTracks[] = {"default", "on", "off"};
 inline constexpr const char* kWaveforms[] = {"default", "sine",     "saw",
                                              "square",  "triangle", "noise"};
-inline constexpr const char* kFilterModels[] = {"default", "svf", "moog-ladder", "diode-ladder",
-                                                "sallen-key"};
+inline constexpr const char* kFilterModels[] = {"default", "svf", "transistor-ladder",
+                                                "diode-ladder", "sallen-key"};
 inline constexpr const char* kFilterOutputs[] = {"default", "lowpass", "bandpass", "highpass"};
 inline constexpr const char* kBodyTypes[] = {"default",   "none",       "guitar", "violin",
                                              "wood-tube", "brass-bell", "vocal"};
@@ -156,6 +156,9 @@ inline int enumFromVal(emscripten::val value, const char* const* names, int coun
     for (int i = 0; i < count; ++i) {
       if (name == names[i]) return i;
     }
+    // Input-only: "moog-ladder" is the pre-rename spelling of "transistor-ladder".
+    if (names == kFilterModels && name == "moog-ladder")
+      return SONARE_SYNTH_FILTER_TRANSISTOR_LADDER;
     throw WasmRangeError(std::string("Unknown ") + what + " name: '" + name + "'");
   }
   // Reject non-number, non-string values (e.g. a boolean) instead of coercing

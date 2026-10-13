@@ -34,7 +34,7 @@ constexpr void configure_synth_programs(ProgramOverrides& o) noexcept {
   lead.waveform = VaWaveform::kSaw;
   lead.unison = 3;
   lead.detune_cents = 12.0f;
-  lead.filter_model = SynthFilterModel::kMoogLadder;
+  lead.filter_model = SynthFilterModel::kTransistorLadder;
   lead.drive = 0.1f;
   lead.amp_env = fallback_env(5.0f, 200.0f, 0.8f, 150.0f);
   lead.cutoff_hz = 3500.0f;
@@ -509,7 +509,7 @@ SONARE_TUNED_CONSTEXPR void configure_synth_bass_and_brass_programs(ProgramOverr
   // octave) and an attack that lengthens with velocity, which the filter
   // envelope carries since the amp attack cannot answer velocity.
   o.synth_bass_2 = sbass;
-  o.synth_bass_2.filter_model = SynthFilterModel::kMoogLadder;
+  o.synth_bass_2.filter_model = SynthFilterModel::kTransistorLadder;
   o.synth_bass_2.cutoff_hz = 181.399f;
   o.synth_bass_2.resonance_q = 6.71441f;
   o.synth_bass_2.vel_to_cutoff_cents = 394.698f;

@@ -29,7 +29,7 @@ float filter_resonance01_from_q(float q) noexcept {
 }
 
 // ---------------------------------------------------------------------------
-// MoogLadderFilter — ZDF 4-pole cascade, global feedback (Stilson & Smith /
+// TransistorLadderFilter — ZDF 4-pole cascade, global feedback (Stilson & Smith /
 // Zavalishin). Per stage: v = (x - z) * G; y = v + z; z = y + v, with the
 // delay-free loop solved through the cascade prediction
 //   y4 = G^4 * u + S,  S = G^3*(1-G)z1 + G^2*(1-G)z2 + G*(1-G)z3 + (1-G)z4
@@ -37,16 +37,16 @@ float filter_resonance01_from_q(float q) noexcept {
 // (1-G == 1/(1+g), the corrected state contribution).
 // ---------------------------------------------------------------------------
 
-void MoogLadderFilter::prepare(double sample_rate) noexcept {
+void TransistorLadderFilter::prepare(double sample_rate) noexcept {
   sample_rate_ = sample_rate > 0.0 ? sample_rate : 48000.0;
   last_cutoff_ = -1.0f;
   last_resonance_ = -1.0f;
   reset();
 }
 
-void MoogLadderFilter::reset() noexcept { z1_ = z2_ = z3_ = z4_ = 0.0f; }
+void TransistorLadderFilter::reset() noexcept { z1_ = z2_ = z3_ = z4_ = 0.0f; }
 
-void MoogLadderFilter::set(float cutoff_hz, float resonance01) noexcept {
+void TransistorLadderFilter::set(float cutoff_hz, float resonance01) noexcept {
   if (cutoff_hz == last_cutoff_ && resonance01 == last_resonance_) return;
   last_cutoff_ = cutoff_hz;
   last_resonance_ = resonance01;
@@ -60,7 +60,7 @@ void MoogLadderFilter::set(float cutoff_hz, float resonance01) noexcept {
   k_ = 4.1f * std::clamp(resonance01, 0.0f, 1.0f);
 }
 
-float MoogLadderFilter::process(float x) noexcept {
+float TransistorLadderFilter::process(float x) noexcept {
   const float G = g_over_gp1_;
   const float s = inv_gp1_ * (G * G * G * z1_ + G * G * z2_ + G * z3_ + z4_);
   float u = (x - k_ * s) / (1.0f + k_ * g4_);
@@ -235,14 +235,14 @@ float Korg35Filter::process(float x) noexcept {
 
 void SynthFilter::prepare(double sample_rate) noexcept {
   svf_.prepare(sample_rate);
-  moog_.prepare(sample_rate);
+  transistor_.prepare(sample_rate);
   diode_.prepare(sample_rate);
   sallen_key_.prepare(sample_rate);
 }
 
 void SynthFilter::reset() noexcept {
   svf_.reset();
-  moog_.reset();
+  transistor_.reset();
   diode_.reset();
   sallen_key_.reset();
 }
@@ -258,8 +258,8 @@ void SynthFilter::set(float cutoff_hz, float q) noexcept {
     case SynthFilterModel::kSvf:
       svf_.set(cutoff_hz, q);
       break;
-    case SynthFilterModel::kMoogLadder:
-      moog_.set(cutoff_hz, filter_resonance01_from_q(q));
+    case SynthFilterModel::kTransistorLadder:
+      transistor_.set(cutoff_hz, filter_resonance01_from_q(q));
       break;
     case SynthFilterModel::kDiodeLadder:
       diode_.set(cutoff_hz, filter_resonance01_from_q(q));
@@ -284,8 +284,8 @@ float SynthFilter::process(float x, SynthFilterOutput output) noexcept {
       }
       return out.lp;
     }
-    case SynthFilterModel::kMoogLadder:
-      return moog_.process(x);
+    case SynthFilterModel::kTransistorLadder:
+      return transistor_.process(x);
     case SynthFilterModel::kDiodeLadder:
       return diode_.process(x);
     case SynthFilterModel::kSallenKey:
