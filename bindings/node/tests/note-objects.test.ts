@@ -660,14 +660,16 @@ describe('renderNotes pitch curve edits', () => {
     // renders.
     expect(renderWith({ vibratoDepthChange: -1 }, 3)).toEqual(flattened);
 
-    // 5.5 Hz sits above a 3 Hz cut and below an 8 Hz one, so flattening the
-    // vibrato takes most of the swing at 3 and little of it at 8. A cutoff that
-    // was never read would render these two the same, and one wired backwards
-    // would invert the order rather than merely shrinking the difference.
+    // 5.5 Hz sits above a 3 Hz cut and below an 8 Hz one, so at 3 the swing is
+    // vibrato and flattening it edits the note, while at 8 the whole swing is
+    // drift, leaving no vibrato to flatten and the render back at the source.
+    // A cutoff that was never read would render these two the same, and one
+    // wired backwards would invert the order.
     const wide = renderWith({ vibratoDepthChange: -1 }, 8);
+    expectEdited(flattened, samples);
     expectEdited(wide, flattened);
     expect(maxDifference(samples, flattened)).toBeGreaterThan(maxDifference(samples, wide));
-    expect(maxDifference(samples, wide)).toBeGreaterThan(0.05);
+    expect(maxDifference(samples, wide)).toBeLessThan(1e-3);
   });
 
   it('rejects a cutoff that cannot be one', () => {

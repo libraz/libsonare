@@ -9,6 +9,13 @@ const SR = 22050;
 const LEFT_SPIKE_POSITIONS = [3000, 6000, 9000];
 const RIGHT_SPIKE_POSITIONS = [4000, 8000];
 
+// Spikes for the threshold test only, placed between the tall ones and
+// likewise isolated, so each adds exactly one detected sample once counted.
+const LEFT_SHORT_SPIKE_POSITIONS = [4500, 7500, 10500];
+const RIGHT_SHORT_SPIKE_POSITIONS = [6000, 10000];
+const SHORT_SPIKE_VALUE = 0.25;
+const LOOSE_THRESHOLD = 0.1;
+
 function sine(freq: number, seconds: number, amp: number): Float32Array {
   const n = Math.floor(SR * seconds);
   const out = new Float32Array(n);
@@ -106,18 +113,31 @@ describe('masteringRepairDecrackleStereo', () => {
       masteringRepairDecrackleStereo({ left, right, sampleRate: SR, threshold: 0 }),
     ).toThrow();
 
-    // A lower threshold makes more of the sine's own variation read as
-    // crackle, moving the detected count past the spike-only baseline. That
-    // is the detector consuming the value, not just the validator.
+    // Short spikes whose median deviation (|0.25| minus a bed neighbour within
+    // 0.1, so 0.15..0.35) sits below the default 0.4 threshold but above
+    // LOOSE_THRESHOLD, and far above 6x the bed's own |dx| envelope (~0.07),
+    // so only the threshold decides whether they count.
+    for (const i of LEFT_SHORT_SPIKE_POSITIONS) {
+      left[i] = SHORT_SPIKE_VALUE;
+    }
+    for (const i of RIGHT_SHORT_SPIKE_POSITIONS) {
+      right[i] = -SHORT_SPIKE_VALUE;
+    }
+
     const strict = masteringRepairDecrackleStereo({ left, right, sampleRate: SR });
     const loose = masteringRepairDecrackleStereo({
       left,
       right,
       sampleRate: SR,
-      threshold: 0.01,
+      threshold: LOOSE_THRESHOLD,
     });
-    expect(loose.leftReport.detected.sampleCount).toBeGreaterThan(
-      strict.leftReport.detected.sampleCount,
+    expect(strict.leftReport.detected.sampleCount).toBe(LEFT_SPIKE_POSITIONS.length);
+    expect(strict.rightReport.detected.sampleCount).toBe(RIGHT_SPIKE_POSITIONS.length);
+    expect(loose.leftReport.detected.sampleCount).toBe(
+      LEFT_SPIKE_POSITIONS.length + LEFT_SHORT_SPIKE_POSITIONS.length,
+    );
+    expect(loose.rightReport.detected.sampleCount).toBe(
+      RIGHT_SPIKE_POSITIONS.length + RIGHT_SHORT_SPIKE_POSITIONS.length,
     );
   });
 
