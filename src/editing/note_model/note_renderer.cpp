@@ -59,8 +59,8 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
 }
 
 /// Writes @p segment at @p dest, cross-fading its edges against @p output's
-/// OWN current content over @p fade samples with the equal-power (cos/sin)
-/// weights NoteEditor splices with: the existing content ramps down while the
+/// OWN current content over @p fade samples with equal-power (cos/sin)
+/// weights: the existing content ramps down while the
 /// segment ramps up, so the seam keeps its level instead of dipping through
 /// silence.
 /// @details Blends against @p output rather than the pristine source

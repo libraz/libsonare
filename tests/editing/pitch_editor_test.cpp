@@ -1834,7 +1834,7 @@ TEST_CASE("NoteEditor stretch_note keeps a continuous level across the splice", 
   // Regression (editing#2): stretch_note used to fade the stretched region to
   // zero at both splice points, leaving an audible level dip/gap where the
   // unmodified head/tail (at full level) meet the silenced splice. The
-  // equal-power cross-fade must keep the seam level continuous.
+  // seam cross-fade must keep the level continuous.
   constexpr int sample_rate = 22050;
   // Constant-amplitude tone so any dip is purely an artifact of the splice.
   auto samples = sine(440.0f, sample_rate, sample_rate);
@@ -1866,10 +1866,104 @@ TEST_CASE("NoteEditor stretch_note keeps a continuous level across the splice", 
   const float head_rms = local_rms(2000, 200);
   const float seam_rms = local_rms(region.onset_sample, 64);
   REQUIRE(head_rms > 0.0f);
-  // Equal-power seam: the splice retains a substantial fraction of the head
+  // The splice retains a substantial fraction of the head
   // level rather than dipping to silence (the old fade-to-zero would put this
   // far below 0.5x).
   REQUIRE(seam_rms > head_rms * 0.5f);
+}
+
+namespace {
+
+/// RMS of @p samples over [begin, begin + width).
+double window_rms(const std::vector<float>& samples, int begin, int width) {
+  double acc = 0.0;
+  for (int i = begin; i < begin + width; ++i) {
+    acc += static_cast<double>(samples[static_cast<size_t>(i)]) * samples[static_cast<size_t>(i)];
+  }
+  return std::sqrt(acc / width);
+}
+
+}  // namespace
+
+TEST_CASE("NoteEditor stretch_note seams hold a tone's level whatever its phase",
+          "[pitch_editor]") {
+  // A stretched tone meets its neighbours coherent at one seam and out of phase
+  // at the other; equal-power weights put a bump on the first and a notch on
+  // the second (+1.3 / -2.6 dB on this four-period RMS before the fix).
+  constexpr float kMaxDeviationDb = 0.5f;
+  for (const int sample_rate : {44100, 48000}) {
+    const int period4 = static_cast<int>(std::lround(4.0 * sample_rate / 440.0));
+    const int fade = static_cast<int>(std::lround(0.005 * sample_rate));
+    auto samples = sine(440.0f, sample_rate, sample_rate / 2);
+    const sonare::Audio audio = sonare::Audio::from_vector(std::move(samples), sample_rate);
+    NoteRegion region;
+    region.onset_sample = sample_rate / 10;
+    region.offset_sample = sample_rate * 3 / 10;
+    const int length = region.offset_sample - region.onset_sample;
+    for (const float ratio : {0.8f, 1.25f, 1.5f}) {
+      CAPTURE(sample_rate, ratio);
+      const sonare::Audio stretched = NoteEditor().stretch_note(audio, region, ratio);
+      const std::vector<float> out(stretched.begin(), stretched.end());
+      const int tail_seam =
+          region.onset_sample + length + static_cast<int>(out.size() - audio.size()) - fade;
+      for (const int seam : {region.onset_sample, tail_seam}) {
+        CAPTURE(seam);
+        for (int begin = seam - period4; begin < seam + fade; begin += 7) {
+          const double level_db = 20.0 * std::log10(window_rms(out, begin, period4) /
+                                                    (0.5 * sonare::constants::kInvSqrt2D));
+          REQUIRE(std::abs(level_db) < kMaxDeviationDb);
+        }
+      }
+    }
+  }
+}
+
+TEST_CASE("NoteEditor stretch_note seams on noise stay between the two sides' levels",
+          "[pitch_editor]") {
+  // The stretched body of noise sits about 1 dB under the source, so a seam
+  // must land between the two; the coherent head seam overshot both by +2 dB
+  // under equal-power weights. Averaged over seeds, since one window of noise
+  // carries a spread of its own.
+  constexpr int kSeeds = 8;
+  constexpr double kMarginDb = 0.5;
+  for (const int sample_rate : {44100, 48000}) {
+    const int fade = static_cast<int>(std::lround(0.005 * sample_rate));
+    NoteRegion region;
+    region.onset_sample = sample_rate / 10;
+    region.offset_sample = sample_rate * 3 / 10;
+    const int length = region.offset_sample - region.onset_sample;
+    for (const float ratio : {0.8f, 1.25f, 1.5f}) {
+      CAPTURE(sample_rate, ratio);
+      double head_power = 0.0;
+      double tail_power = 0.0;
+      double body_power = 0.0;
+      for (int seed = 0; seed < kSeeds; ++seed) {
+        std::mt19937 rng(static_cast<unsigned>(seed + 1));
+        std::normal_distribution<float> noise(0.0f, 0.25f);
+        std::vector<float> samples(static_cast<size_t>(sample_rate / 2));
+        for (float& sample : samples) sample = noise(rng);
+        const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+        const sonare::Audio stretched = NoteEditor().stretch_note(audio, region, ratio);
+        const std::vector<float> out(stretched.begin(), stretched.end());
+        const int stretched_len = length + static_cast<int>(out.size() - audio.size());
+        const double reference = window_rms(samples, region.onset_sample - 8 * fade, 8 * fade);
+        const auto power = [&](int begin, int width) {
+          const double level = window_rms(out, begin, width) / reference;
+          return level * level;
+        };
+        head_power += power(region.onset_sample, fade);
+        tail_power += power(region.onset_sample + stretched_len - fade, fade);
+        body_power += power(region.onset_sample + stretched_len / 2 - 4 * fade, 8 * fade);
+      }
+      const double body_db = 10.0 * std::log10(body_power / kSeeds);
+      for (const double seam_power : {head_power, tail_power}) {
+        const double seam_db = 10.0 * std::log10(seam_power / kSeeds);
+        CAPTURE(seam_db, body_db);
+        REQUIRE(seam_db < std::max(0.0, body_db) + kMarginDb);
+        REQUIRE(seam_db > std::min(0.0, body_db) - kMarginDb);
+      }
+    }
+  }
 }
 
 TEST_CASE("ScaleQuantizer root shift moves enabled pitch classes", "[pitch_editor]") {

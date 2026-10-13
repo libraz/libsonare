@@ -1,17 +1,63 @@
 #include "editing/pitch_editor/note_editor.h"
 
 #include <algorithm>
+#include <climits>
 #include <cmath>
+#include <cstddef>
 #include <string>
 #include <vector>
 
 #include "editing/note_model/note_renderer.h"
 #include "util/constants.h"
 #include "util/exception.h"
+#include "util/numeric_validation.h"
 
 namespace sonare::editing::pitch_editor {
 
+using sonare::constants::kInvSqrt2;
 using sonare::constants::kPi;
+using sonare::constants::kPiD;
+
+namespace {
+
+/// Widest shift of the stretched copy tried at its seams, either way: one
+/// period of a 100 Hz fundamental, so any periodic tone above it can be brought
+/// into phase with its neighbour.
+constexpr double kSpliceSearchSec = 0.01;
+
+/// Normalized correlation of @p a and @p b over @p n samples, weighted toward the
+/// middle where the cross term of a fade peaks; 0 if either is silent.
+float seam_correlation(const float* a, const float* b, int n) noexcept {
+  double ab = 0.0;
+  double aa = 0.0;
+  double bb = 0.0;
+  for (int k = 0; k < n; ++k) {
+    const double w = std::sin(kPiD * (static_cast<double>(k) + 0.5) / static_cast<double>(n));
+    ab += w * a[k] * b[k];
+    aa += w * a[k] * a[k];
+    bb += w * b[k] * b[k];
+  }
+  const double norm = std::sqrt(aa * bb);
+  return norm > 0.0 ? static_cast<float>(ab / norm) : 0.0f;
+}
+
+/// Cross-fades @p outgoing into @p incoming over @p n samples into @p dest with
+/// the weights that keep the level for the two sides' measured correlation:
+/// equal gain when they are coherent, the sin/cos equal-power pair when they
+/// are independent, and the constant-power family between. An anti-correlated
+/// pair is faded as an independent one, since holding its level would boost both.
+void correlated_crossfade(float* dest, const float* outgoing, const float* incoming, int n) {
+  const float rho = std::clamp(seam_correlation(outgoing, incoming, n), 0.0f, 1.0f);
+  for (int k = 0; k < n; ++k) {
+    // Odd part o carries the fade; even part e solves g_in^2 + g_out^2 + 2 rho g_in g_out = 1.
+    const float t = 2.0f * (static_cast<float>(k) + 0.5f) / static_cast<float>(n) - 1.0f;
+    const float o = kInvSqrt2 * std::sin(0.25f * kPi * t);
+    const float e = std::sqrt(std::max(0.0f, (0.5f - (1.0f - rho) * o * o) / (1.0f + rho)));
+    dest[k] = (e - o) * outgoing[k] + (e + o) * incoming[k];
+  }
+}
+
+}  // namespace
 
 NoteEditor::NoteEditor(NoteEditorConfig config) : config_(config) {
   SONARE_CHECK(std::isfinite(config_.fade_ms) && config_.fade_ms >= 0.0f,
@@ -70,46 +116,76 @@ Audio NoteEditor::stretch_note(const Audio& audio, const NoteRegion& region,
     return audio;
   }
 
-  std::vector<float> segment(audio.begin() + clipped.onset_sample,
-                             audio.begin() + clipped.offset_sample);
-  Audio segment_audio = Audio::from_vector(std::move(segment), audio.sample_rate());
+  const int sample_rate = audio.sample_rate();
+  const int size = static_cast<int>(audio.size());
+  const float rate = 1.0f / stretch_ratio;
+  // The region's stretched length is what stretching the region alone yields.
+  std::size_t projected = 0;
+  SONARE_CHECK(numeric::checked_projected_count(static_cast<std::size_t>(length), rate,
+                                                static_cast<std::size_t>(INT_MAX), &projected),
+               ErrorCode::InvalidParameter);
+  const int stretched_len = static_cast<int>(projected);
 
+  // Stretched with source context on both sides, so the copy can be read early or late.
   TimeStretchConfig stretch_config;
   stretch_config.backend = config_.stretch_backend;
-  Audio stretched = time_stretch(segment_audio, 1.0f / stretch_ratio, stretch_config);
-
-  std::vector<float> stretched_samples(stretched.begin(), stretched.end());
+  const int search = static_cast<int>(std::lround(kSpliceSearchSec * sample_rate));
+  const int context = static_cast<int>(std::ceil(search * rate)) + stretch_config.n_fft;
+  const int left = std::min(context, clipped.onset_sample);
+  const int right = std::min(context, size - clipped.offset_sample);
+  std::vector<float> segment(audio.begin() + (clipped.onset_sample - left),
+                             audio.begin() + (clipped.offset_sample + right));
+  const Audio stretched =
+      time_stretch(Audio::from_vector(std::move(segment), sample_rate), rate, stretch_config);
+  const int stretched_size = static_cast<int>(stretched.size());
+  const int base =
+      std::min(static_cast<int>(std::lround(static_cast<double>(left) * stretch_ratio)),
+               stretched_size - stretched_len);
 
   // Each seam cross-fades the stretched region against the source samples that
   // are continuous with the untouched neighbour -- the note's own start at the
-  // head seam, its own end at the tail seam -- with the equal-power weights
-  // note_model::overlay splices with. Nothing overlaps the neighbour itself, so
-  // the result is only the region's length change away from the input. A seam at
-  // a buffer edge has no neighbour and is left uncrossed.
-  const int stretched_len = static_cast<int>(stretched_samples.size());
-  const int fade = std::min(fade_samples(audio.sample_rate(), stretched_len), length);
+  // head seam, its own end at the tail seam. Nothing overlaps the neighbour
+  // itself, so the result is only the region's length change away from the
+  // input. A seam at a buffer edge has no neighbour and is left uncrossed.
+  const int fade = std::min(fade_samples(sample_rate, stretched_len), length);
   const int head_fade = clipped.onset_sample > 0 ? fade : 0;
-  const int tail_fade = clipped.offset_sample < static_cast<int>(audio.size()) ? fade : 0;
+  const int tail_fade = clipped.offset_sample < size ? fade : 0;
+  const float* source_head = audio.data() + clipped.onset_sample;
+  const float* source_tail = audio.data() + (clipped.offset_sample - tail_fade);
+
+  // Out-of-phase sides cancel in any fade: read the copy where its worse seam correlates best.
+  int shift = 0;
+  if (head_fade > 0 || tail_fade > 0) {
+    const int lowest = std::max(-search, -base);
+    const int highest = std::min(search, stretched_size - stretched_len - base);
+    float best = -2.0f;
+    for (int step = 0; step <= 2 * search; ++step) {
+      const int candidate = (step % 2 == 0) ? step / 2 : -(step + 1) / 2;
+      if (candidate < lowest || candidate > highest) continue;
+      const float* read = stretched.data() + base + candidate;
+      float score = 1.0f;
+      if (head_fade > 0) score = seam_correlation(source_head, read, head_fade);
+      if (tail_fade > 0) {
+        score = std::min(
+            score, seam_correlation(read + (stretched_len - tail_fade), source_tail, tail_fade));
+      }
+      if (score > best) {
+        best = score;
+        shift = candidate;
+      }
+    }
+  }
+  const float* copy = stretched.data() + base + shift;
 
   std::vector<float> output;
-  output.reserve(audio.size() - static_cast<size_t>(length) + stretched_samples.size());
+  output.reserve(audio.size() - static_cast<size_t>(length) + static_cast<size_t>(stretched_len));
   output.insert(output.end(), audio.begin(), audio.begin() + clipped.onset_sample);
   const size_t region_start = output.size();
-  output.insert(output.end(), stretched_samples.begin(), stretched_samples.end());
-  for (int k = 0; k < head_fade; ++k) {
-    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(head_fade);
-    float& sample = output[region_start + static_cast<size_t>(k)];
-    sample = std::sin(0.5f * kPi * phase) * sample +
-             std::cos(0.5f * kPi * phase) * audio[static_cast<size_t>(clipped.onset_sample + k)];
-  }
-  const size_t tail_start = region_start + static_cast<size_t>(stretched_len - tail_fade);
-  const int source_tail = clipped.offset_sample - tail_fade;
-  for (int k = 0; k < tail_fade; ++k) {
-    const float phase = (static_cast<float>(k) + 0.5f) / static_cast<float>(tail_fade);
-    float& sample = output[tail_start + static_cast<size_t>(k)];
-    sample = std::cos(0.5f * kPi * phase) * sample +
-             std::sin(0.5f * kPi * phase) * audio[static_cast<size_t>(source_tail + k)];
-  }
+  output.insert(output.end(), copy, copy + stretched_len);
+  correlated_crossfade(output.data() + region_start, source_head, copy, head_fade);
+  const int tail_start = stretched_len - tail_fade;
+  correlated_crossfade(output.data() + region_start + static_cast<size_t>(tail_start),
+                       copy + tail_start, source_tail, tail_fade);
   output.insert(output.end(), audio.begin() + clipped.offset_sample, audio.end());
 
   return Audio::from_vector(std::move(output), audio.sample_rate());
