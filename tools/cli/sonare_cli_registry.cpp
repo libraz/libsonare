@@ -12,6 +12,7 @@
 
 #ifdef SONARE_WITH_MASTERING
 #include "mastering/assistant/platform_targets.h"
+#include "mastering/eq/eq_band.h"
 #endif
 
 // ---------------------------------------------------------------------------
@@ -294,10 +295,13 @@ CliOptionSpec target_platform_value() {
 }
 
 // `repair` writes a repaired file, so `--output` is normally required; `--detect`
-// trades processing for a report and explicitly does not need it. A plain
+// trades processing for a report, writes no file, and so refuses one. A plain
 // `required_output()` cannot express that the requirement is conditional, so
 // the command carries this validator instead.
 CliValidationError validate_repair_output(const CliArgs& args) {
+  if (args.has("detect") && args.has("output")) {
+    return {"--output cannot be combined with --detect", true};
+  }
   if (args.has("detect") || args.has("output")) return {};
   return {"--output is required unless --detect is given", true};
 }
@@ -796,8 +800,10 @@ const std::vector<CliCommandSpec>& build_cli_registry() {
          // (EqBandType, BiquadCoeffMode, StereoPlacement, PhaseMode) or in
          // LinearPhaseEqConfig::Resolution. The bound is the enumerator count,
          // so an index past the end is refused instead of mapping to the first
-         // enumerator.
-         with_domain(int_value("type", 0), enum_index(0, 8, CliOptionDomainStage::Parameter)),
+         // enumerator. `type` takes it from the enum's last enumerator.
+         with_domain(int_value("type", 0),
+                     enum_index(0, static_cast<int>(sonare::mastering::eq::EqBandType::AllPass),
+                                CliOptionDomainStage::Parameter)),
          number_value("frequency-hz", 1000.0), number_value("gain-db", 0.0), number_value("q", 1.0),
          with_domain(int_value("coeff-mode", 0), enum_index(0, 1, CliOptionDomainStage::Parameter)),
          int_value("slope-db-oct", 12),

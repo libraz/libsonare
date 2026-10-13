@@ -318,6 +318,10 @@ void print_command_usage(const char* prog, const CommandInfo& command,
            "the midpoint between two scale notes is pulled toward both and its vibrato "
            "widens.\n";
   }
+  if (command.name == "trim-silence") {
+    std::cout << "\nThe default rule trims below an absolute -60 dBFS threshold (--threshold-db); "
+                 "--top-db selects the peak-relative rule instead.\n";
+  }
   const auto options = cli_options_for_command(path);
   if (!options.empty()) {
     std::cout << "\nOPTIONS:\n";

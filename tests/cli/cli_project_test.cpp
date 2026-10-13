@@ -923,6 +923,13 @@ TEST_CASE("CLI transcribe polyphony options reach the transcriber", "[cli][trans
     }
   }
 
+  SECTION("a polyphonic-only option on monophonic transcription names the refusal") {
+    const std::string mono = CLI + " transcribe " + chord + " --tempo-bpm 120 -o " + out;
+    auto [code, output] = exec_command(mono + " --max-polyphony 4");
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("max_polyphony requires polyphonic transcription"));
+  }
+
   SECTION("a coarser note division keeps fewer notes") {
     auto [fine_code, fine_output] = exec_command(base + " --min-note-division 32");
     INFO(fine_output);

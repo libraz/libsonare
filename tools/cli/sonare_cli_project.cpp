@@ -41,8 +41,10 @@ std::string project_error_string(SonareError err) {
 }
 
 void project_report_error(const std::string& what, SonareError err) {
-  std::cerr << color::red << "Error: " << what << ": " << project_error_string(err) << color::reset
-            << "\n";
+  const char* detail = sonare_last_error_message();
+  std::cerr << color::red << "Error: " << what << ": " << project_error_string(err);
+  if (detail != nullptr && detail[0] != '\0') std::cerr << ": " << detail;
+  std::cerr << color::reset << "\n";
 }
 
 // Maps a C-ABI error onto the published exit-code contract. A project handler

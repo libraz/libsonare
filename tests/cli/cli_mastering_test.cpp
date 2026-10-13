@@ -617,6 +617,23 @@ TEST_CASE("CLI mastering-processor acts on the image a stereo file carries", "[c
   std::remove(input_b.c_str());
 }
 
+TEST_CASE("CLI eq accepts allPass and refuses it in linear-phase mode by name",
+          "[cli][mastering]") {
+  create_test_wav(TEST_WAV);
+  const std::string out = unique_temp_path("_eq_allpass.wav");
+
+  auto [ok_code, ok_output] =
+      exec_command(CLI + " eq --type 9 --phase-mode 2 " + TEST_WAV + " -o " + out + " -q");
+  INFO(ok_output);
+  REQUIRE(ok_code == 0);
+
+  auto [linear_code, linear_output] =
+      exec_command(CLI + " eq --type 9 --phase-mode 3 " + TEST_WAV + " -o " + out + " -q");
+  REQUIRE(linear_code != 0);
+  REQUIRE_THAT(linear_output, ContainsSubstring("AllPass bands have no LinearPhase form"));
+  std::remove(out.c_str());
+}
+
 TEST_CASE("CLI eq equalizes a stereo file as a pair", "[cli][mastering]") {
   // Left and right carry different tones, and the band is placed on the left
   // only: a handler working on the downmix would move both channels or neither.
@@ -975,6 +992,16 @@ TEST_CASE("CLI repair command", "[cli][mastering][repair]") {
     REQUIRE_FALSE(payload["defects"]["measured"].as_bool());
     REQUIRE(payload["defects"].size() == 1);
     std::remove(tiny.c_str());
+  }
+
+  SECTION("--output cannot be combined with --detect") {
+    const std::string out = unique_temp_path("_detect_refused.wav");
+    std::remove(out.c_str());
+    auto [code, output] = exec_command(CLI + " repair " + TEST_WAV + " --detect -q -o " + out);
+    REQUIRE(code == 3);
+    REQUIRE_THAT(output, ContainsSubstring("--output cannot be combined with --detect"));
+    std::ifstream f(out);
+    REQUIRE_FALSE(f.good());
   }
 
   SECTION("--output is required unless --detect is given") {

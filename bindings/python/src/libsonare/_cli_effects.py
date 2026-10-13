@@ -761,7 +761,14 @@ def register_effects_parsers(
         "--target-db", type=_finite_float, default=None, help="Target peak level in dB"
     )
     trim_silence_p = sub.add_parser(
-        "trim-silence", parents=[common], help="Trim leading/trailing silence"
+        "trim-silence",
+        parents=[common],
+        help="Trim leading/trailing silence",
+        description=(
+            "Trim leading/trailing silence. The default rule trims below an absolute "
+            "-60 dBFS threshold (--threshold-db); --top-db selects the peak-relative "
+            "rule instead."
+        ),
     )
     trim_silence_p.add_argument(
         "--threshold-db",

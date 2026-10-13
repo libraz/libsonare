@@ -232,7 +232,7 @@ def _eq_shortcut_names(args: argparse.Namespace) -> list[str]:
 # apply a peak filter and exit 0. The native CLI declares the same bounds in its
 # registry and the cross-surface option-domain comparison pins the two together.
 _EQ_ENUM_BOUNDS = {
-    "type": 8,
+    "type": 9,
     "coeff_mode": 1,
     "placement": 4,
     "phase_mode": 3,
@@ -1069,7 +1069,7 @@ def register_mastering_parsers(
             default=0,
             help=(
                 "Band type enum: 0 peak, 1 low shelf, 2 high shelf, 3 low pass, "
-                "4 high pass, 5 band pass, 6 notch, 7 tilt, 8 flat tilt"
+                "4 high pass, 5 band pass, 6 notch, 7 tilt, 8 flat tilt, 9 all pass"
             ),
         ),
         choices=range(_EQ_ENUM_BOUNDS["type"] + 1),

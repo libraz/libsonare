@@ -711,7 +711,7 @@ def test_no_streaming_safe_reaches_the_suggester(capsys, monkeypatch) -> None:
 @pytest.mark.parametrize(
     ("option", "first_rejected", "last_accepted"),
     [
-        ("type", 9, 8),
+        ("type", 10, 9),
         ("coeff-mode", 2, 1),
         ("placement", 5, 4),
         ("phase-mode", 4, 3),

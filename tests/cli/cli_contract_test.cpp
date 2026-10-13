@@ -1380,7 +1380,7 @@ TEST_CASE("CLI refuses an enumerator index outside its enumeration", "[cli][argu
   };
   const std::vector<EnumOption> options = {
 #ifdef SONARE_WITH_MASTERING
-      {"eq", "type", "9", "8", true, TEST_WAV + " -o " + eq_output + " -q"},
+      {"eq", "type", "10", "9", true, TEST_WAV + " -o " + eq_output + " -q"},
       {"eq", "coeff-mode", "2", "1", true, TEST_WAV + " -o " + eq_output + " -q"},
       {"eq", "placement", "5", "4", false, TEST_WAV + " -o " + eq_output + " -q"},
       {"eq", "phase-mode", "4", "3", true, TEST_WAV + " -o " + eq_output + " -q"},
