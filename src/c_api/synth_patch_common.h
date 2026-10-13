@@ -416,7 +416,15 @@ inline bool synth_config_from_patch_c(const SonareSynthPatch& c,
     }
   }
   // Voice pool / bus.
-  if (set(SONARE_SYNTH_FIELD_GAIN) || c.gain != 0.0f) cfg.gain = c.gain;
+  if (set(SONARE_SYNTH_FIELD_GAIN) || c.gain != 0.0f) {
+    // NativeSynth clamps the master gain to [0, 4]; a value past it would otherwise
+    // render as 4 (or, if negative or NaN, as the default) with no sign of it.
+    if (!(c.gain >= 0.0f && c.gain <= 4.0f)) {
+      if (out_error) *out_error = "synth gain must be a finite value in [0, 4]";
+      return false;
+    }
+    cfg.gain = c.gain;
+  }
   if (set(SONARE_SYNTH_FIELD_POLYPHONY) || c.polyphony != 0) cfg.polyphony = c.polyphony;
   if (set(SONARE_SYNTH_FIELD_BUS_DRIVE) || c.bus_drive != 0.0f) cfg.bus_drive = c.bus_drive;
 

@@ -642,6 +642,31 @@ TEST_CASE("synth patch conversion rejects out-of-range enum fields", "[project][
   REQUIRE(sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error));
 }
 
+TEST_CASE("synth patch conversion refuses a master gain outside [0, 4]",
+          "[project][synth_patch][gain]") {
+  sonare::midi::synth::NativeSynthConfig cfg;
+  const char* error = nullptr;
+  auto convert = [&](float gain) {
+    SonareSynthPatch patch{};
+    patch.struct_version = 2;
+    patch.gain = gain;
+    patch.present_fields |= SONARE_SYNTH_FIELD_GAIN;
+    error = nullptr;
+    return sonare_c_detail::synth_config_from_patch_c(patch, &cfg, &error);
+  };
+
+  for (const float bad : {4.5f, 16.0f, -0.5f, std::numeric_limits<float>::quiet_NaN(),
+                          std::numeric_limits<float>::infinity()}) {
+    REQUIRE_FALSE(convert(bad));
+    REQUIRE(error != nullptr);
+    REQUIRE(std::string(error).find("gain") != std::string::npos);
+  }
+  REQUIRE(convert(4.0f));
+  REQUIRE(cfg.gain == 4.0f);
+  REQUIRE(convert(0.0f));
+  REQUIRE(cfg.gain == 0.0f);
+}
+
 TEST_CASE("bounce_with_synth_instruments renders preset patches deterministically",
           "[project][synth_patch]") {
   SonareProject* project = make_synth_project(3);
