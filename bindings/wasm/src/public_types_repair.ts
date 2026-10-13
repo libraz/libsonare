@@ -8,7 +8,7 @@
  * {@link MasteringRepairDeclickStereoResult}. Runs, not samples.
  */
 export interface ClickDetection {
-  /** Runs meeting the repair criteria. */
+  /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
   count: number;
   /**
    * Outlier runs the criteria excluded. A large value says `maxClickSamples`
@@ -30,8 +30,8 @@ export interface DeclickReport {
   /** This channel's own analysis of the input. */
   detected: ClickDetection;
   /**
-   * Runs interpolated. Larger than `detected.count` only under linked stereo
-   * detection.
+   * Runs interpolated. Larger than `detected.count` under linked stereo
+   * detection, or where the repair acts on a run inside a transient the detector does not count.
    */
   repairedRuns: number;
   /** Samples overwritten by interpolation. */
@@ -151,7 +151,7 @@ export interface MasteringRepairDeclipStereoResult {
  * definition of the defect.
  */
 export interface CrackleDetection {
-  /** Samples deviating from the local median by more than `threshold`. */
+  /** Samples deviating from the local median by more than `threshold`. A sample inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
   sampleCount: number;
   /** `sampleCount` divided by the input length. */
   sampleFraction: number;
@@ -208,7 +208,7 @@ export interface HumDetection {
   /** Tracked fundamental; the configured value when adaptive tracking is off. */
   fundamentalHz: number;
   /** Winning candidate's projected energy over the median candidate, a linear ratio (not dB);
-   * 1.0 means no peak was found at all. Not a lock flag. */
+   * 1.0 means no peak: none was found, or the winner was not a stationary line through most analysis frames (a repeating kick reads 1.0). Not a lock flag. */
   fundamentalProminence: number;
   /** Harmonics found above the floor, not necessarily a contiguous run from the first. */
   harmonics: number;

@@ -117,9 +117,10 @@ struct DefectProfile {
 
   // repair/dehum.h
   float hum_fundamental_hz = 0.0f;
-  /// How far the winning candidate stood above the rest of the search. 1.0 means
-  /// the search found no peak at all -- the detector could not decide, which is
-  /// not the same answer as no hum.
+  /// How far the winning candidate stood above the rest of the search, as a linear
+  /// energy ratio rather than dB. 1.0 means no stationary peak: the search found
+  /// none, or the winner was a repeating tonal burst such as a kick rather than a
+  /// line through most of each frame. Inconclusive, not the same answer as no hum.
   float hum_fundamental_prominence = 1.0f;
   int hum_harmonics = 0;
   float hum_fundamental_dbfs = 0.0f;    ///< Input level at f0.

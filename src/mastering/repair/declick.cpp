@@ -10,6 +10,7 @@
 #include "core/stereo_pair.h"
 #include "mastering/common/noise_profile.h"
 #include "mastering/repair/run_union.h"
+#include "mastering/repair/transient_envelope.h"
 #include "util/exception.h"
 #include "util/lpc.h"
 #include "util/validated.h"
@@ -185,13 +186,27 @@ void apply_runs(std::vector<float>& output, const std::vector<float>& samples,
   for (const ClickRun& run : runs) refine_region_ar(output, run.start, run.end, config);
 }
 
-ClickDetection to_detection(const ChannelAnalysis& analysis, size_t size, int sample_rate) {
+/// How far a click's steepest edge must stand above the transient envelope beside it.
+constexpr double kClickTransientContrast = 6.0;
+
+/// The detector's verdict over the runs the repair selects: a run inside a broadband transient of
+/// the programme -- a drum hit -- is the music, not a click, and is not counted.
+ClickDetection to_detection(const ChannelAnalysis& analysis, const std::vector<float>& samples,
+                            int sample_rate) {
+  const TransientEnvelope envelope(samples.data(), samples.size(), sample_rate);
   ClickDetection detection;
-  detection.count = analysis.selected.size();
+  for (const ClickRun& run : analysis.selected) {
+    double edge = 0.0;
+    for (size_t i = run.start; i <= run.end && i < samples.size(); ++i) {
+      edge = std::max(edge, std::abs(static_cast<double>(samples[i]) - samples[i - 1]));
+    }
+    if (!(edge > kClickTransientContrast * envelope.level(run.start, run.end))) continue;
+    ++detection.count;
+    detection.longest_run_samples = std::max(detection.longest_run_samples, run.end - run.start);
+  }
   detection.rejected = analysis.rejected;
-  detection.longest_run_samples = analysis.longest_run_samples;
   detection.per_second = static_cast<float>(detection.count) * static_cast<float>(sample_rate) /
-                         static_cast<float>(size);
+                         static_cast<float>(samples.size());
   return detection;
 }
 
@@ -222,9 +237,9 @@ size_t count_linked_runs(const std::vector<ClickRun>& applied, const std::vector
 }
 
 DeclickReport to_report(const ChannelAnalysis& analysis, const std::vector<ClickRun>& applied,
-                        size_t size, int sample_rate, bool lpc_model_used) {
+                        const std::vector<float>& samples, int sample_rate, bool lpc_model_used) {
   DeclickReport report;
-  report.detected = to_detection(analysis, size, sample_rate);
+  report.detected = to_detection(analysis, samples, sample_rate);
   report.repaired_runs = applied.size();
   for (const ClickRun& run : applied) report.repaired_samples += run.end - run.start;
   report.linked_runs = count_linked_runs(applied, analysis.selected);
@@ -274,7 +289,7 @@ ClickDetection detect_clicks(const float* samples, size_t size, int sample_rate,
   const std::optional<LpcResult> lpc_model = fit_lpc(buffer, validated.get());
   const ChannelAnalysis analysis =
       analyze_channel(buffer, validated.get(), lpc_model ? &*lpc_model : nullptr);
-  return to_detection(analysis, size, sample_rate);
+  return to_detection(analysis, buffer, sample_rate);
 }
 
 Audio declick(const Audio& audio, const DeclickConfig& config) {
@@ -292,8 +307,8 @@ Audio declick(const Audio& audio, const DeclickConfig& config, DeclickReport* re
   const ChannelAnalysis analysis = analyze_channel(samples, validated.get(), model);
   apply_runs(output, samples, analysis.selected, validated.get(), lpc_model.has_value());
   if (report != nullptr) {
-    *report = to_report(analysis, analysis.selected, samples.size(), audio.sample_rate(),
-                        lpc_model.has_value());
+    *report =
+        to_report(analysis, analysis.selected, samples, audio.sample_rate(), lpc_model.has_value());
   }
   return Audio::from_vector(std::move(output), audio.sample_rate());
 }
@@ -348,7 +363,7 @@ std::vector<DeclickReport> declick_linked(const Audio* const* channels, size_t c
     std::vector<float> output = samples[c];
     apply_runs(output, samples[c], applied, validated.get(), models[c].has_value());
     reports.push_back(
-        to_report(analyses[c], applied, samples[c].size(), sample_rate, models[c].has_value()));
+        to_report(analyses[c], applied, samples[c], sample_rate, models[c].has_value()));
     out->push_back(Audio::from_vector(std::move(output), sample_rate));
   }
   return reports;

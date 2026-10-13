@@ -395,8 +395,8 @@ export interface MasteringRepairDetectHumRequest
  * the fixed path notches the configured frequency without ever looking for
  * hum, so a detector following the flag would hand back its own input.
  * `fundamentalProminence` is the winning candidate's energy over the median
- * candidate (a linear ratio, not dB) -- 1.0 means no peak was found at all, and it is not a
- * lock flag.
+ * candidate (a linear ratio, not dB) -- 1.0 means no peak: none was found, or the winner was not a stationary line through most analysis frames (a repeating kick reads 1.0);
+ * it is not a lock flag.
  *
  * @example
  * ```ts

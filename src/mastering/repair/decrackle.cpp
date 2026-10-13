@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "core/stereo_pair.h"
+#include "mastering/repair/transient_envelope.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/validated.h"
@@ -151,11 +152,19 @@ bool is_crackle(const std::vector<float>& samples, size_t index, float threshold
                                 median);
 }
 
-size_t count_crackle(const std::vector<float>& samples, float threshold) {
+/// How far a crackle sample's deviation must stand above the transient envelope beside it.
+constexpr double kCrackleTransientContrast = 6.0;
+
+/// Crackle samples the detector reports: the median criterion, less the samples that sit inside a
+/// broadband transient of the programme rather than above it.
+size_t count_crackle_defects(const std::vector<float>& samples, int sample_rate, float threshold) {
+  const TransientEnvelope envelope(samples.data(), samples.size(), sample_rate);
   size_t count = 0;
   for (size_t i = 1; i + 1 < samples.size(); ++i) {
     float median = 0.0f;
-    if (is_crackle(samples, i, threshold, &median)) ++count;
+    if (!is_crackle(samples, i, threshold, &median)) continue;
+    const double deviation = std::abs(samples[i] - median);
+    if (deviation > kCrackleTransientContrast * envelope.level(i, i + 1)) ++count;
   }
   return count;
 }
@@ -174,8 +183,8 @@ std::vector<float> run_decrackle(const std::vector<float>& samples, int sample_r
                                  const DecrackleConfig& config, DecrackleReport* report) {
   if (report != nullptr) {
     *report = DecrackleReport{};
-    report->detected =
-        to_detection(count_crackle(samples, config.threshold), samples.size(), sample_rate);
+    report->detected = to_detection(count_crackle_defects(samples, sample_rate, config.threshold),
+                                    samples.size(), sample_rate);
   }
   if (config.mode == DecrackleMode::WaveletShrinkage) {
     return detail::wavelet_shrink_spun(samples, config, detail::kCycleSpinShifts, report);
@@ -255,7 +264,8 @@ CrackleDetection detect_crackle(const float* samples, size_t size, int sample_ra
   if (samples == nullptr || size == 0) return {};
 
   const std::vector<float> buffer(samples, samples + size);
-  return to_detection(count_crackle(buffer, validated->threshold), size, sample_rate);
+  return to_detection(count_crackle_defects(buffer, sample_rate, validated->threshold), size,
+                      sample_rate);
 }
 
 Audio decrackle(const Audio& audio, const DecrackleConfig& config) {

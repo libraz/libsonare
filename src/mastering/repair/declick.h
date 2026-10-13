@@ -46,7 +46,11 @@ void validate_config(const DeclickConfig& config);
 
 /// @brief What a declick analysis found. Counts runs, not samples.
 struct ClickDetection {
-  size_t count = 0;                ///< Runs meeting the repair criteria.
+  size_t count = 0;                ///< Runs meeting the repair criteria whose
+                                   ///  steepest edge also stands well above the
+                                   ///  sample-to-sample level beside them; a run
+                                   ///  inside a drum hit is the music and is not
+                                   ///  counted, nor added to rejected.
   size_t rejected = 0;             ///< Outlier runs the criteria excluded. A
                                    ///  large value says max_click_samples or
                                    ///  neighbor_ratio is too tight for this
@@ -56,8 +60,8 @@ struct ClickDetection {
 };
 
 /// @brief Measures clicks without repairing. Runs the same LPC analysis the
-///        repair runs: a cheaper threshold-only detector would report runs the
-///        repair does not act on.
+///        repair runs, so every counted run is one the repair acts on; a cheaper
+///        threshold-only detector would report runs the repair leaves alone.
 ClickDetection detect_clicks(const float* samples, size_t size, int sample_rate,
                              const DeclickConfig& config = {});
 
@@ -65,7 +69,9 @@ ClickDetection detect_clicks(const float* samples, size_t size, int sample_rate,
 struct DeclickReport {
   ClickDetection detected;      ///< This channel's own analysis of the input.
   size_t repaired_runs = 0;     ///< Runs interpolated. Larger than detected.count
-                                ///  only under linked stereo detection.
+                                ///  under linked stereo detection, and where the
+                                ///  repair selected a run inside a transient the
+                                ///  detector does not count.
   size_t repaired_samples = 0;  ///< Samples overwritten by interpolation.
   size_t linked_runs = 0;       ///< Of repaired_runs, those whose extent this
                                 ///  channel's own detection did not produce.

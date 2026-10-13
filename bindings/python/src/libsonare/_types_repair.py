@@ -24,7 +24,8 @@ class ClickDetection:
     ``count`` is runs meeting the repair criteria; ``rejected`` is runs the
     criteria excluded as outliers. A large ``rejected`` says the configured
     run length or neighbor ratio is too tight for this material, not that the
-    material is clean.
+    material is clean. A run inside a broadband transient such as a drum hit
+    is not counted; the repair still acts on it.
     """
 
     count: int
@@ -151,7 +152,8 @@ class CrackleDetection:
     Measured by the median criterion regardless of the configured mode --
     wavelet shrinkage removes crackle without ever deciding a sample is
     crackle, so this is the only definition of the defect either mode reports
-    against.
+    against. A sample inside a broadband transient such as a drum hit is not
+    counted; the repair still acts on it.
     """
 
     sample_count: int

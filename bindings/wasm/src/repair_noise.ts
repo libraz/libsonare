@@ -442,7 +442,7 @@ export function masteringRepairNoiseBandBins(
  * Always runs the estimation path, whatever `adaptive` says: the fixed path notches the
  * configured frequency without ever looking for hum, so a detector following the flag would
  * hand back its own input. `fundamentalProminence` is the winning candidate's projected energy
- * over the median candidate (a linear ratio, not dB), so `1.0` means no peak was found at all — it is not a lock flag.
+ * over the median candidate (a linear ratio, not dB), so `1.0` means no peak: none was found, or the winner was not a stationary line through most analysis frames (a repeating kick reads 1.0). It is not a lock flag.
  *
  * `harmonicDbfs` is measured at every `k*f0` the sample rate carries, not only the ones a
  * cascade would notch; a `k*f0` at or past Nyquist reads the dB floor because nothing is there

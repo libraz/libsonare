@@ -717,8 +717,9 @@ def mastering_repair_detect_hum(
             )
 
     ``fundamental_prominence`` is the winning candidate's projected energy over
-    the median candidate, a linear ratio (not dB); 1.0 means no peak was found
-    at all. It is not a lock flag. ``harmonic_dbfs`` has 16 entries measured at every ``k * f0`` the
+    the median candidate, a linear ratio (not dB); 1.0 means no peak: none
+    was found, or the winner was not a stationary line through most analysis
+    frames (a repeating kick reads 1.0). It is not a lock flag. ``harmonic_dbfs`` has 16 entries measured at every ``k * f0`` the
     sample rate carries, not only the notched ones, so an entry at or past
     Nyquist reads the dB floor because nothing is there to measure.
 

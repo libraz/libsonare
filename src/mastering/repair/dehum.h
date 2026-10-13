@@ -67,10 +67,14 @@ struct HumDetection {
   float fundamental_hz = 0.0f;  ///< Tracked fundamental. The configured
                                 ///  value when adaptive tracking is off.
   /// How far the winning candidate stood above the rest of the search: the
-  /// ratio of its projected energy to the median of the candidates. 1.0 means
-  /// the search found no peak at all. Not a lock flag.
+  /// ratio of its projected energy to the median of the candidates, a linear
+  /// energy ratio rather than dB. 1.0 means no peak: the search found none, or
+  /// the winner was not a stationary line -- present through most of each
+  /// one-second frame -- in at least half the frames, which is how a repeating
+  /// tonal burst such as a kick reads. Not a lock flag.
   float fundamental_prominence = 1.0f;
-  int harmonics = 0;  ///< Harmonics found above the floor. Not necessarily a
+  int harmonics = 0;  ///< Harmonics found above the floor; 0 whenever
+                      ///  fundamental_prominence is 1.0. Not necessarily a
                       ///  contiguous run from the first.
   /// Input level at each k*f0, k ascending, floored at the library dB floor.
   /// Measured for every k the sample rate can carry, not only the ones the

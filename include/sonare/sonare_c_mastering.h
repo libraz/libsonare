@@ -1305,7 +1305,9 @@ SonareError sonare_mastering_repair_declick(const float* samples, size_t length,
 /// @brief Flat POD mirror of @c mastering::repair::ClickDetection. Counts runs,
 ///        not samples.
 typedef struct {
-  size_t count;                // runs meeting the repair criteria
+  size_t count;                // runs meeting the repair criteria whose steepest
+                               // edge also stands well above the level beside
+                               // them; a run inside a drum hit is not counted
   size_t rejected;             // runs the criteria excluded as outliers
   size_t longest_run_samples;  // over the counted runs
   float per_second;            // count divided by the input duration
@@ -1314,7 +1316,8 @@ typedef struct {
 /// @brief Measures clicks without repairing.
 /// @details Runs the same LPC analysis the repair runs, so a run counted here is
 ///   one the repair would act on; a cheaper threshold-only scan would report runs
-///   it leaves alone.
+///   it leaves alone. The repair also acts on runs inside a transient, which are
+///   not counted here.
 /// @param config Pass NULL to use library defaults.
 SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t length,
                                                   int sample_rate,
@@ -1327,7 +1330,8 @@ SonareError sonare_mastering_repair_detect_clicks(const float* samples, size_t l
 ///   clean.
 typedef struct {
   SonareClickDetection detected;  // this channel's own analysis of the input
-  size_t repaired_runs;           // runs interpolated
+  size_t repaired_runs;           // runs interpolated, including runs inside a
+                                  // transient that detected.count leaves out
   size_t repaired_samples;        // samples overwritten by interpolation
   size_t linked_runs;             // of repaired_runs, those this channel's own
                                   // detection did not produce; always 0 from
@@ -1622,9 +1626,13 @@ SonareError sonare_mastering_repair_decrackle(const float* samples, size_t lengt
 /// @details Measured by the median criterion whatever mode is configured:
 ///   wavelet shrinkage removes crackle without ever deciding a sample is
 ///   crackle, so these counts do not describe what wavelet mode repaired.
+///   A sample inside the broadband body of a drum hit is not counted: its
+///   deviation must also stand well above the level of the few milliseconds
+///   beside it.
 typedef struct {
   size_t sample_count;    // samples deviating from the local median by more
-                          // than threshold
+                          // than threshold, above the transient level beside
+                          // them
   float sample_fraction;  // sample_count divided by the input length
   float per_second;
 } SonareCrackleDetection;
@@ -1643,8 +1651,9 @@ SonareError sonare_mastering_repair_detect_crackle(const float* samples, size_t 
 typedef struct {
   SonareCrackleDetection detected;  // this channel's own analysis of the input
   size_t replaced_samples;          // median mode: samples the filter overwrote,
-                                    // equal to detected.sample_count since the
-                                    // detector and the repair share a criterion
+                                    // at least detected.sample_count since the
+                                    // filter also acts inside the transients
+                                    // the detector sets aside
   size_t detail_coefficients;       // wavelet mode: detail coefficients examined by
                                     // the unshifted pass, not by every pass the
                                     // mode averages
@@ -1712,13 +1721,17 @@ SonareError sonare_mastering_repair_dehum(const float* samples, size_t length, i
 ///   frequency without ever looking for hum, so a detector following the flag
 ///   would hand back its own input.
 typedef struct {
-  float fundamental_hz;                             // tracked fundamental; the configured value
-                                                    // when adaptive tracking is off
-  float fundamental_prominence;                     // winning candidate's projected energy over the
-                                                    // median candidate; 1.0 means no peak was found
-                                                    // at all. Not a lock flag
-  int harmonics;                                    // harmonics above the floor, not necessarily a
-                                                    // contiguous run from the first
+  float fundamental_hz;          // tracked fundamental; the configured value
+                                 // when adaptive tracking is off
+  float fundamental_prominence;  // winning candidate's projected energy over the
+                                 // median candidate, a linear energy ratio, not
+                                 // dB; 1.0 means no peak: none was found, or the
+                                 // winner was not a stationary line in at least
+                                 // half the one-second frames (a repeating kick
+                                 // reads 1.0). Not a lock flag
+  int harmonics;                 // harmonics above the floor, 0 whenever
+                                 // fundamental_prominence is 1.0; not necessarily
+                                 // a contiguous run from the first
   float harmonic_dbfs[SONARE_DEHUM_MAX_HARMONICS];  // input level at each k*f0,
                                                     // k ascending. Measured for
                                                     // every k the sample rate

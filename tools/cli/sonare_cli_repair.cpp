@@ -34,8 +34,8 @@ void reject_non_repair_overrides(const std::vector<mastering::api::Param>& overr
 /// than hides: `measured` false means nothing ran, a large `click_rejected`
 /// alongside a zero `click_count` means the click detector could not decide
 /// rather than that the material is clean, `hum_fundamental_prominence` (a linear
-/// energy ratio, not dB) of 1.0 means no candidate peak was found, and
-/// `noise_band_peak_index` of -1 means no band was measured. `hum_peak_found` and
+/// energy ratio, not dB) of 1.0 means no stationary candidate peak was found (a repeating kick
+/// reads 1.0), and `noise_band_peak_index` of -1 means no band was measured. `hum_peak_found` and
 /// `noise_band_measured` spell those last two out explicitly so a consumer cannot read the sentinel
 /// as data.
 void append_defect_profile_json(JsonBuilder& json,

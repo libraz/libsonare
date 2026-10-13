@@ -5,7 +5,7 @@
 
 /** One channel's click detection, from {@link masteringRepairDeclickStereo}. Counts runs, not samples. */
 export interface ClickDetection {
-  /** Runs meeting the repair criteria. */
+  /** Runs meeting the repair criteria. A run inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
   count: number;
   /** Runs the criteria excluded as outliers. */
   rejected: number;
@@ -137,7 +137,7 @@ export interface DeclipStereoResult {
  * these counts do not describe what wavelet mode repaired.
  */
 export interface CrackleDetection {
-  /** Samples deviating from the local median by more than `threshold`. */
+  /** Samples deviating from the local median by more than `threshold`. A sample inside a broadband transient such as a drum hit is not counted; the repair still acts on it. */
   sampleCount: number;
   /** `sampleCount` divided by the input length. */
   sampleFraction: number;
@@ -278,7 +278,7 @@ export interface HumDetection {
   fundamentalHz: number;
   /**
    * Winning candidate's projected energy over the median candidate, a linear
-   * ratio (not dB). 1.0 means no peak was found at all. Not a lock flag.
+   * ratio (not dB). 1.0 means no peak: none was found, or the winner was not a stationary line through most analysis frames (a repeating kick reads 1.0). Not a lock flag.
    */
   fundamentalProminence: number;
   /** Harmonics above the floor, not necessarily a contiguous run from the first. */

@@ -28,6 +28,7 @@
 #include "mastering/repair/decrackle.h"
 #include "mastering/repair/dehum.h"
 #include "mastering/repair/trim_silence.h"
+#include "repair_drum_fixtures.h"
 #include "support/golden_hash.h"
 #include "util/constants.h"
 
@@ -546,8 +547,8 @@ TEST_CASE("Crackle detection counts the planted deviations at every threshold",
     REQUIRE_THAT(detected.per_second,
                  WithinAbs(static_cast<double>(expected) * kSampleRate / kCrackleFrames, 1.0e-4));
 
-    // The repair acts on exactly what the detector counted: the two read one
-    // criterion, so a cheaper detector cannot drift away from the repair.
+    // The repair acts on exactly what the detector counted: on a smooth bed the
+    // transient gate sets nothing aside, so the two read one criterion here.
     DecrackleReport report;
     decrackle(view(samples), config, &report);
     REQUIRE(report.replaced_samples == expected);
@@ -570,6 +571,57 @@ TEST_CASE("Crackle detection reads the median criterion in wavelet mode too",
   // crackle, so the median deviation is this module's only definition of it.
   REQUIRE(detect_crackle(samples.data(), samples.size(), kSampleRate, wavelet).sample_count ==
           detect_crackle(samples.data(), samples.size(), kSampleRate, median).sample_count);
+}
+
+TEST_CASE("Hum detection reads a kick loop as no peak and a mains line under it as hum",
+          "[repair][stereo][hum]") {
+  namespace drums = sonare::test::repair_drums;
+  const std::vector<float> kick = drums::to_float(drums::kick_loop());
+  const DehumConfig hum50{50.0f, 4};
+  const DehumConfig hum60{60.0f, 4};
+
+  // The kick's body sits at 52 Hz and repeats twice a second, a prominence of 5.5 before the
+  // stationarity gate. It fills four of every ten 100 ms blocks, so neither search finds a line.
+  for (const DehumConfig& config : {hum50, hum60}) {
+    const HumDetection detected = detect_hum(kick.data(), kick.size(), kSampleRate, config);
+    CAPTURE(config.fundamental_hz, detected.fundamental_hz, detected.fundamental_prominence);
+    REQUIRE(detected.fundamental_prominence == 1.0f);
+    REQUIRE(detected.harmonics == 0);
+  }
+
+  // A 50 Hz series fills every block whatever the kick does, so the gate passes it.
+  std::vector<double> humming = drums::kick_loop();
+  plant_hum(humming, kPlantedHum50Hz, {-24.0, -30.0, -36.0});
+  const std::vector<float> dirty = drums::to_float(humming);
+  const HumDetection found = detect_hum(dirty.data(), dirty.size(), kSampleRate, hum50);
+  CAPTURE(found.fundamental_hz, found.fundamental_prominence, found.harmonics);
+  REQUIRE_THAT(found.fundamental_hz, WithinAbs(kPlantedHum50Hz, 0.5));
+  REQUIRE(found.fundamental_prominence > 2.0f);
+  REQUIRE(found.harmonics > 0);
+}
+
+TEST_CASE("Crackle detection sets a snare's body aside and still counts crackle between hits",
+          "[repair][stereo][hum]") {
+  namespace drums = sonare::test::repair_drums;
+  const DecrackleConfig defaults;
+  const std::vector<float> snare = drums::to_float(drums::snare_loop());
+
+  // Over a thousand noise samples clear the default threshold against their median; none of them
+  // stands above the noise beside it.
+  REQUIRE(detect_crackle(snare.data(), snare.size(), kSampleRate, defaults).sample_count == 0);
+
+  // The repair keeps the median criterion alone, so it still acts inside the hits.
+  DecrackleReport report;
+  decrackle(view(snare), defaults, &report);
+  REQUIRE(report.detected.sample_count == 0);
+  REQUIRE(report.replaced_samples > 0);
+
+  std::vector<double> crackled = drums::snare_loop();
+  const std::vector<size_t> gaps = drums::gaps_between_hits();
+  for (size_t k = 0; k < gaps.size(); ++k) crackled[gaps[k]] += (k % 2 == 0 ? 0.6 : -0.6);
+  const std::vector<float> dirty = drums::to_float(crackled);
+  REQUIRE(detect_crackle(dirty.data(), dirty.size(), kSampleRate, defaults).sample_count ==
+          gaps.size());
 }
 
 // --------------------------------------------------- mono output is preserved

@@ -32,6 +32,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/repair/declick.h"
 #include "mastering/repair/declip.h"
+#include "repair_drum_fixtures.h"
 #include "support/golden_hash.h"
 #include "util/constants.h"
 
@@ -308,6 +309,27 @@ TEST_CASE("Declip validation rejects the knobs the clamp used to swallow",
 }
 
 // ----------------------------------------------------------------- detection
+
+TEST_CASE("Declick detection reads a snare as programme and counts clicks between hits",
+          "[repair][stereo][impulse]") {
+  namespace drums = sonare::test::repair_drums;
+  // Noise onsets clear the run criteria at random -- seven runs here before the transient gate --
+  // but no edge inside a hit stands above the hit's own sample-to-sample level.
+  const std::vector<float> snare = drums::to_float(drums::snare_loop());
+  REQUIRE(detect_clicks(snare.data(), snare.size(), kSampleRate).count == 0);
+
+  std::vector<double> clicked = drums::snare_loop();
+  const std::vector<size_t> gaps = drums::gaps_between_hits();
+  for (size_t gap : gaps) {
+    clicked[gap] += 0.9;
+    clicked[gap + 1] -= 0.54;
+    clicked[gap + 2] += 0.27;
+  }
+  const std::vector<float> dirty = drums::to_float(clicked);
+  const ClickDetection detected = detect_clicks(dirty.data(), dirty.size(), kSampleRate);
+  REQUIRE(detected.count == gaps.size());
+  REQUIRE(detected.longest_run_samples <= 3);
+}
 
 TEST_CASE("Declick detection recovers the corpus click count", "[repair][stereo][impulse]") {
   const std::vector<float> samples = click_fixture(0.0);

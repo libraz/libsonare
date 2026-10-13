@@ -40,10 +40,15 @@ void validate_config(const DecrackleConfig& config);
 ///   detection method -- it shrinks coefficients without ever deciding that a
 ///   sample is crackle -- so the median deviation is this module's only
 ///   definition of the defect. A caller therefore gets the same answer before
-///   choosing a mode, which is the order the repair assistant asks in.
+///   choosing a mode, which is the order the repair assistant asks in. A sample
+///   is counted only when its deviation also stands well above the
+///   sample-to-sample level of the few milliseconds beside it, so the
+///   broadband body of a drum hit is not read as crackle; crackle buried inside
+///   such a hit goes uncounted with it.
 struct CrackleDetection {
   size_t sample_count = 0;  ///< Samples deviating from the local median by
-                            ///  more than threshold.
+                            ///  more than threshold, above the transient
+                            ///  level beside them.
   float sample_fraction = 0.0f;
   float per_second = 0.0f;
 };
@@ -60,8 +65,10 @@ CrackleDetection detect_crackle(const float* samples, size_t size, int sample_ra
 struct DecrackleReport {
   CrackleDetection detected;       ///< This channel's own analysis of the input.
   size_t replaced_samples = 0;     ///< Median mode: samples the filter overwrote.
-                                   ///  Equal to detected.sample_count, since the
-                                   ///  detector and the repair share a criterion.
+                                   ///  At least detected.sample_count: the filter
+                                   ///  applies the median criterion alone, so it
+                                   ///  also acts inside the transients the
+                                   ///  detector sets aside.
   size_t detail_coefficients = 0;  ///< Wavelet mode: detail coefficients examined
                                    ///  by the unshifted cycle-spin pass.
   size_t shrunk_coefficients = 0;  ///< Wavelet mode: of those, driven to zero.

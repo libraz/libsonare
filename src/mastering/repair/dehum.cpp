@@ -293,6 +293,40 @@ float prominence_of(const FundamentalSearch& search) {
   return static_cast<float>(search.best_energy / reference);
 }
 
+/// Sub-blocks a detection frame is split into to test whether a candidate is a stationary line.
+/// A tenth of a second holds five cycles at 50 Hz and six at 60, so each block resolves the line.
+constexpr double kHumPresenceBlockSeconds = 0.1;
+
+/// Fraction of a frame's sub-blocks that must carry the candidate for it to count as hum.
+constexpr float kHumPresenceFraction = 0.8f;
+
+/// Amplitude at @p hz a sub-block must reach, relative to the frame's, to count as carrying it.
+constexpr double kHumPresenceAmplitude = 0.6;
+
+/// Fraction of the sub-blocks of @p search's frame [begin, end) whose amplitude at the winning
+/// candidate reaches the share of the frame's amplitude a stationary line would put there. Mains
+/// hum fills every block; a repeating tonal burst such as a kick fills only the blocks its hits
+/// land in, however prominent its frame-level energy.
+float hum_presence(const std::vector<float>& samples, size_t begin, size_t end, int sample_rate,
+                   const FundamentalSearch& search) {
+  const size_t block = std::max<size_t>(
+      1, static_cast<size_t>(kHumPresenceBlockSeconds * static_cast<double>(sample_rate)));
+  if (search.candidates == 0 || end - begin < block) return 0.0f;
+  const double share = static_cast<double>(block) / static_cast<double>(end - begin);
+  const double floor_energy =
+      kHumPresenceAmplitude * kHumPresenceAmplitude * share * share * search.best_energy;
+  size_t blocks = 0;
+  size_t present = 0;
+  for (size_t start = begin; start + block <= end; start += block) {
+    ++blocks;
+    if (projected_energy(samples, start, start + block, search.best_hz, sample_rate) >=
+        floor_energy) {
+      ++present;
+    }
+  }
+  return static_cast<float>(present) / static_cast<float>(blocks);
+}
+
 size_t detection_frame(size_t size, int sample_rate) {
   const double seconds = kHumDetectionFrameSeconds * static_cast<double>(sample_rate);
   return std::min(size, std::max<size_t>(1, static_cast<size_t>(seconds)));
@@ -645,8 +679,12 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
     const size_t end = begin + frame;
     const FundamentalSearch search =
         search_fundamental(buffer, begin, end, sample_rate, validated.get(), config.fundamental_hz);
+    // A winner that is not a stationary line reads as no peak, so the median below needs the
+    // line in most frames.
+    const bool stationary =
+        hum_presence(buffer, begin, end, sample_rate, search) >= kHumPresenceFraction;
     fundamentals.push_back(search.best_hz);
-    prominences.push_back(prominence_of(search));
+    prominences.push_back(stationary ? prominence_of(search) : 1.0f);
     for (int harmonic = 1; harmonic <= kDehumMaxHarmonics; ++harmonic) {
       const size_t slot = static_cast<size_t>(harmonic - 1);
       const float hz = search.best_hz * static_cast<float>(harmonic);
@@ -671,11 +709,13 @@ HumDetection detect_hum(const float* samples, size_t size, int sample_rate,
   HumDetection detection;
   detection.fundamental_hz = median_of(fundamentals);
   detection.fundamental_prominence = median_of(prominences);
+  // Levels are measured either way; a series is counted only on a fundamental that is a line.
+  const bool line_found = detection.fundamental_prominence > 1.0f;
   for (int harmonic = 1; harmonic <= kDehumMaxHarmonics; ++harmonic) {
     const size_t slot = static_cast<size_t>(harmonic - 1);
     const float level = median_of(levels[slot]);
     detection.harmonic_dbfs[slot] = std::max(level, kFloorDb);
-    if (level > kFloorDb && level > median_of(floors[slot]) + kHumHarmonicMarginDb) {
+    if (line_found && level > kFloorDb && level > median_of(floors[slot]) + kHumHarmonicMarginDb) {
       ++detection.harmonics;
     }
   }
