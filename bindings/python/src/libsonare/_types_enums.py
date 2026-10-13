@@ -88,9 +88,13 @@ class AutomationCurve(IntEnum):
 class PanLaw(IntEnum):
     """Pan law for a mixer strip.
 
-    On mono strips it changes centre gain. On stereo strips using Balance,
-    centre remains unity and the selected law changes only the far-channel
-    taper.
+    In Balance mode centre stays unity and the law changes only the
+    far-channel taper; in stereo-pan and dual-pan modes the law's centre
+    attenuation is audible (-3.01, -4.52, -6.02 and 0 dB for the four laws in
+    stereo-pan). A mono source is unity at centre under every law: the
+    standalone mixer always feeds two planes and engine lanes are unity at
+    centre. Only a C++ ``ChannelStrip`` built without ``mono_pan_centre_unity``
+    makes the law change a mono strip's centre gain.
     """
 
     CONST_3DB = 0

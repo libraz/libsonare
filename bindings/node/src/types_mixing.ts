@@ -9,14 +9,20 @@
 
 import type { EqBandInput } from './types_features.js';
 
-export type PanMode =
-  | 'balance'
-  | 'pan'
-  | 'stereoPan'
-  | 'stereo-pan'
-  | 'dualPan'
-  | 'dual-pan'
-  | number;
+/**
+ * How a strip's pan position is applied to a stereo pair. A number is the raw C ABI ordinal
+ * (0, 1, 2).
+ *
+ * - `'balance'` (default): keeps the stereo image and attenuates only the channel away from the
+ *   pan direction. Centre is unity under every {@link PanLaw}.
+ * - `'stereoPan'` (`'stereo-pan'`): folds the pair to mono, `0.5 * (L + R)`, and places it with
+ *   the law's gains. The image collapses and centre takes the law's attenuation: -3.01, -4.52,
+ *   -6.02 and 0 dB for `const3dB`, `const4.5dB`, `const6dB` and `linear0dB`.
+ * - `'dualPan'` (`'dual-pan'`): pans the left and right inputs independently (default -1 and +1,
+ *   which passes the pair through unchanged). Each input uses the law's gains, so one panned to
+ *   centre takes the same attenuation as `'stereoPan'`.
+ */
+export type PanMode = 'balance' | 'stereoPan' | 'stereo-pan' | 'dualPan' | 'dual-pan' | number;
 
 /**
  * Surround pan position for a strip feeding a >2-channel bus. Phase 1 honors
@@ -116,10 +122,14 @@ export interface MixerProcessResult {
 export type AutomationCurve = 'linear' | 'exponential' | 'hold' | 's-curve';
 
 /**
- * Pan law applied by a strip's panner. On mono strips it changes the centre
- * gain; on stereo strips in Balance mode the centre remains unity and it
- * changes only the far-channel taper. Mapped to C enum ints
- * `0=const3dB`, `1=const4.5dB`, `2=const6dB`, `3=linear0dB`.
+ * Pan law applied by a strip's panner. Mapped to C enum ints `0=const3dB`, `1=const4.5dB`,
+ * `2=const6dB`, `3=linear0dB`.
+ *
+ * In `'balance'` mode centre stays unity and the law changes only the far-channel taper; in
+ * `'stereoPan'` and `'dualPan'` the law's centre attenuation is audible (see {@link PanMode}).
+ * A mono source is unity at centre under every law: the standalone `Mixer` always feeds two
+ * planes and engine lanes are unity at centre. Only a C++ `ChannelStrip` built without
+ * `mono_pan_centre_unity` makes the law change a mono strip's centre gain.
  */
 export type PanLaw = 'const3dB' | 'const4.5dB' | 'const6dB' | 'linear0dB';
 

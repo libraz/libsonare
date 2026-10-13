@@ -350,7 +350,6 @@ _MIX_STRIP_PAN_MODES = {
     "balance": 0,
     "stereopan": 1,
     "stereo-pan": 1,
-    "pan": 1,
     "dualpan": 2,
     "dual-pan": 2,
 }

@@ -440,8 +440,9 @@ class _EngineMixingMixin:
     def set_track_strip_pan_law(self, track_id: int, pan_law: PanLawInput) -> None:
         """Set a track strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
 
-        Mono strips apply the law at centre; stereo Balance strips keep centre
-        unity and use it only for the far-channel taper.
+        Balance mode keeps centre unity and uses the law only for the far-channel
+        taper; stereo-pan and dual-pan modes take the law's centre attenuation.
+        A mono source is unity at centre under every law (see :class:`PanLaw`).
         """
         _check(
             _get_lib().sonare_engine_set_track_strip_pan_law(

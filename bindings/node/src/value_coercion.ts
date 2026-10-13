@@ -230,7 +230,7 @@ export function panModeValue(panMode: PanMode): number {
   const mode = typeof panMode === 'string' ? panMode.replace(/_/g, '-').toLowerCase() : panMode;
   return resolveEnumOrdinal(
     mode,
-    { balance: 0, pan: 1, stereopan: 1, 'stereo-pan': 1, dualpan: 2, 'dual-pan': 2 },
+    { balance: 0, stereopan: 1, 'stereo-pan': 1, dualpan: 2, 'dual-pan': 2 },
     'pan mode',
   );
 }

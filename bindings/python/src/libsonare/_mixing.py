@@ -440,8 +440,9 @@ class Mixer:
     def set_pan_law(self, strip: StripRef, pan_law: PanLawInput) -> None:
         """Set a strip's pan law (a ``PanLawName`` alias, enum, or int 0..3).
 
-        Mono strips apply the law at centre; stereo Balance strips keep centre
-        unity and use it only for the far-channel taper.
+        Balance mode keeps centre unity and uses the law only for the far-channel
+        taper; stereo-pan and dual-pan modes take the law's centre attenuation.
+        A mono source is unity at centre under every law (see :class:`PanLaw`).
         """
         handle = self._strip_handle(strip)
         _check(_get_lib().sonare_strip_set_pan_law(handle, ctypes.c_int(_pan_law_value(pan_law))))
@@ -512,6 +513,13 @@ class Mixer:
 
     def set_pan(self, strip: StripRef, pan: float, pan_mode: int | str | None = None) -> None:
         """Set a strip's pan position.
+
+        Pan modes: ``balance`` (default) keeps the stereo image, attenuates only
+        the channel away from the pan direction and is unity at centre under
+        every law; ``stereo-pan`` folds the pair to mono and applies the law's
+        centre attenuation (-3.01, -4.52, -6.02 and 0 dB for the four laws);
+        ``dual-pan`` pans the left and right inputs independently (default -1
+        and +1, a pass-through) with the same centre attenuation.
 
         ``pan_mode`` accepts a :class:`PanLaw`-independent pan mode as an int
         (``0`` balance, ``1`` stereo-pan, ``2`` dual-pan), a name

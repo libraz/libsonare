@@ -722,7 +722,6 @@ _PAN_MODE_NAMES = {
     "balance": PAN_MODE_BALANCE,
     "stereo-pan": PAN_MODE_STEREO_PAN,
     "stereopan": PAN_MODE_STEREO_PAN,
-    "pan": PAN_MODE_STEREO_PAN,
     "dual-pan": PAN_MODE_DUAL_PAN,
     "dualpan": PAN_MODE_DUAL_PAN,
 }

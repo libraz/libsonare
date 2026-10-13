@@ -6,7 +6,7 @@
 mixing::PanMode parse_pan_mode_option(const std::string& value) {
   const std::string key = lowercase_cli_value(value);
   if (key == "balance") return mixing::PanMode::Balance;
-  if (key == "stereopan" || key == "stereo-pan" || key == "pan") return mixing::PanMode::StereoPan;
+  if (key == "stereopan" || key == "stereo-pan") return mixing::PanMode::StereoPan;
   if (key == "dualpan" || key == "dual-pan") return mixing::PanMode::DualPan;
   throw std::invalid_argument("invalid pan mode: " + value);
 }

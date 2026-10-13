@@ -92,7 +92,6 @@ const PAN_LAW_VALUES: Readonly<Record<string, number>> = {
 } as const;
 const PAN_MODE_VALUES = {
   balance: 0,
-  pan: 1,
   stereopan: 1,
   'stereo-pan': 1,
   dualpan: 2,

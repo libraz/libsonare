@@ -19,6 +19,11 @@ extern "C" {
 // Mixing
 // ============================================================================
 
+// How a strip's pan position is applied to a stereo pair. Balance keeps the
+// stereo image and is unity at center under every pan law. StereoPan folds the
+// pair to mono and takes the law's center attenuation (-3.01 / -4.52 / -6.02 /
+// 0 dB). DualPan pans the left and right inputs independently (defaults -1 and
+// +1, a pass-through) with the same center attenuation.
 typedef enum SONARE_ENUM_BASE {
   SONARE_PAN_MODE_BALANCE = 0,
   SONARE_PAN_MODE_STEREO_PAN = 1,
@@ -168,10 +173,14 @@ SonareError sonare_strip_set_solo_safe(SonareStrip* strip, int solo_safe);
 // latency or topology.
 SonareError sonare_strip_set_polarity_invert(SonareStrip* strip, int invert_left, int invert_right);
 // Sets the far-channel taper used by the strip's pan law. @c pan_law:
-// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). For mono strips the
-// selected law changes the center gain; for two-channel strips in Balance mode,
-// the center remains unity and only the far channel is tapered. StereoPan and
-// DualPan use their direct left/right gain mapping. Returns
+// 0 = -3 dB, 1 = -4.5 dB, 2 = -6 dB, 3 = linear (0 dB). In Balance mode the
+// center remains unity and only the far channel is tapered. StereoPan folds the
+// pair to mono (0.5 * (L + R)) and applies the law's gains, so center takes
+// -3.01 / -4.52 / -6.02 / 0 dB for the four laws; DualPan pans each input with
+// the law's gains and takes the same center attenuation. A mono source is unity
+// at center under every law through this API: the mixer always feeds two
+// planes, and the law changes a mono strip's center gain only for a C++
+// ChannelStrip built without mono_pan_centre_unity. Returns
 // @c SONARE_ERROR_INVALID_PARAMETER if strip is NULL or pan_law is unknown.
 SonareError sonare_strip_set_pan_law(SonareStrip* strip, int pan_law);
 // Sets a per-strip channel delay in samples, moving the strip later relative to the
