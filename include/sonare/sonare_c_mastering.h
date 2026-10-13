@@ -20,6 +20,8 @@ extern "C" {
 // the full MasteringChain API instead.
 //
 // ceiling_db always holds; target_lufs is what one normalization pass aims at.
+// The ceiling is held on the true peak read at true_peak_oversample (4x, the
+// BS.1770 measure, by default); a finer meter can read up to ~0.15 dB higher.
 // Where the input's peak headroom cannot supply the gain the target needs, the
 // helper drives its true-peak limiter up to 12 dB to close the distance and
 // stops there, so peaky or peak-normalized input can finish below target with

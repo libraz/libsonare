@@ -23,12 +23,15 @@ struct TruePeakLimiterConfig {
   ///   oversample_factor, to within float rounding of the final correction: the
   ///   last stage (@ref TruePeakOutputGuard) reconstructs the output with that
   ///   meter's own interpolation filter and scales any stencil whose
-  ///   interpolated value exceeds the ceiling. A meter running at a HIGHER
-  ///   oversampling interpolates points the limiter never evaluated and can
-  ///   read above the ceiling: measured for the default 4x limiter read by a
-  ///   16x meter at +0.12 dB on full-scale white noise and below 0.001 dB on
-  ///   transient program material. Raise @ref oversample_factor to push that
-  ///   down, or match the meter's factor to eliminate it. An offline render
+  ///   interpolated value exceeds the ceiling. The default 4x is the BS.1770
+  ///   true-peak measure, so a delivery check at 4x reads at or below the
+  ///   ceiling. A meter running at a HIGHER oversampling interpolates points
+  ///   the limiter never evaluated and can read above the ceiling: measured
+  ///   for the default 4x limiter read by a 16x meter at 44.1 and 48 kHz, up to
+  ///   +0.15 dB on a full-scale sine just below a quarter of the rate, +0.09 dB
+  ///   on noise driven 24 dB into it and +0.02 dB on a driven kick-and-noise
+  ///   mix. Raise @ref oversample_factor to push that down (8x: +0.02 dB on the
+  ///   same signals), or match the meter's factor to eliminate it. An offline render
   ///   trimmed to its input length drops the pre-ring ahead of its first
   ///   sample, so a meter reading that render with silence in its place can
   ///   exceed the ceiling within the first stencil of a program that starts at

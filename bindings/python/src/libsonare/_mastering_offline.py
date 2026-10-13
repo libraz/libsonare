@@ -66,6 +66,10 @@ def mastering(
     ``release_ms`` tunes the post true-peak limiter release; ``0`` keeps the
     library default (50 ms). ``apply_gain_at_input_rate`` applies the static
     loudness gain at the input (pre-oversample) rate.
+
+    ``ceiling_db`` is held on the true peak read at ``true_peak_oversample``
+    (4x, the BS.1770 measure, by default); a finer meter can read up to
+    ~0.15 dB higher.
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mastering_process"):
