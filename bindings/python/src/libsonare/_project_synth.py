@@ -365,11 +365,8 @@ class SampleBank:
         with SampleBank() as bank:
             index = bank.add_sample(tone, root_key=69, source_rate=48000.0)
             bank.add_zone(0, sample_index=index)  # the whole keyboard
-            audio = project.bounce_with_synth_instrument(
-                SynthPatch(engine_mode="sample", sample_set=0),
-                sample_bank=bank,
-                total_frames=24000,
-            )
+            patch = SynthPatch(engine_mode="sample", sample_set=0, sample_bank=bank)
+            audio = project.bounce_with_synth_instrument(patch, total_frames=24000)
     """
 
     # Declared on the class so close() reads it even when __init__ never ran.
