@@ -1014,6 +1014,36 @@ TEST_CASE("Scene load surfaces silently-ignored insert params as a warning",
   sonare_mixer_destroy(clean);
 }
 
+TEST_CASE("Scene load warns about a send to an undeclared bus and still routes it",
+          "[mixing][routing][warning]") {
+  constexpr int kSr = 48000;
+  constexpr int kBlock = 512;
+  auto scene_with_destination = [](const std::string& destination) {
+    return R"({
+      "version": 1,
+      "buses": [{"id": "master", "role": "master"}, {"id": "aux1", "role": "aux"}],
+      "strips": [{"id": "a", "sends": [
+        {"id": "s", "destinationBusId": ")" +
+           destination + R"(", "sendDb": 0}
+      ]}],
+      "connections": [{"source": "a", "destination": "master"}]
+    })";
+  };
+
+  const std::string typo = scene_with_destination("aux1typo");
+  SonareMixer* mixer = sonare_mixer_from_scene_json(typo.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  CHECK(std::string(sonare_last_warning_message()) ==
+        "send 'a' targets undeclared bus 'aux1typo'; created as implicit aux");
+  sonare_mixer_destroy(mixer);
+
+  const std::string declared = scene_with_destination("aux1");
+  mixer = sonare_mixer_from_scene_json(declared.c_str(), kSr, kBlock);
+  REQUIRE(mixer != nullptr);
+  CHECK(std::string(sonare_last_warning_message()).empty());
+  sonare_mixer_destroy(mixer);
+}
+
 TEST_CASE("A bus insert reports its ignored params the way a strip insert does",
           "[mixing][routing][warning]") {
   constexpr int kSr = 48000;
@@ -1441,6 +1471,33 @@ TEST_CASE("VocalReverbSend return insert is wet only", "[mixing][scene]") {
     REQUIRE(left[i] == 0.0f);
     REQUIRE(right[i] == 0.0f);
   }
+}
+
+TEST_CASE("Scene saved with a former processor id round-trips to the current id",
+          "[mixing][scene][legacy]") {
+  const std::string saved =
+      R"({"version":1,"strips":[{"id":"gtr","inserts":[)"
+      R"({"slot":"pre","processor":"eq.pultec","params":{}},)"
+      R"({"slot":"post","processor":"eq.apiStyle","params":{}},)"
+      R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"tweedGrind"}},)"
+      R"({"slot":"post","processor":"saturation.ampSim","params":{"preset":"britStack"}}]}]})";
+  const auto scene = sonare::mixing::api::scene_from_json(saved);
+  REQUIRE(scene.strips.size() == 1);
+  const auto& inserts = scene.strips[0].inserts;
+  REQUIRE(inserts.size() == 4);
+  CHECK(inserts[0].processor_name == "eq.passiveTube");
+  CHECK(inserts[1].processor_name == "eq.steppedProportionalQ");
+  CHECK(inserts[2].params_json.find("vintageGrind") != std::string::npos);
+  CHECK(inserts[3].params_json.find("crunchStack") != std::string::npos);
+
+  const std::string rewritten = sonare::mixing::api::scene_to_json(scene);
+  for (const char* legacy : {"eq.pultec", "eq.apiStyle", "tweedGrind", "britStack"}) {
+    INFO(legacy);
+    CHECK(rewritten.find(legacy) == std::string::npos);
+  }
+  CHECK(rewritten.find("eq.passiveTube") != std::string::npos);
+  CHECK(sonare::mixing::api::scene_to_json(sonare::mixing::api::scene_from_json(rewritten)) ==
+        rewritten);
 }
 
 #endif  // SONARE_WITH_MIXING && SONARE_WITH_GRAPH

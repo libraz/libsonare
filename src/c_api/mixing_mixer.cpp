@@ -648,6 +648,9 @@ SonareMixer* sonare_mixer_from_scene_json(const char* json, int sample_rate, int
 
     apply_solo_mutes(mixer.get());
     build_and_compile(mixer.get());
+    for (std::string& note : undeclared_send_notes(mixer.get())) {
+      ignored_param_notes.push_back(std::move(note));
+    }
     // Scene loaded successfully; surface unknown scene keys and silently-ignored insert
     // params as a non-fatal warning (one note each, '\n'-joined).
     if (!ignored_param_notes.empty()) {

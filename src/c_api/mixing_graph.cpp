@@ -375,6 +375,24 @@ std::string resolve_master_bus_id(const std::vector<sonare::mixing::api::Bus>& b
   return "master";
 }
 
+std::vector<std::string> undeclared_send_notes(const SonareMixer* mixer) {
+  std::unordered_map<std::string, bool> declared;
+  for (const auto& bus : mixer->buses) declared[bus.id] = true;
+  declared[resolve_master_bus_id(mixer->buses)] = true;
+  std::vector<std::string> notes;
+  for (const auto& strip : mixer->strips) {
+    std::unordered_map<std::string, bool> noted;
+    for (const auto& send : strip->scene_strip.sends) {
+      const std::string& dest = send.destination_bus_id;
+      if (declared.count(dest) || noted.count(dest)) continue;
+      noted[dest] = true;
+      notes.push_back("send '" + strip->id + "' targets undeclared bus '" + dest +
+                      "'; created as implicit aux");
+    }
+  }
+  return notes;
+}
+
 // Rebuilds the routing graph from the mixer's stored strips/buses/connections,
 // wiring main edges, send taps, and default master routing, then compiles and
 // prepares it. Throws sonare::SonareException on invalid topology.

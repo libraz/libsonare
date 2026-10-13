@@ -239,6 +239,9 @@ void build_and_compile(SonareMixer* mixer);
 /// @param implicit When non-null, set true only for the synthesized fallback.
 std::string resolve_master_bus_id(const std::vector<sonare::mixing::api::Bus>& buses,
                                   bool* implicit = nullptr);
+/// @brief One note per strip and send destination that no declared bus (nor the
+///        master) names; a compile still routes such a send through an implicit aux bus.
+std::vector<std::string> undeclared_send_notes(const SonareMixer* mixer);
 /// @brief Longest audible tail to the master over the live graph, compiling
 ///        first when the topology is dirty.
 int tail_samples(SonareMixer* mixer);
