@@ -868,11 +868,17 @@ class Mixer:
         Returns a :class:`MixerStereoResult` (``left``, ``right``,
         ``sample_rate``) matching the Node/WASM ``{left, right, sampleRate}``
         shape. With no input strips the master is silent (an empty block), to
-        match the C ABI which accepts ``input_count=0``.
+        match the C ABI which accepts ``input_count=0``. Fewer inputs than strips
+        leave the remaining strips silent; more raise ``SonareValueError``.
         """
         self._require()
         if len(left_channels) != len(right_channels):
             raise SonareValueError("left_channels and right_channels must have the same length")
+        strip_count = self.strip_count()
+        if len(left_channels) > strip_count:
+            raise SonareValueError(
+                f"got {len(left_channels)} input channels for a {strip_count}-strip mixer"
+            )
 
         left_arrays: list[ctypes.Array[ctypes.c_float]] = []
         right_arrays: list[ctypes.Array[ctypes.c_float]] = []

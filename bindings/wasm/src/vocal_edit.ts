@@ -523,6 +523,7 @@ export function vocalEditApiVersion(): number {
 
 /** Analyse mono PCM, or adopt a host analysis, and open an editing session. */
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
+  requestObject('createVocalEditSession', request, 'request', true);
   validateCreate(request);
   if (!vocalEditAvailable()) {
     throw new SonareError(

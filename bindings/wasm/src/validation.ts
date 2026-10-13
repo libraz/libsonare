@@ -1,4 +1,5 @@
 import { ErrorCode, SonareError } from './errors.js';
+import { REQUEST_SHAPES } from './request_keys.js';
 
 /**
  * Per-call validation options accepted by guarded wrappers. Empty-buffer
@@ -556,11 +557,64 @@ export function resolveRenderFrame(fnName: string, renderFrame: number | null | 
 }
 
 /**
+ * Refuses a request key the entry point does not declare, and a key of a nested
+ * options object it forwards to native code that the options do not declare. A
+ * declared key whose value is `undefined` is absent, as everywhere else. A key
+ * that belongs to a nested object is pointed at its field.
+ */
+function assertKnownRequestKeys(fnName: string, request: object): void {
+  const shape = REQUEST_SHAPES[fnName];
+  if (shape === undefined) {
+    throw new Error(`${fnName}: no request shape is declared`);
+  }
+  for (const key of Object.keys(request)) {
+    if (shape.keys.includes(key)) {
+      continue;
+    }
+    const owner = Object.entries({ ...shape.nested, ...shape.hints }).find(([, keys]) =>
+      keys.includes(key),
+    );
+    const hint = owner === undefined ? '' : ` ('${key}' belongs under '${owner[0]}')`;
+    throw new TypeError(`${fnName}: unknown request key '${key}'${hint}`);
+  }
+  for (const [field, keys] of Object.entries(shape.nested ?? {})) {
+    const value = (request as Record<string, unknown>)[field];
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      continue;
+    }
+    for (const key of Object.keys(value)) {
+      if (!keys.includes(key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}' in '${field}'`);
+      }
+    }
+  }
+}
+
+/**
+ * The options bag of a positional overload, which becomes part of the request
+ * the entry point reads: it declares the same keys as the request form, and a
+ * key outside them is refused by name rather than dropped.
+ */
+export function optionsBag<T extends object>(fnName: string, options: T): T {
+  const shape = REQUEST_SHAPES[fnName];
+  if (shape === undefined) {
+    throw new Error(`${fnName}: no request shape is declared`);
+  }
+  for (const key of Object.keys(options ?? {})) {
+    if (!shape.keys.includes(key)) {
+      throw new TypeError(`${fnName}: unknown option '${key}'`);
+    }
+  }
+  return options;
+}
+
+/**
  * The request-object form of a positional entry point: its first argument is
  * either the audio buffer or a request, so anything else (null, a number, an
  * array, another typed array) is a wrong-typed buffer and is reported as one,
  * naming the field, instead of failing on a property read. An entry point that
- * takes only a request (`requestOnly`) reports the request itself instead.
+ * takes only a request (`requestOnly`) reports the request itself instead. A
+ * request carrying a key the entry point does not declare is refused by name.
  */
 export function requestObject<T>(
   fnName: string,
@@ -578,6 +632,8 @@ export function requestObject<T>(
       throw new TypeError(`${fnName}: request must be an object`);
     }
     assertAudioSamples(fnName, value, {}, argName);
+    return value;
   }
+  assertKnownRequestKeys(fnName, value);
   return value;
 }

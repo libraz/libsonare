@@ -248,6 +248,9 @@ def decode_channels(data: bytes) -> tuple[np.ndarray, int]:
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     target_layout: ChannelLayout | int,
+    *,
+    normalize: bool = False,
+    include_lfe: bool = False,
 ) -> np.ndarray:
     """Downmix channels to a narrower layout with the ITU-R BS.775 rule.
 
@@ -259,10 +262,20 @@ def downmix(
     to ``ChannelLayout.MONO`` as the unweighted mean of its channels, as the
     decoders do, and has no other target.
 
+    The fold is not normalised: the coefficients sum, so a source with several
+    full-scale channels can leave the output past full scale (six channels of 1.0
+    fold to 2.414 on a stereo target). Pass ``normalize=True`` to scale the output
+    so the worst case stays at or below full scale, or leave headroom first.
+
     Args:
         channels: One buffer per channel, or a 2-D ``(channels, frames)`` array.
             All channels must be the same length.
         target_layout: A :class:`ChannelLayout` (or its integer value).
+        normalize: Scale the fold so the worst case (every input at full scale, in
+            phase) cannot exceed unity. A peak divisor, not a loudness match, so
+            typical material comes out a few dB quieter.
+        include_lfe: Fold the LFE channel into the front pair at -3 dB instead of
+            dropping it.
 
     Returns:
         A channel-planar 2-D ``float32`` array of shape
@@ -276,12 +289,16 @@ def downmix(
         SonareError: For an upmix or an unknown ``target_layout``.
     """
     lib = _get_lib()
-    mix = getattr(lib, "sonare_downmix", None)
+    mix = getattr(lib, "sonare_downmix_ex", None)
     if mix is None:
         raise _not_supported(
-            "loaded libsonare does not expose sonare_downmix; "
+            "loaded libsonare does not expose sonare_downmix_ex; "
             "rebuild or install a newer native library"
         )
+    if not isinstance(normalize, bool):
+        raise SonareValueError("downmix: normalize must be a bool")
+    if not isinstance(include_lfe, bool):
+        raise SonareValueError("downmix: include_lfe must be a bool")
     layout = ChannelLayout(_to_c_int(target_layout, "target_layout").value)
     planes = _linked_channel_planes("downmix", channels)
     frame_count = int(planes[0].shape[0])
@@ -295,6 +312,8 @@ def downmix(
                 _to_c_size_t(frame_count, "frames"),
                 _to_c_int(len(planes), "channels"),
                 _to_c_int(int(layout), "target_layout"),
+                ctypes.c_int(1 if include_lfe else 0),
+                ctypes.c_int(1 if normalize else 0),
                 ctypes.byref(out),
             )
         )

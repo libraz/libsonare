@@ -99,6 +99,31 @@ describe('downmix', () => {
     }
   });
 
+  it('does not normalise the fold, and normalize / includeLfe change it', () => {
+    const inv = Math.SQRT1_2;
+    const full = Array.from({ length: 6 }, () => plane(1));
+    // Six full-scale planes fold past full scale by default: 1 + 2 * 1/sqrt(2).
+    for (const v of downmix(full, 1)[0]) {
+      expect(v).toBeCloseTo(1 + 2 * inv, 5);
+    }
+    for (const v of downmix(full, 1, { normalize: true })[0]) {
+      expect(v).toBeCloseTo(1, 5);
+    }
+    const surround = [0.1, 0.2, 0.3, 0.4, 0.05, 0.15].map(plane);
+    const left = 0.1 + inv * 0.3 + inv * 0.05;
+    for (const v of downmix(surround, 1, { includeLfe: true })[0]) {
+      expect(v).toBeCloseTo(left + inv * 0.4, 6);
+    }
+    expect(downmix(surround, 1, {})[0][0]).toBeCloseTo(left, 6);
+  });
+
+  it('refuses an options argument that is not an object and a non-boolean option', () => {
+    const stereo = [plane(0.1), plane(0.1)];
+    expect(() => downmix(stereo, 0, 'x' as never)).toThrow(TypeError);
+    expect(() => downmix(stereo, 0, { normalize: 1 as never })).toThrow(TypeError);
+    expect(() => downmix(stereo, 0, { includeLfe: 'yes' as never })).toThrow(TypeError);
+  });
+
   it('copies on an identical layout and folds an unmodelled count by mean', () => {
     const stereo = [plane(0.25), plane(-0.5)];
     expect(downmix(stereo, 1).map((p) => Array.from(p))).toEqual(stereo.map((p) => Array.from(p)));

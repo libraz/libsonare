@@ -275,7 +275,8 @@ Napi::Value SonareWrap::EstimateRoom(const Napi::CallbackInfo& info) {
                            .or_default(cfg.aspect_hint_lw);
   cfg.aspect_hint_lh = sonare::ZeroIsDefault(FloatProperty(opts, "aspectHintLh", 0.0f))
                            .or_default(cfg.aspect_hint_lh);
-  cfg.reference_absorption = FloatProperty(opts, "referenceAbsorption", cfg.reference_absorption);
+  cfg.reference_absorption = sonare::ZeroIsDefault(FloatProperty(opts, "referenceAbsorption", 0.0f))
+                                 .or_default(cfg.reference_absorption);
   cfg.prefer_eyring = BoolProperty(opts, "preferEyring", true);
   const int n_bands = IntProperty(opts, "nOctaveBands", kZeroIsSentinel);
   if (n_bands != 0) cfg.acoustic.n_octave_bands = n_bands;

@@ -574,6 +574,13 @@ def configure_engine_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_char_p,
             ctypes.POINTER(ctypes.c_uint32),
         ]
+    if hasattr(lib, "sonare_engine_resolve_master_automation_id"):
+        lib.sonare_engine_resolve_master_automation_id.restype = ctypes.c_int32
+        lib.sonare_engine_resolve_master_automation_id.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_char_p,
+            ctypes.POINTER(ctypes.c_uint32),
+        ]
     if hasattr(lib, "sonare_engine_resolve_master_insert_automation_id"):
         lib.sonare_engine_resolve_master_insert_automation_id.restype = ctypes.c_int32
         lib.sonare_engine_resolve_master_insert_automation_id.argtypes = [

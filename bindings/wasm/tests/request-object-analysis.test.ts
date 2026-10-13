@@ -360,7 +360,14 @@ describe('WASM basic analysis request objects', () => {
       ),
     );
     expect(
-      Array.from(tempogramRatio({ tempogramData: fourier.data, ...tempogramOptions })),
+      Array.from(
+        tempogramRatio({
+          tempogramData: fourier.data,
+          sampleRate: tempogramOptions.sampleRate,
+          hopLength: tempogramOptions.hopLength,
+          winLength: tempogramOptions.winLength,
+        }),
+      ),
     ).toEqual(
       Array.from(
         tempogramRatio(

@@ -464,7 +464,7 @@ val js_decode_channels(val bytes) {
   return out;
 }
 
-val js_downmix(val channels, val target_layout_value) {
+val js_downmix(val channels, val target_layout_value, val options) {
   const int target_layout = checkedIntFromVal(target_layout_value, "targetLayout");
   if (channels.isUndefined() || channels.isNull()) {
     throw WasmTypeError("downmix: channels must be an array of Float32Array");
@@ -486,9 +486,12 @@ val js_downmix(val channels, val target_layout_value) {
     }
     packed.insert(packed.end(), plane.begin(), plane.end());
   }
+  const bool include_lfe = boolProperty(options, "includeLfe", false);
+  const bool normalize = boolProperty(options, "normalize", false);
   CFloatBuffer mixed;
   const SonareError err =
-      sonare_downmix(packed.data(), frames, static_cast<int>(count), target_layout, &mixed.data);
+      sonare_downmix_ex(packed.data(), frames, static_cast<int>(count), target_layout,
+                        include_lfe ? 1 : 0, normalize ? 1 : 0, &mixed.data);
   if (err != SONARE_OK) throw_c_error(err, "downmix");
   const size_t out_channels =
       static_cast<size_t>(channel_count(static_cast<ChannelLayout>(target_layout)));

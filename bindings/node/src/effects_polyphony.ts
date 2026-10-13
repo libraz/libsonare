@@ -88,6 +88,7 @@ export class PolyphonicAnalysis {
    * canonical spelling.
    */
   constructor(request: AnalyzePolyphonicRequest) {
+    requestObject('analyzePolyphonic', request, 'request', true);
     const { samples, sampleRate, ...options } = request;
     assertAudioInput('analyzePolyphonic', samples, sampleRate, options);
     assertPolyphonicOptions('analyzePolyphonic', options);

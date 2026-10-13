@@ -44,12 +44,14 @@ import type {
   RoomMorphStereoResult,
 } from './public_types.js';
 import { Mode, PitchClass } from './public_types.js';
+import { MUSIC_ANALYZE_OPTION_KEYS } from './request_keys.js';
 import type { ProgressCallback, WasmAcousticResult } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
   assertNonNegativeInteger,
+  optionsBag,
   requestObject,
 } from './validation.js';
 
@@ -126,10 +128,15 @@ export interface DetectKeyRequest extends DetectKeyOptions, SamplesRequest {}
 export interface DetectKeyCandidatesRequest extends KeyDetectionOptions, SamplesRequest {}
 
 /** Canonical request form for analysis with synchronous progress reporting. */
-export interface AnalyzeWithProgressRequest extends SamplesRequest {
+export interface AnalyzeWithProgressRequest extends SamplesRequest, MusicAnalyzeOptions {
   onProgress?: ProgressCallback;
   cancel?: () => boolean;
-  /** Analysis options, with the same fields and defaults {@link analyze} takes. */
+  /**
+   * Analysis options, with the same fields and defaults {@link analyze} takes.
+   * Equivalent to setting the same fields directly on this request object (the
+   * flattened form {@link analyze} takes); a field set both ways takes the
+   * value set here.
+   */
   options?: MusicAnalyzeOptions;
 }
 
@@ -218,7 +225,7 @@ export function detectBpm(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectBpm', options) }
       : requestObject('detectBpm', samples);
   assertAudioInput('detectBpm', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().detectBpm(request.samples, request.sampleRate ?? 22050);
@@ -248,7 +255,7 @@ export function detectKey(
 ): KeyDetection {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectKey', options) }
       : requestObject('detectKey', samples);
   assertAudioInput('detectKey', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule()._detectKeyWithOptions(
@@ -287,7 +294,7 @@ export function detectKeyCandidates(
 ): KeyCandidate[] {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectKeyCandidates', options) }
       : requestObject('detectKeyCandidates', samples);
   assertAudioInput('detectKeyCandidates', request.samples, request.sampleRate ?? 22050, request);
   // The embind value marshalling returns an array whose constructor is not this
@@ -330,7 +337,7 @@ export function detectOnsets(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectOnsets', options) }
       : requestObject('detectOnsets', samples);
   assertAudioInput('detectOnsets', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().detectOnsets(request.samples, request.sampleRate ?? 22050, request);
@@ -356,7 +363,7 @@ export function detectBeats(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectBeats', options) }
       : requestObject('detectBeats', samples);
   assertAudioInput('detectBeats', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().detectBeats(request.samples, request.sampleRate ?? 22050);
@@ -382,7 +389,7 @@ export function detectDownbeats(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectDownbeats', options) }
       : requestObject('detectDownbeats', samples);
   assertAudioInput('detectDownbeats', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().detectDownbeats(request.samples, request.sampleRate ?? 22050);
@@ -409,7 +416,7 @@ export function detectChords(
 ): ChordAnalysisResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectChords', options) }
       : requestObject('detectChords', samples);
   assertAudioInput('detectChords', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule().detectChords(
@@ -494,7 +501,7 @@ export function chordFunctionalAnalysis(
 ): FunctionalChord[] {
   const request =
     samples instanceof Float32Array
-      ? { samples, keyRoot, keyMode, sampleRate, ...options }
+      ? { samples, keyRoot, keyMode, sampleRate, ...optionsBag('chordFunctionalAnalysis', options) }
       : requestObject('chordFunctionalAnalysis', samples);
   assertAudioInput(
     'chordFunctionalAnalysis',
@@ -623,7 +630,7 @@ export function analyze(
 ): AnalysisResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('analyze', options) }
       : requestObject('analyze', samples);
   assertAudioInput('analyze', request.samples, request.sampleRate ?? 22050, request);
   const result = requireModule().analyze(request.samples, request.sampleRate ?? 22050, request);
@@ -773,7 +780,7 @@ export function detectAcoustic(
 ): AcousticResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('detectAcoustic', options) }
       : requestObject('detectAcoustic', samples);
   assertAudioInput('detectAcoustic', request.samples, request.sampleRate ?? 48000, request);
   const result: WasmAcousticResult = requireModule().detectAcoustic(
@@ -832,7 +839,7 @@ export function estimateRoom(
   }
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('estimateRoom', options) }
       : requestObject('estimateRoom', samples);
   assertAudioInput('estimateRoom', request.samples, request.sampleRate ?? 48000, request);
   return module.estimateRoom(
@@ -878,7 +885,9 @@ export function roomGeometryFromEstimate(
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
   const request: RoomGeometryFromEstimateRequest =
-    'estimate' in estimate ? estimate : { estimate, ...options };
+    'estimate' in estimate
+      ? requestObject('roomGeometryFromEstimate', estimate, 'request', true)
+      : { estimate, ...optionsBag('roomGeometryFromEstimate', options) };
   if (typeof request.estimate !== 'object' || request.estimate === null) {
     throw new TypeError('roomGeometryFromEstimate: estimate must be an object');
   }
@@ -932,7 +941,7 @@ export function roomMorph(
   }
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ...options }
+      ? { samples, sampleRate: sampleRate as number, ...optionsBag('roomMorph', options) }
       : requestObject('roomMorph', samples);
   assertAudioInput('roomMorph', request.samples, request.sampleRate, request);
   return module.roomMorph(request.samples, request.sampleRate, resolveAcousticSelectors(request));
@@ -1001,16 +1010,25 @@ export function analyzeWithProgress(
   onProgress?: ProgressCallback,
   options?: MusicAnalyzeOptions,
 ): AnalysisResult {
-  const request: AnalyzeWithProgressRequest =
+  const request: AnalyzeWithProgressRequest = requestObject(
+    'analyzeWithProgress',
     samples instanceof Float32Array
       ? { samples, sampleRate, onProgress: onProgress as ProgressCallback, options }
-      : requestObject('analyzeWithProgress', samples);
+      : samples,
+  );
   assertAudioInput('analyzeWithProgress', request.samples, request.sampleRate ?? 22050, request);
-  // The module reads options with the same reader analyze uses.
+  // Flat option fields and `options` both reach the reader analyze uses; `options` wins a field set in both.
+  const flat: Record<string, unknown> = {};
+  for (const key of MUSIC_ANALYZE_OPTION_KEYS) {
+    const value = (request as unknown as Record<string, unknown>)[key];
+    if (value !== undefined) {
+      flat[key] = value;
+    }
+  }
   const result = requireModule().analyzeWithProgress(
     request.samples,
     request.sampleRate ?? 22050,
-    request.options ?? {},
+    { ...flat, ...request.options },
     request.onProgress ?? (() => {}),
     request.cancel ?? (() => false),
   );
@@ -1024,7 +1042,15 @@ export interface BpmCandidate {
 
 export interface BpmAnalysisResult {
   bpm: number;
+  /**
+   * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (30–300 by default), searched at
+   * the input rate. `analyze()` searches 60–200 BPM at 22050 Hz, so its `bpmConfidence` can differ.
+   */
   confidence: number;
+  /**
+   * Chosen tempo first (`candidates[0].bpm === bpm`), then the other histogram
+   * bins by descending vote share.
+   */
   candidates: BpmCandidate[];
   autocorrelation: Float32Array;
   tempogram: Float32Array;
@@ -1107,7 +1133,7 @@ export function analyzeBpm(
 ): BpmAnalysisResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('analyzeBpm', options) }
       : requestObject('analyzeBpm', samples);
   assertAudioInput('analyzeBpm', request.samples, request.sampleRate ?? 22050, request);
   assertNonNegativeInteger('analyzeBpm', request.maxCandidates ?? 5, 'maxCandidates');
@@ -1139,7 +1165,7 @@ export function analyzeRhythm(
 ): RhythmAnalysisResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('analyzeRhythm', options) }
       : requestObject('analyzeRhythm', samples);
   assertAudioInput('analyzeRhythm', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeRhythm(
@@ -1169,7 +1195,7 @@ export function analyzeDynamics(
 ): DynamicsResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('analyzeDynamics', options) }
       : requestObject('analyzeDynamics', samples);
   assertAudioInput('analyzeDynamics', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeDynamics(
@@ -1198,7 +1224,7 @@ export function analyzeTimbre(
 ): TimbreAnalysisResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('analyzeTimbre', options) }
       : requestObject('analyzeTimbre', samples);
   assertAudioInput('analyzeTimbre', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().analyzeTimbre(

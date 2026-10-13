@@ -237,7 +237,7 @@ val js_reassigned_spectrogram(val samples, const val& sample_rate_val, const val
   return out;
 }
 
-// Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT power spectrogram
+// Inverse: Mel power spectrogram [n_mels x n_frames] -> STFT magnitude spectrogram
 // [(n_fft/2 + 1) x n_frames]. Mirrors feature::mel_to_stft.
 //
 // hop_length is intentionally absent: feature::mel_to_stft does not consume it.
@@ -268,7 +268,7 @@ val js_mel_to_stft(val mel_power, const val& n_mels_val, const val& n_frames_val
   val out = val::object();
   out.set("nBins", n_fft / 2 + 1);
   out.set("nFrames", n_frames);
-  out.set("power", vectorToFloat32Array(stft));
+  out.set("magnitude", vectorToFloat32Array(stft));
   return out;
 }
 

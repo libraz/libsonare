@@ -15,7 +15,7 @@ import type {
   VoicedFlags,
 } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
+import { assertAudioInput, assertFiniteScalar, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -111,6 +111,7 @@ export function timeStretch(
   hopLength?: number,
   options: ValidateOptions = {},
 ): Float32Array {
+  optionsBag('timeStretch', options);
   if (
     nFftOrOptions !== undefined &&
     nFftOrOptions !== null &&
@@ -186,6 +187,7 @@ export function pitchShift(
   hopLength?: number,
   options: ValidateOptions = {},
 ): Float32Array {
+  optionsBag('pitchShift', options);
   if (
     nFftOrOptions !== undefined &&
     nFftOrOptions !== null &&
@@ -256,7 +258,13 @@ export function pitchCorrectToMidi(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, currentMidi, targetMidi, ...options }
+      ? {
+          samples,
+          sampleRate,
+          currentMidi,
+          targetMidi,
+          ...optionsBag('pitchCorrectToMidi', options),
+        }
       : requestObject('pitchCorrectToMidi', samples);
   assertAudioInput('pitchCorrectToMidi', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().pitchCorrectToMidi(
@@ -325,7 +333,7 @@ export function pitchCorrectToMidiTimevarying(
           hopLength,
           voiced,
           voicedProb,
-          ...options,
+          ...optionsBag('pitchCorrectToMidiTimevarying', options),
         }
       : requestObject('pitchCorrectToMidiTimevarying', samples);
   assertAudioInput(
@@ -390,7 +398,13 @@ export function pitchCorrectTimevarying(
 ): Float32Array {
   const request: PitchCorrectTimevaryingRequest =
     samples instanceof Float32Array
-      ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
+      ? {
+          samples,
+          f0Hz: f0Hz as Float32Array,
+          sampleRate,
+          hopLength,
+          ...optionsBag('pitchCorrectTimevarying', options),
+        }
       : requestObject('pitchCorrectTimevarying', samples);
   assertAudioInput(
     'pitchCorrectTimevarying',

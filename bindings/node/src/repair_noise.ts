@@ -15,6 +15,7 @@ import {
   assertAudioChannels,
   assertAudioInput,
   assertPositiveInteger,
+  optionsBag,
   requestObject,
 } from './validation.js';
 
@@ -60,7 +61,7 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDenoiseClassical', options) }
       : requestObject('masteringRepairDenoiseClassical', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDenoiseClassical', request.samples, resolvedSampleRate, request);
@@ -241,7 +242,7 @@ export function masteringRepairDehum(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDehum', options) }
       : requestObject('masteringRepairDehum', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDehum', request.samples, resolvedSampleRate, request);

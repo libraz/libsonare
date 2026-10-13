@@ -28,6 +28,13 @@ import type {
 } from './protocol.js';
 
 export interface SonareWorkletProcessorOptions {
+  /**
+   * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not
+   * initialized yet. Same recipe as {@link SonareRealtimeEngineWorkletProcessorOptions}:
+   * `globalThis.SonareEmbindModuleFactory` builds the module from these bytes,
+   * and the processor posts `{ type: 'ready' }` once it is up.
+   */
+  wasmBinary?: ArrayBuffer | Uint8Array;
   sceneJson: string;
   sampleRate?: number;
   blockSize?: number;
@@ -184,6 +191,14 @@ export interface SonarePlaybackWorkletProcessorOptions {
    * RangeError for any other value.
    */
   sampleRate?: number;
+  /**
+   * Compiled `sonare.wasm` bytes, for a worklet realm where the module is not
+   * initialized yet. Used with `globalThis.SonareEmbindModuleFactory` (and
+   * `SonareEmbindInitPromise` when the host starts the init itself), exactly as
+   * for the realtime engine processor; the processor posts `{ type: 'ready' }`
+   * once the module is up and renders silence until then.
+   */
+  wasmBinary?: ArrayBuffer | Uint8Array;
 }
 
 export interface SonarePlaybackNodeOptions extends SonarePlaybackWorkletProcessorOptions {
@@ -249,7 +264,7 @@ export interface SonarePlaybackDiagnosticsReplyMessage {
 /** Posted when a control message is refused (e.g. a changed prepare key). */
 export interface SonarePlaybackErrorMessage {
   type: 'error';
-  request: SonarePlaybackMessage['type'];
+  request: SonarePlaybackMessage['type'] | 'init';
   message: string;
 }
 

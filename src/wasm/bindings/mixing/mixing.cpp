@@ -8,6 +8,7 @@
 val js_mixing_scene_preset_names() { return stringVectorToVal(mixing::api::scene_preset_names()); }
 
 std::string js_mixing_scene_preset_json(std::string preset_name) {
+  wasmRefuseEmbeddedNul(preset_name, "preset");
   return mixing::api::scene_to_json(
       mixing::api::scene_preset(mixing::api::scene_preset_from_string(preset_name)));
 }

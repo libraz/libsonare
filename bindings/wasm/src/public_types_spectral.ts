@@ -733,12 +733,13 @@ export interface MfccResult {
 }
 
 /**
- * STFT power spectrogram result (from inverse Mel reconstruction)
+ * STFT magnitude spectrogram result (from inverse Mel reconstruction). The data
+ * is magnitude, not squared magnitude.
  */
-export interface StftPowerResult {
+export interface StftMagnitudeResult {
   nBins: number;
   nFrames: number;
-  power: Float32Array;
+  magnitude: Float32Array;
 }
 
 /**

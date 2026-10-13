@@ -803,10 +803,13 @@ class _EngineMixingMixin:
         ``stereo.*``, ``maximizer.*`` and ``multiband.*`` processors are all
         available as strip inserts, so placing one on a strip and resolving its
         parameter here drives it at audio-block precision, live and offline
-        alike. The whole-signal stages of the offline mastering chain
-        (``repair.*``, ``loudness``, and the match stages) have no insert form
-        and no automation id: they buffer the entire signal by construction and
-        do not run on the realtime path.
+        alike. The whole-signal stages of the offline mastering chain that have no insert form
+        (``repair.declick``, ``repair.declip``, ``repair.trimSilence``, ``loudness``, and the match
+        stages) have no automation id: they buffer the entire signal by construction and do not run
+        on the realtime path. The four realtime repair inserts (``repair.decrackle``,
+        ``repair.dehum``, ``repair.denoiseClassical``, ``repair.dereverbClassical``) load into a
+        strip, but every one of their parameters is construction-only, so no automation id resolves
+        (-1) and an edit needs a strip replacement.
 
         Track, bus and master insert ids share one lifetime rule: an id names
         its strip by identity and the kind of processor in its slot (for
@@ -865,6 +868,23 @@ class _EngineMixingMixin:
             _get_lib().sonare_engine_resolve_bus_automation_id(
                 self._require_handle(),
                 _to_c_uint32(bus_id, "bus_id"),
+                _utf8_arg(param_name, "param_name"),
+                ctypes.byref(out_id),
+            )
+        )
+        return int(out_id.value)
+
+    def resolve_master_automation_id(self, param_name: str) -> int:
+        """Resolve the master strip's fader, pan or width to its reserved automation id.
+
+        ``param_name`` is ``"faderDb"``, ``"pan"`` or ``"width"``. The master strip always
+        exists, so the id never goes stale. Raises :class:`SonareError` if the name is none
+        of the three.
+        """
+        out_id = ctypes.c_uint32()
+        _check(
+            _get_lib().sonare_engine_resolve_master_automation_id(
+                self._require_handle(),
                 _utf8_arg(param_name, "param_name"),
                 ctypes.byref(out_id),
             )

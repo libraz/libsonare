@@ -18,6 +18,7 @@
  * ```
  */
 
+import { ErrorCode, SonareError } from './errors.js';
 import './lifetime.js';
 import {
   assertAbiCompatible,
@@ -44,6 +45,7 @@ export type {
   BrowserAudioDecodeOptions,
   ChannelLayout,
   DecodedChannels,
+  DownmixOptions,
 } from './audio.js';
 export { Audio, decodeChannels, decodeChannelsWithBrowserFallback, downmix } from './audio.js';
 export type { ChordAnnotationFields } from './chord_annotation.js';
@@ -917,7 +919,7 @@ export type {
   StereoMonoCompatCheckLogBandsResult,
   StereoMonoCompatCheckResult,
   StereoPairProcessor,
-  StftPowerResult,
+  StftMagnitudeResult,
   StftResult,
   StreamingEqualizerConfig,
   StreamingLoudnessGainResult,
@@ -1260,9 +1262,16 @@ function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
     }
     return preset;
   }
+  if (preset.includes('\0')) {
+    throw new RangeError('preset must not contain NUL');
+  }
   const ordinal = VOICE_PRESET_ORDINALS.indexOf(preset);
   if (ordinal < 0) {
-    throw new Error(`Unknown voice character preset: ${preset}`);
+    throw new SonareError(
+      ErrorCode.InvalidParameter,
+      'InvalidParameter',
+      `Unknown voice character preset: ${preset}`,
+    );
   }
   return ordinal;
 }

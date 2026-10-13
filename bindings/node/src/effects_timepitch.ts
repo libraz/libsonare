@@ -15,7 +15,7 @@ import type {
   PitchCorrectOptions,
   VoicedFlags,
 } from './types.js';
-import { assertAudioInput, assertFiniteScalar, requestObject } from './validation.js';
+import { assertAudioInput, assertFiniteScalar, optionsBag, requestObject } from './validation.js';
 
 export interface TimeStretchRequest extends EffectSamplesRequest {
   /**
@@ -321,7 +321,13 @@ export function pitchCorrectTimevarying(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, f0Hz: f0Hz as Float32Array, sampleRate, hopLength, ...options }
+      ? {
+          samples,
+          f0Hz: f0Hz as Float32Array,
+          sampleRate,
+          hopLength,
+          ...optionsBag('pitchCorrectTimevarying', options),
+        }
       : requestObject('pitchCorrectTimevarying', samples);
   const {
     samples: input,

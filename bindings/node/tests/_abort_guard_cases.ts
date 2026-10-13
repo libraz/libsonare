@@ -807,6 +807,11 @@ export const CASES: AbortGuardCase[] = [
     badArguments: [{ argument: 'paramName', call: (e) => e.resolveBusAutomationId(BUS_ID, 42) }],
   },
   {
+    name: 'RealtimeEngine.resolveMasterAutomationId',
+    missingRequired: [],
+    badArguments: [{ argument: 'paramName', call: (e) => e.resolveMasterAutomationId(42) }],
+  },
+  {
     name: 'RealtimeEngine.resolveMasterInsertAutomationId',
     missingRequired: [],
     badArguments: [

@@ -873,7 +873,7 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   SONARE_NODE_TRY
 
   if (info.Length() < 1 || !info[0].IsArray()) {
-    Napi::TypeError::New(env, "Expected (Float32Array[] channels, targetLayout)")
+    Napi::TypeError::New(env, "Expected (Float32Array[] channels, targetLayout, options?)")
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
@@ -884,6 +884,16 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
   int target = 0;
   if (!sonare_node::RequiredIntArg(env, info, 1, "targetLayout", &target)) {
     return env.Undefined();
+  }
+  bool include_lfe = false;
+  bool normalize = false;
+  if (info.Length() > 2 && !info[2].IsUndefined() && !info[2].IsNull()) {
+    Napi::Object options;
+    if (!sonare_node::RequiredObjectValue(env, info[2], "downmix options", &options)) {
+      return env.Undefined();
+    }
+    include_lfe = sonare_node::BoolProperty(options, "includeLfe", false);
+    normalize = sonare_node::BoolProperty(options, "normalize", false);
   }
   if (inputs.ptrs.empty()) {
     Napi::RangeError::New(env, "downmix: channels must not be empty").ThrowAsJavaScriptException();
@@ -898,8 +908,8 @@ Napi::Value SonareWrap::Downmix(const Napi::CallbackInfo& info) {
                 packed.begin() + static_cast<std::ptrdiff_t>(channel * frames));
   }
   float* out = nullptr;
-  SonareError err =
-      sonare_downmix(packed.data(), frames, static_cast<int>(inputs.ptrs.size()), target, &out);
+  SonareError err = sonare_downmix_ex(packed.data(), frames, static_cast<int>(inputs.ptrs.size()),
+                                      target, include_lfe ? 1 : 0, normalize ? 1 : 0, &out);
   if (err != SONARE_OK) {
     sonare_node::ThrowSonareError(env, err);
     return env.Undefined();

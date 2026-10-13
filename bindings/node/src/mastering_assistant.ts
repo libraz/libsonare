@@ -263,6 +263,7 @@ export function masteringAssistantSuggestStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): TypedJson<MasteringAssistantResult> {
   assertStereoRequest('masteringAssistantSuggestStereo', request);
+  requestObject('masteringAssistantSuggestStereo', request, 'left', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringAssistantSuggestStereo',
@@ -301,6 +302,7 @@ export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantSuggestStereoRequest,
 ): Record<string, number | boolean> {
   assertStereoRequest('masteringAssistantSuggestChainStereo', request);
+  requestObject('masteringAssistantSuggestChainStereo', request, 'left', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringAssistantSuggestChainStereo',
@@ -338,6 +340,7 @@ export function masteringAudioProfileStereo(
   request: MasteringAudioProfileStereoRequest,
 ): TypedJson<MasteringAudioProfile> {
   assertStereoRequest('masteringAudioProfileStereo', request);
+  requestObject('masteringAudioProfileStereo', request, 'left', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringAudioProfileStereo',
@@ -374,6 +377,7 @@ export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): TypedJson<MasteringStreamingPreviewResult> {
   assertStereoRequest('masteringStreamingPreviewStereo', request);
+  requestObject('masteringStreamingPreviewStereo', request, 'left', true);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(
     'masteringStreamingPreviewStereo',

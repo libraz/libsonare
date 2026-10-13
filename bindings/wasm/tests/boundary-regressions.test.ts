@@ -43,7 +43,7 @@ describe('boundary regressions (WASM)', () => {
     );
 
     const valid = module.melToStft(new Float32Array([1]), 1, 1, SR, 2, 0, 0, false);
-    expect(valid.power).toBeInstanceOf(Float32Array);
+    expect(valid.magnitude).toBeInstanceOf(Float32Array);
     expect(valid.nFrames).toBe(1);
   });
 

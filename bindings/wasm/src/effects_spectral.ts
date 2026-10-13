@@ -6,7 +6,7 @@
 import { getSonareModule } from './module_state.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject, resolveSampleBound } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -77,7 +77,7 @@ export function spectralEdit(
 ): Float32Array {
   const request: SpectralEditRequest =
     samples instanceof Float32Array
-      ? { samples, sampleRate: sampleRate as number, ops, ...options }
+      ? { samples, sampleRate: sampleRate as number, ops, ...optionsBag('spectralEdit', options) }
       : requestObject('spectralEdit', samples);
   assertAudioInput('spectralEdit', request.samples, request.sampleRate, request);
   const requestOps = request.ops ?? [];

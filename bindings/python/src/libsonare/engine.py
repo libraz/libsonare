@@ -320,6 +320,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
     def tail_samples(self) -> int:
         """Longest audible tail after the last input, in samples (an upper bound).
 
+        The bound is conservative before the first note (a drum-kit or General
+        MIDI program lane has no patch yet) and narrows once a patch has sounded.
         2147483647 means the tail is unbounded. Control thread only; not
         concurrent with processing.
         """
@@ -710,8 +712,8 @@ class RealtimeEngine(_EngineMidiMixin, _EngineMixingMixin, _EngineIoMixin):
         target reverts to this value once that lane empties -- see
         :meth:`set_automation_lane`. A reserved mixer id (``0x4D58xxxx``) other
         than a master id names no strip and raises :class:`SonareError`
-        (invalid parameter); resolve per-strip ids with the ``resolve_*_automation_id``
-        methods.
+        (invalid parameter); resolve ids with the ``resolve_*_automation_id``
+        methods (``resolve_master_automation_id`` for the master fader, pan and width).
         """
         lib = _get_lib()
         if not hasattr(lib, "sonare_engine_set_parameter"):

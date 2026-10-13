@@ -1,4 +1,10 @@
 import { ErrorCode, SonareError } from './errors.js';
+import {
+  NESTED_KEY_HINTS,
+  NESTED_REQUEST_KEYS,
+  REQUEST_KEYS,
+  type RequestFn,
+} from './request_keys.js';
 import type { ProjectMidiEvent } from './types.js';
 
 /**
@@ -585,29 +591,117 @@ export function resolveOptionalNonNegative(
   return value;
 }
 
+/** The declared field names of `fnName`'s request. */
+type RequestKeysOf<N extends RequestFn> = (typeof REQUEST_KEYS)[N];
+
+type NestedKeysOf<N extends RequestFn> = N extends keyof typeof NESTED_REQUEST_KEYS
+  ? (typeof NESTED_REQUEST_KEYS)[N]
+  : Record<never, never>;
+
+/** Field names present in exactly one of `A` and `B`. */
+type KeyDrift<A, B> = Exclude<keyof A, keyof B> | Exclude<keyof B, keyof A>;
+
+/** Drift of every nested object whose keys are refused, named by the field holding it. */
+type NestedDrift<T, N extends RequestFn> = {
+  [F in keyof NestedKeysOf<N>]: F extends keyof T
+    ? KeyDrift<Exclude<NonNullable<T[F]>, string>, NestedKeysOf<N>[F]>
+    : F;
+}[keyof NestedKeysOf<N>];
+
+/**
+ * `unknown` while the request type and its declared key set agree, otherwise an
+ * object type no request satisfies, so a field added to a request type without
+ * its key-set entry (or the reverse) fails to compile at the call.
+ */
+type RequestKeysAgree<T, N extends RequestFn> = [
+  KeyDrift<T, RequestKeysOf<N>> | NestedDrift<T, N>,
+] extends [never]
+  ? unknown
+  : { requestKeysDrift: KeyDrift<T, RequestKeysOf<N>> | NestedDrift<T, N> };
+
+function ownKey(keys: object, key: string): boolean {
+  return Object.hasOwn(keys, key);
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    !Array.isArray(value) &&
+    !ArrayBuffer.isView(value)
+  );
+}
+
+/**
+ * Refuse the first key of `value` outside `fnName`'s declared request fields,
+ * and the first key of a nested options object outside its declared fields. A
+ * key that belongs to a nested object is reported with the field it goes under.
+ */
+function assertKnownRequestKeys(fnName: RequestFn, value: Record<string, unknown>): void {
+  const keys: object = REQUEST_KEYS[fnName];
+  const nested: Record<string, object> =
+    NESTED_REQUEST_KEYS[fnName as keyof typeof NESTED_REQUEST_KEYS] ?? {};
+  const hints: Record<string, object> = NESTED_KEY_HINTS[fnName] ?? {};
+  for (const key of Object.keys(value)) {
+    if (ownKey(keys, key)) {
+      continue;
+    }
+    const owner = Object.entries({ ...nested, ...hints }).find(([, set]) => ownKey(set, key));
+    const hint = owner ? ` ('${key}' belongs under '${owner[0]}')` : '';
+    throw new TypeError(`${fnName}: unknown request key '${key}'${hint}`);
+  }
+  for (const [field, set] of Object.entries(nested)) {
+    const options = value[field];
+    if (!isPlainObject(options)) {
+      continue;
+    }
+    for (const key of Object.keys(options)) {
+      if (!ownKey(set, key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}' in '${field}'`);
+      }
+    }
+  }
+}
+
+/**
+ * The options bag of a positional overload, held to the same declared fields
+ * as the request form: an unknown key is refused (`TypeError`), naming it.
+ */
+export function optionsBag<O>(fnName: RequestFn, options: O): O {
+  if (isPlainObject(options)) {
+    const keys: object = REQUEST_KEYS[fnName];
+    for (const key of Object.keys(options)) {
+      if (!ownKey(keys, key)) {
+        throw new TypeError(`${fnName}: unknown option '${key}'`);
+      }
+    }
+  }
+  return options;
+}
+
 /**
  * The request-object form of a positional entry point: its first argument is
  * either the audio buffer or a request, so anything else (null, a number, an
  * array, another typed array) is a wrong-typed buffer and is reported as one,
  * naming the field, instead of failing on a property read. An entry point that
  * takes only a request (`requestOnly`) reports the request itself instead.
+ *
+ * A request carrying a key its entry point does not declare is refused, naming
+ * the key (`TypeError`), as is an unknown key inside a nested options object.
  */
-export function requestObject<T>(
-  fnName: string,
-  value: T,
+export function requestObject<T, N extends RequestFn>(
+  fnName: N,
+  value: T & RequestKeysAgree<T, N>,
   argName = 'samples',
   requestOnly = false,
 ): T {
-  if (
-    typeof value !== 'object' ||
-    value === null ||
-    Array.isArray(value) ||
-    ArrayBuffer.isView(value)
-  ) {
+  if (!isPlainObject(value)) {
     if (requestOnly) {
       throw new TypeError(`${fnName}: request must be an object`);
     }
     assertAudioSamples(fnName, value, {}, argName);
+  } else {
+    assertKnownRequestKeys(fnName, value);
   }
   return value;
 }

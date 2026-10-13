@@ -283,7 +283,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     control: [0, 300],
     call: (v) =>
       magnitudeSum(
-        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, v, 0, false).power,
+        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, v, 0, false).magnitude,
       ),
   },
   {
@@ -292,7 +292,7 @@ const FINITE_ARGUMENTS: FloatArgument[] = [
     control: [0, 4000],
     call: (v) =>
       magnitudeSum(
-        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 0, v, false).power,
+        native.melToStft(MEL.power, 32, MEL.nFrames, SAMPLE_RATE, 1024, 0, v, false).magnitude,
       ),
   },
   {

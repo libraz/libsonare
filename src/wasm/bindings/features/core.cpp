@@ -49,7 +49,10 @@ float js_mel_to_hz(float mel) { return mel_to_hz(mel); }
 float js_hz_to_midi(float hz) { return hz_to_midi(hz); }
 float js_midi_to_hz(float midi) { return midi_to_hz(midi); }
 std::string js_hz_to_note(float hz) { return hz_to_note(hz); }
-float js_note_to_hz(const std::string& note) { return note_to_hz(note); }
+float js_note_to_hz(const std::string& note) {
+  wasmRefuseEmbeddedNul(note, "note");
+  return note_to_hz(note);
+}
 float js_frames_to_time(const val& frames, const val& sr, const val& hop_length) {
   return frames_to_time(checkedIntFromVal(frames, "frames"), checkedIntFromVal(sr, "sr"),
                         checkedIntFromVal(hop_length, "hopLength"));

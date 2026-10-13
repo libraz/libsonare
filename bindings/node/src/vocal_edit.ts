@@ -589,6 +589,7 @@ export function vocalEditApiVersion(): number {
 }
 
 export function createVocalEditSession(request: VocalCreateRequest): VocalEditSession {
+  requestObject('createVocalEditSession', request, 'request', true);
   assertAudioInput('createVocalEditSession', request?.samples, request?.sampleRate);
   return wrapVocalEditSession(vocalAddon.createVocalEditSession(request), request.sampleRate);
 }

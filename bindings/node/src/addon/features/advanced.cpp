@@ -272,7 +272,7 @@ Napi::Value SonareWrap::MelToStft(const Napi::CallbackInfo& info) {
   Napi::Object out = Napi::Object::New(env);
   out.Set("nBins", Napi::Number::New(env, n_fft / 2 + 1));
   out.Set("nFrames", Napi::Number::New(env, n_frames));
-  out.Set("power", VecToFloat32(env, stft));
+  out.Set("magnitude", VecToFloat32(env, stft));
   return out;
   SONARE_NODE_CATCH(env)
 }

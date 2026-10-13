@@ -14,12 +14,16 @@ import pytest
 
 from libsonare import (
     Mixer,
+    Project,
     SonareValueError,
     master_audio,
     mastering_preset_params,
     mix_stereo,
     mixing_scene_preset_json,
     note_to_hz,
+    realtime_voice_changer_preset_config,
+    realtime_voice_changer_preset_json,
+    validate_realtime_voice_changer_preset_json,
 )
 from libsonare._engine_conversions import _fixed_bytes
 from libsonare._narrowing import _utf8_arg
@@ -64,6 +68,10 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
         lambda: Mixer.from_scene_json('{"version":1}\x00trailing'),
         lambda: mastering_preset_params("pop\x00junk"),
         lambda: master_audio([0.1] * 4096, 44100, "pop\x00junk"),
+        lambda: realtime_voice_changer_preset_json("neutral-monitor\x00junk"),
+        lambda: realtime_voice_changer_preset_config("neutral-monitor\x00junk"),
+        lambda: validate_realtime_voice_changer_preset_json("{}\x00junk"),
+        lambda: Project.from_json(Project().to_json() + "\x00junk"),
     ],
     ids=[
         "note_to_hz",
@@ -71,6 +79,10 @@ def test_no_encode_call_bypasses_the_shared_encoder() -> None:
         "Mixer.from_scene_json",
         "mastering_preset_params",
         "master_audio",
+        "realtime_voice_changer_preset_json",
+        "realtime_voice_changer_preset_config",
+        "validate_realtime_voice_changer_preset_json",
+        "Project.from_json",
     ],
 )
 def test_embedded_nul_is_refused(call) -> None:

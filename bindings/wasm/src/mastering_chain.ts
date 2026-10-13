@@ -9,7 +9,7 @@ import type {
 } from './public_types.js';
 import type { ProgressCallback } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertString, requestObject } from './validation.js';
+import { assertAudioInput, assertString, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -76,6 +76,7 @@ export function normalize(
   modeOrOptions: NormalizeMode | ValidateOptions = 'peak',
   options: ValidateOptions = {},
 ): Float32Array {
+  optionsBag('normalize', options);
   if (
     modeOrOptions !== undefined &&
     modeOrOptions !== null &&

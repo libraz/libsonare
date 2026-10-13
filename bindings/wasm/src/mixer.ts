@@ -152,7 +152,9 @@ export class Mixer {
    * Mix one block of per-strip stereo audio into the stereo master.
    *
    * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
-   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`
+   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`.
+   *   Fewer inputs than strips leave the remaining strips silent.
+   * @throws RangeError when more inputs are given than the mixer has strips
    * @returns Mixed stereo master (`left`, `right`, `sampleRate`)
    */
   processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
@@ -166,8 +168,9 @@ export class Mixer {
    * Mix one block into caller-owned output arrays.
    *
    * This avoids allocating the result object and result `Float32Array`s. It is
-   * intended for realtime bridges such as AudioWorklet; the input channel count
-   * must match the scene strip count and all arrays must have the same length.
+   * intended for realtime bridges such as AudioWorklet; all arrays must have the
+   * same length. Like {@link processStereo}, fewer inputs than strips leave the
+   * remaining strips silent and more than the strip count throw a `RangeError`.
    */
   processStereoInto(
     leftChannels: Float32Array[],

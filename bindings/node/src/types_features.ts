@@ -14,14 +14,14 @@ export interface CqtResult {
   frequencies: Float32Array;
 }
 
-/** Reconstructed STFT power from a mel spectrogram (`melToStft`). */
+/** Reconstructed STFT magnitude from a mel spectrogram (`melToStft`). */
 export interface InverseStftResult {
   /** Number of STFT frequency bins (`nFft / 2 + 1`). */
   nBins: number;
   /** Number of time frames. */
   nFrames: number;
-  /** Row-major `[nBins x nFrames]` magnitude matrix. */
-  power: Float32Array;
+  /** Row-major `[nBins x nFrames]` magnitude matrix (not squared). */
+  magnitude: Float32Array;
 }
 
 /** Reconstructed mel spectrogram from MFCCs (`mfccToMel`). */

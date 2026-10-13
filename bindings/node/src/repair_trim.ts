@@ -5,7 +5,7 @@
 import type { MasteringRepairSamplesRequest } from './_repair_common.js';
 import { addon } from './native.js';
 import type { TrimRange, TrimSilenceStereoResult } from './types.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject, resolveSampleBound } from './validation.js';
 
 /** Trimming modes accepted by `masteringRepairTrimSilence`. */
 export type TrimSilenceMode = 'peak' | 'lufsGated';
@@ -60,7 +60,7 @@ export function masteringRepairTrimSilence(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairTrimSilence', options) }
       : requestObject('masteringRepairTrimSilence', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairTrimSilence', request.samples, resolvedSampleRate, request);

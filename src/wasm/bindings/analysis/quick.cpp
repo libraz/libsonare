@@ -1082,7 +1082,8 @@ val js_estimate_room(val samples, const val& sample_rate_val, val opts) {
   config.aspect_hint_lh = sonare::ZeroIsDefault(floatProperty(opts, "aspectHintLh", 0.0f))
                               .or_default(config.aspect_hint_lh);
   config.reference_absorption =
-      floatProperty(opts, "referenceAbsorption", config.reference_absorption);
+      sonare::ZeroIsDefault(floatProperty(opts, "referenceAbsorption", 0.0f))
+          .or_default(config.reference_absorption);
   config.prefer_eyring = boolProperty(opts, "preferEyring", true);
   const int n_bands = intProperty(opts, "nOctaveBands", 0);
   if (n_bands != 0) config.acoustic.n_octave_bands = n_bands;

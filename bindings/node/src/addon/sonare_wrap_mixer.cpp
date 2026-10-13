@@ -147,6 +147,14 @@ Napi::Value MixerWrap::ProcessStereo(const Napi::CallbackInfo& info) {
         .ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Fewer inputs than strips leave the rest silent; more is an argument error.
+  const size_t strip_count = sonare_mixer_strip_count(mixer_);
+  if (count > strip_count) {
+    Napi::RangeError::New(env, "got " + std::to_string(count) + " input channels for a " +
+                                   std::to_string(strip_count) + "-strip mixer")
+        .ThrowAsJavaScriptException();
+    return env.Undefined();
+  }
 
   std::vector<Napi::Float32Array> left_arrays;
   std::vector<Napi::Float32Array> right_arrays;

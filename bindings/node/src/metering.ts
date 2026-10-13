@@ -9,6 +9,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamplesInWindow,
+  optionsBag,
   requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
@@ -107,7 +108,7 @@ export function meteringPeakDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringPeakDb', options) }
       : requestObject('meteringPeakDb', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringPeakDb', request.samples, resolvedSampleRate, request);
@@ -127,7 +128,7 @@ export function meteringRmsDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringRmsDb', options) }
       : requestObject('meteringRmsDb', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringRmsDb', request.samples, resolvedSampleRate, request);
@@ -159,7 +160,14 @@ export function meteringSilenceRatio(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, thresholdDb, frameLength, hopLength, ...options }
+      ? {
+          samples,
+          sampleRate,
+          thresholdDb,
+          frameLength,
+          hopLength,
+          ...optionsBag('meteringSilenceRatio', options),
+        }
       : requestObject('meteringSilenceRatio', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringSilenceRatio', request.samples, resolvedSampleRate, request);
@@ -198,7 +206,7 @@ export function meteringCrestFactorDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringCrestFactorDb', options) }
       : requestObject('meteringCrestFactorDb', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringCrestFactorDb', request.samples, resolvedSampleRate, request);
@@ -234,7 +242,7 @@ export function meteringDcOffset(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDcOffset', options) }
       : requestObject('meteringDcOffset', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringDcOffset', request.samples, resolvedSampleRate, request);
@@ -260,7 +268,7 @@ export function meteringTruePeakDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, oversampleFactor, ...options }
+      ? { samples, sampleRate, oversampleFactor, ...optionsBag('meteringTruePeakDb', options) }
       : requestObject('meteringTruePeakDb', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringTruePeakDb', request.samples, resolvedSampleRate, request);
@@ -298,7 +306,7 @@ export function meteringDetectClipping(
 ): ClippingReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDetectClipping', options) }
       : requestObject('meteringDetectClipping', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringDetectClipping', request.samples, resolvedSampleRate, request);
@@ -331,7 +339,7 @@ export function meteringDynamicRange(
 ): DynamicRangeReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDynamicRange', options) }
       : requestObject('meteringDynamicRange', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('meteringDynamicRange', request.samples, resolvedSampleRate, request);
@@ -444,7 +452,12 @@ export function meteringStereoCorrelation(
 ): number {
   const request: MeteringStereoRequest =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringStereoCorrelation', options),
+        }
       : requestObject('meteringStereoCorrelation', left, 'left');
   const _validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -484,7 +497,12 @@ export function meteringStereoWidth(
 ): number {
   const request: MeteringStereoRequest =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringStereoWidth', options),
+        }
       : requestObject('meteringStereoWidth', left, 'left');
   const _validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -523,7 +541,12 @@ export function meteringVectorscope(
 ): VectorscopeReport {
   const request: MeteringScopeRequest =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringVectorscope', options),
+        }
       : requestObject('meteringVectorscope', left, 'left');
   const _validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -561,7 +584,12 @@ export function meteringPhaseScope(
 ): PhaseScopeReport {
   const request: MeteringScopeRequest =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringPhaseScope', options),
+        }
       : requestObject('meteringPhaseScope', left, 'left');
   const _validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -597,7 +625,7 @@ export function meteringSpectrum(
 ): SpectrumReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringSpectrum', options) }
       : requestObject('meteringSpectrum', samples);
   const _validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -633,7 +661,7 @@ export function meteringSpectrumFrame(
 ): SpectrumReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, frameOffset, ...options }
+      ? { samples, sampleRate, frameOffset, ...optionsBag('meteringSpectrumFrame', options) }
       : requestObject('meteringSpectrumFrame', samples);
   const validate = request.validate !== false;
   const resolvedSampleRate = request.sampleRate ?? 22050;
@@ -683,7 +711,7 @@ export function waveformPeaks(
 ): WaveformPeaksReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, channels, ...options }
+      ? { samples, channels, ...optionsBag('waveformPeaks', options) }
       : requestObject('waveformPeaks', samples);
   assertInterleavedSamples(
     'waveformPeaks',
@@ -715,7 +743,7 @@ export function waveformPeakPyramid(
 ): WaveformPeaksReport[] {
   const request =
     samples instanceof Float32Array
-      ? { samples, channels, ...options }
+      ? { samples, channels, ...optionsBag('waveformPeakPyramid', options) }
       : requestObject('waveformPeakPyramid', samples);
   assertInterleavedSamples(
     'waveformPeakPyramid',

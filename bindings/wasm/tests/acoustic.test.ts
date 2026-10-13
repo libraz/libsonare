@@ -266,6 +266,17 @@ describe('geometric room acoustics', () => {
     expect(Array.from(diffuse.rir)).not.toEqual(Array.from(mirror.rir));
   });
 
+  it('treats an explicit zero referenceAbsorption as the library default, matching the C ABI', () => {
+    const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
+    const dflt = estimateRoom(rir.rir, 48000);
+    const zero = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0 });
+    expect(zero.volume).toBe(dflt.volume);
+    expect(zero.lengthM).toBe(dflt.lengthM);
+    // Non-vacuity: the analyzer's 0.01 floor (what a raw 0 used to reach) is far smaller.
+    const floored = estimateRoom(rir.rir, 48000, { referenceAbsorption: 0.01 });
+    expect(floored.volume).toBeLessThan(dflt.volume / 1000);
+  });
+
   it('emits absorption and rt60 bands at the same length', () => {
     const rir = synthesizeRir({ lengthM: 7, widthM: 5, heightM: 3, absorption: 0.15 });
     const est = estimateRoom(rir.rir, 48000);

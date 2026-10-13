@@ -336,14 +336,14 @@ describe('WASM transcribe', () => {
     // pointer, the length and the rate and NOTHING about the sample values, so
     // there is no second line of defence behind it. Measured with the scan
     // skipped, an all-NaN buffer came back as a SUCCESS reporting zero notes.
-    // `validate` is therefore not part of this request type; a caller who sets
-    // it anyway is still scanned.
+    // `validate` is therefore not part of this request type, and a caller who
+    // sets it is refused by name rather than ignored.
     const bypass = { samples: withNan, sampleRate, validate: false };
-    expect(() => transcribe(bypass as unknown as TranscribeRequest)).toThrow(RangeError);
+    expect(() => transcribe(bypass as unknown as TranscribeRequest)).toThrow(
+      "transcribe: unknown request key 'validate'",
+    );
     const allNan = new Float32Array(samples.length).fill(Number.NaN);
-    expect(() =>
-      transcribe({ samples: allNan, sampleRate, validate: false } as unknown as TranscribeRequest),
-    ).toThrow(RangeError);
+    expect(() => transcribe({ samples: allNan, sampleRate })).toThrow(RangeError);
   });
 
   it('refuses an option outside its domain, including a written zero', () => {

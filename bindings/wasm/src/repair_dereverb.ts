@@ -9,7 +9,7 @@ import type {
   MasteringRepairDereverbClassicalStereoResult,
   ReverbDetection,
 } from './public_types_repair.js';
-import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
+import { assertAudioChannels, assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -73,7 +73,7 @@ export function masteringRepairDereverbClassical(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDereverbClassical', options) }
       : requestObject('masteringRepairDereverbClassical', samples);
   assertAudioInput(
     'masteringRepairDereverbClassical',
@@ -325,7 +325,7 @@ export function masteringRepairDetectReverb(
 ): ReverbDetection {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectReverb', options) }
       : requestObject('masteringRepairDetectReverb', samples);
   assertAudioInput('masteringRepairDetectReverb', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectReverb(

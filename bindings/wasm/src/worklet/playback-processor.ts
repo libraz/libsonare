@@ -2,6 +2,7 @@ import { HrtfSet, PlaybackRenderer } from '../index.js';
 import type { PlaybackRendererConfig } from '../public_types_playback.js';
 import type { WasmPlaybackRenderer } from '../sonare.js';
 import { copyPlanesToOutput, type WorkletInput, type WorkletOutput } from './audio_types.js';
+import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import { isPlaybackMessage, requireIntegerOption, resolveContextSampleRate } from './guards.js';
 import type {
   SonarePlaybackDiagnosticsReplyMessage,
@@ -230,16 +231,46 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
   }
   const Base = scope.AudioWorkletProcessor;
   class RegisteredSonarePlaybackWorkletProcessor extends Base {
-    private bridge: SonarePlaybackWorkletProcessor;
+    private bridge?: SonarePlaybackWorkletProcessor;
+    private readonly pendingMessages: SonarePlaybackMessage[] = [];
     readonly port?: WorkletPort;
 
     constructor(options?: { processorOptions?: SonarePlaybackWorkletProcessorOptions }) {
       super();
       const port = this.port;
-      this.bridge = new SonarePlaybackWorkletProcessor(options?.processorOptions ?? {}, port);
+      const processorOptions = options?.processorOptions ?? {};
+      const start = () => {
+        this.bridge = new SonarePlaybackWorkletProcessor(processorOptions, port);
+        for (const message of this.pendingMessages.splice(0)) {
+          this.bridge.receiveMessage(message);
+        }
+      };
+      if (isEmbindReady()) {
+        start();
+      } else {
+        // The module is not initialized in this realm: build it the way the
+        // realtime engine processor does, then construct the renderer.
+        initializeEmbindInWorklet(processorOptions.wasmBinary)
+          .then(() => {
+            start();
+            port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+          })
+          .catch((error: unknown) => {
+            port?.postMessage?.({
+              type: 'error',
+              request: 'init',
+              message: error instanceof Error ? error.message : String(error),
+            } satisfies SonarePlaybackErrorMessage);
+          });
+      }
       const onMessage = (event: { data: unknown }) => {
-        if (isPlaybackMessage(event.data)) {
+        if (!isPlaybackMessage(event.data)) {
+          return;
+        }
+        if (this.bridge) {
           this.bridge.receiveMessage(event.data);
+        } else if (this.pendingMessages.length < 1024) {
+          this.pendingMessages.push(event.data);
         }
       };
       if (port?.addEventListener) {
@@ -251,7 +282,13 @@ export function registerSonarePlaybackWorkletProcessor(name = 'sonare-playback-p
     }
 
     process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-      return this.bridge.process(inputs, outputs);
+      if (this.bridge) {
+        return this.bridge.process(inputs, outputs);
+      }
+      for (const channel of outputs[0] ?? []) {
+        channel.fill(0);
+      }
+      return true;
     }
   }
   scope.registerProcessor(name, RegisteredSonarePlaybackWorkletProcessor);
@@ -288,6 +325,7 @@ export function createSonarePlaybackNode(
     hrtf: options.hrtf,
     maxBlockSize: options.maxBlockSize,
     sampleRate: resolveContextSampleRate(options.sampleRate, context, 'createSonarePlaybackNode'),
+    wasmBinary: options.wasmBinary,
   };
   return factory(context, options.processorName ?? 'sonare-playback-processor', {
     numberOfInputs: 1,

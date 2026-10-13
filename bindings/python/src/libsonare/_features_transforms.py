@@ -205,7 +205,7 @@ def mel_to_stft(
     fmax: float = 0.0,
     htk: bool = False,
 ) -> InverseResult:
-    """Approximate inverse of a Mel filterbank (Mel power -> STFT power).
+    """Approximate inverse of a Mel filterbank (Mel power -> STFT magnitude).
 
     Args:
         mel: Mel power spectrogram, flattened row-major ``[n_mels x n_frames]``.
@@ -219,7 +219,7 @@ def mel_to_stft(
         htk: Use the HTK Mel formula instead of Slaney (default False).
 
     Returns:
-        An :class:`InverseResult` with the reconstructed STFT power matrix.
+        An :class:`InverseResult` with the reconstructed STFT magnitude matrix (not squared).
     """
     lib = _get_lib()
     if not hasattr(lib, "sonare_mel_to_stft"):
@@ -533,7 +533,7 @@ def _require_linear_mel(fn_name: str, result: MelSpectrogramResult) -> None:
 
 
 def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult:
-    """Approximate inverse of a Mel result (Mel power -> STFT power).
+    """Approximate inverse of a Mel result (Mel power -> STFT magnitude).
 
     Reads the matrix and every forward parameter from ``result``, so the call
     equals :func:`mel_to_stft` with the values the forward transform used.
@@ -542,7 +542,7 @@ def mel_result_to_stft(result: MelSpectrogramResult) -> InverseResult:
         result: A :func:`mel_spectrogram` result.
 
     Returns:
-        An :class:`InverseResult` with the reconstructed STFT power matrix.
+        An :class:`InverseResult` with the reconstructed STFT magnitude matrix (not squared).
 
     Raises:
         SonareValueError: If ``result`` is in dB (``result.is_db``).

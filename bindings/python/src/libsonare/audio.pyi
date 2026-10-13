@@ -38,6 +38,9 @@ def decode_channels(data: bytes) -> tuple[np.ndarray, int]: ...
 def downmix(
     channels: Sequence[Sequence[float] | np.ndarray] | np.ndarray,
     target_layout: ChannelLayout | int,
+    *,
+    normalize: bool = False,
+    include_lfe: bool = False,
 ) -> np.ndarray: ...
 
 class Audio:

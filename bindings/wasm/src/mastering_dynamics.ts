@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -113,7 +113,7 @@ export function masteringDynamicsCompressor(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsCompressor', options) }
       : requestObject('masteringDynamicsCompressor', samples);
   assertAudioInput(
     'masteringDynamicsCompressor',
@@ -158,7 +158,7 @@ export function masteringDynamicsGate(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsGate', options) }
       : requestObject('masteringDynamicsGate', samples);
   assertAudioInput('masteringDynamicsGate', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().masteringDynamicsGate(
@@ -184,7 +184,7 @@ export function masteringDynamicsTransientShaper(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsTransientShaper', options) }
       : requestObject('masteringDynamicsTransientShaper', samples);
   assertAudioInput(
     'masteringDynamicsTransientShaper',

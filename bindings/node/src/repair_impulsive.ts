@@ -12,7 +12,7 @@ import type {
   DeclipStereoResult,
   DecrackleStereoResult,
 } from './types.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /** Options for `masteringRepairDeclick`. */
 export interface DeclickOptions {
@@ -41,7 +41,7 @@ export function masteringRepairDeclick(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDeclick', options) }
       : requestObject('masteringRepairDeclick', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDeclick', request.samples, resolvedSampleRate, request);
@@ -146,7 +146,7 @@ export function masteringRepairDeclip(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDeclip', options) }
       : requestObject('masteringRepairDeclip', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDeclip', request.samples, resolvedSampleRate, request);
@@ -215,7 +215,7 @@ export function masteringRepairDecrackle(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDecrackle', options) }
       : requestObject('masteringRepairDecrackle', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringRepairDecrackle', request.samples, resolvedSampleRate, request);

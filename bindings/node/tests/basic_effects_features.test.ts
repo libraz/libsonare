@@ -520,9 +520,9 @@ describe('features', () => {
     expect(htk.nBins).toBe(nFft / 2 + 1);
     expect(htk.nFrames).toBe(mel.nFrames);
     let diff = 0;
-    for (let i = 0; i < htk.power.length; i++) {
-      expect(Number.isFinite(htk.power[i])).toBe(true);
-      diff += (slaney.power[i] - htk.power[i]) ** 2;
+    for (let i = 0; i < htk.magnitude.length; i++) {
+      expect(Number.isFinite(htk.magnitude[i])).toBe(true);
+      diff += (slaney.magnitude[i] - htk.magnitude[i]) ** 2;
     }
     expect(diff).toBeGreaterThan(1e-6);
   });

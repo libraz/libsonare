@@ -23,6 +23,7 @@ import type { ValidateOptions } from './validation.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
+  optionsBag,
   requestObject,
   resolveSampleBound,
 } from './validation.js';
@@ -246,7 +247,7 @@ export function noteStretch(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('noteStretch', options) }
       : requestObject('noteStretch', samples);
   assertAudioInput('noteStretch', request.samples, request.sampleRate ?? 22050, request);
   const rate = request.sampleRate ?? 22050;
@@ -287,7 +288,7 @@ export function noteMove(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('noteMove', options) }
       : requestObject('noteMove', samples);
   assertAudioInput('noteMove', request.samples, request.sampleRate ?? 22050, request);
   const rate = request.sampleRate ?? 22050;

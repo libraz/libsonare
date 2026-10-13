@@ -1,6 +1,7 @@
 import type { MixerRealtimeBuffer } from '../index.js';
 import { Mixer } from '../index.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
+import { initializeEmbindInWorklet, isEmbindReady } from './embind-init.js';
 import { isWorkletMessage, requireIntegerOption } from './guards.js';
 import type {
   SonareWorkletMessage,
@@ -30,7 +31,8 @@ import {
  * AudioWorklet-style mixer bridge backed by the package's single `sonare.wasm`.
  *
  * The WASM module must already be initialized via `init()` before constructing
- * this bridge. Each AudioWorklet input is treated as one stereo strip:
+ * this bridge; the registered processor initializes it itself from
+ * `wasmBinary` when it is not (see {@link SonareWorkletProcessorOptions}). Each AudioWorklet input is treated as one stereo strip:
  * `inputs[strip][0]` is left and `inputs[strip][1]` is right. Missing channels
  * are replaced with preallocated silence.
  */
@@ -407,18 +409,47 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
   }
   const Base = scope.AudioWorkletProcessor;
   class RegisteredSonareWorkletProcessor extends Base {
-    private bridge: SonareWorkletProcessor;
+    private bridge?: SonareWorkletProcessor;
+    private readonly pendingMessages: SonareWorkletMessage[] = [];
     readonly port?: WorkletPort;
 
     constructor(options?: { processorOptions?: SonareWorkletProcessorOptions }) {
       super();
       const port = this.port;
-      this.bridge = new SonareWorkletProcessor(options?.processorOptions ?? { sceneJson: '' }, {
-        postMessage: (message) => port?.postMessage?.(message),
-      });
+      const processorOptions = options?.processorOptions ?? { sceneJson: '' };
+      const start = () => {
+        this.bridge = new SonareWorkletProcessor(processorOptions, {
+          postMessage: (message) => port?.postMessage?.(message),
+        });
+        for (const message of this.pendingMessages.splice(0)) {
+          this.bridge.receiveMessage(message);
+        }
+      };
+      if (isEmbindReady()) {
+        start();
+      } else {
+        // The module is not initialized in this realm: build it the way the
+        // realtime engine processor does, then construct the mixer.
+        initializeEmbindInWorklet(processorOptions.wasmBinary)
+          .then(() => {
+            start();
+            port?.postMessage?.({ type: 'ready', runtimeTarget: 'embind' });
+          })
+          .catch((error: unknown) => {
+            port?.postMessage?.({
+              type: 'error',
+              message: error instanceof Error ? error.message : String(error),
+            });
+          });
+      }
       const onMessage = (event: { data: unknown }) => {
-        if (isWorkletMessage(event.data)) {
+        if (!isWorkletMessage(event.data)) {
+          return;
+        }
+        if (this.bridge) {
           this.bridge.receiveMessage(event.data);
+        } else if (this.pendingMessages.length < 1024) {
+          this.pendingMessages.push(event.data);
         }
       };
       if (port?.addEventListener) {
@@ -430,7 +461,13 @@ export function registerSonareWorkletProcessor(name = 'sonare-worklet-processor'
     }
 
     process(inputs: WorkletInput, outputs: WorkletOutput): boolean {
-      return this.bridge.process(inputs, outputs);
+      if (this.bridge) {
+        return this.bridge.process(inputs, outputs);
+      }
+      for (const channel of outputs[0] ?? []) {
+        channel.fill(0);
+      }
+      return true;
     }
   }
   scope.registerProcessor(name, RegisteredSonareWorkletProcessor);

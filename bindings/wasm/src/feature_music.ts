@@ -21,6 +21,7 @@ import {
   assertPositiveInteger,
   assertSampleRate,
   assertSamples,
+  optionsBag,
   requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
@@ -200,6 +201,7 @@ export function cqt(
   binsPerOctave = 12,
   options: GuardedOptions = {},
 ): CqtResult {
+  optionsBag('cqt', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('cqt', samples);
     const request = samples;
@@ -249,6 +251,7 @@ export function pseudoCqt(
   binsPerOctave = 12,
   options: GuardedOptions = {},
 ): CqtResult {
+  optionsBag('pseudoCqt', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('pseudoCqt', samples);
     const request = samples;
@@ -298,6 +301,7 @@ export function hybridCqt(
   binsPerOctave = 12,
   options: GuardedOptions = {},
 ): CqtResult {
+  optionsBag('hybridCqt', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('hybridCqt', samples);
     const request = samples;
@@ -351,6 +355,7 @@ export function vqt(
   gamma?: number,
   options: GuardedOptions = {},
 ): CqtResult {
+  optionsBag('vqt', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('vqt', samples);
     const request = samples;
@@ -430,6 +435,7 @@ export function cqtToAudio(
   nIter = 32,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('cqtToAudio', options);
   if (!(magnitude instanceof Float32Array)) {
     requestObject('cqtToAudio', magnitude, 'magnitude');
     const request = magnitude;
@@ -495,6 +501,7 @@ export function vqtToAudio(
   nIter = 32,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('vqtToAudio', options);
   if (!(magnitude instanceof Float32Array)) {
     requestObject('vqtToAudio', magnitude, 'magnitude');
     const request = magnitude;
@@ -557,6 +564,7 @@ export function analyzeSections(
   sampleRate = 22050,
   options: AnalyzeSectionsGuardedOptions = {},
 ): Section[] {
+  optionsBag('analyzeSections', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('analyzeSections', samples);
     const r = samples;
@@ -715,6 +723,7 @@ export function analyzeMelody(
   sampleRate = 22050,
   options: MelodyGuardedOptions = {},
 ): MelodyResult {
+  optionsBag('analyzeMelody', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('analyzeMelody', samples);
     const r = samples;
@@ -788,6 +797,7 @@ export function onsetEnvelope(
   nMels = 128,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('onsetEnvelope', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('onsetEnvelope', samples);
     const request = samples;
@@ -836,6 +846,7 @@ export function onsetStrengthMulti(
   nBands = 3,
   options: GuardedOptions = {},
 ): OnsetStrengthMultiResult {
+  optionsBag('onsetStrengthMulti', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('onsetStrengthMulti', samples);
     const request = samples;
@@ -890,6 +901,7 @@ export function fourierTempogram(
   norm = true,
   options: GuardedOptions = {},
 ): WasmFourierTempogramResult {
+  optionsBag('fourierTempogram', options);
   if (!(onsetEnvelope instanceof Float32Array)) {
     requestObject('fourierTempogram', onsetEnvelope, 'onsetEnvelope');
     const request = onsetEnvelope;
@@ -944,6 +956,7 @@ export function tempogramRatio(
   factors?: Float32Array | number[],
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('tempogramRatio', options);
   if (!(tempogramData instanceof Float32Array)) {
     requestObject('tempogramRatio', tempogramData, 'tempogramData');
     const request = tempogramData;
@@ -982,6 +995,7 @@ export function lufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): LufsResult {
+  optionsBag('lufs', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('lufs', samples);
     const r = samples;
@@ -1010,6 +1024,7 @@ export function momentaryLufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
+  optionsBag('momentaryLufs', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('momentaryLufs', samples);
     const r = samples;
@@ -1038,6 +1053,7 @@ export function shortTermLufs(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): Float32Array {
+  optionsBag('shortTermLufs', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('shortTermLufs', samples);
     const r = samples;

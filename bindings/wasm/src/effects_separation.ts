@@ -7,7 +7,7 @@ import { resolveEffectFftOptions } from './_fft_options.js';
 import { getSonareModule } from './module_state.js';
 import type { HpssResult } from './public_types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertHpssKernels, requestObject } from './validation.js';
+import { assertAudioInput, assertHpssKernels, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -124,7 +124,7 @@ export function harmonic(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('harmonic', options) }
       : requestObject('harmonic', samples);
   assertAudioInput('harmonic', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().harmonic(request.samples, request.sampleRate ?? 22050);
@@ -150,7 +150,7 @@ export function percussive(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('percussive', options) }
       : requestObject('percussive', samples);
   assertAudioInput('percussive', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().percussive(request.samples, request.sampleRate ?? 22050);

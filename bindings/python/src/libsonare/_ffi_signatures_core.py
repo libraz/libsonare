@@ -50,6 +50,17 @@ def configure_core_signatures(lib: ctypes.CDLL) -> None:
             ctypes.c_int,
             ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
         ]
+    if hasattr(lib, "sonare_downmix_ex"):
+        lib.sonare_downmix_ex.restype = ctypes.c_int32
+        lib.sonare_downmix_ex.argtypes = [
+            ctypes.POINTER(ctypes.c_float),
+            ctypes.c_size_t,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.c_int,
+            ctypes.POINTER(ctypes.POINTER(ctypes.c_float)),
+        ]
 
     # sonare_audio_from_file
     lib.sonare_audio_from_file.restype = ctypes.c_int32

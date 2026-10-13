@@ -34,6 +34,7 @@ import {
   decomposeStems,
   decomposeStemsLinked,
   detectBoundaries,
+  downmix,
   estimateMeter,
   extractNotes,
   extractPercussiveEvents,
@@ -89,6 +90,7 @@ import {
   synthesizeRir,
   transcribe,
 } from '../src/index.js';
+import { REQUEST_KEYS } from '../src/request_keys.js';
 import {
   addonEntryPoints,
   bareHasSites,
@@ -98,6 +100,15 @@ import {
   SHARED_READER_FILE,
 } from './_addon_sources.js';
 import { glide } from './_helpers.js';
+
+/** The part of `options` the request itself declares; the rest belongs to a nested object. */
+const requestFields = (
+  name: keyof typeof REQUEST_KEYS,
+  options: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(options).filter(([key]) => Object.hasOwn(REQUEST_KEYS[name], key)),
+  );
 
 /**
  * `file:key` reads that may stay in the bare form, each with the reason it is
@@ -290,7 +301,12 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     jsName: 'spectralEdit',
     invoke: (o) =>
       Array.from(
-        spectralEdit(sine(4096), SR, [{ ...o, lowHz: 1000, highHz: 3000, mode: 'mute' }], o),
+        spectralEdit(
+          sine(4096),
+          SR,
+          [{ ...o, lowHz: 1000, highHz: 3000, mode: 'mute' }],
+          requestFields('spectralEdit', o),
+        ),
       ),
   },
   {
@@ -329,7 +345,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         renderNotes({
-          ...o,
+          ...requestFields('renderNotes', o),
           samples: sine(4096, 220),
           sampleRate: SR,
           notes: [{ ...o, onsetSample: 512, offsetSample: 2048, edit: { ...o, gainDb: -6 } }],
@@ -347,7 +363,13 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         voicedProb: new Float32Array(frames).fill(0.9),
         frameRate: SR / 512,
       };
-      return splitNote({ ...o, ...track, notes: extractNotes(track), index: 0, frame: 20 });
+      return splitNote({
+        ...requestFields('splitNote', o),
+        ...track,
+        notes: extractNotes(track),
+        index: 0,
+        frame: 20,
+      });
     },
   },
   {
@@ -369,7 +391,13 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         voicedProb,
         frameRate: SR / 512,
       };
-      return mergeNotes({ ...o, ...track, notes: extractNotes(track), first: 0, last: 1 });
+      return mergeNotes({
+        ...requestFields('mergeNotes', o),
+        ...track,
+        notes: extractNotes(track),
+        first: 0,
+        last: 1,
+      });
     },
   },
   {
@@ -399,7 +427,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
         },
       };
       const result = assignNoteTargets({
-        ...o,
+        ...requestFields('assignNoteTargets', o),
         notes: [
           {
             ...note,
@@ -431,7 +459,7 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
     invoke: (o) =>
       Array.from(
         renderPercussiveEvents({
-          ...o,
+          ...requestFields('renderPercussiveEvents', o),
           samples: sine(4096, 220),
           sampleRate: SR,
           events: [{ ...o, onsetSample: 512, offsetSample: 2048, edit: { ...o, gainDb: -6 } }],
@@ -741,6 +769,15 @@ const UNDEFINED_EQUIVALENCE: ReadonlyArray<{
       const result = masteringDynamicsTransientShaper(sine(2048), SR, o);
       return [Array.from(result.samples).slice(0, 32), result.latencySamples];
     },
+  },
+  {
+    jsName: 'downmix',
+    invoke: (o) =>
+      downmix(
+        [0.1, 0.2, 0.3, 0.4, 0.05, 0.15].map((v) => new Float32Array(8).fill(v)),
+        1,
+        o,
+      ).map((plane) => Array.from(plane)),
   },
   {
     jsName: 'mixStereo',

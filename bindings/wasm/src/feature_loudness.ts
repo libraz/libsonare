@@ -6,7 +6,12 @@
 import { getSonareModule } from './module_state.js';
 import type { WasmLufsResult, WasmLufsSeriesResult } from './sonare.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, assertInterleavedSamples, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertInterleavedSamples,
+  optionsBag,
+  requestObject,
+} from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -51,6 +56,7 @@ export function lufsInterleaved(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): WasmLufsResult {
+  optionsBag('lufsInterleaved', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('lufsInterleaved', samples);
     const r = samples;
@@ -100,6 +106,7 @@ export function lufsSeriesInterleaved(
   sampleRate = 22050,
   options: ValidateOptions = {},
 ): WasmLufsSeriesResult {
+  optionsBag('lufsSeriesInterleaved', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('lufsSeriesInterleaved', samples);
     const r = samples;

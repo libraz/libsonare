@@ -18,6 +18,7 @@ import {
   assertAudioInput,
   assertFiniteScalar,
   assertPositiveInteger,
+  optionsBag,
   requestObject,
 } from './validation.js';
 
@@ -139,6 +140,7 @@ export function trim(
   hopLength?: number,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('trim', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('trim', samples);
     const r = samples;
@@ -206,6 +208,7 @@ export function stft(
   hopLength = 512,
   options: GuardedOptions = {},
 ): StftResult {
+  optionsBag('stft', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('stft', samples);
     const request = samples;
@@ -244,6 +247,7 @@ export function stftDb(
   hopLength = 512,
   options: GuardedOptions = {},
 ): { nBins: number; nFrames: number; db: Float32Array } {
+  optionsBag('stftDb', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('stftDb', samples);
     const request = samples;
@@ -280,6 +284,7 @@ export function chromaCens(
   binsPerOctave = 36,
   options: GuardedOptions = {},
 ): ChromaResult {
+  optionsBag('chromaCens', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('chromaCens', samples);
     const request = samples;
@@ -326,6 +331,7 @@ export function chromaCqt(
   binsPerOctave = 36,
   options: GuardedOptions = {},
 ): ChromaResult {
+  optionsBag('chromaCqt', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('chromaCqt', samples);
     const request = samples;
@@ -370,6 +376,7 @@ export function bassChroma(
   nChroma = 12,
   options: GuardedOptions = {},
 ): ChromaResult {
+  optionsBag('bassChroma', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('bassChroma', samples);
     const request = samples;
@@ -427,6 +434,7 @@ export function melSpectrogram(
   htk = false,
   options: GuardedOptions = {},
 ): MelSpectrogramResult {
+  optionsBag('melSpectrogram', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('melSpectrogram', samples);
     const request = samples;
@@ -500,6 +508,7 @@ export function mfcc(
   lifter = 0,
   options: GuardedOptions = {},
 ): MfccResult {
+  optionsBag('mfcc', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('mfcc', samples);
     const request = samples;
@@ -655,6 +664,7 @@ export function chroma(
   hopLength = 512,
   options: GuardedOptions = {},
 ): ChromaResult {
+  optionsBag('chroma', options);
   if (!(samples instanceof Float32Array)) {
     requestObject('chroma', samples);
     const request = samples;

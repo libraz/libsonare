@@ -10,7 +10,7 @@ import type {
   MasteringRepairDenoiseClassicalStereoResult,
   NoiseDetection,
 } from './public_types_repair.js';
-import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
+import { assertAudioChannels, assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -73,7 +73,7 @@ export function masteringRepairDenoiseClassical(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDenoiseClassical', options) }
       : requestObject('masteringRepairDenoiseClassical', samples);
   assertAudioInput('masteringRepairDenoiseClassical', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDenoiseClassical(
@@ -265,7 +265,7 @@ export function masteringRepairDehum(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDehum', options) }
       : requestObject('masteringRepairDehum', samples);
   assertAudioInput('masteringRepairDehum', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDehum(
@@ -374,7 +374,7 @@ export function masteringRepairDetectNoiseFloor(
 ): NoiseDetection {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectNoiseFloor', options) }
       : requestObject('masteringRepairDetectNoiseFloor', samples);
   assertAudioInput('masteringRepairDetectNoiseFloor', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectNoiseFloor(
@@ -461,7 +461,7 @@ export function masteringRepairDetectHum(
 ): HumDetection {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectHum', options) }
       : requestObject('masteringRepairDetectHum', samples);
   assertAudioInput('masteringRepairDetectHum', request.samples, request.sampleRate ?? 22050);
   return requireModule().masteringRepairDetectHum(

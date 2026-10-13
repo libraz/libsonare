@@ -34,7 +34,13 @@ import type {
   StreamingPlatform,
   TypedJson,
 } from './public_types.js';
-import { assertAudioInput, assertSampleRate, assertString, requestObject } from './validation.js';
+import {
+  assertAudioInput,
+  assertSampleRate,
+  assertString,
+  optionsBag,
+  requestObject,
+} from './validation.js';
 
 export type { MasteringInsertParamChoice, MasteringInsertSlot };
 
@@ -210,7 +216,7 @@ export function mastering(
 ): MasteringResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('mastering', options) }
       : requestObject('mastering', samples);
   assertAudioInput('mastering', request.samples, request.sampleRate ?? 22050);
   return requireModule().mastering(
@@ -1250,6 +1256,7 @@ export function masteringAssistantSuggestStereo(
   request: MasteringAssistantStereoParamsRequest,
 ): TypedJson<MasteringAssistantResult> {
   assertStereoRequest('masteringAssistantSuggestStereo', request);
+  requestObject('masteringAssistantSuggestStereo', request, 'request', true);
   assertAudioInput(
     'masteringAssistantSuggestStereo',
     request.left,
@@ -1281,6 +1288,7 @@ export function masteringAssistantSuggestChainStereo(
   request: MasteringAssistantStereoParamsRequest,
 ): Record<string, number | boolean> {
   assertStereoRequest('masteringAssistantSuggestChainStereo', request);
+  requestObject('masteringAssistantSuggestChainStereo', request, 'request', true);
   assertAudioInput(
     'masteringAssistantSuggestChainStereo',
     request.left,
@@ -1317,6 +1325,7 @@ export function masteringAudioProfileStereo(
   request: MasteringStereoParamsRequest,
 ): TypedJson<MasteringAudioProfile> {
   assertStereoRequest('masteringAudioProfileStereo', request);
+  requestObject('masteringAudioProfileStereo', request, 'request', true);
   assertAudioInput(
     'masteringAudioProfileStereo',
     request.left,
@@ -1352,6 +1361,7 @@ export function masteringStreamingPreviewStereo(
   request: MasteringStreamingPreviewStereoRequest,
 ): TypedJson<MasteringStreamingPreviewResult> {
   assertStereoRequest('masteringStreamingPreviewStereo', request);
+  requestObject('masteringStreamingPreviewStereo', request, 'request', true);
   assertAudioInput(
     'masteringStreamingPreviewStereo',
     request.left,

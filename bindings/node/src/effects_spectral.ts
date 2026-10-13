@@ -6,7 +6,13 @@
 import type { EffectSamplesRequest } from './_effects_common.js';
 import { addon } from './native.js';
 import type { SpectralEditOptions, SpectralRegionOp } from './types.js';
-import { assertAudioInput, assertInt32, requestObject, resolveSampleBound } from './validation.js';
+import {
+  assertAudioInput,
+  assertInt32,
+  optionsBag,
+  requestObject,
+  resolveSampleBound,
+} from './validation.js';
 
 export interface SpectralEditRequest extends EffectSamplesRequest, SpectralEditOptions {
   /**
@@ -81,7 +87,7 @@ export function spectralEdit(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ops, ...options }
+      ? { samples, sampleRate, ops, ...optionsBag('spectralEdit', options) }
       : requestObject('spectralEdit', samples);
   const {
     samples: input,

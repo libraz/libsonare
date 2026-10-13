@@ -20,6 +20,7 @@ import {
   assertAudioChannels,
   assertFiniteScalar,
   assertSampleRate,
+  optionsBag,
   requestObject,
 } from './validation.js';
 import {
@@ -256,7 +257,9 @@ export class Mixer {
    * Mix one block of per-strip stereo audio into the stereo master.
    *
    * @param leftChannels - `leftChannels[i]` is the left channel of strip `i`
-   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`
+   * @param rightChannels - `rightChannels[i]` is the right channel of strip `i`.
+   *   Fewer inputs than strips leave the remaining strips silent.
+   * @throws RangeError when more inputs are given than the mixer has strips
    */
   processStereo(leftChannels: Float32Array[], rightChannels: Float32Array[]): MixerProcessResult {
     if (leftChannels.length !== rightChannels.length) {
@@ -729,7 +732,12 @@ export function mixStereo(
   options: MixOptions = {},
 ): MixResult {
   const request = Array.isArray(leftChannels)
-    ? { leftChannels, rightChannels: rightChannels as Float32Array[], sampleRate, ...options }
+    ? {
+        leftChannels,
+        rightChannels: rightChannels as Float32Array[],
+        sampleRate,
+        ...optionsBag('mixStereo', options),
+      }
     : requestObject('mixStereo', leftChannels, 'request', true);
   const resolvedSampleRate = request.sampleRate ?? 48000;
   assertAudioChannels(

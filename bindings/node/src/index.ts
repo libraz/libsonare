@@ -1,3 +1,4 @@
+export { EXPECTED_ABI_VERSION } from './abi_version.js';
 export * from './analysis.js';
 export * from './audio.js';
 export * from './audio_channels.js';

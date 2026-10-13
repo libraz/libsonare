@@ -651,6 +651,7 @@ def _resolve_preset_ordinal(preset: str | int) -> int:
     """
     if isinstance(preset, int):
         return preset
+    _utf8_arg(preset, "preset")
     try:
         return _VC_PRESET_NAME_TO_ORDINAL[preset]
     except KeyError as exc:

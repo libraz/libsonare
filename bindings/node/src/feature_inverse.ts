@@ -409,7 +409,7 @@ export function vqtToAudio(
 }
 
 /**
- * Reconstruct STFT power from a mel spectrogram. The request form also takes the
+ * Reconstruct STFT magnitude from a mel spectrogram. The request form also takes the
  * forward result as `{ result }` ({@link MelResultToStftRequest}).
  */
 export function melToStft(request: MelToStftRequest | MelResultToStftRequest): InverseStftResult;

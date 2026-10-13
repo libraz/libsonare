@@ -1,6 +1,6 @@
 import { getSonareModule } from './module_state.js';
 import type { MixOptions, MixResult } from './public_types.js';
-import { assertAudioChannels, assertString, requestObject } from './validation.js';
+import { assertAudioChannels, assertString, optionsBag, requestObject } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -67,7 +67,12 @@ export function mixStereo(
     throw new TypeError('mixStereo: options must be an object');
   }
   const request = Array.isArray(leftChannels)
-    ? { leftChannels, rightChannels: rightChannels ?? [], sampleRate, ...options }
+    ? {
+        leftChannels,
+        rightChannels: rightChannels ?? [],
+        sampleRate,
+        ...optionsBag('mixStereo', options),
+      }
     : requestObject('mixStereo', leftChannels, 'request', true);
   if (
     request.leftChannels.length === 0 ||

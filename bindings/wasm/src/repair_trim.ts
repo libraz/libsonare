@@ -4,7 +4,7 @@
 
 import { getSonareModule } from './module_state.js';
 import type { MasteringRepairTrimSilenceStereoResult, TrimRange } from './public_types_repair.js';
-import { assertAudioInput, requestObject, resolveSampleBound } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject, resolveSampleBound } from './validation.js';
 
 function requireModule() {
   return getSonareModule();
@@ -71,7 +71,7 @@ export function masteringRepairTrimSilence(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairTrimSilence', options) }
       : requestObject('masteringRepairTrimSilence', samples);
   assertAudioInput('masteringRepairTrimSilence', request.samples, request.sampleRate ?? 22050);
   const rate = request.sampleRate ?? 22050;
@@ -214,7 +214,7 @@ export function masteringRepairDetectTrimRange(
 ): TrimRange {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDetectTrimRange', options) }
       : requestObject('masteringRepairDetectTrimRange', samples);
   assertAudioInput('masteringRepairDetectTrimRange', request.samples, request.sampleRate ?? 22050);
   const rate = request.sampleRate ?? 22050;

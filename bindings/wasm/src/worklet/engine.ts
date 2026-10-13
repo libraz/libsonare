@@ -522,9 +522,11 @@ export class SonareEngine {
   /**
    * Declares the mixer track lanes in an explicit order.
    *
-   * A successful call may reorder existing track ids, remove track ids, or add
-   * new ones. Existing queued and published track automation follows the track
-   * id, and so do track insert automation ids (see
+   * Lane indices are append-only: the list must start with the already-declared
+   * track ids in their current order and may only append new ones after them;
+   * a reorder or removal throws. (The raw `RealtimeEngine.setTrackLanes` does
+   * accept both.) Existing queued and published track automation follows the
+   * track id, and so do track insert automation ids (see
    * resolveTrackInsertAutomationId). Entries carrying
    * `sends` replace that track's send list; entries without `sends` leave
    * existing sends untouched.
@@ -625,7 +627,8 @@ export class SonareEngine {
 
   /**
    * Longest audible tail in samples (an upper bound; `2147483647` is
-   * unbounded), answered from the offline mirror.
+   * unbounded), answered from the offline mirror. The bound is conservative
+   * before the first note and narrows once a patch has sounded.
    */
   tailSamples(): number {
     return this.offlineEngine.tailSamples();

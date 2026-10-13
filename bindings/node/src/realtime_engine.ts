@@ -220,7 +220,7 @@ export class RealtimeEngine {
    * called concurrently with {@link process}.
    *
    * @param numChannels - Channel count of the blocks that will be rendered
-   * @param blockSize - Frames per block that will be rendered (clamped to the prepared block size)
+   * @param blockSize - Frames per block that will be rendered (a larger block size is refused)
    * @throws If a count is not positive, `numChannels` exceeds the prepared
    *   channel count, or the engine was never prepared
    */
@@ -250,6 +250,9 @@ export class RealtimeEngine {
    * Longest audible tail after the last input, in samples: an upper bound made
    * of the longest instrument tail plus the longest route through lane strips
    * (channel delay included), buses, sends, the graph and the master strip.
+   * An instrument lane whose patch is not known yet (a drum-kit lane or a General
+   * MIDI program lane before any note sounds) contributes a conservative
+   * worst-case bound that narrows once a patch has sounded.
    * `2147483647` means the tail is unbounded. Control-thread only: must not be
    * called concurrently with {@link process}.
    */
@@ -358,8 +361,8 @@ export class RealtimeEngine {
    * regardless of whether the manual value or the lane clear reaches the
    * audio thread first.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
-   * methods.
+   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setAutomationLane(paramId: number, points: EngineAutomationPoint[]): void {
     this.native.setAutomationLane(paramId, points.map(engineAutomationPointValue));
@@ -844,10 +847,13 @@ export class RealtimeEngine {
    * `eq.*`, `dynamics.*`, `saturation.*`, `spectral.*`, `stereo.*`,
    * `maximizer.*` and `multiband.*` processors are all available as strip
    * inserts, so placing one on a strip and resolving its parameter here drives
-   * it at audio-block precision, live and offline alike. The whole-signal
-   * stages of the offline mastering chain (`repair.*`, `loudness`, and the
-   * match stages) have no insert form and no automation id: they buffer the
-   * entire signal by construction and do not run on the realtime path.
+   * it at audio-block precision, live and offline alike. The whole-signal stages of the offline
+   * mastering chain that have no insert form (`repair.declick`, `repair.declip`,
+   * `repair.trimSilence`, `loudness`, and the match stages) have no automation id: they buffer the
+   * entire signal by construction and do not run on the realtime path. The four realtime repair
+   * inserts (`repair.decrackle`, `repair.dehum`, `repair.denoiseClassical`,
+   * `repair.dereverbClassical`) load into a strip, but every one of their parameters is
+   * construction-only, so no automation id resolves (-1) and an edit needs a strip replacement.
    *
    * Track, bus and master insert ids share one lifetime rule: an id names its
    * strip by identity and the kind of processor in its slot (for
@@ -894,6 +900,16 @@ export class RealtimeEngine {
    */
   resolveBusAutomationId(busId: number, paramName: 'faderDb'): number {
     return this.native.resolveBusAutomationId(busId, paramName);
+  }
+
+  /**
+   * Resolve the master strip's fader (`'faderDb'`), pan (`'pan'`) or width
+   * (`'width'`) to its reserved automation id, usable with `setAutomationLane` /
+   * `setParameter`. The master strip always exists, so the id never goes stale.
+   * Returns `-1` when the name is none of the three.
+   */
+  resolveMasterAutomationId(paramName: 'faderDb' | 'pan' | 'width'): number {
+    return this.native.resolveMasterAutomationId(paramName);
   }
 
   /** Return the immutable construction value for a resolved insert parameter. */
@@ -1361,8 +1377,8 @@ export class RealtimeEngine {
    * later starts (and stops) driving `paramId`, the target reverts to this
    * value once that lane empties — see {@link setAutomationLane}.
    * A reserved mixer id (`0x4d58xxxx`) other than a master id names no strip and
-   * throws `InvalidParameter`; resolve per-strip ids with the `resolve*AutomationId`
-   * methods.
+   * throws `InvalidParameter`; resolve ids with the `resolve*AutomationId`
+   * methods (`resolveMasterAutomationId` for the master fader, pan and width).
    */
   setParameter(paramId: number, value: number, renderFrame?: number): void {
     this.native.setParameter(paramId, value, resolveRenderFrame('setParameter', renderFrame));
@@ -2161,6 +2177,13 @@ export class RealtimeEngine {
     this.destroy();
   }
 }
+
+/**
+ * Engine C-ABI version (`engineAbiVersion()`) this package's TypeScript was
+ * built against. A host comparing the loaded addon against it sees a skewed
+ * engine surface.
+ */
+export const EXPECTED_ENGINE_ABI_VERSION = 3;
 
 export function engineAbiVersion(): number {
   return addon.engineAbiVersion();

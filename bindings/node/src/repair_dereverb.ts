@@ -10,7 +10,7 @@ import type {
   ReverbDetection,
   RoomEstimateResult,
 } from './types.js';
-import { assertAudioChannels, assertAudioInput, requestObject } from './validation.js';
+import { assertAudioChannels, assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /** Options for `masteringRepairDereverbClassical`. */
 export interface DereverbClassicalOptions {
@@ -55,7 +55,7 @@ export function masteringRepairDereverbClassical(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringRepairDereverbClassical', options) }
       : requestObject('masteringRepairDereverbClassical', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(

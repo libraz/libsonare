@@ -46,6 +46,7 @@ export class PolyphonicAnalysis {
 
   /** Analyses the request's audio. {@link analyzePolyphonic} is the same call. */
   constructor(request: AnalyzePolyphonicRequest) {
+    requestObject('analyzePolyphonic', request, 'request', true);
     assertAudioInput('analyzePolyphonic', request.samples, request.sampleRate, request);
     this.sampleRate = request.sampleRate;
     const module = getSonareModule();

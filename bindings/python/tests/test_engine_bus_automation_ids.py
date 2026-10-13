@@ -60,3 +60,14 @@ def test_bus_fader_id_keeps_its_bus_across_a_reorder_and_retires_with_it() -> No
         assert _settled(engine) == pytest.approx(1.0, abs=1e-3)
         engine.set_track_buses([{"bus_id": 200}, {"bus_id": 100}])
         assert engine.resolve_bus_automation_id(100, "faderDb") != fader100
+
+
+def test_master_automation_ids_resolve_fader_pan_and_width() -> None:
+    with RealtimeEngine(sample_rate=48000.0, max_block_size=_BLOCK) as engine:
+        names = ("faderDb", "pan", "width")
+        ids = [engine.resolve_master_automation_id(name) for name in names]
+        assert len(set(ids)) == 3
+        for name, param_id in zip(names, ids, strict=True):
+            assert engine.parameter_info(param_id).name == name
+        with pytest.raises(SonareError):
+            engine.resolve_master_automation_id("gain")

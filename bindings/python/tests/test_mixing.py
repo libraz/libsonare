@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 
+from libsonare import SonareValueError
 from libsonare._runtime import _pan_law_value
 
 from ._helpers import LIB_AVAILABLE
@@ -959,3 +960,16 @@ def test_one_shot_true_peak_covers_a_peak_in_the_last_samples() -> None:
 
 def test_mixer_flush_meters_is_callable(mixer) -> None:
     mixer.flush_meters()
+
+
+def test_process_stereo_input_count_rule(mixer) -> None:
+    """Fewer inputs than strips leave the rest silent; more are refused naming both counts."""
+    strips = mixer.strip_count()
+    block = [0.25] * 128
+    mixer.process_stereo([], [])
+    mixer.process_stereo([block], [block])
+    mixer.process_stereo([block] * strips, [block] * strips)
+    with pytest.raises(
+        SonareValueError, match=f"got {strips + 1} input channels for a {strips}-strip mixer"
+    ):
+        mixer.process_stereo([block] * (strips + 1), [block] * (strips + 1))

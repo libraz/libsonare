@@ -671,10 +671,10 @@ export interface WasmMfccResult {
   coefficients: Float32Array;
 }
 
-export interface WasmStftPowerResult {
+export interface WasmStftMagnitudeResult {
   nBins: number;
   nFrames: number;
-  power: Float32Array;
+  magnitude: Float32Array;
 }
 
 export interface WasmMelPowerResult {
@@ -1565,6 +1565,7 @@ export interface WasmRealtimeEngine {
   ) => number;
   resolveTrackLaneAutomationId: (trackId: number, paramName: string) => number;
   resolveBusAutomationId: (busId: number, paramName: string) => number;
+  resolveMasterAutomationId: (paramName: string) => number;
   resolveMasterInsertAutomationId: (insertIndex: number, paramName: string) => number;
   resolveBusInsertAutomationId: (busId: number, insertIndex: number, paramName: string) => number;
   resolveInstrumentAutomationId: (destinationId: number, paramName: string) => number;
@@ -1887,7 +1888,11 @@ export interface SonareModule {
 
   audioFromMemory: (bytes: Uint8Array) => WasmAudioFromMemoryResult;
   decodeChannels: (bytes: Uint8Array) => { sampleRate: number; channels: Float32Array[] };
-  downmix: (channels: Float32Array[], targetLayout: number) => Float32Array[];
+  downmix: (
+    channels: Float32Array[],
+    targetLayout: number,
+    options: { normalize?: boolean; includeLfe?: boolean },
+  ) => Float32Array[];
 
   // Quick API (high-level)
   detectBpm: (samples: Float32Array, sampleRate: number) => number;
@@ -3160,7 +3165,7 @@ export interface SonareModule {
     fmin: number,
     fmax: number,
     htk: boolean,
-  ) => WasmStftPowerResult;
+  ) => WasmStftMagnitudeResult;
   melToAudio: (
     power: Float32Array,
     nMels: number,

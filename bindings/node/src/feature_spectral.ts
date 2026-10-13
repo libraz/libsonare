@@ -14,6 +14,7 @@ import {
   assertNonNegativeScalar,
   assertPositiveInteger,
   assertSampleRate,
+  optionsBag,
   requestObject,
 } from './validation.js';
 
@@ -623,7 +624,7 @@ export function pcen(
 ): Float32Array {
   const request =
     values instanceof Float32Array
-      ? { values, nBins, nFrames, ...options }
+      ? { values, nBins, nFrames, ...optionsBag('pcen', options) }
       : requestObject('pcen', values, 'values');
   const {
     values: requestValues,

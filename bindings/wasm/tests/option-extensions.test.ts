@@ -275,6 +275,6 @@ describe('feature entry points share one nFft rule', () => {
     const even = melToStft({ ...shared, nFft: 2048 });
     const odd = melToStft({ ...shared, nFft: 2049 });
     expect(odd.nBins).toBe(even.nBins);
-    expect(Array.from(odd.power)).not.toEqual(Array.from(even.power));
+    expect(Array.from(odd.magnitude)).not.toEqual(Array.from(even.magnitude));
   });
 });

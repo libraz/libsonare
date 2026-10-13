@@ -7,7 +7,7 @@ import type {
   VoicePresetId,
 } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /**
  * The core refuses an unreachable absolute formant warp and a live formant-mode change with a
@@ -204,7 +204,7 @@ export function voiceChange(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('voiceChange', options) }
       : requestObject('voiceChange', samples);
   assertAudioInput('voiceChange', request.samples, request.sampleRate ?? 22050, request);
   const formantMode = request.formantMode ?? 'relative';
@@ -256,7 +256,7 @@ export function voiceChangeRealtime(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, preset, ...options }
+      ? { samples, sampleRate, preset, ...optionsBag('voiceChangeRealtime', options) }
       : requestObject('voiceChangeRealtime', samples);
   assertAudioInput('voiceChangeRealtime', request.samples, request.sampleRate ?? 48000, request);
   const channels = request.channels ?? 1;
@@ -304,6 +304,9 @@ const VOICE_PRESET_ORDINALS: Record<VoicePresetId, number> = {
 function resolveVoicePresetOrdinal(preset: VoicePresetId | number): number {
   if (typeof preset === 'number') {
     return preset;
+  }
+  if (preset.includes('\0')) {
+    throw new RangeError('preset must not contain NUL');
   }
   const ordinal = VOICE_PRESET_ORDINALS[preset];
   if (ordinal === undefined) {

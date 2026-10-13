@@ -1399,7 +1399,7 @@ describe('v1.2 feature additions (WASM)', () => {
       const stft = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, fmin, fmax);
       expect(stft.nBins).toBe(nFft / 2 + 1);
       expect(stft.nFrames).toBe(mel.nFrames);
-      expect(allFinite(stft.power)).toBe(true);
+      expect(allFinite(stft.magnitude)).toBe(true);
 
       const audio = melToAudio(mel.power, nMels, mel.nFrames, SR, nFft, hop, fmin, fmax, 2);
       expect(audio.length).toBeGreaterThan(0);
@@ -1433,11 +1433,11 @@ describe('v1.2 feature additions (WASM)', () => {
       const htk = melToStft(mel.power, nMels, mel.nFrames, SR, nFft, 0, 0, true);
       expect(htk.nBins).toBe(nFft / 2 + 1);
       expect(htk.nFrames).toBe(mel.nFrames);
-      expect(allFinite(htk.power)).toBe(true);
+      expect(allFinite(htk.magnitude)).toBe(true);
 
       let diff = 0;
-      for (let i = 0; i < htk.power.length; i++) {
-        diff += (slaney.power[i] - htk.power[i]) ** 2;
+      for (let i = 0; i < htk.magnitude.length; i++) {
+        diff += (slaney.magnitude[i] - htk.magnitude[i]) ** 2;
       }
       expect(diff).toBeGreaterThan(1e-6);
 

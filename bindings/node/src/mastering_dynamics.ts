@@ -1,6 +1,6 @@
 import { addon } from './native.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /** Detector mode for `masteringDynamicsCompressor`. */
 export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 | 2;
@@ -90,7 +90,7 @@ export function masteringDynamicsCompressor(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsCompressor', options) }
       : requestObject('masteringDynamicsCompressor', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringDynamicsCompressor', request.samples, resolvedSampleRate, request);
@@ -113,7 +113,7 @@ export function masteringDynamicsGate(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsGate', options) }
       : requestObject('masteringDynamicsGate', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('masteringDynamicsGate', request.samples, resolvedSampleRate, request);
@@ -136,7 +136,7 @@ export function masteringDynamicsTransientShaper(
 ): DynamicsProcessorResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('masteringDynamicsTransientShaper', options) }
       : requestObject('masteringDynamicsTransientShaper', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput(

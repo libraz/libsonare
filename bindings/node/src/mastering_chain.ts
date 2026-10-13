@@ -29,7 +29,7 @@ import type {
   StreamingLoudnessGainResult,
   TypedJson,
 } from './types.js';
-import { assertAudioInput, assertSampleRate, requestObject } from './validation.js';
+import { assertAudioInput, assertSampleRate, optionsBag, requestObject } from './validation.js';
 
 export * from './mastering_assistant.js';
 export * from './mastering_catalog.js';
@@ -59,6 +59,7 @@ export interface MasteringProcessStereoRequest {
 export interface MasteringChainRequest {
   samples: Float32Array;
   sampleRate?: number;
+  /** Chain sections (`loudness`, `eq`, ...) go here, not on the request: an unknown request key is refused. */
   config?: MasteringChainConfig;
   onProgress?: ProgressCallback;
   cancel?: () => boolean;
@@ -163,7 +164,7 @@ export function mastering(
 ): MasteringResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('mastering', options) }
       : requestObject('mastering', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('mastering', request.samples, resolvedSampleRate, request);
@@ -410,7 +411,7 @@ export interface MasterAudioStereoRequest {
 }
 
 function masterAudioRequest(
-  fnName: string,
+  fnName: 'masterAudio' | 'masterAudioAsync',
   requestOrSamples: MasterAudioRequest | Float32Array,
   sampleRate: number,
   preset: MasteringPreset,
@@ -424,7 +425,7 @@ function masterAudioRequest(
 }
 
 function masterAudioStereoRequest(
-  fnName: string,
+  fnName: 'masterAudioStereo' | 'masterAudioStereoAsync',
   requestOrLeft: MasterAudioStereoRequest | Float32Array,
   right: Float32Array | undefined,
   sampleRate: number,

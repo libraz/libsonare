@@ -6,6 +6,7 @@ import type { ChromaResult, CqtResult, NoteSegment, PiptrackResult, PitchResult 
 import {
   assertAudioInput,
   assertPositiveInteger,
+  optionsBag,
   requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
@@ -684,7 +685,7 @@ export function nnlsChroma(
 ): { nChroma: number; nFrames: number; data: Float32Array } {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('nnlsChroma', options) }
       : requestObject('nnlsChroma', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('nnlsChroma', request.samples, resolvedSampleRate, request);

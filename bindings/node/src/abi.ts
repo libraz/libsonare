@@ -1,10 +1,7 @@
+import { EXPECTED_ABI_VERSION } from './abi_version.js';
 import { ErrorCode, SonareError } from './errors.js';
 
-/**
- * Packed C-ABI version (`sonare_abi_version()`) this package's TypeScript was
- * built against. The native module is checked against it when it loads.
- */
-export const EXPECTED_ABI_VERSION = 0x05030207;
+export { EXPECTED_ABI_VERSION };
 
 /**
  * Throw an `AbiMismatch` {@link SonareError} when the native module reports a

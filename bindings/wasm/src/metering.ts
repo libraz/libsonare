@@ -8,6 +8,7 @@ import {
   assertNonNegativeInteger,
   assertPositiveInteger,
   assertSamplesInWindow,
+  optionsBag,
   requestObject,
   resolveOptionalNonNegative,
 } from './validation.js';
@@ -128,7 +129,7 @@ export function meteringPeakDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringPeakDb', options) }
       : requestObject('meteringPeakDb', samples);
   assertAudioInput('meteringPeakDb', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringPeakDb(request.samples, request.sampleRate ?? 22050);
@@ -147,7 +148,7 @@ export function meteringRmsDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringRmsDb', options) }
       : requestObject('meteringRmsDb', samples);
   assertAudioInput('meteringRmsDb', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringRmsDb(request.samples, request.sampleRate ?? 22050);
@@ -178,7 +179,14 @@ export function meteringSilenceRatio(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, thresholdDb, frameLength, hopLength, ...options }
+      ? {
+          samples,
+          sampleRate,
+          thresholdDb,
+          frameLength,
+          hopLength,
+          ...optionsBag('meteringSilenceRatio', options),
+        }
       : requestObject('meteringSilenceRatio', samples);
   assertAudioInput('meteringSilenceRatio', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringSilenceRatio(
@@ -203,7 +211,7 @@ export function meteringCrestFactorDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringCrestFactorDb', options) }
       : requestObject('meteringCrestFactorDb', samples);
   assertAudioInput('meteringCrestFactorDb', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringCrestFactorDb(request.samples, request.sampleRate ?? 22050);
@@ -253,7 +261,7 @@ export function meteringDcOffset(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDcOffset', options) }
       : requestObject('meteringDcOffset', samples);
   assertAudioInput('meteringDcOffset', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringDcOffset(request.samples, request.sampleRate ?? 22050);
@@ -278,7 +286,7 @@ export function meteringTruePeakDb(
 ): number {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, oversampleFactor, ...options }
+      ? { samples, sampleRate, oversampleFactor, ...optionsBag('meteringTruePeakDb', options) }
       : requestObject('meteringTruePeakDb', samples);
   assertAudioInput('meteringTruePeakDb', request.samples, request.sampleRate ?? 22050, request);
   const factor = request.oversampleFactor ?? 4;
@@ -305,7 +313,7 @@ export function meteringDetectClipping(
 ): ClippingReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDetectClipping', options) }
       : requestObject('meteringDetectClipping', samples);
   assertAudioInput('meteringDetectClipping', request.samples, request.sampleRate ?? 22050, request);
   const minRegionSamples = request.minRegionSamples ?? 1;
@@ -337,7 +345,7 @@ export function meteringDynamicRange(
 ): DynamicRangeReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringDynamicRange', options) }
       : requestObject('meteringDynamicRange', samples);
   assertAudioInput('meteringDynamicRange', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringDynamicRange(
@@ -477,7 +485,12 @@ export function meteringStereoCorrelation(
 ): number {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringStereoCorrelation', options),
+        }
       : requestObject('meteringStereoCorrelation', left, 'left');
   assertAudioInput(
     'meteringStereoCorrelation',
@@ -525,7 +538,12 @@ export function meteringStereoWidth(
 ): number {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringStereoWidth', options),
+        }
       : requestObject('meteringStereoWidth', left, 'left');
   assertAudioInput(
     'meteringStereoWidth',
@@ -568,7 +586,12 @@ export function meteringVectorscope(
 ): VectorscopeReport {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringVectorscope', options),
+        }
       : requestObject('meteringVectorscope', left, 'left');
   assertAudioInput(
     'meteringVectorscope',
@@ -618,7 +641,13 @@ export function meteringVectorscopeDecimated(
 ): VectorscopeReport {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, maxPoints, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          maxPoints,
+          ...optionsBag('meteringVectorscopeDecimated', options),
+        }
       : requestObject('meteringVectorscopeDecimated', left, 'left');
   assertAudioInput(
     'meteringVectorscopeDecimated',
@@ -663,7 +692,12 @@ export function meteringPhaseScope(
 ): PhaseScopeReport {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          ...optionsBag('meteringPhaseScope', options),
+        }
       : requestObject('meteringPhaseScope', left, 'left');
   assertAudioInput(
     'meteringPhaseScope',
@@ -713,7 +747,13 @@ export function meteringPhaseScopeDecimated(
 ): PhaseScopeReport {
   const request =
     left instanceof Float32Array
-      ? { left, right: right as Float32Array, sampleRate, maxPoints, ...options }
+      ? {
+          left,
+          right: right as Float32Array,
+          sampleRate,
+          maxPoints,
+          ...optionsBag('meteringPhaseScopeDecimated', options),
+        }
       : requestObject('meteringPhaseScopeDecimated', left, 'left');
   assertAudioInput(
     'meteringPhaseScopeDecimated',
@@ -756,7 +796,7 @@ export function meteringSpectrum(
 ): SpectrumReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('meteringSpectrum', options) }
       : requestObject('meteringSpectrum', samples);
   assertAudioInput('meteringSpectrum', request.samples, request.sampleRate ?? 22050, request);
   return requireModule().meteringSpectrum(request.samples, request.sampleRate ?? 22050, request);
@@ -789,7 +829,7 @@ export function meteringSpectrumFrame(
 ): SpectrumReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, frameOffset, ...options }
+      ? { samples, sampleRate, frameOffset, ...optionsBag('meteringSpectrumFrame', options) }
       : requestObject('meteringSpectrumFrame', samples);
   // The frame is the only span scanned for non-finite samples (below).
   assertAudioInput('meteringSpectrumFrame', request.samples, request.sampleRate ?? 22050, {
@@ -832,7 +872,7 @@ export function waveformPeaks(
 ): WaveformPeaksReport {
   const request =
     samples instanceof Float32Array
-      ? { samples, channels: channels as number, ...options }
+      ? { samples, channels: channels as number, ...optionsBag('waveformPeaks', options) }
       : requestObject('waveformPeaks', samples);
   assertAudioSamples('waveformPeaks', request.samples, request);
   // The scan above covered the samples.
@@ -861,7 +901,7 @@ export function waveformPeakPyramid(
 ): WaveformPeaksReport[] {
   const request =
     samples instanceof Float32Array
-      ? { samples, channels: channels as number, ...options }
+      ? { samples, channels: channels as number, ...optionsBag('waveformPeakPyramid', options) }
       : requestObject('waveformPeakPyramid', samples);
   assertAudioSamples('waveformPeakPyramid', request.samples, request);
   // The scan above covered the samples.

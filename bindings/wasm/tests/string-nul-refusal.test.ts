@@ -21,7 +21,14 @@ import {
   masteringPresetParams,
   masteringProcess,
   mixingScenePresetJson,
+  noteToHz,
+  Project,
   RealtimeEngine,
+  realtimeVoiceChangerPresetConfig,
+  realtimeVoiceChangerPresetJson,
+  realtimeVoiceChangerPresetNames,
+  SonareError,
+  validateRealtimeVoiceChangerPresetJson,
 } from '../dist/index.js';
 import { getSonareModule, setSonareModule } from '../src/module_state.js';
 import { synthPatchRoundTripForTest } from '../src/project.js';
@@ -253,7 +260,68 @@ describe('embedded NUL refusal, mastering names', () => {
   });
 });
 
+describe('embedded NUL refusal, std::string entry points', () => {
+  beforeAll(async () => {
+    await init();
+  });
+
+  it('a preset name or note name is refused by name, not looked up truncated', () => {
+    const [id] = realtimeVoiceChangerPresetNames();
+    expect(noteToHz('A4')).toBeCloseTo(440, 3);
+    expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
+    expect(mixingScenePresetJson('vocalReverbSend').length).toBeGreaterThan(0);
+    expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expect(realtimeVoiceChangerPresetJson(id).length).toBeGreaterThan(0);
+    expectNulRefusal(
+      () => realtimeVoiceChangerPresetJson(`${id}${NUL}junk` as typeof id),
+      'presetId',
+    );
+    expectNulRefusal(
+      () => realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
+      'preset',
+    );
+  });
+
+  it('a JSON text is refused by name, not reported as trailing data', () => {
+    const json = Project.create().toJson();
+    expect(() => Project.fromJson(json)).not.toThrow();
+    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
+    expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'json');
+  });
+
+  it('an unknown voice preset name is a coded SonareError', () => {
+    const error = refusal(() => realtimeVoiceChangerPresetConfig('no-such-preset' as never));
+    expect(error).toBeInstanceOf(SonareError);
+    expect((error as SonareError).codeName).toBe('InvalidParameter');
+  });
+});
+
 describe('embedded NUL refusal, scan', () => {
+  /** `std::string` entry points whose body must refuse a NUL before the core sees the text. */
+  const REFUSING: { file: string; head: string }[] = [
+    { file: 'mixing/mixing.cpp', head: 'std::string js_mixing_scene_preset_json(' },
+    { file: 'features/core.cpp', head: 'float js_note_to_hz(' },
+    { file: 'project/project.cpp', head: 'ProjectWasm ProjectWasm::fromJson(' },
+    {
+      file: 'effects/realtime_voice_changer.cpp',
+      head: 'std::string realtimeVoiceChangerPresetJson(',
+    },
+    {
+      file: 'effects/realtime_voice_changer.cpp',
+      head: 'val validateRealtimeVoiceChangerPresetJson(',
+    },
+  ];
+
+  it('refuses a NUL at the head of each std::string entry point', () => {
+    const sources = wasmBindingSources();
+    const missing = REFUSING.filter(({ file, head }) => {
+      const text = sources.find((source) => source.file === file)?.text ?? '';
+      const at = text.indexOf(head);
+      return at < 0 || !text.slice(at, at + 400).includes('wasmRefuseEmbeddedNul(');
+    }).map(({ file, head }) => `${file}: ${head}`);
+    expect(missing).toEqual([]);
+  });
+
   /**
    * `.c_str()` calls that never carry a JS-supplied string, each with the reason.
    * An entry matches source lines by their text and names how many it matches, so

@@ -17,10 +17,14 @@ import {
   masteringInsertParamNames,
   masteringPresetParams,
   mixingScenePresetJson,
+  noteToHz,
+  Project,
   RealtimeEngine,
+  realtimeVoiceChangerPresetConfig,
   realtimeVoiceChangerPresetJson,
   realtimeVoiceChangerPresetNames,
   StreamingMasteringChain,
+  validateRealtimeVoiceChangerPresetJson,
 } from '../src/index.js';
 import { addon } from '../src/native.js';
 import { addonSources } from './_addon_sources.js';
@@ -195,6 +199,21 @@ describe('embedded NUL refusal, by handoff kind', () => {
     const [id] = realtimeVoiceChangerPresetNames();
     expect(realtimeVoiceChangerPresetJson(id).length).toBeGreaterThan(0);
     expectNulRefusal(() => realtimeVoiceChangerPresetJson(`${id}${NUL}x` as typeof id), 'presetId');
+  });
+});
+
+describe('embedded NUL refusal, text handed to the core as std::string', () => {
+  it('a note name, scene preset, voice preset and JSON text are refused by name', () => {
+    const [id] = realtimeVoiceChangerPresetNames();
+    expectNulRefusal(() => noteToHz(`A4${NUL}junk`), 'note');
+    expectNulRefusal(() => mixingScenePresetJson(`vocalReverbSend${NUL}junk`), 'preset');
+    expectNulRefusal(
+      () => realtimeVoiceChangerPresetConfig(`${id}${NUL}junk` as typeof id),
+      'preset',
+    );
+    expectNulRefusal(() => validateRealtimeVoiceChangerPresetJson(`{}${NUL}junk`), 'presetJson');
+    const json = Project.create().toJson();
+    expectNulRefusal(() => Project.fromJson(`${json}${NUL}junk`), 'json');
   });
 });
 

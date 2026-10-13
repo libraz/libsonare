@@ -12,13 +12,14 @@ import type {
   MelPowerResult,
   MelSpectrogramResult,
   MfccResult,
-  StftPowerResult,
+  StftMagnitudeResult,
 } from './public_types.js';
 import {
   assertAudioInput,
   assertFiniteScalar,
   assertSampleRate,
   assertSamples,
+  optionsBag,
   requestObject,
 } from './validation.js';
 
@@ -294,8 +295,8 @@ function validateMatrix(
 }
 
 /**
- * Approximate inverse of a Mel filterbank: Mel power spectrogram -> STFT power
- * spectrogram. Mirrors `feature::mel_to_stft`.
+ * Approximate inverse of a Mel filterbank: Mel power spectrogram -> STFT magnitude
+ * spectrogram (not squared; the data sits in the result's `power` field). Mirrors `feature::mel_to_stft`.
  *
  * @param power - Mel power spectrogram [nMels x nFrames] row-major
  * @param nMels - Number of Mel bands
@@ -305,9 +306,9 @@ function validateMatrix(
  * @param fmin - Lower Mel band edge in Hz (default: 0)
  * @param fmax - Upper Mel band edge in Hz (default: sr/2 when 0)
  * @param htk - Use the HTK Mel formula instead of Slaney (default: false)
- * @returns STFT power spectrogram result
+ * @returns STFT magnitude spectrogram result
  */
-export function melToStft(request: MelToStftRequest | MelResultToStftRequest): StftPowerResult;
+export function melToStft(request: MelToStftRequest | MelResultToStftRequest): StftMagnitudeResult;
 export function melToStft(
   power: Float32Array,
   nMels: number,
@@ -318,7 +319,7 @@ export function melToStft(
   fmax?: number,
   htk?: boolean,
   options?: GuardedOptions,
-): StftPowerResult;
+): StftMagnitudeResult;
 export function melToStft(
   power: Float32Array | MelToStftRequest | MelResultToStftRequest,
   nMels = 0,
@@ -329,7 +330,7 @@ export function melToStft(
   fmax = 0,
   htk = false,
   options: GuardedOptions = {},
-): StftPowerResult {
+): StftMagnitudeResult {
   if (!(power instanceof Float32Array)) {
     const request = isResultRequest('melToStft', power, 'power')
       ? melRequestFromResult('melToStft', power, MEL_TO_STFT_CARRIED)
@@ -460,6 +461,7 @@ export function griffinLim(
   momentum = 0.99,
   options: GuardedOptions = {},
 ): Float32Array {
+  optionsBag('griffinLim', options);
   if (!(magnitude instanceof Float32Array)) {
     requestObject('griffinLim', magnitude, 'magnitude');
     const request = magnitude;

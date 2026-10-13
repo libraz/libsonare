@@ -103,7 +103,7 @@ const TABLE: Entry[] = [
     'ebur128LoudnessRange',
   ].map((name) => mono(name, name === 'analyzeWithProgress' ? { onProgress: () => {} } : {})),
   mono('chordFunctionalAnalysis', { keyRoot: 0 }),
-  mono('roomMorph', { targetRt60: 0.4 }),
+  mono('roomMorph', { wet: 0.4 }),
   stereo('roomMorphStereo'),
   // Spectral and pitch features
   ...[
@@ -192,10 +192,7 @@ const TABLE: Entry[] = [
           f0Hz: f0(),
           frameRate: 86.13,
           notes: [],
-          index: 0,
-          frame: 10,
-          first: 0,
-          last: 1,
+          ...(name === 'splitNote' ? { index: 0, frame: 10 } : { first: 0, last: 1 }),
         }),
     }),
   ),

@@ -71,6 +71,20 @@ def test_decode_channels_refuses_unusable_bytes() -> None:
         decode_channels(b"garbage")
 
 
+def test_downmix_is_not_normalised_and_takes_options() -> None:
+    inv = math.sqrt(0.5)
+    full = np.ones((6, 8), dtype=np.float32)
+    np.testing.assert_allclose(downmix(full, ChannelLayout.STEREO), 1 + 2 * inv, atol=1e-5)
+    np.testing.assert_allclose(downmix(full, ChannelLayout.STEREO, normalize=True), 1.0, atol=1e-5)
+    surround = np.stack([np.full(8, v, dtype=np.float32) for v in (0.1, 0.2, 0.3, 0.4, 0.05, 0.15)])
+    left = 0.1 + inv * 0.3 + inv * 0.05
+    np.testing.assert_allclose(
+        downmix(surround, ChannelLayout.STEREO, include_lfe=True)[0], left + inv * 0.4, atol=1e-6
+    )
+    with pytest.raises(SonareValueError, match="normalize must be a bool"):
+        downmix(surround, ChannelLayout.STEREO, normalize=1)  # type: ignore[arg-type]
+
+
 def test_downmix_applies_bs775_coefficients() -> None:
     inv = math.sqrt(0.5)
     surround = np.stack([np.full(8, v, dtype=np.float32) for v in (0.1, 0.2, 0.3, 0.4, 0.05, 0.15)])

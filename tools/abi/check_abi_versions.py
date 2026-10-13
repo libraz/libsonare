@@ -112,7 +112,7 @@ def c_source_of_truth() -> dict[str, int]:
 MIRRORS: tuple[tuple[str, str, str], ...] = (
     # Aggregate packed version.
     ("bindings/python/src/libsonare/_ffi.py", r"EXPECTED_ABI_VERSION\s*=\s*(\w+)", "aggregate"),
-    ("bindings/node/src/abi.ts", r"EXPECTED_ABI_VERSION\s*=\s*(\w+)", "aggregate"),
+    ("bindings/node/src/abi_version.ts", r"EXPECTED_ABI_VERSION\s*=\s*(\w+)", "aggregate"),
     ("bindings/wasm/src/abi.ts", r"EXPECTED_ABI_VERSION\s*=\s*(\w+)", "aggregate"),
     # Project ABI.
     (
@@ -141,6 +141,7 @@ MIRRORS: tuple[tuple[str, str, str], ...] = (
     ),
     ("bindings/node/src/addon/engine/common.h", r"kExpectedEngineAbiVersion\s*=\s*(\w+)", "engine"),
     ("bindings/wasm/src/realtime_engine.ts", r"EXPECTED_ENGINE_ABI_VERSION\s*=\s*(\w+)", "engine"),
+    ("bindings/node/src/realtime_engine.ts", r"EXPECTED_ENGINE_ABI_VERSION\s*=\s*(\w+)", "engine"),
 )
 
 

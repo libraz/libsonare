@@ -182,13 +182,26 @@ export interface DecodedChannels {
  */
 export type ChannelLayout = 0 | 1 | 2 | 3;
 
+/** Options for {@link downmix}. */
+export interface DownmixOptions {
+  /**
+   * Scale the fold so the worst case (every input at full scale, in phase)
+   * cannot exceed unity. The scale is a peak divisor, not a loudness match, so
+   * typical material comes out a few dB quieter. Default `false`.
+   */
+  normalize?: boolean;
+  /** Fold the LFE plane into the front pair at -3 dB instead of dropping it. Default `false`. */
+  includeLfe?: boolean;
+}
+
 /**
  * Decode audio bytes once and keep every source channel.
  *
  * {@link Audio.fromMemory} folds a multi-channel source to mono as it decodes;
  * this returns the planes instead. Same format set, size ceiling and
  * decoded-buffer contract as `Audio.fromMemory`. A 5.1 source arrives as
- * `L R C LFE Ls Rs`.
+ * `L R C LFE Ls Rs`. Folding the planes with {@link downmix} is not normalised
+ * and can exceed full scale.
  *
  * @param bytes - Encoded audio bytes such as WAV or MP3.
  * @throws SonareError with `codeName: 'DecodeFailed'` for an empty decode or a
@@ -216,15 +229,29 @@ export function decodeChannels(bytes: Uint8Array): DecodedChannels {
  * 1/2/6/8 folds to mono (`0`) as the unweighted mean of its planes, as the
  * decoders do, and has no other target.
  *
+ * The fold is not normalised: the coefficients sum, so a source with several
+ * full-scale planes can leave the output past full scale (six planes of 1.0
+ * fold to 2.414 on a stereo target). Pass `normalize: true` to scale the output
+ * so the worst case stays at or below full scale, or leave headroom before
+ * calling.
+ *
  * @param channels - One `Float32Array` per channel, all of the same length.
  * @param targetLayout - `0` mono, `1` stereo, `2` 5.1, `3` 7.1.
+ * @param options - `normalize` scales the fold so the worst case (every input
+ *   at full scale, in phase) cannot exceed unity; `includeLfe` folds the LFE
+ *   plane in at -3 dB instead of dropping it. Both default to `false`.
  * @throws SonareError with `codeName: 'InvalidParameter'` for an upmix or an
  *   unknown layout.
  * @throws RangeError for no channels, or channels of differing length.
+ * @throws TypeError for an `options` that is not an object or a non-boolean option.
  * @returns One `Float32Array` per channel of the target layout.
  */
-export function downmix(channels: Float32Array[], targetLayout: ChannelLayout): Float32Array[] {
-  return getSonareModule().downmix(channels, targetLayout);
+export function downmix(
+  channels: Float32Array[],
+  targetLayout: ChannelLayout,
+  options: DownmixOptions = {},
+): Float32Array[] {
+  return getSonareModule().downmix(channels, targetLayout, options);
 }
 
 /**

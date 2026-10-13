@@ -1,6 +1,5 @@
-import { init as initSonareModule, isInitialized } from '../index.js';
-import type { SonareModule } from '../sonare.js';
 import type { WorkletInput, WorkletOutput } from './audio_types.js';
+import { initializeEmbindInWorklet } from './embind-init.js';
 import { SonareRealtimeEngineWorkletProcessor } from './engine-processor.js';
 import {
   isEngineCaptureRequestMessage,
@@ -109,31 +108,7 @@ export function registerSonareRealtimeEngineWorkletProcessor(
       port?: WorkletPort,
     ): Promise<void> {
       try {
-        const initPromise = (
-          globalThis as typeof globalThis & { SonareEmbindInitPromise?: Promise<void> }
-        ).SonareEmbindInitPromise;
-        if (initPromise) {
-          await initPromise;
-        }
-        if (!isInitialized()) {
-          type EmbindModuleFactory = (options?: {
-            locateFile?: (path: string, prefix: string) => string;
-            wasmBinary?: ArrayBuffer | Uint8Array;
-          }) => Promise<SonareModule>;
-          const moduleFactory = (
-            globalThis as typeof globalThis & {
-              SonareEmbindModuleFactory?: EmbindModuleFactory;
-            }
-          ).SonareEmbindModuleFactory;
-          if (!moduleFactory) {
-            throw new Error('embind realtime engine module is not initialized.');
-          }
-          await initSonareModule({
-            locateFile: (path) => path,
-            wasmBinary: options.wasmBinary,
-            moduleFactory,
-          });
-        }
+        await initializeEmbindInWorklet(options.wasmBinary);
         if (this.pendingMessagesOverflowed) {
           throw new Error('AudioWorklet initialization message buffer overflowed.');
         }

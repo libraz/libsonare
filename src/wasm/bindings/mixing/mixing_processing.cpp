@@ -7,6 +7,28 @@
 
 #if defined(SONARE_WITH_MIXING) && defined(SONARE_WITH_GRAPH)
 
+namespace {
+
+// More inputs than strips is an argument the caller got wrong, so it is refused
+// by both counts before the C call; fewer inputs than strips leave the rest silent.
+void requireInputCountWithinStrips(size_t input_count, size_t strip_count) {
+  if (input_count > strip_count) {
+    throw WasmRangeError("got " + std::to_string(input_count) + " input channels for a " +
+                         std::to_string(strip_count) + "-strip mixer");
+  }
+}
+
+// A C INVALID_PARAMETER from the mixer is an argument refusal, not object state.
+[[noreturn]] void throwMixerProcessError(SonareError err) {
+  const std::string message = std::string("mixer process failed: ") + sonare_error_message(err);
+  if (err == SONARE_ERROR_INVALID_PARAMETER) {
+    throw WasmRangeError(message);
+  }
+  throw sonare::SonareException(sonare::ErrorCode::InvalidState, message);
+}
+
+}  // namespace
+
 val MixerWasm::processStereo(val left_channels, val right_channels) {
   // require_non_zero=false: unlike the standalone mixStereo utility, this
   // mixer instance may legitimately be configured with zero strips, and the
@@ -14,6 +36,7 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
   // error.
   const int count = requireMatchedLength(
       left_channels, right_channels, "leftChannels and rightChannels", /*require_non_zero=*/false);
+  requireInputCountWithinStrips(static_cast<size_t>(count), stripCount());
 
   std::vector<std::vector<float>> left_inputs;
   std::vector<std::vector<float>> right_inputs;
@@ -57,11 +80,7 @@ val MixerWasm::processStereo(val left_channels, val right_channels) {
     SonareError err = sonare_mixer_process_stereo(mixer_, left_ptrs.data(), right_ptrs.data(),
                                                   static_cast<size_t>(count), out_left.data(),
                                                   out_right.data(), length);
-    if (err != SONARE_OK) {
-      throw sonare::SonareException(
-          sonare::ErrorCode::InvalidState,
-          std::string("mixer process failed: ") + sonare_error_message(err));
-    }
+    if (err != SONARE_OK) throwMixerProcessError(err);
   }
 
   val out = val::object();
@@ -77,9 +96,7 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
   if (count < 0 || right_channels["length"].as<int>() != count) {
     throw WasmRangeError("leftChannels and rightChannels must have the same length");
   }
-  if (static_cast<size_t>(count) != left_scratch_.size()) {
-    throw WasmRangeError("input channel count must match the mixer's strip count");
-  }
+  requireInputCountWithinStrips(static_cast<size_t>(count), stripCount());
 
   // require_non_zero=false: a zero-sample block is a legitimate no-op here
   // (mirrors the zero-strip tolerance above; sonare_mixer_process_stereo is
@@ -113,11 +130,7 @@ void MixerWasm::processStereoInto(val left_channels, val right_channels, val out
   SonareError err = sonare_mixer_process_stereo(
       mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
       static_cast<size_t>(count), out_scratch_left_.data(), out_scratch_right_.data(), length);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("mixer process failed: ") + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwMixerProcessError(err);
   if (length > 0) {
     // As above, these views borrow scratch memory only for the duration of the
     // bulk copy; no view is retained by the binding after this call returns.
@@ -161,11 +174,7 @@ void MixerWasm::processPreparedStereo(const val& num_samples_val) {
   SonareError err = sonare_mixer_process_stereo(
       mixer_, count > 0 ? left_ptrs_.data() : nullptr, count > 0 ? right_ptrs_.data() : nullptr,
       count, out_scratch_left_.data(), out_scratch_right_.data(), num_samples);
-  if (err != SONARE_OK) {
-    throw sonare::SonareException(
-        sonare::ErrorCode::InvalidState,
-        std::string("mixer process failed: ") + sonare_error_message(err));
-  }
+  if (err != SONARE_OK) throwMixerProcessError(err);
   if (meter_active_ && meter_.has_value()) {
     // Metered here rather than by the caller so every block reaches the meter.
     // The true-peak filter carries cross-block history, and an inter-sample peak

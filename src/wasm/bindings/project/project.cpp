@@ -34,6 +34,7 @@ std::string ProjectWasm::toJson() const {
 }
 
 ProjectWasm ProjectWasm::fromJson(const std::string& json) {
+  wasmRefuseEmbeddedNul(json, "json");
   SonareProject* handle = nullptr;
   char* diag = nullptr;
   const SonareError err = sonare_project_deserialize(json.data(), json.size(), &handle, &diag);

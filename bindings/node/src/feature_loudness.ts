@@ -2,7 +2,7 @@ import type { FeatureSamplesRequest } from './feature_spectral.js';
 import { addon } from './native.js';
 import type { LufsResult, LufsSeriesResult } from './types.js';
 import type { ValidateOptions } from './validation.js';
-import { assertAudioInput, requestObject } from './validation.js';
+import { assertAudioInput, optionsBag, requestObject } from './validation.js';
 
 /** Input for LUFS feature functions, including optional input validation control. */
 export interface LufsRequest extends FeatureSamplesRequest, ValidateOptions {}
@@ -121,7 +121,7 @@ export function lufs(
 ): LufsResult {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('lufs', options) }
       : requestObject('lufs', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('lufs', request.samples, resolvedSampleRate, request);
@@ -145,7 +145,7 @@ export function momentaryLufs(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('momentaryLufs', options) }
       : requestObject('momentaryLufs', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('momentaryLufs', request.samples, resolvedSampleRate, request);
@@ -169,7 +169,7 @@ export function shortTermLufs(
 ): Float32Array {
   const request =
     samples instanceof Float32Array
-      ? { samples, sampleRate, ...options }
+      ? { samples, sampleRate, ...optionsBag('shortTermLufs', options) }
       : requestObject('shortTermLufs', samples);
   const resolvedSampleRate = request.sampleRate ?? 22050;
   assertAudioInput('shortTermLufs', request.samples, resolvedSampleRate, request);
