@@ -213,9 +213,9 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
         assert hanging.unmatched_note_ons == 1
         assert hanging.unmatched_note_offs == 0
 
-        # Export uses a half-open [source_offset, source_offset + length)
-        # interval, so an off exactly at length_ppq is excluded and must be
-        # reported before export too.
+        # The clip window is half-open [source_offset, source_offset + length), so
+        # an off exactly at length_ppq lies outside it; export closes the note at
+        # the clip end, so it validates as a matched pair.
         _boundary_track, boundary_clip = project.add_midi_clip(0.0, 1.0)
         project.set_midi_events(
             boundary_clip,
@@ -225,8 +225,8 @@ def test_validate_midi_notes_flags_hanging_note_on() -> None:
             ],
         )
         boundary = project.validate_midi_notes(boundary_clip)
-        assert boundary.ok is False
-        assert boundary.unmatched_note_ons == 1
+        assert boundary.ok is True
+        assert boundary.unmatched_note_ons == 0
         assert boundary.unmatched_note_offs == 0
     finally:
         project.close()

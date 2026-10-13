@@ -443,7 +443,10 @@ SonareError sonare_project_add_loop_recording_takes(SonareProject* project,
 
 /// @brief Convenience wrapper that creates a MIDI track + a MIDI clip on it.
 ///        The track, source, and clip form one undo transaction. Returns the
-///        allocated track and clip ids. @p length_ppq must be > 0.
+///        allocated track and clip ids. @p length_ppq must be > 0. The clip window
+///        is half-open, [0, @p length_ppq): an event at exactly @p length_ppq is
+///        outside it, and a note still sounding at the clip end is closed with a
+///        note-off there by export and validation.
 SonareError sonare_project_add_midi_clip(SonareProject* project, double start_ppq,
                                          double length_ppq, uint32_t* out_track_id,
                                          uint32_t* out_clip_id);

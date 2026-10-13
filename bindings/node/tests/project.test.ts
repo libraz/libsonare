@@ -1237,7 +1237,7 @@ describe('Project validateMidiNotes', () => {
     project.destroy();
   });
 
-  it('validates the same half-open clip window used by SMF export', () => {
+  it('closes a note still sounding at the half-open clip end', () => {
     const project = Project.create();
     const { clipId } = project.addMidiClip(0, 1);
     project.setMidiEvents(clipId, [
@@ -1246,8 +1246,8 @@ describe('Project validateMidiNotes', () => {
     ]);
 
     const result = project.validateMidiNotes(clipId);
-    expect(result.ok).toBe(false);
-    expect(result.unmatchedNoteOns).toBe(1);
+    expect(result.ok).toBe(true);
+    expect(result.unmatchedNoteOns).toBe(0);
     expect(result.unmatchedNoteOffs).toBe(0);
     project.destroy();
   });

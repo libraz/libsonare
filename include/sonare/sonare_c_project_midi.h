@@ -125,7 +125,10 @@ typedef struct {
 
 /// @brief Replaces a MIDI clip's entire event list in the content store. Pass
 ///        @p count == 0 to clear. Events are stored opaquely (see
-///        @ref SonareMidiEventPod).
+///        @ref SonareMidiEventPod). Export keeps the events inside the clip's
+///        half-open window [0, length_ppq) (after the source offset); a note
+///        still sounding at the clip end, including one whose note-off sits at or
+///        past length_ppq, is closed with a note-off at the clip end.
 /// @warning Drops the clip's SysEx, which import and export both keep. The
 ///          payloads are reached by a handle on the core's own event record and
 ///          @ref SonareMidiEventPod carries none, so replacing the list leaves
@@ -529,8 +532,9 @@ SonareError sonare_project_set_midi_fx(SonareProject* project, uint32_t clip_id,
 ///
 /// Builds the same source-offset / length / loop-expanded, half-open event view
 /// used by SMF export and reports whether every note-on is matched by a note-off
-/// (FIFO per group+channel+note). Useful before bouncing to catch a stuck note
-/// that would otherwise sustain. Does not mutate the project. Returns
+/// (FIFO per group+channel+note). A note still sounding at the clip end (or at a
+/// loop boundary) is closed there by export, so it validates as paired. Useful before bouncing to
+/// catch a stuck note that would otherwise sustain. Does not mutate the project. Returns
 /// SONARE_ERROR_INVALID_PARAMETER if @p project / @p out is null or @p clip_id
 /// is not a MIDI clip.
 SonareError sonare_project_validate_midi_notes(const SonareProject* project, uint32_t clip_id,

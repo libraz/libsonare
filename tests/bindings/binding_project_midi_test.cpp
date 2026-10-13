@@ -1570,12 +1570,12 @@ TEST_CASE("project MIDI validation matches the exported clip window", "[project]
   REQUIRE(sonare_midi_note_off(1.0, 0, 0, 60, 0, &events[1]) == SONARE_OK);
   REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
 
-  // The clip/export interval is half-open: the off at exactly length_ppq is not
-  // serialized, so validation must report the same hanging note before export.
+  // The clip/export interval is half-open, so the off at exactly length_ppq lies
+  // outside it; the note is closed at the clip end and validates as a pair.
   SonareNotePairValidation report{};
   REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
-  REQUIRE(report.ok == 0);
-  REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.ok == 1);
+  REQUIRE(report.unmatched_note_ons == 0);
   REQUIRE(report.unmatched_note_offs == 0);
 
   uint8_t* bytes = nullptr;
@@ -1590,11 +1590,41 @@ TEST_CASE("project MIDI validation matches the exported clip window", "[project]
   REQUIRE(sonare_project_import_smf(imported, bytes, length, &imported_clip) == SONARE_OK);
   sonare_free_bytes(bytes);
   REQUIRE(sonare_project_validate_midi_notes(imported, imported_clip, &report) == SONARE_OK);
-  REQUIRE(report.ok == 0);
-  REQUIRE(report.unmatched_note_ons == 1);
+  REQUIRE(report.ok == 1);
+  REQUIRE(report.unmatched_note_ons == 0);
   REQUIRE(report.unmatched_note_offs == 0);
 
   sonare_project_destroy(imported);
+  sonare_project_destroy(project);
+}
+
+TEST_CASE("project C surface closes a note cut by a loop boundary", "[project]") {
+  SonareProject* project = nullptr;
+  REQUIRE(sonare_project_create(&project) == SONARE_OK);
+  uint32_t track = 0;
+  uint32_t clip = 0;
+  REQUIRE(sonare_project_add_midi_clip(project, 0.0, 3.0, &track, &clip) == SONARE_OK);
+  SonareMidiEventPod events[2]{};
+  REQUIRE(sonare_midi_note_on(0.0, 0, 0, 60, 100, &events[0]) == SONARE_OK);
+  REQUIRE(sonare_midi_note_off(1.5, 0, 0, 60, 0, &events[1]) == SONARE_OK);
+  REQUIRE(sonare_project_set_midi_events(project, clip, events, 2) == SONARE_OK);
+  REQUIRE(sonare_project_set_clip_loop(project, clip, SONARE_LOOP_MODE_LOOP, 1.0, 0.0) ==
+          SONARE_OK);
+
+  // The off lies past the loop length, so each of the three repeats is closed at
+  // its boundary.
+  SonareNotePairValidation report{};
+  REQUIRE(sonare_project_validate_midi_notes(project, clip, &report) == SONARE_OK);
+  REQUIRE(report.ok == 1);
+
+  uint8_t* bytes = nullptr;
+  size_t length = 0;
+  REQUIRE(sonare_project_export_smf(project, &bytes, &length) == SONARE_OK);
+  const auto smf = sonare::midi::import_smf(bytes, length);
+  sonare_free_bytes(bytes);
+  REQUIRE(smf.ok());
+  REQUIRE(smf.clips.size() == 1);
+  REQUIRE(smf.clips[0].events().size() == 6);
   sonare_project_destroy(project);
 }
 

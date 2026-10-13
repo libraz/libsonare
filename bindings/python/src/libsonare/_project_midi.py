@@ -77,6 +77,11 @@ class _ProjectMidiMixin:
         export byte for byte is gone after one call here. Nothing reads the
         handles back either, so a caller that must keep the setup edits the
         exported file rather than the event list.
+
+        Only events inside the clip's half-open window ``[0, length_ppq)`` (after
+        the source offset) are kept for export; a note still sounding at the clip
+        end, including one whose note-off sits at or past ``length_ppq``, is
+        closed with a note-off at the clip end.
         """
         rows = list(events)
         count = len(rows)
@@ -418,7 +423,12 @@ class _ProjectMidiMixin:
         return count.value
 
     def validate_midi_notes(self, clip_id: int) -> NotePairValidation:
-        """Check the clip's exported playback window for unmatched notes."""
+        """Check the clip's exported playback window for unmatched notes.
+
+        The window is half-open, ``[0, length_ppq)``. A note still sounding at the
+        clip end (its note-off at or past ``length_ppq``) is closed there by
+        export, so it validates as paired.
+        """
         result = SonareNotePairValidation()
         _check(
             _get_lib().sonare_project_validate_midi_notes(

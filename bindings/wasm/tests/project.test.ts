@@ -1065,16 +1065,16 @@ describe('Sonare WASM Project', () => {
       expect(crossGroup.unmatchedNoteOns).toBe(1);
       expect(crossGroup.unmatchedNoteOffs).toBe(1);
 
-      // Export uses the half-open clip window, so an off at exactly
-      // lengthPpq is excluded and validation must flag the resulting hang.
+      // The clip window is half-open, so an off at exactly lengthPpq lies outside
+      // it; export closes the note at the clip end, so it still validates.
       const { clipId: boundaryClip } = project.addMidiClip(0, 1);
       project.setMidiEvents(boundaryClip, [
         Project.midiNoteOn(0, 0, 0, 61, 100),
         Project.midiNoteOff(1, 0, 0, 61, 0),
       ]);
       const boundary = project.validateMidiNotes(boundaryClip);
-      expect(boundary.ok).toBe(false);
-      expect(boundary.unmatchedNoteOns).toBe(1);
+      expect(boundary.ok).toBe(true);
+      expect(boundary.unmatchedNoteOns).toBe(0);
       expect(boundary.unmatchedNoteOffs).toBe(0);
     } finally {
       project.delete();

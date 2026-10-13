@@ -1015,7 +1015,15 @@ export class Project {
     return this.native.addLoopRecordingTakes(interleaveLoopRecording(desc));
   }
 
-  /** Create a MIDI track + clip; returns `{ trackId, clipId }`. */
+  /**
+   * Create a MIDI track + clip; returns `{ trackId, clipId }`.
+   *
+   * @remarks
+   * The clip window is half-open, `[0, lengthPpq)`: an event at exactly
+   * `lengthPpq` is outside it. Export and validation close a note still
+   * sounding at the clip end with a note-off there, so a note running the full
+   * length of the clip is a matched pair.
+   */
   addMidiClip(startPpq: number, lengthPpq: number): ProjectMidiClipResult {
     return this.native.addMidiClip(startPpq, lengthPpq);
   }
@@ -1347,6 +1355,11 @@ export class Project {
    * byte for byte is gone after one call here. Nothing reads the handles back
    * either, so a caller that must keep the setup edits the exported file
    * rather than the event list.
+   *
+   * Only events inside the clip's half-open window `[0, lengthPpq)` (after the
+   * source offset) are kept for export; a note still sounding at the clip end,
+   * including one whose note-off sits at or past `lengthPpq`, is closed with a
+   * note-off at the clip end.
    */
   setMidiEvents(
     clipId: number,
@@ -1455,7 +1468,9 @@ export class Project {
 
   /**
    * Validate that every note-on in the clip's exported half-open playback
-   * window has a matching note-off.
+   * window `[0, lengthPpq)` has a matching note-off. A note still sounding at
+   * the clip end (its note-off at or past `lengthPpq`) is closed there by
+   * export, so it validates as paired.
    *
    * @param clipId Target MIDI clip id.
    * @returns `ok` is `true` when fully paired; `unmatchedNoteOns` /

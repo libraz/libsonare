@@ -10,6 +10,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -359,6 +360,83 @@ inline constexpr size_t kMaxProjectMidiExportEvents = sonare::resource::kMaxProj
 inline constexpr size_t kMaxMidiExportLoopIterations =
     sonare::resource::kMaxMidiExportLoopIterations;
 
+uint32_t note_identity_key(const sonare::midi::Ump& ump) {
+  return (static_cast<uint32_t>(ump.group) << 16) | (static_cast<uint32_t>(ump.channel()) << 8) |
+         ump.note_number();
+}
+
+// Identity of the note a source event releases, or false when it is not a note-off.
+bool source_note_off_key(const arr::MidiClipEvent& event, uint32_t* key) {
+  sonare::midi::Ump ump;
+  ump.words[0] = event.data0;
+  ump.word_count = sonare::midi::ump_word_count_for_word0(event.data0);
+  ump.group = static_cast<uint8_t>((event.data0 >> 24u) & 0x0Fu);
+  if (!ump.is_note_off() || ump.note_number() >= 128) return false;
+  *key = note_identity_key(ump);
+  return true;
+}
+
+// The clip window is half-open, so a note-off at or past a cut (a loop boundary
+// or the clip end) is dropped. Close each note still sounding at a cut whose
+// note-off was dropped that way (`windowed_off_keys`) with a note-off there, so a
+// note running to the end of its clip exports as a matched pair. A note-on that
+// never had a note-off stays unmatched.
+void release_notes_at_cuts(const arr::EditClip& clip, double clip_end, bool looping,
+                           size_t loop_iterations, const std::set<uint32_t>& windowed_off_keys,
+                           sonare::midi::MidiClip* clip_out) {
+  std::vector<double> cuts;
+  if (looping) {
+    for (size_t k = 1; k < loop_iterations; ++k) {
+      const double boundary = clip.start_ppq + static_cast<double>(k) * clip.loop_length_ppq;
+      if (!(boundary < clip_end)) break;
+      cuts.push_back(boundary);
+    }
+  }
+  cuts.push_back(clip_end);
+
+  struct Sounding {
+    sonare::midi::Ump on;
+    int count = 0;
+  };
+  std::map<uint32_t, Sounding> open;
+  const auto key = note_identity_key;
+  std::vector<sonare::midi::MidiClipEvent> released;
+  const auto release = [&](double ppq) {
+    for (auto& entry : open) {
+      if (windowed_off_keys.count(entry.first) == 0) continue;
+      const sonare::midi::Ump& on = entry.second.on;
+      const bool midi2 = on.message_type() == sonare::midi::UmpMessageType::kMidi2ChannelVoice;
+      for (int i = 0; i < entry.second.count; ++i) {
+        sonare::midi::MidiClipEvent off;
+        off.ppq = ppq;
+        off.ump =
+            midi2 ? sonare::midi::make_midi2_note_off(on.group, on.channel(), on.note_number(), 0)
+                  : sonare::midi::make_midi1_note_off(on.group, on.channel(), on.note_number(), 0);
+        released.push_back(off);
+      }
+    }
+    open.clear();
+  };
+
+  size_t cut = 0;
+  for (const sonare::midi::MidiClipEvent& event : clip_out->events()) {
+    while (cut < cuts.size() && event.ppq >= cuts[cut]) release(cuts[cut++]);
+    if (event.ump.group >= 16 || event.ump.note_number() >= 128) continue;
+    if (event.ump.is_note_on()) {
+      Sounding& slot = open[key(event.ump)];
+      slot.on = event.ump;
+      ++slot.count;
+    } else if (event.ump.is_note_off()) {
+      const auto it = open.find(key(event.ump));
+      if (it != open.end() && it->second.count > 0 && --it->second.count == 0) open.erase(it);
+    }
+  }
+  while (cut < cuts.size()) release(cuts[cut++]);
+  if (released.empty()) return;
+  for (const sonare::midi::MidiClipEvent& off : released) clip_out->add_event(off);
+  clip_out->sort_stable();
+}
+
 SonareError make_smf_clip_from_events(
     const arr::EditClip& clip, const arr::MidiClipEventList& events,
     const arr::MidiContentStore& midi, sonare::midi::SysExStore* export_store,
@@ -407,11 +485,19 @@ SonareError make_smf_clip_from_events(
 
   std::vector<sonare::midi::MidiClipEvent> expanded;
   expanded.reserve(projected_events);
+  std::set<uint32_t> windowed_off_keys;
+  const auto note_windowed_off = [&windowed_off_keys](const arr::MidiClipEvent& event) {
+    uint32_t key = 0;
+    if (source_note_off_key(event, &key)) windowed_off_keys.insert(key);
+  };
   for (const arr::MidiClipEvent& event : events) {
     if (!std::isfinite(event.ppq) || event.ppq < clip.source_offset_ppq) continue;
     const double rebased = event.ppq - clip.source_offset_ppq;
     if (looping) {
-      if (rebased >= clip.loop_length_ppq) continue;
+      if (rebased >= clip.loop_length_ppq) {
+        note_windowed_off(event);
+        continue;
+      }
       double previous_loop_start = 0.0;
       double previous_event_ppq = 0.0;
       bool have_previous = false;
@@ -431,14 +517,20 @@ SonareError make_smf_clip_from_events(
         previous_loop_start = loop_start;
         previous_event_ppq = ppq;
         have_previous = true;
-        if (ppq >= clip_end) continue;
+        if (ppq >= clip_end) {
+          note_windowed_off(event);
+          continue;
+        }
         sonare::midi::MidiClipEvent out_event;
         out_event.ppq = ppq;
         fill_ump_from_arr_event(event, midi, export_store, exported_handles, &out_event.ump);
         expanded.push_back(out_event);
       }
     } else {
-      if (rebased >= clip.length_ppq) continue;
+      if (rebased >= clip.length_ppq) {
+        note_windowed_off(event);
+        continue;
+      }
       const double ppq = clip.start_ppq + rebased;
       if (!std::isfinite(ppq) || ppq < clip.start_ppq) return SONARE_ERROR_INVALID_FORMAT;
       sonare::midi::MidiClipEvent out_event;
@@ -449,6 +541,7 @@ SonareError make_smf_clip_from_events(
   }
   out->set_events(std::move(expanded));
   out->sort_stable();
+  release_notes_at_cuts(clip, clip_end, looping, loop_iterations, windowed_off_keys, out);
   return SONARE_OK;
 }
 

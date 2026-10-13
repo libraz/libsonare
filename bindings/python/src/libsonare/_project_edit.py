@@ -717,7 +717,12 @@ class _ProjectEditMixin:
         return int(out_clip.value), int(out_take_count.value)
 
     def add_midi_clip(self, start_ppq: float, length_ppq: float) -> tuple[int, int]:
-        """Create a MIDI track + clip; return ``(track_id, clip_id)``."""
+        """Create a MIDI track + clip; return ``(track_id, clip_id)``.
+
+        The clip window is half-open, ``[0, length_ppq)``: an event at exactly
+        ``length_ppq`` is outside it. Export and validation close a note
+        still sounding at the clip end with a note-off there.
+        """
         out_track = ctypes.c_uint32()
         out_clip = ctypes.c_uint32()
         _check(

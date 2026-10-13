@@ -991,9 +991,8 @@ SonareError sonare_project_validate_midi_notes(const SonareProject* project, uin
   const auto it = project->history.midi_content().events.find(clip_id);
   if (it != project->history.midi_content().events.end()) {
     // Validate the exact event set that export emits, including the clip's
-    // source-offset / half-open length window and loop expansion. Validating the
-    // untrimmed source can otherwise approve a note-off at length_ppq that
-    // export necessarily discards, producing a hanging note.
+    // source-offset / half-open length window and loop expansion. A note still
+    // sounding at the clip end is closed there, so it validates as a matched pair.
     sonare::midi::SysExStore sysex_store;
     std::map<uint32_t, sonare::midi::SysExHandle> exported_sysex_handles;
     const SonareError build_error = make_smf_clip_from_events(
