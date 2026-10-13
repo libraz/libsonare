@@ -8,15 +8,16 @@
 #include <vector>
 
 #include "editing/note_model/note_renderer.h"
+#include "editing/note_model/seam_crossfade.h"
 #include "util/constants.h"
 #include "util/exception.h"
 #include "util/numeric_validation.h"
 
 namespace sonare::editing::pitch_editor {
 
-using sonare::constants::kInvSqrt2;
+using note_model::correlated_crossfade;
+using note_model::seam_correlation;
 using sonare::constants::kPi;
-using sonare::constants::kPiD;
 
 namespace {
 
@@ -24,38 +25,6 @@ namespace {
 /// period of a 100 Hz fundamental, so any periodic tone above it can be brought
 /// into phase with its neighbour.
 constexpr double kSpliceSearchSec = 0.01;
-
-/// Normalized correlation of @p a and @p b over @p n samples, weighted toward the
-/// middle where the cross term of a fade peaks; 0 if either is silent.
-float seam_correlation(const float* a, const float* b, int n) noexcept {
-  double ab = 0.0;
-  double aa = 0.0;
-  double bb = 0.0;
-  for (int k = 0; k < n; ++k) {
-    const double w = std::sin(kPiD * (static_cast<double>(k) + 0.5) / static_cast<double>(n));
-    ab += w * a[k] * b[k];
-    aa += w * a[k] * a[k];
-    bb += w * b[k] * b[k];
-  }
-  const double norm = std::sqrt(aa * bb);
-  return norm > 0.0 ? static_cast<float>(ab / norm) : 0.0f;
-}
-
-/// Cross-fades @p outgoing into @p incoming over @p n samples into @p dest with
-/// the weights that keep the level for the two sides' measured correlation:
-/// equal gain when they are coherent, the sin/cos equal-power pair when they
-/// are independent, and the constant-power family between. An anti-correlated
-/// pair is faded as an independent one, since holding its level would boost both.
-void correlated_crossfade(float* dest, const float* outgoing, const float* incoming, int n) {
-  const float rho = std::clamp(seam_correlation(outgoing, incoming, n), 0.0f, 1.0f);
-  for (int k = 0; k < n; ++k) {
-    // Odd part o carries the fade; even part e solves g_in^2 + g_out^2 + 2 rho g_in g_out = 1.
-    const float t = 2.0f * (static_cast<float>(k) + 0.5f) / static_cast<float>(n) - 1.0f;
-    const float o = kInvSqrt2 * std::sin(0.25f * kPi * t);
-    const float e = std::sqrt(std::max(0.0f, (0.5f - (1.0f - rho) * o * o) / (1.0f + rho)));
-    dest[k] = (e - o) * outgoing[k] + (e + o) * incoming[k];
-  }
-}
 
 }  // namespace
 

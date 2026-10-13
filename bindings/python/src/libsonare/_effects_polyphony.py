@@ -649,9 +649,10 @@ class PolyphonicAnalysis:
         energy correctly.
 
         Args:
-            fade_ms: Equal-power cross-fade at each edited note's edges; ``None``
-                keeps the library default (5 ms). A hard cut is deliberately not
-                selectable, because the seam it leaves behind is a click.
+            fade_ms: Cross-fade at each edited note's edges, weighted to hold the
+                level whether the note is coherent with the audio under it or not;
+                ``None`` keeps the library default (5 ms). A hard cut is deliberately
+                not selectable, because the seam it leaves behind is a click.
             vibrato_cutoff_hz: Boundary between the drift and the vibrato that
                 ``NoteEdit.vibrato_depth_change`` and ``NoteEdit.drift_change``
                 act on; ``None`` keeps the default (3 Hz). Pass whatever a curve

@@ -253,7 +253,8 @@ typedef struct {
 ///          @c struct_version 0 and 1 both select the version-1 layout.
 typedef struct {
   int32_t struct_version;
-  /// Equal-power cross-fade at each edited note's edges. 0 keeps the default
+  /// Cross-fade at each edited note's edges, weighted to hold the level whether
+  /// the note is coherent with the audio under it or not. 0 keeps the default
   /// 5 ms; a hard cut is deliberately not selectable, because the seam it
   /// leaves behind is a click.
   float fade_ms;

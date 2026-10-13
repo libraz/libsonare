@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -731,6 +732,103 @@ TEST_CASE("render_notes keeps the input's length and sample rate for every edit"
     REQUIRE(peak(rendered, 0, rendered.size()) < 10.0f);
     for (size_t i = 0; i < rendered.size(); i += 97) {
       REQUIRE(std::isfinite(rendered[i]));
+    }
+  }
+}
+
+namespace {
+
+/// RMS of @p samples over [begin, begin + width).
+double window_rms(const float* samples, int begin, int width) {
+  double acc = 0.0;
+  for (int i = begin; i < begin + width; ++i) {
+    acc += static_cast<double>(samples[i]) * samples[i];
+  }
+  return std::sqrt(acc / width);
+}
+
+}  // namespace
+
+TEST_CASE("render_notes keeps a tone's level across an in-place edit's seams", "[note_model]") {
+  // A gain edit too small to hear leaves the segment coherent with the source it
+  // is faded against; equal-power weights over a pre-tapered source put about
+  // +0.7 dB on this two-period RMS (+1.9 dB at the peak) at each seam.
+  constexpr double kMaxDeviationDb = 0.5;
+  for (const int sample_rate : {44100, 48000}) {
+    CAPTURE(sample_rate);
+    const int window = static_cast<int>(std::lround(2.0 * sample_rate / 440.0));
+    const int fade = static_cast<int>(std::lround(0.005 * sample_rate));
+    std::vector<float> samples(static_cast<size_t>(sample_rate / 2));
+    for (size_t i = 0; i < samples.size(); ++i) {
+      samples[i] = 0.5f * static_cast<float>(std::sin(sonare::constants::kTwoPiD * 440.0 *
+                                                      static_cast<double>(i) / sample_rate));
+    }
+    const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+    NoteObject note;
+    note.onset_sample = sample_rate / 10;
+    note.offset_sample = sample_rate * 3 / 10;
+    note.edit.gain_db = 0.0001f;
+    const sonare::Audio rendered = render_notes(audio, {note});
+    const double reference = 0.5 * sonare::constants::kInvSqrt2D;
+    for (const int seam :
+         {static_cast<int>(note.onset_sample), static_cast<int>(note.offset_sample) - fade}) {
+      CAPTURE(seam);
+      for (int begin = seam - window; begin < seam + fade; begin += 3) {
+        const double level_db =
+            20.0 * std::log10(window_rms(rendered.data(), begin, window) / reference);
+        REQUIRE(std::abs(level_db) < kMaxDeviationDb);
+      }
+    }
+  }
+}
+
+TEST_CASE("render_notes seams on noise stay between the two sides' levels", "[note_model]") {
+  // Averaged over seeds, since one fade window of noise carries a spread of its
+  // own. The gain edit is coherent with its source (overshot +1.1 dB before
+  // correlation-matched weights); the pitch edit is independent of it and must
+  // keep the equal-power behaviour.
+  constexpr int kSeeds = 16;
+  constexpr double kMarginDb = 0.5;
+  for (const int sample_rate : {44100, 48000}) {
+    const int fade = static_cast<int>(std::lround(0.005 * sample_rate));
+    for (const bool coherent : {true, false}) {
+      CAPTURE(sample_rate, coherent);
+      NoteObject note;
+      note.onset_sample = sample_rate / 10;
+      note.offset_sample = sample_rate * 3 / 10;
+      if (coherent) {
+        note.edit.gain_db = 0.0001f;
+      } else {
+        note.edit.pitch_shift_semitones = 3.0f;
+      }
+      const int onset = static_cast<int>(note.onset_sample);
+      const int offset = static_cast<int>(note.offset_sample);
+      double head_power = 0.0;
+      double tail_power = 0.0;
+      double body_power = 0.0;
+      for (int seed = 0; seed < kSeeds; ++seed) {
+        std::mt19937 rng(static_cast<unsigned>(seed + 1));
+        std::normal_distribution<float> noise(0.0f, 0.25f);
+        std::vector<float> samples(static_cast<size_t>(sample_rate / 2));
+        for (float& sample : samples) sample = noise(rng);
+        const sonare::Audio audio = sonare::Audio::from_vector(samples, sample_rate);
+        const sonare::Audio rendered = render_notes(audio, {note});
+        const double reference = window_rms(samples.data(), onset - 8 * fade, 8 * fade);
+        const auto power = [&](int begin, int width) {
+          const double level = window_rms(rendered.data(), begin, width) / reference;
+          return level * level;
+        };
+        head_power += power(onset, fade);
+        tail_power += power(offset - fade, fade);
+        body_power += power((onset + offset) / 2 - 4 * fade, 8 * fade);
+      }
+      const double body_db = 10.0 * std::log10(body_power / kSeeds);
+      for (const double seam_power : {head_power, tail_power}) {
+        const double seam_db = 10.0 * std::log10(seam_power / kSeeds);
+        CAPTURE(seam_db, body_db);
+        REQUIRE(seam_db < std::max(0.0, body_db) + kMarginDb);
+        REQUIRE(seam_db > std::min(0.0, body_db) - kMarginDb);
+      }
     }
   }
 }

@@ -19,7 +19,8 @@
 namespace sonare::editing::note_model {
 
 struct NoteRenderConfig {
-  /// Equal-power cross-fade at each edited note's edges.
+  /// Cross-fade at each edited note's edges, weighted to keep the level whether
+  /// the note sits over its own source or over unrelated audio.
   float fade_ms = 5.0f;
   StretchBackend stretch_backend = StretchBackend::NativeSpectral;
   /// Where the vibrato and drift edits cut the pitch curve. Copy it from the
@@ -31,12 +32,12 @@ struct NoteRenderConfig {
 ///        cutting it, over @p fade samples at each edge.
 /// @details A note that is muted, shortened or moved away leaves that range
 ///          behind, and a hard cut puts a step there. The taper is the
-///          equal-power counterpart of the one the note cross-fades use, so the
-///          seam keeps its level; @c fade of 0 is a hard cut.
+///          quarter-cosine ramp an equal-power fade gives its outgoing side;
+///          @c fade of 0 is a hard cut.
 ///
 ///          Exposed because the pitch editor vacates a span the same way and a
-///          second copy of the taper would drift out of step with the
-///          cross-fade it is paired against.
+///          second copy of the taper would drift out of step with the one
+///          note rendering uses.
 void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
                 int64_t fade);
 

@@ -480,7 +480,8 @@ export interface PolyphonicAnalysisOptions {
 /** Options for {@link PolyphonicAnalysis.render}. All fields are optional. */
 export interface PolyphonicRenderOptions {
   /**
-   * Equal-power cross-fade at each edited note's edges. Default 5 ms; a hard cut
+   * Cross-fade at each edited note's edges, weighted to hold the level whether
+   * the note is coherent with the audio under it or not. Default 5 ms; a hard cut
    * is deliberately not selectable, because the seam it leaves is a click.
    */
   fadeMs?: number;

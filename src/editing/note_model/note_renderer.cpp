@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "editing/note_model/pitch_decomposition.h"
+#include "editing/note_model/seam_crossfade.h"
 #include "editing/pitch_editor/pitch_corrector.h"
 #include "effects/formant_warp.h"
 #include "effects/pitch_shift.h"
@@ -59,10 +60,9 @@ float fade_phase(int64_t k, int64_t length, int64_t fade) noexcept {
 }
 
 /// Writes @p segment at @p dest, cross-fading its edges against @p output's
-/// OWN current content over @p fade samples with equal-power (cos/sin)
-/// weights: the existing content ramps down while the
-/// segment ramps up, so the seam keeps its level instead of dipping through
-/// silence.
+/// OWN current content over @p fade samples with the level-keeping weights of
+/// seam_crossfade.h: a segment over the source it was cut from fades at equal
+/// gain, one over unrelated audio at equal power.
 /// @details Blends against @p output rather than the pristine source
 ///          deliberately: all edited source spans are vacated before any
 ///          destination is written, and a neighbouring note earlier in the
@@ -79,13 +79,48 @@ void overlay(std::vector<float>& output, const std::vector<float>& segment, int6
 
   const int64_t begin = std::max<int64_t>(dest, 0);
   const int64_t end = std::min<int64_t>(dest + seg_len, n);
+  const int64_t edge = std::max<int64_t>(fade, 0);
   for (int64_t j = begin; j < end; ++j) {
     const int64_t k = j - dest;
-    const float phase = fade_phase(k, seg_len, fade);
-    const float segment_gain = phase >= 1.0f ? 1.0f : std::sin(kHalfPi * phase);
-    const float existing_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
-    output[static_cast<size_t>(j)] = segment_gain * segment[static_cast<size_t>(k)] +
-                                     existing_gain * output[static_cast<size_t>(j)];
+    if (k >= edge && k < seg_len - edge) {
+      output[static_cast<size_t>(j)] = segment[static_cast<size_t>(k)];
+    }
+  }
+  // One fade zone of the segment, [first, first + edge), clipped to the buffer;
+  // the correlation is taken over the part that lands.
+  const auto blend = [&](int64_t first, bool fading_in) {
+    const int64_t lo = std::max(first, begin - dest);
+    const int64_t hi = std::min(first + edge, end - dest);
+    if (lo >= hi) return;
+    float* existing = output.data() + (dest + lo);
+    const float rho = seam_correlation(existing, segment.data() + lo, hi - lo);
+    for (int64_t k = lo; k < hi; ++k) {
+      const float phase = (static_cast<float>(k - first) + 0.5f) / static_cast<float>(edge);
+      const SeamGains gains = seam_gains(rho, phase);
+      float& sample = output[static_cast<size_t>(dest + k)];
+      const float incoming = segment[static_cast<size_t>(k)];
+      sample = fading_in ? gains.outgoing * sample + gains.incoming * incoming
+                         : gains.outgoing * incoming + gains.incoming * sample;
+    }
+  };
+  if (edge > 0) {
+    blend(0, true);
+    blend(seg_len - edge, false);
+  }
+}
+
+/// Vacates [@p begin, @p end) of @p output as erase_span does, except that an
+/// edge whose @p keep flag is set keeps the source over its fade zone for the
+/// cross-fade a destination landing on that edge will make against it.
+void vacate(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
+            int64_t fade, bool keep_head, bool keep_tail) {
+  const int64_t length = end - begin;
+  for (int64_t j = begin; j < end; ++j) {
+    const int64_t k = j - begin;
+    if ((keep_head && k < fade) || (keep_tail && k >= length - fade)) continue;
+    const float phase = fade_phase(k, length, fade);
+    const float source_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
+    output[static_cast<size_t>(j)] = source_gain * source[static_cast<size_t>(j)];
   }
 }
 
@@ -181,12 +216,7 @@ void apply_pitch_curve(std::vector<float>& segment, const NoteObject& note, int 
 
 void erase_span(std::vector<float>& output, const Audio& source, int64_t begin, int64_t end,
                 int64_t fade) {
-  const int64_t length = end - begin;
-  for (int64_t j = begin; j < end; ++j) {
-    const float phase = fade_phase(j - begin, length, fade);
-    const float source_gain = phase >= 1.0f ? 0.0f : std::cos(kHalfPi * phase);
-    output[static_cast<size_t>(j)] = source_gain * source[static_cast<size_t>(j)];
-  }
+  vacate(output, source, begin, end, fade, false, false);
 }
 
 bool is_valid_note_edit(const NoteEdit& edit) noexcept {
@@ -276,8 +306,11 @@ Audio render_notes(const Audio& audio, const std::vector<NoteObject>& notes,
     const int64_t onset = note.onset_sample;
     const int64_t offset = note.offset_sample;
 
-    erase_span(output, audio, onset, offset,
-               fade_samples(config.fade_ms, sample_rate, offset - onset));
+    // An edge the rendered note lands back on keeps its source for overlay to fade against.
+    const bool keeps_onset = !note.edit.muted && note.edit.time_offset_samples == 0;
+    const bool keeps_offset = keeps_onset && note.edit.time_stretch_ratio == 1.0f;
+    vacate(output, audio, onset, offset, fade_samples(config.fade_ms, sample_rate, offset - onset),
+           keeps_onset, keeps_offset);
   }
 
   // Render in vector order after clearing all edited source spans. Later notes

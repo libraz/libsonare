@@ -331,9 +331,10 @@ def render_notes(
             measurement.
         frame_rate: F0 frames per second; required when ``f0_hz`` is given and
             ignored otherwise.
-        fade_ms: Equal-power cross-fade at each edited note's edges; ``None``
-            keeps the library default (5 ms). A hard cut is deliberately not
-            selectable, because the seam it leaves behind is a click.
+        fade_ms: Cross-fade at each edited note's edges, weighted to hold the
+            level whether the note is coherent with the audio under it or not;
+            ``None`` keeps the library default (5 ms). A hard cut is deliberately
+            not selectable, because the seam it leaves behind is a click.
         vibrato_cutoff_hz: Boundary between the drift and the vibrato that the
             two curve edits act on; ``None`` keeps the default (3 Hz). Pass what
             :func:`decompose_note_pitch` was called with -- a host that draws
