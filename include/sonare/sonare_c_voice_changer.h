@@ -77,6 +77,8 @@ typedef struct {
   float eq_presence_db;
   float eq_air_db;
 
+  /* Gate, compressor and limiter attack/release times are one time constant:
+     about 63% of the way at the set time. */
   float gate_threshold_db;
   float gate_attack_ms;
   float gate_release_ms;

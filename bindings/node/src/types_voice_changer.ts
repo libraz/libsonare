@@ -81,12 +81,16 @@ export interface RealtimeVoiceChangerConfig {
   eqPresenceDb: number;
   eqAirDb: number;
   gateThresholdDb: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   gateAttackMs: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   gateReleaseMs: number;
   gateRangeDb: number;
   compressorThresholdDb: number;
   compressorRatio: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   compressorAttackMs: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   compressorReleaseMs: number;
   compressorMakeupGainDb: number;
   deesserFrequencyHz: number;
@@ -98,6 +102,7 @@ export interface RealtimeVoiceChangerConfig {
   reverbDamping: number;
   reverbSeed: number;
   limiterCeilingDb: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   limiterReleaseMs: number;
   /** Whether the inter-sample-peak (true-peak) limiter is enabled (default true). */
   limiterEnableIspLimiter: boolean;

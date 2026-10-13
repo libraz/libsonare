@@ -30,13 +30,13 @@ export interface BuiltinSynthBinding {
   waveform?: BuiltinSynthWaveform;
   /** Master output gain, linear (0 => 0.2). */
   gain?: number;
-  /** ADSR attack in ms (0 => 5). */
+  /** ADSR attack in ms (0 => 5); a linear ramp that reaches full level at the set time. */
   attackMs?: number;
-  /** ADSR decay in ms (0 => 60). */
+  /** ADSR decay in ms (0 => 60); a linear ramp, the set time is a full 0 to 1 sweep. */
   decayMs?: number;
   /** ADSR sustain level [0,1] (0 => 0.7). */
   sustain?: number;
-  /** ADSR release in ms (0 => 120). */
+  /** ADSR release in ms (0 => 120); a linear ramp, the set time is a full 0 to 1 sweep. */
   releaseMs?: number;
   /** Max simultaneous voices (0 => 16, clamped to [1, 64]). */
   polyphony?: number;
@@ -758,19 +758,25 @@ export interface SynthPatch {
   pitchOffsetCents?: number;
   /** Amplitude envelope delay before the attack (ms), [0, 5000]. */
   ampDelayMs?: number;
+  /** Attack in ms; the level reaches full at the set time. */
   ampAttackMs?: number;
   /** Amplitude envelope hold at the peak (ms), [0, 5000]. */
   ampHoldMs?: number;
+  /** Decay in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   ampDecayMs?: number;
   ampSustain?: number;
+  /** Release in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   ampReleaseMs?: number;
   /** Filter envelope delay before the attack (ms), [0, 5000]. */
   filterDelayMs?: number;
+  /** Attack in ms; the level reaches full at the set time. */
   filterAttackMs?: number;
   /** Filter envelope hold at the peak (ms), [0, 5000]. */
   filterHoldMs?: number;
+  /** Decay in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   filterDecayMs?: number;
   filterSustain?: number;
+  /** Release in ms: three time constants, about -26 dB of the remaining distance at the set time. */
   filterReleaseMs?: number;
   /**
    * Ignore note-off: the voice ends with its envelope's decay or its engine's

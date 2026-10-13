@@ -128,15 +128,15 @@ static_assert(SONARE_SYNTH_WAVEFORM_TRIANGLE + 1 == SONARE_SYNTH_WAVEFORM_COUNT,
 /// enum rather than sizing a quantity, so there is no meaningful nearest value
 /// to clamp an unknown ordinal to and it is rejected instead.
 typedef struct {
-  int waveform;     /* SonareSynthWaveform; 0 = sine, outside the enum rejected.
-                       NOTE: a distinct enum from SonareSynthOscWaveform
-                       (sonare_c_types_analysis.h), whose 0 means "keep base
-                       preset", not sine. Do not mix the two. */
-  float gain;       /* master output gain (linear); 0 => 0.2 */
-  float attack_ms;  /* ADSR attack in ms; 0 => 5 */
-  float decay_ms;   /* ADSR decay in ms; 0 => 60 */
-  float sustain;    /* ADSR sustain level [0,1]; 0 => 0.7 */
-  float release_ms; /* ADSR release in ms; 0 => 120 */
+  int waveform;    /* SonareSynthWaveform; 0 = sine, outside the enum rejected.
+                      NOTE: a distinct enum from SonareSynthOscWaveform
+                      (sonare_c_types_analysis.h), whose 0 means "keep base
+                      preset", not sine. Do not mix the two. */
+  float gain;      /* master output gain (linear); 0 => 0.2 */
+  float attack_ms; /* ADSR attack in ms; 0 => 5. Linear ramp, full level at the set time */
+  float decay_ms;  /* ADSR decay in ms; 0 => 60. Linear ramp: the set time is a full 0 to 1 sweep */
+  float sustain;   /* ADSR sustain level [0,1]; 0 => 0.7 */
+  float release_ms; /* ADSR release in ms; 0 => 120. Linear ramp, as decay */
   int polyphony;    /* max simultaneous voices; 0 => 16, clamped to [1, 64] */
   /* Every field above takes 0 as "use the default". A negative or non-finite
      value is rejected with SONARE_ERROR_INVALID_PARAMETER rather than resolving

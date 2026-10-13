@@ -9,7 +9,9 @@ export type CompressorDetector = 'peak' | 'rms' | 'log_rms' | 'logRms' | 0 | 1 |
 export interface CompressorOptions extends ValidateOptions {
   thresholdDb?: number;
   ratio?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
   kneeDb?: number;
   makeupGainDb?: number;
@@ -24,7 +26,9 @@ export interface CompressorOptions extends ValidateOptions {
 /** Options for `masteringDynamicsGate`. */
 export interface GateOptions extends ValidateOptions {
   thresholdDb?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
   rangeDb?: number;
   holdMs?: number;

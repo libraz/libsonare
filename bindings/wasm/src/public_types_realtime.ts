@@ -89,7 +89,9 @@ export interface EqBand {
   autoThreshold?: boolean;
   ratio?: number;
   rangeDb?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
   /**
    * Delays the detector's view of the signal by this many ms; a larger value
@@ -202,12 +204,16 @@ export interface RealtimeVoiceChangerPodConfig {
   eqPresenceDb: number;
   eqAirDb: number;
   gateThresholdDb: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   gateAttackMs: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   gateReleaseMs: number;
   gateRangeDb: number;
   compressorThresholdDb: number;
   compressorRatio: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   compressorAttackMs: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   compressorReleaseMs: number;
   compressorMakeupGainDb: number;
   deesserFrequencyHz: number;
@@ -219,6 +225,7 @@ export interface RealtimeVoiceChangerPodConfig {
   reverbDamping: number;
   reverbSeed: number;
   limiterCeilingDb: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   limiterReleaseMs: number;
   /** Non-zero enables the 4x-oversampled inter-sample-peak limiter (default enabled). */
   limiterEnableIspLimiter: boolean;

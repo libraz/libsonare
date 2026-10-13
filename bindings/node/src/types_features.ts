@@ -497,7 +497,9 @@ export interface EqBandInput {
   autoThreshold?: boolean;
   ratio?: number;
   rangeDb?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
   /**
    * Delays the detector's view of the signal by this many ms; a larger value

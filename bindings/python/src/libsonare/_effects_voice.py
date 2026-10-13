@@ -542,6 +542,9 @@ class RealtimeVoiceChangerConfig:
     analysis frame of latency is added, and a configuration whose warp
     ``formant_factor / 2**(retune_semitones / 12)`` leaves [0.55, 1.65] raises
     a ``SonareValueError`` naming the reachable ``formant_factor`` range.
+
+    The gate, compressor and limiter ``*_attack_ms`` / ``*_release_ms`` times are
+    one time constant: about 63% of the way at the set time.
     """
 
     input_gain_db: float = dataclasses.field(default_factory=_neutral_default("input_gain_db"))

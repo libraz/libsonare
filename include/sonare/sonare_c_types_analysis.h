@@ -666,6 +666,8 @@ typedef struct {
                                 below 127 */
 
   /* --- envelopes (ms / sustain in [0,1]) --- */
+  /* Attack reaches full level at the set time; decay and release are three time
+     constants, about -26 dB of the remaining distance at the set time. */
   float amp_attack_ms;
   float amp_decay_ms;
   float amp_sustain; /* 0 => base, or an explicit zero with its presence bit */

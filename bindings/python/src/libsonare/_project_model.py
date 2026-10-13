@@ -510,6 +510,10 @@ class BuiltinSynthConfig:
     or a name (``"sine"`` / ``"saw"`` / ``"square"`` / ``"triangle"``). It is the
     one field with no "nearest sensible value": anything outside that set raises
     :class:`SonareValueError` rather than falling back to sine.
+
+    ``attack_ms`` is a linear ramp that reaches full level at the set time;
+    ``decay_ms`` and ``release_ms`` are linear too, the set time being a full 0
+    to 1 sweep (they take proportionally less from a lower level).
     """
 
     waveform: str | int = SYNTH_WAVEFORM_SINE
@@ -787,6 +791,10 @@ class SynthPatch:
     ``useGmPrograms``): it makes this destination resolve each MIDI channel from
     its GM bank/program messages. ``None`` means "not stated", falling back to
     :meth:`Project.bounce_with_synth_instrument`'s ``auto_select_gm``.
+
+    ``amp_attack_ms`` / ``filter_attack_ms`` reach full level at the set time.
+    ``*_decay_ms`` and ``*_release_ms`` are three time constants: about -26 dB
+    of the remaining distance at the set time.
     """
 
     preset: str = ""

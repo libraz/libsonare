@@ -102,8 +102,9 @@ def mastering_dynamics_compressor(
         sample_rate: Sample rate in Hz (default 22050).
         threshold_db: Compression threshold in dB (default -18).
         ratio: Compression ratio (clamped to >= 1; default 2.0).
-        attack_ms: Attack time in milliseconds (default 10).
-        release_ms: Release time in milliseconds (default 100).
+        attack_ms: Attack time in milliseconds (default 10); one time constant, about
+            63% of the way at the set time.
+        release_ms: Release time in milliseconds (default 100); as ``attack_ms``.
         knee_db: Soft-knee width in dB (default 0).
         makeup_gain_db: Static makeup gain in dB (default 0).
         auto_makeup: Whether to enable automatic makeup gain (default False).
@@ -163,8 +164,9 @@ def mastering_dynamics_gate(
         samples: Mono input buffer (any sequence convertible to float32).
         sample_rate: Sample rate in Hz (default 22050).
         threshold_db: Open-state threshold in dB (default -50).
-        attack_ms: Attack time in milliseconds (default 2).
-        release_ms: Release time in milliseconds (default 80).
+        attack_ms: Attack time in milliseconds (default 2); one time constant, about
+            63% of the way at the set time.
+        release_ms: Release time in milliseconds (default 80); as ``attack_ms``.
         range_db: Closed-state attenuation in dB (default -80).
         hold_ms: Minimum open time in milliseconds (default 0).
         close_threshold_db: Hysteresis close-threshold in dB; clamped to

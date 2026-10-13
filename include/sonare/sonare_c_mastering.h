@@ -37,7 +37,8 @@ typedef struct {
   float target_lufs;
   float ceiling_db;
   int true_peak_oversample;
-  // Post true-peak limiter release in ms. 0 => library default (50 ms). The
+  // Post true-peak limiter release in ms (one time constant, about 63% of the way at the set
+  // time). 0 => library default (50 ms). The
   // helper drives this limiter whenever peak headroom alone cannot reach
   // target_lufs, so the release shapes the result on low-headroom input; it is
   // inert only when the static gain already lands under the ceiling.
@@ -2134,6 +2135,7 @@ SonareError sonare_mastering_repair_apply(const float* const* channels, size_t c
 #define SONARE_COMPRESSOR_DETECTOR_LOG_RMS 2
 
 /// @brief Flat POD mirror of @c mastering::dynamics::CompressorConfig.
+/// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
   float threshold_db;         // default -18 dB
   float ratio;                // default 2.0 (clamped to >= 1)
@@ -2159,6 +2161,7 @@ SonareError sonare_mastering_dynamics_compressor(const float* samples, size_t le
                                                  size_t* out_length, int* out_latency_samples);
 
 /// @brief Flat POD mirror of @c mastering::dynamics::GateConfig.
+/// @details attack_ms and release_ms are one time constant: about 63% of the way at the set time.
 typedef struct {
   float threshold_db;        // open above this level; default -50 dB
   float attack_ms;           // default 2 ms

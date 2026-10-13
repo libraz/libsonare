@@ -331,7 +331,10 @@ export interface MasteringOptions {
   ceilingDb?: number;
   /** Oversampling factor used for peak estimation. Default 4. */
   truePeakOversample?: number;
-  /** Post true-peak limiter release in ms. Default 0 => library default (50 ms). */
+  /**
+   * Post true-peak limiter release in ms: one time constant, about 63% of the way at the set
+   * time. Default 0 => library default (50 ms).
+   */
   releaseMs?: number;
   /** Apply the static loudness gain at the input (pre-oversample) rate. Default false. */
   applyGainAtInputRate?: boolean;
@@ -487,7 +490,9 @@ export type MasteringAssistantParams = Record<string, number | boolean | string>
 export interface MultibandCompressorBand {
   thresholdDb?: number;
   ratio?: number;
+  /** Attack in ms: one time constant, about 63% of the way at the set time. */
   attackMs?: number;
+  /** Release in ms: one time constant, about 63% of the way at the set time. */
   releaseMs?: number;
   kneeDb?: number;
   makeupGainDb?: number;
@@ -607,7 +612,9 @@ export interface MasteringChainConfig {
       enabled?: boolean;
       thresholdDb?: number;
       ratio?: number;
+      /** Attack in ms: one time constant, about 63% of the way at the set time. */
       attackMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
       kneeDb?: number;
       makeupGainDb?: number;
@@ -618,7 +625,9 @@ export interface MasteringChainConfig {
       frequencyHz?: number;
       thresholdDb?: number;
       ratio?: number;
+      /** Attack in ms: one time constant, about 63% of the way at the set time. */
       attackMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
       rangeDb?: number;
       bandpassQ?: number;
@@ -642,15 +651,21 @@ export interface MasteringChainConfig {
       highCutoffHz?: number;
       lowThresholdDb?: number;
       lowRatio?: number;
+      /** Attack in ms: one time constant, about 63% of the way at the set time. */
       lowAttackMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       lowReleaseMs?: number;
       midThresholdDb?: number;
       midRatio?: number;
+      /** Attack in ms: one time constant, about 63% of the way at the set time. */
       midAttackMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       midReleaseMs?: number;
       highThresholdDb?: number;
       highRatio?: number;
+      /** Attack in ms: one time constant, about 63% of the way at the set time. */
       highAttackMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       highReleaseMs?: number;
       /**
        * Crossover structure. `cutoffsHz` replaces the cutoff list and sets the
@@ -731,6 +746,7 @@ export interface MasteringChainConfig {
       enabled?: boolean;
       ceilingDb?: number;
       lookaheadMs?: number;
+      /** Release in ms: one time constant, about 63% of the way at the set time. */
       releaseMs?: number;
       oversampleFactor?: number;
       applyGainAtInputRate?: boolean;
@@ -741,6 +757,7 @@ export interface MasteringChainConfig {
     targetLufs?: number;
     ceilingDb?: number;
     truePeakOversample?: number;
+    /** Release in ms: one time constant, about 63% of the way at the set time. */
     releaseMs?: number;
     applyGainAtInputRate?: boolean;
     /**
