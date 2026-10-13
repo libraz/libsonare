@@ -28,9 +28,10 @@
 #include "mastering/eq/dynamic_eq.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/multiband/multiband_saturation.h"
+#include "mastering/saturation/amp_presets.h"
 #include "mastering/saturation/amp_sim.h"
 #include "mastering/utility/gain.h"
 #include "rt/processor_base.h"
@@ -224,7 +225,7 @@ TEST_CASE("insert construction captures effective realtime parameter values",
                                 "band0.detectorDelayMs"),
                WithinAbs(8.0f, 1e-6f));
   REQUIRE_THAT(
-      ConstructedValue("saturation.ampSim", R"({"preset":"britStack","presetIndex":5})", "drive"),
+      ConstructedValue("saturation.ampSim", R"({"preset":"crunchStack","presetIndex":5})", "drive"),
       WithinAbs(ConstructedValue("saturation.ampSim", R"({"presetIndex":5})", "drive"), 1e-6f));
   for (const auto& name : insert_factory_names()) {
     auto processor = make_insert(name, "{}");
@@ -1315,10 +1316,10 @@ TEST_CASE("string-valued insert options reach only the insert that reads them",
   REQUIRE(ListContains(amp_names, "cabIrF32Base64"));
 
   // Accepted where it means something.
-  REQUIRE(make_insert("saturation.ampSim", R"({"preset":"tweedGrind"})") != nullptr);
+  REQUIRE(make_insert("saturation.ampSim", R"({"preset":"vintageGrind"})") != nullptr);
 
   // Refused where it means nothing, instead of being silently dropped.
-  REQUIRE_THROWS_AS(make_insert("dynamics.compressor", R"({"preset":"tweedGrind"})"),
+  REQUIRE_THROWS_AS(make_insert("dynamics.compressor", R"({"preset":"vintageGrind"})"),
                     sonare::SonareException);
   REQUIRE_THROWS_AS(make_insert("dynamics.compressor", R"({"cabIrF32Base64":"AAAAAA=="})"),
                     sonare::SonareException);
@@ -1746,8 +1747,8 @@ TEST_CASE("the insert's string re-reads spend the params budget once, not once p
         std::strlen("preset") + preset.size() + std::strlen("cabIrF32Base64") + cab_ir.size());
   };
 
-  const std::string params = document("tweedGrind", ir);
-  REQUIRE(RenderInsert("saturation.ampSim", params, exact_budget("tweedGrind", ir)) ==
+  const std::string params = document("vintageGrind", ir);
+  REQUIRE(RenderInsert("saturation.ampSim", params, exact_budget("vintageGrind", ir)) ==
           RenderInsert("saturation.ampSim", params,
                        sonare::resource::kDefaultProjectImportResourceLimits));
 
@@ -1761,7 +1762,7 @@ TEST_CASE("the insert's string re-reads spend the params budget once, not once p
     const char* expected;
   };
   const Malformed cases[] = {{"notAnAmpAtAll", ir, "unknown amp preset"},
-                             {"tweedGrind", "!!!", "cabIrF32Base64"}};
+                             {"vintageGrind", "!!!", "cabIrF32Base64"}};
   for (const auto& bad : cases) {
     try {
       auto processor = make_insert("saturation.ampSim", document(bad.preset, bad.cab_ir), nullptr,
@@ -1918,16 +1919,17 @@ TEST_CASE("an enum wire value selects the enumerator it always selected",
     const auto held = BuildAs("multiband.compressor", OneKey("slope", value), &compressor);
     CHECK(compressor->config().crossover.slope == slopes[value]);
   }
-  const eq::PultecEq* pultec = nullptr;
-  const auto held_pultec = BuildAs("eq.pultec", OneKey("componentModel", 1), &pultec);
-  CHECK(pultec->component_model() == eq::PultecComponentModel::Eqp1aWdf);
+  const eq::PassiveTubeEq* passive_tube = nullptr;
+  const auto held_passive_tube =
+      BuildAs("eq.passiveTube", OneKey("componentModel", 1), &passive_tube);
+  CHECK(passive_tube->component_model() == eq::PassiveTubeComponentModel::WdfCircuit);
   const eq::CutFilter* cut = nullptr;
   const auto held_cut = BuildAs("eq.cutFilter", OneKey("highPassSlope", 16), &cut);
   CHECK(cut->high_pass_slope() == eq::CutFilterSlope::Brickwall);
 
-  const sat::AmpModel amp_models[] = {sat::AmpModel::kClassicCrunch, sat::AmpModel::kFenderClean,
-                                      sat::AmpModel::kModernHiGain,  sat::AmpModel::kTweed,
-                                      sat::AmpModel::kVoxChime,      sat::AmpModel::kRectifier};
+  const sat::AmpModel amp_models[] = {sat::AmpModel::kClassicCrunch, sat::AmpModel::kCleanCombo,
+                                      sat::AmpModel::kModernHiGain,  sat::AmpModel::kVintageCombo,
+                                      sat::AmpModel::kClassAChime,   sat::AmpModel::kHeavyHiGain};
   const sat::PowerTube tubes[] = {sat::PowerTube::k6L6, sat::PowerTube::kEL34,
                                   sat::PowerTube::kEL84, sat::PowerTube::k6V6};
   const sat::MicModel mics[] = {sat::MicModel::kNone, sat::MicModel::kDynamic,
@@ -1966,7 +1968,7 @@ TEST_CASE("an enum wire value no enumerator is declared for is refused",
       {"eq.equalizer", R"({"phaseMode":4})"},
       {"eq.dynamic", R"({"band0.frequencyHz":1000,"band0.type":10})"},
       {"eq.linearPhase", R"({"resolution":6})"},
-      {"eq.pultec", R"({"componentModel":2})"},
+      {"eq.passiveTube", R"({"componentModel":2})"},
       {"eq.cutFilter", R"({"highPassSlope":17})"},
       {"eq.cutFilter", R"({"lowPassSlope":-1})"},
       {"multiband.compressor", R"({"slope":3})"},
@@ -1989,5 +1991,61 @@ TEST_CASE("an enum wire value no enumerator is declared for is refused",
   for (const auto& [name, params] : undeclared) {
     INFO(name << " " << params);
     CHECK_THROWS_AS(make_insert(name, params), sonare::SonareException);
+  }
+}
+
+TEST_CASE("renamed processors accept their former ids on input only",
+          "[mastering][insert_factory][legacy]") {
+  const std::vector<std::pair<std::string, std::string>> renamed = {
+      {"eq.pultec", "eq.passiveTube"}, {"eq.apiStyle", "eq.steppedProportionalQ"}};
+  for (const auto& [legacy, current] : renamed) {
+    INFO(legacy);
+    REQUIRE(make_insert(legacy, "{}") != nullptr);
+    REQUIRE(sonare::mastering::api::insert_param_names(legacy) ==
+            sonare::mastering::api::insert_param_names(current));
+    REQUIRE(sonare::mastering::api::insert_param_info_json(legacy) ==
+            sonare::mastering::api::insert_param_info_json(current));
+    REQUIRE(sonare::mastering::api::channel_policy(legacy) ==
+            sonare::mastering::api::channel_policy(current));
+
+    REQUIRE_FALSE(ListContains(sonare::mastering::api::insert_factory_names(), legacy));
+    REQUIRE_FALSE(ListContains(sonare::mastering::api::processor_names(), legacy));
+    REQUIRE(ListContains(sonare::mastering::api::insert_factory_names(), current));
+    REQUIRE(ListContains(sonare::mastering::api::processor_names(), current));
+    REQUIRE(sonare::mastering::api::processor_catalog_json().find("\"" + legacy + "\"") ==
+            std::string::npos);
+  }
+}
+
+TEST_CASE("renamed amp choices and presets resolve from their former names",
+          "[mastering][insert_factory][legacy]") {
+  namespace sat = sonare::mastering::saturation;
+  const std::vector<std::pair<std::string, std::string>> models = {{"fenderClean", "cleanCombo"},
+                                                                   {"tweed", "vintageCombo"},
+                                                                   {"voxChime", "classAChime"},
+                                                                   {"rectifier", "heavyHiGain"}};
+  for (const auto& [legacy, current] : models) {
+    INFO(legacy);
+    const auto value =
+        sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", current);
+    REQUIRE(value.has_value());
+    REQUIRE(sonare::mastering::api::mastering_enum_value("saturation.ampSim", "ampModel", legacy) ==
+            value);
+    REQUIRE(sonare::mastering::api::insert_param_info_json("saturation.ampSim")
+                .find("\"" + legacy + "\"") == std::string::npos);
+  }
+  REQUIRE(sonare::mastering::api::mastering_enum_value("eq.pultec", "componentModel", "eqp1aWdf") ==
+          sonare::mastering::api::mastering_enum_value("eq.passiveTube", "componentModel",
+                                                       "wdfCircuit"));
+
+  REQUIRE(sat::amp_preset_from_string("tweedGrind") == sat::AmpPreset::kVintageGrind);
+  REQUIRE(sat::amp_preset_from_string("rectifierChug") == sat::AmpPreset::kHeavyChug);
+  REQUIRE(sat::amp_preset_from_string("britStack") == sat::AmpPreset::kCrunchStack);
+  REQUIRE(make_insert("saturation.ampSim", R"({"preset":"rectifierChug"})") != nullptr);
+  for (const std::string& name : sat::amp_preset_names()) {
+    REQUIRE(name != "tweedGrind");
+    REQUIRE(name != "rectifierChug");
+    REQUIRE(name != "britStack");
+    REQUIRE(std::string(sat::amp_preset_to_string(sat::amp_preset_from_string(name))) == name);
   }
 }

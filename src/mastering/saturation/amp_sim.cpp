@@ -41,34 +41,34 @@ struct AmpVoicing {
 // Classic crunch (default): the original AmpSim voicing. amp_model 0 selects it,
 // so an unset field is bit-identical to the original.
 constexpr AmpVoicing kAmpClassicCrunch{750.0f, 2.0f, 6.0f, -10.0f, 44.0f, 120.0f, 550.0f, 3000.0f};
-// American clean: less bright-cap grit and lower gain (breaks up later), a
+// Clean combo: less bright-cap grit and lower gain (breaks up later), a
 // darker mid and an airier top.
-constexpr AmpVoicing kAmpFenderClean{650.0f, 1.0f, 4.0f, -16.0f, 36.0f, 100.0f, 500.0f, 3200.0f};
+constexpr AmpVoicing kAmpCleanCombo{650.0f, 1.0f, 4.0f, -16.0f, 36.0f, 100.0f, 500.0f, 3200.0f};
 // Modern high-gain: more pre-emphasis into the clip and a much hotter triode
 // drive (saturates early), with an upper-mid focus that keeps it articulate.
 constexpr AmpVoicing kAmpModernHiGain{900.0f, 3.0f, 9.0f, -4.0f, 52.0f, 110.0f, 650.0f, 3000.0f};
-// Vintage tweed: little bright-cap grit, an early spongy breakup and a warm,
+// Vintage combo: little bright-cap grit, an early spongy breakup and a warm,
 // dark voice (low top, full low-mid).
-constexpr AmpVoicing kAmpTweed{600.0f, 2.0f, 5.0f, -8.0f, 40.0f, 130.0f, 500.0f, 2600.0f};
-// British class-A chime: a bright, upper-mid-forward voice that stays fairly
+constexpr AmpVoicing kAmpVintageCombo{600.0f, 2.0f, 5.0f, -8.0f, 40.0f, 130.0f, 500.0f, 2600.0f};
+// Class-A chime: a bright, upper-mid-forward voice that stays fairly
 // clean, with an airy top.
-constexpr AmpVoicing kAmpVoxChime{3000.0f, 2.0f, 6.0f, -12.0f, 40.0f, 90.0f, 700.0f, 3400.0f};
-// Modern rectifier: the hottest triode drive, a thick low end, a scooped mid
+constexpr AmpVoicing kAmpClassAChime{3000.0f, 2.0f, 6.0f, -12.0f, 40.0f, 90.0f, 700.0f, 3400.0f};
+// Heavy high-gain: the hottest triode drive, a thick low end, a scooped mid
 // and a darker top.
-constexpr AmpVoicing kAmpRectifier{850.0f, 3.0f, 10.0f, -2.0f, 56.0f, 90.0f, 480.0f, 2800.0f};
+constexpr AmpVoicing kAmpHeavyHiGain{850.0f, 3.0f, 10.0f, -2.0f, 56.0f, 90.0f, 480.0f, 2800.0f};
 
 AmpVoicing amp_voicing(AmpModel model) noexcept {
   switch (model) {
-    case AmpModel::kFenderClean:
-      return kAmpFenderClean;
+    case AmpModel::kCleanCombo:
+      return kAmpCleanCombo;
     case AmpModel::kModernHiGain:
       return kAmpModernHiGain;
-    case AmpModel::kTweed:
-      return kAmpTweed;
-    case AmpModel::kVoxChime:
-      return kAmpVoxChime;
-    case AmpModel::kRectifier:
-      return kAmpRectifier;
+    case AmpModel::kVintageCombo:
+      return kAmpVintageCombo;
+    case AmpModel::kClassAChime:
+      return kAmpClassAChime;
+    case AmpModel::kHeavyHiGain:
+      return kAmpHeavyHiGain;
     default:
       return kAmpClassicCrunch;
   }
@@ -90,26 +90,27 @@ struct CircuitVoicing {
 // the low mids.
 constexpr CircuitVoicing kCircuitClassicCrunch{60.0f, 250.0f, -4.0f, -1.6f,
                                                ToneStackModel::kBritish};
-constexpr CircuitVoicing kCircuitFenderClean{25.0f, 120.0f, -2.0f, -1.9f,
-                                             ToneStackModel::kAmerican};
+constexpr CircuitVoicing kCircuitCleanCombo{25.0f, 120.0f, -2.0f, -1.9f, ToneStackModel::kAmerican};
 constexpr CircuitVoicing kCircuitModernHiGain{160.0f, 400.0f, -6.0f, -1.4f,
                                               ToneStackModel::kBritish};
-constexpr CircuitVoicing kCircuitTweed{20.0f, 100.0f, -2.0f, -2.0f, ToneStackModel::kAmerican};
-constexpr CircuitVoicing kCircuitVoxChime{40.0f, 200.0f, -3.0f, -1.7f, ToneStackModel::kBritish};
-constexpr CircuitVoicing kCircuitRectifier{140.0f, 350.0f, -6.0f, -1.3f, ToneStackModel::kBritish};
+constexpr CircuitVoicing kCircuitVintageCombo{20.0f, 100.0f, -2.0f, -2.0f,
+                                              ToneStackModel::kAmerican};
+constexpr CircuitVoicing kCircuitClassAChime{40.0f, 200.0f, -3.0f, -1.7f, ToneStackModel::kBritish};
+constexpr CircuitVoicing kCircuitHeavyHiGain{140.0f, 350.0f, -6.0f, -1.3f,
+                                             ToneStackModel::kBritish};
 
 CircuitVoicing circuit_voicing(AmpModel model) noexcept {
   switch (model) {
-    case AmpModel::kFenderClean:
-      return kCircuitFenderClean;
+    case AmpModel::kCleanCombo:
+      return kCircuitCleanCombo;
     case AmpModel::kModernHiGain:
       return kCircuitModernHiGain;
-    case AmpModel::kTweed:
-      return kCircuitTweed;
-    case AmpModel::kVoxChime:
-      return kCircuitVoxChime;
-    case AmpModel::kRectifier:
-      return kCircuitRectifier;
+    case AmpModel::kVintageCombo:
+      return kCircuitVintageCombo;
+    case AmpModel::kClassAChime:
+      return kCircuitClassAChime;
+    case AmpModel::kHeavyHiGain:
+      return kCircuitHeavyHiGain;
     default:
       return kCircuitClassicCrunch;
   }

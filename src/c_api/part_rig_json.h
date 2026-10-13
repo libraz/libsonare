@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "mastering/api/legacy_insert_params.h"
 #include "midi/part_rig.h"
 #include "sonare_c_internal.h"
 #include "util/json_budget.h"
@@ -43,10 +44,11 @@ inline SonareError parse_part_rig_inserts(const char* inserts_json,
     const json::Value* processor = item.find("processor");
     if (processor == nullptr || !processor->is_string()) return bad_shape();
     sonare::midi::PartRigStage stage;
-    stage.processor = processor->as_string();
+    stage.processor = sonare::mastering::api::canonical_processor_id(processor->as_string());
     if (const json::Value* params = item.find("params")) {
       if (!params->is_string()) return bad_shape();
-      stage.params_json = params->as_string();
+      stage.params_json = sonare::mastering::api::canonical_insert_params_text(stage.processor,
+                                                                               params->as_string());
     } else {
       stage.params_json = "{}";
     }

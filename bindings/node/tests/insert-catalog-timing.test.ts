@@ -193,7 +193,7 @@ describe('insert timing takes the document an insert is built from', () => {
     expect(timing.tailSamples).not.toBe(
       masteringInsertTiming('saturation.ampSim', {}, 48000).tailSamples,
     );
-    const named = { preset: 'britStack' };
+    const named = { preset: 'crunchStack' };
     expect(masteringInsertTiming('saturation.ampSim', named, 48000)).toEqual(
       sceneTiming('saturation.ampSim', named),
     );

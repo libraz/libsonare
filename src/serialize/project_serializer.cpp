@@ -16,6 +16,7 @@
 
 #include "arrangement/edit_source.h"
 #include "core/audio.h"
+#include "mastering/api/legacy_insert_params.h"
 #include "mixing/api/scene.h"
 #include "serialize/project_serializer_internal.h"
 #include "serialize/serialized_enum_bounds.h"
@@ -70,7 +71,10 @@ std::optional<arrangement::ProjectPartRig> part_rig_from_json(const Value& v) {
   if (const auto* inserts = array_at(v, "inserts")) {
     for (const auto& sv : *inserts) {
       if (!sv.is_object()) return std::nullopt;
-      entry.rig.stages.push_back({str_or(sv, "processor", ""), str_or(sv, "params", "{}")});
+      const std::string processor =
+          mastering::api::canonical_processor_id(str_or(sv, "processor", ""));
+      entry.rig.stages.push_back({processor, mastering::api::canonical_insert_params_text(
+                                                 processor, str_or(sv, "params", "{}"))});
     }
   }
   return entry;

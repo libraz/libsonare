@@ -124,9 +124,9 @@ SONARE_TUNABLE(kRigLeadLevelDb, 22.5f);
 /// deliberately does not link — it reaches an amplifier only through the
 /// injected insert factory — so `gm_rig_preset_name` exposes the list for a test
 /// to hold the two in step.
-constexpr const char* kRigPresets[] = {"cleanCombo", "chimeEdge",  "classicCrunch", "tweedGrind",
-                                       "britStack",  "modernLead", "rectifierChug", "coldBiasBuzz",
-                                       "bassDi",     "bassRig"};
+constexpr const char* kRigPresets[] = {"cleanCombo",  "chimeEdge",  "classicCrunch", "vintageGrind",
+                                       "crunchStack", "modernLead", "heavyChug",     "coldBiasBuzz",
+                                       "bassDi",      "bassRig"};
 constexpr int kRigPresetCount = static_cast<int>(std::size(kRigPresets));
 
 /// Which of them each binding names. Tunable because choosing the amplifier is
@@ -134,7 +134,7 @@ constexpr int kRigPresetCount = static_cast<int>(std::size(kRigPresets));
 /// another one is otherwise a rebuild: the preset is a construction-time string
 /// that no binding and no CLI can set.
 SONARE_TUNABLE(kRigCleanPreset, 0.0f);
-SONARE_TUNABLE(kRigCrunchPreset, 4.0f);  // britStack
+SONARE_TUNABLE(kRigCrunchPreset, 4.0f);  // crunchStack
 SONARE_TUNABLE(kRigLeadPreset, 5.0f);    // modernLead
 
 const char* rig_preset(float selector) noexcept {
@@ -891,7 +891,7 @@ GmFallbackRig gm_fallback_rig(uint16_t bank, uint8_t program) noexcept {
   // electric bass is close enough to a direct signal that binding one would be
   // a preference rather than a repair.
   switch (program & 0x7Fu) {
-    case 26:  // Jazz Guitar: hollow body into a clean American combo
+    case 26:  // Jazz Guitar: hollow body into a clean combo
     case 27:  // Clean Guitar
     case 28:  // Muted Guitar
     case 31:  // Guitar Harmonics: chimes, so the amp stays under breakup

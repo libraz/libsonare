@@ -3,6 +3,7 @@
 #include <unordered_set>
 #include <utility>
 
+#include "mastering/api/legacy_insert_params.h"
 #include "mastering/eq/eq_band_value.h"
 #include "mastering/eq/parametric.h"
 #include "mixing/alignment_delay.h"
@@ -191,8 +192,8 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
     }
     insert.slot = insert_slot_from_string(slot->as_string());
   }
-  insert.processor_name =
-      string_or_legacy(object, "processor", "processor_name", insert.processor_name);
+  insert.processor_name = mastering::api::canonical_processor_id(
+      string_or_legacy(object, "processor", "processor_name", insert.processor_name));
   // The writer embeds the params bag as an object; the string form is what every
   // project file saved before that carries, so both load into the same text.
   if (const auto* params = value_or_legacy(object, "params", "params_json")) {
@@ -205,6 +206,8 @@ Insert insert_from_value(const JsonValue& object, const std::string& path,
                             "insert params must be a JSON object (or the legacy JSON string)");
     }
   }
+  insert.params_json =
+      mastering::api::canonical_insert_params_text(insert.processor_name, insert.params_json);
   insert.sidechain_key =
       string_or_legacy(object, "sidechainKey", "sidechain_key", insert.sidechain_key);
   return insert;
@@ -547,8 +550,11 @@ JsonValue insert_params_to_value(const Insert& insert) {
 JsonValue insert_to_value(const Insert& insert) {
   sonare::util::json::Object object;
   util::json::put(object, "slot", to_string(insert.slot));
-  util::json::put(object, "processor", insert.processor_name);
-  util::json::put(object, "params", insert_params_to_value(insert));
+  const std::string processor = mastering::api::canonical_processor_id(insert.processor_name);
+  Insert current = insert;
+  current.params_json = mastering::api::canonical_insert_params_text(processor, insert.params_json);
+  util::json::put(object, "processor", processor);
+  util::json::put(object, "params", insert_params_to_value(current));
   // Omit `sidechainKey` when empty: the walker treats a missing field and an
   // empty string identically, but the legacy serializer also dropped the field
   // so existing snapshots can still byte-compare against new output.

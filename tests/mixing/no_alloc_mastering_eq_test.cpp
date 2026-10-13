@@ -267,11 +267,12 @@ TEST_CASE("MultibandExciter process performs no heap allocation after prepare",
   REQUIRE(guard.count() == 0);
 }
 
-TEST_CASE("PultecEq process performs no heap allocation after prepare", "[mastering][eq][rt]") {
+TEST_CASE("PassiveTubeEq process performs no heap allocation after prepare",
+          "[mastering][eq][rt]") {
   constexpr int kBlock = 256;
-  sonare::mastering::eq::PultecEq eq;
+  sonare::mastering::eq::PassiveTubeEq eq;
   // Engage the WDF component model so the per-channel component state path runs.
-  eq.set_component_model(sonare::mastering::eq::PultecComponentModel::Eqp1aWdf);
+  eq.set_component_model(sonare::mastering::eq::PassiveTubeComponentModel::WdfCircuit);
   eq.set_output_drive(2.0f);
   eq.prepare(48000.0, kBlock);
 

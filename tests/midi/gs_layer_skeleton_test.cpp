@@ -269,8 +269,8 @@ TEST_CASE("a parallel-2 type is two halves side by side, each ending in its own 
   SECTION("OD1/OD2 numbers its pedals and eight amps across both halves") {
     const Chain chain = gs_efx_insert_chain(efx_of(0x1103), kNoRows);
     const std::array<const char*, 4> presets = {
-        "\"preset\":\"cleanCombo\"", "\"preset\":\"chimeEdge\"", "\"preset\":\"britStack\"",
-        "\"preset\":\"rectifierChug\""};
+        "\"preset\":\"cleanCombo\"", "\"preset\":\"chimeEdge\"", "\"preset\":\"crunchStack\"",
+        "\"preset\":\"heavyChug\""};
     for (uint8_t ordinal = 0; ordinal < 8; ++ordinal) {
       INFO("ordinal " << static_cast<int>(ordinal));
       const GsEfxStage* stage = find_stage(chain, "saturation.ampSim", ordinal);

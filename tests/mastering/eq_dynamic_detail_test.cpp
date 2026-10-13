@@ -118,7 +118,7 @@ TEST_CASE("DynamicEq validates band parameters", "[mastering][eq]") {
 }
 
 // ===================================================================
-// Regression (Pultec corner frequency): the component-model one-pole
+// Regression (passive-tube corner frequency): the component-model one-pole
 // charges now use a prewarped coefficient alpha = 1 - exp(-2*pi*f/fs)
 // rather than the raw digital radian frequency 2*pi*f/fs, and the corner
 // is clamped sub-Nyquist before the formula. At a high corner the old
@@ -126,25 +126,25 @@ TEST_CASE("DynamicEq validates band parameters", "[mastering][eq]") {
 // at 1-alpha <= -1), an unstable smoother; even between 1 and 2 it places
 // the pole at the wrong (much higher) corner. The prewarped form keeps
 // alpha in (0, 1) for any clamped corner so the one-pole stays a stable
-// low-pass. Drive the Eqp1aWdf path hard at a high low-corner and assert
+// low-pass. Drive the WdfCircuit path hard at a high low-corner and assert
 // the output stays finite and bounded (no divergence), and remains a
 // bounded perturbation of the curve-only path.
 // ===================================================================
-TEST_CASE("PultecEq component one-pole corner stays stable at high frequencies",
-          "[mastering][eq][pultec]") {
+TEST_CASE("PassiveTubeEq component one-pole corner stays stable at high frequencies",
+          "[mastering][eq][passive-tube]") {
   constexpr int sample_rate = 48000;
   // 12 kHz low corner: raw-omega alpha = 2*pi*12000/48000 ~= 1.571; the
   // prewarped alpha = 1 - exp(-1.571) ~= 0.792 (and the corner is clamped to
   // 0.49*fs before the formula, guaranteeing alpha < 1).
-  PultecEq curve;
-  PultecEq component;
+  PassiveTubeEq curve;
+  PassiveTubeEq component;
   curve.prepare(sample_rate, 1024);
   component.prepare(sample_rate, 1024);
   curve.set_low_frequency(12000.0f);
   component.set_low_frequency(12000.0f);
   curve.set_low_boost(6.0f);
   component.set_low_boost(6.0f);
-  component.set_component_model(PultecComponentModel::Eqp1aWdf);
+  component.set_component_model(PassiveTubeComponentModel::WdfCircuit);
   component.set_output_drive(4.0f);
 
   auto curve_audio = sine(12000.0f, sample_rate, sample_rate, 0.7f);
@@ -171,28 +171,28 @@ TEST_CASE("PultecEq component one-pole corner stays stable at high frequencies",
 }
 
 // ===================================================================
-// Regression (Pultec corner frequency correctness): the component
+// Regression (passive-tube corner frequency correctness): the component
 // one-pole low charge is a low-pass with coefficient
 // alpha = 1 - exp(-2*pi*f/fs), so its DC step response settles with time
 // constant tau ~= fs / (2*pi*f) samples. The corner therefore controls
 // the settling speed: a LOWER configured low-frequency must produce a
 // SLOWER (longer) settle, scaling roughly inversely with frequency. We
-// observe the smoother through the Eqp1aWdf reactive term (monotone in
+// observe the smoother through the WdfCircuit reactive term (monotone in
 // the low charge) by measuring the 63% settle index of the component
 // output for a DC step at several corners. A miswired/wrong-corner
 // coefficient (e.g. the old raw-omega form, or a fixed corner) would not
 // reproduce this 1/f settle-time scaling.
 // ===================================================================
-TEST_CASE("PultecEq component low corner controls one-pole settle time",
-          "[mastering][eq][pultec]") {
+TEST_CASE("PassiveTubeEq component low corner controls one-pole settle time",
+          "[mastering][eq][passive-tube]") {
   constexpr int sample_rate = 48000;
 
-  // Returns the 63% DC-step settle index (samples) of the Eqp1aWdf component
+  // Returns the 63% DC-step settle index (samples) of the WdfCircuit component
   // output for a given low corner frequency.
   auto settle_index = [&](float corner_hz) {
-    PultecEq eq;
+    PassiveTubeEq eq;
     eq.prepare(sample_rate, 8192);
-    eq.set_component_model(PultecComponentModel::Eqp1aWdf);
+    eq.set_component_model(PassiveTubeComponentModel::WdfCircuit);
     eq.set_low_frequency(corner_hz);
     eq.set_low_boost(8.0f);  // Maximise the low_reactive contribution.
     eq.set_output_drive(0.0f);

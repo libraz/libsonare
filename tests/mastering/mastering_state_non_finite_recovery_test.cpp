@@ -1,7 +1,7 @@
 /// @file mastering_state_non_finite_recovery_test.cpp
 /// @brief One non-finite sample must not outlive the block that carried it, at
 ///        the mastering owners whose recursive cells nothing returned to rest:
-///        the gate's sidechain filter, the Pultec's component charges, the
+///        the gate's sidechain filter, the passive-tube EQ's component charges, the
 ///        low-end focus filters, the adaptive release envelopes, the true-peak
 ///        gain smoothers, both imagers' decorrelation allpasses and the mono
 ///        maker's cascade.
@@ -55,7 +55,7 @@
 #include <vector>
 
 #include "mastering/dynamics/gate.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/maximizer/adaptive_release.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_imager.h"
@@ -92,7 +92,7 @@ constexpr float kSensitivityScale = 0.25f;
 // the crest detector an order of magnitude longer to re-converge than a NaN,
 // which that fold drops on arrival (16 blocks against 139 at the true peak).
 constexpr int kGateRecoveryBlocks = 20;
-constexpr int kPultecRecoveryBlocks = 1700;
+constexpr int kPassiveTubeRecoveryBlocks = 1700;
 constexpr int kLowEndFocusRecoveryBlocks = 30;
 constexpr int kImagerRecoveryBlocks = 10;
 constexpr int kMultibandImagerRecoveryBlocks = 700;
@@ -103,11 +103,11 @@ constexpr int kMultibandImagerRecoveryBlocks = 700;
 // instead, and the ceiling is a decade above the largest measured on either
 // target (3.4e-5). That ceiling moves with the fixture.
 constexpr double kMultibandImagerResidual = 1.0e-3;
-// The Pultec component model is the same kind of exception: its nonlinear charges
+// The passive-tube component model is the same kind of exception: its nonlinear charges
 // carry a rounding-level difference that swells and shrinks (1e-7 to 8e-5 measured
 // past its bound) and merges with the control after anywhere from 360 to 5700
 // blocks, so it too is read against a ceiling at its bound.
-constexpr double kPultecResidual = 1.0e-3;
+constexpr double kPassiveTubeResidual = 1.0e-3;
 constexpr int kMonoMakerRecoveryBlocks = 15;
 constexpr int kTruePeakRecoveryBlocks = 300;
 constexpr int kAdaptiveReleaseBlocks = 160;
@@ -412,15 +412,16 @@ TEST_CASE("the gate bounds a non-finite sample to its own block", "[mastering][d
   check_owner(make, kGateRecoveryBlocks);
 }
 
-TEST_CASE("the pultec equalizer bounds a non-finite sample to its own block", "[mastering][eq]") {
-  using sonare::mastering::eq::PultecComponentModel;
-  using sonare::mastering::eq::PultecEq;
+TEST_CASE("the passive-tube equalizer bounds a non-finite sample to its own block",
+          "[mastering][eq]") {
+  using sonare::mastering::eq::PassiveTubeComponentModel;
+  using sonare::mastering::eq::PassiveTubeEq;
 
   const auto make = []() {
-    auto processor = std::make_shared<PultecEq>();
+    auto processor = std::make_shared<PassiveTubeEq>();
     // The component charges exist only in the modelled mode; the curve-only mode
     // runs the enclosed ParametricEq, which returns its own sections.
-    processor->set_component_model(PultecComponentModel::Eqp1aWdf);
+    processor->set_component_model(PassiveTubeComponentModel::WdfCircuit);
     processor->set_low_frequency(60.0f);
     processor->set_low_boost(4.0f);
     processor->set_low_attenuation(2.0f);
@@ -430,7 +431,7 @@ TEST_CASE("the pultec equalizer bounds a non-finite sample to its own block", "[
     return Owner{wrap(processor), {}};
   };
 
-  check_owner_within(make, kPultecRecoveryBlocks, kPultecResidual);
+  check_owner_within(make, kPassiveTubeRecoveryBlocks, kPassiveTubeResidual);
 }
 
 TEST_CASE("low end focus bounds a non-finite sample to its own block", "[mastering][spectral]") {

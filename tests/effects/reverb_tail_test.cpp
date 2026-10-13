@@ -32,7 +32,7 @@
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/graphic_eq.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/multiband/multiband_compressor.h"
 #include "mastering/repair/decrackle_streaming.h"
 #include "mastering/repair/dehum_streaming.h"
@@ -666,11 +666,11 @@ TEST_CASE("IIR stages report the ring their sections leave", "[effects][tail]") 
     equalizer.set_band(0, {eq::EqBandType::Peak, 50.0f, 9.0f, 6.0f, true});
     require_tail_contains_output(equalizer, 0.5f);
   }
-  SECTION("pultec") {
-    eq::PultecEq pultec;
-    pultec.prepare(kRate, 256);
-    pultec.set_low_boost(8.0f);
-    require_tail_contains_output(pultec, 0.5f);
+  SECTION("passive tube") {
+    eq::PassiveTubeEq passive_tube;
+    passive_tube.prepare(kRate, 256);
+    passive_tube.set_low_boost(8.0f);
+    require_tail_contains_output(passive_tube, 0.5f);
   }
   SECTION("wah") {
     sonare::effects::modulation::Wah wah;

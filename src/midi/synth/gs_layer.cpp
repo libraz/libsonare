@@ -991,8 +991,8 @@ struct GsAmpVoicing {
 constexpr std::array<GsAmpVoicing, 4> kGsAmpTypes = {{
     {"cleanCombo", kGsCabGuitar1x12Combo},
     {"chimeEdge", kGsCabGuitar2x12Open},
-    {"britStack", kGsCabGuitar4x12},
-    {"rectifierChug", kGsCabGuitar4x12},
+    {"crunchStack", kGsCabGuitar4x12},
+    {"heavyChug", kGsCabGuitar4x12},
 }};
 
 /// Rotary Multi prints no Amp Type, and the manual names no amp for it.

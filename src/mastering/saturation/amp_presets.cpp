@@ -1,5 +1,6 @@
 #include "mastering/saturation/amp_presets.h"
 
+#include "mastering/api/legacy_ids.h"
 #include "mastering/saturation/amp_physics.h"
 #include "util/exception.h"
 
@@ -63,7 +64,7 @@ AmpSimConfig bare() {
 
 AmpSimConfig clean_combo() {
   AmpSimConfig c = bare();
-  c.amp_model = AmpModel::kFenderClean;
+  c.amp_model = AmpModel::kCleanCombo;
   c.drive = 0.25f;
   c.bass_db = 2.0f;
   c.mid_db = -1.0f;
@@ -85,7 +86,7 @@ AmpSimConfig clean_combo() {
 
 AmpSimConfig chime_edge() {
   AmpSimConfig c = bare();
-  c.amp_model = AmpModel::kVoxChime;
+  c.amp_model = AmpModel::kClassAChime;
   c.drive = 0.45f;
   c.mid_db = 1.5f;
   c.treble_db = 3.5f;
@@ -115,7 +116,7 @@ AmpSimConfig classic_crunch() {
   c.mic_axis = 0.3f;
   c.mic_distance_cm = 2.5f;
   c.power = 0.4f;
-  // An early British stack: still tube-rectified (GZ34) on a 440 V rail.
+  // An early Crunch stack: still tube-rectified (GZ34) on a 440 V rail.
   c.sag = sag_for({Rectifier::kGz34, kTypicalPowerTransformerOhms, 440.0f, 0.130f});
   c.crossover = crossover_from_bias_fraction(0.65f);
   c.transformer = 0.2f;
@@ -123,10 +124,10 @@ AmpSimConfig classic_crunch() {
   return c;
 }
 
-AmpSimConfig tweed_grind() {
+AmpSimConfig vintage_grind() {
   AmpSimConfig c = bare();
   c.topology = AmpTopology::kCircuit;
-  c.amp_model = AmpModel::kTweed;
+  c.amp_model = AmpModel::kVintageCombo;
   c.preamp_stages = 2;
   c.drive = 0.62f;
   c.bass_db = 3.0f;
@@ -136,7 +137,7 @@ AmpSimConfig tweed_grind() {
   c.power = 0.65f;
   // The softest supply in the set, and the reason this amp is known for its
   // sponginess: a 5Y3 (350 ohms) plus the transformer on a 350 V rail drops
-  // about 50 V at full output — the figure a small tweed combo is measured at.
+  // about 50 V at full output — the figure a small vintage combo is measured at.
   c.sag = sag_for({Rectifier::k5Y3, kTypicalPowerTransformerOhms, 350.0f, 0.100f});
   c.transformer = 0.35f;
   c.nfb = 0.0f;
@@ -150,7 +151,7 @@ AmpSimConfig tweed_grind() {
   return c;
 }
 
-AmpSimConfig brit_stack() {
+AmpSimConfig crunch_stack() {
   AmpSimConfig c = bare();
   c.topology = AmpTopology::kCircuit;
   c.amp_model = AmpModel::kClassicCrunch;
@@ -208,10 +209,10 @@ AmpSimConfig modern_lead() {
   return c;
 }
 
-AmpSimConfig rectifier_chug() {
+AmpSimConfig heavy_chug() {
   AmpSimConfig c = bare();
   c.topology = AmpTopology::kCircuit;
-  c.amp_model = AmpModel::kRectifier;
+  c.amp_model = AmpModel::kHeavyHiGain;
   c.preamp_stages = 4;
   c.drive = 0.85f;
   c.bass_db = 5.0f;
@@ -264,7 +265,7 @@ AmpSimConfig cold_bias_buzz() {
 
 AmpSimConfig bass_di() {
   AmpSimConfig c = bare();
-  c.amp_model = AmpModel::kFenderClean;
+  c.amp_model = AmpModel::kCleanCombo;
   c.drive = 0.15f;
   c.bass_db = 2.0f;
   c.treble_db = 1.0f;
@@ -308,8 +309,8 @@ AmpSimConfig bass_rig() {
 }  // namespace
 
 std::vector<std::string> amp_preset_names() {
-  return {"cleanCombo", "chimeEdge",     "classicCrunch", "tweedGrind", "britStack",
-          "modernLead", "rectifierChug", "coldBiasBuzz",  "bassDi",     "bassRig"};
+  return {"cleanCombo", "chimeEdge", "classicCrunch", "vintageGrind", "crunchStack",
+          "modernLead", "heavyChug", "coldBiasBuzz",  "bassDi",       "bassRig"};
 }
 
 const char* amp_preset_to_string(AmpPreset preset) noexcept {
@@ -320,14 +321,14 @@ const char* amp_preset_to_string(AmpPreset preset) noexcept {
       return "chimeEdge";
     case AmpPreset::kClassicCrunch:
       return "classicCrunch";
-    case AmpPreset::kTweedGrind:
-      return "tweedGrind";
-    case AmpPreset::kBritStack:
-      return "britStack";
+    case AmpPreset::kVintageGrind:
+      return "vintageGrind";
+    case AmpPreset::kCrunchStack:
+      return "crunchStack";
     case AmpPreset::kModernLead:
       return "modernLead";
-    case AmpPreset::kRectifierChug:
-      return "rectifierChug";
+    case AmpPreset::kHeavyChug:
+      return "heavyChug";
     case AmpPreset::kColdBiasBuzz:
       return "coldBiasBuzz";
     case AmpPreset::kBassDi:
@@ -340,8 +341,9 @@ const char* amp_preset_to_string(AmpPreset preset) noexcept {
 
 AmpPreset amp_preset_from_string(const std::string& name) {
   const std::vector<std::string> names = amp_preset_names();
+  const std::string canonical = api::canonical_amp_preset_name(name);
   for (size_t i = 0; i < names.size(); ++i) {
-    if (names[i] == name) return static_cast<AmpPreset>(i);
+    if (names[i] == canonical) return static_cast<AmpPreset>(i);
   }
   throw SonareException(ErrorCode::InvalidParameter, "unknown amp preset: " + name);
 }
@@ -354,14 +356,14 @@ AmpSimConfig amp_preset_config(AmpPreset preset) {
       return chime_edge();
     case AmpPreset::kClassicCrunch:
       return classic_crunch();
-    case AmpPreset::kTweedGrind:
-      return tweed_grind();
-    case AmpPreset::kBritStack:
-      return brit_stack();
+    case AmpPreset::kVintageGrind:
+      return vintage_grind();
+    case AmpPreset::kCrunchStack:
+      return crunch_stack();
     case AmpPreset::kModernLead:
       return modern_lead();
-    case AmpPreset::kRectifierChug:
-      return rectifier_chug();
+    case AmpPreset::kHeavyChug:
+      return heavy_chug();
     case AmpPreset::kColdBiasBuzz:
       return cold_bias_buzz();
     case AmpPreset::kBassDi:

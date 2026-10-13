@@ -373,30 +373,30 @@
         "note": "the same voice through the classicCrunch amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
-        "name": "amp-tweedGrind",
+        "name": "amp-vintageGrind",
         "title": {
-          "en": "Tweed grind",
-          "ja": "ツイードの粗さ"
+          "en": "Vintage grind",
+          "ja": "ヴィンテージの粗さ"
         },
         "desc": {
           "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
           "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
         },
         "overrides": "gm_fallback_map.kRigCleanPreset=3,gm_fallback_map.kRigCleanLevelDb=42.88",
-        "note": "the same voice through the tweedGrind amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+        "note": "the same voice through the vintageGrind amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
-        "name": "amp-britStack",
+        "name": "amp-crunchStack",
         "title": {
-          "en": "British stack",
-          "ja": "英国スタック"
+          "en": "Crunch stack",
+          "ja": "クランチスタック"
         },
         "desc": {
           "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
           "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
         },
         "overrides": "gm_fallback_map.kRigCleanPreset=4,gm_fallback_map.kRigCleanLevelDb=42.52",
-        "note": "the same voice through the britStack amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+        "note": "the same voice through the crunchStack amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-modernLead",
@@ -412,17 +412,17 @@
         "note": "the same voice through the modernLead amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
-        "name": "amp-rectifierChug",
+        "name": "amp-heavyChug",
         "title": {
-          "en": "Rectifier chug",
-          "ja": "レクチファイアのチャグ"
+          "en": "Heavy chug",
+          "ja": "ヘヴィなチャグ"
         },
         "desc": {
           "en": "The same voice through this amplifier — the amplifier is the only thing that differs; the trim after it only makes the ten comparable.",
           "ja": "同じ音色をこのアンプに通したもの。違うのはアンプだけで、後段のトリムは10本を比較可能にするためのものです。"
         },
         "overrides": "gm_fallback_map.kRigCleanPreset=6,gm_fallback_map.kRigCleanLevelDb=35.67",
-        "note": "the same voice through the rectifierChug amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
+        "note": "the same voice through the heavyChug amplifier. The trim differs per amp only so the ten are comparable: levelDb sits after the amplifier, not before it, so it scales the output and changes nothing about the tone - measured identical crest at every value from 0 to 60 dB. What drives an amplifier here is `drive` alone"
       },
       {
         "name": "amp-coldBiasBuzz",

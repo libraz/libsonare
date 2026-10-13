@@ -31,27 +31,27 @@ namespace sonare::mastering::saturation {
 /// changes the processor's defaults — an `AmpSim` built without a preset is
 /// unchanged.
 enum class AmpPreset {
-  /// American clean combo: lots of headroom, a scooped-but-present voice,
+  /// Clean combo: lots of headroom, a scooped-but-present voice,
   /// barely into the power stage. The pedal-platform / clean-rhythm setting.
   kCleanCombo = 0,
-  /// British class-A chime: bright and airy, breaking up only on hard picking.
+  /// Class-A chime: bright and airy, breaking up only on hard picking.
   /// No global feedback, which is what lets its top end stay open.
   kChimeEdge = 1,
   /// The original amp-sim character as a rig: mid-forward crunch with the power
   /// stage and a soft supply working.
   kClassicCrunch = 2,
-  /// Low-wattage American tweed, circuit-level: a warm, dark, spongy breakup
+  /// Low-wattage vintage combo, circuit-level: a warm, dark, spongy breakup
   /// with a heavily sagging supply and no feedback loop.
-  kTweedGrind = 3,
-  /// British stack, circuit-level: a three-stage cascade into an EL34 pair,
+  kVintageGrind = 3,
+  /// Crunch stack, circuit-level: a three-stage cascade into an EL34 pair,
   /// close dynamic mic blended with a darker ribbon further back.
-  kBritStack = 4,
+  kCrunchStack = 4,
   /// Modern high-gain lead, circuit-level: a four-stage cascade, scooped mids,
   /// and enough grid-current tracking to sputter on hard attacks.
   kModernLead = 5,
   /// Modern high-gain rhythm: the heaviest rig here — deep scoop, a sagging
   /// supply, a saturating transformer and a hard-driven cone.
-  kRectifierChug = 6,
+  kHeavyChug = 6,
   /// A coldly biased class-AB amp: the crossover notch is the voice rather than
   /// an artefact — buzzy and gated on quiet playing, cleaning up when pushed.
   kColdBiasBuzz = 7,

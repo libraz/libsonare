@@ -209,7 +209,7 @@ def test_insert_timing_matches_the_constructed_insert_for_a_string_key() -> None
     pair = _timing_pair("saturation.ampSim", params)
     assert pair == _scene_timing("saturation.ampSim", params)
     assert pair[1] != _timing_pair("saturation.ampSim", {})[1]
-    named = {"preset": "britStack"}
+    named = {"preset": "crunchStack"}
     assert _timing_pair("saturation.ampSim", named) == _scene_timing("saturation.ampSim", named)
 
 

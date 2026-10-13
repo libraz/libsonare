@@ -48,27 +48,27 @@ namespace sonare::mastering::saturation {
 /// Selects a whole voicing profile at once; the drive/tone knobs then ride on
 /// top. Independent of `CabModel` (a preset does not force a cabinet).
 enum class AmpModel {
-  /// Classic crunch: the original AmpSim voicing — a mid-forward British-style
+  /// Classic crunch: the original AmpSim voicing — a mid-forward
   /// circuit. `amp_model == kClassicCrunch` is bit-identical to the original,
   /// so an unset field changes nothing.
   kClassicCrunch = 0,
-  /// American clean: less bright-cap grit and lower gain (more headroom, breaks
+  /// Clean combo: less bright-cap grit and lower gain (more headroom, breaks
   /// up later), a slightly darker mid and an airier top — the chimey
   /// clean-to-edge-of-breakup voice.
-  kFenderClean = 1,
+  kCleanCombo = 1,
   /// Modern high-gain: a bright, tight cascaded-gain circuit — more pre-emphasis
   /// pushed into the clip and a much hotter triode drive (saturates early), with
   /// an upper-mid focus that keeps a high-gain tone articulate.
   kModernHiGain = 2,
-  /// Vintage tweed: a low-wattage American circuit — a warm, dark voice with an
+  /// Vintage combo: a low-wattage circuit — a warm, dark voice with an
   /// early, spongy breakup and little bright-cap grit.
-  kTweed = 3,
-  /// British class-A chime: a bright, upper-mid-forward voice that stays fairly
+  kVintageCombo = 3,
+  /// Class-A chime: a bright, upper-mid-forward voice that stays fairly
   /// clean (chimes rather than crunches) with an airy top.
-  kVoxChime = 4,
-  /// Modern rectifier: the hottest voicing — a saturated, thick low end with a
+  kClassAChime = 4,
+  /// Heavy high-gain: the hottest voicing — a saturated, thick low end with a
   /// scooped mid and a darker top (the loose, heavy high-gain voice).
-  kRectifier = 5,
+  kHeavyHiGain = 5,
 };
 
 /// How the preamp and tone section are modelled.

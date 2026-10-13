@@ -442,7 +442,7 @@ TEST_CASE("the amp voicing presets scale gain from clean to high-gain and defaul
   };
   // The clean voicing keeps more headroom; the high-gain voicing saturates
   // earlier and harder — the distortion grows across the three presets.
-  REQUIRE(distortion_for(AmpModel::kFenderClean) < distortion_for(AmpModel::kClassicCrunch));
+  REQUIRE(distortion_for(AmpModel::kCleanCombo) < distortion_for(AmpModel::kClassicCrunch));
   REQUIRE(distortion_for(AmpModel::kClassicCrunch) < distortion_for(AmpModel::kModernHiGain));
 
   // The classic crunch is the default: an unset amp_model is bit-identical.
@@ -469,21 +469,21 @@ TEST_CASE("the added amp voicings retain distinct gain and spectral characterist
     AmpSim amp(config);
     return process_mono(amp, sine(220.0, 0.3f, kNumSamples));
   };
-  // Cab off (nonlinearity alone): the rectifier is the hottest voicing (it
-  // saturates harder than the modern high-gain), the tweed breaks up earlier
+  // Cab off (nonlinearity alone): the heavy high-gain voicing is the hottest (it
+  // saturates harder than the modern high-gain), the vintage combo breaks up earlier
   // than the clean.
-  REQUIRE(thd(out_for(AmpModel::kFenderClean, false), 220.0) <
-          thd(out_for(AmpModel::kTweed, false), 220.0));
+  REQUIRE(thd(out_for(AmpModel::kCleanCombo, false), 220.0) <
+          thd(out_for(AmpModel::kVintageCombo, false), 220.0));
   REQUIRE(thd(out_for(AmpModel::kModernHiGain, false), 220.0) <
-          thd(out_for(AmpModel::kRectifier, false), 220.0));
+          thd(out_for(AmpModel::kHeavyHiGain, false), 220.0));
 
   // Cab on so the voicing's tone-stack/pre-emphasis colour remains observable.
   // The guitar-cab roll-off leaves little energy above 3 kHz, so assert that
   // the two deliberately different voicings do not collapse to the same
   // spectrum instead of comparing values at the floating-point noise floor.
-  const auto vox = out_for(AmpModel::kVoxChime, true);
-  const auto tweed = out_for(AmpModel::kTweed, true);
-  REQUIRE(high_band_fraction(vox, 3000.0) != high_band_fraction(tweed, 3000.0));
+  const auto chime = out_for(AmpModel::kClassAChime, true);
+  const auto vintage = out_for(AmpModel::kVintageCombo, true);
+  REQUIRE(high_band_fraction(chime, 3000.0) != high_band_fraction(vintage, 3000.0));
 }
 
 TEST_CASE("saturation.ampSim selects the amp voicing through the param bag",
@@ -495,16 +495,16 @@ TEST_CASE("saturation.ampSim selects the amp voicing through the param bag",
   auto* hi_amp = dynamic_cast<AmpSim*>(hi.get());
   REQUIRE(clean_amp != nullptr);
   REQUIRE(hi_amp != nullptr);
-  REQUIRE(clean_amp->amp_config().amp_model == AmpModel::kFenderClean);
+  REQUIRE(clean_amp->amp_config().amp_model == AmpModel::kCleanCombo);
   REQUIRE(hi_amp->amp_config().amp_model == AmpModel::kModernHiGain);
 
   // The added voicings parse from their model ids too.
-  auto tweed = make_insert("saturation.ampSim", R"({"ampModel":3})");
-  auto vox = make_insert("saturation.ampSim", R"({"ampModel":4})");
-  auto rect = make_insert("saturation.ampSim", R"({"ampModel":5})");
-  REQUIRE(dynamic_cast<AmpSim*>(tweed.get())->amp_config().amp_model == AmpModel::kTweed);
-  REQUIRE(dynamic_cast<AmpSim*>(vox.get())->amp_config().amp_model == AmpModel::kVoxChime);
-  REQUIRE(dynamic_cast<AmpSim*>(rect.get())->amp_config().amp_model == AmpModel::kRectifier);
+  auto vintage = make_insert("saturation.ampSim", R"({"ampModel":3})");
+  auto chime = make_insert("saturation.ampSim", R"({"ampModel":4})");
+  auto hi_gain = make_insert("saturation.ampSim", R"({"ampModel":5})");
+  REQUIRE(dynamic_cast<AmpSim*>(vintage.get())->amp_config().amp_model == AmpModel::kVintageCombo);
+  REQUIRE(dynamic_cast<AmpSim*>(chime.get())->amp_config().amp_model == AmpModel::kClassAChime);
+  REQUIRE(dynamic_cast<AmpSim*>(hi_gain.get())->amp_config().amp_model == AmpModel::kHeavyHiGain);
 }
 
 TEST_CASE("saturation.ampSim selects the bass cab through the param bag",
@@ -1795,23 +1795,23 @@ TEST_CASE("saturation.ampSim takes a named rig as the base its params ride on",
 
 TEST_CASE("the presets order the supplies the way their rectifiers do",
           "[mastering][saturation][amp]") {
-  // The point of deriving rather than choosing: the tweed's 5Y3 has to come out
+  // The point of deriving rather than choosing: the vintage rig's 5Y3 has to come out
   // saggier than the silicon-rectified modern rigs without anyone deciding that
   // it should.
-  const float tweed = amp_preset_config(AmpPreset::kTweedGrind).sag;
+  const float vintage = amp_preset_config(AmpPreset::kVintageGrind).sag;
   const float modern = amp_preset_config(AmpPreset::kModernLead).sag;
-  const float brit = amp_preset_config(AmpPreset::kBritStack).sag;
-  const float rectifier = amp_preset_config(AmpPreset::kRectifierChug).sag;
-  CHECK(tweed > 2.0f * modern);
-  CHECK(tweed > 2.0f * brit);
+  const float crunch = amp_preset_config(AmpPreset::kCrunchStack).sag;
+  const float heavy = amp_preset_config(AmpPreset::kHeavyChug).sag;
+  CHECK(vintage > 2.0f * modern);
+  CHECK(vintage > 2.0f * crunch);
   // The one modern rig on a tube rectifier sits with the vintage amps, not with
   // its silicon-rectified siblings.
-  CHECK(rectifier > 2.0f * modern);
+  CHECK(heavy > 2.0f * modern);
 
   // Likewise the bias points: the cold-bias rig is the only one with a large
   // dead zone, and the two cathode-biased amps have none at all.
   CHECK(amp_preset_config(AmpPreset::kColdBiasBuzz).crossover > 0.8f);
-  CHECK(amp_preset_config(AmpPreset::kTweedGrind).crossover == 0.0f);
+  CHECK(amp_preset_config(AmpPreset::kVintageGrind).crossover == 0.0f);
   CHECK(amp_preset_config(AmpPreset::kChimeEdge).crossover == 0.0f);
 }
 

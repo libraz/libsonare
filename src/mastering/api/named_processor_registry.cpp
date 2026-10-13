@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "mastering/api/insert_factory.h"
+#include "mastering/api/legacy_ids.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/saturation/amp_presets.h"
 #include "rt/processor_base.h"
@@ -28,7 +29,6 @@ std::vector<std::string> processor_names() {
       "dynamics.upwardCompressor",
       "dynamics.upwardExpander",
       "dynamics.vocalRider",
-      "eq.apiStyle",
       "eq.bandPass",
       "eq.cutFilter",
       "eq.dynamic",
@@ -38,8 +38,9 @@ std::vector<std::string> processor_names() {
       "eq.midSide",
       "eq.minimumPhase",
       "eq.parametric",
-      "eq.pultec",
+      "eq.passiveTube",
       "eq.shelving",
+      "eq.steppedProportionalQ",
       "eq.tilt",
       "final.bitDepth",
       "final.dither",
@@ -113,7 +114,8 @@ std::vector<std::string> stereo_analysis_names() {
   return {"stereo.monoCompatCheck", "stereo.monoCompatCheckLogBands"};
 }
 
-ChannelPolicy channel_policy(const std::string& id) {
+ChannelPolicy channel_policy(const std::string& requested_id) {
+  const std::string id = canonical_processor_id(requested_id);
   // Inherently-stereo processors: they operate on planes 0/1 and pass any
   // surround planes through dry. Everything else processes all planes correctly
   // in a single full-buffer call (Multichannel), which is also the safe default
@@ -178,8 +180,9 @@ const char* channel_policy_to_string(ChannelPolicy policy) noexcept {
   return "multichannel";
 }
 
-InsertTiming insert_timing(const std::string& name, const std::string& json_params,
+InsertTiming insert_timing(const std::string& requested_name, const std::string& json_params,
                            double sample_rate) {
+  const std::string name = canonical_processor_id(requested_name);
   std::vector<std::string> unknown;
   std::unique_ptr<sonare::rt::ProcessorBase> processor = make_insert(name, json_params, &unknown);
   if (processor == nullptr) {

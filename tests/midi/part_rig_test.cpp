@@ -501,7 +501,7 @@ TEST_CASE("sf2: an invalid entry is refused and changes nothing", "[midi][rig][p
 TEST_CASE("sf2: a chain carrying an amplifier feeds it a mono pickup ahead of CC10",
           "[midi][rig][part]") {
   const PartRig amped =
-      chain({{"saturation.ampSim", R"({"preset":"britStack","inputDb":24})"}, kDelay});
+      chain({{"saturation.ampSim", R"({"preset":"crunchStack","inputDb":24})"}, kDelay});
   const StereoRender center = render_panned(with_factory(), amped, 64);
   const StereoRender left = render_panned(with_factory(), amped, 0);
   // Pan sits after the amplifier, so the hard-left leg is the centred one
@@ -669,7 +669,7 @@ TEST_CASE("native: an invalid entry is refused and changes nothing", "[midi][rig
 TEST_CASE("native: a chain carrying an amplifier feeds it a mono pickup ahead of CC10",
           "[midi][rig][part]") {
   const PartRig amped =
-      chain({{"saturation.ampSim", R"({"preset":"britStack","inputDb":24})"}, kDelay});
+      chain({{"saturation.ampSim", R"({"preset":"crunchStack","inputDb":24})"}, kDelay});
   const StereoRender center = render_panned(native_with_factory(), amped, 64);
   const StereoRender left = render_panned(native_with_factory(), amped, 0);
   REQUIRE(relative_rms_difference(center.left, left.left, sonare::constants::kInvSqrt2) < 1.0e-4);

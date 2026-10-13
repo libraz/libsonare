@@ -291,7 +291,7 @@ TEST_CASE("every amplifier a binding can name is one the mastering module has",
   // And each binding's default still names the amplifier the bank was voiced
   // through, which is what makes the selector free in a shipped build.
   REQUIRE(std::string(gm_rig_binding(1).preset) == "cleanCombo");
-  REQUIRE(std::string(gm_rig_binding(2).preset) == "britStack");
+  REQUIRE(std::string(gm_rig_binding(2).preset) == "crunchStack");
   REQUIRE(std::string(gm_rig_binding(3).preset) == "modernLead");
 }
 
@@ -573,7 +573,7 @@ TEST_CASE("a host describes a rig in the mixing scene's own words", "[midi][sf2]
   // mixing module to read one.
   const std::string scene_json = R"({"version":1,"strips":[{"id":"gtr","inserts":[
       {"processor":"dynamics.gate","params":"{}","slot":"pre"},
-      {"processor":"saturation.ampSim","params":"{\"preset\":\"britStack\",\"drive\":0.8}","slot":"pre"},
+      {"processor":"saturation.ampSim","params":"{\"preset\":\"crunchStack\",\"drive\":0.8}","slot":"pre"},
       {"processor":"effects.delay.stereo","params":"{}","slot":"pre"}]}]})";
   const sonare::mixing::api::Scene scene = sonare::mixing::api::scene_from_json(scene_json);
   REQUIRE(scene.strips.size() == 1);

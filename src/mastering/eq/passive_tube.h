@@ -1,6 +1,6 @@
 #pragma once
 
-/// @file pultec.h
+/// @file passive_tube.h
 /// @brief Passive-style program equalizer.
 
 #include <vector>
@@ -11,12 +11,12 @@
 
 namespace sonare::mastering::eq {
 
-enum class PultecComponentModel {
+enum class PassiveTubeComponentModel {
   CurveOnly,
-  Eqp1aWdf,
+  WdfCircuit,
 };
 
-class PultecEq : public rt::ProcessorBase {
+class PassiveTubeEq : public rt::ProcessorBase {
  public:
   void prepare(double sample_rate, int max_block_size) override;
   void process(float* const* channels, int num_channels, int num_samples) override;
@@ -28,7 +28,7 @@ class PultecEq : public rt::ProcessorBase {
   void set_low_attenuation(float amount);
   void set_high_boost(float frequency_hz, float amount, float bandwidth = 0.5f);
   void set_high_attenuation(float frequency_hz, float amount);
-  void set_component_model(PultecComponentModel model);
+  void set_component_model(PassiveTubeComponentModel model);
   void set_output_drive(float drive);
   void clear();
 
@@ -54,7 +54,7 @@ class PultecEq : public rt::ProcessorBase {
   float high_boost() const { return high_boost_; }
   float high_attenuation_frequency() const { return high_attenuation_frequency_hz_; }
   float high_attenuation() const { return high_attenuation_; }
-  PultecComponentModel component_model() const { return component_model_; }
+  PassiveTubeComponentModel component_model() const { return component_model_; }
   float output_drive() const { return output_drive_; }
 
  private:
@@ -80,7 +80,7 @@ class PultecEq : public rt::ProcessorBase {
   float high_bandwidth_ = 0.5f;
   float high_attenuation_frequency_hz_ = 10000.0f;
   float high_attenuation_ = 0.0f;
-  PultecComponentModel component_model_ = PultecComponentModel::CurveOnly;
+  PassiveTubeComponentModel component_model_ = PassiveTubeComponentModel::CurveOnly;
   float output_drive_ = 0.0f;
   // Seeded with the prewarped one-pole coefficient (alpha = 1 - exp(-2*pi*f/fs))
   // for the default corners; prepare()/update_component_coefficients() recompute

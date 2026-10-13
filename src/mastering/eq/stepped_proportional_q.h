@@ -1,6 +1,6 @@
 #pragma once
 
-/// @file api_style.h
+/// @file stepped_proportional_q.h
 /// @brief Stepped proportional-Q equalizer.
 
 #include <array>
@@ -13,7 +13,7 @@
 
 namespace sonare::mastering::eq {
 
-class ApiStyleEq : public rt::ProcessorBase {
+class SteppedProportionalQEq : public rt::ProcessorBase {
  public:
   enum class Band {
     Low = 0,

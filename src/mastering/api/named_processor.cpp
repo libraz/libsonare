@@ -13,6 +13,7 @@
 #include "mastering/api/audio_utils.h"
 #include "mastering/api/insert_factory.h"
 #include "mastering/api/internal_processor_runner.h"
+#include "mastering/api/legacy_ids.h"
 #include "mastering/api/processor_params.h"
 #include "mastering/common/loudness_measure.h"
 #include "mastering/dynamics/brickwall_limiter.h"
@@ -28,7 +29,6 @@
 #include "mastering/dynamics/upward_compressor.h"
 #include "mastering/dynamics/upward_expander.h"
 #include "mastering/dynamics/vocal_rider.h"
-#include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
@@ -38,8 +38,9 @@
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/eq/shelving.h"
+#include "mastering/eq/stepped_proportional_q.h"
 #include "mastering/eq/tilt.h"
 #include "mastering/final/bit_depth.h"
 #include "mastering/final/dither.h"
@@ -375,9 +376,9 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     eq::TiltEq p;
     detail::configure_tilt(p, params);
     run_processor(p, channels, sample_rate, outcome);
-  } else if (name == "eq.apiStyle") {
-    eq::ApiStyleEq p;
-    detail::configure_api_style(p, params);
+  } else if (name == "eq.steppedProportionalQ") {
+    eq::SteppedProportionalQEq p;
+    detail::configure_stepped_proportional_q(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.parametric") {
     eq::ParametricEq p;
@@ -403,9 +404,9 @@ bool try_configure_processor(const std::string& name, const ParamMap& params, Ch
     eq::DynamicEq p;
     detail::configure_dynamic_eq_bands(p, params);
     run_processor(p, channels, sample_rate, outcome);
-  } else if (name == "eq.pultec") {
-    eq::PultecEq p;
-    detail::configure_pultec(p, params);
+  } else if (name == "eq.passiveTube") {
+    eq::PassiveTubeEq p;
+    detail::configure_passive_tube(p, params);
     run_processor(p, channels, sample_rate, outcome);
   } else if (name == "eq.cutFilter") {
     eq::CutFilter p;
@@ -755,8 +756,10 @@ std::vector<std::string> stereo_processor_names() {
   return names;
 }
 
-MonoResult apply_named_processor(const std::string& name, const float* samples, std::size_t length,
-                                 int sample_rate, const std::vector<Param>& params) {
+MonoResult apply_named_processor(const std::string& requested_name, const float* samples,
+                                 std::size_t length, int sample_rate,
+                                 const std::vector<Param>& params) {
+  const std::string name = canonical_processor_id(requested_name);
   validate_params(params.data(), params.size());
   validate_offline_audio_input(samples, length, sample_rate);
   auto map = make_map(params);
@@ -776,9 +779,10 @@ MonoResult apply_named_processor(const std::string& name, const float* samples, 
   return result;
 }
 
-StereoResult apply_named_processor_stereo(const std::string& name, const float* left,
+StereoResult apply_named_processor_stereo(const std::string& requested_name, const float* left,
                                           const float* right, std::size_t length, int sample_rate,
                                           const std::vector<Param>& params) {
+  const std::string name = canonical_processor_id(requested_name);
   validate_params(params.data(), params.size());
   validate_offline_audio_input(left, length, sample_rate);
   validate_offline_audio_input(right, length, sample_rate);

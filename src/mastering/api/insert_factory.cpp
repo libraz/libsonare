@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "mastering/api/chain.h"
+#include "mastering/api/legacy_ids.h"
 #include "mastering/api/named_processor.h"
 #include "mastering/api/param_field_tables.h"
 #include "mastering/api/processor_params.h"
@@ -31,7 +32,6 @@
 #include "mastering/dynamics/upward_compressor.h"
 #include "mastering/dynamics/upward_expander.h"
 #include "mastering/dynamics/vocal_rider.h"
-#include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
@@ -40,8 +40,9 @@
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/eq/shelving.h"
+#include "mastering/eq/stepped_proportional_q.h"
 #include "mastering/eq/tilt.h"
 #include "mastering/maximizer/adaptive_release.h"
 #include "mastering/maximizer/maximizer.h"
@@ -338,9 +339,9 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
     detail::configure_tilt(*p, params);
     return p;
   }
-  if (name == "eq.apiStyle") {
-    auto p = std::make_unique<eq::ApiStyleEq>();
-    detail::configure_api_style(*p, params);
+  if (name == "eq.steppedProportionalQ") {
+    auto p = std::make_unique<eq::SteppedProportionalQEq>();
+    detail::configure_stepped_proportional_q(*p, params);
     return p;
   }
   if (name == "eq.parametric") {
@@ -370,9 +371,9 @@ std::unique_ptr<Processor> build_eq(const std::string& name, const ParamMap& par
     detail::configure_dynamic_eq_bands(*p, params);
     return p;
   }
-  if (name == "eq.pultec") {
-    auto p = std::make_unique<eq::PultecEq>();
-    detail::configure_pultec(*p, params);
+  if (name == "eq.passiveTube") {
+    auto p = std::make_unique<eq::PassiveTubeEq>();
+    detail::configure_passive_tube(*p, params);
     return p;
   }
   if (name == "eq.cutFilter") {
@@ -1269,9 +1270,10 @@ void prepare_for_build_rate(sonare::rt::ProcessorBase& processor, double sample_
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
-    const std::string& name, const std::string& json_params,
+    const std::string& requested_name, const std::string& json_params,
     std::vector<std::string>* out_unknown_keys,
     const sonare::resource::ProjectImportResourceLimits& limits, double build_sample_rate) {
+  const std::string name = canonical_processor_id(requested_name);
   // One admission, one document: every reader below works off the same parsed
   // value, so the call's parse cost is the cost of this admission.
   Value root;
@@ -1291,7 +1293,8 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert(
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
-    const std::string& name, const std::vector<Param>& param_list) {
+    const std::string& requested_name, const std::vector<Param>& param_list) {
+  const std::string name = canonical_processor_id(requested_name);
   const ParamMap params = detail::make_map(param_list);
   auto processor = build_insert(name, params);
   attach_constructed_parameter_values(processor.get(), params);
@@ -1299,8 +1302,10 @@ std::unique_ptr<sonare::rt::ProcessorBase> make_insert_from_params(
 }
 
 std::unique_ptr<sonare::rt::ProcessorBase> make_insert_with_ir(
-    const std::string& name, const std::string& json_params, const float* impulse_response,
-    int ir_num_samples, const sonare::resource::ProjectImportResourceLimits& limits) {
+    const std::string& requested_name, const std::string& json_params,
+    const float* impulse_response, int ir_num_samples,
+    const sonare::resource::ProjectImportResourceLimits& limits) {
+  const std::string name = canonical_processor_id(requested_name);
   if (ir_num_samples < 0 || (ir_num_samples > 0 && impulse_response == nullptr)) {
     throw SonareException(ErrorCode::InvalidParameter, "make_insert_with_ir: invalid IR");
   }
@@ -1351,13 +1356,13 @@ std::vector<std::string> insert_factory_names() {
       "dynamics.upwardExpander",
       "dynamics.vocalRider",
       "eq.tilt",
-      "eq.apiStyle",
+      "eq.steppedProportionalQ",
       "eq.parametric",
       "eq.minimumPhase",
       "eq.linearPhase",
       "eq.dynamic",
       "eq.equalizer",
-      "eq.pultec",
+      "eq.passiveTube",
       "eq.cutFilter",
       "eq.bandPass",
       "eq.shelving",
@@ -1446,7 +1451,8 @@ std::vector<std::string> construction_keys(const ParamMap& params) {
 
 }  // namespace
 
-std::vector<std::string> insert_param_names(const std::string& name) {
+std::vector<std::string> insert_param_names(const std::string& requested_name) {
+  const std::string name = canonical_processor_id(requested_name);
   // Build the processor against an empty param map: every config builder probes
   // or declares the keys it reads (falling back to defaults when absent), so
   // those are exactly the parameter names this processor consumes. The
@@ -1649,8 +1655,9 @@ int required_crossover_cutoffs(const SlotList& slots, const std::string& key) {
 
 }  // namespace
 
-std::vector<Param> insert_probe_params(const std::string& name, const std::string& key,
+std::vector<Param> insert_probe_params(const std::string& requested_name, const std::string& key,
                                        double value) {
+  const std::string name = canonical_processor_id(requested_name);
   std::vector<Param> params{Param{key, value}};
   if (name == "effects.gsEfx") {
     // TYPE is a paired selector, so a single-key probe gets the other byte at zero.
@@ -2381,14 +2388,15 @@ bool chain_key_processor(const std::string& chain_key, std::string* processor, s
 
 std::optional<double> mastering_enum_value(const std::string& processor, const std::string& key,
                                            const std::string& choice) {
-  std::string id = processor;
+  std::string id = canonical_processor_id(processor);
   std::string leaf = key;
   if (processor.empty() && !chain_key_processor(key, &id, &leaf)) return std::nullopt;
   const auto declared = empty_build(id).probed_choices().find(leaf);
   if (declared == empty_build(id).probed_choices().end()) return std::nullopt;
+  const std::string current_choice = canonical_choice_name(leaf, choice);
   std::string valid;
   for (const detail::EnumChoice& entry : declared->second) {
-    if (entry.name == choice) return static_cast<double>(entry.value);
+    if (entry.name == current_choice) return static_cast<double>(entry.value);
     if (!valid.empty()) valid += ", ";
     valid += entry.name;
   }
@@ -2495,7 +2503,8 @@ std::string chain_catalog_json() {
   return out;
 }
 
-std::string insert_slot_info_json(const std::string& name) {
+std::string insert_slot_info_json(const std::string& requested_name) {
+  const std::string name = canonical_processor_id(requested_name);
   // Same declarations the param entries' `slot` field is read from.
   std::string out = "[";
   for (const auto& [slot_name, declaration] : empty_build(name).declared_slots()) {
@@ -2520,7 +2529,8 @@ std::string insert_slot_info_json(const std::string& name) {
   return out;
 }
 
-std::string insert_param_info_json(const std::string& name) {
+std::string insert_param_info_json(const std::string& requested_name) {
+  const std::string name = canonical_processor_id(requested_name);
   // Measuring the bounds costs one processor construction per probe point, so a
   // repeat query — and the capability catalog, which asks for every insert —
   // reads a memo instead of probing again. Thread-local because the C ABI's own
@@ -2535,7 +2545,8 @@ std::string insert_param_info_json(const std::string& name) {
   return memo.emplace(name, std::move(info)).first->second;
 }
 
-std::string insert_param_info_json_at_rate(const std::string& name, double sample_rate) {
+std::string insert_param_info_json_at_rate(const std::string& requested_name, double sample_rate) {
+  const std::string name = canonical_processor_id(requested_name);
   // Keyed apart from the rate-less memo, so the rate-less answer never depends on
   // an earlier call.
   static thread_local std::unordered_map<std::string, std::string> memo;

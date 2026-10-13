@@ -11,7 +11,6 @@
 #include <complex>
 #include <vector>
 
-#include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
@@ -21,10 +20,11 @@
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/eq/shelving.h"
 #include "mastering/eq/spectrum_engine.h"
 #include "mastering/eq/spectrum_registry.h"
+#include "mastering/eq/stepped_proportional_q.h"
 #include "mastering/eq/tilt.h"
 #include "rt/biquad_design.h"
 #include "support/audio_fixtures.h"

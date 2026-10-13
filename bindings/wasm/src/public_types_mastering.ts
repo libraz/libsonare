@@ -3,7 +3,9 @@
  * `fieldRecording`, `voiceMemo` and `shellac78` — enable repair stages only and
  * leave level alone. Every other preset carries an integrated-loudness target
  * and a true-peak ceiling, which are not equally binding: the ceiling always
- * holds, while the loudness target is what one normalization pass aims at.
+ * holds, while the loudness target is what one normalization pass aims at. The
+ * ceiling is held on the true peak read at the configured oversampling (4x, the
+ * BS.1770 measure, by default); a finer meter can read up to ~0.15 dB higher.
  *
  * Reaching a target above the input's loudness costs gain the input's peak
  * headroom may not have, so the stage drives its true-peak limiter up to
@@ -96,7 +98,6 @@ export const SOLO_PROCESSORS = [
   'effects.reverb.plate',
   'effects.reverb.room',
   'effects.reverb.velvet',
-  'eq.apiStyle',
   'eq.bandPass',
   'eq.cutFilter',
   'eq.dynamic',
@@ -106,8 +107,9 @@ export const SOLO_PROCESSORS = [
   'eq.midSide',
   'eq.minimumPhase',
   'eq.parametric',
-  'eq.pultec',
+  'eq.passiveTube',
   'eq.shelving',
+  'eq.steppedProportionalQ',
   'eq.tilt',
   'final.bitDepth',
   'final.dither',
@@ -322,7 +324,10 @@ export interface StereoAnalysisResultMap {
 export interface MasteringOptions {
   /** Target integrated LUFS. Default -14. */
   targetLufs?: number;
-  /** True/sample peak ceiling in dBFS. Default -1. */
+  /**
+   * True/sample peak ceiling in dBFS. Default -1. Held on the true peak read at
+   * {@link truePeakOversample}; a finer meter can read up to ~0.15 dB higher.
+   */
   ceilingDb?: number;
   /** Oversampling factor used for peak estimation. Default 4. */
   truePeakOversample?: number;

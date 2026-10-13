@@ -4579,10 +4579,10 @@
         "amp-cleanCombo",
         "amp-chimeEdge",
         "amp-classicCrunch",
-        "amp-tweedGrind",
-        "amp-britStack",
+        "amp-vintageGrind",
+        "amp-crunchStack",
         "amp-modernLead",
-        "amp-rectifierChug",
+        "amp-heavyChug",
         "amp-coldBiasBuzz",
         "amp-bassDi",
         "amp-bassRig"
@@ -4618,7 +4618,7 @@
         "structure": null,
         "music": null
       },
-      "next": "judge the recorded candidate(s) — amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-tweedGrind, amp-britStack, amp-modernLead, amp-rectifierChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
+      "next": "judge the recorded candidate(s) — amp-cleanCombo, amp-chimeEdge, amp-classicCrunch, amp-vintageGrind, amp-crunchStack, amp-modernLead, amp-heavyChug, amp-coldBiasBuzz, amp-bassDi, amp-bassRig — then listen to a take and record the verdict in signoff.json"
     },
     {
       "slug": "p028-electric-guitar-muted",

@@ -31997,7 +31997,7 @@
      "version": 8,
      "generation": 82,
      "date": "2026-10-05",
-     "note": "programs 29 and 30 put a drive pedal ahead of the amplifier: overdrive into britStack, distortion into modernLead, level trims re-matched to the amped references' peak"
+     "note": "programs 29 and 30 put a drive pedal ahead of the amplifier: overdrive into crunchStack, distortion into modernLead, level trims re-matched to the amped references' peak"
     }
    ],
    "values": {
@@ -32080,7 +32080,7 @@
     "rig.026": "cleanCombo",
     "rig.027": "cleanCombo",
     "rig.028": "cleanCombo",
-    "rig.029": "britStack",
+    "rig.029": "crunchStack",
     "rig.030": "modernLead",
     "rig.031": "cleanCombo"
    }

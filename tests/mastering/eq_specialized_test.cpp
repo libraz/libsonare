@@ -533,9 +533,9 @@ TEST_CASE("GraphicEq boosts selected band more than distant bands", "[mastering]
   REQUIRE(distant_gain < 1.15f);
 }
 
-TEST_CASE("PultecEq low boost and attenuation shape low end", "[mastering][eq]") {
+TEST_CASE("PassiveTubeEq low boost and attenuation shape low end", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  PultecEq eq;
+  PassiveTubeEq eq;
   eq.prepare(sample_rate, 1024);
   eq.set_low_frequency(60.0f);
   eq.set_low_boost(5.0f);
@@ -559,9 +559,9 @@ TEST_CASE("PultecEq low boost and attenuation shape low end", "[mastering][eq]")
   REQUIRE(rms_tail(high, 4096) / high_before < 1.1f);
 }
 
-TEST_CASE("PultecEq high boost and attenuation shape top end", "[mastering][eq]") {
+TEST_CASE("PassiveTubeEq high boost and attenuation shape top end", "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  PultecEq eq;
+  PassiveTubeEq eq;
   eq.prepare(sample_rate, 1024);
   eq.set_high_boost(8000.0f, 5.0f, 0.8f);
   eq.set_high_attenuation(12000.0f, 4.0f);
@@ -579,8 +579,8 @@ TEST_CASE("PultecEq high boost and attenuation shape top end", "[mastering][eq]"
   REQUIRE(rms_tail(air, 4096) / air_before < 1.0f);
 }
 
-TEST_CASE("PultecEq clear bypasses processing", "[mastering][eq]") {
-  PultecEq eq;
+TEST_CASE("PassiveTubeEq clear bypasses processing", "[mastering][eq]") {
+  PassiveTubeEq eq;
   eq.prepare(48000.0, 512);
   eq.set_low_boost(8.0f);
   eq.set_high_boost(8000.0f, 8.0f);
@@ -596,14 +596,15 @@ TEST_CASE("PultecEq clear bypasses processing", "[mastering][eq]") {
   }
 }
 
-TEST_CASE("PultecEq component model adds passive loss and output nonlinearity", "[mastering][eq]") {
-  PultecEq curve;
-  PultecEq component;
+TEST_CASE("PassiveTubeEq component model adds passive loss and output nonlinearity",
+          "[mastering][eq]") {
+  PassiveTubeEq curve;
+  PassiveTubeEq component;
   curve.prepare(48000.0, 512);
   component.prepare(48000.0, 512);
   curve.set_low_boost(5.0f);
   component.set_low_boost(5.0f);
-  component.set_component_model(PultecComponentModel::Eqp1aWdf);
+  component.set_component_model(PassiveTubeComponentModel::WdfCircuit);
   component.set_output_drive(6.0f);
 
   auto curve_audio = sine(60.0f, 48000, 4096, 0.8f);
@@ -613,17 +614,17 @@ TEST_CASE("PultecEq component model adds passive loss and output nonlinearity", 
 
   REQUIRE(rms_tail(component_audio, 512) < rms_tail(curve_audio, 512));
   REQUIRE(peak_abs(component_audio) <= 1.1f);
-  REQUIRE(component.component_model() == PultecComponentModel::Eqp1aWdf);
+  REQUIRE(component.component_model() == PassiveTubeComponentModel::WdfCircuit);
 }
 
-TEST_CASE("PultecEq component model preserves channel state when channel count grows",
+TEST_CASE("PassiveTubeEq component model preserves channel state when channel count grows",
           "[mastering][eq]") {
-  PultecEq mono_path;
-  PultecEq stereo_path;
+  PassiveTubeEq mono_path;
+  PassiveTubeEq stereo_path;
   mono_path.prepare(48000.0, 512);
   stereo_path.prepare(48000.0, 512);
-  mono_path.set_component_model(PultecComponentModel::Eqp1aWdf);
-  stereo_path.set_component_model(PultecComponentModel::Eqp1aWdf);
+  mono_path.set_component_model(PassiveTubeComponentModel::WdfCircuit);
+  stereo_path.set_component_model(PassiveTubeComponentModel::WdfCircuit);
   mono_path.set_low_boost(5.0f);
   stereo_path.set_low_boost(5.0f);
 
@@ -641,24 +642,26 @@ TEST_CASE("PultecEq component model preserves channel state when channel count g
   REQUIRE(max_abs_difference(actual_left, expected_left) < 1.0e-6f);
 }
 
-TEST_CASE("ApiStyleEq snaps frequency and gain to stepped controls", "[mastering][eq]") {
-  ApiStyleEq eq;
+TEST_CASE("SteppedProportionalQEq snaps frequency and gain to stepped controls",
+          "[mastering][eq]") {
+  SteppedProportionalQEq eq;
   eq.prepare(48000.0, 512);
 
-  eq.set_band(ApiStyleEq::Band::LowMid, 520.0f, 5.1f);
+  eq.set_band(SteppedProportionalQEq::Band::LowMid, 520.0f, 5.1f);
 
-  REQUIRE_THAT(eq.frequency(ApiStyleEq::Band::LowMid), WithinAbs(500.0f, 0.0001f));
-  REQUIRE_THAT(eq.gain_db(ApiStyleEq::Band::LowMid), WithinAbs(6.0f, 0.0001f));
-  REQUIRE_THAT(eq.snapped_frequency(ApiStyleEq::Band::High, 11000.0f),
+  REQUIRE_THAT(eq.frequency(SteppedProportionalQEq::Band::LowMid), WithinAbs(500.0f, 0.0001f));
+  REQUIRE_THAT(eq.gain_db(SteppedProportionalQEq::Band::LowMid), WithinAbs(6.0f, 0.0001f));
+  REQUIRE_THAT(eq.snapped_frequency(SteppedProportionalQEq::Band::High, 11000.0f),
                WithinAbs(10000.0f, 0.0001f));
   REQUIRE_THAT(eq.snapped_gain(-5.2f), WithinAbs(-6.0f, 0.0001f));
 }
 
-TEST_CASE("ApiStyleEq boosts selected band more than distant bands", "[mastering][eq]") {
+TEST_CASE("SteppedProportionalQEq boosts selected band more than distant bands",
+          "[mastering][eq]") {
   constexpr int sample_rate = 48000;
-  ApiStyleEq eq;
+  SteppedProportionalQEq eq;
   eq.prepare(sample_rate, 1024);
-  eq.set_band(ApiStyleEq::Band::LowMid, 500.0f, 6.0f);
+  eq.set_band(SteppedProportionalQEq::Band::LowMid, 500.0f, 6.0f);
 
   auto center = sine(500.0f, sample_rate, sample_rate);
   auto distant = sine(8000.0f, sample_rate, sample_rate);
@@ -673,34 +676,36 @@ TEST_CASE("ApiStyleEq boosts selected band more than distant bands", "[mastering
   REQUIRE(rms_tail(distant, 4096) / distant_before < 1.15f);
 }
 
-TEST_CASE("Pultec and API-style defaults automate at every accepted rate", "[mastering][eq]") {
+TEST_CASE("Passive-tube and stepped-proportional-Q defaults automate at every accepted rate",
+          "[mastering][eq]") {
   for (const int rate : {8000, 16000, 22050, 48000}) {
     INFO("rate " << rate);
-    PultecEq pultec;
-    REQUIRE_NOTHROW(pultec.prepare(rate, 512));
+    PassiveTubeEq passive_tube;
+    REQUIRE_NOTHROW(passive_tube.prepare(rate, 512));
     for (unsigned int id = 0; id < 9; ++id) {
-      INFO("pultec id " << id);
-      REQUIRE_NOTHROW(pultec.set_parameter(id, 5.0f));
+      INFO("passive-tube id " << id);
+      REQUIRE_NOTHROW(passive_tube.set_parameter(id, 5.0f));
     }
-    ApiStyleEq api;
-    REQUIRE_NOTHROW(api.prepare(rate, 512));
+    SteppedProportionalQEq stepped;
+    REQUIRE_NOTHROW(stepped.prepare(rate, 512));
     for (unsigned int id = 0; id < 8; ++id) {
-      INFO("api id " << id);
-      REQUIRE_NOTHROW(api.set_parameter(id, id % 2 == 0 ? 20000.0f : 6.0f));
+      INFO("stepped id " << id);
+      REQUIRE_NOTHROW(stepped.set_parameter(id, id % 2 == 0 ? 20000.0f : 6.0f));
     }
     auto audio = sine(440.0f, rate, 4096);
-    process(pultec, audio);
-    process(api, audio);
+    process(passive_tube, audio);
+    process(stepped, audio);
     REQUIRE(std::all_of(audio.begin(), audio.end(), [](float x) { return std::isfinite(x); }));
   }
 }
 
-TEST_CASE("ApiStyleEq keeps bands set before prepare, on every path", "[mastering][eq]") {
+TEST_CASE("SteppedProportionalQEq keeps bands set before prepare, on every path",
+          "[mastering][eq]") {
   // 500 Hz +12 dB at its own centre: the band gives back 10^(12/20) ~ 3.98.
   for (const int rate : {48000, 96000}) {
     INFO("rate " << rate);
-    ApiStyleEq eq;
-    eq.set_band(ApiStyleEq::Band::LowMid, 500.0f, 12.0f);
+    SteppedProportionalQEq eq;
+    eq.set_band(SteppedProportionalQEq::Band::LowMid, 500.0f, 12.0f);
     eq.prepare(rate, 128);
     eq.prepare(rate, 128);
     auto tone = sine(500.0f, rate, rate / 2);
@@ -709,7 +714,7 @@ TEST_CASE("ApiStyleEq keeps bands set before prepare, on every path", "[masterin
     REQUIRE_THAT(rms_tail(tone, static_cast<size_t>(rate / 4)) / before, WithinAbs(3.98f, 0.1f));
 
     const std::string json = R"({"lowMidFrequencyHz":500,"lowMidGainDb":12})";
-    auto insert = sonare::mastering::api::make_insert("eq.apiStyle", json);
+    auto insert = sonare::mastering::api::make_insert("eq.steppedProportionalQ", json);
     REQUIRE(insert != nullptr);
     insert->prepare(rate, 128);
     auto inserted = sine(500.0f, rate, rate / 2);
@@ -719,7 +724,7 @@ TEST_CASE("ApiStyleEq keeps bands set before prepare, on every path", "[masterin
 
     const auto source = sine(500.0f, rate, rate / 2);
     const auto named = sonare::mastering::api::apply_named_processor(
-        "eq.apiStyle", source.data(), source.size(), rate,
+        "eq.steppedProportionalQ", source.data(), source.size(), rate,
         {{"lowMidFrequencyHz", 500.0}, {"lowMidGainDb", 12.0}});
     REQUIRE_THAT(rms_tail(named.samples, static_cast<size_t>(rate / 4)) / before,
                  WithinAbs(3.98f, 0.1f));

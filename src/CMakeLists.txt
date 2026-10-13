@@ -524,7 +524,7 @@ if(BUILD_MASTERING)
     mastering/stereo/phase_align.cpp
     mastering/stereo/stereo_balance.cpp
     mastering/utility/gain.cpp
-    mastering/eq/api_style.cpp
+    mastering/eq/stepped_proportional_q.cpp
     mastering/eq/band_pass.cpp
     # band_strings.cpp is in the always-compiled core list; see the note there.
     mastering/eq/cut_filter.cpp
@@ -541,7 +541,7 @@ if(BUILD_MASTERING)
     mastering/eq/parametric.cpp
     mastering/eq/spectrum_engine.cpp
     mastering/eq/spectrum_registry.cpp
-    mastering/eq/pultec.cpp
+    mastering/eq/passive_tube.cpp
     mastering/eq/shelving.cpp
     mastering/eq/tilt.cpp
   )

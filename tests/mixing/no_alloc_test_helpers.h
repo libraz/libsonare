@@ -38,7 +38,7 @@
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/equalizer.h"
 #include "mastering/eq/minimum_phase.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/eq/spectrum_registry.h"
 #include "mastering/maximizer/true_peak_limiter.h"
 #include "mastering/multiband/multiband_saturation.h"

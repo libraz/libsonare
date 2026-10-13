@@ -35,7 +35,6 @@
 #include "mastering/dynamics/upward_compressor.h"
 #include "mastering/dynamics/upward_expander.h"
 #include "mastering/dynamics/vocal_rider.h"
-#include "mastering/eq/api_style.h"
 #include "mastering/eq/band_pass.h"
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/dynamic_eq.h"
@@ -45,8 +44,9 @@
 #include "mastering/eq/mid_side_eq.h"
 #include "mastering/eq/minimum_phase.h"
 #include "mastering/eq/parametric.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/eq/shelving.h"
+#include "mastering/eq/stepped_proportional_q.h"
 #include "mastering/eq/tilt.h"
 #include "mastering/final/dither.h"
 #include "mastering/maximizer/adaptive_release.h"
@@ -972,14 +972,16 @@ inline void configure_tilt(eq::TiltEq& p, const ParamMap& params) {
   p.set_pivot_hz(f(params, "pivotHz", 1000.0f, display_range(kHzLog, 20, 20000)));
 }
 
-inline void configure_api_style(eq::ApiStyleEq& p, const ParamMap& params) {
-  p.set_band(eq::ApiStyleEq::Band::Low, f(params, "lowFrequencyHz", 100.0f, kHzLog),
+inline void configure_stepped_proportional_q(eq::SteppedProportionalQEq& p,
+                                             const ParamMap& params) {
+  p.set_band(eq::SteppedProportionalQEq::Band::Low, f(params, "lowFrequencyHz", 100.0f, kHzLog),
              f(params, "lowGainDb", 0.0f, kDb));
-  p.set_band(eq::ApiStyleEq::Band::LowMid, f(params, "lowMidFrequencyHz", 400.0f, kHzLog),
-             f(params, "lowMidGainDb", 0.0f, kDb));
-  p.set_band(eq::ApiStyleEq::Band::HighMid, f(params, "highMidFrequencyHz", 3000.0f, kHzLog),
+  p.set_band(eq::SteppedProportionalQEq::Band::LowMid,
+             f(params, "lowMidFrequencyHz", 400.0f, kHzLog), f(params, "lowMidGainDb", 0.0f, kDb));
+  p.set_band(eq::SteppedProportionalQEq::Band::HighMid,
+             f(params, "highMidFrequencyHz", 3000.0f, kHzLog),
              f(params, "highMidGainDb", 0.0f, kDb));
-  p.set_band(eq::ApiStyleEq::Band::High, f(params, "highFrequencyHz", 10000.0f, kHzLog),
+  p.set_band(eq::SteppedProportionalQEq::Band::High, f(params, "highFrequencyHz", 10000.0f, kHzLog),
              f(params, "highGainDb", 0.0f, kDb));
 }
 
@@ -1034,7 +1036,7 @@ inline void configure_dynamic_eq_bands(eq::DynamicEq& p, const ParamMap& params)
   }
 }
 
-inline void configure_pultec(eq::PultecEq& p, const ParamMap& params) {
+inline void configure_passive_tube(eq::PassiveTubeEq& p, const ParamMap& params) {
   p.set_low_frequency(f(params, "lowFrequencyHz", 60.0f, kHzLog));
   p.set_low_boost(f(params, "lowBoost", 0.0f, kNone));
   p.set_low_attenuation(f(params, "lowAttenuation", 0.0f, kNone));
@@ -1042,7 +1044,8 @@ inline void configure_pultec(eq::PultecEq& p, const ParamMap& params) {
                    f(params, "highBoost", 0.0f, kNone), f(params, "highBandwidth", 0.5f, kNone));
   p.set_high_attenuation(f(params, "highAttenuationFrequencyHz", 10000.0f, kHzLog),
                          f(params, "highAttenuation", 0.0f, kNone));
-  p.set_component_model(read_enum(params, "componentModel", eq::PultecComponentModel::CurveOnly));
+  p.set_component_model(
+      read_enum(params, "componentModel", eq::PassiveTubeComponentModel::CurveOnly));
   p.set_output_drive(f(params, "outputDrive", 0.0f, kNone));
 }
 
@@ -1213,7 +1216,7 @@ inline void apply_amp_cab_ir(const ParamMap& params, saturation::AmpSim& amp) {
 
 /// @param base Starting point every key rides on top of — a preset's config, or
 ///        a default-constructed one. An unset key keeps the base's value, which
-///        is what lets `{"preset":"britStack","drive":0.5}` mean "that rig, but
+///        is what lets `{"preset":"crunchStack","drive":0.5}` mean "that rig, but
 ///        turned down" rather than "that rig, with every other control reset".
 inline saturation::AmpSimConfig amp_sim_config(const ParamMap& params,
                                                saturation::AmpSimConfig base = {}) {

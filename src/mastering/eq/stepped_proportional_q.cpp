@@ -1,4 +1,4 @@
-#include "mastering/eq/api_style.h"
+#include "mastering/eq/stepped_proportional_q.h"
 
 #include <algorithm>
 #include <array>
@@ -21,7 +21,7 @@ constexpr std::array<float, 13> kGainSteps = {-12.0f, -10.0f, -8.0f, -6.0f, -4.0
 
 }  // namespace
 
-void ApiStyleEq::prepare(double sample_rate, int max_block_size) {
+void SteppedProportionalQEq::prepare(double sample_rate, int max_block_size) {
   eq_.prepare(sample_rate, max_block_size);
   // The bands set before keep their settings; only their coefficients follow
   // the new rate.
@@ -30,15 +30,15 @@ void ApiStyleEq::prepare(double sample_rate, int max_block_size) {
   }
 }
 
-void ApiStyleEq::process(float* const* channels, int num_channels, int num_samples) {
+void SteppedProportionalQEq::process(float* const* channels, int num_channels, int num_samples) {
   const uint32_t eq_discards = eq_.non_finite_discard_count();
   eq_.process(channels, num_channels, num_samples);
   if (eq_.non_finite_discard_count() != eq_discards) note_non_finite_discard();
 }
 
-void ApiStyleEq::reset() { eq_.reset(); }
+void SteppedProportionalQEq::reset() { eq_.reset(); }
 
-void ApiStyleEq::set_band(Band band, float frequency_hz, float gain_db) {
+void SteppedProportionalQEq::set_band(Band band, float frequency_hz, float gain_db) {
   const size_t i = index(band);
   bands_[i].frequency_hz = snapped_frequency(band, frequency_hz);
   bands_[i].gain_db = snapped_gain(gain_db);
@@ -46,7 +46,7 @@ void ApiStyleEq::set_band(Band band, float frequency_hz, float gain_db) {
   rebuild_band(band);
 }
 
-bool ApiStyleEq::set_parameter_impl(unsigned int param_id, float value) {
+bool SteppedProportionalQEq::set_parameter_impl(unsigned int param_id, float value) {
   const unsigned int band_index = param_id / 2u;
   if (band_index >= bands_.size()) {
     return false;
@@ -63,20 +63,20 @@ bool ApiStyleEq::set_parameter_impl(unsigned int param_id, float value) {
   return true;
 }
 
-std::vector<rt::ParamDescriptor> ApiStyleEq::parameter_descriptors() const {
+std::vector<rt::ParamDescriptor> SteppedProportionalQEq::parameter_descriptors() const {
   return {{"lowFrequencyHz", 0},  {"lowGainDb", 1},          {"lowMidFrequencyHz", 2},
           {"lowMidGainDb", 3},    {"highMidFrequencyHz", 4}, {"highMidGainDb", 5},
           {"highFrequencyHz", 6}, {"highGainDb", 7}};
 }
 
-void ApiStyleEq::clear_band(Band band) {
+void SteppedProportionalQEq::clear_band(Band band) {
   const size_t i = index(band);
   bands_[i].gain_db = 0.0f;
   bands_[i].enabled = false;
   rebuild_band(band);
 }
 
-void ApiStyleEq::clear() {
+void SteppedProportionalQEq::clear() {
   for (size_t i = 0; i < bands_.size(); ++i) {
     bands_[i].gain_db = 0.0f;
     bands_[i].enabled = false;
@@ -84,11 +84,13 @@ void ApiStyleEq::clear() {
   }
 }
 
-float ApiStyleEq::frequency(Band band) const { return bands_[index(band)].frequency_hz; }
+float SteppedProportionalQEq::frequency(Band band) const {
+  return bands_[index(band)].frequency_hz;
+}
 
-float ApiStyleEq::gain_db(Band band) const { return bands_[index(band)].gain_db; }
+float SteppedProportionalQEq::gain_db(Band band) const { return bands_[index(band)].gain_db; }
 
-float ApiStyleEq::snapped_frequency(Band band, float requested_frequency_hz) const {
+float SteppedProportionalQEq::snapped_frequency(Band band, float requested_frequency_hz) const {
   switch (band) {
     case Band::Low:
       return nearest(requested_frequency_hz, kLowFrequencies.data(), kLowFrequencies.size());
@@ -103,11 +105,11 @@ float ApiStyleEq::snapped_frequency(Band band, float requested_frequency_hz) con
   return requested_frequency_hz;
 }
 
-float ApiStyleEq::snapped_gain(float requested_gain_db) const {
+float SteppedProportionalQEq::snapped_gain(float requested_gain_db) const {
   return nearest(requested_gain_db, kGainSteps.data(), kGainSteps.size());
 }
 
-void ApiStyleEq::rebuild_band(Band band) {
+void SteppedProportionalQEq::rebuild_band(Band band) {
   const size_t i = index(band);
   const auto& state = bands_[i];
   EqBandType type = EqBandType::Peak;
@@ -122,9 +124,9 @@ void ApiStyleEq::rebuild_band(Band band) {
       i, {type, state.frequency_hz, state.gain_db, proportional_q(state.gain_db), state.enabled});
 }
 
-size_t ApiStyleEq::index(Band band) { return static_cast<size_t>(band); }
+size_t SteppedProportionalQEq::index(Band band) { return static_cast<size_t>(band); }
 
-float ApiStyleEq::nearest(float value, const float* values, size_t count) {
+float SteppedProportionalQEq::nearest(float value, const float* values, size_t count) {
   size_t best_index = 0;
   float best_distance = std::abs(value - values[0]);
   for (size_t i = 1; i < count; ++i) {
@@ -137,7 +139,7 @@ float ApiStyleEq::nearest(float value, const float* values, size_t count) {
   return values[best_index];
 }
 
-float ApiStyleEq::proportional_q(float gain_db) {
+float SteppedProportionalQEq::proportional_q(float gain_db) {
   return 0.55f + std::min(std::abs(gain_db), 12.0f) / 12.0f * 2.2f;
 }
 

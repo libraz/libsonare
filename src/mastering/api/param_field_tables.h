@@ -40,7 +40,7 @@
 #include "mastering/eq/cut_filter.h"
 #include "mastering/eq/eq_band.h"
 #include "mastering/eq/linear_phase.h"
-#include "mastering/eq/pultec.h"
+#include "mastering/eq/passive_tube.h"
 #include "mastering/final/dither.h"
 #include "mastering/multiband/crossover.h"
 #include "mastering/multiband/multiband_saturation.h"
@@ -457,12 +457,12 @@ constexpr const char* enum_choice_name(
   return nullptr;
 }
 
-constexpr const char* enum_choice_name(sonare::mastering::eq::PultecComponentModel value) {
+constexpr const char* enum_choice_name(sonare::mastering::eq::PassiveTubeComponentModel value) {
   switch (value) {
-    case sonare::mastering::eq::PultecComponentModel::CurveOnly:
+    case sonare::mastering::eq::PassiveTubeComponentModel::CurveOnly:
       return "curveOnly";
-    case sonare::mastering::eq::PultecComponentModel::Eqp1aWdf:
-      return "eqp1aWdf";
+    case sonare::mastering::eq::PassiveTubeComponentModel::WdfCircuit:
+      return "wdfCircuit";
   }
   return nullptr;
 }
@@ -605,16 +605,16 @@ constexpr const char* enum_choice_name(sonare::mastering::saturation::AmpModel v
   switch (value) {
     case sonare::mastering::saturation::AmpModel::kClassicCrunch:
       return "classicCrunch";
-    case sonare::mastering::saturation::AmpModel::kFenderClean:
-      return "fenderClean";
+    case sonare::mastering::saturation::AmpModel::kCleanCombo:
+      return "cleanCombo";
     case sonare::mastering::saturation::AmpModel::kModernHiGain:
       return "modernHiGain";
-    case sonare::mastering::saturation::AmpModel::kTweed:
-      return "tweed";
-    case sonare::mastering::saturation::AmpModel::kVoxChime:
-      return "voxChime";
-    case sonare::mastering::saturation::AmpModel::kRectifier:
-      return "rectifier";
+    case sonare::mastering::saturation::AmpModel::kVintageCombo:
+      return "vintageCombo";
+    case sonare::mastering::saturation::AmpModel::kClassAChime:
+      return "classAChime";
+    case sonare::mastering::saturation::AmpModel::kHeavyHiGain:
+      return "heavyHiGain";
   }
   return nullptr;
 }

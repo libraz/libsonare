@@ -88,7 +88,7 @@ enum class Rectifier {
   k5V4 = 2,
   /// 5U4.
   k5U4 = 3,
-  /// 5Y3: the softest, and the reason small tweed amps sag the way they do.
+  /// 5Y3: the softest, and the reason small vintage combos sag the way they do.
   k5Y3 = 4,
 };
 

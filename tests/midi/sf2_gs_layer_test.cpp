@@ -817,7 +817,7 @@ TEST_CASE("gs_efx_insert_chain covers the guitar/bass multi block", "[midi][sf2]
   bass.params[8] = 1;  // OD Sw: on
   const auto bass_chain = gs_efx_insert_chain(bass);
   for (size_t i = 3; i < 6; ++i) REQUIRE(bass_chain[i].enabled == (i == 5));
-  REQUIRE(bass_chain[5].params_json.find("\"preset\":\"britStack\"") != std::string::npos);
+  REQUIRE(bass_chain[5].params_json.find("\"preset\":\"crunchStack\"") != std::string::npos);
   bass.params[6] = 0;
   REQUIRE(gs_efx_insert_chain(bass)[3].enabled);
 }
