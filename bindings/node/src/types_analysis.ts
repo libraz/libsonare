@@ -239,6 +239,11 @@ export interface AnalysisMelody {
 
 export interface AnalysisResult {
   bpm: number;
+  /**
+   * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
+   * `analyzeBpm()` searches 30–300 BPM at the input rate by default, so the two can differ on
+   * the same input; pass `bpmMin: 60, bpmMax: 200` and a 22050 Hz input to compare them.
+   */
   bpmConfidence: number;
   bpmCandidates: BpmHypothesis[];
   key: Key;
@@ -584,7 +589,15 @@ export interface BpmCandidate {
 
 export interface BpmAnalysisResult {
   bpm: number;
+  /**
+   * Winning tempo cluster's vote share within `bpmMin`–`bpmMax` (30–300 by default), searched at
+   * the input rate. `analyze()` searches 60–200 BPM at 22050 Hz, so its `bpmConfidence` can differ.
+   */
   confidence: number;
+  /**
+   * Chosen tempo first (`candidates[0].bpm === bpm`), then the other histogram
+   * bins by descending vote share.
+   */
   candidates: BpmCandidate[];
   autocorrelation: Float32Array;
   tempogram: Float32Array;

@@ -126,8 +126,10 @@ class BpmAnalyzer {
   float confidence() const { return confidence_; }
 
   /// @brief Returns top BPM candidates.
+  /// @details When non-empty, the first entry is the chosen tempo (its `bpm` equals bpm()) and
+  ///          the rest follow in descending confidence, each a histogram bin's vote share.
   /// @param top_n Number of candidates to return
-  /// @return Sorted list of BPM candidates
+  /// @return BPM candidates, chosen tempo first
   std::vector<BpmCandidate> candidates(int top_n = 5) const;
 
   /// @brief Returns the autocorrelation function.

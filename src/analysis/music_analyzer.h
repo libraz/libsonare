@@ -80,7 +80,7 @@ struct BeatObservations {
 /// @brief Complete music analysis result.
 struct AnalysisResult {
   float bpm = 0.0f;             ///< Detected BPM
-  float bpm_confidence = 0.0f;  ///< BPM detection confidence
+  float bpm_confidence = 0.0f;  ///< Winning tempo cluster's vote share in [bpm_min, bpm_max]
   /// @brief Tempo hypotheses from the existing tempogram estimator.
   std::vector<BpmCandidateHypothesis> bpm_candidates;
   Key key;                       ///< Detected key

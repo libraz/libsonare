@@ -190,7 +190,10 @@ typedef struct {
 
 typedef struct {
   float bpm;
+  /* Winning tempo cluster's vote share within [bpm_min, bpm_max], searched at the input rate;
+     can differ from sonare_analyze's bpm_confidence (60-200 BPM at 22050 Hz) on the same input. */
   float confidence;
+  /* Chosen tempo first (candidates[0].bpm == bpm), then other bins by descending vote share. */
   SonareBpmCandidate* candidates;
   size_t candidate_count;
   float* autocorrelation;

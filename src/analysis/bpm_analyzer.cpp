@@ -553,13 +553,20 @@ void BpmAnalyzer::analyze(const std::vector<float>& onset_strength, int sr, int 
     }
     confidence_ = conf_percent / 100.0f;  ///< Convert percentage to [0, 1]
 
-    /// Update candidates_ for API compatibility
+    /// Chosen tempo first with its own bin's vote share, then the other top bins by vote share.
+    auto vote_share = [total_votes](int votes) {
+      return total_votes > 0 ? static_cast<float>(votes) / static_cast<float>(total_votes) : 0.0f;
+    };
+    const int chosen_bin =
+        std::clamp(static_cast<int>((bpm_ - config_.bpm_min) / bpm_constants::kBinWidth), 0,
+                   static_cast<int>(tempo_hist.size()) - 1);
+    const float chosen_center =
+        config_.bpm_min + static_cast<float>(chosen_bin) * bpm_constants::kBinWidth;
     candidates_.clear();
+    candidates_.push_back({bpm_, vote_share(tempo_hist[static_cast<size_t>(chosen_bin)])});
     for (const auto& bin : top_bins) {
-      float bin_conf = (total_votes > 0)
-                           ? static_cast<float>(bin.votes) / static_cast<float>(total_votes)
-                           : 0.0f;
-      candidates_.push_back({bin.bpm_center, bin_conf});
+      if (bin.bpm_center == chosen_center) continue;
+      candidates_.push_back({bin.bpm_center, vote_share(bin.votes)});
     }
   }
 

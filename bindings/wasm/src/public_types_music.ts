@@ -699,6 +699,11 @@ export interface MelodyContour {
  */
 export interface AnalysisResult {
   bpm: number;
+  /**
+   * Winning tempo cluster's vote share within the searched range: 60–200 BPM at 22050 Hz.
+   * `analyzeBpm()` searches 30–300 BPM at the input rate by default, so the two can differ on
+   * the same input; pass `bpmMin: 60, bpmMax: 200` and a 22050 Hz input to compare them.
+   */
   bpmConfidence: number;
   bpmCandidates: BpmHypothesis[];
   key: Key;

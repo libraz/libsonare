@@ -131,9 +131,26 @@ TEST_CASE("BpmAnalyzer candidates", "[bpm_analyzer]") {
   REQUIRE(candidates.size() <= 5);
   REQUIRE(analyzer.candidates(-1).empty());
 
-  // Candidates should be sorted by confidence
-  for (size_t i = 1; i < candidates.size(); ++i) {
+  // The chosen tempo leads; the rest follow in descending vote share.
+  REQUIRE_FALSE(candidates.empty());
+  REQUIRE(candidates[0].bpm == analyzer.bpm());
+  for (size_t i = 2; i < candidates.size(); ++i) {
     REQUIRE(candidates[i - 1].confidence >= candidates[i].confidence);
+  }
+}
+
+TEST_CASE("BpmAnalyzer lists the chosen tempo first even when a sub-octave out-votes it",
+          "[bpm_analyzer]") {
+  // On a 120 BPM click the 60 BPM bin carries the largest vote share while the
+  // chosen tempo stays near 120; the list must still open with the chosen tempo.
+  for (float bpm : {120.0f, 200.0f}) {
+    BpmAnalyzer analyzer(create_click_track(bpm, 22050, 10.0f));
+    const auto candidates = analyzer.candidates(5);
+    CAPTURE(bpm, analyzer.bpm());
+    REQUIRE(candidates.size() >= 2);
+    REQUIRE(candidates[0].bpm == analyzer.bpm());
+    REQUIRE(candidates[0].confidence > 0.0f);
+    REQUIRE(candidates[0].confidence <= 1.0f);
   }
 }
 

@@ -184,6 +184,8 @@ typedef struct {
 // use sonare_detect_bpm/key/beats for cheaper single-purpose queries.
 typedef struct {
   float bpm;
+  /* Winning tempo cluster's vote share within 60-200 BPM, searched at 22050 Hz. sonare_analyze_bpm
+     searches its own range at the input rate, so pass 60/200 and 22050 Hz input to compare. */
   float bpm_confidence;
   SonareKey key;
   SonareTimeSignature time_signature;
